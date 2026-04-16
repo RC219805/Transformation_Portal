@@ -975,6 +975,37 @@ def test_config_preview_contract_rejects_invalid_cameras_sidecar_path_values(
     assert "cameras_sidecar_path" not in body["data"]["normalized_args"]
 
 
+def test_config_preview_rejects_untrusted_sam2_checkpoint_path(client: TestClient, tmp_path: Path) -> None:
+    input_dir = (tmp_path / "preview-input").resolve()
+    output_dir = (tmp_path / "preview-output").resolve()
+    checkpoint_path = (tmp_path / "sam2-untrusted.pt").resolve()
+    input_dir.mkdir(parents=True, exist_ok=True)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    checkpoint_path.write_bytes(b"untrusted checkpoint bytes")
+
+    response = client.post(
+        "/v1/config-preview",
+        json={
+            "pipeline": "lux-depth-v3",
+            "args": {
+                "input_dir": str(input_dir),
+                "output_dir": str(output_dir),
+                "enable_segmentation": True,
+                "segmentation_backend": "sam2",
+                "sam2_checkpoint_path": str(checkpoint_path),
+            },
+        },
+    )
+    body = response.json()
+
+    assert response.status_code == 200
+    assert body["schema"] == "tp.orchestrator.config_preview.v1"
+    assert body["success"] is True
+    errors = {item["field"]: item for item in body["data"]["field_errors"]}
+    assert errors["sam2_checkpoint_path"]["code"] == "untrusted_checkpoint_path"
+    assert "sam2_checkpoint_path" not in body["data"]["normalized_args"]
+
+
 def test_config_preview_contract_sanitizes_archive_validation_errors(
     client: TestClient,
     tmp_path: Path,

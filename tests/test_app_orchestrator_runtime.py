@@ -2529,6 +2529,29 @@ def test_argv_normalization_ignores_sam2_checkpoint_path_when_backend_is_not_sam
     assert "--sam2-checkpoint-path" not in argv
 
 
+def test_argv_rejects_untrusted_sam2_checkpoint_path(tmp_path: Path) -> None:
+    input_dir = tmp_path / "input"
+    output_dir = tmp_path / "output"
+    checkpoint_path = tmp_path / "sam2-untrusted.pt"
+    input_dir.mkdir()
+    output_dir.mkdir()
+    checkpoint_path.write_bytes(b"untrusted checkpoint bytes")
+
+    payload: Dict[str, object] = {
+        "pipeline": "lux-depth-v3",
+        "args": {
+            "input_dir": str(input_dir),
+            "output_dir": str(output_dir),
+            "enable_segmentation": True,
+            "segmentation_backend": "sam2",
+            "sam2_checkpoint_path": str(checkpoint_path),
+        },
+    }
+
+    with pytest.raises(ValueError, match="SAM2 checkpoint path is not trusted"):
+        orchestrator_app._argv_from_request(payload)
+
+
 def test_argv_rejects_invalid_raw_ingest_mode() -> None:
     payload: Dict[str, object] = {
         "pipeline": "lux-depth-v3",

@@ -11,10 +11,10 @@
 #   - darwin-arm64-cpu    (macOS Apple Silicon, CPU fallback)
 #   - darwin-arm64-mps    (macOS Apple Silicon, Metal)
 #
-# SECURITY NOTE (CVE-2025-32434):
-#   torch < 2.6.0 has a critical RCE vulnerability via torch.load()
-#   MITIGATION: All torch.load() calls use weights_only=True at runtime
-#   This preserves CAS determinism while mitigating the vulnerability.
+# SECURITY NOTE:
+# - Supported Apple Silicon lock rotations now anchor on torch==2.8.0 /
+#   torchvision==0.23.0.
+# - weights_only=True remains mandatory defense in depth for all checkpoint loads.
 #
 # APPLE SILICON POLICY:
 # - DepthPro/Core ML integration is allowed only on Apple Silicon
@@ -23,10 +23,9 @@
 #
 # See: requirements/README.md for layering rationale.
 
-# --- PyTorch (Apple Silicon baseline) ---
-# CAS DETERMINISM: still pinned while the repo baseline remains on torch 2.2.x
-torch==2.2.2  # CAS determinism: keep the Apple Silicon baseline aligned with the repo torch ABI
-torchvision==0.17.2  # Torch match: keep torchvision aligned with the pinned torch baseline
+# --- PyTorch (Apple Silicon supported baseline) ---
+torch==2.8.0  # Supported security baseline
+torchvision==0.23.0  # Paired Apple Silicon baseline
 
 # Diffusion / HuggingFace ecosystem
 diffusers>=0.36.0,<1

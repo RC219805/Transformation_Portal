@@ -5,14 +5,14 @@ This guard prevents the scheduled dependency-update workflow from drifting away
 from the repository's actual checked-in dependency contract.
 
 Contracts enforced:
-1. The workflow must audit the governed lockfile targets listed in
+1. The workflow must audit the governed generic lockfile targets listed in
    REQUIRED_AUDIT_TARGETS.
-2. The workflow must use explicit generic/Linux target-owned update commands
-   instead of broad multi-target regeneration.
-3. The workflow must run the ownership validator for the Ubuntu generic/Linux
-   authoritative contexts.
+2. The workflow must use explicit generic update commands instead of broad or
+   target-owned regeneration.
+3. The workflow must run the ownership validator for the Ubuntu generic
+   authoritative context only.
 4. The Create Pull Request body must mention the required lockfile / ML
-   contract references and must not mention superseded references.
+   contract references and must not mention superseded or frozen-lane updates.
 5. Dependency-update audit reports must be written outside the git checkout
    and uploaded from that temp location only.
 """
@@ -35,7 +35,6 @@ REQUIRED_AUDIT_TARGETS = (
     "requirements/ci.txt",
     "requirements/security.txt",
     "requirements/tools-archive.txt",
-    "requirements/ml-core-linux.txt",
 )
 
 REQUIRED_PR_BODY_REFERENCES = (
@@ -45,25 +44,23 @@ REQUIRED_PR_BODY_REFERENCES = (
     "requirements/security.txt",
     "requirements/tools-archive.txt",
     "requirements/all.txt",
-    "requirements/ml-core-linux.txt",
 )
 
 REQUIRED_PR_BODY_SNIPPETS = (
-    "scheduled automation updates generic locks + `ml-core-linux.txt`",
-    "`ml-core-darwin-arm64.txt` is not updated by scheduled automation",
+    "scheduled automation updates generic locks only",
+    "`ml-core-darwin-arm64.txt` remains a manual Apple Silicon authoritative lane",
     "`ml-core-darwin-x86_64.txt` is frozen pending an authoritative lane decision",
+    "`ml-core-linux.txt` is frozen as an unsupported historical lane",
 )
 
 REQUIRED_WORKFLOW_SNIPPETS = (
     "make update-generic LOCK_PYTHON_VERSION=3.11",
     "make check-generic LOCK_PYTHON_VERSION=3.11",
-    "make update-ml-linux-x86_64 LOCK_PYTHON_VERSION=3.11",
-    "make check-ml-linux-x86_64 LOCK_PYTHON_VERSION=3.11",
     "scripts/validation/check_lock_ownership.py",
     "--context ubuntu-x64-generic",
-    "--context ubuntu-x64-linux",
     "requirements/ml-core-darwin-arm64.txt",
     "requirements/ml-core-darwin-x86_64.txt",
+    "requirements/ml-core-linux.txt",
 )
 
 REQUIRED_INSTALL_TOOLCHAIN_SNIPPETS = (
@@ -83,6 +80,8 @@ REQUIRED_AUDIT_REPORT_SNIPPETS = (
 FORBIDDEN_WORKFLOW_SNIPPETS = (
     "make update LOCK_PYTHON_VERSION=3.11",
     "make check LOCK_PYTHON_VERSION=3.11",
+    "make update-ml-linux-x86_64",
+    "make check-ml-linux-x86_64",
     "make update-ml-darwin-arm64",
     "make check-ml-darwin-arm64",
     "make update-ml-darwin-x86_64",
@@ -99,6 +98,12 @@ FORBIDDEN_PR_BODY_REFERENCES = (
     "requirements/ml-raw.txt",
     "requirements/ml-coreml.txt",
     "requirements/ml-research.txt",
+)
+
+FORBIDDEN_PR_BODY_SNIPPETS = (
+    "- `requirements/ml-core-linux.txt` - Linux x86_64 ML core contract",
+    "scheduled automation updates generic locks + `ml-core-linux.txt`",
+    "- `ml-core-linux.txt` is the Linux x86_64 target-owned ML baseline",
 )
 
 FORBIDDEN_REVIEW_TEXT = (
@@ -195,6 +200,10 @@ def validate_dependency_update_workflow(text: str) -> list[str]:
     for ref in FORBIDDEN_PR_BODY_REFERENCES:
         if ref in pr_body:
             errors.append(f"dependency-update workflow still references non-contract ML lockfile {ref!r}")
+
+    for snippet in FORBIDDEN_PR_BODY_SNIPPETS:
+        if snippet in pr_body:
+            errors.append(f"dependency-update workflow still references frozen-lane PR body text {snippet!r}")
 
     for snippet in FORBIDDEN_REVIEW_TEXT:
         if snippet in pr_body:

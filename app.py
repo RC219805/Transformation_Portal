@@ -517,6 +517,36 @@ def _resolved_portal_upload_root() -> Path:
     return _resolve_allowed_request_path(str(PORTAL_UPLOAD_ROOT), ALLOWED_INPUT_ROOTS)
 
 
+def _path_is_within_root(resolved_path: Path, root: Path) -> bool:
+    try:
+        resolved_path.relative_to(Path(os.path.realpath(root)))
+    except ValueError:
+        return False
+    return True
+
+
+def _compute_file_sha256(path: Path, chunk_size: int = 1024 * 1024) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(chunk_size), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _validate_managed_sam2_checkpoint_path(path_value: str) -> str:
+    resolved = _resolve_allowed_request_path(path_value, ALLOWED_INPUT_ROOTS)
+    if any(_path_is_within_root(resolved, root) for root in MANAGED_SAM2_TRUSTED_ROOTS):
+        return str(resolved)
+    if resolved.is_file():
+        try:
+            digest = _compute_file_sha256(resolved)
+        except OSError as exc:
+            raise _PortalValidationReasonError("Invalid path value", reason="invalid_path_value") from exc
+        if digest in MANAGED_SAM2_TRUSTED_SHA256:
+            return str(resolved)
+    raise _PortalValidationReasonError("SAM2 checkpoint path is not trusted", reason="untrusted_checkpoint_path")
+
+
 LOG_TAIL_LIMIT = 2000
 STATUS_LOG_LIMIT = 250
 EVENT_QUEUE_MAXSIZE = 512
@@ -573,6 +603,16 @@ ALLOWED_OUTPUT_ROOTS = _env_path_roots(
     DEFAULT_ALLOWED_PATH_ROOTS,
 )
 ALLOWED_PATH_ROOTS = list(dict.fromkeys([*ALLOWED_INPUT_ROOTS, *ALLOWED_OUTPUT_ROOTS]))
+MANAGED_SAM2_TRUSTED_ROOTS = [
+    Path(os.path.realpath(REPO_ROOT / "models" / "sam2")),
+    Path(os.path.realpath(REPO_ROOT / "checkpoints")),
+]
+MANAGED_SAM2_TRUSTED_SHA256 = frozenset(
+    {
+        "d0bb7f236400a49669ffdd1be617959a8b1d1065081789d7bbff88eded3a8071",
+        "7442e4e9b732a508f80e141e7c2913437a3610ee0c77381a66658c3a445df87b",
+    }
+)
 PORTAL_UPLOAD_ROOT = Path(
     os.getenv("TP_PORTAL_UPLOAD_ROOT", str(Path(tempfile.gettempdir()) / "transformation-portal" / "uploads"))
 ).expanduser()
@@ -942,6 +982,7 @@ VALIDATION_REASON_CODES = {
     "Invalid path value": "invalid_path_value",
     "Path shorthand traversal disallowed": "path_shorthand_traversal_disallowed",
     "Path outside allowed roots": "path_outside_allowed_roots",
+    "SAM2 checkpoint path is not trusted": "untrusted_checkpoint_path",
     "Invalid quality_tier": "invalid_quality_tier",
     "Invalid depth_backend": "invalid_depth_backend",
     "Invalid segmentation_backend": "invalid_segmentation_backend",
@@ -986,6 +1027,7 @@ PORTAL_SAFE_ERROR_MESSAGES = {
     "policy_yaml_required": "A rights policy YAML file is required before dispatch.",
     "rights_manifest_required": "A rights-manifest JSONL artifact is required before dispatch.",
     "runner_unavailable": "The selected pipeline runner is unavailable in this environment.",
+    "untrusted_checkpoint_path": "Managed SAM2 checkpoint overrides must use a repo-controlled or checksum-verified file.",
     "unsafe_path": "Configured paths must stay within the allowed workspace roots.",
     "unsupported_pipeline": "The selected pipeline is not supported.",
 }
@@ -2847,7 +2889,9 @@ def _lux_config_metadata() -> Dict[str, Any]:
                     "required": False,
                     "field": "sam2_checkpoint_path",
                     "detail": (
-                        "A local checkpoint path is optional. Supply one only" " when the runtime requires a pinned SAM2 file."
+                        "A local checkpoint path is optional. Managed flows only"
+                        " accept repo-controlled SAM2 paths or files whose"
+                        " checksum matches the governed SAM2 manifest."
                     ),
                 },
                 "model_provider_label": "Meta",
@@ -3221,7 +3265,25 @@ def _build_lux_config_preview(
         must_exist=False,
     )
     if sam2_checkpoint_path:
-        normalized_args["sam2_checkpoint_path"] = sam2_checkpoint_path
+        if segmentation_backend == "sam2":
+            try:
+                _validate_managed_sam2_checkpoint_path(sam2_checkpoint_path)
+            except _PortalValidationReasonError:
+                errors.append(
+                    _portal_issue(
+                        "sam2_checkpoint_path",
+                        "untrusted_checkpoint_path",
+                        "SAM2 checkpoint overrides must use a repo-controlled or checksum-verified file.",
+                        suggestion=(
+                            "Use ./models/sam2/... or ./checkpoints/... for repo-managed checkpoints, "
+                            "or provide a file whose SHA-256 matches the governed SAM2 checkpoint manifest."
+                        ),
+                    )
+                )
+            else:
+                normalized_args["sam2_checkpoint_path"] = sam2_checkpoint_path
+        else:
+            normalized_args["sam2_checkpoint_path"] = sam2_checkpoint_path
     normalized_args["sam2_tiling_enabled"] = _as_bool(
         _pick(args, "sam2_tiling_enabled", "sam2TilingEnabled", default=defaults["sam2_tiling_enabled"]),
         default=bool(defaults["sam2_tiling_enabled"]),
@@ -5987,6 +6049,8 @@ def _argv_from_request(
                 str(sam2_checkpoint_path_raw),
                 ALLOWED_INPUT_ROOTS,
             )
+            if segmentation_backend == "sam2":
+                sam2_checkpoint_path = _validate_managed_sam2_checkpoint_path(sam2_checkpoint_path)
 
         cameras_sidecar_path = ""
         if cameras_sidecar_path_raw is not None and str(cameras_sidecar_path_raw).strip():

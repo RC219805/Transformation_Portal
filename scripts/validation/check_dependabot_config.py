@@ -22,6 +22,10 @@ REQUIRED_UPDATES = {
 REQUIRED_TARGET_BRANCH = "main"
 REQUIRED_INTERVAL = "weekly"
 REQUIRED_OPEN_PR_LIMIT = 5
+REQUIRED_PIP_EXCLUDE_PATHS = {
+    "requirements/ml-core-linux.*",
+    "requirements/ml-core-darwin-x86_64.*",
+}
 
 
 def _load_config(text: str) -> dict[str, Any]:
@@ -77,26 +81,29 @@ def validate_dependabot_config(text: str) -> list[str]:
 
         if pair not in REQUIRED_UPDATES:
             errors.append(
-                "dependabot config contains unsupported update target "
-                f"{pair!r}; expected only {sorted(REQUIRED_UPDATES)!r}"
+                "dependabot config contains unsupported update target " f"{pair!r}; expected only {sorted(REQUIRED_UPDATES)!r}"
             )
 
         if entry.get("target-branch") != REQUIRED_TARGET_BRANCH:
-            errors.append(
-                f"dependabot update {pair!r} must target branch {REQUIRED_TARGET_BRANCH!r}"
-            )
+            errors.append(f"dependabot update {pair!r} must target branch {REQUIRED_TARGET_BRANCH!r}")
 
         if entry.get("open-pull-requests-limit") != REQUIRED_OPEN_PR_LIMIT:
-            errors.append(
-                f"dependabot update {pair!r} must set open-pull-requests-limit "
-                f"to {REQUIRED_OPEN_PR_LIMIT}"
-            )
+            errors.append(f"dependabot update {pair!r} must set open-pull-requests-limit " f"to {REQUIRED_OPEN_PR_LIMIT}")
 
         schedule = entry.get("schedule")
         if not isinstance(schedule, dict) or schedule.get("interval") != REQUIRED_INTERVAL:
-            errors.append(
-                f"dependabot update {pair!r} must use a {REQUIRED_INTERVAL!r} schedule"
-            )
+            errors.append(f"dependabot update {pair!r} must use a {REQUIRED_INTERVAL!r} schedule")
+
+        if pair == ("pip", "/"):
+            exclude_paths = entry.get("exclude-paths")
+            if not isinstance(exclude_paths, list):
+                errors.append("dependabot update ('pip', '/') must define exclude-paths as a list")
+            else:
+                missing_excludes = REQUIRED_PIP_EXCLUDE_PATHS - {
+                    value for value in exclude_paths if isinstance(value, str) and value
+                }
+                for missing in sorted(missing_excludes):
+                    errors.append(f"dependabot update ('pip', '/') must exclude unsupported manifest {missing!r}")
 
     missing = REQUIRED_UPDATES - seen_pairs
     for pair in sorted(missing):

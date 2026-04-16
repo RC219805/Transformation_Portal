@@ -1,22 +1,15 @@
 """
-Smoke tests for ML stack upgrades (PR #793b).
+Smoke tests for the governed ML dependency baseline.
 
-These tests validate that major ML framework upgrades don't break core functionality:
-- torch 2.4.1 → 2.10.0
-- torchvision 0.19.1 → 0.25.0
-- scikit-learn 1.7.2 → 1.8.0
-- timm 0.6.7 → 1.0.24
-- diffusers 0.31.0 → 0.36.0
-- transformers 4.53.0 → 4.57.6
-
-Smoke tests exercise representative code paths without requiring large model downloads.
-They use mocked model loading where appropriate to keep test time and disk usage minimal.
+These tests validate that baseline ML framework upgrades do not break core
+imports or representative code paths without requiring large model downloads.
 """
 
 import sys
 from unittest.mock import MagicMock, patch
 
 import pytest
+from packaging.version import Version
 
 # Check if ML packages are available for import
 try:
@@ -260,42 +253,40 @@ def test_ml_stack_imports():
         except PackageNotFoundError:
             return None
 
+    def assert_minimum_version(package_name: str, minimum_version: str) -> None:
+        package_version = get_version(package_name)
+        assert package_version is not None, f"{package_name} not installed"
+        assert Version(package_version) >= Version(
+            minimum_version
+        ), f"{package_name} version {package_version} < {minimum_version}"
+
     # Always check torch (required for ML tests to run)
     torch = pytest.importorskip("torch", reason="torch required for ML smoke tests")
-    torch_version = get_version("torch")
-    assert torch_version is not None, "torch not installed"
-    assert torch_version >= "2.10.0", f"torch version {torch_version} < 2.10.0"
+    assert_minimum_version("torch", "2.8.0")
 
     # Check sklearn (if available)
     if SKLEARN_AVAILABLE:
         import sklearn
 
-        sklearn_version = get_version("scikit-learn")
-        assert sklearn_version is not None, "scikit-learn not installed"
-        assert sklearn_version >= "1.8.0", f"scikit-learn version {sklearn_version} < 1.8.0"
+        assert_minimum_version("scikit-learn", "1.8.0")
 
     # Check diffusers (if available)
     if DIFFUSERS_AVAILABLE:
         import diffusers
 
-        diffusers_version = get_version("diffusers")
-        assert diffusers_version is not None, "diffusers not installed"
-        assert diffusers_version >= "0.36.0", f"diffusers version {diffusers_version} < 0.36.0"
+        assert_minimum_version("diffusers", "0.36.0")
 
     # Check transformers (if available)
     if TRANSFORMERS_AVAILABLE:
         import transformers
 
-        transformers_version = get_version("transformers")
-        assert transformers_version is not None, "transformers not installed"
-        assert transformers_version >= "4.57.0", f"transformers version {transformers_version} < 4.57.0"
+        assert_minimum_version("transformers", "4.57.0")
 
     # Check torchvision (if available)
     if TORCHVISION_AVAILABLE:
         import torchvision
 
-        torchvision_version = get_version("torchvision")
-        assert torchvision_version is not None, "torchvision not installed"
+        assert_minimum_version("torchvision", "0.23.0")
 
     # Check timm (if available)
     if TIMM_AVAILABLE:

@@ -104,11 +104,9 @@ def test_missing_required_pr_body_reference_is_reported() -> None:
 
 
 def test_missing_required_workflow_snippet_is_reported() -> None:
-    broken = remove_workflow_snippet(valid_workflow_text(), "make update-ml-linux-x86_64 LOCK_PYTHON_VERSION=3.11")
+    broken = remove_workflow_snippet(valid_workflow_text(), "make update-generic LOCK_PYTHON_VERSION=3.11")
     errors = workflow_contract.validate_dependency_update_workflow(broken)
-    assert (
-        "dependency-update workflow must include snippet " "'make update-ml-linux-x86_64 LOCK_PYTHON_VERSION=3.11'"
-    ) in errors
+    assert ("dependency-update workflow must include snippet " "'make update-generic LOCK_PYTHON_VERSION=3.11'") in errors
 
 
 def test_missing_required_install_toolchain_snippet_is_reported() -> None:
@@ -143,6 +141,12 @@ def test_forbidden_target_agnostic_update_command_is_reported() -> None:
     broken = valid_workflow_text() + "\n        make update LOCK_PYTHON_VERSION=3.11\n"
     errors = workflow_contract.validate_dependency_update_workflow(broken)
     assert "dependency-update workflow must not include snippet 'make update LOCK_PYTHON_VERSION=3.11'" in errors
+
+
+def test_forbidden_linux_target_owned_update_command_is_reported() -> None:
+    broken = valid_workflow_text() + "\n        make update-ml-linux-x86_64 LOCK_PYTHON_VERSION=3.11\n"
+    errors = workflow_contract.validate_dependency_update_workflow(broken)
+    assert "dependency-update workflow must not include snippet 'make update-ml-linux-x86_64'" in errors
 
 
 def test_repo_local_audit_reports_usage_is_reported() -> None:

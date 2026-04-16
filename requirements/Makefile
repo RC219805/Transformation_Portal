@@ -19,13 +19,13 @@
 # -------------------------------------------------------------------------
 # Target            Lockfile                    Baseline
 # darwin-x86_64     ml-core-darwin-x86_64.txt  torch 2.2.2 + numpy<2 + transformers<5 (frozen)
-# darwin-arm64      ml-core-darwin-arm64.txt   Apple Silicon baseline + CoreML tooling
-# linux-x86_64      ml-core-linux.txt          torch 2.2.2 + transformers<5
+# darwin-arm64      ml-core-darwin-arm64.txt   torch 2.8.0 + torchvision 0.23.0 + CoreML tooling
+# linux-x86_64      ml-core-linux.txt          frozen historical lock (unsupported)
 #
 # Target-owned ML lockfiles:
 #   ml-core-darwin-x86_64.txt  macOS Intel conservative ML baseline (frozen pending authoritative lane)
 #   ml-core-darwin-arm64.txt   macOS Apple Silicon ML baseline
-#   ml-core-linux.txt          Linux x86_64 ML baseline (torch 2.2.2 + transformers<5)
+#   ml-core-linux.txt          Linux x86_64 historical ML baseline (frozen unsupported lane)
 #
 # Non-core optional ML layers are not part of the checked-in lockfile contract.
 # Host-generated outputs for ml-core.txt, ml-cpu.txt, ml-mps.txt, ml-cuda.txt,
@@ -56,7 +56,7 @@ PYTORCH_CPU_INDEX := --extra-index-url https://download.pytorch.org/whl/cpu
 	compile-ml-darwin-arm64 update-ml-darwin-arm64 check-ml-darwin-arm64 \
 	compile-ml-linux-x86_64 update-ml-linux-x86_64 check-ml-linux-x86_64 \
 	compile-ml-darwin-x86_64 update-ml-darwin-x86_64 check-ml-darwin-x86_64 \
-	require-pip-compile require-darwin-arm64-authority require-linux-x86_64-authority refuse-darwin-x86_64-authority \
+	require-pip-compile require-darwin-arm64-authority require-linux-x86_64-authority refuse-darwin-x86_64-authority refuse-linux-x86_64-authority \
 	ml-core.txt ml-cpu.txt ml-mps.txt ml-cuda.txt ml-raw.txt ml-coreml.txt ml-research.txt ml.txt
 
 help:
@@ -82,9 +82,9 @@ help:
 	@echo "  compile-ml-darwin-arm64    Compile the Darwin arm64 ML lock on native Darwin arm64 only"
 	@echo "  update-ml-darwin-arm64     Update the Darwin arm64 ML lock on native Darwin arm64 only"
 	@echo "  check-ml-darwin-arm64      Verify the Darwin arm64 ML lock on native Darwin arm64 only"
-	@echo "  compile-ml-linux-x86_64    Compile the Linux x86_64 ML lock on native Linux x86_64 only"
-	@echo "  update-ml-linux-x86_64     Update the Linux x86_64 ML lock on native Linux x86_64 only"
-	@echo "  check-ml-linux-x86_64      Verify the Linux x86_64 ML lock on native Linux x86_64 only"
+	@echo "  compile-ml-linux-x86_64    Frozen lane - always fails closed"
+	@echo "  update-ml-linux-x86_64     Frozen lane - always fails closed"
+	@echo "  check-ml-linux-x86_64      Frozen lane - always fails closed"
 	@echo "  compile-ml-darwin-x86_64   Frozen lane - always fails closed"
 	@echo "  update-ml-darwin-x86_64    Frozen lane - always fails closed"
 	@echo "  check-ml-darwin-x86_64     Frozen lane - always fails closed"
@@ -92,7 +92,7 @@ help:
 	@echo "Target-owned ML lockfiles:"
 	@echo "  ml-core-darwin-x86_64.txt  macOS Intel conservative ML baseline (frozen)"
 	@echo "  ml-core-darwin-arm64.txt   macOS Apple Silicon ML baseline"
-	@echo "  ml-core-linux.txt          Linux x86_64 ML baseline (torch 2.2.2 + transformers<5)"
+	@echo "  ml-core-linux.txt          Linux x86_64 historical ML baseline (frozen unsupported lane)"
 	@echo ""
 	@echo "Non-core optional ML layers are not part of the checked-in lock contract:"
 	@echo "  ml-core.txt, ml-cpu.txt, ml-mps.txt, ml-cuda.txt,"
@@ -118,7 +118,7 @@ compile-all: compile
 
 compile-ml-layers:
 	@echo "ERROR: target-owned ML locks require explicit authoritative-lane commands."
-	@echo "ERROR: Use 'make compile-ml-darwin-arm64' on native Darwin arm64 or 'make compile-ml-linux-x86_64' on native Linux x86_64."
+	@echo "ERROR: Use 'make compile-ml-darwin-arm64' on native Darwin arm64."
 	@exit 1
 
 compile-accel:
@@ -205,15 +205,18 @@ refuse-darwin-x86_64-authority:
 	@echo "ERROR: Do not regenerate this lockfile from local tooling or scheduled automation."
 	@exit 1
 
+refuse-linux-x86_64-authority:
+	@echo "ERROR: ml-core-linux.txt is frozen as an unsupported historical lane."
+	@echo "ERROR: Do not regenerate this lockfile from local tooling or scheduled automation."
+	@exit 1
+
 ml-core-darwin-x86_64.txt: refuse-darwin-x86_64-authority
 
 ml-core-darwin-arm64.txt: require-darwin-arm64-authority require-pip-compile ml-core-darwin-arm64.in base.txt
 	@echo "Compiling ml-core-darwin-arm64.txt (macOS Apple Silicon baseline)..."
 	@$(PIP_COMPILE) $(PYTORCH_CPU_INDEX) -c base.txt ml-core-darwin-arm64.in -o ml-core-darwin-arm64.txt
 
-ml-core-linux.txt: require-linux-x86_64-authority require-pip-compile ml-core-linux.in base.txt
-	@echo "Compiling ml-core-linux.txt (Linux x86_64 baseline, transformers<5)..."
-	@$(PIP_COMPILE) $(PYTORCH_CPU_INDEX) -c base.txt ml-core-linux.in -o ml-core-linux.txt
+ml-core-linux.txt: refuse-linux-x86_64-authority
 
 compile-ml-darwin-arm64: ml-core-darwin-arm64.txt
 	@echo "✓ Darwin arm64 ML lock compiled successfully"
@@ -247,37 +250,7 @@ check-ml-darwin-arm64: require-darwin-arm64-authority require-pip-compile
 	fi; \
 	echo "✓ Darwin arm64 ML lock is up-to-date"
 
-compile-ml-linux-x86_64: ml-core-linux.txt
-	@echo "✓ Linux x86_64 ML lock compiled successfully"
-
-update-ml-linux-x86_64: require-linux-x86_64-authority require-pip-compile
-	@echo "Updating ml-core-linux.txt on authoritative Linux x86_64 lane..."
-	@$(PIP_COMPILE) --upgrade $(PYTORCH_CPU_INDEX) -c base.txt ml-core-linux.in -o ml-core-linux.txt
-	@echo "✓ Linux x86_64 ML lock updated successfully"
-
-check-ml-linux-x86_64: require-linux-x86_64-authority require-pip-compile
-	@echo "Checking Linux x86_64 ML lock..."
-	@set -euo pipefail; \
-	repo_dir="$$(pwd)"; \
-	tmp_dir="$$(mktemp -d)"; \
-	trap 'rm -rf "$$tmp_dir"' EXIT; \
-	cp base.txt ml-core-linux.in "$$tmp_dir"/; \
-	if [ -f "$$repo_dir/ml-core-linux.txt" ]; then \
-		cp "$$repo_dir/ml-core-linux.txt" "$$tmp_dir"/; \
-	else \
-		echo "ERROR: Required lockfile missing: ml-core-linux.txt"; \
-		exit 1; \
-	fi; \
-	cd "$$tmp_dir"; \
-	$(PIP_COMPILE) $(PYTORCH_CPU_INDEX) -c base.txt ml-core-linux.in -o ml-core-linux.txt >/dev/null; \
-	normalize_req() { \
-		awk 'BEGIN{start=0} { if (!start) { if ($$0 ~ /^#/ || $$0 ~ /^[[:space:]]*$$/) next; start=1 } print }' "$$1"; \
-	}; \
-	if ! diff -u <(normalize_req "$$tmp_dir/ml-core-linux.txt") <(normalize_req "$$repo_dir/ml-core-linux.txt") >/dev/null; then \
-		echo "❌ ml-core-linux.txt is out of date. Run 'make compile-ml-linux-x86_64' on native Linux x86_64."; \
-		exit 1; \
-	fi; \
-	echo "✓ Linux x86_64 ML lock is up-to-date"
+compile-ml-linux-x86_64 update-ml-linux-x86_64 check-ml-linux-x86_64: refuse-linux-x86_64-authority
 
 compile-ml-darwin-x86_64 update-ml-darwin-x86_64 check-ml-darwin-x86_64: refuse-darwin-x86_64-authority
 

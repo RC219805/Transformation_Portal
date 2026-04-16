@@ -196,9 +196,9 @@ class PlatformMatrix:
             - secure: True if platform has secure torch wheels available
             - ml_supported: True if ML stack is supported on this platform
 
-        Security Context (CVE-2025-32434):
-            PyTorch torch==2.2.2 is pinned for CAS determinism (ADR-032).
-            This version is vulnerable to RCE via torch.load().
+        Security Context:
+            Supported Linux and Apple Silicon lanes now pin torch==2.8.0.
+            The frozen macOS Intel lane remains on torch==2.2.2 until retirement.
             All platforms must use weights_only=True for torch.load() calls.
         """
         base_mitigation = (
@@ -213,8 +213,8 @@ class PlatformMatrix:
             return {
                 "platform": self.canonical_target,
                 "cve_2025_32434_note": (
-                    "macOS Intel (x86_64) uses torch==2.2.2 which is vulnerable "
-                    "to CVE-2025-32434 (torch.load RCE). Runtime mitigation required."
+                    "macOS Intel (x86_64) remains on the frozen torch==2.2.2 lane, "
+                    "which is vulnerable to CVE-2025-32434 and no longer supported for ML workloads."
                 ),
                 "mitigation": base_mitigation,
                 "secure": False,  # macOS Intel has no torch>=2.6.0 wheels (dropped platform support)
@@ -224,11 +224,10 @@ class PlatformMatrix:
             return {
                 "platform": self.canonical_target,
                 "cve_2025_32434_note": (
-                    "Platform uses torch==2.2.2 for CAS determinism. "
-                    "CVE-2025-32434 mitigated via weights_only=True at runtime."
+                    "Supported lane uses torch==2.8.0. " "weights_only=True remains required for checkpoint defense in depth."
                 ),
                 "mitigation": base_mitigation,
-                "secure": True,  # Secure when mitigation is applied
+                "secure": True,
                 "ml_supported": True,
             }
 
