@@ -427,16 +427,28 @@ Contract notes:
                             </div>
                         </div>
                     </div>
-                    <div id="apiKeySection" class="mt-4 hidden">
-                        <div class="flex items-center justify-between gap-3 mb-1.5">
-                            <label class="block text-xs font-medium text-slate-700 dark:text-slate-300" for="apiKeyInput">API Key</label>
-                            <span id="authModeBadge" class="rounded-full border border-slate-300 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 px-2.5 py-1 text-[10px] font-mono uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">managed_unavailable</span>
+                    <details id="connectionDetails" class="quiet-disclosure mt-4" data-ui="connection-details">
+                        <summary class="quiet-disclosure__summary">
+                            <div>
+                                <p class="section-kicker">Connection details</p>
+                                <p class="quiet-disclosure__title">Managed access posture and direct-debug controls</p>
+                            </div>
+                            <div class="disclosure-summary-meta">
+                                <span id="authModeBadge" class="rounded-full border border-slate-300 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 px-2.5 py-1 text-[10px] font-mono uppercase tracking-[0.16em] text-slate-600 dark:text-slate-300">managed_unavailable</span>
+                                <span class="disclosure-chevron text-slate-400">▾</span>
+                            </div>
+                        </summary>
+                        <div class="quiet-disclosure__body">
+                            <p id="apiKeyManagedHint" class="text-[12px] leading-relaxed text-slate-600 dark:text-slate-300">Managed mode is active. Backend credentials stay server-side and are never stored in the browser.</p>
+                            <div id="apiKeySection" class="mt-4 hidden">
+                                <label class="block text-xs font-medium text-slate-700 dark:text-slate-300" for="apiKeyInput">API Key</label>
+                                <p class="mt-1 text-[12px] leading-relaxed text-slate-600 dark:text-slate-300">Direct-debug tokens are session-only and never persisted in browser local storage.</p>
+                                <div class="mt-3 flex flex-col sm:flex-row gap-2 sm:items-center">
+                                    <input type="password" id="apiKeyInput" class="flex-1 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-2.5 text-[13px] font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors" placeholder="Bearer token for /v1/jobs endpoints" autocomplete="off" spellcheck="false" disabled />
+                                </div>
+                            </div>
                         </div>
-                        <p id="apiKeyManagedHint" class="text-[12px] leading-relaxed text-slate-500 dark:text-slate-400">Managed mode is active. Backend credentials stay server-side and are never stored in the browser.</p>
-                        <div class="flex flex-col sm:flex-row gap-2 sm:items-center">
-                            <input type="password" id="apiKeyInput" class="flex-1 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-2.5 text-[13px] font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors" placeholder="Bearer token for /v1/jobs endpoints" autocomplete="off" spellcheck="false" disabled />
-                        </div>
-                    </div>
+                    </details>
                     <div id="portalAccessState" class="portal-access-state mt-4" data-ui="portal-access-state" data-tone="info" data-bootstrap-status="pending">
                         <div class="portal-access-state__head">
                             <div>
@@ -679,8 +691,8 @@ Contract notes:
                                         </div>
                                         <p id="stagedUploadProgressLabel" class="mt-2 text-[12px] leading-6 text-slate-500 dark:text-slate-400">No upload in progress.</p>
                                     </div>
-                                    <p id="stagedUploadSummary" class="mt-2 text-[12px] leading-6 text-slate-600 dark:text-slate-300"></p>
-                                    <p id="stagedUploadError" class="mt-1 text-[12px] leading-6 text-red-600 dark:text-red-300"></p>
+                                    <div id="stagedUploadSummary" class="mt-3" aria-live="polite" aria-atomic="true"></div>
+                                    <p id="stagedUploadError" class="mt-1 text-[12px] leading-6 text-red-600 dark:text-red-300" aria-live="assertive"></p>
                                     <input type="file" id="stagedUploadFilesInput" class="hidden" multiple />
                                     <input type="file" id="stagedUploadFolderInput" class="hidden" webkitdirectory directory multiple />
                                 </div>
@@ -937,8 +949,8 @@ Contract notes:
                     <details id="advancedFlagsDetails" class="disclosure-panel disclosure-panel-secondary mt-6">
                         <summary class="disclosure-summary">
                             <div>
-                                <p class="text-[11px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">Advanced Flags</p>
-                                <p class="mt-1 text-[12px] text-slate-500 dark:text-slate-400">Secondary diagnostics, fallback, and runtime strictness controls.</p>
+                                <p class="text-[11px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">Advanced</p>
+                                <p class="mt-1 text-[12px] text-slate-500 dark:text-slate-400">Deliverables, quality, performance, compatibility, and debug controls that stay secondary to the preset-first lane.</p>
                             </div>
                             <div class="disclosure-summary-meta">
                                 <span id="advancedFlagsSummary" class="disclosure-summary-badge">Secondary</span>
@@ -1225,9 +1237,9 @@ Contract notes:
 
                     <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
                         <section class="step-four-primary-card rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/70 p-4">
-                            <h4 class="text-[10px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">Pre-Run Checks</h4>
+                            <h4 class="text-[10px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">Dispatch Checklist</h4>
                             <ul id="preRunWarnings" class="mt-2 space-y-1 text-[12px] text-amber-700 dark:text-amber-300"></ul>
-                            <p id="preRunWarningsEmpty" class="mt-2 text-[12px] text-emerald-700 dark:text-emerald-300">No pre-run warnings.</p>
+                            <p id="preRunWarningsEmpty" class="mt-2 text-[12px] text-emerald-700 dark:text-emerald-300">All dispatch checks passed.</p>
                         </section>
                         <section class="step-four-primary-card rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/70 p-4">
                             <div class="flex items-center justify-between gap-2">
@@ -1244,8 +1256,8 @@ Contract notes:
                     <details id="dispatchToolsDetails" class="disclosure-panel mt-6" data-ui="dispatch-tools">
                         <summary class="disclosure-summary">
                             <div>
-                                <p class="text-[11px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">Secondary CLI & Config Tools</p>
-                                <p class="mt-1 text-[12px] text-slate-500 dark:text-slate-400">Open this only when you need exact argv parity, JSON transport, or the normalized effective config.</p>
+                                <p class="text-[11px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">JSON / CLI / Effective Config</p>
+                                <p class="mt-1 text-[12px] text-slate-500 dark:text-slate-400">Open this only when you need exact argv parity, normalized JSON, inactive preserved values, or the effective config for the next run.</p>
                             </div>
                             <div class="disclosure-summary-meta">
                                 <span id="dispatchToolsSummary" class="disclosure-summary-badge">Collapsed</span>

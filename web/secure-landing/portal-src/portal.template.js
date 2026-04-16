@@ -2836,6 +2836,31 @@ function formatTransportLabel(job) {
     return 'closed';
 }
 
+function _displayJobState(job) {
+    if (!job) return 'idle';
+    const rawState = String(job.state || '').trim().toLowerCase();
+    const artifactCount = Array.isArray(job.artifacts) ? job.artifacts.length : 0;
+    const reviewableOutputs = _jobHasReviewableOutputs(job);
+    if (rawState === 'queued') return 'queued';
+    if (rawState === 'running' && artifactCount > 0) return 'indexing';
+    if (rawState === 'running') return 'running';
+    // Terminal runs stay reviewable once outputs are retained, even when the active artifact is metadata-only.
+    if ((rawState === 'succeeded' || rawState === 'ready') && reviewableOutputs) return 'reviewable';
+    if (rawState === 'partial') return 'partial-failure';
+    if (rawState === 'failed' || rawState === 'canceled') return 'failed';
+    return rawState || 'idle';
+}
+
+function _displayJobStateTone(job) {
+    const displayState = _displayJobState(job);
+    if (displayState === 'reviewable') return 'ready';
+    if (displayState === 'running' || displayState === 'queued' || displayState === 'indexing' || displayState === 'partial-failure') {
+        return 'running';
+    }
+    if (displayState === 'failed' || displayState === 'offline') return 'offline';
+    return 'ready';
+}
+
 function formatBytes(sizeBytes) {
     if (!Number.isFinite(sizeBytes) || sizeBytes < 0) return 'unknown size';
     if (sizeBytes < 1024) return `${sizeBytes} B`;
@@ -2847,6 +2872,49 @@ function formatBytes(sizeBytes) {
         unitIndex += 1;
     }
     return `${value.toFixed(value >= 10 ? 0 : 1)} ${units[unitIndex]}`;
+}
+
+function _syncSwitchStateLabels() {
+    if (typeof document === 'undefined') return;
+    Array.from(document.querySelectorAll('input[role="switch"]')).forEach((input) => {
+        const label = input.closest('label');
+        if (!label) return;
+        const toggleWrap = input.parentElement;
+        if (!toggleWrap) return;
+        let controlsWrap = label.querySelector('[data-switch-controls-wrap="true"]');
+        if (!controlsWrap && toggleWrap.parentElement === label) {
+            controlsWrap = document.createElement('span');
+            controlsWrap.dataset.switchControlsWrap = 'true';
+            controlsWrap.className = 'ml-3 inline-flex items-center gap-3';
+            label.insertBefore(controlsWrap, toggleWrap);
+            controlsWrap.appendChild(toggleWrap);
+        } else if (!controlsWrap && toggleWrap.parentElement instanceof HTMLElement) {
+            controlsWrap = toggleWrap.parentElement;
+            controlsWrap.dataset.switchControlsWrap = 'true';
+            controlsWrap.classList.add('ml-3', 'inline-flex', 'items-center', 'gap-3');
+        }
+        let stateLabel = label.querySelector('[data-switch-state-label="true"]');
+        if (!stateLabel) {
+            stateLabel = document.createElement('span');
+            stateLabel.dataset.switchStateLabel = 'true';
+            stateLabel.className = 'inline-flex min-w-[3rem] items-center justify-center rounded-full border px-2 py-1 text-[10px] font-bold uppercase tracking-[0.16em]';
+            if (controlsWrap) {
+                controlsWrap.insertBefore(stateLabel, controlsWrap.firstChild);
+            } else {
+                label.appendChild(stateLabel);
+            }
+        } else if (controlsWrap && stateLabel.parentElement !== controlsWrap) {
+            controlsWrap.insertBefore(stateLabel, controlsWrap.firstChild);
+        }
+        const checked = Boolean(input.checked);
+        stateLabel.textContent = checked ? 'On' : 'Off';
+        stateLabel.className = checked
+            ? 'inline-flex min-w-[3rem] items-center justify-center rounded-full border border-emerald-300 bg-emerald-50 px-2 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-300'
+            : 'inline-flex min-w-[3rem] items-center justify-center rounded-full border border-slate-300 bg-slate-100 px-2 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-600 dark:border-slate-700 dark:bg-slate-900/80 dark:text-slate-300';
+        input.setAttribute('aria-checked', checked ? 'true' : 'false');
+        const baseLabel = String(input.getAttribute('aria-label') || input.id || 'toggle').replace(/\s+\((on|off)\)$/i, '');
+        input.setAttribute('aria-label', `${baseLabel} (${checked ? 'on' : 'off'})`);
+    });
 }
 
 function formatDuration(startMs, endMs = Date.now()) {
@@ -3585,118 +3653,236 @@ function syncDisclosurePanels(payload = null) {
     );
 }
 
-function renderGovernanceBanner(payload) {
-    if (!els.governanceChecklist) return;
-    const args = payload?.args || {};
-    const dispatchStatus = currentPipelineDispatchStatus();
-    const readinessIssues = currentPipelineReadinessIssues();
-    const items = [];
-    let title = 'Run posture is clear.';
-    let body = 'The current configuration is valid for dispatch. Any license acknowledgments or runtime caveats will surface here before execution.';
-    let postureHint = 'Step 4 stays aligned to this checklist, so blocked governance items clear here before launch becomes trustworthy.';
+function _dispatchChecklistTone(tone = 'info') {
+    if (tone === 'block') {
+        return {
+            badge: 'BLOCK',
+            cardClass: 'border-red-200 bg-red-50/90 dark:border-red-900/60 dark:bg-red-950/25',
+            badgeClass: 'border-red-300 bg-red-100 text-red-700 dark:border-red-800 dark:bg-red-950/60 dark:text-red-200',
+            detailClass: 'text-red-900 dark:text-red-100'
+        };
+    }
+    if (tone === 'warn') {
+        return {
+            badge: 'WARN',
+            cardClass: 'border-amber-200 bg-amber-50/90 dark:border-amber-900/60 dark:bg-amber-950/25',
+            badgeClass: 'border-amber-300 bg-amber-100 text-amber-700 dark:border-amber-800 dark:bg-amber-950/60 dark:text-amber-200',
+            detailClass: 'text-amber-900 dark:text-amber-100'
+        };
+    }
+    return {
+        badge: 'PASS',
+        cardClass: 'border-emerald-200 bg-emerald-50/90 dark:border-emerald-900/60 dark:bg-emerald-950/25',
+        badgeClass: 'border-emerald-300 bg-emerald-100 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-200',
+        detailClass: 'text-emerald-900 dark:text-emerald-100'
+    };
+}
 
-    if (state.pipeline === 'lux-depth-v3') {
-        if (String(args.preset || '').toLowerCase().includes('v3.1')) {
+function _dispatchChecklistItems(payload) {
+    const args = payload?.args || {};
+    const preview = _currentPreviewForPayload(payload) || _effectivePreviewSnapshot(payload);
+    const readinessIssues = currentPipelineReadinessIssues();
+    const preset = currentPresetDescriptor();
+    const previewErrors = Array.isArray(preview?.field_errors) ? preview.field_errors : [];
+    const previewWarnings = Array.isArray(preview?.field_warnings) ? preview.field_warnings : [];
+    const dispatchStatus = currentPipelineDispatchStatus();
+    const isLuxPipeline = state.pipeline === 'lux-depth-v3';
+    const researchPreset = _presetRequiresResearchAcknowledgments(preset, args);
+    const reconstructionEnabled = parseBoolLike(args.enable_reconstruction, false);
+    const depthProEnabled = String(args.depth_backend || '').trim().toLowerCase() === 'depth_pro';
+    const nonCommercialChecked = parseBoolLike(args.non_commercial_ok, false);
+    const appleChecked = parseBoolLike(args.accept_apple_depth_pro_research_license, false);
+    const researchToolsChecked = parseBoolLike(args.accept_research_tools_license, false);
+    const debugBundleEnabled = parseBoolLike(args.emit_scene_debug_bundle, false);
+    const materialsApexGuardrail = parseBoolLike(args.materials_v3, false) && String(args.quality_tier || '').toLowerCase() === 'apex';
+    const segmentationReady = parseBoolLike(args.enable_segmentation, false)
+        && String(args.segmentation_backend || '').toLowerCase() !== 'stub'
+        && parseBoolLike(args.strict_segmentation, false);
+    const items = [];
+
+    if (preview?.status === 'error' || previewErrors.length > 0) {
+        items.push({
+            tone: 'block',
+            label: 'Preview normalization',
+            detail: String(previewErrors[0]?.message || preview?.error || 'Preview validation is blocking dispatch.')
+        });
+    } else if (preview?.status === 'loading') {
+        items.push({
+            tone: 'warn',
+            label: 'Preview normalization',
+            detail: 'Preview-backed normalization is still refreshing. Dispatch remains cautious until the current draft settles.'
+        });
+    } else if (previewWarnings.length > 0) {
+        items.push({
+            tone: 'warn',
+            label: 'Preview normalization',
+            detail: String(previewWarnings[0]?.message || 'Preview surfaced operator-facing warnings.')
+        });
+    } else {
+        items.push({
+            tone: 'pass',
+            label: 'Preview normalization',
+            detail: 'The normalized config is coherent and ready to drive dispatch parity views.'
+        });
+    }
+
+    if (!state.backendOk) {
+        items.push({
+            tone: 'block',
+            label: 'Backend connectivity',
+            detail: 'The orchestrator API is offline. Dispatch stays disabled until connectivity returns.'
+        });
+    } else {
+        items.push({
+            tone: 'pass',
+            label: 'Backend connectivity',
+            detail: 'The live orchestrator API is reachable for managed dispatch.'
+        });
+    }
+
+    const blockedReadinessIssue = readinessIssues.find((issue) => String(issue?.severity || '').trim().toLowerCase() === 'blocked');
+    const warnedReadinessIssue = readinessIssues.find((issue) => String(issue?.severity || '').trim().toLowerCase() !== 'blocked');
+    if (blockedReadinessIssue || dispatchStatus === 'blocked') {
+        items.push({
+            tone: 'block',
+            label: 'Dispatch readiness',
+            detail: String(
+                blockedReadinessIssue?.message
+                || 'A pipeline prerequisite is still blocking dispatch.'
+            )
+        });
+    } else if (warnedReadinessIssue || dispatchStatus === 'degraded') {
+        items.push({
+            tone: 'warn',
+            label: 'Dispatch readiness',
+            detail: String(
+                warnedReadinessIssue?.message
+                || 'The run is valid, but at least one operator prerequisite still needs attention.'
+            )
+        });
+    } else {
+        items.push({
+            tone: 'pass',
+            label: 'Dispatch readiness',
+            detail: 'No blocking readiness prerequisites remain for the current draft.'
+        });
+    }
+
+    if (isLuxPipeline) {
+        const missingAcknowledgments = [];
+        if (researchPreset && !nonCommercialChecked) missingAcknowledgments.push('non-commercial acknowledgment');
+        if (depthProEnabled && !appleChecked) missingAcknowledgments.push('Apple Depth Pro research license');
+        if (reconstructionEnabled && !researchToolsChecked) missingAcknowledgments.push('research tools license');
+        if (missingAcknowledgments.length > 0) {
             items.push({
-                tone: parseBoolLike(args.non_commercial_ok, false) ? 'ok' : 'warn',
-                label: 'Research preset',
-                detail: parseBoolLike(args.non_commercial_ok, false)
-                    ? 'Non-commercial acknowledgment is already set.'
-                    : 'This preset requires non-commercial acknowledgment before dispatch.'
+                tone: 'block',
+                label: 'Governance acknowledgments',
+                detail: `Dispatch requires: ${missingAcknowledgments.join(', ')}.`
+            });
+        } else {
+            items.push({
+                tone: 'pass',
+                label: 'Governance acknowledgments',
+                detail: 'Required research, license, and non-commercial acknowledgments are complete for this draft.'
             });
         }
-        if (String(args.depth_backend || '').toLowerCase() === 'depth_pro') {
-            const ok = parseBoolLike(args.non_commercial_ok, false) && parseBoolLike(args.accept_apple_depth_pro_research_license, false);
+
+        if (materialsApexGuardrail && !segmentationReady) {
             items.push({
-                tone: ok ? 'ok' : 'warn',
-                label: 'Depth Pro license',
-                detail: ok
-                    ? 'Depth Pro research acknowledgments are complete.'
-                    : 'Depth Pro requires non-commercial and Apple research-license acknowledgment.'
-            });
-        }
-        if (parseBoolLike(args.enable_reconstruction, false)) {
-            const ok = parseBoolLike(args.non_commercial_ok, false) && parseBoolLike(args.accept_research_tools_license, false);
-            items.push({
-                tone: ok ? 'ok' : 'warn',
-                label: 'Reconstruction governance',
-                detail: ok
-                    ? 'Scene reconstruction acknowledgments are complete.'
-                    : 'Scene reconstruction requires non-commercial and research-tools acknowledgment.'
-            });
-        }
-        if (parseBoolLike(args.materials_v3, false) && String(args.quality_tier || '').toLowerCase() === 'apex') {
-            const segmentationReady = parseBoolLike(args.enable_segmentation, false)
-                && String(args.segmentation_backend || '').toLowerCase() !== 'stub'
-                && parseBoolLike(args.strict_segmentation, false);
-            items.push({
-                tone: segmentationReady ? 'ok' : 'warn',
+                tone: 'warn',
                 label: 'APEX materials guardrail',
-                detail: segmentationReady
-                    ? 'Segmentation prerequisites for APEX materials are satisfied.'
-                    : 'APEX + Materials V3 expects enabled strict segmentation with a non-stub backend.'
+                detail: 'APEX + Materials V3 expects strict segmentation with a non-stub backend before dispatch.'
+            });
+        } else if (materialsApexGuardrail) {
+            items.push({
+                tone: 'pass',
+                label: 'APEX materials guardrail',
+                detail: 'Strict segmentation and backend posture are aligned for APEX materials.'
+            });
+        }
+
+        if (debugBundleEnabled && !state.portalUi.debugBundleAcknowledged) {
+            items.push({
+                tone: 'block',
+                label: 'Debug bundle acknowledgment',
+                detail: 'Scene debug bundle capture is enabled. Operator acknowledgment is required before dispatch.'
+            });
+        } else {
+            items.push({
+                tone: 'pass',
+                label: 'Debug bundle acknowledgment',
+                detail: debugBundleEnabled
+                    ? 'Debug bundle capture is enabled and acknowledged.'
+                    : 'No additional debug-bundle acknowledgment is required.'
             });
         }
     } else {
         items.push({
-            tone: dispatchStatus === 'blocked' ? 'warn' : dispatchStatus === 'degraded' ? 'info' : 'ok',
+            tone: dispatchStatus === 'blocked' ? 'block' : dispatchStatus === 'degraded' ? 'warn' : 'pass',
             label: 'Archive governance',
             detail: dispatchStatus === 'blocked'
-                ? 'Dispatch is blocked until the canonical archive prerequisites are supplied.'
+                ? 'Canonical archive prerequisites are still missing for this stage.'
                 : dispatchStatus === 'degraded'
-                    ? 'Archive stage is available, but it still requires operator-supplied prerequisites at dispatch time.'
-                    : 'This workflow stays within deterministic archive and provenance outputs.'
+                    ? 'The archive stage is valid, but operator-supplied prerequisites are still required.'
+                    : 'The archive command, input posture, and deterministic outputs are aligned.'
         });
     }
 
-    items.push({
-        tone: state.backendOk ? 'ok' : 'info',
-        label: state.backendOk ? 'Backend live' : 'Backend offline',
-        detail: state.backendOk
-            ? 'Jobs will be submitted to the live orchestrator API.'
-            : 'Execution dispatch stays disabled until the live orchestrator API is reachable.'
-    });
+    return items;
+}
 
-    readinessIssues.forEach((issue) => {
-        items.push({
-            tone: issue.severity === 'blocked' ? 'warn' : 'info',
-            label: titleCaseToken(issue.reason || 'readiness issue', 'Readiness issue'),
-            detail: String(issue.message || 'Pipeline readiness reported an operator-facing prerequisite.')
-        });
-    });
-
+function renderGovernanceBanner(payload) {
+    if (!els.governanceChecklist) return;
+    const items = _dispatchChecklistItems(payload);
+    const hasBlocked = items.some((item) => item.tone === 'block');
     const hasWarnings = items.some((item) => item.tone === 'warn');
-    if (hasWarnings) {
-        title = 'Execution is blocked.';
-        body = 'Before dispatch, satisfy the blocked readiness prerequisites listed below.';
-        postureHint = 'Clear the blocked governance items in this panel before treating the Step 4 launch lane as actionable.';
-    } else if (items.some((item) => item.tone === 'info')) {
-        title = 'Configuration is valid with readiness caveats.';
-        body = 'The run contract is coherent, but at least one prerequisite still needs operator attention before dispatch can be treated as fully ready.';
-        postureHint = 'Use this panel to resolve readiness caveats first; Step 4 will remain cautious until they settle.';
-    }
 
-    if (els.governanceBannerTitle) els.governanceBannerTitle.textContent = title;
-    if (els.governanceBannerBody) els.governanceBannerBody.textContent = body;
-    if (els.governancePostureHint) els.governancePostureHint.textContent = postureHint;
+    if (els.governanceBannerTitle) {
+        els.governanceBannerTitle.textContent = hasBlocked
+            ? 'Dispatch is blocked.'
+            : hasWarnings
+                ? 'Dispatch needs operator attention.'
+                : 'Dispatch is ready.';
+    }
+    if (els.governanceBannerBody) {
+        els.governanceBannerBody.textContent = hasBlocked
+            ? 'Clear the blocked checklist rows below before treating Step 4 as launch-ready.'
+            : hasWarnings
+                ? 'The draft is coherent, but at least one checklist row still needs operator attention before launch.'
+                : 'The current draft, governance posture, and runtime checks are aligned for dispatch.';
+    }
+    if (els.governancePostureHint) {
+        els.governancePostureHint.textContent = hasBlocked
+            ? 'Step 4 mirrors this checklist so the launch lane stays explicit about what is still blocked.'
+            : hasWarnings
+                ? 'Use this checklist to clear warnings before treating the launch lane as final.'
+                : 'Step 4 stays aligned to this checklist so launch remains trustworthy and reviewable.';
+    }
 
     els.governanceChecklist.innerHTML = '';
     items.forEach((item) => {
+        const tone = _dispatchChecklistTone(item.tone);
         const card = document.createElement('div');
-        const toneClass = item.tone === 'warn'
-            ? 'border-amber-200 bg-amber-50/90 dark:border-amber-900/60 dark:bg-amber-900/20'
-            : item.tone === 'ok'
-                ? 'border-emerald-200 bg-emerald-50/90 dark:border-emerald-900/60 dark:bg-emerald-900/20'
-                : 'border-slate-200 bg-white/80 dark:border-slate-700 dark:bg-slate-900/60';
-        card.className = `governance-item ${toneClass}`;
+        card.className = `governance-item ${tone.cardClass}`;
+        card.dataset.tone = item.tone;
+
+        const topRow = document.createElement('div');
+        topRow.className = 'flex items-start justify-between gap-3';
 
         const heading = document.createElement('p');
         heading.className = 'text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400';
         heading.textContent = item.label;
-        card.appendChild(heading);
+        topRow.appendChild(heading);
+
+        const badge = document.createElement('span');
+        badge.className = `inline-flex items-center rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.16em] ${tone.badgeClass}`;
+        badge.textContent = tone.badge;
+        topRow.appendChild(badge);
+
+        card.appendChild(topRow);
 
         const detail = document.createElement('p');
-        detail.className = 'mt-2 text-[12px] leading-6 text-slate-700 dark:text-slate-200';
+        detail.className = `mt-2 text-[12px] leading-6 ${tone.detailClass}`;
         detail.textContent = item.detail;
         card.appendChild(detail);
 
@@ -4086,12 +4272,13 @@ function renderSelectedJobInspector() {
                             : (selected.state === 'running' || selected.state === 'queued' ? 'Waiting for stream' : 'Closed');
     const transportLabel = formatTransportLabel(selected);
     const elapsedLabel = formatDuration(Number(selected.createdAt || 0), Number(selected.finishedAt || Date.now()));
+    const displayState = _displayJobState(selected);
     const latestWarning = Array.isArray(selected.transportWarnings) && selected.transportWarnings.length > 0
         ? selected.transportWarnings[selected.transportWarnings.length - 1]
         : null;
     const visibleAlert = latestWarning && latestWarning.tone !== 'info' ? latestWarning : null;
 
-    if (els.selectedJobStateBadge) els.selectedJobStateBadge.textContent = titleCaseToken(selected.state, 'Unknown');
+    if (els.selectedJobStateBadge) els.selectedJobStateBadge.textContent = titleCaseToken(displayState, 'Unknown');
     if (els.selectedJobIdLabel) {
         els.selectedJobIdLabel.textContent = String(selected.id || 'unknown');
         els.selectedJobIdLabel.title = String(selected.id || 'unknown');
@@ -4105,7 +4292,7 @@ function renderSelectedJobInspector() {
         els.selectedJobProgressBar.value = Math.max(0, Math.min(100, Number(selected.progress) || 0));
     }
     if (els.selectedJobMetaLine) {
-        els.selectedJobMetaLine.textContent = `${titleCaseToken(selected.state, 'Unknown')} • ${transportLabel} • ${elapsedLabel}`;
+        els.selectedJobMetaLine.textContent = `${titleCaseToken(displayState, 'Unknown')} • ${transportLabel} • ${elapsedLabel}`;
     }
     if (els.selectedJobFreshness) {
         els.selectedJobFreshness.textContent = _jobFreshnessLabel(selected);
@@ -4120,7 +4307,7 @@ function renderSelectedJobInspector() {
                 ? readableError
                 : outcomeSummary
                     ? `${outcomeSummary}.`
-                    : `Operators can now read ${titleCaseToken(selected.state, 'job')} state at a glance: ${artifactCount} artifact${artifactCount === 1 ? '' : 's'} indexed, ${transportLabel} transport, ${elapsedLabel}.`;
+                    : `Operators can now read ${titleCaseToken(displayState, 'job')} state at a glance: ${artifactCount} artifact${artifactCount === 1 ? '' : 's'} indexed, ${transportLabel} transport, ${elapsedLabel}.`;
     }
     const recovery = _selectedJobRecoverySnapshot(selected);
     if (els.selectedJobRecoveryTitle) els.selectedJobRecoveryTitle.textContent = recovery.title;
@@ -4549,7 +4736,7 @@ function _syncStagedUploadUi() {
         } else if (busy) {
             els.stagedUploadStatus.textContent = String(uploadState.status || 'Uploading files to the staged input directory...');
         } else if (uploadState.summary) {
-            els.stagedUploadStatus.textContent = 'Staged uploads are ready. The input directory now points at the staged batch.';
+            els.stagedUploadStatus.textContent = 'Staged uploads are ready. Review the receipt below before dispatching the next run.';
         } else {
             els.stagedUploadStatus.textContent = 'Upload a file set and the staged input directory will replace the current source path.';
         }
@@ -4585,7 +4772,7 @@ function _syncStagedUploadUi() {
         }
     }
     if (els.stagedUploadSummary) {
-        els.stagedUploadSummary.textContent = String(uploadState.summary || '');
+        _renderStagedUploadSummary(els.stagedUploadSummary, uploadState);
     }
     if (els.stagedUploadError) {
         els.stagedUploadError.textContent = String(uploadState.error || '');
@@ -4941,6 +5128,165 @@ function _collectStagedUploadSelection(fileList) {
     return { entries, totalBytes };
 }
 
+function _stagedUploadToneClasses(tone = 'info') {
+    if (tone === 'blocked') {
+        return 'border-red-200 bg-red-50/90 text-red-800 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-200';
+    }
+    if (tone === 'warning') {
+        return 'border-amber-200 bg-amber-50/90 text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200';
+    }
+    if (tone === 'success') {
+        return 'border-emerald-200 bg-emerald-50/90 text-emerald-800 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-200';
+    }
+    return 'border-slate-200 bg-white/90 text-slate-800 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-200';
+}
+
+function _appendStagedUploadFact(container, label, value, tone = 'neutral') {
+    if (!container || !String(value || '').trim()) return;
+    const card = document.createElement('div');
+    card.className = `rounded-lg border px-3 py-3 ${_stagedUploadToneClasses(
+        tone === 'blocked' ? 'blocked' : tone === 'warning' ? 'warning' : tone === 'success' ? 'success' : 'info'
+    )}`;
+
+    const heading = document.createElement('p');
+    heading.className = 'text-[10px] font-bold uppercase tracking-[0.18em] opacity-75';
+    heading.textContent = label;
+    card.appendChild(heading);
+
+    const detail = document.createElement('p');
+    detail.className = 'mt-2 text-[12px] font-semibold leading-6';
+    detail.textContent = value;
+    card.appendChild(detail);
+
+    container.appendChild(card);
+}
+
+function _renderStagedUploadSummary(container, uploadState) {
+    if (!container) return;
+    container.replaceChildren();
+
+    const summaryText = String(uploadState?.summary || '').trim();
+    if (!summaryText) return;
+
+    const receipt = uploadState?.receipt && typeof uploadState.receipt === 'object' ? uploadState.receipt : null;
+    const receiptSummary = receipt?.summary && typeof receipt.summary === 'object' ? receipt.summary : {};
+    const topLevelRoots = Array.isArray(receiptSummary.top_level_roots)
+        ? receiptSummary.top_level_roots.map((item) => String(item || '').trim()).filter(Boolean)
+        : [];
+    const warnings = Array.isArray(receiptSummary.warnings)
+        ? receiptSummary.warnings.map((item) => String(item || '').trim()).filter(Boolean)
+        : [];
+    const receivedAtMs = Number.isFinite(Number(receipt?.received_at_epoch_seconds))
+        ? Number(receipt.received_at_epoch_seconds) * 1000
+        : 0;
+
+    const shell = document.createElement('section');
+    shell.className = 'rounded-xl border border-slate-200 bg-slate-50/90 p-4 dark:border-slate-800 dark:bg-slate-950/40';
+
+    const header = document.createElement('div');
+    header.className = 'flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between';
+
+    const headerCopy = document.createElement('div');
+    const title = document.createElement('p');
+    title.className = 'text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400';
+    title.textContent = 'Upload receipt';
+    headerCopy.appendChild(title);
+
+    const summary = document.createElement('p');
+    summary.className = 'mt-2 text-[12px] font-semibold leading-6 text-slate-900 dark:text-white';
+    summary.textContent = summaryText;
+    headerCopy.appendChild(summary);
+    header.appendChild(headerCopy);
+
+    if (receipt?.batch_id) {
+        const badge = document.createElement('span');
+        badge.className = 'inline-flex items-center rounded-full border border-slate-300 bg-white px-3 py-1 text-[10px] font-mono uppercase tracking-[0.16em] text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300';
+        badge.textContent = receipt.batch_id;
+        header.appendChild(badge);
+    }
+
+    shell.appendChild(header);
+
+    const grid = document.createElement('div');
+    grid.className = 'mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4';
+    _appendStagedUploadFact(
+        grid,
+        'Files received',
+        `${Math.max(0, Number(receiptSummary.file_count) || 0)} file${Number(receiptSummary.file_count) === 1 ? '' : 's'}`,
+        'success'
+    );
+    _appendStagedUploadFact(grid, 'Payload size', formatBytes(Math.max(0, Number(receiptSummary.total_bytes) || 0)), 'info');
+    _appendStagedUploadFact(
+        grid,
+        'Preserved roots',
+        topLevelRoots.length > 0 ? topLevelRoots.join(', ') : 'Flat file set',
+        topLevelRoots.length > 0 ? 'success' : 'info'
+    );
+    _appendStagedUploadFact(
+        grid,
+        'Completed',
+        receivedAtMs > 0 ? formatRelativeTime(receivedAtMs) : 'just now',
+        'success'
+    );
+    shell.appendChild(grid);
+
+    const artifacts = receipt?.artifacts && typeof receipt.artifacts === 'object' ? receipt.artifacts : {};
+    const artifactEntries = [
+        ['Baseline manifest', artifacts.baseline_manifest_path],
+        ['Capture metadata', artifacts.capture_metadata_path],
+        ['Upload receipt', artifacts.upload_receipt_path],
+    ].filter(([, value]) => String(value || '').trim());
+    if (artifactEntries.length > 0) {
+        const artifactList = document.createElement('div');
+        artifactList.className = 'mt-4 rounded-lg border border-slate-200 bg-white/90 p-3 dark:border-slate-800 dark:bg-slate-900/70';
+
+        const artifactTitle = document.createElement('p');
+        artifactTitle.className = 'text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400';
+        artifactTitle.textContent = 'Artifacts';
+        artifactList.appendChild(artifactTitle);
+
+        artifactEntries.forEach(([label, value]) => {
+            const row = document.createElement('div');
+            row.className = 'mt-3';
+
+            const rowLabel = document.createElement('p');
+            rowLabel.className = 'text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400';
+            rowLabel.textContent = label;
+            row.appendChild(rowLabel);
+
+            const rowValue = document.createElement('p');
+            rowValue.className = 'mt-1 break-all rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-mono leading-5 text-slate-700 dark:border-slate-700 dark:bg-slate-950/60 dark:text-slate-200';
+            rowValue.textContent = String(value || '');
+            row.appendChild(rowValue);
+
+            artifactList.appendChild(row);
+        });
+
+        shell.appendChild(artifactList);
+    }
+
+    if (warnings.length > 0) {
+        const warningList = document.createElement('div');
+        warningList.className = 'mt-4 rounded-lg border border-amber-200 bg-amber-50/90 p-3 dark:border-amber-900/60 dark:bg-amber-950/30';
+
+        const warningTitle = document.createElement('p');
+        warningTitle.className = 'text-[10px] font-bold uppercase tracking-[0.18em] text-amber-700 dark:text-amber-300';
+        warningTitle.textContent = 'Inline failures';
+        warningList.appendChild(warningTitle);
+
+        warnings.forEach((warning) => {
+            const item = document.createElement('p');
+            item.className = 'mt-2 text-[12px] leading-6 text-amber-800 dark:text-amber-100';
+            item.textContent = warning;
+            warningList.appendChild(item);
+        });
+
+        shell.appendChild(warningList);
+    }
+
+    container.appendChild(shell);
+}
+
 function _applyStagedUploadResult(result) {
     const inputDir = String(result?.input_dir || '').trim();
     const summary = result?.summary && typeof result.summary === 'object' ? result.summary : {};
@@ -4954,11 +5300,12 @@ function _applyStagedUploadResult(result) {
         busy: false,
         progressPercent: 100,
         status: 'ready',
-        summary: `Staged ${fileCount} file${fileCount === 1 ? '' : 's'} (${formatBytes(totalBytes)}). Input directory updated.`,
+        summary: `Staged ${fileCount} file${fileCount === 1 ? '' : 's'} (${formatBytes(totalBytes)}). Input directory updated with receipt-backed operator detail.`,
         error: '',
         lastBatchId: String(result?.batch_id || ''),
         fileCount,
         totalBytes,
+        receipt: result && typeof result === 'object' ? result : null,
     });
 
     state.config.inputDir = inputDir;
@@ -4986,7 +5333,8 @@ function _submitStagedUploadSelection(fileList) {
             progressPercent: 0,
             status: 'idle',
             summary: '',
-            error: 'Select at least one file before staging uploads.'
+            error: 'Select at least one file before staging uploads.',
+            receipt: null,
         });
         _syncStagedUploadUi();
         createToast('Select at least one file before staging uploads.', 'info');
@@ -5001,6 +5349,7 @@ function _submitStagedUploadSelection(fileList) {
         error: '',
         fileCount: selection.entries.length,
         totalBytes: selection.totalBytes,
+        receipt: null,
     });
     _syncStagedUploadUi();
 
@@ -5046,7 +5395,8 @@ function _submitStagedUploadSelection(fileList) {
             busy: false,
             progressPercent: 0,
             status: 'idle',
-            error: 'Network failure interrupted the staged upload.'
+            error: 'Network failure interrupted the staged upload.',
+            receipt: null,
         });
         _syncStagedUploadUi();
         createToast('Network failure interrupted the staged upload.', 'error');
@@ -5057,7 +5407,8 @@ function _submitStagedUploadSelection(fileList) {
             busy: false,
             progressPercent: 0,
             status: 'idle',
-            error: 'Staged upload canceled before completion.'
+            error: 'Staged upload canceled before completion.',
+            receipt: null,
         });
         _syncStagedUploadUi();
         createToast('Staged upload canceled before completion.', 'error');
@@ -5084,6 +5435,7 @@ function _submitStagedUploadSelection(fileList) {
             progressPercent: 0,
             status: 'idle',
             error: errorMessage,
+            receipt: null,
         });
         _syncStagedUploadUi();
         createToast(errorMessage, 'error');
@@ -7872,6 +8224,7 @@ function updateUIFromState() {
     if (els.debugBundleAcknowledge) {
         els.debugBundleAcknowledge.checked = Boolean(state.portalUi.debugBundleAcknowledged);
     }
+    _syncSwitchStateLabels();
     syncSegmentationControlState(c);
     syncRuntimeWorkerModeControls();
     renderFieldPreviewStatuses();
@@ -8138,19 +8491,20 @@ function renderPreRunDiagnostics(payload) {
         }
     }
 
+    const checklistItems = _dispatchChecklistItems(payload);
     if (els.preRunWarnings) {
         els.preRunWarnings.innerHTML = '';
-        warnings.forEach((warning) => {
+        checklistItems.forEach((item) => {
             const li = document.createElement('li');
-            li.className = 'leading-relaxed';
-            li.textContent = warning.startsWith('WARNING:') || warning.startsWith('BLOCKED:')
-                ? warning
-                : `WARNING: ${warning}`;
+            const tone = _dispatchChecklistTone(item.tone);
+            li.className = `rounded-lg border px-3 py-2 leading-relaxed ${tone.cardClass}`;
+            li.dataset.tone = item.tone;
+            li.textContent = `${tone.badge}: ${item.label} - ${item.detail}`;
             els.preRunWarnings.appendChild(li);
         });
     }
     if (els.preRunWarningsEmpty) {
-        els.preRunWarningsEmpty.style.display = warnings.length === 0 ? 'block' : 'none';
+        els.preRunWarningsEmpty.style.display = checklistItems.length === 0 ? 'block' : 'none';
     }
 
     if (els.expectedOutputsList) {
@@ -8422,6 +8776,7 @@ function bindInputs() {
                 if (els.debugBundleAcknowledge) els.debugBundleAcknowledge.checked = false;
             }
             _persistTransientPortalDraft();
+            _syncSwitchStateLabels();
             renderCLI();
             scheduleConfigPreview();
         });
@@ -8648,9 +9003,16 @@ function renderJobQueue(includeReviewSurfaces = true) {
         li.setAttribute('aria-selected', isSelected ? 'true' : 'false');
 
         let badgeColor = 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700';
-        if (job.state === 'running' || job.state === 'partial') badgeColor = 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-800';
-        if (job.state === 'succeeded') badgeColor = 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-400 dark:border-emerald-800';
-        if (job.state === 'failed' || job.state === 'canceled') badgeColor = 'bg-red-50 text-red-700 border-red-200 dark:bg-red-900/30 dark:text-red-400 dark:border-red-800';
+        const displayState = _displayJobState(job);
+        if (displayState === 'running' || displayState === 'indexing' || displayState === 'partial-failure') {
+            badgeColor = 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-800';
+        }
+        if (displayState === 'reviewable') {
+            badgeColor = 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-400 dark:border-emerald-800';
+        }
+        if (displayState === 'failed') {
+            badgeColor = 'bg-red-50 text-red-700 border-red-200 dark:bg-red-900/30 dark:text-red-400 dark:border-red-800';
+        }
 
         const safeState = SAFE_JOB_STATES.has(job.state) ? job.state : 'offline';
         const safePipeline = String(job.pipeline || 'unknown');
@@ -8670,7 +9032,7 @@ function renderJobQueue(includeReviewSurfaces = true) {
         headerLeft.className = 'flex items-center gap-2';
 
         const statusDot = document.createElement('span');
-        statusDot.className = `status-dot ${safeState}`;
+        statusDot.className = `status-dot ${_displayJobStateTone(job)}`;
         headerLeft.appendChild(statusDot);
 
         const pipelineSpan = document.createElement('span');
@@ -8705,7 +9067,7 @@ function renderJobQueue(includeReviewSurfaces = true) {
 
         const stateBadge = document.createElement('span');
         stateBadge.className = `px-2 py-0.5 rounded-full border ${badgeColor}`;
-        stateBadge.textContent = safeState;
+        stateBadge.textContent = displayState;
         metaRight.appendChild(stateBadge);
 
         meta.appendChild(metaRight);

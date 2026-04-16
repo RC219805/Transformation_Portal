@@ -292,8 +292,11 @@ def test_staged_upload_route_stages_files_and_writes_artifacts(
 
     receipt_payload = json.loads(upload_receipt_path.read_text(encoding="utf-8"))
     assert receipt_payload["schema"] == "tp.orchestrator.upload_staging.v1"
+    assert data["received_at_epoch_seconds"] > 0
+    assert data["summary"]["top_level_roots"] == ["nested"]
     assert receipt_payload["summary"]["file_count"] == 2
     assert receipt_payload["summary"]["total_bytes"] == 16
+    assert receipt_payload["summary"]["top_level_roots"] == ["nested"]
 
 
 def test_staged_upload_route_rejects_invalid_relative_paths(
