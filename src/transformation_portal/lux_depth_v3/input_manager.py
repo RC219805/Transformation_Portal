@@ -362,6 +362,7 @@ class ImageInput:
             sort_keys=True,
             separators=(",", ":"),
             ensure_ascii=False,
+            allow_nan=False,
         )
 
     @classmethod
@@ -408,7 +409,10 @@ class ImageInput:
         Raises:
             FileNotFoundError: If file doesn't exist and enrichment requested
         """
-        path = Path(path)
+        # Normalize path first (expand ~, resolve symlinks, etc.) to ensure
+        # consistent behavior for existence checks, hashing, probing, and the
+        # returned ImageInput.path value.
+        path = normalize_lexical_path(Path(path))
         metadata: Dict[str, Any] = {}
 
         if detect_format:
