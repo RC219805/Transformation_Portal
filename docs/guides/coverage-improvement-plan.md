@@ -123,10 +123,23 @@ A: The CI gate will fail. Investigate whether:
 
 **Q: How do I run coverage locally?**
 ```bash
-# Core tests only
-pytest -m "not ml and not slow" --cov=src/transformation_portal --cov-report=term
-
-# Combined (requires ML deps)
-pytest -m "not slow" --cov=src/transformation_portal --cov-report=html
+# Comprehensive coverage report (HTML + XML + terminal)
+make coverage-report
 open htmlcov/index.html
+
+# Diff coverage check against main branch (≥85% required for new code)
+make coverage-diff
+
+# Package-level baseline report for ratcheting
+make coverage-package
+
+# Scoped coverage for specific paths
+make coverage-fast-scope
 ```
+
+**Q: What are the coverage targets?**
+- **Diff coverage**: 85% on new/changed lines (required for PRs)
+- **Global floor**: 25% (prevents regression)
+- **Long-horizon target**: 70% overall
+
+See `docs/coverage/test_coverage_improvement_plan.md` for the full phased plan.
