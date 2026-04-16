@@ -937,6 +937,9 @@ def test_portal_staged_upload_ui_contract_is_present_in_markup_and_source() -> N
     assert "formData.append('files', file, relativePath);" in content
     assert "els.inputDir.dispatchEvent(new Event('input', { bubbles: true }));" in content
     assert "els.inputDir.dispatchEvent(new Event('change', { bubbles: true }));" in content
+    assert "function _renderStagedUploadSummary(container, uploadState) {" in content
+    assert "Upload receipt" in content
+    assert "Inline failures" in content
 
 
 def test_portal_managed_mode_clears_api_keys_and_hides_secret_ui() -> None:
@@ -949,6 +952,8 @@ def test_portal_managed_mode_clears_api_keys_and_hides_secret_ui() -> None:
     assert "sessionStorage.removeItem(API_KEY_STORAGE_KEY);" in clear_body
     assert "_clearStoredApiKeyState(true);" in content
     assert "_loadApiKeyIntoInputs();" in content
+    assert 'id="connectionDetails"' in content
+    assert 'data-ui="connection-details"' in content
     assert 'id="portalAccessState"' in content
     assert 'id="bootstrapStatusBadge"' in content
     assert 'id="bootstrapRecoveryHint"' in content
@@ -1664,7 +1669,7 @@ def test_portal_dispatch_review_keeps_cli_parity_in_secondary_disclosure() -> No
     assert 'id="dispatchToolsDetails"' in content
     assert 'data-ui="dispatch-tools"' in content
     assert "Review dispatch posture" in content
-    assert "Secondary CLI & Config Tools" in content
+    assert "JSON / CLI / Effective Config" in content
     assert "CLI Parity & Config Tools" not in content
     assert 'id="effectiveConfigBtn"' in content
     assert 'id="importBtn"' in content
@@ -3820,6 +3825,9 @@ def test_stage_upload_batch_capture_metadata_failure_falls_back_to_empty_artifac
 
     receipt_payload = json.loads(result.upload_receipt_path.read_text(encoding="utf-8"))
     assert receipt_payload["summary"]["warnings"] == ["capture_metadata_extraction_failed"]
+    assert receipt_payload["summary"]["top_level_roots"] == ["sample.txt"]
+    assert result.received_at_epoch_seconds == 9876.0
+    assert result.top_level_roots == ("sample.txt",)
     assert json.loads(result.capture_metadata_path.read_text(encoding="utf-8")) == []
 
 

@@ -147,6 +147,8 @@ class StagedUploadResult:
     total_bytes: int
     capture_metadata_record_count: int
     capture_metadata_enabled: bool
+    received_at_epoch_seconds: float
+    top_level_roots: tuple[str, ...]
     warnings: tuple[str, ...]
 
     def to_response_data(self) -> dict[str, Any]:
@@ -159,11 +161,13 @@ class StagedUploadResult:
                 "capture_metadata_path": str(self.capture_metadata_path),
                 "upload_receipt_path": str(self.upload_receipt_path),
             },
+            "received_at_epoch_seconds": self.received_at_epoch_seconds,
             "summary": {
                 "file_count": self.file_count,
                 "total_bytes": self.total_bytes,
                 "capture_metadata_enabled": self.capture_metadata_enabled,
                 "capture_metadata_record_count": self.capture_metadata_record_count,
+                "top_level_roots": list(self.top_level_roots),
                 "warnings": list(self.warnings),
             },
         }
@@ -399,6 +403,7 @@ def _build_receipt_payload(
     total_bytes: int,
     capture_metadata_enabled: bool,
     capture_metadata_record_count: int,
+    top_level_roots: Sequence[str],
     warnings: Sequence[str],
     received_at_epoch_seconds: float,
 ) -> dict[str, Any]:
@@ -419,6 +424,7 @@ def _build_receipt_payload(
             "total_bytes": total_bytes,
             "capture_metadata_enabled": capture_metadata_enabled,
             "capture_metadata_record_count": capture_metadata_record_count,
+            "top_level_roots": list(top_level_roots),
             "warnings": _deduplicate_warnings(warnings),
         },
     }
@@ -474,6 +480,7 @@ def stage_upload_batch(
     total_bytes = 0
     records: list[dict[str, Any]] = []
     capture_metadata_record_count = 0
+    top_level_roots: tuple[str, ...] = ()
 
     try:
         input_dir.mkdir(parents=True, exist_ok=True)
@@ -508,6 +515,15 @@ def stage_upload_batch(
             records.append(_build_baseline_record(relative_path, destination_path, sha256, size_bytes))
 
         records.sort(key=lambda item: str(item.get("relative_path") or ""))
+        top_level_roots = tuple(
+            sorted(
+                {
+                    PurePosixPath(str(item.get("relative_path") or "")).parts[0]
+                    for item in records
+                    if PurePosixPath(str(item.get("relative_path") or "")).parts
+                }
+            )
+        )
         baseline_payload = {
             "schema": BASELINE_MANIFEST_SCHEMA,
             "record_count": len(records),
@@ -544,6 +560,7 @@ def stage_upload_batch(
             total_bytes=total_bytes,
             capture_metadata_enabled=capture_metadata_enabled,
             capture_metadata_record_count=capture_metadata_record_count,
+            top_level_roots=top_level_roots,
             warnings=warnings,
             received_at_epoch_seconds=now,
         )
@@ -561,6 +578,8 @@ def stage_upload_batch(
             total_bytes=total_bytes,
             capture_metadata_record_count=capture_metadata_record_count,
             capture_metadata_enabled=capture_metadata_enabled,
+            received_at_epoch_seconds=now,
+            top_level_roots=top_level_roots,
             warnings=tuple(_deduplicate_warnings(warnings)),
         )
     except Exception:

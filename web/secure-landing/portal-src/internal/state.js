@@ -107,7 +107,8 @@ export function createPortalUiState() {
       error: "",
       lastBatchId: "",
       fileCount: 0,
-      totalBytes: 0
+      totalBytes: 0,
+      receipt: null
     },
     artifactViewer: {
       open: false,
