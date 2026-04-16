@@ -4,9 +4,7 @@ This module provides state encoding for the multi-agent RL optimizer,
 combining global context with node-specific local features.
 """
 
-from __future__ import annotations
-
-from typing import Any
+from typing import Any, Dict, List, Optional, Tuple
 
 # Lazy numpy import
 _np = None
@@ -44,9 +42,9 @@ DEFAULT_CONFIG_KEYS = ["threshold", "steps", "bias"]
 
 
 def encode_global(
-    metrics: dict[str, float],
-    diff: dict[str, Any],
-) -> Any:  # Returns numpy array
+    metrics: Dict[str, float],
+    diff: Dict[str, Any],
+) -> Any:
     """Encode global state features.
 
     Args:
@@ -57,7 +55,7 @@ def encode_global(
         Global state feature vector
     """
     np = _get_numpy()
-    feats: list[float] = []
+    feats: List[float] = []
 
     # Metrics features
     feats.append(metrics.get("score", 0.0))
@@ -67,7 +65,7 @@ def encode_global(
     feats.append(metrics.get("llava_score", 0.0))
 
     # Diff histogram
-    hist: dict[tuple[str, str], int] = {}
+    hist: Dict[Tuple[str, str], int] = {}
     for t in DIFF_TYPES:
         for s in SEVERITIES:
             hist[(t, s)] = 0
@@ -93,9 +91,9 @@ def encode_global(
 
 
 def encode_local(
-    node_cfg: dict[str, Any],
-    node_id: str | None = None,
-) -> Any:  # Returns numpy array
+    node_cfg: Dict[str, Any],
+    node_id: Optional[str] = None,
+) -> Any:
     """Encode node-specific local state.
 
     Args:
@@ -110,7 +108,7 @@ def encode_local(
     # Get config keys for this node type
     config_keys = NODE_CONFIG_KEYS.get(node_id or "", DEFAULT_CONFIG_KEYS)
 
-    feats: list[float] = []
+    feats: List[float] = []
 
     for key in config_keys:
         value = node_cfg.get(key, 0.0)
@@ -150,11 +148,11 @@ def encode_local(
 
 
 def encode_state(
-    node_cfg: dict[str, Any],
-    metrics: dict[str, float],
-    diff: dict[str, Any],
-    node_id: str | None = None,
-) -> Any:  # Returns numpy array
+    node_cfg: Dict[str, Any],
+    metrics: Dict[str, float],
+    diff: Dict[str, Any],
+    node_id: Optional[str] = None,
+) -> Any:
     """Encode full state (global + local) for a node agent.
 
     Args:
@@ -190,7 +188,7 @@ def get_state_dim() -> int:
     return get_global_dim() + get_local_dim()
 
 
-def get_node_config(pipeline: dict[str, Any], node_id: str) -> dict[str, Any]:
+def get_node_config(pipeline: Dict[str, Any], node_id: str) -> Dict[str, Any]:
     """Extract node config from pipeline.
 
     Args:
