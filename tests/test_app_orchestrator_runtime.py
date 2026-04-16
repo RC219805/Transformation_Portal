@@ -2529,6 +2529,12 @@ def test_argv_normalization_ignores_sam2_checkpoint_path_when_backend_is_not_sam
     assert "--sam2-checkpoint-path" not in argv
 
 
+def test_validate_managed_sam2_checkpoint_path_allows_repo_controlled_missing_path() -> None:
+    normalized = orchestrator_app._validate_managed_sam2_checkpoint_path("./models/sam2/sam2.1_hiera_large.pt")
+
+    assert normalized.endswith("models/sam2/sam2.1_hiera_large.pt")
+
+
 def test_argv_rejects_untrusted_sam2_checkpoint_path(tmp_path: Path) -> None:
     input_dir = tmp_path / "input"
     output_dir = tmp_path / "output"

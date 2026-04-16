@@ -4,7 +4,9 @@
 # This file is Linux-specific because pip-compile cannot resolve
 # conditional dependencies across platforms in a single graph.
 #
-# Run `make compile-ml-linux-x86_64` in this directory to generate pinned ml-core-linux.txt
+# Frozen historical manifest retained for lock ownership and audit context only.
+# Do not regenerate ml-core-linux.txt locally or in automation; the Linux lane
+# is unsupported and the compile/update/check targets fail closed by contract.
 #
 # PLATFORM TARGETS:
 #   - linux-x86_64-cpu    (Linux Intel/AMD, CPU baseline)
@@ -18,8 +20,8 @@
 # See: requirements/README.md for layering rationale.
 
 # --- PyTorch (Linux frozen historical baseline) ---
-torch==2.8.0  # Frozen historical pin
-torchvision==0.23.0  # Frozen historical companion pin
+torch==2.2.2+cpu  # Frozen historical pin aligned with ml-core-linux.txt
+torchvision==0.17.2+cpu  # Frozen historical companion pin aligned with ml-core-linux.txt
 
 # Diffusion / HuggingFace ecosystem
 # Keep transformers<5 while the managed inference surface remains on 4.57.x.

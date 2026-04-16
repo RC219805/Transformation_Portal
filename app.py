@@ -601,9 +601,10 @@ def _compute_file_sha256(path: Path, chunk_size: int = 1024 * 1024) -> str:
 
 def _validate_managed_sam2_checkpoint_path(path_value: str) -> str:
     resolved = _resolve_allowed_request_path(path_value, ALLOWED_INPUT_ROOTS)
+    # Repo-controlled checkpoints remain valid even before the artifact exists locally.
+    if any(_path_is_within_root(resolved, root) for root in MANAGED_SAM2_TRUSTED_ROOTS):
+        return str(resolved)
     safe_file = _ensure_safe_regular_file_path(resolved, ALLOWED_INPUT_ROOTS)
-    if any(_path_is_within_root(safe_file, root) for root in MANAGED_SAM2_TRUSTED_ROOTS):
-        return str(safe_file)
     digest = _compute_file_sha256(safe_file)
     if digest in MANAGED_SAM2_TRUSTED_SHA256:
         return str(safe_file)
@@ -1051,6 +1052,7 @@ VALIDATION_REASON_CODES = {
     "Path shorthand traversal disallowed": "path_shorthand_traversal_disallowed",
     "Path outside allowed roots": "path_outside_allowed_roots",
     "SAM2 checkpoint path is not trusted": "untrusted_checkpoint_path",
+    "SAM2 checkpoint path exceeds checksum verification size limit": "checkpoint_file_too_large",
     "Invalid quality_tier": "invalid_quality_tier",
     "Invalid depth_backend": "invalid_depth_backend",
     "Invalid segmentation_backend": "invalid_segmentation_backend",
@@ -1069,6 +1071,7 @@ PORTAL_SAFE_ERROR_MESSAGES = {
     "archive_index_required": "An archive index artifact is required before dispatch.",
     "archive_runner_unavailable": "The selected archive command is unavailable in this environment.",
     "bag_dir_required": "A bag directory is required before dispatch.",
+    "checkpoint_file_too_large": "Managed SAM2 checkpoint overrides exceed the checksum verification size limit.",
     "conflicting_log_verbosity_flags": "Verbose and quiet mode cannot both be enabled.",
     "hash_manifest_required": "A hash manifest artifact is required before dispatch.",
     "invalid_archive_command": "The selected archive command is not supported.",
@@ -3326,8 +3329,9 @@ def _build_lux_config_preview(
                         )
                     )
                 else:
-                    message = (
-                        "sam2_checkpoint_path contains an invalid path value." if reason == "invalid_path_value" else str(exc)
+                    message = _portal_safe_error_message(
+                        reason,
+                        field="sam2_checkpoint_path",
                     )
                     errors.append(
                         _portal_issue(

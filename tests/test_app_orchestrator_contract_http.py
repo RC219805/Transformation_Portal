@@ -1006,6 +1006,38 @@ def test_config_preview_rejects_untrusted_sam2_checkpoint_path(client: TestClien
     assert "sam2_checkpoint_path" not in body["data"]["normalized_args"]
 
 
+def test_config_preview_accepts_repo_controlled_missing_sam2_checkpoint_path(
+    client: TestClient,
+    tmp_path: Path,
+) -> None:
+    input_dir = (tmp_path / "preview-input-managed").resolve()
+    output_dir = (tmp_path / "preview-output-managed").resolve()
+    input_dir.mkdir(parents=True, exist_ok=True)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    response = client.post(
+        "/v1/config-preview",
+        json={
+            "pipeline": "lux-depth-v3",
+            "args": {
+                "input_dir": str(input_dir),
+                "output_dir": str(output_dir),
+                "enable_segmentation": True,
+                "segmentation_backend": "sam2",
+                "sam2_checkpoint_path": "./models/sam2/sam2.1_hiera_large.pt",
+            },
+        },
+    )
+    body = response.json()
+
+    assert response.status_code == 200
+    assert body["schema"] == "tp.orchestrator.config_preview.v1"
+    assert body["success"] is True
+    errors = {item["field"]: item for item in body["data"]["field_errors"]}
+    assert "sam2_checkpoint_path" not in errors
+    assert body["data"]["normalized_args"]["sam2_checkpoint_path"].endswith("models/sam2/sam2.1_hiera_large.pt")
+
+
 def test_config_preview_rejects_non_file_sam2_checkpoint_path(client: TestClient, tmp_path: Path) -> None:
     input_dir = (tmp_path / "preview-input-dir").resolve()
     output_dir = (tmp_path / "preview-output-dir").resolve()
@@ -1070,6 +1102,10 @@ def test_config_preview_rejects_oversized_sam2_checkpoint_path(
     assert body["success"] is True
     errors = {item["field"]: item for item in body["data"]["field_errors"]}
     assert errors["sam2_checkpoint_path"]["code"] == "checkpoint_file_too_large"
+    assert (
+        errors["sam2_checkpoint_path"]["message"]
+        == "Managed SAM2 checkpoint overrides exceed the checksum verification size limit."
+    )
     assert "sam2_checkpoint_path" not in body["data"]["normalized_args"]
 
 

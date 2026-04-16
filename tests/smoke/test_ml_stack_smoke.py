@@ -1,8 +1,9 @@
 """
 Smoke tests for the governed ML dependency baseline.
 
-These tests validate that baseline ML framework upgrades do not break core
-imports or representative code paths without requiring large model downloads.
+These tests validate that supported minimum ML framework baselines do not
+break core imports or representative code paths without requiring large
+model downloads.
 """
 
 import sys
@@ -67,7 +68,7 @@ pytestmark = [pytest.mark.unit, pytest.mark.skipif(not TORCH_AVAILABLE, reason="
 
 
 def test_pytorch_basic_operations():
-    """Test basic PyTorch operations work with torch 2.10.0."""
+    """Test basic PyTorch tensor operations against the supported baseline."""
     torch = pytest.importorskip("torch", reason="torch required for ML smoke tests")
 
     # Create a simple tensor
@@ -86,7 +87,7 @@ def test_pytorch_basic_operations():
 
 
 def test_pytorch_mps_device_availability():
-    """Test MPS (Apple Silicon) device detection with torch 2.10.0."""
+    """Test MPS (Apple Silicon) device detection against the supported baseline."""
     torch = pytest.importorskip("torch", reason="torch required for ML smoke tests")
 
     # Should not raise even if MPS not available
@@ -103,7 +104,7 @@ def test_pytorch_mps_device_availability():
 
 @pytest.mark.skipif(not TORCHVISION_AVAILABLE, reason="torchvision not installed")
 def test_torchvision_transforms():
-    """Test torchvision transforms work with torchvision 0.25.0."""
+    """Test torchvision transforms against the supported baseline."""
     torch = pytest.importorskip("torch", reason="torch required for ML smoke tests")
     import numpy as np
     from PIL import Image
@@ -129,7 +130,7 @@ def test_torchvision_transforms():
 
 @pytest.mark.skipif(not SKLEARN_AVAILABLE, reason="scikit-learn not installed")
 def test_scikit_learn_basic_classifier():
-    """Test scikit-learn basic classifier with scikit-learn 1.8.0."""
+    """Test scikit-learn basic classifier against the supported baseline."""
     from sklearn.datasets import make_classification
     from sklearn.ensemble import RandomForestClassifier
     from sklearn.model_selection import train_test_split
@@ -155,7 +156,7 @@ def test_scikit_learn_basic_classifier():
 @pytest.mark.skipif(not TIMM_AVAILABLE, reason="timm not installed")
 @patch("timm.create_model")
 def test_timm_model_interface(mock_create_model):
-    """Test timm model creation interface with timm 1.0.24."""
+    """Test timm model creation against the supported baseline."""
     import timm
 
     # Mock the model to avoid downloading
@@ -174,7 +175,7 @@ def test_timm_model_interface(mock_create_model):
 @pytest.mark.skipif(not DIFFUSERS_AVAILABLE, reason="diffusers not installed")
 @patch("diffusers.DiffusionPipeline.from_pretrained")
 def test_diffusers_pipeline_interface(mock_from_pretrained):
-    """Test diffusers pipeline interface with diffusers 0.36.0."""
+    """Test the diffusers pipeline interface against the supported baseline."""
     import torch
     from diffusers import DiffusionPipeline
 
@@ -200,7 +201,7 @@ def test_diffusers_pipeline_interface(mock_from_pretrained):
 @patch("transformers.AutoTokenizer.from_pretrained")
 @patch("transformers.AutoModel.from_pretrained")
 def test_transformers_model_interface(mock_model_from_pretrained, mock_tokenizer_from_pretrained):
-    """Test transformers model interface with transformers 4.57.6."""
+    """Test the transformers model interface against the supported baseline."""
     torch = pytest.importorskip("torch", reason="torch required for ML smoke tests")
     from transformers import AutoModel, AutoTokenizer
 
@@ -225,7 +226,7 @@ def test_transformers_model_interface(mock_model_from_pretrained, mock_tokenizer
 
 
 def test_torch_cuda_compatibility():
-    """Test CUDA compatibility (if available) with torch 2.10.0."""
+    """Test CUDA compatibility, when present, against the supported baseline."""
     torch = pytest.importorskip("torch", reason="torch required for ML smoke tests")
 
     # This should not fail even without CUDA
