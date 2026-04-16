@@ -525,19 +525,49 @@ def _path_is_within_root(resolved_path: Path, root: Path) -> bool:
     return True
 
 
+def _trusted_allowed_entry(
+    resolved_path: Path,
+    allowed_roots: List[Path],
+) -> Optional[Path]:
+    for root in allowed_roots:
+        try:
+            root_real = Path(os.path.realpath(root))
+            relative_parts = resolved_path.relative_to(root_real).parts
+        except (OSError, RuntimeError, ValueError):
+            continue
+        current = root_real
+        if not relative_parts:
+            return current
+        for part in relative_parts:
+            if part in {"", ".", ".."}:
+                return None
+            try:
+                next_path = next((child for child in current.iterdir() if child.name == part), None)
+            except (NotADirectoryError, FileNotFoundError, OSError, RuntimeError, ValueError):
+                return None
+            if next_path is None:
+                return None
+            current = next_path
+        return current
+    return None
+
+
 def _ensure_safe_regular_file_path(path_value: Path, allowed_roots: List[Path]) -> Path:
     try:
-        candidate_real = Path(os.path.realpath(path_value))
+        candidate_real = _resolve_allowed_request_path(str(path_value), allowed_roots)
+    except _PortalValidationReasonError:
+        raise
     except (OSError, RuntimeError, ValueError) as exc:
         raise _PortalValidationReasonError("Invalid path value", reason="invalid_path_value") from exc
-    if not any(_path_is_within_root(candidate_real, root) for root in allowed_roots):
-        raise _PortalValidationReasonError("Path outside allowed roots", reason="path_outside_allowed_roots")
+    trusted_entry = _trusted_allowed_entry(candidate_real, allowed_roots)
+    if trusted_entry is None:
+        raise _PortalValidationReasonError("Invalid path value", reason="invalid_path_value")
     try:
-        if not candidate_real.is_file():
+        if not trusted_entry.is_file():
             raise _PortalValidationReasonError("Invalid path value", reason="invalid_path_value")
     except OSError as exc:
         raise _PortalValidationReasonError("Invalid path value", reason="invalid_path_value") from exc
-    return candidate_real
+    return trusted_entry
 
 
 def _compute_file_sha256(path: Path, chunk_size: int = 1024 * 1024) -> str:
@@ -2655,31 +2685,6 @@ def _normalize_portal_path_arg(
     must_be_file: bool = False,
     must_be_dir: bool = False,
 ) -> str:
-    def _trusted_allowed_entry(
-        resolved_path: Path,
-    ) -> Optional[Path]:
-        for root in allowed_roots:
-            try:
-                root_real = Path(os.path.realpath(root))
-                relative_parts = resolved_path.relative_to(root_real).parts
-            except (OSError, RuntimeError, ValueError):
-                continue
-            current = root_real
-            if not relative_parts:
-                return current
-            for part in relative_parts:
-                if part in {"", ".", ".."}:
-                    return None
-                try:
-                    next_path = next((child for child in current.iterdir() if child.name == part), None)
-                except (NotADirectoryError, FileNotFoundError, OSError, RuntimeError, ValueError):
-                    return None
-                if next_path is None:
-                    return None
-                current = next_path
-            return current
-        return None
-
     text = str(value or "").strip()
     if not text:
         if required:
@@ -2734,7 +2739,7 @@ def _normalize_portal_path_arg(
         return ""
     trusted_entry: Optional[Path] = None
     if must_exist or must_be_file or must_be_dir:
-        trusted_entry = _trusted_allowed_entry(resolved_path)
+        trusted_entry = _trusted_allowed_entry(resolved_path, allowed_roots)
     if must_exist and trusted_entry is None:
         errors.append(
             _portal_issue(

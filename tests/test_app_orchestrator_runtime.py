@@ -2552,6 +2552,20 @@ def test_argv_rejects_untrusted_sam2_checkpoint_path(tmp_path: Path) -> None:
         orchestrator_app._argv_from_request(payload)
 
 
+def test_ensure_safe_regular_file_path_preserves_outside_root_reason(tmp_path: Path) -> None:
+    allowed_root = tmp_path / "allowed"
+    outside_root = tmp_path / "outside"
+    checkpoint_path = outside_root / "sam2-outside.pt"
+    allowed_root.mkdir()
+    outside_root.mkdir()
+    checkpoint_path.write_bytes(b"outside")
+
+    with pytest.raises(orchestrator_app._PortalValidationReasonError) as exc_info:
+        orchestrator_app._ensure_safe_regular_file_path(checkpoint_path, [allowed_root])
+
+    assert exc_info.value.reason == "path_outside_allowed_roots"
+
+
 def test_argv_rejects_non_file_sam2_checkpoint_path(tmp_path: Path) -> None:
     input_dir = tmp_path / "input"
     output_dir = tmp_path / "output"
