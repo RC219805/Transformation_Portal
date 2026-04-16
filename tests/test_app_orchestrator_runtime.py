@@ -3163,6 +3163,97 @@ def test_archive_gate_readiness_blocks_unsafe_input_dir() -> None:
     assert readiness["missing_prerequisites"][0]["field"] == "input_dir"
 
 
+def test_validate_existing_path_accepts_trusted_regular_file(tmp_path: Path) -> None:
+    allowed_root = tmp_path / "allowed"
+    checkpoint_path = allowed_root / "sam2.pt"
+    allowed_root.mkdir()
+    checkpoint_path.write_bytes(b"checkpoint")
+
+    resolved, issue = orchestrator_app._validate_existing_path(
+        str(checkpoint_path),
+        field="sam2_checkpoint_path",
+        allowed_roots=[allowed_root],
+        missing_reason="missing_checkpoint",
+        missing_message="Checkpoint required.",
+        expected_type="file",
+        required=True,
+    )
+
+    assert resolved == str(checkpoint_path.resolve())
+    assert issue is None
+
+
+def test_validate_existing_path_accepts_trusted_directory(tmp_path: Path) -> None:
+    allowed_root = tmp_path / "allowed"
+    input_dir = allowed_root / "inputs"
+    allowed_root.mkdir()
+    input_dir.mkdir()
+
+    resolved, issue = orchestrator_app._validate_existing_path(
+        str(input_dir),
+        field="input_dir",
+        allowed_roots=[allowed_root],
+        missing_reason="input_dir_required",
+        missing_message="Input directory required.",
+        expected_type="dir",
+        required=True,
+    )
+
+    assert resolved == str(input_dir.resolve())
+    assert issue is None
+
+
+def test_validate_existing_path_preserves_missing_reason_for_path_inside_root(tmp_path: Path) -> None:
+    allowed_root = tmp_path / "allowed"
+    missing_file = allowed_root / "missing.pt"
+    allowed_root.mkdir()
+
+    resolved, issue = orchestrator_app._validate_existing_path(
+        str(missing_file),
+        field="sam2_checkpoint_path",
+        allowed_roots=[allowed_root],
+        missing_reason="missing_checkpoint",
+        missing_message="Checkpoint required.",
+        expected_type="file",
+        required=True,
+    )
+
+    assert resolved == str(missing_file.resolve())
+    assert issue is not None
+    assert issue["reason"] == "missing_checkpoint"
+    assert issue["path"] == str(missing_file.resolve())
+
+
+def test_validate_existing_path_rejects_symlink_escape(tmp_path: Path) -> None:
+    allowed_root = tmp_path / "allowed"
+    outside_root = tmp_path / "outside"
+    outside_file = outside_root / "secret.pt"
+    symlink_path = allowed_root / "escape.pt"
+    allowed_root.mkdir()
+    outside_root.mkdir()
+    outside_file.write_bytes(b"secret")
+    try:
+        symlink_path.symlink_to(outside_file)
+    except (NotImplementedError, OSError):
+        pytest.skip("symlinks are not available on this platform")
+
+    resolved, issue = orchestrator_app._validate_existing_path(
+        str(symlink_path),
+        field="sam2_checkpoint_path",
+        allowed_roots=[allowed_root],
+        missing_reason="missing_checkpoint",
+        missing_message="Checkpoint required.",
+        expected_type="file",
+        required=True,
+    )
+
+    assert resolved is None
+    assert issue is not None
+    assert issue["reason"] == "unsafe_path"
+    assert issue["field"] == "sam2_checkpoint_path"
+    assert issue["path"] == str(symlink_path)
+
+
 # --- Archive Gate E2E Test Extensions (Phase 2) ---
 
 

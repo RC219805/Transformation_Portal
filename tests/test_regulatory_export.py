@@ -22,6 +22,7 @@ REG_EXPORT_TOOL = TOOLS_DIR / "regulatory_export.py"
 if str(TOOLS_DIR) not in sys.path:
     sys.path.insert(0, str(TOOLS_DIR))
 
+import regulatory_export  # noqa: E402
 from bundle_root_fixture import write_bundle_fixture_artifacts  # noqa: E402
 
 pytestmark = [pytest.mark.regression]
@@ -366,10 +367,14 @@ def test_regulatory_export_generates_bound_outputs(tmp_path: Path) -> None:
     commands = export_payload["verification_commands"]
     assert "<BUNDLE_DIR>" in "\n".join(commands)
     assert str(tmp_path) not in "\n".join(commands)
+    assert export_payload["confidentiality_statement"] == regulatory_export.PUBLIC_CONFIDENTIALITY_STATEMENT
+    assert export_payload["article_78_reference"] == regulatory_export.PUBLIC_ARTICLE_78_REFERENCE
 
     markdown = out_md.read_text(encoding="utf-8")
     assert "# Regulatory Export Summary" in markdown
     assert "## Verification Commands" in markdown
+    assert regulatory_export.PUBLIC_CONFIDENTIALITY_STATEMENT in markdown
+    assert regulatory_export.PUBLIC_ARTICLE_78_REFERENCE in markdown
 
 
 def test_regulatory_export_is_deterministic_for_same_inputs(tmp_path: Path) -> None:
