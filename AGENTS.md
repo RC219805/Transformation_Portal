@@ -22,6 +22,7 @@ Quick reference for common workflows and commands in this repo.
 - `make test-orchestrator-http-contract` run HTTP-only orchestrator contract tests (`tests/test_app_orchestrator_contract_http.py`).
 - `make test-portal-contract` run portal runtime/browser contract tests (`tests/test_app_orchestrator_runtime.py`, `tests/validation/test_portal_smoke_scripts.py`).
 - `make test-frontdoor-contract` run managed frontdoor Node 22 contract/build checks (`./scripts/setup/ensure_node_version.sh && cd web/secure-landing && npm test && npm run build`).
+- `make test-archive-gate-contract` run archive gate readiness + HTTP contract coverage for archive Gates A/B/C (`tests/test_app_orchestrator_runtime.py`, `tests/test_app_orchestrator_contract_http.py` with `-k "archive_gate"`).
 - `make seed-frontdoor-user` write the canonical local managed-frontdoor credential fixture to `/tmp/tp-frontdoor-users.json` using `smoke-admin` / `correct horse battery staple` unless you override the env vars.
 - `make run-frontdoor-local` start the canonical local managed frontdoor on `http://localhost:3000` after verifying backend readiness, auth env, and no silent fallback to `:3001`; it auto-seeds the canonical local user fixture when no explicit frontdoor user source is configured.
 - `make validate-orchestrator-http` run the live orchestrator HTTP smoke against a running backend.
@@ -33,7 +34,7 @@ Quick reference for common workflows and commands in this repo.
 - `make audit-pipeline-readiness` run the safe local four-pipeline readiness audit using checked-in archive fixtures.
 - `make coverage-fast-scope` run branch coverage for the audited `core/config` and `streaming` paths with `term-missing` output.
 - `make clean` remove Python caches and build/test artifacts.
-- `make clean-frontdoor` remove frontdoor build artifacts (.next, .next-build-verify).
+- `make clean-frontdoor` remove frontdoor build artifacts (`.next`, `.next-build-verify`, `.next-smoke-*`, `.next-codex-*`).
 - `make clean-all` remove all build artifacts (Python + Node).
 - `make lint` run flake8 + pylint (non-blocking).
 - `make lint-parity` run the GitHub lint job locally with the CI-pinned Python 3.12 lint environment.
@@ -55,6 +56,7 @@ Quick reference for common workflows and commands in this repo.
 - `make check` verify the generic layered requirements surface under `requirements/`.
 - `make check-test-markers` audit test marker coverage (ADR-044) - reports unmarked test functions.
 - `make check-ci-sync` verify CI dependency files are in sync (no drift between `requirements-ci.txt` and `requirements/ci.in`).
+- `make check-todo-governance` scan repository for TODO patterns and fail if ungoverned TODOs (missing tracking references) are found.
 - `make check-portal-asset-budgets` validate raw and gzipped portal asset size budgets against the checked-in budget contract.
 - `make organize-docs` move markdown files into `docs/` (repo hygiene).
 - `make check-docs` dry-run docs organization.
