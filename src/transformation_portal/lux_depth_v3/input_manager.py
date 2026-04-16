@@ -29,7 +29,6 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, ClassVar, Dict, Optional, Tuple, Union
 
-
 # ---------------------------------------------------------------------------
 # Exceptions
 # ---------------------------------------------------------------------------
@@ -48,33 +47,37 @@ class UnsupportedFormatError(InputValidationError):
 # ---------------------------------------------------------------------------
 
 # Standard image formats supported by PIL
-_STANDARD_EXTENSIONS = frozenset({
-    ".jpg",
-    ".jpeg",
-    ".png",
-    ".tiff",
-    ".tif",
-    ".webp",
-    ".bmp",
-})
+_STANDARD_EXTENSIONS = frozenset(
+    {
+        ".jpg",
+        ".jpeg",
+        ".png",
+        ".tiff",
+        ".tif",
+        ".webp",
+        ".bmp",
+    }
+)
 
 # RAW camera formats (subset matching raw_loader.RAW_EXTENSIONS)
-_RAW_EXTENSIONS = frozenset({
-    ".cr2",
-    ".crw",
-    ".nef",
-    ".nrw",
-    ".arw",
-    ".srf",
-    ".sr2",
-    ".dng",
-    ".orf",
-    ".raf",
-    ".pef",
-    ".rw2",
-    ".iiq",
-    ".3fr",
-})
+_RAW_EXTENSIONS = frozenset(
+    {
+        ".cr2",
+        ".crw",
+        ".nef",
+        ".nrw",
+        ".arw",
+        ".srf",
+        ".sr2",
+        ".dng",
+        ".orf",
+        ".raf",
+        ".pef",
+        ".rw2",
+        ".iiq",
+        ".3fr",
+    }
+)
 
 SUPPORTED_EXTENSIONS = _STANDARD_EXTENSIONS | _RAW_EXTENSIONS
 
@@ -237,9 +240,7 @@ class ImageInput:
         # Validate metadata is dict-like if provided
         if self.metadata is not None:
             if not isinstance(self.metadata, dict):
-                raise ValueError(
-                    f"ImageInput metadata must be a dict, got {type(self.metadata).__name__}"
-                )
+                raise ValueError(f"ImageInput metadata must be a dict, got {type(self.metadata).__name__}")
 
     # -----------------------------------------------------------------------
     # Format detection properties
@@ -313,10 +314,7 @@ class ImageInput:
         """
         if check_supported and not self.is_supported:
             supported_list = ", ".join(sorted(SUPPORTED_EXTENSIONS))
-            raise UnsupportedFormatError(
-                f"Unsupported image format: {self.format}. "
-                f"Supported formats: {supported_list}"
-            )
+            raise UnsupportedFormatError(f"Unsupported image format: {self.format}. " f"Supported formats: {supported_list}")
 
         if check_exists and not self.path.exists():
             raise FileNotFoundError(f"Image file not found: {self.path}")
@@ -446,9 +444,7 @@ class ImageInput:
             try:
                 from PIL import Image
             except ImportError as e:
-                raise ImportError(
-                    "PIL/Pillow is required for probe_dimensions=True"
-                ) from e
+                raise ImportError("PIL/Pillow is required for probe_dimensions=True") from e
 
             with Image.open(path) as img:
                 metadata["image_dimensions"] = img.size  # (width, height)
