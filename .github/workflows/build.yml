@@ -593,7 +593,7 @@ jobs:
           TRANSFORMERS_CACHE: "/tmp/transformers_cache"
         run: |
           set -euo pipefail
-          bash scripts/ci/install_ml_test_dependencies.sh --skip-ci-requirements
+          bash scripts/ci/install_ml_test_dependencies.sh --skip-ci-requirements --include-rawpy
 
           # Note: pip cache purge removed - cache now managed by actions/cache@v5
           rm -rf ~/.cache/huggingface || true

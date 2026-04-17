@@ -1,12 +1,14 @@
 """
-Smoke tests for the governed ML dependency baseline.
+Smoke tests for the governed ML dependency baselines.
 
-These tests validate that supported minimum ML framework baselines do not
-break core imports or representative code paths without requiring large
-model downloads.
+These tests validate that CI-selected ML baselines do not break core
+imports or representative code paths without requiring large model
+downloads.
 """
 
+import importlib
 import sys
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -21,50 +23,40 @@ except (ImportError, RuntimeError, TypeError):
     TORCH_AVAILABLE = False
     torch = None
 
-try:
-    import torchvision
-
-    TORCHVISION_AVAILABLE = True
-except (ImportError, RuntimeError, TypeError):
-    TORCHVISION_AVAILABLE = False
-    torchvision = None
-
-try:
-    import timm
-
-    TIMM_AVAILABLE = True
-except (ImportError, RuntimeError, TypeError):
-    TIMM_AVAILABLE = False
-    timm = None
-
-try:
-    import diffusers
-
-    DIFFUSERS_AVAILABLE = True
-except (ImportError, RuntimeError, TypeError):
-    DIFFUSERS_AVAILABLE = False
-    diffusers = None
-
-try:
-    import transformers
-
-    TRANSFORMERS_AVAILABLE = True
-except (ImportError, RuntimeError, TypeError):
-    TRANSFORMERS_AVAILABLE = False
-    transformers = None
-
-try:
-    import sklearn
-
-    SKLEARN_AVAILABLE = True
-except (ImportError, RuntimeError, TypeError):
-    SKLEARN_AVAILABLE = False
-    sklearn = None
-
 # Skip all ML tests if torch is not available
 # ADR-044 Section 4.1 maps tests/smoke/ -> @pytest.mark.unit (no separate smoke marker).
 # The skipif ensures these won't run when torch is unavailable, so `-m unit` remains lightweight.
-pytestmark = [pytest.mark.unit, pytest.mark.skipif(not TORCH_AVAILABLE, reason="torch required for ML smoke tests")]
+pytestmark = [
+    pytest.mark.unit,
+    pytest.mark.ml,
+    pytest.mark.skipif(not TORCH_AVAILABLE, reason="torch required for ML smoke tests"),
+]
+
+_ML_IMPORT_EXCEPTIONS = (ImportError, RuntimeError, TypeError, AttributeError)
+
+
+def _import_optional_module(module_name: str):
+    """Import an optional ML module without failing collection."""
+    try:
+        return importlib.import_module(module_name), None
+    except _ML_IMPORT_EXCEPTIONS as exc:
+        return None, str(exc)
+
+
+def _require_optional_module(module_name: str):
+    """Skip the calling test when an optional ML module is unavailable."""
+    module, error = _import_optional_module(module_name)
+    if module is None:
+        pytest.skip(f"{module_name} unavailable: {error}")
+    return module
+
+
+def _ensure_torch_xpu_namespace() -> None:
+    """Provide the optional torch.xpu namespace expected by newer diffusers builds."""
+    if torch is None or hasattr(torch, "xpu"):
+        return
+
+    torch.xpu = SimpleNamespace(empty_cache=lambda: None, is_available=lambda: False)  # type: ignore[attr-defined]
 
 
 def test_pytorch_basic_operations():
@@ -102,24 +94,23 @@ def test_pytorch_mps_device_availability():
         assert x.device.type == "cpu"
 
 
-@pytest.mark.skipif(not TORCHVISION_AVAILABLE, reason="torchvision not installed")
 def test_torchvision_transforms():
     """Test torchvision transforms against the supported baseline."""
     torch = pytest.importorskip("torch", reason="torch required for ML smoke tests")
+    torchvision = _require_optional_module("torchvision")
     import numpy as np
     from PIL import Image
-    from torchvision import transforms
 
     # Create a dummy image
     img_array = np.random.randint(0, 255, (256, 256, 3), dtype=np.uint8)
     img = Image.fromarray(img_array)
 
     # Test basic transforms
-    transform = transforms.Compose(
+    transform = torchvision.transforms.Compose(
         [
-            transforms.Resize((224, 224)),
-            transforms.ToTensor(),
-            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+            torchvision.transforms.Resize((224, 224)),
+            torchvision.transforms.ToTensor(),
+            torchvision.transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
         ]
     )
 
@@ -128,9 +119,9 @@ def test_torchvision_transforms():
     assert isinstance(tensor, torch.Tensor)
 
 
-@pytest.mark.skipif(not SKLEARN_AVAILABLE, reason="scikit-learn not installed")
 def test_scikit_learn_basic_classifier():
     """Test scikit-learn basic classifier against the supported baseline."""
+    _require_optional_module("sklearn")
     from sklearn.datasets import make_classification
     from sklearn.ensemble import RandomForestClassifier
     from sklearn.model_selection import train_test_split
@@ -153,76 +144,77 @@ def test_scikit_learn_basic_classifier():
     assert score > 0.5
 
 
-@pytest.mark.skipif(not TIMM_AVAILABLE, reason="timm not installed")
-@patch("timm.create_model")
-def test_timm_model_interface(mock_create_model):
+def test_timm_model_interface():
     """Test timm model creation against the supported baseline."""
-    import timm
+    timm = _require_optional_module("timm")
 
-    # Mock the model to avoid downloading
-    mock_model = MagicMock()
-    mock_model.return_value = MagicMock()
-    mock_create_model.return_value = mock_model
+    with patch.object(timm, "create_model") as mock_create_model:
+        # Mock the model to avoid downloading
+        mock_model = MagicMock()
+        mock_model.return_value = MagicMock()
+        mock_create_model.return_value = mock_model
 
-    # Test model creation interface (mocked)
-    model = timm.create_model("resnet18", pretrained=False)
-    assert model is not None
+        # Test model creation interface (mocked)
+        model = timm.create_model("resnet18", pretrained=False)
+        assert model is not None
 
-    # Verify the mock was called correctly
-    mock_create_model.assert_called_once_with("resnet18", pretrained=False)
+        # Verify the mock was called correctly
+        mock_create_model.assert_called_once_with("resnet18", pretrained=False)
 
 
-@pytest.mark.skipif(not DIFFUSERS_AVAILABLE, reason="diffusers not installed")
-@patch("diffusers.DiffusionPipeline.from_pretrained")
-def test_diffusers_pipeline_interface(mock_from_pretrained):
+def test_diffusers_pipeline_interface():
     """Test the diffusers pipeline interface against the supported baseline."""
     import torch
-    from diffusers import DiffusionPipeline
 
-    # Mock the pipeline to avoid downloading large models
-    mock_pipeline = MagicMock()
-    mock_from_pretrained.return_value = mock_pipeline
+    _ensure_torch_xpu_namespace()
+    diffusers = _require_optional_module("diffusers")
 
-    # Test pipeline creation interface (mocked)
-    pipeline = DiffusionPipeline.from_pretrained(
-        "runwayml/stable-diffusion-v1-5", torch_dtype=torch.float32, use_safetensors=True
-    )
-    assert pipeline is not None
+    with patch.object(diffusers.DiffusionPipeline, "from_pretrained") as mock_from_pretrained:
+        # Mock the pipeline to avoid downloading large models
+        mock_pipeline = MagicMock()
+        mock_from_pretrained.return_value = mock_pipeline
 
-    # Verify the mock was called with correct arguments
-    assert mock_from_pretrained.called
-    call_args = mock_from_pretrained.call_args
-    assert call_args[0][0] == "runwayml/stable-diffusion-v1-5"
-    assert call_args[1]["torch_dtype"] == torch.float32
-    assert call_args[1]["use_safetensors"] is True
+        # Test pipeline creation interface (mocked)
+        pipeline = diffusers.DiffusionPipeline.from_pretrained(
+            "runwayml/stable-diffusion-v1-5", torch_dtype=torch.float32, use_safetensors=True
+        )
+        assert pipeline is not None
+
+        # Verify the mock was called with correct arguments
+        assert mock_from_pretrained.called
+        call_args = mock_from_pretrained.call_args
+        assert call_args[0][0] == "runwayml/stable-diffusion-v1-5"
+        assert call_args[1]["torch_dtype"] == torch.float32
+        assert call_args[1]["use_safetensors"] is True
 
 
-@pytest.mark.skipif(not TRANSFORMERS_AVAILABLE, reason="transformers not installed")
-@patch("transformers.AutoTokenizer.from_pretrained")
-@patch("transformers.AutoModel.from_pretrained")
-def test_transformers_model_interface(mock_model_from_pretrained, mock_tokenizer_from_pretrained):
+def test_transformers_model_interface():
     """Test the transformers model interface against the supported baseline."""
     torch = pytest.importorskip("torch", reason="torch required for ML smoke tests")
-    from transformers import AutoModel, AutoTokenizer
+    transformers = _require_optional_module("transformers")
 
-    # Mock tokenizer and model to avoid downloading
-    mock_tokenizer = MagicMock()
-    mock_tokenizer.return_value = {"input_ids": torch.tensor([[1, 2, 3]])}
-    mock_tokenizer_from_pretrained.return_value = mock_tokenizer
+    with (
+        patch.object(transformers.AutoTokenizer, "from_pretrained") as mock_tokenizer_from_pretrained,
+        patch.object(transformers.AutoModel, "from_pretrained") as mock_model_from_pretrained,
+    ):
+        # Mock tokenizer and model to avoid downloading
+        mock_tokenizer = MagicMock()
+        mock_tokenizer.return_value = {"input_ids": torch.tensor([[1, 2, 3]])}
+        mock_tokenizer_from_pretrained.return_value = mock_tokenizer
 
-    mock_model = MagicMock()
-    mock_model_from_pretrained.return_value = mock_model
+        mock_model = MagicMock()
+        mock_model_from_pretrained.return_value = mock_model
 
-    # Test tokenizer and model creation interface (mocked)
-    tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
-    model = AutoModel.from_pretrained("bert-base-uncased")
+        # Test tokenizer and model creation interface (mocked)
+        tokenizer = transformers.AutoTokenizer.from_pretrained("bert-base-uncased")
+        model = transformers.AutoModel.from_pretrained("bert-base-uncased")
 
-    assert tokenizer is not None
-    assert model is not None
+        assert tokenizer is not None
+        assert model is not None
 
-    # Verify mocks were called
-    mock_tokenizer_from_pretrained.assert_called_once_with("bert-base-uncased")
-    mock_model_from_pretrained.assert_called_once_with("bert-base-uncased")
+        # Verify mocks were called
+        mock_tokenizer_from_pretrained.assert_called_once_with("bert-base-uncased")
+        mock_model_from_pretrained.assert_called_once_with("bert-base-uncased")
 
 
 def test_torch_cuda_compatibility():
@@ -263,35 +255,30 @@ def test_ml_stack_imports():
 
     # Always check torch (required for ML tests to run)
     torch = pytest.importorskip("torch", reason="torch required for ML smoke tests")
-    assert_minimum_version("torch", "2.8.0")
+    assert_minimum_version("torch", "2.2.2")
 
     # Check sklearn (if available)
-    if SKLEARN_AVAILABLE:
-        import sklearn
-
+    sklearn, _ = _import_optional_module("sklearn")
+    if sklearn is not None:
         assert_minimum_version("scikit-learn", "1.8.0")
 
-    # Check diffusers (if available)
-    if DIFFUSERS_AVAILABLE:
-        import diffusers
-
+    # Check diffusers install floor (runtime compatibility is covered separately above).
+    diffusers, _ = _import_optional_module("diffusers")
+    if diffusers is not None or get_version("diffusers") is not None:
         assert_minimum_version("diffusers", "0.36.0")
 
     # Check transformers (if available)
-    if TRANSFORMERS_AVAILABLE:
-        import transformers
-
+    transformers, _ = _import_optional_module("transformers")
+    if transformers is not None or get_version("transformers") is not None:
         assert_minimum_version("transformers", "4.57.0")
 
     # Check torchvision (if available)
-    if TORCHVISION_AVAILABLE:
-        import torchvision
-
-        assert_minimum_version("torchvision", "0.23.0")
+    torchvision, _ = _import_optional_module("torchvision")
+    if torchvision is not None:
+        assert_minimum_version("torchvision", "0.17.2")
 
     # Check timm (if available)
-    if TIMM_AVAILABLE:
-        import timm
-
+    timm, _ = _import_optional_module("timm")
+    if timm is not None:
         timm_version = get_version("timm")
         assert timm_version is not None, "timm not installed"

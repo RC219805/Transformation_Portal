@@ -523,7 +523,7 @@ jobs:
 
       - name: Install ML test dependencies
         run: |
-          bash scripts/ci/install_ml_test_dependencies.sh
+          bash scripts/ci/install_ml_test_dependencies.sh --include-rawpy
           df -h
 
       - name: Verify test environment

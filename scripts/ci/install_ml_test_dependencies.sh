@@ -5,12 +5,17 @@ set -euo pipefail
 python_bin="${PYTHON_BIN:-python}"
 ci_requirements_file="${CI_REQUIREMENTS_FILE:-requirements-ci.txt}"
 ml_lockfile="${TP_CI_ML_LOCKFILE:-requirements/ml-core-linux.txt}"
+raw_requirements_file="${TP_CI_ML_RAW_REQUIREMENTS_FILE:-requirements/ml-raw.in}"
 install_ci_requirements=1
+install_rawpy=0
 
 while (($#)); do
   case "$1" in
     --skip-ci-requirements)
       install_ci_requirements=0
+      ;;
+    --include-rawpy)
+      install_rawpy=1
       ;;
     *)
       echo "Unknown argument: $1" >&2
@@ -32,6 +37,13 @@ if [[ ! -f "${ml_lockfile}" ]]; then
 fi
 
 "${python_bin}" -m pip install -r "${ml_lockfile}"
+if [[ "${install_rawpy}" == "1" ]]; then
+  if [[ ! -f "${raw_requirements_file}" ]]; then
+    echo "Missing raw requirements file: ${raw_requirements_file}" >&2
+    exit 1
+  fi
+  "${python_bin}" -m pip install -r "${raw_requirements_file}"
+fi
 "${python_bin}" -m pip install -e . --no-deps
 "${python_bin}" -m pip check
 
