@@ -57,7 +57,7 @@ def test_compile_ml_layers_refuses_broad_target_owned_regeneration() -> None:
 
     assert "target-owned ML locks require explicit authoritative-lane commands" in body
     assert "compile-ml-darwin-arm64" in body
-    assert "compile-ml-linux-x86_64" in body
+    assert "compile-ml-linux-x86_64" not in body
 
 
 def _write_fake_uname(fakebin: Path, *, system: str, machine: str) -> None:
@@ -96,16 +96,13 @@ def test_darwin_arm64_target_fails_closed_off_lane(tmp_path: Path) -> None:
     assert "authoritative only on native Darwin arm64" in (result.stdout + result.stderr)
 
 
-def test_linux_x86_64_target_fails_closed_off_lane(tmp_path: Path) -> None:
+def test_frozen_linux_x86_64_target_exits_nonzero_with_frozen_message(tmp_path: Path) -> None:
     repo_root = tmp_path / "repo"
     requirements_dir = repo_root / "requirements"
     requirements_dir.mkdir(parents=True)
     (requirements_dir / "Makefile").write_text(MAKEFILE_PATH.read_text(encoding="utf-8"), encoding="utf-8")
-    fakebin = tmp_path / "fakebin"
-    fakebin.mkdir()
-    _write_fake_uname(fakebin, system="Darwin", machine="arm64")
 
-    env = {**os.environ, "PATH": f"{fakebin}:/usr/bin:/bin"}
+    env = {**os.environ, "PATH": "/usr/bin:/bin"}
     result = subprocess.run(
         ["make", "compile-ml-linux-x86_64"],
         cwd=requirements_dir,
@@ -116,7 +113,7 @@ def test_linux_x86_64_target_fails_closed_off_lane(tmp_path: Path) -> None:
     )
 
     assert result.returncode != 0
-    assert "authoritative only on native Linux x86_64" in (result.stdout + result.stderr)
+    assert "ml-core-linux.txt is frozen as an unsupported historical lane" in (result.stdout + result.stderr)
 
 
 def test_frozen_darwin_x86_64_target_exits_nonzero_with_frozen_message(tmp_path: Path) -> None:

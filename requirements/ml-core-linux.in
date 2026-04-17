@@ -4,27 +4,27 @@
 # This file is Linux-specific because pip-compile cannot resolve
 # conditional dependencies across platforms in a single graph.
 #
-# Run `make compile-ml-linux-x86_64` in this directory to generate pinned ml-core-linux.txt
+# Frozen historical manifest retained for lock ownership and audit context only.
+# Do not regenerate ml-core-linux.txt locally or in automation; the Linux lane
+# is unsupported and the compile/update/check targets fail closed by contract.
 #
 # PLATFORM TARGETS:
 #   - linux-x86_64-cpu    (Linux Intel/AMD, CPU baseline)
 #   - linux-x86_64-cuda   (Linux Intel/AMD, NVIDIA GPU)
 #
-# SECURITY NOTE (CVE-2025-32434):
-#   torch < 2.6.0 has a critical RCE vulnerability via torch.load()
-#   MITIGATION: All torch.load() calls use weights_only=True at runtime
-#   This preserves CAS determinism while mitigating the vulnerability.
+# SECURITY NOTE:
+#   This Linux lock is retained only as a frozen historical manifest.
+#   weights_only=True remains mandatory defense in depth for all checkpoint
+#   loads.
 #
 # See: requirements/README.md for layering rationale.
 
-# --- PyTorch (Linux, deterministic) ---
-# CAS DETERMINISM: Pinned versions for reproducible environment fingerprints
-# SECURITY: CVE-2025-32434 mitigated via weights_only=True at runtime
-torch==2.2.2  # CAS determinism: cross-platform reproducibility
-torchvision==0.17.2  # CAS determinism: matches torch 2.2.2
+# --- PyTorch (Linux frozen historical baseline) ---
+torch==2.2.2+cpu  # Frozen historical pin aligned with ml-core-linux.txt
+torchvision==0.17.2+cpu  # Frozen historical companion pin aligned with ml-core-linux.txt
 
 # Diffusion / HuggingFace ecosystem
-# Keep transformers<5 while the repo-wide torch baseline remains on 2.2.x.
+# Keep transformers<5 while the managed inference surface remains on 4.57.x.
 diffusers>=0.36.0,<1
 transformers>=4.57.0,<5
 huggingface-hub>=0.19.0,<2

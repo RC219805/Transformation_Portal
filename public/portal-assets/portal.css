@@ -2910,10 +2910,10 @@ textarea,
   font-size: 12px;
 }
 .text-slate-500 {
-  color: rgb(100 116 139);
+  color: rgb(71 85 105);
 }
 .dark .dark\:text-slate-400 {
-  color: rgb(148 163 184);
+  color: rgb(203 213 225);
 }
 .hidden {
   display: none;
@@ -2969,7 +2969,7 @@ textarea,
   line-height: 1rem;
 }
 .border-slate-200 {
-  border-color: rgb(226 232 240);
+  border-color: rgb(203 213 225);
 }
 .bg-white\/80 {
   background-color: rgba(255, 255, 255, 0.8);

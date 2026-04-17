@@ -160,6 +160,10 @@ def test_portal_browser_state_probe_tracks_contextual_action_controls():
     assert "actionSecondary2Key" in expression
     assert "selectedRecoveryPrimaryKey" in expression
     assert "reviewStatusPrimaryKey" in expression
+    assert "connectionDetailsVisible" in expression
+    assert "dispatchChecklistRows" in expression
+    assert "queueEmptyStateVisible" in expression
+    assert "artifactEmptyStateVisible" in expression
 
 
 def test_portal_browser_accessibility_probe_tracks_target_size_and_disclosure_contracts():
@@ -171,6 +175,7 @@ def test_portal_browser_accessibility_probe_tracks_target_size_and_disclosure_co
     assert "#shortcutsBtn" in expression
     assert '[data-ui="view-link"]' in expression
     assert "#buildStepTab1" in expression
+    assert "#connectionDetails > summary" in expression
     assert "focusVisibleWithStickyShells" in expression
     assert "maxDisclosureDepth" in expression
     assert "discoverableDisclosures" in expression
@@ -563,6 +568,11 @@ def test_portal_browser_smoke_tracks_archive_readiness_fields_and_canonical_comm
     assert "summaryBandOutsideReconstruction" in content
     assert "dispatchPrimaryLaneVisible" in content
     assert "dispatchReadinessReason" in content
+    assert "connectionDetailsVisible" in content
+    assert "dispatchChecklistRows" in content
+    assert "dispatchChecklistHasPass" in content
+    assert "queueEmptyStateVisible" in content
+    assert "artifactEmptyStateVisible" in content
     assert "/tmp/gate-a-smoke-portal" in content
     assert "archive-gate-b" in content
     assert "archive-gate-c" in content

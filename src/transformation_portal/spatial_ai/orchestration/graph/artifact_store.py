@@ -728,28 +728,32 @@ class ArtifactStore:
             tmp_artifact_path: Optional[Path] = None
             tmp_prov_path: Optional[Path] = None
             tmp_marker_path: Optional[Path] = None
+            tmp_artifact_fd: Optional[int] = None
+            tmp_prov_fd: Optional[int] = None
+            marker_fd: Optional[int] = None
 
             # Atomic write: temp file + rename
             try:
-                # Write artifact (NumPy archive)
-                with tempfile.NamedTemporaryFile(
-                    mode="wb", dir=artifact_path.parent, delete=False, suffix=".npz"
-                ) as tmp_artifact:
-                    tmp_artifact_path = Path(tmp_artifact.name)
+                # Use explicit file descriptors for payload/provenance temp files so
+                # the path remains stable after close across concurrent Linux CI runs.
+                tmp_artifact_fd, tmp_artifact_path = _mkstemp_path(
+                    artifact_path.parent,
+                    prefix=".artifact_tmp_",
+                    suffix=".npz",
+                )
+                with os.fdopen(tmp_artifact_fd, "wb") as tmp_artifact:
+                    tmp_artifact_fd = None
                     np.savez_compressed(tmp_artifact, **np_dict)
                     tmp_artifact.flush()
                     os.fsync(tmp_artifact.fileno())
 
-                # Write provenance (JSON)
-                with tempfile.NamedTemporaryFile(
-                    mode="w",
-                    dir=artifact_path.parent,
-                    delete=False,
+                tmp_prov_fd, tmp_prov_path = _mkstemp_path(
+                    artifact_path.parent,
+                    prefix=".provenance_tmp_",
                     suffix=".json",
-                    encoding="utf-8",
-                    newline="\n",
-                ) as tmp_prov:
-                    tmp_prov_path = Path(tmp_prov.name)
+                )
+                with os.fdopen(tmp_prov_fd, "w", encoding="utf-8", newline="\n") as tmp_prov:
+                    tmp_prov_fd = None
                     dump_json(
                         asdict(provenance),
                         tmp_prov,
@@ -768,17 +772,18 @@ class ArtifactStore:
                 # Atomic commit marker (Issue #929: transactional visibility)
                 # Only after both artifact and provenance are in place,
                 # atomically create the .committed marker via temp+fsync+rename.
-                # Use mkstemp here instead of NamedTemporaryFile so the marker
-                # path stays stable after close on Linux CI under concurrent load.
+                # Write a small sentinel payload before rename so marker creation
+                # does not rely on zero-byte temp-file behavior under concurrency.
                 marker_fd, tmp_marker_path = _mkstemp_path(
                     artifact_path.parent,
                     prefix=".commit_tmp_",
                     suffix=".committed_tmp",
                 )
-                try:
-                    os.fsync(marker_fd)
-                finally:
-                    os.close(marker_fd)
+                with os.fdopen(marker_fd, "w", encoding="utf-8", newline="\n") as marker_file:
+                    marker_fd = None
+                    marker_file.write("committed\n")
+                    marker_file.flush()
+                    os.fsync(marker_file.fileno())
                 tmp_marker_path.replace(committed_path)
 
                 # Optional: fsync containing directory for crash durability
@@ -788,6 +793,12 @@ class ArtifactStore:
             except Exception as e:
                 # Clean up temp files AND uncommitted artifacts on failure
                 # Without marker, these are by definition uncommitted junk
+                if tmp_artifact_fd is not None:
+                    os.close(tmp_artifact_fd)
+                if tmp_prov_fd is not None:
+                    os.close(tmp_prov_fd)
+                if marker_fd is not None:
+                    os.close(marker_fd)
                 if tmp_artifact_path is not None:
                     tmp_artifact_path.unlink(missing_ok=True)
                 if tmp_prov_path is not None:

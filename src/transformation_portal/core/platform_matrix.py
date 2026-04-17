@@ -196,9 +196,9 @@ class PlatformMatrix:
             - secure: True if platform has secure torch wheels available
             - ml_supported: True if ML stack is supported on this platform
 
-        Security Context (CVE-2025-32434):
-            PyTorch torch==2.2.2 is pinned for CAS determinism (ADR-032).
-            This version is vulnerable to RCE via torch.load().
+        Security Context:
+            The supported Apple Silicon lane now pins torch==2.8.0.
+            Linux and macOS Intel remain frozen unsupported historical ML lanes.
             All platforms must use weights_only=True for torch.load() calls.
         """
         base_mitigation = (
@@ -213,23 +213,34 @@ class PlatformMatrix:
             return {
                 "platform": self.canonical_target,
                 "cve_2025_32434_note": (
-                    "macOS Intel (x86_64) uses torch==2.2.2 which is vulnerable "
-                    "to CVE-2025-32434 (torch.load RCE). Runtime mitigation required."
+                    "macOS Intel (x86_64) remains on the frozen torch==2.2.2 lane, "
+                    "which is vulnerable to CVE-2025-32434 and no longer supported for ML workloads."
                 ),
                 "mitigation": base_mitigation,
                 "secure": False,  # macOS Intel has no torch>=2.6.0 wheels (dropped platform support)
                 "ml_supported": allow_bypass,  # Only if explicitly bypassed
             }
+        if self.is_apple_silicon:
+            return {
+                "platform": self.canonical_target,
+                "cve_2025_32434_note": (
+                    "Supported Apple Silicon lane uses torch==2.8.0. "
+                    "weights_only=True remains required for checkpoint defense in depth."
+                ),
+                "mitigation": base_mitigation,
+                "secure": True,
+                "ml_supported": True,
+            }
         else:
             return {
                 "platform": self.canonical_target,
                 "cve_2025_32434_note": (
-                    "Platform uses torch==2.2.2 for CAS determinism. "
-                    "CVE-2025-32434 mitigated via weights_only=True at runtime."
+                    "Linux ML remains a frozen unsupported historical lane. "
+                    "Use a repo-managed secure subprocess runtime instead of the checked-in ML core lock."
                 ),
                 "mitigation": base_mitigation,
-                "secure": True,  # Secure when mitigation is applied
-                "ml_supported": True,
+                "secure": False,
+                "ml_supported": False,
             }
 
     def assert_ml_supported(self) -> None:
@@ -246,8 +257,8 @@ class PlatformMatrix:
             raise RuntimeError(
                 f"ML stack not supported on {status['platform']}. "
                 f"{status['cve_2025_32434_note']} "
-                "Migrate to macOS Apple Silicon or Linux. "
-                "To bypass (NOT RECOMMENDED): export TP_ALLOW_MACOS_INTEL_ML=1"
+                "Migrate to macOS Apple Silicon or a repo-managed secure subprocess runtime. "
+                "To bypass macOS Intel (NOT RECOMMENDED): export TP_ALLOW_MACOS_INTEL_ML=1"
             )
 
     def warn_if_insecure_ml_platform(self) -> None:

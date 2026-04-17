@@ -937,6 +937,9 @@ def test_portal_staged_upload_ui_contract_is_present_in_markup_and_source() -> N
     assert "formData.append('files', file, relativePath);" in content
     assert "els.inputDir.dispatchEvent(new Event('input', { bubbles: true }));" in content
     assert "els.inputDir.dispatchEvent(new Event('change', { bubbles: true }));" in content
+    assert "function _renderStagedUploadSummary(container, uploadState) {" in content
+    assert "Upload receipt" in content
+    assert "Inline failures" in content
 
 
 def test_portal_managed_mode_clears_api_keys_and_hides_secret_ui() -> None:
@@ -949,6 +952,8 @@ def test_portal_managed_mode_clears_api_keys_and_hides_secret_ui() -> None:
     assert "sessionStorage.removeItem(API_KEY_STORAGE_KEY);" in clear_body
     assert "_clearStoredApiKeyState(true);" in content
     assert "_loadApiKeyIntoInputs();" in content
+    assert 'id="connectionDetails"' in content
+    assert 'data-ui="connection-details"' in content
     assert 'id="portalAccessState"' in content
     assert 'id="bootstrapStatusBadge"' in content
     assert 'id="bootstrapRecoveryHint"' in content
@@ -1664,7 +1669,7 @@ def test_portal_dispatch_review_keeps_cli_parity_in_secondary_disclosure() -> No
     assert 'id="dispatchToolsDetails"' in content
     assert 'data-ui="dispatch-tools"' in content
     assert "Review dispatch posture" in content
-    assert "Secondary CLI & Config Tools" in content
+    assert "JSON / CLI / Effective Config" in content
     assert "CLI Parity & Config Tools" not in content
     assert 'id="effectiveConfigBtn"' in content
     assert 'id="importBtn"' in content
@@ -1717,6 +1722,30 @@ def test_portal_dispatch_lane_surfaces_live_readiness_reason() -> None:
     assert "detail: DISPATCH_BACKEND_OFFLINE_MESSAGE" in snapshot_body
     assert "els.dispatchReadinessReason.textContent = readiness.detail;" in guard_body
     assert "els.dispatchReadinessReason.dataset.tone = readiness.tone;" in guard_body
+
+
+def test_portal_display_job_state_keeps_terminal_retained_outputs_reviewable_without_dead_indexing_branch() -> None:
+    content = _portal_bundle_content()
+    body = _extract_js_function_body(content, "_displayJobState")
+
+    assert "const artifactCount = Array.isArray(job.artifacts) ? job.artifacts.length : 0;" in body
+    assert "const reviewableOutputs = _jobHasReviewableOutputs(job);" in body
+    assert "Terminal runs stay reviewable once outputs are retained" in body
+    assert "if ((rawState === 'succeeded' || rawState === 'ready') && reviewableOutputs) return 'reviewable';" in body
+    assert "if ((rawState === 'succeeded' || rawState === 'ready') && artifactCount > 0) return 'indexing';" not in body
+
+
+def test_portal_switch_state_badges_share_the_toggle_control_wrapper() -> None:
+    content = _portal_bundle_content()
+    body = _extract_js_function_body(content, "_syncSwitchStateLabels")
+
+    assert "let controlsWrap = label.querySelector('[data-switch-controls-wrap=\"true\"]');" in body
+    assert "controlsWrap.dataset.switchControlsWrap = 'true';" in body
+    assert "controlsWrap.className = 'ml-3 inline-flex items-center gap-3';" in body
+    assert "controlsWrap.appendChild(toggleWrap);" in body
+    assert "controlsWrap.insertBefore(stateLabel, controlsWrap.firstChild);" in body
+    assert "label.insertBefore(stateLabel, toggleWrap);" not in body
+    assert "'mr-3 inline-flex min-w-[3rem]" not in body
 
 
 def test_portal_disclosure_defaults_are_state_driven_instead_of_static() -> None:
@@ -2500,6 +2529,99 @@ def test_argv_normalization_ignores_sam2_checkpoint_path_when_backend_is_not_sam
     assert "--sam2-checkpoint-path" not in argv
 
 
+def test_validate_managed_sam2_checkpoint_path_allows_repo_controlled_missing_path() -> None:
+    normalized = orchestrator_app._validate_managed_sam2_checkpoint_path("./models/sam2/sam2.1_hiera_large.pt")
+
+    assert normalized.endswith("models/sam2/sam2.1_hiera_large.pt")
+
+
+def test_argv_rejects_untrusted_sam2_checkpoint_path(tmp_path: Path) -> None:
+    input_dir = tmp_path / "input"
+    output_dir = tmp_path / "output"
+    checkpoint_path = tmp_path / "sam2-untrusted.pt"
+    input_dir.mkdir()
+    output_dir.mkdir()
+    checkpoint_path.write_bytes(b"untrusted checkpoint bytes")
+
+    payload: Dict[str, object] = {
+        "pipeline": "lux-depth-v3",
+        "args": {
+            "input_dir": str(input_dir),
+            "output_dir": str(output_dir),
+            "enable_segmentation": True,
+            "segmentation_backend": "sam2",
+            "sam2_checkpoint_path": str(checkpoint_path),
+        },
+    }
+
+    with pytest.raises(ValueError, match="SAM2 checkpoint path is not trusted"):
+        orchestrator_app._argv_from_request(payload)
+
+
+def test_ensure_safe_regular_file_path_preserves_outside_root_reason(tmp_path: Path) -> None:
+    allowed_root = tmp_path / "allowed"
+    outside_root = tmp_path / "outside"
+    checkpoint_path = outside_root / "sam2-outside.pt"
+    allowed_root.mkdir()
+    outside_root.mkdir()
+    checkpoint_path.write_bytes(b"outside")
+
+    with pytest.raises(orchestrator_app._PortalValidationReasonError) as exc_info:
+        orchestrator_app._ensure_safe_regular_file_path(checkpoint_path, [allowed_root])
+
+    assert exc_info.value.reason == "path_outside_allowed_roots"
+
+
+def test_argv_rejects_non_file_sam2_checkpoint_path(tmp_path: Path) -> None:
+    input_dir = tmp_path / "input"
+    output_dir = tmp_path / "output"
+    checkpoint_dir = tmp_path / "sam2-checkpoint-dir"
+    input_dir.mkdir()
+    output_dir.mkdir()
+    checkpoint_dir.mkdir()
+
+    payload: Dict[str, object] = {
+        "pipeline": "lux-depth-v3",
+        "args": {
+            "input_dir": str(input_dir),
+            "output_dir": str(output_dir),
+            "enable_segmentation": True,
+            "segmentation_backend": "sam2",
+            "sam2_checkpoint_path": str(checkpoint_dir),
+        },
+    }
+
+    with pytest.raises(ValueError, match="Invalid path value"):
+        orchestrator_app._argv_from_request(payload)
+
+
+def test_argv_rejects_oversized_sam2_checkpoint_path(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    input_dir = tmp_path / "input"
+    output_dir = tmp_path / "output"
+    checkpoint_path = tmp_path / "sam2-oversized.pt"
+    input_dir.mkdir()
+    output_dir.mkdir()
+    checkpoint_path.write_bytes(b"oversized")
+    monkeypatch.setattr(orchestrator_app, "MANAGED_SAM2_CHECKSUM_MAX_BYTES", 1)
+
+    payload: Dict[str, object] = {
+        "pipeline": "lux-depth-v3",
+        "args": {
+            "input_dir": str(input_dir),
+            "output_dir": str(output_dir),
+            "enable_segmentation": True,
+            "segmentation_backend": "sam2",
+            "sam2_checkpoint_path": str(checkpoint_path),
+        },
+    }
+
+    with pytest.raises(ValueError, match="checksum verification size limit"):
+        orchestrator_app._argv_from_request(payload)
+
+
 def test_argv_rejects_invalid_raw_ingest_mode() -> None:
     payload: Dict[str, object] = {
         "pipeline": "lux-depth-v3",
@@ -3039,6 +3161,97 @@ def test_archive_gate_readiness_blocks_unsafe_input_dir() -> None:
     assert readiness["status"] == "blocked"
     assert readiness["missing_prerequisites"][0]["reason"] == "unsafe_path"
     assert readiness["missing_prerequisites"][0]["field"] == "input_dir"
+
+
+def test_validate_existing_path_accepts_trusted_regular_file(tmp_path: Path) -> None:
+    allowed_root = tmp_path / "allowed"
+    checkpoint_path = allowed_root / "sam2.pt"
+    allowed_root.mkdir()
+    checkpoint_path.write_bytes(b"checkpoint")
+
+    resolved, issue = orchestrator_app._validate_existing_path(
+        str(checkpoint_path),
+        field="sam2_checkpoint_path",
+        allowed_roots=[allowed_root],
+        missing_reason="missing_checkpoint",
+        missing_message="Checkpoint required.",
+        expected_type="file",
+        required=True,
+    )
+
+    assert resolved == str(checkpoint_path.resolve())
+    assert issue is None
+
+
+def test_validate_existing_path_accepts_trusted_directory(tmp_path: Path) -> None:
+    allowed_root = tmp_path / "allowed"
+    input_dir = allowed_root / "inputs"
+    allowed_root.mkdir()
+    input_dir.mkdir()
+
+    resolved, issue = orchestrator_app._validate_existing_path(
+        str(input_dir),
+        field="input_dir",
+        allowed_roots=[allowed_root],
+        missing_reason="input_dir_required",
+        missing_message="Input directory required.",
+        expected_type="dir",
+        required=True,
+    )
+
+    assert resolved == str(input_dir.resolve())
+    assert issue is None
+
+
+def test_validate_existing_path_preserves_missing_reason_for_path_inside_root(tmp_path: Path) -> None:
+    allowed_root = tmp_path / "allowed"
+    missing_file = allowed_root / "missing.pt"
+    allowed_root.mkdir()
+
+    resolved, issue = orchestrator_app._validate_existing_path(
+        str(missing_file),
+        field="sam2_checkpoint_path",
+        allowed_roots=[allowed_root],
+        missing_reason="missing_checkpoint",
+        missing_message="Checkpoint required.",
+        expected_type="file",
+        required=True,
+    )
+
+    assert resolved == str(missing_file.resolve())
+    assert issue is not None
+    assert issue["reason"] == "missing_checkpoint"
+    assert issue["path"] == str(missing_file.resolve())
+
+
+def test_validate_existing_path_rejects_symlink_escape(tmp_path: Path) -> None:
+    allowed_root = tmp_path / "allowed"
+    outside_root = tmp_path / "outside"
+    outside_file = outside_root / "secret.pt"
+    symlink_path = allowed_root / "escape.pt"
+    allowed_root.mkdir()
+    outside_root.mkdir()
+    outside_file.write_bytes(b"secret")
+    try:
+        symlink_path.symlink_to(outside_file)
+    except (NotImplementedError, OSError):
+        pytest.skip("symlinks are not available on this platform")
+
+    resolved, issue = orchestrator_app._validate_existing_path(
+        str(symlink_path),
+        field="sam2_checkpoint_path",
+        allowed_roots=[allowed_root],
+        missing_reason="missing_checkpoint",
+        missing_message="Checkpoint required.",
+        expected_type="file",
+        required=True,
+    )
+
+    assert resolved is None
+    assert issue is not None
+    assert issue["reason"] == "unsafe_path"
+    assert issue["field"] == "sam2_checkpoint_path"
+    assert issue["path"] == str(symlink_path)
 
 
 # --- Archive Gate E2E Test Extensions (Phase 2) ---
@@ -3820,6 +4033,9 @@ def test_stage_upload_batch_capture_metadata_failure_falls_back_to_empty_artifac
 
     receipt_payload = json.loads(result.upload_receipt_path.read_text(encoding="utf-8"))
     assert receipt_payload["summary"]["warnings"] == ["capture_metadata_extraction_failed"]
+    assert receipt_payload["summary"]["top_level_roots"] == ["sample.txt"]
+    assert result.received_at_epoch_seconds == 9876.0
+    assert result.top_level_roots == ("sample.txt",)
     assert json.loads(result.capture_metadata_path.read_text(encoding="utf-8")) == []
 
 

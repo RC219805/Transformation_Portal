@@ -21,6 +21,9 @@ updates:
     directory: "/"
     target-branch: "main"
     open-pull-requests-limit: 5
+    exclude-paths:
+      - "requirements/ml-core-linux.*"
+      - "requirements/ml-core-darwin-x86_64.*"
     schedule:
       interval: "weekly"
   - package-ecosystem: "github-actions"
@@ -58,6 +61,12 @@ def test_missing_open_pr_limit_is_reported() -> None:
     broken = valid_dependabot_text().replace("    open-pull-requests-limit: 5\n", "", 1)
     errors = dependabot_contract.validate_dependabot_config(broken)
     assert ("dependabot update ('pip', '/') must set open-pull-requests-limit to 5") in errors
+
+
+def test_missing_required_exclude_path_is_reported() -> None:
+    broken = valid_dependabot_text().replace('      - "requirements/ml-core-linux.*"\n', "", 1)
+    errors = dependabot_contract.validate_dependabot_config(broken)
+    assert "dependabot update ('pip', '/') must exclude unsupported manifest 'requirements/ml-core-linux.*'" in errors
 
 
 def test_invalid_yaml_is_reported() -> None:

@@ -74,10 +74,26 @@ def test_detect_transformers_torch_runtime_issue_reports_disabled_backend(monkey
 
 
 def test_detect_transformers_torch_version_issue_allows_repo_baseline(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The repo's torch 2.2.x + transformers 4.57.x baseline must not be rejected."""
+    """The supported torch 2.8.x + transformers 4.57.x baseline must not be rejected."""
     monkeypatch.setattr(
         "transformation_portal.core.ml_dependency_health._installed_version",
         lambda _distribution: "2.4.3",
+    )
+    monkeypatch.setattr(
+        "transformation_portal.core.ml_dependency_health._is_darwin_x86_64_runtime",
+        lambda: False,
+    )
+
+    message = detect_transformers_torch_version_issue("2.8.0", "4.57.6")
+
+    assert message is None
+
+
+def test_detect_transformers_torch_version_issue_allows_frozen_intel_lane(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The frozen Darwin x86_64 2.2.x lane remains compatible with transformers 4.57.x."""
+    monkeypatch.setattr(
+        "transformation_portal.core.ml_dependency_health._installed_version",
+        lambda _distribution: "1.26.4",
     )
     monkeypatch.setattr(
         "transformation_portal.core.ml_dependency_health._is_darwin_x86_64_runtime",

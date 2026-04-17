@@ -666,6 +666,13 @@ def _state_probe_expression() -> str:
     const el = document.getElementById(id);
     return el ? String(el.value || '') : '';
   };
+  const visible = (id) => {
+    const el = document.getElementById(id);
+    if (!el) return false;
+    const style = window.getComputedStyle(el);
+    const rect = el.getBoundingClientRect();
+    return style.display !== 'none' && style.visibility !== 'hidden' && rect.width > 0 && rect.height > 0;
+  };
   const buttonMeta = (id) => {
     const el = document.getElementById(id);
     if (!el) {
@@ -694,8 +701,14 @@ def _state_probe_expression() -> str:
     pipeline: value('pipelineSelect'),
     inputDir: value('inputDir'),
     outputDir: value('outputDir'),
+    authModeBadge: text('authModeBadge'),
     healthText: text('healthText'),
     heroReadinessLabel: text('heroReadinessLabel'),
+    connectionDetailsVisible: visible('connectionDetails'),
+    connectionDetailsOpen: (() => {
+      const el = document.getElementById('connectionDetails');
+      return !!(el && el.open);
+    })(),
     queueCount: text('queueCount'),
     selectedJobState: text('selectedJobStateBadge'),
     selectedJobId: text('selectedJobIdLabel'),
@@ -842,6 +855,13 @@ def _state_probe_expression() -> str:
     preRunWarnings: Array.from(document.querySelectorAll('#preRunWarnings li')).map((item) =>
       String(item.textContent || '').trim()
     ),
+    dispatchChecklistRows: document.querySelectorAll('#preRunWarnings li[data-tone], #preRunWarnings li').length,
+    dispatchChecklistHasPass: Array.from(document.querySelectorAll('#preRunWarnings li')).some((item) =>
+      String(item.textContent || '').trim().startsWith('PASS:')
+    ),
+    dispatchChecklistHasBlock: Array.from(document.querySelectorAll('#preRunWarnings li')).some((item) =>
+      String(item.textContent || '').trim().startsWith('BLOCK:')
+    ),
     preRunWarningsEmptyVisible: (() => {
       const el = document.getElementById('preRunWarningsEmpty');
       if (!el) return false;
@@ -858,6 +878,7 @@ def _state_probe_expression() -> str:
       const el = document.getElementById('rightsManifestField');
       return !!(el && !el.classList.contains('hidden'));
     })(),
+    stagedUploadReceiptVisible: visible('stagedUploadSummary') && !!text('stagedUploadSummary'),
     logHasFixityWrite: (() => {
       const el = document.getElementById('logPane');
       return !!(el && (el.textContent || '').includes('Wrote 3 rows'));
@@ -899,6 +920,8 @@ def _state_probe_expression() -> str:
       const el = document.getElementById('queue-shell');
       return !!(el && el.classList.contains('hidden'));
     })(),
+    queueEmptyStateVisible: visible('emptyQueueState'),
+    artifactEmptyStateVisible: visible('emptyArtifactState'),
     archiveFieldsVisible: (() => {
       const el = document.getElementById('fieldsArchiveGate');
       return !!(el && !el.classList.contains('hidden'));
@@ -1066,6 +1089,7 @@ def _accessibility_probe_expression() -> str:
     shortcutsTargetMin: minTarget('#shortcutsBtn'),
     workspaceLinkTargetMin: minTarget('[data-ui="view-link"]'),
     buildStepTargetMin: minTarget('#buildStepTab1'),
+    connectionDetailsTargetMin: minTarget('#connectionDetails > summary'),
     focusTargetId: focusTargetNode ? String(focusTargetNode.id || focusTargetNode.getAttribute('data-ui') || focusTargetNode.tagName || '') : '',
     focusTargetTop: focusTargetNode ? Number(focusTargetNode.getBoundingClientRect().top || 0) : 0,
     focusTargetBottom: focusTargetNode ? Number(focusTargetNode.getBoundingClientRect().bottom || 0) : 0,
@@ -1661,8 +1685,47 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
             f"Build step tabs fell below the 44px contract: {build_accessibility}",
         )
         _expect(
+            bool(build_accessibility.get("connectionDetailsTargetMin")),
+            f"Connection details disclosure fell below the 44px target-size contract: {build_accessibility}",
+        )
+        _expect(
             bool(build_accessibility.get("focusVisibleWithStickyShells")),
             f"Sticky portal chrome obscured focused controls: {build_accessibility}",
+        )
+        _expect(
+            bool(build_state.get("connectionDetailsVisible")),
+            f"Build view should keep the connection-details disclosure visible: {build_state}",
+        )
+
+        print("portal-browser-smoke: checking empty operate/review states before dispatch", flush=True)
+        connection.evaluate(_navigate_to_console_view_expression("operate"))
+        empty_operate_state = _poll(
+            connection,
+            _state_probe_expression(),
+            predicate=lambda value: (
+                isinstance(value, dict)
+                and str(value.get("currentView", "")) == "operate"
+                and bool(value.get("queueEmptyStateVisible"))
+                and bool(value.get("artifactEmptyStateVisible"))
+            ),
+            timeout_seconds=args.timeout_seconds,
+            description="empty operate state before the first dispatch",
+        )
+        _expect(
+            str(empty_operate_state.get("selectedJobId", "")).strip() == "No job selected",
+            f"Operate empty state should keep the inspector explicit about the lack of a selected run: {empty_operate_state}",
+        )
+        connection.evaluate(_navigate_to_console_view_expression("build"))
+        _poll(
+            connection,
+            _state_probe_expression(),
+            predicate=lambda value: (
+                isinstance(value, dict)
+                and str(value.get("currentView", "")) == "build"
+                and bool(value.get("buildViewVisible"))
+            ),
+            timeout_seconds=args.timeout_seconds,
+            description="build view to restore after the empty-state operate check",
         )
 
         draft_input_dir = str(archive_root)
@@ -1760,6 +1823,22 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
         _expect(
             bool(str(lux_state.get("heroReadinessLabel", "")).strip()),
             f"Lux build view did not expose any readiness label: {lux_state}",
+        )
+        lux_dispatch_state = _poll(
+            connection,
+            _state_probe_expression(),
+            predicate=lambda value: (
+                isinstance(value, dict)
+                and str(value.get("currentView", "")) == "build"
+                and str(value.get("pipeline", "")) == "lux-depth-v3"
+                and int(value.get("dispatchChecklistRows", 0)) >= 4
+            ),
+            timeout_seconds=args.timeout_seconds,
+            description="lux dispatch checklist rows to render",
+        )
+        _expect(
+            bool(lux_dispatch_state.get("dispatchChecklistHasPass")),
+            f"Dispatch checklist should expose explicit pass rows instead of qualitative-only copy: {lux_dispatch_state}",
         )
         _expect(
             not bool(lux_state.get("segmentationBackendVisible")),
@@ -2205,12 +2284,12 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
             predicate=lambda value: (
                 isinstance(value, dict)
                 and str(value.get("selectedJobId", "")).startswith("job_")
-                and str(value.get("selectedJobState", "")).strip().lower() == "succeeded"
+                and str(value.get("selectedJobState", "")).strip().lower() in {"succeeded", "reviewable"}
                 and "3 indexed" in str(value.get("selectedJobArtifactCount", ""))
                 and bool(value.get("logHasFixityWrite"))
             ),
             timeout_seconds=args.timeout_seconds,
-            description="browser-submitted job to succeed with artifacts and logs",
+            description="browser-submitted job to reach a reviewable terminal state with artifacts and logs",
         )
 
         _expect(

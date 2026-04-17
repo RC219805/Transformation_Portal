@@ -182,6 +182,33 @@ Before merging any Dependabot PR:
 |------|--------|--------|
 | 2026-03-26 | Initial creation with PR #1270-#1275 assessment | Architect |
 | 2026-03-26 | Updated after #1275 closure and curated Starlette merge via #1278 | Architect |
+| 2026-04-16 | Added ML alert dismissal/remediation governance for supported vs frozen target-owned lanes | Architect |
+
+---
+
+## ML Alert Governance (2026-04-16)
+
+Dependabot ML alert waves must be triaged by advisory reachability and lane support status, not by raw alert count.
+
+### Default ML dispositions
+
+| Scenario | Disposition | Notes |
+|----------|-------------|-------|
+| Supported target-owned lock (`ml-core-darwin-arm64.txt`) with a reachable vulnerable runtime dependency | Curated remediation PR | Prefer controlled lock/input rotation with focused validation |
+| Frozen/unsupported target-owned lock (`ml-core-linux.txt`, `ml-core-darwin-x86_64.txt`) | Dismiss `not_used` | Document that the lane is frozen, unsupported, and not part of supported ML posture |
+| Vulnerability only affects an unused dependency code path (for example `transformers.Trainer`) | Dismiss `not_used` | Include repo search evidence showing the vulnerable path is unreachable |
+
+### ML review rules
+
+1. Treat repeated alerts across target-owned ML lockfiles as a single advisory wave.
+2. Do not take a broad or pre-release dependency upgrade just to clear the dashboard.
+3. Keep frozen Darwin x86_64 and Linux historical lanes out of supported baseline decisions.
+4. Keep managed checkpoint and model-load trust boundaries tight while rotating versions.
+5. Record dismissals and supported-lane remediation evidence in a dedicated triage artifact.
+
+### Current triage artifact
+
+See [DEPENDABOT_ML_ALERT_TRIAGE_2026-04-16.md](DEPENDABOT_ML_ALERT_TRIAGE_2026-04-16.md) for the April 16, 2026 advisory mapping, dismissal evidence, and supported-lane audit runbook.
 
 ---
 

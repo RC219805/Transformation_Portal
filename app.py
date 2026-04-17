@@ -517,6 +517,100 @@ def _resolved_portal_upload_root() -> Path:
     return _resolve_allowed_request_path(str(PORTAL_UPLOAD_ROOT), ALLOWED_INPUT_ROOTS)
 
 
+def _path_is_within_root(resolved_path: Path, root: Path) -> bool:
+    try:
+        resolved_path.relative_to(Path(os.path.realpath(root)))
+    except ValueError:
+        return False
+    return True
+
+
+def _trusted_allowed_entry(
+    resolved_path: Path,
+    allowed_roots: List[Path],
+) -> Optional[Path]:
+    for root in allowed_roots:
+        try:
+            root_real = Path(os.path.realpath(root))
+            relative_parts = resolved_path.relative_to(root_real).parts
+        except (OSError, RuntimeError, ValueError):
+            continue
+        current = root_real
+        if not relative_parts:
+            return current
+        for part in relative_parts:
+            if part in {"", ".", ".."}:
+                return None
+            try:
+                next_path = next((child for child in current.iterdir() if child.name == part), None)
+            except (NotADirectoryError, FileNotFoundError, OSError, RuntimeError, ValueError):
+                return None
+            if next_path is None:
+                return None
+            current = next_path
+        return current
+    return None
+
+
+def _ensure_safe_regular_file_path(path_value: Path, allowed_roots: List[Path]) -> Path:
+    try:
+        candidate_real = _resolve_allowed_request_path(str(path_value), allowed_roots)
+    except _PortalValidationReasonError:
+        raise
+    except (OSError, RuntimeError, ValueError) as exc:
+        raise _PortalValidationReasonError("Invalid path value", reason="invalid_path_value") from exc
+    trusted_entry = _trusted_allowed_entry(candidate_real, allowed_roots)
+    if trusted_entry is None:
+        raise _PortalValidationReasonError("Invalid path value", reason="invalid_path_value")
+    try:
+        if not trusted_entry.is_file():
+            raise _PortalValidationReasonError("Invalid path value", reason="invalid_path_value")
+    except OSError as exc:
+        raise _PortalValidationReasonError("Invalid path value", reason="invalid_path_value") from exc
+    return trusted_entry
+
+
+def _compute_file_sha256(path: Path, chunk_size: int = 1024 * 1024) -> str:
+    trusted_roots = [*MANAGED_SAM2_TRUSTED_ROOTS, *ALLOWED_INPUT_ROOTS]
+    try:
+        resolved_path = _resolve_allowed_request_path(str(path), trusted_roots)
+    except _PortalValidationReasonError:
+        raise
+    except (OSError, RuntimeError, ValueError) as exc:
+        raise _PortalValidationReasonError("Invalid path value", reason="invalid_path_value") from exc
+    trusted_entry = _trusted_allowed_entry(resolved_path, trusted_roots)
+    if trusted_entry is None:
+        raise _PortalValidationReasonError("Invalid path value", reason="invalid_path_value")
+    try:
+        if not trusted_entry.is_file():
+            raise _PortalValidationReasonError("Invalid path value", reason="invalid_path_value")
+        size_bytes = trusted_entry.stat().st_size
+    except OSError as exc:
+        raise _PortalValidationReasonError("Invalid path value", reason="invalid_path_value") from exc
+    if size_bytes > MANAGED_SAM2_CHECKSUM_MAX_BYTES:
+        raise _PortalValidationReasonError(
+            "SAM2 checkpoint path exceeds checksum verification size limit",
+            reason="checkpoint_file_too_large",
+        )
+    digest = hashlib.sha256()
+    with trusted_entry.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(chunk_size), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _validate_managed_sam2_checkpoint_path(path_value: str) -> str:
+    resolved = _resolve_allowed_request_path(path_value, ALLOWED_INPUT_ROOTS)
+    # Repo-controlled checkpoints remain valid even before the artifact exists locally.
+    if any(_path_is_within_root(resolved, root) for root in MANAGED_SAM2_TRUSTED_ROOTS):
+        return str(resolved)
+    safe_file = _ensure_safe_regular_file_path(resolved, ALLOWED_INPUT_ROOTS)
+    digest = _compute_file_sha256(safe_file)
+    if digest in MANAGED_SAM2_TRUSTED_SHA256:
+        return str(safe_file)
+    raise _PortalValidationReasonError("SAM2 checkpoint path is not trusted", reason="untrusted_checkpoint_path")
+
+
 LOG_TAIL_LIMIT = 2000
 STATUS_LOG_LIMIT = 250
 EVENT_QUEUE_MAXSIZE = 512
@@ -573,6 +667,21 @@ ALLOWED_OUTPUT_ROOTS = _env_path_roots(
     DEFAULT_ALLOWED_PATH_ROOTS,
 )
 ALLOWED_PATH_ROOTS = list(dict.fromkeys([*ALLOWED_INPUT_ROOTS, *ALLOWED_OUTPUT_ROOTS]))
+MANAGED_SAM2_TRUSTED_ROOTS = [
+    Path(os.path.realpath(REPO_ROOT / "models" / "sam2")),
+    Path(os.path.realpath(REPO_ROOT / "checkpoints")),
+]
+MANAGED_SAM2_TRUSTED_SHA256 = frozenset(
+    {
+        "d0bb7f236400a49669ffdd1be617959a8b1d1065081789d7bbff88eded3a8071",
+        "7442e4e9b732a508f80e141e7c2913437a3610ee0c77381a66658c3a445df87b",
+    }
+)
+MANAGED_SAM2_CHECKSUM_MAX_BYTES = _env_int(
+    "TP_MANAGED_SAM2_CHECKSUM_MAX_BYTES",
+    1024 * 1024 * 1024,
+    minimum=1024,
+)
 PORTAL_UPLOAD_ROOT = Path(
     os.getenv("TP_PORTAL_UPLOAD_ROOT", str(Path(tempfile.gettempdir()) / "transformation-portal" / "uploads"))
 ).expanduser()
@@ -942,6 +1051,8 @@ VALIDATION_REASON_CODES = {
     "Invalid path value": "invalid_path_value",
     "Path shorthand traversal disallowed": "path_shorthand_traversal_disallowed",
     "Path outside allowed roots": "path_outside_allowed_roots",
+    "SAM2 checkpoint path is not trusted": "untrusted_checkpoint_path",
+    "SAM2 checkpoint path exceeds checksum verification size limit": "checkpoint_file_too_large",
     "Invalid quality_tier": "invalid_quality_tier",
     "Invalid depth_backend": "invalid_depth_backend",
     "Invalid segmentation_backend": "invalid_segmentation_backend",
@@ -960,6 +1071,7 @@ PORTAL_SAFE_ERROR_MESSAGES = {
     "archive_index_required": "An archive index artifact is required before dispatch.",
     "archive_runner_unavailable": "The selected archive command is unavailable in this environment.",
     "bag_dir_required": "A bag directory is required before dispatch.",
+    "checkpoint_file_too_large": "Managed SAM2 checkpoint overrides exceed the checksum verification size limit.",
     "conflicting_log_verbosity_flags": "Verbose and quiet mode cannot both be enabled.",
     "hash_manifest_required": "A hash manifest artifact is required before dispatch.",
     "invalid_archive_command": "The selected archive command is not supported.",
@@ -986,6 +1098,7 @@ PORTAL_SAFE_ERROR_MESSAGES = {
     "policy_yaml_required": "A rights policy YAML file is required before dispatch.",
     "rights_manifest_required": "A rights-manifest JSONL artifact is required before dispatch.",
     "runner_unavailable": "The selected pipeline runner is unavailable in this environment.",
+    "untrusted_checkpoint_path": "Managed SAM2 checkpoint overrides must use a repo-controlled or checksum-verified file.",
     "unsafe_path": "Configured paths must stay within the allowed workspace roots.",
     "unsupported_pipeline": "The selected pipeline is not supported.",
 }
@@ -1332,13 +1445,15 @@ def _validate_existing_path(
         return None, None
 
     try:
-        if text.startswith("~") or "\x00" in text:
-            raise ValueError("Invalid path value")
-        candidate = Path(text)
-        if not candidate.is_absolute():
-            candidate = REPO_ROOT / candidate
-        candidate_real = os.path.realpath(candidate)
-        candidate_real = str(candidate_real)
+        candidate_real = _resolve_allowed_request_path(text, allowed_roots)
+    except _PortalValidationReasonError:
+        return None, _readiness_issue(
+            "unsafe_path",
+            severity="blocked",
+            message=f"{field} must stay within allowed roots.",
+            field=field,
+            path=text,
+        )
     except (OSError, RuntimeError, ValueError):
         return None, _readiness_issue(
             "unsafe_path",
@@ -1348,22 +1463,19 @@ def _validate_existing_path(
             path=text,
         )
 
-    for root in allowed_roots:
-        try:
-            root_real = os.path.realpath(root)
-            root_real = str(root_real)
-        except (OSError, RuntimeError, ValueError):
-            # Ignore invalid allowlist entries and continue checking the others.
-            continue
+    resolved = str(candidate_real)
+    trusted_entry = _trusted_allowed_entry(candidate_real, allowed_roots)
+    if trusted_entry is None:
+        return resolved, _readiness_issue(
+            missing_reason,
+            severity="blocked",
+            message=missing_message,
+            field=field,
+            path=resolved,
+        )
 
-        root_prefix = root_real if root_real.endswith(os.sep) else root_real + os.sep
-        if candidate_real != root_real and not candidate_real.startswith(root_prefix):
-            continue
-
-        resolved = candidate_real
-        # Keep the normalized-path and root-prefix proof adjacent to the
-        # filesystem probe so the allowlist guard stays obvious to reviewers.
-        if expected_type == "file" and not os.path.isfile(resolved):
+    try:
+        if expected_type == "file" and not trusted_entry.is_file():
             return resolved, _readiness_issue(
                 missing_reason,
                 severity="blocked",
@@ -1371,7 +1483,7 @@ def _validate_existing_path(
                 field=field,
                 path=resolved,
             )
-        if expected_type == "dir" and not os.path.isdir(resolved):
+        if expected_type == "dir" and not trusted_entry.is_dir():
             return resolved, _readiness_issue(
                 missing_reason,
                 severity="blocked",
@@ -1379,15 +1491,15 @@ def _validate_existing_path(
                 field=field,
                 path=resolved,
             )
-        return resolved, None
-
-    return None, _readiness_issue(
-        "unsafe_path",
-        severity="blocked",
-        message=f"{field} must stay within allowed roots.",
-        field=field,
-        path=text,
-    )
+    except OSError:
+        return resolved, _readiness_issue(
+            missing_reason,
+            severity="blocked",
+            message=missing_message,
+            field=field,
+            path=resolved,
+        )
+    return resolved, None
 
 
 def _lux_depth_readiness(args: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
@@ -2586,31 +2698,6 @@ def _normalize_portal_path_arg(
     must_be_file: bool = False,
     must_be_dir: bool = False,
 ) -> str:
-    def _trusted_allowed_entry(
-        resolved_path: Path,
-    ) -> Optional[Path]:
-        for root in allowed_roots:
-            try:
-                root_real = Path(os.path.realpath(root))
-                relative_parts = resolved_path.relative_to(root_real).parts
-            except (OSError, RuntimeError, ValueError):
-                continue
-            current = root_real
-            if not relative_parts:
-                return current
-            for part in relative_parts:
-                if part in {"", ".", ".."}:
-                    return None
-                try:
-                    next_path = next((child for child in current.iterdir() if child.name == part), None)
-                except (NotADirectoryError, FileNotFoundError, OSError, RuntimeError, ValueError):
-                    return None
-                if next_path is None:
-                    return None
-                current = next_path
-            return current
-        return None
-
     text = str(value or "").strip()
     if not text:
         if required:
@@ -2665,7 +2752,7 @@ def _normalize_portal_path_arg(
         return ""
     trusted_entry: Optional[Path] = None
     if must_exist or must_be_file or must_be_dir:
-        trusted_entry = _trusted_allowed_entry(resolved_path)
+        trusted_entry = _trusted_allowed_entry(resolved_path, allowed_roots)
     if must_exist and trusted_entry is None:
         errors.append(
             _portal_issue(
@@ -2847,7 +2934,9 @@ def _lux_config_metadata() -> Dict[str, Any]:
                     "required": False,
                     "field": "sam2_checkpoint_path",
                     "detail": (
-                        "A local checkpoint path is optional. Supply one only" " when the runtime requires a pinned SAM2 file."
+                        "A local checkpoint path is optional. Managed flows only"
+                        " accept repo-controlled SAM2 paths or files whose"
+                        " checksum matches the governed SAM2 manifest."
                     ),
                 },
                 "model_provider_label": "Meta",
@@ -3221,7 +3310,40 @@ def _build_lux_config_preview(
         must_exist=False,
     )
     if sam2_checkpoint_path:
-        normalized_args["sam2_checkpoint_path"] = sam2_checkpoint_path
+        if segmentation_backend == "sam2":
+            try:
+                _validate_managed_sam2_checkpoint_path(sam2_checkpoint_path)
+            except _PortalValidationReasonError as exc:
+                reason = _portal_reason_from_exception(exc, default="invalid_path_value")
+                if reason == "untrusted_checkpoint_path":
+                    errors.append(
+                        _portal_issue(
+                            "sam2_checkpoint_path",
+                            "untrusted_checkpoint_path",
+                            "SAM2 checkpoint overrides must use a repo-controlled or checksum-verified file.",
+                            suggestion=(
+                                "Use ./models/sam2/... or ./checkpoints/... for repo-managed checkpoints, "
+                                "or provide a file whose SHA-256 matches the governed SAM2 checkpoint manifest."
+                            ),
+                        )
+                    )
+                else:
+                    message = _portal_safe_error_message(
+                        reason,
+                        field="sam2_checkpoint_path",
+                    )
+                    errors.append(
+                        _portal_issue(
+                            "sam2_checkpoint_path",
+                            reason,
+                            message,
+                            suggestion=("Choose an existing checkpoint file under the configured repository or temp roots."),
+                        )
+                    )
+            else:
+                normalized_args["sam2_checkpoint_path"] = sam2_checkpoint_path
+        else:
+            normalized_args["sam2_checkpoint_path"] = sam2_checkpoint_path
     normalized_args["sam2_tiling_enabled"] = _as_bool(
         _pick(args, "sam2_tiling_enabled", "sam2TilingEnabled", default=defaults["sam2_tiling_enabled"]),
         default=bool(defaults["sam2_tiling_enabled"]),
@@ -5987,6 +6109,8 @@ def _argv_from_request(
                 str(sam2_checkpoint_path_raw),
                 ALLOWED_INPUT_ROOTS,
             )
+            if segmentation_backend == "sam2":
+                sam2_checkpoint_path = _validate_managed_sam2_checkpoint_path(sam2_checkpoint_path)
 
         cameras_sidecar_path = ""
         if cameras_sidecar_path_raw is not None and str(cameras_sidecar_path_raw).strip():

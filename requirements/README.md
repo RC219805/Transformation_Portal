@@ -17,8 +17,8 @@ requirements/
 ├── ml-core-darwin-x86_64.txt # ML core layer - macOS Intel pinned lock
 ├── ml-core-darwin-arm64.in   # ML core layer - macOS Apple Silicon baseline
 ├── ml-core-darwin-arm64.txt  # ML core layer - macOS Apple Silicon pinned lock
-├── ml-core-linux.in          # ML core layer - Linux x86_64 (torch 2.2.2)
-├── ml-core-linux.txt         # ML core layer - Linux x86_64 (pinned)
+├── ml-core-linux.in          # ML core layer - Linux x86_64 historical baseline (frozen)
+├── ml-core-linux.txt         # ML core layer - Linux x86_64 historical lock (frozen)
 ├── ml-cpu.in               # ML CPU acceleration layer
 ├── ml-cpu.txt              # Deprecated optional ML lock (not checked in)
 ├── ml-mps.in               # ML MPS acceleration layer (Apple Silicon)
@@ -71,16 +71,16 @@ To ensure deterministic builds, the checked-in ML contract is limited to target-
 
 | Target | Lockfile | Governed baseline |
 |----------|----------|-------------------|
-| macOS Intel (`darwin-x86_64`) | `ml-core-darwin-x86_64.txt` | `torch==2.2.2` + `numpy<2` + `transformers<5` (frozen pending authoritative lane) |
-| macOS Apple Silicon (`darwin-arm64`) | `ml-core-darwin-arm64.txt` | `torch==2.2.2` + `transformers<5` + pinned `coremltools` |
-| Linux x86_64 (`linux-x86_64`) | `ml-core-linux.txt` | validated independently against the runtime and lock contract checks |
+| macOS Intel (`darwin-x86_64`) | `ml-core-darwin-x86_64.txt` | `torch==2.2.2` + `numpy<2` + `transformers<5` (frozen pending retirement) |
+| macOS Apple Silicon (`darwin-arm64`) | `ml-core-darwin-arm64.txt` | `torch==2.8.0` + `torchvision==0.23.0` + pinned `coremltools` |
+| Linux x86_64 (`linux-x86_64`) | `ml-core-linux.txt` | frozen unsupported historical lane |
 
 **Contract notes:**
-- All target-owned core locks still anchor on torch 2.2.2 for deterministic CAS identity.
+- Supported target-owned core locks anchor on torch 2.8.0 / torchvision 0.23.0.
 - The Intel Darwin lock is the conservative compatibility lane and must keep `numpy<2` and `transformers<5`.
 - The Apple Silicon Darwin lock must keep pinned `coremltools` and must remain free of Linux/CUDA-only packages.
 - Darwin target-owned lockfiles must never contain `nvidia-*` or `triton`.
-- Linux lock state may evolve independently, but that drift must not be propagated into Darwin lockfiles.
+- The Linux lock is retained as a frozen historical manifest and must not drive supported-lane security baselines.
 - Target-owned core locks must not collapse to identical dependency graphs.
 
 **Important:** Acceleration is NEVER inferred from OS—it must be explicitly specified via profile.
@@ -290,7 +290,7 @@ pip install -r requirements/ml-core-darwin-x86_64.txt  # macOS Intel
 # or
 pip install -r requirements/ml-core-darwin-arm64.txt   # macOS Apple Silicon
 # or
-pip install -r requirements/ml-core-linux.txt    # Linux x86_64
+pip install -r requirements/ml-core-linux.txt    # Linux x86_64 (historical unsupported lane)
 
 # Optional non-core ML layers no longer have trusted checked-in lockfiles.
 # Use target-specific bootstrap flows once those contracts exist again.
@@ -427,9 +427,9 @@ Target-owned ML commands:
   compile-ml-darwin-arm64    Compile the Darwin arm64 ML lock on native Darwin arm64 only
   update-ml-darwin-arm64     Update the Darwin arm64 ML lock on native Darwin arm64 only
   check-ml-darwin-arm64      Verify the Darwin arm64 ML lock on native Darwin arm64 only
-  compile-ml-linux-x86_64    Compile the Linux x86_64 ML lock on native Linux x86_64 only
-  update-ml-linux-x86_64     Update the Linux x86_64 ML lock on native Linux x86_64 only
-  check-ml-linux-x86_64      Verify the Linux x86_64 ML lock on native Linux x86_64 only
+  compile-ml-linux-x86_64    Frozen lane - always fails closed
+  update-ml-linux-x86_64     Frozen lane - always fails closed
+  check-ml-linux-x86_64      Frozen lane - always fails closed
   compile-ml-darwin-x86_64   Frozen lane - always fails closed
   update-ml-darwin-x86_64    Frozen lane - always fails closed
   check-ml-darwin-x86_64     Frozen lane - always fails closed
@@ -437,7 +437,7 @@ Target-owned ML commands:
 Target-owned ML lockfiles:
   ml-core-darwin-x86_64.txt  macOS Intel ML baseline (frozen)
   ml-core-darwin-arm64.txt   macOS Apple Silicon ML baseline
-  ml-core-linux.txt          Linux x86_64 ML baseline
+  ml-core-linux.txt          Linux x86_64 historical ML baseline (frozen unsupported lane)
 
 Forbidden checked-in optional ML lock targets:
   ml-core.txt       not part of checked-in contract
@@ -473,7 +473,7 @@ Each ML layer has a specific contract:
 
 | Layer | Contract | Platform Target | Notes |
 |-------|----------|-----------------|-------|
-| ml-core | Platform-aware PyTorch (torch 2.2.2) | All | Base ML functionality |
+| ml-core | Platform-aware PyTorch (supported lanes on torch 2.8.0) | All | Base ML functionality |
 | ml-cpu | CPU-only, cross-platform | darwin-*/linux-*-cpu | No GPU packages |
 | ml-mps | Apple Silicon MPS | darwin-arm64-mps | Includes accelerate |
 | ml-cuda | NVIDIA CUDA | linux-x86_64-cuda | GPU packages allowed |

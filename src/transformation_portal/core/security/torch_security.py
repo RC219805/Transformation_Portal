@@ -1,17 +1,18 @@
-"""PyTorch security utilities for CVE-2025-32434 mitigation.
+"""PyTorch security utilities for checkpoint loading hardening.
 
-This module provides safe model loading functions that mitigate CVE-2025-32434,
-a critical RCE vulnerability (CVSS 9.8) in torch.load() when loading untrusted
-model files.
+This module provides safe model loading functions that mitigate torch.load()
+checkpoint risks, including CVE-2025-32434 on legacy torch baselines.
 
-MITIGATION STRATEGY (ADR-032 Determinism Preservation):
-    Instead of upgrading to torch >= 2.6.0 (which would break CAS determinism),
-    we mitigate at runtime by enforcing weights_only=True for all torch.load() calls.
+MITIGATION STRATEGY:
+    Supported repository lanes now use torch >= 2.8.0, but runtime hardening
+    still enforces weights_only=True for all torch.load() calls. That keeps
+    the frozen Darwin x86_64 lane constrained, and it preserves a consistent
+    defense-in-depth posture across managed and subprocess runtimes.
 
     Benefits:
-    - Preserves pinned torch==2.2.2 for deterministic CAS identity
-    - Mitigates RCE vulnerability by disabling arbitrary code execution
-    - Maintains cross-platform reproducibility
+    - Mitigates checkpoint RCE by disabling arbitrary code execution
+    - Keeps managed/model-loading trust boundaries explicit
+    - Maintains a single repository-wide torch.load() policy
 
 CVE-2025-32434 Details:
     - Vulnerability: Remote Code Execution via torch.load()
@@ -86,7 +87,7 @@ def safe_load(
     Security:
         This function enforces weights_only=True which disables arbitrary
         code execution during model loading. Files containing custom classes
-        or functions will fail to load - this is intentional for security.
+        or functions will fail to load. This is intentional for security.
 
         If you need to load a file with custom objects, you must:
         1. Verify the source is trusted

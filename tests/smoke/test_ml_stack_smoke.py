@@ -1,22 +1,16 @@
 """
-Smoke tests for ML stack upgrades (PR #793b).
+Smoke tests for the governed ML dependency baseline.
 
-These tests validate that major ML framework upgrades don't break core functionality:
-- torch 2.4.1 → 2.10.0
-- torchvision 0.19.1 → 0.25.0
-- scikit-learn 1.7.2 → 1.8.0
-- timm 0.6.7 → 1.0.24
-- diffusers 0.31.0 → 0.36.0
-- transformers 4.53.0 → 4.57.6
-
-Smoke tests exercise representative code paths without requiring large model downloads.
-They use mocked model loading where appropriate to keep test time and disk usage minimal.
+These tests validate that supported minimum ML framework baselines do not
+break core imports or representative code paths without requiring large
+model downloads.
 """
 
 import sys
 from unittest.mock import MagicMock, patch
 
 import pytest
+from packaging.version import Version
 
 # Check if ML packages are available for import
 try:
@@ -74,7 +68,7 @@ pytestmark = [pytest.mark.unit, pytest.mark.skipif(not TORCH_AVAILABLE, reason="
 
 
 def test_pytorch_basic_operations():
-    """Test basic PyTorch operations work with torch 2.10.0."""
+    """Test basic PyTorch tensor operations against the supported baseline."""
     torch = pytest.importorskip("torch", reason="torch required for ML smoke tests")
 
     # Create a simple tensor
@@ -93,7 +87,7 @@ def test_pytorch_basic_operations():
 
 
 def test_pytorch_mps_device_availability():
-    """Test MPS (Apple Silicon) device detection with torch 2.10.0."""
+    """Test MPS (Apple Silicon) device detection against the supported baseline."""
     torch = pytest.importorskip("torch", reason="torch required for ML smoke tests")
 
     # Should not raise even if MPS not available
@@ -110,7 +104,7 @@ def test_pytorch_mps_device_availability():
 
 @pytest.mark.skipif(not TORCHVISION_AVAILABLE, reason="torchvision not installed")
 def test_torchvision_transforms():
-    """Test torchvision transforms work with torchvision 0.25.0."""
+    """Test torchvision transforms against the supported baseline."""
     torch = pytest.importorskip("torch", reason="torch required for ML smoke tests")
     import numpy as np
     from PIL import Image
@@ -136,7 +130,7 @@ def test_torchvision_transforms():
 
 @pytest.mark.skipif(not SKLEARN_AVAILABLE, reason="scikit-learn not installed")
 def test_scikit_learn_basic_classifier():
-    """Test scikit-learn basic classifier with scikit-learn 1.8.0."""
+    """Test scikit-learn basic classifier against the supported baseline."""
     from sklearn.datasets import make_classification
     from sklearn.ensemble import RandomForestClassifier
     from sklearn.model_selection import train_test_split
@@ -162,7 +156,7 @@ def test_scikit_learn_basic_classifier():
 @pytest.mark.skipif(not TIMM_AVAILABLE, reason="timm not installed")
 @patch("timm.create_model")
 def test_timm_model_interface(mock_create_model):
-    """Test timm model creation interface with timm 1.0.24."""
+    """Test timm model creation against the supported baseline."""
     import timm
 
     # Mock the model to avoid downloading
@@ -181,7 +175,7 @@ def test_timm_model_interface(mock_create_model):
 @pytest.mark.skipif(not DIFFUSERS_AVAILABLE, reason="diffusers not installed")
 @patch("diffusers.DiffusionPipeline.from_pretrained")
 def test_diffusers_pipeline_interface(mock_from_pretrained):
-    """Test diffusers pipeline interface with diffusers 0.36.0."""
+    """Test the diffusers pipeline interface against the supported baseline."""
     import torch
     from diffusers import DiffusionPipeline
 
@@ -207,7 +201,7 @@ def test_diffusers_pipeline_interface(mock_from_pretrained):
 @patch("transformers.AutoTokenizer.from_pretrained")
 @patch("transformers.AutoModel.from_pretrained")
 def test_transformers_model_interface(mock_model_from_pretrained, mock_tokenizer_from_pretrained):
-    """Test transformers model interface with transformers 4.57.6."""
+    """Test the transformers model interface against the supported baseline."""
     torch = pytest.importorskip("torch", reason="torch required for ML smoke tests")
     from transformers import AutoModel, AutoTokenizer
 
@@ -232,7 +226,7 @@ def test_transformers_model_interface(mock_model_from_pretrained, mock_tokenizer
 
 
 def test_torch_cuda_compatibility():
-    """Test CUDA compatibility (if available) with torch 2.10.0."""
+    """Test CUDA compatibility, when present, against the supported baseline."""
     torch = pytest.importorskip("torch", reason="torch required for ML smoke tests")
 
     # This should not fail even without CUDA
@@ -260,42 +254,40 @@ def test_ml_stack_imports():
         except PackageNotFoundError:
             return None
 
+    def assert_minimum_version(package_name: str, minimum_version: str) -> None:
+        package_version = get_version(package_name)
+        assert package_version is not None, f"{package_name} not installed"
+        assert Version(package_version) >= Version(
+            minimum_version
+        ), f"{package_name} version {package_version} < {minimum_version}"
+
     # Always check torch (required for ML tests to run)
     torch = pytest.importorskip("torch", reason="torch required for ML smoke tests")
-    torch_version = get_version("torch")
-    assert torch_version is not None, "torch not installed"
-    assert torch_version >= "2.10.0", f"torch version {torch_version} < 2.10.0"
+    assert_minimum_version("torch", "2.8.0")
 
     # Check sklearn (if available)
     if SKLEARN_AVAILABLE:
         import sklearn
 
-        sklearn_version = get_version("scikit-learn")
-        assert sklearn_version is not None, "scikit-learn not installed"
-        assert sklearn_version >= "1.8.0", f"scikit-learn version {sklearn_version} < 1.8.0"
+        assert_minimum_version("scikit-learn", "1.8.0")
 
     # Check diffusers (if available)
     if DIFFUSERS_AVAILABLE:
         import diffusers
 
-        diffusers_version = get_version("diffusers")
-        assert diffusers_version is not None, "diffusers not installed"
-        assert diffusers_version >= "0.36.0", f"diffusers version {diffusers_version} < 0.36.0"
+        assert_minimum_version("diffusers", "0.36.0")
 
     # Check transformers (if available)
     if TRANSFORMERS_AVAILABLE:
         import transformers
 
-        transformers_version = get_version("transformers")
-        assert transformers_version is not None, "transformers not installed"
-        assert transformers_version >= "4.57.0", f"transformers version {transformers_version} < 4.57.0"
+        assert_minimum_version("transformers", "4.57.0")
 
     # Check torchvision (if available)
     if TORCHVISION_AVAILABLE:
         import torchvision
 
-        torchvision_version = get_version("torchvision")
-        assert torchvision_version is not None, "torchvision not installed"
+        assert_minimum_version("torchvision", "0.23.0")
 
     # Check timm (if available)
     if TIMM_AVAILABLE:

@@ -2,6 +2,12 @@
 
 Quick reference for common workflows and commands in this repo.
 
+## Canonical worktree discipline
+- `origin/main` is the canonical repository baseline and the only standing source of truth on Desktop.
+- Desktop siblings such as `Transformation_Portal__fastapi` or `Transformation_Portal__upload` are temporary git worktrees, not independent repos.
+- When parallel work needs consolidation, first fast-forward local `main` to `origin/main`, then create a single integration branch from that updated base and replay the intended commits there.
+- After validation lands, retire obsolete Desktop worktrees and prune their local-only branches so `Transformation_Portal/` remains the canonical checkout.
+
 ## Common commands (Makefile)
 - `make venv` create local `.venv` with a Python 3.11+ interpreter, or fail closed if an existing `.venv` is unsupported.
 - `make setup` install package in editable mode.
@@ -41,7 +47,7 @@ Quick reference for common workflows and commands in this repo.
 - `make clean-all` remove all build artifacts (Python + Node).
 - `make lint` run flake8 + pylint (non-blocking).
 - `make lint-parity` run the GitHub lint job locally with the CI-pinned Python 3.12 lint environment.
-- `make ci` run local CI checks (lint + check-json-serialization + check-yaml-governance + check-piptools-cache + check-requirements-lock-contract + check-ci-sync + test-fast + test-orchestrator-contract + test-frontdoor-contract).
+- `make ci` run local CI checks (lint + check-json-serialization + check-python-headers + check-yaml-governance + check-piptools-cache + check-requirements-lock-contract + check-ci-sync + test-fast + test-orchestrator-contract + test-frontdoor-contract).
 - `make ci-full` run comprehensive local CI (`./scripts/local_ci_check.sh`).
 - `make ci-quick` run quick local CI (`./scripts/local_ci_check.sh --quick`).
 - `make pre-commit` run pre-commit hooks with CI-aligned Black/isort versions.
@@ -53,6 +59,7 @@ Quick reference for common workflows and commands in this repo.
 - `make check-worktree` check if git worktree is clean after builds (`scripts/validation/check_worktree_clean.sh`).
 - `make validate-ci` validate GitHub Actions configs plus gitleaks, dependency-update, and Dependabot workflow contracts.
 - `make check-json-serialization` fail when raw `json.dump`/`json.dumps` usage is detected outside approved modules.
+- `make check-python-headers` fail when Python header lines 1-2 contain invalid encoding-cookie-like text outside valid PEP 263 declarations.
 - `make check-yaml-governance` fail when raw `yaml.safe_load` usage appears outside the shared preset loader or explicitly exempt non-preset loaders.
 - `make check-piptools-cache` fail if `requirements/.pip-tools-cache` is tracked in git.
 - `make check-requirements-lock-contract` fail when layered lockfile headers, target-owned purity guards, or lane structure drift from contract.

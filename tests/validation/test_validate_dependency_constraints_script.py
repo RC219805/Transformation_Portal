@@ -28,14 +28,6 @@ TARGET_OWNED_LANE_CASES = (
         "check-ml-darwin-arm64",
         "Run 'cd requirements && make compile-ml-darwin-arm64' on native Darwin arm64.",
     ),
-    (
-        "ml-core-linux.in",
-        "ml-core-linux.txt",
-        "Linux",
-        "x86_64",
-        "check-ml-linux-x86_64",
-        "Run 'cd requirements && make compile-ml-linux-x86_64' on native Linux x86_64.",
-    ),
 )
 
 
@@ -182,12 +174,28 @@ def test_frozen_target_owned_ml_input_skips_stale_warning_and_emits_verbose_note
     assert "INFO: ml-core-darwin-x86_64.in is frozen and excluded from freshness regeneration checks." in result.stdout
 
 
+def test_frozen_linux_target_owned_ml_input_skips_stale_warning_and_emits_verbose_note(tmp_path: Path) -> None:
+    repo_root = tmp_path / "repo"
+    _prepare_validator_repo(repo_root)
+
+    requirements_dir = repo_root / "requirements"
+    requirements_dir.mkdir(parents=True, exist_ok=True)
+    in_path = requirements_dir / "ml-core-linux.in"
+    txt_path = requirements_dir / "ml-core-linux.txt"
+    in_path.write_text("torch==2.7.1  # Frozen historical lane regression coverage\n", encoding="utf-8")
+    _write_lockfile(txt_path)
+    _make_stale(in_path, txt_path)
+
+    result = _run_validator(repo_root, verbose=True)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "Compiled .txt file is stale" not in result.stdout
+    assert "INFO: ml-core-linux.in is frozen and excluded from freshness regeneration checks." in result.stdout
+
+
 @pytest.mark.parametrize(
     ("input_name", "lock_name", "system", "machine"),
-    (
-        ("ml-core-darwin-arm64.in", "ml-core-darwin-arm64.txt", "Linux", "x86_64"),
-        ("ml-core-linux.in", "ml-core-linux.txt", "Darwin", "arm64"),
-    ),
+    (("ml-core-darwin-arm64.in", "ml-core-darwin-arm64.txt", "Linux", "x86_64"),),
 )
 def test_target_owned_ml_inputs_skip_freshness_warning_off_lane(
     tmp_path: Path,
@@ -293,10 +301,7 @@ def test_target_owned_ml_inputs_warn_when_authoritative_lane_check_fails(
 
 @pytest.mark.parametrize(
     ("input_name", "lock_name", "system", "machine", "check_target"),
-    (
-        ("ml-core-darwin-arm64.in", "ml-core-darwin-arm64.txt", "Darwin", "arm64", "check-ml-darwin-arm64"),
-        ("ml-core-linux.in", "ml-core-linux.txt", "Linux", "x86_64", "check-ml-linux-x86_64"),
-    ),
+    (("ml-core-darwin-arm64.in", "ml-core-darwin-arm64.txt", "Darwin", "arm64", "check-ml-darwin-arm64"),),
 )
 def test_target_owned_ml_inputs_surface_lane_check_output_in_verbose_mode(
     tmp_path: Path,
