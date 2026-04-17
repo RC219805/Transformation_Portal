@@ -46,6 +46,30 @@ def test_load_features_roundtrip(tmp_path: Path):
     assert metadata == {"source": "test"}
 
 
+def test_load_features_roundtrip_without_torch_numpy_bridge(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    """Feature caches should round-trip when torch's NumPy bridge is unavailable."""
+    encoder = _make_encoder()
+    features = torch.randn(2, 8, dtype=torch.float32)
+    path = tmp_path / "features_no_numpy_bridge.pkl"
+
+    def broken_tensor_numpy(self):
+        raise RuntimeError("Numpy is not available")
+
+    def broken_from_numpy(_array):
+        raise RuntimeError("Numpy is not available")
+
+    monkeypatch.setattr(torch.Tensor, "numpy", broken_tensor_numpy, raising=False)
+    monkeypatch.setattr(torch, "from_numpy", broken_from_numpy)
+
+    encoder.save_features(features, path, metadata={"source": "test"})
+    loaded_features, metadata = encoder.load_features(path)
+
+    assert loaded_features.shape == features.shape
+    assert loaded_features.dtype == features.dtype
+    assert torch.allclose(loaded_features.cpu(), features.cpu(), atol=1e-6)
+    assert metadata == {"source": "test"}
+
+
 def test_load_features_blocks_malicious_pickle(tmp_path: Path):
     """Malicious pickle payloads should be rejected without side effects."""
     encoder = _make_encoder()
