@@ -24,7 +24,7 @@ from email.policy import default as email_policy
 from functools import lru_cache
 from importlib.util import find_spec
 from pathlib import Path, PurePosixPath
-from typing import Any, AsyncGenerator, Callable, Deque, Dict, List, Mapping, Optional, Tuple
+from typing import Any, AsyncGenerator, Callable, Deque, Dict, List, Mapping, NamedTuple, Optional, Tuple
 from urllib.parse import quote
 
 from fastapi import FastAPI, HTTPException, Request
@@ -92,10 +92,21 @@ class _ManagedSam2ChecksumCacheEntry:
     reason: Optional[str]
 
 
+class _Sam2CacheKey(NamedTuple):
+    """Cache key for SAM2 checkpoint trust results."""
+
+    path: str
+    size: int
+    mtime_ns: int
+    dev: int
+    ino: int
+    ctime_ns: int
+
+
 _MANAGED_SAM2_CHECKSUM_CACHE_MAX_ENTRIES = 128
 
 
-class _ManagedSam2BoundedChecksumCache(Dict[Tuple[str, int, int, int, int, int], _ManagedSam2ChecksumCacheEntry]):
+class _ManagedSam2BoundedChecksumCache(Dict[_Sam2CacheKey, _ManagedSam2ChecksumCacheEntry]):
     """Bounded FIFO cache for SAM2 checkpoint trust results."""
 
     def __init__(self, max_entries: int = _MANAGED_SAM2_CHECKSUM_CACHE_MAX_ENTRIES) -> None:
@@ -103,16 +114,16 @@ class _ManagedSam2BoundedChecksumCache(Dict[Tuple[str, int, int, int, int, int],
         if max_entries < 1:
             raise ValueError("max_entries must be at least 1")
         self._max_entries = max_entries
-        self._insertion_order: Deque[Tuple[str, int, int, int, int, int]] = deque()
+        self._insertion_order: Deque[_Sam2CacheKey] = deque()
 
     def __setitem__(
         self,
-        key: Tuple[str, int, int, int, int, int],
+        key: _Sam2CacheKey,
         value: _ManagedSam2ChecksumCacheEntry,
     ) -> None:
         if key not in self:
             self._insertion_order.append(key)
-            while len(self._insertion_order) > self._max_entries:
+            if len(self._insertion_order) > self._max_entries:
                 oldest = self._insertion_order.popleft()
                 super().pop(oldest, None)
         super().__setitem__(key, value)
@@ -628,16 +639,16 @@ def _managed_sam2_reason_message(reason: str) -> str:
     return _MANAGED_SAM2_REASON_MESSAGES.get(reason, "Invalid path value")
 
 
-def _managed_sam2_checksum_cache_key(path: Path) -> Tuple[str, int, int, int, int, int]:
+def _managed_sam2_checksum_cache_key(path: Path) -> _Sam2CacheKey:
     """Build the checksum cache key for a trusted SAM2 checkpoint path."""
     stat_result = path.stat()
-    return (
-        str(path),
-        stat_result.st_size,
-        stat_result.st_mtime_ns,
-        stat_result.st_dev,
-        stat_result.st_ino,
-        stat_result.st_ctime_ns,
+    return _Sam2CacheKey(
+        path=str(path),
+        size=stat_result.st_size,
+        mtime_ns=stat_result.st_mtime_ns,
+        dev=stat_result.st_dev,
+        ino=stat_result.st_ino,
+        ctime_ns=stat_result.st_ctime_ns,
     )
 
 
@@ -668,8 +679,7 @@ def _cached_managed_sam2_checksum_result(path: Path) -> _ManagedSam2ChecksumCach
     if cached is not None:
         return cached
 
-    _, size_bytes, _, _, _, _ = cache_key
-    if size_bytes > MANAGED_SAM2_CHECKSUM_MAX_BYTES:
+    if cache_key.size > MANAGED_SAM2_CHECKSUM_MAX_BYTES:
         entry = _ManagedSam2ChecksumCacheEntry(digest=None, reason="checkpoint_file_too_large")
     else:
         digest = _hash_file_sha256(path)
