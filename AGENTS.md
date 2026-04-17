@@ -39,6 +39,9 @@ Quick reference for common workflows and commands in this repo.
 - `make validate-quick` run quick validation skipping browser smokes (`./scripts/validation/run_full_validation_suite.sh --quick`).
 - `make audit-pipeline-readiness` run the safe local four-pipeline readiness audit using checked-in archive fixtures.
 - `make coverage-fast-scope` run branch coverage for the audited `core/config` and `streaming` paths with `term-missing` output.
+- `make coverage-report` generate comprehensive coverage report with HTML (`htmlcov/index.html`), XML (`coverage.xml`), and terminal output; excludes ML/slow/benchmark tests.
+- `make coverage-diff` check diff coverage against `origin/main` with 85% threshold; requires `coverage.xml` from `make coverage-report`.
+- `make coverage-package` generate package-level coverage baseline report for priority packages (`events/`, `storage/`, `runtime/`, `lux_depth_v3/`, `hardening/`, `app.py`).
 - `make clean` remove Python caches and build/test artifacts.
 - `make clean-frontdoor` remove frontdoor build artifacts (`.next`, `.next-build-verify`, `.next-smoke-*`, `.next-codex-*`).
 - `make clean-all` remove all build artifacts (Python + Node).

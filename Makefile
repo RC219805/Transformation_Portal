@@ -27,7 +27,7 @@ PHASE6_SMOKE_TESTS := \
 	tests/test_lux_render_pipeline_smoke.py \
 	tests/lux_depth_v3/test_orchestrator_smoke.py
 
-.PHONY: help test-fast test-novideo test-full test-integration test-structure test-utils test-orchestrator-contract test-orchestrator-http-contract test-portal-contract test-frontdoor-contract test-archive-gate-contract seed-frontdoor-user run-frontdoor-local validate-orchestrator-http validate-portal-browser validate-frontdoor-browser validate-frontdoor-deployment-gate audit-pipeline-readiness coverage-fast-scope venv repair-core-venv setup clean \
+.PHONY: help test-fast test-novideo test-full test-integration test-structure test-utils test-orchestrator-contract test-orchestrator-http-contract test-portal-contract test-frontdoor-contract test-archive-gate-contract seed-frontdoor-user run-frontdoor-local validate-orchestrator-http validate-portal-browser validate-frontdoor-browser validate-frontdoor-deployment-gate audit-pipeline-readiness coverage-fast-scope coverage-report coverage-diff coverage-package venv repair-core-venv setup clean \
         lint lint-parity ci ci-full pre-commit install-hooks quality-check fix-quality validate-ci organize-docs check-json-serialization check-piptools-cache \
         check-python-headers check-yaml-governance check-stale-docs lock lock-prod lock-ci lock-dev install-core install-ml install-ml-core install-ml-raw install-ml-sam2 install-ml-coreml docs docs-clean \
         check check-test-markers check-ci-sync check-todo-governance check-environment check-portal-asset-budgets validate-full validate-quick clean-frontdoor clean-all check-worktree \
@@ -59,6 +59,9 @@ help:
 	@echo "  test-structure     Run codebase structure validation tests"
 	@echo "  test-utils         Run tests for performance and error handling utilities"
 	@echo "  coverage-fast-scope  Run branch coverage for audited core/config and streaming paths"
+	@echo "  coverage-report    Generate comprehensive coverage report (HTML, XML, terminal)"
+	@echo "  coverage-diff      Check diff coverage against main branch (≥85% required)"
+	@echo "  coverage-package   Generate package-level coverage baseline report for ratcheting"
 	@echo "  validate-orchestrator-http  Run the live orchestrator HTTP smoke audit"
 	@echo "  validate-portal-browser  Run the live browser smoke audit with an isolated local backend"
 	@echo "  validate-frontdoor-browser  Run the live browser smoke audit with isolated local backend/frontdoor runtimes"
@@ -345,6 +348,77 @@ coverage-fast-scope:
 		tests/test_core_config_presets.py \
 		tests/test_streaming_async_pipeline.py \
 		tests/test_preset_health.py
+
+# Coverage reporting targets (Phase 0 coverage infrastructure)
+coverage-report:
+	@echo "Running comprehensive coverage report..."
+	@rm -f .coverage .coverage.* coverage.xml
+	@"$(PY)" -m pytest tests/ \
+		-m "not ml and not slow and not benchmark and not stress" \
+		--cov=src/transformation_portal \
+		--cov-branch \
+		--cov-report=term-missing \
+		--cov-report=html:htmlcov \
+		--cov-report=xml:coverage.xml \
+		--cov-config=pyproject.toml \
+		-q
+	@echo ""
+	@echo "✅ Coverage report generated:"
+	@echo "  - Terminal: above"
+	@echo "  - HTML:     htmlcov/index.html"
+	@echo "  - XML:      coverage.xml"
+
+coverage-diff:
+	@echo "Running diff coverage comparison against main branch..."
+	@if ! "$(PY)" -m pip show diff-cover >/dev/null 2>&1; then \
+		echo "Error: diff-cover not installed. Run 'make install-core' or 'pip install diff-cover'"; \
+		exit 1; \
+	fi
+	@if [ ! -f coverage.xml ]; then \
+		echo "Error: coverage.xml not found. Run 'make coverage-report' first."; \
+		exit 1; \
+	fi
+	@echo "Fetching origin/main for comparison..."
+	@if ! git fetch origin main --quiet 2>/dev/null; then \
+		echo "Warning: Could not fetch origin/main. Using local refs if available."; \
+	fi
+	@if ! git rev-parse --verify origin/main >/dev/null 2>&1; then \
+		echo "Error: origin/main branch not available. Run 'git fetch origin main' first."; \
+		exit 1; \
+	fi
+	@echo "Comparing against origin/main..."
+	@"$(PY)" -m diff_cover.diff_cover_tool coverage.xml --compare-branch=origin/main --fail-under=85
+	@echo "✅ Diff coverage check passed (≥85%)"
+
+coverage-package:
+	@echo "Generating package-level coverage baseline report..."
+	@rm -f .coverage .coverage.* coverage.xml
+	@"$(PY)" -m pytest tests/ \
+		-m "not ml and not slow and not benchmark and not stress" \
+		--cov=src/transformation_portal \
+		--cov-branch \
+		--cov-report=xml:coverage.xml \
+		--cov-config=pyproject.toml \
+		-q
+	@echo ""
+	@echo "=== Package-Level Coverage Baseline ==="
+	@"$(PY)" -m coverage report --include="src/transformation_portal/*" --skip-covered 2>/dev/null || \
+		"$(PY)" -m coverage report --include="src/transformation_portal/*" 2>/dev/null || \
+		echo "  (no coverage data)"
+	@echo ""
+	@echo "--- Priority Package Coverage ---"
+	@for pkg in events storage runtime lux_depth_v3 hardening; do \
+		result=$$("$(PY)" -m coverage report --include="src/transformation_portal/$$pkg/*" 2>/dev/null | tail -1 | awk '{print $$NF}' || true); \
+		if [ -z "$$result" ] || [ "$$result" = "TOTAL" ]; then result="0%"; fi; \
+		printf "  %-20s %s\n" "$$pkg/:" "$$result"; \
+	done
+	@echo ""
+	@echo "--- Root Module Coverage ---"
+	@app_result=$$("$(PY)" -m coverage report --include="app.py" 2>/dev/null | tail -1 | awk '{print $$NF}' || true); \
+	if [ -z "$$app_result" ] || [ "$$app_result" = "TOTAL" ]; then app_result="0%"; fi; \
+	printf "  %-20s %s\n" "app.py:" "$$app_result"
+	@echo ""
+	@echo "✅ Package baseline report complete. Use this as a ratchet reference."
 
 clean:
 	@echo "Cleaning Python cache files and build artifacts..."

@@ -87,7 +87,7 @@ Low-priority modules (can defer):
 
 ### CI Integration
 - **Baseline gate** (`--fail-under=25`): Prevents regression
-- **Diff coverage gate** (`diff-cover --fail-under=80`): New code must be well-tested
+- **Diff coverage gate** (`diff-cover --fail-under=85`): New code must be well-tested
 - **Ratchet mechanism**: As coverage improves, baseline gate increases
 
 ### Ownership
@@ -112,7 +112,7 @@ Update this document quarterly with:
 **Q: Why not 80% coverage like other projects?**
 A: This is a legacy codebase with ~25K statements. Reaching 80% would require ~12,000 new test assertions. We're taking an incremental, pragmatic approach.
 
-**Q: Can I merge code with <80% diff coverage?**
+**Q: Can I merge code with <85% diff coverage?**
 A: No. The diff-cover gate ensures all *new* code is well-tested, even if legacy code has gaps.
 
 **Q: What if coverage drops unexpectedly?**
@@ -123,10 +123,23 @@ A: The CI gate will fail. Investigate whether:
 
 **Q: How do I run coverage locally?**
 ```bash
-# Core tests only
-pytest -m "not ml and not slow" --cov=src/transformation_portal --cov-report=term
-
-# Combined (requires ML deps)
-pytest -m "not slow" --cov=src/transformation_portal --cov-report=html
+# Comprehensive coverage report (HTML + XML + terminal)
+make coverage-report
 open htmlcov/index.html
+
+# Diff coverage check against main branch (≥85% required for new code)
+make coverage-diff
+
+# Package-level baseline report for ratcheting
+make coverage-package
+
+# Scoped coverage for specific paths
+make coverage-fast-scope
 ```
+
+**Q: What are the coverage targets?**
+- **Diff coverage**: 85% on new/changed lines (required for PRs)
+- **Global floor**: 25% (prevents regression)
+- **Long-horizon target**: 70% overall
+
+See `docs/testing/test_coverage_improvement_plan.md` for the full phased plan.
