@@ -3,7 +3,7 @@
 **Purpose**: Define triage policy and merge criteria for Dependabot-generated pull requests
 **Owner**: Transformation Portal Architect
 **Created**: 2026-03-26
-**Last Updated**: 2026-03-26
+**Last Updated**: 2026-04-16
 
 ---
 
@@ -141,9 +141,28 @@ Dependabot PRs that bump exact-pinned dependencies **must not be merged as routi
 
 #### #1278 - curated Starlette compatibility (MERGED)
 - **Scope**: `pyproject.toml`, `requirements/base.in`, `requirements/base.txt`, `requirements/all.txt`
-- **Validated Set**: FastAPI `0.135.1`, Starlette `1.0.0`, Uvicorn `0.42.0`
+- **Validated Set**: FastAPI `0.136.0`, Starlette `1.0.0`, Uvicorn `0.42.0`
 - **Validation**: `make test-orchestrator-contract`, `make ci`, curated live orchestrator smoke
 - **Governance Lesson**: Exact-pinned web stack updates require issue-first / PR-second handling when Dependabot crosses a compatibility boundary
+
+---
+
+## "Dep Pin Changed" Checklist
+
+Use this checklist whenever a governed dependency pin changes, especially under
+`requirements/base.in` or the compiled lock contract:
+
+- [ ] Update the manifest input first (`requirements/*.in`, and `pyproject.toml`
+      only when the compatibility bound must move with it).
+- [ ] Regenerate only the affected governed lockfiles through the existing lock
+      workflow; do not hand-edit compiled lock output.
+- [ ] Re-run `make check-requirements-lock-contract` after regeneration.
+- [ ] Update workflow or contract tests that encode action pins, lock paths, or
+      compatibility expectations.
+- [ ] Update the relevant dependency-governance docs so the recorded baseline,
+      validation path, and runtime/toolchain requirements stay current.
+- [ ] Re-run the validation path for the touched surface (`make ci` at minimum;
+      add frontdoor or browser validation when the web/runtime boundary moved).
 
 ---
 
@@ -182,6 +201,7 @@ Before merging any Dependabot PR:
 |------|--------|--------|
 | 2026-03-26 | Initial creation with PR #1270-#1275 assessment | Architect |
 | 2026-03-26 | Updated after #1275 closure and curated Starlette merge via #1278 | Architect |
+| 2026-04-16 | Recorded the FastAPI 0.136.0 curated baseline and the "dep pin changed" checklist | Architect |
 | 2026-04-16 | Added ML alert dismissal/remediation governance for supported vs frozen target-owned lanes | Architect |
 
 ---

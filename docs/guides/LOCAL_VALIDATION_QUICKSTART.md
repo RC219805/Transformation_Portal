@@ -26,6 +26,24 @@ This validates:
 - Chrome/Chromium availability
 - Port availability (3000, 8000)
 - Frontdoor npm dependencies
+- Validation smoke classification for the Python header guard
+
+### Validation Smoke Classification
+
+The pre-flight check now includes a bounded `validation-smoke` pass that runs the
+Python header validator and classifies failures as one of:
+
+- `pass` — the tracked Python header scan is clean
+- `environment_failure` — local tooling failed (for example `git ls-files` could
+  not run), so repair the environment before treating it as a code regression
+- `product_regression` — the validator found a real header violation or crashed
+  in a repo-owned validation path
+
+To inspect only that check in machine-readable form:
+
+```bash
+make check-environment CHECK_ENV_ARGS="--check validation-smoke --json"
+```
 
 ### Node.js Version (Important)
 

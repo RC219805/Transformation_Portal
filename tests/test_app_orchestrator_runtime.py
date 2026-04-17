@@ -1205,6 +1205,7 @@ def test_portal_review_surface_exposes_warning_banner_and_provenance_contract() 
     content = _portal_bundle_content()
     review_content = _portal_review_source_content()
     render_body = _extract_js_function_body(review_content, "renderArtifactPanel")
+    state_body = _extract_js_function_body(review_content, "_reviewStatusState")
     status_body = _extract_js_function_body(review_content, "_reviewStatusSnapshot")
     banner_body = _extract_js_function_body(review_content, "_renderReviewStatusBanner")
     provenance_body = _extract_js_function_body(review_content, "_renderArtifactProvenance")
@@ -1222,20 +1223,37 @@ def test_portal_review_surface_exposes_warning_banner_and_provenance_contract() 
     assert 'id="reviewProvenanceBatch"' in content
     assert 'data-ui="review-status-banner"' in content
     assert 'data-ui="review-provenance-grid"' in content
+    assert "function _reviewStatusState(job, reviewableOutputs, visibleWarning) {" in review_content
     assert "_renderReviewStatusBanner(selected, selectedArtifact);" in render_body
     assert "_renderArtifactProvenance(selected, selectedArtifact);" in render_body
     assert "_renderReviewStatusBanner(selected, null);" in render_body
     assert "_renderArtifactProvenance(selected, null);" in render_body
     assert "_renderReviewStatusBanner(null, null);" in render_body
     assert "_renderArtifactProvenance(null, null);" in render_body
+    for state_token in (
+        "awaiting_job",
+        "partial_reviewable",
+        "failed_reviewable",
+        "failed_unreviewable",
+        "canceled_reviewable",
+        "canceled_unreviewable",
+        "offline_reviewable",
+        "offline_unreviewable",
+        "transport_blocked",
+        "transport_warning",
+        "in_progress",
+        "ready",
+    ):
+        assert f'"{state_token}"' in state_body
     for job_state in ("partial", "failed", "canceled", "offline"):
-        assert re.search(rf"job\.state === [\"']{job_state}[\"']", status_body)
-    assert "job.reconnectBlocked" in status_body
-    assert "Outputs ready for review" in status_body
-    assert "Run canceled after partial output capture" in status_body
-    assert "Run is offline with reviewable outputs" in status_body
+        assert re.search(rf"job\.state === [\"']{job_state}[\"']", state_body)
+    assert "job.reconnectBlocked" in state_body
+    assert "Outputs ready for review" in review_content
+    assert "Run canceled after partial output capture" in review_content
+    assert "Run is offline with reviewable outputs" in review_content
     assert "_jobFreshnessLabel(job)" in status_body
     assert "els.reviewStatusBanner.dataset.tone = snapshot.tone;" in banner_body
+    assert "els.reviewStatusBanner.dataset.reviewState = snapshot.state;" in banner_body
     assert "artifactDisplayLabel(artifact)" in provenance_body
     assert "artifactLabel(artifact)" in provenance_body
     assert "_artifactFingerprintLabel(artifact)" in provenance_body
@@ -2062,9 +2080,10 @@ def test_portal_runtime_briefing_and_recovery_surfaces_stay_additive_and_selecto
         r"action:\s*[\"\']Next action: inspect the selected run in Operate or wait for indexed outputs before reopening review\.[\"\']",
         artifact_empty_body,
     )
-    assert re.search(
-        r"action:\s*[\"\']Next action: use the selected run state, warning context, and freshness above to decide whether to recover or open review\.[\"\']",
-        review_status_body,
+    assert "const builder = REVIEW_STATUS_BUILDERS[stateToken] || REVIEW_STATUS_BUILDERS.ready;" in review_status_body
+    assert (
+        "Next action: use the selected run state, warning context, and freshness above to decide whether to recover or open review."
+        in review_content
     )
     assert "els.reviewStatusAction.textContent = snapshot.action;" in review_content
     assert "els.selectedJobRecoveryTitle.textContent = recovery.title;" in inspector_body
@@ -2535,6 +2554,17 @@ def test_validate_managed_sam2_checkpoint_path_allows_repo_controlled_missing_pa
     assert normalized.endswith("models/sam2/sam2.1_hiera_large.pt")
 
 
+def test_resolve_managed_sam2_checkpoint_validation_preserves_untrusted_reason(tmp_path: Path) -> None:
+    checkpoint_path = tmp_path / "sam2-untrusted.pt"
+    checkpoint_path.write_bytes(b"untrusted checkpoint bytes")
+    orchestrator_app._clear_managed_sam2_checksum_cache()
+
+    validation = orchestrator_app._resolve_managed_sam2_checkpoint_validation(str(checkpoint_path))
+
+    assert validation.normalized_path is None
+    assert validation.reason == "untrusted_checkpoint_path"
+
+
 def test_argv_rejects_untrusted_sam2_checkpoint_path(tmp_path: Path) -> None:
     input_dir = tmp_path / "input"
     output_dir = tmp_path / "output"
@@ -2554,8 +2584,10 @@ def test_argv_rejects_untrusted_sam2_checkpoint_path(tmp_path: Path) -> None:
         },
     }
 
-    with pytest.raises(ValueError, match="SAM2 checkpoint path is not trusted"):
+    with pytest.raises(orchestrator_app._PortalValidationReasonError, match="SAM2 checkpoint path is not trusted") as exc_info:
         orchestrator_app._argv_from_request(payload)
+
+    assert exc_info.value.reason == "untrusted_checkpoint_path"
 
 
 def test_ensure_safe_regular_file_path_preserves_outside_root_reason(tmp_path: Path) -> None:
@@ -2591,8 +2623,10 @@ def test_argv_rejects_non_file_sam2_checkpoint_path(tmp_path: Path) -> None:
         },
     }
 
-    with pytest.raises(ValueError, match="Invalid path value"):
+    with pytest.raises(orchestrator_app._PortalValidationReasonError, match="Invalid path value") as exc_info:
         orchestrator_app._argv_from_request(payload)
+
+    assert exc_info.value.reason == "invalid_path_value"
 
 
 def test_argv_rejects_oversized_sam2_checkpoint_path(
@@ -2618,8 +2652,140 @@ def test_argv_rejects_oversized_sam2_checkpoint_path(
         },
     }
 
-    with pytest.raises(ValueError, match="checksum verification size limit"):
+    with pytest.raises(
+        orchestrator_app._PortalValidationReasonError,
+        match="checksum verification size limit",
+    ) as exc_info:
         orchestrator_app._argv_from_request(payload)
+
+    assert exc_info.value.reason == "checkpoint_file_too_large"
+
+
+def test_managed_sam2_checkpoint_validation_reuses_cached_hash_result(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    checkpoint_path = (tmp_path / "sam2-governed.pt").resolve()
+    checkpoint_path.write_bytes(b"trusted checkpoint bytes")
+    digest = hashlib.sha256(b"trusted checkpoint bytes").hexdigest()
+    orchestrator_app._clear_managed_sam2_checksum_cache()
+    monkeypatch.setattr(orchestrator_app, "MANAGED_SAM2_TRUSTED_SHA256", {digest})
+
+    hash_calls: list[Path] = []
+    original_hash = orchestrator_app._hash_file_sha256
+
+    def _counting_hash(path: Path, chunk_size: int = 1024 * 1024) -> str:
+        hash_calls.append(path)
+        return original_hash(path, chunk_size)
+
+    monkeypatch.setattr(orchestrator_app, "_hash_file_sha256", _counting_hash)
+
+    first = orchestrator_app._validate_managed_sam2_checkpoint_path(str(checkpoint_path))
+    second = orchestrator_app._validate_managed_sam2_checkpoint_path(str(checkpoint_path))
+
+    assert first == str(checkpoint_path)
+    assert second == str(checkpoint_path)
+    assert hash_calls == [checkpoint_path]
+
+
+def test_managed_sam2_bounded_checksum_cache_eviction() -> None:
+    """Verify bounded cache evicts oldest entries when capacity is exceeded (FIFO)."""
+    cache = orchestrator_app._ManagedSam2BoundedChecksumCache(max_entries=3)
+
+    # Insert 3 entries at capacity
+    key1 = ("/path/a.pt", 100, 1000, 1, 1001, 2000)
+    key2 = ("/path/b.pt", 200, 1000, 1, 1002, 2000)
+    key3 = ("/path/c.pt", 300, 1000, 1, 1003, 2000)
+    entry = orchestrator_app._ManagedSam2ChecksumCacheEntry(digest="abc", reason=None)
+
+    cache[key1] = entry
+    cache[key2] = entry
+    cache[key3] = entry
+
+    assert len(cache) == 3
+    assert key1 in cache
+    assert key2 in cache
+    assert key3 in cache
+
+    # Insert a 4th entry, should evict the oldest (key1)
+    key4 = ("/path/d.pt", 400, 1000, 1, 1004, 2000)
+    cache[key4] = entry
+
+    assert len(cache) == 3
+    assert key1 not in cache  # evicted (oldest)
+    assert key2 in cache
+    assert key3 in cache
+    assert key4 in cache
+
+    # Insert a 5th entry, should evict key2
+    key5 = ("/path/e.pt", 500, 1000, 1, 1005, 2000)
+    cache[key5] = entry
+
+    assert len(cache) == 3
+    assert key2 not in cache  # evicted
+    assert key3 in cache
+    assert key4 in cache
+    assert key5 in cache
+
+    # Updating an existing key should not evict
+    cache[key3] = orchestrator_app._ManagedSam2ChecksumCacheEntry(digest="updated", reason=None)
+    assert len(cache) == 3
+    assert cache[key3].digest == "updated"
+
+    # Clear should empty both dict and deque
+    cache.clear()
+    assert len(cache) == 0
+    assert len(cache._insertion_order) == 0
+
+
+@pytest.mark.parametrize(
+    ("artifact_name", "artifact_bytes", "size_limit", "expected_reason"),
+    [
+        ("sam2-untrusted.pt", b"untrusted checkpoint bytes", None, "untrusted_checkpoint_path"),
+        ("sam2-checkpoint-dir", None, None, "invalid_path_value"),
+        ("sam2-oversized.pt", b"oversized", 1, "checkpoint_file_too_large"),
+    ],
+)
+def test_sam2_checkpoint_preview_and_dispatch_share_reason_codes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    artifact_name: str,
+    artifact_bytes: bytes | None,
+    size_limit: int | None,
+    expected_reason: str,
+) -> None:
+    input_dir = (tmp_path / "input").resolve()
+    output_dir = (tmp_path / "output").resolve()
+    input_dir.mkdir()
+    output_dir.mkdir()
+    checkpoint_path = (tmp_path / artifact_name).resolve()
+    if artifact_bytes is None:
+        checkpoint_path.mkdir()
+    else:
+        checkpoint_path.write_bytes(artifact_bytes)
+    if size_limit is not None:
+        monkeypatch.setattr(orchestrator_app, "MANAGED_SAM2_CHECKSUM_MAX_BYTES", size_limit)
+    orchestrator_app._clear_managed_sam2_checksum_cache()
+
+    payload: Dict[str, object] = {
+        "pipeline": "lux-depth-v3",
+        "args": {
+            "input_dir": str(input_dir),
+            "output_dir": str(output_dir),
+            "enable_segmentation": True,
+            "segmentation_backend": "sam2",
+            "sam2_checkpoint_path": str(checkpoint_path),
+        },
+    }
+
+    preview = orchestrator_app._build_config_preview(payload)
+    preview_error = next(item for item in preview["field_errors"] if item["field"] == "sam2_checkpoint_path")
+
+    with pytest.raises(orchestrator_app._PortalValidationReasonError) as exc_info:
+        orchestrator_app._argv_from_request(payload)
+
+    assert preview_error["code"] == expected_reason
+    assert exc_info.value.reason == expected_reason
 
 
 def test_argv_rejects_invalid_raw_ingest_mode() -> None:

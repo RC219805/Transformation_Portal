@@ -23,6 +23,20 @@ HEADER_COOKIE_PATTERN = re.compile(r"\b(?:coding|encoding)\s*[:=]\s*([-\w.]+)")
 PEP263_PATTERN = re.compile(r"coding[:=]\s*([-\w.]+)")
 
 
+class PythonHeaderToolingError(RuntimeError):
+    """Deterministic tooling failure raised while discovering tracked files."""
+
+    def __init__(self, code: str, message: str):
+        super().__init__(message)
+        self.code = code
+        self.message = message
+
+
+def _format_tooling_error(exc: PythonHeaderToolingError) -> str:
+    """Return a machine-parsable tooling error string for CLI output."""
+    return f"TOOLING_ERROR[{exc.code}]: {exc.message}"
+
+
 def iter_python_files(roots: Iterable[Path]) -> list[Path]:
     """Return Python source files under the supplied roots."""
     files: list[Path] = []
@@ -39,16 +53,25 @@ def iter_python_files(roots: Iterable[Path]) -> list[Path]:
 
 def iter_tracked_python_files(project_root: Path = PROJECT_ROOT) -> list[Path]:
     """Return tracked Python files from git."""
-    result = subprocess.run(
-        ["git", "ls-files", "--", "*.py"],
-        cwd=project_root,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+    try:
+        result = subprocess.run(
+            ["git", "ls-files", "--", "*.py"],
+            cwd=project_root,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except OSError as exc:
+        raise PythonHeaderToolingError(
+            "git_ls_files_invocation_failed",
+            f"git ls-files could not run: {exc}",
+        ) from exc
     if result.returncode != 0:
         stderr = result.stderr.strip()
-        raise RuntimeError(f"git ls-files failed: {stderr or 'unknown error'}")
+        raise PythonHeaderToolingError(
+            "git_ls_files_failed",
+            f"git ls-files failed: {stderr or 'unknown error'}",
+        )
     files = [project_root / line for line in result.stdout.splitlines() if line.strip()]
     return sorted(path.resolve() for path in files)
 
@@ -112,7 +135,11 @@ def main() -> int:
     args = parser.parse_args()
 
     roots = tuple(Path(path) for path in args.paths) if args.paths else None
-    violations = find_violations(roots)
+    try:
+        violations = find_violations(roots)
+    except PythonHeaderToolingError as exc:
+        print(_format_tooling_error(exc))
+        return 1
     if not violations:
         print("OK: Python header declarations are valid")
         return 0
