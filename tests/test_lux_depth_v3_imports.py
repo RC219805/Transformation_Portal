@@ -283,7 +283,7 @@ def test_da3_inference_engine_basic():
 
 
 def test_depth_writer_opencv_dependency():
-    """Test that depth_writer properly handles opencv-python dependency."""
+    """Test that depth_writer properly handles missing OpenCV dependencies."""
     import numpy as np
 
     from transformation_portal.lux_depth_v3.depth_writer import HAS_CV2, atomic_write_depth_u16_png_with_stats
@@ -293,7 +293,7 @@ def test_depth_writer_opencv_dependency():
 
     if not HAS_CV2:
         # If opencv not installed, should raise clear ImportError
-        with pytest.raises(ImportError, match="opencv-python required"):
+        with pytest.raises(ImportError, match="OpenCV \\(cv2\\) required for depth_writer"):
             atomic_write_depth_u16_png_with_stats(
                 output_path=output_path, depth_map=depth_map, method="u16", debug_verify=False
             )

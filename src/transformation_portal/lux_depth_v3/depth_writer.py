@@ -72,12 +72,16 @@ def atomic_write_depth_u16_png_with_stats(
         Tuple of (output_path, verification_path_or_none, statistics)
 
     Raises:
-        ImportError: If opencv-python not installed
+        ImportError: If OpenCV is not installed
         ValueError: If unsupported quantization method specified
         IOError: If write or verification fails
     """
     if not HAS_CV2:
-        raise ImportError("opencv-python required for" " depth_writer. Install with:" " pip install opencv-python")
+        raise ImportError(
+            "OpenCV (cv2) required for depth_writer. "
+            "Install with: pip install opencv-python-headless on Linux "
+            "or pip install opencv-python on other platforms."
+        )
 
     # Normalize legacy/config values
     # EnhanceConfig defaults to "none", which
@@ -156,7 +160,7 @@ def read_depth_u16_png(depth_path: Path) -> np.ndarray:
     """Read depth map from 16-bit PNG.
 
     Returns normalized float32 array [0.0, 1.0].
-    Falls back to PIL if opencv-python is not available.
+    Falls back to PIL if OpenCV is not available.
 
     Args:
         depth_path: Path to depth map PNG
