@@ -64,6 +64,18 @@ def _patch_torch_xpu_namespace(monkeypatch: pytest.MonkeyPatch) -> None:
     )
 
 
+def _pil_image_to_tensor_without_numpy_bridge(pil_image):
+    """Convert a PIL image to a float tensor without torch's NumPy bridge."""
+    if torch is None:  # pragma: no cover - guarded by module-level skipif
+        raise RuntimeError("torch required for ML smoke tests")
+
+    pil_rgb = pil_image.convert("RGB")
+    width, height = pil_rgb.size
+    flat_tensor = torch.tensor(bytearray(pil_rgb.tobytes()), dtype=torch.uint8)
+    tensor = flat_tensor.view(height, width, 3).permute(2, 0, 1).contiguous()
+    return tensor.to(dtype=torch.get_default_dtype()).div(255.0)
+
+
 def test_pytorch_basic_operations():
     """Test basic PyTorch tensor operations against the supported baseline."""
     torch = pytest.importorskip("torch", reason="torch required for ML smoke tests")
@@ -110,18 +122,25 @@ def test_torchvision_transforms():
     img_array = np.random.randint(0, 255, (256, 256, 3), dtype=np.uint8)
     img = Image.fromarray(img_array)
 
-    # Test basic transforms
+    # torchvision.transforms.ToTensor() calls torch.from_numpy() in this pinned
+    # Linux CPU lane, so keep the smoke path representative without depending
+    # on torch's optional NumPy bridge.
     transform = torchvision.transforms.Compose(
         [
             torchvision.transforms.Resize((224, 224)),
-            torchvision.transforms.ToTensor(),
-            torchvision.transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+            torchvision.transforms.Lambda(_pil_image_to_tensor_without_numpy_bridge),
+            torchvision.transforms.Normalize(
+                mean=[0.485, 0.456, 0.406],
+                std=[0.229, 0.224, 0.225],
+            ),
         ]
     )
 
     tensor = transform(img)
     assert tensor.shape == (3, 224, 224)
     assert isinstance(tensor, torch.Tensor)
+    assert tensor.dtype == torch.get_default_dtype()
+    assert torch.isfinite(tensor).all()
 
 
 def test_scikit_learn_basic_classifier():
