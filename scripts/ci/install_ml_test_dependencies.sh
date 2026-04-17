@@ -36,9 +36,9 @@ if [[ ! -f "${ml_lockfile}" ]]; then
   exit 1
 fi
 
-# The base lane installs GUI OpenCV wheels, while the governed ML lockfile
-# owns the headless cv2 provider. Remove all cv2 distributions before the ML
-# install so the environment ends with a single deterministic provider.
+# The CI base layer and the governed ML lockfile can select different cv2
+# distributions. Remove all OpenCV wheels before the ML install so the
+# environment ends with a single deterministic provider.
 "${python_bin}" -m pip uninstall -y \
   opencv-python \
   opencv-contrib-python \

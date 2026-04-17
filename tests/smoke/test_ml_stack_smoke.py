@@ -59,7 +59,12 @@ def _patch_torch_xpu_namespace(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         torch,
         "xpu",
-        SimpleNamespace(empty_cache=lambda: None, is_available=lambda: False),
+        SimpleNamespace(
+            empty_cache=lambda: None,
+            is_available=lambda: False,
+            device_count=lambda: 0,
+            current_device=lambda: 0,
+        ),
         raising=False,
     )
 
