@@ -199,6 +199,17 @@ def test_diffusers_pipeline_interface(monkeypatch: pytest.MonkeyPatch):
     _patch_torch_xpu_namespace(monkeypatch)
     diffusers = _require_optional_module("diffusers")
 
+    class _DiffusionPipelineStub:
+        @staticmethod
+        def from_pretrained(*_args, **_kwargs):
+            raise AssertionError("from_pretrained should be patched in the smoke test")
+
+    # Avoid diffusers' lazy pipeline import path here. In the pinned Linux CPU
+    # lane, resolving the real DiffusionPipeline symbol imports model internals
+    # that require torch.distributed.device_mesh, which is newer than the
+    # governed torch baseline used by this smoke job.
+    monkeypatch.setattr(diffusers, "DiffusionPipeline", _DiffusionPipelineStub, raising=False)
+
     with patch.object(diffusers.DiffusionPipeline, "from_pretrained") as mock_from_pretrained:
         # Mock the pipeline to avoid downloading large models
         mock_pipeline = MagicMock()
