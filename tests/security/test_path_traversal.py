@@ -259,9 +259,9 @@ class TestUnicodeAttacks:
         [
             ("\u2024", "One dot leader"),
             ("\u2025", "Two dot leader"),
-            ("\uFF0E", "Fullwidth full stop"),
+            ("\uff0e", "Fullwidth full stop"),
             ("\u2219", "Bullet operator"),
-            ("\u22C5", "Dot operator"),
+            ("\u22c5", "Dot operator"),
         ],
     )
     def test_unicode_dot_variants(self, tmp_path: Path, unicode_dot: str, description: str) -> None:
@@ -287,8 +287,8 @@ class TestUnicodeAttacks:
         [
             ("\u2215", "Division slash"),
             ("\u2044", "Fraction slash"),
-            ("\uFF0F", "Fullwidth solidus"),
-            ("\u29F8", "Big solidus"),
+            ("\uff0f", "Fullwidth solidus"),
+            ("\u29f8", "Big solidus"),
         ],
     )
     def test_unicode_slash_variants(self, tmp_path: Path, unicode_slash: str, description: str) -> None:
@@ -309,6 +309,7 @@ class TestUnicodeAttacks:
     def test_unicode_normalization_nfc_nfd(self, tmp_path: Path) -> None:
         """Unicode normalization doesn't bypass security."""
         import unicodedata
+
         from transformation_portal.utils.security import validate_filepath
 
         # Create filename with combining characters

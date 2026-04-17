@@ -1,6 +1,6 @@
 # Test Coverage Improvement Plan
 
-**Status**: Phase 0 complete (infrastructure setup)  
+**Status**: Phase 0 complete (infrastructure setup)
 **Last Updated**: 2026-04-16
 
 ## Executive Summary
@@ -84,7 +84,7 @@ coverage report --fail-under=25
 
 ### Phase 0 — Baseline and Governance Setup ✅ COMPLETE
 
-**Duration**: 2-3 days  
+**Duration**: 2-3 days
 **Status**: Complete
 
 #### Deliverables
@@ -94,12 +94,12 @@ coverage report --fail-under=25
 - [x] `make coverage-diff` — diff coverage vs main branch
 - [x] `make coverage-package` — package-level baseline report
 - [x] CI artifact upload for coverage outputs
-- [x] Diff coverage reporting in CI (80% threshold)
+- [x] Diff coverage reporting in CI (85% threshold)
 - [x] `diff-cover` added to dev dependencies
 
 ### Phase 1 — Highest-Gap, Highest-Yield Coverage
 
-**Duration**: ~1 week  
+**Duration**: ~1 week
 **Status**: Pending
 
 #### Priority Targets
@@ -120,7 +120,7 @@ coverage report --fail-under=25
 
 ### Phase 2 — Business-Critical Orchestration Coverage
 
-**Duration**: 1.5-2 weeks  
+**Duration**: 1.5-2 weeks
 **Status**: Pending
 
 #### Focus
@@ -146,7 +146,7 @@ tests/lux_depth_v3/
 
 ### Phase 3 — Runtime and Execution-Path Hardening
 
-**Duration**: 1-1.5 weeks  
+**Duration**: 1-1.5 weeks
 **Status**: Pending
 
 #### Focus
@@ -160,7 +160,7 @@ tests/lux_depth_v3/
 
 ### Phase 4 — Security and Boundary Coverage
 
-**Duration**: ~1 week  
+**Duration**: ~1 week
 **Status**: Pending
 
 #### Focus
@@ -174,7 +174,7 @@ tests/lux_depth_v3/
 
 ### Phase 5 — ML, Optional, and Benchmark Lanes
 
-**Duration**: 1-2 weeks  
+**Duration**: 1-2 weeks
 **Status**: Pending (non-blocking)
 
 #### Focus

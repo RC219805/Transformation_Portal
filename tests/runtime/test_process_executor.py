@@ -26,7 +26,6 @@ from transformation_portal.runtime.process_executor import (
     ProcessTask,
 )
 
-
 # --- Mock Node Classes for Testing ---
 
 
@@ -172,9 +171,7 @@ class TestProcessExecutor:
         assert executor.execution_count == 0
 
         # Mock the actual execution to avoid subprocess
-        with patch.object(executor.ctx, "Queue") as mock_queue, patch.object(
-            executor.ctx, "Process"
-        ) as mock_process:
+        with patch.object(executor.ctx, "Queue") as mock_queue, patch.object(executor.ctx, "Process") as mock_process:
             mock_proc = MagicMock()
             mock_proc.is_alive.return_value = False
             mock_proc.exitcode = 0
@@ -206,9 +203,7 @@ class TestProcessExecutorTimeout:
         """Process is terminated when timeout expires."""
         executor = ProcessExecutor(timeout=0.1)
 
-        with patch.object(executor.ctx, "Queue") as mock_queue, patch.object(
-            executor.ctx, "Process"
-        ) as mock_process:
+        with patch.object(executor.ctx, "Queue") as mock_queue, patch.object(executor.ctx, "Process") as mock_process:
             mock_proc = MagicMock()
             # Simulate process still running after join
             mock_proc.is_alive.side_effect = [True, True, False]  # First check, after terminate, after kill
@@ -233,9 +228,7 @@ class TestProcessExecutorTimeout:
         """Per-call timeout overrides default."""
         executor = ProcessExecutor(timeout=60.0)
 
-        with patch.object(executor.ctx, "Queue") as mock_queue, patch.object(
-            executor.ctx, "Process"
-        ) as mock_process:
+        with patch.object(executor.ctx, "Queue") as mock_queue, patch.object(executor.ctx, "Process") as mock_process:
             mock_proc = MagicMock()
             mock_proc.is_alive.return_value = False
             mock_proc.exitcode = 0
@@ -266,9 +259,7 @@ class TestProcessExecutorErrorHandling:
         """Non-zero exit code is reported as error."""
         executor = ProcessExecutor()
 
-        with patch.object(executor.ctx, "Queue") as mock_queue, patch.object(
-            executor.ctx, "Process"
-        ) as mock_process:
+        with patch.object(executor.ctx, "Queue") as mock_queue, patch.object(executor.ctx, "Process") as mock_process:
             mock_proc = MagicMock()
             mock_proc.is_alive.return_value = False
             mock_proc.exitcode = 1  # Non-zero exit
@@ -295,9 +286,7 @@ class TestProcessExecutorErrorHandling:
         """Process completion without result is an error."""
         executor = ProcessExecutor()
 
-        with patch.object(executor.ctx, "Queue") as mock_queue, patch.object(
-            executor.ctx, "Process"
-        ) as mock_process:
+        with patch.object(executor.ctx, "Queue") as mock_queue, patch.object(executor.ctx, "Process") as mock_process:
             mock_proc = MagicMock()
             mock_proc.is_alive.return_value = False
             mock_proc.exitcode = 0  # Clean exit but no result
@@ -323,9 +312,7 @@ class TestProcessExecutorErrorHandling:
         """Process is cleaned up even if exception occurs."""
         executor = ProcessExecutor()
 
-        with patch.object(executor.ctx, "Queue") as mock_queue, patch.object(
-            executor.ctx, "Process"
-        ) as mock_process:
+        with patch.object(executor.ctx, "Queue") as mock_queue, patch.object(executor.ctx, "Process") as mock_process:
             mock_proc = MagicMock()
             mock_proc.is_alive.return_value = True  # Still alive at cleanup
             mock_process.return_value = mock_proc
@@ -414,9 +401,7 @@ class TestProcessExecutorProcessNaming:
         """Spawned process is named after node_id."""
         executor = ProcessExecutor()
 
-        with patch.object(executor.ctx, "Queue") as mock_queue, patch.object(
-            executor.ctx, "Process"
-        ) as mock_process:
+        with patch.object(executor.ctx, "Queue") as mock_queue, patch.object(executor.ctx, "Process") as mock_process:
             mock_proc = MagicMock()
             mock_proc.is_alive.return_value = False
             mock_proc.exitcode = 0

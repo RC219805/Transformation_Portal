@@ -100,6 +100,7 @@ class TestApexEvaluationHarness:
 
     def test_harness_initialization_with_options(self):
         """Test harness with custom options."""
+
         def custom_metric(paths):
             return 0.5
 
@@ -230,6 +231,7 @@ class TestApexEvaluationHarness:
 
     def test_combine_scores_metrics_only(self):
         """Test score combination with metrics only."""
+
         def mock_metric(paths):
             return 0.85
 
@@ -247,6 +249,7 @@ class TestApexEvaluationHarness:
 
     def test_combine_scores_weighted(self):
         """Test weighted score combination."""
+
         def mock_metric(paths):
             return 0.90
 
@@ -261,6 +264,7 @@ class TestApexEvaluationHarness:
 
     def test_run_metrics_error_handling(self, tmp_path):
         """Test metric error handling."""
+
         def failing_metric(paths):
             raise ValueError("Metric failed")
 
@@ -274,6 +278,7 @@ class TestApexEvaluationHarness:
 
     def test_run_metrics_score_clamping(self):
         """Test that metric scores are clamped to [0, 1]."""
+
         def out_of_range_metric(paths):
             return 1.5  # Out of range
 
@@ -408,6 +413,7 @@ class TestBuiltInMetrics:
         """Test metrics with missing file."""
         try:
             import cv2
+
             # cv2.imread returns None for missing files
             score = sharpness_metric([tmp_path / "nonexistent.png"])
             # Should handle gracefully (return 0 or skip)

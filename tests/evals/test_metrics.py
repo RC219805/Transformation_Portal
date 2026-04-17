@@ -230,6 +230,7 @@ class TestLPIPS:
 
         # Save original state
         import transformation_portal.evals.metrics as metrics_module
+
         original_model = metrics_module._lpips_model
 
         try:

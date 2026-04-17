@@ -87,7 +87,7 @@ Low-priority modules (can defer):
 
 ### CI Integration
 - **Baseline gate** (`--fail-under=25`): Prevents regression
-- **Diff coverage gate** (`diff-cover --fail-under=80`): New code must be well-tested
+- **Diff coverage gate** (`diff-cover --fail-under=85`): New code must be well-tested
 - **Ratchet mechanism**: As coverage improves, baseline gate increases
 
 ### Ownership
@@ -112,7 +112,7 @@ Update this document quarterly with:
 **Q: Why not 80% coverage like other projects?**
 A: This is a legacy codebase with ~25K statements. Reaching 80% would require ~12,000 new test assertions. We're taking an incremental, pragmatic approach.
 
-**Q: Can I merge code with <80% diff coverage?**
+**Q: Can I merge code with <85% diff coverage?**
 A: No. The diff-cover gate ensures all *new* code is well-tested, even if legacy code has gaps.
 
 **Q: What if coverage drops unexpectedly?**
@@ -142,4 +142,4 @@ make coverage-fast-scope
 - **Global floor**: 25% (prevents regression)
 - **Long-horizon target**: 70% overall
 
-See `docs/coverage/test_coverage_improvement_plan.md` for the full phased plan.
+See `docs/testing/test_coverage_improvement_plan.md` for the full phased plan.

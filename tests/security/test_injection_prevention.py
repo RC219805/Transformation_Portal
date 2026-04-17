@@ -216,7 +216,7 @@ class TestFilterGraphInjection:
 @pytest.mark.security
 class TestSQLInjectionPatterns:
     """Tests that SQL injection patterns are handled in path/filename contexts.
-    
+
     Note: This module focuses on file/command operations, not SQL.
     The sanitize_filename function removes path separators and dangerous
     shell/filesystem characters, but doesn't specifically target SQL patterns.
@@ -275,7 +275,7 @@ class TestSQLInjectionPatterns:
 @pytest.mark.security
 class TestLogInjection:
     """Tests for log injection prevention via filename sanitization.
-    
+
     Note: The sanitize_filename function uses os.path.basename which
     doesn't remove newlines/carriage returns from filenames. These
     characters are handled at the filesystem level (most reject them).
@@ -333,7 +333,7 @@ class TestLogInjection:
 @pytest.mark.security
 class TestHeaderInjection:
     """Tests for header injection prevention in filename contexts.
-    
+
     Note: The sanitize_filename function doesn't specifically strip CR/LF.
     These characters are handled by the filesystem (most systems allow them
     but they cause issues with tools expecting single-line filenames).
@@ -366,14 +366,14 @@ class TestHeaderInjection:
 
 
 # =============================================================================
-# Template Injection Prevention  
+# Template Injection Prevention
 # =============================================================================
 
 
 @pytest.mark.security
 class TestTemplateInjectionPatterns:
     """Tests for template injection pattern handling.
-    
+
     While this module doesn't directly handle templates, filenames/paths
     with template syntax should be handled safely.
     """

@@ -183,7 +183,7 @@ class TestParseResponse:
 
     def test_parse_whitespace_handling(self):
         """Test parsing handles whitespace."""
-        raw = "   \n\n{\"summary\": \"Test\", \"changes\": []}\n\n   "
+        raw = '   \n\n{"summary": "Test", "changes": []}\n\n   '
         parsed = _parse_response(raw)
 
         assert parsed["summary"] == "Test"
@@ -293,14 +293,14 @@ class TestSemanticDiff:
 
         # Mock backend
         mock_backend = MagicMock()
-        mock_backend.generate.return_value = '''
+        mock_backend.generate.return_value = """
 {
     "summary": "Minor differences detected",
     "changes": [
         {"type": "texture", "severity": "low", "description": "Color shift"}
     ]
 }
-'''
+"""
 
         result = semantic_diff(backend=mock_backend, image_a=img_a, image_b=img_b)
 
@@ -403,9 +403,7 @@ class TestComputeDiffPenalty:
         """Test penalty for single low severity change."""
         result = SemanticDiffResult(
             summary="Minor issue",
-            changes=(
-                SemanticChange(type="texture", severity="low", description="test"),
-            ),
+            changes=(SemanticChange(type="texture", severity="low", description="test"),),
             raw_text="",
             structured={},
         )
@@ -417,9 +415,7 @@ class TestComputeDiffPenalty:
         """Test penalty for single high severity change."""
         result = SemanticDiffResult(
             summary="Critical issue",
-            changes=(
-                SemanticChange(type="geometry", severity="high", description="test"),
-            ),
+            changes=(SemanticChange(type="geometry", severity="high", description="test"),),
             raw_text="",
             structured={},
         )

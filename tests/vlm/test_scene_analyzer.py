@@ -160,7 +160,7 @@ class TestSceneAnalyzerMocked:
 
     def test_analyze_returns_scene_analysis(self, mock_llava_processor, tmp_path):
         """Test analyze returns SceneAnalysis object."""
-        from transformation_portal.vlm.scene_analyzer import SceneAnalyzer, SceneAnalysis
+        from transformation_portal.vlm.scene_analyzer import SceneAnalysis, SceneAnalyzer
 
         # Create test image
         img_path = tmp_path / "test.png"
@@ -258,9 +258,7 @@ class TestSceneAnalyzerMocked:
 
         with patch("transformation_portal.vlm.scene_analyzer.LLaVAProcessor"):
             analyzer = SceneAnalyzer(llava_processor=mock_llava_processor)
-            materials = analyzer._extract_materials(
-                "Marble countertops, oak hardwood floors, glass windows"
-            )
+            materials = analyzer._extract_materials("Marble countertops, oak hardwood floors, glass windows")
 
         assert "marble" in materials
         assert "oak" in materials

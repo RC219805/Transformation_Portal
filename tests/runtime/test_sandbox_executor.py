@@ -19,14 +19,13 @@ import pytest
 
 pytestmark = pytest.mark.unit
 
+from transformation_portal.runtime.sandbox import SandboxMetrics
 from transformation_portal.runtime.sandbox_executor import (
     DAGNodeProtocol,
     ExecutionResult,
     ExecutorConfig,
     SandboxExecutor,
 )
-from transformation_portal.runtime.sandbox import SandboxMetrics
-
 
 # --- Mock DAG Nodes for Testing ---
 
@@ -204,9 +203,7 @@ class TestSandboxExecutor:
         assert sandbox.workspace.exists()
         assert sandbox.workspace.parent == executor_config.workspace_root
 
-    def test_create_sandbox_with_custom_cleanup(
-        self, executor_config: ExecutorConfig, mock_fs, mock_cas
-    ) -> None:
+    def test_create_sandbox_with_custom_cleanup(self, executor_config: ExecutorConfig, mock_fs, mock_cas) -> None:
         """create_sandbox respects cleanup_on_exit override."""
         executor = SandboxExecutor(
             config=executor_config,
@@ -267,9 +264,7 @@ class TestSandboxExecutor:
         assert "Test failure" in result.error
         assert result.outputs == {}
 
-    def test_run_node_increments_count(
-        self, executor_config: ExecutorConfig, mock_fs, mock_cas
-    ) -> None:
+    def test_run_node_increments_count(self, executor_config: ExecutorConfig, mock_fs, mock_cas) -> None:
         """run_node increments execution count."""
         executor = SandboxExecutor(
             config=executor_config,
@@ -288,9 +283,7 @@ class TestSandboxExecutor:
         executor.run_node(node=MockSuccessNode(), sandbox=sandbox2)
         assert executor.execution_count == 2
 
-    def test_run_node_stores_results(
-        self, executor_config: ExecutorConfig, mock_fs, mock_cas
-    ) -> None:
+    def test_run_node_stores_results(self, executor_config: ExecutorConfig, mock_fs, mock_cas) -> None:
         """run_node stores results in results list."""
         executor = SandboxExecutor(
             config=executor_config,
@@ -305,9 +298,7 @@ class TestSandboxExecutor:
         assert len(executor.results) == 1
         assert executor.results[0] == result
 
-    def test_execute_convenience_method(
-        self, executor_config: ExecutorConfig, mock_fs, mock_cas
-    ) -> None:
+    def test_execute_convenience_method(self, executor_config: ExecutorConfig, mock_fs, mock_cas) -> None:
         """execute() creates sandbox and runs node in one call."""
         executor = SandboxExecutor(
             config=executor_config,
@@ -349,9 +340,7 @@ class TestSandboxExecutor:
         assert results[1].outputs["result_sha"] == "out2"
         assert results[2].outputs["result_sha"] == "out3"
 
-    def test_execute_batch_with_failure(
-        self, executor_config: ExecutorConfig, mock_fs, mock_cas
-    ) -> None:
+    def test_execute_batch_with_failure(self, executor_config: ExecutorConfig, mock_fs, mock_cas) -> None:
         """execute_batch continues after individual failures."""
         executor = SandboxExecutor(
             config=executor_config,
@@ -409,9 +398,7 @@ class TestSandboxExecutorWithGPU:
             cleanup_sandboxes=True,
         )
 
-    def test_executor_with_gpu_semaphore(
-        self, gpu_executor_config: ExecutorConfig
-    ) -> None:
+    def test_executor_with_gpu_semaphore(self, gpu_executor_config: ExecutorConfig) -> None:
         """SandboxExecutor works with GPU semaphore provided."""
         from transformation_portal.runtime.gpu_semaphore import GPUSemaphore
 

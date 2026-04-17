@@ -27,7 +27,6 @@ from transformation_portal.runtime.engine import (
     ExecutionRecord,
 )
 
-
 # --- Mock Node Classes for Testing ---
 
 
@@ -332,9 +331,10 @@ class TestExecutionEngineGPU:
             gpu_devices=[0, 1],
         )
 
-        with patch("transformation_portal.runtime.engine.ProcessExecutor"), patch(
-            "transformation_portal.runtime.engine.GPUPool"
-        ) as mock_pool_cls:
+        with (
+            patch("transformation_portal.runtime.engine.ProcessExecutor"),
+            patch("transformation_portal.runtime.engine.GPUPool") as mock_pool_cls,
+        ):
             mock_pool = MagicMock()
             mock_pool.total_devices = 2
             mock_pool_cls.return_value = mock_pool
@@ -352,11 +352,12 @@ class TestExecutionEngineGPU:
             gpu_devices=[0],
         )
 
-        with patch("transformation_portal.runtime.engine.ProcessExecutor") as mock_exec_cls, patch(
-            "transformation_portal.runtime.engine.GPUPool"
-        ) as mock_pool_cls:
-            from transformation_portal.runtime.process_executor import ProcessResult
+        with (
+            patch("transformation_portal.runtime.engine.ProcessExecutor") as mock_exec_cls,
+            patch("transformation_portal.runtime.engine.GPUPool") as mock_pool_cls,
+        ):
             from transformation_portal.runtime.gpu_pool import GPULease
+            from transformation_portal.runtime.process_executor import ProcessResult
 
             # Mock executor
             mock_executor = MagicMock()

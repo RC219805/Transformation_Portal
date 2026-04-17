@@ -18,11 +18,10 @@ pytestmark = pytest.mark.unit
 
 from transformation_portal.runtime.worker import (
     SpawnError,
+    _worker_entry,
     run_spawned,
     run_with_gpu,
-    _worker_entry,
 )
-
 
 # --- Test Helper Functions (module-level for pickle compatibility) ---
 
@@ -63,12 +62,14 @@ def void_function() -> None:
 def get_pid_function() -> int:
     """Get current process ID."""
     import os
+
     return os.getpid()
 
 
 def get_executable_function() -> str:
     """Get Python executable path."""
     import sys
+
     return sys.executable
 
 

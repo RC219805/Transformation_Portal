@@ -26,7 +26,6 @@ from transformation_portal.runtime.ledger import (
     _hash_dict,
 )
 
-
 # --- Mock Certificate for Testing ---
 
 
@@ -46,22 +45,26 @@ class MockCertificate:
 
 def create_test_manifest(run_id: str = "test_run") -> str:
     """Create a test manifest JSON string."""
-    return json.dumps({
-        "run_id": run_id,
-        "node_id": "test_node",
-        "inputs": {"sha1": "input_path"},
-        "outputs": {"output_path": "sha2"},
-        "timestamp": "2025-01-01T00:00:00Z",
-    })
+    return json.dumps(
+        {
+            "run_id": run_id,
+            "node_id": "test_node",
+            "inputs": {"sha1": "input_path"},
+            "outputs": {"output_path": "sha2"},
+            "timestamp": "2025-01-01T00:00:00Z",
+        }
+    )
 
 
 def create_test_certificate(run_id: str = "test_run") -> MockCertificate:
     """Create a test certificate."""
-    return MockCertificate({
-        "run_id": run_id,
-        "signature": "mock_signature_abc123",
-        "algorithm": "sha256-rsa",
-    })
+    return MockCertificate(
+        {
+            "run_id": run_id,
+            "signature": "mock_signature_abc123",
+            "algorithm": "sha256-rsa",
+        }
+    )
 
 
 # --- Test Classes ---
@@ -103,11 +106,7 @@ class TestHashDict:
     def test_hash_dict_nested_content(self) -> None:
         """_hash_dict handles nested dictionaries."""
         data = {
-            "outer": {
-                "inner": {
-                    "value": "deep"
-                }
-            },
+            "outer": {"inner": {"value": "deep"}},
             "list": [1, 2, 3],
         }
 

@@ -670,8 +670,9 @@ class TestTimeout:
     @pytest.mark.skipif(sys.platform == "win32", reason="SIGALRM not available on Windows")
     def test_timeout_raises_on_exceed(self) -> None:
         """Operation exceeding timeout raises TimeoutError."""
-        from transformation_portal.utils.security import TimeoutError, timeout
         import time
+
+        from transformation_portal.utils.security import TimeoutError, timeout
 
         with pytest.raises(TimeoutError, match="exceeded.*timeout"):
             with timeout(1):

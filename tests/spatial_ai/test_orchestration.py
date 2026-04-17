@@ -567,7 +567,7 @@ class TestErrorHandler:
 
     def test_cpu_fallback_on_oom(self):
         """Test CPU fallback on OOM error - verifies fallback logic is triggered.
-        
+
         Note: The actual error handler passes 'device' as a named parameter
         that is managed internally, not through kwargs. We test that OOM
         detection works and triggers the fallback path.

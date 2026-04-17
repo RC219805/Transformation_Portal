@@ -32,12 +32,14 @@ class TestLLaVAProcessorImports:
         """Test LLAVA_AVAILABLE flag exists."""
         # Import should not fail
         from transformation_portal.vlm import llava
+
         assert hasattr(llava, "LLAVA_AVAILABLE")
 
     def test_processor_import_with_mock(self):
         """Test processor can be imported."""
         # This tests the module loads without error
         from transformation_portal.vlm.llava import LLaVAProcessor
+
         assert LLaVAProcessor is not None
 
 
@@ -61,12 +63,15 @@ class TestLLaVAProcessorMocked:
                         mock_model.from_pretrained.return_value = mock_model_instance
 
                         # Mock torch
-                        with patch.dict("sys.modules", {
-                            "torch": MagicMock(
-                                cuda=MagicMock(is_available=MagicMock(return_value=False)),
-                                backends=MagicMock(mps=MagicMock(is_available=MagicMock(return_value=False))),
-                            )
-                        }):
+                        with patch.dict(
+                            "sys.modules",
+                            {
+                                "torch": MagicMock(
+                                    cuda=MagicMock(is_available=MagicMock(return_value=False)),
+                                    backends=MagicMock(mps=MagicMock(is_available=MagicMock(return_value=False))),
+                                )
+                            },
+                        ):
                             from transformation_portal.vlm.llava import LLaVAProcessor as LP
 
                             # Create processor with mocked init
@@ -87,6 +92,7 @@ class TestLLaVAProcessorMocked:
                 mock_torch.backends.mps.is_available.return_value = False
 
                 # Test the logic
+                device = "cpu"
                 if not mock_torch.cuda.is_available():
                     if not mock_torch.backends.mps.is_available():
                         device = "cpu"
@@ -99,6 +105,7 @@ class TestLLaVAProcessorMocked:
         mock_torch.cuda.is_available.return_value = True
 
         # Test the logic
+        device = "cpu"
         if mock_torch.cuda.is_available():
             device = "cuda"
 
@@ -111,6 +118,7 @@ class TestLLaVAProcessorMocked:
         mock_torch.backends.mps.is_available.return_value = True
 
         # Test the logic
+        device = "cpu"
         if not mock_torch.cuda.is_available():
             if mock_torch.backends.mps.is_available():
                 device = "mps"
@@ -168,11 +176,13 @@ class TestLLaVAProcessorMocked:
 
     def test_assess_quality_mocked(self, mock_processor):
         """Test assess_quality with mocked model."""
-        mock_processor.assess_quality = MagicMock(return_value={
-            "assessment": "High quality image",
-            "prompt": "Quality prompt",
-            "model": "test_model",
-        })
+        mock_processor.assess_quality = MagicMock(
+            return_value={
+                "assessment": "High quality image",
+                "prompt": "Quality prompt",
+                "model": "test_model",
+            }
+        )
 
         result = mock_processor.assess_quality("test.jpg")
 
@@ -181,11 +191,13 @@ class TestLLaVAProcessorMocked:
 
     def test_validate_materials_mocked(self, mock_processor):
         """Test validate_materials with mocked model."""
-        mock_processor.validate_materials = MagicMock(return_value={
-            "validation": "Materials look realistic",
-            "prompt": "Material prompt",
-            "model": "test_model",
-        })
+        mock_processor.validate_materials = MagicMock(
+            return_value={
+                "validation": "Materials look realistic",
+                "prompt": "Material prompt",
+                "model": "test_model",
+            }
+        )
 
         result = mock_processor.validate_materials("test.jpg")
 
@@ -202,10 +214,9 @@ class TestLLaVAProcessorMocked:
 
     def test_repr(self, mock_processor):
         """Test string representation."""
-        mock_processor.__repr__ = MagicMock(return_value=(
-            "LLaVAProcessor(model='llava-hf/llava-1.5-13b-hf', "
-            "device='cpu', quantization=False)"
-        ))
+        mock_processor.__repr__ = MagicMock(
+            return_value=("LLaVAProcessor(model='llava-hf/llava-1.5-13b-hf', " "device='cpu', quantization=False)")
+        )
 
         repr_str = repr(mock_processor)
         assert "LLaVAProcessor" in repr_str
@@ -278,6 +289,7 @@ class TestModelLockIntegration:
 
                             try:
                                 from transformation_portal.vlm.llava import LLaVAProcessor
+
                                 # Try to initialize - may fail but should call resolve
                                 LLaVAProcessor(model_revision="explicit_rev")
                             except Exception:

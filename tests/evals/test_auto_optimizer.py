@@ -501,6 +501,7 @@ class TestAutoOptimizer:
 
     def test_evaluate_sequential_error_handling(self):
         """Test sequential evaluation error handling."""
+
         def failing_run(pipeline):
             raise RuntimeError("Run failed")
 

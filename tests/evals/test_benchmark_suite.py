@@ -204,6 +204,7 @@ class TestBenchmarkSuite:
         # Create image file
         pred_path = tmp_path / "pred.png"
         from PIL import Image
+
         Image.fromarray((pred * 255).astype(np.uint8)).save(pred_path)
 
         # Mock LLaVA backend

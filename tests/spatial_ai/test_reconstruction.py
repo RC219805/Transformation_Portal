@@ -32,11 +32,14 @@ pytestmark = [pytest.mark.unit, pytest.mark.ml]
 @pytest.fixture
 def valid_intrinsics():
     """Create valid camera intrinsic matrix."""
-    return np.array([
-        [500.0, 0.0, 256.0],
-        [0.0, 500.0, 256.0],
-        [0.0, 0.0, 1.0],
-    ], dtype=np.float32)
+    return np.array(
+        [
+            [500.0, 0.0, 256.0],
+            [0.0, 500.0, 256.0],
+            [0.0, 0.0, 1.0],
+        ],
+        dtype=np.float32,
+    )
 
 
 @pytest.fixture
@@ -141,11 +144,14 @@ class TestCameraParams:
 
     def test_invalid_intrinsics_dtype_raises(self, valid_extrinsics):
         """Test that invalid intrinsics dtype is rejected."""
-        bad_intrinsics = np.array([
-            [500.0, 0.0, 256.0],
-            [0.0, 500.0, 256.0],
-            [0.0, 0.0, 1.0],
-        ], dtype=np.float64)
+        bad_intrinsics = np.array(
+            [
+                [500.0, 0.0, 256.0],
+                [0.0, 500.0, 256.0],
+                [0.0, 0.0, 1.0],
+            ],
+            dtype=np.float64,
+        )
 
         with pytest.raises(ValueError, match="float32"):
             CameraParams(
@@ -157,11 +163,14 @@ class TestCameraParams:
 
     def test_invalid_intrinsics_homogeneous_raises(self, valid_extrinsics):
         """Test that invalid homogeneous coordinate is rejected."""
-        bad_intrinsics = np.array([
-            [500.0, 0.0, 256.0],
-            [0.0, 500.0, 256.0],
-            [0.0, 0.0, 2.0],  # Should be 1.0
-        ], dtype=np.float32)
+        bad_intrinsics = np.array(
+            [
+                [500.0, 0.0, 256.0],
+                [0.0, 500.0, 256.0],
+                [0.0, 0.0, 2.0],  # Should be 1.0
+            ],
+            dtype=np.float32,
+        )
 
         with pytest.raises(ValueError, match="must be 1.0"):
             CameraParams(
