@@ -208,25 +208,33 @@ def test_diffusers_pipeline_interface(monkeypatch: pytest.MonkeyPatch):
     # lane, resolving the real DiffusionPipeline symbol imports model internals
     # that require torch.distributed.device_mesh, which is newer than the
     # governed torch baseline used by this smoke job.
-    monkeypatch.setattr(diffusers, "DiffusionPipeline", _DiffusionPipelineStub, raising=False)
+    missing = object()
+    original_pipeline = diffusers.__dict__.get("DiffusionPipeline", missing)
+    diffusers.DiffusionPipeline = _DiffusionPipelineStub
 
-    with patch.object(diffusers.DiffusionPipeline, "from_pretrained") as mock_from_pretrained:
-        # Mock the pipeline to avoid downloading large models
-        mock_pipeline = MagicMock()
-        mock_from_pretrained.return_value = mock_pipeline
+    try:
+        with patch.object(diffusers.DiffusionPipeline, "from_pretrained") as mock_from_pretrained:
+            # Mock the pipeline to avoid downloading large models
+            mock_pipeline = MagicMock()
+            mock_from_pretrained.return_value = mock_pipeline
 
-        # Test pipeline creation interface (mocked)
-        pipeline = diffusers.DiffusionPipeline.from_pretrained(
-            "runwayml/stable-diffusion-v1-5", torch_dtype=torch.float32, use_safetensors=True
-        )
-        assert pipeline is not None
+            # Test pipeline creation interface (mocked)
+            pipeline = diffusers.DiffusionPipeline.from_pretrained(
+                "runwayml/stable-diffusion-v1-5", torch_dtype=torch.float32, use_safetensors=True
+            )
+            assert pipeline is not None
 
-        # Verify the mock was called with correct arguments
-        assert mock_from_pretrained.called
-        call_args = mock_from_pretrained.call_args
-        assert call_args[0][0] == "runwayml/stable-diffusion-v1-5"
-        assert call_args[1]["torch_dtype"] == torch.float32
-        assert call_args[1]["use_safetensors"] is True
+            # Verify the mock was called with correct arguments
+            assert mock_from_pretrained.called
+            call_args = mock_from_pretrained.call_args
+            assert call_args[0][0] == "runwayml/stable-diffusion-v1-5"
+            assert call_args[1]["torch_dtype"] == torch.float32
+            assert call_args[1]["use_safetensors"] is True
+    finally:
+        if original_pipeline is missing:
+            diffusers.__dict__.pop("DiffusionPipeline", None)
+        else:
+            diffusers.DiffusionPipeline = original_pipeline
 
 
 def test_transformers_model_interface():
