@@ -39,6 +39,7 @@ Example:
 from __future__ import annotations
 
 from importlib import import_module
+from typing import Any
 
 __all__ = [
     "IPAdapterStyleTransfer",
@@ -72,7 +73,7 @@ _EXPORTS = {
 }
 
 
-def __getattr__(name: str):
+def __getattr__(name: str) -> Any:
     """Resolve public exports lazily so optional ML dependencies stay optional."""
     try:
         module_name, attribute_name = _EXPORTS[name]
