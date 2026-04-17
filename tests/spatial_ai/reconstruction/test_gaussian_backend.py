@@ -5,7 +5,7 @@ import os
 import numpy as np
 import pytest
 
-pytest.importorskip("torch", reason="torch is required for Gaussian backend tests")
+torch = pytest.importorskip("torch", reason="torch is required for Gaussian backend tests")
 pytestmark = pytest.mark.ml
 
 from transformation_portal.spatial_ai.reconstruction import (  # pylint: disable=wrong-import-position
@@ -52,6 +52,19 @@ def _image_size() -> tuple[int, int]:
     if mode == "ci":
         return 120, 160
     return 240, 320
+
+
+def _disable_torch_numpy_bridge(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Simulate PyTorch wheels built without the optional NumPy bridge."""
+
+    def broken_from_numpy(_array):
+        raise RuntimeError("Numpy is not available")
+
+    def broken_tensor_numpy(self):
+        raise RuntimeError("Numpy is not available")
+
+    monkeypatch.setattr(torch, "from_numpy", broken_from_numpy)
+    monkeypatch.setattr(torch.Tensor, "numpy", broken_tensor_numpy, raising=False)
 
 
 # ---------------------------------------------------------------------
@@ -146,6 +159,20 @@ class TestGaussianBackendReconstruction:
         assert scene.splats.num_gaussians > 0
         assert len(scene.cameras) == 3
 
+    def test_reconstruct_without_torch_numpy_bridge(self, seed_all_rngs, monkeypatch: pytest.MonkeyPatch):
+        seed_all_rngs(42)
+        backend = GaussianBackend(tier="apex_research", device="cpu")
+        images, cameras = self._build_basic_input(2)
+        ri = ReconstructionInput(images=images, gamma=1.0, cameras=cameras, tier="apex_research")
+
+        _disable_torch_numpy_bridge(monkeypatch)
+
+        scene = backend.reconstruct(ri, iterations=5)
+
+        assert scene.splats.num_gaussians > 0
+        assert scene.splats.positions.dtype == np.float32
+        assert scene.splats.colors.dtype == np.float32
+
     def test_render_view(self, seed_all_rngs):
         seed_all_rngs(42)
         backend = GaussianBackend(tier="apex_research")
@@ -154,6 +181,23 @@ class TestGaussianBackendReconstruction:
         ri = ReconstructionInput(images=images, gamma=1.0, cameras=cameras, tier="apex_research")
         scene = backend.reconstruct(ri, iterations=_iterations(100))
 
+        h, w = _image_size()
+        novel_camera = CameraParams(cameras[0].intrinsics, np.eye(4, dtype=np.float32), w, h)
+        rendered = backend.render_view(scene, novel_camera)
+
+        assert rendered.shape == (h, w, 3)
+        assert rendered.dtype == np.float32
+        assert np.all((rendered >= 0) & (rendered <= 1))
+
+    def test_render_view_without_torch_numpy_bridge(self, seed_all_rngs, monkeypatch: pytest.MonkeyPatch):
+        seed_all_rngs(42)
+        backend = GaussianBackend(tier="apex_research", device="cpu")
+        images, cameras = self._build_basic_input(2)
+        ri = ReconstructionInput(images=images, gamma=1.0, cameras=cameras, tier="apex_research")
+
+        _disable_torch_numpy_bridge(monkeypatch)
+
+        scene = backend.reconstruct(ri, iterations=5)
         h, w = _image_size()
         novel_camera = CameraParams(cameras[0].intrinsics, np.eye(4, dtype=np.float32), w, h)
         rendered = backend.render_view(scene, novel_camera)
