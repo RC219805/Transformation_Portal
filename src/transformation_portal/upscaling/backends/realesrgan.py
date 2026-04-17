@@ -31,6 +31,54 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+_TORCH_TO_NUMPY_DTYPE = {
+    "torch.float16": np.float16,
+    "torch.float32": np.float32,
+    "torch.float64": np.float64,
+    "torch.int16": np.int16,
+    "torch.int32": np.int32,
+    "torch.int64": np.int64,
+    "torch.uint8": np.uint8,
+    "torch.bool": np.bool_,
+}
+
+_NUMPY_TO_TORCH_DTYPE = {
+    np.dtype(np.float16): "float16",
+    np.dtype(np.float32): "float32",
+    np.dtype(np.float64): "float64",
+    np.dtype(np.int16): "int16",
+    np.dtype(np.int32): "int32",
+    np.dtype(np.int64): "int64",
+    np.dtype(np.uint8): "uint8",
+    np.dtype(np.bool_): "bool",
+}
+
+
+def _numpy_array_to_tensor(array: np.ndarray) -> "torch.Tensor":
+    """Convert a numpy array to tensor with a NumPy-bridge-free fallback."""
+    import torch
+
+    try:
+        return torch.from_numpy(array)
+    except RuntimeError as exc:
+        if "Numpy is not available" not in str(exc):
+            raise
+        dtype_name = _NUMPY_TO_TORCH_DTYPE.get(array.dtype)
+        tensor_dtype = getattr(torch, dtype_name) if dtype_name else None
+        return torch.tensor(array.tolist(), dtype=tensor_dtype)
+
+
+def _tensor_to_numpy_array(tensor: "torch.Tensor") -> np.ndarray:
+    """Convert a tensor to numpy with a NumPy-bridge-free fallback."""
+    detached = tensor.detach().cpu()
+    try:
+        return detached.numpy()
+    except RuntimeError as exc:
+        if "Numpy is not available" not in str(exc):
+            raise
+        numpy_dtype = _TORCH_TO_NUMPY_DTYPE.get(str(detached.dtype))
+        return np.asarray(detached.tolist(), dtype=numpy_dtype)
+
 
 class RealESRGANUpscaler:
     """Real-ESRGAN upscaling backend (local implementation).
@@ -291,7 +339,7 @@ class RealESRGANUpscaler:
         image_chw = np.transpose(image_float, (2, 0, 1))
 
         # Add batch dimension
-        image_tensor = torch.from_numpy(image_chw).unsqueeze(0)
+        image_tensor = _numpy_array_to_tensor(image_chw).unsqueeze(0)
 
         # Move to device
         image_tensor = image_tensor.to(self._device)
@@ -314,7 +362,7 @@ class RealESRGANUpscaler:
         output = output.squeeze(0).cpu().float()
 
         # CHW to HWC
-        output_np = output.numpy().transpose(1, 2, 0)
+        output_np = _tensor_to_numpy_array(output).transpose(1, 2, 0)
 
         # Clip to [0, 1] and convert to uint8
         output_np = np.clip(output_np, 0, 1)
