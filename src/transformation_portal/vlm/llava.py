@@ -28,6 +28,9 @@ try:
 
     LLAVA_AVAILABLE = True
 except ImportError:
+    AutoProcessor = None
+    BitsAndBytesConfig = None
+    LlavaForConditionalGeneration = None
     LLAVA_AVAILABLE = False
     logging.warning("LLaVA dependencies not available. Install with: pip install transformers>=4.35")
 

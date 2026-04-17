@@ -12,6 +12,8 @@ All tests use mocks - no ML model downloads or GPU requirements.
 
 from __future__ import annotations
 
+import importlib
+import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -41,6 +43,24 @@ class TestLLaVAProcessorImports:
         from transformation_portal.vlm.llava import LLaVAProcessor
 
         assert LLaVAProcessor is not None
+
+    def test_optional_symbols_exist_without_transformers(self):
+        """Test optional symbols remain patchable when transformers is unavailable."""
+        import transformation_portal.vlm.llava as llava_module
+
+        try:
+            with patch.dict(sys.modules, {"transformers": None}):
+                reloaded_module = importlib.reload(llava_module)
+
+                assert reloaded_module.LLAVA_AVAILABLE is False
+                assert hasattr(reloaded_module, "AutoProcessor")
+                assert hasattr(reloaded_module, "BitsAndBytesConfig")
+                assert hasattr(reloaded_module, "LlavaForConditionalGeneration")
+                assert reloaded_module.AutoProcessor is None
+                assert reloaded_module.BitsAndBytesConfig is None
+                assert reloaded_module.LlavaForConditionalGeneration is None
+        finally:
+            importlib.reload(llava_module)
 
 
 class TestLLaVAProcessorMocked:
@@ -279,8 +299,8 @@ class TestModelLockIntegration:
         """Test that revision is resolved via model lock."""
         with patch("transformation_portal.vlm.llava.LLAVA_AVAILABLE", True):
             with patch("transformation_portal.vlm.llava.resolve_model_lock_revision") as mock_resolve:
-                with patch("transformation_portal.vlm.llava.AutoProcessor"):
-                    with patch("transformation_portal.vlm.llava.LlavaForConditionalGeneration"):
+                with patch("transformation_portal.vlm.llava.AutoProcessor", create=True):
+                    with patch("transformation_portal.vlm.llava.LlavaForConditionalGeneration", create=True):
                         with patch("transformation_portal.vlm.llava.torch") as mock_torch:
                             mock_torch.cuda.is_available.return_value = False
                             mock_torch.backends.mps.is_available.return_value = False

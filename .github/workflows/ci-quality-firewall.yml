@@ -521,13 +521,9 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-models-v4-
 
-      - name: Install dependencies
+      - name: Install ML test dependencies
         run: |
-          python -m pip install --upgrade pip wheel setuptools
-          # CPU-only PyTorch to save disk space
-          python -m pip install "torch==2.10.0+cpu" "torchvision==0.25.0+cpu" --index-url https://download.pytorch.org/whl/cpu
-          python -m pip install -r requirements-ci.txt
-          python -m pip install -e . --no-deps
+          bash scripts/ci/install_ml_test_dependencies.sh
           df -h
 
       - name: Verify test environment
