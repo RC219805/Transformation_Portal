@@ -2,6 +2,12 @@
 
 Quick reference for common workflows and commands in this repo.
 
+## Canonical worktree discipline
+- `origin/main` is the canonical repository baseline and the only standing source of truth on Desktop.
+- Desktop siblings such as `Transformation_Portal__fastapi` or `Transformation_Portal__upload` are temporary git worktrees, not independent repos.
+- When parallel work needs consolidation, first fast-forward local `main` to `origin/main`, then create a single integration branch from that updated base and replay the intended commits there.
+- After validation lands, retire obsolete Desktop worktrees and prune their local-only branches so `Transformation_Portal/` remains the canonical checkout.
+
 ## Common commands (Makefile)
 - `make venv` create local `.venv` with a Python 3.11+ interpreter, or fail closed if an existing `.venv` is unsupported.
 - `make setup` install package in editable mode.
