@@ -750,6 +750,10 @@ def _state_probe_expression() -> str:
       const el = document.getElementById('reviewStatusBanner');
       return el ? String(el.dataset.tone || '') : '';
     })(),
+    reviewStatusState: (() => {
+      const el = document.getElementById('reviewStatusBanner');
+      return el ? String(el.dataset.reviewState || '') : '';
+    })(),
     reviewStatusVisible: (() => {
       const el = document.getElementById('reviewStatusBanner');
       return !!(el && !el.classList.contains('hidden'));
@@ -2352,6 +2356,10 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
         _expect(
             str(run_state.get("reviewStatusTone", "")).strip().lower() == "ready",
             f"Review workspace should expose a ready status banner after a successful run: {run_state}",
+        )
+        _expect(
+            str(run_state.get("reviewStatusState", "")).strip() == "ready",
+            f"Review workspace should expose the machine-readable review state token: {run_state}",
         )
         _expect(
             "Outputs ready for review" in str(run_state.get("reviewStatusTitle", "")),

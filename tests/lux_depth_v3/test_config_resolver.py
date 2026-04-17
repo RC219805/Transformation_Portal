@@ -457,6 +457,7 @@ class TestBuildFingerprintPayloads:
         assert "min_finite_pct" in payload
         assert "min_gradient_energy" in payload
         assert payload["low_saturation_warning_band"] == pytest.approx(0.0075)
+        assert payload["threshold_epsilon"] == pytest.approx(1e-6)
 
     def test_fingerprint_changes_when_low_saturation_warning_band_changes(self):
         """APEX gate fingerprint should change when the warning band changes."""
@@ -503,6 +504,55 @@ class TestBuildFingerprintPayloads:
         )
         payload_b = build_depth_cache_payload(
             EnhanceConfig(apex_depth_low_saturation_warning_band=0.01),
+        )
+
+        assert payload_a == payload_b
+
+    def test_apex_depth_gate_fingerprint_normalizes_negative_threshold_epsilon(self):
+        """Negative threshold epsilon should fingerprint as the effective non-negative policy."""
+        from transformation_portal.lux_depth_v3.config import EnhanceConfig
+        from transformation_portal.lux_depth_v3.config_resolver import (
+            build_apex_depth_gate_fingerprint_payload,
+            compute_config_fingerprint,
+        )
+
+        negative_config = EnhanceConfig(apex_depth_threshold_epsilon=-1e-3)
+        zero_config = EnhanceConfig(apex_depth_threshold_epsilon=0.0)
+
+        negative_payload = build_apex_depth_gate_fingerprint_payload(negative_config)
+        zero_payload = build_apex_depth_gate_fingerprint_payload(zero_config)
+
+        assert negative_payload["threshold_epsilon"] == pytest.approx(0.0)
+        assert negative_payload == zero_payload
+        assert compute_config_fingerprint(negative_config).to_sha256() == compute_config_fingerprint(zero_config).to_sha256()
+
+    def test_fingerprint_changes_when_threshold_epsilon_changes(self):
+        """APEX gate fingerprint should change when threshold epsilon changes."""
+        from transformation_portal.lux_depth_v3.config import EnhanceConfig
+        from transformation_portal.lux_depth_v3.config_resolver import (
+            compute_config_fingerprint,
+        )
+
+        config_a = EnhanceConfig(apex_depth_threshold_epsilon=1e-6)
+        config_b = EnhanceConfig(apex_depth_threshold_epsilon=1e-4)
+
+        fingerprint_a = compute_config_fingerprint(config_a)
+        fingerprint_b = compute_config_fingerprint(config_b)
+
+        assert fingerprint_a.to_sha256() != fingerprint_b.to_sha256()
+
+    def test_depth_cache_payload_ignores_threshold_epsilon(self):
+        """Depth cache payload should not change when only gate epsilon changes."""
+        from transformation_portal.lux_depth_v3.config import EnhanceConfig
+        from transformation_portal.lux_depth_v3.config_resolver import (
+            build_depth_cache_payload,
+        )
+
+        payload_a = build_depth_cache_payload(
+            EnhanceConfig(apex_depth_threshold_epsilon=1e-6),
+        )
+        payload_b = build_depth_cache_payload(
+            EnhanceConfig(apex_depth_threshold_epsilon=1e-4),
         )
 
         assert payload_a == payload_b

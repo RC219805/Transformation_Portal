@@ -10,6 +10,7 @@ pytestmark = pytest.mark.unit
 REPO_ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW_PATH = REPO_ROOT / ".github" / "workflows" / "secure-install-pilot.yml"
 REQUIREMENTS_README_PATH = REPO_ROOT / "requirements" / "README.md"
+DEPENDABOT_GOVERNANCE_PATH = REPO_ROOT / "docs" / "governance" / "DEPENDABOT_PR_GOVERNANCE.md"
 ROADMAP_PATH = REPO_ROOT / "docs" / "architecture" / "transformation_portal_roadmap_rereview_2026-04-07.md"
 CHECKOUT_SHA = "de0fac2e4500dabe0009e67214ff5f5447ce83dd"
 SETUP_PYTHON_SHA = "a309ff8b426b58ec0e2a45f0f869d46889d02405"
@@ -97,6 +98,25 @@ def test_secure_install_pilot_readme_records_explicit_hash_policy() -> None:
     assert "`requirements-dev.txt` remain outside this hash-enforced policy decision" in readme
     assert "Promotion to mandatory `--require-hashes` enforcement requires a separate" in readme
     assert "policy decision." in readme
+
+
+def test_requirements_readme_records_current_curated_web_runtime_baseline() -> None:
+    readme = REQUIREMENTS_README_PATH.read_text(encoding="utf-8")
+
+    assert "| FastAPI | `requirements/base.in` | `0.136.0` |" in readme
+    assert "| Starlette | `requirements/base.in` + `pyproject.toml` bound | `1.0.0` |" in readme
+    assert "| Uvicorn | `requirements/base.in` | `0.42.0` |" in readme
+    assert "curated compatibility path on 2026-04-15" in readme
+
+
+def test_dependabot_governance_doc_includes_dep_pin_changed_checklist() -> None:
+    governance_doc = DEPENDABOT_GOVERNANCE_PATH.read_text(encoding="utf-8")
+
+    assert '## "Dep Pin Changed" Checklist' in governance_doc
+    assert "Regenerate only the affected governed lockfiles through the existing lock" in governance_doc
+    assert "make check-requirements-lock-contract" in governance_doc
+    assert "runtime/toolchain requirements stay current" in governance_doc
+    assert "make ci" in governance_doc
 
 
 def test_hash_policy_roadmap_refresh_closes_csp_unlock_and_records_policy_decision() -> None:

@@ -7,6 +7,7 @@ import json
 import subprocess
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
@@ -183,6 +184,64 @@ class TestCheckLocalEnvironment:
         assert len(results) >= 2
         assert all("Port" in r.name for r in results)
 
+    def test_validation_smoke_passes_with_explicit_classification(self, env_module, monkeypatch):
+        validator = SimpleNamespace(
+            PythonHeaderToolingError=RuntimeError,
+            find_violations=lambda: [],
+        )
+        monkeypatch.setattr(env_module, "_load_python_header_validator", lambda: validator)
+
+        result = env_module.check_validation_smoke()
+
+        assert result.passed is True
+        assert result.classification == "pass"
+        assert result.name == "Validation smoke"
+
+    def test_validation_smoke_classifies_product_regression(self, env_module, monkeypatch):
+        validator = SimpleNamespace(
+            PythonHeaderToolingError=RuntimeError,
+            find_violations=lambda: ["file.py:1: header contains cookie-like text 'encoding: Local'"],
+        )
+        monkeypatch.setattr(env_module, "_load_python_header_validator", lambda: validator)
+
+        result = env_module.check_validation_smoke()
+
+        assert result.passed is False
+        assert result.classification == "product_regression"
+        assert "file.py:1" in result.message
+
+    def test_validation_smoke_classifies_environment_failure_for_tooling_error(self, env_module, monkeypatch):
+        class FakeToolingError(RuntimeError):
+            pass
+
+        def _raise_tooling_error():
+            raise FakeToolingError("git ls-files failed: fatal: no git")
+
+        validator = SimpleNamespace(
+            PythonHeaderToolingError=FakeToolingError,
+            find_violations=_raise_tooling_error,
+        )
+        monkeypatch.setattr(env_module, "_load_python_header_validator", lambda: validator)
+
+        result = env_module.check_validation_smoke()
+
+        assert result.passed is False
+        assert result.classification == "environment_failure"
+        assert "fatal: no git" in result.message
+
+    def test_run_specific_check_validation_smoke(self, env_module, monkeypatch):
+        validator = SimpleNamespace(
+            PythonHeaderToolingError=RuntimeError,
+            find_violations=lambda: [],
+        )
+        monkeypatch.setattr(env_module, "_load_python_header_validator", lambda: validator)
+
+        results, exit_code = env_module.run_all_checks(["validation-smoke"])
+
+        assert exit_code == env_module.ExitCode.PASS
+        assert len(results) == 1
+        assert results[0].classification == "pass"
+
     def test_check_result_has_guidance_on_failure(self, env_module):
         """Failed checks should include guidance when available."""
         # Mock a failing check
@@ -261,6 +320,20 @@ class TestCheckLocalEnvironmentCLI:
         output = json.loads(result.stdout)
         assert len(output["results"]) == 1
         assert output["results"][0]["name"] == "Python dependency health"
+
+    def test_script_check_specific_validation_smoke(self):
+        """Script should accept validation-smoke as a specific check."""
+        result = subprocess.run(
+            [sys.executable, str(CHECK_LOCAL_ENVIRONMENT_PATH), "--check", "validation-smoke", "--json"],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        assert result.returncode in (0, 1, 2)
+        output = json.loads(result.stdout)
+        assert len(output["results"]) == 1
+        assert output["results"][0]["name"] == "Validation smoke"
+        assert output["results"][0]["classification"] in {"pass", "environment_failure", "product_regression"}
 
     def test_script_quiet_mode(self):
         """Quiet mode should reduce output."""

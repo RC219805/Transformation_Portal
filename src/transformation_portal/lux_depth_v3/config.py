@@ -431,6 +431,10 @@ class EnhanceConfig:
             float(self.apex_depth_low_saturation_warning_band),
             0.0,
         )
+        self.apex_depth_threshold_epsilon = max(
+            float(self.apex_depth_threshold_epsilon),
+            0.0,
+        )
 
     @property
     def enable_pbr(self) -> bool:

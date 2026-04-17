@@ -150,6 +150,16 @@ class TestEnhanceConfig:
 
         assert config.apex_depth_low_saturation_warning_band == 0.0
 
+    def test_enhance_config_clamps_negative_apex_threshold_epsilon(self):
+        """Negative threshold epsilon values should normalize at config construction."""
+        config = EnhanceConfig(apex_depth_threshold_epsilon=-1e-3)
+
+        assert config.apex_depth_threshold_epsilon == 0.0
+
+    def test_enhance_config_exposes_v2_and_flag_fields(self):
+        """V2 and flag fields should remain available on the public config surface."""
+        config = EnhanceConfig()
+
         # V2 configuration
         assert hasattr(config, "v2_preset")
         assert hasattr(config, "v2_device")
