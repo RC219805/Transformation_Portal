@@ -23,6 +23,9 @@ from PIL import Image
 
 from transformation_portal.core.security.model_lock import resolve_model_lock_revision
 
+MIN_TRANSFORMERS_VERSION = "4.40"
+LLAVA_INSTALL_GUIDANCE = f"pip install transformers>={MIN_TRANSFORMERS_VERSION} accelerate bitsandbytes"
+
 try:
     from transformers import AutoProcessor, BitsAndBytesConfig, LlavaForConditionalGeneration
 
@@ -32,7 +35,7 @@ except ImportError:
     BitsAndBytesConfig = None
     LlavaForConditionalGeneration = None
     LLAVA_AVAILABLE = False
-    logging.warning("LLaVA dependencies not available. Install with: pip install transformers>=4.35")
+    logging.warning("LLaVA dependencies not available. Install with: %s", LLAVA_INSTALL_GUIDANCE)
 
 
 logger = logging.getLogger(__name__)
@@ -106,7 +109,7 @@ Focus on luxury architectural materials."""
         """
         if not LLAVA_AVAILABLE:
             raise ImportError(
-                "LLaVA requires transformers>=4.35. " "Install with: pip install transformers>=4.35 accelerate bitsandbytes"
+                f"LLaVA requires transformers>={MIN_TRANSFORMERS_VERSION}. Install with: {LLAVA_INSTALL_GUIDANCE}"
             )
 
         self.model_id = model_id
