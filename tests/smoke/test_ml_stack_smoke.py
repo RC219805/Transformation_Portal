@@ -64,6 +64,7 @@ def _patch_torch_xpu_namespace(monkeypatch: pytest.MonkeyPatch) -> None:
             is_available=lambda: False,
             device_count=lambda: 0,
             current_device=lambda: 0,
+            manual_seed=lambda _seed: None,
         ),
         raising=False,
     )
