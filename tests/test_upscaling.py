@@ -5,6 +5,11 @@ import logging
 import numpy as np
 import pytest
 
+try:
+    import torch
+except ImportError:  # pragma: no cover - exercised only in non-ML environments
+    torch = None
+
 # Pytest markers
 pytestmark = [
     pytest.mark.unit,
@@ -163,6 +168,69 @@ def test_realesrgan_upscaler(monkeypatch):
     assert upscaler.requires_ml is True
 
     # Test upscaling (small image to avoid long test time)
+    image = np.random.randint(0, 255, (50, 50, 3), dtype=np.uint8)
+    upscaled = upscaler.upscale(image, scale_factor=2.0)
+
+    assert upscaled.shape == (100, 100, 3)
+    assert upscaled.dtype == np.uint8
+
+
+@pytest.mark.skipif(
+    not _check_ml_deps_available(),
+    reason="ML dependencies not installed",
+)
+@pytest.mark.ml
+def test_realesrgan_upscaler_without_torch_numpy_bridge(monkeypatch):
+    """Real-ESRGAN should tolerate PyTorch wheels without the NumPy bridge."""
+    torch = pytest.importorskip("torch", reason="torch is required for Real-ESRGAN bridge fallback test")
+
+    def mock_init(self, device="cpu", model="RealESRGAN_x2plus", half_precision=False):
+        self._model_name = model
+        self._device = device
+        self._half_precision = half_precision
+        self._model = None
+        self._netscale = 2 if "x2" in model else 4
+
+    def mock_load_model(self):
+        class MockModel:
+            def eval(self):
+                return self
+
+            def to(self, device):
+                return self
+
+            def half(self):
+                return self
+
+            def __call__(self, x):
+                import torch.nn.functional as F
+
+                scale = self.netscale
+                return F.interpolate(x, scale_factor=scale, mode="nearest")
+
+            netscale = 2
+
+        model = MockModel()
+        model.netscale = self._netscale
+        self._model = model
+
+    def broken_from_numpy(_array):
+        raise RuntimeError("Numpy is not available")
+
+    def broken_tensor_numpy(self):
+        raise RuntimeError("Numpy is not available")
+
+    from transformation_portal.upscaling.backends.realesrgan import RealESRGANUpscaler
+
+    monkeypatch.setattr(RealESRGANUpscaler, "AVAILABLE", True)
+    monkeypatch.setattr(RealESRGANUpscaler, "__init__", mock_init)
+    monkeypatch.setattr(RealESRGANUpscaler, "_load_model", mock_load_model)
+    monkeypatch.setattr(torch, "from_numpy", broken_from_numpy)
+    monkeypatch.setattr(torch.Tensor, "numpy", broken_tensor_numpy, raising=False)
+
+    registry = UpscalerRegistry()
+    upscaler = registry.get("realesrgan", device="cpu", model="RealESRGAN_x2plus")
+
     image = np.random.randint(0, 255, (50, 50, 3), dtype=np.uint8)
     upscaled = upscaler.upscale(image, scale_factor=2.0)
 

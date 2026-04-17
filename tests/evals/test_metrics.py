@@ -115,6 +115,44 @@ class TestToNumpy:
         assert isinstance(result, np.ndarray)
         assert result.dtype == np.float32
 
+    def test_torch_tensor_conversion_without_numpy_bridge(self):
+        """Test torch tensor conversion when torch's NumPy bridge is unavailable."""
+
+        class FakeTensor:
+            def detach(self):
+                return self
+
+            def cpu(self):
+                return self
+
+            def numpy(self):
+                raise RuntimeError("Numpy is not available")
+
+            def tolist(self):
+                return [[0.0, 0.5], [1.0, 0.25]]
+
+        result = _to_numpy(FakeTensor())
+
+        assert isinstance(result, np.ndarray)
+        assert result.dtype == np.float32
+        np.testing.assert_allclose(result, np.array([[0.0, 0.5], [1.0, 0.25]], dtype=np.float32))
+
+    def test_torch_tensor_conversion_preserves_unrelated_runtime_errors(self):
+        """Test torch tensor conversion still raises unexpected tensor errors."""
+
+        class BrokenTensor:
+            def detach(self):
+                return self
+
+            def cpu(self):
+                return self
+
+            def numpy(self):
+                raise RuntimeError("unexpected tensor conversion failure")
+
+        with pytest.raises(RuntimeError, match="unexpected tensor conversion failure"):
+            _to_numpy(BrokenTensor())
+
 
 class TestPSNR:
     """Test PSNR computation."""

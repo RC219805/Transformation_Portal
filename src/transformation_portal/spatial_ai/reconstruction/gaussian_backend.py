@@ -40,6 +40,56 @@ from .protocol import validate_backend_rasterizer_payload, validate_rasterizer_o
 
 logger = logging.getLogger(__name__)
 
+_TORCH_TO_NUMPY_DTYPE = {
+    torch.float16: np.float16,
+    torch.float32: np.float32,
+    torch.float64: np.float64,
+    torch.int16: np.int16,
+    torch.int32: np.int32,
+    torch.int64: np.int64,
+    torch.uint8: np.uint8,
+    torch.bool: np.bool_,
+}
+
+_NUMPY_TO_TORCH_DTYPE = {
+    np.dtype(np.float16): torch.float16,
+    np.dtype(np.float32): torch.float32,
+    np.dtype(np.float64): torch.float64,
+    np.dtype(np.int16): torch.int16,
+    np.dtype(np.int32): torch.int32,
+    np.dtype(np.int64): torch.int64,
+    np.dtype(np.uint8): torch.uint8,
+    np.dtype(np.bool_): torch.bool,
+}
+
+
+def _tensor_to_numpy_array(tensor: torch.Tensor) -> np.ndarray:
+    """Convert a tensor to numpy, tolerating torch's missing NumPy bridge."""
+    detached = tensor.detach().cpu()
+    try:
+        return detached.numpy()
+    except RuntimeError as exc:
+        if "Numpy is not available" not in str(exc):
+            raise
+        numpy_dtype = _TORCH_TO_NUMPY_DTYPE.get(detached.dtype)
+        return np.asarray(detached.tolist(), dtype=numpy_dtype)
+
+
+def _numpy_array_to_tensor(array: np.ndarray, device: str, *, requires_grad: bool = False) -> torch.Tensor:
+    """Convert a numpy array to tensor, tolerating torch's missing NumPy bridge."""
+    try:
+        tensor = torch.from_numpy(array)
+    except RuntimeError as exc:
+        if "Numpy is not available" not in str(exc):
+            raise
+        tensor_dtype = _NUMPY_TO_TORCH_DTYPE.get(array.dtype)
+        tensor = torch.tensor(array.tolist(), dtype=tensor_dtype)
+
+    tensor = tensor.to(device)
+    if requires_grad:
+        tensor.requires_grad_(True)
+    return tensor
+
 
 class GaussianBackend:
     """3D Gaussian Splatting backend.
@@ -512,14 +562,14 @@ class GaussianBackend:
             device = self.device
 
             # Convert numpy to PyTorch tensors
-            positions = torch.from_numpy(splats.positions).to(device).requires_grad_(True)
-            colors = torch.from_numpy(splats.colors).to(device).requires_grad_(True)
-            scales = torch.from_numpy(splats.scales).to(device).requires_grad_(True)
-            rotations = torch.from_numpy(splats.rotations).to(device).requires_grad_(True)
-            opacities = torch.from_numpy(splats.opacities).to(device).requires_grad_(True)
+            positions = _numpy_array_to_tensor(splats.positions, device, requires_grad=True)
+            colors = _numpy_array_to_tensor(splats.colors, device, requires_grad=True)
+            scales = _numpy_array_to_tensor(splats.scales, device, requires_grad=True)
+            rotations = _numpy_array_to_tensor(splats.rotations, device, requires_grad=True)
+            opacities = _numpy_array_to_tensor(splats.opacities, device, requires_grad=True)
 
             # Prepare target images
-            target_images = [torch.from_numpy(img).to(device) for img in reconstruction_input.images]
+            target_images = [_numpy_array_to_tensor(img, device) for img in reconstruction_input.images]
             cameras = reconstruction_input.cameras
 
             # Log device placement for verification (especially important for MPS)
@@ -535,8 +585,8 @@ class GaussianBackend:
                     scales=scales,
                     rotations=rotations,
                     opacities=opacities,
-                    intrinsics=torch.from_numpy(first_camera.intrinsics).to(device),
-                    extrinsics=torch.from_numpy(first_camera.extrinsics).to(device),
+                    intrinsics=_numpy_array_to_tensor(first_camera.intrinsics, device),
+                    extrinsics=_numpy_array_to_tensor(first_camera.extrinsics, device),
                     image_size=(first_camera.height, first_camera.width),
                 )
 
@@ -562,8 +612,8 @@ class GaussianBackend:
                 total_loss = 0.0
                 for view_idx, (target_img, camera) in enumerate(zip(target_images, cameras)):
                     # Prepare camera parameters
-                    intrinsics = torch.from_numpy(camera.intrinsics).to(device)
-                    extrinsics = torch.from_numpy(camera.extrinsics).to(device)
+                    intrinsics = _numpy_array_to_tensor(camera.intrinsics, device)
+                    extrinsics = _numpy_array_to_tensor(camera.extrinsics, device)
                     image_size = (camera.height, camera.width)
 
                     # Use capped rendering during optimization to avoid OOM/runtime
@@ -659,11 +709,11 @@ class GaussianBackend:
 
             # Convert back to numpy
             optimized_splats = GaussianSplat(
-                positions=positions.detach().cpu().numpy().astype(np.float32),
-                colors=colors.detach().cpu().numpy().astype(np.float32),
-                scales=scales.detach().cpu().numpy().astype(np.float32),
-                rotations=rotations.detach().cpu().numpy().astype(np.float32),
-                opacities=opacities.detach().cpu().numpy().astype(np.float32),
+                positions=_tensor_to_numpy_array(positions).astype(np.float32, copy=False),
+                colors=_tensor_to_numpy_array(colors).astype(np.float32, copy=False),
+                scales=_tensor_to_numpy_array(scales).astype(np.float32, copy=False),
+                rotations=_tensor_to_numpy_array(rotations).astype(np.float32, copy=False),
+                opacities=_tensor_to_numpy_array(opacities).astype(np.float32, copy=False),
                 metadata={
                     **splats.metadata,
                     "optimized": True,
@@ -698,14 +748,14 @@ class GaussianBackend:
         splats = scene.splats
 
         # Convert to PyTorch tensors
-        positions = torch.from_numpy(splats.positions).to(device)
-        colors = torch.from_numpy(splats.colors).to(device)
-        scales = torch.from_numpy(splats.scales).to(device)
-        rotations = torch.from_numpy(splats.rotations).to(device)
-        opacities = torch.from_numpy(splats.opacities).to(device)
+        positions = _numpy_array_to_tensor(splats.positions, device)
+        colors = _numpy_array_to_tensor(splats.colors, device)
+        scales = _numpy_array_to_tensor(splats.scales, device)
+        rotations = _numpy_array_to_tensor(splats.rotations, device)
+        opacities = _numpy_array_to_tensor(splats.opacities, device)
 
-        intrinsics = torch.from_numpy(camera.intrinsics).to(device)
-        extrinsics = torch.from_numpy(camera.extrinsics).to(device)
+        intrinsics = _numpy_array_to_tensor(camera.intrinsics, device)
+        extrinsics = _numpy_array_to_tensor(camera.extrinsics, device)
         image_size = (camera.height, camera.width)
 
         # Render
@@ -725,6 +775,6 @@ class GaussianBackend:
         validate_rasterizer_output(rendered=rendered, image_size=image_size)
 
         # Convert back to numpy
-        rendered_np = rendered.cpu().numpy().astype(np.float32)
+        rendered_np = _tensor_to_numpy_array(rendered).astype(np.float32, copy=False)
 
         return rendered_np

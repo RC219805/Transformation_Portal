@@ -31,6 +31,59 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 
+_TORCH_TO_NUMPY_DTYPE = {
+    torch.float16: np.float16,
+    torch.float32: np.float32,
+    torch.float64: np.float64,
+    torch.int16: np.int16,
+    torch.int32: np.int32,
+    torch.int64: np.int64,
+    torch.uint8: np.uint8,
+    torch.bool: np.bool_,
+}
+
+_NUMPY_TO_TORCH_DTYPE = {
+    np.dtype(np.float16): torch.float16,
+    np.dtype(np.float32): torch.float32,
+    np.dtype(np.float64): torch.float64,
+    np.dtype(np.int16): torch.int16,
+    np.dtype(np.int32): torch.int32,
+    np.dtype(np.int64): torch.int64,
+    np.dtype(np.uint8): torch.uint8,
+    np.dtype(np.bool_): torch.bool,
+}
+
+
+def _tensor_to_numpy_array(tensor: torch.Tensor) -> np.ndarray:
+    """Convert a tensor to numpy, tolerating torch's missing NumPy bridge."""
+    detached = tensor.detach().cpu()
+    try:
+        return detached.numpy()
+    except RuntimeError as exc:
+        if "Numpy is not available" not in str(exc):
+            raise
+        numpy_dtype = _TORCH_TO_NUMPY_DTYPE.get(detached.dtype)
+        return np.asarray(detached.tolist(), dtype=numpy_dtype)
+
+
+def _numpy_array_to_tensor(array: np.ndarray, device: str, dtype_name: Optional[str] = None) -> torch.Tensor:
+    """Convert a numpy array to tensor, tolerating torch's missing NumPy bridge."""
+    try:
+        tensor = torch.from_numpy(array)
+    except RuntimeError as exc:
+        if "Numpy is not available" not in str(exc):
+            raise
+        tensor_dtype = _NUMPY_TO_TORCH_DTYPE.get(array.dtype)
+        tensor = torch.tensor(array.tolist(), dtype=tensor_dtype)
+
+    if dtype_name:
+        target_dtype = getattr(torch, dtype_name.removeprefix("torch."), None)
+        if isinstance(target_dtype, torch.dtype) and tensor.dtype != target_dtype:
+            tensor = tensor.to(dtype=target_dtype)
+
+    return tensor.to(device)
+
+
 class ReferenceImageEncoder:
     """Encoder for extracting style features from reference images.
 
@@ -237,7 +290,7 @@ class ReferenceImageEncoder:
         path.parent.mkdir(parents=True, exist_ok=True)
 
         data = {
-            "features": features.cpu().numpy(),
+            "features": _tensor_to_numpy_array(features),
             "shape": tuple(features.shape),
             "dtype": str(features.dtype),
             "metadata": metadata or {},
@@ -270,7 +323,8 @@ class ReferenceImageEncoder:
         if "features" not in data or not isinstance(data["features"], np.ndarray):
             raise ValueError(f"Invalid feature cache format in {path}: missing ndarray 'features'")
 
-        features = torch.from_numpy(data["features"]).to(self.device)
+        dtype_name = data.get("dtype") if isinstance(data.get("dtype"), str) else None
+        features = _numpy_array_to_tensor(data["features"], self.device, dtype_name=dtype_name)
         metadata = data.get("metadata", {})
         if not isinstance(metadata, dict):
             metadata = {}

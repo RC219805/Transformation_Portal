@@ -593,16 +593,7 @@ jobs:
           TRANSFORMERS_CACHE: "/tmp/transformers_cache"
         run: |
           set -euo pipefail
-          # CPU-only torch wheels (cache enabled for 3-5 min savings)
-          python -m pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
-          # ML extras installs the package too
-          python -m pip install -e ".[ml]"
-
-          # Respect scikit-learn constraint if present
-          SKLEARN_CONSTRAINT="$(grep -E '^scikit-learn[^#]*' requirements-ci.txt | head -n1 || true)"
-          if [ -n "$SKLEARN_CONSTRAINT" ]; then
-            python -m pip install --force-reinstall "$SKLEARN_CONSTRAINT"
-          fi
+          bash scripts/ci/install_ml_test_dependencies.sh --skip-ci-requirements --include-rawpy
 
           # Note: pip cache purge removed - cache now managed by actions/cache@v5
           rm -rf ~/.cache/huggingface || true

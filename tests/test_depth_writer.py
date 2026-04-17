@@ -15,8 +15,8 @@ from transformation_portal.lux_depth_v3.depth_writer import (
     read_depth_u16_png,
 )
 
-# Skip all tests if opencv-python not installed
-pytestmark = [pytest.mark.unit, pytest.mark.skipif(not HAS_CV2, reason="opencv-python not installed")]
+# Skip all tests if OpenCV is not installed
+pytestmark = [pytest.mark.unit, pytest.mark.skipif(not HAS_CV2, reason="OpenCV not installed")]
 
 
 class TestDepthWriter:

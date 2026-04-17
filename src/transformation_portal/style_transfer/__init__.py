@@ -36,10 +36,10 @@ Example:
     ... )
 """
 
-from transformation_portal.style_transfer.ip_adapter import IPAdapterStyleTransfer
-from transformation_portal.style_transfer.multi_reference import MultiReferenceBlender
-from transformation_portal.style_transfer.reference_encoder import ReferenceImageEncoder
-from transformation_portal.style_transfer.style_presets import ArchitecturalStylePresets, StylePreset
+from __future__ import annotations
+
+from importlib import import_module
+from typing import Any
 
 __all__ = [
     "IPAdapterStyleTransfer",
@@ -48,3 +48,43 @@ __all__ = [
     "ReferenceImageEncoder",
     "MultiReferenceBlender",
 ]
+
+_EXPORTS = {
+    "IPAdapterStyleTransfer": (
+        "transformation_portal.style_transfer.ip_adapter",
+        "IPAdapterStyleTransfer",
+    ),
+    "ArchitecturalStylePresets": (
+        "transformation_portal.style_transfer.style_presets",
+        "ArchitecturalStylePresets",
+    ),
+    "StylePreset": (
+        "transformation_portal.style_transfer.style_presets",
+        "StylePreset",
+    ),
+    "ReferenceImageEncoder": (
+        "transformation_portal.style_transfer.reference_encoder",
+        "ReferenceImageEncoder",
+    ),
+    "MultiReferenceBlender": (
+        "transformation_portal.style_transfer.multi_reference",
+        "MultiReferenceBlender",
+    ),
+}
+
+
+def __getattr__(name: str) -> Any:
+    """Resolve public exports lazily so optional ML dependencies stay optional."""
+    try:
+        module_name, attribute_name = _EXPORTS[name]
+    except KeyError as exc:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}") from exc
+
+    value = getattr(import_module(module_name), attribute_name)
+    globals()[name] = value
+    return value
+
+
+def __dir__() -> list[str]:
+    """Keep module introspection aligned with the lazy public surface."""
+    return sorted(set(globals()) | set(__all__))
