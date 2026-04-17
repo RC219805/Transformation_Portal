@@ -51,12 +51,17 @@ def _require_optional_module(module_name: str):
     return module
 
 
-def _ensure_torch_xpu_namespace() -> None:
+def _patch_torch_xpu_namespace(monkeypatch: pytest.MonkeyPatch) -> None:
     """Provide the optional torch.xpu namespace expected by newer diffusers builds."""
     if torch is None or hasattr(torch, "xpu"):
         return
 
-    torch.xpu = SimpleNamespace(empty_cache=lambda: None, is_available=lambda: False)  # type: ignore[attr-defined]
+    monkeypatch.setattr(
+        torch,
+        "xpu",
+        SimpleNamespace(empty_cache=lambda: None, is_available=lambda: False),
+        raising=False,
+    )
 
 
 def test_pytorch_basic_operations():
@@ -162,11 +167,11 @@ def test_timm_model_interface():
         mock_create_model.assert_called_once_with("resnet18", pretrained=False)
 
 
-def test_diffusers_pipeline_interface():
+def test_diffusers_pipeline_interface(monkeypatch: pytest.MonkeyPatch):
     """Test the diffusers pipeline interface against the supported baseline."""
     import torch
 
-    _ensure_torch_xpu_namespace()
+    _patch_torch_xpu_namespace(monkeypatch)
     diffusers = _require_optional_module("diffusers")
 
     with patch.object(diffusers.DiffusionPipeline, "from_pretrained") as mock_from_pretrained:
@@ -236,7 +241,7 @@ def test_torch_cuda_compatibility():
         assert x.device.type == "cpu"
 
 
-def test_ml_stack_imports():
+def test_ml_stack_imports(monkeypatch: pytest.MonkeyPatch):
     """Test that all major ML packages can be imported without errors."""
     from importlib.metadata import PackageNotFoundError, version
 
@@ -253,32 +258,30 @@ def test_ml_stack_imports():
             minimum_version
         ), f"{package_name} version {package_version} < {minimum_version}"
 
+    def assert_importable_if_installed(
+        distribution_name: str,
+        module_name: str,
+        minimum_version: str | None = None,
+    ) -> None:
+        package_version = get_version(distribution_name)
+        if package_version is None:
+            return
+
+        module, error = _import_optional_module(module_name)
+        assert module is not None, f"{distribution_name} installed but import failed: {error}"
+        if minimum_version is not None:
+            assert Version(package_version) >= Version(
+                minimum_version
+            ), f"{distribution_name} version {package_version} < {minimum_version}"
+
     # Always check torch (required for ML tests to run)
     torch = pytest.importorskip("torch", reason="torch required for ML smoke tests")
     assert_minimum_version("torch", "2.2.2")
+    _patch_torch_xpu_namespace(monkeypatch)
 
     # Check sklearn (if available)
-    sklearn, _ = _import_optional_module("sklearn")
-    if sklearn is not None:
-        assert_minimum_version("scikit-learn", "1.8.0")
-
-    # Check diffusers install floor (runtime compatibility is covered separately above).
-    diffusers, _ = _import_optional_module("diffusers")
-    if diffusers is not None or get_version("diffusers") is not None:
-        assert_minimum_version("diffusers", "0.36.0")
-
-    # Check transformers (if available)
-    transformers, _ = _import_optional_module("transformers")
-    if transformers is not None or get_version("transformers") is not None:
-        assert_minimum_version("transformers", "4.57.0")
-
-    # Check torchvision (if available)
-    torchvision, _ = _import_optional_module("torchvision")
-    if torchvision is not None:
-        assert_minimum_version("torchvision", "0.17.2")
-
-    # Check timm (if available)
-    timm, _ = _import_optional_module("timm")
-    if timm is not None:
-        timm_version = get_version("timm")
-        assert timm_version is not None, "timm not installed"
+    assert_importable_if_installed("scikit-learn", "sklearn", "1.8.0")
+    assert_importable_if_installed("diffusers", "diffusers", "0.36.0")
+    assert_importable_if_installed("transformers", "transformers", "4.57.0")
+    assert_importable_if_installed("torchvision", "torchvision", "0.17.2")
+    assert_importable_if_installed("timm", "timm")

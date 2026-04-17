@@ -28,6 +28,17 @@ logger = logging.getLogger(__name__)
 ImageLike = Union[np.ndarray, "torch.Tensor", Path]
 
 
+def _torch_tensor_to_numpy(img: "torch.Tensor") -> np.ndarray:
+    """Convert a torch tensor to numpy with a NumPy-bridge-free fallback."""
+    tensor = img.detach().cpu()
+    try:
+        return tensor.numpy()
+    except RuntimeError as exc:
+        if "Numpy is not available" not in str(exc):
+            raise
+        return np.asarray(tensor.tolist(), dtype=np.float32)
+
+
 def _to_numpy(img: ImageLike) -> np.ndarray:
     """Convert image to numpy array.
 
@@ -52,8 +63,8 @@ def _to_numpy(img: ImageLike) -> np.ndarray:
             pil_img = Image.open(img).convert("RGB")
             return np.array(pil_img).astype(np.float32) / 255.0
 
-    if hasattr(img, "numpy"):  # torch.Tensor
-        arr = img.detach().cpu().numpy()
+    if hasattr(img, "detach") and hasattr(img, "cpu") and hasattr(img, "numpy"):  # torch.Tensor
+        arr = _torch_tensor_to_numpy(img)
     else:
         arr = np.asarray(img)
 
