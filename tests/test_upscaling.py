@@ -5,7 +5,10 @@ import logging
 import numpy as np
 import pytest
 
-torch = pytest.importorskip("torch", reason="torch is required for upscaling tests")
+try:
+    import torch
+except ImportError:  # pragma: no cover - exercised only in non-ML environments
+    torch = None
 
 # Pytest markers
 pytestmark = [
@@ -179,6 +182,7 @@ def test_realesrgan_upscaler(monkeypatch):
 @pytest.mark.ml
 def test_realesrgan_upscaler_without_torch_numpy_bridge(monkeypatch):
     """Real-ESRGAN should tolerate PyTorch wheels without the NumPy bridge."""
+    torch = pytest.importorskip("torch", reason="torch is required for Real-ESRGAN bridge fallback test")
 
     def mock_init(self, device="cpu", model="RealESRGAN_x2plus", half_precision=False):
         self._model_name = model

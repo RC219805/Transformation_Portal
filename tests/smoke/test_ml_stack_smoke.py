@@ -23,9 +23,10 @@ except (ImportError, RuntimeError, TypeError):
     TORCH_AVAILABLE = False
     torch = None
 
-# Skip all ML tests if torch is not available
-# ADR-044 Section 4.1 maps tests/smoke/ -> @pytest.mark.unit (no separate smoke marker).
-# The skipif ensures these won't run when torch is unavailable, so `-m unit` remains lightweight.
+# These smoke checks are intentionally dual-marked:
+# - `unit` keeps them in the lightweight smoke family under ADR-044
+# - `ml` lets core lanes exclude them while ML lanes select them explicitly
+# The skipif keeps collection cheap when torch is unavailable.
 pytestmark = [
     pytest.mark.unit,
     pytest.mark.ml,
