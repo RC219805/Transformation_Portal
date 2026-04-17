@@ -92,6 +92,36 @@ class _ManagedSam2ChecksumCacheEntry:
     reason: Optional[str]
 
 
+_MANAGED_SAM2_CHECKSUM_CACHE_MAX_ENTRIES = 128
+
+
+class _ManagedSam2BoundedChecksumCache(Dict[Tuple[str, int, int, int, int, int], _ManagedSam2ChecksumCacheEntry]):
+    """Bounded FIFO cache for SAM2 checkpoint trust results."""
+
+    def __init__(self, max_entries: int = _MANAGED_SAM2_CHECKSUM_CACHE_MAX_ENTRIES) -> None:
+        super().__init__()
+        if max_entries < 1:
+            raise ValueError("max_entries must be at least 1")
+        self._max_entries = max_entries
+        self._insertion_order: Deque[Tuple[str, int, int, int, int, int]] = deque()
+
+    def __setitem__(
+        self,
+        key: Tuple[str, int, int, int, int, int],
+        value: _ManagedSam2ChecksumCacheEntry,
+    ) -> None:
+        if key not in self:
+            self._insertion_order.append(key)
+            while len(self._insertion_order) > self._max_entries:
+                oldest = self._insertion_order.popleft()
+                super().pop(oldest, None)
+        super().__setitem__(key, value)
+
+    def clear(self) -> None:
+        super().clear()
+        self._insertion_order.clear()
+
+
 def _env_csv(name: str, default: List[str]) -> List[str]:
     raw = os.getenv(name)
     if raw is None:
@@ -590,7 +620,7 @@ _MANAGED_SAM2_REASON_MESSAGES = {
     "path_shorthand_traversal_disallowed": "Path shorthand traversal disallowed",
     "untrusted_checkpoint_path": "SAM2 checkpoint path is not trusted",
 }
-_MANAGED_SAM2_CHECKSUM_CACHE: Dict[Tuple[str, int, int], _ManagedSam2ChecksumCacheEntry] = {}
+_MANAGED_SAM2_CHECKSUM_CACHE: _ManagedSam2BoundedChecksumCache = _ManagedSam2BoundedChecksumCache()
 
 
 def _managed_sam2_reason_message(reason: str) -> str:
@@ -598,10 +628,17 @@ def _managed_sam2_reason_message(reason: str) -> str:
     return _MANAGED_SAM2_REASON_MESSAGES.get(reason, "Invalid path value")
 
 
-def _managed_sam2_checksum_cache_key(path: Path) -> Tuple[str, int, int]:
+def _managed_sam2_checksum_cache_key(path: Path) -> Tuple[str, int, int, int, int, int]:
     """Build the checksum cache key for a trusted SAM2 checkpoint path."""
     stat_result = path.stat()
-    return str(path), stat_result.st_size, stat_result.st_mtime_ns
+    return (
+        str(path),
+        stat_result.st_size,
+        stat_result.st_mtime_ns,
+        stat_result.st_dev,
+        stat_result.st_ino,
+        stat_result.st_ctime_ns,
+    )
 
 
 def _clear_managed_sam2_checksum_cache() -> None:
@@ -631,7 +668,7 @@ def _cached_managed_sam2_checksum_result(path: Path) -> _ManagedSam2ChecksumCach
     if cached is not None:
         return cached
 
-    _, size_bytes, _ = cache_key
+    _, size_bytes, _, _, _, _ = cache_key
     if size_bytes > MANAGED_SAM2_CHECKSUM_MAX_BYTES:
         entry = _ManagedSam2ChecksumCacheEntry(digest=None, reason="checkpoint_file_too_large")
     else:

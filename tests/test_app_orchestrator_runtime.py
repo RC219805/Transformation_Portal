@@ -2688,6 +2688,56 @@ def test_managed_sam2_checkpoint_validation_reuses_cached_hash_result(
     assert hash_calls == [checkpoint_path]
 
 
+def test_managed_sam2_bounded_checksum_cache_eviction() -> None:
+    """Verify bounded cache evicts oldest entries when capacity is exceeded (FIFO)."""
+    cache = orchestrator_app._ManagedSam2BoundedChecksumCache(max_entries=3)
+
+    # Insert 3 entries at capacity
+    key1 = ("/path/a.pt", 100, 1000, 1, 1001, 2000)
+    key2 = ("/path/b.pt", 200, 1000, 1, 1002, 2000)
+    key3 = ("/path/c.pt", 300, 1000, 1, 1003, 2000)
+    entry = orchestrator_app._ManagedSam2ChecksumCacheEntry(digest="abc", reason=None)
+
+    cache[key1] = entry
+    cache[key2] = entry
+    cache[key3] = entry
+
+    assert len(cache) == 3
+    assert key1 in cache
+    assert key2 in cache
+    assert key3 in cache
+
+    # Insert a 4th entry, should evict the oldest (key1)
+    key4 = ("/path/d.pt", 400, 1000, 1, 1004, 2000)
+    cache[key4] = entry
+
+    assert len(cache) == 3
+    assert key1 not in cache  # evicted (oldest)
+    assert key2 in cache
+    assert key3 in cache
+    assert key4 in cache
+
+    # Insert a 5th entry, should evict key2
+    key5 = ("/path/e.pt", 500, 1000, 1, 1005, 2000)
+    cache[key5] = entry
+
+    assert len(cache) == 3
+    assert key2 not in cache  # evicted
+    assert key3 in cache
+    assert key4 in cache
+    assert key5 in cache
+
+    # Updating an existing key should not evict
+    cache[key3] = orchestrator_app._ManagedSam2ChecksumCacheEntry(digest="updated", reason=None)
+    assert len(cache) == 3
+    assert cache[key3].digest == "updated"
+
+    # Clear should empty both dict and deque
+    cache.clear()
+    assert len(cache) == 0
+    assert len(cache._insertion_order) == 0
+
+
 @pytest.mark.parametrize(
     ("artifact_name", "artifact_bytes", "size_limit", "expected_reason"),
     [
