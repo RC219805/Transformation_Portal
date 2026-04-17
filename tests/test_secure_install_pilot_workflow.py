@@ -13,7 +13,7 @@ REQUIREMENTS_README_PATH = REPO_ROOT / "requirements" / "README.md"
 ROADMAP_PATH = REPO_ROOT / "docs" / "architecture" / "transformation_portal_roadmap_rereview_2026-04-07.md"
 CHECKOUT_SHA = "de0fac2e4500dabe0009e67214ff5f5447ce83dd"
 SETUP_PYTHON_SHA = "a309ff8b426b58ec0e2a45f0f869d46889d02405"
-UPLOAD_ARTIFACT_SHA = "bbbca2ddaa5d8feaa63e36b76fdaad77386f024f"
+UPLOAD_ARTIFACT_SHA = "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"
 
 
 def _load_workflow() -> dict:
