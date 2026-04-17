@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import importlib
 import pickle
+import sys
 from pathlib import Path
 
 import pytest
@@ -73,6 +75,24 @@ def test_load_features_requires_numpy_array(tmp_path: Path):
 
     with pytest.raises(ValueError, match="missing ndarray 'features'"):
         encoder.load_features(path)
+
+
+def test_reference_encoder_import_does_not_eagerly_load_ip_adapter(monkeypatch):
+    """Reference encoder imports should not require optional FLUX adapter deps."""
+    module_names = [
+        "transformation_portal.style_transfer",
+        "transformation_portal.style_transfer.ip_adapter",
+        "transformation_portal.style_transfer.reference_encoder",
+    ]
+    for module_name in module_names:
+        monkeypatch.delitem(sys.modules, module_name, raising=False)
+
+    style_transfer_package = importlib.import_module("transformation_portal.style_transfer")
+    assert "transformation_portal.style_transfer.ip_adapter" not in sys.modules
+
+    reference_encoder_module = importlib.import_module("transformation_portal.style_transfer.reference_encoder")
+    assert "transformation_portal.style_transfer.ip_adapter" not in sys.modules
+    assert style_transfer_package.ReferenceImageEncoder is reference_encoder_module.ReferenceImageEncoder
 
 
 pytestmark = [
