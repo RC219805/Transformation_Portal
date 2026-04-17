@@ -23,6 +23,8 @@ from PIL import Image
 
 from transformation_portal.core.security.model_lock import resolve_model_lock_revision
 
+logger = logging.getLogger(__name__)
+
 MIN_TRANSFORMERS_VERSION = "4.40"
 LLAVA_INSTALL_GUIDANCE = f"pip install transformers>={MIN_TRANSFORMERS_VERSION} accelerate bitsandbytes"
 
@@ -35,10 +37,7 @@ except ImportError:
     BitsAndBytesConfig = None
     LlavaForConditionalGeneration = None
     LLAVA_AVAILABLE = False
-    logging.warning("LLaVA dependencies not available. Install with: %s", LLAVA_INSTALL_GUIDANCE)
-
-
-logger = logging.getLogger(__name__)
+    logger.warning("LLaVA dependencies not available. Install with: %s", LLAVA_INSTALL_GUIDANCE)
 
 
 class LLaVAProcessor:

@@ -62,6 +62,23 @@ class TestLLaVAProcessorImports:
         finally:
             importlib.reload(llava_module)
 
+    def test_missing_transformers_warning_uses_module_logger(self, caplog):
+        """Test missing-dependency warning is emitted from the llava module logger."""
+        import transformation_portal.vlm.llava as llava_module
+
+        try:
+            with patch.dict(sys.modules, {"transformers": None}):
+                with caplog.at_level("WARNING", logger="transformation_portal.vlm.llava"):
+                    importlib.reload(llava_module)
+
+                assert any(
+                    record.name == "transformation_portal.vlm.llava"
+                    and "LLaVA dependencies not available" in record.getMessage()
+                    for record in caplog.records
+                )
+        finally:
+            importlib.reload(llava_module)
+
 
 class TestLLaVAProcessorMocked:
     """Test LLaVAProcessor with mocked dependencies."""
