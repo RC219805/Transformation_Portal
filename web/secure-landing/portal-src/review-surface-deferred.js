@@ -240,114 +240,89 @@ export function createDeferredReviewSurfaceApi(host) {
     els.artifactMetadataCard.appendChild(detail);
   }
 
-  function _reviewStatusSnapshot(job, artifact) {
-    if (!job) {
-      return {
-        visible: false,
-        tone: "info",
-        title: "Awaiting completed run",
-        detail: "Select a job to review related warnings, completion state, and output readiness.",
-        action: "Next action: use the selected run state, warning context, and freshness above to decide whether to recover or open review."
-      };
-    }
-
-    const summary = normalizeRunSummary(job.run_summary);
-    const reviewableOutputs = _jobHasReviewableOutputs(job);
-    const artifactCount = Array.isArray(job.artifacts) ? job.artifacts.length : 0;
-    const readableError = getReadableError(job.error);
-    const visibleWarning = _latestVisibleTransportWarning(job);
-    const freshnessLabel = _jobFreshnessLabel(job);
-    const outcomeSummary = typeof summary?.outcome_summary === "string" ? summary.outcome_summary.trim() : "";
-
-    if (job.state === "partial") {
-      return {
-        visible: true,
-        tone: "warning",
-        title: "Run partially completed",
-        detail: outcomeSummary ? `${outcomeSummary}. Updated ${freshnessLabel}.` : "Some inputs failed, but outputs remain reviewable.",
-        action: "Next action: open review for the retained outputs before rerunning failed inputs."
-      };
-    }
-
-    if (job.state === "failed") {
-      return {
-        visible: true,
-        tone: reviewableOutputs ? "warning" : "error",
-        title: reviewableOutputs ? "Run failed after indexing reviewable outputs" : "Run failed before outputs were ready",
-        detail:
-          readableError ||
-          (reviewableOutputs
-            ? `${artifactCount} artifact${artifactCount === 1 ? "" : "s"} remain available for review. Updated ${freshnessLabel}.`
-            : "No reviewable outputs were indexed before the failure was reported."),
-        action: reviewableOutputs
-          ? "Next action: open review for the retained outputs, then decide whether this run needs a retry."
-          : "Next action: inspect the latest warning and failure context in Operate before retrying the run."
-      };
-    }
-
-    if (job.state === "canceled") {
-      return {
-        visible: true,
-        tone: reviewableOutputs ? "warning" : "error",
-        title: reviewableOutputs ? "Run canceled after partial output capture" : "Run canceled before review outputs were ready",
-        detail: reviewableOutputs
-          ? `${artifactCount} artifact${artifactCount === 1 ? "" : "s"} remain available for review despite cancellation. Updated ${freshnessLabel}.`
-          : "Execution was canceled before reviewable outputs were indexed.",
-        action: reviewableOutputs
-          ? "Next action: review the retained outputs before deciding whether to rerun the canceled work."
-          : "Next action: reopen Build or restore the run context before dispatching again."
-      };
-    }
-
-    if (job.state === "offline") {
-      return {
-        visible: true,
-        tone: "warning",
-        title: reviewableOutputs ? "Run is offline with reviewable outputs" : "Run is offline",
-        detail: reviewableOutputs
-          ? `${artifactCount} artifact${artifactCount === 1 ? "" : "s"} remain available, but live backend status is stale until connectivity is restored.`
-          : "Live backend status is stale until connectivity is restored.",
-        action: reviewableOutputs
-          ? "Next action: review the cached outputs while backend connectivity recovers."
-          : "Next action: restore backend connectivity before depending on this run state."
-      };
-    }
-
-    if (job.reconnectBlocked) {
-      return {
-        visible: true,
-        tone: "warning",
-        title: "Transport warning recorded",
-        detail: "Authentication must be restored before live event transport can reconnect.",
-        action: "Next action: restore authentication so live transport and freshness can recover."
-      };
-    }
-
-    if (visibleWarning) {
-      return {
-        visible: true,
-        tone: visibleWarning.tone === "error" ? "error" : "warning",
-        title: "Transport warning recorded",
-        detail: String(visibleWarning.detail || "Live transport reported an operator-visible warning."),
-        action: "Next action: inspect the latest transport warning in Operate before continuing into review."
-      };
-    }
-
-    if (job.state === "running" || job.state === "queued") {
-      return {
-        visible: true,
-        tone: "info",
-        title: "Run still in progress",
-        detail: artifactCount > 0
-          ? `${artifactCount} artifact${artifactCount === 1 ? "" : "s"} already indexed. Updated ${freshnessLabel}.`
-          : "Artifacts and provenance will populate here as outputs arrive.",
-        action: artifactCount > 0
-          ? "Next action: keep review open only if you need the early artifacts; Operate remains the primary live surface."
-          : "Next action: stay in Operate until indexed outputs or a blocking warning arrives."
-      };
-    }
-
-    return {
+  const REVIEW_STATUS_BUILDERS = Object.freeze({
+    awaiting_job: () => ({
+      visible: false,
+      tone: "info",
+      title: "Awaiting completed run",
+      detail: "Select a job to review related warnings, completion state, and output readiness.",
+      action: "Next action: use the selected run state, warning context, and freshness above to decide whether to recover or open review."
+    }),
+    partial_reviewable: ({ outcomeSummary, freshnessLabel }) => ({
+      visible: true,
+      tone: "warning",
+      title: "Run partially completed",
+      detail: outcomeSummary ? `${outcomeSummary}. Updated ${freshnessLabel}.` : "Some inputs failed, but outputs remain reviewable.",
+      action: "Next action: open review for the retained outputs before rerunning failed inputs."
+    }),
+    failed_reviewable: ({ readableError, artifactCount, freshnessLabel }) => ({
+      visible: true,
+      tone: "warning",
+      title: "Run failed after indexing reviewable outputs",
+      detail: readableError || `${artifactCount} artifact${artifactCount === 1 ? "" : "s"} remain available for review. Updated ${freshnessLabel}.`,
+      action: "Next action: open review for the retained outputs, then decide whether this run needs a retry."
+    }),
+    failed_unreviewable: ({ readableError }) => ({
+      visible: true,
+      tone: "error",
+      title: "Run failed before outputs were ready",
+      detail: readableError || "No reviewable outputs were indexed before the failure was reported.",
+      action: "Next action: inspect the latest warning and failure context in Operate before retrying the run."
+    }),
+    canceled_reviewable: ({ artifactCount, freshnessLabel }) => ({
+      visible: true,
+      tone: "warning",
+      title: "Run canceled after partial output capture",
+      detail: `${artifactCount} artifact${artifactCount === 1 ? "" : "s"} remain available for review despite cancellation. Updated ${freshnessLabel}.`,
+      action: "Next action: review the retained outputs before deciding whether to rerun the canceled work."
+    }),
+    canceled_unreviewable: () => ({
+      visible: true,
+      tone: "error",
+      title: "Run canceled before review outputs were ready",
+      detail: "Execution was canceled before reviewable outputs were indexed.",
+      action: "Next action: reopen Build or restore the run context before dispatching again."
+    }),
+    offline_reviewable: ({ artifactCount }) => ({
+      visible: true,
+      tone: "warning",
+      title: "Run is offline with reviewable outputs",
+      detail: `${artifactCount} artifact${artifactCount === 1 ? "" : "s"} remain available, but live backend status is stale until connectivity is restored.`,
+      action: "Next action: review the cached outputs while backend connectivity recovers."
+    }),
+    offline_unreviewable: () => ({
+      visible: true,
+      tone: "warning",
+      title: "Run is offline",
+      detail: "Live backend status is stale until connectivity is restored.",
+      action: "Next action: restore backend connectivity before depending on this run state."
+    }),
+    transport_blocked: () => ({
+      visible: true,
+      tone: "warning",
+      title: "Transport warning recorded",
+      detail: "Authentication must be restored before live event transport can reconnect.",
+      action: "Next action: restore authentication so live transport and freshness can recover."
+    }),
+    transport_warning: ({ visibleWarning }) => ({
+      visible: true,
+      tone: visibleWarning.tone === "error" ? "error" : "warning",
+      title: "Transport warning recorded",
+      detail: String(visibleWarning.detail || "Live transport reported an operator-visible warning."),
+      action: "Next action: inspect the latest transport warning in Operate before continuing into review."
+    }),
+    in_progress: ({ artifactCount, freshnessLabel }) => ({
+      visible: true,
+      tone: "info",
+      title: "Run still in progress",
+      detail: artifactCount > 0
+        ? `${artifactCount} artifact${artifactCount === 1 ? "" : "s"} already indexed. Updated ${freshnessLabel}.`
+        : "Artifacts and provenance will populate here as outputs arrive.",
+      action: artifactCount > 0
+        ? "Next action: keep review open only if you need the early artifacts; Operate remains the primary live surface."
+        : "Next action: stay in Operate until indexed outputs or a blocking warning arrives."
+    }),
+    ready: ({ artifact, artifactCount, outcomeSummary, freshnessLabel }) => ({
       visible: true,
       tone: "ready",
       title: artifact ? "Outputs ready for review" : "Run ready for review",
@@ -355,6 +330,43 @@ export function createDeferredReviewSurfaceApi(host) {
         ? `${outcomeSummary}. Updated ${freshnessLabel}.`
         : `${artifactCount} artifact${artifactCount === 1 ? "" : "s"} indexed and ready for operator review.`,
       action: "Next action: use the selected run state, warning context, and freshness above to decide whether to recover or open review."
+    })
+  });
+
+  function _reviewStatusState(job, reviewableOutputs, visibleWarning) {
+    if (!job) return "awaiting_job";
+    if (job.state === "partial") return "partial_reviewable";
+    if (job.state === "failed") return reviewableOutputs ? "failed_reviewable" : "failed_unreviewable";
+    if (job.state === "canceled") return reviewableOutputs ? "canceled_reviewable" : "canceled_unreviewable";
+    if (job.state === "offline") return reviewableOutputs ? "offline_reviewable" : "offline_unreviewable";
+    if (job.reconnectBlocked) return "transport_blocked";
+    if (visibleWarning) return "transport_warning";
+    if (job.state === "running" || job.state === "queued") return "in_progress";
+    return "ready";
+  }
+
+  function _reviewStatusSnapshot(job, artifact) {
+    const summary = job ? normalizeRunSummary(job.run_summary) : {};
+    const reviewableOutputs = _jobHasReviewableOutputs(job);
+    const artifactCount = job && Array.isArray(job.artifacts) ? job.artifacts.length : 0;
+    const readableError = job ? getReadableError(job.error) : "";
+    const visibleWarning = _latestVisibleTransportWarning(job);
+    const freshnessLabel = _jobFreshnessLabel(job);
+    const outcomeSummary = typeof summary?.outcome_summary === "string" ? summary.outcome_summary.trim() : "";
+    const stateToken = _reviewStatusState(job, reviewableOutputs, visibleWarning);
+    const builder = REVIEW_STATUS_BUILDERS[stateToken] || REVIEW_STATUS_BUILDERS.ready;
+    return {
+      state: stateToken,
+      ...builder({
+        artifact,
+        artifactCount,
+        freshnessLabel,
+        outcomeSummary,
+        readableError,
+        reviewableOutputs,
+        summary,
+        visibleWarning
+      })
     };
   }
 
@@ -362,6 +374,7 @@ export function createDeferredReviewSurfaceApi(host) {
     if (!els.reviewStatusBanner || !els.reviewStatusTitle || !els.reviewStatusDetail) return;
     const snapshot = _reviewStatusSnapshot(job, artifact);
     els.reviewStatusBanner.dataset.tone = snapshot.tone;
+    els.reviewStatusBanner.dataset.reviewState = snapshot.state;
     if (!snapshot.visible) {
       els.reviewStatusBanner.classList.add("hidden");
       els.reviewStatusTitle.textContent = snapshot.title;

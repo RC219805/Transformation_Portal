@@ -160,6 +160,7 @@ def test_portal_browser_state_probe_tracks_contextual_action_controls():
     assert "actionSecondary2Key" in expression
     assert "selectedRecoveryPrimaryKey" in expression
     assert "reviewStatusPrimaryKey" in expression
+    assert "reviewStatusState" in expression
     assert "connectionDetailsVisible" in expression
     assert "dispatchChecklistRows" in expression
     assert "queueEmptyStateVisible" in expression

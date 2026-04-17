@@ -23,6 +23,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import os
 import re
 import shutil
@@ -52,10 +53,12 @@ class CheckResult:
     message: str
     is_hard_requirement: bool = True
     guidance: Optional[str] = None
+    classification: Optional[str] = None
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 FRONTDOOR_ROOT = REPO_ROOT / "web" / "secure-landing"
+CHECK_PYTHON_HEADERS_PATH = Path(__file__).resolve().with_name("check_python_headers.py")
 # Platform-aware venv interpreter path
 if sys.platform == "win32":
     REPO_VENV_PYTHON = REPO_ROOT / ".venv" / "Scripts" / "python.exe"
@@ -440,6 +443,66 @@ def check_dependency_health() -> CheckResult:
     )
 
 
+def _load_python_header_validator():
+    """Load the Python header validator module from the local validation scripts."""
+    spec = importlib.util.spec_from_file_location("tp_check_python_headers", CHECK_PYTHON_HEADERS_PATH)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"Could not load validation helper at {CHECK_PYTHON_HEADERS_PATH}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def check_validation_smoke() -> CheckResult:
+    """Run a bounded validation smoke check and classify failure source."""
+    try:
+        validator = _load_python_header_validator()
+    except Exception as exc:
+        return CheckResult(
+            name="Validation smoke",
+            passed=False,
+            message=f"Could not load Python header validator: {exc}",
+            guidance="Treat this as a product regression in the validation path and inspect `scripts/validation/check_python_headers.py`.",
+            classification="product_regression",
+        )
+
+    tooling_error_type = getattr(validator, "PythonHeaderToolingError", RuntimeError)
+    try:
+        violations = validator.find_violations()
+    except tooling_error_type as exc:
+        return CheckResult(
+            name="Validation smoke",
+            passed=False,
+            message=str(exc),
+            guidance='Repair local git/tooling availability, then rerun `make check-environment CHECK_ENV_ARGS="--check validation-smoke --json"`.',
+            classification="environment_failure",
+        )
+    except Exception as exc:
+        return CheckResult(
+            name="Validation smoke",
+            passed=False,
+            message=f"Python header validation crashed: {exc}",
+            guidance="Treat this as a product regression in the validation path and inspect `scripts/validation/check_python_headers.py`.",
+            classification="product_regression",
+        )
+
+    if violations:
+        return CheckResult(
+            name="Validation smoke",
+            passed=False,
+            message=f"Python header validation found {len(violations)} violation(s); first: {violations[0]}",
+            guidance="Fix the reported header violations, then rerun `make check-python-headers`.",
+            classification="product_regression",
+        )
+
+    return CheckResult(
+        name="Validation smoke",
+        passed=True,
+        message="Python header validation passed on tracked files",
+        classification="pass",
+    )
+
+
 def run_all_checks(
     checks: Optional[list[str]] = None,
 ) -> tuple[list[CheckResult], ExitCode]:
@@ -454,6 +517,7 @@ def run_all_checks(
         "frontdoor": check_frontdoor_dependencies,
         "venv": check_venv_active,
         "dependency-health": check_dependency_health,
+        "validation-smoke": check_validation_smoke,
         "env": check_env_vars,
     }
 
@@ -501,6 +565,8 @@ def print_results(results: list[CheckResult], exit_code: ExitCode) -> None:
         req = "" if result.is_hard_requirement else " (optional)"
         print(f"  {status} {result.name}{req}")
         print(f"      {result.message}")
+        if result.classification:
+            print(f"      Classification: {result.classification}")
         if result.guidance and not result.passed:
             print(f"      → {result.guidance}")
         print()
@@ -533,6 +599,7 @@ Examples:
     %(prog)s --check chrome  Check only Chrome availability
     %(prog)s --check ports   Check only port availability
     %(prog)s --check dependency-health  Check pip dependency health
+    %(prog)s --check validation-smoke  Classify validation smoke failures as environment vs product issues
     %(prog)s --quiet         Only output failures
         """,
     )
@@ -543,7 +610,7 @@ Examples:
     )
     parser.add_argument(
         "--check",
-        choices=["python", "node", "chrome", "ports", "frontdoor", "venv", "dependency-health", "env"],
+        choices=["python", "node", "chrome", "ports", "frontdoor", "venv", "dependency-health", "validation-smoke", "env"],
         action="append",
         help="Run only specified check(s)",
     )
@@ -576,6 +643,7 @@ Examples:
                     "message": r.message,
                     "is_hard_requirement": r.is_hard_requirement,
                     "guidance": r.guidance,
+                    "classification": r.classification,
                 }
                 for r in results
             ],
@@ -590,6 +658,8 @@ Examples:
         if failed:
             for result in failed:
                 print(f"✗ {result.name}: {result.message}")
+                if result.classification:
+                    print(f"  Classification: {result.classification}")
                 if result.guidance:
                     print(f"  → {result.guidance}")
     else:

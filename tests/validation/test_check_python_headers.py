@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import importlib.util
+import subprocess
+import sys
 from pathlib import Path
 from types import ModuleType
 
@@ -72,3 +74,57 @@ def test_ma_state_header_is_now_safe() -> None:
     module = _load_module()
 
     assert module.find_violations([MA_STATE_PATH]) == []
+
+
+def test_iter_tracked_python_files_raises_machine_parsable_tooling_error_on_git_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = _load_module()
+
+    monkeypatch.setattr(
+        module.subprocess,
+        "run",
+        lambda *args, **kwargs: subprocess.CompletedProcess(args=args, returncode=2, stdout="", stderr="fatal: no git"),
+    )
+
+    with pytest.raises(module.PythonHeaderToolingError) as exc_info:
+        module.find_violations()
+
+    assert exc_info.value.code == "git_ls_files_failed"
+    assert exc_info.value.message == "git ls-files failed: fatal: no git"
+
+
+def test_iter_tracked_python_files_raises_machine_parsable_tooling_error_on_invocation_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = _load_module()
+
+    def _boom(*args, **kwargs):
+        raise OSError("git executable missing")
+
+    monkeypatch.setattr(module.subprocess, "run", _boom)
+
+    with pytest.raises(module.PythonHeaderToolingError) as exc_info:
+        module.find_violations()
+
+    assert exc_info.value.code == "git_ls_files_invocation_failed"
+    assert "git executable missing" in exc_info.value.message
+
+
+def test_main_emits_tooling_error_identifier_for_git_discovery_failure(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    module = _load_module()
+
+    monkeypatch.setattr(
+        module.subprocess,
+        "run",
+        lambda *args, **kwargs: subprocess.CompletedProcess(args=args, returncode=2, stdout="", stderr="fatal: no git"),
+    )
+    monkeypatch.setattr(sys, "argv", ["check_python_headers.py"])
+
+    exit_code = module.main()
+
+    assert exit_code == 1
+    assert capsys.readouterr().out.strip() == "TOOLING_ERROR[git_ls_files_failed]: git ls-files failed: fatal: no git"
