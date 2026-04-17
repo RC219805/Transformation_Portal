@@ -50,8 +50,8 @@ class TestLLaVAProcessorMocked:
     def mock_processor(self):
         """Create a mocked LLaVA processor."""
         with patch("transformation_portal.vlm.llava.LLAVA_AVAILABLE", True):
-            with patch("transformation_portal.vlm.llava.AutoProcessor") as mock_auto:
-                with patch("transformation_portal.vlm.llava.LlavaForConditionalGeneration") as mock_model:
+            with patch("transformation_portal.vlm.llava.AutoProcessor", create=True) as mock_auto:
+                with patch("transformation_portal.vlm.llava.LlavaForConditionalGeneration", create=True) as mock_model:
                     with patch("transformation_portal.vlm.llava.resolve_model_lock_revision") as mock_resolve:
                         mock_resolve.return_value = "abc123" * 6 + "ab"  # 40 char SHA
 

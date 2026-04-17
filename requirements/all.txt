@@ -41,6 +41,8 @@ certifi==2026.2.25
     #   requests
 cffi==2.0.0
     # via cryptography
+chardet==7.4.3
+    # via diff-cover
 charset-normalizer==3.4.7
     # via requests
 click==8.3.2
@@ -56,6 +58,8 @@ cryptography==46.0.7
     # via
     #   -r dev.in
     #   secretstorage
+diff-cover==9.7.2
+    # via -r dev.in
 dill==0.4.1
     # via pylint
 distlib==0.4.0
@@ -110,6 +114,8 @@ jeepney==0.9.0
     # via
     #   keyring
     #   secretstorage
+jinja2==3.1.6
+    # via diff-cover
 joblib==1.5.3
     # via scikit-learn
 jsonschema==4.26.0
@@ -126,6 +132,8 @@ librt==0.9.0
     # via mypy
 markdown-it-py==4.0.0
     # via rich
+markupsafe==3.0.3
+    # via jinja2
 mccabe==0.7.0
     # via
     #   flake8
@@ -178,6 +186,7 @@ platformdirs==4.9.6
     #   virtualenv
 pluggy==1.6.0
     # via
+    #   diff-cover
     #   pytest
     #   pytest-cov
     #   tox
@@ -197,6 +206,7 @@ pyflakes==3.4.0
     # via flake8
 pygments==2.20.0
     # via
+    #   diff-cover
     #   pytest
     #   readme-renderer
     #   rich
