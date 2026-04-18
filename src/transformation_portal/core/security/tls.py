@@ -32,10 +32,26 @@ from pathlib import Path
 from typing import Optional, Tuple
 
 logger = logging.getLogger(__name__)
+_MINIMUM_TLS_VERSION = ssl.TLSVersion.TLSv1_2
+_TLS_LEGACY_DISABLE_OPTIONS = getattr(ssl, "OP_NO_TLSv1", 0) | getattr(ssl, "OP_NO_TLSv1_1", 0)
 
 
 class TLSError(RuntimeError):
     """Raised for TLS configuration or connection errors."""
+
+
+def _enforce_minimum_tls_version(
+    ctx: ssl.SSLContext,
+    *,
+    min_version: ssl.TLSVersion = _MINIMUM_TLS_VERSION,
+) -> ssl.SSLContext:
+    """Ensure the SSL context enforces a minimum TLS protocol version."""
+    current_min_version = getattr(ctx, "minimum_version", None)
+    if current_min_version is None or current_min_version < min_version:
+        ctx.minimum_version = min_version
+    if hasattr(ctx, "options") and _TLS_LEGACY_DISABLE_OPTIONS:
+        ctx.options |= _TLS_LEGACY_DISABLE_OPTIONS
+    return ctx
 
 
 def create_server_ssl_context(
@@ -63,7 +79,7 @@ def create_server_ssl_context(
     """
     try:
         ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
-        ctx.minimum_version = min_version
+        _enforce_minimum_tls_version(ctx, min_version=min_version)
 
         # Load server certificate and key
         ctx.load_cert_chain(
@@ -115,7 +131,7 @@ def create_client_ssl_context(
     """
     try:
         ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
-        ctx.minimum_version = min_version
+        _enforce_minimum_tls_version(ctx, min_version=min_version)
 
         # Load client certificate and key
         ctx.load_cert_chain(
@@ -212,6 +228,10 @@ def create_tls_connection(
         TLSError: If connection fails
     """
     try:
+        current_min_version = getattr(ssl_context, "minimum_version", None)
+        if current_min_version is None or current_min_version < ssl.TLSVersion.TLSv1_2:
+            ssl_context.minimum_version = ssl.TLSVersion.TLSv1_2
+        ssl_context.options |= ssl.OP_NO_TLSv1 | ssl.OP_NO_TLSv1_1
         sock = socket.create_connection((host, port), timeout=timeout)
         return ssl_context.wrap_socket(
             sock,

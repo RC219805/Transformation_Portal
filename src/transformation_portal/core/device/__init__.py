@@ -3,6 +3,8 @@ Core Device Management Module
 
 Unified device detection, profiling, and memory management.
 Consolidates patterns from foundation.device_manager and multiple pipelines.
+Compatibility note: retained as an internal/shared helper surface with
+direct smoke coverage, but it currently has no production imports.
 
 Note:
 - ``torch`` and ``psutil`` are optional runtime dependencies.
