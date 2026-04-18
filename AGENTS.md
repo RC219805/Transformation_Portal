@@ -77,17 +77,19 @@ Quick reference for common workflows and commands in this repo.
 - `make lock-dev` regenerate `requirements-dev.lock.txt`.
 - `cd requirements && make compile LOCK_PYTHON_VERSION=3.11` compile only the generic checked-in layered lockfiles (`all/base/dev/ci/security/tools-archive`).
 - `cd requirements && make compile-ml-darwin-arm64 LOCK_PYTHON_VERSION=3.11` compile the Darwin arm64 target-owned ML lock on native Darwin arm64 only.
-- `cd requirements && make compile-ml-linux-x86_64 LOCK_PYTHON_VERSION=3.11` compile the Linux x86_64 target-owned ML lock on native Linux x86_64 only.
+- `cd requirements && make compile-ml-linux-x86_64 LOCK_PYTHON_VERSION=3.11` fail closed because the Linux x86_64 target-owned ML lock is frozen as an unsupported historical lane.
 - `cd requirements && make compile-ml-darwin-x86_64 LOCK_PYTHON_VERSION=3.11` fail closed because the Darwin x86_64 target-owned ML lock is frozen pending an authoritative lane decision.
 - `cd requirements && make compile-ml-layers LOCK_PYTHON_VERSION=3.11` fail closed and direct operators to the explicit target-owned ML commands.
 - `cd requirements && make compile-accel LOCK_PYTHON_VERSION=3.11` fail closed and direct operators to the explicit target-owned ML commands.
 - `cd requirements && make compile-hash-pilot LOCK_PYTHON_VERSION=3.11` generate advisory hash-enforced pilot lockfiles into `requirements/.hash-pilot/`.
 - `cd requirements && make update LOCK_PYTHON_VERSION=3.11` update only the generic checked-in layered lockfiles.
 - `cd requirements && make update-ml-darwin-arm64 LOCK_PYTHON_VERSION=3.11` update the Darwin arm64 target-owned ML lock on native Darwin arm64 only.
-- `cd requirements && make update-ml-linux-x86_64 LOCK_PYTHON_VERSION=3.11` update the Linux x86_64 target-owned ML lock on native Linux x86_64 only.
+- `cd requirements && make update-ml-linux-x86_64 LOCK_PYTHON_VERSION=3.11` fail closed because the Linux x86_64 target-owned ML lock is frozen as an unsupported historical lane.
+- `cd requirements && make update-ml-darwin-x86_64 LOCK_PYTHON_VERSION=3.11` fail closed because the Darwin x86_64 target-owned ML lock is frozen pending an authoritative lane decision.
 - `cd requirements && make check LOCK_PYTHON_VERSION=3.11` verify only the generic checked-in layered lockfiles are current.
 - `cd requirements && make check-ml-darwin-arm64 LOCK_PYTHON_VERSION=3.11` verify the Darwin arm64 target-owned ML lock on native Darwin arm64 only.
-- `cd requirements && make check-ml-linux-x86_64 LOCK_PYTHON_VERSION=3.11` verify the Linux x86_64 target-owned ML lock on native Linux x86_64 only.
+- `cd requirements && make check-ml-linux-x86_64 LOCK_PYTHON_VERSION=3.11` fail closed because the Linux x86_64 target-owned ML lock is frozen as an unsupported historical lane.
+- `cd requirements && make check-ml-darwin-x86_64 LOCK_PYTHON_VERSION=3.11` fail closed because the Darwin x86_64 target-owned ML lock is frozen pending an authoritative lane decision.
 - `cd requirements && make check-hash-pilot LOCK_PYTHON_VERSION=3.11` validate the pilot lockfiles with `pip install --dry-run --require-hashes`.
 - `python3 scripts/validation/check_requirements_lock_contract.py` validate layered lock contract (headers + target-owned purity/compatibility guards + lock ownership manifest coverage).
 - `make docs` build API docs with Sphinx.
@@ -99,7 +101,10 @@ Quick reference for common workflows and commands in this repo.
 - `./.venv/bin/python scripts/validation/check_local_environment.py --strict` treat soft failures as hard failures.
 - `./.venv/bin/python scripts/validation/check_local_environment.py --check python` check only Python version.
 - `./.venv/bin/python scripts/validation/check_local_environment.py --check node` check only Node.js version (22.x required).
+- `./.venv/bin/python scripts/validation/check_local_environment.py --check chrome` check only Chrome/Chromium availability for browser smoke tests.
+- `./.venv/bin/python scripts/validation/check_local_environment.py --check ports` check only validation port availability (`3000`, `8000`).
 - `./.venv/bin/python scripts/validation/check_local_environment.py --check dependency-health` run `pip check` for the active interpreter.
+- `./.venv/bin/python scripts/validation/check_local_environment.py --check validation-smoke` classify validation smoke failures as environment/tooling vs product regressions.
 - `./scripts/setup/ensure_node_version.sh` Node version enforcement wrapper with version manager detection.
 - `cd web/secure-landing && npm run build:portal` bundle the modularized portal sources back into the shipped `public/portal-assets/portal.js` asset and sync shared UI token primitives.
 - `./scripts/validation/run_full_validation_suite.sh` all-in-one validation orchestrator.
@@ -142,6 +147,7 @@ Quick reference for common workflows and commands in this repo.
 - `./scripts/setup/auto-organize-install.sh` install repository file-organization guardrails and pre-commit hook.
 - `./scripts/setup/pre-commit-check.sh` run root-file placement validation manually (also used by the hook).
 - `./scripts/pre_commit_hook.sh` unified pre-commit quality gate wrapper; delegates to `scripts/utilities/pre-commit-quality-check.py` (`--all-files`, `--quick-tests` available).
+- `bash scripts/ci/install_ml_test_dependencies.sh [--skip-ci-requirements] [--include-rawpy]` optionally install the CI base Python layer, remove conflicting OpenCV wheels before the ML install, install the governed ML lockfile, optionally add RAW requirements, install the repo editable with `--no-deps`, and run `pip check`; used by GitHub Actions ML jobs.
 - `./scripts/runbooks/merge_phase2_runbook.sh` temporary guarded merge runbook for the APEX Phase 2 branch; it checks tree cleanliness, syncs branches, runs fast-lane validation, and prompts before merge/push.
 
 ## ComfyUI workflows (`workflows/`)
