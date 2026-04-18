@@ -31,15 +31,21 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
-import os
-import re
-import tempfile
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Optional, Protocol, TypeVar, Union
 
+from transformation_portal.core._cas_helpers import CASObjectMissingError
+from transformation_portal.core._cas_helpers import atomic_write_json as _shared_atomic_write_json
+from transformation_portal.core._cas_helpers import compute_numpy_array_id as _shared_compute_numpy_array_id
+from transformation_portal.core._cas_helpers import load_list_recursive as _shared_load_list_recursive
+from transformation_portal.core._cas_helpers import load_serializable as _shared_load_serializable
+from transformation_portal.core._cas_helpers import make_serializable as _shared_make_serializable
+from transformation_portal.core._cas_helpers import sanitize_cas_id_for_filename as _shared_sanitize_cas_id_for_filename
+from transformation_portal.core._cas_helpers import sanitize_key_for_filename as _shared_sanitize_key_for_filename
+from transformation_portal.core._cas_helpers import serialize_list_recursive as _shared_serialize_list_recursive
 from transformation_portal.core.execution_identity import (
     ArtifactMetadata,
     ExecutionIdentity,
@@ -50,7 +56,7 @@ from transformation_portal.core.execution_identity import (
     should_execute,
 )
 from transformation_portal.determinism.jcs import dumpb as jcs_dumpb
-from transformation_portal.storage.cas_store import ArtifactStore, CASObject
+from transformation_portal.storage.cas_store import ArtifactStore
 
 logger = logging.getLogger(__name__)
 
@@ -58,123 +64,23 @@ T = TypeVar("T")
 
 
 def _sanitize_cas_id_for_filename(cas_id: str) -> str:
-    """Extract the hex digest from a CAS ID for use in filenames.
-
-    CAS IDs have the format 'sha256:<hex_digest>'. The colon is invalid
-    on Windows filesystems. This extracts just the hex digest part.
-
-    Args:
-        cas_id: Full CAS ID (e.g., 'sha256:abc123...')
-
-    Returns:
-        Just the hex digest portion (e.g., 'abc123...')
-    """
-    if cas_id.startswith("sha256:"):
-        return cas_id[7:]  # len("sha256:") == 7
-    return cas_id
+    """Compatibility wrapper for shared CAS filename sanitization."""
+    return _shared_sanitize_cas_id_for_filename(cas_id)
 
 
 def _atomic_write_json(path: Path, data: dict[str, Any]) -> None:
-    """Atomically write JSON data to a file.
-
-    Uses temp-file + fsync + atomic-rename discipline to prevent
-    partial writes or corruption visible to concurrent readers.
-
-    Cross-platform: Works on POSIX (with directory fsync) and Windows
-    (where directory fsync is skipped as NTFS has different durability
-    semantics - renames are already durable after file fsync).
-
-    Args:
-        path: Target file path
-        data: JSON-serializable data to write
-    """
-    import platform
-
-    path.parent.mkdir(parents=True, exist_ok=True)
-
-    # Write to temp file in same directory for atomic rename
-    fd, tmp_path_str = tempfile.mkstemp(
-        suffix=".tmp",
-        prefix=".cache_write_",
-        dir=path.parent,
-    )
-    tmp_path = Path(tmp_path_str)
-
-    try:
-        # Write JSON content
-        with os.fdopen(fd, "w") as f:
-            json.dump(data, f, indent=2, sort_keys=True)
-            f.flush()
-            os.fsync(f.fileno())
-
-        # Atomic rename (works on both POSIX and Windows)
-        os.replace(tmp_path, path)
-
-        # fsync parent directory for durability (POSIX only)
-        # On Windows, NTFS provides different durability guarantees:
-        # the rename is visible after file fsync completes.
-        if platform.system() != "Windows" and hasattr(os, "O_DIRECTORY"):
-            try:
-                dir_fd = os.open(str(path.parent), os.O_RDONLY | os.O_DIRECTORY)
-                try:
-                    os.fsync(dir_fd)
-                finally:
-                    os.close(dir_fd)
-            except OSError:
-                # Directory fsync may fail on some filesystems (e.g., network drives)
-                # but the atomic rename itself already provides consistency guarantees
-                pass
-
-    except Exception:
-        # Clean up temp file on failure
-        if tmp_path.exists():
-            tmp_path.unlink()
-        raise
+    """Compatibility wrapper for shared atomic JSON writes."""
+    _shared_atomic_write_json(path, data)
 
 
 def _compute_numpy_array_id(arr: Any) -> str:
-    """Compute a unique ID for a NumPy array including dtype, shape, and data.
-
-    This prevents false cache hits between arrays with the same raw bytes
-    but different semantics (e.g., np.array([1], dtype=uint32) vs
-    np.array([1,0,0,0], dtype=uint8) both have the same 4 bytes).
-
-    Args:
-        arr: NumPy array (must have dtype, shape, and tobytes() attributes)
-
-    Returns:
-        SHA-256 hex digest of the array manifest
-    """
-    array_manifest = {
-        "dtype": str(arr.dtype),
-        "shape": list(arr.shape),
-        "data_sha256": hashlib.sha256(arr.tobytes()).hexdigest(),
-    }
-    return hashlib.sha256(jcs_dumpb(array_manifest)).hexdigest()
+    """Compatibility wrapper for shared NumPy identity computation."""
+    return _shared_compute_numpy_array_id(arr)
 
 
 def _sanitize_key_for_filename(key: str) -> str:
-    """Sanitize an artifact key for safe filename usage.
-
-    Prevents path traversal attacks by:
-    - Replacing path separators and problematic characters with underscores
-    - Removing directory traversal sequences like '..'
-    - Stripping leading/trailing dots and whitespace
-
-    Args:
-        key: Original artifact key
-
-    Returns:
-        Sanitized key safe for use in filenames
-    """
-    # Replace any path separators and other problematic characters
-    result = re.sub(r'[/\\:*?"<>|]', "_", key)
-    # Remove directory traversal sequences
-    result = result.replace("..", "_")
-    # Strip leading/trailing dots and whitespace
-    result = result.strip(". \t\n\r")
-    # If empty after sanitization, use a placeholder
-    return result if result else "_key_"
+    """Compatibility wrapper for shared artifact-key sanitization."""
+    return _shared_sanitize_key_for_filename(key)
 
 
 def make_serializable(
@@ -183,56 +89,8 @@ def make_serializable(
     base_path: Path,
     cas_id: str,
 ) -> dict[str, Any]:
-    """Convert outputs to JSON-serializable format recursively.
-
-    Handles numpy arrays by storing them as separate .npy files in CAS.
-    Temp files are cleaned up after adding to CAS.
-
-    This is a standalone function usable by both CASExecutor and CASDAGExecutor
-    for consistent recursive serialization semantics.
-
-    Args:
-        outputs: Dictionary of outputs to serialize
-        artifact_store: CAS artifact store for storing arrays
-        base_path: Base directory for temp files
-        cas_id: Base CAS ID for generating unique filenames
-
-    Returns:
-        JSON-serializable dictionary with numpy arrays stored in CAS
-    """
-    import numpy as np
-
-    safe_cas_id = _sanitize_cas_id_for_filename(cas_id)
-    result = {}
-    for key, value in outputs.items():
-        safe_key = _sanitize_key_for_filename(key)
-        if isinstance(value, np.ndarray):
-            # Store numpy array in CAS via temp file
-            array_path = base_path / f"{safe_cas_id}_{safe_key}.npy"
-            array_path.parent.mkdir(parents=True, exist_ok=True)
-            np.save(array_path, value)
-
-            try:
-                # Store reference to CAS
-                cas_obj = artifact_store.add_file(array_path)
-                result[key] = {
-                    "__numpy__": True,
-                    "sha256": cas_obj.sha256,
-                    "shape": list(value.shape),
-                    "dtype": str(value.dtype),
-                }
-            finally:
-                # Clean up temp .npy file after adding to CAS
-                if array_path.exists():
-                    array_path.unlink()
-        elif isinstance(value, dict):
-            result[key] = make_serializable(value, artifact_store, base_path, f"{cas_id}_{safe_key}")
-        elif isinstance(value, (list, tuple)):
-            result[key] = _serialize_list_recursive(value, artifact_store, base_path, f"{cas_id}_{safe_key}")
-        else:
-            result[key] = value
-
-    return result
+    """Compatibility wrapper for shared recursive serialization."""
+    return _shared_make_serializable(outputs, artifact_store, base_path, cas_id)
 
 
 def _serialize_list_recursive(
@@ -241,125 +99,24 @@ def _serialize_list_recursive(
     base_path: Path,
     cas_id: str,
 ) -> list:
-    """Serialize a list/tuple, handling nested numpy arrays and dicts.
-
-    Note: Both list and tuple inputs are converted to lists in the output.
-    This is required for JSON serialization. The original type is not preserved
-    during cache round-trip.
-
-    Args:
-        items: List or tuple of items to serialize
-        artifact_store: CAS artifact store for storing arrays
-        base_path: Base directory for temp files
-        cas_id: Base CAS ID for nested items
-
-    Returns:
-        Serialized list with numpy arrays stored in CAS (always list, even if input was tuple)
-    """
-    import numpy as np
-
-    result = []
-    for i, item in enumerate(items):
-        if isinstance(item, np.ndarray):
-            # Use make_serializable to handle the array
-            serialized = make_serializable({"item": item}, artifact_store, base_path, f"{cas_id}_{i}")
-            result.append(serialized["item"])
-        elif isinstance(item, dict):
-            result.append(make_serializable(item, artifact_store, base_path, f"{cas_id}_{i}"))
-        elif isinstance(item, (list, tuple)):
-            result.append(_serialize_list_recursive(item, artifact_store, base_path, f"{cas_id}_{i}"))
-        else:
-            result.append(item)
-    return result
+    """Compatibility wrapper for shared recursive list serialization."""
+    return _shared_serialize_list_recursive(items, artifact_store, base_path, cas_id)
 
 
 def load_serializable(
     data: dict[str, Any],
     artifact_store: Any,
 ) -> dict[str, Any]:
-    """Reconstruct outputs from serialized format recursively.
-
-    Loads numpy arrays from CAS. Raises CASObjectMissingError if any
-    referenced CAS object is missing (triggers cache miss for self-healing).
-
-    This is a standalone function usable by both CASExecutor and CASDAGExecutor
-    for consistent recursive deserialization semantics.
-
-    Args:
-        data: Serialized dictionary to reconstruct
-        artifact_store: CAS artifact store for loading arrays
-
-    Returns:
-        Reconstructed dictionary with numpy arrays loaded from CAS
-
-    Raises:
-        CASObjectMissingError: If a referenced CAS object is missing
-    """
-    import numpy as np
-
-    result = {}
-    for key, value in data.items():
-        if isinstance(value, dict) and value.get("__numpy__"):
-            # Load numpy array from CAS
-            sha256 = value["sha256"]
-            cas_obj = artifact_store.get_object(sha256)
-            if cas_obj:
-                result[key] = np.load(cas_obj.path)
-            else:
-                # Missing CAS object - fail load to trigger re-execution
-                raise CASObjectMissingError(sha256)
-        elif isinstance(value, dict):
-            result[key] = load_serializable(value, artifact_store)
-        elif isinstance(value, list):
-            result[key] = _load_list_recursive(value, artifact_store)
-        else:
-            result[key] = value
-
-    return result
+    """Compatibility wrapper for shared recursive deserialization."""
+    return _shared_load_serializable(data, artifact_store)
 
 
 def _load_list_recursive(
     items: list,
     artifact_store: Any,
 ) -> list:
-    """Reconstruct a list, handling nested numpy arrays and dicts.
-
-    Args:
-        items: Serialized list to reconstruct
-        artifact_store: CAS artifact store for loading arrays
-
-    Returns:
-        Reconstructed list with numpy arrays loaded from CAS
-
-    Raises:
-        CASObjectMissingError: If a referenced CAS object is missing
-    """
-    import numpy as np
-
-    result = []
-    for item in items:
-        if isinstance(item, dict) and item.get("__numpy__"):
-            sha256 = item["sha256"]
-            cas_obj = artifact_store.get_object(sha256)
-            if cas_obj:
-                result.append(np.load(cas_obj.path))
-            else:
-                raise CASObjectMissingError(sha256)
-        elif isinstance(item, dict):
-            result.append(load_serializable(item, artifact_store))
-        elif isinstance(item, list):
-            result.append(_load_list_recursive(item, artifact_store))
-        else:
-            result.append(item)
-    return result
-
-
-class CASObjectMissingError(Exception):
-    """Raised when a referenced CAS object is missing during cache load."""
-
-    def __init__(self, sha256: str):
-        self.sha256 = sha256
-        super().__init__(f"Missing CAS object: {sha256[:16]}...")
+    """Compatibility wrapper for shared recursive list deserialization."""
+    return _shared_load_list_recursive(items, artifact_store)
 
 
 class ExecutableStage(Protocol):
@@ -631,154 +388,28 @@ class CASExecutor:
         logger.debug("Saved result for %s", cas_id[:16])
 
     def _sanitize_key(self, key: str) -> str:
-        """Sanitize an output key for safe use in filenames.
-
-        Prevents path traversal attacks by:
-        - Replacing path separators and problematic characters with underscores
-        - Removing directory traversal sequences like '..'
-        - Stripping leading/trailing dots and whitespace
-        """
-        # Replace any path separators and other problematic characters
-        result = re.sub(r'[/\\:*?"<>|]', "_", key)
-        # Remove directory traversal sequences
-        result = result.replace("..", "_")
-        # Strip leading/trailing dots and whitespace
-        result = result.strip(". \t\n\r")
-        # If empty after sanitization, use a placeholder
-        return result if result else "_key_"
+        """Sanitize an output key for safe use in filenames."""
+        return _sanitize_key_for_filename(key)
 
     def _make_serializable(
         self,
         outputs: dict[str, Any],
         cas_id: str,
     ) -> dict[str, Any]:
-        """Convert outputs to JSON-serializable format.
-
-        Handles numpy arrays by storing them as separate .npy files in CAS.
-        Temp files are cleaned up after adding to CAS.
-        """
-        import numpy as np
-
-        safe_cas_id = _sanitize_cas_id_for_filename(cas_id)
-        result = {}
-        for key, value in outputs.items():
-            safe_key = self._sanitize_key(key)
-            if isinstance(value, np.ndarray):
-                # Store numpy array in CAS via temp file
-                array_path = self._result_path(cas_id).parent / f"{safe_cas_id}_{safe_key}.npy"
-                array_path.parent.mkdir(parents=True, exist_ok=True)
-                np.save(array_path, value)
-
-                try:
-                    # Store reference to CAS
-                    cas_obj = self.artifact_store.add_file(array_path)
-                    result[key] = {
-                        "__numpy__": True,
-                        "sha256": cas_obj.sha256,
-                        "shape": list(value.shape),
-                        "dtype": str(value.dtype),
-                    }
-                finally:
-                    # Clean up temp .npy file after adding to CAS
-                    if array_path.exists():
-                        array_path.unlink()
-            elif isinstance(value, dict):
-                result[key] = self._make_serializable(value, f"{cas_id}_{safe_key}")
-            elif isinstance(value, (list, tuple)):
-                result[key] = self._serialize_list(value, f"{cas_id}_{safe_key}")
-            else:
-                result[key] = value
-
-        return result
+        """Convert outputs to JSON-serializable format."""
+        return make_serializable(outputs, self.artifact_store, self._result_path(cas_id).parent, cas_id)
 
     def _serialize_list(self, items: list | tuple, cas_id: str) -> list:
-        """Serialize a list/tuple, handling nested numpy arrays and dicts.
-
-        Note: Both list and tuple inputs are converted to lists in the output.
-        This is required for JSON serialization. The original type is not preserved
-        during cache round-trip.
-
-        Args:
-            items: List or tuple of items to serialize
-            cas_id: Base CAS ID for nested items
-
-        Returns:
-            Serialized list with numpy arrays stored in CAS (always list, even if input was tuple)
-        """
-        import numpy as np
-
-        result = []
-        for i, item in enumerate(items):
-            if isinstance(item, np.ndarray):
-                # Use _make_serializable to handle the array
-                serialized = self._make_serializable({"item": item}, f"{cas_id}_{i}")
-                result.append(serialized["item"])
-            elif isinstance(item, dict):
-                result.append(self._make_serializable(item, f"{cas_id}_{i}"))
-            elif isinstance(item, (list, tuple)):
-                result.append(self._serialize_list(item, f"{cas_id}_{i}"))
-            else:
-                result.append(item)
-        return result
+        """Serialize a list/tuple, handling nested numpy arrays and dicts."""
+        return _serialize_list_recursive(items, self.artifact_store, self._result_path(cas_id).parent, cas_id)
 
     def _load_serializable(self, data: dict[str, Any]) -> dict[str, Any]:
-        """Reconstruct outputs from serialized format.
-
-        Loads numpy arrays from CAS. Raises CASObjectMissingError if any
-        referenced CAS object is missing (triggers cache miss for self-healing).
-        """
-        import numpy as np
-
-        result = {}
-        for key, value in data.items():
-            if isinstance(value, dict) and value.get("__numpy__"):
-                # Load numpy array from CAS
-                sha256 = value["sha256"]
-                cas_obj = self.artifact_store.get_object(sha256)
-                if cas_obj:
-                    result[key] = np.load(cas_obj.path)
-                else:
-                    # Missing CAS object - fail load to trigger re-execution
-                    raise CASObjectMissingError(sha256)
-            elif isinstance(value, dict):
-                result[key] = self._load_serializable(value)
-            elif isinstance(value, list):
-                result[key] = self._load_list(value)
-            else:
-                result[key] = value
-
-        return result
+        """Reconstruct outputs from serialized format."""
+        return load_serializable(data, self.artifact_store)
 
     def _load_list(self, items: list) -> list:
-        """Reconstruct a list, handling nested numpy arrays and dicts.
-
-        Args:
-            items: Serialized list to reconstruct
-
-        Returns:
-            Reconstructed list with numpy arrays loaded from CAS
-
-        Raises:
-            CASObjectMissingError: If a referenced CAS object is missing
-        """
-        import numpy as np
-
-        result = []
-        for item in items:
-            if isinstance(item, dict) and item.get("__numpy__"):
-                sha256 = item["sha256"]
-                cas_obj = self.artifact_store.get_object(sha256)
-                if cas_obj:
-                    result.append(np.load(cas_obj.path))
-                else:
-                    raise CASObjectMissingError(sha256)
-            elif isinstance(item, dict):
-                result.append(self._load_serializable(item))
-            elif isinstance(item, list):
-                result.append(self._load_list(item))
-            else:
-                result.append(item)
-        return result
+        """Reconstruct a list, handling nested numpy arrays and dicts."""
+        return _load_list_recursive(items, self.artifact_store)
 
     def _load_result(self, cas_id: str) -> Optional[dict[str, Any]]:
         """Load result from cache if available."""

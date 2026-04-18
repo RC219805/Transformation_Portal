@@ -143,10 +143,20 @@ class TiledProcessor:
 
     def _create_tile_weight(self, size: int, overlap: int, device: torch.device) -> torch.Tensor:
         """Create a 2D weight map for blending."""
+        min_weight = 1e-3
+
+        if overlap <= 0:
+            return torch.ones((1, 1, size, size), device=device)
+
         if self.config.blend_mode == "linear":
-            # Simple pyramid
-            # (Not implemented for brevity, using Gaussian as default)
-            pass
+            coords = torch.arange(size, device=device, dtype=torch.float32)
+            edge_distance = torch.minimum(coords, (size - 1) - coords)
+            ramp = torch.ones(size, device=device, dtype=torch.float32)
+            edge_mask = edge_distance < overlap
+            if edge_mask.any():
+                ramp[edge_mask] = min_weight + (1.0 - min_weight) * (edge_distance[edge_mask] / float(overlap))
+            linear_2d = ramp.unsqueeze(1) * ramp.unsqueeze(0)
+            return linear_2d.view(1, 1, size, size)
 
         # Gaussian window
         # Create 1D gaussian
@@ -160,5 +170,6 @@ class TiledProcessor:
         # Normalize to 0-1 range
         gaussian_2d -= gaussian_2d.min()
         gaussian_2d /= gaussian_2d.max()
+        gaussian_2d = gaussian_2d.clamp_min(min_weight)
 
         return gaussian_2d.view(1, 1, size, size)

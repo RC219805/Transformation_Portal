@@ -8,7 +8,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Literal, Optional, Union
 
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class DeviceType(str, Enum):
@@ -31,7 +31,8 @@ class DeviceConfig(BaseModel):
     gpu_id: int = Field(default=0, ge=0, description="CUDA device index")
     enable_cudnn_benchmark: bool = True
 
-    @validator("device")
+    @field_validator("device")
+    @classmethod
     def validate_device_availability(cls, v):
         # In a real app, we might check torch.cuda.is_available() here
         # keeping it pure config for now.
@@ -59,7 +60,8 @@ class PerformanceConfig(BaseModel):
     tile_overlap: int = Field(default=64, ge=0, description="Overlap between tiles in pixels")
     memory_limit_gb: float = Field(default=8.0, gt=0, description="VRAM limit hint")
 
-    @validator("tile_size")
+    @field_validator("tile_size")
+    @classmethod
     def validate_tile_size(cls, v):
         if 0 < v < 256:
             raise ValueError("tile_size must be 0 or at least 256 pixels")
@@ -104,5 +106,4 @@ class ConfigSchema(BaseModel):
     # Allow arbitrary extra fields for pipeline-specific params (e.g. 'skygan')
     pipeline_params: Dict[str, Any] = Field(default_factory=dict)
 
-    class Config:
-        extra = "ignore"  # Ignore unknown fields to allow forward compatibility
+    model_config = ConfigDict(extra="ignore")

@@ -52,7 +52,7 @@ def autotune_export_config(image: np.ndarray, base_config: ExportConfig) -> Expo
         return base_config
 
     stats = compute_image_stats(image)
-    new_config = base_config.copy()
+    new_config = base_config.model_copy(deep=True)
 
     if stats.is_hdr:
         new_config.format = "exr"
@@ -107,8 +107,9 @@ class ExportManager:
         path.parent.mkdir(parents=True, exist_ok=True)
 
         # 3. Atomic Write Pattern
-        # Write to .tmp file first, then rename
-        temp_path = path.with_suffix(f".{path.suffix}.tmp")
+        # Write to a sibling temp file that keeps the real image extension so
+        # OpenCV/imageio can still select the correct encoder.
+        temp_path = path.parent / f"{path.stem}.tmp{path.suffix}"
 
         try:
             ExportManager._write_file(image, temp_path, config)

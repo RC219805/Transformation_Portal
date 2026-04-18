@@ -23,7 +23,7 @@ import hashlib
 import json
 import logging
 import time
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from typing import Any, Dict, Optional
 
 logger = logging.getLogger(__name__)
@@ -31,6 +31,50 @@ logger = logging.getLogger(__name__)
 
 class TaskSigningError(RuntimeError):
     """Raised for task signing/verification errors."""
+
+
+def _build_sign_payload(
+    payload: Dict[str, Any],
+    *,
+    timestamp: float,
+    nonce: str,
+    metadata: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """Build the canonical task payload used for signing and verification."""
+    sign_payload = {
+        **payload,
+        "_ts": timestamp,
+        "_nonce": nonce,
+    }
+    if metadata is not None:
+        sign_payload["_metadata"] = metadata
+    return sign_payload
+
+
+def _hash_sign_payload(sign_payload: Dict[str, Any]) -> str:
+    """Return the deterministic SHA-256 hash for a sign payload."""
+    canon = json.dumps(sign_payload, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(canon.encode("utf-8")).hexdigest()
+
+
+def _load_serialization_module():
+    """Load the cryptography serialization module or raise a typed error."""
+    try:
+        from cryptography.hazmat.primitives import serialization
+    except ImportError as exc:
+        raise TaskSigningError("cryptography library required for task signing") from exc
+    return serialization
+
+
+def _load_ed25519_public_key_class():
+    """Load the Ed25519 public key class or raise a typed error."""
+    try:
+        from cryptography.hazmat.primitives.asymmetric.ed25519 import (
+            Ed25519PublicKey,
+        )
+    except ImportError as exc:
+        raise TaskSigningError("cryptography library required for task signature verification") from exc
+    return Ed25519PublicKey
 
 
 @dataclass
@@ -151,28 +195,16 @@ class TaskSigner:
         timestamp = time.time()
         nonce = secrets.token_hex(16)
 
-        # Build full signing payload (includes all signed data)
-        sign_payload = {
-            **payload,
-            "_ts": timestamp,
-            "_nonce": nonce,
-        }
+        sign_payload = _build_sign_payload(
+            payload,
+            timestamp=timestamp,
+            nonce=nonce,
+            metadata=metadata,
+        )
+        payload_hash = _hash_sign_payload(sign_payload)
 
-        if metadata:
-            sign_payload["_metadata"] = metadata
-
-        # Canonicalize for deterministic signing
-        canon = json.dumps(sign_payload, sort_keys=True, separators=(",", ":"))
-        canon_bytes = canon.encode("utf-8")
-
-        # Hash the canonical payload - this is what we sign
-        payload_hash = hashlib.sha256(canon_bytes).hexdigest()
-
-        # Sign using Ed25519 directly (not via sign_manifest which has different semantics)
         try:
-            from cryptography.hazmat.primitives import serialization
-
-            # Access private key from signer to sign directly
+            serialization = _load_serialization_module()
             signature = self.signer._priv.sign(payload_hash.encode("utf-8"))
             pub_bytes = self.signer._pub.public_bytes(
                 encoding=serialization.Encoding.Raw,
@@ -182,10 +214,12 @@ class TaskSigner:
 
             signature_b64 = _b64_encode(signature)
             public_key_b64 = _b64_encode(pub_bytes)
-        except (ImportError, AttributeError):
-            # Fallback if cryptography not available - use placeholder
-            signature_b64 = "no_crypto"
-            public_key_b64 = self.signer.public_key_b64 if hasattr(self.signer, "public_key_b64") else "no_crypto"
+        except TaskSigningError:
+            raise
+        except AttributeError as exc:
+            raise TaskSigningError("TaskSigner requires a CertificateSigner with Ed25519 key material") from exc
+        except Exception as exc:
+            raise TaskSigningError(f"Failed to sign task payload: {exc}") from exc
 
         self._sign_count += 1
 
@@ -343,48 +377,33 @@ class TaskVerifier:
         try:
             from transformation_portal.core.security.signing import _b64_decode
 
-            # Check for cryptography library
-            try:
-                from cryptography.hazmat.primitives.asymmetric.ed25519 import (
-                    Ed25519PublicKey,
-                )
-            except ImportError:
-                logger.warning("cryptography not available, skipping signature check")
-                return True
+            if task.signature == "no_crypto" or task.public_key == "no_crypto":
+                logger.warning("Rejecting unsigned task placeholder")
+                return False
 
-            # Handle placeholder signature when crypto was unavailable at signing
-            if task.signature == "no_crypto":
-                logger.warning("Task signed without crypto, skipping verification")
-                return True
-
-            # Reconstruct exact signing payload (must match TaskSigner.sign)
-            sign_payload = {
-                **task.payload,
-                "_ts": task.timestamp,
-                "_nonce": task.nonce,
-            }
-
-            # Include metadata if it was present at signing time
-            if task.metadata is not None:
-                sign_payload["_metadata"] = task.metadata
-
-            # Canonicalize and hash (same as TaskSigner)
-            canon = json.dumps(sign_payload, sort_keys=True, separators=(",", ":"))
-            canon_bytes = canon.encode("utf-8")
-            payload_hash = hashlib.sha256(canon_bytes).hexdigest()
+            sign_payload = _build_sign_payload(
+                task.payload,
+                timestamp=task.timestamp,
+                nonce=task.nonce,
+                metadata=task.metadata,
+            )
+            payload_hash = _hash_sign_payload(sign_payload)
 
             # The signature is over the hex-encoded hash
             payload_to_verify = payload_hash.encode("utf-8")
 
             # Load public key and verify
             pub_bytes = _b64_decode(task.public_key)
-            pub = Ed25519PublicKey.from_public_bytes(pub_bytes)
+            pub = _load_ed25519_public_key_class().from_public_bytes(pub_bytes)
 
             sig = _b64_decode(task.signature)
             pub.verify(sig, payload_to_verify)
 
             return True
 
+        except TaskSigningError as exc:
+            logger.warning("Task signature verification unavailable: %s", exc)
+            return False
         except Exception as e:
             logger.debug("Signature verification failed: %s", e)
             return False

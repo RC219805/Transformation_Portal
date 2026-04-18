@@ -45,6 +45,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
 
+from transformation_portal.core._cas_helpers import CASObjectMissingError
+from transformation_portal.core._cas_helpers import atomic_write_json as _atomic_write_json
+from transformation_portal.core._cas_helpers import compute_numpy_array_id as _compute_numpy_array_id
+from transformation_portal.core._cas_helpers import load_serializable, make_serializable
+from transformation_portal.core._cas_helpers import sanitize_cas_id_for_filename as _sanitize_cas_id_for_filename
 from transformation_portal.core.execution_identity import (
     ArtifactMetadata,
     ExecutionIdentity,
@@ -54,14 +59,8 @@ from transformation_portal.core.execution_identity import (
     is_compatible,
     resolve_platform_lockfile,
 )
-from transformation_portal.core.execution_wrapper import _atomic_write_json  # Shared atomic cache writes
-from transformation_portal.core.execution_wrapper import _compute_numpy_array_id  # Shared NumPy identity computation
-from transformation_portal.core.execution_wrapper import _sanitize_cas_id_for_filename  # Shared filename sanitization
-from transformation_portal.core.execution_wrapper import load_serializable  # Shared recursive deserialization
-from transformation_portal.core.execution_wrapper import make_serializable  # Shared recursive serialization
 from transformation_portal.core.execution_wrapper import (
     CASExecutor,
-    CASObjectMissingError,
     ExecutorConfig,
     FileLock,
 )

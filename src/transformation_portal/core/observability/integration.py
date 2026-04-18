@@ -20,6 +20,9 @@ except ImportError:
     RICH_AVAILABLE = False
 
 
+logger = logging.getLogger(__name__)
+
+
 class JsonFormatter(logging.Formatter):
     """Format logs as newline-delimited JSON."""
 
@@ -109,6 +112,10 @@ class MetricsRegistry:
 
 
 def setup_metrics() -> None:
-    """Initialize metrics collection."""
-    # Placeholder for Prometheus/StatsD init
-    pass
+    """Initialize metrics collection.
+
+    This hook is intentionally a no-op until a concrete metrics backend is
+    wired into the application. It preserves the package-level API without
+    implying that Prometheus/StatsD integration is already configured.
+    """
+    logger.debug("Metrics backend not configured; setup_metrics is a no-op")
