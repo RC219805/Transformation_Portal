@@ -474,6 +474,75 @@ def test_build_run_card_result_summary_projects_quality_gate_and_capability(tmp_
     }
 
 
+def test_build_run_card_result_summary_keeps_semantic_gate_failure_available(tmp_path: Path) -> None:
+    output_root = tmp_path / "output"
+    orch = object.__new__(EnhanceOrchestrator)
+    orch.output_root = output_root
+    orch._active_run_card_segmentation_metadata = {}
+    orch._backend_metadata = SimpleNamespace(
+        requested_backend="da3",
+        resolution_reason=None,
+    )
+
+    summary = orch._build_run_card_result_summary(
+        [
+            {
+                "image": str(tmp_path / "inputs" / "image_03.png"),
+                "status": "error",
+                "backend": "da3",
+                "runtime_s": 1.11,
+                "manifest": None,
+                "fallback_used": False,
+                "error_code": "APEX_DEPTH_SATURATION_LOW",
+                "error": "APEX depth validity gate failed: APEX_DEPTH_SATURATION_LOW",
+                "error_details": {
+                    "passed": False,
+                    "failure_codes": ["APEX_DEPTH_SATURATION_LOW"],
+                    "warnings": [],
+                    "metrics": {"saturation_low_fraction": 0.031},
+                    "thresholds": {"saturation_low_fraction_max": 0.02},
+                    "shape_context": {"native_shape": [64, 64]},
+                },
+                "attempts": [
+                    {
+                        "backend": "da3",
+                        "status": "failed",
+                        "failure_kind": "semantic",
+                        "error_code": "APEX_DEPTH_SATURATION_LOW",
+                        "error_message": "APEX depth validity gate failed: APEX_DEPTH_SATURATION_LOW",
+                        "model_id": "depth-anything/Depth-Anything-V2-Small-hf",
+                        "model_revision": "rev-semantic",
+                    }
+                ],
+            }
+        ]
+    )
+
+    assert summary[0]["quality_gate"] == {
+        "kind": "apex_depth",
+        "passed": False,
+        "failure_codes": ["APEX_DEPTH_SATURATION_LOW"],
+        "warnings": [],
+        "details": {
+            "metrics": {"saturation_low_fraction": 0.031},
+            "thresholds": {"saturation_low_fraction_max": 0.02},
+            "shape_context": {"native_shape": [64, 64]},
+        },
+    }
+    assert summary[0]["capability"] == {
+        "requested_backend": "da3",
+        "executed_backend": "da3",
+        "availability_state": "available",
+        "reason": None,
+        "synthetic_output": False,
+        "stub_mode": False,
+        "fallback_executed": False,
+        "model_repo_id": "depth-anything/Depth-Anything-V2-Small-hf",
+        "model_revision": "rev-semantic",
+        "asset_bundle_version": None,
+    }
+
+
 @pytest.mark.parametrize("version", ["v1", "v2"])
 def test_run_card_schema_accepts_additive_quality_gate_and_capability(version: str) -> None:
     pytest.importorskip("jsonschema")

@@ -1,4 +1,8 @@
-"""Small shared reporting builders for capability, quality-gate, and stage status payloads."""
+"""Small shared reporting builders for capability, quality-gate, and stage status payloads.
+
+Capability describes backend availability/execution truth. Quality-gate describes
+output-validity truth. Result-row status captures the final artifact outcome.
+"""
 
 from __future__ import annotations
 
@@ -104,14 +108,101 @@ def select_result_attempt(result: Mapping[str, Any]) -> Optional[dict[str, Any]]
     return None
 
 
+def _list_result_attempts(result: Mapping[str, Any]) -> list[dict[str, Any]]:
+    """Return deep-copied attempt records for rows with structured history."""
+    attempts = result.get("attempts")
+    if not isinstance(attempts, list):
+        return []
+    return [copy.deepcopy(dict(attempt)) for attempt in attempts if isinstance(attempt, Mapping)]
+
+
+def _find_failed_attempt_for_backend(
+    attempts: list[dict[str, Any]],
+    executed_backend: Optional[str],
+) -> Optional[dict[str, Any]]:
+    """Return the most relevant failed attempt for the executed backend."""
+    if executed_backend:
+        for attempt in reversed(attempts):
+            if attempt.get("status") == "failed" and attempt.get("backend") == executed_backend:
+                return attempt
+    for attempt in reversed(attempts):
+        if attempt.get("status") == "failed":
+            return attempt
+    return None
+
+
+def _is_semantic_gate_failure(
+    failed_attempt: Optional[dict[str, Any]],
+    gate_report: Optional[Mapping[str, Any]],
+) -> bool:
+    """Return True when a failed row reflects output-quality rejection, not backend loss."""
+    if isinstance(failed_attempt, Mapping) and failed_attempt.get("failure_kind") == "semantic":
+        return True
+    if isinstance(gate_report, Mapping) and gate_report.get("passed") is False and isinstance(failed_attempt, Mapping):
+        return failed_attempt.get("failure_kind") == "semantic"
+    return False
+
+
+def _resolve_fallback_reason(
+    attempts: list[dict[str, Any]],
+    resolution_reason: Any,
+) -> Optional[str]:
+    """Return the best available explanation for backend fallback execution."""
+    normalized_reason = _normalize_optional_string(resolution_reason)
+    if normalized_reason:
+        return normalized_reason
+
+    for attempt in attempts:
+        if attempt.get("status") != "failed":
+            continue
+        if attempt.get("failure_kind") not in {"operational", "license"}:
+            continue
+        reason = _normalize_optional_string(attempt.get("error_message")) or _normalize_optional_string(
+            attempt.get("error_code")
+        )
+        if reason:
+            return reason
+
+    for attempt in attempts:
+        if attempt.get("status") != "failed":
+            continue
+        reason = _normalize_optional_string(attempt.get("error_message")) or _normalize_optional_string(
+            attempt.get("error_code")
+        )
+        if reason:
+            return reason
+
+    return None
+
+
+def _select_capability_metadata_attempt(
+    selected_attempt: Optional[dict[str, Any]],
+    failed_attempt: Optional[dict[str, Any]],
+    executed_backend: Optional[str],
+) -> Optional[dict[str, Any]]:
+    """Return the attempt that best represents executed-backend provenance."""
+    if isinstance(selected_attempt, Mapping) and (
+        executed_backend is None or selected_attempt.get("backend") == executed_backend
+    ):
+        return selected_attempt
+    if isinstance(failed_attempt, Mapping):
+        return failed_attempt
+    return selected_attempt
+
+
 def build_orchestrator_result_capability_report(
     result: Mapping[str, Any],
     *,
     requested_backend: Any = None,
     resolution_reason: Any = None,
 ) -> dict[str, Any]:
-    """Build the normalized capability record for an orchestrator result row."""
+    """Build the normalized capability record for an orchestrator result row.
+
+    Capability describes backend truth. Quality-gate and row status carry the
+    separate question of whether the produced output was ultimately accepted.
+    """
     selected_attempt = select_result_attempt(result)
+    attempts = _list_result_attempts(result)
     requested = (
         result.get("requested_backend")
         or requested_backend
@@ -124,26 +215,33 @@ def build_orchestrator_result_capability_report(
     )
     fallback_executed = bool(result.get("fallback_used"))
     status = result.get("status")
+    gate_report = resolve_result_quality_gate(result)
+    failed_attempt = _find_failed_attempt_for_backend(attempts, executed_backend)
+    semantic_gate_failure = _is_semantic_gate_failure(failed_attempt, gate_report)
+    selected_attempt_succeeded = isinstance(selected_attempt, Mapping) and selected_attempt.get("status") == "success"
+    metadata_attempt = _select_capability_metadata_attempt(
+        selected_attempt,
+        failed_attempt,
+        _normalize_optional_string(executed_backend),
+    )
 
     if status == "skipped":
         availability_state = "skipped"
         reason = result.get("reason")
+    elif fallback_executed and (selected_attempt_succeeded or semantic_gate_failure):
+        availability_state = "fallback_executed"
+        reason = _resolve_fallback_reason(attempts, resolution_reason)
+    elif selected_attempt_succeeded or semantic_gate_failure:
+        availability_state = "available"
+        reason = None
     elif status == "error":
         availability_state = "failed"
-        reason = result.get("error_code") or result.get("error")
-    elif fallback_executed:
-        availability_state = "fallback_executed"
-        reason = resolution_reason or None
-        if not reason:
-            attempts = result.get("attempts")
-            if isinstance(attempts, list):
-                for attempt in attempts:
-                    if not isinstance(attempt, Mapping):
-                        continue
-                    if attempt.get("status") == "failed":
-                        reason = attempt.get("error_message") or attempt.get("error_code")
-                        if reason:
-                            break
+        reason = (
+            (_normalize_optional_string(failed_attempt.get("error_message")) if isinstance(failed_attempt, Mapping) else None)
+            or (_normalize_optional_string(failed_attempt.get("error_code")) if isinstance(failed_attempt, Mapping) else None)
+            or _normalize_optional_string(result.get("error_code"))
+            or _normalize_optional_string(result.get("error"))
+        )
     elif executed_backend:
         availability_state = "available"
         reason = None
@@ -152,11 +250,11 @@ def build_orchestrator_result_capability_report(
         reason = None
 
     model_repo_id = result.get("model_id")
-    if not model_repo_id and isinstance(selected_attempt, Mapping):
-        model_repo_id = selected_attempt.get("model_id")
+    if not model_repo_id and isinstance(metadata_attempt, Mapping):
+        model_repo_id = metadata_attempt.get("model_id")
 
-    model_revision = selected_attempt.get("model_revision") if isinstance(selected_attempt, Mapping) else None
-    asset_bundle_version = selected_attempt.get("asset_bundle_version") if isinstance(selected_attempt, Mapping) else None
+    model_revision = metadata_attempt.get("model_revision") if isinstance(metadata_attempt, Mapping) else None
+    asset_bundle_version = metadata_attempt.get("asset_bundle_version") if isinstance(metadata_attempt, Mapping) else None
 
     return build_capability_report(
         requested_backend=requested,
