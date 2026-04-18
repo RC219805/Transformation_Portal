@@ -403,8 +403,124 @@ def test_build_run_card_result_summary_uses_cached_segmentation_metadata(tmp_pat
                 "mask_artifact_format": "npz",
                 "tile_size": 1024,
             },
+            "quality_gate": None,
+            "capability": {
+                "requested_backend": "da3",
+                "executed_backend": "da3",
+                "availability_state": "available",
+                "reason": None,
+                "synthetic_output": False,
+                "stub_mode": False,
+                "fallback_executed": False,
+                "model_repo_id": None,
+                "model_revision": None,
+                "asset_bundle_version": None,
+            },
         }
     ]
+
+
+def test_build_run_card_result_summary_projects_quality_gate_and_capability(tmp_path: Path) -> None:
+    output_root = tmp_path / "output"
+    orch = object.__new__(EnhanceOrchestrator)
+    orch.output_root = output_root
+    orch._active_run_card_segmentation_metadata = {}
+    orch._backend_metadata = SimpleNamespace(requested_backend="depth_pro", resolution_reason=None)
+
+    summary = orch._build_run_card_result_summary(
+        [
+            {
+                "image": str(tmp_path / "inputs" / "image_02.png"),
+                "status": "ok",
+                "backend": "depth_pro",
+                "runtime_s": 2.34,
+                "manifest": None,
+                "fallback_used": False,
+                "model_id": "apple/ml-depth-pro",
+                "quality_gate": {
+                    "passed": True,
+                    "failure_codes": [],
+                    "warnings": ["APEX_DEPTH_GRADIENT_LOW"],
+                    "metrics": {"finite_pct": 1.0},
+                    "thresholds": {"finite_pct_min": 0.999},
+                    "shape_context": {"native_shape": [64, 64]},
+                },
+            }
+        ]
+    )
+
+    assert summary[0]["quality_gate"] == {
+        "kind": "apex_depth",
+        "passed": True,
+        "failure_codes": [],
+        "warnings": ["APEX_DEPTH_GRADIENT_LOW"],
+        "details": {
+            "metrics": {"finite_pct": 1.0},
+            "thresholds": {"finite_pct_min": 0.999},
+            "shape_context": {"native_shape": [64, 64]},
+        },
+    }
+    assert summary[0]["capability"] == {
+        "requested_backend": "depth_pro",
+        "executed_backend": "depth_pro",
+        "availability_state": "available",
+        "reason": None,
+        "synthetic_output": False,
+        "stub_mode": False,
+        "fallback_executed": False,
+        "model_repo_id": "apple/ml-depth-pro",
+        "model_revision": None,
+        "asset_bundle_version": None,
+    }
+
+
+@pytest.mark.parametrize("version", ["v1", "v2"])
+def test_run_card_schema_accepts_additive_quality_gate_and_capability(version: str) -> None:
+    pytest.importorskip("jsonschema")
+    payload = _valid_run_card_payload()
+    payload["run_card_version"] = version
+    payload["result_summary"] = [
+        {
+            "image": "image_01.png",
+            "status": "ok",
+            "backend": "depth_pro",
+            "runtime_s": 1.25,
+            "quality_gate": {
+                "kind": "apex_depth",
+                "passed": True,
+                "failure_codes": [],
+                "warnings": [],
+                "details": {
+                    "metrics": {"finite_pct": 1.0},
+                    "thresholds": {"finite_pct_min": 0.999},
+                    "shape_context": {"native_shape": [64, 64]},
+                },
+            },
+            "capability": {
+                "requested_backend": "depth_pro",
+                "executed_backend": "depth_pro",
+                "availability_state": "available",
+                "reason": None,
+                "synthetic_output": False,
+                "stub_mode": False,
+                "fallback_executed": False,
+                "model_repo_id": "apple/ml-depth-pro",
+                "model_revision": "rev-123",
+                "asset_bundle_version": None,
+            },
+        }
+    ]
+    if version == "v2":
+        payload.pop("artifact_merkle_root", None)
+        payload["artifact_tree"] = {
+            "algorithm": "ct-sha256-v1",
+            "leaf_format": "tp.run_card.artifact_leaf.v1",
+            "leaf_count": 0,
+            "root_sha256": "e" * 64,
+            "artifacts": [],
+        }
+
+    _validate_run_card_payload(payload, _run_card_schema_path(version))
 
 
 def test_collect_run_card_artifacts_includes_reconstruction_report(tmp_path: Path):

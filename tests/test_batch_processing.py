@@ -1093,6 +1093,17 @@ class TestEnhanceBatch:
                 assert results[0]["status"] == "error"
                 assert results[0]["error_code"] == "APEX_DEPTH_PLATEAU"
                 assert results[0]["error_details"] == expected_details
+                assert results[0]["quality_gate"] == {
+                    "kind": "apex_depth",
+                    "passed": False,
+                    "failure_codes": ["APEX_DEPTH_PLATEAU"],
+                    "warnings": [],
+                    "details": {
+                        "metrics": {"upper_iqr": 0.0},
+                        "thresholds": {"upper_iqr_min": 1e-4},
+                        "shape_context": {},
+                    },
+                }
 
     def test_enhance_batch_sequential_enriches_apex_gate_error_payload(self, batch_temp_workspace):
         """Sequential batch path should emit structured ApexStrictGateError fields."""
@@ -1141,6 +1152,17 @@ class TestEnhanceBatch:
                     assert result["status"] == "error"
                     assert result["error_code"] == "APEX_DEPTH_SATURATION_HIGH"
                     assert result["error_details"] == expected_details
+                    assert result["quality_gate"] == {
+                        "kind": "apex_depth",
+                        "passed": False,
+                        "failure_codes": ["APEX_DEPTH_SATURATION_HIGH"],
+                        "warnings": [],
+                        "details": {
+                            "metrics": {"saturation_high_fraction": 0.4},
+                            "thresholds": {"saturation_high_fraction_max": 0.02},
+                            "shape_context": {},
+                        },
+                    }
 
     def test_enhance_batch_sequential_preserves_attempt_history_for_apex_gate_failures(self, batch_temp_workspace):
         """Sequential batch errors should retain the failed attempt provenance from Stage A."""
@@ -1217,3 +1239,18 @@ class TestEnhanceBatch:
                     assert result["attempts"][0]["failure_kind"] == "semantic"
                     assert result["attempts"][0]["error_code"] == "APEX_DEPTH_SATURATION_LOW"
                     assert result["attempts"][0]["error_details"] == expected_details
+                    assert result["quality_gate"] == {
+                        "kind": "apex_depth",
+                        "passed": False,
+                        "failure_codes": ["APEX_DEPTH_SATURATION_LOW"],
+                        "warnings": [],
+                        "details": {
+                            "metrics": {"saturation_low_fraction": 0.031},
+                            "thresholds": {"saturation_low_fraction_max": 0.02},
+                            "shape_context": {
+                                "gate_evaluated_shape": [64, 64],
+                                "native_shape": [64, 64],
+                                "artifact_shape": [100, 100],
+                            },
+                        },
+                    }

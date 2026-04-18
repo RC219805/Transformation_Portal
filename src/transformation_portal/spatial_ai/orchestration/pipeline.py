@@ -50,6 +50,7 @@ from transformation_portal.compliance import (
     validate_non_commercial_preset,
 )
 from transformation_portal.ingest.canonical_json import dump_json
+from transformation_portal.reporting.contracts import build_stage_report, derive_stage_report_map
 from transformation_portal.spatial_ai.ingest.linear_decoder import LinearDecoder, LinearIngestResult
 from transformation_portal.spatial_ai.materials.contracts import MaterialInput, PBRTextures
 from transformation_portal.spatial_ai.materials.material_backend import (
@@ -298,6 +299,7 @@ if "PipelineResult" not in globals():
         errors: List[str] = field(default_factory=list)
         warnings: List[str] = field(default_factory=list)
         metadata: Dict[str, Any] = field(default_factory=dict)
+        stage_reports: List[Dict[str, Any]] = field(default_factory=list)
 
         def save_summary(self, path: Path) -> None:
             """Save execution summary as JSON.
@@ -305,6 +307,8 @@ if "PipelineResult" not in globals():
             Args:
                 path: Output path for summary JSON.
             """
+            stage_reports = list(self.stage_reports)
+            stage_report_map = derive_stage_report_map(stage_reports)
             summary = {
                 "input": str(self.input_path),
                 "output_dir": str(self.output_dir),
@@ -313,18 +317,31 @@ if "PipelineResult" not in globals():
                 "peak_memory_mb": self.peak_memory_mb,
                 "errors": self.errors,
                 "warnings": self.warnings,
+                "stage_reports": stage_reports,
                 "results": {
                     "linear_image": self.linear_image is not None,
                     "segmentation": {
-                        "completed": self.segmentation is not None,
+                        "completed": (
+                            stage_report_map.get("segmentation", {}).get("status") in {"completed", "cached"}
+                            if "segmentation" in stage_report_map
+                            else self.segmentation is not None
+                        ),
                         "num_masks": len(self.segmentation.masks) if self.segmentation else 0,
                     },
                     "materials": {
-                        "completed": self.materials is not None,
+                        "completed": (
+                            stage_report_map.get("materials", {}).get("status") in {"completed", "cached"}
+                            if "materials" in stage_report_map
+                            else self.materials is not None
+                        ),
                         "num_segments": len(self.materials) if self.materials else 0,
                     },
                     "scene_3d": {
-                        "completed": self.scene_3d is not None,
+                        "completed": (
+                            stage_report_map.get("reconstruction", {}).get("status") in {"completed", "cached"}
+                            if "reconstruction" in stage_report_map
+                            else self.scene_3d is not None
+                        ),
                         "num_gaussians": self.scene_3d.splats.num_gaussians if self.scene_3d else 0,
                         "rmse": self.scene_3d.rmse if self.scene_3d else None,
                     },
@@ -367,6 +384,7 @@ if "MultiViewReconstructionResult" not in globals():
         request_metadata: Dict[str, Any] = field(default_factory=dict)
         errors: List[str] = field(default_factory=list)
         warnings: List[str] = field(default_factory=list)
+        stage_reports: List[Dict[str, Any]] = field(default_factory=list)
 
         def save_summary(self, path: Path) -> None:
             """Save reconstruction summary as JSON.
@@ -383,6 +401,7 @@ if "MultiViewReconstructionResult" not in globals():
                 "peak_memory_mb": self.peak_memory_mb,
                 "errors": self.errors,
                 "warnings": self.warnings,
+                "stage_reports": self.stage_reports,
                 "scene": {
                     "num_gaussians": self.scene.splats.num_gaussians,
                     "rmse": self.scene.rmse,
@@ -554,6 +573,12 @@ class SpatialAIPipeline:
         if not input_path.exists():
             raise FileNotFoundError(f"Input file not found: {input_path}")
 
+        if "reconstruction" in self.config.stages:
+            raise ValueError(
+                "Single-image pipeline does not support reconstruction. "
+                "Use process_multiview() with a MultiViewReconstructionRequest."
+            )
+
         # ADR-026 §2.3: Reset stateful backends at sequence boundaries
         if sequence_id is not None:
             self.reset_sequence(sequence_id)
@@ -581,6 +606,7 @@ class SpatialAIPipeline:
                 if "ingest" in self.config.stages:
                     result.linear_image = self._run_ingest(input_path, output_dir, save_intermediates)
                     result.stages_completed.append("ingest")
+                    result.stage_reports.append(build_stage_report(stage="ingest", status="completed"))
 
                 # Phase 2.1: Segmentation
                 if "segment" in self.config.stages or "segmentation" in self.config.stages:
@@ -589,6 +615,7 @@ class SpatialAIPipeline:
 
                     result.segmentation = self._run_segmentation(result.linear_image, output_dir, save_intermediates)
                     result.stages_completed.append("segmentation")
+                    result.stage_reports.append(build_stage_report(stage="segmentation", status="completed"))
 
                 # Phase 2.2: Materials
                 if "materials" in self.config.stages:
@@ -599,6 +626,7 @@ class SpatialAIPipeline:
                         result.linear_image, result.segmentation, output_dir, save_intermediates
                     )
                     result.stages_completed.append("materials")
+                    result.stage_reports.append(build_stage_report(stage="materials", status="completed"))
 
                 # Phase 2.3: Reconstruction
                 if "reconstruction" in self.config.stages:
@@ -819,6 +847,10 @@ class SpatialAIPipeline:
                 peak_memory_mb=peak_memory,
                 stages_completed=["reconstruction", "export"],
                 request_metadata=request.to_metadata_dict(),
+                stage_reports=[
+                    build_stage_report(stage="reconstruction", status="completed"),
+                    build_stage_report(stage="export", status="completed"),
+                ],
             )
 
             self.progress_tracker.complete_pipeline(success=True)
@@ -1503,6 +1535,13 @@ class SpatialAIPipeline:
                 stages_completed=[sr.stage_id for sr in exec_result.stage_results],
                 execution_time=exec_result.total_time_ms / 1000.0,
                 peak_memory_mb=self.resource_manager.get_peak_memory_mb(),
+                stage_reports=[
+                    build_stage_report(
+                        stage=sr.stage_id,
+                        status=("cached" if getattr(sr, "cache_hit", False) else "completed"),
+                    )
+                    for sr in exec_result.stage_results
+                ],
             )
 
             # Extract outputs from graph results

@@ -26,6 +26,7 @@ import torch
 from PIL import Image
 
 from transformation_portal.core.security.model_lock import resolve_model_lock_revision
+from transformation_portal.reporting.contracts import build_capability_report
 
 try:
     from diffusers import FluxPipeline
@@ -107,6 +108,7 @@ class IPAdapterStyleTransfer:
         self.clip_vision_revision = clip_vision_revision
         self.flux_model_revision = flux_model_revision
         self.strict_model_lock = strict_model_lock
+        self.last_capability_report = None
 
         self._resolve_model_revisions()
 
@@ -249,6 +251,14 @@ class IPAdapterStyleTransfer:
             )
 
         styled_image = result.images[0]
+        self.last_capability_report = build_capability_report(
+            requested_backend="ip_adapter",
+            executed_backend="flux_img2img",
+            availability_state="available",
+            reason="Style transfer currently executes through FLUX img2img without adapter injection.",
+            model_repo_id=self.FLUX_MODEL,
+            model_revision=self.flux_model_revision,
+        )
 
         logger.info("Style transfer complete")
 
@@ -331,6 +341,14 @@ class IPAdapterStyleTransfer:
             )
 
         styled_image = result.images[0]
+        self.last_capability_report = build_capability_report(
+            requested_backend="ip_adapter",
+            executed_backend="flux_img2img",
+            availability_state="available",
+            reason="Style transfer currently executes through FLUX img2img without adapter injection.",
+            model_repo_id=self.FLUX_MODEL,
+            model_revision=self.flux_model_revision,
+        )
 
         logger.info("Multi-reference style transfer complete")
 
@@ -362,12 +380,12 @@ class IPAdapterStyleTransfer:
         preset_config = ArchitecturalStylePresets.get_preset(preset)
 
         # Load reference image from preset
-        reference_path = preset_config["reference_image"]
+        reference_path = ArchitecturalStylePresets.resolve_reference_image(preset)
 
         # Transfer style
         return self.transfer_style(
             content_image=content_image,
-            style_reference=reference_path,
+            style_reference=str(reference_path),
             style_strength=strength,
             prompt=preset_config.get("prompt"),
             **kwargs,

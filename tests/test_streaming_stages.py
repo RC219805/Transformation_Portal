@@ -14,7 +14,8 @@ pytestmark = [
     pytest.mark.unit,
 ]
 
-from transformation_portal.streaming.stages import ImageData, ImageLoadStage, ImageSaveStage
+import transformation_portal.depth.models as depth_models
+from transformation_portal.streaming.stages import DepthEstimationStage, ImageData, ImageLoadStage, ImageSaveStage
 
 
 def test_image_load_stage_loads_rgb_image_and_metadata(tmp_path: Path) -> None:
@@ -75,5 +76,91 @@ def test_image_save_stage_writes_expected_output_suffix(tmp_path: Path) -> None:
         with Image.open(output_path) as saved:
             assert saved.mode == "RGB"
             assert saved.size == (2, 2)
+
+    asyncio.run(runner())
+
+
+def test_depth_stage_missing_runtime_fails_closed_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    def _raise_import_error(**_kwargs):
+        raise ImportError("missing depth runtime")
+
+    monkeypatch.setattr(depth_models, "load_depth_model", _raise_import_error)
+
+    async def runner() -> None:
+        stage = DepthEstimationStage()
+        with pytest.raises(DepthEstimationStage.DepthBackendUnavailableError, match="Depth backend unavailable"):
+            await stage.startup()
+
+    asyncio.run(runner())
+
+
+def test_depth_stage_allows_synthetic_only_with_explicit_opt_in(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    def _raise_import_error(**_kwargs):
+        raise ImportError("missing depth runtime")
+
+    monkeypatch.setattr(depth_models, "load_depth_model", _raise_import_error)
+
+    image_data = ImageData(
+        array=np.ones((4, 4, 3), dtype=np.float32),
+        path=tmp_path / "frame.png",
+    )
+
+    async def runner() -> None:
+        stage = DepthEstimationStage(allow_synthetic_depth=True)
+        await stage.startup()
+        try:
+            result = await stage(image_data)
+        finally:
+            await stage.shutdown()
+
+        assert result.success
+        assert result.data is not None
+        assert result.data.metadata["synthetic_output"] is True
+        assert result.data.metadata["depth_capability"]["executed_backend"] == "synthetic"
+        assert result.data.metadata["depth_capability"]["availability_state"] == "synthetic_opt_in"
+
+    asyncio.run(runner())
+
+
+def test_depth_stage_uses_estimate_depth_contract_when_real_model_present(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    calls = {"estimate_depth": 0}
+
+    class FakeDepthModel:
+        model_revision = "rev-123"
+
+        class variant:
+            value = "depth-anything/Depth-Anything-V2-Small-hf"
+
+        def estimate_depth(self, image: np.ndarray) -> dict:
+            calls["estimate_depth"] += 1
+            return {
+                "depth": np.full(image.shape[:2], 0.5, dtype=np.float32),
+                "depth_raw": np.full(image.shape[:2], 12.0, dtype=np.float32),
+                "metadata": {"backend": "pytorch_cpu"},
+            }
+
+    monkeypatch.setattr(depth_models, "load_depth_model", lambda **_kwargs: FakeDepthModel())
+
+    image_data = ImageData(
+        array=np.ones((4, 4, 3), dtype=np.float32),
+        path=tmp_path / "frame.png",
+    )
+
+    async def runner() -> None:
+        stage = DepthEstimationStage(cache_model=False)
+        await stage.startup()
+        try:
+            result = await stage(image_data)
+        finally:
+            await stage.shutdown()
+
+        assert result.success
+        assert calls["estimate_depth"] == 1
+        assert np.allclose(result.data.depth_map, 0.5)
+        assert result.data.metadata["depth_capability"]["executed_backend"] == "pytorch_cpu"
+        assert result.data.metadata["depth_capability"]["model_repo_id"] == "depth-anything/Depth-Anything-V2-Small-hf"
 
     asyncio.run(runner())

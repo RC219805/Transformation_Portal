@@ -32,6 +32,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
+from transformation_portal.reporting.contracts import build_capability_report
+
 from .async_pipeline import AsyncStage, DeviceType, WorkerPool
 
 
@@ -320,6 +322,9 @@ class DepthEstimationStage(AsyncStage[ImageData, ImageData]):
         >>> depth_map = result.data.depth_map
     """
 
+    class DepthBackendUnavailableError(RuntimeError):
+        """Raised when the real depth backend is unavailable and synthetic output is disabled."""
+
     def __init__(
         self,
         device: DeviceType = DeviceType.AUTO,
@@ -327,6 +332,8 @@ class DepthEstimationStage(AsyncStage[ImageData, ImageData]):
         max_concurrent: int = 1,
         cache_model: bool = True,
         worker_pool: Optional[WorkerPool] = None,
+        allow_synthetic_depth: bool = False,
+        model_revision: Optional[str] = None,
     ):
         """Initialize depth estimation stage.
 
@@ -336,6 +343,8 @@ class DepthEstimationStage(AsyncStage[ImageData, ImageData]):
             max_concurrent: Maximum concurrent estimations
             cache_model: Keep model loaded in memory
             worker_pool: Shared worker pool
+            allow_synthetic_depth: Enable synthetic fallback for dev/test only
+            model_revision: Optional pinned model revision
         """
         super().__init__(
             name="depth_estimation",
@@ -348,6 +357,8 @@ class DepthEstimationStage(AsyncStage[ImageData, ImageData]):
         self._model = None
         self._torch_device = None
         self._worker_pool = worker_pool
+        self._allow_synthetic_depth = allow_synthetic_depth
+        self._model_revision = model_revision
 
     def _detect_device(self) -> str:
         """Detect best available device."""
@@ -388,12 +399,19 @@ class DepthEstimationStage(AsyncStage[ImageData, ImageData]):
             return
 
         try:
-            # Try to import from transformation_portal depth module
             from transformation_portal.depth.models import load_depth_model
 
-            self._model = load_depth_model(model_size=self._model_size, device=self._torch_device)
-        except ImportError:
-            # Fallback: create a placeholder that returns mock depth
+            self._model = load_depth_model(
+                model_size=self._model_size,
+                device=self._torch_device,
+                model_revision=self._model_revision,
+            )
+        except Exception as exc:
+            if not self._allow_synthetic_depth:
+                raise self.DepthBackendUnavailableError(
+                    "Depth backend unavailable. Install the repo depth runtime or enable "
+                    "allow_synthetic_depth=True for dev/test instrumentation."
+                ) from exc
             self._model = self._create_mock_model()
 
     def _create_mock_model(self) -> Callable:
@@ -440,11 +458,33 @@ class DepthEstimationStage(AsyncStage[ImageData, ImageData]):
         if self._model is None:
             self._load_model()
 
-        depth_map = self._model(image_data.array)
+        synthetic_output = not hasattr(self._model, "estimate_depth")
+        if synthetic_output:
+            depth_map = self._model(image_data.array)
+            capability = build_capability_report(
+                requested_backend="depth_anything_v2",
+                executed_backend="synthetic",
+                availability_state="synthetic_opt_in",
+                reason="Synthetic depth enabled explicitly for dev/test.",
+                synthetic_output=True,
+            )
+        else:
+            result = self._model.estimate_depth(image_data.array)
+            depth_map = result["depth"]
+            metadata = result.get("metadata") if isinstance(result, dict) else {}
+            capability = build_capability_report(
+                requested_backend="depth_anything_v2",
+                executed_backend=metadata.get("backend", "depth_anything_v2"),
+                availability_state="available",
+                model_repo_id=getattr(getattr(self._model, "variant", None), "value", None),
+                model_revision=getattr(self._model, "model_revision", None),
+            )
 
         image_data.depth_map = depth_map
         image_data.metadata["depth_estimated"] = True
         image_data.metadata["depth_device"] = self._torch_device
+        image_data.metadata["depth_capability"] = capability
+        image_data.metadata["synthetic_output"] = synthetic_output
 
         return image_data
 

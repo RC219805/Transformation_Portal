@@ -45,6 +45,11 @@ from ..core.ml_dependency_health import (
 from ..depth.backends.protocol import DepthBackend, LicenseRestrictionError
 from ..depth.backends.registry import DepthBackendRegistry
 from ..ingest.canonical_json import dump_json, dumps_json
+from ..reporting.contracts import (
+    build_orchestrator_result_capability_report,
+    build_quality_gate_report,
+    resolve_result_quality_gate,
+)
 from ..spatial_ai.reconstruction.contracts import (  # noqa: E501
     LicenseRestrictionError as ReconstructionLicenseRestrictionError,
 )
@@ -3903,6 +3908,7 @@ class EnhanceOrchestrator:
                     ),
                     "attempts": depth_attempts,
                     "selected_attempt_index": None,
+                    "quality_gate": None,
                 }
 
         # Runtime invariant checks for attempt-selection consistency.
@@ -4056,6 +4062,9 @@ class EnhanceOrchestrator:
             "v2_output_path": v2_output_path,
             "segmentation_mask_path": segmentation_mask_path,
             "runtime_s": (pipeline_end_time - pipeline_start_time),
+            "quality_gate": build_quality_gate_report(
+                getattr(depth_metadata, "stats", {}).get("apex_depth_validity") if depth_metadata is not None else None
+            ),
         }
 
     def _verify_pbr_outputs(
@@ -4893,9 +4902,11 @@ class EnhanceOrchestrator:
                     "_active_selected_attempt_index",
                     None,
                 )
+                error_payload["quality_gate"] = None
                 if isinstance(e, ApexStrictGateError):
                     error_payload["error_code"] = e.code
                     error_payload["error_details"] = e.details
+                    error_payload["quality_gate"] = build_quality_gate_report(e.details)
                 results.append(error_payload)
 
         return results
@@ -5031,9 +5042,11 @@ class EnhanceOrchestrator:
                         "_active_selected_attempt_index",
                         None,
                     )
+                    error_payload["quality_gate"] = None
                     if isinstance(e, ApexStrictGateError):
                         error_payload["error_code"] = e.code
                         error_payload["error_details"] = e.details
+                        error_payload["quality_gate"] = build_quality_gate_report(e.details)
                     results.append(error_payload)
 
         if getattr(self.config, "enable_reconstruction", False):
@@ -6012,6 +6025,20 @@ class EnhanceOrchestrator:
                     "error_message": result.get("error"),
                     "error_details": result.get("error_details"),
                     "segmentation_metadata": segmentation_metadata,
+                    "quality_gate": resolve_result_quality_gate(result),
+                    "capability": build_orchestrator_result_capability_report(
+                        result,
+                        requested_backend=getattr(
+                            getattr(self, "_backend_metadata", None),
+                            "requested_backend",
+                            None,
+                        ),
+                        resolution_reason=getattr(
+                            getattr(self, "_backend_metadata", None),
+                            "resolution_reason",
+                            None,
+                        ),
+                    ),
                 }
             )
         return summary_rows
