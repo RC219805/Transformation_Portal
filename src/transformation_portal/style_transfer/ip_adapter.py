@@ -17,28 +17,91 @@ Reference:
     Text-to-Image Diffusion Models" (2023)
 """
 
+from __future__ import annotations
+
 import logging
+from contextlib import nullcontext
 from pathlib import Path
-from typing import List, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Any, List, Optional, Tuple, Union
 
 import numpy as np
-import torch
 from PIL import Image
 
 from transformation_portal.core.security.model_lock import resolve_model_lock_revision
 from transformation_portal.reporting.contracts import build_capability_report
 
-try:
+if TYPE_CHECKING:
+    import torch
     from diffusers import FluxPipeline
     from transformers import CLIPImageProcessor, CLIPVisionModelWithProjection
-
-    IPADAPTER_AVAILABLE = True
-except ImportError:
-    IPADAPTER_AVAILABLE = False
-    logging.warning("IP-Adapter dependencies not available")
+else:
+    torch = None  # type: ignore[assignment]
+    FluxPipeline = Any  # type: ignore[assignment]
+    CLIPImageProcessor = Any  # type: ignore[assignment]
+    CLIPVisionModelWithProjection = Any  # type: ignore[assignment]
 
 
 logger = logging.getLogger(__name__)
+
+_TORCH_IMPORT_ERROR: Optional[Exception] = None
+_RUNTIME_IMPORT_ERROR: Optional[Exception] = None
+
+try:
+    import torch as _torch
+except Exception as exc:  # pragma: no cover - depends on optional runtime
+    _torch = None
+    _TORCH_IMPORT_ERROR = exc
+
+if _torch is not None:
+    torch = _torch  # type: ignore[assignment]
+
+
+def _missing_runtime_import_error() -> ImportError:
+    if _TORCH_IMPORT_ERROR is not None:
+        return ImportError(
+            "IP-Adapter requires torch, transformers, and diffusers. "
+            "Install the optional style-transfer runtime before using this surface."
+        )
+    if _RUNTIME_IMPORT_ERROR is not None:
+        return ImportError(
+            "IP-Adapter requires a compatible torch + transformers + diffusers runtime. "
+            "The optional style-transfer dependencies could not be imported."
+        )
+    return ImportError(
+        "IP-Adapter requires torch, transformers, and diffusers. "
+        "Install the optional style-transfer runtime before using this surface."
+    )
+
+
+def _require_torch_runtime() -> Any:
+    if torch is None:  # type: ignore[truthy-function]
+        raise _missing_runtime_import_error() from _TORCH_IMPORT_ERROR
+    return torch
+
+
+def _load_ip_adapter_runtime() -> tuple[type[Any], type[Any], type[Any]]:
+    global FluxPipeline, CLIPImageProcessor, CLIPVisionModelWithProjection, _RUNTIME_IMPORT_ERROR
+
+    _require_torch_runtime()
+
+    if (
+        not isinstance(FluxPipeline, type)
+        or not isinstance(CLIPImageProcessor, type)
+        or not isinstance(CLIPVisionModelWithProjection, type)
+    ):
+        try:
+            from diffusers import FluxPipeline as flux_pipeline_cls
+            from transformers import CLIPImageProcessor as clip_image_processor_cls
+            from transformers import CLIPVisionModelWithProjection as clip_vision_model_cls
+        except Exception as exc:  # pragma: no cover - depends on optional runtime
+            _RUNTIME_IMPORT_ERROR = exc
+            raise _missing_runtime_import_error() from exc
+
+        FluxPipeline = flux_pipeline_cls  # type: ignore[assignment]
+        CLIPImageProcessor = clip_image_processor_cls  # type: ignore[assignment]
+        CLIPVisionModelWithProjection = clip_vision_model_cls  # type: ignore[assignment]
+
+    return FluxPipeline, CLIPImageProcessor, CLIPVisionModelWithProjection  # type: ignore[return-value]
 
 
 class IPAdapterStyleTransfer:
@@ -76,7 +139,7 @@ class IPAdapterStyleTransfer:
     def __init__(
         self,
         device: Optional[str] = None,
-        torch_dtype: torch.dtype = torch.bfloat16,
+        torch_dtype: Optional["torch.dtype"] = None,
         enable_cpu_offload: bool = False,
         *,
         clip_vision_revision: Optional[str] = None,
@@ -97,11 +160,11 @@ class IPAdapterStyleTransfer:
         Raises:
             ImportError: If required dependencies not available
         """
-        if not IPADAPTER_AVAILABLE:
-            raise ImportError(
-                "IP-Adapter requires transformers and diffusers. "
-                "Install with: pip install transformers>=4.38.0 diffusers>=0.30.0"
-            )
+        runtime_torch = _require_torch_runtime()
+        flux_pipeline_cls, clip_image_processor_cls, clip_vision_model_cls = _load_ip_adapter_runtime()
+
+        if torch_dtype is None:
+            torch_dtype = runtime_torch.bfloat16
 
         self.device = device or self._detect_device()
         self.torch_dtype = torch_dtype
@@ -115,19 +178,19 @@ class IPAdapterStyleTransfer:
         logger.info(f"Initializing IP-Adapter on {self.device}")
 
         # Load CLIP vision model for reference encoding
-        self.image_encoder = CLIPVisionModelWithProjection.from_pretrained(  # nosec B615
+        self.image_encoder = clip_vision_model_cls.from_pretrained(  # nosec B615
             self.CLIP_VISION_MODEL,
             revision=self.clip_vision_revision,
             torch_dtype=torch_dtype,
         ).to(self.device)
 
-        self.image_processor = CLIPImageProcessor.from_pretrained(  # nosec B615
+        self.image_processor = clip_image_processor_cls.from_pretrained(  # nosec B615
             self.CLIP_VISION_MODEL,
             revision=self.clip_vision_revision,
         )
 
         # Load FLUX pipeline
-        self.flux_pipe = FluxPipeline.from_pretrained(  # nosec B615
+        self.flux_pipe = flux_pipeline_cls.from_pretrained(  # nosec B615
             self.FLUX_MODEL,
             revision=self.flux_model_revision,
             torch_dtype=torch_dtype,
@@ -157,13 +220,22 @@ class IPAdapterStyleTransfer:
 
     def _detect_device(self) -> str:
         """Auto-detect optimal device."""
-        if torch.cuda.is_available():
+        runtime_torch = torch
+        if runtime_torch is None:
+            return "cpu"
+        if runtime_torch.cuda.is_available():
             return "cuda"
-        elif torch.backends.mps.is_available():
+        elif runtime_torch.backends.mps.is_available():
             return "mps"
         return "cpu"
 
-    def encode_reference_image(self, image: Union[str, Path, Image.Image, np.ndarray]) -> torch.Tensor:
+    def _inference_mode(self) -> Any:
+        runtime_torch = torch
+        if runtime_torch is None:
+            return nullcontext()
+        return runtime_torch.inference_mode()
+
+    def encode_reference_image(self, image: Union[str, Path, Image.Image, np.ndarray]) -> "torch.Tensor":
         """Encode reference image to style features.
 
         Args:
@@ -179,7 +251,8 @@ class IPAdapterStyleTransfer:
         inputs = self.image_processor(images=pil_image, return_tensors="pt").to(self.device)
 
         # Encode
-        with torch.inference_mode():
+        runtime_torch = _require_torch_runtime()
+        with runtime_torch.inference_mode():
             image_features = self.image_encoder(**inputs).image_embeds
 
         logger.info(f"Encoded reference image: {image_features.shape}")
@@ -227,7 +300,8 @@ class IPAdapterStyleTransfer:
         # Prepare for diffusion
         generator = None
         if seed is not None:
-            generator = torch.Generator(device=self.device).manual_seed(seed)
+            runtime_torch = _require_torch_runtime()
+            generator = runtime_torch.Generator(device=self.device).manual_seed(seed)
 
         # NOTE: Full IP-Adapter integration would inject style_features
         # into the UNet cross-attention layers. This is a framework showing
@@ -238,7 +312,7 @@ class IPAdapterStyleTransfer:
 
         # For now, use FLUX img2img as foundation
         # (IP-Adapter weights for FLUX are in development)
-        with torch.inference_mode():
+        with self._inference_mode():
             # The style_features would be passed to a custom pipeline
             # that injects them into cross-attention
             result = self.flux_pipe(
@@ -308,7 +382,8 @@ class IPAdapterStyleTransfer:
             weights.append(weight)
 
         # Normalize weights
-        weights = torch.tensor(weights, device=self.device)
+        runtime_torch = _require_torch_runtime()
+        weights = runtime_torch.tensor(weights, device=self.device)
         weights = weights / weights.sum()
 
         # Blend style features
@@ -325,12 +400,12 @@ class IPAdapterStyleTransfer:
 
         generator = None
         if seed is not None:
-            generator = torch.Generator(device=self.device).manual_seed(seed)
+            generator = runtime_torch.Generator(device=self.device).manual_seed(seed)
 
         # Calculate average strength from weights
         avg_strength = 0.7  # Default
 
-        with torch.inference_mode():
+        with runtime_torch.inference_mode():
             result = self.flux_pipe(
                 prompt=prompt,
                 image=content_pil,
@@ -395,7 +470,7 @@ class IPAdapterStyleTransfer:
         self,
         reference_images: List[Union[str, Path, Image.Image]],
         weights: Optional[List[float]] = None,
-    ) -> torch.Tensor:
+    ) -> "torch.Tensor":
         """Extract averaged style from collection of reference images.
 
         Useful for learning a "house style" from multiple examples.
@@ -416,7 +491,8 @@ class IPAdapterStyleTransfer:
         if weights is None:
             weights = [1.0 / len(reference_images)] * len(reference_images)
 
-        weights = torch.tensor(weights, device=self.device)
+        runtime_torch = _require_torch_runtime()
+        weights = runtime_torch.tensor(weights, device=self.device)
         weights = weights / weights.sum()
 
         # Average with weights
@@ -445,7 +521,8 @@ class IPAdapterStyleTransfer:
         features2 = self.encode_reference_image(image2)
 
         # Compute cosine similarity
-        similarity = torch.nn.functional.cosine_similarity(features1, features2, dim=-1).item()
+        runtime_torch = _require_torch_runtime()
+        similarity = runtime_torch.nn.functional.cosine_similarity(features1, features2, dim=-1).item()
 
         # Normalize to 0-1
         similarity = (similarity + 1) / 2
@@ -479,7 +556,8 @@ class IPAdapterStyleTransfer:
         features2 = self.encode_reference_image(style2)
 
         # Create interpolation weights
-        alphas = torch.linspace(0, 1, num_steps, device=self.device)
+        runtime_torch = _require_torch_runtime()
+        alphas = runtime_torch.linspace(0, 1, num_steps, device=self.device)
 
         interpolated_images = []
 

@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+import builtins
+import importlib.util
+from pathlib import Path
 from unittest.mock import Mock
 
 import pytest
 from PIL import Image
 
+import transformation_portal.style_transfer.ip_adapter as ip_adapter_module
 from transformation_portal.style_transfer.ip_adapter import IPAdapterStyleTransfer
 from transformation_portal.style_transfer.style_presets import (
     ArchitecturalStylePresets,
@@ -63,3 +67,36 @@ def test_transfer_style_reports_flux_img2img_backend() -> None:
     assert isinstance(result, Image.Image)
     assert style_transfer.last_capability_report["executed_backend"] == "flux_img2img"
     assert style_transfer.last_capability_report["model_revision"] == "rev-123"
+
+
+def test_ip_adapter_module_import_stays_lazy_without_optional_runtime(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module_path = Path(ip_adapter_module.__file__).resolve()
+    original_import = builtins.__import__
+
+    def fake_import(name, globals=None, locals=None, fromlist=(), level=0):
+        if name == "torch":
+            raise ModuleNotFoundError("No module named 'torch'")
+        if name in {"diffusers", "transformers"}:
+            raise ModuleNotFoundError(f"No module named '{name}'")
+        return original_import(name, globals, locals, fromlist, level)
+
+    monkeypatch.setattr(builtins, "__import__", fake_import)
+
+    spec = importlib.util.spec_from_file_location("test_ip_adapter_lazy_import", module_path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    assert module.IPAdapterStyleTransfer.__name__ == "IPAdapterStyleTransfer"
+
+
+def test_ip_adapter_init_fails_closed_when_optional_runtime_is_missing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(ip_adapter_module, "torch", None)
+    monkeypatch.setattr(ip_adapter_module, "_TORCH_IMPORT_ERROR", ModuleNotFoundError("No module named 'torch'"))
+
+    with pytest.raises(ImportError, match="requires torch, transformers, and diffusers"):
+        IPAdapterStyleTransfer()
