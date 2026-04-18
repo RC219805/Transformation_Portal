@@ -8,7 +8,6 @@ execution wrapper and DAG executor. Public compatibility aliases remain in
 from __future__ import annotations
 
 import hashlib
-import json
 import os
 import platform
 import re
@@ -17,6 +16,7 @@ from pathlib import Path
 from typing import Any
 
 from transformation_portal.determinism.jcs import dumpb as jcs_dumpb
+from transformation_portal.ingest.canonical_json import dump_json
 
 
 class CASObjectMissingError(Exception):
@@ -47,7 +47,7 @@ def atomic_write_json(path: Path, data: dict[str, Any]) -> None:
 
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as handle:
-            json.dump(data, handle, indent=2, sort_keys=True)
+            dump_json(data, handle, indent=2, sort_keys=True)
             handle.flush()
             os.fsync(handle.fileno())
 

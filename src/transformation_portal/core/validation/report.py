@@ -5,7 +5,6 @@ Captures the full context of a processing run to ensure results can be
 reproduced or debugged later.
 """
 
-import json
 import logging
 import platform
 import subprocess
@@ -13,7 +12,12 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-import torch
+from transformation_portal.ingest.canonical_json import dump_json
+
+try:
+    import torch
+except (ImportError, OSError):  # pragma: no cover - optional dependency boundary
+    torch = None  # type: ignore[assignment]
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +50,14 @@ class DeviceInfo:
 
     @classmethod
     def capture(cls) -> "DeviceInfo":
+        if torch is None:
+            return cls(
+                system=platform.platform(),
+                python_version=platform.python_version(),
+                pytorch_version="not-installed",
+                cuda_version=None,
+                gpu_name=None,
+            )
         gpu = torch.cuda.get_device_name(0) if torch.cuda.is_available() else None
         cuda = torch.version.cuda if torch.cuda.is_available() else None
         return cls(
@@ -88,7 +100,7 @@ class ProcessingReport:
     metrics: Dict[str, float] = field(default_factory=dict)
     output_files: List[str] = field(default_factory=list)
 
-    def save(self, path: str):
+    def save(self, path: str) -> None:
         """Save report to JSON."""
-        with open(path, "w") as f:
-            json.dump(asdict(self), f, indent=2)
+        with open(path, "w", encoding="utf-8") as handle:
+            dump_json(asdict(self), handle, indent=2, sort_keys=True)

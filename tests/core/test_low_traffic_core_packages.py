@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 import math
+import subprocess
+import sys
 
 import numpy as np
 import pytest
@@ -92,6 +94,44 @@ def test_observability_setup_metrics_is_explicit_no_op() -> None:
     MetricsRegistry.increment("jobs")
 
     assert MetricsRegistry.get_all() == {"jobs": 1}
+
+
+def test_validation_package_import_is_torch_optional() -> None:
+    test_script = """
+import sys
+
+class TorchBlocker:
+    def find_spec(self, fullname, path=None, target=None):
+        if fullname == "torch" or fullname.startswith("torch."):
+            raise ImportError(f"Torch import blocked for test: {fullname}")
+        return None
+
+sys.meta_path.insert(0, TorchBlocker())
+
+import transformation_portal.core.validation as validation
+from transformation_portal.core.validation.report import DeviceInfo, ProcessingReport
+
+assert validation.MetricsComputer is not None
+device = DeviceInfo.capture()
+assert device.pytorch_version == "not-installed"
+assert device.cuda_version is None
+assert device.gpu_name is None
+report = ProcessingReport(job_id="job-1")
+assert report.device.pytorch_version == "not-installed"
+print("SUCCESS")
+"""
+    result = subprocess.run(
+        [sys.executable, "-c", test_script],
+        capture_output=True,
+        text=True,
+        timeout=10,
+        check=False,
+    )
+
+    if result.returncode != 0:
+        pytest.fail(f"validation import should not require torch\nstdout: {result.stdout}\nstderr: {result.stderr}")
+
+    assert "SUCCESS" in result.stdout
 
 
 def test_validation_helpers_smoke(tmp_path) -> None:
