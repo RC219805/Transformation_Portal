@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import math
 import subprocess
 import sys
 
@@ -139,7 +138,9 @@ def test_validation_helpers_smoke(tmp_path) -> None:
     metrics = MetricsComputer.compute(image, image.copy())
     comparison = BaselineComparator().compare(image, image.copy())
 
-    assert math.isinf(metrics.psnr)
+    assert metrics.psnr >= 100.0
+    assert metrics.mse == pytest.approx(0.0)
+    assert metrics.ssim == pytest.approx(1.0)
     assert comparison.passed is True
 
     report = ProcessingReport(

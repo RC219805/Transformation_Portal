@@ -229,10 +229,9 @@ def create_tls_connection(
     """
     try:
         current_min_version = getattr(ssl_context, "minimum_version", None)
-        if current_min_version is None or current_min_version < _MINIMUM_TLS_VERSION:
-            ssl_context.minimum_version = _MINIMUM_TLS_VERSION
-        if hasattr(ssl_context, "options") and _TLS_LEGACY_DISABLE_OPTIONS:
-            ssl_context.options |= _TLS_LEGACY_DISABLE_OPTIONS
+        if current_min_version is None or current_min_version < ssl.TLSVersion.TLSv1_2:
+            ssl_context.minimum_version = ssl.TLSVersion.TLSv1_2
+        ssl_context.options |= ssl.OP_NO_TLSv1 | ssl.OP_NO_TLSv1_1
         sock = socket.create_connection((host, port), timeout=timeout)
         return ssl_context.wrap_socket(
             sock,
