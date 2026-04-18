@@ -33,6 +33,7 @@ from typing import Optional, Tuple
 
 logger = logging.getLogger(__name__)
 _MINIMUM_TLS_VERSION = ssl.TLSVersion.TLSv1_2
+_TLS_LEGACY_DISABLE_OPTIONS = getattr(ssl, "OP_NO_TLSv1", 0) | getattr(ssl, "OP_NO_TLSv1_1", 0)
 
 
 class TLSError(RuntimeError):
@@ -48,6 +49,8 @@ def _enforce_minimum_tls_version(
     current_min_version = getattr(ctx, "minimum_version", None)
     if current_min_version is None or current_min_version < min_version:
         ctx.minimum_version = min_version
+    if hasattr(ctx, "options") and _TLS_LEGACY_DISABLE_OPTIONS:
+        ctx.options |= _TLS_LEGACY_DISABLE_OPTIONS
     return ctx
 
 
@@ -225,7 +228,11 @@ def create_tls_connection(
         TLSError: If connection fails
     """
     try:
-        _enforce_minimum_tls_version(ssl_context)
+        current_min_version = getattr(ssl_context, "minimum_version", None)
+        if current_min_version is None or current_min_version < _MINIMUM_TLS_VERSION:
+            ssl_context.minimum_version = _MINIMUM_TLS_VERSION
+        if hasattr(ssl_context, "options") and _TLS_LEGACY_DISABLE_OPTIONS:
+            ssl_context.options |= _TLS_LEGACY_DISABLE_OPTIONS
         sock = socket.create_connection((host, port), timeout=timeout)
         return ssl_context.wrap_socket(
             sock,

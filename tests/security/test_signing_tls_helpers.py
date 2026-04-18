@@ -92,6 +92,7 @@ def test_create_tls_connection_enforces_tls12_floor(monkeypatch: pytest.MonkeyPa
     class FakeSSLContext:
         def __init__(self) -> None:
             self.minimum_version = ssl.TLSVersion.TLSv1
+            self.options = 0
             self.wrap_calls: list[tuple[object, str]] = []
 
         def wrap_socket(self, sock, *, server_hostname):
@@ -105,4 +106,10 @@ def test_create_tls_connection_enforces_tls12_floor(monkeypatch: pytest.MonkeyPa
 
     assert wrapped == "wrapped-socket"
     assert context.minimum_version == ssl.TLSVersion.TLSv1_2
+    tlsv1_disable = getattr(ssl, "OP_NO_TLSv1", 0)
+    tlsv11_disable = getattr(ssl, "OP_NO_TLSv1_1", 0)
+    if tlsv1_disable:
+        assert context.options & tlsv1_disable
+    if tlsv11_disable:
+        assert context.options & tlsv11_disable
     assert context.wrap_calls and context.wrap_calls[0][1] == "127.0.0.1"
