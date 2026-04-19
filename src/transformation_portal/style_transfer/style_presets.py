@@ -20,9 +20,16 @@ Each preset includes:
 
 import logging
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Dict, List, Optional
 
 logger = logging.getLogger(__name__)
+
+
+class PresetAssetsNotBundledError(FileNotFoundError):
+    """Raised when a preset references an asset that is not bundled locally."""
+
+    error_code = "asset_bundle_missing"
 
 
 @dataclass
@@ -359,6 +366,8 @@ class ArchitecturalStylePresets:
         ),
     }
 
+    ASSETS_ROOT = Path(__file__).resolve().parent / "preset_assets"
+
     @classmethod
     def get_preset(cls, name: str) -> Dict[str, any]:
         """Get style preset by name.
@@ -389,6 +398,33 @@ class ArchitecturalStylePresets:
             "contrast": preset.contrast,
             "tags": preset.tags,
         }
+
+    @classmethod
+    def resolve_reference_image(
+        cls,
+        name: str,
+        *,
+        assets_root: Optional[Path] = None,
+    ) -> Path:
+        """Resolve and validate a preset reference image inside the bundled asset pack."""
+        preset = cls.get_preset(name)
+        base_root = (Path(assets_root) if assets_root is not None else cls.ASSETS_ROOT).resolve()
+        candidate = Path(preset["reference_image"])
+        if candidate.is_absolute():
+            raise PresetAssetsNotBundledError(
+                f"Preset '{name}' assets must live inside the bundled asset pack. "
+                f"Absolute reference paths are not allowed: {candidate}"
+            )
+        resolved = (base_root / candidate).resolve()
+        try:
+            resolved.relative_to(base_root)
+        except ValueError as exc:
+            raise PresetAssetsNotBundledError(
+                f"Preset '{name}' assets must stay within the bundled asset pack: {resolved}"
+            ) from exc
+        if not resolved.exists():
+            raise PresetAssetsNotBundledError(f"Preset '{name}' assets are not bundled. Missing reference image: {resolved}")
+        return resolved
 
     @classmethod
     def list_presets(cls, category: Optional[str] = None, tags: Optional[List[str]] = None) -> List[str]:
@@ -455,4 +491,4 @@ class ArchitecturalStylePresets:
 
 
 # Export
-__all__ = ["StylePreset", "ArchitecturalStylePresets"]
+__all__ = ["StylePreset", "ArchitecturalStylePresets", "PresetAssetsNotBundledError"]

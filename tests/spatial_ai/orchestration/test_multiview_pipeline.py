@@ -198,6 +198,10 @@ class TestMultiviewPipelineExecution:
         assert summary["scene"]["num_gaussians"] > 0
         assert "stages_completed" in summary
         assert "reconstruction" in summary["stages_completed"]
+        assert summary["stage_reports"] == [
+            {"stage": "reconstruction", "status": "completed", "capability": None, "quality_gate": None},
+            {"stage": "export", "status": "completed", "capability": None, "quality_gate": None},
+        ]
 
     def test_accepts_synthetic_with_override(self, tmp_path):
         """Synthetic cameras work with explicit override."""

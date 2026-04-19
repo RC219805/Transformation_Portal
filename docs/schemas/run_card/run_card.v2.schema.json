@@ -500,6 +500,109 @@
               "string",
               "null"
             ]
+          },
+          "quality_gate": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "minLength": 1
+              },
+              "passed": {
+                "type": "boolean"
+              },
+              "failure_codes": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "warnings": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "details": {
+                "type": "object",
+                "properties": {
+                  "metrics": {
+                    "type": "object"
+                  },
+                  "thresholds": {
+                    "type": "object"
+                  },
+                  "shape_context": {
+                    "type": "object"
+                  }
+                },
+                "additionalProperties": true
+              }
+            },
+            "additionalProperties": true
+          },
+          "capability": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "requested_backend": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "executed_backend": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "availability_state": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "reason": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "synthetic_output": {
+                "type": "boolean"
+              },
+              "stub_mode": {
+                "type": "boolean"
+              },
+              "fallback_executed": {
+                "type": "boolean"
+              },
+              "model_repo_id": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "model_revision": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "asset_bundle_version": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "additionalProperties": true
           }
         },
         "additionalProperties": true

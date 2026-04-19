@@ -7,7 +7,7 @@ does not eagerly pull in optional ML stacks like torch-backed depth models.
 from __future__ import annotations
 
 from importlib import import_module
-from typing import Dict, Tuple
+from typing import Dict, Optional, Tuple
 
 
 class CoreMLExporter:
@@ -42,6 +42,7 @@ __all__ = [
     "DepthAnythingV2Model",
     "ModelBackend",
     "ModelVariant",
+    "load_depth_model",
     "CoreMLDepthModel",
     "CoreMLExporter",
     "CoreMLDepthEstimator",
@@ -62,3 +63,40 @@ def __getattr__(name: str) -> object:
 
 def __dir__() -> list[str]:
     return sorted(set(globals()) | set(__all__))
+
+
+def load_depth_model(
+    *,
+    model_size: str = "base",
+    device: Optional[str] = None,
+    model_revision: Optional[str] = None,
+) -> object:
+    """Compatibility loader for the repo-local Depth Anything V2 wrapper."""
+    depth_model_cls = __getattr__("DepthAnythingV2Model")
+    model_backend_cls = __getattr__("ModelBackend")
+    model_variant_cls = __getattr__("ModelVariant")
+
+    normalized_size = str(model_size or "base").strip().lower()
+    variant_map = {
+        "small": model_variant_cls.SMALL,
+        "base": model_variant_cls.BASE,
+        "large": model_variant_cls.LARGE,
+    }
+    try:
+        variant = variant_map[normalized_size]
+    except KeyError as exc:
+        raise ValueError(f"Unsupported depth model_size {model_size!r}. Expected one of: small, base, large.") from exc
+
+    normalized_device = str(device or "").strip().lower()
+    backend = None
+    if normalized_device == "mps":
+        backend = model_backend_cls.PYTORCH_MPS
+    elif normalized_device in {"cpu", "cuda"}:
+        backend = model_backend_cls.PYTORCH_CPU
+
+    return depth_model_cls(
+        variant=variant,
+        backend=backend,
+        device=(normalized_device or None),
+        model_revision=model_revision,
+    )

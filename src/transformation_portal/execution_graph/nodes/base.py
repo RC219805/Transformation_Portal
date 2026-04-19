@@ -15,6 +15,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
+from transformation_portal.stage_graph.stage import StageStatus
+
 
 @dataclass
 class NodeResult:
@@ -29,11 +31,17 @@ class NodeResult:
     outputs: dict[str, Any] = field(default_factory=dict)
     metadata: dict[str, Any] = field(default_factory=dict)
     error: Optional[str] = None
+    status: StageStatus = StageStatus.COMPLETED
+
+    def __post_init__(self) -> None:
+        """Normalize legacy error-only construction onto shared stage status."""
+        if self.error is not None and self.status in {StageStatus.COMPLETED, StageStatus.CACHED}:
+            self.status = StageStatus.FAILED
 
     @property
     def success(self) -> bool:
         """Check if execution succeeded."""
-        return self.error is None
+        return self.status in {StageStatus.COMPLETED, StageStatus.CACHED}
 
 
 class DAGNode:

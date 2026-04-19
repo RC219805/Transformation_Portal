@@ -16,6 +16,8 @@ from pathlib import Path
 from typing import Any, Optional
 
 from transformation_portal.execution_graph.nodes.base import DAGNode, NodeResult
+from transformation_portal.reporting.contracts import build_capability_report
+from transformation_portal.stage_graph.stage import StageStatus
 
 logger = logging.getLogger(__name__)
 
@@ -138,22 +140,25 @@ class NVDiffRecNode(DAGNode):
 
         output_dir.mkdir(parents=True, exist_ok=True)
 
-        # Return stub outputs indicating backend is not available
         return NodeResult(
-            outputs={
-                "albedo": None,
-                "normal": None,
-                "roughness": None,
-                "metallic": None,
-                "mesh": None,
-                "diagnostics": None,
-                "backend_available": False,
-            },
+            outputs={},
             metadata={
                 "num_input_images": len(image_paths),
                 "output_dir": str(output_dir),
+                "backend_available": False,
                 "stub_mode": True,
+                "capability": build_capability_report(
+                    requested_backend="nvdiffrec",
+                    executed_backend=None,
+                    availability_state="backend_unwired",
+                    reason=(
+                        "NVDiffRec backend is not wired for this execution node. "
+                        "Provide a concrete backend or use the supported multiview reconstruction surface."
+                    ),
+                    stub_mode=True,
+                ),
             },
+            status=StageStatus.UNAVAILABLE,
         )
 
     def _run_with_backend(
@@ -187,7 +192,13 @@ class NVDiffRecNode(DAGNode):
                 metadata={
                     "num_input_images": len(image_paths),
                     "output_dir": str(output_dir),
+                    "backend_available": True,
                     "stub_mode": False,
+                    "capability": build_capability_report(
+                        requested_backend="nvdiffrec",
+                        executed_backend="nvdiffrec",
+                        availability_state="available",
+                    ),
                 },
             )
 

@@ -33,6 +33,7 @@ class StageStatus(str, Enum):
     CACHED = "cached"
     COMPLETED = "completed"
     FAILED = "failed"
+    UNAVAILABLE = "unavailable"
     SKIPPED = "skipped"
 
 

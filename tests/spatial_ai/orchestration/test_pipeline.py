@@ -204,6 +204,7 @@ class TestPipelineResult:
         assert result.errors == []
         assert result.warnings == []
         assert result.metadata == {}
+        assert result.stage_reports == []
 
     def test_full_result_creation(self):
         """Test creating result with all fields."""
@@ -233,6 +234,7 @@ class TestPipelineResult:
         assert result.errors == ["Error 1"]
         assert result.warnings == ["Warning 1"]
         assert result.metadata == {"key": "value"}
+        assert result.stage_reports == []
 
     def test_save_summary(self, tmp_path):
         """Test saving execution summary as JSON."""
@@ -261,6 +263,12 @@ class TestPipelineResult:
             errors=["Error 1", "Error 2"],
             warnings=["Warning 1"],
             metadata={"custom": "data"},
+            stage_reports=[
+                {"stage": "ingest", "status": "completed", "capability": None, "quality_gate": None},
+                {"stage": "segmentation", "status": "completed", "capability": None, "quality_gate": None},
+                {"stage": "materials", "status": "completed", "capability": None, "quality_gate": None},
+                {"stage": "reconstruction", "status": "completed", "capability": None, "quality_gate": None},
+            ],
         )
 
         summary_path = tmp_path / "summary.json"
@@ -278,6 +286,7 @@ class TestPipelineResult:
         assert summary["peak_memory_mb"] == 4096.0
         assert summary["errors"] == ["Error 1", "Error 2"]
         assert summary["warnings"] == ["Warning 1"]
+        assert len(summary["stage_reports"]) == 4
 
         # Check results section
         assert summary["results"]["linear_image"] is True
@@ -300,6 +309,10 @@ class TestPipelineResult:
             linear_image=MagicMock(),
             execution_time=10.0,
             peak_memory_mb=512.0,
+            stage_reports=[
+                {"stage": "ingest", "status": "completed", "capability": None, "quality_gate": None},
+                {"stage": "segmentation", "status": "skipped", "capability": None, "quality_gate": None},
+            ],
         )
 
         summary_path = tmp_path / "partial.json"
@@ -313,6 +326,7 @@ class TestPipelineResult:
         assert summary["results"]["segmentation"]["num_masks"] == 0
         assert summary["results"]["materials"]["completed"] is False
         assert summary["results"]["scene_3d"]["completed"] is False
+        assert summary["stage_reports"][1]["status"] == "skipped"
 
 
 class TestSpatialAIPipelineInitialization:
@@ -1146,6 +1160,26 @@ class TestSpatialAIPipelineE2E:
         summary_path = output_dir / "pipeline_summary.json"
         assert summary_path.exists()
 
+    def test_process_rejects_single_image_reconstruction_at_entrypoint(self, tmp_path):
+        """Single-image reconstruction should fail before execution begins."""
+        config = PipelineConfig(
+            tier="apex_research",
+            stages=["ingest", "reconstruction"],
+        )
+        pipeline = SpatialAIPipeline(config)
+
+        input_path = tmp_path / "input.tiff"
+        input_path.touch()
+
+        with pytest.raises(PipelineError, match="process_multiview") as exc_info:
+            pipeline.process(
+                input_path=input_path,
+                output_dir=tmp_path / "output",
+                save_intermediates=False,
+            )
+
+        assert exc_info.value.stage == "reconstruction"
+
     def test_process_input_not_found(self, tmp_path):
         """Test process raises error when input file not found."""
         config = PipelineConfig(tier="standard", stages=["ingest"])
@@ -1351,7 +1385,7 @@ class TestGraphModeExecution:
     """Test graph-mode execution path (ADR-029)."""
 
     def test_graph_mode_rejects_reconstruction(self, tmp_path):
-        """Graph mode should fail explicitly if reconstruction is requested."""
+        """Single-image process() should reject reconstruction before graph execution."""
         config = PipelineConfig(
             tier="apex_research",  # Use research tier (3DGS license requires it)
             stages=["ingest", "segment", "reconstruction"],
@@ -1368,8 +1402,8 @@ class TestGraphModeExecution:
                 output_dir=tmp_path / "output",
             )
 
-        assert "reconstruction" in str(exc_info.value).lower()
-        assert "graph mode" in str(exc_info.value).lower()
+        assert exc_info.value.stage == "reconstruction"
+        assert "process_multiview" in str(exc_info.value)
 
     def test_graph_mode_delegates_to_executor(self, tmp_path):
         """Graph mode should delegate to Executor.execute()."""
