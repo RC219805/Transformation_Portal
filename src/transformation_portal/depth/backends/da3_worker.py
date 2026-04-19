@@ -41,6 +41,11 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Enable the Apple CoreML opt-in when supported.",
     )
     parser.add_argument(
+        "--non-commercial-ok",
+        action="store_true",
+        help="Acknowledge non-commercial registry-selected models for subprocess execution.",
+    )
+    parser.add_argument(
         "--input-image",
         type=Path,
         help="Input image path for inference mode.",
@@ -97,6 +102,7 @@ def _run_inference(
     model_key: str | None,
     device: str,
     use_coreml: bool,
+    non_commercial_ok: bool,
 ) -> int:
     """Run DA3 inference and persist structured outputs."""
     from ...lux_depth_v3.config import DA3Config, DeviceConfig
@@ -107,6 +113,7 @@ def _run_inference(
     config = DA3Config(
         model_variant=model_variant,
         model_key=model_key,
+        non_commercial_ok=non_commercial_ok,
         device=DeviceConfig(device=device, use_coreml=use_coreml),
     )
     engine = DA3InferenceEngine(
@@ -114,6 +121,7 @@ def _run_inference(
         commercial_use=True,
         validate_license_strict=False,
         model_key=model_key,
+        non_commercial_ok=non_commercial_ok,
     )
     result = engine.predict(image)
 
@@ -161,6 +169,7 @@ def main(argv: list[str] | None = None) -> int:
         model_key=str(args.model_key) if args.model_key else None,
         device=str(args.device),
         use_coreml=bool(args.use_coreml),
+        non_commercial_ok=bool(args.non_commercial_ok),
     )
 
 

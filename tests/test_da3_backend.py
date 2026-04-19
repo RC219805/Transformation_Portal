@@ -211,6 +211,7 @@ def test_da3_backend_subprocess_ensure_available_skips_local_dependency_checks(t
     assert "--check" in command
     assert "METRIC_LARGE" in command
     assert "da3_research" in command
+    assert "--non-commercial-ok" in command
     assert mock_run.call_args.kwargs["timeout"] == 321
 
 
@@ -395,7 +396,58 @@ def test_da3_backend_subprocess_compute_returns_depth_result(tmp_path):
         assert command[command.index("--model-variant") + 1] == "METRIC_LARGE"
         assert "--model-key" in command
         assert command[command.index("--model-key") + 1] == "da3_research"
+        assert "--non-commercial-ok" in command
     assert seen_timeouts == [123, 123]
+
+
+def test_da3_worker_inference_propagates_non_commercial_ack(monkeypatch, tmp_path):
+    """Worker subprocess config should preserve parent non-commercial acknowledgement."""
+    import transformation_portal.depth.backends.da3_worker as da3_worker
+    import transformation_portal.lux_depth_v3.inference as inference_module
+
+    captured = {}
+    input_path = tmp_path / "input.png"
+    output_depth = tmp_path / "depth.npy"
+    output_json = tmp_path / "result.json"
+    Image.new("RGB", (4, 5), color="white").save(input_path)
+
+    class FakeEngine:
+        def __init__(self, *, config, commercial_use, validate_license_strict, model_key, non_commercial_ok):
+            captured["config_non_commercial_ok"] = config.non_commercial_ok
+            captured["engine_non_commercial_ok"] = non_commercial_ok
+            captured["model_key"] = model_key
+            captured["commercial_use"] = commercial_use
+            captured["validate_license_strict"] = validate_license_strict
+
+        def predict(self, image):
+            del image
+            return SimpleNamespace(
+                depth_map=np.full((4, 5), 0.25, dtype=np.float32),
+                metadata={"device": "cpu"},
+                original_image=np.zeros((4, 5, 3), dtype=np.uint8),
+            )
+
+    monkeypatch.setattr(inference_module, "DA3InferenceEngine", FakeEngine)
+
+    exit_code = da3_worker._run_inference(
+        input_image=input_path,
+        output_depth=output_depth,
+        output_json=output_json,
+        model_variant_name="METRIC_LARGE",
+        model_key="da3_research",
+        device="cpu",
+        use_coreml=False,
+        non_commercial_ok=True,
+    )
+
+    assert exit_code == 0
+    assert captured == {
+        "config_non_commercial_ok": True,
+        "engine_non_commercial_ok": True,
+        "model_key": "da3_research",
+        "commercial_use": True,
+        "validate_license_strict": False,
+    }
 
 
 def test_da3_backend_subprocess_compute_launch_oserror_reports_category(tmp_path):

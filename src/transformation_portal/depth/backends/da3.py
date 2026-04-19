@@ -307,6 +307,10 @@ class DA3Backend:
             and CURRENT_PLATFORM.is_apple_silicon
         )
 
+    def _non_commercial_opt_in_enabled(self) -> bool:
+        """Return whether the caller acknowledged non-commercial registry selections."""
+        return bool(self._config is not None and getattr(self._config, "non_commercial_ok", False))
+
     def _cache_device_tag(self) -> str:
         """Return the cache key device/runtime tag for this backend config."""
         if self._apple_coreml_opt_in_enabled():
@@ -348,6 +352,8 @@ class DA3Backend:
             "--device",
             self._device,
         )
+        if self._non_commercial_opt_in_enabled():
+            command.append("--non-commercial-ok")
         if self._apple_coreml_opt_in_enabled():
             command.append("--use-coreml")
 
@@ -610,6 +616,8 @@ class DA3Backend:
                 "--device",
                 str(use_device),
             )
+            if self._non_commercial_opt_in_enabled():
+                command.append("--non-commercial-ok")
             if self._apple_coreml_opt_in_enabled():
                 command.append("--use-coreml")
 
