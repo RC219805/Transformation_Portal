@@ -574,9 +574,10 @@ class SpatialAIPipeline:
             raise FileNotFoundError(f"Input file not found: {input_path}")
 
         if "reconstruction" in self.config.stages:
-            raise ValueError(
+            raise PipelineError(
+                "reconstruction",
                 "Single-image pipeline does not support reconstruction. "
-                "Use process_multiview() with a MultiViewReconstructionRequest."
+                "Use process_multiview() with a MultiViewReconstructionRequest.",
             )
 
         # ADR-026 §2.3: Reset stateful backends at sequence boundaries

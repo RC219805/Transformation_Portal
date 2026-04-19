@@ -1171,12 +1171,14 @@ class TestSpatialAIPipelineE2E:
         input_path = tmp_path / "input.tiff"
         input_path.touch()
 
-        with pytest.raises(ValueError, match="process_multiview"):
+        with pytest.raises(PipelineError, match="process_multiview") as exc_info:
             pipeline.process(
                 input_path=input_path,
                 output_dir=tmp_path / "output",
                 save_intermediates=False,
             )
+
+        assert exc_info.value.stage == "reconstruction"
 
     def test_process_input_not_found(self, tmp_path):
         """Test process raises error when input file not found."""
@@ -1394,12 +1396,13 @@ class TestGraphModeExecution:
         input_path = tmp_path / "input.tiff"
         input_path.touch()
 
-        with pytest.raises(ValueError) as exc_info:
+        with pytest.raises(PipelineError) as exc_info:
             pipeline.process(
                 input_path=input_path,
                 output_dir=tmp_path / "output",
             )
 
+        assert exc_info.value.stage == "reconstruction"
         assert "process_multiview" in str(exc_info.value)
 
     def test_graph_mode_delegates_to_executor(self, tmp_path):

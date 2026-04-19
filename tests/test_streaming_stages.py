@@ -122,6 +122,22 @@ def test_depth_stage_allows_synthetic_only_with_explicit_opt_in(monkeypatch: pyt
     asyncio.run(runner())
 
 
+def test_depth_stage_invalid_model_size_propagates_validation_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def _raise_value_error(**_kwargs):
+        raise ValueError("Unsupported depth model_size 'giant'. Expected one of: small, base, large.")
+
+    monkeypatch.setattr(depth_models, "load_depth_model", _raise_value_error)
+
+    async def runner() -> None:
+        stage = DepthEstimationStage(model_size="giant", allow_synthetic_depth=True)
+        with pytest.raises(ValueError, match="Unsupported depth model_size 'giant'"):
+            await stage.startup()
+
+    asyncio.run(runner())
+
+
 def test_depth_stage_uses_estimate_depth_contract_when_real_model_present(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,

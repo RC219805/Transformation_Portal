@@ -32,6 +32,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
+from transformation_portal.core.ml_dependency_health import OPTIONAL_IMPORT_EXCEPTIONS
 from transformation_portal.reporting.contracts import build_capability_report
 
 from .async_pipeline import AsyncStage, DeviceType, WorkerPool
@@ -406,13 +407,41 @@ class DepthEstimationStage(AsyncStage[ImageData, ImageData]):
                 device=self._torch_device,
                 model_revision=self._model_revision,
             )
-        except Exception as exc:
+        except OPTIONAL_IMPORT_EXCEPTIONS as exc:
+            if not self._is_runtime_unavailable_error(exc):
+                raise
             if not self._allow_synthetic_depth:
                 raise self.DepthBackendUnavailableError(
                     "Depth backend unavailable. Install the repo depth runtime or enable "
                     "allow_synthetic_depth=True for dev/test instrumentation."
                 ) from exc
             self._model = self._create_mock_model()
+
+    @staticmethod
+    def _is_runtime_unavailable_error(exc: BaseException) -> bool:
+        """Return True when depth model load failed due to optional runtime availability."""
+        known_runtime_markers = (
+            "no backend available",
+            "outside the repository's supported runtime envelope",
+            "install with: pip install",
+            "package is installed but not importable",
+            "required for pytorch backend",
+            "required for onnx backend",
+            "required for coreml backend",
+            "required for resizing",
+        )
+        current: Optional[BaseException] = exc
+        visited: set[int] = set()
+        while current is not None and id(current) not in visited:
+            visited.add(id(current))
+            if isinstance(current, (ImportError, ModuleNotFoundError)):
+                return True
+            if isinstance(current, RuntimeError):
+                message = str(current).lower()
+                if any(marker in message for marker in known_runtime_markers):
+                    return True
+            current = current.__cause__ or current.__context__
+        return False
 
     def _create_mock_model(self) -> Callable:
         """Create mock depth model for testing/fallback."""

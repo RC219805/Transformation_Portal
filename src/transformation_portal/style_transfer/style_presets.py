@@ -408,9 +408,20 @@ class ArchitecturalStylePresets:
     ) -> Path:
         """Resolve and validate a preset reference image inside the bundled asset pack."""
         preset = cls.get_preset(name)
-        base_root = Path(assets_root) if assets_root is not None else cls.ASSETS_ROOT
+        base_root = (Path(assets_root) if assets_root is not None else cls.ASSETS_ROOT).resolve()
         candidate = Path(preset["reference_image"])
-        resolved = candidate if candidate.is_absolute() else base_root / candidate
+        if candidate.is_absolute():
+            raise PresetAssetsNotBundledError(
+                f"Preset '{name}' assets must live inside the bundled asset pack. "
+                f"Absolute reference paths are not allowed: {candidate}"
+            )
+        resolved = (base_root / candidate).resolve()
+        try:
+            resolved.relative_to(base_root)
+        except ValueError as exc:
+            raise PresetAssetsNotBundledError(
+                f"Preset '{name}' assets must stay within the bundled asset pack: {resolved}"
+            ) from exc
         if not resolved.exists():
             raise PresetAssetsNotBundledError(f"Preset '{name}' assets are not bundled. Missing reference image: {resolved}")
         return resolved

@@ -29,6 +29,40 @@ def test_resolve_reference_image_fails_when_asset_bundle_missing(tmp_path, monke
     assert exc_info.value.error_code == "asset_bundle_missing"
 
 
+def test_resolve_reference_image_rejects_absolute_reference_paths(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(ArchitecturalStylePresets, "ASSETS_ROOT", tmp_path)
+    absolute_reference = tmp_path / "outside.jpg"
+    monkeypatch.setattr(
+        ArchitecturalStylePresets.PRESETS["architectural_digest"],
+        "reference_image",
+        str(absolute_reference),
+    )
+
+    with pytest.raises(PresetAssetsNotBundledError, match="Absolute reference paths are not allowed"):
+        ArchitecturalStylePresets.resolve_reference_image("architectural_digest")
+
+
+def test_resolve_reference_image_rejects_paths_outside_asset_bundle(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(ArchitecturalStylePresets, "ASSETS_ROOT", tmp_path / "bundle")
+    escape_root = tmp_path / "escape"
+    escape_root.mkdir(parents=True, exist_ok=True)
+    Image.new("RGB", (4, 4), color="white").save(escape_root / "architectural_digest.jpg")
+    monkeypatch.setattr(
+        ArchitecturalStylePresets.PRESETS["architectural_digest"],
+        "reference_image",
+        "../escape/architectural_digest.jpg",
+    )
+
+    with pytest.raises(PresetAssetsNotBundledError, match="must stay within the bundled asset pack"):
+        ArchitecturalStylePresets.resolve_reference_image("architectural_digest")
+
+
 def test_apply_preset_style_resolves_bundled_reference_asset(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
     asset_path = tmp_path / "references" / "editorial" / "architectural_digest.jpg"
     asset_path.parent.mkdir(parents=True, exist_ok=True)
