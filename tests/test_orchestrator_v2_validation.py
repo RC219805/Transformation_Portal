@@ -34,12 +34,17 @@ def temp_output():
     shutil.rmtree(tmpdir, ignore_errors=True)
 
 
+def _make_config(**overrides) -> EnhanceConfig:
+    """Build test configs that exercise V2 behavior without tripping DA3 license gating."""
+    return EnhanceConfig(non_commercial_ok=True, **overrides)
+
+
 class TestV2ValidationFailFast:
     """Test V2 script validation and fail-fast behavior."""
 
     def test_v2_enabled_script_missing_raises_error(self, temp_output):
         """Test fail-fast when V2 enabled but script missing."""
-        config = EnhanceConfig(enable_v2=True, v2_preset="default", depth_device="cpu")
+        config = _make_config(enable_v2=True, v2_preset="default", depth_device="cpu")
 
         # Simulate missing script (since scripts/enhance_image.py now exists)
         original_exists = Path.exists
@@ -63,7 +68,7 @@ class TestV2ValidationFailFast:
 
     def test_v2_disabled_no_error_when_script_missing(self, temp_output):
         """Test V2 disabled allows initialization without script."""
-        config = EnhanceConfig(enable_v2=False, v2_preset="default", depth_device="cpu")  # Ignored when enable_v2=False
+        config = _make_config(enable_v2=False, v2_preset="default", depth_device="cpu")  # Ignored when enable_v2=False
 
         # Should succeed even without V2 script
         orchestrator = EnhanceOrchestrator(config=config, output_root=temp_output)
@@ -73,7 +78,7 @@ class TestV2ValidationFailFast:
 
     def test_v2_preset_none_no_error_when_script_missing(self, temp_output):
         """Test v2_preset=None allows initialization without script."""
-        config = EnhanceConfig(enable_v2=True, v2_preset=None, depth_device="cpu")  # None = skip V2
+        config = _make_config(enable_v2=True, v2_preset=None, depth_device="cpu")  # None = skip V2
 
         # Should succeed even without V2 script
         orchestrator = EnhanceOrchestrator(config=config, output_root=temp_output)
@@ -83,7 +88,7 @@ class TestV2ValidationFailFast:
 
     def test_v2_disabled_overrides_preset(self, temp_output):
         """Test enable_v2=False overrides v2_preset."""
-        config = EnhanceConfig(enable_v2=False, v2_preset="premium", depth_device="cpu")  # Should be ignored
+        config = _make_config(enable_v2=False, v2_preset="premium", depth_device="cpu")  # Should be ignored
 
         # Should succeed - enable_v2 takes precedence
         orchestrator = EnhanceOrchestrator(config=config, output_root=temp_output)
@@ -95,7 +100,7 @@ class TestV2ConfigCombinations:
 
     def test_default_config_requires_v2_script(self, temp_output):
         """Test default config expects V2 script to exist."""
-        config = EnhanceConfig()  # Defaults: enable_v2=True, v2_preset="default"
+        config = _make_config()  # Defaults: enable_v2=True, v2_preset="default"
 
         # Simulate missing script
         original_exists = Path.exists
@@ -114,7 +119,7 @@ class TestV2ConfigCombinations:
 
     def test_pbr_only_config_no_v2_required(self, temp_output):
         """Test PBR-only config doesn't require V2 script."""
-        config = EnhanceConfig(enable_v2=False, generate_pbr=True, pbr_normal_strength=1.5, depth_device="cpu")
+        config = _make_config(enable_v2=False, generate_pbr=True, pbr_normal_strength=1.5, depth_device="cpu")
 
         # Should succeed
         orchestrator = EnhanceOrchestrator(config=config, output_root=temp_output)
@@ -127,7 +132,7 @@ class TestV2ErrorMessages:
 
     def test_error_message_contains_solutions(self, temp_output):
         """Test error message provides actionable solutions."""
-        config = EnhanceConfig(enable_v2=True, v2_preset="default")
+        config = _make_config(enable_v2=True, v2_preset="default")
 
         # Simulate missing script
         original_exists = Path.exists
@@ -159,7 +164,7 @@ class TestV2ErrorMessages:
 
     def test_error_message_mentions_pbr_only_workflow(self, temp_output):
         """Test error message mentions PBR-only workflow option."""
-        config = EnhanceConfig(enable_v2=True, v2_preset="default")
+        config = _make_config(enable_v2=True, v2_preset="default")
 
         # Simulate missing script
         original_exists = Path.exists
@@ -183,7 +188,7 @@ class TestV2ConfigMigration:
     def test_old_style_v2_preset_string_still_works(self, temp_output):
         """Test backward compatibility with string v2_preset."""
         # Old style: v2_preset is always a string, enable_v2 controls behavior
-        config = EnhanceConfig(
+        config = _make_config(
             enable_v2=False,
             v2_preset="default",  # Old code would set this
         )
@@ -195,7 +200,7 @@ class TestV2ConfigMigration:
     def test_new_style_v2_preset_optional(self, temp_output):
         """Test new style with Optional[str] v2_preset."""
         # New style: v2_preset=None explicitly skips V2
-        config = EnhanceConfig(
+        config = _make_config(
             enable_v2=True,
             v2_preset=None,  # Explicitly skip V2
         )

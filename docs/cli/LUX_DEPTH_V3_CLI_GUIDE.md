@@ -1,10 +1,10 @@
 # Lux Depth V3 CLI - APEX Command Variants
 
-This document provides usage examples for the `lux-depth-v3` CLI with APEX quality tier support, including both commercial-safe and research-only variants.
+This document provides usage examples for the `lux-depth-v3` CLI with APEX quality tier support, including the current Apache-2.0 DA3 selector for the Lux V3 relative-depth surface and the research-only variants.
 
 ## Table of Contents
 - [Installation](#installation)
-- [Commercial-Safe APEX Mode](#commercial-safe-apex-mode)
+- [Apache APEX Mode](#apache-apex-mode)
 - [Research-Only APEX+ Variants](#research-only-apex-variants)
 - [Command Options Reference](#command-options-reference)
 - [Quality Tiers](#quality-tiers)
@@ -24,9 +24,9 @@ The `lux-depth-v3` command should now be available on your PATH. Alternatively, 
 python -m transformation_portal.lux_depth_v3 [options]
 ```
 
-## Commercial-Safe APEX Mode
+## Apache APEX Mode
 
-The commercial-safe APEX mode uses the canonical `da3` production backend and provides the highest quality output for production use.
+For the current Lux V3 relative-depth surface, the Apache-2.0 APEX path uses `--model-key "da3-metric"`. The bare `da3` selector is now the research-default DA3 path and requires `--non-commercial-ok "true"`.
 
 ### Basic APEX Command
 
@@ -37,6 +37,7 @@ lux-depth-v3 \
   --preset "premium" \
   --quality-tier "apex" \
   --depth-backend "da3" \
+  --model-key "da3-metric" \
   --materials-v3 "on" \
   --pbr "on" \
   --cache-depth "on" \
@@ -57,6 +58,7 @@ lux-depth-v3 \
   --output-dir "./output/apex_cuda" \
   --preset "premium" \
   --quality-tier "apex" \
+  --model-key "da3-metric" \
   --depth-device "cuda" \
   --materials-v3 "on" \
   --pbr "on" \
@@ -72,6 +74,7 @@ lux-depth-v3 \
   --output-dir "./output/apex_mps" \
   --preset "premium" \
   --quality-tier "apex" \
+  --model-key "da3-metric" \
   --depth-device "mps" \
   --materials-v3 "on" \
   --pbr "on" \
@@ -108,6 +111,26 @@ lux-depth-v3 \
 
 **License**: CC BY-NC 4.0 (Non-Commercial)
 **Use Cases**: Research, academic projects, non-commercial portfolio work
+
+### Variant A2: DA3 Research Default
+
+The `da3` selector resolves to the research-default nested DA3 checkpoint and requires non-commercial acknowledgement.
+
+```bash
+lux-depth-v3 \
+  --input-dir "./input_images" \
+  --output-dir "./output/lux_depth_v3_apex_da3_research" \
+  --preset "premium" \
+  --quality-tier "apex" \
+  --depth-backend "da3" \
+  --model-key "da3" \
+  --non-commercial-ok "true" \
+  --materials-v3 "on" \
+  --pbr "on"
+```
+
+**License**: CC BY-NC 4.0 (Non-Commercial)
+**Output Contract**: Current Lux V3 relative-depth surface
 
 ### Variant B: Apple Depth Pro (AMLR Research License)
 
@@ -156,7 +179,11 @@ lux-depth-v3 \
 ### Depth Backend Configuration
 
 - `--depth-backend TEXT`: Depth estimation backend
-  - Options: `da3` (default, commercial-safe), `depth_pro` (research-only)
+  - Options: `da3` (default backend family), `depth_pro` (research-only)
+- `--model-key TEXT`: Canonical model selector within the chosen backend family
+  - Public options in this release: `da3`, `da3-research`, `da3-metric`
+  - `da3` / `da3-research`: Research-default DA3 selector; requires `--non-commercial-ok "true"`
+  - `da3-metric`: Apache-2.0 DA3 selector for the current Lux V3 relative-depth surface
 - `--depth-device TEXT`: Device for depth inference (default: `cpu`)
   - Options: `cpu`, `cuda`, `mps`
 
@@ -194,7 +221,7 @@ lux-depth-v3 \
 ### License Acknowledgements
 
 - `--non-commercial-ok TEXT`: Acknowledge non-commercial license restrictions (default: `false`)
-  - Required for: Depth Anything V3.1, Depth Pro
+  - Required for: `da3` / `da3-research`, Depth Anything V3.1, Depth Pro
 - `--accept-apple-depth-pro-research-license TEXT`: Accept Apple Depth Pro research license (default: `false`)
   - Required for: Depth Pro backend
 

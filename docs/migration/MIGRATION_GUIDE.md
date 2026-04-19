@@ -48,7 +48,8 @@ result = pipeline.run(image)
 ```
 
 **Available backends:**
-- `da3` (Depth Anything V3) - Default, production-safe, commercial use OK
+- `da3` (Depth Anything V3 family) - Default backend family; the bare `da3` selector now resolves to the research-default DA3 model and requires `--non-commercial-ok`
+- `da3-metric` - Apache-2.0 DA3 selector for the current Lux V3 relative-depth surface
 - `depth_pro` (Apple Depth Pro) - Research only, requires explicit license acceptance
 
 #### 3. Configuration Format

@@ -132,7 +132,7 @@ class TestProvenanceIntegration:
 
         # Validate required fields
         assert "input" in provenance_data
-        assert provenance_data["input"]["file_path"] == str(fixture_path)
+        assert Path(provenance_data["input"]["file_path"]) == fixture_path.resolve()
         assert provenance_data["input"]["file_sha256"]
         assert provenance_data["input"]["file_size_bytes"] > 0
 

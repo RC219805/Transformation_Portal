@@ -34,6 +34,7 @@ def test_orchestrator_uses_registry(tmp_path, mock_da3_available):
     config = EnhanceConfig(
         depth_backend="da3",
         depth_device="cpu",
+        non_commercial_ok=True,
         enable_v2=False,
     )
 
@@ -47,6 +48,7 @@ def test_orchestrator_default_backend(tmp_path, mock_da3_available):
     """Orchestrator defaults to DA3 if no backend specified."""
     config = EnhanceConfig(
         depth_device="cpu",
+        non_commercial_ok=True,
         enable_v2=False,
     )
 
@@ -332,7 +334,7 @@ def test_orchestrator_keeps_da3_default_off_apple_silicon(tmp_path):
             non_commercial_ok=True,
             accept_apple_depth_pro_research_license=True,
             enable_v2=False,
-            use_coreml_backend=True,
+            use_coreml_backend=False,
         )
 
         orchestrator = EnhanceOrchestrator(config, tmp_path)
@@ -348,6 +350,7 @@ def test_orchestrator_canonicalizes_legacy_backend_alias_in_metadata(tmp_path, m
         config = EnhanceConfig(
             depth_backend="depth_anything_v3",
             depth_device="cpu",
+            non_commercial_ok=True,
             enable_v2=False,
         )
 
@@ -376,6 +379,7 @@ def test_orchestrator_backend_metadata_capture(tmp_path, mock_da3_available):
     config = EnhanceConfig(
         depth_backend="da3",
         depth_device="cpu",
+        non_commercial_ok=True,
         enable_v2=False,
     )
 
@@ -604,6 +608,7 @@ def test_depth_metadata_uses_resolved_backend_not_config_default(tmp_path, mock_
     config = EnhanceConfig(
         depth_backend="da3",
         depth_device="cpu",
+        non_commercial_ok=True,
         enable_v2=False,
         enable_materials_v3=False,
     )
@@ -662,6 +667,7 @@ def test_get_or_create_depth_backend_prefers_active_instance_over_stale_cache(tm
     config = EnhanceConfig(
         depth_backend="da3",
         depth_device="cpu",
+        non_commercial_ok=True,
         enable_v2=False,
     )
     orchestrator = EnhanceOrchestrator(config, tmp_path)
@@ -709,6 +715,7 @@ def test_enhance_image_reuses_initialized_backend_metadata_without_recapture(tmp
     config = EnhanceConfig(
         depth_backend="da3",
         depth_device="cpu",
+        non_commercial_ok=True,
         enable_v2=False,
     )
     orchestrator = EnhanceOrchestrator(config, tmp_path)
@@ -740,6 +747,7 @@ def test_apex_gate_evaluates_native_depth_grid_before_artifact_resize(tmp_path, 
     config = EnhanceConfig(
         depth_backend="da3",
         depth_device="cpu",
+        non_commercial_ok=True,
         enable_v2=False,
         quality_tier="apex",
     )

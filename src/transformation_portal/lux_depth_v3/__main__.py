@@ -8,12 +8,13 @@ APEX command variants for the lux_depth_v3 pipeline supporting:
 - Material segmentation (stub, EfficientSAM, or SAM2 backends)
 
 Usage:
-    # Commercial-safe APEX (default, no research opt-ins)
+    # Apache-2.0 DA3 path for production workflows
     lux-depth-v3 \\
         --input-dir "./input_images" \\
         --output-dir "./output/lux_depth_v3_apex" \\
         --quality-tier "apex" \\
         --depth-backend "da3" \\
+        --model-key "da3-metric" \\
         --depth-device "mps" \\
         --materials-v3 "on" \\
         --pbr "on" \\
@@ -45,12 +46,12 @@ Usage:
         --segmentation-backend "efficientsam" \\
         --depth-device "mps"
 
-    # Research-only: Depth Anything V3.1 (explicit opt-in)
+    # Research-only: DA3 research default (explicit opt-in)
     lux-depth-v3 \\
         --input-dir "./input_images" \\
         --output-dir "./output/lux_depth_v3_apex_da31" \\
         --quality-tier "apex" \\
-        --preset "depth-anything-v3.1-research-m4" \\
+        --model-key "da3" \\
         --non-commercial-ok "true" \\
         --depth-device "mps" \\
         --materials-v3 "on" \\
@@ -163,6 +164,7 @@ from ._backend_contract import backend_alias_warning, is_legacy_backend_alias, n
 from .config import EnhanceConfig, Preset
 from .config_resolver import apply_effective_raw_runtime_config
 from .ingest_adapter import RAW_PREVIEW_ESCAPE_ENV
+from .model_resolution import ModelLicenseError, ModelRequest, UnknownModelError, resolve_model_contract
 from .orchestrator import EnhanceOrchestrator
 
 logger = logging.getLogger(__name__)
@@ -319,7 +321,16 @@ def main(
     depth_backend: Optional[str] = typer.Option(
         None,
         "--depth-backend",
-        help=("Depth backend: da3 (default, commercial), depth_pro " "(research-only, metric depth)"),
+        help=("Depth backend: da3 (default) or depth_pro " "(research-only backend)"),
+    ),
+    model_key: Optional[str] = typer.Option(
+        None,
+        "--model-key",
+        help=(
+            "Model selector for the current Lux V3 relative-depth surface: "
+            "da3 (research-default, requires --non-commercial-ok), "
+            "da3-research, or da3-metric (Apache-2.0)."
+        ),
     ),
     depth_pro_python: Optional[str] = typer.Option(
         None,
@@ -900,6 +911,7 @@ def main(
         logger.warning(f"Preset '{preset}' does not map" " to a known Preset enum." " Continuing with string value.")
 
     config = EnhanceConfig(
+        model_key=model_key,
         preset=preset_enum,
         preset_requested=preset,
         depth_device=depth_device,
@@ -953,6 +965,20 @@ def main(
         allow_semantic_fallback=allow_semantic_fallback,
     )
     apply_effective_raw_runtime_config(config)
+    if depth_backend == "da3" or depth_backend is None:
+        try:
+            resolve_model_contract(
+                ModelRequest(
+                    model_key=model_key,
+                    model_variant=config.model_variant,
+                    use_coreml_backend=bool(getattr(config, "use_coreml_backend", False)),
+                    non_commercial_ok=enable_non_commercial,
+                )
+            )
+        except (ModelLicenseError, UnknownModelError) as exc:
+            logger.error(str(exc))
+            print(str(exc), file=sys.stdout)
+            raise typer.Exit(code=1)
 
     # Forward-compatible knobs: apply via setattr
     # for non-breaking config evolution.

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -18,6 +19,7 @@ pytestmark = [
 ]
 
 from transformation_portal.lux_depth_v3.config import EnhanceConfig, ModelVariant
+from transformation_portal.lux_depth_v3.model_resolution import ModelRequest, resolve_model_contract
 from transformation_portal.lux_depth_v3.orchestrator import (
     ApexStrictGateError,
     EnhanceOrchestrator,
@@ -592,6 +594,60 @@ def test_run_card_schema_accepts_additive_quality_gate_and_capability(version: s
     _validate_run_card_payload(payload, _run_card_schema_path(version))
 
 
+@pytest.mark.parametrize("version", ["v1", "v2"])
+def test_run_card_schema_accepts_additive_model_contract(version: str) -> None:
+    payload = _valid_run_card_payload()
+    payload["run_card_version"] = version
+    if version == "v1":
+        payload["artifact_merkle_root"] = "0" * 64
+    else:
+        payload.pop("artifact_merkle_root", None)
+        payload["artifact_tree"] = {
+            "algorithm": "ct-sha256-v1",
+            "leaf_format": "tp.run_card.artifact_leaf.v1",
+            "leaf_count": 0,
+            "root_sha256": "1" * 64,
+            "artifacts": [],
+        }
+    payload["model_contract"] = {
+        "requested_model_selector": "METRIC_LARGE",
+        "canonical_model_key": "da3_research",
+        "resolved_repo_id": "depth-anything/DA3NESTED-GIANT-LARGE-1.1",
+        "resolved_revision": "b2359bdf726fb44ef62acca04d629dcf158053e7",
+        "license_id": "cc-by-nc-4.0",
+        "usage_class": "non_commercial_only",
+        "requires_non_commercial_ok": True,
+        "non_commercial_ok": True,
+        "backend_kind": "da3_api",
+        "accelerator_kind": "none",
+        "fallback_chain": [],
+        "manifest_schema_version": 1,
+    }
+    _validate_run_card_payload(payload, _run_card_schema_path(version))
+
+
+@pytest.mark.parametrize("revision", [None, "main"])
+def test_build_run_card_model_contract_skips_unpinned_revision(
+    revision: str | None,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    orch = object.__new__(EnhanceOrchestrator)
+    orch.config = SimpleNamespace(non_commercial_ok=False)
+    resolved = resolve_model_contract(ModelRequest(model_key="da3-metric"))
+    orch._resolved_model_contract = replace(resolved, revision=revision)
+
+    with patch(
+        "transformation_portal.lux_depth_v3.orchestrator.load_model_lock_manifest_payload",
+        return_value={"version": 1},
+    ):
+        with caplog.at_level("WARNING"):
+            model_contract = orch._build_run_card_model_contract()
+
+    assert model_contract is None
+    assert "Skipping run-card model_contract" in caplog.text
+    assert resolved.spec.repo_id in caplog.text
+
+
 def test_collect_run_card_artifacts_includes_reconstruction_report(tmp_path: Path):
     output_root = tmp_path / "output"
     manifests_dir = output_root / "manifests"
@@ -976,6 +1032,7 @@ def test_resolve_run_card_backend_model_artifact_prefers_selected_attempt():
 def test_emit_run_card_respects_run_card_include_proofs_flag(tmp_path: Path):
     config = EnhanceConfig(
         model_variant=ModelVariant.METRIC_LARGE,
+        model_key="da3-metric",
         run_card_version="v2",
         run_card_include_proofs=False,
     )
@@ -1028,6 +1085,7 @@ def test_emit_run_card_respects_run_card_include_proofs_flag(tmp_path: Path):
 def test_emit_run_card_skips_legacy_merkle_root_for_v2(tmp_path: Path):
     config = EnhanceConfig(
         model_variant=ModelVariant.METRIC_LARGE,
+        model_key="da3-metric",
         run_card_version="v2",
     )
     orch = EnhanceOrchestrator(config, tmp_path)
@@ -1082,6 +1140,7 @@ def test_emit_run_card_skips_legacy_merkle_root_for_v2(tmp_path: Path):
 def test_build_run_card_inputs_skips_hashing_when_hash_mode_never(tmp_path: Path) -> None:
     config = EnhanceConfig(
         model_variant=ModelVariant.METRIC_LARGE,
+        model_key="da3-metric",
         hash_mode=HashMode.NEVER,
     )
     orch = EnhanceOrchestrator(config, tmp_path)
@@ -1094,7 +1153,7 @@ def test_build_run_card_inputs_skips_hashing_when_hash_mode_never(tmp_path: Path
 
 
 def test_build_run_card_inputs_reuses_result_input_sha256(tmp_path: Path) -> None:
-    config = EnhanceConfig(model_variant=ModelVariant.METRIC_LARGE)
+    config = EnhanceConfig(model_variant=ModelVariant.METRIC_LARGE, model_key="da3-metric")
     orch = EnhanceOrchestrator(config, tmp_path)
     input_path = tmp_path / "inputs" / "image_01.png"
     input_path.parent.mkdir(parents=True, exist_ok=True)
@@ -1120,7 +1179,7 @@ def test_build_run_card_inputs_reuses_result_input_sha256(tmp_path: Path) -> Non
 
 
 def test_build_run_card_inputs_preserves_per_result_input_sha256(tmp_path: Path) -> None:
-    config = EnhanceConfig(model_variant=ModelVariant.METRIC_LARGE)
+    config = EnhanceConfig(model_variant=ModelVariant.METRIC_LARGE, model_key="da3-metric")
     orch = EnhanceOrchestrator(config, tmp_path)
     input_dir = tmp_path / "inputs"
     input_dir.mkdir(parents=True, exist_ok=True)
@@ -1161,7 +1220,7 @@ def test_build_run_card_inputs_preserves_per_result_input_sha256(tmp_path: Path)
 
 
 def test_build_run_card_inputs_omits_size_bytes_when_stat_fails(tmp_path: Path) -> None:
-    config = EnhanceConfig(model_variant=ModelVariant.METRIC_LARGE)
+    config = EnhanceConfig(model_variant=ModelVariant.METRIC_LARGE, model_key="da3-metric")
     orch = EnhanceOrchestrator(config, tmp_path)
     input_path = tmp_path / "inputs" / "image_01.png"
     input_path.parent.mkdir(parents=True, exist_ok=True)

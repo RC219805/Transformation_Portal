@@ -5,11 +5,11 @@ Lux Depth V3 is a production-grade orchestrator for depth-aware image processing
 ## Overview
 
 The Lux Depth V3 pipeline provides:
-- **Depth Estimation** using the canonical `da3` backend (commercial-safe) or `depth_pro` (research-only)
+- **Depth Estimation** using the canonical `da3` backend surface
 - **PBR Map Generation** (normal, roughness, ambient occlusion)
 - **Materials V3** surface-aware finishing
 - **V2 Enhancement** (optional AI-powered refinement)
-- **APEX Quality Tier** support for commercial production
+- **APEX Quality Tier** support for governed production and research workflows
 
 ## Quick Start
 
@@ -21,6 +21,7 @@ lux-depth-v3 \
   --output-dir "./output/commercial" \
   --quality-tier "apex" \
   --depth-backend "da3" \
+  --model-key "da3-metric" \
   --depth-device "mps" \
   --pbr "on" \
   --enable-v2 "off" \
@@ -36,6 +37,7 @@ lux-depth-v3 \
   --output-dir "./output/enhanced" \
   --quality-tier "apex" \
   --depth-backend "da3" \
+  --model-key "da3-metric" \
   --depth-device "mps" \
   --pbr "on" \
   --materials-v3 "on" \
@@ -85,6 +87,12 @@ The V2 enhancement stage is **optional** and enabled by default for backward com
 - Research model configurations
 - Fine-tuned parameter combinations
 - Non-commercial depth models
+
+### Model Selectors
+
+- `da3` / `da3-research` - research-default DA3 selector; requires `--non-commercial-ok "true"`
+- `da3-metric` - Apache-2.0 DA3 selector for the current Lux V3 relative-depth surface
+- `da3-base` / `da3-small` - registry-supported experimental selectors, hidden from public CLI help until smoke-tested
 
 **Recommendation:** Start with `--quality-tier`, add `--preset` only when needed.
 
