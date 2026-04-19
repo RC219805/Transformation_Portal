@@ -527,6 +527,16 @@ def test_da3_backend_registry_integration():
     assert backends["da3"]["requires_checkpoint"] is False
 
 
+def test_da3_backend_registry_instantiation_without_config_defers_license_gate():
+    """Registry metadata access should not enforce DA3 research-license acknowledgement."""
+    registry = DepthBackendRegistry()
+
+    backend = registry.get_backend("da3")
+
+    assert isinstance(backend, DA3Backend)
+    assert backend._resolved_model_contract.canonical_key == "da3_research"
+
+
 @pytest.mark.skipif(
     not can_run_da3_compute(),
     reason="DA3 compute requires depth_anything_3 + transformers + online mode",

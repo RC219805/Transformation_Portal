@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -18,6 +19,7 @@ pytestmark = [
 ]
 
 from transformation_portal.lux_depth_v3.config import EnhanceConfig, ModelVariant
+from transformation_portal.lux_depth_v3.model_resolution import ModelRequest, resolve_model_contract
 from transformation_portal.lux_depth_v3.orchestrator import (
     ApexStrictGateError,
     EnhanceOrchestrator,
@@ -622,6 +624,28 @@ def test_run_card_schema_accepts_additive_model_contract(version: str) -> None:
         "manifest_schema_version": 1,
     }
     _validate_run_card_payload(payload, _run_card_schema_path(version))
+
+
+@pytest.mark.parametrize("revision", [None, "main"])
+def test_build_run_card_model_contract_skips_unpinned_revision(
+    revision: str | None,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    orch = object.__new__(EnhanceOrchestrator)
+    orch.config = SimpleNamespace(non_commercial_ok=False)
+    resolved = resolve_model_contract(ModelRequest(model_key="da3-metric"))
+    orch._resolved_model_contract = replace(resolved, revision=revision)
+
+    with patch(
+        "transformation_portal.lux_depth_v3.orchestrator.load_model_lock_manifest_payload",
+        return_value={"version": 1},
+    ):
+        with caplog.at_level("WARNING"):
+            model_contract = orch._build_run_card_model_contract()
+
+    assert model_contract is None
+    assert "Skipping run-card model_contract" in caplog.text
+    assert resolved.spec.repo_id in caplog.text
 
 
 def test_collect_run_card_artifacts_includes_reconstruction_report(tmp_path: Path):

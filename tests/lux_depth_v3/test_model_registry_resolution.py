@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import sys
+from types import SimpleNamespace
+
 import pytest
 
 from transformation_portal.lux_depth_v3.config import DA3Config, DeviceConfig, ModelVariant
@@ -107,6 +110,82 @@ def test_only_published_coreml_artifact_is_coreml_eligible() -> None:
     )
     assert resolved.spec.repo_id == "apple/coreml-depth-anything-v2-small"
     assert resolved.accelerator_kind.value == "coreml"
+
+
+def test_coreml_estimator_cache_key_includes_revision(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
+    import transformation_portal.lux_depth_v3.coreml_backend as coreml_backend
+
+    monkeypatch.setattr(coreml_backend, "COREML_AVAILABLE", True)
+    monkeypatch.setattr(
+        coreml_backend.CoreMLDepthEstimator,
+        "_load_or_convert",
+        lambda self, force_reconvert=False: object(),
+    )
+
+    estimator = coreml_backend.CoreMLDepthEstimator(
+        "apple/coreml-depth-anything-v2-small",
+        cache_dir=tmp_path,
+        revision="a" * 40,
+    )
+
+    assert estimator._get_cache_path().name.endswith(f"_{'a' * 40}.mlpackage")
+
+
+def test_coreml_estimator_download_pins_hub_revision(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
+    import transformation_portal.lux_depth_v3.coreml_backend as coreml_backend
+
+    calls = {}
+    downloaded_path = tmp_path / "DepthAnythingV2SmallF16.mlpackage"
+    downloaded_path.write_text("stub", encoding="utf-8")
+
+    def fake_download(**kwargs):
+        calls.update(kwargs)
+        return str(downloaded_path)
+
+    monkeypatch.setitem(sys.modules, "huggingface_hub", SimpleNamespace(hf_hub_download=fake_download))
+    monkeypatch.setattr(coreml_backend, "CoreMLDepthModel", lambda model_path: model_path)
+
+    estimator = object.__new__(coreml_backend.CoreMLDepthEstimator)
+    estimator.model_id = "apple/coreml-depth-anything-v2-small"
+    estimator.cache_dir = tmp_path
+    estimator.revision = "b" * 40
+
+    estimator._load_published_coreml_model(estimator._get_cache_path())
+
+    assert calls["revision"] == "b" * 40
+
+
+def test_da3_inference_coreml_loader_receives_resolved_revision(monkeypatch: pytest.MonkeyPatch) -> None:
+    import transformation_portal.lux_depth_v3.coreml_backend as coreml_backend
+    import transformation_portal.lux_depth_v3.inference as inference_module
+
+    config = DA3Config(device=DeviceConfig(device="cpu"))
+    engine = DA3InferenceEngine(config)
+    resolved = resolve_model_contract(
+        ModelRequest(
+            model_key="coreml_depth_anything_v2_small",
+            use_coreml_backend=True,
+        )
+    )
+    captured = {}
+
+    class FakeEstimator:
+        def __init__(self, model_id, cache_dir=None, force_reconvert=False, revision=None):
+            del cache_dir, force_reconvert
+            captured["model_id"] = model_id
+            captured["revision"] = revision
+
+    monkeypatch.setattr(inference_module, "COREML_AVAILABLE", True)
+    monkeypatch.setattr(inference_module, "_ensure_optional_runtime_imports", lambda: None)
+    monkeypatch.setattr(engine, "_resolve_model_contract", lambda use_coreml_backend=None: resolved)
+    monkeypatch.setattr(coreml_backend, "CoreMLDepthEstimator", FakeEstimator)
+
+    engine._load_coreml_model()
+
+    assert captured == {
+        "model_id": "apple/coreml-depth-anything-v2-small",
+        "revision": resolved.revision,
+    }
 
 
 def test_da3_inference_engine_accepts_positional_config(monkeypatch: pytest.MonkeyPatch) -> None:

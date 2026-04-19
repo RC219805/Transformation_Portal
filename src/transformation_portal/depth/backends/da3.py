@@ -159,9 +159,10 @@ class DA3Backend:
             ModelRequest(
                 model_key=getattr(config, "model_key", None) if config is not None else None,
                 raw_model_id=getattr(config, "raw_model_id", None) if config is not None else None,
-                model_variant=self._model_variant,
+                model_variant=self._model_variant if config is not None else None,
                 use_coreml_backend=bool(getattr(config, "use_coreml_backend", False)) if config is not None else False,
                 non_commercial_ok=bool(getattr(config, "non_commercial_ok", False)) if config is not None else False,
+                enforce_license=config is not None,
             )
         )
         self._model_id = self._resolved_model_contract.spec.repo_id

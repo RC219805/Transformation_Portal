@@ -600,7 +600,10 @@ class DA3InferenceEngine:
         self._requested_model_id = model_id
         self._resolved_model_id = model_id
         logger.info("Loading CoreML model: %s", model_id)
-        self.model = CoreMLDepthEstimator(model_id)
+        self.model = CoreMLDepthEstimator(
+            model_id,
+            revision=resolved_contract.revision,
+        )
         logger.info("CoreML model loaded with published artifact acceleration")
 
     def predict(

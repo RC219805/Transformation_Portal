@@ -53,7 +53,13 @@ class CoreMLDepthEstimator:
         >>> depth = estimator.predict(image)
     """
 
-    def __init__(self, model_id: str, cache_dir: Optional[Path] = None, force_reconvert: bool = False):
+    def __init__(
+        self,
+        model_id: str,
+        cache_dir: Optional[Path] = None,
+        force_reconvert: bool = False,
+        revision: Optional[str] = None,
+    ):
         """Initialize CoreML depth estimator.
 
         Args:
@@ -75,6 +81,7 @@ class CoreMLDepthEstimator:
             )
 
         self.model_id = model_id
+        self.revision = revision
         self.cache_dir = cache_dir or Path.home() / ".cache" / "transformation_portal" / "coreml"
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
@@ -91,7 +98,10 @@ class CoreMLDepthEstimator:
         """
         # Sanitize model ID for filesystem
         model_name = self.model_id.replace("/", "_").replace("-", "_")
-        return self.cache_dir / f"{model_name}.mlpackage"
+        if not self.revision:
+            return self.cache_dir / f"{model_name}.mlpackage"
+        revision_token = self.revision.replace("/", "_").replace("-", "_")
+        return self.cache_dir / f"{model_name}_{revision_token}.mlpackage"
 
     def _load_or_convert(self, force_reconvert: bool = False) -> Any:
         """Load cached CoreML model or convert from PyTorch.
@@ -133,12 +143,25 @@ class CoreMLDepthEstimator:
         if cache_path.exists():
             return CoreMLDepthModel(cache_path)
 
-        model_path = hf_hub_download(  # nosec B615
-            repo_id=self.model_id,
-            filename="DepthAnythingV2SmallF16.mlpackage",
-            cache_dir=self.cache_dir,
+        model_path = Path(
+            hf_hub_download(  # nosec B615
+                repo_id=self.model_id,
+                filename="DepthAnythingV2SmallF16.mlpackage",
+                cache_dir=self.cache_dir,
+                revision=self.revision,
+            )
         )
-        return CoreMLDepthModel(model_path)
+        if not cache_path.exists():
+            try:
+                cache_path.symlink_to(model_path, target_is_directory=model_path.is_dir())
+            except OSError:
+                logger.debug(
+                    "CoreML cache alias unavailable for %s@%s; using Hub cache path directly",
+                    self.model_id,
+                    self.revision or "unpinned",
+                )
+        stable_path = cache_path if cache_path.exists() else model_path
+        return CoreMLDepthModel(stable_path)
 
     def _convert_pytorch_to_coreml(self, output_path: Path) -> Any:
         """Convert PyTorch depth model to CoreML with ANE optimization.

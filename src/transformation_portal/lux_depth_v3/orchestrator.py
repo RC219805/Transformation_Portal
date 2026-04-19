@@ -40,6 +40,7 @@ from typing import Any, Callable, Dict, List, Optional, cast
 import numpy as np
 
 from transformation_portal.attestation.model_lock_manifest import load_model_lock_manifest as load_model_lock_manifest_payload
+from transformation_portal.core.security.model_lock import is_pinned_revision
 
 from ..core.ml_dependency_health import (
     detect_transformers_torch_version_issue,
@@ -5973,6 +5974,13 @@ class EnhanceOrchestrator:
         """Build additive registry-backed model provenance for the run card."""
         resolved_contract = getattr(self, "_resolved_model_contract", None)
         if resolved_contract is None:
+            return None
+        if not is_pinned_revision(resolved_contract.revision):
+            logger.warning(
+                "Skipping run-card model_contract for %s because the resolved revision is not pinned: %r",
+                resolved_contract.spec.repo_id,
+                resolved_contract.revision,
+            )
             return None
         try:
             manifest_payload = load_model_lock_manifest_payload()
