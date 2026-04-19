@@ -350,9 +350,11 @@ def test_da3_backend_subprocess_compute_returns_depth_result(tmp_path):
         )
     )
 
+    seen_commands = []
     seen_timeouts = []
 
     def fake_run(command, **kwargs):
+        seen_commands.append(command)
         seen_timeouts.append(kwargs["timeout"])
         if "--check" in command:
             return MagicMock(returncode=0, stdout="", stderr="")
@@ -387,6 +389,12 @@ def test_da3_backend_subprocess_compute_returns_depth_result(tmp_path):
     assert result.metadata["runner"]["mode"] == "subprocess"
     assert result.metadata["runner"]["python_executable"] == backend._python_executable
     assert any("normalized to relative" in warning for warning in result.warnings)
+    assert len(seen_commands) == 2
+    for command in seen_commands:
+        assert "--model-variant" in command
+        assert command[command.index("--model-variant") + 1] == "METRIC_LARGE"
+        assert "--model-key" in command
+        assert command[command.index("--model-key") + 1] == "da3_research"
     assert seen_timeouts == [123, 123]
 
 

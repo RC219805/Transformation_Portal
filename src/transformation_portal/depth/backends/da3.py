@@ -603,10 +603,12 @@ class DA3Backend:
                 str(output_depth_path),
                 "--output-json",
                 str(output_json_path),
-                "--device",
-                str(use_device),
                 "--model-variant",
                 self._model_variant.name,
+                "--model-key",
+                self._resolved_model_contract.canonical_key,
+                "--device",
+                str(use_device),
             )
             if self._apple_coreml_opt_in_enabled():
                 command.append("--use-coreml")

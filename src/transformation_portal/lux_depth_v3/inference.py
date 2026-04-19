@@ -347,14 +347,6 @@ class DA3InferenceEngine:
             )
             return False
 
-        if not TORCH_AVAILABLE:
-            logger.warning("CoreML requires torch for model conversion")
-            return False
-
-        if not TRANSFORMERS_AVAILABLE:
-            logger.warning("CoreML requires transformers for model loading")
-            return False
-
         return True
 
     def _resolve_device(self) -> str:
@@ -460,8 +452,9 @@ class DA3InferenceEngine:
             raise RuntimeError(f"Failed to load model {model_id}: {e}") from e
 
     def _is_da3_model(self, model_id: str) -> bool:
-        """Check if model ID is a DA3 Nested model."""
-        return model_id.startswith("depth-anything/da3") or "da3nested" in model_id.lower()
+        """Check if model ID points at a DA3-family checkpoint."""
+        normalized_model_id = model_id.lower()
+        return normalized_model_id.startswith("depth-anything/da3") or "da3nested" in normalized_model_id
 
     def _load_da3_model(self, model_id: str) -> None:
         """Load DA3 model using custom depth-anything-3 library.

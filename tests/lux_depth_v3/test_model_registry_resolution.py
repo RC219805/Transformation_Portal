@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import platform
 import sys
 from types import SimpleNamespace
 
@@ -197,6 +198,41 @@ def test_da3_inference_engine_accepts_positional_config(monkeypatch: pytest.Monk
     config = DA3Config(model_variant=ModelVariant.METRIC_BASE, device=DeviceConfig(device="cpu"))
     engine = DA3InferenceEngine(config)
     assert engine.config is config
+
+
+def test_da3_model_detection_is_case_insensitive(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        DA3InferenceEngine,
+        "_auto_detect_backend",
+        lambda self: ModelBackend.PYTORCH_CPU,
+    )
+    engine = DA3InferenceEngine(DA3Config(device=DeviceConfig(device="cpu")))
+
+    assert engine._is_da3_model("depth-anything/DA3METRIC-LARGE") is True
+    assert engine._is_da3_model("depth-anything/DA3-BASE") is True
+    assert engine._is_da3_model("depth-anything/DA3-SMALL") is True
+
+
+def test_coreml_backend_auto_detection_does_not_require_torch_or_transformers(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import transformation_portal.lux_depth_v3.inference as inference_module
+
+    monkeypatch.setattr(inference_module, "_ensure_optional_runtime_imports", lambda: None)
+    monkeypatch.setattr(inference_module, "COREML_AVAILABLE", True)
+    monkeypatch.setattr(inference_module, "TORCH_AVAILABLE", False)
+    monkeypatch.setattr(inference_module, "TRANSFORMERS_AVAILABLE", False)
+    monkeypatch.setattr(platform, "system", lambda: "Darwin")
+    monkeypatch.setattr(platform, "machine", lambda: "arm64")
+
+    engine = DA3InferenceEngine(
+        DA3Config(
+            model_key="coreml_depth_anything_v2_small",
+            device=DeviceConfig(device="cpu", use_coreml=True),
+        )
+    )
+
+    assert engine.backend is ModelBackend.COREML
 
 
 def test_da3_stub_backend_raises_immediately() -> None:
