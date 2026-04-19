@@ -204,6 +204,7 @@ def test_da3_inference_da3_custom_path_ignores_transformers_pipeline_guard(
     engine = da3_inference.DA3InferenceEngine(
         DA3Config(
             model_variant=DA3ModelVariant.METRIC_LARGE,
+            non_commercial_ok=True,
             device=DeviceConfig(device="cpu", use_fp16=False),
         )
     )

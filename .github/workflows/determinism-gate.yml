@@ -97,6 +97,7 @@ jobs:
           python -m transformation_portal.lux_depth_v3 \
             --input-dir output/run_card_gate_input \
             --output-dir output/run_card_gate_output \
+            --model-key da3-metric \
             --depth-device cpu \
             --enable-v2 off \
             --emit-run-card on \
