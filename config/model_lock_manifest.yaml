@@ -61,9 +61,41 @@ repositories:
   onnx-community/depth-anything-v2-large:
     revision: "58f6f567efd3eacfeddec1dcc21cf77f67e4eaa9"
     owner: "depth pipeline"
+  depth-anything/DA3NESTED-GIANT-LARGE-1.1:
+    revision: "b2359bdf726fb44ef62acca04d629dcf158053e7"
+    owner: "depth pipeline"
+    canonical_key: "da3_research"
+    license: "cc-by-nc-4.0"
+    usage_class: "non_commercial_only"
+    backend_kind: "da3_api"
+  depth-anything/DA3METRIC-LARGE:
+    revision: "4010e39f3634a45bc60553321fb49fb760bd594e"
+    owner: "depth pipeline"
+    canonical_key: "da3_metric"
+    license: "apache-2.0"
+    usage_class: "commercial_ok"
+    backend_kind: "da3_api"
+  depth-anything/DA3-BASE:
+    revision: "f4a6c9b3c95e41c82048423d3493a81ec3fa810e"
+    owner: "depth pipeline"
+    canonical_key: "da3_base"
+    license: "apache-2.0"
+    usage_class: "commercial_ok"
+    backend_kind: "da3_api"
+  depth-anything/DA3-SMALL:
+    revision: "e08cab65ca0ec38e7826075418411ab90cab4da3"
+    owner: "depth pipeline"
+    canonical_key: "da3_small"
+    license: "apache-2.0"
+    usage_class: "commercial_ok"
+    backend_kind: "da3_api"
   apple/coreml-depth-anything-v2-small:
     revision: "cfef6f6f2a70783dedc0bfae40cecbc2052285d3"
     owner: "depth pipeline"
+    canonical_key: "coreml_depth_anything_v2_small"
+    license: "apache-2.0"
+    usage_class: "commercial_ok"
+    backend_kind: "coreml_published"
 
   # --- Lux Render Pipeline Models ---
   runwayml/stable-diffusion-v1-5:

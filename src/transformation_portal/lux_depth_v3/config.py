@@ -39,7 +39,7 @@ class ModelVariant(Enum):
         (),
         {
             "name": "depth-anything-v3-metric-large",
-            "display_name": ("Depth Anything V3 Metric Large " "(DA3 Nested Giant)"),
+            "display_name": "Depth Anything V3 Research Default (DA3 Nested Giant Large)",
             "huggingface_id": "depth-anything/DA3NESTED-GIANT-LARGE-1.1",
         },
     )()
@@ -48,8 +48,8 @@ class ModelVariant(Enum):
         (),
         {
             "name": "depth-anything-v3-metric-base",
-            "display_name": "Depth Anything V3 Metric Base",
-            "huggingface_id": ("depth-anything/" "Depth-Anything-V3-Metric-Base-hf"),
+            "display_name": "Depth Anything V3 Base Compatibility Selector",
+            "huggingface_id": "depth-anything/DA3-BASE",
         },
     )()
     METRIC_SMALL = type(
@@ -57,8 +57,8 @@ class ModelVariant(Enum):
         (),
         {
             "name": "depth-anything-v3-metric-small",
-            "display_name": "Depth Anything V3 Metric Small",
-            "huggingface_id": ("depth-anything/" "Depth-Anything-V3-Metric-Small-hf"),
+            "display_name": "Depth Anything V3 Small Compatibility Selector",
+            "huggingface_id": "depth-anything/DA3-SMALL",
         },
     )()
 
@@ -108,6 +108,9 @@ class DA3Config:
     """Depth Anything V3 configuration."""
 
     model_variant: ModelVariant = ModelVariant.METRIC_LARGE
+    model_key: Optional[str] = None
+    raw_model_id: Optional[str] = None
+    non_commercial_ok: bool = False
     device: DeviceConfig = field(default_factory=DeviceConfig)
     postprocessing: PostprocessingConfig = field(
         default_factory=PostprocessingConfig,
@@ -172,6 +175,8 @@ class EnhanceConfig:
 
     # Depth configuration
     model_variant: Optional[ModelVariant] = None
+    model_key: Optional[str] = None
+    raw_model_id: Optional[str] = None
     preset: Optional[Preset] = None
     # Raw preset string from CLI/user input
     # (captured even when preset does not map

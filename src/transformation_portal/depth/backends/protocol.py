@@ -25,6 +25,7 @@ class LicenseType(Enum):
 
     COMMERCIAL = "commercial"
     RESEARCH_ONLY = "research_only"
+    MODEL_DEPENDENT = "model_dependent"
 
 
 class LicenseRestrictionError(Exception):

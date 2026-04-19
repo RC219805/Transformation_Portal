@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import logging
 import time
+import warnings
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
@@ -31,6 +32,7 @@ from transformation_portal.core.security.model_lock import is_model_lock_strict_
 
 # noqa: F401 - Used in docstring examples
 from .config import DA3Config, ModelVariant  # noqa: F401
+from .model_resolution import ModelRequest, ResolvedModel, resolve_model_contract
 from .raw_loader import is_raw_file
 
 if TYPE_CHECKING:
@@ -186,6 +188,10 @@ class DA3InferenceEngine:
         config: Union[DA3Config, str] = "cpu",
         commercial_use: bool = True,
         validate_license_strict: bool = False,
+        *,
+        model_key: Optional[str] = None,
+        raw_model_id: Optional[str] = None,
+        non_commercial_ok: Optional[bool] = None,
     ):
         """Initialize inference engine.
 
@@ -214,9 +220,30 @@ class DA3InferenceEngine:
                 "Auto-constructed DA3Config" f" with device={device_str}",
             )
 
+        if model_key is not None:
+            config.model_key = model_key
+        if raw_model_id is not None:
+            config.raw_model_id = raw_model_id
+        if non_commercial_ok is not None:
+            config.non_commercial_ok = bool(non_commercial_ok)
+
         self.config = config
         self.commercial_use = commercial_use
         self.validate_license_strict = validate_license_strict
+        self._resolved_model_contract: Optional[ResolvedModel] = None
+        if commercial_use is not True:
+            warnings.warn(
+                "commercial_use is deprecated and no longer controls license enforcement. "
+                "Use non_commercial_ok for CC BY-NC research models.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+        if validate_license_strict is not False:
+            warnings.warn(
+                "validate_license_strict is deprecated and no longer bypasses registry license enforcement.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
 
         # Auto-detect backend and device
         self.backend = self._auto_detect_backend()
@@ -237,12 +264,34 @@ class DA3InferenceEngine:
             self.device,
         )
 
+    def _resolve_model_contract(self, *, use_coreml_backend: Optional[bool] = None) -> ResolvedModel:
+        """Resolve and cache the registry-backed model contract."""
+        if self._resolved_model_contract is not None and (
+            use_coreml_backend is None
+            or use_coreml_backend == (self._resolved_model_contract.accelerator_kind.value == "coreml")
+        ):
+            return self._resolved_model_contract
+        resolved = resolve_model_contract(
+            ModelRequest(
+                model_key=getattr(self.config, "model_key", None),
+                raw_model_id=getattr(self.config, "raw_model_id", None),
+                model_variant=self.config.model_variant,
+                use_coreml_backend=bool(use_coreml_backend),
+                non_commercial_ok=bool(getattr(self.config, "non_commercial_ok", False)),
+            )
+        )
+        if not use_coreml_backend:
+            self._resolved_model_contract = resolved
+        return resolved
+
     def _auto_detect_backend(self) -> ModelBackend:
         """Auto-detect optimal backend for current hardware."""
         device_spec = self.config.device.device.lower()
 
         # Phase 3: Check if CoreML is explicitly requested via config
         use_coreml = getattr(self.config.device, "use_coreml", False)
+        if use_coreml:
+            self._resolve_model_contract(use_coreml_backend=True)
         if use_coreml and self._should_use_coreml():
             logger.info(
                 "CoreML backend enabled via config " "(5x speedup on Apple Silicon)",
@@ -350,14 +399,9 @@ class DA3InferenceEngine:
         """
         _ensure_optional_runtime_imports()
 
-        # Get HuggingFace model ID from config
-        model_id = self.config.model_variant.value.huggingface_id
-        model_revision = resolve_model_lock_revision(
-            model_id,
-            requested_revision=None,
-            strict=None,
-            context="DA3InferenceEngine(primary_model)",
-        )
+        resolved_contract = self._resolve_model_contract(use_coreml_backend=False)
+        model_id = resolved_contract.spec.repo_id
+        model_revision = resolved_contract.revision
 
         # Provenance
         self._requested_model_id = model_id
@@ -376,13 +420,6 @@ class DA3InferenceEngine:
             raise ImportError("transformers required for PyTorch backend. Install with: " "pip install transformers")
         if TRANSFORMERS_TORCH_BACKEND_ISSUE:
             raise RuntimeError(TRANSFORMERS_TORCH_BACKEND_ISSUE)
-
-        # Fallback mapping to V2 metric models (which exist on HuggingFace)
-        v3_to_v2_fallback = {
-            "depth-anything/Depth-Anything-V3-Metric-Large-hf": "depth-anything/Depth-Anything-V2-Metric-Indoor-Large-hf",
-            "depth-anything/Depth-Anything-V3-Metric-Base-hf": "depth-anything/Depth-Anything-V2-Metric-Indoor-Base-hf",
-            "depth-anything/Depth-Anything-V3-Metric-Small-hf": "depth-anything/Depth-Anything-V2-Metric-Indoor-Small-hf",
-        }
 
         try:
             # Determine device argument for transformers pipeline
@@ -419,64 +456,8 @@ class DA3InferenceEngine:
             logger.info("Loaded PyTorch model: %s", model_id)
 
         except Exception as e:
-            # Try fallback to V2 metric model
-            fallback_model = v3_to_v2_fallback.get(model_id)
-            if fallback_model:
-                logger.warning(
-                    "V3 model %s not available," + " falling back to V2: %s",
-                    model_id,
-                    fallback_model,
-                )
-                try:
-                    fallback_revision = resolve_model_lock_revision(
-                        fallback_model,
-                        requested_revision=None,
-                        strict=None,
-                        context="DA3InferenceEngine(fallback_model)",
-                    )
-                    device_arg = self._transformers_device_arg()
-
-                    # Determine dtype for FP16 optimization
-                    use_fp16 = getattr(self.config.device, "use_fp16", True)
-                    torch_dtype = None
-                    if use_fp16 and self.device in ("mps", "cuda") and torch is not None:
-                        torch_dtype = torch.float16
-
-                    if pipeline is None:
-                        raise RuntimeError("transformers pipeline not available")
-                    self.model = pipeline(
-                        task="depth-estimation",
-                        model=fallback_model,
-                        revision=fallback_revision,
-                        device=device_arg,
-                        torch_dtype=torch_dtype,
-                    )
-
-                    # Additional FP16 optimization for MPS
-                    if (
-                        use_fp16
-                        and self.device == "mps"
-                        and hasattr(
-                            self.model.model,
-                            "half",
-                        )
-                    ):
-                        self.model.model = self.model.model.half()
-
-                    logger.info("Loaded fallback V2 model: %s", fallback_model)
-                    self._using_fallback_model = True
-                    self._fallback_model_id = fallback_model
-                    self._resolved_model_id = fallback_model
-
-                    return
-                except Exception as fallback_error:
-                    logger.error(
-                        "Fallback model also" + " failed: %s",
-                        fallback_error,
-                    )
-
             logger.error("Failed to load PyTorch model: %s", e)
-            raise RuntimeError(f"Failed to load model" f" {model_id}" f" (and fallback): {e}") from e
+            raise RuntimeError(f"Failed to load model {model_id}: {e}") from e
 
     def _is_da3_model(self, model_id: str) -> bool:
         """Check if model ID is a DA3 Nested model."""
@@ -605,8 +586,8 @@ class DA3InferenceEngine:
     def _load_coreml_model(self) -> None:
         """Load CoreML model for Apple Neural Engine (Phase 3).
 
-        Converts PyTorch DA3 models to CoreML format with ANE optimization.
-        Provides 5x inference speedup on Apple Silicon (400ms → 80ms on M4).
+        Loads a published CoreML artifact that has already been validated for this
+        runtime surface.
         """
         _ensure_optional_runtime_imports()
         if not COREML_AVAILABLE:
@@ -614,25 +595,13 @@ class DA3InferenceEngine:
 
         from .coreml_backend import CoreMLDepthEstimator
 
-        try:
-            # Get HuggingFace model ID from config
-            model_id = self.config.model_variant.value.huggingface_id
-
-            logger.info(f"Loading CoreML model: {model_id}")
-            self.model = CoreMLDepthEstimator(model_id)
-
-            logger.info(
-                "CoreML model loaded with ANE acceleration (5x speedup)",
-            )
-
-        except Exception as e:
-            logger.error(f"CoreML model loading failed: {e}")
-            logger.warning("Falling back to PyTorch MPS backend")
-
-            # Fallback to MPS
-            self.backend = ModelBackend.PYTORCH_MPS
-            self.device = "mps"
-            self._load_pytorch_model()
+        resolved_contract = self._resolve_model_contract(use_coreml_backend=True)
+        model_id = resolved_contract.spec.repo_id
+        self._requested_model_id = model_id
+        self._resolved_model_id = model_id
+        logger.info("Loading CoreML model: %s", model_id)
+        self.model = CoreMLDepthEstimator(model_id)
+        logger.info("CoreML model loaded with published artifact acceleration")
 
     def predict(
         self,

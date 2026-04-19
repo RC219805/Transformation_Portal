@@ -27,6 +27,10 @@ def _build_parser() -> argparse.ArgumentParser:
         help="ModelVariant enum member name (for example METRIC_LARGE).",
     )
     parser.add_argument(
+        "--model-key",
+        help="Canonical Lux Depth V3 registry key (for example da3_metric).",
+    )
+    parser.add_argument(
         "--device",
         default="cpu",
         help="Inference device to pass to DA3.",
@@ -90,6 +94,7 @@ def _run_inference(
     output_depth: Path,
     output_json: Path,
     model_variant_name: str,
+    model_key: str | None,
     device: str,
     use_coreml: bool,
 ) -> int:
@@ -101,12 +106,14 @@ def _run_inference(
     model_variant = _resolve_model_variant(model_variant_name)
     config = DA3Config(
         model_variant=model_variant,
+        model_key=model_key,
         device=DeviceConfig(device=device, use_coreml=use_coreml),
     )
     engine = DA3InferenceEngine(
         config=config,
         commercial_use=True,
         validate_license_strict=False,
+        model_key=model_key,
     )
     result = engine.predict(image)
 
@@ -151,6 +158,7 @@ def main(argv: list[str] | None = None) -> int:
         output_depth=args.output_depth.expanduser(),
         output_json=args.output_json.expanduser(),
         model_variant_name=str(args.model_variant),
+        model_key=str(args.model_key) if args.model_key else None,
         device=str(args.device),
         use_coreml=bool(args.use_coreml),
     )

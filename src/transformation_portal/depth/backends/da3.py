@@ -34,6 +34,7 @@ from ...core.ml_dependency_health import (
     ensure_dependency_importable,
 )
 from ...core.platform_matrix import CURRENT_PLATFORM
+from ...lux_depth_v3.model_resolution import ModelRequest, resolve_model_contract
 from .protocol import DepthResult, LicenseType
 
 if TYPE_CHECKING:
@@ -73,6 +74,12 @@ def _model_requires_custom_da3_library(model_variant: "ModelVariant") -> bool:
     """Return whether the selected model requires the depth-anything-3 package."""
     model_id = _model_id_for_variant(model_variant).lower()
     return model_id.startswith("depth-anything/da3") or "da3nested" in model_id
+
+
+def _model_requires_custom_da3_library_for_model_id(model_id: str) -> bool:
+    """Return whether a model ID requires the depth-anything-3 package."""
+    normalized = str(model_id).lower()
+    return normalized.startswith("depth-anything/da3") or "da3nested" in normalized
 
 
 def _infer_source_depth_units(metadata: dict[str, Any]) -> str:
@@ -138,7 +145,7 @@ class DA3Backend:
     """Depth Anything V3 backend adapter implementing DepthBackend protocol."""
 
     name = "da3"
-    license_type = LicenseType.COMMERCIAL
+    license_type = LicenseType.MODEL_DEPENDENT
     requires_checkpoint = False
     WORKER_MODULE = "transformation_portal.depth.backends.da3_worker"
 
@@ -148,6 +155,16 @@ class DA3Backend:
         self._engine: Optional[DA3InferenceEngine] = None
         self._device = self._resolve_device(config)
         self._model_variant = self._resolve_model_variant(config)
+        self._resolved_model_contract = resolve_model_contract(
+            ModelRequest(
+                model_key=getattr(config, "model_key", None) if config is not None else None,
+                raw_model_id=getattr(config, "raw_model_id", None) if config is not None else None,
+                model_variant=self._model_variant,
+                use_coreml_backend=bool(getattr(config, "use_coreml_backend", False)) if config is not None else False,
+                non_commercial_ok=bool(getattr(config, "non_commercial_ok", False)) if config is not None else False,
+            )
+        )
+        self._model_id = self._resolved_model_contract.spec.repo_id
         self._repo_root = self._find_repo_root()
         self._repo_src = self._repo_root / "src" if self._repo_root is not None else None
         self._python_executable = self._resolve_python_executable(config)
@@ -297,7 +314,7 @@ class DA3Backend:
 
     def _ensure_local_package_available(self) -> None:
         """Ensure depth-anything-3 is installed for DA3 nested models."""
-        if not _model_requires_custom_da3_library(self._model_variant):
+        if not _model_requires_custom_da3_library_for_model_id(self._model_id):
             return
 
         try:
@@ -325,6 +342,8 @@ class DA3Backend:
             "--check",
             "--model-variant",
             self._model_variant.name,
+            "--model-key",
+            self._resolved_model_contract.canonical_key,
             "--device",
             self._device,
         )
@@ -764,10 +783,7 @@ class DA3Backend:
         else:
             image_hash = hashlib.sha256(image.tobytes()).hexdigest()[:16]
 
-        if hasattr(self._model_variant, "value"):
-            model_name = self._model_variant.value.name
-        else:
-            model_name = "metric_large"
+        model_name = self._resolved_model_contract.canonical_key
 
         runner_mode = "subp" if self._uses_subprocess() else "local"
         runner_path = self._python_executable or sys.executable
@@ -784,21 +800,23 @@ class DA3Backend:
         device_config = DeviceConfig(device=device, use_coreml=use_coreml)
         da3_config = DA3Config(
             model_variant=self._model_variant,
+            model_key=self._resolved_model_contract.canonical_key,
+            raw_model_id=self._resolved_model_contract.spec.repo_id,
+            non_commercial_ok=bool(getattr(self._config, "non_commercial_ok", False)) if self._config else False,
             device=device_config,
         )
 
-        if self._config:
-            commercial_use = not getattr(self._config, "non_commercial_ok", False)
-        else:
-            commercial_use = True
         self._engine = DA3InferenceEngine(
             config=da3_config,
-            commercial_use=commercial_use,
+            commercial_use=True,
             validate_license_strict=False,
+            model_key=self._resolved_model_contract.canonical_key,
+            raw_model_id=self._resolved_model_contract.spec.repo_id,
+            non_commercial_ok=bool(getattr(self._config, "non_commercial_ok", False)) if self._config else False,
         )
 
         logger.info(
             "Loaded DA3 backend: model=%s device=%s",
-            self._model_variant.value.name,
+            self._model_id,
             device,
         )

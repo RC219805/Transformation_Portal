@@ -57,11 +57,24 @@ def load_model_lock_manifest(path: Optional[Path] = None) -> Dict[str, Any]:
     if not isinstance(payload, dict):
         raise ValueError(f"Model lock manifest root must be an object: {manifest_path}")
 
-    repositories = payload.get("repositories")
-    if repositories is None:
-        payload["repositories"] = {}
-    elif not isinstance(repositories, dict):
-        raise ValueError(f"Model lock manifest 'repositories' must be an object: {manifest_path}")
+    if payload.get("version") == 1 or "repositories" in payload:
+        repositories = payload.get("repositories")
+        if repositories is None:
+            payload["repositories"] = {}
+        elif not isinstance(repositories, dict):
+            raise ValueError(f"Model lock manifest 'repositories' must be an object: {manifest_path}")
+        payload["manifest_schema_version"] = 1
+    elif payload.get("schema_version") == 2 and "models" in payload:
+        models = payload.get("models")
+        if not isinstance(models, dict):
+            raise ValueError(f"Model lock manifest 'models' must be an object: {manifest_path}")
+        payload["repositories"] = models
+        payload["manifest_schema_version"] = 2
+    else:
+        raise ValueError(
+            f"Unsupported model lock manifest shape: {manifest_path}. "
+            "Expected v1 'version' + 'repositories' or v2 'schema_version' + 'models'."
+        )
 
     artifact_attestation = payload.get("artifact_attestation")
     if artifact_attestation is None:

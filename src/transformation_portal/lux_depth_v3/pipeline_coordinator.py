@@ -51,6 +51,7 @@ from .config_resolver import (
     resolve_effective_depth_pro_python_executable,
 )
 from .manifest import BackendSelectionMetadata
+from .model_resolution import BackendCapabilityError, ModelLicenseError, ModelRequest, resolve_model_contract
 
 logger = logging.getLogger(__name__)
 
@@ -223,6 +224,7 @@ def expected_output_depth_units_for_backend(backend_id: str) -> str:
 def default_model_id_for_backend(
     backend_id: str,
     model_variant: Optional[ModelVariant] = None,
+    config: Optional[EnhanceConfig] = None,
 ) -> str:
     """Return canonical backend model identifier for provenance.
 
@@ -240,6 +242,23 @@ def default_model_id_for_backend(
     if normalized_backend == "da2":
         return "depth-anything/Depth-Anything-V2-Small-hf"
     if normalized_backend == "da3":
+        if config is not None:
+            try:
+                return resolve_model_contract(
+                    ModelRequest(
+                        model_key=getattr(config, "model_key", None),
+                        raw_model_id=getattr(config, "raw_model_id", None),
+                        model_variant=model_variant or getattr(config, "model_variant", None),
+                        use_coreml_backend=bool(getattr(config, "use_coreml_backend", False)),
+                        non_commercial_ok=bool(getattr(config, "non_commercial_ok", False)),
+                        enforce_license=False,
+                    )
+                ).spec.repo_id
+            except Exception:
+                logger.debug(
+                    "Falling back to legacy DA3 model ID resolution for backend provenance",
+                    exc_info=True,
+                )
         if model_variant is not None:
             return model_variant.value.huggingface_id
         return ModelVariant.METRIC_LARGE.value.huggingface_id
@@ -315,6 +334,7 @@ def resolve_backend_model_id(
     result_metadata: Optional[Dict[str, Any]] = None,
     backend: Optional[Any] = None,
     model_variant: Optional[ModelVariant] = None,
+    config: Optional[EnhanceConfig] = None,
 ) -> str:
     """Resolve stable model id for provenance and run-card semantics.
 
@@ -352,7 +372,7 @@ def resolve_backend_model_id(
         return from_backend
 
     # Fall back to default
-    return default_model_id_for_backend(backend_id, model_variant)
+    return default_model_id_for_backend(backend_id, model_variant, config=config)
 
 
 def select_backend(
@@ -426,7 +446,7 @@ def select_backend(
                 reason = f"Requested '{normalized_requested}' unavailable: {requested_error}. " f"Selected '{backend_id}'"
             break
 
-        except LicenseRestrictionError:
+        except (LicenseRestrictionError, ModelLicenseError, BackendCapabilityError):
             # Never bypass explicit license restrictions on requested backend
             if index == 0:
                 raise

@@ -229,12 +229,13 @@ Output Deliverables
 
 **Solution:**
 ```bash
-# ✅ Omit research flags for commercial workflows
+# ✅ Use the Apache DA3 selector for commercial workflows
 --quality-tier "apex" \
---depth-backend "da3"
+--depth-backend "da3" \
+--model-key "da3-metric"
 ```
 
-**Explanation:** The canonical commercial-safe backend is `da3`; it does not require research license flags.
+**Explanation:** `da3` is now the research-default selector. Use `--model-key "da3-metric"` for the Apache-2.0 DA3 path on the current Lux V3 relative-depth surface.
 
 ---
 

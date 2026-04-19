@@ -220,6 +220,31 @@ def test_model_lock_manifest_path_falls_back_to_cwd(tmp_path: Path, monkeypatch:
     assert model_lock_manifest_path() == manifest
 
 
+def test_load_model_lock_manifest_normalizes_v2_models_shape(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    manifest = tmp_path / "model_lock_v2.yaml"
+    manifest.write_text(
+        yaml.safe_dump(
+            {
+                "schema_version": 2,
+                "models": {
+                    "depth-anything/DA3METRIC-LARGE": {
+                        "revision": "1" * 40,
+                        "canonical_key": "da3_metric",
+                    }
+                },
+            },
+            sort_keys=True,
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("TP_MODEL_LOCK_MANIFEST", str(manifest))
+
+    payload = load_model_lock_manifest()
+
+    assert payload["manifest_schema_version"] == 2
+    assert payload["repositories"]["depth-anything/DA3METRIC-LARGE"]["canonical_key"] == "da3_metric"
+
+
 def test_da3_inference_pipeline_load_uses_pinned_revision_in_strict_mode(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -228,46 +253,49 @@ def test_da3_inference_pipeline_load_uses_pinned_revision_in_strict_mode(
     from transformation_portal.lux_depth_v3.config import ModelVariant as DA3ModelVariant
 
     manifest_path = tmp_path / "model_lock.yaml"
-    model_id = "depth-anything/Depth-Anything-V3-Metric-Base-hf"
+    model_id = "depth-anything/DA3-BASE"
     pinned = "7" * 40
     _write_manifest(manifest_path, {model_id: {"revision": pinned}})
 
     monkeypatch.setenv("TP_MODEL_LOCK_MANIFEST", str(manifest_path))
     monkeypatch.setenv("TP_STRICT_MODEL_LOCK", "1")
-    monkeypatch.setattr(da3_inference, "TRANSFORMERS_AVAILABLE", True)
-    monkeypatch.setattr(da3_inference, "TORCH_AVAILABLE", True)
     monkeypatch.setattr(
         da3_inference.DA3InferenceEngine,
         "_auto_detect_backend",
         lambda self: da3_inference.ModelBackend.PYTORCH_CPU,
     )
 
-    captured: dict[str, str | int | None] = {}
+    captured: dict[str, str | None] = {}
 
-    class _FakeModel:
-        pass
+    class _FakeDA3Model:
+        def to(self, device: str) -> "_FakeDA3Model":
+            captured["device"] = device
+            return self
 
-    class _FakePipeline:
-        def __init__(self) -> None:
-            self.model = _FakeModel()
+        def eval(self) -> "_FakeDA3Model":
+            captured["eval"] = "true"
+            return self
 
-    def _fake_pipeline(*, task: str, model: str, revision: str | None = None, **kwargs):
-        captured["task"] = task
-        captured["model"] = model
-        captured["revision"] = revision
-        captured["device"] = kwargs.get("device")
-        return _FakePipeline()
+    class _FakeDepthAnything3:
+        @staticmethod
+        def from_pretrained(model: str, **kwargs):
+            captured["model"] = model
+            captured["revision"] = kwargs.get("revision")
+            return _FakeDA3Model()
 
-    monkeypatch.setattr(da3_inference, "pipeline", _fake_pipeline)
+    fake_pkg = types.ModuleType("depth_anything_3")
+    fake_api = types.ModuleType("depth_anything_3.api")
+    fake_api.DepthAnything3 = _FakeDepthAnything3
+    monkeypatch.setitem(sys.modules, "depth_anything_3", fake_pkg)
+    monkeypatch.setitem(sys.modules, "depth_anything_3.api", fake_api)
 
     config = DA3Config(
         model_variant=DA3ModelVariant.METRIC_BASE,
         device=DeviceConfig(device="cpu", use_fp16=False),
     )
     engine = da3_inference.DA3InferenceEngine(config)
-    engine._load_pytorch_model()
+    engine._load_da3_model(model_id)
 
-    assert captured["task"] == "depth-estimation"
     assert captured["model"] == model_id
     assert captured["revision"] == pinned
     assert captured["device"] == "cpu"
@@ -279,46 +307,48 @@ def test_da3_inference_pipeline_load_uses_mps_device_string(tmp_path: Path, monk
     from transformation_portal.lux_depth_v3.config import ModelVariant as DA3ModelVariant
 
     manifest_path = tmp_path / "model_lock.yaml"
-    model_id = "depth-anything/Depth-Anything-V3-Metric-Base-hf"
+    model_id = "depth-anything/DA3-BASE"
     pinned = "6" * 40
     _write_manifest(manifest_path, {model_id: {"revision": pinned}})
 
     monkeypatch.setenv("TP_MODEL_LOCK_MANIFEST", str(manifest_path))
     monkeypatch.setenv("TP_STRICT_MODEL_LOCK", "1")
-    monkeypatch.setattr(da3_inference, "TRANSFORMERS_AVAILABLE", True)
-    monkeypatch.setattr(da3_inference, "TORCH_AVAILABLE", True)
     monkeypatch.setattr(
         da3_inference.DA3InferenceEngine,
         "_auto_detect_backend",
         lambda self: da3_inference.ModelBackend.PYTORCH_MPS,
     )
 
-    captured: dict[str, str | int | None] = {}
+    captured: dict[str, str | None] = {}
 
-    class _FakeModel:
-        pass
+    class _FakeDA3Model:
+        def to(self, device: str) -> "_FakeDA3Model":
+            captured["device"] = device
+            return self
 
-    class _FakePipeline:
-        def __init__(self) -> None:
-            self.model = _FakeModel()
+        def eval(self) -> "_FakeDA3Model":
+            return self
 
-    def _fake_pipeline(*, task: str, model: str, revision: str | None = None, **kwargs):
-        captured["task"] = task
-        captured["model"] = model
-        captured["revision"] = revision
-        captured["device"] = kwargs.get("device")
-        return _FakePipeline()
+    class _FakeDepthAnything3:
+        @staticmethod
+        def from_pretrained(model: str, **kwargs):
+            captured["model"] = model
+            captured["revision"] = kwargs.get("revision")
+            return _FakeDA3Model()
 
-    monkeypatch.setattr(da3_inference, "pipeline", _fake_pipeline)
+    fake_pkg = types.ModuleType("depth_anything_3")
+    fake_api = types.ModuleType("depth_anything_3.api")
+    fake_api.DepthAnything3 = _FakeDepthAnything3
+    monkeypatch.setitem(sys.modules, "depth_anything_3", fake_pkg)
+    monkeypatch.setitem(sys.modules, "depth_anything_3.api", fake_api)
 
     config = DA3Config(
         model_variant=DA3ModelVariant.METRIC_BASE,
         device=DeviceConfig(device="mps", use_fp16=False),
     )
     engine = da3_inference.DA3InferenceEngine(config)
-    engine._load_pytorch_model()
+    engine._load_da3_model(model_id)
 
-    assert captured["task"] == "depth-estimation"
     assert captured["model"] == model_id
     assert captured["revision"] == pinned
     assert captured["device"] == "mps"

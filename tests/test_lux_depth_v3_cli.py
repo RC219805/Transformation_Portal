@@ -14,6 +14,7 @@ from transformation_portal.lux_depth_v3.__main__ import _parse_bool_flag, app
 pytestmark = pytest.mark.unit
 
 runner = CliRunner()
+DEFAULT_APACHE_MODEL_ARGS = ["--model-key", "da3-metric"]
 
 
 def strip_ansi(text: str) -> str:
@@ -256,12 +257,14 @@ class TestCLIValidation:
                 str(input_dir),
                 "--output-dir",
                 str(tmp_path / "output"),
+                *DEFAULT_APACHE_MODEL_ARGS,
             ],
         )
 
         assert result.exit_code == 1
         assert "raw inputs detected but canonical raw ingest is unavailable" in result.stdout.lower()
-        assert 'pip install -e ".[raw]"' in result.stdout
+        assert "rebuild that dedicated raw runtime" in result.stdout.lower()
+        assert "--raw-python" in result.stdout
 
     def test_non_raw_inputs_do_not_trigger_rawpy_preflight(self, monkeypatch, tmp_path):
         """Non-RAW batches should not be blocked by the optional RAW dependency."""
@@ -289,6 +292,7 @@ class TestCLIValidation:
                 str(input_dir),
                 "--output-dir",
                 str(tmp_path / "output"),
+                *DEFAULT_APACHE_MODEL_ARGS,
             ],
         )
 
@@ -317,6 +321,7 @@ class TestCLIValidation:
                 str(tmp_path / "output"),
                 "--raw-ingest-mode",
                 "force_preview",
+                *DEFAULT_APACHE_MODEL_ARGS,
             ],
         )
 
@@ -346,13 +351,15 @@ class TestCLIValidation:
                 str(input_dir),
                 "--output-dir",
                 str(tmp_path / "output"),
+                *DEFAULT_APACHE_MODEL_ARGS,
             ],
         )
 
         assert result.exit_code == 1
         assert "rawpy is unavailable in this environment" in result.stdout.lower()
         assert "not installed" not in result.stdout.lower()
-        assert "inspect the import/runtime error in the logs" in result.stdout.lower()
+        assert "rebuild that dedicated raw runtime" in result.stdout.lower()
+        assert "working interpreter" in result.stdout.lower()
 
     def test_apex_materials_v3_requires_segmentation_enabled(self, tmp_path):
         """APEX strict gate should require explicit segmentation when Materials V3 is on."""
@@ -504,15 +511,15 @@ class TestCLIConfiguration:
         ("name", "args", "expected_backend", "expected_device", "expected_non_commercial"),
         [
             (
-                "commercial_safe_default",
-                [],
+                "apache_default",
+                ["--model-key", "da3-metric"],
                 "da3",
                 "cpu",
                 False,
             ),
             (
                 "apple_silicon_da3",
-                ["--depth-backend", "da3", "--depth-device", "mps"],
+                ["--depth-backend", "da3", "--depth-device", "mps", "--model-key", "da3-metric"],
                 "da3",
                 "mps",
                 False,
@@ -544,7 +551,7 @@ class TestCLIConfiguration:
         expected_device,
         expected_non_commercial,
     ):
-        """CLI should preserve the supported commercial-safe, Apple Silicon, and research tiers."""
+        """CLI should preserve the supported Apache, Apple Silicon, and research tiers."""
         from unittest.mock import MagicMock, patch
 
         input_dir = tmp_path / "input"
@@ -602,6 +609,8 @@ class TestCLIConfiguration:
                 "apex",
                 "--depth-backend",
                 "da3",
+                "--model-key",
+                "da3-metric",
                 "--materials-v3",
                 "on",
                 "--pbr",
@@ -659,6 +668,8 @@ class TestCLIConfiguration:
                     str(tmp_path / "output"),
                     "--depth-backend",
                     "depth_anything_v3",
+                    "--model-key",
+                    "da3-metric",
                 ],
             )
 
@@ -735,6 +746,7 @@ class TestCLIConfiguration:
                     str(tmp_path / "output"),
                     "--enable-v2",
                     "off",
+                    *DEFAULT_APACHE_MODEL_ARGS,
                 ],
             )
 
@@ -773,6 +785,7 @@ class TestCLIConfiguration:
                     str(tmp_path / "output"),
                     "--v2-preset",
                     "none",
+                    *DEFAULT_APACHE_MODEL_ARGS,
                 ],
             )
 
@@ -812,6 +825,7 @@ class TestCLIConfiguration:
                     "v2",
                     "--run-card-include-proofs",
                     "on",
+                    *DEFAULT_APACHE_MODEL_ARGS,
                 ],
             )
 
@@ -848,6 +862,7 @@ class TestCLIConfiguration:
                     str(tmp_path / "output"),
                     "--depth-pro-python",
                     "./.venv-depth-pro/bin/python",
+                    *DEFAULT_APACHE_MODEL_ARGS,
                 ],
             )
 
@@ -884,6 +899,7 @@ class TestCLIConfiguration:
                     str(tmp_path / "output"),
                     "--da3-python",
                     "./.venv-da3/bin/python",
+                    *DEFAULT_APACHE_MODEL_ARGS,
                 ],
             )
 
@@ -920,6 +936,7 @@ class TestCLIConfiguration:
                     str(tmp_path / "output"),
                     "--raw-python",
                     "./.venv-raw/bin/python",
+                    *DEFAULT_APACHE_MODEL_ARGS,
                 ],
             )
 
@@ -957,6 +974,7 @@ class TestCLIConfiguration:
                 str(tmp_path / "output"),
                 "--raw-python",
                 "./.venv-raw/bin/python",
+                *DEFAULT_APACHE_MODEL_ARGS,
             ],
         )
 
@@ -991,6 +1009,7 @@ class TestCLIConfiguration:
                     str(input_dir),
                     "--output-dir",
                     str(tmp_path / "output"),
+                    *DEFAULT_APACHE_MODEL_ARGS,
                 ],
             )
 
@@ -1027,6 +1046,7 @@ class TestCLIConfiguration:
                     str(tmp_path / "output"),
                     "--save-float-depth",
                     "on",
+                    *DEFAULT_APACHE_MODEL_ARGS,
                 ],
             )
 
@@ -1175,6 +1195,7 @@ class TestSegmentationCLI:
                     "efficientsam",
                     "--sam2-model-size",
                     "tiny",
+                    *DEFAULT_APACHE_MODEL_ARGS,
                 ],
             )
 
@@ -1210,6 +1231,7 @@ class TestSegmentationCLI:
                     str(input_dir),
                     "--output-dir",
                     str(tmp_path / "output"),
+                    *DEFAULT_APACHE_MODEL_ARGS,
                 ],
             )
 
@@ -1253,6 +1275,7 @@ class TestSegmentationCLI:
                     "--segmentation-backend",
                     "efficientsam",
                     "--strict-segmentation",
+                    *DEFAULT_APACHE_MODEL_ARGS,
                 ],
             )
 
@@ -1300,6 +1323,7 @@ class TestSegmentationCLI:
                     "--sam2-checkpoint-path",
                     str(tmp_path / "sam2_hiera_large.pt"),
                     "--strict-segmentation",
+                    *DEFAULT_APACHE_MODEL_ARGS,
                 ],
             )
 

@@ -44,6 +44,7 @@ from ..core.raw_runtime import RAW_RUNTIME_ENV_VAR, REPO_LOCAL_RAW_PYTHON, repo_
 from ..ingest.canonical_json import canonicalize_json
 from .config import DA3Config, EnhanceConfig, ModelVariant, Preset
 from .manifest import ConfigFingerprint
+from .model_resolution import ModelRequest, ResolvedModel, resolve_model_contract
 
 logger = logging.getLogger(__name__)
 _REPO_LOCAL_DEPTH_PRO_PYTHON_PARTS = (".venv-depth-pro", "bin", "python")
@@ -225,6 +226,16 @@ class ResolvedConfig:
     model_variant: Optional[ModelVariant] = None
     quality_tier: str = "standard"
     fingerprint: Optional[ConfigFingerprint] = None
+    resolved_model_contract: Optional[ResolvedModel] = None
+
+
+def _compat_model_variant_for_resolved_key(canonical_key: str) -> ModelVariant:
+    """Map resolved registry keys back to compatibility model variants."""
+    if canonical_key == "da3_base":
+        return ModelVariant.METRIC_BASE
+    if canonical_key == "da3_small":
+        return ModelVariant.METRIC_SMALL
+    return ModelVariant.METRIC_LARGE
 
 
 def discover_presets(pipeline: str = "lux_depth_v3") -> List[PresetInfo]:
@@ -445,6 +456,8 @@ def build_depth_cache_payload(
 
     return {
         "model_variant": mv.value.name,
+        "model_key": getattr(config, "model_key", None),
+        "raw_model_id": getattr(config, "raw_model_id", None),
         "depth_device": config.depth_device,
         "preset": config.preset.value if config.preset else None,
         "depth_backend": config.depth_backend,
@@ -631,9 +644,26 @@ class ConfigResolver:
             config.preset,
             config.model_variant,
         )
+        resolved_model_contract = resolve_model_contract(
+            ModelRequest(
+                model_key=getattr(config, "model_key", None),
+                raw_model_id=getattr(config, "raw_model_id", None),
+                model_variant=config.model_variant,
+                use_coreml_backend=bool(getattr(config, "use_coreml_backend", False)),
+                non_commercial_ok=bool(getattr(config, "non_commercial_ok", False)),
+                enforce_license=False,
+            )
+        )
+        if getattr(config, "model_key", None) or getattr(config, "raw_model_id", None):
+            resolved_model = _compat_model_variant_for_resolved_key(
+                resolved_model_contract.canonical_key,
+            )
 
         # Apply device configuration
         da3_config.device.device = config.depth_device
+        da3_config.model_key = getattr(config, "model_key", None)
+        da3_config.raw_model_id = getattr(config, "raw_model_id", None)
+        da3_config.non_commercial_ok = bool(getattr(config, "non_commercial_ok", False))
 
         # Update config with resolved model variant
         config.model_variant = resolved_model
@@ -653,6 +683,7 @@ class ConfigResolver:
             model_variant=resolved_model,
             quality_tier=config.quality_tier,
             fingerprint=fingerprint,
+            resolved_model_contract=resolved_model_contract,
         )
 
     def discover_presets(self, pipeline: str = "lux_depth_v3") -> List[PresetInfo]:

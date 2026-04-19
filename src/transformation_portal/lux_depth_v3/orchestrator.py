@@ -39,6 +39,8 @@ from typing import Any, Callable, Dict, List, Optional, cast
 
 import numpy as np
 
+from transformation_portal.attestation.model_lock_manifest import load_model_lock_manifest as load_model_lock_manifest_payload
+
 from ..core.ml_dependency_health import (
     detect_transformers_torch_version_issue,
 )
@@ -438,24 +440,11 @@ class EnhanceOrchestrator:
         # Note: zones_dir intentionally NOT created here
         # Will be created on-demand when zoning features are implemented
 
-        # Initialize V3 Configuration
-        # (Priority: User Override > Preset > Default)
-        if config.preset is not None:
-            da3_config = DA3Config.from_preset(config.preset)
-            if config.model_variant is not None:
-                logger.info(
-                    "Overriding preset model" + " with user choice: %s",
-                    config.model_variant.value.display_name,
-                )
-                da3_config.model_variant = config.model_variant
-            else:
-                config.model_variant = da3_config.model_variant
-        else:
-            model = config.model_variant if config.model_variant is not None else ModelVariant.METRIC_LARGE
-            da3_config = DA3Config(model_variant=model)
-            config.model_variant = model
-
-        da3_config.device.device = config.depth_device
+        resolved_config = ConfigResolver().resolve(self.config)
+        self._resolved_config = resolved_config
+        self._resolved_model_contract = resolved_config.resolved_model_contract
+        self.config = resolved_config.enhance_config
+        da3_config = resolved_config.da3_config
 
         # Initialize Depth Backend via Registry (ADR-019)
         self.depth_backend: Optional[DepthBackend] = None
@@ -714,7 +703,7 @@ class EnhanceOrchestrator:
 
         Delegates to pipeline_coordinator.default_model_id_for_backend().
         """
-        return default_model_id_for_backend(backend_id, self._model_variant)
+        return default_model_id_for_backend(backend_id, self._model_variant, config=self.config)
 
     def _derive_model_id_from_backend_instance(
         self,
@@ -743,6 +732,7 @@ class EnhanceOrchestrator:
             result_metadata=result_metadata,
             backend=backend,
             model_variant=self._model_variant,
+            config=self.config,
         )
 
     @staticmethod
@@ -5979,6 +5969,36 @@ class EnhanceOrchestrator:
         fingerprint["grouping_mode"] = str(getattr(self.config, "grouping_mode", "single"))
         return fingerprint
 
+    def _build_run_card_model_contract(self) -> Optional[Dict[str, Any]]:
+        """Build additive registry-backed model provenance for the run card."""
+        resolved_contract = getattr(self, "_resolved_model_contract", None)
+        if resolved_contract is None:
+            return None
+        try:
+            manifest_payload = load_model_lock_manifest_payload()
+            manifest_schema_version = int(
+                manifest_payload.get(
+                    "manifest_schema_version",
+                    manifest_payload.get("version", manifest_payload.get("schema_version", 1)),
+                )
+            )
+        except Exception:
+            manifest_schema_version = 1
+        return {
+            "requested_model_selector": resolved_contract.requested_selector,
+            "canonical_model_key": resolved_contract.canonical_key,
+            "resolved_repo_id": resolved_contract.spec.repo_id,
+            "resolved_revision": resolved_contract.revision,
+            "license_id": resolved_contract.spec.license_id,
+            "usage_class": resolved_contract.spec.usage_class.value,
+            "requires_non_commercial_ok": resolved_contract.spec.requires_non_commercial_ok,
+            "non_commercial_ok": bool(getattr(self.config, "non_commercial_ok", False)),
+            "backend_kind": resolved_contract.spec.backend_kind.value,
+            "accelerator_kind": resolved_contract.accelerator_kind.value,
+            "fallback_chain": list(resolved_contract.fallback_chain),
+            "manifest_schema_version": manifest_schema_version,
+        }
+
     def _run_card_output_relative_path(self, path_value: Any) -> Optional[str]:
         """Render an output-root-relative path suitable for run-card summaries."""
         return render_run_card_output_relative_path(path_value, self.output_root)
@@ -6166,6 +6186,9 @@ class EnhanceOrchestrator:
             "artifact_index": artifact_index,
             **artifact_summary_payload,
         }
+        model_contract = self._build_run_card_model_contract()
+        if model_contract is not None:
+            run_card["model_contract"] = model_contract
 
         def _json_default(obj: Any) -> Any:
             # --- ConfigFingerprint ---

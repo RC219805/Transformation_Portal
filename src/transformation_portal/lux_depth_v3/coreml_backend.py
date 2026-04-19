@@ -1,17 +1,7 @@
-"""CoreML backend for Depth Anything V3 on Apple Silicon.
+"""CoreML backend for published Depth Anything CoreML artifacts on Apple Silicon.
 
-Provides 5x inference speedup on Apple Neural Engine (ANE) compared to PyTorch MPS.
-Converts PyTorch DA3 models to CoreML format with FP16 precision and ANE optimization.
-
-Performance (Apple M4, 1024×1024):
-- PyTorch MPS: ~400ms
-- CoreML ANE:   ~80ms (5x speedup)
-
-Architecture:
-- One-time model conversion (5-10 minutes per model)
-- Cached converted models in ~/.cache/transformation_portal/coreml/
-- Graceful fallback to PyTorch if conversion fails
-- Thread-safe concurrent inference (ANE supports multiple contexts)
+This release only supports registry-listed published CoreML packages. DA3-to-CoreML
+conversion is intentionally not part of the supported runtime surface.
 """
 
 from __future__ import annotations
@@ -24,7 +14,10 @@ from typing import Any, Dict, Optional
 
 import numpy as np
 
+from transformation_portal.depth.models.coreml_wrapper import CoreMLDepthModel
+
 logger = logging.getLogger(__name__)
+_SUPPORTED_PUBLISHED_COREML_MODEL_IDS = {"apple/coreml-depth-anything-v2-small"}
 
 # Lazy imports to avoid dependency errors
 try:
@@ -53,36 +46,33 @@ except ImportError:
 
 
 class CoreMLDepthEstimator:
-    """CoreML-optimized depth estimation for Apple Silicon.
-
-    Converts PyTorch DA3 models to CoreML format with ANE acceleration.
-    Caches converted models in ~/.cache/transformation_portal/coreml/
+    """CoreML depth estimation for published Apple Silicon artifacts.
 
     Example:
-        >>> estimator = CoreMLDepthEstimator("depth-anything/Depth-Anything-V3-Metric-Small-hf")
-        >>> depth = estimator.predict(image)  # ~80ms on M4
+        >>> estimator = CoreMLDepthEstimator("apple/coreml-depth-anything-v2-small")
+        >>> depth = estimator.predict(image)
     """
 
     def __init__(self, model_id: str, cache_dir: Optional[Path] = None, force_reconvert: bool = False):
         """Initialize CoreML depth estimator.
 
         Args:
-            model_id: HuggingFace model ID (e.g., "depth-anything/Depth-Anything-V3-Metric-Small-hf")
+            model_id: Published Hugging Face CoreML model ID.
             cache_dir: Directory for cached CoreML models (default: ~/.cache/transformation_portal/coreml/)
             force_reconvert: Force reconversion even if cached model exists
 
         Raises:
-            RuntimeError: If coremltools or dependencies unavailable
-            ValueError: If model conversion fails
+            RuntimeError: If coremltools unavailable
+            ValueError: If the model is not a supported published CoreML artifact
         """
         if not COREML_AVAILABLE:
             raise RuntimeError("coremltools not available. Install: pip install coremltools")
 
-        if not TORCH_AVAILABLE:
-            raise RuntimeError("torch not available. Install: pip install torch")
-
-        if not TRANSFORMERS_AVAILABLE:
-            raise RuntimeError("transformers not available. Install: pip install transformers")
+        if model_id not in _SUPPORTED_PUBLISHED_COREML_MODEL_IDS:
+            raise ValueError(
+                f"CoreML backend is only supported for published CoreML artifacts in this release. "
+                f"Unsupported model_id={model_id!r}."
+            )
 
         self.model_id = model_id
         self.cache_dir = cache_dir or Path.home() / ".cache" / "transformation_portal" / "coreml"
@@ -114,6 +104,9 @@ class CoreMLDepthEstimator:
         """
         cache_path = self._get_cache_path()
 
+        if self.model_id in _SUPPORTED_PUBLISHED_COREML_MODEL_IDS:
+            return self._load_published_coreml_model(cache_path)
+
         if cache_path.exists() and not force_reconvert:
             logger.info(f"Loading cached CoreML model: {cache_path}")
             try:
@@ -132,6 +125,20 @@ class CoreMLDepthEstimator:
         except Exception as e:
             logger.error(f"CoreML conversion failed: {e}")
             raise ValueError(f"Failed to convert {self.model_id} to CoreML: {e}") from e
+
+    def _load_published_coreml_model(self, cache_path: Path) -> Any:
+        """Load a published CoreML artifact from Hugging Face."""
+        from huggingface_hub import hf_hub_download  # pylint: disable=import-outside-toplevel
+
+        if cache_path.exists():
+            return CoreMLDepthModel(cache_path)
+
+        model_path = hf_hub_download(  # nosec B615
+            repo_id=self.model_id,
+            filename="DepthAnythingV2SmallF16.mlpackage",
+            cache_dir=self.cache_dir,
+        )
+        return CoreMLDepthModel(model_path)
 
     def _convert_pytorch_to_coreml(self, output_path: Path) -> Any:
         """Convert PyTorch depth model to CoreML with ANE optimization.
@@ -206,20 +213,11 @@ class CoreMLDepthEstimator:
         # Ensure float32 (CoreML input requirement)
         image = image.astype(np.float32)
 
-        # Run CoreML inference
-        output = self.coreml_model.predict({"input": image})
-
-        # Extract depth (assumes output key is "depth" or first key)
-        depth = output.get("depth")
-        if depth is None:
-            # Fallback to first output
-            depth = output[list(output.keys())[0]]
-
-        # Remove batch dimension if present
+        depth = self.coreml_model.predict(image)
         if depth.ndim == 4:
-            depth = depth[0, 0]  # BCHW → HW
+            depth = depth[0, 0]
         elif depth.ndim == 3:
-            depth = depth[0]  # CHW → HW
+            depth = depth[0]
 
         return depth
 

@@ -278,6 +278,75 @@
       },
       "additionalProperties": false
     },
+    "model_contract": {
+      "type": "object",
+      "required": [
+        "accelerator_kind",
+        "backend_kind",
+        "canonical_model_key",
+        "fallback_chain",
+        "license_id",
+        "manifest_schema_version",
+        "non_commercial_ok",
+        "requested_model_selector",
+        "requires_non_commercial_ok",
+        "resolved_repo_id",
+        "resolved_revision",
+        "usage_class"
+      ],
+      "properties": {
+        "requested_model_selector": {
+          "type": "string",
+          "minLength": 1
+        },
+        "canonical_model_key": {
+          "type": "string",
+          "minLength": 1
+        },
+        "resolved_repo_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "resolved_revision": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{40}$"
+        },
+        "license_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "usage_class": {
+          "type": "string",
+          "minLength": 1
+        },
+        "requires_non_commercial_ok": {
+          "type": "boolean"
+        },
+        "non_commercial_ok": {
+          "type": "boolean"
+        },
+        "backend_kind": {
+          "type": "string",
+          "minLength": 1
+        },
+        "accelerator_kind": {
+          "type": "string",
+          "minLength": 1
+        },
+        "fallback_chain": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "manifest_schema_version": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "additionalProperties": false
+    },
     "environment": {
       "type": "object",
       "required": [
