@@ -1780,7 +1780,8 @@ def test_portal_disclosure_defaults_are_state_driven_instead_of_static() -> None
     assert 'id="reconstructionDetailsSummary"' in content
     assert 'id="dispatchToolsSummary"' in content
     assert 'id="advancedFlagsDetails" class="disclosure-panel disclosure-panel-secondary mt-6">' in content
-    assert 'id="governanceDetails" class="disclosure-panel disclosure-panel-secondary mt-6">' in content
+    assert 'id="governanceDetails" class="hidden disclosure-panel disclosure-panel-secondary mt-6">' in content
+    assert 'id="reconstructionDetails" class="hidden disclosure-panel disclosure-panel-secondary mt-6">' in content
     assert "function _setDisclosureSummaryBadge(element, text, tone = 'info') {" in content
     assert "element.dataset.tone = String(tone || 'info').trim().toLowerCase() || 'info';" in content
     assert "const previewFieldGroups = {" in sync_body
@@ -1796,6 +1797,22 @@ def test_portal_disclosure_defaults_are_state_driven_instead_of_static() -> None
     assert "reconstructionNeedsAttention ? 'Needs attention' : reconstructionActive ? 'Contextual' : 'Contextual'" in sync_body
     assert "String(args.preset || '').toLowerCase().includes('v3.1')" not in sync_body
     assert "setupDisclosurePanels();" in init_body
+
+
+def test_portal_html_first_paint_lux_defaults_match_premium_posture() -> None:
+    html = _portal_html_content()
+
+    assert re.search(r'id="enableSegmentation"[^>]*checked', html)
+    assert '<option value="efficientsam" selected>efficientsam</option>' in html
+    assert '<option value="stub">stub</option>' in html
+    assert re.search(r'id="strictSegmentation"[^>]*checked', html)
+    assert re.search(r'id="sam2ModelSizeField" class="[^"]*\bhidden\b', html)
+    assert re.search(r'id="sam2CheckpointField" class="[^"]*\bhidden\b', html)
+    assert re.search(r'id="v2PresetField" class="[^"]*\bhidden\b', html)
+    assert re.search(r'id="governanceDetails" class="[^"]*\bhidden\b', html)
+    assert re.search(r'id="reconstructionDetails" class="[^"]*\bhidden\b', html)
+    assert "Segmentation is active via efficientsam." in html
+    assert "Turn segmentation on to choose a backend and strictness policy." not in html
 
 
 def test_portal_overview_and_build_surfaces_sync_bootstrap_skeletons_and_preview_loading() -> None:
@@ -1920,6 +1937,9 @@ def test_portal_preset_selection_applies_recommended_defaults_without_changing_c
     assert "run_card_include_proofs" in preset_body
     assert "advanced_sections" in fetch_body
     assert "recommended_args" in fetch_body
+    assert "applyPresetRecommendedArgs(" not in fetch_body
+    assert "state.config =" not in fetch_body
+    assert "state.config.preset =" not in fetch_body
 
 
 def test_portal_init_establishes_interactive_shell_before_bootstrap_settles() -> None:
@@ -2860,10 +2880,10 @@ def test_argv_rejects_invalid_log_level() -> None:
 
 def test_portal_segmentation_defaults_align_with_cli_defaults() -> None:
     state_source = _portal_internal_state_source_content()
-    assert "enable: false," in state_source
-    assert 'backend: "stub",' in state_source
+    assert "enable: true," in state_source
+    assert 'backend: "efficientsam",' in state_source
     assert 'sam2ModelSize: "base",' in state_source
-    assert "strict: false" in state_source
+    assert "strict: true" in state_source
 
 
 def test_portal_surfaces_pre_run_diagnostics_and_expected_outputs() -> None:

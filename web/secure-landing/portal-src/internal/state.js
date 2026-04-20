@@ -7,11 +7,11 @@ export function createPortalConfigState() {
     depthBackend: "da3",
     depthDevice: "cpu",
     segmentation: {
-      enable: false,
-      backend: "stub",
+      enable: true,
+      backend: "efficientsam",
       sam2ModelSize: "base",
       sam2CheckpointPath: "",
-      strict: false
+      strict: true
     },
     flags: {
       materials: true,

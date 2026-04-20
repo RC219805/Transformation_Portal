@@ -938,13 +938,25 @@ def _state_probe_expression() -> str:
       const el = document.getElementById('flags-shell');
       return !!(el && !el.classList.contains('hidden'));
     })(),
+    enableSegmentationChecked: (() => {
+      const el = document.getElementById('enableSegmentation');
+      return !!(el && el.checked);
+    })(),
     segmentationBackendVisible: (() => {
       const el = document.getElementById('segmentationBackendField');
       return !!(el && !el.classList.contains('hidden'));
     })(),
+    segmentationBackendValue: (() => {
+      const el = document.getElementById('segmentationBackend');
+      return el ? String(el.value || '') : '';
+    })(),
     strictSegmentationVisible: (() => {
       const el = document.getElementById('strictSegmentationField');
       return !!(el && !el.classList.contains('hidden'));
+    })(),
+    strictSegmentationChecked: (() => {
+      const el = document.getElementById('strictSegmentation');
+      return !!(el && el.checked);
     })(),
     sam2ModelSizeVisible: (() => {
       const el = document.getElementById('sam2ModelSizeField');
@@ -1249,8 +1261,11 @@ def _set_pipeline_form_expression(
     summaryReconstructionState: (document.getElementById('summaryReconstructionState').textContent || '').trim(),
     summaryRuntimeWorkers: (document.getElementById('summaryRuntimeWorkers').textContent || '').trim(),
     summaryPreviewState: (document.getElementById('summaryPreviewState').textContent || '').trim(),
+    enableSegmentationChecked: !!document.getElementById('enableSegmentation').checked,
     segmentationBackendVisible: !document.getElementById('segmentationBackendField').classList.contains('hidden'),
+    segmentationBackendValue: document.getElementById('segmentationBackend').value,
     strictSegmentationVisible: !document.getElementById('strictSegmentationField').classList.contains('hidden'),
+    strictSegmentationChecked: !!document.getElementById('strictSegmentation').checked,
     sam2ModelSizeVisible: !document.getElementById('sam2ModelSizeField').classList.contains('hidden'),
     sam2CheckpointVisible: !document.getElementById('sam2CheckpointField').classList.contains('hidden'),
     governanceDetailsVisible: !document.getElementById('governanceDetails').classList.contains('hidden'),
@@ -1845,12 +1860,24 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
             f"Dispatch checklist should expose explicit pass rows instead of qualitative-only copy: {lux_dispatch_state}",
         )
         _expect(
-            not bool(lux_state.get("segmentationBackendVisible")),
-            f"Segmentation backend should stay hidden until segmentation is enabled: {lux_state}",
+            bool(lux_state.get("enableSegmentationChecked")),
+            f"Premium Lux should enable segmentation by default: {lux_state}",
         )
         _expect(
-            not bool(lux_state.get("strictSegmentationVisible")),
-            f"Strict segmentation should stay hidden until segmentation is enabled: {lux_state}",
+            bool(lux_state.get("segmentationBackendVisible")),
+            f"Segmentation backend should be visible on the premium Lux default: {lux_state}",
+        )
+        _expect(
+            str(lux_state.get("segmentationBackendValue", "")) == "efficientsam",
+            f"Premium Lux should default to efficientsam segmentation: {lux_state}",
+        )
+        _expect(
+            bool(lux_state.get("strictSegmentationVisible")),
+            f"Strict segmentation should be visible on the premium Lux default: {lux_state}",
+        )
+        _expect(
+            bool(lux_state.get("strictSegmentationChecked")),
+            f"Premium Lux should enable strict segmentation by default: {lux_state}",
         )
         _expect(
             not bool(lux_state.get("sam2ModelSizeVisible")) and not bool(lux_state.get("sam2CheckpointVisible")),

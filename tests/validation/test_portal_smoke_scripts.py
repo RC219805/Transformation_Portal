@@ -163,6 +163,9 @@ def test_portal_browser_state_probe_tracks_contextual_action_controls():
     assert "reviewStatusState" in expression
     assert "connectionDetailsVisible" in expression
     assert "dispatchChecklistRows" in expression
+    assert "enableSegmentationChecked" in expression
+    assert "segmentationBackendValue" in expression
+    assert "strictSegmentationChecked" in expression
     assert "queueEmptyStateVisible" in expression
     assert "artifactEmptyStateVisible" in expression
 
@@ -549,7 +552,10 @@ def test_portal_browser_smoke_tracks_archive_readiness_fields_and_canonical_comm
     assert "preRunWarnings" in content
     assert "missingArchiveIndexWarningVisible" in content
     assert "rightsManifestFieldVisible" in content
+    assert "enableSegmentationChecked" in content
     assert "segmentationBackendVisible" in content
+    assert "segmentationBackendValue" in content
+    assert "strictSegmentationChecked" in content
     assert "governanceDetailsVisible" in content
     assert "advancedFlagsOpen" in content
     assert "governanceDetailsOpen" in content
