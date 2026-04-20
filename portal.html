@@ -726,7 +726,7 @@ Contract notes:
                             <label class="flex items-center justify-between rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50 px-4 py-3.5 cursor-pointer group transition-colors">
                                 <span class="text-[12px] font-medium select-none text-slate-700 dark:text-slate-300">Enable Segmentation</span>
                                 <div class="relative inline-flex items-center">
-                                    <input type="checkbox" id="enableSegmentation" role="switch" class="sr-only peer" />
+                                    <input type="checkbox" id="enableSegmentation" role="switch" class="sr-only peer" checked />
                                     <div class="w-9 h-5 rounded-full transition-colors duration-200 ease-in-out peer-focus-visible:ring-2 peer-focus-visible:ring-offset-2 peer-focus-visible:ring-indigo-500 bg-slate-300 dark:bg-slate-600 peer-checked:bg-indigo-600"></div>
                                     <div class="absolute left-[2px] top-[2px] bg-white w-4 h-4 rounded-full transition-transform duration-200 ease-in-out peer-checked:translate-x-4 shadow-sm"></div>
                                 </div>
@@ -735,11 +735,11 @@ Contract notes:
                                 <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="segmentationBackend">Segmentation Backend</label>
                                 <select id="segmentationBackend" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2.5 text-[13px] font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors cursor-pointer">
                                     <option value="sam2">sam2</option>
-                                    <option value="efficientsam">efficientsam</option>
-                                    <option value="stub" selected>stub</option>
+                                    <option value="efficientsam" selected>efficientsam</option>
+                                    <option value="stub">stub</option>
                                 </select>
                             </div>
-                            <div id="sam2ModelSizeField">
+                            <div id="sam2ModelSizeField" class="hidden">
                                 <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="sam2ModelSize">SAM2 Model Size</label>
                                 <select id="sam2ModelSize" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2.5 text-[13px] font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors cursor-pointer">
                                     <option value="base" selected>base</option>
@@ -749,14 +749,14 @@ Contract notes:
                             <label id="strictSegmentationField" class="flex items-center justify-between rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50 px-4 py-3.5 cursor-pointer group transition-colors">
                                 <span class="text-[12px] font-medium select-none text-slate-700 dark:text-slate-300">Strict Segmentation</span>
                                 <div class="relative inline-flex items-center">
-                                    <input type="checkbox" id="strictSegmentation" role="switch" class="sr-only peer" />
+                                    <input type="checkbox" id="strictSegmentation" role="switch" class="sr-only peer" checked />
                                     <div class="w-9 h-5 rounded-full transition-colors duration-200 ease-in-out peer-focus-visible:ring-2 peer-focus-visible:ring-offset-2 peer-focus-visible:ring-indigo-500 bg-slate-300 dark:bg-slate-600 peer-checked:bg-indigo-600"></div>
                                     <div class="absolute left-[2px] top-[2px] bg-white w-4 h-4 rounded-full transition-transform duration-200 ease-in-out peer-checked:translate-x-4 shadow-sm"></div>
                                 </div>
                             </label>
                         </div>
-                        <p id="segmentationApplicabilityHint" class="text-[11px] leading-5 text-slate-500 dark:text-slate-400">Turn segmentation on to choose a backend and strictness policy. SAM2-only controls appear when that backend is selected.</p>
-                        <div id="sam2CheckpointField">
+                        <p id="segmentationApplicabilityHint" class="text-[11px] leading-5 text-slate-500 dark:text-slate-400">Segmentation is active via efficientsam. SAM2-only controls stay hidden until you switch back to sam2.</p>
+                        <div id="sam2CheckpointField" class="hidden">
                             <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="sam2CheckpointPath">SAM2 Checkpoint Path (Optional)</label>
                             <input type="text" id="sam2CheckpointPath" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-2.5 text-[13px] font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors" placeholder="./models/sam2/sam2.1_hiera_large.pt" autocomplete="off" spellcheck="false" />
                         </div>
@@ -836,7 +836,7 @@ Contract notes:
                             </div>
                         </label>
 
-                        <div id="v2PresetField" class="sm:col-span-2">
+                        <div id="v2PresetField" class="hidden sm:col-span-2">
                              <input type="text" id="v2Preset" placeholder="V2 Preset (e.g. default)" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-2.5 text-[13px] font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors disabled:opacity-50" value="default" disabled autocomplete="off" spellcheck="false" />
                         </div>
                     </div>
@@ -993,7 +993,7 @@ Contract notes:
                     </details>
 
                     <!-- Licenses -->
-                    <details id="governanceDetails" class="disclosure-panel disclosure-panel-secondary mt-6">
+                    <details id="governanceDetails" class="hidden disclosure-panel disclosure-panel-secondary mt-6">
                         <summary class="disclosure-summary">
                             <div>
                                 <p class="text-[11px] font-bold uppercase tracking-widest text-amber-600 dark:text-amber-500">Compliance & Research Acknowledgments</p>
@@ -1020,7 +1020,7 @@ Contract notes:
                         </div>
                     </details>
 
-                    <details id="reconstructionDetails" class="disclosure-panel disclosure-panel-secondary mt-6">
+                    <details id="reconstructionDetails" class="hidden disclosure-panel disclosure-panel-secondary mt-6">
                         <summary class="disclosure-summary">
                             <div>
                                 <p class="text-[11px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">Reconstruction & Runtime</p>
