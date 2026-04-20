@@ -48,7 +48,7 @@ docutils==0.22.4
     # via
     #   -c all.txt
     #   readme-renderer
-filelock==3.25.2
+filelock==3.29.0
     # via
     #   -c all.txt
     #   python-discovery
@@ -104,7 +104,7 @@ nh3==0.3.4
     # via
     #   -c all.txt
     #   readme-renderer
-packaging==26.0
+packaging==26.1
     # via
     #   -c all.txt
     #   build
@@ -199,11 +199,11 @@ urllib3==2.6.3
     #   id
     #   requests
     #   twine
-virtualenv==21.2.1
+virtualenv==21.2.4
     # via
     #   -c all.txt
     #   tox
-zipp==3.23.0
+zipp==3.23.1
     # via
     #   -c all.txt
     #   importlib-metadata

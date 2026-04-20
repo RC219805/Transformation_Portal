@@ -70,7 +70,7 @@ execnet==2.1.2
     # via pytest-xdist
 fastapi==0.136.0
     # via -r base.in
-filelock==3.25.2
+filelock==3.29.0
     # via
     #   python-discovery
     #   tox
@@ -156,16 +156,13 @@ numpy==2.4.4
     # via
     #   -r base.in
     #   imagecodecs
-    #   opencv-python
     #   opencv-python-headless
     #   scikit-learn
     #   scipy
     #   tifffile
-opencv-python==4.13.0.92 ; platform_system != "Linux"
-    # via -r base.in
 opencv-python-headless==4.13.0.92 ; platform_system == "Linux"
     # via -r base.in
-packaging==26.0
+packaging==26.1
     # via
     #   black
     #   build
@@ -199,11 +196,11 @@ pycodestyle==2.14.0
     #   flake8
 pycparser==3.0
     # via cffi
-pydantic==2.13.1
+pydantic==2.13.2
     # via
     #   -r base.in
     #   fastapi
-pydantic-core==2.46.1
+pydantic-core==2.46.2
     # via pydantic
 pyflakes==3.4.0
     # via flake8
@@ -333,7 +330,7 @@ urllib3==2.6.3
     #   twine
 uvicorn==0.42.0
     # via -r base.in
-virtualenv==21.2.1
+virtualenv==21.2.4
     # via tox
-zipp==3.23.0
+zipp==3.23.1
     # via importlib-metadata

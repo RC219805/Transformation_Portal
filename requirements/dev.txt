@@ -134,7 +134,7 @@ mypy-extensions==1.1.0
     #   -c all.txt
     #   black
     #   mypy
-packaging==26.0
+packaging==26.1
     # via
     #   -c all.txt
     #   black
