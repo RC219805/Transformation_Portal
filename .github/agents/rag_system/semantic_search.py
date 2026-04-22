@@ -57,6 +57,22 @@ class CodeEntity:
     complexity: int = 0  # Cyclomatic complexity
     usage_count: int = 0  # How many times it's referenced
 
+    # Nesting context. For a method, ``parent_class`` is the dotted path of
+    # the enclosing class (e.g. ``Outer.Inner``). For a nested class it's the
+    # dotted path of the class that directly encloses it. Top-level functions
+    # and classes leave this as ``None``.
+    parent_class: Optional[str] = None
+
+    @property
+    def qualified_name(self) -> str:
+        """Dotted ``parent_class.name`` if nested, otherwise just ``name``.
+
+        Use this (not bare ``name``) for any index/dict keyed per file,
+        because two different classes in the same file can legitimately
+        share a method name.
+        """
+        return f"{self.parent_class}.{self.name}" if self.parent_class else self.name
+
 
 @dataclass
 class SemanticSearchResult:
@@ -124,7 +140,9 @@ class CodeParser:
         collected: List[CodeEntity] = []
         for node in body:
             if isinstance(node, ast.ClassDef):
-                collected.append(self._parse_class(node, file_path, imports))
+                collected.append(self._parse_class(node, file_path, imports, parent_class=parent_class))
+                # Build the dotted path of THIS class so its body members
+                # record the class that directly contains them.
                 nested_context = f"{parent_class}.{node.name}" if parent_class else node.name
                 collected.extend(
                     self._collect_body_entities(node.body, file_path, imports, parent_class=nested_context)
@@ -147,8 +165,14 @@ class CodeParser:
 
         return imports
 
-    def _parse_class(self, node: ast.ClassDef, file_path: str, imports: Set[str]) -> CodeEntity:
-        """Parse a class definition."""
+    def _parse_class(
+        self, node: ast.ClassDef, file_path: str, imports: Set[str], parent_class: Optional[str] = None
+    ) -> CodeEntity:
+        """Parse a class definition.
+
+        ``parent_class`` is the dotted path of the directly enclosing class
+        when this class is nested, and ``None`` for top-level classes.
+        """
         docstring = ast.get_docstring(node)
 
         # Extract decorators
@@ -167,6 +191,7 @@ class CodeParser:
             docstring=docstring,
             decorators=decorators,
             imports=imports.copy(),
+            parent_class=parent_class,
         )
 
     def _parse_function(
@@ -213,6 +238,7 @@ class CodeParser:
             calls=calls,
             imports=imports.copy(),
             complexity=complexity,
+            parent_class=parent_class,
         )
 
     def _extract_calls(self, node: ast.AST) -> Set[str]:
@@ -293,7 +319,13 @@ class SemanticCodeSearch:
             if self._should_index(py_file):
                 entities = self.parser.parse_file(str(py_file))
                 for entity in entities:
-                    self.entities[f"{entity.file_path}:{entity.name}"] = entity
+                    # Use qualified_name so two classes in the same file can
+                    # both define a method with the same bare name without
+                    # overwriting each other in the entity index.
+                    self.entities[f"{entity.file_path}:{entity.qualified_name}"] = entity
+                    # entity_index is list-valued and is used for case-
+                    # insensitive lookup by bare name, so keep that keyed
+                    # on the unqualified name.
                     self.entity_index[entity.name.lower()].append(entity)
 
         # Build call graph

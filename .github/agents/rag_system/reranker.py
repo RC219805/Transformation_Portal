@@ -62,15 +62,17 @@ class ResultReranker:
             return results
 
         # Build new result objects so the caller's list and items are not
-        # mutated. Re-running rerank() on the original input list recomputes
-        # scores from the untouched values, but passing already-reranked
-        # outputs back in will apply the boost on top of the already-boosted
-        # score — reranker signals are additive by design, so the function is
-        # not idempotent across repeated application to its own outputs.
+        # mutated. rerank() is also idempotent across repeated application:
+        # if an input already carries a ``rerank_boost`` from a previous
+        # pass, subtract it before applying the freshly-computed boost so
+        # the final score is rebased off the original (pre-rerank) value
+        # instead of compounding.
         reranked = []
         for result in results:
             rerank_score = self._compute_rerank_score(result, query)
-            final_score = result.score + rerank_score
+            previous_boost = result.metadata.get("rerank_boost", 0.0)
+            base_score = result.score - previous_boost
+            final_score = base_score + rerank_score
             new_metadata = {**result.metadata, "rerank_boost": rerank_score}
             reranked.append(replace(result, score=final_score, metadata=new_metadata))
 

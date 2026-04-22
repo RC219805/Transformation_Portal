@@ -303,18 +303,17 @@ class TestRerankerIdempotence:
         assert original.score == 1.0
         assert "rerank_boost" not in original.metadata
 
-    def test_rerank_preserves_metadata_across_passes(self):
-        """rerank() must overwrite (not compound) rerank_boost in metadata."""
+    def test_rerank_is_idempotent_across_passes(self):
+        """rerank() must be idempotent: re-running on reranked output gives
+        the same metadata and the same final score as the first pass."""
         result = self._make_result()
         reranker = ResultReranker()
 
         first = reranker.rerank([result], "foo")
         second = reranker.rerank(first, "foo")
 
-        # The boost is the same on each pass (idempotent in metadata); the
-        # score is expected to keep accumulating because reranker signals are
-        # additive on the input score — that's by design.
         assert first[0].metadata["rerank_boost"] == second[0].metadata["rerank_boost"]
+        assert first[0].score == second[0].score
         # The original input object is still untouched.
         assert result.score == 1.0
         assert "rerank_boost" not in result.metadata
@@ -509,6 +508,46 @@ class TestSemanticSearch:
         assert by_name["outer_method"].entity_type == "method"
         assert by_name["inner_method"].entity_type == "method"
         assert by_name["deep_method"].entity_type == "method"
+
+        # Each nested entity should carry the dotted parent context so that
+        # qualified_name is unique even if two inner classes shared a method
+        # name. See test_same_named_methods_in_sibling_classes for collisions.
+        assert by_name["Inner"].parent_class == "Outer"
+        assert by_name["DeepInner"].parent_class == "Outer.Inner"
+        assert by_name["inner_method"].parent_class == "Outer.Inner"
+        assert by_name["deep_method"].parent_class == "Outer.Inner.DeepInner"
+        assert by_name["DeepInner"].qualified_name == "Outer.Inner.DeepInner"
+        assert by_name["deep_method"].qualified_name == "Outer.Inner.DeepInner.deep_method"
+
+    def test_same_named_methods_in_sibling_classes(self, tmp_path):
+        """Regression: two classes in the same file can legitimately define
+        a method with the same bare name. They must not overwrite each other
+        in ``SemanticCodeSearch.entities``."""
+        from rag_system.semantic_search import SemanticCodeSearch
+
+        pkg = tmp_path / "collide_pkg"
+        pkg.mkdir()
+        (pkg / "__init__.py").write_text("")
+        (pkg / "collide.py").write_text(
+            "class A:\n"
+            "    def process(self, x):\n"
+            "        return x + 1\n"
+            "\n"
+            "class B:\n"
+            "    def process(self, x):\n"
+            "        return x * 2\n"
+        )
+
+        search = SemanticCodeSearch(str(tmp_path))
+        search.index_codebase()
+
+        process_entities = [e for e in search.entities.values() if e.name == "process"]
+        assert len(process_entities) == 2
+        parents = {e.parent_class for e in process_entities}
+        assert parents == {"A", "B"}
+        # And the two are distinguishable in the entity dict by qualified key.
+        assert any(k.endswith(":A.process") for k in search.entities)
+        assert any(k.endswith(":B.process") for k in search.entities)
 
 
 if __name__ == "__main__":
