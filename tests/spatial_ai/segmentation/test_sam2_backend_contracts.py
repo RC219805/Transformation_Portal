@@ -352,10 +352,11 @@ def test_hf_prompted_points_keep_sam2_processor_nesting(
         def __init__(self, value: Any) -> None:
             self.value = value
 
-        def to(self, device: Any) -> FakeTensor:
+        def to(self, device: Any) -> Any:
+            del device
             return self
 
-        def cpu(self) -> FakeTensor:
+        def cpu(self) -> Any:
             return self
 
     processor_calls: list[dict[str, Any]] = []
@@ -384,7 +385,11 @@ def test_hf_prompted_points_keep_sam2_processor_nesting(
 
     backend._hf_model = FakeModel()
     backend._hf_processor = FakeProcessor()
-    monkeypatch.setitem(sys.modules, "torch", SimpleNamespace(no_grad=lambda: _NoGrad()))
+
+    def _no_grad() -> _NoGrad:
+        return _NoGrad()
+
+    monkeypatch.setitem(sys.modules, "torch", SimpleNamespace(no_grad=_no_grad))
 
     result = backend._segment_prompted(_points_input(SegmentationInput))
 

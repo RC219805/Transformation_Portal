@@ -17,6 +17,8 @@ from typer.testing import CliRunner
 
 from transformation_portal.lux_depth_v3.pbr_cli import app
 
+# pylint: disable=redefined-outer-name
+
 pytestmark = [pytest.mark.stress, pytest.mark.slow]
 
 
@@ -111,7 +113,7 @@ class TestLargeBatchProcessing:
 
         # Calculate throughput
         throughput = num_files / elapsed
-        print(f"\nStress test performance:")
+        print("\nStress test performance:")
         print(f"  Total time: {elapsed:.1f}s")
         print(f"  Throughput: {throughput:.2f} images/sec")
         print(f"  Avg time per image: {elapsed/num_files:.2f}s")
@@ -164,7 +166,7 @@ class TestLargeBatchProcessing:
         # Memory growth should be reasonable
         # Allow up to 2GB growth for 20x 2048x2048 images
         max_growth_mb = 2000
-        print(f"\nMemory usage:")
+        print("\nMemory usage:")
         print(f"  Before: {mem_before:.1f} MB")
         print(f"  After:  {mem_after:.1f} MB")
         print(f"  Delta:  {mem_delta:.1f} MB")
@@ -326,7 +328,7 @@ class TestPerformanceBenchmarks:
             ],
         )
 
-        print(f"\nPerformance baseline (1024x1024):")
+        print("\nPerformance baseline (1024x1024):")
         print(f"  Standard preset: {standard_time:.3f}s")
         print(f"  Draft preset:    {draft_time:.3f}s")
         assert (

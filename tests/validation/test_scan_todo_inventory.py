@@ -17,6 +17,8 @@ from types import ModuleType
 
 import pytest
 
+# pylint: disable=redefined-outer-name,unnecessary-lambda
+
 # Mark all tests in this module as unit tests (ADR-044)
 pytestmark = [
     pytest.mark.unit,
