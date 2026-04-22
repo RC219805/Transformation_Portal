@@ -14,10 +14,24 @@ import re
 from collections import defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 
-from indexer import DocumentChunk, RepositoryIndexer
-from retriever import HybridRetriever
+try:
+    from .indexer import RepositoryIndexer
+    from .logger import get_logger
+    from .retriever import HybridRetriever
+except ImportError:
+    # Script execution (python .github/agents/rag_system/semantic_search.py):
+    # the parent of this file is not yet on sys.path as a package.
+    import sys
+    from pathlib import Path
+
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+    from rag_system.indexer import RepositoryIndexer
+    from rag_system.logger import get_logger
+    from rag_system.retriever import HybridRetriever
+
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -42,6 +56,22 @@ class CodeEntity:
     # Usage metadata
     complexity: int = 0  # Cyclomatic complexity
     usage_count: int = 0  # How many times it's referenced
+
+    # Nesting context. For a method, ``parent_class`` is the dotted path of
+    # the enclosing class (e.g. ``Outer.Inner``). For a nested class it's the
+    # dotted path of the class that directly encloses it. Top-level functions
+    # and classes leave this as ``None``.
+    parent_class: Optional[str] = None
+
+    @property
+    def qualified_name(self) -> str:
+        """Dotted ``parent_class.name`` if nested, otherwise just ``name``.
+
+        Use this (not bare ``name``) for any index/dict keyed per file,
+        because two different classes in the same file can legitimately
+        share a method name.
+        """
+        return f"{self.parent_class}.{self.name}" if self.parent_class else self.name
 
 
 @dataclass
@@ -85,28 +115,41 @@ class CodeParser:
             # Extract imports
             imports = self._extract_imports(tree)
 
-            # Extract classes and functions
-            for node in ast.walk(tree):
-                if isinstance(node, ast.ClassDef):
-                    entity = self._parse_class(node, file_path, imports)
-                    entities.append(entity)
-
-                    # Parse methods within class
-                    for method_node in node.body:
-                        if isinstance(method_node, ast.FunctionDef):
-                            method_entity = self._parse_function(method_node, file_path, imports, parent_class=node.name)
-                            entities.append(method_entity)
-
-                elif isinstance(node, ast.FunctionDef):
-                    # Only top-level functions (not methods)
-                    if not any(isinstance(parent, ast.ClassDef) for parent in ast.walk(tree)):
-                        entity = self._parse_function(node, file_path, imports)
-                        entities.append(entity)
+            entities.extend(self._collect_body_entities(tree.body, file_path, imports))
 
         except Exception as e:
-            print(f"Warning: Could not parse {file_path}: {e}")
+            logger.warning("Could not parse %s: %s", file_path, e)
 
         return entities
+
+    def _collect_body_entities(
+        self,
+        body: List[ast.stmt],
+        file_path: str,
+        imports: Set[str],
+        parent_class: Optional[str] = None,
+    ) -> List[CodeEntity]:
+        """Walk an AST body collecting code entities, recursing into nested
+        classes so their methods and inner classes are also indexed.
+
+        Methods are attributed to their immediate enclosing class; nested
+        classes are surfaced with a dotted ``Outer.Inner`` name for the
+        ``parent_class`` context passed to their methods so inner methods are
+        not silently merged into the outer class.
+        """
+        collected: List[CodeEntity] = []
+        for node in body:
+            if isinstance(node, ast.ClassDef):
+                collected.append(self._parse_class(node, file_path, imports, parent_class=parent_class))
+                # Build the dotted path of THIS class so its body members
+                # record the class that directly contains them.
+                nested_context = f"{parent_class}.{node.name}" if parent_class else node.name
+                collected.extend(
+                    self._collect_body_entities(node.body, file_path, imports, parent_class=nested_context)
+                )
+            elif isinstance(node, ast.FunctionDef):
+                collected.append(self._parse_function(node, file_path, imports, parent_class=parent_class))
+        return collected
 
     def _extract_imports(self, tree: ast.AST) -> Set[str]:
         """Extract all imports from AST."""
@@ -122,8 +165,14 @@ class CodeParser:
 
         return imports
 
-    def _parse_class(self, node: ast.ClassDef, file_path: str, imports: Set[str]) -> CodeEntity:
-        """Parse a class definition."""
+    def _parse_class(
+        self, node: ast.ClassDef, file_path: str, imports: Set[str], parent_class: Optional[str] = None
+    ) -> CodeEntity:
+        """Parse a class definition.
+
+        ``parent_class`` is the dotted path of the directly enclosing class
+        when this class is nested, and ``None`` for top-level classes.
+        """
         docstring = ast.get_docstring(node)
 
         # Extract decorators
@@ -142,6 +191,7 @@ class CodeParser:
             docstring=docstring,
             decorators=decorators,
             imports=imports.copy(),
+            parent_class=parent_class,
         )
 
     def _parse_function(
@@ -188,6 +238,7 @@ class CodeParser:
             calls=calls,
             imports=imports.copy(),
             complexity=complexity,
+            parent_class=parent_class,
         )
 
     def _extract_calls(self, node: ast.AST) -> Set[str]:
@@ -261,14 +312,20 @@ class SemanticCodeSearch:
 
     def index_codebase(self):
         """Index all code entities in the repository."""
-        print("Indexing codebase for semantic search...")
+        logger.info("Indexing codebase for semantic search...")
 
         # Parse all Python files
         for py_file in self.repo_root.rglob("*.py"):
             if self._should_index(py_file):
                 entities = self.parser.parse_file(str(py_file))
                 for entity in entities:
-                    self.entities[f"{entity.file_path}:{entity.name}"] = entity
+                    # Use qualified_name so two classes in the same file can
+                    # both define a method with the same bare name without
+                    # overwriting each other in the entity index.
+                    self.entities[f"{entity.file_path}:{entity.qualified_name}"] = entity
+                    # entity_index is list-valued and is used for case-
+                    # insensitive lookup by bare name, so keep that keyed
+                    # on the unqualified name.
                     self.entity_index[entity.name.lower()].append(entity)
 
         # Build call graph
@@ -278,7 +335,7 @@ class SemanticCodeSearch:
         chunks = self.indexer.index_repository()
         self.retriever.index(chunks)
 
-        print(f"Indexed {len(self.entities)} code entities")
+        logger.info("Indexed %d code entities", len(self.entities))
 
     def search(self, query: str, entity_type: Optional[str] = None, top_k: int = 10) -> List[SemanticSearchResult]:
         """
@@ -404,7 +461,7 @@ class SemanticCodeSearch:
 
         return {k: v for k, v in api_map.items() if v}
 
-    def _analyze_query_intent(self, query: str) -> Dict[str, any]:
+    def _analyze_query_intent(self, query: str) -> Dict[str, Any]:
         """Analyze query to determine search intent."""
         query_lower = query.lower()
 

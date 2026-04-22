@@ -13,15 +13,17 @@ import sys
 import tempfile
 from pathlib import Path
 
-# Add parent directory to path for imports
-sys.path.insert(0, str(Path(__file__).parent.parent))
+# Make the rag_system package importable when tests are invoked directly
+# (pytest discovery handles this for typical layouts; this keeps `python
+# tests/test_rag_pipeline.py` working too).
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 import pytest
-from citation import CitationGenerator
-from indexer import DocumentChunk, RepositoryIndexer
-from reranker import ResultReranker
-from retriever import HybridRetriever
-from templates import CodeModificationResponse, PromptTemplates
+from rag_system.citation import CitationGenerator
+from rag_system.indexer import DocumentChunk, RepositoryIndexer
+from rag_system.reranker import ResultReranker
+from rag_system.retriever import HybridRetriever
+from rag_system.templates import CodeModificationResponse, PromptTemplates
 
 
 @pytest.fixture
@@ -152,10 +154,9 @@ class TestRAGPipeline:
         assert len(citations) > 0, "Should generate citations"
 
         for citation in citations:
-            assert "file_path" in citation, "Citation should have file_path"
-            assert "snippet" in citation, "Citation should have snippet"
-            assert "confidence" in citation, "Citation should have confidence"
-            assert 0.0 <= citation["confidence"] <= 1.0, "Confidence should be in [0,1]"
+            assert citation.file_path, "Citation should have file_path"
+            assert citation.snippet, "Citation should have snippet"
+            assert 0.0 <= citation.confidence <= 1.0, "Confidence should be in [0,1]"
 
     def test_end_to_end_workflow(self, temp_repo):
         """Test complete RAG workflow from indexing to citation."""
@@ -191,7 +192,7 @@ class TestRAGPipeline:
     def test_prompt_templates_feature_implementation(self):
         """Test feature implementation template generation."""
         template = PromptTemplates.feature_implementation(
-            description="Add depth-based atmospheric haze effect",
+            feature_description="Add depth-based atmospheric haze effect",
             context="Existing atmospheric processor in depth_pipeline/processors/",
         )
 
@@ -212,7 +213,7 @@ class TestRAGPipeline:
 
     def test_code_modification_response_schema(self):
         """Test CodeModificationResponse schema."""
-        from templates import FileModification
+        from rag_system.templates import FileModification
 
         response = CodeModificationResponse(
             summary="Add new depth effect",
@@ -274,6 +275,279 @@ class TestRAGPipeline:
         # Test JSON format
         json_str = citation_gen.format_citations(citations, format_type="json")
         assert "file_path" in json_str, "JSON should have file_path field"
+
+
+class TestRerankerIdempotence:
+    """Regression tests for the reranker mutation bug."""
+
+    def _make_result(self, score=1.0, content="def foo(): pass"):
+        from rag_system.retriever import RetrievalResult
+
+        return RetrievalResult(
+            chunk_id="c1",
+            content=content,
+            file_path="a.py",
+            start_line=1,
+            end_line=2,
+            score=score,
+            retrieval_method="bm25",
+            metadata={},
+        )
+
+    def test_rerank_does_not_mutate_input(self):
+        """rerank() must not mutate the input results or their metadata."""
+        original = self._make_result()
+        reranker = ResultReranker()
+        reranker.rerank([original], "foo")
+
+        assert original.score == 1.0
+        assert "rerank_boost" not in original.metadata
+
+    def test_rerank_is_idempotent_across_passes(self):
+        """rerank() must be idempotent: re-running on reranked output gives
+        the same metadata and the same final score as the first pass."""
+        result = self._make_result()
+        reranker = ResultReranker()
+
+        first = reranker.rerank([result], "foo")
+        second = reranker.rerank(first, "foo")
+
+        assert first[0].metadata["rerank_boost"] == second[0].metadata["rerank_boost"]
+        assert first[0].score == second[0].score
+        # The original input object is still untouched.
+        assert result.score == 1.0
+        assert "rerank_boost" not in result.metadata
+
+
+class TestKnowledgeEngine:
+    """Tests for KnowledgeIntegrationEngine."""
+
+    def test_add_feedback_and_analyze_patterns(self):
+        from rag_system.knowledge_engine import KnowledgeIntegrationEngine
+
+        engine = KnowledgeIntegrationEngine()
+        for i in range(10):
+            engine.add_feedback(
+                pipeline="lux-depth-v3",
+                artifact_id=f"artifact-{i}",
+                success=i % 3 != 0,
+                processing_time=1.0 + i * 0.1,
+                parameters={"preset": "premium"},
+                error_message="ValueError: bad input" if i % 3 == 0 else None,
+                quality_score=0.8,
+            )
+
+        analysis = engine.analyze_patterns("lux-depth-v3", days=30)
+        assert analysis.total_runs == 10
+        assert 0.5 <= analysis.success_rate <= 0.8
+        assert analysis.avg_processing_time > 0
+        assert "ValueError" in analysis.failure_modes
+
+    def test_analyze_patterns_with_no_records(self):
+        from rag_system.knowledge_engine import KnowledgeIntegrationEngine
+
+        engine = KnowledgeIntegrationEngine()
+        analysis = engine.analyze_patterns("unknown-pipeline")
+
+        assert analysis.total_runs == 0
+        assert analysis.success_rate == 0.0
+
+    def test_kpi_summary(self):
+        from rag_system.knowledge_engine import KnowledgeIntegrationEngine
+
+        engine = KnowledgeIntegrationEngine()
+        engine.add_feedback(
+            pipeline="ingest",
+            artifact_id="a1",
+            success=True,
+            processing_time=2.5,
+            parameters={},
+            quality_score=0.9,
+        )
+
+        summary = engine.get_kpi_summary(pipeline="ingest", days=1)
+        assert "ingest:success_rate" in summary
+        assert "ingest:processing_time" in summary
+        assert summary["ingest:processing_time"]["current"] == 2.5
+
+
+class TestConfigEnvOverrides:
+    """Tests for RAG_* environment variable overrides."""
+
+    def _reset(self):
+        from rag_system.config import reset_config
+
+        reset_config()
+
+    def test_env_override_bool(self, monkeypatch):
+        from rag_system.config import Config, reset_config
+
+        monkeypatch.setenv("RAG_INDEXER_CACHE_ENABLED", "false")
+        reset_config()
+        cfg = Config()
+        assert cfg.get("indexer.cache_enabled") is False
+        reset_config()
+
+    def test_env_override_float(self, monkeypatch):
+        from rag_system.config import Config, reset_config
+
+        monkeypatch.setenv("RAG_RETRIEVER_BM25_WEIGHT", "0.85")
+        reset_config()
+        cfg = Config()
+        assert cfg.get("retriever.bm25_weight") == 0.85
+        reset_config()
+
+    def test_env_override_int(self, monkeypatch):
+        from rag_system.config import Config, reset_config
+
+        monkeypatch.setenv("RAG_CITATION_MAX_RESULTS", "10")
+        reset_config()
+        cfg = Config()
+        assert cfg.get("citation.max_results") == 10
+        reset_config()
+
+    def test_set_and_get_roundtrip(self):
+        from rag_system.config import Config
+
+        cfg = Config()
+        cfg.set("retriever.bm25_weight", 0.42)
+        assert cfg.get("retriever.bm25_weight") == 0.42
+        assert cfg.get("retriever", "bm25_weight") == 0.42
+
+
+class TestIndexerCache:
+    """Tests for the indexer JSON cache round-trip."""
+
+    def test_cache_round_trip(self, temp_repo):
+        indexer_a = RepositoryIndexer(temp_repo)
+        chunks_a = indexer_a.index_repository()
+        assert len(chunks_a) > 0
+        assert indexer_a.cache_file.exists()
+
+        # Second instance should load from cache without re-walking the repo
+        indexer_b = RepositoryIndexer(temp_repo)
+        chunks_b = indexer_b.index_repository()
+        assert len(chunks_b) == len(chunks_a)
+        assert {c.chunk_id for c in chunks_b} == {c.chunk_id for c in chunks_a}
+
+    def test_clear_cache(self, temp_repo):
+        indexer = RepositoryIndexer(temp_repo)
+        indexer.index_repository()
+        assert indexer.cache_file.exists()
+
+        indexer.clear_cache()
+        assert not indexer.cache_file.exists()
+
+
+class TestSemanticSearch:
+    """Smoke tests for SemanticCodeSearch against a minimal Python repo."""
+
+    def _make_repo(self, tmp_path):
+        pkg = tmp_path / "example_pkg"
+        pkg.mkdir()
+        (pkg / "__init__.py").write_text("")
+        (pkg / "depth.py").write_text(
+            "def compute_depth(image):\n"
+            '    """Compute the depth map for the given image."""\n'
+            "    return image\n"
+            "\n"
+            "class DepthProcessor:\n"
+            '    """Process images to produce depth maps."""\n'
+            "    def process(self, image):\n"
+            "        return compute_depth(image)\n"
+        )
+        return tmp_path
+
+    def test_index_and_find_function(self, tmp_path):
+        from rag_system.semantic_search import SemanticCodeSearch
+
+        repo = self._make_repo(tmp_path)
+        search = SemanticCodeSearch(str(repo))
+        search.index_codebase()
+
+        assert any(e.name == "compute_depth" for e in search.entities.values())
+        assert any(e.name == "DepthProcessor" for e in search.entities.values())
+
+    def test_search_returns_entities(self, tmp_path):
+        from rag_system.semantic_search import SemanticCodeSearch
+
+        repo = self._make_repo(tmp_path)
+        search = SemanticCodeSearch(str(repo))
+        search.index_codebase()
+
+        results = search.search("depth map", top_k=5)
+        assert len(results) > 0
+        assert any("depth" in r.entity.name.lower() or "depth" in (r.entity.docstring or "").lower() for r in results)
+
+    def test_indexes_nested_classes_and_their_methods(self, tmp_path):
+        """Regression: nested ClassDefs must still be parsed."""
+        from rag_system.semantic_search import CodeParser
+
+        src = tmp_path / "nested.py"
+        src.write_text(
+            "class Outer:\n"
+            "    def outer_method(self):\n"
+            "        return 1\n"
+            "\n"
+            "    class Inner:\n"
+            '        """Inner helper."""\n'
+            "        def inner_method(self):\n"
+            "            return 2\n"
+            "\n"
+            "        class DeepInner:\n"
+            "            def deep_method(self):\n"
+            "                return 3\n"
+        )
+
+        entities = CodeParser().parse_file(str(src))
+        by_name = {e.name: e for e in entities}
+
+        assert "Outer" in by_name and by_name["Outer"].entity_type == "class"
+        assert "Inner" in by_name and by_name["Inner"].entity_type == "class"
+        assert "DeepInner" in by_name and by_name["DeepInner"].entity_type == "class"
+        assert by_name["outer_method"].entity_type == "method"
+        assert by_name["inner_method"].entity_type == "method"
+        assert by_name["deep_method"].entity_type == "method"
+
+        # Each nested entity should carry the dotted parent context so that
+        # qualified_name is unique even if two inner classes shared a method
+        # name. See test_same_named_methods_in_sibling_classes for collisions.
+        assert by_name["Inner"].parent_class == "Outer"
+        assert by_name["DeepInner"].parent_class == "Outer.Inner"
+        assert by_name["inner_method"].parent_class == "Outer.Inner"
+        assert by_name["deep_method"].parent_class == "Outer.Inner.DeepInner"
+        assert by_name["DeepInner"].qualified_name == "Outer.Inner.DeepInner"
+        assert by_name["deep_method"].qualified_name == "Outer.Inner.DeepInner.deep_method"
+
+    def test_same_named_methods_in_sibling_classes(self, tmp_path):
+        """Regression: two classes in the same file can legitimately define
+        a method with the same bare name. They must not overwrite each other
+        in ``SemanticCodeSearch.entities``."""
+        from rag_system.semantic_search import SemanticCodeSearch
+
+        pkg = tmp_path / "collide_pkg"
+        pkg.mkdir()
+        (pkg / "__init__.py").write_text("")
+        (pkg / "collide.py").write_text(
+            "class A:\n"
+            "    def process(self, x):\n"
+            "        return x + 1\n"
+            "\n"
+            "class B:\n"
+            "    def process(self, x):\n"
+            "        return x * 2\n"
+        )
+
+        search = SemanticCodeSearch(str(tmp_path))
+        search.index_codebase()
+
+        process_entities = [e for e in search.entities.values() if e.name == "process"]
+        assert len(process_entities) == 2
+        parents = {e.parent_class for e in process_entities}
+        assert parents == {"A", "B"}
+        # And the two are distinguishable in the entity dict by qualified key.
+        assert any(k.endswith(":A.process") for k in search.entities)
+        assert any(k.endswith(":B.process") for k in search.entities)
 
 
 if __name__ == "__main__":

@@ -19,8 +19,16 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple
 
-from knowledge_engine import FeedbackRecord, KnowledgeIntegrationEngine
-from semantic_search import CodeEntity, SemanticCodeSearch
+try:
+    from .knowledge_engine import FeedbackRecord, KnowledgeIntegrationEngine
+    from .semantic_search import CodeEntity, SemanticCodeSearch
+except ImportError:
+    import sys
+    from pathlib import Path
+
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+    from rag_system.knowledge_engine import FeedbackRecord, KnowledgeIntegrationEngine
+    from rag_system.semantic_search import CodeEntity, SemanticCodeSearch
 
 # ============================================================================
 # 1. CODEBASE EVOLUTION TRACKER
@@ -938,8 +946,6 @@ def main():
     print(f"Running {args.mode} analysis...")
 
     # Initialize
-    from semantic_search import SemanticCodeSearch
-
     search = SemanticCodeSearch(args.repo_root)
     search.index_codebase()
 
