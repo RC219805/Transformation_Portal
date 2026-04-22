@@ -93,6 +93,15 @@ def test_root_redirects_to_portal(client: TestClient) -> None:
     assert response.headers["location"] == "/portal"
 
 
+def test_root_redirect_preserves_query_string(client: TestClient) -> None:
+    # Legacy/deep links such as `/?view=review` must continue to land on
+    # the right workspace tab after the redirect; query string carries the
+    # routing context we don't want the canonicalisation to drop.
+    response = client.get("/?view=review&job=job_xyz", follow_redirects=False)
+    assert response.status_code == 307
+    assert response.headers["location"] == "/portal?view=review&job=job_xyz"
+
+
 def test_portal_route_serves_html(client: TestClient) -> None:
     response = client.get("/portal")
     assert response.status_code == 200
@@ -131,9 +140,7 @@ def test_dispatch_rejects_missing_input_dir(client: TestClient, tmp_path: Path) 
     assert body["error"]["details"]["field"] == "input_dir"
 
 
-def test_dispatch_output_dir_gets_created_when_missing(
-    client: TestClient, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_dispatch_output_dir_gets_created_when_missing(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
     async def fake_run_job(job, _argv):
         job.state = "succeeded"
         job.exit_code = 0
@@ -151,6 +158,40 @@ def test_dispatch_output_dir_gets_created_when_missing(
     response = client.post("/v1/jobs", json=_lux_payload(input_dir, output_dir))
     assert response.status_code == 200, response.text
     assert output_dir.is_dir()
+
+
+def test_dispatch_does_not_mkdir_when_admission_rejects(client: TestClient) -> None:
+    # Filesystem preflight is read-only; the mkdir must only run after the
+    # admission gate succeeds, so a 429 response leaves no directories on
+    # disk for the requested output path.
+    allowed = orchestrator_app.ALLOWED_INPUT_ROOTS[0]
+    input_dir = allowed / "inp"
+    input_dir.mkdir(parents=True, exist_ok=True)
+    output_dir = allowed / "should-not-exist-after-429"
+    assert not output_dir.exists()
+
+    previous_limit = orchestrator_app.MAX_CONCURRENT_JOBS
+    try:
+        orchestrator_app.MAX_CONCURRENT_JOBS = 1
+        orchestrator_app.JOBS["job_busy"] = orchestrator_app.Job(
+            id="job_busy",
+            created_at=orchestrator_app._now(),
+            state="running",
+            request={"pipeline": "lux-depth-v3", "args": {}},
+        )
+        response = client.post("/v1/jobs", json=_lux_payload(input_dir, output_dir))
+    finally:
+        orchestrator_app.MAX_CONCURRENT_JOBS = previous_limit
+
+    assert response.status_code == 429
+    assert not output_dir.exists(), "output_dir was created despite admission rejection"
+
+
+def test_artifact_fingerprint_default_cap_is_inexpensive() -> None:
+    # The default cap must stay small enough that hashing up to
+    # MAX_INDEXED_ARTIFACTS (200) artifacts per job remains an inexpensive
+    # background-thread workload rather than blocking the event loop.
+    assert orchestrator_app.ARTIFACT_FINGERPRINT_MAX_BYTES <= 16 * 1024 * 1024
 
 
 def test_dispatch_rejects_unknown_preset(client: TestClient) -> None:
@@ -214,9 +255,7 @@ def test_artifact_lookup_excludes_non_indexed_files(tmp_path: Path) -> None:
     assert set(job.artifact_lookup.keys()) == {"a.json", "b.json"}
 
 
-def test_artifact_endpoint_attaches_non_previewable(
-    client: TestClient, tmp_path: Path
-) -> None:
+def test_artifact_endpoint_attaches_non_previewable(client: TestClient, tmp_path: Path) -> None:
     allowed = orchestrator_app.ALLOWED_OUTPUT_ROOTS[0]
     output_dir = allowed / "job_files"
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -390,12 +429,9 @@ def test_app_uses_lifespan_not_on_event() -> None:
 
 def test_lifespan_creates_and_cancels_cleanup_task() -> None:
     async def _drive() -> tuple[bool, bool]:
-        async with orchestrator_app.app.router.lifespan_context(
-            orchestrator_app.app
-        ) as _:
+        async with orchestrator_app.app.router.lifespan_context(orchestrator_app.app) as _:
             started = (
-                orchestrator_app.app.state.cleanup_task is not None
-                and not orchestrator_app.app.state.cleanup_task.done()
+                orchestrator_app.app.state.cleanup_task is not None and not orchestrator_app.app.state.cleanup_task.done()
             )
         finished = orchestrator_app.app.state.cleanup_task is None
         return started, finished

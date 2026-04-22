@@ -2686,44 +2686,44 @@ def test_archive_gate_c_prov_export_rejects_missing_manifest(client: TestClient)
     assert body["error"]["details"]["field"] == "manifest_jsonl"
 
 
-def test_v1_jobs_rejects_when_max_concurrent_jobs_reached(client: TestClient) -> None:
+def test_v1_jobs_rejects_when_max_concurrent_jobs_reached(client: TestClient, tmp_path) -> None:
+    # Use per-test isolated directories under tmp_path so the test stays
+    # parallel-safe under pytest-xdist (no shared repo-root paths).
     previous_limit = orchestrator_app.MAX_CONCURRENT_JOBS
-    repo_root = orchestrator_app.REPO_ROOT
-    input_dir = repo_root / "input"
-    output_dir = repo_root / "output"
-    input_preexisted = input_dir.exists()
-    output_preexisted = output_dir.exists()
+    previous_input_roots = orchestrator_app.ALLOWED_INPUT_ROOTS
+    previous_output_roots = orchestrator_app.ALLOWED_OUTPUT_ROOTS
+    allowed_root = (tmp_path / "rate-limit-isolated").resolve()
+    allowed_root.mkdir(parents=True, exist_ok=True)
+    input_dir = allowed_root / "input"
+    output_dir = allowed_root / "output"
+    input_dir.mkdir(parents=True, exist_ok=True)
+    output_dir.mkdir(parents=True, exist_ok=True)
     try:
-        input_dir.mkdir(parents=True, exist_ok=True)
-        output_dir.mkdir(parents=True, exist_ok=True)
+        orchestrator_app.ALLOWED_INPUT_ROOTS = [allowed_root]
+        orchestrator_app.ALLOWED_OUTPUT_ROOTS = [allowed_root]
         orchestrator_app.MAX_CONCURRENT_JOBS = 1
         orchestrator_app.JOBS["job_busy"] = orchestrator_app.Job(
             id="job_busy",
             created_at=orchestrator_app._now(),
             state="running",
-            request={"pipeline": "lux-depth-v3", "args": {"input_dir": "./input", "output_dir": "./output"}},
+            request={
+                "pipeline": "lux-depth-v3",
+                "args": {"input_dir": str(input_dir), "output_dir": str(output_dir)},
+            },
         )
         response = client.post(
             "/v1/jobs",
             json={
                 "pipeline": "lux-depth-v3",
-                "args": {"input_dir": "./input", "output_dir": "./output"},
+                "args": {"input_dir": str(input_dir), "output_dir": str(output_dir)},
             },
         )
         body = response.json()
     finally:
         orchestrator_app.MAX_CONCURRENT_JOBS = previous_limit
+        orchestrator_app.ALLOWED_INPUT_ROOTS = previous_input_roots
+        orchestrator_app.ALLOWED_OUTPUT_ROOTS = previous_output_roots
         orchestrator_app.JOBS.clear()
-        if not input_preexisted:
-            try:
-                input_dir.rmdir()
-            except OSError:
-                pass
-        if not output_preexisted:
-            try:
-                output_dir.rmdir()
-            except OSError:
-                pass
 
     assert response.status_code == 429
     assert body["error"]["code"] == "RATE_LIMITED"
@@ -2839,7 +2839,7 @@ def test_http_exception_handler_preserves_safe_413_detail_for_v1_requests() -> N
     assert body["error"]["details"] == {"path": "/v1/jobs"}
 
 
-def test_job_events_stream_emits_state_log_progress_artifact_done(client: TestClient, monkeypatch) -> None:
+def test_job_events_stream_emits_state_log_progress_artifact_done(client: TestClient, monkeypatch, tmp_path) -> None:
     async def fake_run_job(job, _argv):  # noqa: ANN001
         job.state = "running"
         job.started_at = orchestrator_app._now()
@@ -2887,32 +2887,29 @@ def test_job_events_stream_emits_state_log_progress_artifact_done(client: TestCl
 
     monkeypatch.setattr(orchestrator_app, "_run_job", fake_run_job)
 
-    repo_root = orchestrator_app.REPO_ROOT
-    input_dir = repo_root / "input"
-    output_dir = repo_root / "output"
-    created_input = not input_dir.exists()
-    created_output = not output_dir.exists()
+    # Use per-test isolated paths so the SSE stream test stays parallel-safe
+    # under pytest-xdist (no shared repo-root directories).
+    previous_input_roots = orchestrator_app.ALLOWED_INPUT_ROOTS
+    previous_output_roots = orchestrator_app.ALLOWED_OUTPUT_ROOTS
+    allowed_root = (tmp_path / "sse-stream-isolated").resolve()
+    allowed_root.mkdir(parents=True, exist_ok=True)
+    input_dir = allowed_root / "input"
+    output_dir = allowed_root / "output"
     input_dir.mkdir(parents=True, exist_ok=True)
     output_dir.mkdir(parents=True, exist_ok=True)
     try:
+        orchestrator_app.ALLOWED_INPUT_ROOTS = [allowed_root]
+        orchestrator_app.ALLOWED_OUTPUT_ROOTS = [allowed_root]
         create = client.post(
             "/v1/jobs",
             json={
                 "pipeline": "lux-depth-v3",
-                "args": {"input_dir": "./input", "output_dir": "./output"},
+                "args": {"input_dir": str(input_dir), "output_dir": str(output_dir)},
             },
         )
     finally:
-        if created_input:
-            try:
-                input_dir.rmdir()
-            except OSError:
-                pass
-        if created_output:
-            try:
-                output_dir.rmdir()
-            except OSError:
-                pass
+        orchestrator_app.ALLOWED_INPUT_ROOTS = previous_input_roots
+        orchestrator_app.ALLOWED_OUTPUT_ROOTS = previous_output_roots
     assert create.status_code == 200
     job_id = create.json()["data"]["id"]
 

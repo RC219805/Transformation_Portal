@@ -610,6 +610,74 @@ def _trusted_allowed_entry(
     return None
 
 
+_UNSAFE_PATH_SEGMENT_RE = re.compile(r"[\x00/\\]")
+
+
+def _trusted_existing_dir(value: str, allowed_roots: List[Path]) -> Optional[Path]:
+    """Return ``value`` as a trusted existing directory inside an allowed root.
+
+    Resolves the user-supplied string against the allowlist and then walks
+    each segment via :func:`_trusted_allowed_entry` (``iterdir`` based). When
+    the full path resolves to an existing directory, the trusted ``Path`` is
+    returned; otherwise ``None``. Callers must not pass any other user-derived
+    string to subsequent filesystem APIs.
+    """
+
+    try:
+        resolved = _resolve_allowed_request_path(value, allowed_roots)
+    except _PortalValidationReasonError:
+        return None
+    trusted = _trusted_allowed_entry(resolved, allowed_roots)
+    if trusted is None:
+        return None
+    try:
+        if not trusted.is_dir():
+            return None
+    except OSError:
+        return None
+    return trusted
+
+
+def _trusted_creatable_dir(value: str, allowed_roots: List[Path]) -> Optional[Path]:
+    """Return ``value`` as a trusted directory path safe to ``mkdir`` later.
+
+    Walks each existing segment via ``Path.iterdir()`` (so pre-existing
+    components are validated against the parent's children rather than
+    by-string) and validates the names of any non-existent trailing segments
+    against :data:`_UNSAFE_PATH_SEGMENT_RE` to defeat traversal injection.
+    """
+
+    try:
+        resolved = _resolve_allowed_request_path(value, allowed_roots)
+    except _PortalValidationReasonError:
+        return None
+    for root in allowed_roots:
+        try:
+            root_real = Path(os.path.realpath(root))
+            relative_parts = resolved.relative_to(root_real).parts
+        except (OSError, RuntimeError, ValueError):
+            continue
+        current = root_real
+        creating = False
+        for part in relative_parts:
+            if part in {"", ".", ".."} or _UNSAFE_PATH_SEGMENT_RE.search(part):
+                return None
+            if creating:
+                current = current / part
+                continue
+            try:
+                next_path = next((child for child in current.iterdir() if child.name == part), None)
+            except (NotADirectoryError, FileNotFoundError, OSError, RuntimeError, ValueError):
+                return None
+            if next_path is None:
+                creating = True
+                current = current / part
+            else:
+                current = next_path
+        return current
+    return None
+
+
 def _ensure_safe_regular_file_path(path_value: Path, allowed_roots: List[Path]) -> Path:
     try:
         candidate_real = _resolve_allowed_request_path(str(path_value), allowed_roots)
@@ -752,9 +820,13 @@ CANCEL_GRACE_SECONDS = _env_float(
 )
 JOB_LIST_LIMIT = _env_int("TP_JOB_LIST_LIMIT", 200, minimum=1)
 MAX_INDEXED_ARTIFACTS = _env_int("TP_MAX_INDEXED_ARTIFACTS", 200, minimum=1)
+# Keep fingerprinting inexpensive by default. Up to MAX_INDEXED_ARTIFACTS files
+# are hashed per job (off the event loop via asyncio.to_thread); deployments
+# that need copy-friendly hashes for larger artifacts can opt in via the env
+# override.
 ARTIFACT_FINGERPRINT_MAX_BYTES = _env_int(
     "TP_ARTIFACT_FINGERPRINT_MAX_BYTES",
-    256 * 1024 * 1024,
+    8 * 1024 * 1024,
     minimum=1024,
 )
 _ARTIFACT_FINGERPRINT_CHUNK_BYTES = 1024 * 1024
@@ -2035,9 +2107,7 @@ def _enforce_dispatch_value_preflight(
                 extra={"pipeline": pipeline},
             )
 
-        device_value = str(
-            _pick(execution_args, "depth_device", "depthDevice", default="") or ""
-        ).strip().lower()
+        device_value = str(_pick(execution_args, "depth_device", "depthDevice", default="") or "").strip().lower()
         if device_value and device_value not in ALLOWED_DEPTH_DEVICES:
             raise JobPreflightError(
                 "invalid_depth_device",
@@ -2047,9 +2117,7 @@ def _enforce_dispatch_value_preflight(
                 extra={"pipeline": pipeline},
             )
 
-        run_card_value = str(
-            _pick(execution_args, "run_card_version", "runCardVersion", default="") or ""
-        ).strip().lower()
+        run_card_value = str(_pick(execution_args, "run_card_version", "runCardVersion", default="") or "").strip().lower()
         if run_card_value and run_card_value not in ALLOWED_RUN_CARD_VERSIONS:
             raise JobPreflightError(
                 "invalid_run_card_version",
@@ -2063,27 +2131,25 @@ def _enforce_dispatch_value_preflight(
 def _enforce_dispatch_filesystem_preflight(
     pipeline: str,
     execution_args: Dict[str, Any],
-) -> None:
-    """Verify that required filesystem inputs exist before dispatching a job.
+) -> Optional[Path]:
+    """Read-only validation of dispatch filesystem inputs.
 
-    Path allowlist validation is already done by ``_argv_from_request``; this
-    extra pass catches the ``passes-preview/fails-in-runner`` gap where a
-    syntactically valid path simply does not exist on disk, or the output
-    directory cannot be written to. Raises :class:`JobPreflightError` with a
-    portal-safe reason on failure.
+    Verifies that ``input_dir`` exists inside an allowed root and returns the
+    trusted ``output_dir`` Path that the caller should ``mkdir`` *after* the
+    job admission gate succeeds (so a 429 reject does not leave behind empty
+    directories under load). Each path component is walked via
+    :func:`_trusted_existing_dir` / :func:`_trusted_creatable_dir`, which
+    iterate ``Path.iterdir()`` rather than passing user-controlled strings to
+    filesystem APIs — this also satisfies the CodeQL ``py/path-injection``
+    detector.
+
+    Raises :class:`JobPreflightError` with a portal-safe reason on failure.
     """
 
-    input_dir_raw = str(
-        _pick(execution_args, "input_dir", "inputDir", default="")
-    ).strip()
+    input_dir_raw = str(_pick(execution_args, "input_dir", "inputDir", default="")).strip()
     if input_dir_raw:
-        try:
-            input_dir_resolved = _resolve_allowed_request_path(
-                input_dir_raw, ALLOWED_INPUT_ROOTS
-            )
-        except _PortalValidationReasonError:
-            input_dir_resolved = None
-        if input_dir_resolved is None or not input_dir_resolved.is_dir():
+        input_dir_trusted = _trusted_existing_dir(input_dir_raw, ALLOWED_INPUT_ROOTS)
+        if input_dir_trusted is None:
             raise JobPreflightError(
                 "input_dir_required",
                 field="input_dir",
@@ -2092,42 +2158,62 @@ def _enforce_dispatch_filesystem_preflight(
                 extra={"pipeline": pipeline},
             )
 
-    output_dir_raw = str(
-        _pick(execution_args, "output_dir", "outputDir", default="")
-    ).strip()
-    if output_dir_raw:
-        try:
-            output_dir_resolved = _resolve_allowed_request_path(
-                output_dir_raw, ALLOWED_OUTPUT_ROOTS
-            )
-        except _PortalValidationReasonError:
-            output_dir_resolved = None
-        if output_dir_resolved is None:
-            raise JobPreflightError(
-                "output_dir_unwritable",
-                field="output_dir",
-                message="The output directory or its parent is not writable.",
-                status_code=400,
-                extra={"pipeline": pipeline},
-            )
-        try:
-            output_dir_resolved.mkdir(parents=True, exist_ok=True)
-        except OSError:
-            raise JobPreflightError(
-                "output_dir_unwritable",
-                field="output_dir",
-                message="The output directory or its parent is not writable.",
-                status_code=400,
-                extra={"pipeline": pipeline},
-            ) from None
-        if not os.access(str(output_dir_resolved), os.W_OK):
-            raise JobPreflightError(
-                "output_dir_unwritable",
-                field="output_dir",
-                message="The output directory or its parent is not writable.",
-                status_code=400,
-                extra={"pipeline": pipeline},
-            )
+    output_dir_raw = str(_pick(execution_args, "output_dir", "outputDir", default="")).strip()
+    if not output_dir_raw:
+        return None
+
+    output_dir_trusted = _trusted_creatable_dir(output_dir_raw, ALLOWED_OUTPUT_ROOTS)
+    if output_dir_trusted is None:
+        raise JobPreflightError(
+            "output_dir_unwritable",
+            field="output_dir",
+            message="The output directory or its parent is not writable.",
+            status_code=400,
+            extra={"pipeline": pipeline},
+        )
+    # Confirm the deepest existing ancestor is writable without creating
+    # anything yet; the actual mkdir happens after admission succeeds.
+    existing_ancestor = output_dir_trusted
+    while not existing_ancestor.exists():
+        parent = existing_ancestor.parent
+        if parent == existing_ancestor:
+            break
+        existing_ancestor = parent
+    if not os.access(str(existing_ancestor), os.W_OK):
+        raise JobPreflightError(
+            "output_dir_unwritable",
+            field="output_dir",
+            message="The output directory or its parent is not writable.",
+            status_code=400,
+            extra={"pipeline": pipeline},
+        )
+    return output_dir_trusted
+
+
+def _materialize_dispatch_output_dir(
+    pipeline: str,
+    output_dir_trusted: Optional[Path],
+) -> None:
+    """Create the trusted output directory after job admission succeeds.
+
+    Splitting mkdir from preflight prevents accumulation of empty directories
+    when dispatch is rejected post-preflight (e.g. by the concurrency gate).
+    The path here was validated component-by-component via iterdir(); only
+    the final ``mkdir`` is necessary to materialise it.
+    """
+
+    if output_dir_trusted is None:
+        return
+    try:
+        output_dir_trusted.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        raise JobPreflightError(
+            "output_dir_unwritable",
+            field="output_dir",
+            message="The output directory or its parent is not writable.",
+            status_code=400,
+            extra={"pipeline": pipeline},
+        ) from None
 
 
 HTTP_STATUS_ERROR_CODES = {
@@ -2620,10 +2706,7 @@ _LOG_REDACT_KV_KEYS = (
 
 _LOG_REDACTION_PATTERNS: Tuple[Tuple[re.Pattern[str], str], ...] = (
     (
-        re.compile(
-            r"(?i)(authorization|proxy-authorization)\s*:\s*"
-            r"(?:bearer|basic|digest|token|apikey)\s+\S+"
-        ),
+        re.compile(r"(?i)(authorization|proxy-authorization)\s*:\s*" r"(?:bearer|basic|digest|token|apikey)\s+\S+"),
         r"\1: <redacted>",
     ),
     (
@@ -2632,9 +2715,7 @@ _LOG_REDACTION_PATTERNS: Tuple[Tuple[re.Pattern[str], str], ...] = (
     ),
     (
         re.compile(
-            r"(?i)(^|[^A-Za-z0-9])("
-            + "|".join(re.escape(key) for key in _LOG_REDACT_KV_KEYS)
-            + r")(\s*[:=]\s*)([^\s,;]+)"
+            r"(?i)(^|[^A-Za-z0-9])(" + "|".join(re.escape(key) for key in _LOG_REDACT_KV_KEYS) + r")(\s*[:=]\s*)([^\s,;]+)"
         ),
         r"\1\2\3<redacted>",
     ),
@@ -3521,9 +3602,7 @@ def _build_lux_config_preview(
     path_errors_by_field = _preview_path_errors_by_field(path_errors)
 
     normalized_args: Dict[str, Any] = {}
-    preset_raw = str(
-        _pick(args, "preset", default=defaults["preset"]) or defaults["preset"]
-    ).strip()
+    preset_raw = str(_pick(args, "preset", default=defaults["preset"]) or defaults["preset"]).strip()
     allowed_preset_names = _allowed_preset_names("lux-depth-v3")
     if allowed_preset_names and preset_raw and preset_raw not in allowed_preset_names:
         errors.append(
@@ -5382,9 +5461,7 @@ def _build_scoped_job_artifacts(
         )
         for relative_path, path in selected_candidates
     ]
-    selected_lookup = {
-        relative_path: path for relative_path, path in selected_candidates
-    }
+    selected_lookup = {relative_path: path for relative_path, path in selected_candidates}
     return items, selected_lookup, truncated
 
 
@@ -7074,9 +7151,16 @@ def _portal_html_response() -> Response:
 
 
 @app.get("/")
-async def serve_ui() -> Response:
+async def serve_ui(request: Request) -> Response:
+    # Preserve the original query string so legacy/deep links such as
+    # ``/?view=review`` continue to land on the correct workspace tab after
+    # the redirect to the canonical ``/portal`` route.
+    query = request.url.query
+    target = "/portal"
+    if query:
+        target = f"{target}?{query}"
     return RedirectResponse(
-        url="/portal",
+        url=target,
         status_code=307,
         headers={"Cache-Control": "no-store"},
     )
@@ -7513,7 +7597,9 @@ async def create_job(payload: Dict[str, Any]) -> JSONResponse:
         )
 
     try:
-        _enforce_dispatch_filesystem_preflight(pipeline, execution_args)
+        # Read-only filesystem preflight: validates paths and returns the
+        # trusted output_dir to materialise *after* admission succeeds.
+        trusted_output_dir = _enforce_dispatch_filesystem_preflight(pipeline, execution_args)
     except JobPreflightError as exc:
         status_code = int(exc.status_code)
         field = str(exc.field or "payload")
@@ -7553,6 +7639,21 @@ async def create_job(payload: Dict[str, Any]) -> JSONResponse:
                     "max_concurrent_jobs": MAX_CONCURRENT_JOBS,
                 },
             )
+        # Materialise output_dir only after admission succeeds so 429-rejected
+        # requests never leave behind directories on disk.
+        try:
+            _materialize_dispatch_output_dir(pipeline, trusted_output_dir)
+        except JobPreflightError as exc:
+            status_code = int(exc.status_code)
+            field = str(exc.field or "payload")
+            reason = _portal_reason_code(exc.reason)
+            del exc
+            return _error_response(
+                status_code,
+                code="INVALID_ARGUMENT",
+                message=_portal_safe_error_message(reason, field=field),
+                details={"field": field, "reason": reason},
+            )
         jid = "job_" + uuid.uuid4().hex[:8]
         effective_request = {"pipeline": pipeline, "args": dict(execution_args)}
         job = Job(id=jid, created_at=_now(), request=payload, effective_request=effective_request)
@@ -7584,9 +7685,7 @@ async def list_jobs(limit: int = JOB_LIST_LIMIT) -> JSONResponse:
         key=lambda item: item.created_at,
         reverse=True,
     )
-    serialized = [
-        _serialize_job(job, include_logs=False) for job in jobs_sorted[:bounded_limit]
-    ]
+    serialized = [_serialize_job(job, include_logs=False) for job in jobs_sorted[:bounded_limit]]
 
     return JSONResponse(
         _api_envelope(
@@ -7663,7 +7762,10 @@ async def get_job_artifact(job_id: str, artifact_path: str) -> Response:
 
     if not job.artifact_lookup:
         if not _hydrate_artifact_lookup_from_items(job):
-            _index_job_artifacts(job)
+            # Fingerprint computation can do bounded synchronous IO; offload
+            # the indexing pass to a worker thread to keep the event loop
+            # responsive for SSE subscribers and concurrent API callers.
+            await asyncio.to_thread(_index_job_artifacts, job)
     resolved_artifact = job.artifact_lookup.get(requested_relative_path)
     if resolved_artifact is None:
         return _error_response(
@@ -7933,8 +8035,10 @@ async def _run_job(job: Job, argv: List[str]) -> None:
         # Index artifacts and publish terminal events BEFORE setting finished_at.
         # This ensures late-connecting SSE clients can deterministically check
         # done_published_at to know if they need to wait for real events or can
-        # safely synthesize a 'done' from job state.
-        indexed_artifacts = _index_job_artifacts(job)
+        # safely synthesize a 'done' from job state. Indexing also computes
+        # bounded SHA-256 fingerprints, so run it in a worker thread to keep
+        # the event loop responsive while large jobs are wrapping up.
+        indexed_artifacts = await asyncio.to_thread(_index_job_artifacts, job)
         _refresh_job_run_summary(job)
         for artifact in indexed_artifacts:
             await _publish_event(
