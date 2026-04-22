@@ -88,23 +88,19 @@ class CodeParser:
             # Extract imports
             imports = self._extract_imports(tree)
 
-            # Extract classes and functions
-            for node in ast.walk(tree):
+            # Walk only the module body so top-level functions and classes
+            # are surfaced without descending into class bodies twice. Methods
+            # are parsed explicitly from each ClassDef below.
+            for node in tree.body:
                 if isinstance(node, ast.ClassDef):
-                    entity = self._parse_class(node, file_path, imports)
-                    entities.append(entity)
-
-                    # Parse methods within class
+                    entities.append(self._parse_class(node, file_path, imports))
                     for method_node in node.body:
                         if isinstance(method_node, ast.FunctionDef):
-                            method_entity = self._parse_function(method_node, file_path, imports, parent_class=node.name)
-                            entities.append(method_entity)
-
+                            entities.append(
+                                self._parse_function(method_node, file_path, imports, parent_class=node.name)
+                            )
                 elif isinstance(node, ast.FunctionDef):
-                    # Only top-level functions (not methods)
-                    if not any(isinstance(parent, ast.ClassDef) for parent in ast.walk(tree)):
-                        entity = self._parse_function(node, file_path, imports)
-                        entities.append(entity)
+                    entities.append(self._parse_function(node, file_path, imports))
 
         except Exception as e:
             logger.warning("Could not parse %s: %s", file_path, e)

@@ -187,6 +187,85 @@ When validation is incomplete, separate:
 
 ---
 
+## Response Formats
+
+### A) Code Modification Requests
+
+For merge-ready browser-surface work, respond with:
+
+```json
+{
+  "summary": "What changes and why (1-3 sentences).",
+  "scope_surface": "frontdoor|portal-shell|portal-assets|browser-validation|docs-tests|mixed",
+  "risk": "Low|Medium|High with brief justification.",
+  "files": [
+    {
+      "path": "relative/path/to/file",
+      "patch": "unified diff",
+      "description": "Rationale and impact."
+    }
+  ],
+  "tests": [
+    "make test-portal-contract",
+    "make validate-portal-browser"
+  ],
+  "commands": [
+    "cd web/secure-landing && npm run build:portal"
+  ],
+  "contract_impact": {
+    "route_contract_changed": false,
+    "auth_or_trust_boundary_touched": false,
+    "selector_or_data_ui_changed": false,
+    "manifest_or_asset_surface_changed": false,
+    "managed_cache_or_header_changed": false
+  },
+  "rollout": {
+    "always_on_or_gated": "always-on|rollout-gated",
+    "rollback_lever": "how to revert safely"
+  },
+  "governance_check": {
+    "needs_escalation": false,
+    "reason": ""
+  },
+  "notes": "Browser compatibility, reduced-motion, keyboard/focus, bundle-budget, or follow-up items.",
+  "confidence": 0.85,
+  "citations": [
+    {
+      "file_path": "relative/path/to/existing_file",
+      "snippet": "short snippet or identifier",
+      "relevance": "why this supports the change"
+    }
+  ]
+}
+```
+
+### B) Troubleshooting and Analysis
+
+For diagnosis without a merge-ready patch, respond with:
+
+```json
+{
+  "summary": "What is wrong and why (1-3 sentences).",
+  "hypothesis": "Most likely cause, grounded in repo/contract evidence.",
+  "evidence": [
+    {
+      "file_path": "relative/path/to/file",
+      "snippet": "short snippet or identifier",
+      "observation": "what this tells us"
+    }
+  ],
+  "reproduction": "Steps or commands that make the issue observable.",
+  "recommended_next_steps": [
+    "Concrete, contract-safe follow-up action"
+  ],
+  "contract_risk": "What managed-browser, auth, or asset-manifest contract this touches if acted on.",
+  "needs_escalation": false,
+  "confidence": 0.7
+}
+```
+
+---
+
 ## Escalation and Rollback
 
 Prefer additive, revert-safe browser changes with an explicit rollback story.

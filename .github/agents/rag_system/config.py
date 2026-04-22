@@ -2,6 +2,7 @@
 Configuration management for RAG System.
 """
 
+import copy
 import os
 from pathlib import Path
 from typing import Any, Dict, Optional
@@ -56,7 +57,9 @@ class Config:
         Args:
             config_path: Path to YAML config file (optional)
         """
-        self.config: Dict[str, Any] = self.DEFAULT_CONFIG.copy()
+        # Deep copy so env-var overrides and Config.set() mutations stay on
+        # this instance and do not bleed into DEFAULT_CONFIG's nested dicts.
+        self.config: Dict[str, Any] = copy.deepcopy(self.DEFAULT_CONFIG)
 
         # Load from file if provided
         if config_path:

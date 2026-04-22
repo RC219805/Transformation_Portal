@@ -10,7 +10,7 @@ import re
 from collections import Counter
 from dataclasses import dataclass
 from functools import lru_cache
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Set, Tuple
 
 import numpy as np
 
@@ -67,11 +67,14 @@ class BM25Retriever:
         """
         self.k1 = k1
         self.b = b
-        self.corpus = []
-        self.doc_freqs = Counter()
-        self.idf = {}
-        self.doc_lens = []
-        self.avgdl = 0
+        self.corpus: List[str] = []
+        self.doc_freqs: Counter = Counter()
+        self.idf: Dict[str, float] = {}
+        self.doc_lens: List[int] = []
+        # Per-document term frequencies cached at fit time so queries don't
+        # have to re-tokenize every document on every call.
+        self.doc_term_freqs: List[Counter] = []
+        self.avgdl = 0.0
         self.N = 0
 
     def fit(self, documents: List[str]):
@@ -84,59 +87,68 @@ class BM25Retriever:
         self.corpus = documents
         self.N = len(documents)
 
-        # Tokenize and compute document frequencies
         tokenized_docs = [self._tokenize(doc) for doc in documents]
         self.doc_lens = [len(doc) for doc in tokenized_docs]
-        self.avgdl = sum(self.doc_lens) / self.N if self.N > 0 else 0
+        self.doc_term_freqs = [Counter(doc) for doc in tokenized_docs]
+        self.avgdl = sum(self.doc_lens) / self.N if self.N > 0 else 0.0
 
-        # Compute document frequencies
+        self.doc_freqs = Counter()
         for tokens in tokenized_docs:
-            unique_tokens = set(tokens)
-            for token in unique_tokens:
+            for token in set(tokens):
                 self.doc_freqs[token] += 1
 
-        # Compute IDF scores using Robertson-Sparck Jones (RSJ) IDF formula
-        # The 0.5 smoothing constants prevent negative or undefined IDF values
-        # for very rare or very common terms
-        for token, freq in self.doc_freqs.items():
-            self.idf[token] = math.log((self.N - freq + 0.5) / (freq + 0.5) + 1.0)
+        # Robertson-Sparck Jones (RSJ) IDF formula. The 0.5 smoothing constants
+        # prevent negative or undefined IDF values for very rare or very common
+        # terms.
+        self.idf = {
+            token: math.log((self.N - freq + 0.5) / (freq + 0.5) + 1.0)
+            for token, freq in self.doc_freqs.items()
+        }
 
-    def search(self, query: str, top_k: int = 10) -> List[Tuple[int, float]]:
+    def search(
+        self,
+        query: str,
+        top_k: int = 10,
+        allowed_indices: Optional[Set[int]] = None,
+    ) -> List[Tuple[int, float]]:
         """
         Search for documents matching the query.
 
         Args:
             query: Search query string
             top_k: Number of top results to return
+            allowed_indices: Optional set of corpus indices to restrict the
+                result set to. Scoring still uses the full-corpus IDF
+                statistics, which keeps rankings consistent regardless of the
+                filter.
 
         Returns:
             List of (document_index, score) tuples
         """
         query_tokens = self._tokenize(query)
-        scores = []
+        if not query_tokens or self.N == 0:
+            return []
 
-        for doc_idx, doc in enumerate(self.corpus):
-            doc_tokens = self._tokenize(doc)
-            token_freqs = Counter(doc_tokens)
+        scores: List[Tuple[int, float]] = []
+
+        for doc_idx in range(self.N):
+            if allowed_indices is not None and doc_idx not in allowed_indices:
+                continue
+
+            token_freqs = self.doc_term_freqs[doc_idx]
+            doc_len = self.doc_lens[doc_idx]
+            denom_length_term = self.k1 * (1 - self.b + self.b * (doc_len / self.avgdl)) if self.avgdl else 0.0
 
             score = 0.0
-            doc_len = self.doc_lens[doc_idx]
-
             for token in query_tokens:
-                if token not in token_freqs:
+                tf = token_freqs.get(token, 0)
+                if not tf:
                     continue
-
-                tf = token_freqs[token]
-                idf = self.idf.get(token, 0)
-
-                # BM25 formula
-                numerator = tf * (self.k1 + 1)
-                denominator = tf + self.k1 * (1 - self.b + self.b * (doc_len / self.avgdl))
-                score += idf * (numerator / denominator)
+                idf = self.idf.get(token, 0.0)
+                score += idf * (tf * (self.k1 + 1)) / (tf + denom_length_term)
 
             scores.append((doc_idx, score))
 
-        # Sort by score descending
         scores.sort(key=lambda x: x[1], reverse=True)
         return scores[:top_k]
 
@@ -308,13 +320,11 @@ class HybridRetriever:
             logger.debug("No chunks match filters")
             return []
 
-        # Reuse the indexed BM25 corpus when no filters are applied.
-        if chunk_type_filter is None and file_path_filter is None:
-            bm25_scores = self._bm25_search(query, top_k)
-        else:
-            filtered_chunks = [self.chunks[i] for i in filtered_indices]
-            filtered_docs = [chunk.content for chunk in filtered_chunks]
-            bm25_scores = self._bm25_search(query, top_k, documents=filtered_docs)
+        # Search the indexed BM25 corpus directly, letting the filter apply
+        # at scoring time. This preserves the IDF statistics from the full
+        # corpus and avoids refitting BM25 on every filtered query.
+        allowed_indices = set(filtered_indices) if (chunk_type_filter or file_path_filter) else None
+        bm25_scores = self._bm25_search(query, top_k, filtered_indices, allowed_indices)
 
         # Get vector results (if enabled)
         vector_scores = None
@@ -327,23 +337,30 @@ class HybridRetriever:
         logger.debug(f"Retrieved {len(results)} results for query: '{query[:50]}'")
         return results
 
-    def _bm25_search(self, query: str, top_k: int, documents: Optional[List[str]] = None) -> Dict[int, float]:
+    def _bm25_search(
+        self,
+        query: str,
+        top_k: int,
+        filtered_indices: List[int],
+        allowed_indices: Optional[Set[int]] = None,
+    ) -> Dict[int, float]:
         """
-        Perform BM25 search.
+        Perform BM25 search against the indexed corpus.
 
-        Returns:
-            Dict mapping local index to BM25 score
+        Returns a dict keyed by local index (position within
+        ``filtered_indices``) to stay compatible with ``_combine_results``
+        and the vector-search output.
         """
-        if documents is None:
-            bm25_results = self.bm25.search(query, top_k=top_k * 2)
-        else:
-            temp_bm25 = BM25Retriever(k1=self.bm25.k1, b=self.bm25.b)
-            temp_bm25.fit(documents)
-            bm25_results = temp_bm25.search(query, top_k=top_k * 2)  # Get more for hybrid
+        bm25_results = self.bm25.search(query, top_k=top_k * 2, allowed_indices=allowed_indices)
 
-        scores = {}
-        for local_idx, score in bm25_results:
-            if score > 0:
+        global_to_local = {global_idx: local_idx for local_idx, global_idx in enumerate(filtered_indices)}
+
+        scores: Dict[int, float] = {}
+        for global_idx, score in bm25_results:
+            if score <= 0:
+                continue
+            local_idx = global_to_local.get(global_idx)
+            if local_idx is not None:
                 scores[local_idx] = score
 
         return scores
