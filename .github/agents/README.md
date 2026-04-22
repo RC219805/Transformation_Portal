@@ -56,7 +56,9 @@ Living support docs:
 
 - `docs/guides/CUSTOM_AGENT_GUIDE.md`
 - `docs/reference/AGENT_QUICK_REFERENCE.md`
-- `QUICK_START_v2.md`
-- `RAG_IMPLEMENTATION_SUMMARY.md`
+- `QUICK_START_v2.md` — agent-selection cheatsheet
+- `RAG_QUICK_START.md` — RAG usage quick-start
+- `RAG_ENHANCEMENTS_GUIDE.md`, `RAG_SYSTEM_ENHANCEMENTS.md` — RAG capability reference
+- `rag_system/README.md` — RAG package architecture and module reference
 
-Historical or milestone-style materials in `.github/agents/` should not be treated as canonical operating docs. When a report becomes historical rather than instructional, move or archive it under the repo's documentation policy instead of letting it define live agent behavior.
+Historical or milestone-style materials in `.github/agents/` should not be treated as canonical operating docs. When a report becomes historical rather than instructional, move it to `_archive/` (or `rag_system/_archive/` for RAG-specific artifacts) instead of letting it define live agent behavior.
