@@ -55,8 +55,6 @@ body {
 
 :root {
     color-scheme: light;
-    --ux-focus-ring: rgba(8, 145, 178, 0.92);
-    --ux-focus-shadow: rgba(8, 145, 178, 0.18);
     --ux-panel-border: rgba(100, 116, 139, 0.3);
     --ux-panel-border-strong: rgba(8, 145, 178, 0.3);
     --shell-ink: #0f172a;
@@ -84,8 +82,6 @@ body {
 
 .dark:root {
     color-scheme: dark;
-    --ux-focus-ring: rgba(103, 232, 249, 0.96);
-    --ux-focus-shadow: rgba(34, 211, 238, 0.2);
     --ux-panel-border: rgba(100, 116, 139, 0.5);
     --ux-panel-border-strong: rgba(103, 232, 249, 0.34);
     --shell-ink: #e5eef6;
@@ -1030,7 +1026,7 @@ progress::-moz-progress-bar { background-color: #4f46e5; transition: width 0.3s 
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    min-height: 2.4rem;
+    min-height: var(--ux-target-min-size);
     min-width: 0;
     border-radius: 8px;
     border: 1px solid var(--shell-border);
@@ -1321,7 +1317,6 @@ details[open] .disclosure-chevron {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    min-height: 40px;
     border-radius: 999px;
     border: 1px solid var(--shell-border);
     background: rgba(255, 255, 255, 0.72);
@@ -1406,8 +1401,10 @@ details[open] .disclosure-chevron {
     border-color: rgba(8, 145, 178, 0.32);
     background: rgba(255, 255, 255, 0.92);
     color: var(--shell-ink);
-    outline: none;
     transform: translateY(-1px);
+}
+.dispatch-tool-btn:hover {
+    outline: none;
 }
 
 .dispatch-tool-btn-primary {
@@ -1479,18 +1476,32 @@ details[open] .disclosure-chevron {
     display: block;
     overflow: hidden;
     position: relative;
-    background:
-        linear-gradient(90deg, rgba(226, 232, 240, 0.58), rgba(255, 255, 255, 0.94), rgba(226, 232, 240, 0.58));
-    background-size: 200% 100%;
+    background: rgba(226, 232, 240, 0.72);
+}
+
+.skeleton-line::before,
+.skeleton-block::before,
+.skeleton-pill::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.85) 50%, transparent 100%);
+    transform: translateX(-100%);
     animation: skeletonShimmer 1.4s ease-in-out infinite;
+    will-change: transform;
+    pointer-events: none;
 }
 
 .dark .skeleton-line,
 .dark .skeleton-block,
 .dark .skeleton-pill {
-    background:
-        linear-gradient(90deg, rgba(51, 65, 85, 0.72), rgba(71, 85, 105, 0.95), rgba(51, 65, 85, 0.72));
-    background-size: 200% 100%;
+    background: rgba(51, 65, 85, 0.72);
+}
+
+.dark .skeleton-line::before,
+.dark .skeleton-block::before,
+.dark .skeleton-pill::before {
+    background: linear-gradient(90deg, transparent 0%, rgba(148, 163, 184, 0.4) 50%, transparent 100%);
 }
 
 .skeleton-line {
@@ -1574,10 +1585,10 @@ details[open] .disclosure-chevron {
 
 @keyframes skeletonShimmer {
     0% {
-        background-position: 200% 0;
+        transform: translateX(-100%);
     }
     100% {
-        background-position: -200% 0;
+        transform: translateX(100%);
     }
 }
 
@@ -1646,6 +1657,8 @@ details[open] .disclosure-chevron {
     border-color: rgba(8, 145, 178, 0.28);
     background: rgba(255, 255, 255, 0.84);
     box-shadow: 0 14px 28px rgba(14, 116, 144, 0.08);
+}
+.workspace-link:hover {
     outline: none;
 }
 
@@ -2018,6 +2031,15 @@ details[open] .disclosure-chevron {
     display: none;
 }
 
+@media (prefers-color-scheme: dark) {
+    html:not(.light) .portal-brand-asset--light {
+        display: none;
+    }
+    html:not(.light) .portal-brand-asset--dark {
+        display: block;
+    }
+}
+
 .portal-topbar__actions {
     flex-wrap: wrap;
     justify-content: flex-end;
@@ -2280,6 +2302,8 @@ details[open] .disclosure-chevron {
 .build-step-tab:focus-visible {
     transform: translateY(-1px);
     border-color: rgba(8, 145, 178, 0.28);
+}
+.build-step-tab:hover {
     outline: none;
 }
 

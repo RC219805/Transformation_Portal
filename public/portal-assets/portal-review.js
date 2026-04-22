@@ -51,6 +51,11 @@ function createDeferredReviewSurfaceApi(host) {
   let artifactViewerPreviewSource = "";
   let artifactViewerPreviewRequestId = 0;
   let artifactViewerFallbackEventKey = "";
+  let artifactViewerAbortController = null;
+  let artifactViewerKeydownHandler = null;
+  let artifactViewerLastLoadContext = null;
+  let artifactViewerLastLoadName = "";
+  const ARTIFACT_VIEWER_FETCH_TIMEOUT_MS = 15000;
   function _artifactViewerEventMetadata(job, artifact, extra = {}) {
     const metadata = {
       job_id: _normalizeSelectedJobId(job?.id),
@@ -91,9 +96,12 @@ function createDeferredReviewSurfaceApi(host) {
     artifactViewerPreviewSource = "";
     _revokeArtifactViewerObjectUrl();
   }
-  function _showArtifactViewerFallback(context, artifactName) {
+  function _showArtifactViewerFallback(context, artifactName, fallbackOptions) {
     const url = context?.url || "";
-    const fallbackReason = url ? "inline_preview_unavailable" : "asset_url_unavailable";
+    const isRetryable = Boolean(fallbackOptions?.retryable && url);
+    const fallbackReason = isRetryable
+      ? "inline_preview_failed"
+      : url ? "inline_preview_unavailable" : "asset_url_unavailable";
     if (els.artifactViewerImage) {
       els.artifactViewerImage.classList.add("hidden");
       els.artifactViewerImage.removeAttribute("src");
@@ -103,15 +111,50 @@ function createDeferredReviewSurfaceApi(host) {
       els.artifactViewerFallback.classList.remove("hidden");
     }
     if (els.artifactViewerFallbackTitle) {
-      els.artifactViewerFallbackTitle.textContent = url ? "Inline preview unavailable" : "Artifact URL unavailable";
+      els.artifactViewerFallbackTitle.textContent = isRetryable
+        ? "Inline preview failed to load"
+        : url ? "Inline preview unavailable" : "Artifact URL unavailable";
     }
     if (els.artifactViewerFallbackDetail) {
-      els.artifactViewerFallbackDetail.textContent = url ? "This artifact stays reviewable through retained metadata, integrity fingerprints, and the managed raw asset link." : "The browser cannot resolve a managed asset URL for this artifact, so review stays pinned to the retained metadata above.";
+      els.artifactViewerFallbackDetail.textContent = isRetryable
+        ? "The managed asset request did not complete. Retry the preview or continue reviewing the retained metadata and fingerprints."
+        : url
+          ? "This artifact stays reviewable through retained metadata, integrity fingerprints, and the managed raw asset link."
+          : "The browser cannot resolve a managed asset URL for this artifact, so review stays pinned to the retained metadata above.";
     }
+    _renderArtifactViewerRetry(isRetryable ? { context, artifactName } : null);
     _setArtifactViewerStatus(
-      url ? `${artifactName} is open with metadata fallback because an inline preview is unavailable.` : `${artifactName} is open with metadata fallback because the managed asset URL is unavailable.`
+      isRetryable
+        ? `${artifactName} inline preview failed to load; retry available.`
+        : url
+          ? `${artifactName} is open with metadata fallback because an inline preview is unavailable.`
+          : `${artifactName} is open with metadata fallback because the managed asset URL is unavailable.`
     );
     _emitArtifactViewerFallback(context, fallbackReason);
+  }
+  function _renderArtifactViewerRetry(target) {
+    if (!els.artifactViewerFallback) return;
+    const existing = els.artifactViewerFallback.querySelector("[data-ui='artifact-viewer-retry']");
+    if (!target) {
+      if (existing) existing.remove();
+      return;
+    }
+    const button = existing || document.createElement("button");
+    if (!existing) {
+      button.type = "button";
+      button.className = "artifact-viewer-retry-btn";
+      button.dataset.ui = "artifact-viewer-retry";
+      button.textContent = "Retry preview";
+      els.artifactViewerFallback.appendChild(button);
+    }
+    button.onclick = () => {
+      button.disabled = true;
+      button.textContent = "Retrying…";
+      Promise.resolve(_loadArtifactViewerInlinePreview(target.context, target.artifactName)).finally(() => {
+        button.disabled = false;
+        button.textContent = "Retry preview";
+      });
+    };
   }
   function _renderArtifactViewerInlineImage(src, zoomPercent) {
     if (!els.artifactViewerImage) return;
@@ -126,6 +169,8 @@ function createDeferredReviewSurfaceApi(host) {
       _showArtifactViewerFallback(context, artifactName);
       return;
     }
+    artifactViewerLastLoadContext = context;
+    artifactViewerLastLoadName = artifactName;
     if (artifactViewerObjectUrl && artifactViewerPreviewPath === artifactPath && artifactViewerPreviewSource === context.url) {
       _renderArtifactViewerInlineImage(artifactViewerObjectUrl, context.zoomPercent);
       _setArtifactViewerStatus(`${artifactName} preview open at ${context.zoomPercent}% zoom.`);
@@ -134,11 +179,21 @@ function createDeferredReviewSurfaceApi(host) {
     const requestId = ++artifactViewerPreviewRequestId;
     artifactViewerPreviewPath = artifactPath;
     artifactViewerPreviewSource = context.url;
+    if (artifactViewerAbortController) {
+      try { artifactViewerAbortController.abort(); } catch (_abortErr) {}
+    }
+    const controller = typeof AbortController === "function" ? new AbortController() : null;
+    artifactViewerAbortController = controller;
+    const timeoutId = controller ? setTimeout(() => {
+      try { controller.abort(); } catch (_abortErr) {}
+    }, ARTIFACT_VIEWER_FETCH_TIMEOUT_MS) : null;
     try {
       if (state.auth?.mode === "direct_debug" && typeof _buildAuthHeaders === "function") {
-        const response = await fetch(context.url, {
+        const fetchOptions = {
           headers: _buildAuthHeaders({ Accept: artifactContentType(context.artifact) || "*/*" }, "GET")
-        });
+        };
+        if (controller) fetchOptions.signal = controller.signal;
+        const response = await fetch(context.url, fetchOptions);
         if (!response.ok) {
           throw new Error(`artifact_preview_${response.status}`);
         }
@@ -155,9 +210,16 @@ function createDeferredReviewSurfaceApi(host) {
       }
       _renderArtifactViewerInlineImage(context.url, context.zoomPercent);
       _setArtifactViewerStatus(`${artifactName} preview open at ${context.zoomPercent}% zoom.`);
-    } catch {
+    } catch (err) {
       if (requestId !== artifactViewerPreviewRequestId) return;
-      _showArtifactViewerFallback(context, artifactName);
+      // Suppress toast for intentional aborts (modal close, zoom/navigate re-render, new request).
+      if (err?.name !== "AbortError") {
+        try { createToast(`Preview unavailable: ${err?.message || "network error"}`, "error"); } catch (_toastErr) {}
+      }
+      _showArtifactViewerFallback(context, artifactName, { retryable: err?.name !== "AbortError" });
+    } finally {
+      if (timeoutId !== null) clearTimeout(timeoutId);
+      if (artifactViewerAbortController === controller) artifactViewerAbortController = null;
     }
   }
   function getRunCardArtifact(job) {
@@ -777,11 +839,13 @@ function createDeferredReviewSurfaceApi(host) {
         _clearArtifactViewerPreviewCache();
       }
       if (els.artifactViewerImage) {
+        // Reset the previous handler so closures over stale artifactPath don't stack and leak.
+        els.artifactViewerImage.onerror = null;
         els.artifactViewerImage.onerror = () => {
           const activeContext = _artifactViewerContext();
           if (!activeContext.artifact) return;
           if (_artifactRouteKey(activeContext.artifact) !== artifactPath) return;
-          _showArtifactViewerFallback(activeContext, artifactName);
+          _showArtifactViewerFallback(activeContext, artifactName, { retryable: true });
         };
       }
       if (state.auth?.mode !== "direct_debug") {
@@ -803,8 +867,40 @@ function createDeferredReviewSurfaceApi(host) {
     _showArtifactViewerFallback(context, artifactName);
     void job;
   }
+  function _setArtifactViewerBackgroundInert(inert) {
+    const main = document.getElementById("main-content");
+    if (!main) return;
+    if (inert) main.setAttribute("aria-hidden", "true"); else main.removeAttribute("aria-hidden");
+    try { main.inert = Boolean(inert); } catch (_) {}
+  }
+  function _handleArtifactViewerKeydown(event) {
+    if (!state.portalUi?.artifactViewer?.open) return;
+    if (event.key === "Escape") { event.preventDefault(); _closeArtifactViewer(true); return; }
+    if (event.key !== "Tab" || !els.artifactViewerPanel) return;
+    const nodes = els.artifactViewerPanel.querySelectorAll('button:not([disabled]),[href],input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])');
+    const visible = Array.prototype.filter.call(nodes, (n) => n.offsetParent !== null);
+    if (!visible.length) return;
+    const first = visible[0];
+    const last = visible[visible.length - 1];
+    const active = document.activeElement;
+    const outside = !els.artifactViewerPanel.contains(active);
+    if (event.shiftKey && (active === first || outside)) { last.focus(); event.preventDefault(); }
+    else if (!event.shiftKey && (active === last || outside)) { first.focus(); event.preventDefault(); }
+  }
   function _closeArtifactViewer(restoreFocus = true) {
     state.portalUi.artifactViewer.open = false;
+    if (artifactViewerAbortController) {
+      try { artifactViewerAbortController.abort(); } catch (_abortErr) {}
+      artifactViewerAbortController = null;
+    }
+    if (artifactViewerKeydownHandler && typeof document !== "undefined") {
+      document.removeEventListener("keydown", artifactViewerKeydownHandler, true);
+      artifactViewerKeydownHandler = null;
+    }
+    _setArtifactViewerBackgroundInert(false);
+    _renderArtifactViewerRetry(null);
+    artifactViewerLastLoadContext = null;
+    artifactViewerLastLoadName = "";
     renderArtifactViewer();
     if (restoreFocus) {
       _restoreOverlayFocus();
@@ -822,6 +918,11 @@ function createDeferredReviewSurfaceApi(host) {
     state.portalUi.artifactViewer.zoomPercent = 100;
     artifactViewerFallbackEventKey = "";
     _rememberOverlayTrigger(trigger);
+    _setArtifactViewerBackgroundInert(true);
+    if (!artifactViewerKeydownHandler && typeof document !== "undefined") {
+      artifactViewerKeydownHandler = _handleArtifactViewerKeydown;
+      document.addEventListener("keydown", artifactViewerKeydownHandler, true);
+    }
     renderArtifactViewer();
     if (els.closeArtifactViewerBtn) els.closeArtifactViewerBtn.focus();
     void emitPortalEvent("artifact_viewer_opened", {

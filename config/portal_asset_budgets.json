@@ -11,7 +11,7 @@
     },
     "portal-review.js": {
       "max_bytes": 50000,
-      "max_gzip_bytes": 9000
+      "max_gzip_bytes": 10500
     },
     "portal-review.css": {
       "max_bytes": 7000,
@@ -20,6 +20,22 @@
     "shared-ui-tokens.css": {
       "max_bytes": 2048,
       "max_gzip_bytes": 768
+    },
+    "brand/dna-symbol-dark.svg": {
+      "max_bytes": 15000,
+      "max_gzip_bytes": 4000
+    },
+    "brand/dna-symbol-light.svg": {
+      "max_bytes": 15000,
+      "max_gzip_bytes": 4000
+    },
+    "fonts/portal-sans.woff2": {
+      "max_bytes": 30000,
+      "max_gzip_bytes": 30000
+    },
+    "fonts/portal-mono.woff2": {
+      "max_bytes": 33000,
+      "max_gzip_bytes": 33000
     }
   }
 }
