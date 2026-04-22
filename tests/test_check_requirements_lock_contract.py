@@ -38,6 +38,10 @@ def write_lockfile(tmp_path: Path, name: str, python_version: str, body: str = "
     )
 
 
+def write_input_file(tmp_path: Path, name: str, body: str) -> None:
+    (tmp_path / "requirements" / name).write_text(body.rstrip() + "\n", encoding="utf-8")
+
+
 def write_lock_ownership_manifest(tmp_path: Path) -> None:
     (tmp_path / "requirements" / "lock_ownership.yml").write_text(
         "\n".join(
@@ -228,6 +232,85 @@ def test_generic_lock_accepts_complete_linux_keyring_chain(isolated_repo: Path) 
     )
 
     errors = contract.validate_generic_linux_keyring_pins()
+
+    assert errors == []
+
+
+def test_generic_runtime_marker_pins_require_non_linux_opencv_in_base_lock(isolated_repo: Path) -> None:
+    write_input_file(
+        isolated_repo,
+        "base.in",
+        'opencv-python>=4.8.0,<5 ; platform_system != "Linux"\n'
+        'opencv-python-headless>=4.8.0,<5 ; platform_system == "Linux"\n',
+    )
+    write_lockfile(
+        isolated_repo,
+        "all.txt",
+        "3.11",
+        body='opencv-python==4.13.0.92 ; platform_system != "Linux"\n'
+        'opencv-python-headless==4.13.0.92 ; platform_system == "Linux"\n',
+    )
+    write_lockfile(
+        isolated_repo,
+        "base.txt",
+        "3.11",
+        body='opencv-python-headless==4.13.0.92 ; platform_system == "Linux"\n',
+    )
+
+    errors = contract.validate_generic_base_runtime_platform_marker_pins()
+
+    assert errors == [
+        f"{isolated_repo / 'requirements' / 'base.txt'} must retain 'opencv-python' because "
+        f"{isolated_repo / 'requirements' / 'base.in'} declares it with marker 'platform_system != \"Linux\"'. "
+        "Regenerate the generic lock on ubuntu-x64-generic or restore the pinned platform-marked runtime dependency."
+    ]
+
+
+def test_generic_runtime_marker_pins_require_non_linux_opencv_in_all_lock(isolated_repo: Path) -> None:
+    write_input_file(
+        isolated_repo,
+        "base.in",
+        'opencv-python>=4.8.0,<5 ; platform_system != "Linux"\n'
+        'opencv-python-headless>=4.8.0,<5 ; platform_system == "Linux"\n',
+    )
+    write_lockfile(
+        isolated_repo,
+        "all.txt",
+        "3.11",
+        body='opencv-python-headless==4.13.0.92 ; platform_system == "Linux"\n',
+    )
+    write_lockfile(
+        isolated_repo,
+        "base.txt",
+        "3.11",
+        body='opencv-python==4.13.0.92 ; platform_system != "Linux"\n'
+        'opencv-python-headless==4.13.0.92 ; platform_system == "Linux"\n',
+    )
+
+    errors = contract.validate_generic_base_runtime_platform_marker_pins()
+
+    assert errors == [
+        f"{isolated_repo / 'requirements' / 'all.txt'} must retain 'opencv-python' because "
+        f"{isolated_repo / 'requirements' / 'base.in'} declares it with marker 'platform_system != \"Linux\"'. "
+        "Regenerate the generic lock on ubuntu-x64-generic or restore the pinned platform-marked runtime dependency."
+    ]
+
+
+def test_generic_runtime_marker_pins_accept_expected_opencv_marker_packages(isolated_repo: Path) -> None:
+    write_input_file(
+        isolated_repo,
+        "base.in",
+        'opencv-python>=4.8.0,<5 ; platform_system != "Linux"\n'
+        'opencv-python-headless>=4.8.0,<5 ; platform_system == "Linux"\n',
+    )
+    lock_body = (
+        'opencv-python==4.13.0.92 ; platform_system != "Linux"\n'
+        'opencv-python-headless==4.13.0.92 ; platform_system == "Linux"\n'
+    )
+    write_lockfile(isolated_repo, "all.txt", "3.11", body=lock_body)
+    write_lockfile(isolated_repo, "base.txt", "3.11", body=lock_body)
+
+    errors = contract.validate_generic_base_runtime_platform_marker_pins()
 
     assert errors == []
 
