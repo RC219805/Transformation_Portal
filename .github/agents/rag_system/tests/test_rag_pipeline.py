@@ -480,6 +480,36 @@ class TestSemanticSearch:
         assert len(results) > 0
         assert any("depth" in r.entity.name.lower() or "depth" in (r.entity.docstring or "").lower() for r in results)
 
+    def test_indexes_nested_classes_and_their_methods(self, tmp_path):
+        """Regression: nested ClassDefs must still be parsed."""
+        from rag_system.semantic_search import CodeParser
+
+        src = tmp_path / "nested.py"
+        src.write_text(
+            "class Outer:\n"
+            "    def outer_method(self):\n"
+            "        return 1\n"
+            "\n"
+            "    class Inner:\n"
+            '        """Inner helper."""\n'
+            "        def inner_method(self):\n"
+            "            return 2\n"
+            "\n"
+            "        class DeepInner:\n"
+            "            def deep_method(self):\n"
+            "                return 3\n"
+        )
+
+        entities = CodeParser().parse_file(str(src))
+        by_name = {e.name: e for e in entities}
+
+        assert "Outer" in by_name and by_name["Outer"].entity_type == "class"
+        assert "Inner" in by_name and by_name["Inner"].entity_type == "class"
+        assert "DeepInner" in by_name and by_name["DeepInner"].entity_type == "class"
+        assert by_name["outer_method"].entity_type == "method"
+        assert by_name["inner_method"].entity_type == "method"
+        assert by_name["deep_method"].entity_type == "method"
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

@@ -16,9 +16,20 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 
-from .indexer import RepositoryIndexer
-from .logger import get_logger
-from .retriever import HybridRetriever
+try:
+    from .indexer import RepositoryIndexer
+    from .logger import get_logger
+    from .retriever import HybridRetriever
+except ImportError:
+    # Script execution (python .github/agents/rag_system/semantic_search.py):
+    # the parent of this file is not yet on sys.path as a package.
+    import sys
+    from pathlib import Path
+
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+    from rag_system.indexer import RepositoryIndexer
+    from rag_system.logger import get_logger
+    from rag_system.retriever import HybridRetriever
 
 logger = get_logger(__name__)
 
@@ -88,24 +99,39 @@ class CodeParser:
             # Extract imports
             imports = self._extract_imports(tree)
 
-            # Walk only the module body so top-level functions and classes
-            # are surfaced without descending into class bodies twice. Methods
-            # are parsed explicitly from each ClassDef below.
-            for node in tree.body:
-                if isinstance(node, ast.ClassDef):
-                    entities.append(self._parse_class(node, file_path, imports))
-                    for method_node in node.body:
-                        if isinstance(method_node, ast.FunctionDef):
-                            entities.append(
-                                self._parse_function(method_node, file_path, imports, parent_class=node.name)
-                            )
-                elif isinstance(node, ast.FunctionDef):
-                    entities.append(self._parse_function(node, file_path, imports))
+            entities.extend(self._collect_body_entities(tree.body, file_path, imports))
 
         except Exception as e:
             logger.warning("Could not parse %s: %s", file_path, e)
 
         return entities
+
+    def _collect_body_entities(
+        self,
+        body: List[ast.stmt],
+        file_path: str,
+        imports: Set[str],
+        parent_class: Optional[str] = None,
+    ) -> List[CodeEntity]:
+        """Walk an AST body collecting code entities, recursing into nested
+        classes so their methods and inner classes are also indexed.
+
+        Methods are attributed to their immediate enclosing class; nested
+        classes are surfaced with a dotted ``Outer.Inner`` name for the
+        ``parent_class`` context passed to their methods so inner methods are
+        not silently merged into the outer class.
+        """
+        collected: List[CodeEntity] = []
+        for node in body:
+            if isinstance(node, ast.ClassDef):
+                collected.append(self._parse_class(node, file_path, imports))
+                nested_context = f"{parent_class}.{node.name}" if parent_class else node.name
+                collected.extend(
+                    self._collect_body_entities(node.body, file_path, imports, parent_class=nested_context)
+                )
+            elif isinstance(node, ast.FunctionDef):
+                collected.append(self._parse_function(node, file_path, imports, parent_class=parent_class))
+        return collected
 
     def _extract_imports(self, tree: ast.AST) -> Set[str]:
         """Extract all imports from AST."""

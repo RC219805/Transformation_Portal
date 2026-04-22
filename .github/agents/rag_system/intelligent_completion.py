@@ -15,7 +15,14 @@ from collections import Counter, defaultdict
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Set, Tuple
 
-from .semantic_search import CodeEntity, CodeParser, SemanticCodeSearch
+try:
+    from .semantic_search import CodeEntity, CodeParser, SemanticCodeSearch
+except ImportError:
+    import sys
+    from pathlib import Path
+
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+    from rag_system.semantic_search import CodeEntity, CodeParser, SemanticCodeSearch
 
 
 @dataclass

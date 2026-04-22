@@ -18,7 +18,14 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple
 
-from .semantic_search import CodeEntity, SemanticCodeSearch
+try:
+    from .semantic_search import CodeEntity, SemanticCodeSearch
+except ImportError:
+    import sys
+    from pathlib import Path
+
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+    from rag_system.semantic_search import CodeEntity, SemanticCodeSearch
 
 
 @dataclass

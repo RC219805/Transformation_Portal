@@ -61,9 +61,12 @@ class ResultReranker:
         if not results:
             return results
 
-        # Compute reranking scores. Build new result objects so the input list
-        # is not mutated — calling rerank() twice on the same list must not
-        # double-apply the boost.
+        # Build new result objects so the caller's list and items are not
+        # mutated. Re-running rerank() on the original input list recomputes
+        # scores from the untouched values, but passing already-reranked
+        # outputs back in will apply the boost on top of the already-boosted
+        # score — reranker signals are additive by design, so the function is
+        # not idempotent across repeated application to its own outputs.
         reranked = []
         for result in results:
             rerank_score = self._compute_rerank_score(result, query)
