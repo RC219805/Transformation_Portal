@@ -19,8 +19,8 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple
 
-from knowledge_engine import FeedbackRecord, KnowledgeIntegrationEngine
-from semantic_search import CodeEntity, SemanticCodeSearch
+from .knowledge_engine import FeedbackRecord, KnowledgeIntegrationEngine
+from .semantic_search import CodeEntity, SemanticCodeSearch
 
 # ============================================================================
 # 1. CODEBASE EVOLUTION TRACKER
@@ -938,8 +938,6 @@ def main():
     print(f"Running {args.mode} analysis...")
 
     # Initialize
-    from semantic_search import SemanticCodeSearch
-
     search = SemanticCodeSearch(args.repo_root)
     search.index_codebase()
 

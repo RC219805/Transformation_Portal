@@ -14,10 +14,13 @@ import re
 from collections import defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 
-from indexer import DocumentChunk, RepositoryIndexer
-from retriever import HybridRetriever
+from .indexer import RepositoryIndexer
+from .logger import get_logger
+from .retriever import HybridRetriever
+
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -104,7 +107,7 @@ class CodeParser:
                         entities.append(entity)
 
         except Exception as e:
-            print(f"Warning: Could not parse {file_path}: {e}")
+            logger.warning("Could not parse %s: %s", file_path, e)
 
         return entities
 
@@ -261,7 +264,7 @@ class SemanticCodeSearch:
 
     def index_codebase(self):
         """Index all code entities in the repository."""
-        print("Indexing codebase for semantic search...")
+        logger.info("Indexing codebase for semantic search...")
 
         # Parse all Python files
         for py_file in self.repo_root.rglob("*.py"):
@@ -278,7 +281,7 @@ class SemanticCodeSearch:
         chunks = self.indexer.index_repository()
         self.retriever.index(chunks)
 
-        print(f"Indexed {len(self.entities)} code entities")
+        logger.info("Indexed %d code entities", len(self.entities))
 
     def search(self, query: str, entity_type: Optional[str] = None, top_k: int = 10) -> List[SemanticSearchResult]:
         """
@@ -404,7 +407,7 @@ class SemanticCodeSearch:
 
         return {k: v for k, v in api_map.items() if v}
 
-    def _analyze_query_intent(self, query: str) -> Dict[str, any]:
+    def _analyze_query_intent(self, query: str) -> Dict[str, Any]:
         """Analyze query to determine search intent."""
         query_lower = query.lower()
 

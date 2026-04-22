@@ -6,6 +6,7 @@ for continuous improvement of image processing workflows.
 """
 
 import json
+import re
 import statistics
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
@@ -197,9 +198,6 @@ class KnowledgeIntegrationEngine:
         error_patterns = []
         for record in records:
             if not record.success and record.error_message:
-                # Extract error type
-                import re
-
                 error_type_match = re.search(r"(\w+Error|\w+Exception)", record.error_message)
                 if error_type_match:
                     error_type = error_type_match.group(1)
@@ -484,8 +482,6 @@ class KnowledgeIntegrationEngine:
                 error_counter = Counter()
                 for record in self.feedback_records:
                     if not record.success and record.error_message:
-                        import re
-
                         error_type_match = re.search(r"(\w+Error|\w+Exception)", record.error_message)
                         if error_type_match:
                             error_counter[error_type_match.group(1)] += 1

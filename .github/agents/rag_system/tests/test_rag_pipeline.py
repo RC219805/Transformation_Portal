@@ -13,15 +13,17 @@ import sys
 import tempfile
 from pathlib import Path
 
-# Add parent directory to path for imports
-sys.path.insert(0, str(Path(__file__).parent.parent))
+# Make the rag_system package importable when tests are invoked directly
+# (pytest discovery handles this for typical layouts; this keeps `python
+# tests/test_rag_pipeline.py` working too).
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 import pytest
-from citation import CitationGenerator
-from indexer import DocumentChunk, RepositoryIndexer
-from reranker import ResultReranker
-from retriever import HybridRetriever
-from templates import CodeModificationResponse, PromptTemplates
+from rag_system.citation import CitationGenerator
+from rag_system.indexer import DocumentChunk, RepositoryIndexer
+from rag_system.reranker import ResultReranker
+from rag_system.retriever import HybridRetriever
+from rag_system.templates import CodeModificationResponse, PromptTemplates
 
 
 @pytest.fixture
@@ -212,7 +214,7 @@ class TestRAGPipeline:
 
     def test_code_modification_response_schema(self):
         """Test CodeModificationResponse schema."""
-        from templates import FileModification
+        from rag_system.templates import FileModification
 
         response = CodeModificationResponse(
             summary="Add new depth effect",

@@ -18,7 +18,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple
 
-from semantic_search import CodeEntity, SemanticCodeSearch
+from .semantic_search import CodeEntity, SemanticCodeSearch
 
 
 @dataclass
@@ -573,8 +573,6 @@ def main():
 
     # Initialize
     print("Initializing documentation system...")
-    from semantic_search import SemanticCodeSearch
-
     search = SemanticCodeSearch(args.repo_root)
     search.index_codebase()
 

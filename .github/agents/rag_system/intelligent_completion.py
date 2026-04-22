@@ -15,7 +15,7 @@ from collections import Counter, defaultdict
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Set, Tuple
 
-from semantic_search import CodeEntity, CodeParser, SemanticCodeSearch
+from .semantic_search import CodeEntity, CodeParser, SemanticCodeSearch
 
 
 @dataclass

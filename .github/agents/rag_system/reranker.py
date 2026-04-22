@@ -5,7 +5,7 @@ Reranks retrieval results to improve precision using additional signals.
 """
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import List, Optional
 
 
@@ -61,17 +61,15 @@ class ResultReranker:
         if not results:
             return results
 
-        # Compute reranking scores
+        # Compute reranking scores. Build new result objects so the input list
+        # is not mutated — calling rerank() twice on the same list must not
+        # double-apply the boost.
         reranked = []
         for result in results:
             rerank_score = self._compute_rerank_score(result, query)
-            # Combine with original retrieval score
             final_score = result.score + rerank_score
-
-            # Create modified result with updated score
-            result.score = final_score
-            result.metadata["rerank_boost"] = rerank_score
-            reranked.append(result)
+            new_metadata = {**result.metadata, "rerank_boost": rerank_score}
+            reranked.append(replace(result, score=final_score, metadata=new_metadata))
 
         # Sort by final score
         reranked.sort(key=lambda x: x.score, reverse=True)
