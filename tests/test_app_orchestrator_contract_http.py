@@ -2429,6 +2429,7 @@ def test_archive_gate_a_fixity_verify_submission_returns_job_envelope(
     monkeypatch.setattr(orchestrator_app, "_run_job", fake_run_job)
     hash_manifest = tmp_path / "hash_manifest.csv.gz"
     hash_manifest.write_bytes(b"fixture-manifest")
+    (tmp_path / "archive_root").mkdir(parents=True, exist_ok=True)
 
     response = client.post(
         "/v1/jobs",
@@ -2467,6 +2468,7 @@ def test_archive_gate_b_bag_validate_submission_returns_job_envelope(
     monkeypatch.setattr(orchestrator_app, "_run_job", fake_run_job)
     bag_dir = tmp_path / "bag"
     bag_dir.mkdir(parents=True, exist_ok=True)
+    (tmp_path / "archive_root").mkdir(parents=True, exist_ok=True)
 
     response = client.post(
         "/v1/jobs",
@@ -2505,6 +2507,7 @@ def test_archive_gate_b_dedup_plan_submission_returns_job_envelope(
     monkeypatch.setattr(orchestrator_app, "_run_job", fake_run_job)
     manifest_jsonl = tmp_path / "manifest.jsonl"
     manifest_jsonl.write_text('{"id":"asset-1"}\n', encoding="utf-8")
+    (tmp_path / "archive_root").mkdir(parents=True, exist_ok=True)
 
     response = client.post(
         "/v1/jobs",
@@ -2543,6 +2546,7 @@ def test_archive_gate_c_prov_export_submission_returns_job_envelope(
     monkeypatch.setattr(orchestrator_app, "_run_job", fake_run_job)
     manifest_jsonl = tmp_path / "manifest.jsonl"
     manifest_jsonl.write_text('{"id":"asset-1"}\n', encoding="utf-8")
+    (tmp_path / "archive_root").mkdir(parents=True, exist_ok=True)
 
     response = client.post(
         "/v1/jobs",
@@ -2581,6 +2585,7 @@ def test_archive_gate_c_stac_export_submission_returns_job_envelope(
     monkeypatch.setattr(orchestrator_app, "_run_job", fake_run_job)
     manifest_jsonl = tmp_path / "manifest.jsonl"
     manifest_jsonl.write_text('{"id":"asset-1"}\n', encoding="utf-8")
+    (tmp_path / "archive_root").mkdir(parents=True, exist_ok=True)
 
     response = client.post(
         "/v1/jobs",
@@ -2619,6 +2624,7 @@ def test_archive_gate_c_mets_export_submission_returns_job_envelope(
     monkeypatch.setattr(orchestrator_app, "_run_job", fake_run_job)
     manifest_jsonl = tmp_path / "manifest.jsonl"
     manifest_jsonl.write_text('{"id":"asset-1"}\n', encoding="utf-8")
+    (tmp_path / "archive_root").mkdir(parents=True, exist_ok=True)
 
     response = client.post(
         "/v1/jobs",
@@ -2682,7 +2688,14 @@ def test_archive_gate_c_prov_export_rejects_missing_manifest(client: TestClient)
 
 def test_v1_jobs_rejects_when_max_concurrent_jobs_reached(client: TestClient) -> None:
     previous_limit = orchestrator_app.MAX_CONCURRENT_JOBS
+    repo_root = orchestrator_app.REPO_ROOT
+    input_dir = repo_root / "input"
+    output_dir = repo_root / "output"
+    input_preexisted = input_dir.exists()
+    output_preexisted = output_dir.exists()
     try:
+        input_dir.mkdir(parents=True, exist_ok=True)
+        output_dir.mkdir(parents=True, exist_ok=True)
         orchestrator_app.MAX_CONCURRENT_JOBS = 1
         orchestrator_app.JOBS["job_busy"] = orchestrator_app.Job(
             id="job_busy",
@@ -2701,6 +2714,16 @@ def test_v1_jobs_rejects_when_max_concurrent_jobs_reached(client: TestClient) ->
     finally:
         orchestrator_app.MAX_CONCURRENT_JOBS = previous_limit
         orchestrator_app.JOBS.clear()
+        if not input_preexisted:
+            try:
+                input_dir.rmdir()
+            except OSError:
+                pass
+        if not output_preexisted:
+            try:
+                output_dir.rmdir()
+            except OSError:
+                pass
 
     assert response.status_code == 429
     assert body["error"]["code"] == "RATE_LIMITED"
@@ -2864,13 +2887,32 @@ def test_job_events_stream_emits_state_log_progress_artifact_done(client: TestCl
 
     monkeypatch.setattr(orchestrator_app, "_run_job", fake_run_job)
 
-    create = client.post(
-        "/v1/jobs",
-        json={
-            "pipeline": "lux-depth-v3",
-            "args": {"input_dir": "./input", "output_dir": "./output"},
-        },
-    )
+    repo_root = orchestrator_app.REPO_ROOT
+    input_dir = repo_root / "input"
+    output_dir = repo_root / "output"
+    created_input = not input_dir.exists()
+    created_output = not output_dir.exists()
+    input_dir.mkdir(parents=True, exist_ok=True)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        create = client.post(
+            "/v1/jobs",
+            json={
+                "pipeline": "lux-depth-v3",
+                "args": {"input_dir": "./input", "output_dir": "./output"},
+            },
+        )
+    finally:
+        if created_input:
+            try:
+                input_dir.rmdir()
+            except OSError:
+                pass
+        if created_output:
+            try:
+                output_dir.rmdir()
+            except OSError:
+                pass
     assert create.status_code == 200
     job_id = create.json()["data"]["id"]
 

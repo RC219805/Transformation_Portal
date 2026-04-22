@@ -286,29 +286,29 @@ Contract notes:
                     Keyboard: <span class="kbd">1</span> overview, <span class="kbd">2</span> build, <span class="kbd">3</span> operate, <span class="kbd">4</span> review, <span class="kbd">?</span> shortcuts.
                 </p>
             </div>
-            <div class="workspace-rail-links" role="tablist" aria-label="Console views">
-                <a class="workspace-link is-active" data-view-link="overview" data-ui="view-link" href="?view=overview" role="tab" aria-selected="true" aria-keyshortcuts="1">
+            <div class="workspace-rail-links" aria-label="Console views">
+                <a class="workspace-link is-active" data-view-link="overview" data-ui="view-link" href="?view=overview" aria-current="page" aria-keyshortcuts="1">
                     <span class="workspace-link-heading">
                         <span class="workspace-link-label">Overview</span>
                         <span class="workspace-link-shortcut" aria-hidden="true">1</span>
                     </span>
                     <span class="workspace-link-meta">Status, recent jobs, and next action.</span>
                 </a>
-                <a class="workspace-link" data-view-link="build" data-ui="view-link" href="?view=build" role="tab" aria-selected="false" aria-keyshortcuts="2">
+                <a class="workspace-link" data-view-link="build" data-ui="view-link" href="?view=build" aria-keyshortcuts="2">
                     <span class="workspace-link-heading">
                         <span class="workspace-link-label">Build</span>
                         <span class="workspace-link-shortcut" aria-hidden="true">2</span>
                     </span>
                     <span class="workspace-link-meta">Preview-backed dispatch flow.</span>
                 </a>
-                <a class="workspace-link" data-view-link="operate" data-ui="view-link" href="?view=operate" role="tab" aria-selected="false" aria-keyshortcuts="3">
+                <a class="workspace-link" data-view-link="operate" data-ui="view-link" href="?view=operate" aria-keyshortcuts="3">
                     <span class="workspace-link-heading">
                         <span class="workspace-link-label">Operate</span>
                         <span class="workspace-link-shortcut" aria-hidden="true">3</span>
                     </span>
                     <span class="workspace-link-meta">Queue, inspector, artifacts, and logs.</span>
                 </a>
-                <a class="workspace-link" data-view-link="review" data-ui="view-link" href="?view=review" role="tab" aria-selected="false" aria-keyshortcuts="4">
+                <a class="workspace-link" data-view-link="review" data-ui="view-link" href="?view=review" aria-keyshortcuts="4">
                     <span class="workspace-link-heading">
                         <span class="workspace-link-label">Review</span>
                         <span class="workspace-link-shortcut" aria-hidden="true">4</span>
@@ -637,7 +637,7 @@ Contract notes:
                             <div class="sm:col-span-3">
                                 <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="presetSelect">Preset</label>
                                 <select id="presetSelect" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2.5 text-[13px] font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors cursor-pointer">
-                                    <option value="premium">premium (Stable)</option>
+                                    <option value="premium" selected>premium (Stable)</option>
                                     <option value="default">default (Canary)</option>
                                     <option value="depth-anything-v3.1-research-m4">v3.1-m4 (Experimental)</option>
                                 </select>
@@ -645,16 +645,16 @@ Contract notes:
                             <div>
                                 <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="qualityTier">Quality Tier</label>
                                 <select id="qualityTier" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2.5 text-[13px] font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors cursor-pointer">
-                                    <option value="apex" selected>apex (Max)</option>
-                                    <option value="premium">premium</option>
+                                    <option value="apex">apex (Max)</option>
+                                    <option value="premium" selected>premium</option>
                                     <option value="standard">standard</option>
                                 </select>
                             </div>
                             <div>
                                 <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="depthDevice">Compute Device</label>
                                 <select id="depthDevice" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2.5 text-[13px] font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors cursor-pointer">
-                                    <option value="cpu">cpu</option>
-                                    <option value="cuda" selected>cuda</option>
+                                    <option value="cpu" selected>cpu</option>
+                                    <option value="cuda">cuda</option>
                                     <option value="mps">mps (macOS)</option>
                                 </select>
                             </div>
@@ -1612,7 +1612,7 @@ Contract notes:
                             </h2>
                             <p id="logMetaLabel" class="mt-1 text-[11px] text-slate-500 dark:text-slate-400">Select a job to stream or inspect its log output.</p>
                         </div>
-                        <button id="clearLogsBtn" class="text-[10px] uppercase font-bold text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors focus:outline-none">Clear</button>
+                        <button id="clearLogsBtn" type="button" class="text-[10px] uppercase font-bold text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors focus:outline-none">Clear</button>
                     </div>
                     <pre id="logPane" class="log-surface flex-1 p-6 text-[11px] font-mono leading-relaxed text-slate-300 overflow-y-auto custom-scrollbar whitespace-pre-wrap break-words"></pre>
                 </div>
@@ -1631,7 +1631,7 @@ Contract notes:
         <div class="w-full max-w-sm rounded-xl bg-white shadow-2xl border border-slate-200 dark:bg-slate-900 dark:border-slate-800 transform scale-95 opacity-0 transition-all duration-200" id="shortcutsPanel" role="dialog" aria-modal="true" aria-labelledby="shortcutsTitle">
             <div class="px-5 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
                 <h2 id="shortcutsTitle" class="text-sm font-semibold">Keyboard Shortcuts</h2>
-                <button id="closeShortcutsBtn" class="rounded-md px-2 py-1 text-slate-500 hover:bg-slate-100 hover:text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:hover:bg-slate-800 dark:hover:text-white transition-colors" aria-label="Close dialog">
+                <button id="closeShortcutsBtn" type="button" class="rounded-md px-2 py-1 text-slate-500 hover:bg-slate-100 hover:text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:hover:bg-slate-800 dark:hover:text-white transition-colors" aria-label="Close dialog">
                     <span class="text-lg leading-none">&times;</span>
                 </button>
             </div>
