@@ -197,11 +197,11 @@ class TestFastPreviewPreset:
         """Draft should use base model for speed."""
         assert FAST_PREVIEW.model_variant == ModelVariant.METRIC_BASE
 
-    def test_draft_heavy_smoothing(self):
-        """Draft should use heavy smoothing to hide artifacts."""
-        assert FAST_PREVIEW.pbr_normal_blur_radius >= 2
-        assert FAST_PREVIEW.pbr_roughness_blur_radius >= 5
-        assert FAST_PREVIEW.pbr_ao_blur_radius >= 8
+    def test_draft_blur_budget_stays_below_standard(self):
+        """Draft should keep a lighter blur budget than standard for speed."""
+        assert FAST_PREVIEW.pbr_normal_blur_radius <= STANDARD_QUALITY.pbr_normal_blur_radius
+        assert FAST_PREVIEW.pbr_roughness_blur_radius <= STANDARD_QUALITY.pbr_roughness_blur_radius
+        assert FAST_PREVIEW.pbr_ao_blur_radius < STANDARD_QUALITY.pbr_ao_blur_radius
 
     def test_draft_lower_strength_parameters(self):
         """Draft should have lower strength for speed."""
@@ -319,6 +319,18 @@ class TestPresetConsistency:
 class TestPresetPerformanceCharacteristics:
     """Test performance-related preset characteristics."""
 
+    @staticmethod
+    def _blur_work_score(config: EnhanceConfig) -> int:
+        return sum(
+            (2 * radius) + 1
+            for radius in (
+                config.pbr_normal_blur_radius,
+                config.pbr_roughness_blur_radius,
+                config.pbr_ao_blur_radius,
+            )
+            if radius > 0
+        )
+
     def test_draft_optimized_for_speed(self):
         """Draft should prioritize speed over quality."""
         # Smaller model
@@ -328,6 +340,7 @@ class TestPresetPerformanceCharacteristics:
         # Lower strength (less computation)
         assert FAST_PREVIEW.pbr_normal_strength < 1.0
         assert FAST_PREVIEW.pbr_roughness_strength < 1.0
+        assert self._blur_work_score(FAST_PREVIEW) < self._blur_work_score(STANDARD_QUALITY)
 
     def test_premium_optimized_for_quality(self):
         """Premium should prioritize quality over speed."""

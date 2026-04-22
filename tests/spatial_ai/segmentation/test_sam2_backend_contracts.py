@@ -162,6 +162,88 @@ def test_hf_loader_reuses_pipeline_components_when_available(
     assert backend._hf_processor is fake_processor
 
 
+def test_video_mode_uses_cached_repo_checkpoint_without_loading_image_pipeline(
+    segmentation_surface: tuple[Any, Any], tmp_path: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    SAM2Backend, SegmentationInput = segmentation_surface
+    cached_checkpoint = tmp_path / "sam2.1_hiera_large.pt"
+    cached_checkpoint.write_bytes(b"stub-checkpoint")
+    video_dir = tmp_path / "video_frames"
+    video_dir.mkdir()
+    (video_dir / "00000.jpg").write_bytes(b"frame")
+
+    hub_module = ModuleType("huggingface_hub")
+    hub_module.try_to_load_from_cache = lambda *, repo_id=None, filename=None, revision=None: str(cached_checkpoint)
+    hub_module.hf_hub_download = lambda **_kwargs: (_ for _ in ()).throw(
+        AssertionError("hf_hub_download should not run when cached checkpoint exists")
+    )
+    monkeypatch.setitem(sys.modules, "huggingface_hub", hub_module)
+
+    build_calls: list[dict[str, Any]] = []
+
+    class _FakeVideoPredictor:
+        def init_state(self, **kwargs: Any) -> dict[str, Any]:
+            assert kwargs["video_path"] == str(video_dir)
+            return {"num_frames": 1, "video_height": 8, "video_width": 8}
+
+        def add_new_points(self, **kwargs: Any) -> tuple[None, np.ndarray, np.ndarray]:
+            assert kwargs["frame_idx"] == 0
+            assert kwargs["obj_id"] == 1
+            return None, np.array([1], dtype=np.int32), np.ones((1, 8, 8), dtype=np.float32)
+
+        def propagate_in_video(self, inference_state: dict[str, Any]):
+            del inference_state
+            yield 0, np.array([1], dtype=np.int32), np.ones((1, 8, 8), dtype=np.float32)
+
+        def reset_state(self, inference_state: dict[str, Any]) -> None:
+            del inference_state
+
+    sam2_module = ModuleType("sam2")
+    build_module = ModuleType("sam2.build_sam")
+
+    def _build_video_predictor(*, config_file: str, ckpt_path: str, device: str) -> _FakeVideoPredictor:
+        build_calls.append({"config_file": config_file, "ckpt_path": ckpt_path, "device": device})
+        return _FakeVideoPredictor()
+
+    build_module.build_sam2_video_predictor = _build_video_predictor
+    sam2_module.build_sam = build_module
+    monkeypatch.setitem(sys.modules, "sam2", sam2_module)
+    monkeypatch.setitem(sys.modules, "sam2.build_sam", build_module)
+
+    backend = SAM2Backend(
+        model_size="large",
+        device="cpu",
+        repo_id=SAM2_REPO_ID,
+        revision=PINNED_REVISION,
+        prefer_hf_pipeline=True,
+    )
+    monkeypatch.setattr(
+        backend,
+        "_load_model",
+        lambda: (_ for _ in ()).throw(AssertionError("_load_model should be skipped for video mode")),
+    )
+
+    seg_input = SegmentationInput(
+        image=None,
+        gamma=1.0,
+        mode="video",
+        video_path=str(video_dir),
+        prompts={"frame_idx": 0, "object_id": 1, "points": [[2, 3]], "labels": [1]},
+    )
+
+    result = backend.segment(seg_input)
+
+    assert build_calls == [
+        {
+            "config_file": backend.MODEL_CONFIGS["large"],
+            "ckpt_path": str(cached_checkpoint),
+            "device": "cpu",
+        }
+    ]
+    assert result.masks.shape == (1, 8, 8)
+    assert result.temporal_ids.tolist() == [1]
+
+
 def test_clone_for_device_preserves_loading_contract(segmentation_surface: tuple[Any, Any], checkpoint_path: str) -> None:
     SAM2Backend, _ = segmentation_surface
     backend = SAM2Backend(

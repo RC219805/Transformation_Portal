@@ -3,7 +3,7 @@
 This module wraps Meta's Segment Anything Model 2 (SAM2) for:
 - Automatic mask generation (full image)
 - Prompted segmentation (points/bboxes)
-- Video temporal tracking (stub for future)
+- Video temporal tracking
 
 Architecture:
 - Direct checkpoint loading (not HuggingFace Hub)
@@ -211,6 +211,7 @@ class SAM2Backend:
         self._hf_mask_generator: Any = None
         self._hf_model: Any = None
         self._hf_processor: Any = None
+        self._hf_video_checkpoint_path: Optional[Path] = None
 
         # Material classification (optional)
         self.enable_material_classification = enable_material_classification
@@ -371,12 +372,12 @@ class SAM2Backend:
         """
         # Contract validation already done in SegmentationInput.__post_init__
 
-        # Lazy load model
-        self._load_model()
-
         # Execute segmentation based on mode
         if seg_input.mode == "video":
             return self._segment_video(seg_input)
+
+        # Lazy load model
+        self._load_model()
 
         if self.tiling.enabled and seg_input.mode in self.tiling.apply_to_modes:
             if self.tiled_engine is None:
@@ -782,6 +783,73 @@ class SAM2Backend:
         self._hf_model = hf_model
         self._hf_processor = hf_processor
 
+    @staticmethod
+    def _hf_offline_mode_enabled() -> bool:
+        """Return True when HuggingFace/Transformers offline flags are enabled."""
+        return os.getenv("HF_HUB_OFFLINE") == "1" or os.getenv("TRANSFORMERS_OFFLINE") == "1"
+
+    def _iter_hf_checkpoint_candidates(self) -> tuple[str, ...]:
+        """Return plausible SAM2 checkpoint filenames for pinned repo-backed loads."""
+        default_name = self.DEFAULT_CHECKPOINTS[self.model_size]
+        candidates = [default_name]
+        if default_name.startswith("sam2_"):
+            candidates.append(default_name.replace("sam2_", "sam2.1_", 1))
+        return tuple(dict.fromkeys(candidates))
+
+    def _resolve_hf_video_checkpoint_path(self) -> Path:
+        """Resolve a local checkpoint file for the official SAM2 video predictor path."""
+        if self._hf_video_checkpoint_path is not None and self._hf_video_checkpoint_path.is_file():
+            return self._hf_video_checkpoint_path
+        if not self.repo_id or not self.revision:
+            raise RuntimeError("Pinned repo_id and revision are required for SAM2 video checkpoint resolution")
+
+        try:
+            from huggingface_hub import hf_hub_download, try_to_load_from_cache
+        except ImportError as exc:
+            raise RuntimeError(
+                "repo_id-based SAM2 video tracking requires huggingface_hub to resolve the pinned checkpoint"
+            ) from exc
+
+        candidates = self._iter_hf_checkpoint_candidates()
+        failures: list[str] = []
+        offline = self._hf_offline_mode_enabled()
+
+        for filename in candidates:
+            cached_path: Any = None
+            try:
+                cached_path = try_to_load_from_cache(repo_id=self.repo_id, filename=filename, revision=self.revision)
+            except TypeError:
+                cached_path = try_to_load_from_cache(repo_id=self.repo_id, filename=filename)
+            except (OSError, ValueError) as exc:
+                failures.append(f"{filename}: cache lookup failed ({exc})")
+                cached_path = None
+
+            if isinstance(cached_path, str) and Path(cached_path).is_file():
+                self._hf_video_checkpoint_path = Path(cached_path)
+                return self._hf_video_checkpoint_path
+
+            try:
+                resolved = hf_hub_download(
+                    repo_id=self.repo_id,
+                    filename=filename,
+                    revision=self.revision,
+                    local_files_only=offline,
+                )
+            except Exception as exc:  # pragma: no cover - exercised via focused unit stubs
+                failures.append(f"{filename}: {exc}")
+                continue
+
+            resolved_path = Path(resolved)
+            if resolved_path.is_file():
+                self._hf_video_checkpoint_path = resolved_path
+                return self._hf_video_checkpoint_path
+
+        failure_summary = "; ".join(failures) if failures else "no matching checkpoint candidates found"
+        raise RuntimeError(
+            f"Unable to resolve SAM2 video checkpoint for repo_id={self.repo_id} revision={self.revision}. "
+            f"Tried {', '.join(candidates)}. {failure_summary}"
+        )
+
     def _extract_sam2_predictions(self, output: Any) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """Extract masks plus IoU/stability scores from a SAM2 output object.
 
@@ -1174,11 +1242,6 @@ class SAM2Backend:
             RuntimeError: If video tracking fails.
             ImportError: If SAM2 video components missing.
         """
-        if self._hf_model is not None or self._hf_mask_generator is not None:
-            raise NotImplementedError(
-                "Hugging Face repo_id-based SAM2 loading currently supports auto / points / bbox. "
-                "Use the official checkpoint path for video tracking."
-            )
         try:
             from sam2.build_sam import build_sam2_video_predictor
         except ImportError as e:
@@ -1194,10 +1257,19 @@ class SAM2Backend:
         if not hasattr(self, "_video_predictor") or self._video_predictor is None:
             logger.info(f"Loading SAM2 video predictor: {self.model_size} on {self.device}")
             config_name = self.MODEL_CONFIGS[self.model_size]
+            checkpoint_path = (
+                self._resolve_hf_video_checkpoint_path()
+                if self.prefer_hf_pipeline and self.checkpoint_path is None
+                else self.checkpoint_path
+            )
+            if checkpoint_path is None:
+                raise RuntimeError(
+                    "SAM2 video tracking requires either a trusted checkpoint_path or a pinned repo_id/revision"
+                )
 
             self._video_predictor = build_sam2_video_predictor(
                 config_file=config_name,
-                ckpt_path=str(self.checkpoint_path),
+                ckpt_path=str(checkpoint_path),
                 device=self.device,
             )
 

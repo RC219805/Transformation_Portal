@@ -153,6 +153,15 @@ class TestTodoDetectionInPythonFiles:
         assert "HACK" in types
 
 
+class TestExcludedPaths:
+    """Tests for generated/ignored path exclusions."""
+
+    def test_next_build_outputs_are_excluded(self, scanner_module: ModuleType) -> None:
+        assert scanner_module._is_excluded_path(Path("web/secure-landing/.next/dev/server/chunks/a.js")) is True
+        assert scanner_module._is_excluded_path(Path("web/secure-landing/.next-build-verify/server/a.js")) is True
+        assert scanner_module._is_excluded_path(Path("web/secure-landing/.next-smoke-123/server/a.js")) is True
+
+
 # ============================================================================
 # TEST: Abstract NotImplementedError Patterns
 # ============================================================================
