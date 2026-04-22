@@ -1444,7 +1444,7 @@ class SpatialAIPipeline:
             # This would require multi-view input or camera pose estimation
             raise NotImplementedError(
                 "3D reconstruction requires multi-view input. "
-                "Single-view reconstruction is not yet implemented. "
+                "Single-view reconstruction is not yet implemented. (TODO_INVENTORY.md) "
                 "Use SceneBuilder directly with multiple views for 3DGS."
             )
 

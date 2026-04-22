@@ -17,7 +17,26 @@ from typer.testing import CliRunner
 
 from transformation_portal.lux_depth_v3.pbr_cli import app
 
+# pylint: disable=redefined-outer-name
+
 pytestmark = [pytest.mark.stress, pytest.mark.slow]
+
+
+def _measure_best_elapsed(runner: CliRunner, args: list[str], repeats: int = 2) -> tuple[float, object]:
+    """Return the fastest successful CLI run to reduce scheduler noise."""
+    best_elapsed: float | None = None
+    best_result = None
+    for _ in range(repeats):
+        start = time.perf_counter()
+        result = runner.invoke(app, args)
+        elapsed = time.perf_counter() - start
+        assert result.exit_code == 0, result.stdout
+        if best_elapsed is None or elapsed < best_elapsed:
+            best_elapsed = elapsed
+            best_result = result
+    assert best_elapsed is not None
+    assert best_result is not None
+    return best_elapsed, best_result
 
 
 @pytest.fixture
@@ -94,7 +113,7 @@ class TestLargeBatchProcessing:
 
         # Calculate throughput
         throughput = num_files / elapsed
-        print(f"\nStress test performance:")
+        print("\nStress test performance:")
         print(f"  Total time: {elapsed:.1f}s")
         print(f"  Throughput: {throughput:.2f} images/sec")
         print(f"  Avg time per image: {elapsed/num_files:.2f}s")
@@ -147,7 +166,7 @@ class TestLargeBatchProcessing:
         # Memory growth should be reasonable
         # Allow up to 2GB growth for 20x 2048x2048 images
         max_growth_mb = 2000
-        print(f"\nMemory usage:")
+        print("\nMemory usage:")
         print(f"  Before: {mem_before:.1f} MB")
         print(f"  After:  {mem_after:.1f} MB")
         print(f"  Delta:  {mem_delta:.1f} MB")
@@ -281,9 +300,8 @@ class TestPerformanceBenchmarks:
         runner = CliRunner()
 
         # Measure time for standard preset
-        start = time.time()
-        result = runner.invoke(
-            app,
+        standard_time, _ = _measure_best_elapsed(
+            runner,
             [
                 "generate",
                 "--depth",
@@ -294,15 +312,11 @@ class TestPerformanceBenchmarks:
                 str(output_dir),
             ],
         )
-        standard_time = time.time() - start
-
-        assert result.exit_code == 0
 
         # Measure time for draft preset (should be faster)
         output_dir2 = tmp_path / "output2"
-        start = time.time()
-        result = runner.invoke(
-            app,
+        draft_time, _ = _measure_best_elapsed(
+            runner,
             [
                 "generate",
                 "--depth",
@@ -313,19 +327,13 @@ class TestPerformanceBenchmarks:
                 str(output_dir2),
             ],
         )
-        draft_time = time.time() - start
 
-        assert result.exit_code == 0
-
-        print(f"\nPerformance baseline (1024x1024):")
+        print("\nPerformance baseline (1024x1024):")
         print(f"  Standard preset: {standard_time:.3f}s")
         print(f"  Draft preset:    {draft_time:.3f}s")
-
-        # NOTE: Currently draft preset is actually slower than standard
-        # This may indicate a performance regression or incorrect preset configuration
-        # For now, we just verify both presets complete successfully
-        # and track timing for regression detection
-        # TODO: Investigate why draft is slower than expected (expected: draft < standard)
+        assert (
+            draft_time <= standard_time * 1.10
+        ), f"Draft preset regressed beyond tolerance: draft={draft_time:.3f}s standard={standard_time:.3f}s"
 
     def test_throughput_by_preset(self, tmp_path):
         """Compare throughput across different presets."""
@@ -344,10 +352,8 @@ class TestPerformanceBenchmarks:
         times = {}
         for preset in presets:
             output_dir = tmp_path / f"output_{preset}"
-
-            start = time.time()
-            result = runner.invoke(
-                app,
+            elapsed, _ = _measure_best_elapsed(
+                runner,
                 [
                     "generate",
                     "--depth-dir",
@@ -358,23 +364,16 @@ class TestPerformanceBenchmarks:
                     str(output_dir),
                 ],
             )
-            elapsed = time.time() - start
-
-            assert result.exit_code == 0
             times[preset] = elapsed
 
         print(f"\nThroughput by preset ({num_files} images):")
         for preset, elapsed in times.items():
             throughput = num_files / elapsed
             print(f"  {preset:8s}: {elapsed:.2f}s ({throughput:.1f} img/s)")
-
-        # NOTE: Current behavior shows premium is fastest, draft is slowest
-        # This is opposite of expected behavior (draft should be fastest for throughput)
-        # For now, we just verify all presets complete and report timings
-        # TODO: Investigate preset performance ordering regression
-        #
-        # Expected: draft < standard < premium (in time)
-        # Actual: premium < standard < draft (in time)
+        assert times["draft"] <= times["standard"] * 1.10, (
+            f"Draft batch throughput regressed beyond tolerance: draft={times['draft']:.3f}s "
+            f"standard={times['standard']:.3f}s"
+        )
 
 
 @pytest.mark.stress

@@ -78,15 +78,16 @@ FAST_PREVIEW = EnhanceConfig(
     # PBR Generation
     generate_pbr=True,
     save_float_depth=False,  # Speed: use PNG depth (lower precision)
-    # Normal Map - Reduced detail with heavy smoothing
+    # Normal Map - Skip pre-blur to keep preview generation fast
+    # while lower strength limits visual noise.
     pbr_normal_strength=0.8,
-    pbr_normal_blur_radius=2,
-    # Roughness Map - Simplified detail
+    pbr_normal_blur_radius=0,
+    # Roughness Map - Light smoothing for fast preview reads
     pbr_roughness_strength=0.7,
-    pbr_roughness_blur_radius=5,
-    # Ambient Occlusion - Subtle, wide blur
+    pbr_roughness_blur_radius=2,
+    # Ambient Occlusion - Subtle shadows with a bounded blur budget
     pbr_ao_strength=0.8,
-    pbr_ao_blur_radius=8,
+    pbr_ao_blur_radius=4,
     pbr_ao_bias=0.50,
     # Depth Model - Base for speed
     model_variant=ModelVariant.METRIC_BASE,

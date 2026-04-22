@@ -52,9 +52,7 @@ PYTHON_SCAN_ROOTS = (
 JS_TS_SCAN_ROOT = PROJECT_ROOT / "web"
 
 # TODO patterns to detect
-TODO_PATTERNS = (
-    re.compile(r"#\s*(TODO|FIXME|HACK|XXX)\s*:?\s*(.*)$", re.IGNORECASE),
-)
+TODO_PATTERNS = (re.compile(r"#\s*(TODO|FIXME|HACK|XXX)\s*:?\s*(.*)$", re.IGNORECASE),)
 
 # JS/TS TODO patterns (single-line // comments and block /** */ comments)
 JS_TODO_PATTERNS = (
@@ -65,25 +63,27 @@ JS_TODO_PATTERNS = (
 # Governance reference patterns - TODOs with proper tracking
 GOVERNANCE_REF_PATTERNS = (
     re.compile(r"\(Phase\s*\d+[A-Za-z]?\)", re.IGNORECASE),  # (Phase 3), (Phase 4A)
-    re.compile(r"\(ADR-\d+\)", re.IGNORECASE),              # (ADR-044)
-    re.compile(r"\(#\d+\)"),                                 # (#1234) - issue ref
-    re.compile(r"\(@[\w-]+\)"),                             # (@specialist) - owner
+    re.compile(r"\(ADR-\d+\)", re.IGNORECASE),  # (ADR-044)
+    re.compile(r"\(#\d+\)"),  # (#1234) - issue ref
+    re.compile(r"\(@[\w-]+\)"),  # (@specialist) - owner
     re.compile(r"\([A-Za-z]+_INVENTORY\.md(?:\s+§[\w.-]+)?\)", re.IGNORECASE),  # (TODO_INVENTORY.md), (TODO_INVENTORY.md §3.1)
 )
 
 # Excluded patterns (false positives in security code)
-EXCLUDED_PATTERNS = (
-    re.compile(r"TODO_REPLACE", re.IGNORECASE),  # Security scanner pattern
-)
+EXCLUDED_PATTERNS = (re.compile(r"TODO_REPLACE", re.IGNORECASE),)  # Security scanner pattern
 
 # Self-exclude: this scanner file contains TODO examples in docs
 SELF_EXCLUDE_FILE = "scripts/validation/scan_todo_inventory.py"
 
 # Excluded file paths (relative to project root)
 EXCLUDED_PATH_PATTERNS = (
-    "docs/",                    # Historical documentation markers
+    "docs/",  # Historical documentation markers
     "__pycache__/",
     ".git/",
+    ".next/",
+    ".next-build-verify/",
+    ".next-smoke-",
+    ".next-codex-",
     "node_modules/",
     ".venv/",
     ".runtime/",
@@ -324,9 +324,7 @@ def _extract_comment_todos(source: str, path: Path) -> tuple[list[TodoItem], lis
                     # Include context for multi-line messages (next line if continuation)
                     if lineno < len(lines):
                         next_line = lines[lineno].strip()
-                        if next_line.startswith("#") and not any(
-                            p.search(next_line) for p in TODO_PATTERNS
-                        ):
+                        if next_line.startswith("#") and not any(p.search(next_line) for p in TODO_PATTERNS):
                             continuation = next_line.lstrip("#").strip()
                             if continuation:
                                 message = f"{message} {continuation}"
@@ -493,18 +491,14 @@ def _format_human_readable(result: ScanResult, governance_mode: bool) -> str:
             lines.append("-" * 70)
             ungoverned = [item for item in result.items if not item.has_governance_ref]
             for item in ungoverned:
-                lines.append(
-                    f"  {item.path}:{item.lineno} [{item.todo_type.value}] {item.message[:60]}"
-                )
+                lines.append(f"  {item.path}:{item.lineno} [{item.todo_type.value}] {item.message[:60]}")
         else:
             lines.append("-" * 70)
             lines.append("All TODOs:")
             lines.append("-" * 70)
             for item in result.items:
                 gov_marker = "✓" if item.has_governance_ref else "⚠"
-                lines.append(
-                    f"  {gov_marker} {item.path}:{item.lineno} [{item.todo_type.value}] {item.message[:60]}"
-                )
+                lines.append(f"  {gov_marker} {item.path}:{item.lineno} [{item.todo_type.value}] {item.message[:60]}")
 
     # Errors
     if result.errors:
@@ -590,17 +584,13 @@ def main() -> int:
     # Exit 2: scan errors in governance mode (fail closed)
     if args.check_governance and result.errors:
         if not args.json:
-            print(
-                f"❌ Governance check failed: {len(result.errors)} scan error(s) encountered (fail closed)"
-            )
+            print(f"❌ Governance check failed: {len(result.errors)} scan error(s) encountered (fail closed)")
         return 2
 
     # Exit 1: ungoverned TODOs in governance mode
     if args.check_governance and result.ungoverned_count > 0:
         if not args.json:
-            print(
-                f"❌ Governance check failed: {result.ungoverned_count} ungoverned TODO(s) found"
-            )
+            print(f"❌ Governance check failed: {result.ungoverned_count} ungoverned TODO(s) found")
         return 1
 
     if not args.json:

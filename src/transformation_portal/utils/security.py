@@ -416,7 +416,9 @@ def timeout(seconds: int):
     """
     if not hasattr(signal, "SIGALRM"):
         raise NotImplementedError(
-            "timeout() requires signal.SIGALRM (Unix-only). " "Use multiprocessing or threading-based timeout on Windows."
+            "timeout() requires signal.SIGALRM (Unix-only). "
+            "(TODO_INVENTORY.md §2.4) "
+            "Use multiprocessing or threading-based timeout on Windows."
         )
 
     def timeout_handler(signum, frame):
