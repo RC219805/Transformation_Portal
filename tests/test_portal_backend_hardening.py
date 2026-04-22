@@ -292,8 +292,10 @@ def test_artifact_endpoint_attaches_non_previewable(client: TestClient, tmp_path
 @pytest.mark.parametrize(
     "line,expected",
     [
-        ("api_key=sk-abcdef123", "api_key=<redacted>"),
-        ("OPENAI_API_KEY=sk-abcdef123", "OPENAI_API_KEY=<redacted>"),
+        # Keep these fixtures non-secret-shaped: CI runs gitleaks on pushed
+        # diffs and on clean checked-out source trees.
+        ("api_key=query-secret", "api_key=<redacted>"),
+        ("OPENAI_API_KEY=query-secret", "OPENAI_API_KEY=<redacted>"),
         ("password: hunter2", "password: <redacted>"),
         ("token = abcdef", "token = <redacted>"),
         ("Authorization: Bearer abcdef.token", "Authorization: <redacted>"),
