@@ -486,7 +486,8 @@ def test_portal_phase1_accessibility_tokens_align_focus_and_target_size() -> Non
     css_content = _portal_css_content()
     shared_tokens = orchestrator_app.PORTAL_ASSET_PATHS["shared-ui-tokens.css"].read_text(encoding="utf-8")
 
-    assert "--ux-focus-ring:" in css_content
+    assert "--ux-focus-ring:" in shared_tokens
+    assert "--ux-focus-shadow:" in shared_tokens
     assert re.search(r"--ux-target-min-size:\s*44px;", shared_tokens)
     assert "font-size: var(--ux-body-size);" in css_content
     assert css_content.count("--shell-border: var(--ux-panel-border);") >= 2
@@ -500,11 +501,17 @@ def test_portal_html_externalizes_direct_debug_assets_without_third_party_hosts(
     css_content = _portal_css_content()
     bundle = orchestrator_app._get_portal_asset_bundle()
 
+    assert (
+        f'<link rel="preload" as="font" type="font/woff2" crossorigin href="{bundle.urls["fonts/portal-sans.woff2"]}" />'
+        in html_content
+    )
     assert f'href="{bundle.urls["portal.css"]}"' in html_content
     assert f'src="{bundle.urls["portal.js"]}"' in html_content
     assert f'data-review-surface-js-url="{bundle.urls["portal-review.js"]}"' in html_content
     assert f'data-review-surface-css-url="{bundle.urls["portal-review.css"]}"' in html_content
     assert bundle.urls["shared-ui-tokens.css"] in css_content
+    assert '<meta name="theme-color" content="#F4F7FB" media="(prefers-color-scheme: light)" />' in html_content
+    assert '<meta name="theme-color" content="#020617" media="(prefers-color-scheme: dark)" />' in html_content
     assert "<style>" not in html_content
     assert "<script>" not in html_content
     assert "https://cdn.tailwindcss.com" not in html_content
@@ -512,6 +519,13 @@ def test_portal_html_externalizes_direct_debug_assets_without_third_party_hosts(
     assert "https://fonts.gstatic.com" not in html_content
     assert "tailwind.config" not in css_content
     assert "Phase 1 local utility snapshot replacing Tailwind CDN for portal.html" in css_content
+
+
+def test_portal_html_signature_tracks_preloaded_font_fingerprint() -> None:
+    signature = orchestrator_app._portal_html_signature()
+    font_fingerprint = orchestrator_app._get_portal_direct_asset_fingerprint("fonts/portal-sans.woff2")
+
+    assert ("fonts/portal-sans.woff2", font_fingerprint) in signature
 
 
 def test_portal_runtime_helpers_read_served_js_assets_from_rendered_html() -> None:
@@ -1308,18 +1322,34 @@ def test_portal_artifact_viewer_modal_is_feature_flagged_and_keyboard_complete()
     assert "artifact_viewer_fallback" in fallback_event_body
     assert 'surface: "artifact_review"' in fallback_event_body
     assert "fallback_reason: fallbackReason" in fallback_event_body
+    assert "const isRetryable = Boolean(fallbackOptions?.retryable && url);" in show_fallback_body
+    assert "_renderArtifactViewerRetry(isRetryable ? { context, artifactName } : null);" in show_fallback_body
     assert "_emitArtifactViewerFallback(context, fallbackReason);" in show_fallback_body
     assert 'els.artifactViewerModal.classList.toggle("hidden", !shouldShow);' in render_body
+    assert "_closeArtifactViewer(false);" in render_body
     assert "els.artifactViewerImage.style.transform = `scale(${zoomPercent / 100})`;" in render_body
+    assert "els.artifactViewerImage.onerror = null;" in render_body
+    assert "_showArtifactViewerFallback(activeContext, artifactName, { retryable: true });" in render_body
     assert "_showArtifactViewerFallback(context, artifactName);" in render_body
+    assert "const ARTIFACT_VIEWER_FETCH_TIMEOUT_MS = 15000;" in review_content
     assert (
         'headers: _buildAuthHeaders({ Accept: artifactContentType(context.artifact) || "*/*" }, "GET"),' in preview_load_body
     )
+    assert '_abortArtifactViewerPreview("superseded");' in preview_load_body
+    assert '_abortArtifactViewerPreview("timeout", controller);' in preview_load_body
+    assert 'const abortReason = err?.name === "AbortError" ? _artifactViewerAbortReason(controller) : "";' in preview_load_body
+    assert 'const retryable = err?.name !== "AbortError" || abortReason === "timeout";' in preview_load_body
     assert "URL.createObjectURL(await response.blob())" in preview_load_body
+    assert "_showArtifactViewerFallback(context, artifactName, { retryable });" in preview_load_body
     assert "els.artifactViewerCopyFingerprintBtn.dataset.fingerprint = fingerprint;" in render_body
     assert "_setArtifactViewerStatus(" in render_body
     assert "_rememberArtifactSelection(context.job.id, nextPath);" in navigate_body
     assert "renderReviewSurfaces();" in navigate_body
+    assert '_abortArtifactViewerPreview("close");' in close_body
+    assert "_setArtifactViewerBackgroundInert(false);" in close_body
+    assert "_renderArtifactViewerRetry(null);" in close_body
+    assert "_setArtifactViewerBackgroundInert(true);" in open_body
+    assert 'document.addEventListener("keydown", artifactViewerKeydownHandler, true);' in open_body
     assert (
         'if (e.key === "Escape" && els.artifactViewerModal && !els.artifactViewerModal.classList.contains("hidden"))'
         in content
@@ -1527,6 +1557,7 @@ def test_portal_theme_control_cycles_system_dark_light_preferences() -> None:
     content = _portal_bundle_content()
     next_body = _extract_js_function_body(content, "_nextThemePreference")
     sync_body = _extract_js_function_body(content, "_syncThemeButton")
+    apply_body = _extract_js_function_body(content, "applyThemePreference")
 
     assert "Theme: System" in content
     assert "Theme preference: system. Click to switch to dark." in content
@@ -1536,6 +1567,8 @@ def test_portal_theme_control_cycles_system_dark_light_preferences() -> None:
     assert "applyThemePreference(_nextThemePreference(state.themePreference));" in content
     assert "Theme: System (${effectiveLabel})" in sync_body
     assert "Theme preference: ${preference}. Click to switch to ${nextPreference}." in sync_body
+    assert "document.documentElement.classList.toggle('dark', mode === 'dark');" in apply_body
+    assert "document.documentElement.classList.toggle('light', mode === 'light');" in apply_body
 
 
 def test_portal_theme_system_listener_only_reacts_while_following_system() -> None:

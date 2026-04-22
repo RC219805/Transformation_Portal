@@ -264,6 +264,7 @@ PORTAL_HTML_TEMPLATE_TOKENS = {
     "__PORTAL_REVIEW_CSS_URL__": "portal-review.css",
     "__PORTAL_BRAND_LIGHT_URL__": "brand/dna-symbol-light.svg",
     "__PORTAL_BRAND_DARK_URL__": "brand/dna-symbol-dark.svg",
+    "__PORTAL_FONT_SANS_URL__": "fonts/portal-sans.woff2",
 }
 
 
@@ -399,6 +400,7 @@ def _portal_html_signature() -> Tuple[object, ...]:
                 "portal-review.css",
                 "brand/dna-symbol-dark.svg",
                 "brand/dna-symbol-light.svg",
+                "fonts/portal-sans.woff2",
             )
         ),
     )

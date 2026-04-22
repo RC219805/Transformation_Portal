@@ -3,7 +3,10 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#F4F7FB" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#020617" media="(prefers-color-scheme: dark)" />
     <title>Transformation Portal — Orchestrator</title>
+    <link rel="preload" as="font" type="font/woff2" crossorigin href="__PORTAL_FONT_SANS_URL__" />
     <link rel="stylesheet" href="__PORTAL_CSS_URL__" />
 </head>
 <!--
@@ -55,13 +58,18 @@ Contract notes:
                         class="portal-brand-asset portal-brand-asset--light"
                         src="__PORTAL_BRAND_LIGHT_URL__"
                         alt=""
+                        width="48"
+                        height="48"
                         decoding="async"
+                        fetchpriority="high"
                         aria-hidden="true"
                     />
                     <img
                         class="portal-brand-asset portal-brand-asset--dark"
                         src="__PORTAL_BRAND_DARK_URL__"
                         alt=""
+                        width="48"
+                        height="48"
                         decoding="async"
                         aria-hidden="true"
                     />
