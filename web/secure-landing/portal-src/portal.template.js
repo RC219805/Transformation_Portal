@@ -10433,6 +10433,7 @@ function applyThemePreference(preference, options) {
     state.themePreference = normalizedPreference;
     state.theme = mode;
     document.documentElement.classList.toggle('dark', mode === 'dark');
+    document.documentElement.classList.toggle('light', mode === 'light');
 
     if (persist) {
         localStorage.setItem(THEME_STORAGE_VERSION_KEY, THEME_STORAGE_VERSION);

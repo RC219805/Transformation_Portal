@@ -400,6 +400,7 @@ def _portal_html_signature() -> Tuple[object, ...]:
                 "portal-review.css",
                 "brand/dna-symbol-dark.svg",
                 "brand/dna-symbol-light.svg",
+                "fonts/portal-sans.woff2",
             )
         ),
     )

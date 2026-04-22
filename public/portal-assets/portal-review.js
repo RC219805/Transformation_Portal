@@ -53,9 +53,7 @@ function createDeferredReviewSurfaceApi(host) {
   let artifactViewerFallbackEventKey = "";
   let artifactViewerAbortController = null;
   let artifactViewerKeydownHandler = null;
-  let artifactViewerLastLoadContext = null;
-  let artifactViewerLastLoadName = "";
-  const ARTIFACT_VIEWER_FETCH_TIMEOUT_MS = 15000;
+  const ARTIFACT_VIEWER_FETCH_TIMEOUT_MS = 15e3;
   function _artifactViewerEventMetadata(job, artifact, extra = {}) {
     const metadata = {
       job_id: _normalizeSelectedJobId(job?.id),
@@ -96,12 +94,32 @@ function createDeferredReviewSurfaceApi(host) {
     artifactViewerPreviewSource = "";
     _revokeArtifactViewerObjectUrl();
   }
+  function _abortArtifactViewerPreview(reason = "superseded", controller = artifactViewerAbortController) {
+    if (!controller) return;
+    controller.__tpAbortReason = String(reason || "superseded");
+    try {
+      controller.abort();
+    } catch (_abortErr) {
+    }
+    if (artifactViewerAbortController === controller) {
+      artifactViewerAbortController = null;
+    }
+  }
+  function _artifactViewerAbortReason(controller) {
+    if (!controller) return "";
+    if (controller.__tpAbortReason) {
+      return String(controller.__tpAbortReason);
+    }
+    const signalReason = controller.signal?.reason;
+    if (signalReason instanceof Error) {
+      return signalReason.name || signalReason.message || "";
+    }
+    return signalReason ? String(signalReason) : "";
+  }
   function _showArtifactViewerFallback(context, artifactName, fallbackOptions) {
     const url = context?.url || "";
     const isRetryable = Boolean(fallbackOptions?.retryable && url);
-    const fallbackReason = isRetryable
-      ? "inline_preview_failed"
-      : url ? "inline_preview_unavailable" : "asset_url_unavailable";
+    const fallbackReason = isRetryable ? "inline_preview_failed" : url ? "inline_preview_unavailable" : "asset_url_unavailable";
     if (els.artifactViewerImage) {
       els.artifactViewerImage.classList.add("hidden");
       els.artifactViewerImage.removeAttribute("src");
@@ -111,24 +129,14 @@ function createDeferredReviewSurfaceApi(host) {
       els.artifactViewerFallback.classList.remove("hidden");
     }
     if (els.artifactViewerFallbackTitle) {
-      els.artifactViewerFallbackTitle.textContent = isRetryable
-        ? "Inline preview failed to load"
-        : url ? "Inline preview unavailable" : "Artifact URL unavailable";
+      els.artifactViewerFallbackTitle.textContent = isRetryable ? "Inline preview failed to load" : url ? "Inline preview unavailable" : "Artifact URL unavailable";
     }
     if (els.artifactViewerFallbackDetail) {
-      els.artifactViewerFallbackDetail.textContent = isRetryable
-        ? "The managed asset request did not complete. Retry the preview or continue reviewing the retained metadata and fingerprints."
-        : url
-          ? "This artifact stays reviewable through retained metadata, integrity fingerprints, and the managed raw asset link."
-          : "The browser cannot resolve a managed asset URL for this artifact, so review stays pinned to the retained metadata above.";
+      els.artifactViewerFallbackDetail.textContent = isRetryable ? "The managed asset request did not complete. Retry the preview or continue reviewing the retained metadata and fingerprints." : url ? "This artifact stays reviewable through retained metadata, integrity fingerprints, and the managed raw asset link." : "The browser cannot resolve a managed asset URL for this artifact, so review stays pinned to the retained metadata above.";
     }
     _renderArtifactViewerRetry(isRetryable ? { context, artifactName } : null);
     _setArtifactViewerStatus(
-      isRetryable
-        ? `${artifactName} inline preview failed to load; retry available.`
-        : url
-          ? `${artifactName} is open with metadata fallback because an inline preview is unavailable.`
-          : `${artifactName} is open with metadata fallback because the managed asset URL is unavailable.`
+      isRetryable ? `${artifactName} inline preview failed to load; retry available.` : url ? `${artifactName} is open with metadata fallback because an inline preview is unavailable.` : `${artifactName} is open with metadata fallback because the managed asset URL is unavailable.`
     );
     _emitArtifactViewerFallback(context, fallbackReason);
   }
@@ -149,7 +157,7 @@ function createDeferredReviewSurfaceApi(host) {
     }
     button.onclick = () => {
       button.disabled = true;
-      button.textContent = "Retrying…";
+      button.textContent = "Retrying\u2026";
       Promise.resolve(_loadArtifactViewerInlinePreview(target.context, target.artifactName)).finally(() => {
         button.disabled = false;
         button.textContent = "Retry preview";
@@ -161,6 +169,7 @@ function createDeferredReviewSurfaceApi(host) {
     els.artifactViewerImage.src = src;
     els.artifactViewerImage.classList.remove("hidden");
     els.artifactViewerImage.style.transform = `scale(${zoomPercent / 100})`;
+    _renderArtifactViewerRetry(null);
     if (els.artifactViewerFallback) els.artifactViewerFallback.classList.add("hidden");
   }
   async function _loadArtifactViewerInlinePreview(context, artifactName) {
@@ -169,8 +178,6 @@ function createDeferredReviewSurfaceApi(host) {
       _showArtifactViewerFallback(context, artifactName);
       return;
     }
-    artifactViewerLastLoadContext = context;
-    artifactViewerLastLoadName = artifactName;
     if (artifactViewerObjectUrl && artifactViewerPreviewPath === artifactPath && artifactViewerPreviewSource === context.url) {
       _renderArtifactViewerInlineImage(artifactViewerObjectUrl, context.zoomPercent);
       _setArtifactViewerStatus(`${artifactName} preview open at ${context.zoomPercent}% zoom.`);
@@ -179,13 +186,12 @@ function createDeferredReviewSurfaceApi(host) {
     const requestId = ++artifactViewerPreviewRequestId;
     artifactViewerPreviewPath = artifactPath;
     artifactViewerPreviewSource = context.url;
-    if (artifactViewerAbortController) {
-      try { artifactViewerAbortController.abort(); } catch (_abortErr) {}
-    }
+    _abortArtifactViewerPreview("superseded");
     const controller = typeof AbortController === "function" ? new AbortController() : null;
+    if (controller) controller.__tpAbortReason = "";
     artifactViewerAbortController = controller;
     const timeoutId = controller ? setTimeout(() => {
-      try { controller.abort(); } catch (_abortErr) {}
+      _abortArtifactViewerPreview("timeout", controller);
     }, ARTIFACT_VIEWER_FETCH_TIMEOUT_MS) : null;
     try {
       if (state.auth?.mode === "direct_debug" && typeof _buildAuthHeaders === "function") {
@@ -212,14 +218,20 @@ function createDeferredReviewSurfaceApi(host) {
       _setArtifactViewerStatus(`${artifactName} preview open at ${context.zoomPercent}% zoom.`);
     } catch (err) {
       if (requestId !== artifactViewerPreviewRequestId) return;
-      // Suppress toast for intentional aborts (modal close, zoom/navigate re-render, new request).
-      if (err?.name !== "AbortError") {
-        try { createToast(`Preview unavailable: ${err?.message || "network error"}`, "error"); } catch (_toastErr) {}
+      const abortReason = err?.name === "AbortError" ? _artifactViewerAbortReason(controller) : "";
+      const retryable = err?.name !== "AbortError" || abortReason === "timeout";
+      if (!retryable) return;
+      const failureMessage = abortReason === "timeout" ? `request timed out after ${ARTIFACT_VIEWER_FETCH_TIMEOUT_MS / 1e3}s` : err?.message || "network error";
+      try {
+        createToast(`Preview unavailable: ${failureMessage}`, "error");
+      } catch (_toastErr) {
       }
-      _showArtifactViewerFallback(context, artifactName, { retryable: err?.name !== "AbortError" });
+      _showArtifactViewerFallback(context, artifactName, { retryable });
     } finally {
       if (timeoutId !== null) clearTimeout(timeoutId);
-      if (artifactViewerAbortController === controller) artifactViewerAbortController = null;
+      if (artifactViewerAbortController === controller) {
+        artifactViewerAbortController = null;
+      }
     }
   }
   function getRunCardArtifact(job) {
@@ -784,8 +796,9 @@ function createDeferredReviewSurfaceApi(host) {
     els.artifactViewerModal.setAttribute("aria-hidden", shouldShow ? "false" : "true");
     els.artifactViewerModal.dataset.overlayOpen = shouldShow ? "true" : "false";
     if (!shouldShow) {
-      if (!_artifactViewerEnabled()) {
-        state.portalUi.artifactViewer.open = false;
+      if (!_artifactViewerEnabled() && Boolean(state.portalUi?.artifactViewer?.open)) {
+        _closeArtifactViewer(false);
+        return;
       }
       _clearArtifactViewerPreviewCache();
       if (els.artifactViewerImage) {
@@ -799,8 +812,7 @@ function createDeferredReviewSurfaceApi(host) {
     }
     const context = _artifactViewerContext();
     if (!context.job || !context.artifact) {
-      state.portalUi.artifactViewer.open = false;
-      renderArtifactViewer();
+      _closeArtifactViewer(false);
       return;
     }
     const { artifact, index, artifacts, inlinePreview, job, url, zoomPercent } = context;
@@ -839,7 +851,6 @@ function createDeferredReviewSurfaceApi(host) {
         _clearArtifactViewerPreviewCache();
       }
       if (els.artifactViewerImage) {
-        // Reset the previous handler so closures over stale artifactPath don't stack and leak.
         els.artifactViewerImage.onerror = null;
         els.artifactViewerImage.onerror = () => {
           const activeContext = _artifactViewerContext();
@@ -870,37 +881,47 @@ function createDeferredReviewSurfaceApi(host) {
   function _setArtifactViewerBackgroundInert(inert) {
     const main = document.getElementById("main-content");
     if (!main) return;
-    if (inert) main.setAttribute("aria-hidden", "true"); else main.removeAttribute("aria-hidden");
-    try { main.inert = Boolean(inert); } catch (_) {}
+    if (inert) main.setAttribute("aria-hidden", "true");
+    else main.removeAttribute("aria-hidden");
+    try {
+      main.inert = Boolean(inert);
+    } catch (_) {
+    }
   }
   function _handleArtifactViewerKeydown(event) {
     if (!state.portalUi?.artifactViewer?.open) return;
-    if (event.key === "Escape") { event.preventDefault(); _closeArtifactViewer(true); return; }
+    if (event.key === "Escape") {
+      event.preventDefault();
+      _closeArtifactViewer(true);
+      return;
+    }
     if (event.key !== "Tab" || !els.artifactViewerPanel) return;
-    const nodes = els.artifactViewerPanel.querySelectorAll('button:not([disabled]),[href],input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])');
-    const visible = Array.prototype.filter.call(nodes, (n) => n.offsetParent !== null);
+    const nodes = els.artifactViewerPanel.querySelectorAll(
+      'button:not([disabled]),[href],input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])'
+    );
+    const visible = Array.prototype.filter.call(nodes, (node) => node.offsetParent !== null);
     if (!visible.length) return;
     const first = visible[0];
     const last = visible[visible.length - 1];
     const active = document.activeElement;
     const outside = !els.artifactViewerPanel.contains(active);
-    if (event.shiftKey && (active === first || outside)) { last.focus(); event.preventDefault(); }
-    else if (!event.shiftKey && (active === last || outside)) { first.focus(); event.preventDefault(); }
+    if (event.shiftKey && (active === first || outside)) {
+      last.focus();
+      event.preventDefault();
+    } else if (!event.shiftKey && (active === last || outside)) {
+      first.focus();
+      event.preventDefault();
+    }
   }
   function _closeArtifactViewer(restoreFocus = true) {
     state.portalUi.artifactViewer.open = false;
-    if (artifactViewerAbortController) {
-      try { artifactViewerAbortController.abort(); } catch (_abortErr) {}
-      artifactViewerAbortController = null;
-    }
+    _abortArtifactViewerPreview("close");
     if (artifactViewerKeydownHandler && typeof document !== "undefined") {
       document.removeEventListener("keydown", artifactViewerKeydownHandler, true);
       artifactViewerKeydownHandler = null;
     }
     _setArtifactViewerBackgroundInert(false);
     _renderArtifactViewerRetry(null);
-    artifactViewerLastLoadContext = null;
-    artifactViewerLastLoadName = "";
     renderArtifactViewer();
     if (restoreFocus) {
       _restoreOverlayFocus();
