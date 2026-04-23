@@ -4,11 +4,11 @@
       "artifact_type": "combined_manifest",
       "path": "manifests/image_01_combined.json",
       "relative_path": "manifests/image_01_combined.json",
-      "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
-      "size_bytes": 1234
+      "sha256": "4abd7d8cd7149d44a23a977f356b5413fe6fb2d4eb0425ff55fc37cb8d313f43",
+      "size_bytes": 87
     }
   ],
-  "artifact_merkle_root": "c2f480d4dda9f4522b9f6d590011636d904accfe59f12f9d66a0221c2558e3a2",
+  "artifact_merkle_root": "95b3f395c26ed71770536dd8609f8a7759ba2041e8d6cb2f1eb6d2e2cbaaf695",
   "backend_selection": {
     "device": "cpu",
     "model_id": "depth-anything/DA3NESTED-GIANT-LARGE-1.1",

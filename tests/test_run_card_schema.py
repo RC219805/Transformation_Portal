@@ -476,6 +476,40 @@ def test_build_run_card_result_summary_projects_quality_gate_and_capability(tmp_
     }
 
 
+def test_build_run_card_result_summary_reports_segmentation_not_requested(tmp_path: Path) -> None:
+    output_root = tmp_path / "output"
+    orch = object.__new__(EnhanceOrchestrator)
+    orch.output_root = output_root
+    orch.config = EnhanceConfig(
+        enable_materials_v3=False,
+        enable_material_segmentation=True,
+        material_segmentation_backend="sam2",
+        strict_backend=True,
+    )
+    orch._active_run_card_segmentation_metadata = {}
+    orch._backend_metadata = SimpleNamespace(requested_backend="depth_pro", resolution_reason=None)
+
+    summary = orch._build_run_card_result_summary(
+        [
+            {
+                "image": str(tmp_path / "inputs" / "image_02.png"),
+                "status": "ok",
+                "backend": "depth_pro",
+                "runtime_s": 2.34,
+                "manifest": None,
+            }
+        ]
+    )
+
+    assert summary[0]["segmentation_status"] == {
+        "status": "not_requested",
+        "enabled": False,
+        "reason": "materials_v3_disabled",
+        "backend": "sam2",
+        "strict_backend": True,
+    }
+
+
 def test_build_run_card_result_summary_keeps_semantic_gate_failure_available(tmp_path: Path) -> None:
     output_root = tmp_path / "output"
     orch = object.__new__(EnhanceOrchestrator)
@@ -646,6 +680,45 @@ def test_build_run_card_model_contract_skips_unpinned_revision(
     assert model_contract is None
     assert "Skipping run-card model_contract" in caplog.text
     assert resolved.spec.repo_id in caplog.text
+
+
+def test_build_run_card_model_contract_uses_depth_pro_selected_backend() -> None:
+    orch = object.__new__(EnhanceOrchestrator)
+    orch.config = SimpleNamespace(
+        non_commercial_ok=True,
+        accept_apple_depth_pro_research_license=True,
+        depth_device="mps",
+    )
+    artifact_sha = "3eb35ca68168ad3d14cb150f8947a4edf85589941661fdb2686259c80685c0ce"
+
+    model_contract = orch._build_run_card_model_contract(
+        results=[],
+        backend_selection={
+            "resolved": "depth_pro",
+            "device": "mps",
+            "model_artifact_filename": "depth_pro.pt",
+            "model_artifact_sha256": artifact_sha,
+        },
+    )
+
+    assert model_contract == {
+        "contract_kind": "local_checkpoint",
+        "requested_model_selector": "depth_pro",
+        "canonical_model_key": "depth_pro",
+        "resolved_repo_id": "apple/ml-depth-pro",
+        "resolved_revision": None,
+        "model_artifact_filename": "depth_pro.pt",
+        "model_artifact_sha256": artifact_sha,
+        "license_id": "apple-machine-learning-research-license",
+        "usage_class": "non_commercial_only",
+        "requires_non_commercial_ok": True,
+        "non_commercial_ok": True,
+        "accept_apple_depth_pro_research_license": True,
+        "backend_kind": "depth_pro",
+        "accelerator_kind": "mps",
+        "fallback_chain": [],
+        "manifest_schema_version": 1,
+    }
 
 
 def test_collect_run_card_artifacts_includes_reconstruction_report(tmp_path: Path):
@@ -906,10 +979,107 @@ def test_config_fingerprint_uses_raw_preset_requested_when_enum_unset():
 
     fingerprint = orch._build_run_card_config_fingerprint()
 
-    assert fingerprint["preset_requested"] == "premium"
-    assert fingerprint["preset_resolved"] == "quality_tier:apex"
+    assert fingerprint["model_variant"] == "apple/ml-depth-pro"
+    assert fingerprint["preset_requested"] == "depth_pro"
+    assert fingerprint["preset_resolved"] == "backend:depth_pro"
     assert fingerprint["raw_ingest_profile"] == "tp.raw_ingest.deterministic_v1"
     assert len(fingerprint["raw_ingest_settings_hash"]) == 64
+
+
+def test_run_card_config_fingerprint_hashes_resolved_checkpoint_sha() -> None:
+    orch = object.__new__(EnhanceOrchestrator)
+    orch.config = EnhanceConfig(
+        model_variant=ModelVariant.METRIC_LARGE,
+        preset=None,
+        quality_tier="apex",
+        depth_device="mps",
+        emit_run_card=True,
+    )
+    orch._backend_metadata = SimpleNamespace(
+        requested_backend="depth_pro",
+        resolved_backend="depth_pro",
+        device="mps",
+    )
+    orch._is_apex_tier = lambda: True
+    first_sha = "1" * 64
+    second_sha = "2" * 64
+
+    first = orch._build_run_card_config_fingerprint(
+        backend_selection={
+            "resolved": "depth_pro",
+            "model_id": "apple/ml-depth-pro",
+            "model_artifact_filename": "depth_pro.pt",
+            "model_artifact_sha256": first_sha,
+        },
+        run_card_version="v2",
+        include_proofs=True,
+    )
+    second = orch._build_run_card_config_fingerprint(
+        backend_selection={
+            "resolved": "depth_pro",
+            "model_id": "apple/ml-depth-pro",
+            "model_artifact_filename": "depth_pro.pt",
+            "model_artifact_sha256": second_sha,
+        },
+        run_card_version="v2",
+        include_proofs=True,
+    )
+
+    assert first["model_artifact_sha256"] == first_sha
+    assert first["resolved_model_id"] == "apple/ml-depth-pro"
+    assert first["output_depth_units"] == "meters"
+    assert first["depth_png_encoding"] == "normalized_u16_png"
+    assert first["run_card_include_proofs"] is True
+    assert first["sha256"] != second["sha256"]
+
+
+def test_apex_gradient_threshold_is_reported_as_warning_min() -> None:
+    orch = object.__new__(EnhanceOrchestrator)
+    orch.config = EnhanceConfig(quality_tier="apex")
+    orch.config.apex_depth_min_gradient_energy = 10.0
+    depth = np.linspace(0.0, 1.0, 100, dtype=np.float32).reshape(10, 10)
+
+    report = orch._enforce_apex_depth_validity_gate(depth)
+
+    assert report is not None
+    assert report["passed"] is True
+    assert report["warnings"] == ["APEX_DEPTH_GRADIENT_LOW"]
+    assert "gradient_energy_warning_min" in report["thresholds"]
+    assert "gradient_energy_min" not in report["thresholds"]
+
+
+def test_apex_duplicate_depth_png_hash_fails_for_distinct_float_depths(tmp_path: Path) -> None:
+    depth_png_a = tmp_path / "a.png"
+    depth_png_b = tmp_path / "b.png"
+    depth_float_a = tmp_path / "a.npy"
+    depth_float_b = tmp_path / "b.npy"
+    depth_png_a.write_bytes(b"same-png")
+    depth_png_b.write_bytes(b"same-png")
+    np.save(depth_float_a, np.zeros((2, 2), dtype=np.float32))
+    np.save(depth_float_b, np.ones((2, 2), dtype=np.float32))
+
+    orch = object.__new__(EnhanceOrchestrator)
+    orch._is_apex_tier = lambda: True
+
+    with pytest.raises(ApexStrictGateError, match="APEX_DEPTH_PNG_DUPLICATE_HASH"):
+        orch._enforce_apex_depth_png_uniqueness(
+            [
+                {
+                    "status": "ok",
+                    "image": "a.jpg",
+                    "input_sha256": "1" * 64,
+                    "depth_path": str(depth_png_a),
+                    "depth_float_path": str(depth_float_a),
+                },
+                {
+                    "status": "ok",
+                    "image": "b.jpg",
+                    "input_sha256": "2" * 64,
+                    "depth_path": str(depth_png_b),
+                    "depth_float_path": str(depth_float_b),
+                },
+            ]
+        )
 
 
 def test_resolve_run_card_backend_model_id_prefers_selected_attempt_model():

@@ -199,7 +199,7 @@ class TestRealProcessing:
 
             # Run enhancement
             result = enhance_image(temp_8bit_tiff, output_path, allow_8bit_output=False)
-            emitted_output = resolve_v2_emitted_artifact_path(output_path, bit_depth=8)
+            emitted_output = resolve_v2_emitted_artifact_path(output_path, bit_depth=8, materials_enabled=False)
 
             # Verify success
             assert result["status"] == "success"

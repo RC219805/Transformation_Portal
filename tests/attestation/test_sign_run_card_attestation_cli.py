@@ -39,22 +39,24 @@ def _run_tool(*args: str, path_prepend: Path | None = None) -> subprocess.Comple
 
 
 def _write_run_card_v2(tmp_path: Path) -> Path:
-    artifact_index = [
-        {
-            "artifact_type": "depth_u16_png",
-            "path": "depth/image_01_depth.png",
-            "relative_path": "depth/image_01_depth.png",
-            "size_bytes": 1024,
-            "sha256": "a" * 64,
-        },
-        {
-            "artifact_type": "batch_manifest",
-            "path": "manifests/batch_01.json",
-            "relative_path": "manifests/batch_01.json",
-            "size_bytes": 2048,
-            "sha256": "b" * 64,
-        },
-    ]
+    artifact_payloads = {
+        "depth/image_01_depth.png": (b"depth-preview-fixture", "depth_u16_png"),
+        "manifests/batch_01.json": (b'{"batch_id":"2026-04-10_120000"}\n', "batch_manifest"),
+    }
+    artifact_index = []
+    for relative_path, (content, artifact_type) in artifact_payloads.items():
+        artifact_path = tmp_path / relative_path
+        artifact_path.parent.mkdir(parents=True, exist_ok=True)
+        artifact_path.write_bytes(content)
+        artifact_index.append(
+            {
+                "artifact_type": artifact_type,
+                "path": relative_path,
+                "relative_path": relative_path,
+                "size_bytes": len(content),
+                "sha256": hashlib.sha256(content).hexdigest(),
+            }
+        )
     fingerprint_fields = {
         "model_variant": "METRIC_LARGE",
         "depth_quantization": "u16",

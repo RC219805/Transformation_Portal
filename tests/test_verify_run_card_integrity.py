@@ -10,10 +10,16 @@ from pathlib import Path
 
 import pytest
 
+from transformation_portal.ingest.canonical_json import canonicalize_json
 from transformation_portal.lux_depth_v3.artifact_manager import compute_artifact_merkle_root
 from transformation_portal.lux_depth_v3.artifact_tree import build_artifact_tree
 
 pytest.importorskip("jsonschema")
+
+_DEFAULT_ARTIFACT_BYTES = {
+    "depth/image_01_depth.png": b"depth-preview",
+    "manifests/image_01_combined.json": b'{"backend_selection":{}}',
+}
 
 
 def _load_script_module(module_name: str, relative_path: str):
@@ -33,15 +39,15 @@ def _valid_run_card_payload(module) -> dict:
             "artifact_type": "depth_u16_png",
             "path": "depth/image_01_depth.png",
             "relative_path": "depth/image_01_depth.png",
-            "size_bytes": 1024,
-            "sha256": "a" * 64,
+            "size_bytes": len(_DEFAULT_ARTIFACT_BYTES["depth/image_01_depth.png"]),
+            "sha256": hashlib.sha256(_DEFAULT_ARTIFACT_BYTES["depth/image_01_depth.png"]).hexdigest(),
         },
         {
             "artifact_type": "combined_manifest",
             "path": "manifests/image_01_combined.json",
             "relative_path": "manifests/image_01_combined.json",
-            "size_bytes": 2048,
-            "sha256": "b" * 64,
+            "size_bytes": len(_DEFAULT_ARTIFACT_BYTES["manifests/image_01_combined.json"]),
+            "sha256": hashlib.sha256(_DEFAULT_ARTIFACT_BYTES["manifests/image_01_combined.json"]).hexdigest(),
         },
     ]
     config_fingerprint = {
@@ -153,10 +159,55 @@ def _valid_run_card_payload(module) -> dict:
 
 def _write_json(path: Path, payload: dict, *, canonical: bool = True) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
+    for artifact in payload.get("artifact_index", []):
+        if not isinstance(artifact, dict):
+            continue
+        relative_path = artifact.get("relative_path")
+        if not isinstance(relative_path, str):
+            continue
+        content = _DEFAULT_ARTIFACT_BYTES.get(relative_path)
+        if content is None:
+            continue
+        artifact_path = path.parent / relative_path
+        artifact_path.parent.mkdir(parents=True, exist_ok=True)
+        if not artifact_path.exists():
+            artifact_path.write_bytes(content)
     if canonical:
         path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
     else:
         path.write_text(json.dumps(payload), encoding="utf-8")
+
+
+def _write_self_attested_run_card(path: Path, payload: dict) -> None:
+    integrity = {
+        "path": path.name,
+        "self_indexing": "excluded_self_hash_cycle",
+    }
+    payload["run_card_integrity"] = {
+        **integrity,
+        "canonical_payload_sha256": hashlib.sha256(
+            canonicalize_json(
+                {
+                    **payload,
+                    "run_card_integrity": integrity,
+                }
+            )
+        ).hexdigest(),
+    }
+    _write_json(path, payload)
+    (path.with_suffix(".self.json")).write_text(
+        json.dumps(
+            {
+                "run_card_path": path.name,
+                "self_indexing": "excluded_self_hash_cycle",
+                "final_run_card_sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+                "hash_algorithm": "sha256",
+            },
+            indent=2,
+            sort_keys=True,
+        ),
+        encoding="utf-8",
+    )
 
 
 def _artifact_entry(*, output_root: Path, file_path: Path, artifact_type: str) -> dict:
@@ -186,6 +237,45 @@ def test_verify_run_card_integrity_accepts_valid_payload(tmp_path: Path):
 
     errors = module.verify_run_card_integrity(run_card_path)
     assert errors == []
+
+
+def test_verify_run_card_integrity_rejects_artifact_hash_drift(tmp_path: Path):
+    module = _load_script_module("verify_run_card_integrity_script_artifact_drift", "scripts/verify_run_card_integrity.py")
+    run_card_path = tmp_path / "run_card_drift.json"
+    payload = _valid_run_card_payload(module)
+    _write_json(run_card_path, payload)
+    (tmp_path / "depth" / "image_01_depth.png").write_bytes(b"mutated")
+
+    errors = module.verify_run_card_integrity(run_card_path)
+
+    assert any("artifact_index[0].size_bytes mismatch" in error for error in errors)
+    assert any("artifact_index[0].sha256 mismatch" in error for error in errors)
+
+
+def test_verify_run_card_integrity_accepts_self_attestation_sidecar(tmp_path: Path):
+    module = _load_script_module("verify_run_card_integrity_script_self", "scripts/verify_run_card_integrity.py")
+    run_card_path = tmp_path / "run_card_self.json"
+    payload = _valid_run_card_payload(module)
+    _write_self_attested_run_card(run_card_path, payload)
+
+    errors = module.verify_run_card_integrity(run_card_path)
+
+    assert errors == []
+
+
+def test_verify_run_card_integrity_rejects_self_attestation_hash_drift(tmp_path: Path):
+    module = _load_script_module("verify_run_card_integrity_script_self_drift", "scripts/verify_run_card_integrity.py")
+    run_card_path = tmp_path / "run_card_self_drift.json"
+    payload = _valid_run_card_payload(module)
+    _write_self_attested_run_card(run_card_path, payload)
+    sidecar_path = run_card_path.with_suffix(".self.json")
+    sidecar = json.loads(sidecar_path.read_text(encoding="utf-8"))
+    sidecar["final_run_card_sha256"] = "f" * 64
+    sidecar_path.write_text(json.dumps(sidecar, indent=2, sort_keys=True), encoding="utf-8")
+
+    errors = module.verify_run_card_integrity(run_card_path)
+
+    assert any("final_run_card_sha256 mismatch" in error for error in errors)
 
 
 def test_verify_run_card_integrity_rejects_schema_violation(tmp_path: Path):

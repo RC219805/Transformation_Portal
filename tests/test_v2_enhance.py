@@ -161,6 +161,7 @@ class TestEmittedArtifactPath:
             ("scene.DNG", 16, "scene_materials_v3_enhanced.tif"),
             ("scene.CR2", 16, "scene_materials_v3_enhanced.tif"),
             ("scene_materials_v3_enhanced.nef", 16, "scene_materials_v3_enhanced.tif"),
+            ("scene_v2_enhanced.png", 8, "scene_materials_v3_enhanced.png"),
             ("scene.jpg", 8, "scene_materials_v3_enhanced.png"),
         ],
     )
@@ -177,6 +178,17 @@ class TestEmittedArtifactPath:
 
         assert resolved == tmp_path / expected_name
         assert resolved.suffix == emitted_v2_suffix_for_bit_depth(bit_depth)
+
+    def test_resolve_v2_emitted_artifact_path_uses_plain_v2_name_without_materials(self, tmp_path):
+        candidate_path = tmp_path / "scene_v2_enhanced.png"
+
+        resolved = resolve_v2_emitted_artifact_path(
+            candidate_path,
+            bit_depth=8,
+            materials_enabled=False,
+        )
+
+        assert resolved == tmp_path / "scene_v2_enhanced.png"
 
 
 class TestLoadDepthMap:
@@ -257,7 +269,7 @@ class TestEnhanceImage:
         Image.fromarray(test_image, mode="RGB").save(input_path)
 
         output_path = tmp_path / "output.png"
-        expected_output = resolve_v2_emitted_artifact_path(output_path, bit_depth=8)
+        expected_output = resolve_v2_emitted_artifact_path(output_path, bit_depth=8, materials_enabled=False)
 
         # Mock EnhancementStage to avoid actual processing
         with patch("transformation_portal.lux_depth_v3.v2_enhance.EnhancementStage") as mock_stage_cls:
@@ -345,7 +357,7 @@ class TestEnhanceImage:
         Image.fromarray(depth_data, mode="L").save(depth_path)
 
         output_path = tmp_path / "output.png"
-        expected_output = resolve_v2_emitted_artifact_path(output_path, bit_depth=8)
+        expected_output = resolve_v2_emitted_artifact_path(output_path, bit_depth=8, materials_enabled=False)
         config = V2EnhancementConfig(
             preset="default",
             enhancement_strength=0.7,
@@ -551,7 +563,7 @@ class TestEnhanceImage:
 
             # Verify output file exists (copied from input)
             assert output_path.exists()
-            assert not resolve_v2_emitted_artifact_path(output_path, bit_depth=8).exists()
+            assert not resolve_v2_emitted_artifact_path(output_path, bit_depth=8, materials_enabled=False).exists()
 
     def test_enhance_image_normalizes_inherited_raw_suffix_for_8bit_output(self, tmp_path):
         """8-bit enhancement should overwrite inherited RAW suffixes before save."""
@@ -560,7 +572,7 @@ class TestEnhanceImage:
         Image.fromarray(test_image, mode="RGB").save(input_path)
 
         raw_suffix_output = tmp_path / "input.DNG"
-        expected_output = tmp_path / "input_materials_v3_enhanced.png"
+        expected_output = tmp_path / "input_v2_enhanced.png"
 
         with patch("transformation_portal.lux_depth_v3.v2_enhance.EnhancementStage") as mock_stage_cls:
             mock_stage = Mock()
@@ -616,7 +628,7 @@ class TestEnhanceImage:
 
         # Output path in non-existent directory
         output_path = tmp_path / "subdir" / "nested" / "output.png"
-        expected_output = resolve_v2_emitted_artifact_path(output_path, bit_depth=8)
+        expected_output = resolve_v2_emitted_artifact_path(output_path, bit_depth=8, materials_enabled=False)
 
         with patch("transformation_portal.lux_depth_v3.v2_enhance.EnhancementStage") as mock_stage_cls:
             mock_stage = Mock()
@@ -665,7 +677,7 @@ class TestEnhanceImage:
         """Test that RGBA inputs preserve alpha channel byte-for-byte."""
         input_path = tmp_path / "input.png"
         output_path = tmp_path / "output.png"
-        expected_output = resolve_v2_emitted_artifact_path(output_path, bit_depth=8)
+        expected_output = resolve_v2_emitted_artifact_path(output_path, bit_depth=8, materials_enabled=False)
 
         # Create RGBA test image with distinct alpha channel
         rgb = np.random.randint(0, 256, (100, 100, 3), dtype=np.uint8)
@@ -708,7 +720,7 @@ class TestEnhanceImage:
         """Test that enhancement never changes spatial dimensions."""
         input_path = tmp_path / "input.png"
         output_path = tmp_path / "output.png"
-        expected_output = resolve_v2_emitted_artifact_path(output_path, bit_depth=8)
+        expected_output = resolve_v2_emitted_artifact_path(output_path, bit_depth=8, materials_enabled=False)
 
         # Test with various image sizes
         test_sizes = [(100, 100), (640, 480), (1920, 1080), (99, 157)]  # Including odd dimensions
@@ -739,7 +751,7 @@ class TestEnhanceImage:
 
         input_path = tmp_path / "input.jpg"
         output_path = tmp_path / "output.jpg"
-        expected_output = resolve_v2_emitted_artifact_path(output_path, bit_depth=8)
+        expected_output = resolve_v2_emitted_artifact_path(output_path, bit_depth=8, materials_enabled=False)
 
         # Create test JPEG with EXIF and ICC profile
         test_image = np.random.randint(0, 256, (100, 100, 3), dtype=np.uint8)
@@ -777,7 +789,7 @@ class TestEnhanceImage:
         """Test that ICC color profiles are preserved in enhanced images."""
         input_path = tmp_path / "input.jpg"
         output_path = tmp_path / "output.jpg"
-        expected_output = resolve_v2_emitted_artifact_path(output_path, bit_depth=8)
+        expected_output = resolve_v2_emitted_artifact_path(output_path, bit_depth=8, materials_enabled=False)
 
         # Create test image with ICC profile
         test_image = np.random.randint(0, 256, (100, 100, 3), dtype=np.uint8)
@@ -811,7 +823,7 @@ class TestEnhanceImage:
 
         input_path = tmp_path / "input_16bit.tif"
         output_path = tmp_path / "input.CR2"
-        expected_output = tmp_path / "input_materials_v3_enhanced.tif"
+        expected_output = tmp_path / "input_v2_enhanced.tif"
 
         test_image_16 = np.random.randint(0, 65536, (32, 32, 3), dtype=np.uint16)
         tifffile.imwrite(input_path, test_image_16, photometric="rgb", compression=None)

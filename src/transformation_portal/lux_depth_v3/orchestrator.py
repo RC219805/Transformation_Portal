@@ -47,7 +47,7 @@ from ..core.ml_dependency_health import (
 )
 from ..depth.backends.protocol import DepthBackend, LicenseRestrictionError
 from ..depth.backends.registry import DepthBackendRegistry
-from ..ingest.canonical_json import dump_json, dumps_json
+from ..ingest.canonical_json import canonicalize_json, dump_json, dumps_json
 from ..reporting.contracts import (
     build_orchestrator_result_capability_report,
     build_quality_gate_report,
@@ -1104,16 +1104,80 @@ class EnhanceOrchestrator:
         """
         return compute_config_fingerprint(self.config, self._model_variant)
 
-    def _build_run_card_config_fingerprint(self) -> Dict[str, Any]:
+    @staticmethod
+    def _finalize_run_card_config_fingerprint(payload: Dict[str, Any]) -> Dict[str, Any]:
+        """Attach canonical JSON and SHA-256 over the resolved fingerprint payload."""
+        canonical_payload = {
+            key: value for key, value in payload.items() if key not in {"hash_algorithm", "canonical_json", "sha256"}
+        }
+        canonical_json_bytes = canonicalize_json(canonical_payload)
+        return {
+            **canonical_payload,
+            "hash_algorithm": "sha256",
+            "canonical_json": canonical_json_bytes.decode("utf-8"),
+            "sha256": hashlib.sha256(canonical_json_bytes).hexdigest(),
+        }
+
+    def _build_run_card_config_fingerprint(
+        self,
+        *,
+        backend_selection: Optional[Dict[str, Any]] = None,
+        run_card_version: Optional[str] = None,
+        include_proofs: Optional[bool] = None,
+    ) -> Dict[str, Any]:
         """Build run-card config fingerprint.
 
         Delegates to config_resolver.build_run_card_config_fingerprint().
         """
-        return build_run_card_config_fingerprint(
+        fingerprint = build_run_card_config_fingerprint(
             self.config,
             self._model_variant,
             self._backend_metadata,
         )
+        payload = {
+            key: value for key, value in fingerprint.items() if key not in {"hash_algorithm", "canonical_json", "sha256"}
+        }
+        resolved_backend = None
+        if isinstance(backend_selection, dict):
+            resolved_backend = backend_selection.get("resolved")
+            payload.update(
+                {
+                    "resolved_model_id": backend_selection.get("model_id"),
+                    "model_artifact_filename": backend_selection.get("model_artifact_filename"),
+                    "model_artifact_sha256": backend_selection.get("model_artifact_sha256"),
+                }
+            )
+        if resolved_backend is None:
+            resolved_backend = getattr(self._backend_metadata, "resolved_backend", None)
+        normalized_resolved_backend = normalize_backend_id(resolved_backend)
+        if normalized_resolved_backend == "depth_pro":
+            payload["model_variant"] = "apple/ml-depth-pro"
+            payload["preset"] = "depth_pro"
+            payload["preset_requested"] = "depth_pro"
+            payload["preset_resolved"] = "backend:depth_pro"
+        payload["output_depth_units"] = "meters" if normalized_resolved_backend == "depth_pro" else "relative"
+        payload["depth_png_encoding"] = "normalized_u16_png"
+        materials_v3_enabled = bool(getattr(self.config, "enable_materials_v3", False))
+        material_segmentation_enabled = bool(
+            getattr(
+                self.config,
+                "enable_material_segmentation",
+                False,
+            )
+        )
+        payload["materials_v3_enabled"] = materials_v3_enabled
+        payload["material_segmentation_enabled"] = material_segmentation_enabled
+        payload["material_segmentation_backend"] = getattr(self.config, "material_segmentation_backend", None)
+        payload["strict_segmentation"] = bool(
+            materials_v3_enabled and material_segmentation_enabled and getattr(self.config, "strict_backend", False)
+        )
+        payload["pbr_enabled"] = bool(getattr(self.config, "generate_pbr", False))
+        if run_card_version is not None:
+            payload["run_card_version"] = run_card_version
+        if include_proofs is not None:
+            payload["run_card_include_proofs"] = bool(include_proofs)
+        payload["emit_run_card"] = bool(getattr(self.config, "emit_run_card", False))
+        return self._finalize_run_card_config_fingerprint(payload)
 
     def _extract_v2_depth_handoff_status(
         self,
@@ -4369,7 +4433,7 @@ class EnhanceOrchestrator:
                     0.02,
                 ),
             ),
-            "gradient_energy_min": float(
+            "gradient_energy_warning_min": float(
                 getattr(
                     _cfg,
                     "apex_depth_min_" + "gradient_energy",
@@ -4470,7 +4534,7 @@ class EnhanceOrchestrator:
             is None
         ) or (float(metrics["saturation_low_fraction"]) > (effective_low_saturation_max + comparison_epsilon))
         low_gradient = (metrics.get("gradient_energy") is None) or (
-            float(metrics["gradient_energy"]) < (thresholds["gradient_energy_min"] - comparison_epsilon)
+            float(metrics["gradient_energy"]) < (thresholds["gradient_energy_warning_min"] - comparison_epsilon)
         )
 
         failure_codes: List[str] = []
@@ -5083,12 +5147,27 @@ class EnhanceOrchestrator:
                         }
                     )
 
+        self._enforce_apex_depth_png_uniqueness(results)
+        batch_backend_summary = self._compute_backend_summary(results)
+        batch_backend_selection = self._build_backend_selection_payload(
+            results,
+            batch_backend_summary,
+        )
+        batch_config_fingerprint = self._build_run_card_config_fingerprint(
+            backend_selection=batch_backend_selection,
+            run_card_version=getattr(self.config, "run_card_version", "v2"),
+            include_proofs=bool(getattr(self.config, "run_card_include_proofs", False)),
+        )
+
         bm = BatchManifest(
             batch_id=batch_id,
             start_time=batch_start_utc,
             end_time=batch_end_utc,
-            config={"model": self._model_variant.value.name},
-            results=results,
+            config=self._build_batch_manifest_config(
+                backend_selection=batch_backend_selection,
+                config_fingerprint=batch_config_fingerprint,
+            ),
+            results=self._portable_batch_manifest_results(results),
             stats={
                 **runtime_stats,
                 "total_images": len(results),
@@ -5813,6 +5892,182 @@ class EnhanceOrchestrator:
             message = f"{message} First fallback reason: {detail.strip()}"
         return message
 
+    def _build_backend_selection_payload(
+        self,
+        results: List[Dict[str, Any]],
+        backend_summary: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """Build the resolved backend-selection payload used by manifests."""
+        requested_backend = getattr(self._backend_metadata, "requested_backend", None) or "auto"
+        backend_selection_resolved = (
+            backend_summary["final_backends_used"][0]
+            if backend_summary.get("final_backends_used")
+            else getattr(self._backend_metadata, "resolved_backend", None)
+        )
+        backend_model_artifact = self._resolve_run_card_backend_model_artifact(
+            results,
+            backend_selection_resolved,
+        )
+        backend_selection: Dict[str, Any] = {
+            "requested": requested_backend,
+            "resolved": backend_selection_resolved,
+            "device": getattr(self._backend_metadata, "device", None),
+            "model_id": self._resolve_run_card_backend_model_id(
+                results,
+                backend_selection_resolved,
+            ),
+            "model_artifact_filename": backend_model_artifact.get(
+                "model_artifact_filename",
+            ),
+            "model_artifact_sha256": backend_model_artifact.get(
+                "model_artifact_sha256",
+            ),
+        }
+        if (
+            getattr(self._backend_metadata, "resolved_backend", None) != backend_selection_resolved
+            and backend_summary.get("fallback_images") == 0
+        ):
+            backend_selection["logical_backend"] = getattr(self._backend_metadata, "resolved_backend", None)
+            backend_selection["resolved_engine"] = backend_selection_resolved
+        return backend_selection
+
+    def _build_batch_manifest_config(
+        self,
+        *,
+        backend_selection: Dict[str, Any],
+        config_fingerprint: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """Build replayable batch-level config from the resolved execution contract."""
+        return {
+            "model": self._model_variant.value.name,
+            "depth_backend": backend_selection.get("resolved"),
+            "model_id": backend_selection.get("model_id"),
+            "model_artifact_filename": backend_selection.get("model_artifact_filename"),
+            "model_artifact_sha256": backend_selection.get("model_artifact_sha256"),
+            "device": backend_selection.get("device"),
+            "license_contract_id": (
+                "apple-machine-learning-research-license"
+                if normalize_backend_id(backend_selection.get("resolved")) == "depth_pro"
+                else None
+            ),
+            "quality_tier": getattr(self.config, "quality_tier", None),
+            "depth_quantization": getattr(self.config, "depth_quantization", None),
+            "depth_png_encoding": config_fingerprint.get("depth_png_encoding"),
+            "output_depth_units": config_fingerprint.get("output_depth_units"),
+            "enable_materials_v3": bool(getattr(self.config, "enable_materials_v3", False)),
+            "generate_pbr": bool(getattr(self.config, "generate_pbr", False)),
+            "emit_run_card": bool(getattr(self.config, "emit_run_card", False)),
+            "run_card_version": config_fingerprint.get("run_card_version"),
+            "run_card_include_proofs": bool(config_fingerprint.get("run_card_include_proofs", False)),
+            "config_fingerprint_sha256": config_fingerprint.get("sha256"),
+        }
+
+    def _portable_batch_manifest_results(self, results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Return batch results with output paths made portable under output_root."""
+        portable_results: List[Dict[str, Any]] = []
+        path_like_keys = {
+            "depth_path",
+            "depth_float_path",
+            "depth_metadata_path",
+            "manifest",
+            "v2_output",
+            "v2_output_path",
+            "v2_report",
+            "v2_report_path",
+            "v2_log",
+            "v2_log_path",
+            "provenance_sidecar",
+            "pbr_manifest_path",
+            "reconstruction_manifest_path",
+            "reconstruction_report_path",
+            "reconstruction_preflight_path",
+            "reconstruction_diagnostics_path",
+        }
+        for result in results:
+            row = copy.deepcopy(result)
+            image_value = row.get("image")
+            if isinstance(image_value, str) and image_value.strip():
+                row["image"] = Path(image_value).name
+            for key in path_like_keys:
+                relative_path = self._run_card_output_relative_path(row.get(key))
+                if relative_path is not None:
+                    row[key] = relative_path
+            portable_results.append(row)
+        return portable_results
+
+    @staticmethod
+    def _selected_successful_attempt(result: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """Return a successful selected attempt from a result row."""
+        attempts = result.get("attempts")
+        if not isinstance(attempts, list) or not attempts:
+            return None
+        selected_attempt_index = result.get("selected_attempt_index")
+        if isinstance(selected_attempt_index, int) and 0 <= selected_attempt_index < len(attempts):
+            attempt = attempts[selected_attempt_index]
+            if isinstance(attempt, dict) and attempt.get("status") == "success":
+                return attempt
+        for attempt in attempts:
+            if isinstance(attempt, dict) and attempt.get("status") == "success":
+                return attempt
+        return None
+
+    def _enforce_apex_depth_png_uniqueness(self, results: List[Dict[str, Any]]) -> None:
+        """Fail suspicious duplicate depth PNGs before provenance is emitted."""
+        if not self._is_apex_tier():
+            return
+
+        grouped: Dict[str, List[Dict[str, Optional[str]]]] = {}
+        for result in results:
+            if result.get("status") != "ok":
+                continue
+            depth_path_value = result.get("depth_path")
+            depth_float_path_value = result.get("depth_float_path")
+            if not isinstance(depth_path_value, str) or not isinstance(depth_float_path_value, str):
+                continue
+            depth_path = Path(depth_path_value)
+            depth_float_path = Path(depth_float_path_value)
+            if not depth_path.exists() or not depth_float_path.exists():
+                continue
+            png_sha = compute_file_sha256(depth_path)
+            float_sha = compute_file_sha256(depth_float_path)
+            input_sha = self._normalize_sha256(result.get("input_sha256"))
+            if input_sha is None:
+                image_value = result.get("image")
+                if isinstance(image_value, str) and Path(image_value).is_file():
+                    input_sha = compute_file_sha256(Path(image_value))
+            grouped.setdefault(png_sha, []).append(
+                {
+                    "image": str(result.get("image")),
+                    "depth_path": str(depth_path),
+                    "depth_float_path": str(depth_float_path),
+                    "input_sha256": input_sha,
+                    "depth_float_sha256": float_sha,
+                }
+            )
+
+        for png_sha, rows in grouped.items():
+            if len(rows) < 2:
+                continue
+            for left_index, left_row in enumerate(rows):
+                for right_row in rows[left_index + 1 :]:
+                    if (
+                        left_row.get("input_sha256")
+                        and right_row.get("input_sha256")
+                        and left_row.get("input_sha256") != right_row.get("input_sha256")
+                        and left_row.get("depth_float_sha256") != right_row.get("depth_float_sha256")
+                    ):
+                        raise ApexStrictGateError(
+                            "APEX_DEPTH_PNG_DUPLICATE_HASH",
+                            "Different inputs and float-depth artifacts produced an identical depth PNG hash.",
+                            {
+                                "passed": False,
+                                "failure_codes": ["APEX_DEPTH_PNG_DUPLICATE_HASH"],
+                                "warnings": [],
+                                "duplicate_depth_png_sha256": png_sha,
+                                "conflicting_rows": [left_row, right_row],
+                            },
+                        )
+
     def _resolve_run_card_backend_model_id(
         self,
         results: List[Dict[str, Any]],
@@ -5970,8 +6225,51 @@ class EnhanceOrchestrator:
         fingerprint["grouping_mode"] = str(getattr(self.config, "grouping_mode", "single"))
         return fingerprint
 
-    def _build_run_card_model_contract(self) -> Optional[Dict[str, Any]]:
+    def _build_run_card_model_contract(
+        self,
+        *,
+        results: Optional[List[Dict[str, Any]]] = None,
+        backend_selection: Optional[Dict[str, Any]] = None,
+    ) -> Optional[Dict[str, Any]]:
         """Build additive registry-backed model provenance for the run card."""
+        if isinstance(backend_selection, dict) and normalize_backend_id(backend_selection.get("resolved")) == "depth_pro":
+            artifact_filename = backend_selection.get("model_artifact_filename")
+            artifact_sha256 = backend_selection.get("model_artifact_sha256")
+            if (not artifact_filename or not artifact_sha256) and results:
+                for result in results:
+                    if result.get("status") != "ok" or normalize_backend_id(result.get("backend")) != "depth_pro":
+                        continue
+                    attempt = self._selected_successful_attempt(result)
+                    if isinstance(attempt, dict):
+                        artifact_filename = artifact_filename or attempt.get("model_artifact_filename")
+                        artifact_sha256 = artifact_sha256 or attempt.get("model_artifact_sha256")
+                    if artifact_filename or artifact_sha256:
+                        break
+            return {
+                "contract_kind": "local_checkpoint",
+                "requested_model_selector": "depth_pro",
+                "canonical_model_key": "depth_pro",
+                "resolved_repo_id": "apple/ml-depth-pro",
+                "resolved_revision": None,
+                "model_artifact_filename": artifact_filename,
+                "model_artifact_sha256": artifact_sha256,
+                "license_id": "apple-machine-learning-research-license",
+                "usage_class": "non_commercial_only",
+                "requires_non_commercial_ok": True,
+                "non_commercial_ok": bool(getattr(self.config, "non_commercial_ok", False)),
+                "accept_apple_depth_pro_research_license": bool(
+                    getattr(
+                        self.config,
+                        "accept_apple_depth_pro_research_license",
+                        False,
+                    )
+                ),
+                "backend_kind": "depth_pro",
+                "accelerator_kind": str(backend_selection.get("device") or getattr(self.config, "depth_device", "cpu")),
+                "fallback_chain": [],
+                "manifest_schema_version": 1,
+            }
+
         resolved_contract = getattr(self, "_resolved_model_contract", None)
         if resolved_contract is None:
             return None
@@ -5993,6 +6291,7 @@ class EnhanceOrchestrator:
         except Exception:
             manifest_schema_version = 1
         return {
+            "contract_kind": "hf_revision",
             "requested_model_selector": resolved_contract.requested_selector,
             "canonical_model_key": resolved_contract.canonical_key,
             "resolved_repo_id": resolved_contract.spec.repo_id,
@@ -6024,6 +6323,54 @@ class EnhanceOrchestrator:
             return None
         return copy.deepcopy(segmentation_metadata)
 
+    def _build_run_card_segmentation_status(
+        self,
+        segmentation_metadata: Optional[Dict[str, Any]],
+    ) -> Optional[Dict[str, Any]]:
+        """Build explicit segmentation execution status for run-card summaries."""
+        if not hasattr(self, "config"):
+            return None
+        backend = getattr(self.config, "material_segmentation_backend", None)
+        strict_backend = bool(getattr(self.config, "strict_backend", False))
+        if not bool(getattr(self.config, "enable_materials_v3", False)):
+            return {
+                "status": "not_requested",
+                "enabled": False,
+                "reason": "materials_v3_disabled",
+                "backend": backend,
+                "strict_backend": strict_backend,
+            }
+        if not bool(getattr(self.config, "enable_material_segmentation", False)):
+            return {
+                "status": "not_requested",
+                "enabled": False,
+                "reason": "material_segmentation_disabled",
+                "backend": backend,
+                "strict_backend": strict_backend,
+            }
+        if isinstance(segmentation_metadata, dict):
+            return {
+                "status": str(segmentation_metadata.get("status") or "ok"),
+                "enabled": True,
+                "backend": segmentation_metadata.get("backend") or backend,
+                "strict_backend": strict_backend,
+                "mask_artifact_path": self._run_card_output_relative_path(
+                    segmentation_metadata.get("mask_artifact_path"),
+                ),
+                "mask_count": segmentation_metadata.get("mask_count"),
+                "confidence_summary": segmentation_metadata.get("confidence_summary"),
+                "warnings": list(segmentation_metadata.get("warnings") or []),
+                "errors": list(segmentation_metadata.get("errors") or []),
+            }
+        return {
+            "status": "missing_evidence" if strict_backend else "not_recorded",
+            "enabled": True,
+            "backend": backend,
+            "strict_backend": strict_backend,
+            "warnings": ["SEGMENTATION_EVIDENCE_MISSING"],
+            "errors": ["SEGMENTATION_EVIDENCE_MISSING"] if strict_backend else [],
+        }
+
     def _build_run_card_result_summary(self, results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """Build a compact per-image execution summary for replay triage."""
         cached_segmentation_metadata = getattr(
@@ -6042,33 +6389,35 @@ class EnhanceOrchestrator:
                 cached_metadata = cached_segmentation_metadata.get(manifest_path)
                 if isinstance(cached_metadata, dict):
                     segmentation_metadata = copy.deepcopy(cached_metadata)
-            summary_rows.append(
-                {
-                    "image": Path(image_path).name,
-                    "status": result.get("status"),
-                    "backend": result.get("backend"),
-                    "runtime_s": result.get("runtime_s"),
-                    "manifest_path": self._run_card_output_relative_path(manifest_path),
-                    "error_code": result.get("error_code"),
-                    "error_message": result.get("error"),
-                    "error_details": result.get("error_details"),
-                    "segmentation_metadata": segmentation_metadata,
-                    "quality_gate": resolve_result_quality_gate(result),
-                    "capability": build_orchestrator_result_capability_report(
-                        result,
-                        requested_backend=getattr(
-                            getattr(self, "_backend_metadata", None),
-                            "requested_backend",
-                            None,
-                        ),
-                        resolution_reason=getattr(
-                            getattr(self, "_backend_metadata", None),
-                            "resolution_reason",
-                            None,
-                        ),
+            row = {
+                "image": Path(image_path).name,
+                "status": result.get("status"),
+                "backend": result.get("backend"),
+                "runtime_s": result.get("runtime_s"),
+                "manifest_path": self._run_card_output_relative_path(manifest_path),
+                "error_code": result.get("error_code"),
+                "error_message": result.get("error"),
+                "error_details": result.get("error_details"),
+                "segmentation_metadata": segmentation_metadata,
+                "quality_gate": resolve_result_quality_gate(result),
+                "capability": build_orchestrator_result_capability_report(
+                    result,
+                    requested_backend=getattr(
+                        getattr(self, "_backend_metadata", None),
+                        "requested_backend",
+                        None,
                     ),
-                }
-            )
+                    resolution_reason=getattr(
+                        getattr(self, "_backend_metadata", None),
+                        "resolution_reason",
+                        None,
+                    ),
+                ),
+            }
+            segmentation_status = self._build_run_card_segmentation_status(segmentation_metadata)
+            if segmentation_status is not None:
+                row["segmentation_status"] = segmentation_status
+            summary_rows.append(row)
         return summary_rows
 
     def _emit_run_card(
@@ -6130,53 +6479,30 @@ class EnhanceOrchestrator:
         )
         if requested_backend_defect is not None:
             logger.error(requested_backend_defect)
-        requested_backend = self._backend_metadata.requested_backend or "auto"
-        backend_selection_resolved = (
-            backend_summary["final_backends_used"][0]
-            if backend_summary["final_backends_used"]
-            else (self._backend_metadata.resolved_backend)
-        )
-        backend_model_artifact = self._resolve_run_card_backend_model_artifact(
+        backend_selection = self._build_backend_selection_payload(
             results,
-            backend_selection_resolved,
+            backend_summary,
         )
-
-        backend_selection: Dict[str, Any] = {
-            "requested": requested_backend,
-            "resolved": backend_selection_resolved,
-            "device": self._backend_metadata.device,
-            "model_id": self._resolve_run_card_backend_model_id(
-                results,
-                backend_selection_resolved,
-            ),
-            "model_artifact_filename": backend_model_artifact.get(
-                "model_artifact_filename",
-            ),
-            "model_artifact_sha256": backend_model_artifact.get(
-                "model_artifact_sha256",
-            ),
-        }
-        # Explicit wrapper semantics when
-        # logical backend delegates to a
-        # different runtime engine.
-        if self._backend_metadata.resolved_backend != backend_selection_resolved and backend_summary["fallback_images"] == 0:
-            backend_selection["logical_backend"] = self._backend_metadata.resolved_backend
-            backend_selection["resolved_engine"] = backend_selection_resolved
 
         artifact_summary_payload: dict[str, Any] = (
             {"artifact_tree": artifact_tree} if run_card_version == "v2" else {"artifact_merkle_root": artifact_merkle_root}
         )
+        include_tree_proofs = bool(artifact_tree.get("proofs")) if isinstance(artifact_tree, dict) else False
 
         run_card = {
             "run_card_version": run_card_version,
             "batch_id": batch_id,
             "start_time": start_time,
             "end_time": end_time,
-            "config_fingerprint": self._build_run_card_config_fingerprint(),
+            "config_fingerprint": self._build_run_card_config_fingerprint(
+                backend_selection=backend_selection,
+                run_card_version=run_card_version,
+                include_proofs=include_tree_proofs,
+            ),
             "inputs": self._build_run_card_inputs(results),
             "effective_config": self._build_run_card_effective_config(
                 run_card_version=run_card_version,
-                include_proofs=bool(artifact_tree.get("proofs")) if isinstance(artifact_tree, dict) else False,
+                include_proofs=include_tree_proofs,
             ),
             "result_summary": self._build_run_card_result_summary(results),
             "backend_selection": backend_selection,
@@ -6194,9 +6520,23 @@ class EnhanceOrchestrator:
             "artifact_index": artifact_index,
             **artifact_summary_payload,
         }
-        model_contract = self._build_run_card_model_contract()
+        model_contract = self._build_run_card_model_contract(
+            results=results,
+            backend_selection=backend_selection,
+        )
         if model_contract is not None:
             run_card["model_contract"] = model_contract
+        run_card_integrity_payload = {
+            "path": self._run_card_output_relative_path(str(run_card_path)),
+            "self_indexing": "excluded_self_hash_cycle",
+        }
+        integrity_canonical_payload = {
+            **run_card,
+            "run_card_integrity": run_card_integrity_payload,
+        }
+        integrity_payload_bytes = canonicalize_json(integrity_canonical_payload)
+        run_card_integrity_payload["canonical_payload_sha256"] = hashlib.sha256(integrity_payload_bytes).hexdigest()
+        run_card["run_card_integrity"] = run_card_integrity_payload
 
         def _json_default(obj: Any) -> Any:
             # --- ConfigFingerprint ---
@@ -6277,6 +6617,22 @@ class EnhanceOrchestrator:
                     f,
                     indent=2,
                     default=_json_default,
+                    sort_keys=True,
+                    ensure_ascii=False,
+                    allow_nan=False,
+                )
+            run_card_self_attestation_path = run_card_path.with_suffix(".self.json")
+            run_card_self_attestation = {
+                "run_card_path": self._run_card_output_relative_path(str(run_card_path)),
+                "self_indexing": "excluded_self_hash_cycle",
+                "final_run_card_sha256": compute_file_sha256(run_card_path),
+                "hash_algorithm": "sha256",
+            }
+            with open(run_card_self_attestation_path, "w", encoding="utf-8") as f:
+                dump_json(
+                    run_card_self_attestation,
+                    f,
+                    indent=2,
                     sort_keys=True,
                     ensure_ascii=False,
                     allow_nan=False,

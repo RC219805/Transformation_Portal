@@ -94,6 +94,22 @@ class TestDepthWriter:
         assert loaded[0, 0] == 0.0  # -0.5 clipped to 0
         assert loaded[1, 0] == 1.0  # 1.5 clipped to 1
 
+    def test_metric_depth_is_percentile_normalized_for_png(self, tmp_path):
+        """Metric meter values should not collapse into a saturated PNG."""
+        depth_map = np.linspace(2.0, 40.0, 10000, dtype=np.float32).reshape(100, 100)
+        output_path = tmp_path / "metric_depth.png"
+
+        path, _, stats = atomic_write_depth_u16_png_with_stats(output_path, depth_map)
+        loaded = read_depth_u16_png(path)
+
+        assert stats.normalization is not None
+        assert stats.normalization["mode"] == "percentile_1_99"
+        assert stats.encoded_min == 0
+        assert stats.encoded_max == 65535
+        assert stats.encoded_unique_values is not None
+        assert stats.encoded_unique_values > 100
+        assert float(np.mean(loaded > 0.999)) < 0.05
+
     def test_directory_creation(self, tmp_path):
         """Verify parent directories are created if needed."""
         # Use nested path that doesn't exist yet

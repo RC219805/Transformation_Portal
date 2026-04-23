@@ -165,6 +165,58 @@
             "null"
           ]
         },
+        "resolved_model_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "model_artifact_filename": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "model_artifact_sha256": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "output_depth_units": {
+          "type": "string",
+          "minLength": 1
+        },
+        "depth_png_encoding": {
+          "type": "string",
+          "minLength": 1
+        },
+        "materials_v3_enabled": {
+          "type": "boolean"
+        },
+        "material_segmentation_enabled": {
+          "type": "boolean"
+        },
+        "material_segmentation_backend": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "pbr_enabled": {
+          "type": "boolean"
+        },
+        "run_card_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "run_card_include_proofs": {
+          "type": "boolean"
+        },
+        "emit_run_card": {
+          "type": "boolean"
+        },
         "hash_algorithm": {
           "type": "string",
           "const": "sha256"
@@ -291,10 +343,13 @@
         "requested_model_selector",
         "requires_non_commercial_ok",
         "resolved_repo_id",
-        "resolved_revision",
         "usage_class"
       ],
       "properties": {
+        "contract_kind": {
+          "type": "string",
+          "minLength": 1
+        },
         "requested_model_selector": {
           "type": "string",
           "minLength": 1
@@ -308,8 +363,30 @@
           "minLength": 1
         },
         "resolved_revision": {
-          "type": "string",
+          "type": [
+            "string",
+            "null"
+          ],
           "pattern": "^[a-f0-9]{40}$"
+        },
+        "model_artifact_filename": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "model_artifact_sha256": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "model_artifact_source": {
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "license_id": {
           "type": "string",
@@ -323,6 +400,9 @@
           "type": "boolean"
         },
         "non_commercial_ok": {
+          "type": "boolean"
+        },
+        "accept_apple_depth_pro_research_license": {
           "type": "boolean"
         },
         "backend_kind": {
@@ -676,6 +756,30 @@
         },
         "additionalProperties": true
       }
+    },
+    "run_card_integrity": {
+      "type": "object",
+      "required": [
+        "canonical_payload_sha256",
+        "path",
+        "self_indexing"
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^(?!/)(?!.*\\\\)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"
+        },
+        "self_indexing": {
+          "type": "string",
+          "const": "excluded_self_hash_cycle"
+        },
+        "canonical_payload_sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      },
+      "additionalProperties": false
     },
     "artifact_index": {
       "type": "array",

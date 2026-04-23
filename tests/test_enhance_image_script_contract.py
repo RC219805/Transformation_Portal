@@ -38,10 +38,10 @@ def _write_input_fixture(path: Path) -> None:
 @pytest.mark.parametrize(
     ("input_name", "asset_key", "expected_name"),
     [
-        ("scene.DNG", None, "scene_materials_v3_enhanced.tif"),
-        ("scene.CR2", "scene_hash", "scene_hash_materials_v3_enhanced.tif"),
-        ("scene.jpg", None, "scene_materials_v3_enhanced.png"),
-        ("scene.png", "scene_hash", "scene_hash_materials_v3_enhanced.png"),
+        ("scene.DNG", None, "scene_v2_enhanced.tif"),
+        ("scene.CR2", "scene_hash", "scene_hash_v2_enhanced.tif"),
+        ("scene.jpg", None, "scene_v2_enhanced.png"),
+        ("scene.png", "scene_hash", "scene_hash_v2_enhanced.png"),
     ],
 )
 def test_run_v2_enhancement_uses_canonical_emitted_artifact_name(
