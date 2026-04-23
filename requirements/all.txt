@@ -199,11 +199,11 @@ pycodestyle==2.14.0
     #   flake8
 pycparser==3.0
     # via cffi
-pydantic==2.13.1
+pydantic==2.13.3
     # via
     #   -r base.in
     #   fastapi
-pydantic-core==2.46.1
+pydantic-core==2.46.3
     # via pydantic
 pyflakes==3.4.0
     # via flake8
