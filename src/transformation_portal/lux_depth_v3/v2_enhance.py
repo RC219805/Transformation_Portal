@@ -321,6 +321,8 @@ def _normalized_exif_after_orientation(pil_image: Image.Image, orientation_appli
                 del exif_obj[0x0112]
         except (KeyError, TypeError, ValueError):
             return None
+        if not exif_obj:
+            return None
 
     try:
         return exif_obj.tobytes()
@@ -612,7 +614,8 @@ def enhance_image(
         load_backend = str(metadata.get("load_backend") or "pil")
         source_had_icc = bool(icc_profile)
         source_had_exif = bool(exif_data or metadata.get("exif_orientation"))
-        exif_preservation_mode = str(metadata.get("exif_preservation_mode") or "none")
+        load_exif_preservation_mode = str(metadata.get("exif_preservation_mode") or "none")
+        exif_preservation_mode = load_exif_preservation_mode
         save_backend = "unknown"
         save_degraded = False
         save_degradation_reason = None
@@ -743,7 +746,7 @@ def enhance_image(
 
                     enhanced_image = np.dstack([enhanced_image, alpha_channel])
 
-                # Build extratags for ICC profile and EXIF metadata preservation
+                # Build extratags for ICC profile preservation.
                 extratags = []
 
                 # Preserve ICC profile (TIFF tag 34675)
@@ -752,12 +755,7 @@ def enhance_image(
                     icc_preserved = True
                     logger.debug("Preserving ICC profile in 16-bit TIFF output")
 
-                # Preserve EXIF data (TIFF tag 34665 points to EXIF IFD)
-                # Note: Full EXIF preservation in TIFF requires IFD handling which tifffile
-                # supports via 'exiftags' parameter in newer versions. For now, we log the
-                # intent and document that EXIF preservation is best-effort for 16-bit TIFF.
                 if exif_data:
-                    exif_preservation_mode = "none"
                     logger.debug(
                         "EXIF data present in source but not written by the 16-bit tifffile save path. "
                         "ICC profile is preserved separately when available."
@@ -772,6 +770,8 @@ def enhance_image(
                     extratags=extratags if extratags else None,
                 )
                 save_backend = "tifffile"
+                if source_had_exif:
+                    exif_preservation_mode = "none"
                 logger.info(f"Saved 16-bit TIFF: {output_path}")
 
             except Exception as e:
@@ -797,8 +797,12 @@ def enhance_image(
                     icc_preserved = True
                 if exif_data:
                     save_kwargs["exif"] = exif_data
-                    if exif_preservation_mode != "normalized":
+                    if load_exif_preservation_mode in {"normalized", "partial"}:
+                        exif_preservation_mode = load_exif_preservation_mode
+                    else:
                         exif_preservation_mode = "full"
+                elif source_had_exif:
+                    exif_preservation_mode = "none"
                 output_image.save(output_path, **save_kwargs)
                 logger.warning(f"Saved as 8-bit (16-bit save failed): {output_path}")
                 # Note: target_bits stays 8 (was set via allow_8bit_output)
@@ -836,9 +840,13 @@ def enhance_image(
             # Preserve EXIF data if present
             if exif_data:
                 save_kwargs["exif"] = exif_data
-                if exif_preservation_mode != "normalized":
+                if load_exif_preservation_mode in {"normalized", "partial"}:
+                    exif_preservation_mode = load_exif_preservation_mode
+                else:
                     exif_preservation_mode = "full"
                 logger.debug("Preserving EXIF metadata")
+            elif source_had_exif:
+                exif_preservation_mode = "none"
 
             output_image.save(output_path, **save_kwargs)
             save_backend = "pil"

@@ -1003,6 +1003,55 @@ class TestEnhanceImage:
         context = call_args[0][0]
         np.testing.assert_array_equal(context.get_artifact("image"), expected)
 
+    def test_16bit_tiff_allowed_8bit_output_reports_normalized_exif(self, tmp_path):
+        """PIL 8-bit output should not report normalized EXIF as fully preserved."""
+        tifffile = pytest.importorskip("tifffile")
+
+        input_path = tmp_path / "input_orientation_with_exif.tif"
+        output_path = tmp_path / "output_orientation_with_exif.tif"
+        source = np.arange(2 * 3 * 3, dtype=np.uint16).reshape(2, 3, 3)
+        tifffile.imwrite(
+            input_path,
+            source,
+            photometric="rgb",
+            compression=None,
+            extratags=[
+                (274, "H", 1, 6, False),
+                (315, "s", len("transformation-portal") + 1, "transformation-portal", False),
+            ],
+        )
+
+        with Image.open(input_path) as opened:
+            exif = opened.getexif()
+            assert exif.get(0x0112) == 6
+            assert exif.get(315) == "transformation-portal"
+
+        with patch("transformation_portal.lux_depth_v3.v2_enhance.EnhancementStage") as mock_stage_cls:
+            mock_stage = Mock()
+            mock_stage_cls.return_value = mock_stage
+
+            def compute(context):
+                image_from_context = context.get_artifact("image")
+                mock_result = Mock()
+                mock_result.status = StageStatus.COMPLETED
+                mock_result.artifacts = {"enhanced_image": (image_from_context / 257).astype(np.uint8)}
+                mock_result.metadata = {}
+                return mock_result
+
+            mock_stage.compute.side_effect = compute
+
+            report = enhance_image(input_path, output_path, allow_8bit_output=True)
+
+        assert report["status"] == "success"
+        assert report["io"]["load_backend"] == "tifffile"
+        assert report["io"]["save_backend"] == "pil"
+        assert report["io"]["save_degraded"] is True
+        assert report["io"]["save_degradation_reason"] == "allow_8bit_output"
+        assert report["io"]["metadata_preservation_mode"] == "partial"
+        assert report["io"]["exif_preservation_mode"] == "normalized"
+        assert report["io"]["exif_orientation_normalized"] is True
+        assert report["io"]["source_exif_orientation"] == 6
+
     def test_enhance_image_handles_palette_mode(self, tmp_path):
         """Test that palette (P) mode images are converted to RGB."""
         input_path = tmp_path / "input.png"
