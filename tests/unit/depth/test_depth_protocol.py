@@ -25,24 +25,26 @@ from transformation_portal.lux_depth_v3.protocols import (
 class MockCommercialBackend:
     """Mock commercial depth backend for testing."""
 
+    backend_info = BackendInfo(
+        name="Mock Commercial Backend",
+        model_id="mock/commercial-v1",
+        role=BackendRole.PRODUCTION,
+        license_tier=LicenseTier.COMMERCIAL,
+        capabilities=frozenset(
+            {
+                BackendCapability.RELATIVE_DEPTH,
+                BackendCapability.BATCH_INFERENCE,
+            }
+        ),
+        description="Test backend for commercial use",
+    )
+
     def __init__(self):
         self._loaded = False
 
     @property
     def info(self) -> BackendInfo:
-        return BackendInfo(
-            name="Mock Commercial Backend",
-            model_id="mock/commercial-v1",
-            role=BackendRole.PRODUCTION,
-            license_tier=LicenseTier.COMMERCIAL,
-            capabilities=frozenset(
-                {
-                    BackendCapability.RELATIVE_DEPTH,
-                    BackendCapability.BATCH_INFERENCE,
-                }
-            ),
-            description="Test backend for commercial use",
-        )
+        return self.backend_info
 
     def load(
         self,
@@ -71,22 +73,24 @@ class MockCommercialBackend:
 class MockResearchBackend:
     """Mock research backend (non-commercial) for testing."""
 
+    backend_info = BackendInfo(
+        name="Mock Research Backend",
+        model_id="mock/research-v1",
+        role=BackendRole.AUDIT,
+        license_tier=LicenseTier.NON_COMMERCIAL,
+        capabilities=frozenset(
+            {
+                BackendCapability.RELATIVE_DEPTH,
+                BackendCapability.METRIC_DEPTH,
+                BackendCapability.CONFIDENCE_MAP,
+            }
+        ),
+        description="Test backend for research (non-commercial)",
+    )
+
     @property
     def info(self) -> BackendInfo:
-        return BackendInfo(
-            name="Mock Research Backend",
-            model_id="mock/research-v1",
-            role=BackendRole.AUDIT,
-            license_tier=LicenseTier.NON_COMMERCIAL,
-            capabilities=frozenset(
-                {
-                    BackendCapability.RELATIVE_DEPTH,
-                    BackendCapability.METRIC_DEPTH,
-                    BackendCapability.CONFIDENCE_MAP,
-                }
-            ),
-            description="Test backend for research (non-commercial)",
-        )
+        return self.backend_info
 
     def load(
         self,
@@ -116,21 +120,23 @@ class MockResearchBackend:
 class MockVideoBackend:
     """Mock video-capable backend for testing."""
 
+    backend_info = BackendInfo(
+        name="Mock Video Backend",
+        model_id="mock/video-v1",
+        role=BackendRole.VIDEO,
+        license_tier=LicenseTier.COMMERCIAL,
+        capabilities=frozenset(
+            {
+                BackendCapability.RELATIVE_DEPTH,
+                BackendCapability.VIDEO_STREAMING,
+            }
+        ),
+        description="Test backend for video processing",
+    )
+
     @property
     def info(self) -> BackendInfo:
-        return BackendInfo(
-            name="Mock Video Backend",
-            model_id="mock/video-v1",
-            role=BackendRole.VIDEO,
-            license_tier=LicenseTier.COMMERCIAL,
-            capabilities=frozenset(
-                {
-                    BackendCapability.RELATIVE_DEPTH,
-                    BackendCapability.VIDEO_STREAMING,
-                }
-            ),
-            description="Test backend for video processing",
-        )
+        return self.backend_info
 
     def load(
         self,
@@ -253,6 +259,76 @@ class TestDepthModelRegistry:
         backend = registry.get_backend(name="custom_name")
         assert backend.info.model_id == "mock/commercial-v1"
 
+    def test_register_backend_does_not_require_constructor(self, registry):
+        """Registration and listing use class metadata without construction."""
+
+        class ConstructorRequiredBackend:
+            backend_info = BackendInfo(
+                name="Constructor Required",
+                model_id="mock/constructor-required",
+                role=BackendRole.PRODUCTION,
+                license_tier=LicenseTier.COMMERCIAL,
+            )
+
+            def __init__(self, required_arg):
+                self.required_arg = required_arg
+
+            @property
+            def info(self) -> BackendInfo:
+                return self.backend_info
+
+            def load(self, device: str = "auto", weights_path: Optional[Path] = None, strict_license: bool = True) -> None:
+                pass
+
+            def predict(self, image: np.ndarray) -> DepthArtifact:
+                raise NotImplementedError
+
+        registry.register(ConstructorRequiredBackend, name="constructor_required")
+        backends = registry.list_backends(role=BackendRole.PRODUCTION)
+        assert [info.model_id for info in backends] == ["mock/constructor-required"]
+
+    def test_register_requires_class_available_backend_info(self, registry):
+        """Backends must expose metadata without instance construction."""
+
+        class MissingMetadataBackend:
+            @property
+            def info(self) -> BackendInfo:
+                return BackendInfo(
+                    name="Missing Metadata Runtime Info",
+                    model_id="mock/missing-metadata-runtime-info",
+                    role=BackendRole.PRODUCTION,
+                    license_tier=LicenseTier.COMMERCIAL,
+                )
+
+            def load(self, device: str = "auto", weights_path: Optional[Path] = None, strict_license: bool = True) -> None:
+                pass
+
+            def predict(self, image: np.ndarray) -> DepthArtifact:
+                raise NotImplementedError
+
+        with pytest.raises(TypeError, match="must expose BackendInfo"):
+            registry.register(MissingMetadataBackend)
+
+    def test_register_requires_protocol_info_member(self, registry):
+        """Class validation requires the runtime protocol info member."""
+
+        class MissingInfoBackend:
+            backend_info = BackendInfo(
+                name="Missing Info",
+                model_id="mock/missing-info",
+                role=BackendRole.PRODUCTION,
+                license_tier=LicenseTier.COMMERCIAL,
+            )
+
+            def load(self, device: str = "auto", weights_path: Optional[Path] = None, strict_license: bool = True) -> None:
+                pass
+
+            def predict(self, image: np.ndarray) -> DepthArtifact:
+                raise NotImplementedError
+
+        with pytest.raises(TypeError, match="info"):
+            registry.register(MissingInfoBackend)
+
     def test_list_backends_by_role(self, registry):
         """Test listing backends filtered by role."""
         registry.register(MockCommercialBackend)
@@ -289,11 +365,176 @@ class TestDepthModelRegistry:
         backend = registry.get_backend(role=BackendRole.PRODUCTION)
         assert backend.info.role == BackendRole.PRODUCTION
 
+    def test_list_and_role_lookup_do_not_instantiate_all_backends(self, registry):
+        """Metadata discovery stays constructor-free; acquisition builds only the selected backend."""
+
+        class CountingProductionBackend:
+            constructor_calls = 0
+            backend_info = BackendInfo(
+                name="Counting Production",
+                model_id="mock/counting-production",
+                role=BackendRole.PRODUCTION,
+                license_tier=LicenseTier.COMMERCIAL,
+            )
+
+            def __init__(self):
+                type(self).constructor_calls += 1
+
+            @property
+            def info(self) -> BackendInfo:
+                return self.backend_info
+
+            def load(self, device: str = "auto", weights_path: Optional[Path] = None, strict_license: bool = True) -> None:
+                pass
+
+            def predict(self, image: np.ndarray) -> DepthArtifact:
+                raise NotImplementedError
+
+        class CountingAuditBackend:
+            constructor_calls = 0
+            backend_info = BackendInfo(
+                name="Counting Audit",
+                model_id="mock/counting-audit",
+                role=BackendRole.AUDIT,
+                license_tier=LicenseTier.NON_COMMERCIAL,
+            )
+
+            def __init__(self):
+                type(self).constructor_calls += 1
+
+            @property
+            def info(self) -> BackendInfo:
+                return self.backend_info
+
+            def load(self, device: str = "auto", weights_path: Optional[Path] = None, strict_license: bool = True) -> None:
+                pass
+
+            def predict(self, image: np.ndarray) -> DepthArtifact:
+                raise NotImplementedError
+
+        registry.register(CountingProductionBackend, name="production")
+        registry.register(CountingAuditBackend, name="audit")
+
+        listed = registry.list_backends()
+        assert len(listed) == 2
+        assert CountingProductionBackend.constructor_calls == 0
+        assert CountingAuditBackend.constructor_calls == 0
+
+        backend = registry.get_backend(role=BackendRole.PRODUCTION, use_cache=False)
+        assert isinstance(backend, CountingProductionBackend)
+        assert CountingProductionBackend.constructor_calls == 1
+        assert CountingAuditBackend.constructor_calls == 0
+
+    def test_role_lookup_skips_unconstructable_candidate(self, registry):
+        """Role lookup can fall through when a registered backend needs constructor args."""
+
+        class ConstructorRequiredProductionBackend:
+            backend_info = BackendInfo(
+                name="Constructor Required Production",
+                model_id="mock/constructor-required-production",
+                role=BackendRole.PRODUCTION,
+                license_tier=LicenseTier.COMMERCIAL,
+            )
+
+            def __init__(self, required_arg):
+                self.required_arg = required_arg
+
+            @property
+            def info(self) -> BackendInfo:
+                return self.backend_info
+
+            def load(self, device: str = "auto", weights_path: Optional[Path] = None, strict_license: bool = True) -> None:
+                pass
+
+            def predict(self, image: np.ndarray) -> DepthArtifact:
+                raise NotImplementedError
+
+        class FallbackProductionBackend:
+            constructor_calls = 0
+            backend_info = BackendInfo(
+                name="Fallback Production",
+                model_id="mock/fallback-production",
+                role=BackendRole.PRODUCTION,
+                license_tier=LicenseTier.COMMERCIAL,
+            )
+
+            def __init__(self):
+                type(self).constructor_calls += 1
+
+            @property
+            def info(self) -> BackendInfo:
+                return self.backend_info
+
+            def load(self, device: str = "auto", weights_path: Optional[Path] = None, strict_license: bool = True) -> None:
+                pass
+
+            def predict(self, image: np.ndarray) -> DepthArtifact:
+                raise NotImplementedError
+
+        registry.register(ConstructorRequiredProductionBackend, name="constructor_required")
+        registry.register(FallbackProductionBackend, name="fallback")
+
+        with pytest.raises(TypeError):
+            registry.get_backend(name="constructor_required")
+        backend = registry.get_backend(role=BackendRole.PRODUCTION, use_cache=False)
+
+        assert isinstance(backend, FallbackProductionBackend)
+        assert FallbackProductionBackend.constructor_calls == 1
+
     def test_get_backend_commercial_only_rejects_research(self, registry):
         """Test that commercial_only rejects non-commercial backends."""
         registry.register(MockResearchBackend)
         with pytest.raises(ValueError, match="non-commercial license"):
             registry.get_backend(name="MockResearchBackend", commercial_only=True)
+
+    def test_get_backend_commercial_only_rejects_cached_research(self, registry):
+        """Commercial filtering is enforced before returning cached instances."""
+        registry.register(MockResearchBackend)
+        registry.get_backend(name="MockResearchBackend", commercial_only=False)
+        with pytest.raises(ValueError, match="non-commercial license"):
+            registry.get_backend(name="MockResearchBackend", commercial_only=True)
+
+    def test_get_backend_rechecks_runtime_info_for_commercial_only(self, registry):
+        """Registration metadata overrides cannot mask non-commercial runtime info."""
+        commercial_override = BackendInfo(
+            name="Runtime Override",
+            model_id="mock/runtime-override",
+            role=BackendRole.PRODUCTION,
+            license_tier=LicenseTier.COMMERCIAL,
+        )
+
+        class RuntimeResearchBackend:
+            constructor_calls = 0
+            backend_info = BackendInfo(
+                name="Runtime Research",
+                model_id="mock/runtime-research",
+                role=BackendRole.PRODUCTION,
+                license_tier=LicenseTier.NON_COMMERCIAL,
+            )
+
+            def __init__(self):
+                type(self).constructor_calls += 1
+
+            @property
+            def info(self) -> BackendInfo:
+                return self.backend_info
+
+            def load(self, device: str = "auto", weights_path: Optional[Path] = None, strict_license: bool = True) -> None:
+                pass
+
+            def predict(self, image: np.ndarray) -> DepthArtifact:
+                raise NotImplementedError
+
+        registry.register(
+            RuntimeResearchBackend,
+            name="runtime_research",
+            info=commercial_override,
+        )
+        registry.get_backend(name="runtime_research", commercial_only=False)
+
+        with pytest.raises(ValueError, match="non-commercial license"):
+            registry.get_backend(name="runtime_research", commercial_only=True)
+        assert RuntimeResearchBackend.constructor_calls == 1
 
     def test_get_backend_not_found(self, registry):
         """Test error when backend not found."""
