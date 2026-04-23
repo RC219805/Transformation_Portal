@@ -164,6 +164,14 @@ def canonical_asset_stem(input_path_or_stem: str) -> str:
     return normalized
 
 
+def _relative_depth_candidate(depth_dir: Path, depth_path: Path) -> str:
+    """Return a stable candidate path for ambiguity diagnostics."""
+    try:
+        return str(depth_path.relative_to(depth_dir))
+    except ValueError:
+        return str(depth_path)
+
+
 def find_depth_map(depth_dir: Path, image_stem: str) -> Optional[Path]:
     """Find depth map for input image in depth directory.
 
@@ -178,6 +186,9 @@ def find_depth_map(depth_dir: Path, image_stem: str) -> Optional[Path]:
 
     Returns:
         Path to depth map or None if not found
+
+    Raises:
+        V2EnhancementError: If more than one plausible depth map is found
     """
     if not depth_dir or not depth_dir.exists():
         return None
@@ -186,6 +197,14 @@ def find_depth_map(depth_dir: Path, image_stem: str) -> Optional[Path]:
     candidate_stems = [canonical_stem]
     if image_stem not in candidate_stems:
         candidate_stems.append(image_stem)
+
+    candidates: list[Path] = []
+    seen_candidates: set[Path] = set()
+
+    def add_candidate(depth_path: Path) -> None:
+        if depth_path not in seen_candidates:
+            seen_candidates.add(depth_path)
+            candidates.append(depth_path)
 
     for stem in candidate_stems:
         patterns = [
@@ -199,17 +218,27 @@ def find_depth_map(depth_dir: Path, image_stem: str) -> Optional[Path]:
         for pattern in patterns:
             depth_path = depth_dir / pattern
             if depth_path.exists():
-                logger.debug(f"Found depth map: {depth_path}")
-                return depth_path
+                add_candidate(depth_path)
 
         # Fallback: recursive search for nested output_key
         # directories. Sort for deterministic selection.
         for pattern in patterns:
             recursive_matches = sorted(depth_dir.glob(f"**/{pattern}"))
-            if recursive_matches:
-                depth_path = recursive_matches[0]
-                logger.debug(f"Found nested depth map: {depth_path}")
-                return depth_path
+            for depth_path in recursive_matches:
+                if depth_path.exists():
+                    add_candidate(depth_path)
+
+    if len(candidates) == 1:
+        logger.debug(f"Found depth map: {candidates[0]}")
+        return candidates[0]
+
+    if len(candidates) > 1:
+        candidate_list = [_relative_depth_candidate(depth_dir, candidate) for candidate in candidates]
+        raise V2EnhancementError(
+            "Ambiguous depth map matches for "
+            f"'{image_stem}' (canonical='{canonical_stem}') in {depth_dir}: "
+            f"{candidate_list}"
+        )
 
     logger.warning(
         "No depth map found for '%s' (canonical='%s') in %s",
@@ -252,6 +281,55 @@ def detect_input_bit_depth(pil_image: Image.Image) -> int:
     return 8
 
 
+def _apply_exif_orientation_to_array(image_array: np.ndarray, orientation: int | None) -> np.ndarray:
+    """Apply EXIF orientation to a numpy image array using Pillow-compatible semantics."""
+    if orientation in (None, 1):
+        return image_array
+
+    if orientation == 2:
+        return np.flip(image_array, axis=1)
+    if orientation == 3:
+        return np.rot90(image_array, 2)
+    if orientation == 4:
+        return np.flip(image_array, axis=0)
+    if orientation == 5:
+        return np.rot90(np.flip(image_array, axis=1), 1)
+    if orientation == 6:
+        return np.rot90(image_array, -1)
+    if orientation == 7:
+        return np.rot90(np.flip(image_array, axis=1), -1)
+    if orientation == 8:
+        return np.rot90(image_array, 1)
+
+    logger.debug("Ignoring unsupported EXIF orientation value: %s", orientation)
+    return image_array
+
+
+def _normalized_exif_after_orientation(pil_image: Image.Image, orientation_applied: bool) -> Optional[bytes]:
+    """Return EXIF bytes that cannot trigger a second orientation transform."""
+    try:
+        exif_obj = pil_image.getexif()
+    except (AttributeError, ValueError, OSError):
+        return None
+
+    if not exif_obj:
+        return None
+
+    if orientation_applied:
+        try:
+            if 0x0112 in exif_obj:
+                del exif_obj[0x0112]
+        except (KeyError, TypeError, ValueError):
+            return None
+        if not exif_obj:
+            return None
+
+    try:
+        return exif_obj.tobytes()
+    except (AttributeError, ValueError, OSError):
+        return None
+
+
 def load_image_preserve_bit_depth(input_path: Path, allow_8bit_output: bool = False) -> tuple[np.ndarray, int, dict]:
     """Load image preserving bit depth (8-bit or 16-bit).
 
@@ -279,6 +357,10 @@ def load_image_preserve_bit_depth(input_path: Path, allow_8bit_output: bool = Fa
             "format": pil_image.format,
             "mode": pil_image.mode,
             "size": pil_image.size,
+            "load_backend": "pil",
+            "exif_orientation": None,
+            "exif_orientation_applied": False,
+            "exif_preservation_mode": "none",
         }
 
         # Detect bit depth FIRST (before any loading)
@@ -293,6 +375,7 @@ def load_image_preserve_bit_depth(input_path: Path, allow_8bit_output: bool = Fa
                 exif_orientation = exif.get(0x0112)  # Orientation tag
         except Exception as e:
             logger.debug(f"Could not extract EXIF orientation: {e}")
+        metadata["exif_orientation"] = exif_orientation
 
     # For 16-bit TIFFs, use tifffile to load correctly
     if detected_input_bits == 16 and image_format == "TIFF":
@@ -307,17 +390,19 @@ def load_image_preserve_bit_depth(input_path: Path, allow_8bit_output: bool = Fa
 
             # Handle EXIF orientation for tifffile path
             # tifffile doesn't apply EXIF orientation automatically
+            orientation_applied = bool(exif_orientation and exif_orientation != 1)
             if exif_orientation and exif_orientation != 1:
-                # Apply rotation to numpy array
-                if exif_orientation == 3:
-                    image_array = np.rot90(image_array, 2)
-                elif exif_orientation == 6:
-                    image_array = np.rot90(image_array, -1)
-                elif exif_orientation == 8:
-                    image_array = np.rot90(image_array, 1)
-                # orientations 2, 4, 5, 7 involve flips (rare, skip for now)
-
+                image_array = _apply_exif_orientation_to_array(image_array, int(exif_orientation))
                 logger.info(f"Applied EXIF orientation {exif_orientation} to 16-bit TIFF")
+
+            with Image.open(input_path) as pil_image_for_exif:
+                metadata["exif"] = _normalized_exif_after_orientation(pil_image_for_exif, orientation_applied)
+            metadata["load_backend"] = "tifffile"
+            metadata["exif_orientation_applied"] = orientation_applied
+            if orientation_applied:
+                metadata["exif_preservation_mode"] = "normalized"
+            elif metadata.get("exif"):
+                metadata["exif_preservation_mode"] = "full"
 
             # Ensure RGB format (H, W, 3)
             if image_array.ndim == 2:
@@ -345,22 +430,20 @@ def load_image_preserve_bit_depth(input_path: Path, allow_8bit_output: bool = Fa
     # Standard PIL loading for 8-bit or fallback
     with Image.open(input_path) as opened_image:
         # Handle EXIF orientation
+        orientation_applied = bool(exif_orientation and exif_orientation != 1)
         oriented_image: Image.Image = ImageOps.exif_transpose(opened_image)
 
         # After applying exif_transpose, normalize EXIF to avoid double-rotation:
         # - pixels have been rotated already
         # - EXIF Orientation must not request additional rotation in viewers
-        exif_data: Optional[bytes] = None
-        try:
-            exif_obj = oriented_image.getexif()
-            if exif_obj:
-                # Pillow typically normalizes orientation to 1 after transpose
-                exif_data = exif_obj.tobytes()
-        except (AttributeError, ValueError, OSError):
-            # Image doesn't support EXIF or EXIF is malformed
-            pass
-
+        exif_data = _normalized_exif_after_orientation(oriented_image, orientation_applied)
         metadata["exif"] = exif_data
+        metadata["load_backend"] = "pil"
+        metadata["exif_orientation_applied"] = orientation_applied
+        if orientation_applied:
+            metadata["exif_preservation_mode"] = "normalized"
+        elif exif_data:
+            metadata["exif_preservation_mode"] = "full"
 
         # Handle palette mode
         if oriented_image.mode == "P":
@@ -500,6 +583,9 @@ def enhance_image(
         return {
             "status": "passthrough",
             "implementation": "v2_enhance",
+            "artifact_contract": "passthrough_exact_copy",
+            "is_canonical_emitted_artifact": False,
+            "output_naming_policy": "caller_path_exact",
             "input": str(input_path),
             "output": str(output_path),
             "depth_map": str(depth_map_path) if depth_map_path else None,
@@ -525,6 +611,15 @@ def enhance_image(
         image, input_bits, metadata = load_image_preserve_bit_depth(input_path, allow_8bit_output)
         icc_profile = metadata.get("icc_profile")
         exif_data = metadata.get("exif")
+        load_backend = str(metadata.get("load_backend") or "pil")
+        source_had_icc = bool(icc_profile)
+        source_had_exif = bool(exif_data or metadata.get("exif_orientation"))
+        load_exif_preservation_mode = str(metadata.get("exif_preservation_mode") or "none")
+        exif_preservation_mode = load_exif_preservation_mode
+        save_backend = "unknown"
+        save_degraded = False
+        save_degradation_reason = None
+        icc_preserved = False
 
         logger.debug(f"Loaded image: shape={image.shape}, dtype={image.dtype}, " f"bits_per_sample={input_bits}")
 
@@ -540,6 +635,10 @@ def enhance_image(
             target_bits = input_bits
             if input_bits == 16:
                 logger.info("Quality Firewall ACTIVE: 16-bit input detected - " "will preserve 16-bit output")
+
+        if input_bits != target_bits:
+            save_degraded = True
+            save_degradation_reason = "allow_8bit_output"
 
         # Handle RGBA inputs: extract RGB, enhance, restore alpha
         alpha_channel = None
@@ -568,7 +667,6 @@ def enhance_image(
             logger.warning(f"Depth map path provided but not found: {depth_map_path}")
 
         # Apply enhancement using existing EnhancementStage
-        # NOTE: EnhancementStage must be updated to handle uint16 input/output
         enhancer = EnhancementStage(
             enhancement_strength=config.enhancement_strength,
             clarity_strength=config.clarity_strength,
@@ -648,22 +746,19 @@ def enhance_image(
 
                     enhanced_image = np.dstack([enhanced_image, alpha_channel])
 
-                # Build extratags for ICC profile and EXIF metadata preservation
+                # Build extratags for ICC profile preservation.
                 extratags = []
 
                 # Preserve ICC profile (TIFF tag 34675)
                 if icc_profile:
                     extratags.append((34675, "B", len(icc_profile), icc_profile, False))
+                    icc_preserved = True
                     logger.debug("Preserving ICC profile in 16-bit TIFF output")
 
-                # Preserve EXIF data (TIFF tag 34665 points to EXIF IFD)
-                # Note: Full EXIF preservation in TIFF requires IFD handling which tifffile
-                # supports via 'exiftags' parameter in newer versions. For now, we log the
-                # intent and document that EXIF preservation is best-effort for 16-bit TIFF.
                 if exif_data:
                     logger.debug(
-                        "EXIF data present in source; full EXIF preservation in 16-bit TIFF "
-                        "requires manual IFD handling. ICC profile is preserved."
+                        "EXIF data present in source but not written by the 16-bit tifffile save path. "
+                        "ICC profile is preserved separately when available."
                     )
 
                 # Save with tifffile (preserves 16-bit)
@@ -674,6 +769,9 @@ def enhance_image(
                     compression="lzw",  # Lossless compression
                     extratags=extratags if extratags else None,
                 )
+                save_backend = "tifffile"
+                if source_had_exif:
+                    exif_preservation_mode = "none"
                 logger.info(f"Saved 16-bit TIFF: {output_path}")
 
             except Exception as e:
@@ -687,14 +785,24 @@ def enhance_image(
 
                 # Only fall back to 8-bit if explicitly allowed
                 logger.warning(f"tifffile save failed, falling back to 8-bit PIL: {e}")
+                save_backend = "pil"
+                save_degraded = True
+                save_degradation_reason = str(e)
                 # Convert to 8-bit and save with PIL
                 enhanced_8bit = (enhanced_image.astype(np.float32) / 65535.0 * 255.0).astype(np.uint8)
                 output_image = Image.fromarray(enhanced_8bit)
                 save_kwargs = {}
                 if icc_profile:
                     save_kwargs["icc_profile"] = icc_profile
+                    icc_preserved = True
                 if exif_data:
                     save_kwargs["exif"] = exif_data
+                    if load_exif_preservation_mode in {"normalized", "partial"}:
+                        exif_preservation_mode = load_exif_preservation_mode
+                    else:
+                        exif_preservation_mode = "full"
+                elif source_had_exif:
+                    exif_preservation_mode = "none"
                 output_image.save(output_path, **save_kwargs)
                 logger.warning(f"Saved as 8-bit (16-bit save failed): {output_path}")
                 # Note: target_bits stays 8 (was set via allow_8bit_output)
@@ -726,20 +834,29 @@ def enhance_image(
             save_kwargs = {}
             if icc_profile:
                 save_kwargs["icc_profile"] = icc_profile
+                icc_preserved = True
                 logger.debug("Preserving ICC color profile")
 
             # Preserve EXIF data if present
             if exif_data:
                 save_kwargs["exif"] = exif_data
+                if load_exif_preservation_mode in {"normalized", "partial"}:
+                    exif_preservation_mode = load_exif_preservation_mode
+                else:
+                    exif_preservation_mode = "full"
                 logger.debug("Preserving EXIF metadata")
+            elif source_had_exif:
+                exif_preservation_mode = "none"
 
             output_image.save(output_path, **save_kwargs)
+            save_backend = "pil"
             logger.info(f"Saved enhanced image: {output_path}")
 
         runtime_s = time.perf_counter() - start_time
 
         stage_metadata = result.metadata if isinstance(result.metadata, dict) else {}
         stage_has_depth = stage_metadata.get("has_depth") if isinstance(stage_metadata, dict) else None
+        exif_orientation_normalized = bool(metadata.get("exif_orientation_applied"))
 
         # Determine depth consumption semantics
         if stage_has_depth is not None:
@@ -752,10 +869,23 @@ def enhance_image(
             depth_consumed = False
             consumption_source = "not_found" if depth_map_path else "not_requested"
 
+        effective_exif_preserved = exif_preservation_mode == "full"
+        if not source_had_icc and not source_had_exif:
+            metadata_preservation_mode = "none"
+        elif (not source_had_icc or icc_preserved) and (not source_had_exif or effective_exif_preserved):
+            metadata_preservation_mode = "full"
+        elif icc_preserved or exif_preservation_mode in {"full", "normalized", "partial"}:
+            metadata_preservation_mode = "partial"
+        else:
+            metadata_preservation_mode = "none"
+
         # Build metadata report with bit-depth information
         return {
             "status": "success",
             "implementation": "v2_enhance",
+            "artifact_contract": "canonical_v2_emitted_artifact",
+            "is_canonical_emitted_artifact": True,
+            "output_naming_policy": "canonical_v2_emitted_artifact",
             "input": str(input_path),
             "output": str(output_path),
             "depth_map": str(depth_map_path) if depth_map_path else None,
@@ -766,6 +896,17 @@ def enhance_image(
             "timestamp": time.time(),
             "stage_metadata": stage_metadata,
             "enhancement_metadata": result.artifacts.get("enhancement_metadata", {}),
+            "io": {
+                "load_backend": load_backend,
+                "save_backend": save_backend,
+                "metadata_preservation_mode": metadata_preservation_mode,
+                "icc_preserved": icc_preserved,
+                "exif_preservation_mode": exif_preservation_mode,
+                "exif_orientation_normalized": exif_orientation_normalized,
+                "source_exif_orientation": metadata.get("exif_orientation"),
+                "save_degraded": save_degraded,
+                "save_degradation_reason": save_degradation_reason,
+            },
             # BIT-DEPTH METADATA (Quality Firewall contract)
             "bit_depth": {
                 "input_bits_per_sample": input_bits,
