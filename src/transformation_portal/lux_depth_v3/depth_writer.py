@@ -125,6 +125,12 @@ def normalize_depth_for_u16_png(depth_map: np.ndarray) -> tuple[np.ndarray, dict
     }
 
 
+def _count_u16_unique_values(depth_u16: np.ndarray) -> int:
+    """Return exact u16 cardinality with bounded memory."""
+    counts = np.bincount(depth_u16.reshape(-1), minlength=65536)
+    return int(np.count_nonzero(counts))
+
+
 def atomic_write_depth_u16_png_with_stats(
     output_path: Path,
     depth_map: np.ndarray,
@@ -197,7 +203,7 @@ def atomic_write_depth_u16_png_with_stats(
         normalization=normalization_stats,
         encoded_min=int(np.min(depth_u16)),
         encoded_max=int(np.max(depth_u16)),
-        encoded_unique_values=int(np.unique(depth_u16).size),
+        encoded_unique_values=_count_u16_unique_values(depth_u16),
     )
 
     # 3. Atomic Write using shared helper

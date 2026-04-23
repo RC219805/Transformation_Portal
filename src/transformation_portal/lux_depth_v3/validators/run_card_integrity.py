@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import stat
 from json import JSONDecodeError
 from pathlib import Path
 from typing import Any
@@ -52,12 +53,19 @@ def _read_text(path: Path) -> tuple[str | None, str | None]:
         return None, f"Failed to read text file {path}: {exc}"
 
 
-def _compute_file_sha256(path: Path) -> str:
+def _compute_file_sha256(path: Path) -> tuple[str | None, str | None]:
     digest = hashlib.sha256()
-    with open(path, "rb") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
+    try:
+        with open(path, "rb") as handle:
+            for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                digest.update(chunk)
+    except FileNotFoundError:
+        return None, f"File not found while hashing: {path}"
+    except PermissionError:
+        return None, f"Permission denied while hashing file: {path}"
+    except OSError as exc:
+        return None, f"Failed to hash file {path}: {exc}"
+    return digest.hexdigest(), None
 
 
 def canonical_json_text(payload: Any) -> str:
@@ -216,11 +224,22 @@ def _verify_indexed_artifact_files(
             errors.append(path_error)
             continue
         assert artifact_path is not None
-        if not artifact_path.is_file():
+        try:
+            artifact_stat = artifact_path.stat()
+        except FileNotFoundError:
             errors.append(f"artifact_index[{index}] file is missing: {relative_path}")
             continue
+        except PermissionError:
+            errors.append(f"artifact_index[{index}] file is not readable: {relative_path}")
+            continue
+        except OSError as exc:
+            errors.append(f"artifact_index[{index}] file stat failed for {relative_path}: {exc}")
+            continue
+        if not stat.S_ISREG(artifact_stat.st_mode):
+            errors.append(f"artifact_index[{index}] is not a regular file: {relative_path}")
+            continue
         expected_size = artifact.get("size_bytes")
-        actual_size = artifact_path.stat().st_size
+        actual_size = artifact_stat.st_size
         if isinstance(expected_size, int) and expected_size != actual_size:
             errors.append(
                 f"artifact_index[{index}].size_bytes mismatch for {relative_path}: "
@@ -228,7 +247,10 @@ def _verify_indexed_artifact_files(
             )
         expected_sha = artifact.get("sha256")
         if isinstance(expected_sha, str) and SHA256_HEX_RE.fullmatch(expected_sha):
-            actual_sha = _compute_file_sha256(artifact_path)
+            actual_sha, hash_error = _compute_file_sha256(artifact_path)
+            if hash_error:
+                errors.append(f"artifact_index[{index}] file hash failed for {relative_path}: {hash_error}")
+                continue
             if expected_sha != actual_sha:
                 errors.append(
                     f"artifact_index[{index}].sha256 mismatch for {relative_path}: " f"got={expected_sha}, actual={actual_sha}"
@@ -285,7 +307,10 @@ def _verify_run_card_self_integrity(
     if not isinstance(final_sha, str) or not SHA256_HEX_RE.fullmatch(final_sha):
         errors.append("run card self-integrity sidecar final_run_card_sha256 must be a lowercase 64-char hex digest")
         return
-    actual_file_sha = _compute_file_sha256(run_card_path)
+    actual_file_sha, run_card_hash_error = _compute_file_sha256(run_card_path)
+    if run_card_hash_error:
+        errors.append(f"run card self-integrity sidecar hash check failed: {run_card_hash_error}")
+        return
     if final_sha != actual_file_sha:
         errors.append(
             "run card self-integrity sidecar final_run_card_sha256 mismatch: " f"got={final_sha}, actual={actual_file_sha}"

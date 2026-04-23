@@ -336,6 +336,7 @@
         "accelerator_kind",
         "backend_kind",
         "canonical_model_key",
+        "contract_kind",
         "fallback_chain",
         "license_id",
         "manifest_schema_version",
@@ -348,7 +349,10 @@
       "properties": {
         "contract_kind": {
           "type": "string",
-          "minLength": 1
+          "enum": [
+            "hf_revision",
+            "local_checkpoint"
+          ]
         },
         "requested_model_selector": {
           "type": "string",
@@ -425,6 +429,59 @@
           "minimum": 1
         }
       },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "contract_kind": {
+                "const": "hf_revision"
+              }
+            },
+            "required": [
+              "contract_kind"
+            ]
+          },
+          "then": {
+            "required": [
+              "resolved_revision"
+            ],
+            "properties": {
+              "resolved_revision": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{40}$"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "contract_kind": {
+                "const": "local_checkpoint"
+              }
+            },
+            "required": [
+              "contract_kind"
+            ]
+          },
+          "then": {
+            "required": [
+              "model_artifact_filename",
+              "model_artifact_sha256"
+            ],
+            "properties": {
+              "model_artifact_filename": {
+                "type": "string",
+                "minLength": 1
+              },
+              "model_artifact_sha256": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              }
+            }
+          }
+        }
+      ],
       "additionalProperties": false
     },
     "environment": {

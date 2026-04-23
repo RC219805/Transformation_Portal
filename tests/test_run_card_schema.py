@@ -644,6 +644,7 @@ def test_run_card_schema_accepts_additive_model_contract(version: str) -> None:
             "artifacts": [],
         }
     payload["model_contract"] = {
+        "contract_kind": "hf_revision",
         "requested_model_selector": "METRIC_LARGE",
         "canonical_model_key": "da3_research",
         "resolved_repo_id": "depth-anything/DA3NESTED-GIANT-LARGE-1.1",
@@ -658,6 +659,78 @@ def test_run_card_schema_accepts_additive_model_contract(version: str) -> None:
         "manifest_schema_version": 1,
     }
     _validate_run_card_payload(payload, _run_card_schema_path(version))
+
+
+@pytest.mark.parametrize("version", ["v1", "v2"])
+def test_run_card_schema_requires_model_contract_immutable_identifier(version: str) -> None:
+    payload = _valid_run_card_payload()
+    payload["run_card_version"] = version
+    if version == "v1":
+        payload["artifact_merkle_root"] = "0" * 64
+    else:
+        payload.pop("artifact_merkle_root", None)
+        payload["artifact_tree"] = {
+            "algorithm": "ct-sha256-v1",
+            "leaf_format": "tp.run_card.artifact_leaf.v1",
+            "leaf_count": 0,
+            "root_sha256": "1" * 64,
+            "artifacts": [],
+        }
+    payload["model_contract"] = {
+        "contract_kind": "local_checkpoint",
+        "requested_model_selector": "depth_pro",
+        "canonical_model_key": "depth_pro",
+        "resolved_repo_id": "apple/ml-depth-pro",
+        "resolved_revision": None,
+        "model_artifact_filename": "depth_pro.pt",
+        "model_artifact_sha256": None,
+        "license_id": "apple-machine-learning-research-license",
+        "usage_class": "non_commercial_only",
+        "requires_non_commercial_ok": True,
+        "non_commercial_ok": True,
+        "backend_kind": "depth_pro",
+        "accelerator_kind": "mps",
+        "fallback_chain": [],
+        "manifest_schema_version": 1,
+    }
+
+    with pytest.raises(RuntimeError, match="model_artifact_sha256"):
+        _validate_run_card_payload(payload, _run_card_schema_path(version))
+
+
+@pytest.mark.parametrize("version", ["v1", "v2"])
+def test_run_card_schema_requires_hf_model_contract_revision(version: str) -> None:
+    payload = _valid_run_card_payload()
+    payload["run_card_version"] = version
+    if version == "v1":
+        payload["artifact_merkle_root"] = "0" * 64
+    else:
+        payload.pop("artifact_merkle_root", None)
+        payload["artifact_tree"] = {
+            "algorithm": "ct-sha256-v1",
+            "leaf_format": "tp.run_card.artifact_leaf.v1",
+            "leaf_count": 0,
+            "root_sha256": "1" * 64,
+            "artifacts": [],
+        }
+    payload["model_contract"] = {
+        "contract_kind": "hf_revision",
+        "requested_model_selector": "METRIC_LARGE",
+        "canonical_model_key": "da3_research",
+        "resolved_repo_id": "depth-anything/DA3NESTED-GIANT-LARGE-1.1",
+        "resolved_revision": None,
+        "license_id": "cc-by-nc-4.0",
+        "usage_class": "non_commercial_only",
+        "requires_non_commercial_ok": True,
+        "non_commercial_ok": True,
+        "backend_kind": "da3_api",
+        "accelerator_kind": "none",
+        "fallback_chain": [],
+        "manifest_schema_version": 1,
+    }
+
+    with pytest.raises(RuntimeError, match="resolved_revision"):
+        _validate_run_card_payload(payload, _run_card_schema_path(version))
 
 
 @pytest.mark.parametrize("revision", [None, "main"])
@@ -1080,6 +1153,31 @@ def test_apex_duplicate_depth_png_hash_fails_for_distinct_float_depths(tmp_path:
                 },
             ]
         )
+
+
+def test_portable_batch_manifest_results_preserves_input_relative_and_segmentation_paths(tmp_path: Path) -> None:
+    output_root = tmp_path / "output"
+    input_root = tmp_path / "input"
+    orch = object.__new__(EnhanceOrchestrator)
+    orch.output_root = output_root
+
+    portable = orch._portable_batch_manifest_results(
+        [
+            {
+                "status": "ok",
+                "image": str(input_root / "unit-a" / "same-name.jpg"),
+                "depth_path": str(output_root / "depth" / "same-name_depth.png"),
+                "segmentation_mask_path": str(output_root / "masks" / "same-name_mask.png"),
+            }
+        ],
+        input_root=input_root,
+    )
+
+    row = portable[0]
+    assert row["image"] == "unit-a/same-name.jpg"
+    assert row["image_basename"] == "same-name.jpg"
+    assert row["depth_path"] == "depth/same-name_depth.png"
+    assert row["segmentation_mask_path"] == "masks/same-name_mask.png"
 
 
 def test_resolve_run_card_backend_model_id_prefers_selected_attempt_model():

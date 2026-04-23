@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from transformation_portal.ingest.canonical_json import canonicalize_json
+from transformation_portal.ingest.canonical_json import canonicalize_json, dumps_json
 from transformation_portal.lux_depth_v3.artifact_manager import compute_artifact_merkle_root
 from transformation_portal.lux_depth_v3.artifact_tree import build_artifact_tree
 
@@ -173,7 +173,10 @@ def _write_json(path: Path, payload: dict, *, canonical: bool = True) -> None:
         if not artifact_path.exists():
             artifact_path.write_bytes(content)
     if canonical:
-        path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
+        path.write_text(
+            dumps_json(payload, indent=2, sort_keys=True, ensure_ascii=False, allow_nan=False),
+            encoding="utf-8",
+        )
     else:
         path.write_text(json.dumps(payload), encoding="utf-8")
 
@@ -250,6 +253,39 @@ def test_verify_run_card_integrity_rejects_artifact_hash_drift(tmp_path: Path):
 
     assert any("artifact_index[0].size_bytes mismatch" in error for error in errors)
     assert any("artifact_index[0].sha256 mismatch" in error for error in errors)
+
+
+def test_verify_run_card_integrity_reports_artifact_hash_read_failure(tmp_path: Path, monkeypatch):
+    module = _load_script_module(
+        "verify_run_card_integrity_script_artifact_hash_failure", "scripts/verify_run_card_integrity.py"
+    )
+    run_card_path = tmp_path / "run_card_hash_failure.json"
+    payload = _valid_run_card_payload(module)
+    _write_json(run_card_path, payload)
+
+    def fail_hash(path: Path):
+        return None, f"simulated hash failure for {path}"
+
+    monkeypatch.setitem(module.verify_run_card_integrity.__globals__, "_compute_file_sha256", fail_hash)
+
+    errors = module.verify_run_card_integrity(run_card_path)
+    assert any("artifact_index[0] file hash failed" in error for error in errors)
+
+
+def test_verify_run_card_integrity_rejects_non_regular_artifact(tmp_path: Path):
+    module = _load_script_module(
+        "verify_run_card_integrity_script_non_regular_artifact", "scripts/verify_run_card_integrity.py"
+    )
+    run_card_path = tmp_path / "run_card_non_regular.json"
+    payload = _valid_run_card_payload(module)
+    relative_path = payload["artifact_index"][0]["relative_path"]
+    artifact_path = run_card_path.parent / relative_path
+    artifact_path.parent.mkdir(parents=True)
+    artifact_path.mkdir()
+    _write_json(run_card_path, payload)
+
+    errors = module.verify_run_card_integrity(run_card_path)
+    assert any("artifact_index[0] is not a regular file" in error for error in errors)
 
 
 def test_verify_run_card_integrity_accepts_self_attestation_sidecar(tmp_path: Path):

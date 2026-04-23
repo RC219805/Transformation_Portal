@@ -110,6 +110,7 @@ from .manifest import (
     compute_file_sha256,
     get_git_revision,
 )
+from .path_aliasing import relative_to_path_alias
 from .pbr import generate_pbr_maps
 from .pbr_writer import write_pbr_maps
 from .postprocessing import Postprocessor
@@ -5167,7 +5168,7 @@ class EnhanceOrchestrator:
                 backend_selection=batch_backend_selection,
                 config_fingerprint=batch_config_fingerprint,
             ),
-            results=self._portable_batch_manifest_results(results),
+            results=self._portable_batch_manifest_results(results, input_root=input_dir),
             stats={
                 **runtime_stats,
                 "total_images": len(results),
@@ -5962,7 +5963,12 @@ class EnhanceOrchestrator:
             "config_fingerprint_sha256": config_fingerprint.get("sha256"),
         }
 
-    def _portable_batch_manifest_results(self, results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    def _portable_batch_manifest_results(
+        self,
+        results: List[Dict[str, Any]],
+        *,
+        input_root: Optional[Path] = None,
+    ) -> List[Dict[str, Any]]:
         """Return batch results with output paths made portable under output_root."""
         portable_results: List[Dict[str, Any]] = []
         path_like_keys = {
@@ -5982,18 +5988,33 @@ class EnhanceOrchestrator:
             "reconstruction_report_path",
             "reconstruction_preflight_path",
             "reconstruction_diagnostics_path",
+            "segmentation_mask_path",
         }
         for result in results:
             row = copy.deepcopy(result)
             image_value = row.get("image")
             if isinstance(image_value, str) and image_value.strip():
-                row["image"] = Path(image_value).name
+                row["image_basename"] = Path(image_value).name
+                row["image"] = self._input_root_relative_path(image_value, input_root=input_root)
             for key in path_like_keys:
                 relative_path = self._run_card_output_relative_path(row.get(key))
                 if relative_path is not None:
                     row[key] = relative_path
             portable_results.append(row)
         return portable_results
+
+    @staticmethod
+    def _input_root_relative_path(path_value: str, *, input_root: Optional[Path]) -> str:
+        """Render input image paths as input-root-relative when possible."""
+        if input_root is not None:
+            try:
+                return relative_to_path_alias(path_value, input_root).as_posix()
+            except ValueError:
+                pass
+        path = Path(path_value)
+        if path.is_absolute():
+            return path.name
+        return path.as_posix()
 
     @staticmethod
     def _selected_successful_attempt(result: Dict[str, Any]) -> Optional[Dict[str, Any]]:
@@ -6016,7 +6037,10 @@ class EnhanceOrchestrator:
         if not self._is_apex_tier():
             return
 
-        grouped: Dict[str, List[Dict[str, Optional[str]]]] = {}
+        grouped: Dict[
+            str,
+            Dict[str, Any],
+        ] = {}
         for result in results:
             if result.get("status") != "ok":
                 continue
@@ -6035,38 +6059,54 @@ class EnhanceOrchestrator:
                 image_value = result.get("image")
                 if isinstance(image_value, str) and Path(image_value).is_file():
                     input_sha = compute_file_sha256(Path(image_value))
-            grouped.setdefault(png_sha, []).append(
-                {
-                    "image": str(result.get("image")),
-                    "depth_path": str(depth_path),
-                    "depth_float_path": str(depth_float_path),
-                    "input_sha256": input_sha,
-                    "depth_float_sha256": float_sha,
-                }
-            )
-
-        for png_sha, rows in grouped.items():
-            if len(rows) < 2:
+            row = {
+                "image": str(result.get("image")),
+                "depth_path": str(depth_path),
+                "depth_float_path": str(depth_float_path),
+                "input_sha256": input_sha,
+                "depth_float_sha256": float_sha,
+            }
+            if not input_sha:
                 continue
-            for left_index, left_row in enumerate(rows):
-                for right_row in rows[left_index + 1 :]:
-                    if (
-                        left_row.get("input_sha256")
-                        and right_row.get("input_sha256")
-                        and left_row.get("input_sha256") != right_row.get("input_sha256")
-                        and left_row.get("depth_float_sha256") != right_row.get("depth_float_sha256")
-                    ):
-                        raise ApexStrictGateError(
-                            "APEX_DEPTH_PNG_DUPLICATE_HASH",
-                            "Different inputs and float-depth artifacts produced an identical depth PNG hash.",
-                            {
-                                "passed": False,
-                                "failure_codes": ["APEX_DEPTH_PNG_DUPLICATE_HASH"],
-                                "warnings": [],
-                                "duplicate_depth_png_sha256": png_sha,
-                                "conflicting_rows": [left_row, right_row],
-                            },
-                        )
+            group = grouped.setdefault(
+                png_sha,
+                {
+                    "rows": [],
+                    "input_counts": {},
+                    "float_counts": {},
+                    "pair_counts": {},
+                },
+            )
+            rows = group["rows"]
+            input_counts = group["input_counts"]
+            float_counts = group["float_counts"]
+            pair_counts = group["pair_counts"]
+            comparable_count = len(rows)
+            pair_key = (input_sha, float_sha)
+            covered_by_same_input_or_float = (
+                int(input_counts.get(input_sha, 0)) + int(float_counts.get(float_sha, 0)) - int(pair_counts.get(pair_key, 0))
+            )
+            if comparable_count and covered_by_same_input_or_float < comparable_count:
+                conflicting_row = next(
+                    existing
+                    for existing in rows
+                    if existing.get("input_sha256") != input_sha and existing.get("depth_float_sha256") != float_sha
+                )
+                raise ApexStrictGateError(
+                    "APEX_DEPTH_PNG_DUPLICATE_HASH",
+                    "Different inputs and float-depth artifacts produced an identical depth PNG hash.",
+                    {
+                        "passed": False,
+                        "failure_codes": ["APEX_DEPTH_PNG_DUPLICATE_HASH"],
+                        "warnings": [],
+                        "duplicate_depth_png_sha256": png_sha,
+                        "conflicting_rows": [conflicting_row, row],
+                    },
+                )
+            rows.append(row)
+            input_counts[input_sha] = int(input_counts.get(input_sha, 0)) + 1
+            float_counts[float_sha] = int(float_counts.get(float_sha, 0)) + 1
+            pair_counts[pair_key] = int(pair_counts.get(pair_key, 0)) + 1
 
     def _resolve_run_card_backend_model_id(
         self,
