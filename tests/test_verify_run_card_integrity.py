@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import builtins
 import hashlib
 import importlib.util
 import json
@@ -196,6 +197,34 @@ def test_verify_run_card_integrity_rejects_schema_violation(tmp_path: Path):
 
     errors = module.verify_run_card_integrity(run_card_path)
     assert any("Schema validation failed" in error for error in errors)
+
+
+def test_verify_run_card_integrity_reports_jsonschema_install_hint(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    """Missing jsonschema is reported with the governed version/install hint."""
+    from transformation_portal.lux_depth_v3.validators import run_card_validator
+
+    module = _load_script_module("verify_run_card_integrity_missing_jsonschema", "scripts/verify_run_card_integrity.py")
+    run_card_path = tmp_path / "run_card_valid.json"
+    payload = _valid_run_card_payload(module)
+    _write_json(run_card_path, payload)
+
+    original_import = builtins.__import__
+
+    def block_jsonschema_import(name, globals=None, locals=None, fromlist=(), level=0):  # noqa: A002
+        if name == "jsonschema" or name.startswith("jsonschema."):
+            raise ImportError("simulated missing jsonschema")
+        return original_import(name, globals, locals, fromlist, level)
+
+    run_card_validator._load_validator.cache_clear()
+    monkeypatch.setattr(builtins, "__import__", block_jsonschema_import)
+    errors = module.verify_run_card_integrity(run_card_path)
+    run_card_validator._load_validator.cache_clear()
+
+    assert errors == [
+        "jsonschema dependency is required for run card schema validation "
+        "(jsonschema>=4.21.0,<5); install the core runtime with "
+        "`make install-core` or install dependencies from requirements/base.in"
+    ]
 
 
 def test_verify_run_card_integrity_rejects_missing_sha256(tmp_path: Path):

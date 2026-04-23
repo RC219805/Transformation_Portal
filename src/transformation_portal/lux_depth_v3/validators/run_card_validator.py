@@ -46,6 +46,13 @@ from transformation_portal.schemas.run_card import load_run_card_schema
 from .jsonschema_formats import build_jsonschema_format_checker
 from .run_card_backend_semantics import collect_run_card_backend_semantic_errors
 
+JSONSCHEMA_REQUIREMENT = "jsonschema>=4.21.0,<5"
+JSONSCHEMA_INSTALL_HINT = (
+    "jsonschema dependency is required for run card schema validation "
+    f"({JSONSCHEMA_REQUIREMENT}); install the core runtime with "
+    "`make install-core` or install dependencies from requirements/base.in"
+)
+
 
 class RunCardValidationError(RuntimeError):
     """Raised when run card validation fails.
@@ -93,7 +100,7 @@ def _build_validator(schema: Dict[str, Any]) -> Any:
         import jsonschema
     except ImportError as exc:  # pragma: no cover
         raise RuntimeError(
-            "jsonschema dependency is required for run card schema validation",
+            JSONSCHEMA_INSTALL_HINT,
         ) from exc
 
     try:
