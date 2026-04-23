@@ -496,6 +496,38 @@ def test_portal_phase1_accessibility_tokens_align_focus_and_target_size() -> Non
     assert "#build-shell label:not(.sr-only)" in css_content
 
 
+def test_portal_shell_veil_tokens_use_shell_namespace_and_ordered_opacity() -> None:
+    css_content = _portal_css_content()
+
+    assert "--s-veil" not in css_content
+    assert "--s-tint-faint" not in css_content
+    assert "--shell-tint-faint:" in css_content
+
+    def token_alpha(selector: str, token: str) -> float:
+        block_match = re.search(
+            rf"^{re.escape(selector)} \{{(?P<body>.*?)^\}}",
+            css_content,
+            re.M | re.S,
+        )
+        assert block_match is not None, f"{selector} token block missing"
+        value_match = re.search(
+            rf"{re.escape(token)}:\s*rgba\(\s*\d+,\s*\d+,\s*\d+,\s*(?P<alpha>0?\.\d+)\s*\);",
+            block_match.group("body"),
+        )
+        assert value_match is not None, f"{token} missing from {selector}"
+        return float(value_match.group("alpha"))
+
+    for selector in (":root", ".dark:root"):
+        assert token_alpha(selector, "--shell-veil-soft") < token_alpha(
+            selector,
+            "--shell-veil",
+        )
+        assert token_alpha(selector, "--shell-veil") < token_alpha(
+            selector,
+            "--shell-veil-strong",
+        )
+
+
 def test_portal_html_externalizes_direct_debug_assets_without_third_party_hosts() -> None:
     html_content = _portal_html_content()
     css_content = _portal_css_content()
