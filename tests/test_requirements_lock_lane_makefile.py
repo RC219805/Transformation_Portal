@@ -37,12 +37,16 @@ def test_generic_targets_do_not_reference_target_owned_ml_locks() -> None:
         assert "ml-core-linux.txt" not in body
 
 
-def test_check_generic_normalizes_linux_keyring_chain_packages() -> None:
+def test_check_generic_normalizes_host_specific_generic_lock_packages() -> None:
     body = _target_body("check-generic")
 
     for snippet in (
         "all.txt:jeepney==*",
         "all.txt:secretstorage==*",
+        "all.txt:opencv-python==*",
+        "all.txt:opencv-python-headless==*",
+        "base.txt:opencv-python==*",
+        "base.txt:opencv-python-headless==*",
         "ci.txt:cffi==*",
         "ci.txt:cryptography==*",
         "ci.txt:jeepney==*",

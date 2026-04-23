@@ -309,12 +309,12 @@ check-generic: require-pip-compile
 	$(PIP_COMPILE) security.in -o security.txt >/dev/null; \
 	$(PIP_COMPILE) -c all.txt tools-archive.in -o tools-archive.txt >/dev/null; \
 	normalize_req() { \
-		: "The lock contract separately enforces the Linux-only keyring chain, so host-side diffs ignore those packages and pip-compile provenance comments."; \
+		: "The lock contract separately enforces the Linux-only keyring chain and platform-marked OpenCV runtime pins, so host-side diffs ignore those packages and pip-compile provenance comments."; \
 		file_name="$$(basename "$$1")"; \
 		awk '!/^[[:space:]]*#/ && !/^[[:space:]]*$$/ { print }' "$$1" | \
 		while IFS= read -r line; do \
 			case "$$file_name:$$line" in \
-				all.txt:jeepney==*|all.txt:secretstorage==*|ci.txt:cffi==*|ci.txt:cryptography==*|ci.txt:jeepney==*|ci.txt:pycparser==*|ci.txt:secretstorage==*) \
+				all.txt:jeepney==*|all.txt:secretstorage==*|all.txt:opencv-python==*|all.txt:opencv-python-headless==*|base.txt:opencv-python==*|base.txt:opencv-python-headless==*|ci.txt:cffi==*|ci.txt:cryptography==*|ci.txt:jeepney==*|ci.txt:pycparser==*|ci.txt:secretstorage==*) \
 					continue; \
 					;; \
 			esac; \
