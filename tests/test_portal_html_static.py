@@ -5,7 +5,7 @@
 Pins three contracts that the portal shell must satisfy before any
 JavaScript hydration runs:
 
-* Items 12: the default-selected options on the preset, quality tier,
+* Item 12: the default-selected options on the preset, quality tier,
   and compute device ``<select>`` elements agree with the backend's
   default preset (``PRESET_CATALOG`` + ``LUX_PORTAL_DEFAULT_ARGS``),
   so the pre-hydration render does not misrepresent the effective
@@ -184,6 +184,19 @@ def test_workspace_rail_uses_nav_semantics() -> None:
     assert parser.outer_tag == "nav", f"workspace rail must be a <nav>, got <{parser.outer_tag}>"
     aria_label = parser.outer_attrs.get("aria-label")
     assert aria_label and aria_label.strip(), f"workspace rail <nav> must have a non-empty aria-label, got {aria_label!r}"
+
+    # The rail root itself must also be free of tab semantics; banning them
+    # only on descendants would let ``<nav data-ui="view-switcher" role="tablist">``
+    # slip through exactly the regression this test is meant to catch.
+    outer_role = parser.outer_attrs.get("role")
+    assert outer_role is None, (
+        f"workspace rail <nav> must not carry a role attribute (would re-introduce tab semantics), "
+        f"found role={outer_role!r}"
+    )
+    assert "aria-selected" not in parser.outer_attrs, (
+        'workspace rail <nav> must not carry aria-selected (replaced by aria-current="page" on the active link), '
+        f"found aria-selected={parser.outer_attrs.get('aria-selected')!r}"
+    )
 
     assert parser.descendant_roles == [], (
         f'workspace rail must not use role="..." on descendants (tablist/tab were replaced), '
