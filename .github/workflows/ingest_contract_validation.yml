@@ -91,8 +91,10 @@ jobs:
         continue-on-error: true
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
-          ref: ${{ github.head_ref }}
-          fetch-depth: 1
+          ref: ${{ github.event.pull_request.head.sha }}
+          # Keep the PR base commit local so schema drift detection can diff
+          # without a second network fetch, which has been flaky in CI.
+          fetch-depth: 0
           lfs: false
           submodules: false
 
@@ -102,8 +104,8 @@ jobs:
         continue-on-error: true
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
-          ref: ${{ github.head_ref }}
-          fetch-depth: 1
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
           lfs: false
           submodules: false
 
@@ -127,15 +129,28 @@ jobs:
 
       - name: Check for schema changes with policy enforcement
         run: |
-          # Check if schema files were modified
-          git fetch origin ${{ github.base_ref }}
+          set -euo pipefail
 
+          BASE_SHA="${{ github.event.pull_request.base.sha }}"
+          HEAD_SHA="${{ github.event.pull_request.head.sha }}"
+
+          if ! git cat-file -e "${BASE_SHA}^{commit}"; then
+            echo "❌ Missing PR base commit after checkout: ${BASE_SHA}"
+            exit 1
+          fi
+
+          if ! git cat-file -e "${HEAD_SHA}^{commit}"; then
+            echo "❌ Missing PR head commit after checkout: ${HEAD_SHA}"
+            exit 1
+          fi
+
+          # Check if schema files were modified
           SCHEMA_FILES="src/transformation_portal/ingest/schemas.py"
-          CHANGED_FILES=$(git diff --name-only origin/${{ github.base_ref }}..HEAD)
+          CHANGED_FILES=$(git diff --name-only "${BASE_SHA}...${HEAD_SHA}")
 
           SCHEMA_CHANGED=false
           for file in $SCHEMA_FILES; do
-            if echo "$CHANGED_FILES" | grep -q "$file"; then
+            if printf '%s\n' "$CHANGED_FILES" | grep -Fxq "$file"; then
               echo "⚠️  Schema file modified: $file"
               SCHEMA_CHANGED=true
             fi
@@ -148,7 +163,7 @@ jobs:
 
             # Check 1: Schema version must be bumped
             echo "✓ Checking schema version bump..."
-            VERSION_CHANGED=$(git diff origin/${{ github.base_ref }}..HEAD -- src/transformation_portal/ingest/schemas.py | grep -E '^\+.*Literal\["[0-9]+\.[0-9]+\.[0-9]+"\]' | wc -l)
+            VERSION_CHANGED=$(git diff "${BASE_SHA}...${HEAD_SHA}" -- src/transformation_portal/ingest/schemas.py | grep -Ec '^\+.*Literal\["[0-9]+\.[0-9]+\.[0-9]+"\]' || true)
 
             if [ "$VERSION_CHANGED" -eq 0 ]; then
               echo "❌ POLICY VIOLATION: Schema version not bumped"
@@ -161,7 +176,7 @@ jobs:
             # Check 2: CHANGELOG.md must be updated
             echo ""
             echo "✓ Checking CHANGELOG.md update..."
-            if ! echo "$CHANGED_FILES" | grep -q "CHANGELOG.md"; then
+            if ! printf '%s\n' "$CHANGED_FILES" | grep -Fxq "CHANGELOG.md"; then
               echo "❌ POLICY VIOLATION: CHANGELOG.md not updated"
               echo "   Schema changes require CHANGELOG.md update with migration notes"
               exit 1
@@ -171,7 +186,7 @@ jobs:
             # Check 3: Contract docs must be updated
             echo ""
             echo "✓ Checking contract documentation update..."
-            if ! echo "$CHANGED_FILES" | grep -q "docs/apex/ingest_contract.md"; then
+            if ! printf '%s\n' "$CHANGED_FILES" | grep -Fxq "docs/apex/ingest_contract.md"; then
               echo "❌ POLICY VIOLATION: docs/apex/ingest_contract.md not updated"
               echo "   Schema changes require contract documentation update"
               exit 1
