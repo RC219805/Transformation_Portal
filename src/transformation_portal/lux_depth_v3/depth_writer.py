@@ -43,10 +43,92 @@ class DepthWriteStats:
     shape: tuple[int, ...]
     dtype: str
     method: str
+    encoding: str = "u16"
+    normalization: Optional[dict[str, Any]] = None
+    encoded_min: Optional[int] = None
+    encoded_max: Optional[int] = None
+    encoded_unique_values: Optional[int] = None
 
     def _asdict(self) -> dict:
         """Return stats as dict (orchestrator compatibility)."""
         return asdict(self)
+
+
+def _finite_float_array(depth_map: np.ndarray) -> np.ndarray:
+    """Return a float32 array with non-finite values replaced by 0."""
+    arr = np.asarray(depth_map, dtype=np.float32)
+    if np.isfinite(arr).all():
+        return arr
+    return np.nan_to_num(arr, nan=0.0, posinf=0.0, neginf=0.0).astype(np.float32, copy=False)
+
+
+def normalize_depth_for_u16_png(depth_map: np.ndarray) -> tuple[np.ndarray, dict[str, Any]]:
+    """Build the deterministic normalized preview encoded into depth_u16 PNG."""
+    arr = _finite_float_array(depth_map)
+    finite = np.isfinite(np.asarray(depth_map))
+    finite_values = np.asarray(depth_map, dtype=np.float32)[finite]
+    if finite_values.size == 0:
+        normalized = np.zeros_like(arr, dtype=np.float32)
+        return normalized, {
+            "mode": "no_finite_values",
+            "source_min": None,
+            "source_max": None,
+            "encoded_min": 0.0,
+            "encoded_max": 0.0,
+        }
+
+    source_min = float(np.min(finite_values))
+    source_max = float(np.max(finite_values))
+    if source_min >= 0.0 and source_max <= 1.0:
+        normalized = np.clip(arr, 0.0, 1.0)
+        return normalized.astype(np.float32, copy=False), {
+            "mode": "identity_0_1",
+            "source_min": source_min,
+            "source_max": source_max,
+            "encoded_min": float(np.min(normalized)),
+            "encoded_max": float(np.max(normalized)),
+        }
+
+    if source_min >= -0.5 and source_max <= 1.5:
+        normalized = np.clip(arr, 0.0, 1.0)
+        return normalized.astype(np.float32, copy=False), {
+            "mode": "clip_0_1",
+            "source_min": source_min,
+            "source_max": source_max,
+            "encoded_min": float(np.min(normalized)),
+            "encoded_max": float(np.max(normalized)),
+        }
+
+    p01 = float(np.percentile(finite_values, 1.0))
+    p99 = float(np.percentile(finite_values, 99.0))
+    if not np.isfinite(p01) or not np.isfinite(p99) or p99 <= p01:
+        normalized = np.zeros_like(arr, dtype=np.float32)
+        return normalized, {
+            "mode": "degenerate_percentile_1_99",
+            "source_min": source_min,
+            "source_max": source_max,
+            "percentile_1": p01 if np.isfinite(p01) else None,
+            "percentile_99": p99 if np.isfinite(p99) else None,
+            "encoded_min": 0.0,
+            "encoded_max": 0.0,
+        }
+
+    normalized = np.clip((arr - p01) / (p99 - p01), 0.0, 1.0).astype(np.float32, copy=False)
+    return normalized, {
+        "mode": "percentile_1_99",
+        "source_min": source_min,
+        "source_max": source_max,
+        "percentile_1": p01,
+        "percentile_99": p99,
+        "encoded_min": float(np.min(normalized)),
+        "encoded_max": float(np.max(normalized)),
+    }
+
+
+def _count_u16_unique_values(depth_u16: np.ndarray) -> int:
+    """Return exact u16 cardinality with bounded memory."""
+    counts = np.bincount(depth_u16.reshape(-1), minlength=65536)
+    return int(np.count_nonzero(counts))
 
 
 def atomic_write_depth_u16_png_with_stats(
@@ -54,6 +136,7 @@ def atomic_write_depth_u16_png_with_stats(
     depth_map: np.ndarray,
     method: str = "u16",
     debug_verify: bool = False,
+    compute_encoded_unique_values: bool = False,
     **kwargs: Any,
 ) -> tuple[Path, Optional[Path], DepthWriteStats]:
     """Atomically write depth map as 16-bit PNG with statistics.
@@ -66,6 +149,8 @@ def atomic_write_depth_u16_png_with_stats(
         depth_map: Depth map as numpy array (float32, range [0.0, 1.0])
         method: Quantization method (only "u16" supported)
         debug_verify: Whether to verify write integrity by reading back
+        compute_encoded_unique_values: Whether to compute exact u16 cardinality.
+            This scans the encoded image and is intended for APEX audit paths.
         **kwargs: Additional arguments (reserved for future use)
 
     Returns:
@@ -93,21 +178,36 @@ def atomic_write_depth_u16_png_with_stats(
     if method != "u16":
         raise ValueError("Unsupported depth quantization" f" method: {method!r}." " Only 'u16' is supported.")
 
+    finite_depth = _finite_float_array(depth_map)
+
     # 1. Calculate statistics on original data
     stats = DepthWriteStats(
-        min=float(np.min(depth_map)),
-        max=float(np.max(depth_map)),
-        mean=float(np.mean(depth_map)),
-        std=float(np.std(depth_map)),
+        min=float(np.min(finite_depth)),
+        max=float(np.max(finite_depth)),
+        mean=float(np.mean(finite_depth)),
+        std=float(np.std(finite_depth)),
         shape=tuple(depth_map.shape),
         dtype=str(depth_map.dtype),
         method=method,
     )
 
     # 2. Normalize to 16-bit (0-65535)
-    # Assumes input is 0.0-1.0 float. Clip just in case.
-    depth_clipped = np.clip(depth_map, 0.0, 1.0)
-    depth_u16 = (depth_clipped * 65535.0).astype(np.uint16)
+    depth_normalized, normalization_stats = normalize_depth_for_u16_png(depth_map)
+    depth_u16 = np.rint(depth_normalized * 65535.0).astype(np.uint16)
+    stats = DepthWriteStats(
+        min=stats.min,
+        max=stats.max,
+        mean=stats.mean,
+        std=stats.std,
+        shape=stats.shape,
+        dtype=stats.dtype,
+        method=stats.method,
+        encoding="normalized_u16_png",
+        normalization=normalization_stats,
+        encoded_min=int(np.min(depth_u16)),
+        encoded_max=int(np.max(depth_u16)),
+        encoded_unique_values=(_count_u16_unique_values(depth_u16) if compute_encoded_unique_values else None),
+    )
 
     # 3. Atomic Write using shared helper
     # cv2.imwrite requires a file path, so we

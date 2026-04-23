@@ -34,12 +34,23 @@ def build_quality_gate_report(
     if not isinstance(gate_payload, Mapping):
         return None
 
+    existing_details = gate_payload.get("details")
+    if isinstance(existing_details, Mapping):
+        metrics = _copy_mapping(existing_details.get("metrics")) or {}
+        thresholds = _copy_mapping(existing_details.get("thresholds")) or {}
+        shape_context = _copy_mapping(existing_details.get("shape_context")) or {}
+        demoted_failure_codes = existing_details.get("demoted_failure_codes")
+    else:
+        metrics = _copy_mapping(gate_payload.get("metrics")) or {}
+        thresholds = _copy_mapping(gate_payload.get("thresholds")) or {}
+        shape_context = _copy_mapping(gate_payload.get("shape_context")) or {}
+        demoted_failure_codes = gate_payload.get("demoted_failure_codes")
+
     details = {
-        "metrics": _copy_mapping(gate_payload.get("metrics")) or {},
-        "thresholds": _copy_mapping(gate_payload.get("thresholds")) or {},
-        "shape_context": _copy_mapping(gate_payload.get("shape_context")) or {},
+        "metrics": metrics,
+        "thresholds": thresholds,
+        "shape_context": shape_context,
     }
-    demoted_failure_codes = gate_payload.get("demoted_failure_codes")
     if demoted_failure_codes not in (None, [], {}):
         details["demoted_failure_codes"] = copy.deepcopy(demoted_failure_codes)
 

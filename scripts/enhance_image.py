@@ -304,6 +304,7 @@ def run_v2_enhancement(
         safe_join_under(output_dir, lookup_key),
         bit_depth=candidate_bit_depth,
         identity=lookup_key,
+        materials_enabled=masks_file is not None,
     )
 
     # Prevent no-op/self-copy edge case

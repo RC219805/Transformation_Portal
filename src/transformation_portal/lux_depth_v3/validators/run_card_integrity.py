@@ -5,13 +5,15 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import stat
 from json import JSONDecodeError
 from pathlib import Path
 from typing import Any
 
-from transformation_portal.ingest.canonical_json import dumps_json
+from transformation_portal.ingest.canonical_json import canonicalize_json, dumps_json
 from transformation_portal.lux_depth_v3.artifact_manager import compute_artifact_merkle_root
 from transformation_portal.lux_depth_v3.artifact_tree import verify_artifact_tree_payload
+from transformation_portal.lux_depth_v3.manifest import compute_file_sha256 as _shared_compute_file_sha256
 from transformation_portal.lux_depth_v3.run_card_contract import (
     RunCardPathValidationError,
     infer_run_card_version,
@@ -50,6 +52,17 @@ def _read_text(path: Path) -> tuple[str | None, str | None]:
         return None, f"Permission denied reading text file: {path}"
     except OSError as exc:
         return None, f"Failed to read text file {path}: {exc}"
+
+
+def _compute_file_sha256(path: Path) -> tuple[str | None, str | None]:
+    try:
+        return _shared_compute_file_sha256(path), None
+    except FileNotFoundError:
+        return None, f"File not found while hashing: {path}"
+    except PermissionError:
+        return None, f"Permission denied while hashing file: {path}"
+    except OSError as exc:
+        return None, f"Failed to hash file {path}: {exc}"
 
 
 def canonical_json_text(payload: Any) -> str:
@@ -164,34 +177,9 @@ def _verify_config_fingerprint(run_card_payload: dict[str, Any], errors: list[st
         errors.append("config_fingerprint.sha256 must be a lowercase 64-char hex digest")
         return
 
-    fields = (
-        "model_variant",
-        "depth_quantization",
-        "depth_device",
-        "preset",
-        "v2_preset",
-        "v2_device",
-        "v2_upscaler_backend",
-        "preset_requested",
-        "preset_resolved",
-        "backend_requested",
-        "backend_resolved",
-        "device_requested",
-        "device_resolved",
-        "quality_tier",
-        "strict_inputs",
-        "strict_segmentation",
-        "apex_strict_mode",
+    fingerprint_fields = tuple(
+        field for field in config_fingerprint if field not in {"hash_algorithm", "canonical_json", "sha256"}
     )
-    optional_fields = (
-        "raw_ingest_profile",
-        "raw_ingest_settings_hash",
-        "depth_pro_python_executable",
-        "raw_python_executable",
-        "da3_python_executable",
-    )
-    present_optional_fields = tuple(field for field in optional_fields if field in config_fingerprint)
-    fingerprint_fields = (*fields, *present_optional_fields)
     expected_canonical_json = dumps_json(
         {field: config_fingerprint.get(field) for field in fingerprint_fields},
         sort_keys=True,
@@ -205,6 +193,134 @@ def _verify_config_fingerprint(run_card_payload: dict[str, Any], errors: list[st
     recomputed_sha = hashlib.sha256(canonical_json.encode("utf-8")).hexdigest()
     if recomputed_sha != sha256_hex:
         errors.append("config_fingerprint.sha256 mismatch: " f"got={sha256_hex}, expected={recomputed_sha}")
+
+
+def _verify_indexed_artifact_files(
+    run_card_payload: dict[str, Any],
+    *,
+    run_card_root: Path,
+    errors: list[str],
+) -> None:
+    """Recompute indexed artifact size/hash from disk."""
+    artifact_index = run_card_payload.get("artifact_index")
+    if not isinstance(artifact_index, list):
+        return
+
+    for index, artifact in enumerate(artifact_index):
+        if not isinstance(artifact, dict):
+            continue
+        relative_path = artifact.get("relative_path")
+        if not isinstance(relative_path, str) or not relative_path:
+            continue
+        artifact_path, path_error = resolve_artifact_path(
+            run_card_root=run_card_root,
+            relative_path=relative_path,
+            context=f"artifact_index[{index}]",
+        )
+        if path_error:
+            errors.append(path_error)
+            continue
+        assert artifact_path is not None
+        try:
+            artifact_stat = artifact_path.stat()
+        except FileNotFoundError:
+            errors.append(f"artifact_index[{index}] file is missing: {relative_path}")
+            continue
+        except PermissionError:
+            errors.append(f"artifact_index[{index}] file is not readable: {relative_path}")
+            continue
+        except OSError as exc:
+            errors.append(f"artifact_index[{index}] file stat failed for {relative_path}: {exc}")
+            continue
+        if not stat.S_ISREG(artifact_stat.st_mode):
+            errors.append(f"artifact_index[{index}] is not a regular file: {relative_path}")
+            continue
+        expected_size = artifact.get("size_bytes")
+        actual_size = artifact_stat.st_size
+        if isinstance(expected_size, int) and expected_size != actual_size:
+            errors.append(
+                f"artifact_index[{index}].size_bytes mismatch for {relative_path}: "
+                f"got={expected_size}, actual={actual_size}"
+            )
+        expected_sha = artifact.get("sha256")
+        if isinstance(expected_sha, str) and SHA256_HEX_RE.fullmatch(expected_sha):
+            actual_sha, hash_error = _compute_file_sha256(artifact_path)
+            if hash_error:
+                errors.append(f"artifact_index[{index}] file hash failed for {relative_path}: {hash_error}")
+                continue
+            if expected_sha != actual_sha:
+                errors.append(
+                    f"artifact_index[{index}].sha256 mismatch for {relative_path}: " f"got={expected_sha}, actual={actual_sha}"
+                )
+
+
+def _verify_run_card_self_integrity(
+    raw_run_card_payload: dict[str, Any],
+    *,
+    run_card_path: Path,
+    errors: list[str],
+) -> None:
+    """Validate non-recursive run-card self-integrity evidence when present."""
+    integrity = raw_run_card_payload.get("run_card_integrity")
+    if integrity is None:
+        return
+    if not isinstance(integrity, dict):
+        errors.append("run_card_integrity must be an object")
+        return
+
+    if integrity.get("self_indexing") != "excluded_self_hash_cycle":
+        errors.append("run_card_integrity.self_indexing must be 'excluded_self_hash_cycle'")
+    expected_relative_path = run_card_path.name
+    if integrity.get("path") != expected_relative_path:
+        errors.append(
+            "run_card_integrity.path mismatch: " f"got={integrity.get('path')!r}, expected={expected_relative_path!r}"
+        )
+
+    expected_payload_sha = integrity.get("canonical_payload_sha256")
+    if not isinstance(expected_payload_sha, str) or not SHA256_HEX_RE.fullmatch(expected_payload_sha):
+        errors.append("run_card_integrity.canonical_payload_sha256 must be a lowercase 64-char hex digest")
+    else:
+        integrity_without_hash = {key: value for key, value in integrity.items() if key != "canonical_payload_sha256"}
+        payload_without_hash = {
+            **raw_run_card_payload,
+            "run_card_integrity": integrity_without_hash,
+        }
+        actual_payload_sha = hashlib.sha256(canonicalize_json(payload_without_hash)).hexdigest()
+        if actual_payload_sha != expected_payload_sha:
+            errors.append(
+                "run_card_integrity.canonical_payload_sha256 mismatch: "
+                f"got={expected_payload_sha}, actual={actual_payload_sha}"
+            )
+
+    sidecar_path = run_card_path.with_suffix(".self.json")
+    sidecar_payload, sidecar_error = _load_json(sidecar_path)
+    if sidecar_error:
+        errors.append(f"run card self-integrity sidecar missing or unreadable: {sidecar_error}")
+        return
+    if not isinstance(sidecar_payload, dict):
+        errors.append(f"run card self-integrity sidecar must be a JSON object: {sidecar_path}")
+        return
+    if sidecar_payload.get("run_card_path") != expected_relative_path:
+        errors.append(
+            "run card self-integrity sidecar run_card_path mismatch: "
+            f"got={sidecar_payload.get('run_card_path')!r}, expected={expected_relative_path!r}"
+        )
+    if sidecar_payload.get("self_indexing") != "excluded_self_hash_cycle":
+        errors.append("run card self-integrity sidecar self_indexing must be 'excluded_self_hash_cycle'")
+    if sidecar_payload.get("hash_algorithm") != "sha256":
+        errors.append("run card self-integrity sidecar hash_algorithm must be 'sha256'")
+    final_sha = sidecar_payload.get("final_run_card_sha256")
+    if not isinstance(final_sha, str) or not SHA256_HEX_RE.fullmatch(final_sha):
+        errors.append("run card self-integrity sidecar final_run_card_sha256 must be a lowercase 64-char hex digest")
+        return
+    actual_file_sha, run_card_hash_error = _compute_file_sha256(run_card_path)
+    if run_card_hash_error:
+        errors.append(f"run card self-integrity sidecar hash check failed: {run_card_hash_error}")
+        return
+    if final_sha != actual_file_sha:
+        errors.append(
+            "run card self-integrity sidecar final_run_card_sha256 mismatch: " f"got={final_sha}, actual={actual_file_sha}"
+        )
 
 
 def _verify_reconstruction_scene_manifests(
@@ -409,6 +525,12 @@ def verify_run_card_integrity(
                     f"artifact_merkle_root mismatch: expected={expected_merkle_root}, recomputed={recomputed_merkle_root}"
                 )
 
+    _verify_indexed_artifact_files(
+        run_card_payload,
+        run_card_root=run_card_path.parent,
+        errors=errors,
+    )
+
     artifact_index_by_relative_path = {}
     for artifact in artifact_index:
         if not isinstance(artifact, dict):
@@ -439,6 +561,11 @@ def verify_run_card_integrity(
         errors=errors,
     )
     _verify_config_fingerprint(run_card_payload, errors)
+    _verify_run_card_self_integrity(
+        raw_run_card_payload,
+        run_card_path=run_card_path,
+        errors=errors,
+    )
 
     if check_canonical_json:
         raw_text, raw_text_error = _read_text(run_card_path)

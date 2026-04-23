@@ -1013,8 +1013,15 @@ class TestEnhanceBatch:
                             assert "start_time" in manifest
                             assert "end_time" in manifest
                         assert "config" in manifest
+                        assert manifest["config"]["depth_backend"] == "da3"
+                        assert manifest["config"]["device"] == "cpu"
+                        assert manifest["config"]["quality_tier"] == "standard"
+                        assert manifest["config"]["depth_png_encoding"] == "normalized_u16_png"
+                        assert len(manifest["config"]["config_fingerprint_sha256"]) == 64
                         assert "results" in manifest
                         assert "stats" in manifest
+                        assert manifest["results"][0]["image"].endswith(".jpg")
+                        assert not Path(manifest["results"][0]["image"]).is_absolute()
 
                         # Verify stats structure
                         stats = manifest["stats"]

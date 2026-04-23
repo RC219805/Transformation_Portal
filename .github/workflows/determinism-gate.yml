@@ -112,7 +112,16 @@ jobs:
           python scripts/verify_run_card_integrity.py tests/golden/run_card/run_card_valid.v1.json --check-canonical-json
 
           shopt -s globstar nullglob
-          run_cards=(output/**/run_card_*.json)
+          run_card_candidates=(output/**/run_card_*.json)
+          run_cards=()
+          for run_card in "${run_card_candidates[@]}"; do
+            case "$run_card" in
+              *.self.json|*.attestation.*.json)
+                continue
+                ;;
+            esac
+            run_cards+=("$run_card")
+          done
           if [ "${#run_cards[@]}" -eq 0 ]; then
             echo "❌ No generated run cards found under output/ for this workflow run."
             echo "Determinism gate requires validating at least one runtime-generated run card."

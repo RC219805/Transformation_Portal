@@ -519,6 +519,7 @@ def persist_depth_artifacts(
             depth_map,
             method=config.depth_quantization,
             debug_verify=config.verify_depth_writes,
+            compute_encoded_unique_values=(str(getattr(config, "quality_tier", "")).lower() == "apex"),
         )
 
         # Save float depth NPY if enabled

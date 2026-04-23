@@ -476,6 +476,40 @@ def test_build_run_card_result_summary_projects_quality_gate_and_capability(tmp_
     }
 
 
+def test_build_run_card_result_summary_reports_segmentation_not_requested(tmp_path: Path) -> None:
+    output_root = tmp_path / "output"
+    orch = object.__new__(EnhanceOrchestrator)
+    orch.output_root = output_root
+    orch.config = EnhanceConfig(
+        enable_materials_v3=False,
+        enable_material_segmentation=True,
+        material_segmentation_backend="sam2",
+        strict_backend=True,
+    )
+    orch._active_run_card_segmentation_metadata = {}
+    orch._backend_metadata = SimpleNamespace(requested_backend="depth_pro", resolution_reason=None)
+
+    summary = orch._build_run_card_result_summary(
+        [
+            {
+                "image": str(tmp_path / "inputs" / "image_02.png"),
+                "status": "ok",
+                "backend": "depth_pro",
+                "runtime_s": 2.34,
+                "manifest": None,
+            }
+        ]
+    )
+
+    assert summary[0]["segmentation_status"] == {
+        "status": "not_requested",
+        "enabled": False,
+        "reason": "materials_v3_disabled",
+        "backend": "sam2",
+        "strict_backend": True,
+    }
+
+
 def test_build_run_card_result_summary_keeps_semantic_gate_failure_available(tmp_path: Path) -> None:
     output_root = tmp_path / "output"
     orch = object.__new__(EnhanceOrchestrator)
@@ -610,6 +644,7 @@ def test_run_card_schema_accepts_additive_model_contract(version: str) -> None:
             "artifacts": [],
         }
     payload["model_contract"] = {
+        "contract_kind": "hf_revision",
         "requested_model_selector": "METRIC_LARGE",
         "canonical_model_key": "da3_research",
         "resolved_repo_id": "depth-anything/DA3NESTED-GIANT-LARGE-1.1",
@@ -624,6 +659,110 @@ def test_run_card_schema_accepts_additive_model_contract(version: str) -> None:
         "manifest_schema_version": 1,
     }
     _validate_run_card_payload(payload, _run_card_schema_path(version))
+
+
+@pytest.mark.parametrize("version", ["v1", "v2"])
+def test_run_card_schema_accepts_legacy_hf_model_contract_without_kind(version: str) -> None:
+    payload = _valid_run_card_payload()
+    payload["run_card_version"] = version
+    if version == "v1":
+        payload["artifact_merkle_root"] = "0" * 64
+    else:
+        payload.pop("artifact_merkle_root", None)
+        payload["artifact_tree"] = {
+            "algorithm": "ct-sha256-v1",
+            "leaf_format": "tp.run_card.artifact_leaf.v1",
+            "leaf_count": 0,
+            "root_sha256": "1" * 64,
+            "artifacts": [],
+        }
+    payload["model_contract"] = {
+        "requested_model_selector": "METRIC_LARGE",
+        "canonical_model_key": "da3_research",
+        "resolved_repo_id": "depth-anything/DA3NESTED-GIANT-LARGE-1.1",
+        "resolved_revision": "b2359bdf726fb44ef62acca04d629dcf158053e7",
+        "license_id": "cc-by-nc-4.0",
+        "usage_class": "non_commercial_only",
+        "requires_non_commercial_ok": True,
+        "non_commercial_ok": True,
+        "backend_kind": "da3_api",
+        "accelerator_kind": "none",
+        "fallback_chain": [],
+        "manifest_schema_version": 1,
+    }
+    _validate_run_card_payload(payload, _run_card_schema_path(version))
+
+
+@pytest.mark.parametrize("version", ["v1", "v2"])
+def test_run_card_schema_requires_model_contract_immutable_identifier(version: str) -> None:
+    payload = _valid_run_card_payload()
+    payload["run_card_version"] = version
+    if version == "v1":
+        payload["artifact_merkle_root"] = "0" * 64
+    else:
+        payload.pop("artifact_merkle_root", None)
+        payload["artifact_tree"] = {
+            "algorithm": "ct-sha256-v1",
+            "leaf_format": "tp.run_card.artifact_leaf.v1",
+            "leaf_count": 0,
+            "root_sha256": "1" * 64,
+            "artifacts": [],
+        }
+    payload["model_contract"] = {
+        "contract_kind": "local_checkpoint",
+        "requested_model_selector": "depth_pro",
+        "canonical_model_key": "depth_pro",
+        "resolved_repo_id": "apple/ml-depth-pro",
+        "resolved_revision": None,
+        "model_artifact_filename": "depth_pro.pt",
+        "model_artifact_sha256": None,
+        "license_id": "apple-machine-learning-research-license",
+        "usage_class": "non_commercial_only",
+        "requires_non_commercial_ok": True,
+        "non_commercial_ok": True,
+        "backend_kind": "depth_pro",
+        "accelerator_kind": "mps",
+        "fallback_chain": [],
+        "manifest_schema_version": 1,
+    }
+
+    with pytest.raises(RuntimeError, match="model_artifact_sha256"):
+        _validate_run_card_payload(payload, _run_card_schema_path(version))
+
+
+@pytest.mark.parametrize("version", ["v1", "v2"])
+def test_run_card_schema_requires_hf_model_contract_revision(version: str) -> None:
+    payload = _valid_run_card_payload()
+    payload["run_card_version"] = version
+    if version == "v1":
+        payload["artifact_merkle_root"] = "0" * 64
+    else:
+        payload.pop("artifact_merkle_root", None)
+        payload["artifact_tree"] = {
+            "algorithm": "ct-sha256-v1",
+            "leaf_format": "tp.run_card.artifact_leaf.v1",
+            "leaf_count": 0,
+            "root_sha256": "1" * 64,
+            "artifacts": [],
+        }
+    payload["model_contract"] = {
+        "contract_kind": "hf_revision",
+        "requested_model_selector": "METRIC_LARGE",
+        "canonical_model_key": "da3_research",
+        "resolved_repo_id": "depth-anything/DA3NESTED-GIANT-LARGE-1.1",
+        "resolved_revision": None,
+        "license_id": "cc-by-nc-4.0",
+        "usage_class": "non_commercial_only",
+        "requires_non_commercial_ok": True,
+        "non_commercial_ok": True,
+        "backend_kind": "da3_api",
+        "accelerator_kind": "none",
+        "fallback_chain": [],
+        "manifest_schema_version": 1,
+    }
+
+    with pytest.raises(RuntimeError, match="resolved_revision"):
+        _validate_run_card_payload(payload, _run_card_schema_path(version))
 
 
 @pytest.mark.parametrize("revision", [None, "main"])
@@ -646,6 +785,45 @@ def test_build_run_card_model_contract_skips_unpinned_revision(
     assert model_contract is None
     assert "Skipping run-card model_contract" in caplog.text
     assert resolved.spec.repo_id in caplog.text
+
+
+def test_build_run_card_model_contract_uses_depth_pro_selected_backend() -> None:
+    orch = object.__new__(EnhanceOrchestrator)
+    orch.config = SimpleNamespace(
+        non_commercial_ok=True,
+        accept_apple_depth_pro_research_license=True,
+        depth_device="mps",
+    )
+    artifact_sha = "3eb35ca68168ad3d14cb150f8947a4edf85589941661fdb2686259c80685c0ce"
+
+    model_contract = orch._build_run_card_model_contract(
+        results=[],
+        backend_selection={
+            "resolved": "depth_pro",
+            "device": "mps",
+            "model_artifact_filename": "depth_pro.pt",
+            "model_artifact_sha256": artifact_sha,
+        },
+    )
+
+    assert model_contract == {
+        "contract_kind": "local_checkpoint",
+        "requested_model_selector": "depth_pro",
+        "canonical_model_key": "depth_pro",
+        "resolved_repo_id": "apple/ml-depth-pro",
+        "resolved_revision": None,
+        "model_artifact_filename": "depth_pro.pt",
+        "model_artifact_sha256": artifact_sha,
+        "license_id": "apple-machine-learning-research-license",
+        "usage_class": "non_commercial_only",
+        "requires_non_commercial_ok": True,
+        "non_commercial_ok": True,
+        "accept_apple_depth_pro_research_license": True,
+        "backend_kind": "depth_pro",
+        "accelerator_kind": "mps",
+        "fallback_chain": [],
+        "manifest_schema_version": 1,
+    }
 
 
 def test_collect_run_card_artifacts_includes_reconstruction_report(tmp_path: Path):
@@ -906,10 +1084,132 @@ def test_config_fingerprint_uses_raw_preset_requested_when_enum_unset():
 
     fingerprint = orch._build_run_card_config_fingerprint()
 
-    assert fingerprint["preset_requested"] == "premium"
-    assert fingerprint["preset_resolved"] == "quality_tier:apex"
+    assert fingerprint["model_variant"] == "apple/ml-depth-pro"
+    assert fingerprint["preset_requested"] == "depth_pro"
+    assert fingerprint["preset_resolved"] == "backend:depth_pro"
     assert fingerprint["raw_ingest_profile"] == "tp.raw_ingest.deterministic_v1"
     assert len(fingerprint["raw_ingest_settings_hash"]) == 64
+
+
+def test_run_card_config_fingerprint_hashes_resolved_checkpoint_sha() -> None:
+    orch = object.__new__(EnhanceOrchestrator)
+    orch.config = EnhanceConfig(
+        model_variant=ModelVariant.METRIC_LARGE,
+        preset=None,
+        quality_tier="apex",
+        depth_device="mps",
+        emit_run_card=True,
+    )
+    orch._backend_metadata = SimpleNamespace(
+        requested_backend="depth_pro",
+        resolved_backend="depth_pro",
+        device="mps",
+    )
+    orch._is_apex_tier = lambda: True
+    first_sha = "1" * 64
+    second_sha = "2" * 64
+
+    first = orch._build_run_card_config_fingerprint(
+        backend_selection={
+            "resolved": "depth_pro",
+            "model_id": "apple/ml-depth-pro",
+            "model_artifact_filename": "depth_pro.pt",
+            "model_artifact_sha256": first_sha,
+        },
+        run_card_version="v2",
+        include_proofs=True,
+    )
+    second = orch._build_run_card_config_fingerprint(
+        backend_selection={
+            "resolved": "depth_pro",
+            "model_id": "apple/ml-depth-pro",
+            "model_artifact_filename": "depth_pro.pt",
+            "model_artifact_sha256": second_sha,
+        },
+        run_card_version="v2",
+        include_proofs=True,
+    )
+
+    assert first["model_artifact_sha256"] == first_sha
+    assert first["resolved_model_id"] == "apple/ml-depth-pro"
+    assert first["output_depth_units"] == "meters"
+    assert first["depth_png_encoding"] == "normalized_u16_png"
+    assert first["run_card_include_proofs"] is True
+    assert first["sha256"] != second["sha256"]
+
+
+def test_apex_gradient_threshold_is_reported_as_warning_min() -> None:
+    orch = object.__new__(EnhanceOrchestrator)
+    orch.config = EnhanceConfig(quality_tier="apex")
+    orch.config.apex_depth_min_gradient_energy = 10.0
+    depth = np.linspace(0.0, 1.0, 100, dtype=np.float32).reshape(10, 10)
+
+    report = orch._enforce_apex_depth_validity_gate(depth)
+
+    assert report is not None
+    assert report["passed"] is True
+    assert report["warnings"] == ["APEX_DEPTH_GRADIENT_LOW"]
+    assert "gradient_energy_warning_min" in report["thresholds"]
+    assert "gradient_energy_min" not in report["thresholds"]
+
+
+def test_apex_duplicate_depth_png_hash_fails_for_distinct_float_depths(tmp_path: Path) -> None:
+    depth_png_a = tmp_path / "a.png"
+    depth_png_b = tmp_path / "b.png"
+    depth_float_a = tmp_path / "a.npy"
+    depth_float_b = tmp_path / "b.npy"
+    depth_png_a.write_bytes(b"same-png")
+    depth_png_b.write_bytes(b"same-png")
+    np.save(depth_float_a, np.zeros((2, 2), dtype=np.float32))
+    np.save(depth_float_b, np.ones((2, 2), dtype=np.float32))
+
+    orch = object.__new__(EnhanceOrchestrator)
+    orch._is_apex_tier = lambda: True
+
+    with pytest.raises(ApexStrictGateError, match="APEX_DEPTH_PNG_DUPLICATE_HASH"):
+        orch._enforce_apex_depth_png_uniqueness(
+            [
+                {
+                    "status": "ok",
+                    "image": "a.jpg",
+                    "input_sha256": "1" * 64,
+                    "depth_path": str(depth_png_a),
+                    "depth_float_path": str(depth_float_a),
+                },
+                {
+                    "status": "ok",
+                    "image": "b.jpg",
+                    "input_sha256": "2" * 64,
+                    "depth_path": str(depth_png_b),
+                    "depth_float_path": str(depth_float_b),
+                },
+            ]
+        )
+
+
+def test_portable_batch_manifest_results_preserves_input_relative_and_segmentation_paths(tmp_path: Path) -> None:
+    output_root = tmp_path / "output"
+    input_root = tmp_path / "input"
+    orch = object.__new__(EnhanceOrchestrator)
+    orch.output_root = output_root
+
+    portable = orch._portable_batch_manifest_results(
+        [
+            {
+                "status": "ok",
+                "image": str(input_root / "unit-a" / "same-name.jpg"),
+                "depth_path": str(output_root / "depth" / "same-name_depth.png"),
+                "segmentation_mask_path": str(output_root / "masks" / "same-name_mask.png"),
+            }
+        ],
+        input_root=input_root,
+    )
+
+    row = portable[0]
+    assert row["image"] == "unit-a/same-name.jpg"
+    assert row["image_basename"] == "same-name.jpg"
+    assert row["depth_path"] == "depth/same-name_depth.png"
+    assert row["segmentation_mask_path"] == "masks/same-name_mask.png"
 
 
 def test_resolve_run_card_backend_model_id_prefers_selected_attempt_model():
@@ -1135,6 +1435,77 @@ def test_emit_run_card_skips_legacy_merkle_root_for_v2(tmp_path: Path):
         )
 
     build_tree.assert_called_once()
+
+
+def test_emit_run_card_cleans_partial_file_when_self_sidecar_write_fails(tmp_path: Path):
+    config = EnhanceConfig(
+        model_variant=ModelVariant.METRIC_LARGE,
+        model_key="da3-metric",
+        run_card_version="v1",
+    )
+    orch = EnhanceOrchestrator(config, tmp_path)
+    artifact_path = tmp_path / "depth" / "image_01_depth.png"
+    artifact_path.parent.mkdir(parents=True, exist_ok=True)
+    artifact_path.write_bytes(b"depth")
+    run_card_path = tmp_path / "run_card_2026-04-10_120000.json"
+    sidecar_path = run_card_path.with_suffix(".self.json")
+    real_open = open
+    sidecar_write_attempted = False
+
+    def fail_sidecar_open(path: Any, *args: Any, **kwargs: Any):
+        nonlocal sidecar_write_attempted
+        if str(path).endswith(".self.json") and args and "w" in str(args[0]):
+            sidecar_write_attempted = True
+            raise OSError("simulated sidecar write failure")
+        return real_open(path, *args, **kwargs)
+
+    with (
+        patch.object(orch, "_collect_run_card_artifact_paths", return_value=[artifact_path]),
+        patch.object(
+            orch,
+            "_compute_backend_summary",
+            return_value={
+                "requested_backend": "da3",
+                "primary_backend": "da3",
+                "final_backends_used": ["da3"],
+                "fallback_images": 0,
+                "semantic_fallback_images": 0,
+                "operational_fallback_images": 0,
+            },
+        ),
+        patch.object(orch, "_requested_backend_fulfillment_defect", return_value=None),
+        patch.object(
+            orch,
+            "_build_backend_selection_payload",
+            return_value={
+                "requested": "da3",
+                "resolved": "da3",
+                "device": "cpu",
+                "model_id": "depth-anything/DA3NESTED-GIANT-LARGE-1.1",
+            },
+        ),
+        patch.object(orch, "_build_run_card_model_contract", return_value=None),
+        patch("transformation_portal.lux_depth_v3.orchestrator.open", side_effect=fail_sidecar_open, create=True),
+    ):
+        orch._emit_run_card(
+            batch_id="2026-04-10_120000",
+            start_time="2026-04-10T12:00:00Z",
+            end_time="2026-04-10T12:05:00Z",
+            results=[{"status": "ok", "backend": "da3", "runtime_s": 1.0}],
+            runtime_stats={
+                "count": 1,
+                "total": 1.0,
+                "mean": 1.0,
+                "min": 1.0,
+                "max": 1.0,
+                "median": 1.0,
+            },
+            outliers=[],
+        )
+
+    assert sidecar_write_attempted is True
+    assert not run_card_path.exists()
+    assert not sidecar_path.exists()
 
 
 def test_build_run_card_inputs_skips_hashing_when_hash_mode_never(tmp_path: Path) -> None:

@@ -42,6 +42,34 @@ def test_build_quality_gate_report_projects_expected_shape() -> None:
     }
 
 
+def test_build_quality_gate_report_preserves_already_serialized_details() -> None:
+    report = build_quality_gate_report(
+        {
+            "kind": "apex_depth",
+            "passed": True,
+            "failure_codes": [],
+            "warnings": ["APEX_DEPTH_GRADIENT_LOW"],
+            "details": {
+                "metrics": {"gradient_energy": 0.00042},
+                "thresholds": {"gradient_energy_warning_min": 0.0005},
+                "shape_context": {"artifact_shape": [128, 128]},
+            },
+        }
+    )
+
+    assert report == {
+        "kind": "apex_depth",
+        "passed": True,
+        "failure_codes": [],
+        "warnings": ["APEX_DEPTH_GRADIENT_LOW"],
+        "details": {
+            "metrics": {"gradient_energy": 0.00042},
+            "thresholds": {"gradient_energy_warning_min": 0.0005},
+            "shape_context": {"artifact_shape": [128, 128]},
+        },
+    }
+
+
 def test_build_orchestrator_result_capability_report_uses_selected_attempt_and_fallback_reason() -> None:
     report = build_orchestrator_result_capability_report(
         {

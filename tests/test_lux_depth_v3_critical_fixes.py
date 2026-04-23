@@ -67,7 +67,7 @@ class TestFix1DoubleEXIFRotation:
 
             # Run enhancement
             result = enhance_image(input_path, output_path, config=None)
-            emitted_output = resolve_v2_emitted_artifact_path(output_path, bit_depth=8)
+            emitted_output = resolve_v2_emitted_artifact_path(output_path, bit_depth=8, materials_enabled=False)
 
             assert result["status"] == "success"
             assert Path(result["output"]) == emitted_output
@@ -101,7 +101,11 @@ class TestFix1DoubleEXIFRotation:
 
             result = enhance_image(input_path, output_path, config=None)
             assert result["status"] == "success"
-            assert Path(result["output"]) == resolve_v2_emitted_artifact_path(output_path, bit_depth=8)
+            assert Path(result["output"]) == resolve_v2_emitted_artifact_path(
+                output_path,
+                bit_depth=8,
+                materials_enabled=False,
+            )
 
 
 class TestFix2DimensionMismatch:
@@ -278,7 +282,7 @@ class TestFix5AlphaChannelSafety:
 
             # Run enhancement - should not crash despite dimension mismatch
             result = enhance_image(input_path, output_path, config=None)
-            emitted_output = resolve_v2_emitted_artifact_path(output_path, bit_depth=8)
+            emitted_output = resolve_v2_emitted_artifact_path(output_path, bit_depth=8, materials_enabled=False)
 
             assert result["status"] == "success"
             assert Path(result["output"]) == emitted_output
@@ -313,7 +317,7 @@ class TestFix5AlphaChannelSafety:
             mock_instance.compute.return_value = mock_result
 
             result = enhance_image(input_path, output_path, config=None)
-            emitted_output = resolve_v2_emitted_artifact_path(output_path, bit_depth=8)
+            emitted_output = resolve_v2_emitted_artifact_path(output_path, bit_depth=8, materials_enabled=False)
             assert result["status"] == "success"
             assert Path(result["output"]) == emitted_output
 

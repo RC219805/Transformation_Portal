@@ -48,6 +48,7 @@ class V2EnhancementError(Exception):
 
 _DERIVED_STEM_SUFFIXES = (
     "_materials_v3_enhanced",
+    "_v2_enhanced",
     "_materials_v3",
     "_enhanced",
     "_pbr",
@@ -95,13 +96,15 @@ def resolve_v2_emitted_artifact_path(
     *,
     bit_depth: int,
     identity: str | None = None,
+    materials_enabled: bool = True,
 ) -> Path:
     """Normalize a V2 emitted artifact path to the canonical basename and suffix."""
     candidate_path = Path(output_path)
     normalized_identity = canonical_asset_stem(identity) if identity else canonical_asset_stem(candidate_path.stem)
     if not normalized_identity:
         normalized_identity = "artifact"
-    emitted_name = f"{normalized_identity}_materials_v3_enhanced{emitted_v2_suffix_for_bit_depth(bit_depth)}"
+    stage_label = "materials_v3_enhanced" if materials_enabled else "v2_enhanced"
+    emitted_name = f"{normalized_identity}_{stage_label}{emitted_v2_suffix_for_bit_depth(bit_depth)}"
     return candidate_path.with_name(emitted_name)
 
 
@@ -714,6 +717,7 @@ def enhance_image(
         output_path = resolve_v2_emitted_artifact_path(
             output_path,
             bit_depth=target_bits,
+            materials_enabled=material_masks is not None,
         )
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
