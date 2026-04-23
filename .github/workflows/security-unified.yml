@@ -44,7 +44,7 @@ permissions:
   packages: read
 
 concurrency:
-  group: security-unified-${{ github.ref }}
+  group: security-unified-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:

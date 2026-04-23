@@ -34,7 +34,7 @@ on:
     - cron: "0 0 * * 0" # Weekly on Sunday 00:00 UTC
 
 concurrency:
-  group: apex-${{ github.event.pull_request.number || github.ref }}
+  group: apex-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 # Workflow-level permissions with least privilege defaults
