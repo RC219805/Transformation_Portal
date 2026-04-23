@@ -23,6 +23,7 @@ from dataclasses import dataclass
 import numpy as np
 import pytest
 
+from transformation_portal.lux_depth_v3 import pixel_ops_executor
 from transformation_portal.lux_depth_v3.pixel_ops_executor import apply_pixel_ops
 from transformation_portal.lux_depth_v3.pixel_ops_registry import OP_REGISTRY
 from transformation_portal.lux_depth_v3.v2_presets import V2EnhancementConfig
@@ -128,6 +129,29 @@ def test_v2_depth_smoothing_uses_bounded_sigma(monkeypatch, shape, expected_sigm
 
     assert out is depth
     assert captured["sigma"] == pytest.approx(expected_sigma)
+
+
+def test_v2_low_texture_weight_uses_bounded_proxy(monkeypatch):
+    """Large-frame low-texture detection should run on a bounded proxy."""
+    import scipy.ndimage
+
+    captured = {}
+
+    def fake_gradient_magnitude(luma: np.ndarray, sigma: float) -> np.ndarray:
+        captured["shape"] = luma.shape
+        captured["sigma"] = sigma
+        return np.zeros_like(luma, dtype=np.float32)
+
+    monkeypatch.setattr(scipy.ndimage, "gaussian_gradient_magnitude", fake_gradient_magnitude)
+
+    image = np.zeros((1536, 2048, 3), dtype=np.float32)
+    low_tex = EnhancementStage._low_texture_weight(image)
+
+    assert low_tex.shape == image.shape[:2]
+    assert low_tex.dtype == np.float32
+    assert captured["shape"] == (768, 1024)
+    assert captured["sigma"] == pytest.approx(2.0)
+    assert np.allclose(low_tex, 1.0)
 
 
 def test_v2_low_gradient_guard_preserves_flat_frame():
@@ -254,6 +278,28 @@ def test_materials_v3_guard_fires_on_large_flat_sky():
     assert sky["low_tex_guard"]["roi_mean_grad"] < config.pixel_ops_low_grad_threshold
 
 
+def test_materials_v3_low_tex_feather_sigma_is_capped(monkeypatch):
+    """Adaptive feathering must keep OpenCV kernel size bounded."""
+    captured = {}
+
+    def fake_gaussian_blur(mask: np.ndarray, ksize: tuple[int, int], sigma: float) -> np.ndarray:
+        captured["ksize"] = ksize
+        captured["sigma"] = sigma
+        return mask
+
+    monkeypatch.setattr(pixel_ops_executor.cv2, "GaussianBlur", fake_gaussian_blur)
+
+    config = _PxOpsConfig()
+    image, seg, plan = _full_image_sky_inputs()
+    _, telemetry = apply_pixel_ops(image, seg, plan, config, registry=OP_REGISTRY)
+
+    sky = [a for a in telemetry["applied"] if a["material"] == "sky"][0]
+    assert sky["low_tex_guard"]["applied"] is True
+    assert sky["feather_sigma"] == pytest.approx(pixel_ops_executor._LOW_TEX_MAX_FEATHER_SIGMA)
+    assert captured["sigma"] == pytest.approx(pixel_ops_executor._LOW_TEX_MAX_FEATHER_SIGMA)
+    assert captured["ksize"] == (73, 73)
+
+
 def test_materials_v3_guard_does_not_fire_on_textured_sky():
     """A textured ROI must be treated normally (no feather widening, no clamp)."""
     config = _PxOpsConfig()
@@ -268,6 +314,26 @@ def test_materials_v3_guard_does_not_fire_on_textured_sky():
     # Feather sigma should be the configured default, unchanged.
     assert sky["feather_sigma"] == pytest.approx(config.mask_feather_sigma_default)
     assert sky["low_tex_guard"]["delta_scale_applied"] == pytest.approx(1.0)
+
+
+def test_materials_v3_delta_percentile_uses_bounded_2d_sample():
+    """The clamp statistic should avoid full 3D percentile work on large ROIs."""
+    delta = np.empty((1024, 1024, 3), dtype=np.float32)
+    delta[..., 0] = 0.1
+    delta[..., 1] = 0.2
+    delta[..., 2] = 0.3
+    mask = np.ones((1024, 1024), dtype=np.float32)
+
+    weighted_abs, sample_stride = pixel_ops_executor._weighted_abs_delta_for_percentile(
+        delta,
+        mask,
+        max_samples=65_536,
+    )
+
+    assert sample_stride == 4
+    assert weighted_abs.ndim == 2
+    assert weighted_abs.size <= 65_536
+    assert weighted_abs.max() == pytest.approx(0.3)
 
 
 def test_materials_v3_delta_clamp_caps_large_flat_shift():

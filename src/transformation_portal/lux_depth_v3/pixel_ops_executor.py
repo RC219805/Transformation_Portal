@@ -12,6 +12,9 @@ import numpy as np
 from .pixel_ops_decider import decide_pixel_ops
 from .pixel_ops_registry import OP_REGISTRY
 
+_LOW_TEX_MAX_FEATHER_SIGMA = 12.0
+_LOW_TEX_DELTA_PERCENTILE_MAX_SAMPLES = 262_144
+
 
 def _canonical_mask(mask: np.ndarray) -> np.ndarray:
     """Canonicalize mask to 2D (H, W) float32 format.
@@ -113,6 +116,30 @@ def _feather_mask(mask: np.ndarray, sigma: float) -> np.ndarray:
 
     feathered = cv2.GaussianBlur(mask, (ksize, ksize), sigma)
     return np.clip(feathered, 0.0, 1.0).astype(np.float32)
+
+
+def _weighted_abs_delta_for_percentile(
+    delta: np.ndarray,
+    mask: np.ndarray,
+    max_samples: int = _LOW_TEX_DELTA_PERCENTILE_MAX_SAMPLES,
+) -> tuple[np.ndarray, int]:
+    """Return a bounded 2D weighted-delta sample for percentile checks."""
+    if delta.size == 0 or mask.size == 0:
+        return np.asarray([], dtype=np.float32), 1
+
+    height, width = mask.shape[:2]
+    sample_stride = 1
+    if height > 0 and width > 0 and height * width > max_samples:
+        sample_stride = int(math.ceil(math.sqrt((height * width) / float(max_samples))))
+        delta = delta[::sample_stride, ::sample_stride]
+        mask = mask[::sample_stride, ::sample_stride]
+
+    abs_delta = np.abs(delta.astype(np.float32, copy=False))
+    if abs_delta.ndim == 3:
+        abs_delta = abs_delta.max(axis=-1)
+
+    weighted = abs_delta * mask.astype(np.float32, copy=False)
+    return weighted.astype(np.float32, copy=False), sample_stride
 
 
 def _expand_bbox_with_padding(
@@ -394,7 +421,10 @@ def apply_pixel_ops(
         else:
             feather_sigma = float(feather_overrides.get(material_key, feather_default))
             if is_low_tex_large and feather_sigma > 0.0:
-                feather_sigma *= low_tex_feather_multiplier
+                feather_sigma = min(
+                    feather_sigma * low_tex_feather_multiplier,
+                    _LOW_TEX_MAX_FEATHER_SIGMA,
+                )
 
         # A2: Expand bbox by feathering padding
         pad = math.ceil(3 * feather_sigma) if feather_sigma > 0 else 0
@@ -445,15 +475,12 @@ def apply_pixel_ops(
         # between a smooth material and its neighbors even if the op itself
         # is configured aggressively.
         delta_scale_applied = 1.0
+        delta_sample_stride = 1
         if is_low_tex_large and working_before_ops_inside is not None:
             working_inside = working[inside_y, inside_x]
             delta_inside = working_inside.astype(np.float32, copy=False) - working_before_ops_inside
             mask_inside = mask_roi_feathered[inside_y, inside_x]
-            weighted_abs = np.abs(delta_inside)
-            if weighted_abs.ndim == 3:
-                weighted_abs = weighted_abs * mask_inside[..., None]
-            else:
-                weighted_abs = weighted_abs * mask_inside
+            weighted_abs, delta_sample_stride = _weighted_abs_delta_for_percentile(delta_inside, mask_inside)
             if weighted_abs.size > 0:
                 p99 = float(np.percentile(weighted_abs, 99))
                 if p99 > low_tex_delta_ceiling and p99 > 1e-6:
@@ -497,6 +524,7 @@ def apply_pixel_ops(
                     "roi_mean_grad": round(roi_grad_energy, 6),
                     "bbox_fraction": round(bbox_frac, 4),
                     "delta_scale_applied": round(delta_scale_applied, 4),
+                    "delta_sample_stride": int(delta_sample_stride),
                 },
             }
         )

@@ -17,6 +17,8 @@ import numpy as np
 
 from ..stage import Stage, StageContext, StageResult, StageStatus
 
+_LOW_TEXTURE_PROXY_MAX_SIDE = 1024
+
 
 class EnhancementStage(Stage):
     """
@@ -333,9 +335,10 @@ class EnhancementStage(Stage):
     def _low_texture_weight(image: np.ndarray) -> np.ndarray:
         """Per-pixel `low_tex` weight in [0, 1] (1 = flat region).
 
-        Uses a coarse Gaussian gradient magnitude on the luminance channel.
-        Normalized by the 95th percentile so a single bright edge does not
-        suppress the guard everywhere.
+        Uses a bounded luminance proxy for large frames, then resizes the
+        weight back to full resolution. This keeps the default guard from
+        adding an unbounded full-frame convolution and percentile on 4K/8K
+        inputs.
         """
         from scipy.ndimage import gaussian_gradient_magnitude
 
@@ -346,14 +349,41 @@ class EnhancementStage(Stage):
             luma = image if image.ndim == 2 else image[..., 0]
         luma = luma.astype(np.float32, copy=False)
 
-        grad = gaussian_gradient_magnitude(luma, sigma=4.0)
+        h, w = luma.shape[:2]
+        max_side = max(h, w)
+        resized_proxy = False
+        proxy_scale = 1.0
+        luma_proxy = luma
+        if max_side > _LOW_TEXTURE_PROXY_MAX_SIDE:
+            import cv2
+
+            proxy_scale = _LOW_TEXTURE_PROXY_MAX_SIDE / float(max_side)
+            proxy_h = max(1, int(round(h * proxy_scale)))
+            proxy_w = max(1, int(round(w * proxy_scale)))
+            luma_proxy = cv2.resize(luma, (proxy_w, proxy_h), interpolation=cv2.INTER_AREA)
+            resized_proxy = True
+
+        # Scale the local-gradient sigma into proxy pixels. Keep a floor of 1
+        # proxy pixel so highly downsampled large frames still get stable local
+        # gradient estimates instead of alias-sensitive single-pixel checks.
+        sigma = max(1.0, 4.0 * proxy_scale)
+        grad = gaussian_gradient_magnitude(luma_proxy, sigma=sigma)
         p95 = float(np.percentile(grad, 95))
         if p95 <= 1e-6:
             # Entirely flat frame → guard fires everywhere.
-            return np.ones_like(grad, dtype=np.float32)
-        normalized = np.clip(grad / p95, 0.0, 1.0)
-        low_tex = 1.0 - normalized
-        return low_tex.astype(np.float32, copy=False)
+            low_tex_proxy = np.ones_like(grad, dtype=np.float32)
+        else:
+            normalized = np.clip(grad / p95, 0.0, 1.0)
+            low_tex_proxy = 1.0 - normalized
+
+        if resized_proxy:
+            import cv2
+
+            low_tex = cv2.resize(low_tex_proxy.astype(np.float32, copy=False), (w, h), interpolation=cv2.INTER_LINEAR)
+        else:
+            low_tex = low_tex_proxy
+
+        return np.clip(low_tex, 0.0, 1.0).astype(np.float32, copy=False)
 
     @staticmethod
     def _resize_depth_map(depth_map: np.ndarray, target_shape: tuple[int, int]) -> np.ndarray:
