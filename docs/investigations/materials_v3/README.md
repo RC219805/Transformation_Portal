@@ -64,7 +64,7 @@ These investigations directly informed the final implementation delivered in:
 **Key Findings**:
 - Root cause: response planner still lacks mask canonicalization even though the pixel-ops executor has it
 - Policy drift: taxonomy marks `sky` canary, but planner rejects it as `not_in_canary_set`
-- Config drift: `refinement_strategy="none"` does not disable refinement in the planner
+- Config drift: taxonomy defines `none`, config comments mention `disabled`, and planner ignores the strategy value
 - Performance issue: full-image Sobel gradients are recomputed once per present material
 
 **Resolution**: Pending response-planner hardening pass.

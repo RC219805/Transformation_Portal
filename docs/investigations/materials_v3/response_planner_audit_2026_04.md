@@ -10,7 +10,7 @@ The current Materials V3 response planner has three confirmed correctness defect
 
 1. `(H, W, 1)` masks crash `compute_edge_signals`.
 2. `sky` is marked as canary material in taxonomy but rejected by the planner as `not_in_canary_set`.
-3. `refinement_strategy="none"` is ignored and can still allow refinement for `glass`.
+3. `refinement_strategy` handling is internally inconsistent: taxonomy defines `none`, config comments mention `disabled`, and the planner still allows `glass` refinement when given `none`.
 
 The right remediation is not a rewrite. Make a narrow planner hardening pass: canonicalize masks before morphology, cache image gradients once per response plan, drive refinement eligibility from taxonomy plus config, sort material iteration, and split refinement telemetry from pixel-op telemetry. Depth-guided refinement should remain a follow-up feature after these contract fixes land.
 
@@ -31,7 +31,7 @@ Local probes confirmed the headline behavior:
 
 - Calling `compute_edge_signals` with an `(8, 8, 1)` mask raised `IndexError: tuple index out of range` inside SciPy morphology.
 - Calling `_decide_refinement("sky", ...)` with sufficient coverage/confidence/edge support returned `reason: "not_in_canary_set"`.
-- Calling `_decide_refinement("glass", ...)` with `refinement_strategy="none"` returned `should_refine_edges: True` and `strategy: "canary"`.
+- Calling `_decide_refinement("glass", ...)` with `refinement_strategy="none"` returned `should_refine_edges: True` and `strategy: "canary"`, while the config comment currently documents `(canary, disabled)` and the taxonomy enum defines `canary`, `all`, and `none`.
 
 ## Findings
 
@@ -39,7 +39,7 @@ Local probes confirmed the headline behavior:
 | --- | --- | --- | --- |
 | Critical | Planner mask canonicalization gap | `materials_v3.py` passes raw masks into `compute_edge_signals`; the planner uses 2D morphology directly. | Canonicalize planner masks to 2D float32 before boundary extraction and fail closed on unsupported shapes. |
 | High | Taxonomy/planner drift | `DEFAULT_MATERIAL_METADATA["sky"]["canary"]` is `True`, but `_decide_refinement` hard-codes `{glass, foliage, water}`. | Make canary eligibility read from taxonomy. |
-| High | `refinement_strategy` ignored | Config exposes `canary`, `all`, and `none`; planner always behaves as canary and returns `"strategy": "canary"`. | Resolve strategy from config and enforce `none`, `canary`, and `all` semantics. |
+| High | `refinement_strategy` ignored / config contract drift | `RefinementStrategy` in taxonomy supports `canary`, `all`, and `none`, but planner logic always behaves as canary and returns `"strategy": "canary"`; current config documentation/usage is also inconsistent about whether `disabled` is meant to alias `none`. | Resolve strategy from config and taxonomy, enforce `none`, `canary`, and `all` semantics, and document or normalize whether `disabled` is a supported alias for `none`. |
 | Medium | Repeated full-image gradient work | Sobel gradients are recomputed once per material. | Compute normalized gradient magnitude once per response plan and reuse it for every mask. |
 | Medium | Summary telemetry conflates reasons | `skipped_reasons_histogram` is populated only from pixel-op reasons. | Split refinement reasons from pixel-op reasons while preserving the existing summary envelope. |
 | Low | Material order depends on upstream insertion order | `generate_response_plan` iterates `per_class_stats.items()`. | Iterate sorted material keys for deterministic response-plan ordering. |
@@ -58,11 +58,12 @@ Minimum safe fix:
 
 ### 2. Taxonomy And Strategy Drift
 
-The taxonomy says `sky` is a canary material. The planner does not consult taxonomy, so `sky` is blocked before refinement eligibility can be evaluated. Separately, the config surface exposes `refinement_strategy`, but `_decide_refinement` ignores it and hard-codes the response strategy to `"canary"`.
+The taxonomy says `sky` is a canary material. The planner does not consult taxonomy, so `sky` is blocked before refinement eligibility can be evaluated. Separately, the taxonomy enum exposes `canary`, `all`, and `none`, while the config comment documents `(canary, disabled)`. `_decide_refinement` ignores both surfaces and hard-codes the response strategy to `"canary"`.
 
 Minimum safe fix:
 
 - Resolve `strategy = str(getattr(config, "refinement_strategy", "canary")).lower()`.
+- Decide and document whether `disabled` is a supported alias for `none`; if supported, normalize it before decision logic, and if not supported, reject it as invalid.
 - For `none`, always return ineligible with a stable reason such as `strategy_disabled`.
 - For `canary`, allow only materials whose taxonomy metadata has `canary: True`.
 - For `all`, allow all present materials subject to coverage/confidence/boundary/edge gates.
@@ -115,6 +116,7 @@ Add focused response-planner tests covering:
 - `compute_edge_signals` accepts `(1, H, W)` masks.
 - Invalid 3D masks fail closed with a clear `ValueError`.
 - `refinement_strategy="none"` disables all refinement.
+- `refinement_strategy="disabled"` is either normalized to `none` or rejected with the same documented fail-closed behavior used for invalid strategies.
 - `refinement_strategy="canary"` allows taxonomy canaries, including `sky`.
 - `refinement_strategy="all"` allows non-canary materials through normal gates.
 - Response-plan material ordering is stable and sorted.
@@ -133,7 +135,7 @@ make test-fast
 | Priority | Work | Rationale |
 | --- | --- | --- |
 | P0 | Planner mask canonicalization | Fixes a confirmed runtime crash. |
-| P0 | Config/taxonomy-driven refinement policy | Restores the documented contract for sky and strategy settings. |
+| P0 | Config/taxonomy-driven refinement policy | Restores the documented contract for sky and resolves the `none` versus `disabled` strategy drift. |
 | P1 | Cached gradient field | Removes repeated full-image work with low implementation risk. |
 | P1 | Deterministic ordering and split histograms | Improves reproducibility and triage without changing execution semantics. |
 | P2 | Depth-guided refinement | Valuable feature work, but not part of the critical correctness fix. |
@@ -144,7 +146,7 @@ The hardening work is complete only when:
 
 - The Materials V3 focused test suite passes.
 - The mask-shape regression tests prove `(H, W, 1)` and `(1, H, W)` no longer crash the planner.
-- Strategy tests prove `none`, `canary`, and `all` behave distinctly.
+- Strategy tests prove `none`, `canary`, and `all` behave distinctly, and prove the documented behavior for `disabled`.
 - `sky` eligibility follows taxonomy.
 - Response-plan ordering is deterministic.
 - Fast local validation is green, or any remaining failure is clearly classified as product logic, stale test logic, or environment/tooling.
