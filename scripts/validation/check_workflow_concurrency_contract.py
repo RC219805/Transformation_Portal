@@ -48,6 +48,10 @@ def _has_trigger(config: dict[str, Any], trigger_name: str) -> bool:
 def _load_workflow_config(workflow_name: str, text: str) -> dict[str, Any]:
     """Return a normalized workflow mapping.
 
+    Args:
+        workflow_name: Workflow filename used to scope deterministic error messages.
+        text: Raw workflow YAML text to parse and normalize.
+
     Returns:
         dict[str, Any]: The normalized workflow configuration mapping.
 
@@ -64,7 +68,16 @@ def _load_workflow_config(workflow_name: str, text: str) -> dict[str, Any]:
 
 
 def validate_workflow_concurrency_contract_text(workflow_name: str, text: str) -> list[str]:
-    """Return concurrency contract violations for a single workflow file."""
+    """Return concurrency contract violations for a single workflow file.
+
+    Args:
+        workflow_name: Workflow filename used to scope reported violations.
+        text: Raw workflow YAML text to validate.
+
+    Returns:
+        list[str]: File-scoped contract violations, including YAML loader/import
+        errors and mixed-trigger concurrency violations.
+    """
     try:
         config = _load_workflow_config(workflow_name, text)
     except ValueError as exc:
