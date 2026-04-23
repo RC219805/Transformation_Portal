@@ -1880,14 +1880,18 @@ def test_portal_html_first_paint_lux_defaults_match_premium_posture() -> None:
     assert re.search(r'id="enableSegmentation"[^>]*checked', html)
     assert '<option value="efficientsam" selected>efficientsam</option>' in html
     assert '<option value="stub">stub</option>' in html
+    assert '<option value="custom">custom (Manual)</option>' in html
     assert re.search(r'id="strictSegmentation"[^>]*checked', html)
     assert re.search(r'id="sam2ModelSizeField" class="[^"]*\bhidden\b', html)
     assert re.search(r'id="sam2CheckpointField" class="[^"]*\bhidden\b', html)
+    assert re.search(r'id="sam2TuningPanel" class="[^"]*\bhidden\b', html)
+    assert re.search(r'id="sam2TilingConfigFields" class="[^"]*\bhidden\b', html)
     assert re.search(r'id="v2PresetField" class="[^"]*\bhidden\b', html)
     assert re.search(r'id="governanceDetails" class="[^"]*\bhidden\b', html)
     assert re.search(r'id="reconstructionDetails" class="[^"]*\bhidden\b', html)
     assert "Segmentation is active via efficientsam." in html
     assert "Turn segmentation on to choose a backend and strictness policy." not in html
+    assert re.search(r'id="runCardVersion"[^>]*>[\s\S]*?<option value="v1" selected>v1</option>', html)
 
 
 def test_portal_overview_and_build_surfaces_sync_bootstrap_skeletons_and_preview_loading() -> None:
@@ -2039,15 +2043,24 @@ def test_portal_preset_selection_applies_recommended_defaults_without_changing_c
     content = _portal_bundle_content()
     bind_body = _extract_js_function_body(content, "bindInputs")
     preset_body = _extract_js_function_body(content, "applyPresetRecommendedArgs")
+    option_body = _extract_js_function_body(content, "applyPipelinePresetOptions")
     fetch_body = _extract_js_function_body(content, "fetchPresetsForPipeline")
 
     assert "applyPresetRecommendedArgs(nextPreset);" in bind_body
+    assert "if (String(presetName || '').trim() === 'custom') {" in preset_body
+    assert "state.config.preset = 'custom';" in preset_body
     assert "quality_tier" in preset_body
     assert "depth_backend" in preset_body
     assert "segmentation_backend" in preset_body
+    assert "sam2_tiling_enabled" in preset_body
+    assert "sam2_tile_size_px" in preset_body
+    assert "sam2_points_per_side" in preset_body
     assert "emit_run_card" in preset_body
     assert "run_card_version" in preset_body
     assert "run_card_include_proofs" in preset_body
+    assert "customOption.value = 'custom';" in option_body
+    assert "customOption.textContent = 'custom (Manual)';" in option_body
+    assert "const names = [...els.presetSelect.options].map((option) => String(option.value || ''));" in option_body
     assert "advanced_sections" in fetch_body
     assert "recommended_args" in fetch_body
     assert "applyPresetRecommendedArgs(" not in fetch_body
@@ -2305,6 +2318,16 @@ def test_lux_cli_parity_links_portal_canonical_args_and_backend_argv() -> None:
         "enable_segmentation": "--enable-segmentation",
         "segmentation_backend": "--segmentation-backend",
         "sam2_model_size": "--sam2-model-size",
+        "sam2_tiling_enabled": "--sam2-tiling-enabled",
+        "sam2_tile_size_px": "--sam2-tile-size-px",
+        "sam2_overlap_px": "--sam2-overlap-px",
+        "sam2_global_pass_longest_side": "--sam2-global-pass-longest-side",
+        "sam2_max_concurrency": "--sam2-max-concurrency",
+        "sam2_points_per_side": "--sam2-points-per-side",
+        "sam2_points_per_batch": "--sam2-points-per-batch",
+        "sam2_pred_iou_thresh": "--sam2-pred-iou-thresh",
+        "sam2_stability_score_thresh": "--sam2-stability-score-thresh",
+        "sam2_crop_n_layers": "--sam2-crop-n-layers",
         "sam2_checkpoint_path": "--sam2-checkpoint-path",
         "strict_segmentation": "--strict-segmentation",
         "materials_v3": "--materials-v3",
@@ -2359,6 +2382,16 @@ def test_lux_cli_parity_links_portal_canonical_args_and_backend_argv() -> None:
             "enable_segmentation": True,
             "segmentation_backend": "sam2",
             "sam2_model_size": "large",
+            "sam2_tiling_enabled": True,
+            "sam2_tile_size_px": 1536,
+            "sam2_overlap_px": 256,
+            "sam2_global_pass_longest_side": 1280,
+            "sam2_max_concurrency": 1,
+            "sam2_points_per_side": 32,
+            "sam2_points_per_batch": 64,
+            "sam2_pred_iou_thresh": 0.88,
+            "sam2_stability_score_thresh": 0.85,
+            "sam2_crop_n_layers": 1,
             "sam2_checkpoint_path": "./models/sam2/sam2.1_hiera_large.pt",
             "strict_segmentation": True,
             "materials_v3": True,
@@ -2410,6 +2443,16 @@ def test_lux_cli_parity_links_portal_canonical_args_and_backend_argv() -> None:
     assert _flag_value(argv, "--enable-segmentation") == "on"
     assert _flag_value(argv, "--segmentation-backend") == "sam2"
     assert _flag_value(argv, "--sam2-model-size") == "large"
+    assert "--sam2-tiling-enabled" in argv
+    assert _flag_value(argv, "--sam2-tile-size-px") == "1536"
+    assert _flag_value(argv, "--sam2-overlap-px") == "256"
+    assert _flag_value(argv, "--sam2-global-pass-longest-side") == "1280"
+    assert _flag_value(argv, "--sam2-max-concurrency") == "1"
+    assert _flag_value(argv, "--sam2-points-per-side") == "32"
+    assert _flag_value(argv, "--sam2-points-per-batch") == "64"
+    assert _flag_value(argv, "--sam2-pred-iou-thresh") == "0.88"
+    assert _flag_value(argv, "--sam2-stability-score-thresh") == "0.85"
+    assert _flag_value(argv, "--sam2-crop-n-layers") == "1"
     assert _flag_value(argv, "--sam2-checkpoint-path").endswith("models/sam2/sam2.1_hiera_large.pt")
     assert "--strict-segmentation" in argv
     assert _flag_value(argv, "--materials-v3") == "on"
@@ -2996,7 +3039,28 @@ def test_portal_segmentation_defaults_align_with_cli_defaults() -> None:
     assert "enable: true," in state_source
     assert 'backend: "efficientsam",' in state_source
     assert 'sam2ModelSize: "base",' in state_source
+    assert "sam2TilingEnabled: false," in state_source
+    assert "sam2TileSizePx: 1536," in state_source
+    assert "sam2OverlapPx: 256," in state_source
+    assert "sam2GlobalPassLongestSide: 1280," in state_source
+    assert "sam2MaxConcurrency: 1," in state_source
+    assert "sam2PointsPerSide: 32," in state_source
+    assert "sam2PointsPerBatch: 64," in state_source
+    assert "sam2PredIouThresh: 0.88," in state_source
+    assert "sam2StabilityScoreThresh: 0.85," in state_source
+    assert "sam2CropNLayers: 1," in state_source
     assert "strict: true" in state_source
+
+
+def test_portal_run_card_version_control_is_explicit_in_state_and_bundle() -> None:
+    state_source = _portal_internal_state_source_content()
+    content = _portal_bundle_content()
+    update_body = _extract_js_function_body(content, "updateUIFromState")
+
+    assert 'runCardVersion: "v1"' in state_source
+    assert "runCardVersion: _domId('runCardVersion')" in content
+    assert "runCardVersionField: _domId('runCardVersionField')" in content
+    assert "syncRunCardControlState(c);" in update_body
 
 
 def test_portal_surfaces_pre_run_diagnostics_and_expected_outputs() -> None:
@@ -3164,17 +3228,33 @@ def test_portal_lux_build_surface_hides_inapplicable_optional_controls_until_nee
     assert "sam2ModelSizeField: _domId('sam2ModelSizeField')" in content
     assert "strictSegmentationField: _domId('strictSegmentationField')" in content
     assert "sam2CheckpointField: _domId('sam2CheckpointField')" in content
+    assert "sam2TuningPanel: _domId('sam2TuningPanel')" in content
+    assert "sam2TilingConfigFields: _domId('sam2TilingConfigFields')" in content
+    assert "sam2GeneratorConfigFields: _domId('sam2GeneratorConfigFields')" in content
+    assert "runCardVersionField: _domId('runCardVersionField')" in content
     assert "v2PresetField: _domId('v2PresetField')" in content
     assert "governanceDetailsHint: _domId('governanceDetailsHint')" in content
     assert "licenseAppleField: _domId('licenseAppleField')" in content
     assert "reconstructionConfigFields: _domId('reconstructionConfigFields')" in content
     assert "function _derivePresetResearchFlag" in content
     assert ".includes('research')" in preset_research_body
+    assert "if (String(state.config.preset || '').trim() === 'custom') {" in preset_body
+    assert "Manual configuration mode." in preset_body
     assert "is_research: _derivePresetResearchFlag({" in preset_body
     assert "is_research: _derivePresetResearchFlag({" in fallback_body
     assert "is_research: _derivePresetResearchFlag(preset)" in fetch_body
     assert "_setContextVisibility(els.segmentationBackendField, isLuxPipeline && segmentationEnabled);" in applicability_body
     assert "_setContextVisibility(els.sam2ModelSizeField, isLuxPipeline && showSam2Controls);" in applicability_body
+    assert "_setContextVisibility(els.sam2TuningPanel, isLuxPipeline && showSam2Controls);" in applicability_body
+    assert (
+        "_setContextVisibility(els.sam2TilingConfigFields, isLuxPipeline && showSam2Controls && sam2TilingEnabled);"
+        in applicability_body
+    )
+    assert "_setContextVisibility(els.sam2GeneratorConfigFields, isLuxPipeline && showSam2Controls);" in applicability_body
+    assert (
+        "SAM2 is active, so generator controls are live now. Tiling values matter only when tiling is enabled."
+        in applicability_body
+    )
     assert "_setContextVisibility(els.v2PresetField, isLuxPipeline && enableV2);" in applicability_body
     assert "_setContextVisibility(els.governanceDetails, governanceVisible);" in applicability_body
     assert "els.licenseAppleField" in applicability_body

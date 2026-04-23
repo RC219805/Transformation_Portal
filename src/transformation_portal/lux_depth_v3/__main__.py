@@ -64,12 +64,11 @@ Usage:
         --emit-run-card "on" \\
         --overwrite
 
-    # Research-only: Apple Depth Pro (explicit opt-in)
+    # Research-only: Apple Depth Pro backend (explicit opt-in)
     lux-depth-v3 \\
         --input-dir "./input_images" \\
         --output-dir "./output/lux_depth_v3_apex_depthpro" \\
         --quality-tier "apex" \\
-        --preset "apple-depth-pro-research" \\
         --depth-backend "depth_pro" \\
         --depth-pro-python "./.venv-depth-pro/bin/python" \\
         --non-commercial-ok "true" \\
@@ -114,9 +113,11 @@ Key Concepts:
       * --quality-tier: Controls output quality
         (standard|premium|apex) - use for most
         workflows
-      * --preset: Named configuration for
-        specialized scenarios - overrides
-        quality-tier
+      * --preset: Curated preset name or
+        metadata-only label for specialized
+        scenarios. Unmapped labels are
+        preserved as metadata and may still
+        trigger governance checks.
 
     - PBR-Only Workflows:
       * Add --enable-v2 "off" to skip V2 enhancement validation and execution
@@ -299,11 +300,14 @@ def main(
         "premium",
         "--preset",
         help=(
-            "Named pipeline configuration"
-            " (premium,"
+            "Curated pipeline preset or"
+            " metadata label (premium,"
+            " default,"
             " depth-anything-v3.1-research-m4,"
-            " etc.). Optional - use"
-            " --quality-tier for most workflows."
+            " etc.). Unmapped values are"
+            " preserved as labels. Optional"
+            " - use --quality-tier for most"
+            " workflows."
         ),
     ),
     quality_tier: str = typer.Option(

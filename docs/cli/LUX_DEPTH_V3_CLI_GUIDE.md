@@ -171,8 +171,9 @@ lux-depth-v3 \
 
 ### Pipeline Configuration
 
-- `--preset TEXT`: Pipeline preset (default: `premium`)
-  - Options: `premium`, `depth-anything-v3.1-research-m4`, `default`, etc.
+- `--preset TEXT`: Curated preset or metadata label (default: `premium`)
+  - Curated examples: `premium`, `depth-anything-v3.1-research-m4`, `default`
+  - Unmapped values are preserved as labels and do not become first-class typed presets
 - `--quality-tier TEXT`: Quality tier (default: `standard`)
   - Options: `standard`, `premium`, `apex`
 
@@ -441,7 +442,8 @@ These flags serve **different purposes**:
 **`--preset`** (named configuration)
 - Provides **named combinations** of parameters for specific scenarios
 - Fine-tunes pipeline behavior for particular depth models or use cases
-- Examples: `premium`, `depth-anything-v3.1-research-m4`, `apple-depth-pro-research`
+- Curated examples: `premium`, `depth-anything-v3.1-research-m4`, `default`
+- Unmapped values are preserved as metadata labels unless they match a real preset
 - Can override quality-tier defaults when specified
 
 **Recommendation**: Start with `--quality-tier` for most workflows. Use `--preset` only when you need specific model configurations or research-only features.

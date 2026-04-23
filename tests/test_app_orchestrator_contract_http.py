@@ -1109,6 +1109,69 @@ def test_config_preview_rejects_oversized_sam2_checkpoint_path(
     assert "sam2_checkpoint_path" not in body["data"]["normalized_args"]
 
 
+def test_lux_config_preview_preserves_custom_preset_and_advanced_sam2_controls(
+    client: TestClient,
+    tmp_path: Path,
+) -> None:
+    input_dir = (tmp_path / "preview-input-custom-sam2").resolve()
+    output_dir = (tmp_path / "preview-output-custom-sam2").resolve()
+    input_dir.mkdir(parents=True, exist_ok=True)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    (input_dir / "frame.jpg").write_bytes(b"fixture-image")
+
+    response = client.post(
+        "/v1/config-preview",
+        json={
+            "pipeline": "lux-depth-v3",
+            "args": {
+                "input_dir": str(input_dir),
+                "output_dir": str(output_dir),
+                "preset": "custom",
+                "enable_segmentation": True,
+                "segmentation_backend": "sam2",
+                "sam2_model_size": "large",
+                "sam2_tiling_enabled": True,
+                "sam2_tile_size_px": 1536,
+                "sam2_overlap_px": 256,
+                "sam2_global_pass_longest_side": 1280,
+                "sam2_max_concurrency": 1,
+                "sam2_points_per_side": 32,
+                "sam2_points_per_batch": 64,
+                "sam2_pred_iou_thresh": 0.88,
+                "sam2_stability_score_thresh": 0.85,
+                "sam2_crop_n_layers": 1,
+                "emit_run_card": True,
+                "run_card_version": "v2",
+            },
+        },
+    )
+    body = response.json()
+
+    assert response.status_code == 200
+    assert body["schema"] == "tp.orchestrator.config_preview.v1"
+    assert body["success"] is True
+    preview = body["data"]
+    normalized = preview["normalized_args"]
+
+    assert normalized["preset"] == "custom"
+    assert normalized["segmentation_backend"] == "sam2"
+    assert normalized["sam2_model_size"] == "large"
+    assert normalized["sam2_tiling_enabled"] is True
+    assert normalized["sam2_tile_size_px"] == 1536
+    assert normalized["sam2_overlap_px"] == 256
+    assert normalized["sam2_global_pass_longest_side"] == 1280
+    assert normalized["sam2_max_concurrency"] == 1
+    assert normalized["sam2_points_per_side"] == 32
+    assert normalized["sam2_points_per_batch"] == 64
+    assert normalized["sam2_pred_iou_thresh"] == pytest.approx(0.88)
+    assert normalized["sam2_stability_score_thresh"] == pytest.approx(0.85)
+    assert normalized["sam2_crop_n_layers"] == 1
+    assert normalized["run_card_version"] == "v2"
+    assert preview["execution_args"]["preset"] == "custom"
+    assert preview["execution_args"]["sam2_tiling_enabled"] is True
+    assert preview["execution_args"]["run_card_version"] == "v2"
+
+
 def test_config_preview_contract_sanitizes_archive_validation_errors(
     client: TestClient,
     tmp_path: Path,

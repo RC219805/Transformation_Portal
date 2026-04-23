@@ -270,12 +270,27 @@ const els = {
     sam2ModelSizeField: _domId('sam2ModelSizeField'),
     strictSegmentationField: _domId('strictSegmentationField'),
     sam2CheckpointField: _domId('sam2CheckpointField'),
+    sam2TuningPanel: _domId('sam2TuningPanel'),
+    sam2TilingToggleField: _domId('sam2TilingToggleField'),
+    sam2TilingConfigFields: _domId('sam2TilingConfigFields'),
+    sam2GeneratorConfigFields: _domId('sam2GeneratorConfigFields'),
+    sam2TuningHint: _domId('sam2TuningHint'),
     segmentationApplicabilityHint: _domId('segmentationApplicabilityHint'),
     segmentation: {
         enable: _domId('enableSegmentation'),
         backend: _domId('segmentationBackend'),
         sam2ModelSize: _domId('sam2ModelSize'),
         sam2CheckpointPath: _domId('sam2CheckpointPath'),
+        sam2TilingEnabled: _domId('sam2TilingEnabled'),
+        sam2TileSizePx: _domId('sam2TileSizePx'),
+        sam2OverlapPx: _domId('sam2OverlapPx'),
+        sam2GlobalPassLongestSide: _domId('sam2GlobalPassLongestSide'),
+        sam2MaxConcurrency: _domId('sam2MaxConcurrency'),
+        sam2PointsPerSide: _domId('sam2PointsPerSide'),
+        sam2PointsPerBatch: _domId('sam2PointsPerBatch'),
+        sam2PredIouThresh: _domId('sam2PredIouThresh'),
+        sam2StabilityScoreThresh: _domId('sam2StabilityScoreThresh'),
+        sam2CropNLayers: _domId('sam2CropNLayers'),
         strict: _domId('strictSegmentation')
     },
 
@@ -302,8 +317,10 @@ const els = {
         marketing: _domId('emitMarketing'),
         report: _domId('emitReport'),
         runCard: _domId('emitRunCard'),
+        runCardVersion: _domId('runCardVersion'),
         runCardIncludeProofs: _domId('emitRunCardIncludeProofs')
     },
+    runCardVersionField: _domId('runCardVersionField'),
 
     licenses: {
         nonCommercialOk: _domId('licenseNonCommercial'),
@@ -3296,6 +3313,17 @@ function currentPresetDescriptor() {
             advanced_sections: []
         };
     }
+    if (String(state.config.preset || '').trim() === 'custom') {
+        return {
+            name: 'custom',
+            label: 'custom',
+            stability: 'custom',
+            description: 'Manual configuration mode. Current draft values are preserved and curated presets stop backfilling the Lux contract.',
+            is_research: false,
+            recommended_args: {},
+            advanced_sections: ['advanced']
+        };
+    }
     const presets = Array.isArray(state.presetsByPipeline[state.pipeline]) ? state.presetsByPipeline[state.pipeline] : [];
     const selected = presets.find((preset) => String(preset.name) === String(state.config.preset));
     if (selected) return selected;
@@ -3437,6 +3465,7 @@ function syncBuildSurfaceApplicability(payload = null) {
     const segmentationEnabled = parseBoolLike(args.enable_segmentation, false);
     const segmentationBackend = _resolveSegmentationBackend(args.segmentation_backend || state.config.segmentation?.backend);
     const showSam2Controls = segmentationEnabled && segmentationBackend === 'sam2';
+    const sam2TilingEnabled = parseBoolLike(args.sam2_tiling_enabled, false);
     const enableV2 = parseBoolLike(args.enable_v2, false);
     const reconstructionEnabled = parseBoolLike(args.enable_reconstruction, false);
     const researchPreset = _presetRequiresResearchAcknowledgments(preset, args);
@@ -3460,14 +3489,22 @@ function syncBuildSurfaceApplicability(payload = null) {
     _setContextVisibility(els.strictSegmentationField, isLuxPipeline && segmentationEnabled);
     _setContextVisibility(els.sam2ModelSizeField, isLuxPipeline && showSam2Controls);
     _setContextVisibility(els.sam2CheckpointField, isLuxPipeline && showSam2Controls);
+    _setContextVisibility(els.sam2TuningPanel, isLuxPipeline && showSam2Controls);
+    _setContextVisibility(els.sam2TilingConfigFields, isLuxPipeline && showSam2Controls && sam2TilingEnabled);
+    _setContextVisibility(els.sam2GeneratorConfigFields, isLuxPipeline && showSam2Controls);
     if (els.segmentationApplicabilityHint) {
         els.segmentationApplicabilityHint.textContent = !isLuxPipeline
             ? ''
             : !segmentationEnabled
                 ? 'Turn segmentation on to choose a backend and strictness policy. SAM2-only controls appear when that backend is selected.'
                 : showSam2Controls
-                    ? 'SAM2 is active, so model size and checkpoint controls are now available.'
+                    ? 'SAM2 is active, so generator controls are live now. Tiling values matter only when tiling is enabled.'
                     : `Segmentation is active via ${segmentationBackend}. SAM2-only controls stay hidden until you switch back to sam2.`;
+    }
+    if (els.sam2TuningHint) {
+        els.sam2TuningHint.textContent = sam2TilingEnabled
+            ? 'Generator controls and tiling controls are both active for this SAM2 run.'
+            : 'Generator controls always apply while SAM2 is active. Tiling values matter only when tiling is enabled.';
     }
 
     _setContextVisibility(els.v2PresetField, isLuxPipeline && enableV2);
@@ -6455,6 +6492,24 @@ function _parsePositiveIntOrNull(value) {
     return parsed;
 }
 
+function _parseNonNegativeIntOrNull(value) {
+    if (value === null || value === undefined) return null;
+    const text = String(value).trim();
+    if (!text) return null;
+    const parsed = Number.parseInt(text, 10);
+    if (!Number.isFinite(parsed) || parsed < 0) return null;
+    return parsed;
+}
+
+function _parseProbabilityOrNull(value) {
+    if (value === null || value === undefined) return null;
+    const text = String(value).trim();
+    if (!text) return null;
+    const parsed = Number.parseFloat(text);
+    if (!Number.isFinite(parsed) || parsed < 0 || parsed > 1) return null;
+    return parsed;
+}
+
 function _normalizeVerboseQuietFlags(flags, notify = false) {
     if (!flags) return false;
     flags.verbose = parseBoolLike(flags.verbose, false);
@@ -6468,11 +6523,58 @@ function _normalizeVerboseQuietFlags(flags, notify = false) {
 }
 
 function syncSegmentationControlState(config) {
-    if (!els.segmentation.sam2ModelSize || !els.segmentation.backend) return;
-    const backend = _resolveSegmentationBackend(config.segmentation?.backend);
-    els.segmentation.sam2ModelSize.disabled = backend !== 'sam2';
+    if (!els.segmentation.backend) return;
+    const segmentation = config?.segmentation || {};
+    const segmentationEnabled = parseBoolLike(segmentation.enable, false);
+    const backend = _resolveSegmentationBackend(segmentation.backend);
+    const sam2Active = segmentationEnabled && backend === 'sam2';
+    const sam2TilingEnabled = parseBoolLike(segmentation.sam2TilingEnabled, false);
+
+    if (els.segmentation.sam2ModelSize) {
+        els.segmentation.sam2ModelSize.disabled = !sam2Active;
+    }
     if (els.segmentation.sam2CheckpointPath) {
-        els.segmentation.sam2CheckpointPath.disabled = backend !== 'sam2';
+        els.segmentation.sam2CheckpointPath.disabled = !sam2Active;
+    }
+    if (els.segmentation.sam2TilingEnabled) {
+        els.segmentation.sam2TilingEnabled.disabled = !sam2Active;
+    }
+    if (els.sam2TuningPanel) {
+        els.sam2TuningPanel.classList.toggle('hidden', !sam2Active);
+    }
+    if (els.sam2TilingConfigFields) {
+        els.sam2TilingConfigFields.classList.toggle('hidden', !sam2Active || !sam2TilingEnabled);
+    }
+    if (els.sam2GeneratorConfigFields) {
+        els.sam2GeneratorConfigFields.classList.toggle('hidden', !sam2Active);
+    }
+    [
+        els.segmentation.sam2TileSizePx,
+        els.segmentation.sam2OverlapPx,
+        els.segmentation.sam2GlobalPassLongestSide,
+        els.segmentation.sam2MaxConcurrency,
+    ].forEach((field) => {
+        if (field) field.disabled = !sam2Active || !sam2TilingEnabled;
+    });
+    [
+        els.segmentation.sam2PointsPerSide,
+        els.segmentation.sam2PointsPerBatch,
+        els.segmentation.sam2PredIouThresh,
+        els.segmentation.sam2StabilityScoreThresh,
+        els.segmentation.sam2CropNLayers,
+    ].forEach((field) => {
+        if (field) field.disabled = !sam2Active;
+    });
+}
+
+function syncRunCardControlState(config) {
+    const emits = config?.emits || {};
+    const runCardEnabled = parseBoolLike(emits.runCard, false);
+    if (els.runCardVersionField) {
+        els.runCardVersionField.classList.toggle('opacity-60', !runCardEnabled);
+    }
+    if (els.emits.runCardVersion) {
+        els.emits.runCardVersion.disabled = !runCardEnabled;
     }
 }
 
@@ -7705,6 +7807,40 @@ function buildCanonicalLuxDepthArgs(config) {
         els.segmentation.sam2CheckpointPath ? els.segmentation.sam2CheckpointPath.value : config.segmentation?.sam2CheckpointPath,
         config.segmentation?.sam2CheckpointPath || ''
     );
+    const sam2TilingEnabled = els.segmentation.sam2TilingEnabled
+        ? Boolean(els.segmentation.sam2TilingEnabled.checked)
+        : parseBoolLike(config.segmentation?.sam2TilingEnabled, false);
+    const sam2TileSizePx = _parsePositiveIntOrNull(
+        els.segmentation.sam2TileSizePx ? els.segmentation.sam2TileSizePx.value : config.segmentation?.sam2TileSizePx
+    );
+    const sam2OverlapPx = _parseNonNegativeIntOrNull(
+        els.segmentation.sam2OverlapPx ? els.segmentation.sam2OverlapPx.value : config.segmentation?.sam2OverlapPx
+    );
+    const sam2GlobalPassLongestSide = _parsePositiveIntOrNull(
+        els.segmentation.sam2GlobalPassLongestSide
+            ? els.segmentation.sam2GlobalPassLongestSide.value
+            : config.segmentation?.sam2GlobalPassLongestSide
+    );
+    const sam2MaxConcurrency = _parsePositiveIntOrNull(
+        els.segmentation.sam2MaxConcurrency ? els.segmentation.sam2MaxConcurrency.value : config.segmentation?.sam2MaxConcurrency
+    );
+    const sam2PointsPerSide = _parsePositiveIntOrNull(
+        els.segmentation.sam2PointsPerSide ? els.segmentation.sam2PointsPerSide.value : config.segmentation?.sam2PointsPerSide
+    );
+    const sam2PointsPerBatch = _parsePositiveIntOrNull(
+        els.segmentation.sam2PointsPerBatch ? els.segmentation.sam2PointsPerBatch.value : config.segmentation?.sam2PointsPerBatch
+    );
+    const sam2PredIouThresh = _parseProbabilityOrNull(
+        els.segmentation.sam2PredIouThresh ? els.segmentation.sam2PredIouThresh.value : config.segmentation?.sam2PredIouThresh
+    );
+    const sam2StabilityScoreThresh = _parseProbabilityOrNull(
+        els.segmentation.sam2StabilityScoreThresh
+            ? els.segmentation.sam2StabilityScoreThresh.value
+            : config.segmentation?.sam2StabilityScoreThresh
+    );
+    const sam2CropNLayers = _parseNonNegativeIntOrNull(
+        els.segmentation.sam2CropNLayers ? els.segmentation.sam2CropNLayers.value : config.segmentation?.sam2CropNLayers
+    );
     const strictSegmentation = els.segmentation.strict
         ? Boolean(els.segmentation.strict.checked)
         : parseBoolLike(config.segmentation?.strict, false);
@@ -7762,7 +7898,12 @@ function buildCanonicalLuxDepthArgs(config) {
     const emitRunCardIncludeProofs = els.emits.runCardIncludeProofs
         ? Boolean(els.emits.runCardIncludeProofs.checked)
         : parseBoolLike(config.emits?.runCardIncludeProofs, false);
-    const runCardVersion = _resolveRunCardVersion(config.emits?.runCardVersion);
+    const runCardVersion = _resolveRunCardVersion(
+        _textOrFallback(
+            els.emits.runCardVersion ? els.emits.runCardVersion.value : config.emits?.runCardVersion,
+            config.emits?.runCardVersion || 'v1'
+        )
+    );
 
     const nonCommercialOk = els.licenses.nonCommercialOk
         ? Boolean(els.licenses.nonCommercialOk.checked)
@@ -7839,6 +7980,7 @@ function buildCanonicalLuxDepthArgs(config) {
         enable_segmentation: segmentationEnable,
         segmentation_backend: segmentationBackend,
         sam2_model_size: sam2ModelSize,
+        sam2_tiling_enabled: sam2TilingEnabled,
         strict_segmentation: strictSegmentation,
         materials_v3: materialsV3,
         pbr,
@@ -7872,6 +8014,15 @@ function buildCanonicalLuxDepthArgs(config) {
     };
     if (depthDevice) args.depth_device = depthDevice;
     if (sam2CheckpointPath) args.sam2_checkpoint_path = sam2CheckpointPath;
+    if (sam2TileSizePx !== null) args.sam2_tile_size_px = sam2TileSizePx;
+    if (sam2OverlapPx !== null) args.sam2_overlap_px = sam2OverlapPx;
+    if (sam2GlobalPassLongestSide !== null) args.sam2_global_pass_longest_side = sam2GlobalPassLongestSide;
+    if (sam2MaxConcurrency !== null) args.sam2_max_concurrency = sam2MaxConcurrency;
+    if (sam2PointsPerSide !== null) args.sam2_points_per_side = sam2PointsPerSide;
+    if (sam2PointsPerBatch !== null) args.sam2_points_per_batch = sam2PointsPerBatch;
+    if (sam2PredIouThresh !== null) args.sam2_pred_iou_thresh = sam2PredIouThresh;
+    if (sam2StabilityScoreThresh !== null) args.sam2_stability_score_thresh = sam2StabilityScoreThresh;
+    if (sam2CropNLayers !== null) args.sam2_crop_n_layers = sam2CropNLayers;
     if (camerasSidecarPath) args.cameras_sidecar_path = camerasSidecarPath;
     if (reconstructionIterations !== null) args.reconstruction_iterations = reconstructionIterations;
     if (maxWorkers !== null) args.max_workers = maxWorkers;
@@ -7902,6 +8053,10 @@ function seedPresetFallbacks() {
 }
 
 function applyPresetRecommendedArgs(presetName) {
+    if (String(presetName || '').trim() === 'custom') {
+        state.config.preset = 'custom';
+        return;
+    }
     const presets = Array.isArray(state.presetsByPipeline[state.pipeline]) ? state.presetsByPipeline[state.pipeline] : [];
     const preset = presets.find((item) => String(item?.name || '') === String(presetName || ''));
     const recommended = preset && preset.recommended_args && typeof preset.recommended_args === 'object'
@@ -7920,6 +8075,38 @@ function applyPresetRecommendedArgs(presetName) {
     if (Object.prototype.hasOwnProperty.call(recommended, 'segmentation_backend')) c.segmentation.backend = _resolveSegmentationBackend(recommended.segmentation_backend);
     if (Object.prototype.hasOwnProperty.call(recommended, 'sam2_model_size')) c.segmentation.sam2ModelSize = _resolveSam2ModelSize(recommended.sam2_model_size);
     if (Object.prototype.hasOwnProperty.call(recommended, 'sam2_checkpoint_path')) c.segmentation.sam2CheckpointPath = _textOrFallback(recommended.sam2_checkpoint_path, '');
+    if (Object.prototype.hasOwnProperty.call(recommended, 'sam2_tiling_enabled')) {
+        c.segmentation.sam2TilingEnabled = parseBoolLike(recommended.sam2_tiling_enabled, c.segmentation.sam2TilingEnabled);
+    }
+    if (Object.prototype.hasOwnProperty.call(recommended, 'sam2_tile_size_px')) {
+        c.segmentation.sam2TileSizePx = _parsePositiveIntOrNull(recommended.sam2_tile_size_px) || c.segmentation.sam2TileSizePx;
+    }
+    if (Object.prototype.hasOwnProperty.call(recommended, 'sam2_overlap_px')) {
+        c.segmentation.sam2OverlapPx = _parseNonNegativeIntOrNull(recommended.sam2_overlap_px) ?? c.segmentation.sam2OverlapPx;
+    }
+    if (Object.prototype.hasOwnProperty.call(recommended, 'sam2_global_pass_longest_side')) {
+        c.segmentation.sam2GlobalPassLongestSide =
+            _parsePositiveIntOrNull(recommended.sam2_global_pass_longest_side) || c.segmentation.sam2GlobalPassLongestSide;
+    }
+    if (Object.prototype.hasOwnProperty.call(recommended, 'sam2_max_concurrency')) {
+        c.segmentation.sam2MaxConcurrency = _parsePositiveIntOrNull(recommended.sam2_max_concurrency) || c.segmentation.sam2MaxConcurrency;
+    }
+    if (Object.prototype.hasOwnProperty.call(recommended, 'sam2_points_per_side')) {
+        c.segmentation.sam2PointsPerSide = _parsePositiveIntOrNull(recommended.sam2_points_per_side) || c.segmentation.sam2PointsPerSide;
+    }
+    if (Object.prototype.hasOwnProperty.call(recommended, 'sam2_points_per_batch')) {
+        c.segmentation.sam2PointsPerBatch = _parsePositiveIntOrNull(recommended.sam2_points_per_batch) || c.segmentation.sam2PointsPerBatch;
+    }
+    if (Object.prototype.hasOwnProperty.call(recommended, 'sam2_pred_iou_thresh')) {
+        c.segmentation.sam2PredIouThresh = _parseProbabilityOrNull(recommended.sam2_pred_iou_thresh) ?? c.segmentation.sam2PredIouThresh;
+    }
+    if (Object.prototype.hasOwnProperty.call(recommended, 'sam2_stability_score_thresh')) {
+        c.segmentation.sam2StabilityScoreThresh =
+            _parseProbabilityOrNull(recommended.sam2_stability_score_thresh) ?? c.segmentation.sam2StabilityScoreThresh;
+    }
+    if (Object.prototype.hasOwnProperty.call(recommended, 'sam2_crop_n_layers')) {
+        c.segmentation.sam2CropNLayers = _parseNonNegativeIntOrNull(recommended.sam2_crop_n_layers) ?? c.segmentation.sam2CropNLayers;
+    }
     if (Object.prototype.hasOwnProperty.call(recommended, 'strict_segmentation')) c.segmentation.strict = parseBoolLike(recommended.strict_segmentation, c.segmentation.strict);
 
     c.flags = c.flags || {};
@@ -7990,8 +8177,14 @@ function applyPipelinePresetOptions(pipelineName) {
         option.textContent = String(preset.label || preset.name);
         els.presetSelect.appendChild(option);
     });
+    if (![...els.presetSelect.options].some((option) => String(option.value || '') === 'custom')) {
+        const customOption = document.createElement('option');
+        customOption.value = 'custom';
+        customOption.textContent = 'custom (Manual)';
+        els.presetSelect.appendChild(customOption);
+    }
 
-    const names = presets.map((preset) => String(preset.name));
+    const names = [...els.presetSelect.options].map((option) => String(option.value || ''));
     if (names.includes(selectedBefore)) {
         els.presetSelect.value = selectedBefore;
     } else {
@@ -8114,6 +8307,16 @@ function updateUIFromState() {
     c.segmentation.backend = _resolveSegmentationBackend(c.segmentation.backend);
     c.segmentation.sam2ModelSize = _resolveSam2ModelSize(c.segmentation.sam2ModelSize);
     c.segmentation.sam2CheckpointPath = _textOrFallback(c.segmentation.sam2CheckpointPath, '');
+    c.segmentation.sam2TilingEnabled = parseBoolLike(c.segmentation.sam2TilingEnabled, false);
+    c.segmentation.sam2TileSizePx = _parsePositiveIntOrNull(c.segmentation.sam2TileSizePx) || 1536;
+    c.segmentation.sam2OverlapPx = _parseNonNegativeIntOrNull(c.segmentation.sam2OverlapPx) ?? 256;
+    c.segmentation.sam2GlobalPassLongestSide = _parsePositiveIntOrNull(c.segmentation.sam2GlobalPassLongestSide) || 1280;
+    c.segmentation.sam2MaxConcurrency = _parsePositiveIntOrNull(c.segmentation.sam2MaxConcurrency) || 1;
+    c.segmentation.sam2PointsPerSide = _parsePositiveIntOrNull(c.segmentation.sam2PointsPerSide) || 32;
+    c.segmentation.sam2PointsPerBatch = _parsePositiveIntOrNull(c.segmentation.sam2PointsPerBatch) || 64;
+    c.segmentation.sam2PredIouThresh = _parseProbabilityOrNull(c.segmentation.sam2PredIouThresh) ?? 0.88;
+    c.segmentation.sam2StabilityScoreThresh = _parseProbabilityOrNull(c.segmentation.sam2StabilityScoreThresh) ?? 0.85;
+    c.segmentation.sam2CropNLayers = _parseNonNegativeIntOrNull(c.segmentation.sam2CropNLayers) ?? 1;
     c.segmentation.strict = parseBoolLike(c.segmentation.strict, false);
     c.flags = c.flags || {};
     c.flags.materials = parseBoolLike(c.flags.materials, false);
@@ -8174,6 +8377,21 @@ function updateUIFromState() {
     if (els.segmentation.backend) els.segmentation.backend.value = c.segmentation.backend;
     if (els.segmentation.sam2ModelSize) els.segmentation.sam2ModelSize.value = c.segmentation.sam2ModelSize;
     if (els.segmentation.sam2CheckpointPath) els.segmentation.sam2CheckpointPath.value = c.segmentation.sam2CheckpointPath;
+    if (els.segmentation.sam2TileSizePx) els.segmentation.sam2TileSizePx.value = String(c.segmentation.sam2TileSizePx);
+    if (els.segmentation.sam2OverlapPx) els.segmentation.sam2OverlapPx.value = String(c.segmentation.sam2OverlapPx);
+    if (els.segmentation.sam2GlobalPassLongestSide) {
+        els.segmentation.sam2GlobalPassLongestSide.value = String(c.segmentation.sam2GlobalPassLongestSide);
+    }
+    if (els.segmentation.sam2MaxConcurrency) els.segmentation.sam2MaxConcurrency.value = String(c.segmentation.sam2MaxConcurrency);
+    if (els.segmentation.sam2PointsPerSide) els.segmentation.sam2PointsPerSide.value = String(c.segmentation.sam2PointsPerSide);
+    if (els.segmentation.sam2PointsPerBatch) els.segmentation.sam2PointsPerBatch.value = String(c.segmentation.sam2PointsPerBatch);
+    if (els.segmentation.sam2PredIouThresh) {
+        els.segmentation.sam2PredIouThresh.value = String(c.segmentation.sam2PredIouThresh);
+    }
+    if (els.segmentation.sam2StabilityScoreThresh) {
+        els.segmentation.sam2StabilityScoreThresh.value = String(c.segmentation.sam2StabilityScoreThresh);
+    }
+    if (els.segmentation.sam2CropNLayers) els.segmentation.sam2CropNLayers.value = String(c.segmentation.sam2CropNLayers);
     if (els.v2Preset) {
         els.v2Preset.value = c.v2Preset;
         els.v2Preset.disabled = !c.flags.enableV2;
@@ -8215,6 +8433,7 @@ function updateUIFromState() {
     safeSyncCheck(els.flags.verbose, c.flags.verbose);
     safeSyncCheck(els.flags.quiet, c.flags.quiet);
     safeSyncCheck(els.segmentation.enable, c.segmentation.enable);
+    safeSyncCheck(els.segmentation.sam2TilingEnabled, c.segmentation.sam2TilingEnabled);
     safeSyncCheck(els.segmentation.strict, c.segmentation.strict);
 
     safeSyncCheck(els.emits.master16, c.emits.master16);
@@ -8222,6 +8441,7 @@ function updateUIFromState() {
     safeSyncCheck(els.emits.marketing, c.emits.marketing);
     safeSyncCheck(els.emits.report, c.emits.report);
     safeSyncCheck(els.emits.runCard, c.emits.runCard);
+    if (els.emits.runCardVersion) els.emits.runCardVersion.value = c.emits.runCardVersion;
     safeSyncCheck(els.emits.runCardIncludeProofs, c.emits.runCardIncludeProofs);
 
     safeSyncCheck(els.licenses.nonCommercialOk, c.licenses.nonCommercialOk);
@@ -8237,6 +8457,7 @@ function updateUIFromState() {
     }
     _syncSwitchStateLabels();
     syncSegmentationControlState(c);
+    syncRunCardControlState(c);
     syncRuntimeWorkerModeControls();
     renderFieldPreviewStatuses();
     _syncStagedUploadUi();
@@ -8572,6 +8793,36 @@ function renderCLI() {
         cliLines.push(`  --segmentation-backend ${q(payload.args.segmentation_backend)}`);
         if (payload.args.segmentation_backend === 'sam2') {
             cliLines.push(`  --sam2-model-size ${q(payload.args.sam2_model_size)}`);
+            if (parseBoolLike(payload.args.sam2_tiling_enabled, false)) {
+                cliLines.push(`  --sam2-tiling-enabled`);
+            }
+            if (parseBoolLike(payload.args.sam2_tiling_enabled, false) && payload.args.sam2_tile_size_px) {
+                cliLines.push(`  --sam2-tile-size-px ${q(payload.args.sam2_tile_size_px)}`);
+            }
+            if (parseBoolLike(payload.args.sam2_tiling_enabled, false) && payload.args.sam2_overlap_px !== undefined) {
+                cliLines.push(`  --sam2-overlap-px ${q(payload.args.sam2_overlap_px)}`);
+            }
+            if (parseBoolLike(payload.args.sam2_tiling_enabled, false) && payload.args.sam2_global_pass_longest_side) {
+                cliLines.push(`  --sam2-global-pass-longest-side ${q(payload.args.sam2_global_pass_longest_side)}`);
+            }
+            if (parseBoolLike(payload.args.sam2_tiling_enabled, false) && payload.args.sam2_max_concurrency) {
+                cliLines.push(`  --sam2-max-concurrency ${q(payload.args.sam2_max_concurrency)}`);
+            }
+            if (payload.args.sam2_points_per_side) {
+                cliLines.push(`  --sam2-points-per-side ${q(payload.args.sam2_points_per_side)}`);
+            }
+            if (payload.args.sam2_points_per_batch) {
+                cliLines.push(`  --sam2-points-per-batch ${q(payload.args.sam2_points_per_batch)}`);
+            }
+            if (payload.args.sam2_pred_iou_thresh !== undefined) {
+                cliLines.push(`  --sam2-pred-iou-thresh ${q(payload.args.sam2_pred_iou_thresh)}`);
+            }
+            if (payload.args.sam2_stability_score_thresh !== undefined) {
+                cliLines.push(`  --sam2-stability-score-thresh ${q(payload.args.sam2_stability_score_thresh)}`);
+            }
+            if (payload.args.sam2_crop_n_layers !== undefined) {
+                cliLines.push(`  --sam2-crop-n-layers ${q(payload.args.sam2_crop_n_layers)}`);
+            }
         }
         if (payload.args.sam2_checkpoint_path) {
             cliLines.push(`  --sam2-checkpoint-path ${q(payload.args.sam2_checkpoint_path)}`);
@@ -8673,7 +8924,18 @@ function bindInputs() {
             ':qualityTier': 'quality_tier',
             ':depthBackend': 'depth_backend',
             'segmentation:backend': 'segmentation_backend',
+            'segmentation:sam2TilingEnabled': 'sam2_tiling_enabled',
+            'segmentation:sam2TileSizePx': 'sam2_tile_size_px',
+            'segmentation:sam2OverlapPx': 'sam2_overlap_px',
+            'segmentation:sam2GlobalPassLongestSide': 'sam2_global_pass_longest_side',
+            'segmentation:sam2MaxConcurrency': 'sam2_max_concurrency',
+            'segmentation:sam2PointsPerSide': 'sam2_points_per_side',
+            'segmentation:sam2PointsPerBatch': 'sam2_points_per_batch',
+            'segmentation:sam2PredIouThresh': 'sam2_pred_iou_thresh',
+            'segmentation:sam2StabilityScoreThresh': 'sam2_stability_score_thresh',
+            'segmentation:sam2CropNLayers': 'sam2_crop_n_layers',
             'segmentation:strict': 'strict_segmentation',
+            'emits:runCardVersion': 'run_card_version',
             'licenses:nonCommercialOk': 'non_commercial_ok',
             'licenses:acceptApple': 'accept_apple_depth_pro_research_license',
             'licenses:acceptResearchTools': 'accept_research_tools_license',
@@ -8813,6 +9075,15 @@ function bindInputs() {
     safeBindText(els.segmentation.backend, 'segmentation', 'backend');
     safeBindText(els.segmentation.sam2ModelSize, 'segmentation', 'sam2ModelSize');
     safeBindInput(els.segmentation.sam2CheckpointPath, 'segmentation', 'sam2CheckpointPath');
+    safeBindInput(els.segmentation.sam2TileSizePx, 'segmentation', 'sam2TileSizePx');
+    safeBindInput(els.segmentation.sam2OverlapPx, 'segmentation', 'sam2OverlapPx');
+    safeBindInput(els.segmentation.sam2GlobalPassLongestSide, 'segmentation', 'sam2GlobalPassLongestSide');
+    safeBindInput(els.segmentation.sam2MaxConcurrency, 'segmentation', 'sam2MaxConcurrency');
+    safeBindInput(els.segmentation.sam2PointsPerSide, 'segmentation', 'sam2PointsPerSide');
+    safeBindInput(els.segmentation.sam2PointsPerBatch, 'segmentation', 'sam2PointsPerBatch');
+    safeBindInput(els.segmentation.sam2PredIouThresh, 'segmentation', 'sam2PredIouThresh');
+    safeBindInput(els.segmentation.sam2StabilityScoreThresh, 'segmentation', 'sam2StabilityScoreThresh');
+    safeBindInput(els.segmentation.sam2CropNLayers, 'segmentation', 'sam2CropNLayers');
     safeBindInput(els.v2Preset, null, 'v2Preset');
     safeBindText(els.reconstruction.groupingMode, 'reconstruction', 'groupingMode');
     safeBindInput(els.reconstruction.camerasSidecarPath, 'reconstruction', 'camerasSidecarPath');
@@ -8838,6 +9109,7 @@ function bindInputs() {
     safeBindCheck(els.flags.verbose, 'flags', 'verbose');
     safeBindCheck(els.flags.quiet, 'flags', 'quiet');
     safeBindCheck(els.segmentation.enable, 'segmentation', 'enable');
+    safeBindCheck(els.segmentation.sam2TilingEnabled, 'segmentation', 'sam2TilingEnabled');
     safeBindCheck(els.segmentation.strict, 'segmentation', 'strict');
     safeBindCheck(els.reconstruction.enable, 'reconstruction', 'enable');
     safeBindCheck(els.reconstruction.emitSceneDebugBundle, 'reconstruction', 'emitSceneDebugBundle');
@@ -8847,15 +9119,29 @@ function bindInputs() {
     safeBindCheck(els.emits.marketing, 'emits', 'marketing');
     safeBindCheck(els.emits.report, 'emits', 'report');
     safeBindCheck(els.emits.runCard, 'emits', 'runCard');
+    safeBindText(els.emits.runCardVersion, 'emits', 'runCardVersion');
     safeBindCheck(els.emits.runCardIncludeProofs, 'emits', 'runCardIncludeProofs');
 
     safeBindCheck(els.licenses.nonCommercialOk, 'licenses', 'nonCommercialOk');
     safeBindCheck(els.licenses.acceptApple, 'licenses', 'acceptApple');
     safeBindCheck(els.licenses.acceptResearchTools, 'licenses', 'acceptResearchTools');
 
-    if (els.segmentation.backend) {
-        els.segmentation.backend.addEventListener('change', () => {
+    [
+        els.segmentation.enable,
+        els.segmentation.backend,
+        els.segmentation.sam2TilingEnabled,
+    ].forEach((el) => {
+        if (!el) return;
+        el.addEventListener('change', () => {
             syncSegmentationControlState(state.config);
+            renderCLI();
+            scheduleConfigPreview();
+        });
+    });
+
+    if (els.emits.runCard) {
+        els.emits.runCard.addEventListener('change', () => {
+            syncRunCardControlState(state.config);
             renderCLI();
             scheduleConfigPreview();
         });
@@ -10143,6 +10429,27 @@ if (els.fileInput) els.fileInput.addEventListener('change', async (e) => {
                 data.args.sam2_checkpoint_path,
                 c.segmentation.sam2CheckpointPath
             );
+            c.segmentation.sam2TilingEnabled = parseBoolLike(
+                data.args.sam2_tiling_enabled,
+                c.segmentation.sam2TilingEnabled
+            );
+            c.segmentation.sam2TileSizePx = _parsePositiveIntOrNull(data.args.sam2_tile_size_px) || c.segmentation.sam2TileSizePx;
+            c.segmentation.sam2OverlapPx =
+                _parseNonNegativeIntOrNull(data.args.sam2_overlap_px) ?? c.segmentation.sam2OverlapPx;
+            c.segmentation.sam2GlobalPassLongestSide =
+                _parsePositiveIntOrNull(data.args.sam2_global_pass_longest_side) || c.segmentation.sam2GlobalPassLongestSide;
+            c.segmentation.sam2MaxConcurrency =
+                _parsePositiveIntOrNull(data.args.sam2_max_concurrency) || c.segmentation.sam2MaxConcurrency;
+            c.segmentation.sam2PointsPerSide =
+                _parsePositiveIntOrNull(data.args.sam2_points_per_side) || c.segmentation.sam2PointsPerSide;
+            c.segmentation.sam2PointsPerBatch =
+                _parsePositiveIntOrNull(data.args.sam2_points_per_batch) || c.segmentation.sam2PointsPerBatch;
+            c.segmentation.sam2PredIouThresh =
+                _parseProbabilityOrNull(data.args.sam2_pred_iou_thresh) ?? c.segmentation.sam2PredIouThresh;
+            c.segmentation.sam2StabilityScoreThresh =
+                _parseProbabilityOrNull(data.args.sam2_stability_score_thresh) ?? c.segmentation.sam2StabilityScoreThresh;
+            c.segmentation.sam2CropNLayers =
+                _parseNonNegativeIntOrNull(data.args.sam2_crop_n_layers) ?? c.segmentation.sam2CropNLayers;
             c.segmentation.strict = parseBoolLike(data.args.strict_segmentation, c.segmentation.strict);
 
             c.flags.materials = parseBoolLike(data.args.materials_v3, c.flags.materials);
