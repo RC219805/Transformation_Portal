@@ -382,8 +382,8 @@ Contract notes:
                         <p id="contextRibbonCompareMeta" class="console-context-meta">No paired comparison is available for the current artifact.</p>
                     </div>
                 </div>
-                <section id="consoleActionRail" class="console-action-rail hidden" data-ui="console-action-rail" data-tone="info" aria-live="polite" role="status">
-                    <div class="console-action-rail-copy">
+                <section id="consoleActionRail" class="console-action-rail hidden" data-ui="console-action-rail" data-tone="info">
+                    <div class="console-action-rail-copy" aria-live="polite" role="status">
                         <p class="console-action-rail-kicker">Action rail</p>
                         <p id="consoleActionRailTitle" class="console-action-rail-title">Keep the next operator move pinned</p>
                         <p id="consoleActionRailDetail" class="console-action-rail-detail">Contextual review, artifact, compare, and recovery actions update here from the current run state.</p>
@@ -711,7 +711,7 @@ Contract notes:
                                 <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="inputDir">Input Directory</label>
                                 <input type="text" id="inputDir" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-2.5 text-[13px] font-mono transition-colors" value="./input_images" autocomplete="off" spellcheck="false" />
                                 <p id="inputDirStatus" class="field-status mt-1 text-[12px] leading-6 text-slate-500 dark:text-slate-400">Set the source folder for the next run.</p>
-                                <div id="stagedUploadShell" class="mt-3 hidden rounded-xl border border-dashed border-slate-300 dark:border-slate-700 bg-white/70 dark:bg-slate-900/60 p-4" data-ui="staged-upload-shell" aria-live="polite" role="status">
+                                <div id="stagedUploadShell" class="mt-3 hidden rounded-xl border border-dashed border-slate-300 dark:border-slate-700 bg-white/70 dark:bg-slate-900/60 p-4" data-ui="staged-upload-shell">
                                     <div class="flex flex-wrap items-start justify-between gap-3">
                                         <div>
                                             <p class="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Staged Uploads</p>
@@ -1566,11 +1566,13 @@ Contract notes:
                             <p id="artifactSelectionTitle" class="text-[12px] font-semibold text-slate-800 dark:text-slate-100">No artifact selected</p>
                             <p id="artifactSelectionMeta" class="text-[11px] font-mono text-slate-500 dark:text-slate-400">Preview, metadata, and actions will appear here when outputs are indexed.</p>
                         </div>
-                        <div id="reviewStatusBanner" class="review-status-banner hidden" data-tone="info" data-ui="review-status-banner" aria-live="polite" role="status">
-                            <p class="review-status-kicker">Run Status</p>
-                            <p id="reviewStatusTitle" class="review-status-title">Awaiting completed run</p>
-                            <p id="reviewStatusDetail" class="review-status-detail">Select a job to review related warnings, completion state, and output readiness.</p>
-                            <p id="reviewStatusAction" class="review-status-action">Next action: use the selected run state, warning context, and freshness above to decide whether to recover or open review.</p>
+                        <div id="reviewStatusBanner" class="review-status-banner hidden" data-tone="info" data-ui="review-status-banner">
+                            <div class="review-status-text" aria-live="polite" role="status">
+                                <p class="review-status-kicker">Run Status</p>
+                                <p id="reviewStatusTitle" class="review-status-title">Awaiting completed run</p>
+                                <p id="reviewStatusDetail" class="review-status-detail">Select a job to review related warnings, completion state, and output readiness.</p>
+                                <p id="reviewStatusAction" class="review-status-action">Next action: use the selected run state, warning context, and freshness above to decide whether to recover or open review.</p>
+                            </div>
                             <div id="reviewStatusActions" class="review-status-actions hidden" data-ui="review-status-actions">
                                 <button id="reviewStatusPrimaryBtn" type="button" class="operator-action-btn operator-action-btn-primary hidden" data-ui="review-status-primary"></button>
                                 <button id="reviewStatusSecondaryBtn" type="button" class="operator-action-btn operator-action-btn-secondary hidden" data-ui="review-status-secondary"></button>
