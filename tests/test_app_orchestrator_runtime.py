@@ -3249,7 +3249,10 @@ def test_portal_lux_build_surface_hides_inapplicable_optional_controls_until_nee
     assert "is_research: _derivePresetResearchFlag({" in preset_body
     assert "is_research: _derivePresetResearchFlag({" in fallback_body
     assert "is_research: _derivePresetResearchFlag(preset)" in fetch_body
-    assert "if (category === 'segmentation' && (key === 'enable' || key === 'backend' || key === 'sam2TilingEnabled')) {" in bind_inputs_body
+    assert (
+        "if (category === 'segmentation' && (key === 'enable' || key === 'backend' || key === 'sam2TilingEnabled')) {"
+        in bind_inputs_body
+    )
     assert "syncSegmentationControlState(state.config);" in bind_inputs_body
     assert "[\n        els.segmentation.enable," not in bind_inputs_body
     assert "_setContextVisibility(els.segmentationBackendField, isLuxPipeline && segmentationEnabled);" in applicability_body
