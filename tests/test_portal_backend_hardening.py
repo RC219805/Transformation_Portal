@@ -18,13 +18,14 @@ Focused tests for the P0/P1 changes introduced in
   unknown metrics on event types that accept none.
 * Artifact fingerprinting emits sha256 for bounded files and reports
   ``skipped_size`` above the cap.
-* The FastAPI app uses the ``lifespan`` context manager rather than deprecated
-  ``on_event`` hooks.
+
+Lifespan and portal.html static contracts are pinned by
+``tests/test_lifespan_cleanup.py`` and ``tests/test_portal_html_static.py``
+respectively.
 """
 
 from __future__ import annotations
 
-import asyncio
 import importlib
 import os
 import signal
@@ -419,31 +420,6 @@ def test_artifact_fingerprint_reports_skipped_size_above_cap(tmp_path: Path) -> 
 
 
 # ---------------------------------------------------------------------------
-# Lifespan
-# ---------------------------------------------------------------------------
-
-
-def test_app_uses_lifespan_not_on_event() -> None:
-    # `lifespan` is the supported FastAPI startup/shutdown surface; we want to
-    # see exactly one entry (our orchestrator) and no `on_event` handlers.
-    assert orchestrator_app.app.router.lifespan_context is not None
-
-
-def test_lifespan_creates_and_cancels_cleanup_task() -> None:
-    async def _drive() -> tuple[bool, bool]:
-        async with orchestrator_app.app.router.lifespan_context(orchestrator_app.app) as _:
-            started = (
-                orchestrator_app.app.state.cleanup_task is not None and not orchestrator_app.app.state.cleanup_task.done()
-            )
-        finished = orchestrator_app.app.state.cleanup_task is None
-        return started, finished
-
-    started, finished = asyncio.run(_drive())
-    assert started
-    assert finished
-
-
-# ---------------------------------------------------------------------------
 # Subprocess cancellation helpers
 # ---------------------------------------------------------------------------
 
@@ -498,31 +474,3 @@ def test_signal_process_tree_returns_false_when_not_session_leader() -> None:
         os.getpgid = original_getpgid  # type: ignore[assignment]
 
     assert delivered is False
-
-
-# ---------------------------------------------------------------------------
-# Portal HTML static contract
-# ---------------------------------------------------------------------------
-
-
-def test_portal_html_defaults_match_backend_defaults() -> None:
-    portal_html = Path(orchestrator_app.REPO_ROOT) / "portal.html"
-    markup = portal_html.read_text(encoding="utf-8")
-    # Preset "premium" is the backend default and must be statically selected
-    # so pre-hydration rendering does not misrepresent the effective config.
-    assert '<option value="premium" selected>premium (Stable)</option>' in markup
-    assert '<option value="premium" selected>premium</option>' in markup
-    assert '<option value="cpu" selected>cpu</option>' in markup
-
-
-def test_portal_html_buttons_all_have_type_attribute() -> None:
-    import re
-
-    portal_html = Path(orchestrator_app.REPO_ROOT) / "portal.html"
-    markup = portal_html.read_text(encoding="utf-8")
-    missing_type: list[str] = []
-    for match in re.finditer(r"<button\b([^>]*)>", markup):
-        attrs = match.group(1)
-        if "type=" not in attrs:
-            missing_type.append(attrs.strip())
-    assert missing_type == [], f"buttons without type attribute: {missing_type}"
