@@ -582,6 +582,16 @@ def main(
         "--overwrite",
         help="Force reprocessing even if outputs exist",
     ),
+    keep_intermediates: bool = typer.Option(
+        False,
+        "--keep-intermediates",
+        help=(
+            "Preserve the Materials V3 intermediate TIFF/PNG in"
+            " <output>/temp/*_materials_v3_enhanced.* after V2 runs."
+            " Use to bisect banding / color regressions by comparing"
+            " the Materials V3 intermediate against the final V2 output."
+        ),
+    ),
     force_depth: bool = typer.Option(
         False,
         "--force-depth",
@@ -963,6 +973,7 @@ def main(
         raw_wb_mode=raw_wb_mode_normalized,
         raw_demosaic=raw_demosaic_normalized,
         allow_semantic_fallback=allow_semantic_fallback,
+        keep_intermediates=keep_intermediates,
     )
     apply_effective_raw_runtime_config(config)
     if depth_backend == "da3" or depth_backend is None:

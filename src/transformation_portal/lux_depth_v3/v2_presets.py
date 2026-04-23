@@ -42,7 +42,12 @@ class V2EnhancementConfig:
     material_strength: float = 0.6
     depth_aware_tone_mapping: bool = True
     atmospheric_effects: bool = True
-    version: str = "1.0.0"
+    # Banding-mitigation knobs (see EnhancementStage). Defaults intentionally
+    # enable both guards — the whole point is that a banded frame is a worse
+    # failure mode than a slightly softer tone curve on a clear sky.
+    tone_depth_smoothing: bool = True
+    tone_low_tex_strength: float = 0.6
+    version: str = "1.1.0"
 
     def __post_init__(self) -> None:
         """Validate configuration parameters."""
@@ -52,6 +57,10 @@ class V2EnhancementConfig:
             raise ValueError(f"clarity_strength must be in [0, 1], got {self.clarity_strength}")
         if not 0.0 <= self.material_strength <= 1.0:
             raise ValueError(f"material_strength must be in [0, 1], got {self.material_strength}")
+        if not 0.0 <= self.tone_low_tex_strength <= 1.0:
+            raise ValueError(
+                f"tone_low_tex_strength must be in [0, 1], got {self.tone_low_tex_strength}"
+            )
 
     @classmethod
     def from_preset(cls, preset: str) -> V2EnhancementConfig:
@@ -79,6 +88,8 @@ class V2EnhancementConfig:
             material_strength=float(preset_config["material_strength"]),
             depth_aware_tone_mapping=bool(preset_config["depth_aware_tone_mapping"]),
             atmospheric_effects=bool(preset_config["atmospheric_effects"]),
+            tone_depth_smoothing=bool(preset_config.get("tone_depth_smoothing", True)),
+            tone_low_tex_strength=float(preset_config.get("tone_low_tex_strength", 0.6)),
         )
 
     def to_dict(self) -> Dict[str, Any]:
@@ -94,6 +105,8 @@ class V2EnhancementConfig:
             "material_strength": self.material_strength,
             "depth_aware_tone_mapping": self.depth_aware_tone_mapping,
             "atmospheric_effects": self.atmospheric_effects,
+            "tone_depth_smoothing": self.tone_depth_smoothing,
+            "tone_low_tex_strength": self.tone_low_tex_strength,
             "version": self.version,
         }
 

@@ -264,6 +264,55 @@ config = EnhanceConfig(
 
 ---
 
+## Addendum — Banding mitigation (2026-04-23)
+
+Follow-up after a vertical "paneling" / luminance banding artifact was
+reported on a dusk aerial (smooth sky, moon bloom, water reflection). The
+physical mechanism in this codebase is not tile seams (V2 is full-frame):
+
+1. `EnhancementStage._apply_tone_mapping` broadcasts a per-pixel
+   depth-derived multiplier across RGB, so any high-frequency structure in
+   the depth map projects 1:1 into luminance bands.
+2. `pixel_ops_executor.apply_pixel_ops` applies a uniform gain across each
+   material mask with only a σ=3 px Gaussian feather at mask edges; a flat
+   per-material shift on a large sky or water mask reads as a hard step at
+   the neighbor boundary.
+
+### Two defensive guards (shipped together)
+
+- **V2 tone mapping** — `tone_depth_smoothing` low-passes the depth map
+  before it drives the multiplier, and `tone_low_tex_strength` attenuates
+  the multiplier toward unity on low-gradient regions. Both default ON.
+- **Materials V3 pixel ops** — when an ROI is both low-gradient (mean
+  gradient energy on normalized [0, 1] luminance below
+  `pixel_ops_low_grad_threshold`) and large (bbox fraction at least
+  `pixel_ops_low_tex_min_bbox_frac`), the feather sigma is widened by
+  `pixel_ops_low_tex_feather_multiplier` and the p99 per-pixel |delta| is
+  soft-clamped to `pixel_ops_low_tex_delta_ceiling`. Textured regions are
+  unaffected — the guard records `low_tex_guard.applied = False` in
+  telemetry on those.
+
+### Stage-isolation tooling
+
+- `--keep-intermediates` preserves
+  `<output>/temp/*_materials_v3_enhanced.{tif,png}` after V2 runs. To
+  bisect a banding regression: run once with `--enable-v2 on
+  --keep-intermediates`, inspect the Materials V3 intermediate vs the
+  final `*_v2_enhanced.*`. If the band is in the intermediate, the fix
+  belongs in Materials V3; if it only appears in the final output, it
+  belongs in V2.
+
+### Files
+
+- `src/transformation_portal/stage_graph/stages/enhancement.py` (V2 guards)
+- `src/transformation_portal/lux_depth_v3/pixel_ops_executor.py` (V3 guards)
+- `src/transformation_portal/lux_depth_v3/config.py`,
+  `v2_presets.py`, `__main__.py`, `orchestrator.py` (config + CLI wiring)
+- `config/materials_v3_production.yaml` (documented defaults)
+- `tests/test_v2_banding_regression.py` (locks in both guards)
+
+---
+
 ## Approval
 
 **Architect Decision:** Accepted

@@ -88,6 +88,16 @@ materials_v3:
   # Glass material response
   glass_response_enabled: true
 
+  # Seam-safe guard for large low-texture materials (sky, water, smooth
+  # walls). Widens mask feathering and soft-clamps per-material delta
+  # amplitude when the ROI is both low-gradient AND large, so a flat per-
+  # material gain can never produce a visible luminance step across the
+  # mask boundary. Textured materials are unaffected.
+  pixel_ops_low_grad_threshold: 0.01           # mean gradient energy on [0,1] luminance
+  pixel_ops_low_tex_min_bbox_frac: 0.05        # minimum bbox fraction of whole image
+  pixel_ops_low_tex_feather_multiplier: 8.0    # widen 3 px → ~24 px on a flat sky
+  pixel_ops_low_tex_delta_ceiling: 0.04        # p99 |delta| ceiling (normalized)
+
 # ============================================================================
 # V2 Enhancement Configuration
 # ============================================================================
@@ -104,6 +114,17 @@ v2_enhancement:
 
   # V2 subprocess timeout (seconds)
   v2_timeout: 120
+
+  # Banding-mitigation knobs (EnhancementStage._apply_tone_mapping):
+  # When true, the depth map is low-pass filtered before it drives the
+  # per-pixel luminance multiplier. Prevents upstream depth striping from
+  # projecting into visible vertical bands on sky/water. Safe to leave on
+  # — the low-pass kernel is small compared to scene-scale depth variation.
+  tone_depth_smoothing: true
+  # How hard to attenuate the depth-driven adjustment toward unity on
+  # low-gradient regions (sky, water, smooth walls). 0.0 disables; 1.0
+  # fully flattens the adjustment there.
+  tone_low_tex_strength: 0.6
 
   # Upscaler backend (optional)
   # v2_upscaler_backend: "esrgan"  # Uncomment to enable upscaling

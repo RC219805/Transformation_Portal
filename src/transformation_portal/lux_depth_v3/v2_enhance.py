@@ -676,6 +676,8 @@ def enhance_image(
             material_strength=config.material_strength,
             version=config.version,
             output_dtype=target_dtype,  # Use consistent target dtype
+            tone_low_tex_strength=getattr(config, "tone_low_tex_strength", 0.6),
+            tone_depth_smoothing=getattr(config, "tone_depth_smoothing", True),
         )
 
         # Create minimal context for stage execution

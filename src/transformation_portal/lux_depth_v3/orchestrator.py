@@ -4039,8 +4039,13 @@ class EnhanceOrchestrator:
         # Capture end time for accurate timestamps
         pipeline_end_time = time.time()
 
-        # Clean up temporary enhanced image file if it was created
-        if enhanced_image_path and enhanced_image_path.exists():
+        # Clean up temporary enhanced image file if it was created, unless
+        # the operator has asked to keep intermediates for bisection.
+        if (
+            enhanced_image_path
+            and enhanced_image_path.exists()
+            and not getattr(self.config, "keep_intermediates", False)
+        ):
             try:
                 enhanced_image_path.unlink()
                 logger.debug(
@@ -4052,6 +4057,11 @@ class EnhanceOrchestrator:
                     "Failed to clean up" + " temporary enhanced" + " image: %s",
                     e,
                 )
+        elif enhanced_image_path and enhanced_image_path.exists():
+            logger.info(
+                "keep_intermediates=True; preserving Materials V3 intermediate at %s",
+                enhanced_image_path,
+            )
 
         # --- MANIFEST WRITING ---
         input_sha = self._write_manifest(
