@@ -4054,9 +4054,12 @@ class EnhanceOrchestrator:
                     e,
                 )
         elif enhanced_image_path and enhanced_image_path.exists():
-            logger.info(
-                "keep_intermediates=True; preserving Materials V3 intermediate at %s",
-                enhanced_image_path,
+            # DEBUG (not INFO) and basename-only to avoid leaking the absolute
+            # filesystem layout into batch logs. The full path is already
+            # recoverable from <output_root>/temp/ + asset stem.
+            logger.debug(
+                "keep_intermediates=True; preserving Materials V3 intermediate: %s",
+                enhanced_image_path.name,
             )
 
         # --- MANIFEST WRITING ---

@@ -362,24 +362,30 @@ def apply_pixel_ops(
             )
             continue
 
-        # Probe the ROI for gradient energy (on the UNPADDED bbox, in
-        # normalized [0, 1] float) to decide whether this material needs the
-        # seam-safe path. We reuse the normalized ROI below so the cost is
-        # amortized.
+        # Decide whether this material needs the seam-safe path. The guard can
+        # only fire when the ROI is both flat AND large, so when bbox_frac is
+        # already below the large-ROI threshold we can skip the gradient probe
+        # entirely — that's the common case on small materials (door glass,
+        # foliage patches, stone trim) where the extra float conversion and
+        # Sobel pass would be wasted work.
         img_h, img_w = image.shape[:2]
         x0, y0, x1, y1 = bbox
         bbox_frac = ((x1 - x0) * (y1 - y0)) / float(max(1, img_h * img_w))
 
-        probe_roi = image[y0:y1, x0:x1]
-        probe_dtype = probe_roi.dtype
-        if probe_dtype == np.uint8:
-            probe_norm = probe_roi.astype(np.float32) / 255.0
-        elif probe_dtype == np.uint16:
-            probe_norm = probe_roi.astype(np.float32) / 65535.0
+        if bbox_frac < low_tex_min_bbox_frac:
+            roi_grad_energy = 0.0
+            is_low_tex_large = False
         else:
-            probe_norm = probe_roi.astype(np.float32, copy=False)
-        roi_grad_energy = _roi_mean_gradient_energy(probe_norm)
-        is_low_tex_large = roi_grad_energy < low_grad_threshold and bbox_frac >= low_tex_min_bbox_frac
+            probe_roi = image[y0:y1, x0:x1]
+            probe_dtype = probe_roi.dtype
+            if probe_dtype == np.uint8:
+                probe_norm = probe_roi.astype(np.float32) / 255.0
+            elif probe_dtype == np.uint16:
+                probe_norm = probe_roi.astype(np.float32) / 65535.0
+            else:
+                probe_norm = probe_roi.astype(np.float32, copy=False)
+            roi_grad_energy = _roi_mean_gradient_energy(probe_norm)
+            is_low_tex_large = roi_grad_energy < low_grad_threshold
 
         # A3: Get material-specific feathering sigma (with adaptive widening
         # for large low-texture materials).
