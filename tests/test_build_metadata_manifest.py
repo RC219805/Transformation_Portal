@@ -11,8 +11,14 @@ from typing import Any
 
 import pytest
 
-import tp.phase4.hash_capture_metadata as hash_capture_metadata
-from tp.phase4.hash_capture_metadata import MetadataSchemaValidationError, compute_metadata_sha256
+from tp.phase4.hash_capture_metadata import (
+    METADATA_CONTRACT_VERSION,
+    MetadataManifestInputError,
+    MetadataSchemaValidationError,
+    build_metadata_manifest_payload,
+    compute_metadata_sha256,
+)
+from tp.phase4.validation_helpers import validate_records_with_schema
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 EXTRACT_TOOL = PROJECT_ROOT / "tools" / "extract_capture_metadata.py"
@@ -143,9 +149,24 @@ def test_phase4d_metadata_validation_normalizes_validator_runtime_errors(monkeyp
         del schema, error_cls, label
         return _ExplodingValidator()
 
-    monkeypatch.setattr(hash_capture_metadata, "_build_validator", _fake_build_validator)
+    import tp.phase4.schema_validation as schema_validation
+
+    monkeypatch.setattr(schema_validation, "build_draft202012_validator", _fake_build_validator)
     with pytest.raises(MetadataSchemaValidationError, match="validator runtime error"):
-        hash_capture_metadata._validate_metadata_records([{}], metadata_schema={})
+        validate_records_with_schema([{}], {}, error_cls=MetadataSchemaValidationError, label="metadata")
+
+
+def test_phase4d_build_payload_reports_missing_relative_path_without_keyerror() -> None:
+    pytest.importorskip("jsonschema")
+    records = [
+        {
+            "metadata_contract_version": METADATA_CONTRACT_VERSION,
+            "file_sha256": "a" * 64,
+        }
+    ]
+
+    with pytest.raises(MetadataManifestInputError, match=r"input metadata array record\[0\] missing relative_path"):
+        build_metadata_manifest_payload(records, metadata_schema={}, manifest_schema={})
 
 
 def test_phase4d_golden_manifest_matches_expected(tmp_path: Path) -> None:
@@ -262,6 +283,8 @@ def test_phase4d_cli_fails_schema_validation_on_missing_required_field(tmp_path:
     result = _run_manifest_cli(input_path=input_path, out_path=out_path)
     assert result.returncode == 4
     assert "Schema validation failure:" in result.stderr
+    assert "record[0] schema validation failed at <root>" in result.stderr
+    assert "camera_model" in result.stderr
 
 
 def test_phase4d_cli_fails_schema_validation_on_nan_value(tmp_path: Path) -> None:
