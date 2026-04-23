@@ -97,10 +97,11 @@ Contract notes:
     </header>
 
     <main id="main-content" tabindex="-1" class="mx-auto max-w-7xl px-6 py-8 outline-none">
+        <div class="portal-shell-grid">
         <!-- ============================================ -->
         <!-- 2. OVERVIEW VIEW                            -->
         <!-- ============================================ -->
-        <section id="overview-shell" data-ui="overview-grid" class="portal-overview-shell mb-6 grid grid-cols-1 lg:grid-cols-12 gap-4">
+        <section id="overview-shell" data-ui="overview-grid" class="portal-overview-shell mb-6 lg:mb-0 grid grid-cols-1 lg:grid-cols-12 gap-4 lg:items-start">
             <div id="mission-shell" class="workspace-shell workspace-shell--overview overview-primary lg:col-span-7 rounded-[1.75rem] shell-panel-strong p-6" data-ui="overview-summary">
                 <div id="missionShellSkeletonState" class="hidden space-y-5" aria-hidden="true" data-ui="overview-skeleton">
                     <div class="surface-skeleton-row">
@@ -163,29 +164,6 @@ Contract notes:
                     </div>
                 </div>
 
-                <div class="mt-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
-                    <div class="stat-tile" data-ui="overview-card">
-                        <p class="stat-label">Pipeline</p>
-                        <p id="heroPipelineValue" class="stat-value">lux-depth-v3</p>
-                    </div>
-                    <div class="stat-tile" data-ui="overview-card">
-                        <p class="stat-label">Preset</p>
-                        <p id="heroPresetValue" class="stat-value">premium</p>
-                    </div>
-                    <div class="stat-tile" data-ui="overview-card">
-                        <p class="stat-label">Connection</p>
-                        <p id="heroModeValue" class="stat-value">Checking…</p>
-                    </div>
-                    <div class="stat-tile" data-ui="overview-card">
-                        <p class="stat-label">Recent Jobs</p>
-                        <p id="heroQueueValue" class="stat-value">0 live jobs</p>
-                    </div>
-                </div>
-
-                <div class="mt-5">
-                    <p class="stat-label">Capability Stack</p>
-                    <div id="capabilityChips" class="mt-3 flex flex-wrap gap-2"></div>
-                </div>
                 </div>
             </div>
 
@@ -274,9 +252,33 @@ Contract notes:
                 </details>
                 </div>
             </div>
+
+            <div class="portal-overview-stats lg:col-span-12 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                <div class="stat-tile" data-ui="overview-card">
+                    <p class="stat-label">Pipeline</p>
+                    <p id="heroPipelineValue" class="stat-value">lux-depth-v3</p>
+                </div>
+                <div class="stat-tile" data-ui="overview-card">
+                    <p class="stat-label">Preset</p>
+                    <p id="heroPresetValue" class="stat-value">premium</p>
+                </div>
+                <div class="stat-tile" data-ui="overview-card">
+                    <p class="stat-label">Connection</p>
+                    <p id="heroModeValue" class="stat-value">Checking…</p>
+                </div>
+                <div class="stat-tile" data-ui="overview-card">
+                    <p class="stat-label">Recent Jobs</p>
+                    <p id="heroQueueValue" class="stat-value">0 live jobs</p>
+                </div>
+            </div>
+
+            <div class="portal-overview-capability lg:col-span-12">
+                <p class="stat-label">Capability Stack</p>
+                <div id="capabilityChips" class="mt-3 flex flex-wrap gap-2"></div>
+            </div>
         </section>
 
-        <nav aria-label="Workspace sections" class="portal-workspace-rail workspace-rail mb-6 rounded-[1.5rem] px-3 py-3" data-ui="view-switcher">
+        <nav aria-label="Workspace sections" class="portal-workspace-rail workspace-rail mb-6 lg:mb-0 rounded-2xl px-3 py-3" data-ui="view-switcher">
             <div class="workspace-rail-copy">
                 <p class="section-kicker">Workspace</p>
                 <p class="workspace-rail-text">
@@ -318,7 +320,7 @@ Contract notes:
             </div>
         </nav>
 
-        <section id="console-context-shell" class="workspace-shell portal-context-shell mb-6 rounded-[1.5rem] shell-panel px-6 py-5 shadow-soft dark:shadow-soft-dark" data-ui="console-context-shell">
+        <section id="console-context-shell" class="workspace-shell portal-context-shell mb-6 lg:mb-0 rounded-2xl shell-panel px-6 py-5" data-ui="console-context-shell">
             <div class="portal-context-head flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
                 <div>
                     <p class="section-kicker">Current View</p>
@@ -377,7 +379,7 @@ Contract notes:
             <section id="build-shell" class="lg:col-span-7 flex flex-col gap-6">
 
                 <!-- Orchestration Profile -->
-                <div id="profile-shell" data-ambient-zone="profile" data-ambient-focus-x="18" data-ambient-focus-y="28" data-ambient-shift-x="-22" data-ambient-shift-y="-4" data-ambient-stage-scale="1.02" data-ambient-stage-rotate="-0.45" data-ambient-color-a="#34d399" data-ambient-color-b="#f59e0b" data-ambient-color-c="#67e8f9" data-ambient-focus-color="#99f6e4" class="workspace-shell deferred-shell rounded-[1.75rem] shell-panel p-6 shadow-soft dark:shadow-soft-dark transition-colors duration-300" data-shell-size="compact" data-ui="connection-card">
+                <div id="profile-shell" data-ambient-zone="profile" data-ambient-focus-x="18" data-ambient-focus-y="28" data-ambient-shift-x="-22" data-ambient-shift-y="-4" data-ambient-stage-scale="1.02" data-ambient-stage-rotate="-0.45" data-ambient-color-a="#34d399" data-ambient-color-b="#f59e0b" data-ambient-color-c="#67e8f9" data-ambient-focus-color="#99f6e4" class="workspace-shell deferred-shell rounded-2xl shell-panel p-6 shadow-soft dark:shadow-soft-dark transition-colors duration-300" data-shell-size="compact" data-ui="connection-card">
                     <div id="profileShellSkeletonState" class="hidden space-y-4" aria-hidden="true" data-ui="build-skeleton">
                         <div class="surface-skeleton-row">
                             <div class="flex-1 space-y-3">
@@ -484,7 +486,7 @@ Contract notes:
                     </div>
                 </div>
 
-                <section id="buildStepperShell" class="rounded-[1.75rem] shell-panel p-5 shadow-soft dark:shadow-soft-dark" data-ui="build-stepper">
+                <section id="buildStepperShell" class="rounded-2xl shell-panel p-5 shadow-soft dark:shadow-soft-dark" data-ui="build-stepper">
                     <div id="buildStepperSkeletonState" class="hidden space-y-4" aria-hidden="true" data-ui="build-stepper-skeleton">
                         <div class="surface-skeleton-row">
                             <div class="flex-1 space-y-3">
@@ -588,7 +590,7 @@ Contract notes:
                 </section>
 
                 <!-- Parameters -->
-                <div id="parameters-shell" data-ambient-zone="parameters" data-ambient-focus-x="22" data-ambient-focus-y="46" data-ambient-shift-x="-20" data-ambient-shift-y="8" data-ambient-stage-scale="1.038" data-ambient-stage-rotate="-0.35" data-ambient-color-a="#0ea5e9" data-ambient-color-b="#22d3ee" data-ambient-color-c="#93c5fd" data-ambient-focus-color="#bae6fd" class="workspace-shell deferred-shell rounded-[1.75rem] shell-panel p-6 shadow-soft dark:shadow-soft-dark transition-colors duration-300" data-shell-size="tall">
+                <div id="parameters-shell" class="workspace-shell deferred-shell rounded-2xl shell-panel p-6 shadow-soft dark:shadow-soft-dark transition-colors duration-300" data-shell-size="tall">
                     <div id="parametersShellSkeletonState" class="hidden space-y-4" aria-hidden="true" data-ui="build-parameters-skeleton">
                         <div class="surface-skeleton-row">
                             <div class="flex-1 space-y-3">
@@ -624,7 +626,7 @@ Contract notes:
                         <span class="signal-badge">Preset-first flow</span>
                     </div>
 
-                    <section id="presetBuilderShell" data-build-step-panel="1" class="rounded-[1.5rem] border border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/50 p-5 build-step-panel" data-ui="build-step-panel">
+                    <section id="presetBuilderShell" data-build-step-panel="1" class="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/50 p-5 build-step-panel" data-ui="build-step-panel">
                         <div class="flex items-start justify-between gap-3">
                             <div>
                                 <p class="section-kicker">Step 1</p>
@@ -665,7 +667,7 @@ Contract notes:
                         </div>
                     </section>
 
-                    <section id="buildPathsShell" data-build-step-panel="2" class="mt-5 rounded-[1.5rem] border border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/50 p-5 build-step-panel" data-ui="build-step-panel">
+                    <section id="buildPathsShell" data-build-step-panel="2" class="mt-5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/50 p-5 build-step-panel" data-ui="build-step-panel">
                         <div class="flex items-start justify-between gap-3">
                             <div>
                                 <p class="section-kicker">Step 2</p>
@@ -793,7 +795,7 @@ Contract notes:
                     </div>
 
                 <!-- Pipeline Flags -->
-                <fieldset id="flags-shell" data-build-step-panel="3" data-ambient-zone="flags" data-ambient-focus-x="36" data-ambient-focus-y="66" data-ambient-shift-x="-6" data-ambient-shift-y="14" data-ambient-stage-scale="1.045" data-ambient-stage-rotate="0.3" data-ambient-color-a="#10b981" data-ambient-color-b="#f59e0b" data-ambient-color-c="#38bdf8" data-ambient-focus-color="#fef08a" class="workspace-shell deferred-shell rounded-[1.75rem] shell-panel p-6 shadow-soft dark:shadow-soft-dark transition-colors duration-300 build-step-panel" data-shell-size="tall" data-ui="build-step-panel">
+                <fieldset id="flags-shell" data-build-step-panel="3" class="workspace-shell deferred-shell rounded-2xl shell-panel p-6 shadow-soft dark:shadow-soft-dark transition-colors duration-300 build-step-panel" data-shell-size="tall" data-ui="build-step-panel">
                     <legend class="block text-[11px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-4">Primary Output Posture</legend>
                     <p class="step-primary-note">Shape the deliverables first. Diagnostics, acknowledgments, and runtime detail stay below as secondary controls unless the preview or contract pulls them forward.</p>
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1190,7 +1192,7 @@ Contract notes:
                     </details>
                 </fieldset>
 
-                <section id="governance-shell" data-build-step-panel="3" data-ambient-zone="governance" data-ambient-focus-x="28" data-ambient-focus-y="42" data-ambient-shift-x="-14" data-ambient-shift-y="4" data-ambient-stage-scale="1.028" data-ambient-stage-rotate="-0.2" data-ambient-color-a="#14b8a6" data-ambient-color-b="#f59e0b" data-ambient-color-c="#fde68a" data-ambient-focus-color="#fdba74" class="workspace-shell deferred-shell governance-banner rounded-[1.75rem] p-6 shadow-soft dark:shadow-soft-dark build-step-panel" data-shell-size="compact" data-ui="build-governance">
+                <section id="governance-shell" data-build-step-panel="3" class="workspace-shell deferred-shell governance-banner rounded-2xl p-6 shadow-soft dark:shadow-soft-dark build-step-panel" data-shell-size="compact" data-ui="build-governance">
                     <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                         <div class="max-w-2xl">
                             <p class="section-kicker">Governance Brief</p>
@@ -1208,7 +1210,7 @@ Contract notes:
                 </section>
 
                 <!-- CLI Preview & Actions -->
-                <div id="cli-shell" data-build-step-panel="4" data-ambient-zone="dispatch" data-ambient-focus-x="42" data-ambient-focus-y="82" data-ambient-shift-x="-4" data-ambient-shift-y="18" data-ambient-stage-scale="1.05" data-ambient-stage-rotate="0.35" data-ambient-color-a="#06b6d4" data-ambient-color-b="#f97316" data-ambient-color-c="#14b8a6" data-ambient-focus-color="#fdba74" class="workspace-shell deferred-shell rounded-[1.75rem] shell-panel p-6 shadow-soft dark:shadow-soft-dark transition-colors duration-300 build-step-panel" data-shell-size="compact" data-ui="build-step-panel">
+                <div id="cli-shell" data-build-step-panel="4" class="workspace-shell deferred-shell rounded-2xl shell-panel p-6 shadow-soft dark:shadow-soft-dark transition-colors duration-300 build-step-panel" data-shell-size="compact" data-ui="build-step-panel">
                     <div class="flex items-start justify-between gap-3">
                         <div>
                             <p class="section-kicker">Step 4</p>
@@ -1291,7 +1293,7 @@ Contract notes:
             <aside id="jobs-shell" class="lg:col-span-5 flex flex-col gap-6" data-ui="operate-grid">
 
                 <!-- Selected Job Inspector -->
-                <div id="selected-job-shell" data-ambient-zone="inspector" data-ambient-focus-x="78" data-ambient-focus-y="30" data-ambient-shift-x="18" data-ambient-shift-y="-2" data-ambient-stage-scale="1.032" data-ambient-stage-rotate="0.35" data-ambient-color-a="#38bdf8" data-ambient-color-b="#60a5fa" data-ambient-color-c="#22d3ee" data-ambient-focus-color="#bfdbfe" class="workspace-shell sticky-shell rounded-[1.75rem] shell-panel p-6 shadow-soft dark:shadow-soft-dark transition-colors duration-300" data-ui="inspector-panel">
+                <div id="selected-job-shell" data-ambient-zone="inspector" data-ambient-focus-x="78" data-ambient-focus-y="30" data-ambient-shift-x="18" data-ambient-shift-y="-2" data-ambient-stage-scale="1.032" data-ambient-stage-rotate="0.35" data-ambient-color-a="#38bdf8" data-ambient-color-b="#60a5fa" data-ambient-color-c="#22d3ee" data-ambient-focus-color="#bfdbfe" class="workspace-shell sticky-shell rounded-2xl shell-panel p-6 shadow-soft dark:shadow-soft-dark transition-colors duration-300" data-ui="inspector-panel">
                     <div class="flex items-start justify-between gap-3 pb-4 border-b border-slate-200 dark:border-slate-800">
                         <div>
                             <p class="section-kicker">Selected Job</p>
@@ -1425,7 +1427,7 @@ Contract notes:
                 <!-- ============================================ -->
                 <!-- 4. OPERATE VIEW (Job Queue)                 -->
                 <!-- ============================================ -->
-                <div id="queue-shell" data-ambient-zone="queue" data-ambient-focus-x="82" data-ambient-focus-y="46" data-ambient-shift-x="20" data-ambient-shift-y="6" data-ambient-stage-scale="1.036" data-ambient-stage-rotate="0.28" data-ambient-color-a="#14b8a6" data-ambient-color-b="#84cc16" data-ambient-color-c="#38bdf8" data-ambient-focus-color="#bbf7d0" class="workspace-shell deferred-shell rounded-[1.75rem] shell-panel p-6 shadow-soft dark:shadow-soft-dark transition-colors duration-300 flex flex-col max-h-[350px]" data-shell-size="compact" data-ui="queue-panel">
+                <div id="queue-shell" class="workspace-shell deferred-shell rounded-2xl shell-panel p-6 shadow-soft dark:shadow-soft-dark transition-colors duration-300 flex flex-col max-h-[350px]" data-shell-size="compact" data-ui="queue-panel">
                     <div class="flex items-center justify-between mb-4 pb-4 border-b border-slate-200 dark:border-slate-800">
                         <div>
                             <h2 class="text-[11px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">Job Queue</h2>
@@ -1474,7 +1476,7 @@ Contract notes:
                 <!-- ============================================ -->
                 <!-- 5. REVIEW VIEW (Artifacts)                  -->
                 <!-- ============================================ -->
-                <div id="artifacts-shell" data-ambient-zone="artifacts" data-ambient-focus-x="76" data-ambient-focus-y="64" data-ambient-shift-x="14" data-ambient-shift-y="12" data-ambient-stage-scale="1.03" data-ambient-stage-rotate="-0.2" data-ambient-color-a="#0ea5e9" data-ambient-color-b="#f59e0b" data-ambient-color-c="#14b8a6" data-ambient-focus-color="#fde68a" class="workspace-shell deferred-shell rounded-[1.75rem] shell-panel p-6 shadow-soft dark:shadow-soft-dark transition-colors duration-300" data-shell-size="compact" data-ui="review-surface">
+                <div id="artifacts-shell" data-ambient-zone="artifacts" data-ambient-focus-x="76" data-ambient-focus-y="64" data-ambient-shift-x="14" data-ambient-shift-y="12" data-ambient-stage-scale="1.03" data-ambient-stage-rotate="-0.2" data-ambient-color-a="#0ea5e9" data-ambient-color-b="#f59e0b" data-ambient-color-c="#14b8a6" data-ambient-focus-color="#fde68a" class="workspace-shell deferred-shell rounded-2xl shell-panel p-6 shadow-soft dark:shadow-soft-dark transition-colors duration-300" data-shell-size="compact" data-ui="review-surface">
                     <div class="flex items-center justify-between mb-4 pb-3 border-b border-slate-200 dark:border-slate-800">
                         <h2 class="text-[11px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">Artifacts</h2>
                         <div class="flex items-center gap-2">
@@ -1507,7 +1509,7 @@ Contract notes:
                         </div>
                     </div>
                     <div id="artifactShellContent">
-                    <div id="artifactPreviewStage" class="rounded-[1.5rem] border border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/50 p-4">
+                    <div id="artifactPreviewStage" class="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/50 p-4">
                         <div id="artifactCompareStage" class="hidden grid grid-cols-1 md:grid-cols-2 gap-4">
                             <figure class="space-y-3">
                                 <img id="artifactPreviewImage" alt="Selected artifact preview" class="hidden w-full rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-900/60 object-contain max-h-[320px]" />
@@ -1603,7 +1605,7 @@ Contract notes:
                 </div>
 
                 <!-- Live Logs -->
-                <div id="logs-shell" data-ambient-zone="logs" data-ambient-focus-x="70" data-ambient-focus-y="84" data-ambient-shift-x="10" data-ambient-shift-y="18" data-ambient-stage-scale="1.04" data-ambient-stage-rotate="0.18" data-ambient-color-a="#22d3ee" data-ambient-color-b="#60a5fa" data-ambient-color-c="#f97316" data-ambient-focus-color="#fed7aa" class="workspace-shell deferred-shell hidden rounded-[1.75rem] shell-panel flex-col flex-1 min-h-[400px] overflow-hidden transition-colors duration-300 shadow-soft dark:shadow-soft-dark" data-shell-size="tall" data-ui="logs-panel">
+                <div id="logs-shell" class="workspace-shell deferred-shell hidden rounded-2xl shell-panel flex-col flex-1 min-h-[400px] overflow-hidden transition-colors duration-300 shadow-soft dark:shadow-soft-dark" data-shell-size="tall" data-ui="logs-panel">
                     <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-900">
                         <div>
                             <h2 class="text-[11px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400 flex items-center gap-2">
@@ -1619,6 +1621,7 @@ Contract notes:
 
             </aside>
 
+        </div>
         </div>
     </main>
 
@@ -1647,7 +1650,7 @@ Contract notes:
     </div>
 
     <div id="effectiveConfigDrawer" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/55 backdrop-blur-sm p-4 dark:bg-black/70 transition-opacity" aria-hidden="true" data-ui="drawer-shell">
-        <div class="w-full max-w-5xl rounded-[1.75rem] border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-800 dark:bg-slate-900" role="dialog" aria-modal="true" aria-labelledby="effectiveConfigTitle">
+        <div class="w-full max-w-5xl rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-800 dark:bg-slate-900" role="dialog" aria-modal="true" aria-labelledby="effectiveConfigTitle">
             <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                 <div>
                     <p class="section-kicker">Effective Config</p>
@@ -1690,7 +1693,7 @@ Contract notes:
     </div>
 
     <div id="artifactViewerModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-950/72 backdrop-blur-sm p-4 dark:bg-black/80 transition-opacity" aria-hidden="true" data-ui="artifact-viewer-modal">
-        <div id="artifactViewerPanel" class="artifact-viewer-panel w-full max-w-6xl rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-2xl dark:border-slate-800 dark:bg-slate-900" role="dialog" aria-modal="true" aria-labelledby="artifactViewerTitle" aria-describedby="artifactViewerMeta artifactViewerStatus">
+        <div id="artifactViewerPanel" class="artifact-viewer-panel w-full max-w-6xl rounded-xl border border-slate-200 bg-white p-5 shadow-2xl dark:border-slate-800 dark:bg-slate-900" role="dialog" aria-modal="true" aria-labelledby="artifactViewerTitle" aria-describedby="artifactViewerMeta artifactViewerStatus">
             <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                 <div class="min-w-0">
                     <p class="section-kicker">Artifact Viewer</p>
