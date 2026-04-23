@@ -110,6 +110,41 @@ class TestFindDepthMap:
         found = find_depth_map(depth_dir, "test_image")
         assert found == depth_path
 
+    def test_find_depth_map_fails_closed_on_direct_ambiguity(self, tmp_path):
+        """Multiple direct candidate sidecars should not silently choose one."""
+        depth_dir = tmp_path / "depth"
+        depth_dir.mkdir()
+
+        (depth_dir / "test_image_depth.png").touch()
+        (depth_dir / "test_image_depth_u16.png").touch()
+
+        with pytest.raises(V2EnhancementError) as exc_info:
+            find_depth_map(depth_dir, "test_image")
+
+        message = str(exc_info.value)
+        assert "Ambiguous depth map matches" in message
+        assert "test_image_depth.png" in message
+        assert "test_image_depth_u16.png" in message
+
+    def test_find_depth_map_fails_closed_on_recursive_ambiguity(self, tmp_path):
+        """Multiple nested candidate sidecars should not silently choose the first sorted hit."""
+        depth_dir = tmp_path / "depth"
+        nested_a = depth_dir / "scene_a"
+        nested_b = depth_dir / "scene_b"
+        nested_a.mkdir(parents=True)
+        nested_b.mkdir(parents=True)
+
+        (nested_a / "test_image_depth.png").touch()
+        (nested_b / "test_image_depth.png").touch()
+
+        with pytest.raises(V2EnhancementError) as exc_info:
+            find_depth_map(depth_dir, "test_image")
+
+        message = str(exc_info.value)
+        assert "Ambiguous depth map matches" in message
+        assert "scene_a/test_image_depth.png" in message
+        assert "scene_b/test_image_depth.png" in message
+
     def test_find_depth_map_no_directory(self):
         """Test behavior when depth_dir is None or doesn't exist."""
         assert find_depth_map(None, "test") is None
@@ -247,6 +282,15 @@ class TestEnhanceImage:
             assert report["output"] == str(expected_output)
             assert report["preset"] == "default"
             assert report["depth_consumed"] is False
+            assert report["artifact_contract"] == "canonical_v2_emitted_artifact"
+            assert report["is_canonical_emitted_artifact"] is True
+            assert report["output_naming_policy"] == "canonical_v2_emitted_artifact"
+            assert report["io"]["load_backend"] == "pil"
+            assert report["io"]["save_backend"] == "pil"
+            assert report["io"]["metadata_preservation_mode"] == "none"
+            assert report["io"]["icc_preserved"] is False
+            assert report["io"]["exif_preservation_mode"] == "none"
+            assert report["io"]["save_degraded"] is False
             assert "runtime_s" in report
             assert expected_output.exists()
 
@@ -431,6 +475,9 @@ class TestEnhanceImage:
         report = enhance_image(input_path, output_path, depth_map_path=depth_path, config=config)
 
         assert report["status"] == "passthrough"
+        assert report["artifact_contract"] == "passthrough_exact_copy"
+        assert report["is_canonical_emitted_artifact"] is False
+        assert report["output_naming_policy"] == "caller_path_exact"
         assert "depth" in report
         assert report["depth"]["requested"] is True
         assert report["depth"]["loaded"] is False  # Not loaded in passthrough
@@ -492,12 +539,16 @@ class TestEnhanceImage:
             assert report["preset"] == "none"
             assert report["depth_consumed"] is False
             assert "enhancement skipped" in report["message"]
+            assert report["artifact_contract"] == "passthrough_exact_copy"
+            assert report["is_canonical_emitted_artifact"] is False
+            assert report["output_naming_policy"] == "caller_path_exact"
 
             # Verify EnhancementStage was NOT called
             mock_stage_cls.assert_not_called()
 
             # Verify output file exists (copied from input)
             assert output_path.exists()
+            assert not resolve_v2_emitted_artifact_path(output_path, bit_depth=8).exists()
 
     def test_enhance_image_normalizes_inherited_raw_suffix_for_8bit_output(self, tmp_path):
         """8-bit enhancement should overwrite inherited RAW suffixes before save."""
@@ -707,6 +758,10 @@ class TestEnhanceImage:
         report = enhance_image(input_path, output_path, config=config)
 
         assert report["status"] == "passthrough"
+        assert report["artifact_contract"] == "passthrough_exact_copy"
+        assert report["is_canonical_emitted_artifact"] is False
+        assert report["output_naming_policy"] == "caller_path_exact"
+        assert not expected_output.exists()
 
         # Get output file SHA256
         with open(output_path, "rb") as f:
@@ -873,6 +928,59 @@ class TestEnhanceImage:
 
                 # Verify exif_transpose was called
                 mock_transpose.assert_called_once()
+
+    @pytest.mark.parametrize("orientation", [2, 4, 5, 7])
+    def test_16bit_tiff_applies_mirrored_exif_orientations(self, tmp_path, orientation):
+        """The tifffile loader path should apply mirrored EXIF orientations too."""
+        tifffile = pytest.importorskip("tifffile")
+
+        input_path = tmp_path / f"input_orientation_{orientation}.tif"
+        output_path = tmp_path / f"output_orientation_{orientation}.tif"
+        source = np.arange(2 * 3 * 3, dtype=np.uint16).reshape(2, 3, 3)
+        tifffile.imwrite(
+            input_path,
+            source,
+            photometric="rgb",
+            compression=None,
+            extratags=[(274, "H", 1, orientation, False)],
+        )
+
+        with Image.open(input_path) as opened:
+            assert opened.getexif().get(0x0112) == orientation
+
+        if orientation == 2:
+            expected = np.flip(source, axis=1)
+        elif orientation == 4:
+            expected = np.flip(source, axis=0)
+        elif orientation == 5:
+            expected = np.swapaxes(source, 0, 1)
+        else:
+            expected = np.flip(np.swapaxes(source, 0, 1), axis=(0, 1))
+
+        with patch("transformation_portal.lux_depth_v3.v2_enhance.EnhancementStage") as mock_stage_cls:
+            mock_stage = Mock()
+            mock_stage_cls.return_value = mock_stage
+
+            def compute(context):
+                image_from_context = context.get_artifact("image")
+                mock_result = Mock()
+                mock_result.status = StageStatus.COMPLETED
+                mock_result.artifacts = {"enhanced_image": image_from_context.copy()}
+                mock_result.metadata = {}
+                return mock_result
+
+            mock_stage.compute.side_effect = compute
+
+            with patch("tifffile.imwrite"):
+                report = enhance_image(input_path, output_path, allow_8bit_output=False)
+
+        assert report["status"] == "success"
+        assert report["io"]["load_backend"] == "tifffile"
+        assert report["io"]["exif_preservation_mode"] == "normalized"
+
+        call_args = mock_stage.compute.call_args
+        context = call_args[0][0]
+        np.testing.assert_array_equal(context.get_artifact("image"), expected)
 
     def test_enhance_image_handles_palette_mode(self, tmp_path):
         """Test that palette (P) mode images are converted to RGB."""
