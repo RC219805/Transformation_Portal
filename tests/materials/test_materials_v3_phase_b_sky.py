@@ -158,6 +158,32 @@ def test_sky_seed_generates_prompts():
         assert len(result["points_positive"]) > 0 or len(result["points_negative"]) > 0
 
 
+def test_sky_seed_clamps_threshold_knobs():
+    """Out-of-range finite thresholds are clamped predictably."""
+    H, W = 32, 32
+    image = np.ones((H, W, 3), dtype=np.uint8) * 255
+    config = PhaseBTestConfig(
+        sky_top_region_fraction=2.0,
+        sky_gradient_threshold=-1.0,
+        sky_brightness_threshold=2.0,
+    )
+
+    result = detect_sky_seed(image, config)
+
+    assert result["coarse_mask"].shape == (H, W)
+    assert 0.0 <= result["confidence"] <= 1.0
+
+
+def test_sky_seed_rejects_non_finite_thresholds():
+    """Non-finite thresholds fail closed instead of reaching arithmetic paths."""
+    H, W = 32, 32
+    image = np.ones((H, W, 3), dtype=np.uint8) * 255
+    config = PhaseBTestConfig(sky_top_region_fraction=float("nan"))
+
+    with pytest.raises(ValueError, match="sky_top_region_fraction must be finite"):
+        detect_sky_seed(image, config)
+
+
 # =============================================================================
 # B3: Sky Pixel Operations Tests
 # =============================================================================

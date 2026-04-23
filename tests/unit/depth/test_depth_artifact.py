@@ -10,6 +10,7 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+from PIL import Image
 
 pytestmark = [pytest.mark.unit]
 
@@ -106,6 +107,20 @@ class TestCameraIntrinsics:
         # fx = width / (2 * tan(30°)) ≈ 1663 for 1920px width
         assert intrinsics.fx > 1000  # Focal length should be reasonable for typical FOV
 
+    @pytest.mark.parametrize(
+        ("width", "height", "fov_degrees", "match"),
+        [
+            (0, 100, 60.0, "width must be positive"),
+            (100, 0, 60.0, "height must be positive"),
+            (100, 100, 0.0, "fov_degrees"),
+            (100, 100, 180.0, "fov_degrees"),
+        ],
+    )
+    def test_estimate_from_image_rejects_invalid_inputs(self, width, height, fov_degrees, match):
+        """Test intrinsics estimation guardrails."""
+        with pytest.raises(ValueError, match=match):
+            CameraIntrinsics.estimate_from_image(width=width, height=height, fov_degrees=fov_degrees)
+
 
 class TestDepthProvenance:
     """Test DepthProvenance dataclass."""
@@ -199,6 +214,23 @@ class TestDepthArtifact:
         )
         assert artifact.has_metric_depth
         assert artifact.metric_map_m is not None
+
+    def test_optional_arrays_normalize_to_float32(self, sample_provenance):
+        """Metric and confidence arrays follow the same float32 dtype contract as depth_map."""
+        depth_map = np.ones((4, 4), dtype=np.float64)
+        metric_map = np.arange(16, dtype=np.float64).reshape(4, 4)
+        confidence = np.ones((4, 4), dtype=np.uint8)
+        artifact = DepthArtifact(
+            depth_map=depth_map,
+            provenance=sample_provenance,
+            metric_map_m=metric_map,
+            confidence=confidence,
+        )
+        assert artifact.depth_map.dtype == np.float32
+        assert artifact.metric_map_m is not None
+        assert artifact.metric_map_m.dtype == np.float32
+        assert artifact.confidence is not None
+        assert artifact.confidence.dtype == np.float32
 
     def test_artifact_with_confidence(self, sample_depth_map, sample_provenance):
         """Test artifact with confidence map."""
@@ -297,6 +329,28 @@ class TestDepthArtifact:
         hash3 = artifact3.compute_content_hash()
         assert hash1 != hash3
 
+    def test_artifact_content_hash_is_depth_raster_only(self, sample_provenance):
+        """Optional arrays and provenance do not alter the compatibility hash."""
+        depth_map = np.ones((4, 4), dtype=np.float32)
+        other_provenance = DepthProvenance(
+            model_id="other-model",
+            license_tier=LicenseTier.NON_COMMERCIAL,
+        )
+        artifact1 = DepthArtifact(
+            depth_map=depth_map,
+            provenance=sample_provenance,
+            metric_map_m=np.zeros((4, 4), dtype=np.float32),
+            confidence=np.zeros((4, 4), dtype=np.float32),
+        )
+        artifact2 = DepthArtifact(
+            depth_map=depth_map.copy(),
+            provenance=other_provenance,
+            metric_map_m=np.ones((4, 4), dtype=np.float32),
+            confidence=np.ones((4, 4), dtype=np.float32),
+            metadata={"different": True},
+        )
+        assert artifact1.compute_content_hash() == artifact2.compute_content_hash()
+
     def test_artifact_validation_non_2d(self, sample_provenance):
         """Test validation rejects non-2D depth maps."""
         with pytest.raises(ValueError, match="must be 2D"):
@@ -353,6 +407,7 @@ class TestDepthArtifactWriter:
             with open(paths["sidecar"]) as f:
                 sidecar = json.load(f)
             assert sidecar["schema_version"] == "1.0.0"
+            assert sidecar["outputs"]["sidecar"] == str(paths["sidecar"])
 
     def test_write_artifact_with_metric(self):
         """Test writing artifact with metric depth."""
@@ -377,6 +432,56 @@ class TestDepthArtifactWriter:
 
             loaded_metric = np.load(paths["depth_metric"])
             np.testing.assert_array_equal(loaded_metric, metric_map)
+
+    def test_write_artifact_persists_optional_arrays_as_float32(self):
+        """Persisted optional arrays use the normalized artifact dtype."""
+        depth_map = np.random.rand(4, 4).astype(np.float32)
+        metric_map = np.random.rand(4, 4).astype(np.float64)
+        confidence = np.ones((4, 4), dtype=np.uint8)
+        provenance = DepthProvenance(
+            model_id="metric-model",
+            license_tier=LicenseTier.EXPERIMENTAL,
+        )
+        artifact = DepthArtifact(
+            depth_map=depth_map,
+            provenance=provenance,
+            metric_map_m=metric_map,
+            confidence=confidence,
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            writer = DepthArtifactWriter(output_dir=Path(tmpdir))
+            paths = writer.write(artifact, stem="metric_test")
+
+            assert np.load(paths["depth_metric"]).dtype == np.float32
+            assert np.load(paths["confidence"]).dtype == np.float32
+
+    def test_write_preview_handles_nan_inf_deterministically(self):
+        """Preview normalization ignores non-finite values."""
+        depth = np.array([[np.nan, 0.0], [np.inf, 1.0]], dtype=np.float32)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "preview.png"
+            writer = DepthArtifactWriter(output_dir=Path(tmpdir), save_float=False)
+            writer._write_preview(depth, path)
+
+            preview = np.array(Image.open(path))
+            assert preview[0, 0] == 0
+            assert preview[1, 0] == 0
+            assert preview[0, 1] == 0
+            assert preview[1, 1] == 65535
+
+    def test_write_preview_all_invalid_writes_zero_preview(self):
+        """All-invalid preview input has a deterministic zero fallback."""
+        depth = np.array([[np.nan, np.inf], [-np.inf, np.nan]], dtype=np.float32)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "preview.png"
+            writer = DepthArtifactWriter(output_dir=Path(tmpdir), save_float=False)
+            writer._write_preview(depth, path)
+
+            preview = np.array(Image.open(path))
+            assert np.all(preview == 0)
 
     def test_write_artifact_selective(self):
         """Test writing with selective outputs."""

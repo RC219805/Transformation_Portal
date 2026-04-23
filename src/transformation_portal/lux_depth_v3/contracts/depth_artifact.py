@@ -4,8 +4,7 @@ This module defines the core contract for depth artifacts across all pipeline
 stages. The DepthArtifact is designed to be self-describing, auditable, and
 interoperable.
 
-Contract Version: 1.0.0
-Schema Compatibility: v2.0.0 Golden Path
+The artifact schema version is exposed as ``DEPTH_ARTIFACT_SCHEMA_VERSION``.
 
 Example:
     >>> from transformation_portal.lux_depth_v3.contracts import DepthArtifact
@@ -105,6 +104,13 @@ class CameraIntrinsics:
             Estimated CameraIntrinsics
         """
         import math
+
+        if width <= 0:
+            raise ValueError("width must be positive")
+        if height <= 0:
+            raise ValueError("height must be positive")
+        if not 0 < fov_degrees < 180:
+            raise ValueError("fov_degrees must be greater than 0 and less than 180")
 
         fov_rad = math.radians(fov_degrees)
         fx = width / (2 * math.tan(fov_rad / 2))
@@ -258,6 +264,16 @@ class DepthArtifact:
                     "must match depth_map "
                     f"shape {self.depth_map.shape}"
                 )
+            if self.metric_map_m.dtype != np.float32:
+                logger.warning(
+                    "metric_map_m dtype is %s, converting to float32",
+                    self.metric_map_m.dtype,
+                )
+                object.__setattr__(
+                    self,
+                    "metric_map_m",
+                    self.metric_map_m.astype(np.float32),
+                )
 
         if self.confidence is not None:
             if not isinstance(self.confidence, np.ndarray):
@@ -265,6 +281,16 @@ class DepthArtifact:
             if self.confidence.shape != self.depth_map.shape:
                 raise ValueError(
                     f"confidence shape " f"{self.confidence.shape} " "must match depth_map " f"shape {self.depth_map.shape}"
+                )
+            if self.confidence.dtype != np.float32:
+                logger.warning(
+                    "confidence dtype is %s, converting to float32",
+                    self.confidence.dtype,
+                )
+                object.__setattr__(
+                    self,
+                    "confidence",
+                    self.confidence.astype(np.float32),
                 )
 
         # Provenance validation
@@ -346,7 +372,10 @@ class DepthArtifact:
         }
 
     def compute_content_hash(self) -> str:
-        """Compute content-addressable hash of depth data.
+        """Compute the depth-raster content hash.
+
+        The compatibility contract intentionally hashes only ``depth_map`` bytes;
+        optional arrays, intrinsics, metadata, and provenance are not included.
 
         Returns:
             SHA-256 hash (first 16 chars) of depth_map bytes
@@ -433,6 +462,7 @@ class DepthArtifactWriter:
         # Save JSON sidecar
         if self.save_sidecar:
             sidecar_path = self.output_dir / f"{stem}_depth.json"
+            paths["sidecar"] = sidecar_path
             sidecar_data = artifact.to_sidecar_dict()
             # Add output paths to sidecar
             sidecar_data["outputs"] = {k: str(v) for k, v in paths.items()}
@@ -446,8 +476,6 @@ class DepthArtifactWriter:
                     ensure_ascii=False,
                     allow_nan=False,
                 )
-            paths["sidecar"] = sidecar_path
-
         logger.info("Wrote DepthArtifact: %s", stem)
         return paths
 
@@ -455,15 +483,18 @@ class DepthArtifactWriter:
         """Write 16-bit PNG preview of depth map."""
         from PIL import Image
 
-        # Normalize to [0, 1]
-        d_min, d_max = depth.min(), depth.max()
-        if d_max - d_min > 1e-8:
-            normalized = (depth - d_min) / (d_max - d_min)
+        finite_mask = np.isfinite(depth)
+        normalized = np.zeros(depth.shape, dtype=np.float32)
+        if finite_mask.any():
+            finite_depth = depth[finite_mask].astype(np.float32)
+            d_min, d_max = float(finite_depth.min()), float(finite_depth.max())
+            if d_max - d_min > 1e-8:
+                normalized[finite_mask] = (finite_depth - d_min) / (d_max - d_min)
         else:
-            normalized = np.zeros_like(depth)
+            logger.warning("Depth preview input contains no finite values; writing zero preview")
 
         # Convert to 16-bit
-        depth_u16 = (normalized * 65535).astype(np.uint16)
+        depth_u16 = (np.clip(normalized, 0.0, 1.0) * 65535).astype(np.uint16)
 
         # Save as 16-bit PNG
         img = Image.fromarray(depth_u16, mode="I;16")

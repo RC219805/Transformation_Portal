@@ -8,9 +8,7 @@ must implement. This enables:
 - Consistent provenance tracking
 - Circuit breaker patterns for fallback
 
-Protocol Version: 1.0.0
-
-Compatible with: v2.0.0 Golden Path
+The protocol version is exposed as ``DEPTH_MODEL_PROTOCOL_VERSION``.
 
 Example
 -------
@@ -31,6 +29,7 @@ Example
 
 from __future__ import annotations
 
+import inspect
 import logging
 from dataclasses import dataclass, field
 from enum import Enum, auto
@@ -269,19 +268,92 @@ class DepthModelRegistry:
     def __init__(self) -> None:
         """Initialize empty registry."""
         self._backends: Dict[str, Type[DepthModel]] = {}
+        self._backend_info: Dict[str, BackendInfo] = {}
         self._instances: Dict[str, DepthModel] = {}
         self._fallback_chains: Dict[BackendRole, List[str]] = {}
+
+    @staticmethod
+    def _resolve_backend_info(backend_class: Type[DepthModel]) -> BackendInfo:
+        """Resolve class-available backend metadata without construction."""
+        backend_info = getattr(backend_class, "backend_info", None)
+        if isinstance(backend_info, BackendInfo):
+            return backend_info
+        if callable(backend_info):
+            resolved = backend_info()
+            if isinstance(resolved, BackendInfo):
+                return resolved
+
+        get_backend_info = getattr(backend_class, "get_backend_info", None)
+        if callable(get_backend_info):
+            resolved = get_backend_info()
+            if isinstance(resolved, BackendInfo):
+                return resolved
+
+        info_attr = getattr(backend_class, "info", None)
+        if isinstance(info_attr, BackendInfo):
+            return info_attr
+
+        raise TypeError(
+            f"{backend_class.__name__} must expose BackendInfo via a class-level "
+            "'backend_info' attribute/callable or get_backend_info() method"
+        )
+
+    @staticmethod
+    def _validate_backend_class_surface(backend_class: Type[DepthModel]) -> None:
+        required_methods = ("load", "predict")
+        missing_or_invalid = [attr for attr in required_methods if not callable(getattr(backend_class, attr, None))]
+        try:
+            info_member = inspect.getattr_static(backend_class, "info")
+        except AttributeError:
+            info_member = None
+        if not isinstance(info_member, (BackendInfo, property)):
+            missing_or_invalid.append("info")
+
+        if missing_or_invalid:
+            raise TypeError(
+                f"{backend_class.__name__} does not implement DepthModel protocol "
+                "(missing or invalid: "
+                f"{', '.join(missing_or_invalid)})"
+            )
+
+    @staticmethod
+    def _validate_runtime_backend_info(
+        name: str,
+        registered_info: BackendInfo,
+        instance: DepthModel,
+        commercial_only: bool,
+    ) -> None:
+        """Validate runtime metadata before returning a constructed backend."""
+        runtime_info = getattr(instance, "info", None)
+        if not isinstance(runtime_info, BackendInfo):
+            raise TypeError(f"Backend '{name}' instance.info must be a BackendInfo instance")
+
+        if registered_info.model_id != runtime_info.model_id or registered_info.license_tier != runtime_info.license_tier:
+            logger.warning(
+                "Registered backend info for '%s' differs from instance.info "
+                "(registered model_id=%s, tier=%s; runtime model_id=%s, tier=%s)",
+                name,
+                registered_info.model_id,
+                registered_info.license_tier.value,
+                runtime_info.model_id,
+                runtime_info.license_tier.value,
+            )
+
+        if commercial_only and not runtime_info.is_commercial_safe():
+            raise ValueError(f"Backend '{name}' requires non-commercial license " f"(tier: {runtime_info.license_tier.value})")
 
     def register(
         self,
         backend_class: Type[DepthModel],
         name: Optional[str] = None,
+        info: Optional[BackendInfo] = None,
     ) -> None:
         """Register a depth model backend.
 
         Args:
             backend_class: Class implementing DepthModel protocol
             name: Optional registration name (defaults to class name)
+            info: Optional class-available backend metadata override
 
         Raises:
             TypeError: If backend_class doesn't implement DepthModel
@@ -289,27 +361,15 @@ class DepthModelRegistry:
         if not isinstance(backend_class, type):
             raise TypeError("backend_class must be a class")
 
-        # Validate protocol compliance
-        # Require core DepthModel surface: info, load, predict
-        instance = backend_class()
-        required_attrs = ("load", "predict")
-        missing_or_invalid = [
-            attr for attr in required_attrs if not hasattr(instance, attr) or not callable(getattr(instance, attr, None))
-        ]
-        # Check for info property separately (can be property or method)
-        if not hasattr(instance, "info"):
-            missing_or_invalid.append("info")
-
-        if missing_or_invalid:
-            raise TypeError(
-                f"{backend_class.__name__} does not "
-                "implement DepthModel protocol "
-                "(missing or non-callable: "
-                f"{', '.join(missing_or_invalid)})"
-            )
+        self._validate_backend_class_surface(backend_class)
+        resolved_info = info or self._resolve_backend_info(backend_class)
+        if not isinstance(resolved_info, BackendInfo):
+            raise TypeError("backend metadata must be a BackendInfo instance")
 
         reg_name = name or backend_class.__name__
         self._backends[reg_name] = backend_class
+        self._backend_info[reg_name] = resolved_info
+        self._instances.pop(reg_name, None)
         logger.info("Registered depth backend: %s", reg_name)
 
     def list_backends(
@@ -328,10 +388,7 @@ class DepthModelRegistry:
             List of BackendInfo for matching backends
         """
         results = []
-        for name, cls in self._backends.items():
-            instance = cls()
-            info = instance.info
-
+        for info in self._backend_info.values():
             if role is not None and info.role != role:
                 continue
 
@@ -372,15 +429,17 @@ class DepthModelRegistry:
             if name not in self._backends:
                 raise KeyError(f"Backend '{name}' not registered")
 
+            info = self._backend_info[name]
+            if commercial_only and not info.is_commercial_safe():
+                raise ValueError(f"Backend '{name}' requires " "non-commercial license " f"(tier: {info.license_tier.value})")
+
             if use_cache and name in self._instances:
-                return self._instances[name]
+                instance = self._instances[name]
+                self._validate_runtime_backend_info(name, info, instance, commercial_only)
+                return instance
 
             instance = self._backends[name]()
-
-            if commercial_only and not instance.info.is_commercial_safe():
-                raise ValueError(
-                    f"Backend '{name}' requires " "non-commercial license " f"(tier: {instance.info.license_tier.value})"
-                )
+            self._validate_runtime_backend_info(name, info, instance, commercial_only)
 
             if use_cache:
                 self._instances[name] = instance
@@ -396,14 +455,31 @@ class DepthModelRegistry:
                 raise KeyError(f"No backend found for " f"role={role.name}, " f"commercial_only={commercial_only}")
 
             # Return first matching (priority order determined by registration)
+            failures = []
+            last_error: Optional[Exception] = None
             for info in candidates:
-                for reg_name, cls in self._backends.items():
-                    if cls().info.model_id == info.model_id:
-                        return self.get_backend(
-                            name=reg_name,
-                            commercial_only=commercial_only,
-                            use_cache=use_cache,
-                        )
+                for reg_name, registered_info in self._backend_info.items():
+                    if registered_info.model_id == info.model_id:
+                        try:
+                            return self.get_backend(
+                                name=reg_name,
+                                commercial_only=commercial_only,
+                                use_cache=use_cache,
+                            )
+                        except Exception as exc:
+                            last_error = exc
+                            failures.append(f"{reg_name}: {exc}")
+                            logger.warning(
+                                "Skipping depth backend '%s' during role lookup: %s",
+                                reg_name,
+                                exc,
+                            )
+
+            if failures:
+                raise RuntimeError(
+                    f"No constructable backend found for role={role.name}, "
+                    f"commercial_only={commercial_only}; failures: {'; '.join(failures)}"
+                ) from last_error
 
         raise KeyError("Must specify either 'name' or 'role'")
 
@@ -465,6 +541,7 @@ def get_registry() -> DepthModelRegistry:
 
 def register_backend(
     name: Optional[str] = None,
+    info: Optional[BackendInfo] = None,
 ) -> Callable[[Type[DepthModel]], Type[DepthModel]]:
     """Decorator to register a depth model backend.
 
@@ -475,7 +552,7 @@ def register_backend(
     """
 
     def decorator(cls: Type[DepthModel]) -> Type[DepthModel]:
-        get_registry().register(cls, name)
+        get_registry().register(cls, name, info=info)
         return cls
 
     return decorator
