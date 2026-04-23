@@ -17,6 +17,8 @@ import numpy as np
 
 from ..stage import Stage, StageContext, StageResult, StageStatus
 
+_LOW_TEXTURE_PROXY_MAX_SIDE = 1024
+
 
 class EnhancementStage(Stage):
     """
@@ -30,8 +32,10 @@ class EnhancementStage(Stage):
         enhancement_strength: float = 0.7,
         clarity_strength: float = 0.5,
         material_strength: float = 0.6,
-        version: str = "1.0.0",
+        version: str = "1.1.0",
         output_dtype: Optional[np.dtype] = None,
+        tone_low_tex_strength: float = 0.6,
+        tone_depth_smoothing: bool = True,
     ):
         """
         Initialize enhancement stage.
@@ -42,12 +46,22 @@ class EnhancementStage(Stage):
             material_strength: Material enhancement strength [0, 1]
             version: Stage version for cache invalidation
             output_dtype: Output dtype (np.uint8 or np.uint16). If None, defaults to uint8.
+            tone_low_tex_strength: How hard to attenuate the depth-driven
+                luminance adjustment on low-gradient regions (sky, water,
+                smooth walls). 0.0 disables the guard; 1.0 flattens the
+                adjustment to unity there. Defaults to 0.6.
+            tone_depth_smoothing: When True, low-pass the depth map before
+                it drives the per-pixel luminance multiplier. Prevents
+                high-frequency striping in the depth map from projecting
+                into visible vertical luminance bands.
         """
         super().__init__(name="enhancement", version=version)
         self.enhancement_strength = enhancement_strength
         self.clarity_strength = clarity_strength
         self.material_strength = material_strength
         self.output_dtype = output_dtype if output_dtype is not None else np.dtype("uint8")
+        self.tone_low_tex_strength = float(np.clip(tone_low_tex_strength, 0.0, 1.0))
+        self.tone_depth_smoothing = bool(tone_depth_smoothing)
 
     def get_dependencies(self) -> list:
         """Depends on depth and materials for best results."""
@@ -140,6 +154,8 @@ class EnhancementStage(Stage):
             f"{self.enhancement_strength:.2f}_"
             f"{self.clarity_strength:.2f}_"
             f"{self.material_strength:.2f}_"
+            f"{self.tone_low_tex_strength:.2f}_"
+            f"{int(self.tone_depth_smoothing)}_"
             f"{self.version}"
         )
 
@@ -232,20 +248,24 @@ class EnhancementStage(Stage):
             )
             depth_map = self._resize_depth_map(depth_map, (image_height, image_width))
 
-        # Adaptive depth-based tone mapping
-        # Use percentiles to adapt to actual depth distribution
-        depth_median = float(np.median(depth_map))
+        # Percentiles are computed on the RAW depth map so the decision about
+        # "near vs. far" stays aligned with the scene, not with our smoothing
+        # kernel.
         depth_p75 = float(np.percentile(depth_map, 75))
-
-        # Center the adjustment curve at the 75th percentile
-        # This ensures that most architectural elements (< p75) get boosted
-        # and distant elements (> p75) get compressed
         center_point = depth_p75
 
-        # Normalize depth relative to center point
-        # depth < center → negative (boost)
-        # depth > center → positive (compress)
-        depth_normalized = (depth_map - center_point) / (1.0 - center_point + 1e-6)
+        # Decouple depth high-frequencies from per-pixel luminance.
+        #
+        # The multiplier below (`adjustment`) is broadcast across RGB, so any
+        # fine vertical structure in depth lands as a vertical luminance band
+        # in the output. That is exactly how "paneling" can appear on sky
+        # and water in aerials even though V2 itself is full-frame. We low-
+        # pass the depth map before it feeds the curve; the global tonal
+        # intent (near vs. far) is preserved because the low-pass kernel is
+        # much smaller than scene-scale depth variation.
+        depth_for_tone = self._lowpass_depth_for_tone(depth_map) if self.tone_depth_smoothing else depth_map
+
+        depth_normalized = (depth_for_tone - center_point) / (1.0 - center_point + 1e-6)
         depth_normalized = np.clip(depth_normalized, -1.0, 1.0)
 
         # Apply smooth sigmoid for gradual transition
@@ -278,10 +298,92 @@ class EnhancementStage(Stage):
 
         adjustment = np.clip(adjustment, 1.0 + max_compress, 1.0 + max_boost)
 
+        # Low-gradient-energy guard.
+        #
+        # On near-flat regions (clear sky, still water, smooth walls) even a
+        # small residual variation in the multiplier reads as a visible
+        # luminance step to the eye, because there is no scene texture to
+        # mask it. We measure local image gradient energy and pull the
+        # multiplier toward 1.0 where texture is absent. Textured regions
+        # (foliage, stonework, railings) see essentially no change.
+        if adjustment.ndim > 0 and self.tone_low_tex_strength > 0.0:
+            low_tex = self._low_texture_weight(image)
+            # Move `adjustment` toward 1.0 in low-texture areas.
+            attenuation = 1.0 - self.tone_low_tex_strength * low_tex
+            adjustment = 1.0 + (adjustment - 1.0) * attenuation
+
         # Apply adjustment (broadcast to RGB)
         result = image * adjustment[:, :, np.newaxis]
 
         return np.clip(result, 0, 1)
+
+    def _lowpass_depth_for_tone(self, depth_map: np.ndarray) -> np.ndarray:
+        """Low-pass the depth map before it drives per-pixel luminance.
+
+        The smoothing scale still tracks image size so we suppress pixel-scale
+        striping and tile discontinuities from upstream depth backends, but the
+        effective blur radius is bounded to keep runtime predictable on large
+        frames and to avoid over-smoothing scene-scale depth intent.
+        """
+        from scipy.ndimage import gaussian_filter
+
+        h, w = depth_map.shape[:2]
+        sigma = float(np.clip(max(h, w) / 1024.0, 2.0, 8.0))
+        return gaussian_filter(depth_map.astype(np.float32, copy=False), sigma=sigma)
+
+    @staticmethod
+    def _low_texture_weight(image: np.ndarray) -> np.ndarray:
+        """Per-pixel `low_tex` weight in [0, 1] (1 = flat region).
+
+        Uses a bounded luminance proxy for large frames, then resizes the
+        weight back to full resolution. This keeps the default guard from
+        adding an unbounded full-frame convolution and percentile on 4K/8K
+        inputs.
+        """
+        from scipy.ndimage import gaussian_gradient_magnitude
+
+        # Rec. 709 luminance; image is float32 in [0, 1].
+        if image.ndim == 3 and image.shape[-1] >= 3:
+            luma = 0.2126 * image[..., 0] + 0.7152 * image[..., 1] + 0.0722 * image[..., 2]
+        else:
+            luma = image if image.ndim == 2 else image[..., 0]
+        luma = luma.astype(np.float32, copy=False)
+
+        h, w = luma.shape[:2]
+        max_side = max(h, w)
+        resized_proxy = False
+        proxy_scale = 1.0
+        luma_proxy = luma
+        if max_side > _LOW_TEXTURE_PROXY_MAX_SIDE:
+            import cv2
+
+            proxy_scale = _LOW_TEXTURE_PROXY_MAX_SIDE / float(max_side)
+            proxy_h = max(1, int(round(h * proxy_scale)))
+            proxy_w = max(1, int(round(w * proxy_scale)))
+            luma_proxy = cv2.resize(luma, (proxy_w, proxy_h), interpolation=cv2.INTER_AREA)
+            resized_proxy = True
+
+        # Scale the local-gradient sigma into proxy pixels. Keep a floor of 1
+        # proxy pixel so highly downsampled large frames still get stable local
+        # gradient estimates instead of alias-sensitive single-pixel checks.
+        sigma = max(1.0, 4.0 * proxy_scale)
+        grad = gaussian_gradient_magnitude(luma_proxy, sigma=sigma)
+        p95 = float(np.percentile(grad, 95))
+        if p95 <= 1e-6:
+            # Entirely flat frame → guard fires everywhere.
+            low_tex_proxy = np.ones_like(grad, dtype=np.float32)
+        else:
+            normalized = np.clip(grad / p95, 0.0, 1.0)
+            low_tex_proxy = 1.0 - normalized
+
+        if resized_proxy:
+            import cv2
+
+            low_tex = cv2.resize(low_tex_proxy.astype(np.float32, copy=False), (w, h), interpolation=cv2.INTER_LINEAR)
+        else:
+            low_tex = low_tex_proxy
+
+        return np.clip(low_tex, 0.0, 1.0).astype(np.float32, copy=False)
 
     @staticmethod
     def _resize_depth_map(depth_map: np.ndarray, target_shape: tuple[int, int]) -> np.ndarray:

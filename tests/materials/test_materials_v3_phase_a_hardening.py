@@ -33,6 +33,7 @@ class PhaseATestConfig:
 
     apply_pixel_ops: bool = True
     glass_response_enabled: bool = True
+    water_response_enabled: bool = True
     min_coverage_px: int = 500
     min_mean_conf: float = 0.2
     refinement_strategy: str = "canary"
@@ -41,6 +42,15 @@ class PhaseATestConfig:
     mask_feather_sigma_default: float = 3.0
     mask_feather_sigma_overrides: Dict[str, float] = field(default_factory=dict)
     mask_feather_disabled_materials: list = field(default_factory=list)
+
+    # Phase A tests verify baseline feather-sigma plumbing with synthetic flat
+    # fixtures, so they must opt out of the low-texture seam-safe guard
+    # (which would otherwise widen the feather on flat-plus-large fixtures).
+    # Setting the bbox fraction gate above 1.0 disables the guard for any ROI.
+    pixel_ops_low_grad_threshold: float = 0.01
+    pixel_ops_low_tex_min_bbox_frac: float = 2.0
+    pixel_ops_low_tex_feather_multiplier: float = 8.0
+    pixel_ops_low_tex_delta_ceiling: float = 0.04
 
 
 # =============================================================================

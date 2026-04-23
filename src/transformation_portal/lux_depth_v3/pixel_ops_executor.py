@@ -12,6 +12,9 @@ import numpy as np
 from .pixel_ops_decider import decide_pixel_ops
 from .pixel_ops_registry import OP_REGISTRY
 
+_LOW_TEX_MAX_FEATHER_SIGMA = 12.0
+_LOW_TEX_DELTA_PERCENTILE_MAX_SAMPLES = 262_144
+
 
 def _canonical_mask(mask: np.ndarray) -> np.ndarray:
     """Canonicalize mask to 2D (H, W) float32 format.
@@ -63,6 +66,34 @@ def _bounding_box(mask: np.ndarray) -> tuple[int, int, int, int] | None:
     return int(xs.min()), int(ys.min()), int(xs.max()) + 1, int(ys.max()) + 1
 
 
+def _roi_mean_gradient_energy(roi_normalized: np.ndarray) -> float:
+    """Mean gradient magnitude of a normalized [0, 1] float32 ROI.
+
+    A low value (< ~0.01) means the ROI is near-flat: clear sky, still
+    water, smooth wall. Used by `apply_pixel_ops` to detect regions where
+    a flat per-material gain would read as a visible luminance step and
+    widen the feather / clamp the delta accordingly.
+    """
+    if roi_normalized.size == 0:
+        return 0.0
+    arr = roi_normalized.astype(np.float32, copy=False)
+    if arr.ndim == 3 and arr.shape[-1] >= 3:
+        luma = 0.2126 * arr[..., 0] + 0.7152 * arr[..., 1] + 0.0722 * arr[..., 2]
+    elif arr.ndim == 3:
+        luma = arr[..., 0]
+    else:
+        luma = arr
+    # Reject pixel-scale noise so a noisy-but-flat sky still reads as flat.
+    kernel = np.array([1.0, 2.0, 1.0], dtype=np.float32) / 4.0
+    # scipy is already imported elsewhere in Materials V3; use cv2 since it's
+    # already a dependency of this module to keep the import footprint small.
+    blurred = cv2.sepFilter2D(luma, cv2.CV_32F, kernel, kernel)
+    gx = cv2.Sobel(blurred, cv2.CV_32F, 1, 0, ksize=3)
+    gy = cv2.Sobel(blurred, cv2.CV_32F, 0, 1, ksize=3)
+    grad = np.sqrt(gx * gx + gy * gy)
+    return float(grad.mean())
+
+
 def _feather_mask(mask: np.ndarray, sigma: float) -> np.ndarray:
     """Apply Gaussian feathering to mask edges.
 
@@ -85,6 +116,30 @@ def _feather_mask(mask: np.ndarray, sigma: float) -> np.ndarray:
 
     feathered = cv2.GaussianBlur(mask, (ksize, ksize), sigma)
     return np.clip(feathered, 0.0, 1.0).astype(np.float32)
+
+
+def _weighted_abs_delta_for_percentile(
+    delta: np.ndarray,
+    mask: np.ndarray,
+    max_samples: int = _LOW_TEX_DELTA_PERCENTILE_MAX_SAMPLES,
+) -> tuple[np.ndarray, int]:
+    """Return a bounded 2D weighted-delta sample for percentile checks."""
+    if delta.size == 0 or mask.size == 0:
+        return np.asarray([], dtype=np.float32), 1
+
+    height, width = mask.shape[:2]
+    sample_stride = 1
+    if height > 0 and width > 0 and height * width > max_samples:
+        sample_stride = int(math.ceil(math.sqrt((height * width) / float(max_samples))))
+        delta = delta[::sample_stride, ::sample_stride]
+        mask = mask[::sample_stride, ::sample_stride]
+
+    abs_delta = np.abs(delta.astype(np.float32, copy=False))
+    if abs_delta.ndim == 3:
+        abs_delta = abs_delta.max(axis=-1)
+
+    weighted = abs_delta * mask.astype(np.float32, copy=False)
+    return weighted.astype(np.float32, copy=False), sample_stride
 
 
 def _expand_bbox_with_padding(
@@ -257,6 +312,16 @@ def apply_pixel_ops(
     feather_overrides = getattr(config, "mask_feather_sigma_overrides", {}) or {}
     feather_disabled = set(getattr(config, "mask_feather_disabled_materials", []) or [])
 
+    # Low-texture seam-safe guard (addresses vertical luminance banding on
+    # large smooth materials like sky/water). The guard fires only when the
+    # ROI is both low-gradient *and* large: a small flat region is too
+    # localized to produce a visible panel, and a large but textured region
+    # can absorb the ordinary op without visible stepping.
+    low_grad_threshold = float(getattr(config, "pixel_ops_low_grad_threshold", 0.01))
+    low_tex_feather_multiplier = float(getattr(config, "pixel_ops_low_tex_feather_multiplier", 8.0))
+    low_tex_min_bbox_frac = float(getattr(config, "pixel_ops_low_tex_min_bbox_frac", 0.05))
+    low_tex_delta_ceiling = float(getattr(config, "pixel_ops_low_tex_delta_ceiling", 0.04))
+
     # Sort by priority (highest first) to process in order
     sorted_materials = sorted(
         resolved_materials.items(),
@@ -324,17 +389,48 @@ def apply_pixel_ops(
             )
             continue
 
-        # A3: Get material-specific feathering sigma
+        # Decide whether this material needs the seam-safe path. The guard can
+        # only fire when the ROI is both flat AND large, so when bbox_frac is
+        # already below the large-ROI threshold we can skip the gradient probe
+        # entirely — that's the common case on small materials (door glass,
+        # foliage patches, stone trim) where the extra float conversion and
+        # Sobel pass would be wasted work.
+        img_h, img_w = image.shape[:2]
+        x0, y0, x1, y1 = bbox
+        bbox_frac = ((x1 - x0) * (y1 - y0)) / float(max(1, img_h * img_w))
+
+        if bbox_frac < low_tex_min_bbox_frac:
+            roi_grad_energy = 0.0
+            is_low_tex_large = False
+        else:
+            probe_roi = image[y0:y1, x0:x1]
+            probe_dtype = probe_roi.dtype
+            if probe_dtype == np.uint8:
+                probe_norm = probe_roi.astype(np.float32) / 255.0
+            elif probe_dtype == np.uint16:
+                probe_norm = probe_roi.astype(np.float32) / 65535.0
+            else:
+                probe_norm = probe_roi.astype(np.float32, copy=False)
+            roi_grad_energy = _roi_mean_gradient_energy(probe_norm)
+            is_low_tex_large = roi_grad_energy < low_grad_threshold
+
+        # A3: Get material-specific feathering sigma (with adaptive widening
+        # for large low-texture materials).
         if material_key in feather_disabled:
             feather_sigma = 0.0
         else:
             feather_sigma = float(feather_overrides.get(material_key, feather_default))
+            if is_low_tex_large and feather_sigma > 0.0:
+                feather_sigma = min(
+                    feather_sigma * low_tex_feather_multiplier,
+                    _LOW_TEX_MAX_FEATHER_SIGMA,
+                )
 
         # A2: Expand bbox by feathering padding
-        img_h, img_w = image.shape[:2]
         pad = math.ceil(3 * feather_sigma) if feather_sigma > 0 else 0
-        x0, y0, x1, y1 = bbox
         x0_padded, y0_padded, x1_padded, y1_padded = _expand_bbox_with_padding(bbox, pad, img_h, img_w)
+        inside_y = slice(y0 - y0_padded, y1 - y0_padded)
+        inside_x = slice(x0 - x0_padded, x1 - x0_padded)
 
         # Extract padded ROI
         mask_roi_padded = mask_2d[y0_padded:y1_padded, x0_padded:x1_padded]
@@ -356,6 +452,12 @@ def apply_pixel_ops(
             working = working.astype(np.float32) / 65535.0
         # else: already float, no normalization needed
 
+        # Capture only the unpadded writeback region in normalized space. The
+        # clamp only needs the pixels that can be written back, so copying the
+        # full padded ROI would create avoidable memory pressure on large
+        # sky/water masks.
+        working_before_ops_inside = working[inside_y, inside_x].copy() if is_low_tex_large else None
+
         for op_name in implemented_ops:
             op_def = ops_for_material.get(op_name)
             if not op_def or not op_def.implemented:
@@ -367,6 +469,28 @@ def apply_pixel_ops(
             )
             applied_ops.append(op_name)
 
+        # Delta-ceiling guard: on large flat materials, any single pixel op
+        # is allowed to shift the region by at most `low_tex_delta_ceiling`
+        # (in normalized [0, 1]). This prevents a visible luminance step
+        # between a smooth material and its neighbors even if the op itself
+        # is configured aggressively.
+        delta_scale_applied = 1.0
+        delta_sample_stride = 1
+        if is_low_tex_large and working_before_ops_inside is not None:
+            working_inside = working[inside_y, inside_x]
+            delta_inside = working_inside.astype(np.float32, copy=False) - working_before_ops_inside
+            mask_inside = mask_roi_feathered[inside_y, inside_x]
+            weighted_abs, delta_sample_stride = _weighted_abs_delta_for_percentile(delta_inside, mask_inside)
+            if weighted_abs.size > 0:
+                p99 = float(np.percentile(weighted_abs, 99))
+                if p99 > low_tex_delta_ceiling and p99 > 1e-6:
+                    delta_scale_applied = float(low_tex_delta_ceiling / p99)
+                    working[inside_y, inside_x] = np.clip(
+                        working_before_ops_inside + delta_inside * delta_scale_applied,
+                        0.0,
+                        1.0,
+                    )
+
         # Denormalize and write back (A4)
         if original_dtype == np.uint8:
             after_padded = np.clip(working * 255.0, 0.0, 255.0).astype(np.uint8)
@@ -376,15 +500,15 @@ def apply_pixel_ops(
             after_padded = working.astype(original_dtype)
 
         # Write back only the original (non-padded) ROI
-        output[y0:y1, x0:x1] = after_padded[(y0 - y0_padded) : (y1 - y0_padded), (x0 - x0_padded) : (x1 - x0_padded)]
+        output[y0:y1, x0:x1] = after_padded[inside_y, inside_x]
 
         elapsed_ms = (time.perf_counter() - start_material) * 1000.0
 
         # Compute stats on original ROI
         delta_stats = _compute_delta_stats(
-            before_padded[(y0 - y0_padded) : (y1 - y0_padded), (x0 - x0_padded) : (x1 - x0_padded)],
-            after_padded[(y0 - y0_padded) : (y1 - y0_padded), (x0 - x0_padded) : (x1 - x0_padded)],
-            mask_roi_feathered[(y0 - y0_padded) : (y1 - y0_padded), (x0 - x0_padded) : (x1 - x0_padded)],
+            before_padded[inside_y, inside_x],
+            after_padded[inside_y, inside_x],
+            mask_roi_feathered[inside_y, inside_x],
         )
 
         telemetry["applied"].append(
@@ -395,6 +519,13 @@ def apply_pixel_ops(
                 "delta_stats": delta_stats,
                 "feather_sigma": feather_sigma,
                 "bbox_padding": pad,
+                "low_tex_guard": {
+                    "applied": bool(is_low_tex_large),
+                    "roi_mean_grad": round(roi_grad_energy, 6),
+                    "bbox_fraction": round(bbox_frac, 4),
+                    "delta_scale_applied": round(delta_scale_applied, 4),
+                    "delta_sample_stride": int(delta_sample_stride),
+                },
             }
         )
 

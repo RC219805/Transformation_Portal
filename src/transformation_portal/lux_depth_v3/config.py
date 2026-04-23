@@ -199,6 +199,12 @@ class EnhanceConfig:
     # Fail if depth artifacts found in input
     # directory (validation mode)
     strict_inputs: bool = False
+    # Preserve the Materials V3 intermediate TIFF/PNG in
+    # <output>/temp/*_materials_v3_enhanced.* after V2 runs. Use this to
+    # bisect a banding / color regression: compare the Materials V3
+    # intermediate against the final V2 output without re-running the
+    # pipeline with --enable-v2 off.
+    keep_intermediates: bool = False
 
     # License acceptance flags (for research-only models)
     # Apple AMLR license for Depth Pro
@@ -360,6 +366,24 @@ class EnhanceConfig:
     )
     # Materials with feathering disabled
     mask_feather_disabled_materials: list[str] = field(default_factory=list)
+
+    # Materials V3 Pixel Ops - Seam-safe guard for large low-texture
+    # materials (sky, water, smooth walls).
+    # Gradient-energy threshold below which an ROI counts as "flat".
+    # Measured on normalized [0, 1] luminance.
+    pixel_ops_low_grad_threshold: float = 0.01
+    # Minimum bbox fraction (relative to whole image) required for the guard
+    # to engage. Small flat regions don't produce visible panels.
+    pixel_ops_low_tex_min_bbox_frac: float = 0.05
+    # Multiplier applied to the per-material feather sigma when the guard
+    # fires. A 3 px feather becomes 24 px, pushing the mask transition into
+    # a scale the eye cannot parse as a hard seam.
+    pixel_ops_low_tex_feather_multiplier: float = 8.0
+    # p99 ceiling on per-pixel |delta| (normalized [0, 1]) applied to the
+    # pre/post-op difference on a large flat ROI. Any op that exceeds this
+    # is soft-clamped proportionally so it cannot produce a visible
+    # luminance step across the mask boundary.
+    pixel_ops_low_tex_delta_ceiling: float = 0.04
 
     # Materials V3 Phase B - Sky Bootstrap
     # Top fraction of image to consider for

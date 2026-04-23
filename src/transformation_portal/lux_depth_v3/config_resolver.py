@@ -359,6 +359,14 @@ def build_materials_fingerprint_payload(config: EnhanceConfig) -> Dict[str, Any]
             key: float(value) for key, value in sorted(config.mask_feather_sigma_overrides.items())
         },
         "mask_feather_disabled_materials": sorted(str(value) for value in config.mask_feather_disabled_materials),
+        # Seam-safe guard knobs for large low-texture materials. These must be
+        # in the fingerprint so that changing any of them invalidates cached
+        # materials_v3 artifacts — otherwise operators tuning these will keep
+        # seeing pre-change output from the reuse cache.
+        "pixel_ops_low_grad_threshold": float(getattr(config, "pixel_ops_low_grad_threshold", 0.01)),
+        "pixel_ops_low_tex_min_bbox_frac": float(getattr(config, "pixel_ops_low_tex_min_bbox_frac", 0.05)),
+        "pixel_ops_low_tex_feather_multiplier": float(getattr(config, "pixel_ops_low_tex_feather_multiplier", 8.0)),
+        "pixel_ops_low_tex_delta_ceiling": float(getattr(config, "pixel_ops_low_tex_delta_ceiling", 0.04)),
         "sky_top_region_fraction": float(config.sky_top_region_fraction),
         "sky_gradient_threshold": float(config.sky_gradient_threshold),
         "sky_brightness_threshold": float(config.sky_brightness_threshold),
