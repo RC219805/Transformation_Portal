@@ -379,9 +379,7 @@ def apply_pixel_ops(
         else:
             probe_norm = probe_roi.astype(np.float32, copy=False)
         roi_grad_energy = _roi_mean_gradient_energy(probe_norm)
-        is_low_tex_large = (
-            roi_grad_energy < low_grad_threshold and bbox_frac >= low_tex_min_bbox_frac
-        )
+        is_low_tex_large = roi_grad_energy < low_grad_threshold and bbox_frac >= low_tex_min_bbox_frac
 
         # A3: Get material-specific feathering sigma (with adaptive widening
         # for large low-texture materials).

@@ -58,9 +58,7 @@ class V2EnhancementConfig:
         if not 0.0 <= self.material_strength <= 1.0:
             raise ValueError(f"material_strength must be in [0, 1], got {self.material_strength}")
         if not 0.0 <= self.tone_low_tex_strength <= 1.0:
-            raise ValueError(
-                f"tone_low_tex_strength must be in [0, 1], got {self.tone_low_tex_strength}"
-            )
+            raise ValueError(f"tone_low_tex_strength must be in [0, 1], got {self.tone_low_tex_strength}")
 
     @classmethod
     def from_preset(cls, preset: str) -> V2EnhancementConfig:

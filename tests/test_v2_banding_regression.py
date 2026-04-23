@@ -98,8 +98,7 @@ def test_v2_depth_stripe_does_not_project_into_luminance_bands():
 
     # The guard must reduce per-column ripple by at least an order of magnitude.
     assert ripple_on < ripple_off / 10.0, (
-        f"Depth-stripe guard insufficient: ripple_on={ripple_on:.6f}, "
-        f"ripple_off={ripple_off:.6f}"
+        f"Depth-stripe guard insufficient: ripple_on={ripple_on:.6f}, " f"ripple_off={ripple_off:.6f}"
     )
 
 

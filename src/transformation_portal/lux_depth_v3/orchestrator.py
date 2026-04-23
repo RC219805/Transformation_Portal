@@ -4041,11 +4041,7 @@ class EnhanceOrchestrator:
 
         # Clean up temporary enhanced image file if it was created, unless
         # the operator has asked to keep intermediates for bisection.
-        if (
-            enhanced_image_path
-            and enhanced_image_path.exists()
-            and not getattr(self.config, "keep_intermediates", False)
-        ):
+        if enhanced_image_path and enhanced_image_path.exists() and not getattr(self.config, "keep_intermediates", False):
             try:
                 enhanced_image_path.unlink()
                 logger.debug(
