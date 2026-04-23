@@ -55,17 +55,21 @@ body {
 
 :root {
     color-scheme: light;
-    --ux-panel-border: rgba(100, 116, 139, 0.3);
+    --ux-panel-border: rgba(148, 163, 184, 0.22);
     --ux-panel-border-strong: rgba(8, 145, 178, 0.3);
     --shell-ink: #0f172a;
     --shell-muted: #475569;
     --shell-border: var(--ux-panel-border);
-    --shell-panel: rgba(255, 255, 255, 0.78);
-    --shell-panel-strong: rgba(255, 255, 255, 0.92);
-    --shell-accent: #0f766e;
-    --shell-accent-soft: rgba(15, 118, 110, 0.12);
+    --shell-panel: rgba(255, 255, 255, 0.86);
+    --shell-panel-strong: rgba(255, 255, 255, 0.94);
+    --shell-accent: #0891b2;
+    --shell-accent-soft: rgba(8, 145, 178, 0.1);
     --shell-signal: #b45309;
     --shell-danger: #b91c1c;
+    --shell-veil-soft: rgba(255, 255, 255, 0.72);
+    --shell-veil: rgba(255, 255, 255, 0.74);
+    --shell-veil-strong: rgba(255, 255, 255, 0.78);
+    --shell-tint-faint: rgba(148, 163, 184, 0.06);
     --ambient-shift-x: 0px;
     --ambient-shift-y: 0px;
     --ambient-focus-x: 52%;
@@ -87,12 +91,15 @@ body {
     --shell-ink: #e5eef6;
     --shell-muted: #a8b6c8;
     --shell-border: var(--ux-panel-border);
-    --shell-panel: rgba(15, 23, 42, 0.76);
+    --shell-panel: var(--shell-veil-strong);
     --shell-panel-strong: rgba(15, 23, 42, 0.9);
     --shell-accent: #2dd4bf;
     --shell-accent-soft: rgba(45, 212, 191, 0.14);
     --shell-signal: #fbbf24;
     --shell-danger: #f87171;
+    --shell-veil-soft: rgba(15, 23, 42, 0.72);
+    --shell-veil: rgba(15, 23, 42, 0.74);
+    --shell-veil-strong: rgba(15, 23, 42, 0.76);
     --ambient-color-a: 45 212 191;
     --ambient-color-b: 96 165 250;
     --ambient-color-c: 125 211 252;
@@ -307,7 +314,7 @@ progress::-moz-progress-bar { background-color: #4f46e5; transition: width 0.3s 
 
 .hero-action-secondary {
     border: 1px solid var(--shell-border);
-    background: rgba(255, 255, 255, 0.74);
+    background: var(--shell-veil);
     color: var(--shell-ink);
 }
 .dark .hero-action-secondary {
@@ -319,7 +326,7 @@ progress::-moz-progress-bar { background-color: #4f46e5; transition: width 0.3s 
     align-items: center;
     border-radius: 999px;
     border: 1px solid var(--shell-border);
-    background: rgba(255, 255, 255, 0.74);
+    background: var(--shell-veil);
     padding: 0.35rem 0.65rem;
     font-size: 10px;
     font-weight: 800;
@@ -405,7 +412,7 @@ progress::-moz-progress-bar { background-color: #4f46e5; transition: width 0.3s 
     border-color: rgba(45, 212, 191, 0.36);
     box-shadow:
         0 20px 48px rgba(14, 165, 233, 0.12),
-        inset 0 1px 0 rgba(148, 163, 184, 0.06);
+        inset 0 1px 0 var(--shell-tint-faint);
 }
 
 @keyframes shellGradientShift {
@@ -547,8 +554,8 @@ progress::-moz-progress-bar { background-color: #4f46e5; transition: width 0.3s 
 }
 .dark .ambient-grid {
     background-image:
-        linear-gradient(rgba(148, 163, 184, 0.06) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(148, 163, 184, 0.06) 1px, transparent 1px);
+        linear-gradient(var(--shell-tint-faint) 1px, transparent 1px),
+        linear-gradient(90deg, var(--shell-tint-faint) 1px, transparent 1px);
     opacity: 0.38;
 }
 
@@ -674,20 +681,20 @@ progress::-moz-progress-bar { background-color: #4f46e5; transition: width 0.3s 
     border-color: rgba(15, 118, 110, 0.3);
 }
 .dark .section-link {
-    background: rgba(15, 23, 42, 0.72);
+    background: var(--shell-veil-soft);
 }
 
 .governance-banner {
     border: 1px solid rgba(15, 118, 110, 0.18);
     background:
         linear-gradient(135deg, rgba(15, 118, 110, 0.08), rgba(6, 95, 70, 0.03)),
-        rgba(255, 255, 255, 0.78);
+        var(--shell-veil-strong);
 }
 .dark .governance-banner {
     border-color: rgba(45, 212, 191, 0.2);
     background:
         linear-gradient(135deg, rgba(45, 212, 191, 0.1), rgba(8, 145, 178, 0.05)),
-        rgba(15, 23, 42, 0.72);
+        var(--shell-veil-soft);
 }
 
 .step-primary-note {
@@ -894,7 +901,7 @@ progress::-moz-progress-bar { background-color: #4f46e5; transition: width 0.3s 
 .dark .runtime-briefing-card[data-tone="ready"] {
     border-color: rgba(45, 212, 191, 0.24);
     background:
-        linear-gradient(180deg, rgba(15, 118, 110, 0.18), rgba(15, 23, 42, 0.76)),
+        linear-gradient(180deg, rgba(15, 118, 110, 0.18), var(--shell-veil-strong)),
         rgba(15, 23, 42, 0.58);
 }
 
@@ -903,7 +910,7 @@ progress::-moz-progress-bar { background-color: #4f46e5; transition: width 0.3s 
 .dark .runtime-briefing-card[data-tone="warning"] {
     border-color: rgba(251, 191, 36, 0.24);
     background:
-        linear-gradient(180deg, rgba(120, 53, 15, 0.24), rgba(15, 23, 42, 0.76)),
+        linear-gradient(180deg, rgba(120, 53, 15, 0.24), var(--shell-veil-strong)),
         rgba(15, 23, 42, 0.58);
 }
 
@@ -912,11 +919,13 @@ progress::-moz-progress-bar { background-color: #4f46e5; transition: width 0.3s 
 .dark .runtime-briefing-card[data-tone="blocked"] {
     border-color: rgba(248, 113, 113, 0.24);
     background:
-        linear-gradient(180deg, rgba(127, 29, 29, 0.24), rgba(15, 23, 42, 0.76)),
+        linear-gradient(180deg, rgba(127, 29, 29, 0.24), var(--shell-veil-strong)),
         rgba(15, 23, 42, 0.58);
 }
 
-.console-context-label {
+.console-context-label,
+.build-pulse-label,
+.runtime-briefing-label {
     font-size: 10px;
     font-weight: 800;
     letter-spacing: 0.18em;
@@ -956,7 +965,7 @@ progress::-moz-progress-bar { background-color: #4f46e5; transition: width 0.3s 
 
 .dark .console-action-rail {
     background:
-        linear-gradient(135deg, rgba(15, 23, 42, 0.88), rgba(15, 23, 42, 0.74)),
+        linear-gradient(135deg, rgba(15, 23, 42, 0.88), var(--shell-veil)),
         rgba(15, 23, 42, 0.78);
     box-shadow:
         inset 0 1px 0 rgba(148, 163, 184, 0.05),
@@ -1059,12 +1068,7 @@ progress::-moz-progress-bar { background-color: #4f46e5; transition: width 0.3s 
 }
 
 .operator-action-btn-secondary {
-    background: rgba(255, 255, 255, 0.78);
-    color: var(--shell-ink);
-}
-
-.dark .operator-action-btn-secondary {
-    background: rgba(15, 23, 42, 0.76);
+    background: var(--shell-veil-strong);
     color: var(--shell-ink);
 }
 
@@ -1145,14 +1149,6 @@ progress::-moz-progress-bar { background-color: #4f46e5; transition: width 0.3s 
         0 12px 26px rgba(2, 6, 23, 0.18);
 }
 
-.build-pulse-label {
-    font-size: 10px;
-    font-weight: 800;
-    letter-spacing: 0.18em;
-    text-transform: uppercase;
-    color: var(--shell-muted);
-}
-
 .build-pulse-value {
     margin-top: 0.45rem;
     font-size: 13px;
@@ -1165,14 +1161,6 @@ progress::-moz-progress-bar { background-color: #4f46e5; transition: width 0.3s 
     margin-top: 0.4rem;
     font-size: 11px;
     line-height: 1.55;
-    color: var(--shell-muted);
-}
-
-.runtime-briefing-label {
-    font-size: 10px;
-    font-weight: 800;
-    letter-spacing: 0.18em;
-    text-transform: uppercase;
     color: var(--shell-muted);
 }
 
@@ -1319,7 +1307,7 @@ details[open] .disclosure-chevron {
     justify-content: center;
     border-radius: 999px;
     border: 1px solid var(--shell-border);
-    background: rgba(255, 255, 255, 0.72);
+    background: var(--shell-veil-soft);
     padding: 0.7rem 1rem;
     font-size: 12px;
     font-weight: 700;
@@ -1560,12 +1548,6 @@ details[open] .disclosure-chevron {
     border-radius: 999px;
     pointer-events: none;
     opacity: 0.82;
-    background: linear-gradient(
-        90deg,
-        rgba(15, 118, 110, 0.12),
-        rgba(34, 211, 238, 0.72),
-        rgba(15, 118, 110, 0.12)
-    );
 }
 
 .dark .surface-loading {
@@ -1729,7 +1711,7 @@ details[open] .disclosure-chevron {
 
 .dark .workspace-link-shortcut {
     border-color: rgba(71, 85, 105, 0.7);
-    background: rgba(15, 23, 42, 0.72);
+    background: var(--shell-veil-soft);
     color: rgba(203, 213, 225, 0.88);
 }
 
@@ -1753,15 +1735,15 @@ details[open] .disclosure-chevron {
     border: 1px dashed rgba(148, 163, 184, 0.28);
     border-radius: 1.25rem;
     background:
-        linear-gradient(180deg, rgba(255, 255, 255, 0.78), rgba(248, 250, 252, 0.72)),
-        rgba(255, 255, 255, 0.74);
+        linear-gradient(180deg, var(--shell-veil-strong), rgba(248, 250, 252, 0.72)),
+        var(--shell-veil);
 }
 
 .dark .surface-empty-state {
     border-color: rgba(71, 85, 105, 0.58);
     background:
-        linear-gradient(180deg, rgba(15, 23, 42, 0.78), rgba(15, 23, 42, 0.72)),
-        rgba(15, 23, 42, 0.74);
+        linear-gradient(180deg, rgba(15, 23, 42, 0.78), var(--shell-veil-soft)),
+        var(--shell-veil);
 }
 
 .surface-empty-state--compact {
@@ -1773,7 +1755,7 @@ details[open] .disclosure-chevron {
     border-color: rgba(245, 158, 11, 0.28);
     background:
         linear-gradient(135deg, rgba(245, 158, 11, 0.08), rgba(255, 255, 255, 0.82)),
-        rgba(255, 255, 255, 0.78);
+        var(--shell-veil-strong);
 }
 
 .dark .surface-empty-state[data-tone="warning"] {
@@ -1787,7 +1769,7 @@ details[open] .disclosure-chevron {
     border-color: rgba(239, 68, 68, 0.28);
     background:
         linear-gradient(135deg, rgba(239, 68, 68, 0.08), rgba(255, 255, 255, 0.82)),
-        rgba(255, 255, 255, 0.78);
+        var(--shell-veil-strong);
 }
 
 .dark .surface-empty-state[data-tone="error"] {
@@ -1841,7 +1823,7 @@ details[open] .disclosure-chevron {
     gap: 0.35rem;
     border-radius: 999px;
     border: 1px solid var(--shell-border);
-    background: rgba(255, 255, 255, 0.72);
+    background: var(--shell-veil-soft);
     padding: 0.28rem 0.55rem;
     font-size: 10px;
     font-weight: 700;
@@ -1851,7 +1833,7 @@ details[open] .disclosure-chevron {
 }
 
 .dark .job-chip {
-    background: rgba(15, 23, 42, 0.72);
+    background: var(--shell-veil-soft);
 }
 
 .sticky-shell {
@@ -1994,15 +1976,6 @@ details[open] .disclosure-chevron {
 
 /* Operator console reset */
 
-:root {
-    --ux-panel-border: rgba(148, 163, 184, 0.22);
-    --shell-border: var(--ux-panel-border);
-    --shell-panel: rgba(255, 255, 255, 0.86);
-    --shell-panel-strong: rgba(255, 255, 255, 0.94);
-    --shell-accent: #0891b2;
-    --shell-accent-soft: rgba(8, 145, 178, 0.1);
-}
-
 .shell-bg {
     min-height: 100vh;
     background:
@@ -2060,7 +2033,7 @@ details[open] .disclosure-chevron {
 .portal-brand-mark {
     overflow: hidden;
     padding: 0.55rem;
-    border: 1px solid rgba(255, 255, 255, 0.72);
+    border: 1px solid var(--shell-veil-soft);
     background: rgba(255, 255, 255, 0.96);
     color: #155e75;
     box-shadow:
@@ -2073,7 +2046,7 @@ details[open] .disclosure-chevron {
     background: rgba(15, 23, 42, 0.92);
     color: #a5f3fc;
     box-shadow:
-        inset 0 1px 0 rgba(148, 163, 184, 0.06),
+        inset 0 1px 0 var(--shell-tint-faint),
         0 18px 36px rgba(2, 6, 23, 0.34);
 }
 
@@ -2132,7 +2105,7 @@ details[open] .disclosure-chevron {
 }
 
 .dark .topbar-status {
-    background: rgba(15, 23, 42, 0.72);
+    background: var(--shell-veil-soft);
     box-shadow: inset 0 1px 0 rgba(148, 163, 184, 0.08);
 }
 
@@ -2163,8 +2136,8 @@ details[open] .disclosure-chevron {
 .portal-context-shell {
     border: 1px solid rgba(100, 116, 139, 0.24);
     background:
-        linear-gradient(180deg, rgba(255, 255, 255, 0.84), rgba(255, 255, 255, 0.74)),
-        rgba(255, 255, 255, 0.74);
+        linear-gradient(180deg, rgba(255, 255, 255, 0.84), var(--shell-veil)),
+        var(--shell-veil);
     backdrop-filter: blur(18px);
     box-shadow: 0 18px 42px rgba(15, 23, 42, 0.06);
 }
@@ -2172,8 +2145,8 @@ details[open] .disclosure-chevron {
 .dark .portal-context-shell {
     border-color: rgba(71, 85, 105, 0.52);
     background:
-        linear-gradient(180deg, rgba(15, 23, 42, 0.84), rgba(15, 23, 42, 0.74)),
-        rgba(15, 23, 42, 0.76);
+        linear-gradient(180deg, rgba(15, 23, 42, 0.84), var(--shell-veil)),
+        var(--shell-veil-strong);
     box-shadow: 0 18px 42px rgba(2, 6, 23, 0.3);
 }
 
@@ -2213,14 +2186,14 @@ details[open] .disclosure-chevron {
 
 .stat-tile,
 .panel-subtle {
-    background: rgba(255, 255, 255, 0.74);
+    background: var(--shell-veil);
     border: 1px solid rgba(148, 163, 184, 0.2);
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.26);
 }
 
 .dark .stat-tile,
 .dark .panel-subtle {
-    background: rgba(15, 23, 42, 0.72);
+    background: var(--shell-veil-soft);
     box-shadow: inset 0 1px 0 rgba(148, 163, 184, 0.08);
 }
 
@@ -2260,7 +2233,7 @@ details[open] .disclosure-chevron {
 
 .dark .workspace-rail {
     background:
-        linear-gradient(180deg, rgba(15, 23, 42, 0.84), rgba(15, 23, 42, 0.76)),
+        linear-gradient(180deg, rgba(15, 23, 42, 0.84), var(--shell-veil-strong)),
         rgba(15, 23, 42, 0.8);
 }
 
@@ -2280,7 +2253,7 @@ details[open] .disclosure-chevron {
     border-radius: 1rem;
     padding: 0.9rem 1rem;
     justify-content: flex-start;
-    background: rgba(255, 255, 255, 0.74);
+    background: var(--shell-veil);
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.26);
 }
 
@@ -2299,7 +2272,7 @@ details[open] .disclosure-chevron {
 }
 
 .dark .workspace-link {
-    background: rgba(15, 23, 42, 0.76);
+    background: var(--shell-veil-strong);
     box-shadow: inset 0 1px 0 rgba(148, 163, 184, 0.08);
 }
 
@@ -2309,14 +2282,14 @@ details[open] .disclosure-chevron {
 }
 
 .console-context-card {
-    background: rgba(255, 255, 255, 0.74);
+    background: var(--shell-veil);
     backdrop-filter: blur(16px);
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.24);
 }
 
 .dark .console-context-card {
     background: rgba(15, 23, 42, 0.68);
-    box-shadow: inset 0 1px 0 rgba(148, 163, 184, 0.06);
+    box-shadow: inset 0 1px 0 var(--shell-tint-faint);
 }
 
 .console-context-label {
@@ -2352,7 +2325,7 @@ details[open] .disclosure-chevron {
     width: 100%;
     border: 1px solid var(--shell-border);
     border-radius: 1.25rem;
-    background: rgba(255, 255, 255, 0.72);
+    background: var(--shell-veil-soft);
     padding: 0.95rem 1rem;
     text-align: left;
     color: var(--shell-ink);
@@ -2360,7 +2333,7 @@ details[open] .disclosure-chevron {
 }
 
 .dark .build-step-tab {
-    background: rgba(15, 23, 42, 0.74);
+    background: var(--shell-veil);
 }
 
 .build-step-tab:hover,
@@ -2464,16 +2437,16 @@ details[open] .disclosure-chevron {
     border-color: rgba(148, 163, 184, 0.18);
     background:
         linear-gradient(180deg, rgba(255, 255, 255, 0.82), rgba(248, 250, 252, 0.76)),
-        rgba(255, 255, 255, 0.78);
+        var(--shell-veil-strong);
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.24);
 }
 
 .dark .surface-skeleton-card {
     border-color: rgba(71, 85, 105, 0.55);
     background:
-        linear-gradient(180deg, rgba(15, 23, 42, 0.82), rgba(15, 23, 42, 0.74)),
-        rgba(15, 23, 42, 0.76);
-    box-shadow: inset 0 1px 0 rgba(148, 163, 184, 0.06);
+        linear-gradient(180deg, rgba(15, 23, 42, 0.82), var(--shell-veil)),
+        var(--shell-veil-strong);
+    box-shadow: inset 0 1px 0 var(--shell-tint-faint);
 }
 
 .surface-loading {
@@ -2490,7 +2463,7 @@ details[open] .disclosure-chevron {
 .dark .surface-loading {
     border-color: rgba(71, 85, 105, 0.48);
     background:
-        linear-gradient(180deg, rgba(15, 23, 42, 0.84), rgba(15, 23, 42, 0.76)),
+        linear-gradient(180deg, rgba(15, 23, 42, 0.84), var(--shell-veil-strong)),
         rgba(15, 23, 42, 0.78);
 }
 
@@ -2499,7 +2472,7 @@ details[open] .disclosure-chevron {
 }
 
 .dark .review-status-banner {
-    box-shadow: inset 0 1px 0 rgba(148, 163, 184, 0.06);
+    box-shadow: inset 0 1px 0 var(--shell-tint-faint);
 }
 
 .micro-status,
