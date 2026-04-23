@@ -455,14 +455,31 @@ class DepthModelRegistry:
                 raise KeyError(f"No backend found for " f"role={role.name}, " f"commercial_only={commercial_only}")
 
             # Return first matching (priority order determined by registration)
+            failures = []
+            last_error: Optional[Exception] = None
             for info in candidates:
                 for reg_name, registered_info in self._backend_info.items():
                     if registered_info.model_id == info.model_id:
-                        return self.get_backend(
-                            name=reg_name,
-                            commercial_only=commercial_only,
-                            use_cache=use_cache,
-                        )
+                        try:
+                            return self.get_backend(
+                                name=reg_name,
+                                commercial_only=commercial_only,
+                                use_cache=use_cache,
+                            )
+                        except Exception as exc:
+                            last_error = exc
+                            failures.append(f"{reg_name}: {exc}")
+                            logger.warning(
+                                "Skipping depth backend '%s' during role lookup: %s",
+                                reg_name,
+                                exc,
+                            )
+
+            if failures:
+                raise RuntimeError(
+                    f"No constructable backend found for role={role.name}, "
+                    f"commercial_only={commercial_only}; failures: {'; '.join(failures)}"
+                ) from last_error
 
         raise KeyError("Must specify either 'name' or 'role'")
 

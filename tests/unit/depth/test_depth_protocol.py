@@ -425,6 +425,62 @@ class TestDepthModelRegistry:
         assert CountingProductionBackend.constructor_calls == 1
         assert CountingAuditBackend.constructor_calls == 0
 
+    def test_role_lookup_skips_unconstructable_candidate(self, registry):
+        """Role lookup can fall through when a registered backend needs constructor args."""
+
+        class ConstructorRequiredProductionBackend:
+            backend_info = BackendInfo(
+                name="Constructor Required Production",
+                model_id="mock/constructor-required-production",
+                role=BackendRole.PRODUCTION,
+                license_tier=LicenseTier.COMMERCIAL,
+            )
+
+            def __init__(self, required_arg):
+                self.required_arg = required_arg
+
+            @property
+            def info(self) -> BackendInfo:
+                return self.backend_info
+
+            def load(self, device: str = "auto", weights_path: Optional[Path] = None, strict_license: bool = True) -> None:
+                pass
+
+            def predict(self, image: np.ndarray) -> DepthArtifact:
+                raise NotImplementedError
+
+        class FallbackProductionBackend:
+            constructor_calls = 0
+            backend_info = BackendInfo(
+                name="Fallback Production",
+                model_id="mock/fallback-production",
+                role=BackendRole.PRODUCTION,
+                license_tier=LicenseTier.COMMERCIAL,
+            )
+
+            def __init__(self):
+                type(self).constructor_calls += 1
+
+            @property
+            def info(self) -> BackendInfo:
+                return self.backend_info
+
+            def load(self, device: str = "auto", weights_path: Optional[Path] = None, strict_license: bool = True) -> None:
+                pass
+
+            def predict(self, image: np.ndarray) -> DepthArtifact:
+                raise NotImplementedError
+
+        registry.register(ConstructorRequiredProductionBackend, name="constructor_required")
+        registry.register(FallbackProductionBackend, name="fallback")
+
+        with pytest.raises(TypeError):
+            registry.get_backend(name="constructor_required")
+        backend = registry.get_backend(role=BackendRole.PRODUCTION, use_cache=False)
+
+        assert isinstance(backend, FallbackProductionBackend)
+        assert FallbackProductionBackend.constructor_calls == 1
+
     def test_get_backend_commercial_only_rejects_research(self, registry):
         """Test that commercial_only rejects non-commercial backends."""
         registry.register(MockResearchBackend)
