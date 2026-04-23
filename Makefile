@@ -488,6 +488,8 @@ check-stale-docs:
 validate-ci:
 	@echo "Validating GitHub Actions workflows..."
 	@"$(PY)" scripts/validate_ci_config.py
+	@echo "Validating workflow concurrency contract..."
+	@"$(PY)" scripts/validation/check_workflow_concurrency_contract.py
 	@echo "Validating gitleaks workflow contract..."
 	@"$(PY)" scripts/validation/check_gitleaks_workflow_contract.py
 	@echo "Validating dependency-update workflow contract..."

@@ -89,12 +89,12 @@ pillow==12.2.0
     # via
     #   -c all.txt
     #   -r base.in
-pydantic==2.13.1
+pydantic==2.13.3
     # via
     #   -c all.txt
     #   -r base.in
     #   fastapi
-pydantic-core==2.46.1
+pydantic-core==2.46.3
     # via
     #   -c all.txt
     #   pydantic
