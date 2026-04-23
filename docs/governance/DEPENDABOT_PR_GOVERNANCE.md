@@ -3,7 +3,7 @@
 **Purpose**: Define triage policy and merge criteria for Dependabot-generated pull requests
 **Owner**: Transformation Portal Architect
 **Created**: 2026-03-26
-**Last Updated**: 2026-04-16
+**Last Updated**: 2026-04-23
 
 ---
 
@@ -60,9 +60,9 @@ The following are the enforced controls that constrain Dependabot PR acceptance:
 The following dependencies are **exact-pinned** in `requirements/base.in` for API/UI parity and security baseline:
 
 ```
-fastapi==0.135.1
+fastapi==0.136.0
 starlette==1.0.0
-uvicorn==0.42.0
+uvicorn==0.45.0
 aiofiles==25.1.0
 ```
 
@@ -203,6 +203,7 @@ Before merging any Dependabot PR:
 | 2026-03-26 | Updated after #1275 closure and curated Starlette merge via #1278 | Architect |
 | 2026-04-16 | Recorded the FastAPI 0.136.0 curated baseline and the "dep pin changed" checklist | Architect |
 | 2026-04-16 | Added ML alert dismissal/remediation governance for supported vs frozen target-owned lanes | Architect |
+| 2026-04-23 | Synced the exact-pinned web stack block with the curated Uvicorn 0.45.0 baseline | Architect |
 
 ---
 
