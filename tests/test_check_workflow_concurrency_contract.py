@@ -121,6 +121,50 @@ jobs:
     assert workflow_contract.validate_workflow_concurrency_contract_text("no-cancel.yml", text) == []
 
 
+def test_quoted_true_cancel_in_progress_requires_event_namespace() -> None:
+    text = """
+name: Quoted True Cancellation
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '0 1 * * *'
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: "true"
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo ok
+"""
+    errors = workflow_contract.validate_workflow_concurrency_contract_text("quoted-true.yml", text)
+    assert errors == [
+        "quoted-true.yml: mixed schedule/push workflow must include an interpolated '${{ github.event_name }}' token "
+        "in concurrency.group when cancel-in-progress is enabled (current: '${{ github.workflow }}-${{ github.ref }}')"
+    ]
+
+
+def test_quoted_false_cancel_in_progress_is_exempt() -> None:
+    text = """
+name: Quoted False Cancellation
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '0 1 * * *'
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: "false"
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo ok
+"""
+    assert workflow_contract.validate_workflow_concurrency_contract_text("quoted-false.yml", text) == []
+
+
 def test_expression_based_cancel_in_progress_requires_event_namespace() -> None:
     text = """
 name: Conditional Cancellation
