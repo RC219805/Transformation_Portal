@@ -48,6 +48,9 @@ def _has_trigger(config: dict[str, Any], trigger_name: str) -> bool:
 def _load_workflow_config(workflow_name: str, text: str) -> dict[str, Any]:
     """Return a normalized workflow mapping.
 
+    Returns:
+        dict[str, Any]: The normalized workflow configuration mapping.
+
     Raises:
         ValueError: When PyYAML is unavailable or the workflow text is invalid YAML.
     """
