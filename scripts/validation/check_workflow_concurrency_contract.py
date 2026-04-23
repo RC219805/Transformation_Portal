@@ -12,7 +12,10 @@ import sys
 from pathlib import Path
 from typing import Any
 
-import yaml
+try:
+    import yaml
+except ImportError:
+    yaml = None
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 WORKFLOWS_DIR = REPO_ROOT / ".github" / "workflows"
@@ -42,9 +45,23 @@ def _has_trigger(config: dict[str, Any], trigger_name: str) -> bool:
     return False
 
 
+def _load_workflow_config(workflow_name: str, text: str) -> dict[str, Any]:
+    """Return a normalized workflow mapping or raise a deterministic contract error."""
+    if yaml is None:
+        raise ValueError(f"{workflow_name}: PyYAML not installed (pip install PyYAML)")
+    try:
+        loaded = yaml.safe_load(text)
+    except yaml.YAMLError as exc:
+        raise ValueError(f"{workflow_name}: invalid YAML: {exc}") from exc
+    return _normalize_workflow_config(loaded)
+
+
 def validate_workflow_concurrency_contract_text(workflow_name: str, text: str) -> list[str]:
     """Return concurrency contract violations for a single workflow file."""
-    config = _normalize_workflow_config(yaml.safe_load(text))
+    try:
+        config = _load_workflow_config(workflow_name, text)
+    except ValueError as exc:
+        return [str(exc)]
     errors: list[str] = []
 
     has_schedule = _has_trigger(config, "schedule")

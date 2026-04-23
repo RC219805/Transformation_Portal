@@ -119,3 +119,15 @@ jobs:
       - run: echo ok
 """
     assert workflow_contract.validate_workflow_concurrency_contract_text("no-cancel.yml", text) == []
+
+
+def test_invalid_yaml_is_reported_as_file_scoped_contract_violation() -> None:
+    errors = workflow_contract.validate_workflow_concurrency_contract_text("broken.yml", "on: [")
+    assert len(errors) == 1
+    assert errors[0].startswith("broken.yml: invalid YAML:")
+
+
+def test_missing_pyyaml_is_reported_as_file_scoped_contract_violation(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(workflow_contract, "yaml", None)
+    errors = workflow_contract.validate_workflow_concurrency_contract_text("broken.yml", "on: push")
+    assert errors == ["broken.yml: PyYAML not installed (pip install PyYAML)"]
