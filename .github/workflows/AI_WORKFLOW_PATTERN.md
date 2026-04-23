@@ -147,6 +147,13 @@ concurrency:
 ```
 
 ```yaml
+# Mixed schedule + push/pull_request workflows
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true       # ← REQUIRED: Prevent cross-event cancellation
+```
+
+```yaml
 # Issue/PR event workflows (issues, issue_comment, pull_request_target)
 concurrency:
   group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.issue.number || github.event.pull_request.number || github.run_id }}
