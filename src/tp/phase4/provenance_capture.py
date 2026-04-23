@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import hashlib
-import re
 from typing import Any
 
 from tp.crypto.merkle import merkle_root_sha256
@@ -19,93 +18,55 @@ from .hash_capture_metadata import (
     canonical_json_bytes,
     compute_metadata_sha256,
 )
-from .schema_validation import build_draft202012_validator
+from .validation_helpers import (
+    build_path_index,
+    ensure_sha256_hex,
+    require_contract_version,
+    require_sorted_relative_paths,
+    require_unique_relative_paths,
+    validate_payload_with_schema,
+    validate_records_with_schema,
+)
 
 PROVENANCE_CONTRACT_VERSION = "tp.meta.provenance.v1"
 PROVENANCE_MERKLE_CONTRACT_VERSION = "tp.meta.provenance_merkle.v1"
 
-_SHA256_HEX_RE = re.compile(r"^[a-f0-9]{64}$")
-
-
-def _build_validator(schema: dict[str, Any], *, error_cls: type[Exception], label: str) -> Any:
-    return build_draft202012_validator(schema, error_cls=error_cls, label=label)
-
 
 def _validate_capture_records(records: list[dict[str, Any]], metadata_schema: dict[str, Any]) -> None:
-    validator = _build_validator(
+    validate_records_with_schema(
+        records,
         metadata_schema,
         error_cls=ProvenanceSchemaValidationError,
         label="metadata",
+        record_label_fn=lambda index, _record: f"capture record[{index}]",
     )
-    for index, record in enumerate(records):
-        try:
-            errors = sorted(validator.iter_errors(record), key=lambda error: list(error.path))
-        except (TypeError, ValueError) as exc:
-            raise ProvenanceSchemaValidationError(
-                f"capture record[{index}] schema validation failed due to validator runtime error ({type(exc).__name__})"
-            ) from exc
-        if errors:
-            first = errors[0]
-            path = ".".join(str(part) for part in first.path) or "<root>"
-            raise ProvenanceSchemaValidationError(
-                f"capture record[{index}] schema validation failed at {path}: {first.message}"
-            )
 
 
 def _validate_metadata_manifest(payload: dict[str, Any], manifest_schema: dict[str, Any]) -> None:
-    validator = _build_validator(
+    validate_payload_with_schema(
+        payload,
         manifest_schema,
         error_cls=ProvenanceSchemaValidationError,
-        label="metadata_manifest",
+        label="metadata manifest",
     )
-    errors = sorted(validator.iter_errors(payload), key=lambda error: list(error.path))
-    if errors:
-        first = errors[0]
-        path = ".".join(str(part) for part in first.path) or "<root>"
-        raise ProvenanceSchemaValidationError(f"metadata manifest schema validation failed at {path}: {first.message}")
 
 
 def _validate_provenance_manifest(payload: dict[str, Any], provenance_manifest_schema: dict[str, Any]) -> None:
-    validator = _build_validator(
+    validate_payload_with_schema(
+        payload,
         provenance_manifest_schema,
         error_cls=ProvenanceSchemaValidationError,
-        label="provenance_manifest",
+        label="provenance manifest",
     )
-    errors = sorted(validator.iter_errors(payload), key=lambda error: list(error.path))
-    if errors:
-        first = errors[0]
-        path = ".".join(str(part) for part in first.path) or "<root>"
-        raise ProvenanceSchemaValidationError(f"provenance manifest schema validation failed at {path}: {first.message}")
 
 
 def _validate_provenance_merkle(payload: dict[str, Any], provenance_merkle_schema: dict[str, Any]) -> None:
-    validator = _build_validator(
+    validate_payload_with_schema(
+        payload,
         provenance_merkle_schema,
         error_cls=ProvenanceMerkleSchemaValidationError,
-        label="provenance_merkle",
+        label="provenance merkle",
     )
-    errors = sorted(validator.iter_errors(payload), key=lambda error: list(error.path))
-    if errors:
-        first = errors[0]
-        path = ".".join(str(part) for part in first.path) or "<root>"
-        raise ProvenanceMerkleSchemaValidationError(f"provenance merkle schema validation failed at {path}: {first.message}")
-
-
-def _require_unique_relative_paths(records: list[dict[str, Any]], *, label: str) -> None:
-    seen: set[str] = set()
-    for index, record in enumerate(records):
-        relative_path = record.get("relative_path")
-        if not isinstance(relative_path, str):
-            raise ProvenanceInputError(f"{label} record[{index}] missing relative_path")
-        if relative_path in seen:
-            raise ProvenanceInputError(f"{label} duplicate relative_path: {relative_path}")
-        seen.add(relative_path)
-
-
-def _require_sorted_relative_paths(records: list[dict[str, Any]], *, label: str) -> None:
-    relative_paths = [record["relative_path"] for record in records]
-    if relative_paths != sorted(relative_paths):
-        raise ProvenanceInputError(f"{label} must be sorted by relative_path")
 
 
 def _require_capture_contract_version(records: list[dict[str, Any]]) -> None:
@@ -114,7 +75,8 @@ def _require_capture_contract_version(records: list[dict[str, Any]]) -> None:
         if contract_version != METADATA_CONTRACT_VERSION:
             relative_path = record.get("relative_path", "<unknown>")
             raise ProvenanceInputError(
-                f"capture record[{index}] contract mismatch for {relative_path}: expected {METADATA_CONTRACT_VERSION}, got {contract_version!r}"
+                f"capture record[{index}] contract mismatch for {relative_path}: "
+                f"expected {METADATA_CONTRACT_VERSION}, got {contract_version!r}"
             )
 
 
@@ -122,13 +84,15 @@ def _require_metadata_manifest_contract_version(payload: dict[str, Any]) -> list
     manifest_contract_version = payload.get("metadata_manifest_contract_version")
     if manifest_contract_version != METADATA_MANIFEST_CONTRACT_VERSION:
         raise ProvenanceInputError(
-            f"metadata manifest contract mismatch: expected {METADATA_MANIFEST_CONTRACT_VERSION}, got {manifest_contract_version!r}"
+            "metadata manifest contract mismatch: "
+            f"expected {METADATA_MANIFEST_CONTRACT_VERSION}, got {manifest_contract_version!r}"
         )
 
     metadata_contract_version = payload.get("metadata_contract_version")
     if metadata_contract_version != METADATA_CONTRACT_VERSION:
         raise ProvenanceInputError(
-            f"metadata manifest metadata_contract_version mismatch: expected {METADATA_CONTRACT_VERSION}, got {metadata_contract_version!r}"
+            "metadata manifest metadata_contract_version mismatch: "
+            f"expected {METADATA_CONTRACT_VERSION}, got {metadata_contract_version!r}"
         )
 
     entries = payload.get("entries")
@@ -141,13 +105,15 @@ def _require_provenance_manifest_contract_version(payload: dict[str, Any]) -> li
     provenance_contract_version = payload.get("provenance_contract_version")
     if provenance_contract_version != PROVENANCE_CONTRACT_VERSION:
         raise ProvenanceInputError(
-            f"provenance manifest contract mismatch: expected {PROVENANCE_CONTRACT_VERSION}, got {provenance_contract_version!r}"
+            "provenance manifest contract mismatch: "
+            f"expected {PROVENANCE_CONTRACT_VERSION}, got {provenance_contract_version!r}"
         )
 
     metadata_contract_version = payload.get("metadata_contract_version")
     if metadata_contract_version != METADATA_CONTRACT_VERSION:
         raise ProvenanceInputError(
-            f"provenance manifest metadata_contract_version mismatch: expected {METADATA_CONTRACT_VERSION}, got {metadata_contract_version!r}"
+            "provenance manifest metadata_contract_version mismatch: "
+            f"expected {METADATA_CONTRACT_VERSION}, got {metadata_contract_version!r}"
         )
 
     entries = payload.get("entries")
@@ -165,24 +131,9 @@ def _require_fingerprint_match(records: list[dict[str, Any]], expected_fingerpri
         if fingerprint != expected_fingerprint:
             relative_path = record.get("relative_path", "<unknown>")
             raise ProvenanceInputError(
-                f"capture record[{index}] fingerprint mismatch for {relative_path}: expected {expected_fingerprint}, got {fingerprint!r}"
+                f"capture record[{index}] fingerprint mismatch for {relative_path}: "
+                f"expected {expected_fingerprint}, got {fingerprint!r}"
             )
-
-
-def _path_index(records: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
-    return {record["relative_path"]: record for record in records}
-
-
-def _ensure_sha256_hex(value: Any, *, label: str) -> str:
-    if not isinstance(value, str) or not _SHA256_HEX_RE.match(value):
-        raise ProvenanceInputError(f"{label} must be a lowercase 64-character sha256 hex digest")
-    return value
-
-
-def _ensure_contract_version(value: str, *, expected: str, label: str) -> str:
-    if value != expected:
-        raise ProvenanceInputError(f"{label} mismatch: expected {expected}, got {value!r}")
-    return value
 
 
 def compute_provenance_entry_sha256(
@@ -194,24 +145,29 @@ def compute_provenance_entry_sha256(
     provenance_contract_version: str = PROVENANCE_CONTRACT_VERSION,
 ) -> str:
     """Compute SHA256(F || M || C || Mv || Pv) over binary digests + UTF-8 version strings."""
-    capture_version = _ensure_contract_version(
+    capture_version = require_contract_version(
         capture_contract_version,
         expected=METADATA_CONTRACT_VERSION,
         label="capture_contract_version",
+        error_cls=ProvenanceInputError,
     )
-    metadata_version = _ensure_contract_version(
+    metadata_version = require_contract_version(
         metadata_contract_version,
         expected=METADATA_CONTRACT_VERSION,
         label="metadata_contract_version",
+        error_cls=ProvenanceInputError,
     )
-    provenance_version = _ensure_contract_version(
+    provenance_version = require_contract_version(
         provenance_contract_version,
         expected=PROVENANCE_CONTRACT_VERSION,
         label="provenance_contract_version",
+        error_cls=ProvenanceInputError,
     )
 
-    file_digest = bytes.fromhex(_ensure_sha256_hex(file_sha256, label="file_sha256"))
-    metadata_digest = bytes.fromhex(_ensure_sha256_hex(metadata_sha256, label="metadata_sha256"))
+    file_digest = bytes.fromhex(ensure_sha256_hex(file_sha256, label="file_sha256", error_cls=ProvenanceInputError))
+    metadata_digest = bytes.fromhex(
+        ensure_sha256_hex(metadata_sha256, label="metadata_sha256", error_cls=ProvenanceInputError)
+    )
     capture_version_bytes = capture_version.encode("utf-8")
     metadata_version_bytes = metadata_version.encode("utf-8")
     provenance_version_bytes = provenance_version.encode("utf-8")
@@ -242,16 +198,18 @@ def build_provenance_manifest_payload(
     _require_capture_contract_version(capture_records)
     metadata_manifest_entries = _require_metadata_manifest_contract_version(metadata_manifest_payload)
 
-    _require_unique_relative_paths(capture_records, label="capture metadata")
-    _require_unique_relative_paths(metadata_manifest_entries, label="metadata manifest")
+    require_unique_relative_paths(capture_records, label="capture metadata", error_cls=ProvenanceInputError)
+    require_unique_relative_paths(metadata_manifest_entries, label="metadata manifest", error_cls=ProvenanceInputError)
     if strict_input_order:
-        _require_sorted_relative_paths(capture_records, label="capture metadata array")
-        _require_sorted_relative_paths(metadata_manifest_entries, label="metadata manifest entries")
+        require_sorted_relative_paths(capture_records, label="capture metadata array", error_cls=ProvenanceInputError)
+        require_sorted_relative_paths(
+            metadata_manifest_entries, label="metadata manifest entries", error_cls=ProvenanceInputError
+        )
     if required_config_fingerprint_sha256 is not None:
         _require_fingerprint_match(capture_records, expected_fingerprint=required_config_fingerprint_sha256)
 
-    capture_by_path = _path_index(capture_records)
-    manifest_by_path = _path_index(metadata_manifest_entries)
+    capture_by_path = build_path_index(capture_records, label="capture metadata", error_cls=ProvenanceInputError)
+    manifest_by_path = build_path_index(metadata_manifest_entries, label="metadata manifest", error_cls=ProvenanceInputError)
 
     capture_paths = set(capture_by_path)
     manifest_paths = set(manifest_by_path)
@@ -259,7 +217,8 @@ def build_provenance_manifest_payload(
     missing_in_capture = sorted(manifest_paths - capture_paths)
     if missing_in_manifest or missing_in_capture:
         raise ProvenanceInputError(
-            f"relative_path alignment mismatch between capture metadata and metadata manifest: missing_in_manifest={missing_in_manifest}, "
+            "relative_path alignment mismatch between capture metadata and metadata manifest: "
+            f"missing_in_manifest={missing_in_manifest}, "
             f"missing_in_capture={missing_in_capture}"
         )
 
@@ -268,9 +227,13 @@ def build_provenance_manifest_payload(
         capture_record = capture_by_path[relative_path]
         manifest_entry = manifest_by_path[relative_path]
 
-        capture_file_sha256 = _ensure_sha256_hex(capture_record.get("file_sha256"), label=f"{relative_path} file_sha256")
-        manifest_file_sha256 = _ensure_sha256_hex(
-            manifest_entry.get("file_sha256"), label=f"{relative_path} metadata manifest file_sha256"
+        capture_file_sha256 = ensure_sha256_hex(
+            capture_record.get("file_sha256"), label=f"{relative_path} file_sha256", error_cls=ProvenanceInputError
+        )
+        manifest_file_sha256 = ensure_sha256_hex(
+            manifest_entry.get("file_sha256"),
+            label=f"{relative_path} metadata manifest file_sha256",
+            error_cls=ProvenanceInputError,
         )
         if capture_file_sha256 != manifest_file_sha256:
             raise ProvenanceInputError(
@@ -284,12 +247,15 @@ def build_provenance_manifest_payload(
                 f"canonical metadata serialization failed for record with relative_path={relative_path!r}: {exc}"
             ) from exc
 
-        manifest_metadata_sha256 = _ensure_sha256_hex(
-            manifest_entry.get("metadata_sha256"), label=f"{relative_path} metadata manifest metadata_sha256"
+        manifest_metadata_sha256 = ensure_sha256_hex(
+            manifest_entry.get("metadata_sha256"),
+            label=f"{relative_path} metadata manifest metadata_sha256",
+            error_cls=ProvenanceInputError,
         )
         if recomputed_metadata_sha256 != manifest_metadata_sha256:
             raise ProvenanceInputError(
-                f"metadata_sha256 mismatch for {relative_path}: recomputed={recomputed_metadata_sha256}, manifest={manifest_metadata_sha256}"
+                f"metadata_sha256 mismatch for {relative_path}: "
+                f"recomputed={recomputed_metadata_sha256}, manifest={manifest_metadata_sha256}"
             )
 
         provenance_entry_sha256 = compute_provenance_entry_sha256(
@@ -336,14 +302,18 @@ def build_provenance_merkle_payload(
     _validate_provenance_manifest(provenance_manifest_payload, provenance_manifest_schema=provenance_manifest_schema)
     manifest_entries = _require_provenance_manifest_contract_version(provenance_manifest_payload)
 
-    _require_unique_relative_paths(manifest_entries, label="provenance manifest")
+    require_unique_relative_paths(manifest_entries, label="provenance manifest", error_cls=ProvenanceInputError)
     if strict_input_order:
-        _require_sorted_relative_paths(manifest_entries, label="provenance manifest entries")
+        require_sorted_relative_paths(manifest_entries, label="provenance manifest entries", error_cls=ProvenanceInputError)
 
     sorted_entries = sorted(manifest_entries, key=lambda entry: entry["relative_path"])
     leaf_hashes: list[bytes] = []
     for index, entry in enumerate(sorted_entries):
-        digest_hex = _ensure_sha256_hex(entry.get("provenance_entry_sha256"), label=f"entry[{index}] provenance_entry_sha256")
+        digest_hex = ensure_sha256_hex(
+            entry.get("provenance_entry_sha256"),
+            label=f"entry[{index}] provenance_entry_sha256",
+            error_cls=ProvenanceInputError,
+        )
         leaf_hashes.append(bytes.fromhex(digest_hex))
 
     if not leaf_hashes:

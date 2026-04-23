@@ -24,6 +24,7 @@ from tp.phase4.provenance_capture import (
 )
 from tp.phase4.verify_phase4_chain import (
     FAILURE_MESSAGE_MAX_LENGTH,
+    Phase4AlignmentError,
     build_verification_report_payload,
     default_failure_computed_block,
     verify_phase4_chain_payloads,
@@ -254,6 +255,64 @@ def test_phase4f_cli_returns_exit_code_31_for_invalid_input_json(tmp_path: Path)
     assert "Malformed input:" in result.stderr
 
 
+def test_phase4f_verify_reports_missing_relative_path_without_keyerror() -> None:
+    pytest.importorskip("jsonschema")
+    capture_payload = [
+        {
+            "metadata_contract_version": METADATA_CONTRACT_VERSION,
+            "file_sha256": "a" * 64,
+        }
+    ]
+    metadata_manifest_payload = {
+        "metadata_manifest_contract_version": METADATA_MANIFEST_CONTRACT_VERSION,
+        "metadata_contract_version": METADATA_CONTRACT_VERSION,
+        "entries": [],
+    }
+    provenance_manifest_payload = {
+        "provenance_contract_version": PROVENANCE_CONTRACT_VERSION,
+        "metadata_contract_version": METADATA_CONTRACT_VERSION,
+        "entries": [],
+    }
+    provenance_merkle_payload = {
+        "provenance_merkle_contract_version": PROVENANCE_MERKLE_CONTRACT_VERSION,
+        "provenance_contract_version": PROVENANCE_CONTRACT_VERSION,
+        "leaf_count": 0,
+        "provenance_merkle_root": "a" * 64,
+    }
+
+    with pytest.raises(Phase4AlignmentError, match=r"capture metadata record\[0\] missing relative_path"):
+        verify_phase4_chain_payloads(
+            capture_payload,
+            metadata_manifest_payload,
+            provenance_manifest_payload,
+            provenance_merkle_payload,
+            metadata_schema={},
+            metadata_manifest_schema={},
+            provenance_manifest_schema={},
+            provenance_merkle_schema={},
+        )
+
+
+def test_phase4f_verify_reports_invalid_sha256_with_alignment_error() -> None:
+    pytest.importorskip("jsonschema")
+    capture_payload, metadata_manifest_payload, provenance_manifest_payload, provenance_merkle_payload = (
+        _build_two_record_chain_payloads()
+    )
+    capture_payload[0]["file_sha256"] = "not-a-sha256"
+
+    with pytest.raises(Phase4AlignmentError, match="capture file_sha256"):
+        verify_phase4_chain_payloads(
+            capture_payload,
+            metadata_manifest_payload,
+            provenance_manifest_payload,
+            provenance_merkle_payload,
+            metadata_schema={},
+            metadata_manifest_schema={},
+            provenance_manifest_schema={},
+            provenance_merkle_schema={},
+        )
+
+
 def test_phase4f_cli_returns_exit_code_32_for_schema_failure(tmp_path: Path) -> None:
     bad_capture = tmp_path / "capture_schema_invalid.json"
     capture_payload = _load_json(GOLDEN_CAPTURE)
@@ -272,6 +331,8 @@ def test_phase4f_cli_returns_exit_code_32_for_schema_failure(tmp_path: Path) -> 
     )
     assert result.returncode == 32
     assert "Schema validation failure:" in result.stderr
+    assert "capture record[0] schema validation failed at <root>" in result.stderr
+    assert "camera_model" in result.stderr
 
 
 def test_phase4f_cli_returns_exit_code_33_for_alignment_mismatch(tmp_path: Path) -> None:

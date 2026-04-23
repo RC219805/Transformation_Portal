@@ -11,7 +11,12 @@ from .exceptions import (
     MetadataManifestSchemaValidationError,
     MetadataSchemaValidationError,
 )
-from .schema_validation import build_draft202012_validator
+from .validation_helpers import (
+    require_sorted_relative_paths,
+    require_unique_relative_paths,
+    validate_payload_with_schema,
+    validate_records_with_schema,
+)
 
 METADATA_CONTRACT_VERSION = "tp.meta.capture.v1"
 METADATA_MANIFEST_CONTRACT_VERSION = "tp.meta.capture_manifest.v1"
@@ -36,57 +41,22 @@ def compute_metadata_sha256(metadata_object: dict[str, Any]) -> str:
     return hashlib.sha256(canonical_json_bytes(metadata_object)).hexdigest()
 
 
-def _build_validator(schema: dict[str, Any], *, error_cls: type[Exception], label: str) -> Any:
-    return build_draft202012_validator(schema, error_cls=error_cls, label=label)
-
-
 def _validate_metadata_records(records: list[dict[str, Any]], metadata_schema: dict[str, Any]) -> None:
-    validator = _build_validator(
+    validate_records_with_schema(
+        records,
         metadata_schema,
         error_cls=MetadataSchemaValidationError,
         label="metadata",
     )
-    for index, record in enumerate(records):
-        try:
-            errors = sorted(validator.iter_errors(record), key=lambda error: list(error.path))
-        except (TypeError, ValueError) as exc:
-            raise MetadataSchemaValidationError(
-                f"record[{index}] schema validation failed due to validator runtime error ({type(exc).__name__})"
-            ) from exc
-        if errors:
-            first = errors[0]
-            path = ".".join(str(part) for part in first.path) or "<root>"
-            raise MetadataSchemaValidationError(f"record[{index}] schema validation failed at {path}: {first.message}")
 
 
 def _validate_metadata_manifest(payload: dict[str, Any], manifest_schema: dict[str, Any]) -> None:
-    validator = _build_validator(
+    validate_payload_with_schema(
+        payload,
         manifest_schema,
         error_cls=MetadataManifestSchemaValidationError,
-        label="metadata_manifest",
+        label="metadata manifest",
     )
-    errors = sorted(validator.iter_errors(payload), key=lambda error: list(error.path))
-    if errors:
-        first = errors[0]
-        path = ".".join(str(part) for part in first.path) or "<root>"
-        raise MetadataManifestSchemaValidationError(f"metadata manifest schema validation failed at {path}: {first.message}")
-
-
-def _require_unique_relative_paths(records: list[dict[str, Any]]) -> None:
-    seen: set[str] = set()
-    for index, record in enumerate(records):
-        relative_path = record.get("relative_path")
-        if not isinstance(relative_path, str):
-            raise MetadataManifestInputError(f"record[{index}] missing relative_path")
-        if relative_path in seen:
-            raise MetadataManifestInputError(f"duplicate relative_path: {relative_path}")
-        seen.add(relative_path)
-
-
-def _require_sorted_relative_paths(records: list[dict[str, Any]]) -> None:
-    relative_paths = [record["relative_path"] for record in records]
-    if relative_paths != sorted(relative_paths):
-        raise MetadataManifestInputError("input metadata array must be sorted by relative_path")
 
 
 def _require_metadata_contract_version(records: list[dict[str, Any]]) -> None:
@@ -128,9 +98,9 @@ def build_metadata_manifest_payload(
 
     _validate_metadata_records(records, metadata_schema=metadata_schema)
     _require_metadata_contract_version(records)
-    _require_unique_relative_paths(records)
+    require_unique_relative_paths(records, label="input metadata array", error_cls=MetadataManifestInputError)
     if strict_input_order:
-        _require_sorted_relative_paths(records)
+        require_sorted_relative_paths(records, label="input metadata array", error_cls=MetadataManifestInputError)
     if required_config_fingerprint_sha256 is not None:
         _require_fingerprint_match(records, expected_fingerprint=required_config_fingerprint_sha256)
 

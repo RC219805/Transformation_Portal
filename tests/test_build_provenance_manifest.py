@@ -16,7 +16,12 @@ from tp.phase4.hash_capture_metadata import (
     METADATA_MANIFEST_CONTRACT_VERSION,
     compute_metadata_sha256,
 )
-from tp.phase4.provenance_capture import PROVENANCE_CONTRACT_VERSION, ProvenanceInputError, compute_provenance_entry_sha256
+from tp.phase4.provenance_capture import (
+    PROVENANCE_CONTRACT_VERSION,
+    ProvenanceInputError,
+    build_provenance_manifest_payload,
+    compute_provenance_entry_sha256,
+)
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 PROVENANCE_MANIFEST_TOOL = PROJECT_ROOT / "tools" / "build_provenance_manifest.py"
@@ -156,6 +161,39 @@ def test_phase4e_provenance_entry_hash_rejects_contract_version_mismatch() -> No
             file_sha256=manifest_entry["file_sha256"],
             metadata_sha256=manifest_entry["metadata_sha256"],
             provenance_contract_version="tp.meta.provenance.v2",
+        )
+
+
+def test_phase4e_provenance_entry_hash_rejects_invalid_sha256() -> None:
+    manifest_entry = _load_json(GOLDEN_METADATA_MANIFEST)["entries"][0]
+    with pytest.raises(ProvenanceInputError, match="file_sha256"):
+        compute_provenance_entry_sha256(
+            file_sha256="not-a-sha256",
+            metadata_sha256=manifest_entry["metadata_sha256"],
+        )
+
+
+def test_phase4e_build_manifest_reports_missing_relative_path_without_keyerror() -> None:
+    pytest.importorskip("jsonschema")
+    capture_records = [
+        {
+            "metadata_contract_version": METADATA_CONTRACT_VERSION,
+            "file_sha256": "a" * 64,
+        }
+    ]
+    metadata_manifest_payload = {
+        "metadata_manifest_contract_version": METADATA_MANIFEST_CONTRACT_VERSION,
+        "metadata_contract_version": METADATA_CONTRACT_VERSION,
+        "entries": [],
+    }
+
+    with pytest.raises(ProvenanceInputError, match=r"capture metadata record\[0\] missing relative_path"):
+        build_provenance_manifest_payload(
+            capture_records,
+            metadata_manifest_payload,
+            metadata_schema={},
+            metadata_manifest_schema={},
+            provenance_manifest_schema={},
         )
 
 
