@@ -29,6 +29,7 @@ Example
 
 from __future__ import annotations
 
+import inspect
 import logging
 from dataclasses import dataclass, field
 from enum import Enum, auto
@@ -299,14 +300,47 @@ class DepthModelRegistry:
 
     @staticmethod
     def _validate_backend_class_surface(backend_class: Type[DepthModel]) -> None:
-        required_attrs = ("load", "predict")
-        missing_or_invalid = [attr for attr in required_attrs if not callable(getattr(backend_class, attr, None))]
+        required_methods = ("load", "predict")
+        missing_or_invalid = [attr for attr in required_methods if not callable(getattr(backend_class, attr, None))]
+        try:
+            info_member = inspect.getattr_static(backend_class, "info")
+        except AttributeError:
+            info_member = None
+        if not isinstance(info_member, (BackendInfo, property)):
+            missing_or_invalid.append("info")
+
         if missing_or_invalid:
             raise TypeError(
                 f"{backend_class.__name__} does not implement DepthModel protocol "
-                "(missing or non-callable: "
+                "(missing or invalid: "
                 f"{', '.join(missing_or_invalid)})"
             )
+
+    @staticmethod
+    def _validate_runtime_backend_info(
+        name: str,
+        registered_info: BackendInfo,
+        instance: DepthModel,
+        commercial_only: bool,
+    ) -> None:
+        """Validate runtime metadata before returning a constructed backend."""
+        runtime_info = getattr(instance, "info", None)
+        if not isinstance(runtime_info, BackendInfo):
+            raise TypeError(f"Backend '{name}' instance.info must be a BackendInfo instance")
+
+        if registered_info.model_id != runtime_info.model_id or registered_info.license_tier != runtime_info.license_tier:
+            logger.warning(
+                "Registered backend info for '%s' differs from instance.info "
+                "(registered model_id=%s, tier=%s; runtime model_id=%s, tier=%s)",
+                name,
+                registered_info.model_id,
+                registered_info.license_tier.value,
+                runtime_info.model_id,
+                runtime_info.license_tier.value,
+            )
+
+        if commercial_only and not runtime_info.is_commercial_safe():
+            raise ValueError(f"Backend '{name}' requires non-commercial license " f"(tier: {runtime_info.license_tier.value})")
 
     def register(
         self,
@@ -400,9 +434,12 @@ class DepthModelRegistry:
                 raise ValueError(f"Backend '{name}' requires " "non-commercial license " f"(tier: {info.license_tier.value})")
 
             if use_cache and name in self._instances:
-                return self._instances[name]
+                instance = self._instances[name]
+                self._validate_runtime_backend_info(name, info, instance, commercial_only)
+                return instance
 
             instance = self._backends[name]()
+            self._validate_runtime_backend_info(name, info, instance, commercial_only)
 
             if use_cache:
                 self._instances[name] = instance

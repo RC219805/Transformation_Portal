@@ -273,6 +273,10 @@ class TestDepthModelRegistry:
             def __init__(self, required_arg):
                 self.required_arg = required_arg
 
+            @property
+            def info(self) -> BackendInfo:
+                return self.backend_info
+
             def load(self, device: str = "auto", weights_path: Optional[Path] = None, strict_license: bool = True) -> None:
                 pass
 
@@ -287,6 +291,15 @@ class TestDepthModelRegistry:
         """Backends must expose metadata without instance construction."""
 
         class MissingMetadataBackend:
+            @property
+            def info(self) -> BackendInfo:
+                return BackendInfo(
+                    name="Missing Metadata Runtime Info",
+                    model_id="mock/missing-metadata-runtime-info",
+                    role=BackendRole.PRODUCTION,
+                    license_tier=LicenseTier.COMMERCIAL,
+                )
+
             def load(self, device: str = "auto", weights_path: Optional[Path] = None, strict_license: bool = True) -> None:
                 pass
 
@@ -295,6 +308,26 @@ class TestDepthModelRegistry:
 
         with pytest.raises(TypeError, match="must expose BackendInfo"):
             registry.register(MissingMetadataBackend)
+
+    def test_register_requires_protocol_info_member(self, registry):
+        """Class validation requires the runtime protocol info member."""
+
+        class MissingInfoBackend:
+            backend_info = BackendInfo(
+                name="Missing Info",
+                model_id="mock/missing-info",
+                role=BackendRole.PRODUCTION,
+                license_tier=LicenseTier.COMMERCIAL,
+            )
+
+            def load(self, device: str = "auto", weights_path: Optional[Path] = None, strict_license: bool = True) -> None:
+                pass
+
+            def predict(self, image: np.ndarray) -> DepthArtifact:
+                raise NotImplementedError
+
+        with pytest.raises(TypeError, match="info"):
+            registry.register(MissingInfoBackend)
 
     def test_list_backends_by_role(self, registry):
         """Test listing backends filtered by role."""
@@ -404,6 +437,48 @@ class TestDepthModelRegistry:
         registry.get_backend(name="MockResearchBackend", commercial_only=False)
         with pytest.raises(ValueError, match="non-commercial license"):
             registry.get_backend(name="MockResearchBackend", commercial_only=True)
+
+    def test_get_backend_rechecks_runtime_info_for_commercial_only(self, registry):
+        """Registration metadata overrides cannot mask non-commercial runtime info."""
+        commercial_override = BackendInfo(
+            name="Runtime Override",
+            model_id="mock/runtime-override",
+            role=BackendRole.PRODUCTION,
+            license_tier=LicenseTier.COMMERCIAL,
+        )
+
+        class RuntimeResearchBackend:
+            constructor_calls = 0
+            backend_info = BackendInfo(
+                name="Runtime Research",
+                model_id="mock/runtime-research",
+                role=BackendRole.PRODUCTION,
+                license_tier=LicenseTier.NON_COMMERCIAL,
+            )
+
+            def __init__(self):
+                type(self).constructor_calls += 1
+
+            @property
+            def info(self) -> BackendInfo:
+                return self.backend_info
+
+            def load(self, device: str = "auto", weights_path: Optional[Path] = None, strict_license: bool = True) -> None:
+                pass
+
+            def predict(self, image: np.ndarray) -> DepthArtifact:
+                raise NotImplementedError
+
+        registry.register(
+            RuntimeResearchBackend,
+            name="runtime_research",
+            info=commercial_override,
+        )
+        registry.get_backend(name="runtime_research", commercial_only=False)
+
+        with pytest.raises(ValueError, match="non-commercial license"):
+            registry.get_backend(name="runtime_research", commercial_only=True)
+        assert RuntimeResearchBackend.constructor_calls == 1
 
     def test_get_backend_not_found(self, registry):
         """Test error when backend not found."""
