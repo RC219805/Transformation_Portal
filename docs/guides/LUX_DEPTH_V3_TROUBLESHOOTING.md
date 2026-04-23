@@ -252,7 +252,7 @@ Output Deliverables
 
 ```bash
 --quality-tier TIER       # Recommended: standard|premium|apex
---preset NAME             # Advanced: Named configuration (overrides quality-tier)
+--preset NAME             # Advanced: Curated preset or metadata label
 ```
 
 ### V2 Enhancement (Optional, Default: ON)

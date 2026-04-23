@@ -11,6 +11,16 @@ export function createPortalConfigState() {
       backend: "efficientsam",
       sam2ModelSize: "base",
       sam2CheckpointPath: "",
+      sam2TilingEnabled: false,
+      sam2TileSizePx: 1536,
+      sam2OverlapPx: 256,
+      sam2GlobalPassLongestSide: 1280,
+      sam2MaxConcurrency: 1,
+      sam2PointsPerSide: 32,
+      sam2PointsPerBatch: 64,
+      sam2PredIouThresh: 0.88,
+      sam2StabilityScoreThresh: 0.85,
+      sam2CropNLayers: 1,
       strict: true
     },
     flags: {

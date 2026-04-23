@@ -53,3 +53,19 @@ def test_docs_match_current_cli_help_for_backend_and_v2_controls():
     assert "depth_pro" in docs_text
     assert "da3" in docs_text
     assert '--enable-v2 "off"' in docs_text
+
+
+def test_docs_and_help_describe_presets_as_curated_or_metadata_labels():
+    """Preset docs should not advertise fake curated presets."""
+    result = CliRunner().invoke(app, ["--help"])
+    assert result.exit_code == 0
+
+    help_output = strip_ansi(result.stdout).lower()
+    docs_text = _joined_docs_text().lower()
+
+    assert '--preset "apple-depth-pro-research"' not in help_output
+    assert "--preset apple-depth-pro-research" not in help_output
+    assert '--preset "apple-depth-pro-research"' not in docs_text
+    assert "--preset apple-depth-pro-research" not in docs_text
+    assert "depth-anything-v3.1-research-m4" in docs_text
+    assert "metadata label" in docs_text

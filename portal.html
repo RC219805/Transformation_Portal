@@ -653,17 +653,17 @@ Contract notes:
                             <h2 class="text-[11px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">Pipeline Parameters</h2>
                             <p class="mt-2 text-[12px] leading-6 text-slate-500 dark:text-slate-400">Move quickly from intent to dispatch: choose the outcome, set the input/output paths, then open advanced controls only when the run contract needs them.</p>
                         </div>
-                        <span class="signal-badge">Preset-first flow</span>
+                        <span class="signal-badge">Preset or custom flow</span>
                     </div>
 
                     <section id="presetBuilderShell" data-build-step-panel="1" class="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/50 p-5 build-step-panel" data-ui="build-step-panel">
                         <div class="flex items-start justify-between gap-3">
                             <div>
                                 <p class="section-kicker">Step 1</p>
-                                <h3 class="mt-2 text-base font-extrabold tracking-tight text-slate-900 dark:text-white">Choose the outcome preset</h3>
-                                <p class="mt-2 text-[12px] leading-6 text-slate-500 dark:text-slate-400">Presets now drive the fastest valid path. Picking one hydrates recommended defaults, keeps governance visible, and only opens advanced sections when the run actually needs them.</p>
+                                <h3 class="mt-2 text-base font-extrabold tracking-tight text-slate-900 dark:text-white">Choose a preset or manual mode</h3>
+                                <p class="mt-2 text-[12px] leading-6 text-slate-500 dark:text-slate-400">Curated presets still hydrate the fastest valid path. Switch to custom when you need manual Lux controls without backfilling a curated preset contract.</p>
                             </div>
-                            <span class="micro-status">Preset → intelligent defaults</span>
+                            <span class="micro-status">Preset or custom → draft posture</span>
                         </div>
                         <div class="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-4">
                             <div class="sm:col-span-3">
@@ -672,6 +672,7 @@ Contract notes:
                                     <option value="premium" selected>premium (Stable)</option>
                                     <option value="default">default (Canary)</option>
                                     <option value="depth-anything-v3.1-research-m4">v3.1-m4 (Experimental)</option>
+                                    <option value="custom">custom (Manual)</option>
                                 </select>
                             </div>
                             <div>
@@ -702,7 +703,7 @@ Contract notes:
                             <div>
                                 <p class="section-kicker">Step 2</p>
                                 <h3 class="mt-2 text-base font-extrabold tracking-tight text-slate-900 dark:text-white">Set inputs and output destination</h3>
-                                <p class="mt-2 text-[12px] leading-6 text-slate-500 dark:text-slate-400">A standard Lux Depth run should be dispatchable from these paths alone. JSON import/export and full CLI parity stay available below for exact reproducibility.</p>
+                                <p class="mt-2 text-[12px] leading-6 text-slate-500 dark:text-slate-400">A standard Lux Depth run should be dispatchable from these paths alone. JSON import/export, custom manual tuning, and full CLI parity stay available below for exact reproducibility.</p>
                             </div>
                             <span class="micro-status">Input → output → dispatch</span>
                         </div>
@@ -802,6 +803,63 @@ Contract notes:
                         <div id="sam2CheckpointField" class="hidden">
                             <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="sam2CheckpointPath">SAM2 Checkpoint Path (Optional)</label>
                             <input type="text" id="sam2CheckpointPath" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-2.5 text-[13px] font-mono transition-colors" placeholder="./models/sam2/sam2.1_hiera_large.pt" autocomplete="off" spellcheck="false" />
+                        </div>
+                        <div id="sam2TuningPanel" class="hidden rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/50 p-4 space-y-4">
+                            <div class="flex items-start justify-between gap-3">
+                                <div>
+                                    <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">SAM2 Tuning</p>
+                                    <p id="sam2TuningHint" class="mt-2 text-[11px] leading-5 text-slate-500 dark:text-slate-400">Generator controls always apply while SAM2 is active. Tiling values matter only when tiling is enabled.</p>
+                                </div>
+                                <span class="shrink-0 rounded border border-indigo-300 dark:border-indigo-700 bg-indigo-50 dark:bg-indigo-900/20 px-1.5 py-0.5 text-[9px] uppercase tracking-wide text-indigo-700 dark:text-indigo-400">Advanced</span>
+                            </div>
+                            <label id="sam2TilingToggleField" class="flex items-center justify-between rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3.5 cursor-pointer group transition-colors">
+                                <span class="text-[12px] font-medium select-none text-slate-700 dark:text-slate-300">Enable SAM2 Tiling</span>
+                                <div class="relative inline-flex items-center">
+                                    <input type="checkbox" id="sam2TilingEnabled" role="switch" class="sr-only peer" />
+                                    <div class="w-9 h-5 rounded-full transition-colors duration-200 ease-in-out peer-focus-visible:ring-2 peer-focus-visible:ring-offset-2 peer-focus-visible:ring-indigo-500 bg-slate-300 dark:bg-slate-600 peer-checked:bg-indigo-600"></div>
+                                    <div class="absolute left-[2px] top-[2px] bg-white w-4 h-4 rounded-full transition-transform duration-200 ease-in-out peer-checked:translate-x-4 shadow-sm"></div>
+                                </div>
+                            </label>
+                            <div id="sam2TilingConfigFields" class="hidden grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+                                <div>
+                                    <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="sam2TileSizePx">Tile Size (px)</label>
+                                    <input type="number" id="sam2TileSizePx" min="1" step="1" value="1536" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-2.5 text-[13px] font-mono transition-colors" />
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="sam2OverlapPx">Overlap (px)</label>
+                                    <input type="number" id="sam2OverlapPx" min="0" step="1" value="256" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-2.5 text-[13px] font-mono transition-colors" />
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="sam2GlobalPassLongestSide">Global Pass Longest Side</label>
+                                    <input type="number" id="sam2GlobalPassLongestSide" min="1" step="1" value="1280" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-2.5 text-[13px] font-mono transition-colors" />
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="sam2MaxConcurrency">Max Concurrency</label>
+                                    <input type="number" id="sam2MaxConcurrency" min="1" step="1" value="1" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-2.5 text-[13px] font-mono transition-colors" />
+                                </div>
+                            </div>
+                            <div id="sam2GeneratorConfigFields" class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4">
+                                <div>
+                                    <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="sam2PointsPerSide">Points / Side</label>
+                                    <input type="number" id="sam2PointsPerSide" min="1" step="1" value="32" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-2.5 text-[13px] font-mono transition-colors" />
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="sam2PointsPerBatch">Points / Batch</label>
+                                    <input type="number" id="sam2PointsPerBatch" min="1" step="1" value="64" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-2.5 text-[13px] font-mono transition-colors" />
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="sam2PredIouThresh">Pred IoU Threshold</label>
+                                    <input type="number" id="sam2PredIouThresh" min="0" max="1" step="0.01" value="0.88" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-2.5 text-[13px] font-mono transition-colors" />
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="sam2StabilityScoreThresh">Stability Threshold</label>
+                                    <input type="number" id="sam2StabilityScoreThresh" min="0" max="1" step="0.01" value="0.85" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-2.5 text-[13px] font-mono transition-colors" />
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="sam2CropNLayers">Crop Layers</label>
+                                    <input type="number" id="sam2CropNLayers" min="0" step="1" value="1" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-2.5 text-[13px] font-mono transition-colors" />
+                                </div>
+                            </div>
                         </div>
                     </div>
 
@@ -922,12 +980,20 @@ Contract notes:
                         </label>
                         </div>
                     </fieldset>
+                    <div id="runCardVersionField" class="mt-4 max-w-xs">
+                        <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="runCardVersion">Run Card Version</label>
+                        <select id="runCardVersion" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2.5 text-[13px] font-mono transition-colors cursor-pointer">
+                            <option value="v1" selected>v1</option>
+                            <option value="v2">v2</option>
+                        </select>
+                        <p class="mt-1 text-[11px] leading-5 text-slate-500 dark:text-slate-400">Manual run-card contract version. Presets can still hydrate this, but custom mode keeps it operator-editable.</p>
+                    </div>
 
                     <section class="mt-6 space-y-4" data-ui="build-posture-band">
                         <div class="flex items-start justify-between gap-3">
                             <div>
                                 <p class="section-kicker">Current Run Posture</p>
-                                <p class="mt-2 text-[12px] leading-6 text-slate-500 dark:text-slate-400">Keep runtime posture, preview status, and research risk visible before opening deeper runtime or research-only controls.</p>
+                                <p class="mt-2 text-[12px] leading-6 text-slate-500 dark:text-slate-400">Keep runtime posture, preview status, and research risk visible before opening deeper runtime or custom research controls.</p>
                             </div>
                             <span class="micro-status">Primary run posture</span>
                         </div>
@@ -996,7 +1062,7 @@ Contract notes:
                         <summary class="disclosure-summary">
                             <div>
                                 <p class="text-[11px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">Advanced</p>
-                                <p class="mt-1 text-[12px] text-slate-500 dark:text-slate-400">Deliverables, quality, performance, compatibility, and debug controls that stay secondary to the preset-first lane.</p>
+                                <p class="mt-1 text-[12px] text-slate-500 dark:text-slate-400">Deliverables, quality, performance, compatibility, and debug controls that stay secondary to the curated-preset lane and become primary when you switch to custom.</p>
                             </div>
                             <div class="disclosure-summary-meta">
                                 <span id="advancedFlagsSummary" class="disclosure-summary-badge">Secondary</span>

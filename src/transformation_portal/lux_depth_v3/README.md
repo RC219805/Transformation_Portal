@@ -87,6 +87,8 @@ The V2 enhancement stage is **optional** and enabled by default for backward com
 - Research model configurations
 - Fine-tuned parameter combinations
 - Non-commercial depth models
+- Curated presets such as `premium`, `default`, or `depth-anything-v3.1-research-m4`
+- Unmapped preset strings are preserved as metadata labels unless they match a real preset
 
 ### Model Selectors
 
