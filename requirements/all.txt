@@ -331,7 +331,7 @@ urllib3==2.6.3
     #   id
     #   requests
     #   twine
-uvicorn==0.42.0
+uvicorn==0.45.0
     # via -r base.in
 virtualenv==21.2.1
     # via tox

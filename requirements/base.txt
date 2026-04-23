@@ -165,7 +165,7 @@ typing-inspection==0.4.2
     #   -c all.txt
     #   fastapi
     #   pydantic
-uvicorn==0.42.0
+uvicorn==0.45.0
     # via
     #   -c all.txt
     #   -r base.in
