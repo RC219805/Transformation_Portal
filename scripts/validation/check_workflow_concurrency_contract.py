@@ -7,6 +7,7 @@ workflows on the same branch when cancel-in-progress is enabled.
 
 from __future__ import annotations
 
+import re
 import sys
 from pathlib import Path
 from typing import Any
@@ -16,7 +17,7 @@ import yaml
 REPO_ROOT = Path(__file__).resolve().parents[2]
 WORKFLOWS_DIR = REPO_ROOT / ".github" / "workflows"
 
-EVENT_NAME_SNIPPET = "github.event_name"
+EVENT_NAME_EXPRESSION = re.compile(r"\$\{\{\s*github\.event_name\s*\}\}")
 
 
 def _normalize_workflow_config(config: dict[str, Any] | None) -> dict[str, Any]:
@@ -68,10 +69,11 @@ def validate_workflow_concurrency_contract_text(workflow_name: str, text: str) -
         )
         return errors
 
-    if EVENT_NAME_SNIPPET not in group:
+    if EVENT_NAME_EXPRESSION.search(group) is None:
         errors.append(
-            f"{workflow_name}: mixed schedule/push workflow must include {EVENT_NAME_SNIPPET!r} in "
-            f"concurrency.group when cancel-in-progress is true (current: {group!r})"
+            f"{workflow_name}: mixed schedule/push workflow must include an interpolated "
+            f"'${{{{ github.event_name }}}}' token in concurrency.group when cancel-in-progress "
+            f"is true (current: {group!r})"
         )
 
     return errors
@@ -82,7 +84,9 @@ def validate_repo_workflow_concurrency_contract(workflows_dir: Path = WORKFLOWS_
     errors: list[str] = []
 
     for workflow_path in sorted(workflows_dir.glob("*.yml")) + sorted(workflows_dir.glob("*.yaml")):
-        errors.extend(validate_workflow_concurrency_contract_text(workflow_path.name, workflow_path.read_text()))
+        errors.extend(
+            validate_workflow_concurrency_contract_text(workflow_path.name, workflow_path.read_text(encoding="utf-8"))
+        )
 
     return errors
 

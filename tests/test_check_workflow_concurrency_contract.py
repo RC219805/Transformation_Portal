@@ -32,8 +32,8 @@ jobs:
 """
     errors = workflow_contract.validate_workflow_concurrency_contract_text("broken.yml", text)
     assert errors == [
-        "broken.yml: mixed schedule/push workflow must include 'github.event_name' in concurrency.group when "
-        "cancel-in-progress is true (current: '${{ github.workflow }}-${{ github.ref }}')"
+        "broken.yml: mixed schedule/push workflow must include an interpolated '${{ github.event_name }}' token "
+        "in concurrency.group when cancel-in-progress is true (current: '${{ github.workflow }}-${{ github.ref }}')"
     ]
 
 
@@ -57,6 +57,30 @@ jobs:
       - run: echo ok
 """
     assert workflow_contract.validate_workflow_concurrency_contract_text("safe.yml", text) == []
+
+
+def test_literal_event_name_text_without_expression_fails() -> None:
+    text = """
+name: Fake Event Namespace
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '0 1 * * *'
+concurrency:
+  group: mywf-github.event_name-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo ok
+"""
+    errors = workflow_contract.validate_workflow_concurrency_contract_text("fake.yml", text)
+    assert errors == [
+        "fake.yml: mixed schedule/push workflow must include an interpolated '${{ github.event_name }}' token "
+        "in concurrency.group when cancel-in-progress is true (current: 'mywf-github.event_name-${{ github.ref }}')"
+    ]
 
 
 def test_schedule_only_workflow_is_exempt() -> None:
