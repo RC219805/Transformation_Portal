@@ -662,6 +662,38 @@ def test_run_card_schema_accepts_additive_model_contract(version: str) -> None:
 
 
 @pytest.mark.parametrize("version", ["v1", "v2"])
+def test_run_card_schema_accepts_legacy_hf_model_contract_without_kind(version: str) -> None:
+    payload = _valid_run_card_payload()
+    payload["run_card_version"] = version
+    if version == "v1":
+        payload["artifact_merkle_root"] = "0" * 64
+    else:
+        payload.pop("artifact_merkle_root", None)
+        payload["artifact_tree"] = {
+            "algorithm": "ct-sha256-v1",
+            "leaf_format": "tp.run_card.artifact_leaf.v1",
+            "leaf_count": 0,
+            "root_sha256": "1" * 64,
+            "artifacts": [],
+        }
+    payload["model_contract"] = {
+        "requested_model_selector": "METRIC_LARGE",
+        "canonical_model_key": "da3_research",
+        "resolved_repo_id": "depth-anything/DA3NESTED-GIANT-LARGE-1.1",
+        "resolved_revision": "b2359bdf726fb44ef62acca04d629dcf158053e7",
+        "license_id": "cc-by-nc-4.0",
+        "usage_class": "non_commercial_only",
+        "requires_non_commercial_ok": True,
+        "non_commercial_ok": True,
+        "backend_kind": "da3_api",
+        "accelerator_kind": "none",
+        "fallback_chain": [],
+        "manifest_schema_version": 1,
+    }
+    _validate_run_card_payload(payload, _run_card_schema_path(version))
+
+
+@pytest.mark.parametrize("version", ["v1", "v2"])
 def test_run_card_schema_requires_model_contract_immutable_identifier(version: str) -> None:
     payload = _valid_run_card_payload()
     payload["run_card_version"] = version

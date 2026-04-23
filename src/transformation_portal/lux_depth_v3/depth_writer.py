@@ -136,6 +136,7 @@ def atomic_write_depth_u16_png_with_stats(
     depth_map: np.ndarray,
     method: str = "u16",
     debug_verify: bool = False,
+    compute_encoded_unique_values: bool = False,
     **kwargs: Any,
 ) -> tuple[Path, Optional[Path], DepthWriteStats]:
     """Atomically write depth map as 16-bit PNG with statistics.
@@ -148,6 +149,8 @@ def atomic_write_depth_u16_png_with_stats(
         depth_map: Depth map as numpy array (float32, range [0.0, 1.0])
         method: Quantization method (only "u16" supported)
         debug_verify: Whether to verify write integrity by reading back
+        compute_encoded_unique_values: Whether to compute exact u16 cardinality.
+            This scans the encoded image and is intended for APEX audit paths.
         **kwargs: Additional arguments (reserved for future use)
 
     Returns:
@@ -203,7 +206,7 @@ def atomic_write_depth_u16_png_with_stats(
         normalization=normalization_stats,
         encoded_min=int(np.min(depth_u16)),
         encoded_max=int(np.max(depth_u16)),
-        encoded_unique_values=_count_u16_unique_values(depth_u16),
+        encoded_unique_values=(_count_u16_unique_values(depth_u16) if compute_encoded_unique_values else None),
     )
 
     # 3. Atomic Write using shared helper

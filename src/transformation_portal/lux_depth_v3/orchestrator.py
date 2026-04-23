@@ -2223,6 +2223,7 @@ class EnhanceOrchestrator:
                     result.depth,
                     method=self.config.depth_quantization,
                     debug_verify=self.config.verify_depth_writes,
+                    compute_encoded_unique_values=self._is_apex_tier(),
                 )
 
                 # 3b. Save float depth (.npy) for high-precision PBR if enabled

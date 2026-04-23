@@ -336,7 +336,6 @@
         "accelerator_kind",
         "backend_kind",
         "canonical_model_key",
-        "contract_kind",
         "fallback_chain",
         "license_id",
         "manifest_schema_version",
@@ -430,6 +429,26 @@
         }
       },
       "allOf": [
+        {
+          "if": {
+            "not": {
+              "required": [
+                "contract_kind"
+              ]
+            }
+          },
+          "then": {
+            "required": [
+              "resolved_revision"
+            ],
+            "properties": {
+              "resolved_revision": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{40}$"
+              }
+            }
+          }
+        },
         {
           "if": {
             "properties": {
