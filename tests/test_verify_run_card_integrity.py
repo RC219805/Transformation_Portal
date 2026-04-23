@@ -263,6 +263,21 @@ def test_verify_run_card_integrity_detects_canonical_json_drift(tmp_path: Path):
     assert any("canonical serialization drift" in error for error in errors)
 
 
+def test_verify_run_card_integrity_collects_canonical_read_failure(tmp_path: Path, monkeypatch):
+    module = _load_script_module("verify_run_card_integrity_script_canonical_read", "scripts/verify_run_card_integrity.py")
+    run_card_path = tmp_path / "run_card.json"
+    payload = _valid_run_card_payload(module)
+    _write_json(run_card_path, payload)
+
+    def fail_read_text(path: Path):
+        return None, f"Failed to read text file {path}: simulated failure"
+
+    monkeypatch.setitem(module.verify_run_card_integrity.__globals__, "_read_text", fail_read_text)
+
+    errors = module.verify_run_card_integrity(run_card_path, check_canonical_json=True)
+    assert any("simulated failure" in error for error in errors)
+
+
 def test_verify_run_card_integrity_rejects_backend_semantic_mismatch(tmp_path: Path):
     module = _load_script_module("verify_run_card_integrity_script_backend", "scripts/verify_run_card_integrity.py")
     run_card_path = tmp_path / "run_card_backend_mismatch.json"
@@ -272,6 +287,21 @@ def test_verify_run_card_integrity_rejects_backend_semantic_mismatch(tmp_path: P
 
     errors = module.verify_run_card_integrity(run_card_path)
     assert any("backend_selection.resolved must match backend_summary.final_backends_used[0]" in error for error in errors)
+
+
+def test_verify_run_card_integrity_and_validator_share_final_backend_type_semantics(tmp_path: Path):
+    module = _load_script_module("verify_run_card_integrity_script_backend_type", "scripts/verify_run_card_integrity.py")
+    from transformation_portal.lux_depth_v3.validators import validate_run_card_backend_semantics
+
+    run_card_path = tmp_path / "run_card_backend_type.json"
+    payload = _valid_run_card_payload(module)
+    payload["backend_summary"]["final_backends_used"] = "da3"
+    _write_json(run_card_path, payload)
+
+    errors = module.verify_run_card_integrity(run_card_path)
+    assert any("backend_summary.final_backends_used must be an array" in error for error in errors)
+    with pytest.raises(RuntimeError, match="backend_summary.final_backends_used must be an array"):
+        validate_run_card_backend_semantics(payload)
 
 
 def test_verify_run_card_integrity_accepts_wrapper_semantics(tmp_path: Path):
@@ -305,6 +335,29 @@ def test_verify_run_card_integrity_rejects_requested_depth_pro_full_fallback(tmp
     assert any("requested backend 'depth_pro' was not honored" in error for error in errors)
 
 
+def test_verify_run_card_integrity_and_validator_share_depth_pro_fallback_semantics(tmp_path: Path):
+    module = _load_script_module("verify_run_card_integrity_script_depth_pro_shared", "scripts/verify_run_card_integrity.py")
+    from transformation_portal.lux_depth_v3.validators import validate_run_card_backend_semantics
+
+    run_card_path = tmp_path / "run_card_depth_pro_fallback.json"
+    payload = _valid_run_card_payload(module)
+    payload["backend_selection"]["requested"] = "depth_pro"
+    payload["backend_selection"]["resolved"] = "da3"
+    payload["backend_summary"]["requested_backend"] = "depth_pro"
+    payload["backend_summary"]["primary_backend"] = "da3"
+    payload["backend_summary"]["final_backends_used"] = ["da3"]
+    payload["backend_summary"]["fallback_images"] = 1
+    payload["total_images"] = 1
+    payload["success_count"] = 1
+    payload["error_count"] = 0
+    _write_json(run_card_path, payload)
+
+    errors = module.verify_run_card_integrity(run_card_path)
+    assert any("requested backend 'depth_pro' was not honored" in error for error in errors)
+    with pytest.raises(RuntimeError, match="requested backend 'depth_pro' was not honored"):
+        validate_run_card_backend_semantics(payload)
+
+
 def test_verify_run_card_integrity_handles_non_integer_success_count_without_crashing(tmp_path: Path):
     module = _load_script_module(
         "verify_run_card_integrity_script_depth_pro_type_guard", "scripts/verify_run_card_integrity.py"
@@ -326,6 +379,18 @@ def test_verify_run_card_integrity_handles_non_integer_success_count_without_cra
 
     assert errors
     assert any("success_count" in error for error in errors)
+
+
+def test_verify_run_card_integrity_reports_malformed_override_schema(tmp_path: Path):
+    module = _load_script_module("verify_run_card_integrity_script_bad_schema", "scripts/verify_run_card_integrity.py")
+    run_card_path = tmp_path / "run_card.json"
+    bad_schema_path = tmp_path / "bad_schema.json"
+    payload = _valid_run_card_payload(module)
+    _write_json(run_card_path, payload)
+    bad_schema_path.write_text(json.dumps({"type": 123}), encoding="utf-8")
+
+    errors = module.verify_run_card_integrity(run_card_path, schema_path=bad_schema_path)
+    assert any("Run card schema is invalid" in error for error in errors)
 
 
 def test_verify_run_card_integrity_rejects_combined_manifest_path_escape(tmp_path: Path):

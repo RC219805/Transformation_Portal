@@ -18,17 +18,9 @@ from transformation_portal.lux_depth_v3.run_card_contract import (
     normalize_run_card_relative_path,
     with_inferred_run_card_version,
 )
-from transformation_portal.schemas.run_card import load_run_card_schema
 
-from .jsonschema_formats import build_jsonschema_format_checker
-from .run_card_validator import _default_schema_path
-
-try:
-    from jsonschema import Draft202012Validator, FormatChecker
-except ImportError:  # pragma: no cover - runtime guard for environments missing optional deps
-    Draft202012Validator = None  # type: ignore[assignment]
-    FormatChecker = None  # type: ignore[assignment]
-
+from .run_card_backend_semantics import collect_run_card_backend_semantic_errors
+from .run_card_validator import _default_schema_path, _load_validator
 
 SHA256_HEX_RE = re.compile(r"^[a-f0-9]{64}$")
 DEFAULT_SCHEMA_V1_PATH = _default_schema_path("v1")
@@ -47,6 +39,17 @@ def _load_json(path: Path) -> tuple[Any | None, str | None]:
         return None, f"Invalid JSON in {path}: {exc.msg} (line {exc.lineno}, column {exc.colno})"
     except OSError as exc:
         return None, f"Failed to read JSON file {path}: {exc}"
+
+
+def _read_text(path: Path) -> tuple[str | None, str | None]:
+    try:
+        return path.read_text(encoding="utf-8"), None
+    except FileNotFoundError:
+        return None, f"Text file not found: {path}"
+    except PermissionError:
+        return None, f"Permission denied reading text file: {path}"
+    except OSError as exc:
+        return None, f"Failed to read text file {path}: {exc}"
 
 
 def canonical_json_text(payload: Any) -> str:
@@ -79,61 +82,22 @@ def resolve_artifact_path(
     return artifact_path, None
 
 
-def _verify_backend_semantics(run_card_payload: dict[str, Any], errors: list[str]) -> None:
-    backend_selection = run_card_payload.get("backend_selection")
-    backend_summary = run_card_payload.get("backend_summary")
-    if not isinstance(backend_selection, dict) or not isinstance(backend_summary, dict):
-        return
-
-    final_backends_used = backend_summary.get("final_backends_used")
-    if not isinstance(final_backends_used, list):
-        errors.append("backend_summary.final_backends_used must be an array")
-        return
-
-    success_count = run_card_payload.get("success_count")
-    if not isinstance(success_count, int):
-        success_count = 0
-
-    if not final_backends_used:
-        if success_count > 0:
-            errors.append("backend_summary.final_backends_used must be non-empty when success_count > 0")
-        return
-
-    primary_backend = final_backends_used[0]
-    if not isinstance(primary_backend, str) or not primary_backend:
-        errors.append("backend_summary.final_backends_used[0] must be a non-empty string")
-        return
-
-    summary_primary = backend_summary.get("primary_backend")
-    if summary_primary != primary_backend:
-        errors.append("backend_summary.primary_backend must equal backend_summary.final_backends_used[0]")
-
-    resolved = backend_selection.get("resolved")
-    if not isinstance(resolved, str) or not resolved:
-        errors.append("backend_selection.resolved must be a non-empty string")
-        return
-    if resolved != primary_backend:
-        errors.append("backend_selection.resolved must match backend_summary.final_backends_used[0]")
-
-    logical_backend = backend_selection.get("logical_backend")
-    resolved_engine = backend_selection.get("resolved_engine")
-    wrapper_declared = logical_backend is not None or resolved_engine is not None
-    if not wrapper_declared:
-        return
-
-    if not isinstance(logical_backend, str) or not logical_backend:
-        errors.append("backend_selection.logical_backend must be a non-empty string when wrapper semantics are declared")
-    if not isinstance(resolved_engine, str) or not resolved_engine:
-        errors.append("backend_selection.resolved_engine must be a non-empty string when wrapper semantics are declared")
-    if isinstance(logical_backend, str) and isinstance(resolved_engine, str):
-        if logical_backend == resolved_engine:
-            errors.append("backend_selection.logical_backend and backend_selection.resolved_engine must differ")
-        if resolved_engine != primary_backend:
-            errors.append("backend_selection.resolved_engine must match backend_summary.final_backends_used[0]")
-
-    fallback_images = backend_summary.get("fallback_images")
-    if isinstance(fallback_images, int) and fallback_images != 0:
-        errors.append("wrapper semantics are only valid when backend_summary.fallback_images == 0")
+def _verify_backend_semantics(
+    run_card_payload: dict[str, Any],
+    *,
+    run_card_root: Path,
+    errors: list[str],
+) -> None:
+    for error in collect_run_card_backend_semantic_errors(run_card_payload):
+        if error.startswith("requested backend 'depth_pro' was not honored"):
+            fallback_reason = _first_combined_manifest_fallback_reason(
+                run_card_payload,
+                run_card_root=run_card_root,
+                errors=errors,
+            )
+            if fallback_reason:
+                error = f"{error}. First fallback reason: {fallback_reason}"
+        errors.append(error)
 
 
 def _first_combined_manifest_fallback_reason(
@@ -180,56 +144,6 @@ def _first_combined_manifest_fallback_reason(
             if isinstance(error_message, str) and error_message.strip():
                 return f"{relative_path}: {error_message.strip()}"
     return None
-
-
-def _verify_requested_depth_pro_fulfillment(
-    run_card_payload: dict[str, Any],
-    *,
-    run_card_root: Path,
-    errors: list[str],
-) -> None:
-    backend_selection = run_card_payload.get("backend_selection")
-    backend_summary = run_card_payload.get("backend_summary")
-    if not isinstance(backend_selection, dict) or not isinstance(backend_summary, dict):
-        return
-
-    requested_backend = backend_selection.get("requested") or backend_summary.get("requested_backend")
-    if requested_backend != "depth_pro":
-        return
-
-    success_count = run_card_payload.get("success_count")
-    fallback_images = backend_summary.get("fallback_images")
-    primary_backend = backend_summary.get("primary_backend")
-    total_images = run_card_payload.get("total_images")
-    error_count = run_card_payload.get("error_count")
-    has_error_failures = isinstance(error_count, int) and error_count > 0
-    has_incomplete_successes = (
-        isinstance(success_count, int) and isinstance(total_images, int) and success_count < total_images
-    )
-    run_failed = has_error_failures or has_incomplete_successes
-    if (
-        not isinstance(success_count, int)
-        or success_count <= 0
-        or not isinstance(fallback_images, int)
-        or fallback_images != success_count
-        or not isinstance(primary_backend, str)
-        or primary_backend == requested_backend
-        or run_failed
-    ):
-        return
-
-    error = (
-        "requested backend 'depth_pro' was not honored: "
-        f"all successful images ({success_count}/{success_count}) used fallback backend '{primary_backend}'"
-    )
-    fallback_reason = _first_combined_manifest_fallback_reason(
-        run_card_payload,
-        run_card_root=run_card_root,
-        errors=errors,
-    )
-    if fallback_reason:
-        error = f"{error}. First fallback reason: {fallback_reason}"
-    errors.append(error)
 
 
 def _verify_config_fingerprint(run_card_payload: dict[str, Any], errors: list[str]) -> None:
@@ -413,8 +327,6 @@ def verify_run_card_integrity(
     """Return list of integrity errors for a run card."""
     if not run_card_path.exists():
         return [f"Run card not found: {run_card_path}"]
-    if Draft202012Validator is None or FormatChecker is None:
-        return ["jsonschema dependency is required (install jsonschema>=4.21.0,<5)"]
 
     raw_run_card_payload, run_card_load_error = _load_json(run_card_path)
     if run_card_load_error:
@@ -427,14 +339,20 @@ def verify_run_card_integrity(
     if schema_path is not None:
         if not effective_schema_path.exists():
             return [f"Run card schema not found: {effective_schema_path}"]
-        schema_payload, schema_load_error = _load_json(effective_schema_path)
-        if schema_load_error:
-            return [schema_load_error]
-    else:
-        schema_payload = load_run_card_schema(infer_run_card_version(run_card_payload))
 
     errors: list[str] = []
-    validator = Draft202012Validator(schema_payload, format_checker=build_jsonschema_format_checker())
+    try:
+        validator = _load_validator(
+            str(effective_schema_path) if schema_path is not None else None,
+            infer_run_card_version(run_card_payload),
+        )
+    except RuntimeError as exc:
+        errors.append(str(exc))
+        return errors
+    except (JSONDecodeError, OSError) as exc:
+        errors.append(f"Failed to load run card schema {effective_schema_path}: {exc}")
+        return errors
+
     schema_errors = sorted(validator.iter_errors(run_card_payload), key=lambda item: list(item.path))
     for item in schema_errors:
         errors.append(f"Schema validation failed at {format_error_path(item.path)}: {item.message}")
@@ -515,8 +433,7 @@ def verify_run_card_integrity(
         errors=errors,
     )
 
-    _verify_backend_semantics(run_card_payload, errors)
-    _verify_requested_depth_pro_fulfillment(
+    _verify_backend_semantics(
         run_card_payload,
         run_card_root=run_card_path.parent,
         errors=errors,
@@ -524,9 +441,12 @@ def verify_run_card_integrity(
     _verify_config_fingerprint(run_card_payload, errors)
 
     if check_canonical_json:
-        raw_text = run_card_path.read_text(encoding="utf-8")
-        canonical = canonical_json_text(raw_run_card_payload)
-        if raw_text not in (canonical, canonical + "\n"):
-            errors.append("JSON canonical serialization drift detected (expected sort_keys=True, indent=2)")
+        raw_text, raw_text_error = _read_text(run_card_path)
+        if raw_text_error:
+            errors.append(raw_text_error)
+        else:
+            canonical = canonical_json_text(raw_run_card_payload)
+            if raw_text not in (canonical, canonical + "\n"):
+                errors.append("JSON canonical serialization drift detected (expected sort_keys=True, indent=2)")
 
     return errors

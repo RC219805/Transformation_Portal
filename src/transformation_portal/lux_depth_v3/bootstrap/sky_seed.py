@@ -24,6 +24,22 @@ from typing import Any, Dict, List, Tuple
 import numpy as np
 
 
+def _clamp_finite_float(
+    value: Any,
+    *,
+    name: str,
+    minimum: float,
+    maximum: float,
+) -> float:
+    try:
+        resolved = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{name} must be a finite number") from exc
+    if not np.isfinite(resolved):
+        raise ValueError(f"{name} must be finite")
+    return float(np.clip(resolved, minimum, maximum))
+
+
 def detect_sky_seed(image: np.ndarray, config: Any) -> Dict[str, Any]:
     """Detect sky region using heuristics.
 
@@ -66,13 +82,24 @@ def detect_sky_seed(image: np.ndarray, config: Any) -> Dict[str, Any]:
 
     H, W = img.shape[:2]
 
-    # Get configuration parameters with safe defaults
-    top_region_fraction = getattr(config, "sky_top_region_fraction", 0.5)
-    gradient_threshold = getattr(config, "sky_gradient_threshold", 0.05)
-    brightness_threshold = getattr(config, "sky_brightness_threshold", 0.4)
-
-    # Input validation: clamp top_region_fraction to [0, 1]
-    top_region_fraction = np.clip(top_region_fraction, 0.0, 1.0)
+    top_region_fraction = _clamp_finite_float(
+        getattr(config, "sky_top_region_fraction", 0.5),
+        name="sky_top_region_fraction",
+        minimum=0.0,
+        maximum=1.0,
+    )
+    gradient_threshold = _clamp_finite_float(
+        getattr(config, "sky_gradient_threshold", 0.05),
+        name="sky_gradient_threshold",
+        minimum=0.0,
+        maximum=float(np.sqrt(2.0)),
+    )
+    brightness_threshold = _clamp_finite_float(
+        getattr(config, "sky_brightness_threshold", 0.4),
+        name="sky_brightness_threshold",
+        minimum=0.0,
+        maximum=1.0,
+    )
 
     # 1. Top-of-frame prior
     # Sky is typically in the upper portion of the image
@@ -125,7 +152,7 @@ def detect_sky_seed(image: np.ndarray, config: Any) -> Dict[str, Any]:
 
     # Generate prompt points for SAM2 refinement
     points_positive = _sample_points_inside(coarse_mask, num_points=5)
-    points_negative = _sample_points_outside(coarse_mask, H, W, num_points=5)
+    points_negative = _sample_points_outside(coarse_mask, num_points=5)
 
     return {
         "coarse_mask": coarse_mask,
@@ -174,13 +201,11 @@ def _sample_points_inside(mask: np.ndarray, num_points: int = 5) -> List[Tuple[i
     return [(int(xs[i]), int(ys[i])) for i in indices]
 
 
-def _sample_points_outside(mask: np.ndarray, H: int, W: int, num_points: int = 5) -> List[Tuple[int, int]]:
+def _sample_points_outside(mask: np.ndarray, num_points: int = 5) -> List[Tuple[int, int]]:
     """Sample deterministic points outside the mask using stratified sampling.
 
     Args:
         mask: Binary mask (H, W) with values in {0, 1}
-        H: Image height
-        W: Image width
         num_points: Number of points to sample
 
     Returns:

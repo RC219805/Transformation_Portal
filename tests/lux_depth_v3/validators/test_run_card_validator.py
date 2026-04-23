@@ -235,6 +235,24 @@ class TestBackendSemanticsValidation:
         ):
             validate_run_card_backend_semantics(payload)
 
+    def test_non_list_final_backends_raises(self):
+        """Backend semantics reject malformed final_backends_used consistently."""
+        from transformation_portal.lux_depth_v3.validators import (
+            validate_run_card_backend_semantics,
+        )
+
+        payload = {
+            "backend_selection": {"resolved": "da3"},
+            "backend_summary": {
+                "final_backends_used": "da3",
+                "primary_backend": "da3",
+            },
+            "success_count": 1,
+        }
+
+        with pytest.raises(RuntimeError, match="final_backends_used must be an array"):
+            validate_run_card_backend_semantics(payload)
+
     def test_primary_backend_mismatch_raises(self):
         """Test that primary_backend not matching final_backends_used[0] raises."""
         from transformation_portal.lux_depth_v3.validators import (
@@ -300,6 +318,31 @@ class TestBackendSemanticsValidation:
         }
 
         validate_run_card_backend_semantics(payload)
+
+    def test_requested_depth_pro_full_success_fallback_raises(self):
+        """Requested Depth Pro full fallback fails when the run otherwise succeeded."""
+        from transformation_portal.lux_depth_v3.validators import (
+            validate_run_card_backend_semantics,
+        )
+
+        payload = {
+            "backend_selection": {
+                "requested": "depth_pro",
+                "resolved": "da3",
+            },
+            "backend_summary": {
+                "requested_backend": "depth_pro",
+                "final_backends_used": ["da3"],
+                "primary_backend": "da3",
+                "fallback_images": 2,
+            },
+            "total_images": 2,
+            "success_count": 2,
+            "error_count": 0,
+        }
+
+        with pytest.raises(RuntimeError, match="requested backend 'depth_pro' was not honored"):
+            validate_run_card_backend_semantics(payload)
 
 
 class TestWrapperSemanticsValidation:
