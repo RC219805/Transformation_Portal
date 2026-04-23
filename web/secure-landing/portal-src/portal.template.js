@@ -4024,6 +4024,11 @@ function _setSurfaceLoadingState(container, isLoading) {
     container.setAttribute('data-surface-loading', isLoading ? 'true' : 'false');
 }
 
+function _setButtonBusy(btn, busy) {
+    if (!btn) return;
+    btn.setAttribute('aria-busy', busy ? 'true' : 'false');
+}
+
 function _isBootstrapSurfaceLoading() {
     return state.bootstrap.status === 'pending';
 }
@@ -9811,6 +9816,7 @@ async function submitJob() {
     if (els.runJobBtn) {
         els.runJobBtn.disabled = true;
         els.runJobBtn.textContent = "Dispatching...";
+        _setButtonBusy(els.runJobBtn, true);
     }
 
     const randomId = window.crypto?.randomUUID ? window.crypto.randomUUID().replace(/-/g, '').slice(0, 8) : Math.random().toString(36).slice(2, 8);
@@ -9919,6 +9925,7 @@ async function submitJob() {
     } finally {
         if (els.runJobBtn) {
             els.runJobBtn.textContent = "Execute Job";
+            _setButtonBusy(els.runJobBtn, false);
         }
         _syncBootstrapGuardedControls();
     }
