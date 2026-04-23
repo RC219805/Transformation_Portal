@@ -56,6 +56,23 @@ These investigations directly informed the final implementation delivered in:
 
 ---
 
+### 3. Response Planner Audit - April 2026
+**File**: [`response_planner_audit_2026_04.md`](response_planner_audit_2026_04.md)
+
+**Summary**: Current-code audit of Materials V3 response planning after Phase A/B hardening.
+
+**Key Findings**:
+- Root cause: response planner still lacks mask canonicalization even though the pixel-ops executor has it
+- Policy drift: taxonomy marks `sky` canary, but planner rejects it as `not_in_canary_set`
+- Config drift: `refinement_strategy="none"` does not disable refinement in the planner
+- Performance issue: full-image Sobel gradients are recomputed once per present material
+
+**Resolution**: Pending response-planner hardening pass.
+
+**Value**: Converts a broad external-style audit into a repo-grounded remediation checklist.
+
+---
+
 ## Diagnostic Methodology
 
 For detailed debugging approaches and techniques used during Materials V3 development, see:
