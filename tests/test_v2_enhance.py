@@ -10,10 +10,11 @@ from unittest.mock import MagicMock, Mock, patch
 
 import numpy as np
 import pytest
-from PIL import Image
+from PIL import Image, ImageOps
 
 from transformation_portal.lux_depth_v3.v2_enhance import (
     V2EnhancementError,
+    _apply_exif_orientation_to_array,
     canonical_asset_stem,
     emitted_v2_suffix_for_bit_depth,
     enhance_image,
@@ -290,6 +291,8 @@ class TestEnhanceImage:
             assert report["io"]["metadata_preservation_mode"] == "none"
             assert report["io"]["icc_preserved"] is False
             assert report["io"]["exif_preservation_mode"] == "none"
+            assert report["io"]["exif_orientation_normalized"] is False
+            assert report["io"]["source_exif_orientation"] is None
             assert report["io"]["save_degraded"] is False
             assert "runtime_s" in report
             assert expected_output.exists()
@@ -929,6 +932,20 @@ class TestEnhanceImage:
                 # Verify exif_transpose was called
                 mock_transpose.assert_called_once()
 
+    @pytest.mark.parametrize("orientation", range(1, 9))
+    def test_numpy_exif_orientation_matches_pillow_reference(self, orientation):
+        """Numpy EXIF transforms should match ImageOps.exif_transpose geometry."""
+        source = np.arange(2 * 3 * 3, dtype=np.uint8).reshape(2, 3, 3)
+        image = Image.fromarray(source, mode="RGB")
+        exif = image.getexif()
+        exif[0x0112] = orientation
+        image.info["exif"] = exif.tobytes()
+
+        expected = np.asarray(ImageOps.exif_transpose(image))
+        actual = _apply_exif_orientation_to_array(source, orientation)
+
+        np.testing.assert_array_equal(actual, expected)
+
     @pytest.mark.parametrize("orientation", [2, 4, 5, 7])
     def test_16bit_tiff_applies_mirrored_exif_orientations(self, tmp_path, orientation):
         """The tifffile loader path should apply mirrored EXIF orientations too."""
@@ -953,9 +970,9 @@ class TestEnhanceImage:
         elif orientation == 4:
             expected = np.flip(source, axis=0)
         elif orientation == 5:
-            expected = np.swapaxes(source, 0, 1)
+            expected = np.rot90(np.flip(source, axis=1), 1)
         else:
-            expected = np.flip(np.swapaxes(source, 0, 1), axis=(0, 1))
+            expected = np.rot90(np.flip(source, axis=1), -1)
 
         with patch("transformation_portal.lux_depth_v3.v2_enhance.EnhancementStage") as mock_stage_cls:
             mock_stage = Mock()
@@ -976,7 +993,11 @@ class TestEnhanceImage:
 
         assert report["status"] == "success"
         assert report["io"]["load_backend"] == "tifffile"
-        assert report["io"]["exif_preservation_mode"] == "normalized"
+        assert report["io"]["save_backend"] == "tifffile"
+        assert report["io"]["metadata_preservation_mode"] == "none"
+        assert report["io"]["exif_preservation_mode"] == "none"
+        assert report["io"]["exif_orientation_normalized"] is True
+        assert report["io"]["source_exif_orientation"] == orientation
 
         call_args = mock_stage.compute.call_args
         context = call_args[0][0]

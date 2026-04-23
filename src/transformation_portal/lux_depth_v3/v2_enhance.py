@@ -293,11 +293,11 @@ def _apply_exif_orientation_to_array(image_array: np.ndarray, orientation: int |
     if orientation == 4:
         return np.flip(image_array, axis=0)
     if orientation == 5:
-        return np.swapaxes(image_array, 0, 1)
+        return np.rot90(np.flip(image_array, axis=1), 1)
     if orientation == 6:
         return np.rot90(image_array, -1)
     if orientation == 7:
-        return np.flip(np.swapaxes(image_array, 0, 1), axis=(0, 1))
+        return np.rot90(np.flip(image_array, axis=1), -1)
     if orientation == 8:
         return np.rot90(image_array, 1)
 
@@ -757,11 +757,10 @@ def enhance_image(
                 # supports via 'exiftags' parameter in newer versions. For now, we log the
                 # intent and document that EXIF preservation is best-effort for 16-bit TIFF.
                 if exif_data:
-                    if exif_preservation_mode != "normalized":
-                        exif_preservation_mode = "partial"
+                    exif_preservation_mode = "none"
                     logger.debug(
-                        "EXIF data present in source; full EXIF preservation in 16-bit TIFF "
-                        "requires manual IFD handling. ICC profile is preserved."
+                        "EXIF data present in source but not written by the 16-bit tifffile save path. "
+                        "ICC profile is preserved separately when available."
                     )
 
                 # Save with tifffile (preserves 16-bit)
@@ -849,6 +848,7 @@ def enhance_image(
 
         stage_metadata = result.metadata if isinstance(result.metadata, dict) else {}
         stage_has_depth = stage_metadata.get("has_depth") if isinstance(stage_metadata, dict) else None
+        exif_orientation_normalized = bool(metadata.get("exif_orientation_applied"))
 
         # Determine depth consumption semantics
         if stage_has_depth is not None:
@@ -894,6 +894,8 @@ def enhance_image(
                 "metadata_preservation_mode": metadata_preservation_mode,
                 "icc_preserved": icc_preserved,
                 "exif_preservation_mode": exif_preservation_mode,
+                "exif_orientation_normalized": exif_orientation_normalized,
+                "source_exif_orientation": metadata.get("exif_orientation"),
                 "save_degraded": save_degraded,
                 "save_degradation_reason": save_degradation_reason,
             },
