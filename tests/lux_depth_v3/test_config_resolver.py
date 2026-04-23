@@ -425,6 +425,47 @@ class TestBuildFingerprintPayloads:
         assert "mask_feather_sigma_default" in payload
         assert "sam2_model_size" in payload
 
+    def test_materials_fingerprint_payload_includes_low_texture_guard_knobs(self):
+        """Materials cache fingerprint must include every seam-safe guard knob."""
+        from transformation_portal.lux_depth_v3.config import EnhanceConfig
+        from transformation_portal.lux_depth_v3.config_resolver import (
+            build_materials_fingerprint_payload,
+        )
+
+        config = EnhanceConfig(
+            pixel_ops_low_grad_threshold=0.02,
+            pixel_ops_low_tex_min_bbox_frac=0.10,
+            pixel_ops_low_tex_feather_multiplier=4.0,
+            pixel_ops_low_tex_delta_ceiling=0.02,
+        )
+        payload = build_materials_fingerprint_payload(config)
+
+        assert payload["pixel_ops_low_grad_threshold"] == pytest.approx(0.02)
+        assert payload["pixel_ops_low_tex_min_bbox_frac"] == pytest.approx(0.10)
+        assert payload["pixel_ops_low_tex_feather_multiplier"] == pytest.approx(4.0)
+        assert payload["pixel_ops_low_tex_delta_ceiling"] == pytest.approx(0.02)
+
+    @pytest.mark.parametrize(
+        "field,value",
+        [
+            ("pixel_ops_low_grad_threshold", 0.02),
+            ("pixel_ops_low_tex_min_bbox_frac", 0.10),
+            ("pixel_ops_low_tex_feather_multiplier", 4.0),
+            ("pixel_ops_low_tex_delta_ceiling", 0.02),
+        ],
+    )
+    def test_config_fingerprint_changes_with_low_texture_guard_knobs(self, field, value):
+        """Changing a seam-safe guard knob must invalidate Stage A reuse."""
+        from transformation_portal.lux_depth_v3.config import EnhanceConfig
+        from transformation_portal.lux_depth_v3.config_resolver import (
+            compute_config_fingerprint,
+        )
+
+        baseline = EnhanceConfig()
+        changed = EnhanceConfig(**{field: value})
+
+        assert compute_config_fingerprint(baseline).to_sha256() != compute_config_fingerprint(changed).to_sha256()
+
     def test_pbr_fingerprint_payload(self):
         """Test PBR fingerprint payload structure."""
         from transformation_portal.lux_depth_v3.config import EnhanceConfig

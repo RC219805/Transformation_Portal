@@ -399,6 +399,8 @@ def apply_pixel_ops(
         # A2: Expand bbox by feathering padding
         pad = math.ceil(3 * feather_sigma) if feather_sigma > 0 else 0
         x0_padded, y0_padded, x1_padded, y1_padded = _expand_bbox_with_padding(bbox, pad, img_h, img_w)
+        inside_y = slice(y0 - y0_padded, y1 - y0_padded)
+        inside_x = slice(x0 - x0_padded, x1 - x0_padded)
 
         # Extract padded ROI
         mask_roi_padded = mask_2d[y0_padded:y1_padded, x0_padded:x1_padded]
@@ -420,9 +422,11 @@ def apply_pixel_ops(
             working = working.astype(np.float32) / 65535.0
         # else: already float, no normalization needed
 
-        # Capture pre-op state in normalized space so we can soft-clamp the
-        # delta magnitude on low-texture large ROIs without losing precision.
-        working_before_ops = working.copy() if is_low_tex_large else None
+        # Capture only the unpadded writeback region in normalized space. The
+        # clamp only needs the pixels that can be written back, so copying the
+        # full padded ROI would create avoidable memory pressure on large
+        # sky/water masks.
+        working_before_ops_inside = working[inside_y, inside_x].copy() if is_low_tex_large else None
 
         for op_name in implemented_ops:
             op_def = ops_for_material.get(op_name)
@@ -441,12 +445,10 @@ def apply_pixel_ops(
         # between a smooth material and its neighbors even if the op itself
         # is configured aggressively.
         delta_scale_applied = 1.0
-        if is_low_tex_large and working_before_ops is not None:
-            delta_norm = working.astype(np.float32, copy=False) - working_before_ops
-            slice_y = slice(y0 - y0_padded, y1 - y0_padded)
-            slice_x = slice(x0 - x0_padded, x1 - x0_padded)
-            delta_inside = delta_norm[slice_y, slice_x]
-            mask_inside = mask_roi_feathered[slice_y, slice_x]
+        if is_low_tex_large and working_before_ops_inside is not None:
+            working_inside = working[inside_y, inside_x]
+            delta_inside = working_inside.astype(np.float32, copy=False) - working_before_ops_inside
+            mask_inside = mask_roi_feathered[inside_y, inside_x]
             weighted_abs = np.abs(delta_inside)
             if weighted_abs.ndim == 3:
                 weighted_abs = weighted_abs * mask_inside[..., None]
@@ -456,8 +458,11 @@ def apply_pixel_ops(
                 p99 = float(np.percentile(weighted_abs, 99))
                 if p99 > low_tex_delta_ceiling and p99 > 1e-6:
                     delta_scale_applied = float(low_tex_delta_ceiling / p99)
-                    working = working_before_ops + delta_norm * delta_scale_applied
-                    working = np.clip(working, 0.0, 1.0)
+                    working[inside_y, inside_x] = np.clip(
+                        working_before_ops_inside + delta_inside * delta_scale_applied,
+                        0.0,
+                        1.0,
+                    )
 
         # Denormalize and write back (A4)
         if original_dtype == np.uint8:
@@ -468,15 +473,15 @@ def apply_pixel_ops(
             after_padded = working.astype(original_dtype)
 
         # Write back only the original (non-padded) ROI
-        output[y0:y1, x0:x1] = after_padded[(y0 - y0_padded) : (y1 - y0_padded), (x0 - x0_padded) : (x1 - x0_padded)]
+        output[y0:y1, x0:x1] = after_padded[inside_y, inside_x]
 
         elapsed_ms = (time.perf_counter() - start_material) * 1000.0
 
         # Compute stats on original ROI
         delta_stats = _compute_delta_stats(
-            before_padded[(y0 - y0_padded) : (y1 - y0_padded), (x0 - x0_padded) : (x1 - x0_padded)],
-            after_padded[(y0 - y0_padded) : (y1 - y0_padded), (x0 - x0_padded) : (x1 - x0_padded)],
-            mask_roi_feathered[(y0 - y0_padded) : (y1 - y0_padded), (x0 - x0_padded) : (x1 - x0_padded)],
+            before_padded[inside_y, inside_x],
+            after_padded[inside_y, inside_x],
+            mask_roi_feathered[inside_y, inside_x],
         )
 
         telemetry["applied"].append(

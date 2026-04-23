@@ -102,6 +102,34 @@ def test_v2_depth_stripe_does_not_project_into_luminance_bands():
     )
 
 
+@pytest.mark.parametrize(
+    ("shape", "expected_sigma"),
+    [
+        ((512, 1), 2.0),
+        ((4096, 1), 4.0),
+        ((16384, 1), 8.0),
+    ],
+)
+def test_v2_depth_smoothing_uses_bounded_sigma(monkeypatch, shape, expected_sigma):
+    """Depth smoothing must not scale into large Gaussian kernels on huge frames."""
+    import scipy.ndimage
+
+    captured = {}
+
+    def fake_gaussian_filter(depth_map: np.ndarray, sigma: float) -> np.ndarray:
+        captured["sigma"] = sigma
+        return depth_map
+
+    monkeypatch.setattr(scipy.ndimage, "gaussian_filter", fake_gaussian_filter)
+    stage = EnhancementStage()
+
+    depth = np.zeros(shape, dtype=np.float32)
+    out = stage._lowpass_depth_for_tone(depth)
+
+    assert out is depth
+    assert captured["sigma"] == pytest.approx(expected_sigma)
+
+
 def test_v2_low_gradient_guard_preserves_flat_frame():
     """A frame with no texture must come out within a tight epsilon of the input."""
     img = np.full((128, 128, 3), 0.5, dtype=np.float32)

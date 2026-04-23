@@ -318,14 +318,15 @@ class EnhancementStage(Stage):
     def _lowpass_depth_for_tone(self, depth_map: np.ndarray) -> np.ndarray:
         """Low-pass the depth map before it drives per-pixel luminance.
 
-        Kernel scales with image size so the band of frequencies we reject
-        is pixel-scale (striping, per-tile discontinuities from upstream
-        depth backends), not scene-scale (near-vs-far intent).
+        The smoothing scale still tracks image size so we suppress pixel-scale
+        striping and tile discontinuities from upstream depth backends, but the
+        effective blur radius is bounded to keep runtime predictable on large
+        frames and to avoid over-smoothing scene-scale depth intent.
         """
         from scipy.ndimage import gaussian_filter
 
         h, w = depth_map.shape[:2]
-        sigma = float(np.clip(max(h, w) / 128.0, 4.0, 64.0))
+        sigma = float(np.clip(max(h, w) / 1024.0, 2.0, 8.0))
         return gaussian_filter(depth_map.astype(np.float32, copy=False), sigma=sigma)
 
     @staticmethod
