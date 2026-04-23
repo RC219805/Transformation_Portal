@@ -7797,6 +7797,7 @@ function buildCanonicalLuxDepthArgs(config) {
             config.segmentation?.backend || 'stub'
         )
     );
+    const sam2Active = segmentationEnable && segmentationBackend === 'sam2';
     const sam2ModelSize = _resolveSam2ModelSize(
         _textOrFallback(
             els.segmentation.sam2ModelSize ? els.segmentation.sam2ModelSize.value : config.segmentation?.sam2ModelSize,
@@ -7979,8 +7980,6 @@ function buildCanonicalLuxDepthArgs(config) {
         depth_backend: depthBackend,
         enable_segmentation: segmentationEnable,
         segmentation_backend: segmentationBackend,
-        sam2_model_size: sam2ModelSize,
-        sam2_tiling_enabled: sam2TilingEnabled,
         strict_segmentation: strictSegmentation,
         materials_v3: materialsV3,
         pbr,
@@ -8013,16 +8012,22 @@ function buildCanonicalLuxDepthArgs(config) {
         quiet
     };
     if (depthDevice) args.depth_device = depthDevice;
-    if (sam2CheckpointPath) args.sam2_checkpoint_path = sam2CheckpointPath;
-    if (sam2TileSizePx !== null) args.sam2_tile_size_px = sam2TileSizePx;
-    if (sam2OverlapPx !== null) args.sam2_overlap_px = sam2OverlapPx;
-    if (sam2GlobalPassLongestSide !== null) args.sam2_global_pass_longest_side = sam2GlobalPassLongestSide;
-    if (sam2MaxConcurrency !== null) args.sam2_max_concurrency = sam2MaxConcurrency;
-    if (sam2PointsPerSide !== null) args.sam2_points_per_side = sam2PointsPerSide;
-    if (sam2PointsPerBatch !== null) args.sam2_points_per_batch = sam2PointsPerBatch;
-    if (sam2PredIouThresh !== null) args.sam2_pred_iou_thresh = sam2PredIouThresh;
-    if (sam2StabilityScoreThresh !== null) args.sam2_stability_score_thresh = sam2StabilityScoreThresh;
-    if (sam2CropNLayers !== null) args.sam2_crop_n_layers = sam2CropNLayers;
+    if (sam2Active) {
+        args.sam2_model_size = sam2ModelSize;
+        if (sam2CheckpointPath) args.sam2_checkpoint_path = sam2CheckpointPath;
+        if (sam2PointsPerSide !== null) args.sam2_points_per_side = sam2PointsPerSide;
+        if (sam2PointsPerBatch !== null) args.sam2_points_per_batch = sam2PointsPerBatch;
+        if (sam2PredIouThresh !== null) args.sam2_pred_iou_thresh = sam2PredIouThresh;
+        if (sam2StabilityScoreThresh !== null) args.sam2_stability_score_thresh = sam2StabilityScoreThresh;
+        if (sam2CropNLayers !== null) args.sam2_crop_n_layers = sam2CropNLayers;
+        if (sam2TilingEnabled) {
+            args.sam2_tiling_enabled = true;
+            if (sam2TileSizePx !== null) args.sam2_tile_size_px = sam2TileSizePx;
+            if (sam2OverlapPx !== null) args.sam2_overlap_px = sam2OverlapPx;
+            if (sam2GlobalPassLongestSide !== null) args.sam2_global_pass_longest_side = sam2GlobalPassLongestSide;
+            if (sam2MaxConcurrency !== null) args.sam2_max_concurrency = sam2MaxConcurrency;
+        }
+    }
     if (camerasSidecarPath) args.cameras_sidecar_path = camerasSidecarPath;
     if (reconstructionIterations !== null) args.reconstruction_iterations = reconstructionIterations;
     if (maxWorkers !== null) args.max_workers = maxWorkers;

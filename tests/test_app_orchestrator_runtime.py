@@ -3068,6 +3068,21 @@ def test_portal_run_card_version_control_is_explicit_in_state_and_bundle() -> No
     assert "els.emits.runCard.addEventListener('change'" not in bind_text_body
 
 
+def test_portal_canonical_lux_args_gate_sam2_fields_to_active_backend_and_tiling() -> None:
+    content = _portal_bundle_content()
+    build_body = _extract_js_function_body(content, "buildCanonicalLuxDepthArgs")
+
+    assert "const sam2Active = segmentationEnable && segmentationBackend === 'sam2';" in build_body
+    assert "if (sam2Active) {" in build_body
+    assert "args.sam2_model_size = sam2ModelSize;" in build_body
+    assert "if (sam2CheckpointPath) args.sam2_checkpoint_path = sam2CheckpointPath;" in build_body
+    assert "if (sam2PointsPerSide !== null) args.sam2_points_per_side = sam2PointsPerSide;" in build_body
+    assert "if (sam2TilingEnabled) {" in build_body
+    assert "args.sam2_tiling_enabled = true;" in build_body
+    assert "if (sam2TileSizePx !== null) args.sam2_tile_size_px = sam2TileSizePx;" in build_body
+    assert "if (sam2MaxConcurrency !== null) args.sam2_max_concurrency = sam2MaxConcurrency;" in build_body
+
+
 def test_portal_surfaces_pre_run_diagnostics_and_expected_outputs() -> None:
     content = _portal_bundle_content()
     render_cli_body = _extract_js_function_body(content, "renderCLI")
