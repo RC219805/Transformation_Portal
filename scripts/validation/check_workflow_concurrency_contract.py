@@ -46,7 +46,11 @@ def _has_trigger(config: dict[str, Any], trigger_name: str) -> bool:
 
 
 def _load_workflow_config(workflow_name: str, text: str) -> dict[str, Any]:
-    """Return a normalized workflow mapping or raise a deterministic contract error."""
+    """Return a normalized workflow mapping.
+
+    Raises:
+        ValueError: When PyYAML is unavailable or the workflow text is invalid YAML.
+    """
     if yaml is None:
         raise ValueError(f"{workflow_name}: PyYAML not installed (pip install PyYAML)")
     try:
