@@ -3056,11 +3056,16 @@ def test_portal_run_card_version_control_is_explicit_in_state_and_bundle() -> No
     state_source = _portal_internal_state_source_content()
     content = _portal_bundle_content()
     update_body = _extract_js_function_body(content, "updateUIFromState")
+    bind_text_body = _extract_js_function_body(content, "bindInputs")
 
     assert 'runCardVersion: "v1"' in state_source
     assert "runCardVersion: _domId('runCardVersion')" in content
     assert "runCardVersionField: _domId('runCardVersionField')" in content
     assert "syncRunCardControlState(c);" in update_body
+    assert "const syncDependentControlState = (category, key) => {" in bind_text_body
+    assert "if (category === 'emits' && key === 'runCard') {" in bind_text_body
+    assert "syncRunCardControlState(state.config);" in bind_text_body
+    assert "els.emits.runCard.addEventListener('change'" not in bind_text_body
 
 
 def test_portal_surfaces_pre_run_diagnostics_and_expected_outputs() -> None:
@@ -3223,6 +3228,7 @@ def test_portal_lux_build_surface_hides_inapplicable_optional_controls_until_nee
     preset_research_body = _extract_js_function_body(content, "_derivePresetResearchFlag")
     fallback_body = _extract_js_function_body(content, "seedPresetFallbacks")
     fetch_body = _extract_js_function_body(content, "fetchPresetsForPipeline")
+    bind_inputs_body = _extract_js_function_body(content, "bindInputs")
 
     assert "segmentationBackendField: _domId('segmentationBackendField')" in content
     assert "sam2ModelSizeField: _domId('sam2ModelSizeField')" in content
@@ -3243,6 +3249,9 @@ def test_portal_lux_build_surface_hides_inapplicable_optional_controls_until_nee
     assert "is_research: _derivePresetResearchFlag({" in preset_body
     assert "is_research: _derivePresetResearchFlag({" in fallback_body
     assert "is_research: _derivePresetResearchFlag(preset)" in fetch_body
+    assert "if (category === 'segmentation' && (key === 'enable' || key === 'backend' || key === 'sam2TilingEnabled')) {" in bind_inputs_body
+    assert "syncSegmentationControlState(state.config);" in bind_inputs_body
+    assert "[\n        els.segmentation.enable," not in bind_inputs_body
     assert "_setContextVisibility(els.segmentationBackendField, isLuxPipeline && segmentationEnabled);" in applicability_body
     assert "_setContextVisibility(els.sam2ModelSizeField, isLuxPipeline && showSam2Controls);" in applicability_body
     assert "_setContextVisibility(els.sam2TuningPanel, isLuxPipeline && showSam2Controls);" in applicability_body

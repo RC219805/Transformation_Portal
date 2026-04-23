@@ -8960,6 +8960,14 @@ function bindInputs() {
         }
         return 'dispatch';
     };
+    const syncDependentControlState = (category, key) => {
+        if (category === 'segmentation' && (key === 'enable' || key === 'backend' || key === 'sam2TilingEnabled')) {
+            syncSegmentationControlState(state.config);
+        }
+        if (category === 'emits' && key === 'runCard') {
+            syncRunCardControlState(state.config);
+        }
+    };
 
     const safeBindText = (el, category, key) => {
         if (!el) return;
@@ -8975,6 +8983,7 @@ function bindInputs() {
                 void fetchConfigMetadata(state.pipeline, true);
             }
             else {
+                syncDependentControlState(category, key);
                 _persistTransientPortalDraft();
                 const field = trackedTelemetryField(category, key);
                 if (field) {
@@ -9048,6 +9057,7 @@ function bindInputs() {
                 state.portalUi.debugBundleGuardrailSeen = false;
                 if (els.debugBundleAcknowledge) els.debugBundleAcknowledge.checked = false;
             }
+            syncDependentControlState(category, key);
             _persistTransientPortalDraft();
             _syncSwitchStateLabels();
             renderCLI();
@@ -9125,27 +9135,6 @@ function bindInputs() {
     safeBindCheck(els.licenses.nonCommercialOk, 'licenses', 'nonCommercialOk');
     safeBindCheck(els.licenses.acceptApple, 'licenses', 'acceptApple');
     safeBindCheck(els.licenses.acceptResearchTools, 'licenses', 'acceptResearchTools');
-
-    [
-        els.segmentation.enable,
-        els.segmentation.backend,
-        els.segmentation.sam2TilingEnabled,
-    ].forEach((el) => {
-        if (!el) return;
-        el.addEventListener('change', () => {
-            syncSegmentationControlState(state.config);
-            renderCLI();
-            scheduleConfigPreview();
-        });
-    });
-
-    if (els.emits.runCard) {
-        els.emits.runCard.addEventListener('change', () => {
-            syncRunCardControlState(state.config);
-            renderCLI();
-            scheduleConfigPreview();
-        });
-    }
 
     if (els.runtime.maxWorkersMode) {
         els.runtime.maxWorkersMode.addEventListener('change', (e) => {
