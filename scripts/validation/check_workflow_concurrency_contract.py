@@ -45,6 +45,27 @@ def _has_trigger(config: dict[str, Any], trigger_name: str) -> bool:
     return False
 
 
+def _cancel_in_progress_is_enabled(value: Any) -> bool:
+    """Return True when cancel-in-progress can cancel in-flight runs.
+
+    GitHub Actions accepts expressions for this field. Because the validator
+    cannot safely prove those expressions evaluate to false, expression-shaped
+    values are treated as enabled to avoid false negatives.
+    """
+    if isinstance(value, bool):
+        return value
+    if not isinstance(value, str):
+        return False
+
+    normalized = value.strip().lower()
+    if normalized == "true":
+        return True
+    if normalized == "false":
+        return False
+
+    return "${{" in value and "}}" in value
+
+
 def _load_workflow_config(workflow_name: str, text: str) -> dict[str, Any]:
     """Return a normalized workflow mapping.
 
@@ -95,14 +116,14 @@ def validate_workflow_concurrency_contract_text(workflow_name: str, text: str) -
     if not isinstance(concurrency, dict):
         return errors
 
-    if concurrency.get("cancel-in-progress") is not True:
+    if not _cancel_in_progress_is_enabled(concurrency.get("cancel-in-progress")):
         return errors
 
     group = concurrency.get("group")
     if not isinstance(group, str):
         errors.append(
             f"{workflow_name}: mixed schedule/push workflow must define a string concurrency.group when "
-            "cancel-in-progress is true"
+            "cancel-in-progress is enabled"
         )
         return errors
 
@@ -110,7 +131,7 @@ def validate_workflow_concurrency_contract_text(workflow_name: str, text: str) -
         errors.append(
             f"{workflow_name}: mixed schedule/push workflow must include an interpolated "
             f"'${{{{ github.event_name }}}}' token in concurrency.group when cancel-in-progress "
-            f"is true (current: {group!r})"
+            f"is enabled (current: {group!r})"
         )
 
     return errors
@@ -118,9 +139,15 @@ def validate_workflow_concurrency_contract_text(workflow_name: str, text: str) -
 
 def validate_repo_workflow_concurrency_contract(workflows_dir: Path = WORKFLOWS_DIR) -> list[str]:
     """Validate all workflow files in the repository."""
-    errors: list[str] = []
+    if not workflows_dir.is_dir():
+        return [f"{workflows_dir}: workflows directory is missing or not a directory"]
 
-    for workflow_path in sorted(workflows_dir.glob("*.yml")) + sorted(workflows_dir.glob("*.yaml")):
+    workflow_paths = sorted(workflows_dir.glob("*.yml")) + sorted(workflows_dir.glob("*.yaml"))
+    if not workflow_paths:
+        return [f"{workflows_dir}: no workflow files found"]
+
+    errors: list[str] = []
+    for workflow_path in workflow_paths:
         errors.extend(
             validate_workflow_concurrency_contract_text(workflow_path.name, workflow_path.read_text(encoding="utf-8"))
         )
