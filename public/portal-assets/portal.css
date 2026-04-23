@@ -1972,14 +1972,23 @@ details[open] .disclosure-chevron {
     }
 }
 
-body[data-bootstrap-loading="true"] .portal-overview-stats,
-body[data-bootstrap-loading="true"] .portal-overview-capability {
-    display: none;
-}
-
 @media (max-width: 767px) {
     .workspace-rail-links {
         grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 479px) {
+    .portal-overview-stats,
+    .portal-overview-stats-skeleton {
+        grid-template-columns: 1fr;
+    }
+    .workspace-rail-links {
+        grid-template-columns: 1fr;
+    }
+    .hero-action {
+        width: 100%;
+        justify-content: center;
     }
 }
 
@@ -2377,6 +2386,16 @@ body[data-bootstrap-loading="true"] .portal-overview-capability {
     opacity: 0.58;
     cursor: not-allowed;
     transform: none;
+}
+
+@media (max-width: 639px) {
+    .build-step-tabs {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0.5rem;
+    }
+    .build-step-tab {
+        min-height: 0;
+    }
 }
 
 .build-step-index {
@@ -3774,6 +3793,9 @@ textarea,
 }
 .max-h-\[320px\] {
   max-height: 320px;
+}
+.max-h-\[92vh\] {
+  max-height: 92vh;
 }
 .border-dashed {
   border-style: dashed;

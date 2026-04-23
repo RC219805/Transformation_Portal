@@ -186,6 +186,10 @@ const els = {
     heroPresetValue: _domId('heroPresetValue'),
     heroModeValue: _domId('heroModeValue'),
     heroQueueValue: _domId('heroQueueValue'),
+    overviewStatsRow: _domId('overviewStatsRow'),
+    overviewStatsSkeletonState: _domId('overviewStatsSkeletonState'),
+    overviewCapabilityRow: _domId('overviewCapabilityRow'),
+    overviewCapabilitySkeletonState: _domId('overviewCapabilitySkeletonState'),
     capabilityChips: _domId('capabilityChips'),
     presetHeadline: _domId('presetHeadline'),
     presetStabilityBadge: _domId('presetStabilityBadge'),
@@ -4039,6 +4043,8 @@ function _syncOverviewBuildLoadingState(payload = null) {
 
     _toggleSurfaceSkeleton(els.missionShell, els.missionShellContent, els.missionShellSkeletonState, bootstrapLoading);
     _toggleSurfaceSkeleton(els.intelligenceShell, els.intelligenceShellContent, els.intelligenceShellSkeletonState, bootstrapLoading);
+    _toggleSurfaceSkeleton(els.overviewStatsRow, els.overviewStatsRow, els.overviewStatsSkeletonState, bootstrapLoading);
+    _toggleSurfaceSkeleton(els.overviewCapabilityRow, els.overviewCapabilityRow, els.overviewCapabilitySkeletonState, bootstrapLoading);
     _toggleSurfaceSkeleton(els.profileShell, els.profileShellContent, els.profileShellSkeletonState, bootstrapLoading);
     _toggleSurfaceSkeleton(els.buildStepperShell, els.buildStepperShellContent, els.buildStepperSkeletonState, bootstrapLoading);
     _toggleSurfaceSkeleton(els.parametersShell, els.parametersShellContent, els.parametersShellSkeletonState, bootstrapLoading);

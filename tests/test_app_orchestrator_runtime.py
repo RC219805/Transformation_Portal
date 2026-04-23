@@ -537,6 +537,16 @@ def test_portal_runtime_helpers_read_served_js_assets_from_rendered_html() -> No
     assert served_portal_js == _portal_asset_path(bundle.urls["portal.js"]).read_text(encoding="utf-8")
     assert served_review_js == _portal_asset_path(bundle.urls["portal-review.js"]).read_text(encoding="utf-8")
     assert served_portal_js != _portal_js_source_content()
+    assert "overviewStatsSkeletonState" in served_portal_js
+    assert "overviewCapabilitySkeletonState" in served_portal_js
+    assert (
+        "_toggleSurfaceSkeleton(els.overviewStatsRow,els.overviewStatsRow,els.overviewStatsSkeletonState,bootstrapLoading)"
+        in served_portal_js
+    )
+    assert (
+        "_toggleSurfaceSkeleton(els.overviewCapabilityRow,els.overviewCapabilityRow,els.overviewCapabilitySkeletonState,bootstrapLoading)"
+        in served_portal_js
+    )
     assert "Review surfaces failed to load. Reload the portal and retry the review action." in runtime_content
     assert "deferredReviewSurfaceLoadFailedAt" in runtime_content
     assert "DEFERRED_REVIEW_SURFACE_RETRY_WINDOW_MS" in runtime_content
@@ -1858,6 +1868,8 @@ def test_portal_overview_and_build_surfaces_sync_bootstrap_skeletons_and_preview
 
     assert 'id="missionShellSkeletonState"' in content
     assert 'id="intelligenceShellSkeletonState"' in content
+    assert 'id="overviewStatsSkeletonState"' in content
+    assert 'id="overviewCapabilitySkeletonState"' in content
     assert 'id="profileShellSkeletonState"' in content
     assert 'id="buildStepperSkeletonState"' in content
     assert 'id="parametersShellSkeletonState"' in content
@@ -1870,6 +1882,14 @@ def test_portal_overview_and_build_surfaces_sync_bootstrap_skeletons_and_preview
     )
     assert (
         "_toggleSurfaceSkeleton(els.intelligenceShell, els.intelligenceShellContent, els.intelligenceShellSkeletonState, bootstrapLoading);"
+        in helper_body
+    )
+    assert (
+        "_toggleSurfaceSkeleton(els.overviewStatsRow, els.overviewStatsRow, els.overviewStatsSkeletonState, bootstrapLoading);"
+        in helper_body
+    )
+    assert (
+        "_toggleSurfaceSkeleton(els.overviewCapabilityRow, els.overviewCapabilityRow, els.overviewCapabilitySkeletonState, bootstrapLoading);"
         in helper_body
     )
     assert (
@@ -1903,6 +1923,34 @@ def test_portal_loading_tokens_and_reduced_motion_cover_overview_and_build_surfa
     assert ".toast-enter," in css
     assert ".surface-loading::after {" in css
     assert "transition: none !important;" in css
+
+
+def test_portal_runtime_css_ships_short_viewport_modal_and_phone_stepper_rules() -> None:
+    css = _portal_css_content()
+    base_stepper_rule = (
+        ".build-step-tabs {\n"
+        "    display: grid;\n"
+        "    grid-template-columns: repeat(4, minmax(0, 1fr));\n"
+        "    gap: 0.75rem;\n"
+        "}"
+    )
+    phone_stepper_rule = (
+        "@media (max-width: 639px) {\n"
+        "    .build-step-tabs {\n"
+        "        grid-template-columns: repeat(2, minmax(0, 1fr));\n"
+        "        gap: 0.5rem;\n"
+        "    }\n"
+        "    .build-step-tab {\n"
+        "        min-height: 0;\n"
+        "    }\n"
+        "}"
+    )
+
+    assert ".max-h-\\[92vh\\] {" in css
+    assert "max-height: 92vh;" in css
+    assert base_stepper_rule in css
+    assert phone_stepper_rule in css
+    assert css.index(base_stepper_rule) < css.index(phone_stepper_rule)
 
 
 def test_portal_preview_statuses_render_inline_for_build_fields() -> None:
