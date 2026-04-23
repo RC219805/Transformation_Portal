@@ -13,6 +13,7 @@ from typing import Any
 from transformation_portal.ingest.canonical_json import canonicalize_json, dumps_json
 from transformation_portal.lux_depth_v3.artifact_manager import compute_artifact_merkle_root
 from transformation_portal.lux_depth_v3.artifact_tree import verify_artifact_tree_payload
+from transformation_portal.lux_depth_v3.manifest import compute_file_sha256 as _shared_compute_file_sha256
 from transformation_portal.lux_depth_v3.run_card_contract import (
     RunCardPathValidationError,
     infer_run_card_version,
@@ -54,18 +55,14 @@ def _read_text(path: Path) -> tuple[str | None, str | None]:
 
 
 def _compute_file_sha256(path: Path) -> tuple[str | None, str | None]:
-    digest = hashlib.sha256()
     try:
-        with open(path, "rb") as handle:
-            for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-                digest.update(chunk)
+        return _shared_compute_file_sha256(path), None
     except FileNotFoundError:
         return None, f"File not found while hashing: {path}"
     except PermissionError:
         return None, f"Permission denied while hashing file: {path}"
     except OSError as exc:
         return None, f"Failed to hash file {path}: {exc}"
-    return digest.hexdigest(), None
 
 
 def canonical_json_text(payload: Any) -> str:
@@ -303,6 +300,15 @@ def _verify_run_card_self_integrity(
     if not isinstance(sidecar_payload, dict):
         errors.append(f"run card self-integrity sidecar must be a JSON object: {sidecar_path}")
         return
+    if sidecar_payload.get("run_card_path") != expected_relative_path:
+        errors.append(
+            "run card self-integrity sidecar run_card_path mismatch: "
+            f"got={sidecar_payload.get('run_card_path')!r}, expected={expected_relative_path!r}"
+        )
+    if sidecar_payload.get("self_indexing") != "excluded_self_hash_cycle":
+        errors.append("run card self-integrity sidecar self_indexing must be 'excluded_self_hash_cycle'")
+    if sidecar_payload.get("hash_algorithm") != "sha256":
+        errors.append("run card self-integrity sidecar hash_algorithm must be 'sha256'")
     final_sha = sidecar_payload.get("final_run_card_sha256")
     if not isinstance(final_sha, str) or not SHA256_HEX_RE.fullmatch(final_sha):
         errors.append("run card self-integrity sidecar final_run_card_sha256 must be a lowercase 64-char hex digest")

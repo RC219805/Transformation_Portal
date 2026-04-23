@@ -314,6 +314,28 @@ def test_verify_run_card_integrity_rejects_self_attestation_hash_drift(tmp_path:
     assert any("final_run_card_sha256 mismatch" in error for error in errors)
 
 
+def test_verify_run_card_integrity_rejects_self_attestation_metadata_mismatch(tmp_path: Path):
+    module = _load_script_module("verify_run_card_integrity_script_self_metadata", "scripts/verify_run_card_integrity.py")
+    run_card_path = tmp_path / "run_card_self_metadata.json"
+    payload = _valid_run_card_payload(module)
+    _write_self_attested_run_card(run_card_path, payload)
+    sidecar_path = run_card_path.with_suffix(".self.json")
+    sidecar = json.loads(sidecar_path.read_text(encoding="utf-8"))
+    sidecar["run_card_path"] = "other_run_card.json"
+    sidecar["self_indexing"] = "included_in_tree"
+    sidecar["hash_algorithm"] = "sha512"
+    sidecar_path.write_text(
+        dumps_json(sidecar, indent=2, sort_keys=True, ensure_ascii=False, allow_nan=False),
+        encoding="utf-8",
+    )
+
+    errors = module.verify_run_card_integrity(run_card_path)
+
+    assert any("sidecar run_card_path mismatch" in error for error in errors)
+    assert any("sidecar self_indexing" in error for error in errors)
+    assert any("sidecar hash_algorithm" in error for error in errors)
+
+
 def test_verify_run_card_integrity_rejects_schema_violation(tmp_path: Path):
     module = _load_script_module("verify_run_card_integrity_script_schema", "scripts/verify_run_card_integrity.py")
     run_card_path = tmp_path / "run_card_invalid_schema.json"

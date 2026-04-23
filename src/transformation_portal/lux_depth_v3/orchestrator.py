@@ -6566,17 +6566,6 @@ class EnhanceOrchestrator:
         )
         if model_contract is not None:
             run_card["model_contract"] = model_contract
-        run_card_integrity_payload = {
-            "path": self._run_card_output_relative_path(str(run_card_path)),
-            "self_indexing": "excluded_self_hash_cycle",
-        }
-        integrity_canonical_payload = {
-            **run_card,
-            "run_card_integrity": run_card_integrity_payload,
-        }
-        integrity_payload_bytes = canonicalize_json(integrity_canonical_payload)
-        run_card_integrity_payload["canonical_payload_sha256"] = hashlib.sha256(integrity_payload_bytes).hexdigest()
-        run_card["run_card_integrity"] = run_card_integrity_payload
 
         def _json_default(obj: Any) -> Any:
             # --- ConfigFingerprint ---
@@ -6635,7 +6624,21 @@ class EnhanceOrchestrator:
             # --- Final deterministic fallback ---
             return str(obj)
 
+        run_card_write_attempted = False
+        sidecar_write_attempted = False
+        run_card_self_attestation_path = run_card_path.with_suffix(".self.json")
         try:
+            run_card_integrity_payload = {
+                "path": self._run_card_output_relative_path(str(run_card_path)),
+                "self_indexing": "excluded_self_hash_cycle",
+            }
+            integrity_canonical_payload = {
+                **run_card,
+                "run_card_integrity": run_card_integrity_payload,
+            }
+            integrity_payload_bytes = canonicalize_json(integrity_canonical_payload)
+            run_card_integrity_payload["canonical_payload_sha256"] = hashlib.sha256(integrity_payload_bytes).hexdigest()
+            run_card["run_card_integrity"] = run_card_integrity_payload
             serialized_run_card = json.loads(
                 dumps_json(
                     run_card,
@@ -6651,33 +6654,46 @@ class EnhanceOrchestrator:
             )
             _validate_run_card_backend_semantics(serialized_run_card)
 
-            with open(run_card_path, "w", encoding="utf-8") as f:
-                dump_json(
-                    run_card,
-                    f,
-                    indent=2,
-                    default=_json_default,
-                    sort_keys=True,
-                    ensure_ascii=False,
-                    allow_nan=False,
-                )
-            run_card_self_attestation_path = run_card_path.with_suffix(".self.json")
+            run_card_text = dumps_json(
+                run_card,
+                indent=2,
+                default=_json_default,
+                sort_keys=True,
+                ensure_ascii=False,
+                allow_nan=False,
+            )
             run_card_self_attestation = {
                 "run_card_path": self._run_card_output_relative_path(str(run_card_path)),
                 "self_indexing": "excluded_self_hash_cycle",
-                "final_run_card_sha256": compute_file_sha256(run_card_path),
+                "final_run_card_sha256": hashlib.sha256(run_card_text.encode("utf-8")).hexdigest(),
                 "hash_algorithm": "sha256",
             }
+            sidecar_text = dumps_json(
+                run_card_self_attestation,
+                indent=2,
+                sort_keys=True,
+                ensure_ascii=False,
+                allow_nan=False,
+            )
+            run_card_write_attempted = True
+            with open(run_card_path, "w", encoding="utf-8") as f:
+                f.write(run_card_text)
+            sidecar_write_attempted = True
             with open(run_card_self_attestation_path, "w", encoding="utf-8") as f:
-                dump_json(
-                    run_card_self_attestation,
-                    f,
-                    indent=2,
-                    sort_keys=True,
-                    ensure_ascii=False,
-                    allow_nan=False,
-                )
+                f.write(sidecar_text)
         except (OSError, TypeError, ValueError, RuntimeError):
+            if run_card_write_attempted or sidecar_write_attempted:
+                for partial_path in (run_card_path, run_card_self_attestation_path):
+                    try:
+                        partial_path.unlink()
+                    except FileNotFoundError:
+                        pass
+                    except OSError:
+                        logger.warning(
+                            "Failed to remove partial run-card artifact after emission failure: %s",
+                            partial_path,
+                            exc_info=True,
+                        )
             logger.exception(
                 "Run card emission failed" " for batch_id=%s" " (output: %s)." " Continuing without" " run card.",
                 batch_id,

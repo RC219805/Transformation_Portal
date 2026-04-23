@@ -1405,6 +1405,77 @@ def test_emit_run_card_skips_legacy_merkle_root_for_v2(tmp_path: Path):
     build_tree.assert_called_once()
 
 
+def test_emit_run_card_cleans_partial_file_when_self_sidecar_write_fails(tmp_path: Path):
+    config = EnhanceConfig(
+        model_variant=ModelVariant.METRIC_LARGE,
+        model_key="da3-metric",
+        run_card_version="v1",
+    )
+    orch = EnhanceOrchestrator(config, tmp_path)
+    artifact_path = tmp_path / "depth" / "image_01_depth.png"
+    artifact_path.parent.mkdir(parents=True, exist_ok=True)
+    artifact_path.write_bytes(b"depth")
+    run_card_path = tmp_path / "run_card_2026-04-10_120000.json"
+    sidecar_path = run_card_path.with_suffix(".self.json")
+    real_open = open
+    sidecar_write_attempted = False
+
+    def fail_sidecar_open(path: Any, *args: Any, **kwargs: Any):
+        nonlocal sidecar_write_attempted
+        if str(path).endswith(".self.json") and args and "w" in str(args[0]):
+            sidecar_write_attempted = True
+            raise OSError("simulated sidecar write failure")
+        return real_open(path, *args, **kwargs)
+
+    with (
+        patch.object(orch, "_collect_run_card_artifact_paths", return_value=[artifact_path]),
+        patch.object(
+            orch,
+            "_compute_backend_summary",
+            return_value={
+                "requested_backend": "da3",
+                "primary_backend": "da3",
+                "final_backends_used": ["da3"],
+                "fallback_images": 0,
+                "semantic_fallback_images": 0,
+                "operational_fallback_images": 0,
+            },
+        ),
+        patch.object(orch, "_requested_backend_fulfillment_defect", return_value=None),
+        patch.object(
+            orch,
+            "_build_backend_selection_payload",
+            return_value={
+                "requested": "da3",
+                "resolved": "da3",
+                "device": "cpu",
+                "model_id": "depth-anything/DA3NESTED-GIANT-LARGE-1.1",
+            },
+        ),
+        patch.object(orch, "_build_run_card_model_contract", return_value=None),
+        patch("transformation_portal.lux_depth_v3.orchestrator.open", side_effect=fail_sidecar_open, create=True),
+    ):
+        orch._emit_run_card(
+            batch_id="2026-04-10_120000",
+            start_time="2026-04-10T12:00:00Z",
+            end_time="2026-04-10T12:05:00Z",
+            results=[{"status": "ok", "backend": "da3", "runtime_s": 1.0}],
+            runtime_stats={
+                "count": 1,
+                "total": 1.0,
+                "mean": 1.0,
+                "min": 1.0,
+                "max": 1.0,
+                "median": 1.0,
+            },
+            outliers=[],
+        )
+
+    assert sidecar_write_attempted is True
+    assert not run_card_path.exists()
+    assert not sidecar_path.exists()
+
+
 def test_build_run_card_inputs_skips_hashing_when_hash_mode_never(tmp_path: Path) -> None:
     config = EnhanceConfig(
         model_variant=ModelVariant.METRIC_LARGE,
