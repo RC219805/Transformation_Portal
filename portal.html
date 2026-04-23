@@ -41,7 +41,7 @@ Contract notes:
     class="shell-bg text-slate-900 dark:text-slate-100 antialiased selection:bg-cyan-500/25 transition-colors duration-300"
 >
 
-    <a href="#main-content" class="skip-link rounded-lg px-4 py-2 text-sm font-medium text-white bg-indigo-600 shadow-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">
+    <a href="#main-content" class="skip-link rounded-lg px-4 py-2 text-sm font-medium text-white bg-indigo-600 shadow-lg">
         Skip to main content
     </a>
 
@@ -86,10 +86,10 @@ Contract notes:
             </div>
 
             <div class="portal-topbar__actions flex items-center gap-3" data-ui="portal-topbar-actions">
-                <button id="shortcutsBtn" type="button" class="rounded-full border border-slate-200 dark:border-slate-700 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500 hover:text-slate-900 hover:border-slate-300 dark:text-slate-400 dark:hover:text-white dark:hover:border-slate-600 transition-colors focus:outline-none focus:ring-2 focus:ring-cyan-500">
+                <button id="shortcutsBtn" type="button" class="rounded-full border border-slate-200 dark:border-slate-700 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500 hover:text-slate-900 hover:border-slate-300 dark:text-slate-400 dark:hover:text-white dark:hover:border-slate-600 transition-colors">
                     Shortcuts <span class="kbd">?</span>
                 </button>
-                <button id="themeBtn" type="button" class="rounded-full px-4 py-2 text-xs font-semibold border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors focus:outline-none focus:ring-2 focus:ring-cyan-500" aria-label="Theme preference: system. Click to switch to dark.">
+                <button id="themeBtn" type="button" class="rounded-full px-4 py-2 text-xs font-semibold border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors" aria-label="Theme preference: system. Click to switch to dark.">
                     Theme: System
                 </button>
             </div>
@@ -149,16 +149,16 @@ Contract notes:
                         </p>
                     </div>
                     <div class="overview-actions" data-ui="overview-actions-cluster">
-                        <button id="heroRunBtn" type="button" class="hero-action hero-action-primary focus:outline-none focus:ring-2 focus:ring-cyan-500" data-ui="overview-new-run">
+                        <button id="heroRunBtn" type="button" class="hero-action hero-action-primary" data-ui="overview-new-run">
                             New Run
                         </button>
-                        <button id="resumeDraftBtn" type="button" class="hero-action hero-action-secondary focus:outline-none focus:ring-2 focus:ring-cyan-500" data-ui="overview-resume-draft">
+                        <button id="resumeDraftBtn" type="button" class="hero-action hero-action-secondary" data-ui="overview-resume-draft">
                             Resume Draft
                         </button>
-                        <button id="heroExportBtn" type="button" class="hero-action hero-action-secondary focus:outline-none focus:ring-2 focus:ring-cyan-500 disabled:opacity-50 disabled:cursor-not-allowed" disabled data-ui="overview-active-job">
+                        <button id="heroExportBtn" type="button" class="hero-action hero-action-secondary disabled:opacity-50 disabled:cursor-not-allowed btn-busy" disabled data-ui="overview-active-job" aria-busy="false">
                             View Active Job
                         </button>
-                        <button id="refreshHealthBtn" type="button" class="hero-action hero-action-secondary focus:outline-none focus:ring-2 focus:ring-cyan-500 disabled:opacity-50 disabled:cursor-not-allowed" disabled data-ui="overview-latest-review">
+                        <button id="refreshHealthBtn" type="button" class="hero-action hero-action-secondary disabled:opacity-50 disabled:cursor-not-allowed btn-busy" disabled data-ui="overview-latest-review" aria-busy="false">
                             Review Latest Output
                         </button>
                     </div>
@@ -360,7 +360,7 @@ Contract notes:
                 <p id="consoleViewMeta" class="portal-context-meta text-[11px] font-mono text-slate-500 dark:text-slate-400">View routing stays client-side to preserve the live orchestrator contract.</p>
             </div>
             <div class="console-context-strip mt-4" data-ui="console-context-strip">
-                <div id="consoleContextRibbon" class="console-context-ribbon portal-context-ribbon hidden" data-ui="console-context-ribbon" aria-live="polite">
+                <div id="consoleContextRibbon" class="console-context-ribbon portal-context-ribbon hidden" data-ui="console-context-ribbon" aria-live="polite" role="status">
                     <div id="contextRibbonCard1" class="console-context-card" data-tone="info">
                         <p id="contextRibbonCard1Label" class="console-context-label">Job</p>
                         <p id="contextRibbonJob" class="console-context-value">No job selected</p>
@@ -382,7 +382,7 @@ Contract notes:
                         <p id="contextRibbonCompareMeta" class="console-context-meta">No paired comparison is available for the current artifact.</p>
                     </div>
                 </div>
-                <section id="consoleActionRail" class="console-action-rail hidden" data-ui="console-action-rail" data-tone="info" aria-live="polite">
+                <section id="consoleActionRail" class="console-action-rail hidden" data-ui="console-action-rail" data-tone="info" aria-live="polite" role="status">
                     <div class="console-action-rail-copy">
                         <p class="console-action-rail-kicker">Action rail</p>
                         <p id="consoleActionRailTitle" class="console-action-rail-title">Keep the next operator move pinned</p>
@@ -448,7 +448,7 @@ Contract notes:
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
                             <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="pipelineSelect">Pipeline Execution</label>
-                            <select id="pipelineSelect" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2.5 text-[13px] font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors cursor-pointer">
+                            <select id="pipelineSelect" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2.5 text-[13px] font-mono transition-colors cursor-pointer">
                                 <option value="lux-depth-v3">lux-depth-v3</option>
                                 <option value="archive-gate-a">archive-gate-a (Fixity / Manifest Prep)</option>
                                 <option value="archive-gate-b">archive-gate-b (BagIt Build)</option>
@@ -458,10 +458,10 @@ Contract notes:
                         <div>
                             <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="profileSelect">Local Profile</label>
                             <div class="flex gap-2">
-                                <select id="profileSelect" class="flex-1 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2.5 text-[13px] focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors cursor-pointer">
+                                <select id="profileSelect" class="flex-1 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2.5 text-[13px] transition-colors cursor-pointer">
                                     <!-- Populated by JS -->
                                 </select>
-                                <button id="saveProfileBtn" type="button" class="rounded-xl px-4 py-2 text-[13px] font-semibold border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                                <button id="saveProfileBtn" type="button" class="rounded-xl px-4 py-2 text-[13px] font-semibold border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors btn-busy" aria-busy="false">
                                     Save
                                 </button>
                             </div>
@@ -484,7 +484,7 @@ Contract notes:
                                 <label class="block text-xs font-medium text-slate-700 dark:text-slate-300" for="apiKeyInput">API Key</label>
                                 <p class="mt-1 text-[12px] leading-relaxed text-slate-600 dark:text-slate-300">Direct-debug tokens are session-only and never persisted in browser local storage.</p>
                                 <div class="mt-3 flex flex-col sm:flex-row gap-2 sm:items-center">
-                                    <input type="password" id="apiKeyInput" class="flex-1 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-2.5 text-[13px] font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors" placeholder="Bearer token for /v1/jobs endpoints" autocomplete="off" spellcheck="false" disabled />
+                                    <input type="password" id="apiKeyInput" class="flex-1 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-2.5 text-[13px] font-mono transition-colors" placeholder="Bearer token for /v1/jobs endpoints" autocomplete="off" spellcheck="false" disabled />
                                 </div>
                             </div>
                         </div>
@@ -556,10 +556,10 @@ Contract notes:
                             <p id="buildStepSummary" class="mt-2 text-[14px] leading-7 text-slate-600 dark:text-slate-300">Start with the pipeline and preset, then move through paths, contextual options, and dispatch review.</p>
                         </div>
                         <div class="build-stepper-actions-inline">
-                            <button id="buildStepBackBtn" type="button" class="stepper-nav-btn focus:outline-none focus:ring-2 focus:ring-cyan-500">
+                            <button id="buildStepBackBtn" type="button" class="stepper-nav-btn">
                                 Back
                             </button>
-                            <button id="buildStepNextBtn" type="button" class="stepper-nav-btn stepper-nav-btn-primary focus:outline-none focus:ring-2 focus:ring-cyan-500">
+                            <button id="buildStepNextBtn" type="button" class="stepper-nav-btn stepper-nav-btn-primary">
                                 Next
                             </button>
                         </div>
@@ -668,7 +668,7 @@ Contract notes:
                         <div class="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-4">
                             <div class="sm:col-span-3">
                                 <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="presetSelect">Preset</label>
-                                <select id="presetSelect" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2.5 text-[13px] font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors cursor-pointer">
+                                <select id="presetSelect" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2.5 text-[13px] font-mono transition-colors cursor-pointer">
                                     <option value="premium" selected>premium (Stable)</option>
                                     <option value="default">default (Canary)</option>
                                     <option value="depth-anything-v3.1-research-m4">v3.1-m4 (Experimental)</option>
@@ -676,7 +676,7 @@ Contract notes:
                             </div>
                             <div>
                                 <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="qualityTier">Quality Tier</label>
-                                <select id="qualityTier" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2.5 text-[13px] font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors cursor-pointer">
+                                <select id="qualityTier" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2.5 text-[13px] font-mono transition-colors cursor-pointer">
                                     <option value="apex">apex (Max)</option>
                                     <option value="premium" selected>premium</option>
                                     <option value="standard">standard</option>
@@ -684,7 +684,7 @@ Contract notes:
                             </div>
                             <div>
                                 <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="depthDevice">Compute Device</label>
-                                <select id="depthDevice" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2.5 text-[13px] font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors cursor-pointer">
+                                <select id="depthDevice" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2.5 text-[13px] font-mono transition-colors cursor-pointer">
                                     <option value="cpu" selected>cpu</option>
                                     <option value="cuda">cuda</option>
                                     <option value="mps">mps (macOS)</option>
@@ -709,9 +709,9 @@ Contract notes:
                         <div class="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div>
                                 <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="inputDir">Input Directory</label>
-                                <input type="text" id="inputDir" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-2.5 text-[13px] font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors" value="./input_images" autocomplete="off" spellcheck="false" />
+                                <input type="text" id="inputDir" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-2.5 text-[13px] font-mono transition-colors" value="./input_images" autocomplete="off" spellcheck="false" />
                                 <p id="inputDirStatus" class="field-status mt-1 text-[12px] leading-6 text-slate-500 dark:text-slate-400">Set the source folder for the next run.</p>
-                                <div id="stagedUploadShell" class="mt-3 hidden rounded-xl border border-dashed border-slate-300 dark:border-slate-700 bg-white/70 dark:bg-slate-900/60 p-4" data-ui="staged-upload-shell" aria-live="polite">
+                                <div id="stagedUploadShell" class="mt-3 hidden rounded-xl border border-dashed border-slate-300 dark:border-slate-700 bg-white/70 dark:bg-slate-900/60 p-4" data-ui="staged-upload-shell" aria-live="polite" role="status">
                                     <div class="flex flex-wrap items-start justify-between gap-3">
                                         <div>
                                             <p class="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Staged Uploads</p>
@@ -731,15 +731,15 @@ Contract notes:
                                         </div>
                                         <p id="stagedUploadProgressLabel" class="mt-2 text-[12px] leading-6 text-slate-500 dark:text-slate-400">No upload in progress.</p>
                                     </div>
-                                    <div id="stagedUploadSummary" class="mt-3" aria-live="polite" aria-atomic="true"></div>
-                                    <p id="stagedUploadError" class="mt-1 text-[12px] leading-6 text-red-600 dark:text-red-300" aria-live="assertive"></p>
+                                    <div id="stagedUploadSummary" class="mt-3" aria-live="polite" aria-atomic="true" role="status"></div>
+                                    <p id="stagedUploadError" class="mt-1 text-[12px] leading-6 text-red-600 dark:text-red-300" aria-live="assertive" role="alert"></p>
                                     <input type="file" id="stagedUploadFilesInput" class="hidden" multiple />
                                     <input type="file" id="stagedUploadFolderInput" class="hidden" webkitdirectory directory multiple />
                                 </div>
                             </div>
                             <div>
                                 <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="outputDir">Output Directory</label>
-                                <input type="text" id="outputDir" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-2.5 text-[13px] font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors" value="./output/lux_depth_v3_apex" autocomplete="off" spellcheck="false" />
+                                <input type="text" id="outputDir" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-2.5 text-[13px] font-mono transition-colors" value="./output/lux_depth_v3_apex" autocomplete="off" spellcheck="false" />
                                 <p id="outputDirStatus" class="field-status mt-1 text-[12px] leading-6 text-slate-500 dark:text-slate-400">Choose the governed destination for generated outputs.</p>
                             </div>
                         </div>
@@ -757,12 +757,14 @@ Contract notes:
                         </div>
                         <div>
                             <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="depthBackend">Depth Backend</label>
-                            <select id="depthBackend" class="w-full sm:w-1/2 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2.5 text-[13px] font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors cursor-pointer">
+                            <select id="depthBackend" class="w-full sm:w-1/2 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2.5 text-[13px] font-mono transition-colors cursor-pointer">
                                 <option value="da3" selected>da3 (Depth Anything v3)</option>
                                 <option value="depth_pro">depth_pro (Research-Only)</option>
                             </select>
                         </div>
-                        <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+                        <fieldset class="group-bare">
+                            <legend class="sr-only">Segmentation</legend>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
                             <label class="flex items-center justify-between rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50 px-4 py-3.5 cursor-pointer group transition-colors">
                                 <span class="text-[12px] font-medium select-none text-slate-700 dark:text-slate-300">Enable Segmentation</span>
                                 <div class="relative inline-flex items-center">
@@ -773,7 +775,7 @@ Contract notes:
                             </label>
                             <div id="segmentationBackendField">
                                 <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="segmentationBackend">Segmentation Backend</label>
-                                <select id="segmentationBackend" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2.5 text-[13px] font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors cursor-pointer">
+                                <select id="segmentationBackend" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2.5 text-[13px] font-mono transition-colors cursor-pointer">
                                     <option value="sam2">sam2</option>
                                     <option value="efficientsam" selected>efficientsam</option>
                                     <option value="stub">stub</option>
@@ -781,7 +783,7 @@ Contract notes:
                             </div>
                             <div id="sam2ModelSizeField" class="hidden">
                                 <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="sam2ModelSize">SAM2 Model Size</label>
-                                <select id="sam2ModelSize" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2.5 text-[13px] font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors cursor-pointer">
+                                <select id="sam2ModelSize" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2.5 text-[13px] font-mono transition-colors cursor-pointer">
                                     <option value="base" selected>base</option>
                                     <option value="large">large</option>
                                 </select>
@@ -794,11 +796,12 @@ Contract notes:
                                     <div class="absolute left-[2px] top-[2px] bg-white w-4 h-4 rounded-full transition-transform duration-200 ease-in-out peer-checked:translate-x-4 shadow-sm"></div>
                                 </div>
                             </label>
-                        </div>
+                            </div>
+                        </fieldset>
                         <p id="segmentationApplicabilityHint" class="text-[11px] leading-5 text-slate-500 dark:text-slate-400">Segmentation is active via efficientsam. SAM2-only controls stay hidden until you switch back to sam2.</p>
                         <div id="sam2CheckpointField" class="hidden">
                             <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="sam2CheckpointPath">SAM2 Checkpoint Path (Optional)</label>
-                            <input type="text" id="sam2CheckpointPath" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-2.5 text-[13px] font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors" placeholder="./models/sam2/sam2.1_hiera_large.pt" autocomplete="off" spellcheck="false" />
+                            <input type="text" id="sam2CheckpointPath" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-2.5 text-[13px] font-mono transition-colors" placeholder="./models/sam2/sam2.1_hiera_large.pt" autocomplete="off" spellcheck="false" />
                         </div>
                     </div>
 
@@ -812,12 +815,12 @@ Contract notes:
                         </div>
                         <div id="archiveIndexField">
                             <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="archiveIndexPath">Archive Index Path</label>
-                            <input type="text" id="archiveIndexPath" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-2.5 text-[13px] font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors" value="" placeholder="./tests/fixtures/archive_small/archive_index_normalized.csv.gz" autocomplete="off" spellcheck="false" />
+                            <input type="text" id="archiveIndexPath" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-2.5 text-[13px] font-mono transition-colors" value="" placeholder="./tests/fixtures/archive_small/archive_index_normalized.csv.gz" autocomplete="off" spellcheck="false" />
                             <p id="archiveIndexStatus" class="mt-1 text-[12px] leading-6 text-slate-500 dark:text-slate-400">Required for `fixity-scan`. Supply an existing normalized archive index that is safe to read from the local allowlist.</p>
                         </div>
                         <div id="rightsManifestField" class="hidden">
                             <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="rightsManifestPath">Rights Manifest JSONL</label>
-                            <input type="text" id="rightsManifestPath" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-2.5 text-[13px] font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors" value="" placeholder="./output/archive_manifest_v2.rights.jsonl" autocomplete="off" spellcheck="false" />
+                            <input type="text" id="rightsManifestPath" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-2.5 text-[13px] font-mono transition-colors" value="" placeholder="./output/archive_manifest_v2.rights.jsonl" autocomplete="off" spellcheck="false" />
                             <p id="rightsManifestStatus" class="mt-1 text-[12px] leading-6 text-slate-500 dark:text-slate-400">Required for `bag-build` and `mets-export`. This must point to an existing rights-manifest artifact generated by an earlier archive stage.</p>
                         </div>
                     </div>
@@ -877,7 +880,7 @@ Contract notes:
                         </label>
 
                         <div id="v2PresetField" class="hidden sm:col-span-2">
-                             <input type="text" id="v2Preset" placeholder="V2 Preset (e.g. default)" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-2.5 text-[13px] font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors disabled:opacity-50" value="default" disabled autocomplete="off" spellcheck="false" />
+                             <input type="text" id="v2Preset" placeholder="V2 Preset (e.g. default)" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-2.5 text-[13px] font-mono transition-colors disabled:opacity-50" value="default" disabled autocomplete="off" spellcheck="false" />
                         </div>
                     </div>
 
@@ -890,32 +893,35 @@ Contract notes:
                     </div>
 
                     <!-- Native Emit Checkboxes -->
-                    <div class="mt-4 grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-3">
+                    <fieldset class="mt-4 group-bare">
+                        <legend class="sr-only">Emit outputs</legend>
+                        <div class="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-3">
                         <label class="flex items-center gap-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
-                            <input type="checkbox" id="emitMaster16" checked class="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 dark:border-slate-600 dark:bg-slate-900" />
+                            <input type="checkbox" id="emitMaster16" checked class="w-4 h-4 rounded text-indigo-600 border-slate-300 dark:border-slate-600 dark:bg-slate-900" />
                             <span class="text-[11px] font-mono select-none truncate text-slate-600 dark:text-slate-300">master16</span>
                         </label>
                         <label class="flex items-center gap-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
-                            <input type="checkbox" id="emitUpscaled16" checked class="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 dark:border-slate-600 dark:bg-slate-900" />
+                            <input type="checkbox" id="emitUpscaled16" checked class="w-4 h-4 rounded text-indigo-600 border-slate-300 dark:border-slate-600 dark:bg-slate-900" />
                             <span class="text-[11px] font-mono select-none truncate text-slate-600 dark:text-slate-300">upscaled16</span>
                         </label>
                         <label class="flex items-center gap-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
-                            <input type="checkbox" id="emitMarketing" class="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 dark:border-slate-600 dark:bg-slate-900" />
+                            <input type="checkbox" id="emitMarketing" class="w-4 h-4 rounded text-indigo-600 border-slate-300 dark:border-slate-600 dark:bg-slate-900" />
                             <span class="text-[11px] font-mono select-none truncate text-slate-600 dark:text-slate-300">marketing</span>
                         </label>
                         <label class="flex items-center gap-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
-                            <input type="checkbox" id="emitReport" checked class="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 dark:border-slate-600 dark:bg-slate-900" />
+                            <input type="checkbox" id="emitReport" checked class="w-4 h-4 rounded text-indigo-600 border-slate-300 dark:border-slate-600 dark:bg-slate-900" />
                             <span class="text-[11px] font-mono select-none truncate text-slate-600 dark:text-slate-300">report</span>
                         </label>
                         <label class="flex items-center gap-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
-                            <input type="checkbox" id="emitRunCard" checked class="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 dark:border-slate-600 dark:bg-slate-900" />
+                            <input type="checkbox" id="emitRunCard" checked class="w-4 h-4 rounded text-indigo-600 border-slate-300 dark:border-slate-600 dark:bg-slate-900" />
                             <span class="text-[11px] font-mono select-none truncate text-slate-600 dark:text-slate-300">run_card</span>
                         </label>
                         <label class="flex items-center gap-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
-                            <input type="checkbox" id="emitRunCardIncludeProofs" class="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 dark:border-slate-600 dark:bg-slate-900" />
+                            <input type="checkbox" id="emitRunCardIncludeProofs" class="w-4 h-4 rounded text-indigo-600 border-slate-300 dark:border-slate-600 dark:bg-slate-900" />
                             <span class="text-[11px] font-mono select-none truncate text-slate-600 dark:text-slate-300">run_card_proofs</span>
                         </label>
-                    </div>
+                        </div>
+                    </fieldset>
 
                     <section class="mt-6 space-y-4" data-ui="build-posture-band">
                         <div class="flex items-start justify-between gap-3">
@@ -999,34 +1005,34 @@ Contract notes:
                         </summary>
                         <div class="mt-4 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
                             <label class="flex items-center gap-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
-                                <input type="checkbox" id="saveFloatDepth" class="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 dark:border-slate-600 dark:bg-slate-900" />
+                                <input type="checkbox" id="saveFloatDepth" class="w-4 h-4 rounded text-indigo-600 border-slate-300 dark:border-slate-600 dark:bg-slate-900" />
                                 <span class="text-[11px] font-mono select-none truncate text-slate-600 dark:text-slate-300">save_float_depth</span>
                             </label>
                             <label class="flex items-center gap-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
-                                <input type="checkbox" id="forceDepth" class="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 dark:border-slate-600 dark:bg-slate-900" />
+                                <input type="checkbox" id="forceDepth" class="w-4 h-4 rounded text-indigo-600 border-slate-300 dark:border-slate-600 dark:bg-slate-900" />
                                 <span class="text-[11px] font-mono select-none truncate text-slate-600 dark:text-slate-300">force_depth</span>
                             </label>
                             <label class="flex items-center gap-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
-                                <input type="checkbox" id="strictInputs" class="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 dark:border-slate-600 dark:bg-slate-900" />
+                                <input type="checkbox" id="strictInputs" class="w-4 h-4 rounded text-indigo-600 border-slate-300 dark:border-slate-600 dark:bg-slate-900" />
                                 <span class="flex items-center gap-2 min-w-0">
                                     <span class="text-[11px] font-mono select-none truncate text-slate-600 dark:text-slate-300">strict_inputs</span>
                                     <span class="shrink-0 rounded border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 px-1.5 py-0.5 text-[9px] uppercase tracking-wide text-amber-700 dark:text-amber-400">Debug</span>
                                 </span>
                             </label>
                             <label class="flex items-center gap-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
-                                <input type="checkbox" id="verifyImages" class="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 dark:border-slate-600 dark:bg-slate-900" />
+                                <input type="checkbox" id="verifyImages" class="w-4 h-4 rounded text-indigo-600 border-slate-300 dark:border-slate-600 dark:bg-slate-900" />
                                 <span class="text-[11px] font-mono select-none truncate text-slate-600 dark:text-slate-300">verify_images</span>
                             </label>
                             <label class="flex items-center gap-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
-                                <input type="checkbox" id="allowSemanticFallback" class="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 dark:border-slate-600 dark:bg-slate-900" />
+                                <input type="checkbox" id="allowSemanticFallback" class="w-4 h-4 rounded text-indigo-600 border-slate-300 dark:border-slate-600 dark:bg-slate-900" />
                                 <span class="text-[11px] font-mono select-none truncate text-slate-600 dark:text-slate-300">allow_semantic_fallback</span>
                             </label>
                             <label class="flex items-center gap-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
-                                <input type="checkbox" id="verboseFlag" class="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 dark:border-slate-600 dark:bg-slate-900" />
+                                <input type="checkbox" id="verboseFlag" class="w-4 h-4 rounded text-indigo-600 border-slate-300 dark:border-slate-600 dark:bg-slate-900" />
                                 <span class="text-[11px] font-mono select-none truncate text-slate-600 dark:text-slate-300">verbose</span>
                             </label>
                             <label class="flex items-center gap-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
-                                <input type="checkbox" id="quietFlag" class="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 dark:border-slate-600 dark:bg-slate-900" />
+                                <input type="checkbox" id="quietFlag" class="w-4 h-4 rounded text-indigo-600 border-slate-300 dark:border-slate-600 dark:bg-slate-900" />
                                 <span class="text-[11px] font-mono select-none truncate text-slate-600 dark:text-slate-300">quiet</span>
                             </label>
                         </div>
@@ -1046,15 +1052,15 @@ Contract notes:
                         </summary>
                         <div class="mt-4 p-4 rounded-xl border border-amber-200 dark:border-amber-900/50 bg-amber-50 dark:bg-amber-900/10 transition-colors space-y-3">
                             <label id="licenseNonCommercialField" class="flex items-start gap-3 cursor-pointer group">
-                                <input type="checkbox" id="licenseNonCommercial" class="w-4 h-4 mt-0.5 rounded text-amber-600 focus:ring-amber-500 border-amber-300 dark:border-amber-700 dark:bg-slate-900" />
+                                <input type="checkbox" id="licenseNonCommercial" class="w-4 h-4 mt-0.5 rounded text-amber-600 border-amber-300 dark:border-amber-700 dark:bg-slate-900" />
                                 <span class="text-[12px] leading-tight select-none text-slate-700 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-white transition-colors">I acknowledge this run is strictly for <strong>Non-Commercial</strong> purposes.</span>
                             </label>
                             <label id="licenseAppleField" class="flex items-start gap-3 cursor-pointer group">
-                                <input type="checkbox" id="licenseApple" class="w-4 h-4 mt-0.5 rounded text-amber-600 focus:ring-amber-500 border-amber-300 dark:border-amber-700 dark:bg-slate-900" />
+                                <input type="checkbox" id="licenseApple" class="w-4 h-4 mt-0.5 rounded text-amber-600 border-amber-300 dark:border-amber-700 dark:bg-slate-900" />
                                 <span class="text-[12px] leading-tight select-none text-slate-700 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-white transition-colors">I accept the <strong>Apple Depth Pro Research License</strong> terms.</span>
                             </label>
                             <label id="licenseResearchToolsField" class="flex items-start gap-3 cursor-pointer group">
-                                <input type="checkbox" id="licenseResearchTools" class="w-4 h-4 mt-0.5 rounded text-amber-600 focus:ring-amber-500 border-amber-300 dark:border-amber-700 dark:bg-slate-900" />
+                                <input type="checkbox" id="licenseResearchTools" class="w-4 h-4 mt-0.5 rounded text-amber-600 border-amber-300 dark:border-amber-700 dark:bg-slate-900" />
                                 <span class="text-[12px] leading-tight select-none text-slate-700 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-white transition-colors">I accept the <strong>Research Tools License</strong> terms required for scene reconstruction.</span>
                             </label>
                         </div>
@@ -1103,7 +1109,7 @@ Contract notes:
                                 <p id="debugBundleSensitivity" class="mt-2 text-[12px] leading-6 text-slate-600 dark:text-slate-300">May include source images, camera metadata, segmentation overlays, and reprojection previews.</p>
                             </div>
                             <label class="flex items-start gap-3 cursor-pointer group">
-                                <input type="checkbox" id="debugBundleAcknowledge" class="w-4 h-4 mt-0.5 rounded text-amber-600 focus:ring-amber-500 border-amber-300 dark:border-amber-700 dark:bg-slate-900" />
+                                <input type="checkbox" id="debugBundleAcknowledge" class="w-4 h-4 mt-0.5 rounded text-amber-600 border-amber-300 dark:border-amber-700 dark:bg-slate-900" />
                                 <span class="text-[12px] leading-tight select-none text-slate-700 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-white transition-colors">I understand this debug bundle can copy source imagery and camera metadata into the output directory for offline triage.</span>
                             </label>
                             <p id="debugBundleAcknowledgeHint" class="text-[11px] leading-5 text-amber-700 dark:text-amber-300">Required before dispatch when debug bundle emission is enabled.</p>
@@ -1111,7 +1117,7 @@ Contract notes:
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div>
                                 <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="groupingMode">Grouping Mode</label>
-                                <select id="groupingMode" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2.5 text-[13px] font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors cursor-pointer">
+                                <select id="groupingMode" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2.5 text-[13px] font-mono transition-colors cursor-pointer">
                                     <option value="single" selected>single</option>
                                     <option value="parent_dir">parent_dir</option>
                                 </select>
@@ -1119,19 +1125,19 @@ Contract notes:
                             </div>
                             <div>
                                 <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="reconstructionIterations">Reconstruction Iterations</label>
-                                <input type="number" id="reconstructionIterations" min="1" step="1" value="1000" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-2.5 text-[13px] font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors" />
+                                <input type="number" id="reconstructionIterations" min="1" step="1" value="1000" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-2.5 text-[13px] font-mono transition-colors" />
                                 <p id="reconstructionIterationsStatus" class="mt-1 text-[11px] leading-5 text-slate-500 dark:text-slate-400">Balanced default: 1000 iterations.</p>
                             </div>
                         </div>
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div>
                                 <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="camerasSidecarPath">Cameras Sidecar Path (Optional)</label>
-                                <input type="text" id="camerasSidecarPath" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-2.5 text-[13px] font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors" placeholder="./manifests/scene_cameras.json" autocomplete="off" spellcheck="false" />
+                                <input type="text" id="camerasSidecarPath" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-2.5 text-[13px] font-mono transition-colors" placeholder="./manifests/scene_cameras.json" autocomplete="off" spellcheck="false" />
                                 <p id="camerasSidecarStatus" class="mt-1 text-[11px] leading-5 text-slate-500 dark:text-slate-400">Recommended for multi-view reconstruction runs.</p>
                             </div>
                             <div>
                                 <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="reconstructionTier">Reconstruction Tier</label>
-                                <select id="reconstructionTier" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2.5 text-[13px] font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors cursor-pointer">
+                                <select id="reconstructionTier" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2.5 text-[13px] font-mono transition-colors cursor-pointer">
                                     <option value="apex_research" selected>apex_research</option>
                                     <option value="apex_research_ultra">apex_research_ultra</option>
                                     <option value="experimental">experimental</option>
@@ -1147,7 +1153,7 @@ Contract notes:
                                     <span>RAW Ingest Mode</span>
                                     <span class="shrink-0 rounded border border-indigo-300 dark:border-indigo-700 bg-indigo-50 dark:bg-indigo-900/20 px-1.5 py-0.5 text-[9px] uppercase tracking-wide text-indigo-700 dark:text-indigo-400">Advanced</span>
                                 </label>
-                                <select id="rawIngestMode" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2.5 text-[13px] font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors cursor-pointer">
+                                <select id="rawIngestMode" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2.5 text-[13px] font-mono transition-colors cursor-pointer">
                                     <option value="auto" selected>auto</option>
                                     <option value="force_rawpy">force_rawpy</option>
                                     <option value="force_preview">force_preview</option>
@@ -1185,29 +1191,29 @@ Contract notes:
                         <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
                             <div>
                                 <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="maxWorkersMode">Max Workers</label>
-                                <select id="maxWorkersMode" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2.5 text-[13px] font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors cursor-pointer">
+                                <select id="maxWorkersMode" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2.5 text-[13px] font-mono transition-colors cursor-pointer">
                                     <option value="auto" selected>auto</option>
                                     <option value="fixed">fixed</option>
                                 </select>
                                 <div id="maxWorkersValueField" class="hidden mt-3">
-                                    <input type="number" id="maxWorkers" min="1" step="1" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-2.5 text-[13px] font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors" placeholder="enter worker cap" />
+                                    <input type="number" id="maxWorkers" min="1" step="1" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-2.5 text-[13px] font-mono transition-colors" placeholder="enter worker cap" />
                                 </div>
                                 <p id="maxWorkersStatus" class="mt-1 text-[11px] leading-5 text-slate-500 dark:text-slate-400">Auto lets the backend choose a safe CPU worker cap.</p>
                             </div>
                             <div>
                                 <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="maxGpuWorkersMode">Max GPU Workers</label>
-                                <select id="maxGpuWorkersMode" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2.5 text-[13px] font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors cursor-pointer">
+                                <select id="maxGpuWorkersMode" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2.5 text-[13px] font-mono transition-colors cursor-pointer">
                                     <option value="auto" selected>auto</option>
                                     <option value="fixed">fixed</option>
                                 </select>
                                 <div id="maxGpuWorkersValueField" class="hidden mt-3">
-                                    <input type="number" id="maxGpuWorkers" min="1" step="1" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-2.5 text-[13px] font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors" placeholder="enter GPU worker cap" />
+                                    <input type="number" id="maxGpuWorkers" min="1" step="1" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-2.5 text-[13px] font-mono transition-colors" placeholder="enter GPU worker cap" />
                                 </div>
                                 <p id="maxGpuWorkersStatus" class="mt-1 text-[11px] leading-5 text-slate-500 dark:text-slate-400">Auto keeps GPU parallelism conservative to reduce VRAM contention.</p>
                             </div>
                             <div>
                                 <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="logLevel">Log Level (Optional)</label>
-                                <select id="logLevel" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2.5 text-[13px] font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors cursor-pointer">
+                                <select id="logLevel" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2.5 text-[13px] font-mono transition-colors cursor-pointer">
                                     <option value="" selected>(default)</option>
                                     <option value="DEBUG">DEBUG</option>
                                     <option value="INFO">INFO</option>
@@ -1264,9 +1270,9 @@ Contract notes:
                         <section class="step-four-dispatch-shell rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/70 p-4" data-ui="dispatch-launch">
                             <div>
                                 <h4 class="text-[10px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">Dispatch</h4>
-                                <p id="dispatchReadinessReason" class="dispatch-readiness-reason mt-2 text-[12px] leading-6 text-slate-600 dark:text-slate-300" data-tone="info" aria-live="polite" aria-atomic="true">Preview-backed validation will explain when dispatch is ready.</p>
+                                <p id="dispatchReadinessReason" class="dispatch-readiness-reason mt-2 text-[12px] leading-6 text-slate-600 dark:text-slate-300" data-tone="info" aria-live="polite" aria-atomic="true" role="status">Preview-backed validation will explain when dispatch is ready.</p>
                             </div>
-                            <button id="runJobBtn" type="button" class="mt-4 w-full rounded-2xl px-6 py-4 text-[14px] font-extrabold uppercase tracking-[0.14em] text-white shadow-glow transition-all focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:ring-offset-2 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed bg-gradient-to-r from-teal-700 via-cyan-600 to-sky-600 hover:from-teal-600 hover:via-cyan-500 hover:to-sky-500 dark:focus:ring-offset-slate-900" disabled data-ui="dispatch-cta" aria-describedby="dispatchReadinessReason">
+                            <button id="runJobBtn" type="button" class="mt-4 w-full rounded-2xl px-6 py-4 text-[14px] font-extrabold uppercase tracking-[0.14em] text-white shadow-glow transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed bg-gradient-to-r from-teal-700 via-cyan-600 to-sky-600 hover:from-teal-600 hover:via-cyan-500 hover:to-sky-500 btn-busy" disabled data-ui="dispatch-cta" aria-describedby="dispatchReadinessReason" aria-busy="false">
                                 Execute Job
                             </button>
                             <p class="dispatch-shortcut-hint mt-3" data-ui="dispatch-shortcut-hint">
@@ -1306,13 +1312,13 @@ Contract notes:
                         </summary>
                         <div class="mt-4 space-y-4">
                             <div class="dispatch-tools-actions">
-                                <button id="effectiveConfigBtn" type="button" class="dispatch-tool-btn focus:outline-none focus:ring-2 focus:ring-cyan-500">View Effective Config</button>
-                                <button id="importBtn" type="button" class="dispatch-tool-btn focus:outline-none focus:ring-2 focus:ring-cyan-500">Import JSON</button>
-                                <button id="exportBtn" type="button" class="dispatch-tool-btn focus:outline-none focus:ring-2 focus:ring-cyan-500">Export JSON</button>
-                                <button id="copyCliBtn" type="button" class="dispatch-tool-btn dispatch-tool-btn-primary focus:outline-none focus:ring-2 focus:ring-cyan-500">Copy CLI</button>
+                                <button id="effectiveConfigBtn" type="button" class="dispatch-tool-btn btn-busy" aria-busy="false">View Effective Config</button>
+                                <button id="importBtn" type="button" class="dispatch-tool-btn btn-busy" aria-busy="false">Import JSON</button>
+                                <button id="exportBtn" type="button" class="dispatch-tool-btn btn-busy" aria-busy="false">Export JSON</button>
+                                <button id="copyCliBtn" type="button" class="dispatch-tool-btn dispatch-tool-btn-primary btn-busy" aria-busy="false">Copy CLI</button>
                                 <input type="file" id="fileInput" accept=".json" title="Import JSON configuration" class="hidden" />
                             </div>
-                            <textarea id="cliPreview" readonly title="Generated CLI command preview" class="command-frame w-full min-h-[140px] rounded-xl border border-slate-200 dark:border-slate-800 p-4 text-[12px] font-mono leading-relaxed text-slate-300 overflow-y-auto custom-scrollbar resize-y focus:outline-none focus:ring-2 focus:ring-indigo-500"></textarea>
+                            <textarea id="cliPreview" readonly title="Generated CLI command preview" class="command-frame w-full min-h-[140px] rounded-xl border border-slate-200 dark:border-slate-800 p-4 text-[12px] font-mono leading-relaxed text-slate-300 overflow-y-auto custom-scrollbar resize-y"></textarea>
                         </div>
                     </details>
                 </div>
@@ -1493,7 +1499,7 @@ Contract notes:
                                 <span class="skeleton-line skeleton-line-medium"></span>
                             </div>
                         </div>
-                        <ul id="jobList" class="space-y-3" aria-live="polite" data-ui="queue-list"></ul>
+                        <ul id="jobList" class="space-y-3" aria-live="polite" aria-relevant="additions" data-ui="queue-list"></ul>
                         <div id="emptyQueueState" class="surface-empty-state h-full flex flex-col items-center justify-center text-center py-8" data-ui="queue-empty-state" data-tone="neutral">
                             <p class="surface-empty-kicker">Queue</p>
                             <p id="emptyQueueTitle" class="surface-empty-title">No runs yet</p>
@@ -1560,7 +1566,7 @@ Contract notes:
                             <p id="artifactSelectionTitle" class="text-[12px] font-semibold text-slate-800 dark:text-slate-100">No artifact selected</p>
                             <p id="artifactSelectionMeta" class="text-[11px] font-mono text-slate-500 dark:text-slate-400">Preview, metadata, and actions will appear here when outputs are indexed.</p>
                         </div>
-                        <div id="reviewStatusBanner" class="review-status-banner hidden" data-tone="info" data-ui="review-status-banner" aria-live="polite">
+                        <div id="reviewStatusBanner" class="review-status-banner hidden" data-tone="info" data-ui="review-status-banner" aria-live="polite" role="status">
                             <p class="review-status-kicker">Run Status</p>
                             <p id="reviewStatusTitle" class="review-status-title">Awaiting completed run</p>
                             <p id="reviewStatusDetail" class="review-status-detail">Select a job to review related warnings, completion state, and output readiness.</p>
@@ -1600,7 +1606,7 @@ Contract notes:
                                 <p id="reviewProvenanceBatch" class="review-provenance-value">Not reported</p>
                             </div>
                         </div>
-                        <div id="reviewCompareSummary" class="review-compare-summary hidden" data-ui="review-compare-summary" aria-live="polite">
+                        <div id="reviewCompareSummary" class="review-compare-summary hidden" data-ui="review-compare-summary" aria-live="polite" role="status">
                             <p id="reviewCompareTitle" class="review-compare-title">No compare pair</p>
                             <p id="reviewCompareDetail" class="review-compare-detail">No paired comparison is available for the current artifact.</p>
                         </div>
@@ -1644,7 +1650,7 @@ Contract notes:
                             </h2>
                             <p id="logMetaLabel" class="mt-1 text-[11px] text-slate-500 dark:text-slate-400">Select a job to stream or inspect its log output.</p>
                         </div>
-                        <button id="clearLogsBtn" type="button" class="text-[10px] uppercase font-bold text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors focus:outline-none">Clear</button>
+                        <button id="clearLogsBtn" type="button" class="text-[10px] uppercase font-bold text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors">Clear</button>
                     </div>
                     <pre id="logPane" class="log-surface flex-1 p-6 text-[11px] font-mono leading-relaxed text-slate-300 overflow-y-auto custom-scrollbar whitespace-pre-wrap break-words"></pre>
                 </div>
@@ -1664,7 +1670,7 @@ Contract notes:
         <div class="w-full max-w-sm max-h-[92vh] overflow-y-auto custom-scrollbar rounded-xl bg-white shadow-2xl border border-slate-200 dark:bg-slate-900 dark:border-slate-800 transform scale-95 opacity-0 transition-all duration-200" id="shortcutsPanel" role="dialog" aria-modal="true" aria-labelledby="shortcutsTitle">
             <div class="px-5 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
                 <h2 id="shortcutsTitle" class="text-sm font-semibold">Keyboard Shortcuts</h2>
-                <button id="closeShortcutsBtn" type="button" class="rounded-md px-2 py-1 text-slate-500 hover:bg-slate-100 hover:text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:hover:bg-slate-800 dark:hover:text-white transition-colors" aria-label="Close dialog">
+                <button id="closeShortcutsBtn" type="button" class="rounded-md px-2 py-1 text-slate-500 hover:bg-slate-100 hover:text-slate-900 dark:hover:bg-slate-800 dark:hover:text-white transition-colors" aria-label="Close dialog">
                     <span class="text-lg leading-none">&times;</span>
                 </button>
             </div>
@@ -1729,7 +1735,7 @@ Contract notes:
                     <p class="section-kicker">Artifact Viewer</p>
                     <h2 id="artifactViewerTitle" class="mt-2 text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white">Awaiting artifact selection</h2>
                     <p id="artifactViewerMeta" class="mt-2 text-[12px] leading-6 text-slate-500 dark:text-slate-400">Open Review to inspect indexed outputs without leaving the operator console.</p>
-                    <p id="artifactViewerStatus" class="sr-only" aria-live="polite">Artifact viewer is closed.</p>
+                    <p id="artifactViewerStatus" class="sr-only" aria-live="polite" role="status">Artifact viewer is closed.</p>
                 </div>
                 <div class="flex flex-wrap items-center gap-2">
                     <button id="artifactViewerPrevBtn" type="button" class="rounded-lg border border-slate-300 dark:border-slate-700 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300 transition-colors hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed">Previous</button>
@@ -1776,7 +1782,7 @@ Contract notes:
     </div>
 
     <!-- Toast Container -->
-    <div id="toastContainer" class="fixed bottom-6 right-6 z-50 flex flex-col gap-3 w-full max-w-sm pointer-events-none" aria-live="polite"></div>
+    <div id="toastContainer" class="fixed bottom-6 right-6 z-50 flex flex-col gap-3 w-full max-w-sm pointer-events-none" aria-live="polite" role="status"></div>
     <script src="__PORTAL_JS_URL__" defer></script>
 </body>
 </html>
