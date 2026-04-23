@@ -33,7 +33,7 @@ jobs:
     errors = workflow_contract.validate_workflow_concurrency_contract_text("broken.yml", text)
     assert errors == [
         "broken.yml: mixed schedule/push workflow must include an interpolated '${{ github.event_name }}' token "
-        "in concurrency.group when cancel-in-progress is true (current: '${{ github.workflow }}-${{ github.ref }}')"
+        "in concurrency.group when cancel-in-progress is enabled (current: '${{ github.workflow }}-${{ github.ref }}')"
     ]
 
 
@@ -79,7 +79,7 @@ jobs:
     errors = workflow_contract.validate_workflow_concurrency_contract_text("fake.yml", text)
     assert errors == [
         "fake.yml: mixed schedule/push workflow must include an interpolated '${{ github.event_name }}' token "
-        "in concurrency.group when cancel-in-progress is true (current: 'mywf-github.event_name-${{ github.ref }}')"
+        "in concurrency.group when cancel-in-progress is enabled (current: 'mywf-github.event_name-${{ github.ref }}')"
     ]
 
 
@@ -121,6 +121,30 @@ jobs:
     assert workflow_contract.validate_workflow_concurrency_contract_text("no-cancel.yml", text) == []
 
 
+def test_expression_based_cancel_in_progress_requires_event_namespace() -> None:
+    text = """
+name: Conditional Cancellation
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '0 1 * * *'
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref == 'refs/heads/main' }}
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo ok
+"""
+    errors = workflow_contract.validate_workflow_concurrency_contract_text("conditional.yml", text)
+    assert errors == [
+        "conditional.yml: mixed schedule/push workflow must include an interpolated '${{ github.event_name }}' token "
+        "in concurrency.group when cancel-in-progress is enabled (current: '${{ github.workflow }}-${{ github.ref }}')"
+    ]
+
+
 def test_invalid_yaml_is_reported_as_file_scoped_contract_violation() -> None:
     errors = workflow_contract.validate_workflow_concurrency_contract_text("broken.yml", "on: [")
     assert len(errors) == 1
@@ -131,3 +155,20 @@ def test_missing_pyyaml_is_reported_as_file_scoped_contract_violation(monkeypatc
     monkeypatch.setattr(workflow_contract, "yaml", None)
     errors = workflow_contract.validate_workflow_concurrency_contract_text("broken.yml", "on: push")
     assert errors == ["broken.yml: PyYAML not installed (pip install PyYAML)"]
+
+
+def test_repo_validation_fails_closed_when_workflows_dir_is_missing(tmp_path: Path) -> None:
+    missing_dir = tmp_path / "workflows"
+    assert workflow_contract.validate_repo_workflow_concurrency_contract(missing_dir) == [
+        f"{missing_dir}: workflows directory is missing or not a directory"
+    ]
+
+
+def test_repo_validation_fails_closed_when_workflows_dir_has_no_yaml_files(tmp_path: Path) -> None:
+    workflows_dir = tmp_path / "workflows"
+    workflows_dir.mkdir()
+    (workflows_dir / "README.md").write_text("docs only", encoding="utf-8")
+
+    assert workflow_contract.validate_repo_workflow_concurrency_contract(workflows_dir) == [
+        f"{workflows_dir}: no workflow files found"
+    ]
