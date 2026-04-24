@@ -52,6 +52,22 @@ def test_decider_will_apply_when_enabled():
     assert "brightness_boost" in decision["recommended_ops"]
 
 
+def test_decider_blocks_low_confidence_material_masks():
+    config = DummyConfig()
+    stats = {
+        "coverage_px": 2000,
+        "mean_conf": 0.1,
+        "edge_conf": 0.6,
+    }
+
+    decision = decide_pixel_ops("foliage", stats, config, registry=OP_REGISTRY)
+
+    assert decision["will_apply"] is False
+    assert decision["eligible"] is False
+    assert decision["reason"] == "below_confidence_threshold"
+    assert "below_confidence_threshold" in decision["blocked_by"]
+
+
 def test_apply_pixel_ops_emits_telemetry():
     config = DummyConfig()
     image, segmentation_result, response_plan = _make_inputs()
@@ -60,6 +76,63 @@ def test_apply_pixel_ops_emits_telemetry():
     assert telemetry["enabled"] is True
     assert telemetry["applied"]
     assert telemetry["timing_ms"]["total"] >= 0.0
+
+
+def test_apply_pixel_ops_blocks_low_confidence_material_masks():
+    config = DummyConfig()
+    image = np.zeros((64, 64, 3), dtype=np.uint8)
+    mask = np.zeros((64, 64), dtype=np.float32)
+    mask[8:56, 8:56] = 1.0
+    segmentation_result = {"materials": {"foliage": mask}}
+    response_plan = {
+        "per_class": {
+            "foliage": {
+                "coverage_px": int(mask.sum()),
+                "mean_conf": 0.1,
+                "edge_conf": 0.6,
+            }
+        }
+    }
+
+    output, telemetry = apply_pixel_ops(image, segmentation_result, response_plan, config, registry=OP_REGISTRY)
+
+    assert np.array_equal(output, image)
+    assert telemetry["applied"] == []
+    assert telemetry["blocked"][0]["material"] == "foliage"
+    assert telemetry["blocked"][0]["reason"] == "below_confidence_threshold"
+
+
+def test_apply_pixel_ops_rechecks_stale_plan_decisions():
+    config = DummyConfig()
+    image = np.zeros((64, 64, 3), dtype=np.uint8)
+    mask = np.zeros((64, 64), dtype=np.float32)
+    mask[8:56, 8:56] = 1.0
+    segmentation_result = {"materials": {"foliage": mask}}
+    response_plan = {
+        "per_class": {
+            "foliage": {
+                "coverage_px": int(mask.sum()),
+                "mean_conf": 0.1,
+                "edge_conf": 0.6,
+                "pixel_ops": {
+                    "eligible": True,
+                    "enabled": True,
+                    "implemented": True,
+                    "recommended_ops": ["vibrance_boost"],
+                    "should_apply": True,
+                    "will_apply": True,
+                    "blocked_by": [],
+                    "reason": "stale_cached_plan",
+                },
+            }
+        }
+    }
+
+    output, telemetry = apply_pixel_ops(image, segmentation_result, response_plan, config, registry=OP_REGISTRY)
+
+    assert np.array_equal(output, image)
+    assert telemetry["applied"] == []
+    assert telemetry["blocked"][0]["reason"] == "below_confidence_threshold"
 
 
 def test_apply_pixel_ops_disabled_still_emits_object():

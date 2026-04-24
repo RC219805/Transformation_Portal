@@ -204,6 +204,28 @@ def test_feathering_uses_material_override():
         assert telemetry["applied"][0]["feather_sigma"] == 7.0
 
 
+def test_feathered_writeback_preserves_padded_transition():
+    """Feather tails should be written outside the hard material bbox."""
+    config = PhaseATestConfig(mask_feather_sigma_default=5.0)
+    image = np.ones((64, 64, 3), dtype=np.uint8) * 100
+
+    mask = np.zeros((64, 64), dtype=np.float32)
+    mask[20:44, 20:44] = 1.0
+
+    segmentation_result = {"materials": {"glass": mask}}
+    response_plan = {"per_class": {"glass": {"coverage_px": int(mask.sum()), "mean_conf": 0.7}}}
+
+    output, telemetry = apply_pixel_ops(image, segmentation_result, response_plan, config)
+
+    assert telemetry["applied"]
+    # This pixel is outside the original bbox but inside the padded feather
+    # tail. It must receive a partial blend; otherwise the transition is
+    # clipped into a rectangular edge.
+    assert not np.array_equal(output[19, 32], image[19, 32])
+    # Distant pixels outside the padded ROI remain untouched.
+    assert np.array_equal(output[0, 0], image[0, 0])
+
+
 def test_feathering_disabled_for_material():
     """Test A3: Feathering can be disabled for specific materials."""
     config = PhaseATestConfig(mask_feather_sigma_default=3.0, mask_feather_disabled_materials=["glass"])

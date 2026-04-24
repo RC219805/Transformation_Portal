@@ -348,8 +348,13 @@ def apply_pixel_ops(
         if not plan_entry:
             continue
 
+        # Recompute execution eligibility from the current code/config instead
+        # of blindly trusting a serialized response-plan decision. This keeps
+        # cached or stale plans from bypassing newer fail-closed guards.
+        decision = decide_pixel_ops(material_key, plan_entry, config, registry=registry)
         plan_decision = plan_entry.get("pixel_ops")
-        decision = plan_decision or decide_pixel_ops(material_key, plan_entry, config, registry=registry)
+        if isinstance(plan_decision, dict) and plan_decision.get("recommended_ops"):
+            decision["recommended_ops"] = plan_decision["recommended_ops"]
         ops_for_material = registry.get(material_key, {})
         recommended_ops = decision.get("recommended_ops") or list(ops_for_material.keys())
         if not decision.get("will_apply", False):
@@ -452,11 +457,10 @@ def apply_pixel_ops(
             working = working.astype(np.float32) / 65535.0
         # else: already float, no normalization needed
 
-        # Capture only the unpadded writeback region in normalized space. The
-        # clamp only needs the pixels that can be written back, so copying the
-        # full padded ROI would create avoidable memory pressure on large
-        # sky/water masks.
-        working_before_ops_inside = working[inside_y, inside_x].copy() if is_low_tex_large else None
+        # Capture the full feathered writeback scope only when the low-texture
+        # clamp can engage. This keeps the common textured path allocation-free
+        # while preventing unclamped feather tails on smooth large surfaces.
+        working_before_ops_padded = working.copy() if is_low_tex_large else None
 
         for op_name in implemented_ops:
             op_def = ops_for_material.get(op_name)
@@ -476,17 +480,15 @@ def apply_pixel_ops(
         # is configured aggressively.
         delta_scale_applied = 1.0
         delta_sample_stride = 1
-        if is_low_tex_large and working_before_ops_inside is not None:
-            working_inside = working[inside_y, inside_x]
-            delta_inside = working_inside.astype(np.float32, copy=False) - working_before_ops_inside
-            mask_inside = mask_roi_feathered[inside_y, inside_x]
-            weighted_abs, delta_sample_stride = _weighted_abs_delta_for_percentile(delta_inside, mask_inside)
+        if is_low_tex_large and working_before_ops_padded is not None:
+            delta_padded = working.astype(np.float32, copy=False) - working_before_ops_padded
+            weighted_abs, delta_sample_stride = _weighted_abs_delta_for_percentile(delta_padded, mask_roi_feathered)
             if weighted_abs.size > 0:
                 p99 = float(np.percentile(weighted_abs, 99))
                 if p99 > low_tex_delta_ceiling and p99 > 1e-6:
                     delta_scale_applied = float(low_tex_delta_ceiling / p99)
-                    working[inside_y, inside_x] = np.clip(
-                        working_before_ops_inside + delta_inside * delta_scale_applied,
+                    working = np.clip(
+                        working_before_ops_padded + delta_padded * delta_scale_applied,
                         0.0,
                         1.0,
                     )
@@ -499,8 +501,10 @@ def apply_pixel_ops(
         else:
             after_padded = working.astype(original_dtype)
 
-        # Write back only the original (non-padded) ROI
-        output[y0:y1, x0:x1] = after_padded[inside_y, inside_x]
+        # Write back the full padded ROI so the Gaussian feather tail is not
+        # clipped at the material bbox. Clipping that tail creates visible
+        # rectangular panels around broad material masks.
+        output[y0_padded:y1_padded, x0_padded:x1_padded] = after_padded
 
         elapsed_ms = (time.perf_counter() - start_material) * 1000.0
 

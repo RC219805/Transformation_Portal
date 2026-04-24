@@ -92,6 +92,8 @@ def _decide_refinement(
         reason = "not_in_canary_set"
     elif not sufficient_coverage:
         reason = "insufficient_coverage"
+    elif not sufficient_conf:
+        reason = "insufficient_confidence"
     elif not sufficient_boundary:
         reason = "insufficient_boundary_pixels"
     elif not has_edge_support:
