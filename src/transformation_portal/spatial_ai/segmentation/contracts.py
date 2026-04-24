@@ -107,6 +107,8 @@ class MaskMetadata:
         stability_score: Mask stability score [0, 1] (higher = more stable).
         material_label: Optional material classification (e.g., "wood", "marble").
         material_confidence: Optional material classification confidence [0, 1].
+        is_empty: True when metadata represents an intentionally empty mask
+            placeholder, such as a missing video object in one frame.
     """
 
     area: int
@@ -114,6 +116,7 @@ class MaskMetadata:
     stability_score: float
     material_label: Optional[str] = None
     material_confidence: Optional[float] = None
+    is_empty: bool = False
 
     def __post_init__(self):
         """Validate metadata."""

@@ -120,6 +120,7 @@ class SAM2Backend:
         generator_kwargs: Optional[Dict[str, Any]] = None,
         enable_material_classification: bool = False,
         material_confidence_threshold: float = 0.3,
+        material_classification_strict: bool = False,
         tiling: Optional[SegmentationTilingConfig] = None,
     ) -> None:
         """Initialize SAM2 backend.
@@ -154,6 +155,8 @@ class SAM2Backend:
                 ``stability_score_thresh``, ``box_nms_thresh``).
             enable_material_classification: Enable CLIP-based material labeling.
             material_confidence_threshold: Confidence threshold for material labels.
+            material_classification_strict: Raise material classification load or
+                inference failures instead of leaving masks unlabeled.
             tiling: Optional tiling configuration for large-image segmentation.
                 When enabled, processes images in tiles to manage memory.
 
@@ -216,6 +219,7 @@ class SAM2Backend:
         # Material classification (optional)
         self.enable_material_classification = enable_material_classification
         self.material_confidence_threshold = material_confidence_threshold
+        self.material_classification_strict = bool(material_classification_strict)
         self._material_classifier: Any = None
         if enable_material_classification:
             from transformation_portal.spatial_ai.segmentation.material_classifier import MaterialClassifier
@@ -223,6 +227,7 @@ class SAM2Backend:
             self._material_classifier = MaterialClassifier(
                 device=self.device,
                 confidence_threshold=material_confidence_threshold,
+                strict=self.material_classification_strict,
             )
             logger.info("Material classification enabled")
 
@@ -843,6 +848,7 @@ class SAM2Backend:
             generator_kwargs=self.generator_kwargs,
             enable_material_classification=self.enable_material_classification,
             material_confidence_threshold=self.material_confidence_threshold,
+            material_classification_strict=self.material_classification_strict,
             tiling=self.tiling,
         )
 
@@ -877,6 +883,7 @@ class SAM2Backend:
         stability_score: float,
         material_label: Optional[str] = None,
         material_confidence: Optional[float] = None,
+        is_empty: bool = False,
     ) -> MaskMetadata:
         """Build MaskMetadata while tolerating future field changes."""
         kwargs = {
@@ -885,6 +892,7 @@ class SAM2Backend:
             "stability_score": float(stability_score),
             "material_label": material_label,
             "material_confidence": material_confidence,
+            "is_empty": bool(is_empty),
         }
         filtered = {key: value for key, value in kwargs.items() if key in _MASK_METADATA_FIELDS}
         return cast(MaskMetadata, MaskMetadata(**cast(Any, filtered)))
@@ -896,13 +904,22 @@ class SAM2Backend:
         metadata_list: list[MaskMetadata],
     ) -> None:
         """Populate optional material labels when classifier support is enabled."""
-        if (
-            self.enable_material_classification
-            and self._material_classifier is not None
-            and self._material_classifier.is_available()
-        ):
-            logger.info("Running material classification...")
-            material_results = self._material_classifier.classify_masks(image_uint8, masks)
+        if self.enable_material_classification and self._material_classifier is not None:
+            try:
+                if not self._material_classifier.is_available():
+                    if self.material_classification_strict:
+                        raise RuntimeError(
+                            "Material classification is enabled in strict mode, but the classifier is unavailable."
+                        )
+                    return
+                logger.info("Running material classification...")
+                material_results = self._material_classifier.classify_masks(image_uint8, masks)
+            except Exception as exc:
+                if self.material_classification_strict:
+                    raise
+                logger.warning("Material classification failed; leaving SAM2 masks unlabeled: %s", exc)
+                return
+
             for idx, (label, confidence) in enumerate(material_results):
                 if idx >= len(metadata_list):
                     break
@@ -1543,6 +1560,7 @@ class SAM2Backend:
                         area=area if area > 0 else 1,  # Ensure positive
                         bbox=bbox,
                         stability_score=1.0,  # Video tracking is stable
+                        is_empty=area <= 0,
                     )
                 )
             else:
@@ -1558,6 +1576,7 @@ class SAM2Backend:
                         area=1,  # Dummy value for empty mask
                         bbox=(0, 0, 1, 1),
                         stability_score=0.0,
+                        is_empty=True,
                     )
                 )
 

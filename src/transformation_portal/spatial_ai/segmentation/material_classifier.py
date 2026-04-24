@@ -82,6 +82,7 @@ class MaterialClassifier:
         *,
         model_revision: Optional[str] = None,
         strict_model_lock: Optional[bool] = None,
+        strict: bool = False,
     ):
         """Initialize material classifier.
 
@@ -92,6 +93,8 @@ class MaterialClassifier:
             model_revision: Optional immutable revision for CLIP model assets.
             strict_model_lock: Enforce pinned revisions for remote model loads.
                 If None, uses ``TP_STRICT_MODEL_LOCK`` environment variable.
+            strict: If True, model load/inference failures are raised instead
+                of returning unlabeled material results.
         """
         if not 0.0 <= confidence_threshold <= 1.0:
             raise ValueError(f"confidence_threshold must be in [0, 1], got {confidence_threshold}")
@@ -99,6 +102,7 @@ class MaterialClassifier:
         self.device = device
         self.confidence_threshold = confidence_threshold
         self.material_classes = material_classes or self.DEFAULT_MATERIAL_CLASSES
+        self.strict = bool(strict)
         self.strict_model_lock = strict_model_lock
         self.model_revision = resolve_model_lock_revision(
             self.CLIP_MODEL_ID,
@@ -199,6 +203,11 @@ class MaterialClassifier:
             Label is None if confidence below threshold.
         """
         if not self.is_available():
+            if self.strict:
+                raise RuntimeError(
+                    "Material classification is enabled in strict mode, but CLIP is unavailable. "
+                    "Install transformers and torch, or disable strict material classification."
+                )
             logger.warning("CLIP not available, returning unlabeled")
             return [(None, None) for _ in range(len(masks))]
 
@@ -206,8 +215,14 @@ class MaterialClassifier:
         if len(masks) == 0 or not np.any(masks):
             return [(None, None) for _ in range(len(masks))]
 
-        self._load_model()
-        import torch
+        try:
+            self._load_model()
+            import torch
+        except Exception as exc:
+            if self.strict:
+                raise
+            logger.warning("CLIP material classification unavailable; returning unlabeled masks: %s", exc)
+            return [(None, None) for _ in range(len(masks))]
 
         results = []
 
@@ -220,26 +235,33 @@ class MaterialClassifier:
                 results.append((None, None))
                 continue
 
-            # Prepare inputs for CLIP
-            inputs = self._processor(
-                text=self.material_classes,
-                images=masked_image,
-                return_tensors="pt",
-                padding=True,
-            )
-            inputs = {k: v.to(self._model.device) for k, v in inputs.items()}
+            try:
+                # Prepare inputs for CLIP
+                inputs = self._processor(
+                    text=self.material_classes,
+                    images=masked_image,
+                    return_tensors="pt",
+                    padding=True,
+                )
+                inputs = {k: v.to(self._model.device) for k, v in inputs.items()}
 
-            # Run CLIP
-            with torch.no_grad():
-                outputs = self._model(**inputs)
+                # Run CLIP
+                with torch.no_grad():
+                    outputs = self._model(**inputs)
 
-            # Compute similarities (logits)
-            logits_per_image = outputs.logits_per_image  # (1, N_classes)
-            probs = logits_per_image.softmax(dim=1)[0]  # (N_classes,)
+                # Compute similarities (logits)
+                logits_per_image = outputs.logits_per_image  # (1, N_classes)
+                probs = logits_per_image.softmax(dim=1)[0]  # (N_classes,)
 
-            # Get top prediction
-            best_idx = probs.argmax().item()
-            best_prob = probs[best_idx].item()
+                # Get top prediction
+                best_idx = probs.argmax().item()
+                best_prob = probs[best_idx].item()
+            except Exception as exc:
+                if self.strict:
+                    raise
+                logger.warning("CLIP material classification failed for one mask; leaving it unlabeled: %s", exc)
+                results.append((None, None))
+                continue
 
             # Check confidence threshold
             if best_prob >= self.confidence_threshold:

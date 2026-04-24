@@ -183,6 +183,18 @@ class TestMaterialClassifierClassifyMasks:
         assert results[0] == (None, None)
         assert results[1] == (None, None)
 
+    def test_strict_classify_without_clip_raises(self):
+        """Strict mode fails fast when CLIP dependencies are unavailable."""
+        classifier = MaterialClassifier(strict=True)
+        classifier._available = False
+
+        image = np.random.rand(100, 100, 3).astype(np.uint8)
+        masks = np.zeros((1, 100, 100), dtype=bool)
+        masks[0, :50, :50] = True
+
+        with pytest.raises(RuntimeError, match="strict mode.*CLIP is unavailable"):
+            classifier.classify_masks(image, masks)
+
     @pytest.mark.ml
     @pytest.mark.skipif(not HAS_ML_DEPS, reason="Requires transformers and torch")
     def test_classify_with_high_confidence(self):
