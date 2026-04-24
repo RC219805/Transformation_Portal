@@ -1,5 +1,6 @@
 """Unit tests for material classifier (Phase 2.1)."""
 
+import sys
 from unittest.mock import MagicMock, Mock, patch
 
 import numpy as np
@@ -225,6 +226,112 @@ class TestMaterialClassifierClassifyMasks:
 
         # Empty mask should return (None, None)
         assert results[0] == (None, None)
+
+    def test_classify_masks_batches_clip_and_preserves_order(self, monkeypatch):
+        """Batched CLIP classification should preserve mask ordering."""
+
+        class FakeScalar:
+            def __init__(self, value):
+                self.value = value
+
+            def item(self):
+                return self.value
+
+        class FakeTensor:
+            def __init__(self, values):
+                self.values = np.asarray(values, dtype=np.float32)
+
+            def to(self, _device):
+                return self
+
+            def softmax(self, dim):
+                shifted = self.values - np.max(self.values, axis=dim, keepdims=True)
+                exp = np.exp(shifted)
+                return FakeTensor(exp / np.sum(exp, axis=dim, keepdims=True))
+
+            def __getitem__(self, key):
+                return FakeTensor(self.values[key])
+
+            def argmax(self):
+                return FakeScalar(int(np.argmax(self.values)))
+
+            def item(self):
+                return float(np.asarray(self.values).item())
+
+        class FakeNoGrad:
+            def __enter__(self):
+                return None
+
+            def __exit__(self, *_exc):
+                return False
+
+        fake_torch = type("FakeTorch", (), {"no_grad": staticmethod(lambda: FakeNoGrad())})
+        monkeypatch.setitem(sys.modules, "torch", fake_torch)
+
+        processor_calls = []
+        model_calls = []
+
+        class FakeProcessor:
+            def __call__(self, *, text, images, return_tensors, padding):
+                processor_calls.append(
+                    {
+                        "text": list(text),
+                        "image_count": len(images),
+                        "return_tensors": return_tensors,
+                        "padding": padding,
+                    }
+                )
+                return {"pixel_values": FakeTensor([[0.0]]), "input_ids": FakeTensor([[0.0]])}
+
+        class FakeModel:
+            device = "cpu"
+
+            def __call__(self, **_inputs):
+                model_calls.append("batch")
+                return type(
+                    "FakeOutputs",
+                    (),
+                    {
+                        # Two non-empty masks: first should classify as glass,
+                        # third should classify as wood. The middle mask is empty.
+                        "logits_per_image": FakeTensor(
+                            [
+                                [0.1, 3.0],
+                                [4.0, 0.1],
+                            ]
+                        )
+                    },
+                )()
+
+        classifier = MaterialClassifier(
+            device="cpu",
+            confidence_threshold=0.5,
+            material_classes=["wood", "glass"],
+        )
+        classifier._available = True
+        classifier._processor = FakeProcessor()
+        classifier._model = FakeModel()
+
+        image = np.ones((32, 32, 3), dtype=np.uint8) * 127
+        masks = np.zeros((3, 32, 32), dtype=bool)
+        masks[0, 2:14, 2:14] = True
+        masks[2, 16:30, 16:30] = True
+
+        results = classifier.classify_masks(image, masks)
+
+        assert results[0][0] == "glass"
+        assert results[1] == (None, None)
+        assert results[2][0] == "wood"
+        assert processor_calls == [
+            {
+                "text": ["wood", "glass"],
+                "image_count": 2,
+                "return_tensors": "pt",
+                "padding": True,
+            }
+        ]
+        assert model_calls == ["batch"]
+        assert classifier._last_timing_ms["batch_size"] == 2
 
 
 class TestMaterialClassifierModelLoading:

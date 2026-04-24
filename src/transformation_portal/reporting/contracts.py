@@ -299,14 +299,19 @@ def build_stage_report(
     status: str,
     capability: Optional[Mapping[str, Any]] = None,
     quality_gate: Optional[Mapping[str, Any]] = None,
+    metadata: Optional[Mapping[str, Any]] = None,
 ) -> dict[str, Any]:
     """Build a normalized stage-report payload."""
-    return {
+    report = {
         "stage": stage,
         "status": status,
         "capability": _copy_mapping(capability),
         "quality_gate": _copy_mapping(quality_gate),
     }
+    metadata_copy = _copy_mapping(metadata)
+    if metadata_copy is not None:
+        report["metadata"] = metadata_copy
+    return report
 
 
 def derive_stage_report_map(stage_reports: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:

@@ -46,7 +46,7 @@ class TestPipelineConfig:
         assert config.tier == "standard"
         assert config.stages == ["ingest"]
         assert config.ingest == {}
-        assert config.segmentation == {}
+        assert config.segmentation == {"cache_policy": "read_write"}
         assert config.materials == {}
         assert config.reconstruction == {}
         assert config.resource_limits is None
@@ -70,6 +70,26 @@ class TestPipelineConfig:
         assert config.ingest["strict_ingest"] is True
         assert config.resource_limits is limits
         assert config.error_strategy == ErrorRecoveryStrategy.RETRY_WITH_CPU_FALLBACK
+        assert config.segmentation["cache_policy"] == "read_write"
+
+    def test_segmentation_cache_policy_normalized(self):
+        """Segmentation cache policy is additive and defaults to read/write."""
+        default_config = PipelineConfig(tier="standard", stages=["ingest"])
+        assert default_config.segmentation["cache_policy"] == "read_write"
+
+        disabled_config = PipelineConfig(
+            tier="standard",
+            stages=["ingest", "segment"],
+            segmentation={"backend": "sam2", "cache_policy": "off"},
+        )
+        assert disabled_config.segmentation["cache_policy"] == "off"
+
+        with pytest.raises(ValueError, match="segmentation.cache_policy"):
+            PipelineConfig(
+                tier="standard",
+                stages=["ingest", "segment"],
+                segmentation={"backend": "sam2", "cache_policy": "invalid"},
+            )
 
     def test_invalid_stage_rejected(self):
         """Test invalid stage name is rejected."""
@@ -499,7 +519,7 @@ class TestSpatialAIPipelinePresetLoading:
         assert config.tier == "apex_research"
         assert set(config.stages) == {"ingest", "segmentation", "materials"}
         assert config.ingest == {"strict_ingest": True, "emit_exr": True}
-        assert config.segmentation == {"backend": "sam2"}
+        assert config.segmentation == {"backend": "sam2", "cache_policy": "read_write"}
 
 
 class TestSpatialAIPipelineIngestStage:

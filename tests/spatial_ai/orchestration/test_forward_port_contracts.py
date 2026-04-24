@@ -244,6 +244,213 @@ def test_pipeline_rebuilds_segmentation_backend_on_cpu_fallback(monkeypatch: pyt
     assert float(result.scores[0]) == pytest.approx(0.95)
 
 
+def test_pipeline_rekeys_segmentation_cache_after_cpu_fallback(monkeypatch: pytest.MonkeyPatch, tmp_path: Any) -> None:
+    pipeline_mod = _import_pipeline_module(monkeypatch)
+    monkeypatch.setattr(pipeline_mod, "SegmentationTilingConfig", _FakeTilingConfig)
+
+    builds: list[Any] = []
+
+    class FakeSAM2Backend:
+        def __init__(
+            self,
+            *,
+            model_size: Any,
+            device: Any,
+            checkpoint_path: Any = None,
+            repo_id: Any = None,
+            revision: Any = None,
+            prefer_hf_pipeline: Any = None,
+            generator_kwargs: Any = None,
+            enable_material_classification: bool = False,
+            material_confidence_threshold: float = 0.3,
+            tiling: Any = None,
+        ) -> None:
+            del checkpoint_path, repo_id, revision, prefer_hf_pipeline, generator_kwargs
+            del enable_material_classification, material_confidence_threshold, tiling
+            self.model_size = model_size
+            self.device = device
+            builds.append(self)
+
+        def segment(self, seg_input: Any) -> Any:
+            del seg_input
+            if self.device == "cuda":
+                raise RuntimeError("CUDA out of memory")
+            mask = np.zeros((1, 2, 2), dtype=bool)
+            mask[0, 0, 0] = True
+            return pipeline_mod.SegmentationResult(
+                masks=mask,
+                scores=np.array([0.95], dtype=np.float32),
+                metadata=[
+                    pipeline_mod.MaskMetadata(
+                        area=1,
+                        bbox=(0, 0, 1, 1),
+                        stability_score=0.9,
+                    )
+                ],
+            )
+
+    monkeypatch.setattr(pipeline_mod, "SAM2Backend", FakeSAM2Backend)
+
+    pipeline = _make_pipeline(
+        {
+            "tier": "standard",
+            "pipeline": {
+                "segmentation": {
+                    "backend": "sam2",
+                    "cache_policy": "read_write",
+                    "model": {
+                        "size": "large",
+                        "repo_id": SAM2_REPO_ID,
+                        "revision": PINNED_REVISION,
+                        "prefer_hf_pipeline": True,
+                    },
+                }
+            },
+            "error_strategy": "retry_cpu_fallback",
+        },
+        pipeline_mod,
+        monkeypatch,
+    )
+
+    ingest_result = _make_ingest_result()
+    result = pipeline._run_segmentation(
+        ingest_result=ingest_result,
+        output_dir=tmp_path,
+        save_intermediates=False,
+    )
+    metadata = dict(pipeline._last_segmentation_stage_metadata)
+    cache_dir = tmp_path / ".cache" / "spatial_ai" / "segmentation"
+
+    cuda_key, cuda_payload = pipeline_mod._build_segmentation_cache_key(
+        image=ingest_result.linear_rgb,
+        segmentation_cfg=pipeline.config.segmentation,
+        device="cuda",
+    )
+    cpu_key, cpu_payload = pipeline_mod._build_segmentation_cache_key(
+        image=ingest_result.linear_rgb,
+        segmentation_cfg=pipeline.config.segmentation,
+        device="cpu",
+    )
+
+    assert [backend.device for backend in builds] == ["cuda", "cpu"]
+    assert metadata["device"] == "cpu"
+    assert metadata["cache_key"] == cpu_key
+    assert metadata["cache_key"] != cuda_key
+    assert "cache_rekey" in metadata["timing_ms"]
+    assert (
+        pipeline_mod._read_segmentation_cache(
+            cache_dir=cache_dir,
+            cache_key=cuda_key,
+            key_payload=cuda_payload,
+        )
+        is None
+    )
+    cached_cpu = pipeline_mod._read_segmentation_cache(
+        cache_dir=cache_dir,
+        cache_key=cpu_key,
+        key_payload=cpu_payload,
+    )
+    assert cached_cpu is not None
+    assert np.array_equal(cached_cpu.masks, result.masks)
+
+
+def test_pipeline_segmentation_cache_hit_skips_backend(monkeypatch: pytest.MonkeyPatch, tmp_path: Any) -> None:
+    pipeline_mod = _import_pipeline_module(monkeypatch)
+    monkeypatch.setattr(pipeline_mod, "SegmentationTilingConfig", _FakeTilingConfig)
+
+    builds: list[Any] = []
+    calls = {"segment": 0}
+
+    class FakeSAM2Backend:
+        def __init__(
+            self,
+            *,
+            model_size: Any,
+            device: Any,
+            checkpoint_path: Any = None,
+            repo_id: Any = None,
+            revision: Any = None,
+            prefer_hf_pipeline: Any = None,
+            generator_kwargs: Any = None,
+            enable_material_classification: bool = False,
+            material_confidence_threshold: float = 0.3,
+            tiling: Any = None,
+        ) -> None:
+            self.model_size = model_size
+            self.device = device
+            self.checkpoint_path = checkpoint_path
+            self.repo_id = repo_id
+            self.revision = revision
+            self.prefer_hf_pipeline = prefer_hf_pipeline
+            self.generator_kwargs = dict(generator_kwargs or {})
+            self.enable_material_classification = enable_material_classification
+            self.material_confidence_threshold = material_confidence_threshold
+            self.tiling = tiling
+            builds.append(self)
+
+        def segment(self, seg_input: Any) -> Any:
+            calls["segment"] += 1
+            del seg_input
+            mask = np.zeros((1, 2, 2), dtype=bool)
+            mask[0, 0, 0] = True
+            return pipeline_mod.SegmentationResult(
+                masks=mask,
+                scores=np.array([0.91], dtype=np.float32),
+                metadata=[
+                    pipeline_mod.MaskMetadata(
+                        area=1,
+                        bbox=(0, 0, 1, 1),
+                        stability_score=0.93,
+                        material_label="glass",
+                        material_confidence=0.88,
+                    )
+                ],
+            )
+
+    monkeypatch.setattr(pipeline_mod, "SAM2Backend", FakeSAM2Backend)
+
+    pipeline = _make_pipeline(
+        {
+            "tier": "standard",
+            "pipeline": {
+                "segmentation": {
+                    "backend": "sam2",
+                    "cache_policy": "read_write",
+                    "model": {
+                        "size": "large",
+                        "repo_id": SAM2_REPO_ID,
+                        "revision": PINNED_REVISION,
+                        "prefer_hf_pipeline": True,
+                    },
+                }
+            },
+        },
+        pipeline_mod,
+        monkeypatch,
+    )
+
+    first = pipeline._run_segmentation(
+        ingest_result=_make_ingest_result(),
+        output_dir=tmp_path,
+        save_intermediates=False,
+    )
+    first_metadata = dict(pipeline._last_segmentation_stage_metadata)
+    second = pipeline._run_segmentation(
+        ingest_result=_make_ingest_result(),
+        output_dir=tmp_path,
+        save_intermediates=False,
+    )
+    second_metadata = dict(pipeline._last_segmentation_stage_metadata)
+
+    assert len(builds) == 1
+    assert calls["segment"] == 1
+    assert np.array_equal(first.masks, second.masks)
+    assert first_metadata["cache_hit"] is False
+    assert second_metadata["cache_hit"] is True
+    assert second_metadata["mask_count"] == 1
+    assert second_metadata["cache_key"] == first_metadata["cache_key"]
+
+
 def test_pipeline_rebuilds_material_backend_on_cpu_fallback(monkeypatch: pytest.MonkeyPatch, tmp_path: Any) -> None:
     pipeline_mod = _import_pipeline_module(monkeypatch)
     builds: list[Any] = []

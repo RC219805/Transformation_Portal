@@ -38,9 +38,11 @@ import logging
 import math
 import os
 import tempfile
+import time
 from dataclasses import asdict, dataclass, field, is_dataclass
+from functools import lru_cache
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, List, Literal, Optional, Union, cast
+from typing import TYPE_CHECKING, Any, Dict, List, Literal, Mapping, Optional, Union, cast
 
 import numpy as np
 
@@ -49,7 +51,7 @@ from transformation_portal.compliance import (
     validate_materials_preset,
     validate_non_commercial_preset,
 )
-from transformation_portal.ingest.canonical_json import dump_json
+from transformation_portal.ingest.canonical_json import canonicalize_json, dump_json
 from transformation_portal.reporting.contracts import build_stage_report, derive_stage_report_map
 from transformation_portal.spatial_ai.ingest.linear_decoder import LinearDecoder, LinearIngestResult
 from transformation_portal.spatial_ai.materials.contracts import MaterialInput, PBRTextures
@@ -96,7 +98,206 @@ def _is_reload_safe_pipeline_config(candidate: object) -> bool:
 def _sha256_array(array: np.ndarray) -> str:
     """Return a deterministic SHA-256 for a numpy array payload."""
     contiguous = array if array.flags["C_CONTIGUOUS"] else np.ascontiguousarray(array)
-    return hashlib.sha256(memoryview(contiguous.view(np.uint8))).hexdigest()
+    return hashlib.sha256(memoryview(contiguous.view(np.uint8).ravel())).hexdigest()
+
+
+_SEGMENTATION_CACHE_SCHEMA_VERSION = "spatial-ai-segmentation-cache.v1"
+
+
+def _normalise_segmentation_cache_policy(value: Any) -> str:
+    policy = str(value or "read_write").strip().lower()
+    return policy if policy in {"off", "read_write"} else "off"
+
+
+def _segmentation_cache_paths(cache_dir: Path, cache_key: str) -> tuple[Path, Path]:
+    root = cache_dir / cache_key[:2]
+    return root / f"{cache_key}.npz", root / f"{cache_key}.json"
+
+
+def _file_identity(path_value: Any) -> Optional[dict[str, Any]]:
+    if not path_value:
+        return None
+    path = Path(str(path_value))
+    if not path.is_file():
+        return {
+            "path": str(path),
+            "exists": False,
+            "sha256": None,
+            "size": None,
+            "mtime_ns": None,
+        }
+    try:
+        stat = path.stat()
+        return {
+            "path": str(path),
+            "exists": True,
+            "sha256": _sha256_file_cached(str(path), int(stat.st_size), int(stat.st_mtime_ns)),
+            "size": int(stat.st_size),
+            "mtime_ns": int(stat.st_mtime_ns),
+        }
+    except OSError:
+        return {
+            "path": str(path),
+            "exists": False,
+            "sha256": None,
+            "size": None,
+            "mtime_ns": None,
+        }
+
+
+@lru_cache(maxsize=8)
+def _sha256_file_cached(path: str, size: int, mtime_ns: int) -> str:
+    del size, mtime_ns
+    return _sha256_file(Path(path))
+
+
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _metadata_to_cache_dict(metadata: MaskMetadata) -> dict[str, Any]:
+    return {
+        "area": int(metadata.area),
+        "bbox": list(metadata.bbox),
+        "stability_score": float(metadata.stability_score),
+        "material_label": metadata.material_label,
+        "material_confidence": metadata.material_confidence,
+        "is_empty": bool(metadata.is_empty),
+    }
+
+
+def _metadata_from_cache_dict(data: Mapping[str, Any]) -> MaskMetadata:
+    return MaskMetadata(
+        area=int(data["area"]),
+        bbox=tuple(int(value) for value in data["bbox"]),
+        stability_score=float(data["stability_score"]),
+        material_label=data.get("material_label"),
+        material_confidence=(float(data["material_confidence"]) if data.get("material_confidence") is not None else None),
+        is_empty=bool(data.get("is_empty", False)),
+    )
+
+
+def _segmentation_result_checksum(result: SegmentationResult) -> str:
+    digest = hashlib.sha256()
+    for array in (result.masks, result.scores):
+        contiguous = array if array.flags["C_CONTIGUOUS"] else np.ascontiguousarray(array)
+        digest.update(str(contiguous.shape).encode("utf-8"))
+        digest.update(str(contiguous.dtype).encode("utf-8"))
+        digest.update(memoryview(contiguous.view(np.uint8).ravel()))
+    digest.update(canonicalize_json([_metadata_to_cache_dict(item) for item in result.metadata]))
+    return digest.hexdigest()
+
+
+def _segmentation_mask_count(result: Any) -> int:
+    masks = getattr(result, "masks", None)
+    if masks is None:
+        return 0
+    shape = getattr(masks, "shape", None)
+    if shape:
+        return int(shape[0])
+    try:
+        return len(masks)
+    except TypeError:
+        return 0
+
+
+def _build_segmentation_cache_key(
+    *,
+    image: np.ndarray,
+    segmentation_cfg: Mapping[str, Any],
+    device: str,
+) -> tuple[str, dict[str, Any]]:
+    model_cfg = segmentation_cfg.get("model", {}) if isinstance(segmentation_cfg.get("model"), Mapping) else {}
+    sanitized_model_cfg = dict(model_cfg)
+    checkpoint_path = sanitized_model_cfg.get("checkpoint_path")
+    sanitized_model_cfg["checkpoint"] = _file_identity(checkpoint_path)
+    sanitized_model_cfg.pop("checkpoint_path", None)
+    payload = {
+        "schema_version": _SEGMENTATION_CACHE_SCHEMA_VERSION,
+        "image_hash": _sha256_array(image),
+        "image_shape": list(image.shape),
+        "image_dtype": str(image.dtype),
+        "backend": segmentation_cfg.get("backend", "sam2"),
+        "device": device,
+        "model": _sanitize_json_value(sanitized_model_cfg),
+        "generator": dict(segmentation_cfg.get("generator", {}) or {}),
+        "material_classification": bool(segmentation_cfg.get("material_classification", False)),
+        "material_confidence_threshold": float(segmentation_cfg.get("material_confidence_threshold", 0.3)),
+        "tiling": _sanitize_json_value(segmentation_cfg.get("tiling", {}) or {}),
+    }
+    cache_key = hashlib.sha256(canonicalize_json(payload)).hexdigest()
+    return cache_key, payload
+
+
+def _read_segmentation_cache(
+    *,
+    cache_dir: Path,
+    cache_key: str,
+    key_payload: Mapping[str, Any],
+) -> Optional[SegmentationResult]:
+    masks_path, metadata_path = _segmentation_cache_paths(cache_dir, cache_key)
+    if not masks_path.is_file() or not metadata_path.is_file():
+        return None
+    try:
+        metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+        if metadata.get("schema_version") != _SEGMENTATION_CACHE_SCHEMA_VERSION:
+            return None
+        if metadata.get("cache_key") != cache_key or metadata.get("key_payload") != dict(key_payload):
+            return None
+        with np.load(masks_path, allow_pickle=False) as data:
+            masks = np.asarray(data["masks"])
+            scores = np.asarray(data["scores"])
+        mask_metadata = [_metadata_from_cache_dict(item) for item in metadata.get("metadata", [])]
+        result = SegmentationResult(
+            masks=masks.astype(bool, copy=False), scores=scores.astype(np.float32), metadata=mask_metadata
+        )
+        if _segmentation_result_checksum(result) != metadata.get("result_sha256"):
+            return None
+        return result
+    except Exception as exc:
+        logger.debug("Ignoring invalid spatial segmentation cache entry %s: %s", cache_key, exc)
+        return None
+
+
+def _write_segmentation_cache(
+    *,
+    cache_dir: Path,
+    cache_key: str,
+    key_payload: Mapping[str, Any],
+    result: SegmentationResult,
+) -> None:
+    if _segmentation_mask_count(result) == 0:
+        return
+    if not isinstance(result.masks, np.ndarray) or not isinstance(result.scores, np.ndarray):
+        return
+    masks_path, metadata_path = _segmentation_cache_paths(cache_dir, cache_key)
+    masks_path.parent.mkdir(parents=True, exist_ok=True)
+    temp_npz = masks_path.with_suffix(".npz.tmp")
+    temp_json = metadata_path.with_suffix(".json.tmp")
+    try:
+        with temp_npz.open("wb") as handle:
+            np.savez_compressed(handle, masks=result.masks, scores=result.scores)
+        metadata = {
+            "schema_version": _SEGMENTATION_CACHE_SCHEMA_VERSION,
+            "cache_key": cache_key,
+            "key_payload": dict(key_payload),
+            "metadata": [_metadata_to_cache_dict(item) for item in result.metadata],
+            "result_sha256": _segmentation_result_checksum(result),
+        }
+        with temp_json.open("w", encoding="utf-8") as handle:
+            dump_json(metadata, handle, indent=2, sort_keys=True, ensure_ascii=False, allow_nan=False)
+            handle.write("\n")
+        temp_npz.replace(masks_path)
+        temp_json.replace(metadata_path)
+    finally:
+        for temp_path in (temp_npz, temp_json):
+            if temp_path.exists():
+                with contextlib.suppress(OSError):
+                    temp_path.unlink()
 
 
 def _sanitize_json_value(value: Any) -> Any:
@@ -226,6 +427,17 @@ class PipelineConfig:
         for stage in self.stages:
             if stage not in VALID_STAGES:
                 raise ValueError(f"Invalid stage '{stage}'. Valid: {VALID_STAGES}")
+
+        raw_segmentation_cfg = self.segmentation or {}
+        raw_cache_policy = raw_segmentation_cfg.get("cache_policy") if isinstance(raw_segmentation_cfg, dict) else None
+        if raw_cache_policy is not None and str(raw_cache_policy).strip().lower() not in {"off", "read_write"}:
+            raise ValueError("segmentation.cache_policy must be one of: off, read_write")
+
+        segmentation_cfg = dict(raw_segmentation_cfg)
+        segmentation_cfg["cache_policy"] = _normalise_segmentation_cache_policy(
+            segmentation_cfg.get("cache_policy", "read_write")
+        )
+        self.segmentation = segmentation_cfg
 
         # Tier validation
         VALID_TIERS = ["standard", "apex_research", "apex_research_ultra", "experimental"]
@@ -474,6 +686,8 @@ class SpatialAIPipeline:
 
         # Track stateful backends for sequence lifecycle reset (ADR-026 §2.3)
         self._stateful_backends: Dict[str, Any] = {}
+        self._last_segmentation_stage_metadata: Dict[str, Any] = {}
+        self._last_materials_stage_metadata: Dict[str, Any] = {}
 
         logger.info(f"Initialized pipeline: tier={self.config.tier}, stages={self.config.stages}")
 
@@ -616,7 +830,13 @@ class SpatialAIPipeline:
 
                     result.segmentation = self._run_segmentation(result.linear_image, output_dir, save_intermediates)
                     result.stages_completed.append("segmentation")
-                    result.stage_reports.append(build_stage_report(stage="segmentation", status="completed"))
+                    result.stage_reports.append(
+                        build_stage_report(
+                            stage="segmentation",
+                            status="completed",
+                            metadata=self._last_segmentation_stage_metadata,
+                        )
+                    )
 
                 # Phase 2.2: Materials
                 if "materials" in self.config.stages:
@@ -627,7 +847,13 @@ class SpatialAIPipeline:
                         result.linear_image, result.segmentation, output_dir, save_intermediates
                     )
                     result.stages_completed.append("materials")
-                    result.stage_reports.append(build_stage_report(stage="materials", status="completed"))
+                    result.stage_reports.append(
+                        build_stage_report(
+                            stage="materials",
+                            status="completed",
+                            metadata=self._last_materials_stage_metadata,
+                        )
+                    )
 
                 # Phase 2.3: Reconstruction
                 if "reconstruction" in self.config.stages:
@@ -1029,6 +1255,9 @@ class SpatialAIPipeline:
             SegmentationResult.
         """
         self.progress_tracker.start_stage("segment", "Segmentation")
+        self._last_segmentation_stage_metadata = {}
+        timing_ms: dict[str, float] = {}
+        t_stage = time.perf_counter()
 
         try:
             # Parse config
@@ -1046,6 +1275,7 @@ class SpatialAIPipeline:
             enable_material = bool(self.config.segmentation.get("material_classification", False))
             material_threshold = float(self.config.segmentation.get("material_confidence_threshold", 0.3))
             tiling_cfg = SegmentationTilingConfig.from_dict(self.config.segmentation.get("tiling"))
+            cache_policy = _normalise_segmentation_cache_policy(self.config.segmentation.get("cache_policy", "read_write"))
 
             active_device: Dict[str, Literal["cuda", "mps", "cpu"]] = {
                 "value": cast(Literal["cuda", "mps", "cpu"], self.resource_manager.select_device())
@@ -1084,14 +1314,47 @@ class SpatialAIPipeline:
                 self.resource_manager.register_model("sam2", backend)
                 return backend
 
-            _build_backend(active_device["value"])
-
             # Create input contract
             seg_input = SegmentationInput(
                 image=ingest_result.linear_rgb,
                 gamma=ingest_result.gamma,
                 mode="auto",
             )
+
+            cache_key: Optional[str] = None
+            cache_payload: Dict[str, Any] = {}
+            cache_key_device: Optional[Literal["cuda", "mps", "cpu"]] = None
+            if cache_policy == "read_write":
+                t_cache = time.perf_counter()
+                cache_key_device = active_device["value"]
+                cache_key, cache_payload = _build_segmentation_cache_key(
+                    image=ingest_result.linear_rgb,
+                    segmentation_cfg=self.config.segmentation,
+                    device=cache_key_device,
+                )
+                cached_result = _read_segmentation_cache(
+                    cache_dir=output_dir / ".cache" / "spatial_ai" / "segmentation",
+                    cache_key=cache_key,
+                    key_payload=cache_payload,
+                )
+                timing_ms["cache_lookup"] = round((time.perf_counter() - t_cache) * 1000.0, 3)
+                if cached_result is not None:
+                    self.progress_tracker.complete_stage("segment", success=True)
+                    timing_ms["total"] = round((time.perf_counter() - t_stage) * 1000.0, 3)
+                    self._last_segmentation_stage_metadata = {
+                        "cache_hit": True,
+                        "cache_key": cache_key,
+                        "cache_policy": cache_policy,
+                        "timing_ms": timing_ms,
+                        "mask_count": _segmentation_mask_count(cached_result),
+                        "backend": backend_cfg,
+                        "device": active_device["value"],
+                        "model_size": model_size,
+                    }
+                    logger.info("Segmentation cache hit: %s", cache_key)
+                    return cached_result
+
+            _build_backend(active_device["value"])
 
             # Execute
             def _segment() -> SegmentationResult:
@@ -1115,6 +1378,7 @@ class SpatialAIPipeline:
                 else self.config.error_strategy
             )
 
+            t_segment = time.perf_counter()
             result = self.error_handler.execute_with_retry(
                 func=_segment,
                 stage="segment",
@@ -1122,6 +1386,42 @@ class SpatialAIPipeline:
                 device=active_device["value"],
                 on_device_change=_on_device_change,
             )
+            timing_ms["backend_segment"] = round((time.perf_counter() - t_segment) * 1000.0, 3)
+            classifier = getattr(backend_holder["backend"], "_material_classifier", None)
+            classifier_timing = getattr(classifier, "_last_timing_ms", None)
+            if isinstance(classifier_timing, dict) and classifier_timing:
+                clip_timing = {
+                    str(key): float(value) for key, value in classifier_timing.items() if isinstance(value, (int, float))
+                }
+                timing_ms["clip_classification"] = round(
+                    sum(value for key, value in clip_timing.items() if key != "batch_size"),
+                    3,
+                )
+            else:
+                clip_timing = {}
+
+            if cache_policy == "read_write" and cache_key:
+                if cache_key_device != active_device["value"]:
+                    t_cache_rekey = time.perf_counter()
+                    cache_key, cache_payload = _build_segmentation_cache_key(
+                        image=ingest_result.linear_rgb,
+                        segmentation_cfg=self.config.segmentation,
+                        device=active_device["value"],
+                    )
+                    cache_key_device = active_device["value"]
+                    timing_ms["cache_rekey"] = round((time.perf_counter() - t_cache_rekey) * 1000.0, 3)
+
+                t_cache_write = time.perf_counter()
+                try:
+                    _write_segmentation_cache(
+                        cache_dir=output_dir / ".cache" / "spatial_ai" / "segmentation",
+                        cache_key=cache_key,
+                        key_payload=cache_payload,
+                        result=result,
+                    )
+                except Exception as exc:
+                    logger.debug("Spatial segmentation cache write failed: %s", exc)
+                timing_ms["cache_write"] = round((time.perf_counter() - t_cache_write) * 1000.0, 3)
 
             # Save masks if requested
             if save_intermediates:
@@ -1134,11 +1434,25 @@ class SpatialAIPipeline:
                 logger.debug(f"Saved segmentation masks: {masks_path}")
 
             self.progress_tracker.complete_stage("segment", success=True)
-            if result.scores.size:
-                score_summary = f"[{result.scores.min():.3f}, {result.scores.max():.3f}]"
+            timing_ms["total"] = round((time.perf_counter() - t_stage) * 1000.0, 3)
+            self._last_segmentation_stage_metadata = {
+                "cache_hit": False,
+                "cache_key": cache_key,
+                "cache_policy": cache_policy,
+                "timing_ms": timing_ms,
+                "mask_count": _segmentation_mask_count(result),
+                "backend": backend_cfg,
+                "device": active_device["value"],
+                "model_size": model_size,
+            }
+            if clip_timing:
+                self._last_segmentation_stage_metadata["clip_classification"] = {"timing_ms": clip_timing}
+            scores = np.asarray(getattr(result, "scores", []), dtype=np.float32)
+            if scores.size:
+                score_summary = f"[{scores.min():.3f}, {scores.max():.3f}]"
             else:
                 score_summary = "empty"
-            logger.info(f"Segmentation completed: {len(result.masks)} masks, " f"scores={score_summary}")
+            logger.info(f"Segmentation completed: {_segmentation_mask_count(result)} masks, " f"scores={score_summary}")
 
             # Unload model to free memory
             self.resource_manager.unload_model("sam2")
@@ -1168,6 +1482,9 @@ class SpatialAIPipeline:
             Dict mapping segment IDs to PBR textures.
         """
         self.progress_tracker.start_stage("materials", "PBR Materials")
+        self._last_materials_stage_metadata = {}
+        timing_ms: dict[str, float] = {}
+        t_stage = time.perf_counter()
 
         try:
             # Parse config
@@ -1280,6 +1597,7 @@ class SpatialAIPipeline:
                     _build_backend(rebuilt_device, replace_tracking=True)
 
                 try:
+                    t_generate = time.perf_counter()
                     pbr_textures = self.error_handler.execute_with_retry(
                         func=_generate,
                         stage="materials",
@@ -1287,6 +1605,7 @@ class SpatialAIPipeline:
                         device=active_device["value"],
                         on_device_change=_on_device_change,
                     )
+                    timing_ms[f"segment_{i}"] = round((time.perf_counter() - t_generate) * 1000.0, 3)
                 except PipelineError:
                     if per_segment_strategy == ErrorRecoveryStrategy.FAIL_FAST:
                         raise
@@ -1333,6 +1652,13 @@ class SpatialAIPipeline:
                 logger.debug(f"Saved PBR textures: {textures_dir}")
 
             self.progress_tracker.complete_stage("materials", success=True)
+            timing_ms["total"] = round((time.perf_counter() - t_stage) * 1000.0, 3)
+            self._last_materials_stage_metadata = {
+                "timing_ms": timing_ms,
+                "segment_count": len(materials),
+                "backend": backend_cfg,
+                "device": active_device["value"],
+            }
             logger.info(f"Materials completed: {len(materials)} segments")
 
             # Unload model to free memory (C3: match segmentation lifecycle)

@@ -463,6 +463,11 @@ def main(
         "--strict-segmentation",
         help=("Fail on segmentation backend errors instead of " + "falling back to stub"),
     ),
+    segmentation_cache: str = typer.Option(
+        "read_write",
+        "--segmentation-cache",
+        help="Segmentation cache policy: off or read_write.",
+    ),
     # Caching
     cache_depth: str = typer.Option(
         "off",
@@ -815,6 +820,13 @@ def main(
         print(error_msg, file=sys.stdout)
         raise typer.Exit(code=1)
 
+    normalized_segmentation_cache = str(segmentation_cache or "read_write").strip().lower()
+    if normalized_segmentation_cache not in {"off", "read_write"}:
+        error_msg = "Invalid --segmentation-cache. Must be one of: off, read_write"
+        logger.error(error_msg)
+        print(error_msg, file=sys.stdout)
+        raise typer.Exit(code=1)
+
     # APEX strict gate: do not allow Materials V3 no-op configurations
     if quality_tier.lower() == "apex" and enable_materials_v3:
         if not enable_material_segmentation:
@@ -959,6 +971,7 @@ def main(
         sam2_stability_score_thresh=sam2_stability_score_thresh,
         sam2_crop_n_layers=sam2_crop_n_layers,
         strict_backend=strict_segmentation,
+        material_segmentation_cache_policy=normalized_segmentation_cache,
         emit_master16=enable_emit_master16,
         emit_upscaled16=enable_emit_upscaled16,
         emit_marketing=enable_emit_marketing,

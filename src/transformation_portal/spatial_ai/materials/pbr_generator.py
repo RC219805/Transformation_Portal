@@ -128,6 +128,20 @@ class PBRGenerator:
         Returns:
             List of N PBRTextures objects, one per segment.
         """
+        config = config or self.backend_engine._build_generation_config()
+        decision = self.backend_engine.resolve_backend_decision(config.backend)
+        if decision.executed_backend == "heuristic" and not (
+            config.strict_backend and decision.requested_backend != decision.executed_backend
+        ):
+            return self._generate_batch_heuristic_shared(
+                image=image,
+                gamma=gamma,
+                masks=masks,
+                depth=depth,
+                material_hints=material_hints,
+                config=config,
+            )
+
         results = []
 
         # Process each segment
@@ -146,6 +160,77 @@ class PBRGenerator:
             )
 
             results.append(pbr)
+
+        return results
+
+    def _generate_batch_heuristic_shared(
+        self,
+        *,
+        image: np.ndarray,
+        gamma: float,
+        masks: List[np.ndarray],
+        depth: Optional[np.ndarray],
+        material_hints: Optional[List[str]],
+        config: MaterialGenerationConfig,
+    ) -> List[PBRTextures]:
+        """Generate heuristic PBR textures by sharing full-image intermediates.
+
+        The heuristic backend computes full-image albedo/normal/roughness/AO
+        before applying each mask, so one unmasked generation per material hint
+        is equivalent to repeated per-mask generation and avoids duplicate
+        bilateral/Sobel/variance passes.
+        """
+        MaterialInput(image=image, gamma=gamma, depth=depth)
+        base_by_hint: dict[Optional[str], PBRTextures] = {}
+        results: List[PBRTextures] = []
+
+        for idx, mask in enumerate(masks):
+            hint = material_hints[idx] if material_hints else None
+            MaterialInput(image=image, gamma=gamma, mask=mask, depth=depth, material_hint=hint)
+            if hint not in base_by_hint:
+                base_by_hint[hint] = self.backend_engine.generate_pbr_textures(
+                    rgb=image,
+                    mask=None,
+                    depth=depth,
+                    material_hint=hint,
+                    config=config,
+                )
+            base = base_by_hint[hint]
+            mask_bool = np.asarray(mask, dtype=bool)
+
+            albedo = base.albedo.copy()
+            normal = base.normal.copy()
+            roughness = base.roughness.copy()
+            metallic = base.metallic.copy()
+            ao = base.ambient_occlusion.copy()
+            height = base.height.copy() if base.height is not None else None
+
+            albedo[~mask_bool] = 0.0
+            normal[~mask_bool] = [0.0, 0.0, 1.0]
+            roughness[~mask_bool] = 0.5
+            metallic[~mask_bool] = 0.0
+            ao[~mask_bool] = 1.0
+            if height is not None:
+                height[~mask_bool] = 0.5
+
+            properties = MaterialProperties(
+                roughness_mean=float(np.mean(roughness[mask_bool])),
+                metallic_mean=float(np.mean(metallic[mask_bool])),
+                ao_strength=float(np.mean(1.0 - ao[mask_bool])),
+                normal_strength=config.normal_strength,
+            )
+            results.append(
+                PBRTextures(
+                    albedo=albedo,
+                    normal=normal,
+                    roughness=roughness,
+                    metallic=metallic,
+                    ambient_occlusion=ao,
+                    height=height,
+                    properties=properties,
+                    metadata=base.metadata,
+                )
+            )
 
         return results
 
