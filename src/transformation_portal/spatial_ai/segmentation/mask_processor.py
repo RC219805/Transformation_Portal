@@ -179,6 +179,9 @@ class MaskProcessor:
 
         # Assign IDs
         current_ids = np.zeros(N_cur, dtype=np.int32)
+        if N_prev == 0:
+            return np.arange(N_cur, dtype=np.int32)
+
         used_prev_ids = set()
         next_new_id = prev_ids.max() + 1 if len(prev_ids) > 0 else 0
 

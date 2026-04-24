@@ -618,6 +618,40 @@ class TestSpatialAIPipelineSegmentationStage:
         assert result is mock_seg_result
         MockBackend.assert_called_once()
 
+    def test_run_segmentation_accepts_empty_result(self, tmp_path, caplog):
+        """Empty segmentation is a valid result and should not crash score logging."""
+        config = PipelineConfig(
+            tier="standard",
+            stages=["segment"],
+            segmentation={"backend": "sam2"},
+            resource_limits=ResourceLimits(device_preference=["cpu"]),
+        )
+        pipeline = SpatialAIPipeline(config)
+
+        ingest_result = MagicMock(spec=LinearIngestResult)
+        ingest_result.linear_rgb = np.random.rand(128, 128, 3).astype(np.float32)
+        ingest_result.gamma = 1.0
+
+        mock_seg_result = SegmentationResult(
+            masks=np.zeros((0, 128, 128), dtype=bool),
+            scores=np.zeros((0,), dtype=np.float32),
+            metadata=[],
+        )
+
+        caplog.set_level("INFO", logger="transformation_portal.spatial_ai.orchestration.pipeline")
+        with patch("transformation_portal.spatial_ai.orchestration.pipeline.SAM2Backend") as MockBackend:
+            mock_backend = MockBackend.return_value
+            mock_backend.segment.return_value = mock_seg_result
+
+            result = pipeline._run_segmentation(
+                ingest_result=ingest_result,
+                output_dir=tmp_path,
+                save_intermediates=False,
+            )
+
+        assert result is mock_seg_result
+        assert "Segmentation completed: 0 masks, scores=empty" in caplog.text
+
     def test_run_segmentation_passes_tiling_config(self, tmp_path):
         """Test tiling config dict is parsed and passed to SAM2 backend."""
         config = PipelineConfig(

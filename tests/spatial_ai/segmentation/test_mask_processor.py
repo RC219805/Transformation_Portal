@@ -225,6 +225,33 @@ class TestTemporalTracking:
         assert current_ids[1] == 11
         assert current_ids[2] == 12
 
+    def test_track_empty_previous_masks_assigns_deterministic_ids(self):
+        """Current masks with no previous frame should start IDs at zero."""
+        current_masks = np.zeros((3, 100, 100), dtype=bool)
+        current_masks[0, :10, :10] = True
+        current_masks[1, 20:30, 20:30] = True
+        current_masks[2, 50:60, 50:60] = True
+        prev_masks = np.zeros((0, 100, 100), dtype=bool)
+        prev_ids = np.array([], dtype=np.int32)
+
+        processor = MaskProcessor(iou_threshold=0.5)
+        current_ids = processor.track_temporal(current_masks, prev_masks, prev_ids)
+
+        np.testing.assert_array_equal(current_ids, np.array([0, 1, 2], dtype=np.int32))
+
+    def test_track_empty_current_masks_returns_empty_ids(self):
+        """No current masks should return an empty ID vector."""
+        current_masks = np.zeros((0, 100, 100), dtype=bool)
+        prev_masks = np.zeros((1, 100, 100), dtype=bool)
+        prev_masks[0, :10, :10] = True
+        prev_ids = np.array([10], dtype=np.int32)
+
+        processor = MaskProcessor(iou_threshold=0.5)
+        current_ids = processor.track_temporal(current_masks, prev_masks, prev_ids)
+
+        assert current_ids.shape == (0,)
+        assert current_ids.dtype == np.int32
+
     def test_track_invalid_dtypes(self):
         """Test tracking rejects invalid dtypes."""
         current_masks = np.zeros((2, 100, 100), dtype=np.float32)  # Wrong

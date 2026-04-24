@@ -1134,10 +1134,11 @@ class SpatialAIPipeline:
                 logger.debug(f"Saved segmentation masks: {masks_path}")
 
             self.progress_tracker.complete_stage("segment", success=True)
-            logger.info(
-                f"Segmentation completed: {len(result.masks)} masks, "
-                f"scores=[{result.scores.min():.3f}, {result.scores.max():.3f}]"
-            )
+            if result.scores.size:
+                score_summary = f"[{result.scores.min():.3f}, {result.scores.max():.3f}]"
+            else:
+                score_summary = "empty"
+            logger.info(f"Segmentation completed: {len(result.masks)} masks, " f"scores={score_summary}")
 
             # Unload model to free memory
             self.resource_manager.unload_model("sam2")
