@@ -31,7 +31,7 @@ repos:
     hooks:
       - id: auto-format-staged
         name: Auto-format staged Python files
-        entry: python scripts/dev/auto_format_changed.py
+        entry: scripts/setup/run_repo_python.sh scripts/dev/auto_format_changed.py
         language: system
         pass_filenames: false
         stages: [pre-commit]
@@ -85,7 +85,7 @@ repos:
 
       - id: check-test-markers
         name: Check Test Markers (ADR-044)
-        entry: python scripts/validation/check_test_markers.py
+        entry: scripts/setup/run_repo_python.sh scripts/validation/check_test_markers.py
         language: system
         files: ^tests/.*\.py$
         types: [python]

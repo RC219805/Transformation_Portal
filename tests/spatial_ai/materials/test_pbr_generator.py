@@ -168,6 +168,61 @@ class TestPBRGenerator:
 
         assert len(results) == len(sample_masks)
 
+    def test_batch_heuristic_shared_matches_per_segment_outputs(self, generator):
+        """Shared heuristic intermediates should be equivalent to per-mask generation."""
+        rng = np.random.default_rng(1234)
+        image = rng.random((32, 32, 3), dtype=np.float32)
+        depth = rng.random((32, 32), dtype=np.float32)
+        masks = []
+        mask_a = np.zeros((32, 32), dtype=bool)
+        mask_a[2:20, 3:18] = True
+        masks.append(mask_a)
+        mask_b = np.zeros((32, 32), dtype=bool)
+        mask_b[10:30, 12:31] = True
+        masks.append(mask_b)
+        hints = ["metal", "wood"]
+        config = MaterialGenerationConfig(
+            backend="heuristic",
+            device="cpu",
+            normal_strength=1.3,
+            ao_intensity=0.6,
+        )
+
+        expected = [
+            generator.generate(
+                image=image,
+                gamma=1.0,
+                mask=mask,
+                depth=depth,
+                material_hint=hint,
+                config=config,
+            )
+            for mask, hint in zip(masks, hints)
+        ]
+        actual = generator.generate_batch(
+            image=image,
+            gamma=1.0,
+            masks=masks,
+            depth=depth,
+            material_hints=hints,
+            config=config,
+        )
+
+        for expected_pbr, actual_pbr in zip(expected, actual):
+            np.testing.assert_allclose(actual_pbr.albedo, expected_pbr.albedo, atol=1e-6)
+            np.testing.assert_allclose(actual_pbr.normal, expected_pbr.normal, atol=1e-6)
+            np.testing.assert_allclose(actual_pbr.roughness, expected_pbr.roughness, atol=1e-6)
+            np.testing.assert_allclose(actual_pbr.metallic, expected_pbr.metallic, atol=1e-6)
+            np.testing.assert_allclose(
+                actual_pbr.ambient_occlusion,
+                expected_pbr.ambient_occlusion,
+                atol=1e-6,
+            )
+            np.testing.assert_allclose(actual_pbr.height, expected_pbr.height, atol=1e-6)
+            assert actual_pbr.properties.roughness_mean == pytest.approx(expected_pbr.properties.roughness_mean)
+            assert actual_pbr.properties.metallic_mean == pytest.approx(expected_pbr.properties.metallic_mean)
+            assert actual_pbr.properties.ao_strength == pytest.approx(expected_pbr.properties.ao_strength)
+
     def test_contract_validation(self, generator):
         """Test input contract validation."""
         # Invalid image dtype

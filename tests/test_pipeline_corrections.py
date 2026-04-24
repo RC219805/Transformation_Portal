@@ -37,7 +37,11 @@ class TestStageAliasNormalization:
 
         assert "segmentation" in config.stages
         assert "segment" not in config.stages
-        assert config.segmentation == {"backend": "sam2", "model": {"size": "large"}}
+        assert config.segmentation == {
+            "backend": "sam2",
+            "cache_policy": "read_write",
+            "model": {"size": "large"},
+        }
 
     def test_segmentation_key_still_works(self):
         """Config dict with 'segmentation' key should still work as before."""
@@ -51,7 +55,7 @@ class TestStageAliasNormalization:
         config = SpatialAIPipeline._dict_to_config(data)
 
         assert "segmentation" in config.stages
-        assert config.segmentation == {"backend": "sam2"}
+        assert config.segmentation == {"backend": "sam2", "cache_policy": "read_write"}
 
     def test_segment_alias_preferred_over_empty_segmentation(self):
         """When only 'segment' is present, its data is used for segmentation."""

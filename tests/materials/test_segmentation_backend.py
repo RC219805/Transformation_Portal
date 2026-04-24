@@ -16,9 +16,11 @@ Note: Tests marked with @pytest.mark.ml require torch/torchvision.
 
 from __future__ import annotations
 
+import json
 import socket
 import sys
 import types
+from contextlib import contextmanager
 from types import SimpleNamespace
 
 import numpy as np
@@ -739,6 +741,264 @@ def test_segment_materials_sam2_backend_auto_enables_tiling_for_large_images(mon
     assert metadata["sam2_runtime"]["tiling"]["decision"] == "auto_large_image"
     assert metadata["sam2_runtime"]["tiling"]["effective"]["enabled"] is True
     assert metadata["sam2_runtime"]["tiling"]["image_shape"] == [4097, 2, 3]
+
+
+def test_segment_materials_cache_hit_skips_backend(sample_image, tmp_path, monkeypatch):
+    """Validated exact-match cache entries should skip backend execution."""
+    import transformation_portal.lux_depth_v3.segmentation_backend as seg_module
+
+    calls = {"segment": 0}
+    glass_mask = np.zeros(sample_image.shape[:2], dtype=np.float32)
+    glass_mask[5:20, 5:20] = 1.0
+
+    class FakeBackend:
+        info = SegmentationBackendInfo(
+            name="Fake EfficientSAM",
+            model_id="fake-efficientsam",
+            requires_gpu=False,
+            requires_weights=False,
+            approximate_memory_mb=1,
+            description="test",
+        )
+        _device = "cpu"
+
+        def segment(self, image):
+            calls["segment"] += 1
+            assert image.shape == sample_image.shape
+            return {"glass": (glass_mask, 0.91)}
+
+        def get_runtime_metadata(self):
+            return {"clip_runtime": {"weights_source": "test"}}
+
+    monkeypatch.setattr(seg_module, "_get_backend_instance", lambda *args, **kwargs: FakeBackend())
+    config = EnhanceConfig(
+        enable_material_segmentation=True,
+        material_segmentation_backend="efficientsam",
+        material_segmentation_cache_policy="read_write",
+        depth_device="cpu",
+    )
+
+    first = segment_materials(sample_image, config, cache_dir=tmp_path)
+    first_metadata = get_last_segmentation_runtime_metadata()
+    second = segment_materials(sample_image, config, cache_dir=tmp_path)
+    second_metadata = get_last_segmentation_runtime_metadata()
+
+    assert calls["segment"] == 1
+    assert np.array_equal(first["glass"], second["glass"])
+    assert first_metadata["cache_hit"] is False
+    assert second_metadata["cache_hit"] is True
+    assert second_metadata["mask_count"] == 1
+    assert second_metadata["backend"] == "efficientsam"
+    assert first_metadata["material_confidences"]["glass"] == pytest.approx(0.91)
+    assert second_metadata["material_confidences"]["glass"] == pytest.approx(0.91)
+    assert second_metadata["confidence_summary"]["count"] == 1
+
+
+def test_efficientsam_clip_classification_batches_segments(sample_image, monkeypatch):
+    """EfficientSAM CLIP classification should encode all segment crops in one batch."""
+    import transformation_portal.lux_depth_v3.segmentation_backend as seg_module
+
+    class FakeScalar:
+        def __init__(self, value):
+            self.value = value
+
+        def item(self):
+            return self.value
+
+    class FakeTensor:
+        def __init__(self, values):
+            self.values = np.asarray(values, dtype=np.float32)
+
+        def to(self, _device):
+            return self
+
+        def unsqueeze(self, axis):
+            return FakeTensor(np.expand_dims(self.values, axis))
+
+        def norm(self, dim=-1, keepdim=True):
+            return FakeTensor(np.linalg.norm(self.values, axis=dim, keepdims=keepdim))
+
+        def __truediv__(self, other):
+            other_values = other.values if isinstance(other, FakeTensor) else other
+            return FakeTensor(self.values / np.maximum(other_values, 1e-6))
+
+        @property
+        def T(self):
+            return FakeTensor(self.values.T)
+
+        def __matmul__(self, other):
+            return FakeTensor(self.values @ other.values)
+
+        def __getitem__(self, key):
+            return FakeTensor(self.values[key])
+
+        def argmax(self):
+            return FakeScalar(int(np.argmax(self.values)))
+
+        def item(self):
+            return float(np.asarray(self.values).item())
+
+    @contextmanager
+    def fake_no_grad():
+        yield
+
+    class FakeTorch:
+        @staticmethod
+        def no_grad():
+            return fake_no_grad()
+
+        @staticmethod
+        def cat(tensors, dim=0):
+            return FakeTensor(np.concatenate([tensor.values for tensor in tensors], axis=dim))
+
+    monkeypatch.setitem(sys.modules, "torch", FakeTorch)
+    monkeypatch.setattr(seg_module, "OPEN_CLIP_AVAILABLE", True)
+
+    model_calls = {"encode_text": 0, "encode_image": 0}
+    preprocess_vectors = [
+        [1.0, 0.0, 0.0, 0.0],
+        [0.0, 0.0, 0.0, 1.0],
+    ]
+
+    class FakeModel:
+        def encode_text(self, tokens):
+            model_calls["encode_text"] += 1
+            return tokens
+
+        def encode_image(self, image_batch):
+            model_calls["encode_image"] += 1
+            return image_batch
+
+    def fake_tokenizer(_prompts):
+        return FakeTensor(np.eye(4, dtype=np.float32))
+
+    def fake_preprocess(_region):
+        return FakeTensor(preprocess_vectors.pop(0))
+
+    backend = EfficientSAMBackend()
+    backend._device = "cpu"
+    backend._load_clip_runtime = lambda: (FakeModel(), fake_preprocess, fake_tokenizer)
+
+    mask_a = np.zeros(sample_image.shape[:2], dtype=bool)
+    mask_a[2:30, 2:30] = True
+    mask_b = np.zeros(sample_image.shape[:2], dtype=bool)
+    mask_b[25:55, 25:55] = True
+    segments = [
+        {"segmentation": mask_a, "bbox": [2, 2, 28, 28], "area": int(mask_a.sum())},
+        {"segmentation": mask_b, "bbox": [25, 25, 30, 30], "area": int(mask_b.sum())},
+    ]
+
+    result = backend._classify_segments_with_clip(sample_image, segments)
+
+    assert model_calls == {"encode_text": 1, "encode_image": 1}
+    assert set(result) == {"glass", "stone"}
+    assert result["glass"][1] == pytest.approx(1.0)
+    assert result["stone"][1] == pytest.approx(1.0)
+    metadata = backend.get_runtime_metadata()
+    assert metadata["clip_classification"]["timing_ms"]["batch_size"] == 2.0
+
+
+def test_segment_materials_cache_key_invalidates_on_config_change(sample_image, tmp_path, monkeypatch):
+    """Cache keys should include segmentation-affecting configuration."""
+    import transformation_portal.lux_depth_v3.segmentation_backend as seg_module
+
+    calls = {"segment": 0}
+
+    class FakeBackend:
+        info = SegmentationBackendInfo("Fake", "fake", False, False, 1, "test")
+        _device = "cpu"
+
+        def segment(self, image):
+            calls["segment"] += 1
+            mask = np.zeros(image.shape[:2], dtype=np.float32)
+            mask[calls["segment"] : calls["segment"] + 4, 0:4] = 1.0
+            return {"glass": (mask, 0.9)}
+
+    monkeypatch.setattr(seg_module, "_get_backend_instance", lambda *args, **kwargs: FakeBackend())
+    config = EnhanceConfig(
+        enable_material_segmentation=True,
+        material_segmentation_backend="efficientsam",
+        material_segmentation_cache_policy="read_write",
+        sky_gradient_threshold=0.05,
+    )
+    changed_config = EnhanceConfig(
+        enable_material_segmentation=True,
+        material_segmentation_backend="efficientsam",
+        material_segmentation_cache_policy="read_write",
+        sky_gradient_threshold=0.06,
+    )
+
+    segment_materials(sample_image, config, cache_dir=tmp_path)
+    segment_materials(sample_image, changed_config, cache_dir=tmp_path)
+
+    assert calls["segment"] == 2
+
+
+def test_segment_materials_corrupt_cache_recomputes(sample_image, tmp_path, monkeypatch):
+    """Invalid cache metadata should be rejected and recomputed."""
+    import transformation_portal.lux_depth_v3.segmentation_backend as seg_module
+
+    calls = {"segment": 0}
+
+    class FakeBackend:
+        info = SegmentationBackendInfo("Fake", "fake", False, False, 1, "test")
+        _device = "cpu"
+
+        def segment(self, image):
+            calls["segment"] += 1
+            mask = np.zeros(image.shape[:2], dtype=np.float32)
+            mask[1:8, 1:8] = 1.0
+            return {"glass": (mask, 0.9)}
+
+    monkeypatch.setattr(seg_module, "_get_backend_instance", lambda *args, **kwargs: FakeBackend())
+    config = EnhanceConfig(
+        enable_material_segmentation=True,
+        material_segmentation_backend="efficientsam",
+        material_segmentation_cache_policy="read_write",
+    )
+
+    segment_materials(sample_image, config, cache_dir=tmp_path)
+    metadata_files = list(tmp_path.glob("*/*.json"))
+    assert metadata_files
+    metadata_files[0].write_text('{"schema_version":"bad"}', encoding="utf-8")
+    segment_materials(sample_image, config, cache_dir=tmp_path)
+
+    assert calls["segment"] == 2
+
+
+def test_segment_materials_cache_rejects_missing_confidence(sample_image, tmp_path, monkeypatch):
+    """Exact-result cache entries must not synthesize missing confidence values."""
+    import transformation_portal.lux_depth_v3.segmentation_backend as seg_module
+
+    calls = {"segment": 0}
+
+    class FakeBackend:
+        info = SegmentationBackendInfo("Fake", "fake", False, False, 1, "test")
+        _device = "cpu"
+
+        def segment(self, image):
+            calls["segment"] += 1
+            mask = np.zeros(image.shape[:2], dtype=np.float32)
+            mask[calls["segment"] : calls["segment"] + 4, 1:5] = 1.0
+            return {"glass": (mask, 0.9)}
+
+    monkeypatch.setattr(seg_module, "_get_backend_instance", lambda *args, **kwargs: FakeBackend())
+    config = EnhanceConfig(
+        enable_material_segmentation=True,
+        material_segmentation_backend="efficientsam",
+        material_segmentation_cache_policy="read_write",
+    )
+
+    segment_materials(sample_image, config, cache_dir=tmp_path)
+    metadata_files = list(tmp_path.glob("*/*.json"))
+    assert metadata_files
+    metadata = json.loads(metadata_files[0].read_text(encoding="utf-8"))
+    metadata["masks"]["glass"].pop("confidence")
+    metadata_files[0].write_text(json.dumps(metadata), encoding="utf-8")
+
+    segment_materials(sample_image, config, cache_dir=tmp_path)
+
+    assert calls["segment"] == 2
 
 
 def test_segment_materials_sam2_strict_mode_missing_backend(sample_image, monkeypatch):

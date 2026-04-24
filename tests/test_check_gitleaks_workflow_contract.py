@@ -20,6 +20,10 @@ title = "Transformation Portal gitleaks config"
 [extend]
 useDefault = true
 
+[allowlist]
+description = "Ignore generated local artifact directories already excluded from version control"
+paths = ['''{gitleaks_contract.EXPECTED_ARTIFACT_PATH_REGEX}''']
+
 [[rules]]
 id = "{gitleaks_contract.EXPECTED_RULE_ID}"
 
@@ -29,6 +33,17 @@ condition = "AND"
 regexTarget = "{gitleaks_contract.EXPECTED_REGEX_TARGET}"
 regexes = ['''{gitleaks_contract.EXPECTED_MATCH_REGEX}''']
 paths = ['''{gitleaks_contract.EXPECTED_PATH_REGEX}''']
+
+[[rules.allowlists]]
+description = "Ignore the SAM2 tiling UI flag false positive"
+condition = "AND"
+regexTarget = "{gitleaks_contract.EXPECTED_REGEX_TARGET}"
+regexes = ['''{gitleaks_contract.EXPECTED_SAM2_TILING_MATCH_REGEX}''']
+paths = [
+  '''{gitleaks_contract.EXPECTED_SAM2_TILING_PATH_REGEXES[0]}''',
+  '''{gitleaks_contract.EXPECTED_SAM2_TILING_PATH_REGEXES[1]}''',
+  '''{gitleaks_contract.EXPECTED_SAM2_TILING_PATH_REGEXES[2]}''',
+]
 """
 
 
@@ -92,6 +107,39 @@ paths = ['''^public/portal-assets/''']
         firewall_workflow_text=valid_firewall_workflow_text(),
     )
     assert "gitleaks config must not define a global allowlist for portal assets" in errors
+    assert "gitleaks global allowlist must use singular [allowlist] syntax for v8.21.x" in errors
+
+
+def test_missing_generated_artifact_allowlist_is_reported() -> None:
+    config_text = valid_config_text().replace(
+        f"""
+[allowlist]
+description = "Ignore generated local artifact directories already excluded from version control"
+paths = ['''{gitleaks_contract.EXPECTED_ARTIFACT_PATH_REGEX}''']
+""",
+        "",
+        1,
+    )
+    errors = gitleaks_contract.validate_gitleaks_contract(
+        config_text=config_text,
+        ci_workflow_text=valid_ci_workflow_text(),
+        firewall_workflow_text=valid_firewall_workflow_text(),
+    )
+    assert "gitleaks config must define exactly one ignored generated artifact directory allowlist" in errors
+
+
+def test_broad_generated_artifact_allowlist_is_reported() -> None:
+    config_text = valid_config_text().replace(
+        f"paths = ['''{gitleaks_contract.EXPECTED_ARTIFACT_PATH_REGEX}''']",
+        "paths = ['''.*''']",
+        1,
+    )
+    errors = gitleaks_contract.validate_gitleaks_contract(
+        config_text=config_text,
+        ci_workflow_text=valid_ci_workflow_text(),
+        firewall_workflow_text=valid_firewall_workflow_text(),
+    )
+    assert "gitleaks global allowlist must be scoped only to ignored generated artifact directories" in errors
 
 
 def test_broad_rule_path_allowlist_is_reported() -> None:
@@ -105,7 +153,8 @@ def test_broad_rule_path_allowlist_is_reported() -> None:
         ci_workflow_text=valid_ci_workflow_text(),
         firewall_workflow_text=valid_firewall_workflow_text(),
     )
-    assert "generic-api-key allowlist must be scoped only to public/portal-assets/portal.js" in errors
+    assert "generic-api-key allowlists must be scoped only to approved false-positive patterns" in errors
+    assert "generic-api-key allowlist must match only the generated auth failure false-positive branch" in errors
 
 
 def test_wrong_regex_target_is_reported() -> None:
@@ -119,7 +168,7 @@ def test_wrong_regex_target_is_reported() -> None:
         ci_workflow_text=valid_ci_workflow_text(),
         firewall_workflow_text=valid_firewall_workflow_text(),
     )
-    assert "generic-api-key allowlist must target the portal source line" in errors
+    assert "generic-api-key allowlists must target source lines" in errors
 
 
 def test_wrong_match_regex_is_reported() -> None:

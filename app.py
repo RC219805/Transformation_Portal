@@ -1234,6 +1234,7 @@ ALLOWED_BACKENDS = {"da3", "depth_pro"}
 ALLOWED_DEPTH_DEVICES = {"cpu", "cuda", "mps"}
 ALLOWED_RUN_CARD_VERSIONS = {"v1", "v2"}
 ALLOWED_SEGMENTATION_BACKENDS = {"stub", "efficientsam", "sam2"}
+ALLOWED_SEGMENTATION_CACHE_POLICIES = {"off", "read_write"}
 ALLOWED_SAM2_MODEL_SIZES = {"base", "large"}
 ALLOWED_GROUPING_MODES = {"single", "parent_dir"}
 ALLOWED_RECONSTRUCTION_TIERS = {
@@ -1374,6 +1375,7 @@ PORTAL_ALLOWED_EVENT_FIELDS = {
     "run_card_include_proofs",
     "run_card_version",
     "segmentation_backend",
+    "segmentation_cache",
     "strict_segmentation",
 }
 PORTAL_ALLOWED_RUM_EVENT_TYPES = {
@@ -1430,6 +1432,7 @@ LUX_PORTAL_DEFAULT_ARGS: Dict[str, Any] = {
     "depth_device": "cpu",
     "enable_segmentation": False,
     "segmentation_backend": "stub",
+    "segmentation_cache": "read_write",
     "sam2_model_size": "base",
     "sam2_tiling_enabled": False,
     "sam2_tile_size_px": 1536,
@@ -3706,6 +3709,31 @@ def _build_lux_config_preview(
         )
         segmentation_backend = str(defaults["segmentation_backend"])
     normalized_args["segmentation_backend"] = segmentation_backend
+
+    segmentation_cache = (
+        str(
+            _pick(
+                args,
+                "segmentation_cache",
+                "segmentationCache",
+                default=defaults["segmentation_cache"],
+            )
+            or defaults["segmentation_cache"]
+        )
+        .strip()
+        .lower()
+    )
+    if segmentation_cache not in ALLOWED_SEGMENTATION_CACHE_POLICIES:
+        errors.append(
+            _portal_issue(
+                "segmentation_cache",
+                "invalid_segmentation_cache",
+                "Segmentation cache policy is not supported.",
+                suggestion="Choose off or read_write.",
+            )
+        )
+        segmentation_cache = str(defaults["segmentation_cache"])
+    normalized_args["segmentation_cache"] = segmentation_cache
 
     sam2_model_size = (
         str(
@@ -6488,6 +6516,19 @@ def _argv_from_request(
             "strictSegmentation",
             default=False,
         )
+        segmentation_cache = (
+            str(
+                _pick(
+                    args,
+                    "segmentation_cache",
+                    "segmentationCache",
+                    default="read_write",
+                )
+                or "read_write"
+            )
+            .strip()
+            .lower()
+        )
         enable_reconstruction = _pick(
             args,
             "enable_reconstruction",
@@ -6546,6 +6587,8 @@ def _argv_from_request(
             )
         if segmentation_backend == "sam2" and sam2_model_size not in ALLOWED_SAM2_MODEL_SIZES:
             raise _PortalValidationReasonError("Invalid sam2_model_size", reason="invalid_sam2_model_size")
+        if segmentation_cache not in ALLOWED_SEGMENTATION_CACHE_POLICIES:
+            raise _PortalValidationReasonError("Invalid segmentation_cache", reason="invalid_segmentation_cache")
         if grouping_mode not in ALLOWED_GROUPING_MODES:
             raise _PortalValidationReasonError("Invalid grouping_mode")
 
@@ -6689,6 +6732,8 @@ def _argv_from_request(
                 onoff(enable_segmentation),
                 "--segmentation-backend",
                 segmentation_backend,
+                "--segmentation-cache",
+                segmentation_cache,
                 "--materials-v3",
                 onoff(
                     _pick(

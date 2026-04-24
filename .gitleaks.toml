@@ -5,6 +5,10 @@ useDefault = true
 
 # Keep this compatible with the manual firewall scan, which currently runs
 # gitleaks v8.21.x and does not support global allowlist targetRules.
+[allowlist]
+description = "Ignore generated local artifact directories already excluded from version control"
+paths = ['''(^|/)(output|output_[^/]*|test_output|test_artifacts|processed_images|processed_output|extracted_context|docs/api/_build|__pycache__|\.pytest_cache|\.mypy_cache|\.ruff_cache|\.pyre|web/secure-landing/(?:\.next|\.next-build-verify|\.next-smoke-[^/]*|\.next-codex-[^/]*))(/|$)''']
+
 [[rules]]
 id = "generic-api-key"
 
@@ -14,3 +18,14 @@ condition = "AND"
 regexTarget = "line"
 regexes = ['''return normalizedReason==="auth_failure"\|\|normalizedReason==="auth"\|\|normalizedStatus===401\|\|normalizedStatus===403\?\{reason:"auth_failure"''']
 paths = ['''(^|/)public/portal-assets/portal\.js$''']
+
+[[rules.allowlists]]
+description = "Ignore the SAM2 tiling UI flag false positive"
+condition = "AND"
+regexTarget = "line"
+regexes = ['''sam2TilingEnabled''']
+paths = [
+  '''(^|/)public/portal-assets/portal\.js$''',
+  '''(^|/)tests/test_app_orchestrator_runtime\.py$''',
+  '''(^|/)web/secure-landing/portal-src/portal\.template\.js$''',
+]

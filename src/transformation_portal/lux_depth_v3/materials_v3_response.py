@@ -16,6 +16,7 @@ from .pixel_ops_registry import OP_REGISTRY
 def compute_edge_signals(
     mask_np: np.ndarray,
     rgb_np: np.ndarray,
+    grad_mag: np.ndarray | None = None,
 ) -> Dict[str, float]:
     """Computes objective boundary metrics using image gradients."""
     if mask_np is None or mask_np.sum() == 0:
@@ -40,7 +41,21 @@ def compute_edge_signals(
     if boundary_pixels_count == 0:
         return {"boundary_pixels": 0, "edge_alignment": 0.0}
 
-    # 2. Compute Image Gradients (Sobel)
+    # 2. Use precomputed image gradients when available; otherwise compute
+    # them for backward-compatible direct helper calls.
+    if grad_mag is None:
+        grad_mag = _normalized_gradient_magnitude(rgb_np)
+
+    # 3. Compute Alignment (Mean gradient magnitude at boundary)
+    alignment_score = float(np.mean(grad_mag[boundary_mask]))
+
+    return {
+        "boundary_pixels": boundary_pixels_count,
+        "edge_alignment": round(alignment_score, 4),
+    }
+
+
+def _normalized_gradient_magnitude(rgb_np: np.ndarray) -> np.ndarray:
     if rgb_np.ndim == 3 and rgb_np.shape[2] == 3:
         gray = np.dot(rgb_np[..., :3], [0.2989, 0.5870, 0.1140])
     else:
@@ -53,14 +68,7 @@ def compute_edge_signals(
     max_grad = np.max(grad_mag)
     if max_grad > 0:
         grad_mag /= max_grad
-
-    # 3. Compute Alignment (Mean gradient magnitude at boundary)
-    alignment_score = float(np.mean(grad_mag[boundary_mask]))
-
-    return {
-        "boundary_pixels": boundary_pixels_count,
-        "edge_alignment": round(alignment_score, 4),
-    }
+    return grad_mag
 
 
 def _decide_refinement(
@@ -140,6 +148,7 @@ def generate_response_plan(
     }
 
     histogram: Dict[str, int] = {}
+    shared_grad_mag = _normalized_gradient_magnitude(rgb_image) if per_class_stats else None
     for mat_key, stats in per_class_stats.items():
         if not stats.get("present", False):
             continue
@@ -147,7 +156,7 @@ def generate_response_plan(
 
         edge_signals = {"boundary_pixels": 0, "edge_alignment": 0.0}
         if "mask" in stats:
-            edge_signals = compute_edge_signals(stats["mask"], rgb_image)
+            edge_signals = compute_edge_signals(stats["mask"], rgb_image, shared_grad_mag)
 
         refinement = _decide_refinement(mat_key, stats, edge_signals, config)
         pixel_ops = _decide_pixel_ops(mat_key, stats, config)
@@ -165,6 +174,7 @@ def generate_response_plan(
             "coverage_px": stats["coverage_px"],
             "mean_conf": stats["mean_conf"],
             "edge_conf": stats.get("edge_conf", 0.0),
+            "bbox": stats.get("bbox"),
             "refinement": refinement,
             "pixel_ops": pixel_ops,
             "edge_signals": edge_signals,

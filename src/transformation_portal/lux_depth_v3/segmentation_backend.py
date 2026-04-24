@@ -41,15 +41,19 @@ For usage examples, see docs/reference/materials_v3_quick_reference_old.md
 from __future__ import annotations
 
 import hashlib
+import json
 import logging
 import os
+import time
 from contextvars import ContextVar
 from functools import lru_cache
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any, Dict, List, Literal, Optional, Tuple, cast
+from typing import Any, Dict, List, Literal, Mapping, Optional, Tuple, cast
 
 import numpy as np
+
+from transformation_portal.ingest.canonical_json import canonicalize_json, dump_json
 
 from .config import EnhanceConfig
 from .protocols.segmentation_backend import SegmentationBackend, SegmentationBackendInfo
@@ -79,20 +83,31 @@ def _coerce_material_result(value: Any) -> Tuple[np.ndarray, Optional[float]]:
     return value, None
 
 
-def _record_material_confidence_metadata(material_confidences: Dict[str, float]) -> None:
-    if not material_confidences:
-        return
+def _split_material_results(results: Mapping[str, Any]) -> Tuple[Dict[str, np.ndarray], Dict[str, float]]:
+    masks: Dict[str, np.ndarray] = {}
+    material_confidences: Dict[str, float] = {}
+    for material, value in results.items():
+        mask, confidence = _coerce_material_result(value)
+        masks[material] = mask
+        if confidence is not None:
+            material_confidences[material] = confidence
+    return masks, material_confidences
 
-    runtime_metadata = _LAST_SEGMENTATION_RUNTIME_METADATA.get() or {}
+
+def _material_confidence_metadata(material_confidences: Dict[str, float]) -> Dict[str, Any]:
+    if not material_confidences:
+        return {}
+
     scores = list(material_confidences.values())
-    runtime_metadata["material_confidences"] = dict(material_confidences)
-    runtime_metadata["confidence_summary"] = {
-        "count": len(scores),
-        "min": float(min(scores)),
-        "mean": float(np.mean(scores)),
-        "max": float(max(scores)),
+    return {
+        "material_confidences": dict(material_confidences),
+        "confidence_summary": {
+            "count": len(scores),
+            "min": float(min(scores)),
+            "mean": float(np.mean(scores)),
+            "max": float(max(scores)),
+        },
     }
-    _LAST_SEGMENTATION_RUNTIME_METADATA.set(runtime_metadata)
 
 
 # Lazy imports for ML dependencies
@@ -149,6 +164,8 @@ except ImportError:
 
 SAM2_AUTO_TILING_MAX_AREA_PX = 8_000_000
 SAM2_AUTO_TILING_MAX_DIM_PX = 4096
+SEGMENTATION_CACHE_SCHEMA_VERSION = "materials-segmentation-cache.v1"
+_CACHE_MASK_CHECKSUM_CHUNK_SIZE = 1024 * 1024
 
 
 def _build_sam2_generator_kwargs(
@@ -201,6 +218,219 @@ def _serialize_sam2_tiling_config(tiling: Any) -> Optional[Dict[str, Any]]:
         },
         "max_concurrency": getattr(tiling, "max_concurrency", None),
     }
+
+
+def _stable_array_hash(array: np.ndarray) -> str:
+    arr = array if array.flags.c_contiguous else np.ascontiguousarray(array)
+    digest = hashlib.sha256()
+    digest.update(str(arr.shape).encode("utf-8"))
+    digest.update(str(arr.dtype).encode("utf-8"))
+    view = memoryview(cast(Any, arr.view(np.uint8).reshape(-1)))
+    digest.update(cast(Any, view))
+    return digest.hexdigest()
+
+
+def _mask_checksum(mask: np.ndarray) -> str:
+    arr = mask if mask.flags.c_contiguous else np.ascontiguousarray(mask)
+    digest = hashlib.sha256()
+    digest.update(str(arr.shape).encode("utf-8"))
+    digest.update(str(arr.dtype).encode("utf-8"))
+    view = memoryview(cast(Any, arr.view(np.uint8).reshape(-1)))
+    for offset in range(0, len(view), _CACHE_MASK_CHECKSUM_CHUNK_SIZE):
+        digest.update(cast(Any, view[offset : offset + _CACHE_MASK_CHECKSUM_CHUNK_SIZE]))
+    return digest.hexdigest()
+
+
+@lru_cache(maxsize=8)
+def _cached_file_sha256(path: str, size: int, mtime_ns: int) -> str:
+    del size, mtime_ns
+    digest = hashlib.sha256()
+    with Path(path).open("rb") as handle:
+        for chunk in iter(lambda: handle.read(_CACHE_MASK_CHECKSUM_CHUNK_SIZE), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _file_identity(path_value: Optional[str]) -> Optional[Dict[str, Any]]:
+    if not path_value:
+        return None
+    path = Path(path_value)
+    if not path.is_file():
+        return {"path": str(path), "exists": False, "sha256": None, "size": None, "mtime_ns": None}
+    try:
+        stat = path.stat()
+        return {
+            "path": str(path),
+            "exists": True,
+            "sha256": _cached_file_sha256(str(path), int(stat.st_size), int(stat.st_mtime_ns)),
+            "size": int(stat.st_size),
+            "mtime_ns": int(stat.st_mtime_ns),
+        }
+    except OSError:
+        return {"path": str(path), "exists": False, "sha256": None, "size": None, "mtime_ns": None}
+
+
+def _normalise_cache_policy(value: Any) -> str:
+    policy = str(value or "read_write").strip().lower()
+    return policy if policy in {"off", "read_write"} else "off"
+
+
+def _segmentation_cache_paths(cache_dir: Path, cache_key: str) -> tuple[Path, Path]:
+    shard = cache_key[:2]
+    root = cache_dir / shard
+    return root / f"{cache_key}.npz", root / f"{cache_key}.json"
+
+
+def _build_segmentation_cache_key(
+    *,
+    image: np.ndarray,
+    backend_name: str,
+    device: str,
+    strict_backend: bool,
+    sam2_model_size: str,
+    sam2_checkpoint_path: Optional[str],
+    sam2_tiling_enabled: bool,
+    sam2_tile_size_px: int,
+    sam2_overlap_px: int,
+    sam2_global_pass_longest_side: int,
+    sam2_max_concurrency: int,
+    sam2_points_per_side: int,
+    sam2_points_per_batch: int,
+    sam2_pred_iou_thresh: float,
+    sam2_stability_score_thresh: float,
+    sam2_crop_n_layers: int,
+    sky_top_region_fraction: float,
+    sky_gradient_threshold: float,
+    sky_brightness_threshold: float,
+) -> tuple[str, Dict[str, Any]]:
+    payload: Dict[str, Any] = {
+        "schema_version": SEGMENTATION_CACHE_SCHEMA_VERSION,
+        "image_hash": _stable_array_hash(image),
+        "image_shape": list(image.shape),
+        "image_dtype": str(image.dtype),
+        "backend": backend_name,
+        "device": device,
+        "strict_backend": bool(strict_backend),
+        "sam2_model_size": sam2_model_size,
+        "sam2_checkpoint": _file_identity(sam2_checkpoint_path),
+        "sam2_generator": {
+            "points_per_side": int(sam2_points_per_side),
+            "points_per_batch": int(sam2_points_per_batch),
+            "pred_iou_thresh": float(sam2_pred_iou_thresh),
+            "stability_score_thresh": float(sam2_stability_score_thresh),
+            "crop_n_layers": int(sam2_crop_n_layers),
+        },
+        "sam2_tiling": {
+            "enabled": bool(sam2_tiling_enabled),
+            "tile_size_px": int(sam2_tile_size_px),
+            "overlap_px": int(sam2_overlap_px),
+            "global_pass_longest_side": int(sam2_global_pass_longest_side),
+            "max_concurrency": int(sam2_max_concurrency),
+        },
+        "sky_bootstrap": {
+            "top_region_fraction": float(sky_top_region_fraction),
+            "gradient_threshold": float(sky_gradient_threshold),
+            "brightness_threshold": float(sky_brightness_threshold),
+        },
+    }
+    cache_key = hashlib.sha256(canonicalize_json(payload)).hexdigest()
+    return cache_key, payload
+
+
+def _read_cached_material_masks(
+    *,
+    cache_dir: Path,
+    cache_key: str,
+    expected_payload: Dict[str, Any],
+) -> Optional[tuple[Dict[str, Tuple[np.ndarray, float]], Dict[str, Any]]]:
+    masks_path, metadata_path = _segmentation_cache_paths(cache_dir, cache_key)
+    if not masks_path.is_file() or not metadata_path.is_file():
+        return None
+
+    try:
+        metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+        if metadata.get("schema_version") != SEGMENTATION_CACHE_SCHEMA_VERSION:
+            return None
+        if metadata.get("cache_key") != cache_key:
+            return None
+        if metadata.get("key_payload") != expected_payload:
+            return None
+        mask_entries = metadata.get("masks")
+        if not isinstance(mask_entries, dict):
+            return None
+
+        results: Dict[str, Tuple[np.ndarray, float]] = {}
+        with np.load(masks_path, allow_pickle=False) as data:
+            for material, entry in mask_entries.items():
+                if not isinstance(entry, dict) or material not in data.files:
+                    return None
+                mask = np.asarray(data[material])
+                if list(mask.shape) != list(entry.get("shape") or []):
+                    return None
+                if str(mask.dtype) != str(entry.get("dtype")):
+                    return None
+                if _mask_checksum(mask) != entry.get("sha256"):
+                    return None
+                confidence = _coerce_unit_confidence(entry.get("confidence"))
+                if confidence is None:
+                    return None
+                results[str(material)] = (mask.astype(np.float32, copy=False), confidence)
+        return results, metadata
+    except Exception as exc:
+        logger.debug("Ignoring invalid material segmentation cache entry %s: %s", cache_key, exc)
+        return None
+
+
+def _write_cached_material_masks(
+    *,
+    cache_dir: Path,
+    cache_key: str,
+    key_payload: Dict[str, Any],
+    results: Dict[str, Tuple[np.ndarray, float]],
+    runtime_metadata: Optional[Dict[str, Any]],
+) -> None:
+    if not results:
+        return
+
+    masks_path, metadata_path = _segmentation_cache_paths(cache_dir, cache_key)
+    masks_path.parent.mkdir(parents=True, exist_ok=True)
+
+    arrays: Dict[str, np.ndarray] = {}
+    mask_entries: Dict[str, Dict[str, Any]] = {}
+    for material, (mask, confidence) in sorted(results.items()):
+        arr = np.asarray(mask, dtype=np.float32)
+        arrays[material] = arr
+        mask_entries[material] = {
+            "shape": list(arr.shape),
+            "dtype": str(arr.dtype),
+            "sha256": _mask_checksum(arr),
+            "confidence": float(confidence),
+        }
+
+    temp_npz = masks_path.with_suffix(".npz.tmp")
+    temp_json = metadata_path.with_suffix(".json.tmp")
+    try:
+        with temp_npz.open("wb") as handle:
+            np.savez_compressed(handle, **cast(Any, arrays))
+        metadata = {
+            "schema_version": SEGMENTATION_CACHE_SCHEMA_VERSION,
+            "cache_key": cache_key,
+            "key_payload": key_payload,
+            "masks": mask_entries,
+            "runtime_metadata": runtime_metadata or {},
+        }
+        with temp_json.open("w", encoding="utf-8") as handle:
+            dump_json(metadata, handle, sort_keys=True, indent=2, ensure_ascii=False, allow_nan=False)
+            handle.write("\n")
+        temp_npz.replace(masks_path)
+        temp_json.replace(metadata_path)
+    finally:
+        for temp_path in (temp_npz, temp_json):
+            if temp_path.exists():
+                try:
+                    temp_path.unlink()
+                except OSError:
+                    logger.debug("Failed to remove temporary segmentation cache file: %s", temp_path)
 
 
 # =============================================================================
@@ -281,6 +511,9 @@ class EfficientSAMBackend:
         self._clip_preprocess: Any = None
         self._clip_tokenizer: Any = None
         self._clip_runtime_metadata: Optional[Dict[str, Any]] = None
+        self._clip_text_features: Any = None
+        self._clip_text_prompt_signature: Optional[Tuple[str, ...]] = None
+        self._clip_classification_timing_ms: Dict[str, float] = {}
         self._sky_top_region_fraction = float(sky_top_region_fraction)
         self._sky_gradient_threshold = float(sky_gradient_threshold)
         self._sky_brightness_threshold = float(sky_brightness_threshold)
@@ -365,9 +598,14 @@ class EfficientSAMBackend:
 
     def get_runtime_metadata(self) -> Optional[Dict[str, Any]]:
         """Expose runtime metadata for governance/attestation reports."""
-        if self._clip_runtime_metadata is None:
+        metadata: Dict[str, Any] = {}
+        if self._clip_runtime_metadata is not None:
+            metadata["clip_runtime"] = dict(self._clip_runtime_metadata)
+        if self._clip_classification_timing_ms:
+            metadata["clip_classification"] = {"timing_ms": dict(self._clip_classification_timing_ms)}
+        if not metadata:
             return None
-        return {"clip_runtime": dict(self._clip_runtime_metadata)}
+        return metadata
 
     def _load_clip_runtime(self) -> Tuple[Any, Any, Any]:
         """Load CLIP model/tokenizer with cache-first offline-safe resolution."""
@@ -723,10 +961,18 @@ class EfficientSAMBackend:
             we first generate heuristic segments and then classify them with CLIP.
             This provides better material detection than pure heuristics alone.
         """
+        self._clip_classification_timing_ms = {}
+        t_total = time.perf_counter()
+
         # If no SAM segments, generate heuristic segments first
         if not segments:
+            t_heuristic = time.perf_counter()
             logger.debug("No SAM segments provided, generating heuristic segments for CLIP classification")
             heuristic_results = self._heuristic_segmentation(image)
+            self._clip_classification_timing_ms["heuristic_segments"] = round(
+                (time.perf_counter() - t_heuristic) * 1000.0,
+                3,
+            )
 
             # Convert heuristic masks to segment format for CLIP
             # Note: heuristic_results is Dict[str, Tuple[np.ndarray, float]]
@@ -789,13 +1035,19 @@ class EfficientSAMBackend:
                 "stone": "a photo of stone, concrete, and gray surfaces",
             }
 
-            # Tokenize text prompts
-            text_tokens = tokenizer(list(material_prompts.values())).to(self._device)
-
             with torch.no_grad():
-                # Encode text prompts
-                text_features = model.encode_text(text_tokens)
-                text_features = text_features / text_features.norm(dim=-1, keepdim=True)
+                prompt_signature = tuple(material_prompts.values())
+                if self._clip_text_features is None or self._clip_text_prompt_signature != prompt_signature:
+                    t_text = time.perf_counter()
+                    text_tokens = tokenizer(list(material_prompts.values())).to(self._device)
+                    text_features = model.encode_text(text_tokens)
+                    self._clip_text_features = text_features / text_features.norm(dim=-1, keepdim=True)
+                    self._clip_text_prompt_signature = prompt_signature
+                    self._clip_classification_timing_ms["text_encode"] = round(
+                        (time.perf_counter() - t_text) * 1000.0,
+                        3,
+                    )
+                text_features = self._clip_text_features
 
                 # Initialize material masks with tracking for confidence scores
                 h, w = image.shape[:2]
@@ -806,7 +1058,9 @@ class EfficientSAMBackend:
                 # Convert image to PIL for preprocessing
                 pil_image = Image.fromarray(image)
 
-                # Classify each segment
+                t_crop = time.perf_counter()
+                region_tensors = []
+                region_segments: list[tuple[int, Dict[str, Any]]] = []
                 for seg_idx, segment in enumerate(segments):
                     mask = segment["segmentation"]
                     bbox = segment["bbox"]  # [x, y, w, h]
@@ -821,15 +1075,31 @@ class EfficientSAMBackend:
                     # Crop and preprocess region
                     region = pil_image.crop((x1, y1, x2, y2))
                     region_tensor = preprocess(region).unsqueeze(0).to(self._device)
+                    region_tensors.append(region_tensor)
+                    region_segments.append((seg_idx, segment))
+                self._clip_classification_timing_ms["crop_preprocess"] = round(
+                    (time.perf_counter() - t_crop) * 1000.0,
+                    3,
+                )
 
-                    # Encode image region
-                    image_features = model.encode_image(region_tensor)
-                    image_features = image_features / image_features.norm(dim=-1, keepdim=True)
+                if not region_tensors:
+                    return self._heuristic_segmentation(image)
 
-                    # Compute similarity scores
-                    similarities = (image_features @ text_features.T).squeeze(0)
+                t_image = time.perf_counter()
+                image_batch = torch.cat(region_tensors, dim=0)
+                image_features = model.encode_image(image_batch)
+                image_features = image_features / image_features.norm(dim=-1, keepdim=True)
+                similarity_batch = image_features @ text_features.T
+                self._clip_classification_timing_ms["image_encode"] = round(
+                    (time.perf_counter() - t_image) * 1000.0,
+                    3,
+                )
+                self._clip_classification_timing_ms["batch_size"] = float(len(region_tensors))
 
-                    # Assign to best matching material
+                # Classify each segment in stable input order
+                for row_idx, (seg_idx, segment) in enumerate(region_segments):
+                    mask = segment["segmentation"]
+                    similarities = similarity_batch[row_idx]
                     best_idx = similarities.argmax().item()
                     best_material = list(material_prompts.keys())[best_idx]
                     best_score = similarities[best_idx].item()
@@ -874,9 +1144,11 @@ class EfficientSAMBackend:
                     f"CLIP classified {len(segments)} segments into {len(material_masks)} materials: "
                     f"{', '.join(f'{m} ({c:.0%})' for m, (_, c) in material_masks.items())}"
                 )
+                self._clip_classification_timing_ms["total"] = round((time.perf_counter() - t_total) * 1000.0, 3)
                 return material_masks
 
         except Exception as e:
+            self._clip_classification_timing_ms["total"] = round((time.perf_counter() - t_total) * 1000.0, 3)
             logger.warning(f"CLIP classification failed: {e}, falling back to heuristics")
             import traceback
 
@@ -1465,6 +1737,7 @@ def _get_backend_instance(
 def segment_materials(
     image: np.ndarray,
     config: EnhanceConfig,
+    cache_dir: Optional[Path] = None,
 ) -> Dict[str, np.ndarray]:
     """Segment image into material masks.
 
@@ -1494,6 +1767,8 @@ def segment_materials(
         ValueError: If image format is invalid
     """
     _LAST_SEGMENTATION_RUNTIME_METADATA.set(None)
+    t_total = time.perf_counter()
+    timing_ms: Dict[str, float] = {}
 
     # Check if segmentation is enabled
     enable_segmentation = getattr(config, "enable_material_segmentation", False)
@@ -1520,12 +1795,73 @@ def segment_materials(
     sky_top_region_fraction = float(getattr(config, "sky_top_region_fraction", 0.5))
     sky_gradient_threshold = float(getattr(config, "sky_gradient_threshold", 0.05))
     sky_brightness_threshold = float(getattr(config, "sky_brightness_threshold", 0.4))
+    cache_policy = _normalise_cache_policy(getattr(config, "material_segmentation_cache_policy", "read_write"))
 
     # Get device for backend (if applicable)
     device = getattr(config, "depth_device", "cpu")  # Reuse depth_device setting
+    cache_key: Optional[str] = None
+    cache_payload: Optional[Dict[str, Any]] = None
+    cache_enabled = bool(cache_dir) and cache_policy == "read_write" and backend_name != "stub"
+
+    if cache_enabled and cache_dir is not None:
+        t_cache = time.perf_counter()
+        try:
+            cache_key, cache_payload = _build_segmentation_cache_key(
+                image=image,
+                backend_name=backend_name,
+                device=device,
+                strict_backend=strict_backend,
+                sam2_model_size=sam2_model_size,
+                sam2_checkpoint_path=sam2_checkpoint_path,
+                sam2_tiling_enabled=sam2_tiling_enabled,
+                sam2_tile_size_px=sam2_tile_size_px,
+                sam2_overlap_px=sam2_overlap_px,
+                sam2_global_pass_longest_side=sam2_global_pass_longest_side,
+                sam2_max_concurrency=sam2_max_concurrency,
+                sam2_points_per_side=sam2_points_per_side,
+                sam2_points_per_batch=sam2_points_per_batch,
+                sam2_pred_iou_thresh=sam2_pred_iou_thresh,
+                sam2_stability_score_thresh=sam2_stability_score_thresh,
+                sam2_crop_n_layers=sam2_crop_n_layers,
+                sky_top_region_fraction=sky_top_region_fraction,
+                sky_gradient_threshold=sky_gradient_threshold,
+                sky_brightness_threshold=sky_brightness_threshold,
+            )
+            cached = _read_cached_material_masks(
+                cache_dir=cache_dir,
+                cache_key=cache_key,
+                expected_payload=cache_payload,
+            )
+            timing_ms["cache_lookup"] = round((time.perf_counter() - t_cache) * 1000.0, 3)
+            if cached is not None:
+                cached_results, cached_metadata = cached
+                masks, material_confidences = _split_material_results(cached_results)
+                confidence_metadata = _material_confidence_metadata(material_confidences)
+                timing_ms["total"] = round((time.perf_counter() - t_total) * 1000.0, 3)
+                metadata: Dict[str, Any] = {
+                    "cache_hit": True,
+                    "cache_key": cache_key,
+                    "cache_policy": cache_policy,
+                    "timing_ms": timing_ms,
+                    "mask_count": len(masks),
+                    "backend": backend_name,
+                    "device": device,
+                    "model_size": sam2_model_size if backend_name == "sam2" else None,
+                }
+                cached_runtime = cached_metadata.get("runtime_metadata")
+                if isinstance(cached_runtime, dict):
+                    metadata.update(cached_runtime)
+                metadata.update(confidence_metadata)
+                _LAST_SEGMENTATION_RUNTIME_METADATA.set(metadata)
+                logger.debug("Material segmentation cache hit: %s", cache_key)
+                return masks
+        except Exception as exc:
+            timing_ms["cache_lookup"] = round((time.perf_counter() - t_cache) * 1000.0, 3)
+            logger.debug("Material segmentation cache lookup skipped after error: %s", exc)
 
     try:
         # Get or create backend instance (cached)
+        t_backend = time.perf_counter()
         backend = _get_backend_instance(
             backend_name,
             device=device,
@@ -1546,29 +1882,58 @@ def segment_materials(
             sky_gradient_threshold=sky_gradient_threshold,
             sky_brightness_threshold=sky_brightness_threshold,
         )
+        timing_ms["backend_load"] = round((time.perf_counter() - t_backend) * 1000.0, 3)
 
         # Run segmentation
+        t_segment = time.perf_counter()
         results = backend.segment(image)
+        timing_ms["backend_segment"] = round((time.perf_counter() - t_segment) * 1000.0, 3)
+        runtime_metadata: Optional[Dict[str, Any]] = None
         if hasattr(backend, "get_runtime_metadata"):
             try:
                 runtime_metadata = backend.get_runtime_metadata()
             except Exception as exc:
                 logger.debug("Failed to query segmentation runtime metadata: %s", exc)
                 runtime_metadata = None
-            if isinstance(runtime_metadata, dict):
-                _LAST_SEGMENTATION_RUNTIME_METADATA.set(dict(runtime_metadata))
 
         # Extract masks from (mask, confidence) tuples for backward compatibility
         # while preserving real classifier confidence for downstream Materials V3
         # decisions through runtime metadata.
-        masks: Dict[str, np.ndarray] = {}
-        material_confidences: Dict[str, float] = {}
-        for material, value in results.items():
-            mask, confidence = _coerce_material_result(value)
-            masks[material] = mask
-            if confidence is not None:
-                material_confidences[material] = confidence
-        _record_material_confidence_metadata(material_confidences)
+        masks, material_confidences = _split_material_results(results)
+        confidence_metadata = _material_confidence_metadata(material_confidences)
+        runtime_metadata_for_cache = dict(runtime_metadata) if isinstance(runtime_metadata, dict) else {}
+        runtime_metadata_for_cache.update(confidence_metadata)
+
+        if cache_enabled and cache_dir is not None and cache_key and cache_payload and results:
+            t_cache_write = time.perf_counter()
+            try:
+                _write_cached_material_masks(
+                    cache_dir=cache_dir,
+                    cache_key=cache_key,
+                    key_payload=cache_payload,
+                    results=results,
+                    runtime_metadata=runtime_metadata_for_cache,
+                )
+            except Exception as exc:
+                logger.debug("Material segmentation cache write failed: %s", exc)
+            timing_ms["cache_write"] = round((time.perf_counter() - t_cache_write) * 1000.0, 3)
+
+        timing_ms["total"] = round((time.perf_counter() - t_total) * 1000.0, 3)
+        metadata = {
+            "cache_hit": False,
+            "cache_key": cache_key,
+            "cache_policy": cache_policy,
+            "timing_ms": timing_ms,
+            "mask_count": len(masks),
+            "backend": backend_name,
+            "executed_backend": getattr(getattr(backend, "info", None), "model_id", None),
+            "device": getattr(backend, "_device", device),
+            "model_size": sam2_model_size if backend_name == "sam2" else None,
+        }
+        if isinstance(runtime_metadata, dict):
+            metadata.update(runtime_metadata)
+        metadata.update(confidence_metadata)
+        _LAST_SEGMENTATION_RUNTIME_METADATA.set(metadata)
 
         logger.debug(
             f"Segmentation completed using {backend.info.name}: " f"{len(masks)} materials detected: {list(masks.keys())}"

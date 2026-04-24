@@ -2519,14 +2519,18 @@ class EnhanceOrchestrator:
         try:
             logger.info("Generating PBR maps...")
             pbr_t0 = time.time()
+            pbr_perf_t0 = time.perf_counter()
 
             # Use to_pbr_config() for consistent parameter conversion
             pbr_config = self.config.to_pbr_config()
 
             # Generate maps from depth
+            pbr_generate_t0 = time.perf_counter()
             normal_map, roughness_map, ao_map = generate_pbr_maps(depth, config=pbr_config)
+            pbr_generate_ms = round((time.perf_counter() - pbr_generate_t0) * 1000.0, 3)
 
             # Write PBR maps
+            pbr_write_t0 = time.perf_counter()
             pbr_dir = self.output_root / "pbr"
             pbr_dir.mkdir(parents=True, exist_ok=True)
 
@@ -2540,8 +2544,10 @@ class EnhanceOrchestrator:
                 output_dir=pbr_dir,
                 base_name=sanitized_stem,
             )
+            pbr_write_ms = round((time.perf_counter() - pbr_write_t0) * 1000.0, 3)
 
             pbr_runtime = time.time() - pbr_t0
+            pbr_total_ms = round((time.perf_counter() - pbr_perf_t0) * 1000.0, 3)
             logger.info(
                 "PBR maps generated in" " %.2fs: %s",
                 pbr_runtime,
@@ -2554,6 +2560,11 @@ class EnhanceOrchestrator:
                 "roughness_path": str(pbr_paths["roughness"]),
                 "ao_path": str(pbr_paths["ao"]),
                 "runtime_seconds": pbr_runtime,
+                "timing_ms": {
+                    "generate_maps": pbr_generate_ms,
+                    "write_maps": pbr_write_ms,
+                    "total": pbr_total_ms,
+                },
                 "config": {
                     "normal_strength": pbr_config.normal_strength,
                     "normal_blur_radius": pbr_config.normal_blur_radius,
@@ -2794,6 +2805,7 @@ class EnhanceOrchestrator:
                 "materials": segment_materials(
                     preprocessed_uint8_for_seg,
                     self.config,
+                    cache_dir=self.output_root / ".cache" / "material_segmentation",
                 ),
             }
             segmentation_runtime = get_last_segmentation_runtime_metadata()
@@ -2829,10 +2841,12 @@ class EnhanceOrchestrator:
 
                 material_masks = materials_v3_result.get("material_masks")
                 if isinstance(material_masks, dict) and material_masks:
+                    t_mask_serialize = time.perf_counter()
                     mask_artifact_path = self._persist_material_masks_artifact(
                         material_masks,
                         output_key,
                     )
+                    mask_serialization_ms = round((time.perf_counter() - t_mask_serialize) * 1000.0, 3)
                     if mask_artifact_path:
                         materials_v3_metadata = materials_v3_result.setdefault(
                             "materials_v3_metadata",
@@ -2858,6 +2872,10 @@ class EnhanceOrchestrator:
                         segmentation_metadata["mask_artifact_shape"] = list(
                             np.asarray(next(iter(material_masks.values()))).shape[:2]
                         )
+                        timing_metadata = segmentation_metadata.get("timing_ms")
+                        timing_metadata = dict(timing_metadata) if isinstance(timing_metadata, dict) else {}
+                        timing_metadata["mask_serialization"] = mask_serialization_ms
+                        segmentation_metadata["timing_ms"] = timing_metadata
                         materials_v3_metadata["segmentation_metadata"] = segmentation_metadata
 
                 enhanced_image = materials_v3_result.get("enhanced_image")

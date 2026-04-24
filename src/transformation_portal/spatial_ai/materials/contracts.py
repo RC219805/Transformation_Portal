@@ -191,6 +191,7 @@ class PBRGenerationMetadata:
     material_hint: Optional[str] = None
     depth_used: bool = False
     backend_decision: Optional[BackendDecision] = None
+    timing_ms: Optional[dict] = None
 
     def to_dict(self) -> dict:
         """Convert metadata to dictionary for serialization."""
@@ -202,6 +203,7 @@ class PBRGenerationMetadata:
             "material_hint": self.material_hint,
             "depth_used": self.depth_used,
             "backend_decision": (self.backend_decision.to_dict() if self.backend_decision is not None else None),
+            "timing_ms": dict(self.timing_ms or {}),
         }
 
 

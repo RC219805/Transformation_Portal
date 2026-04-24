@@ -171,6 +171,7 @@ class PBRStageResult:
     roughness_path: Optional[str] = None
     ao_path: Optional[str] = None
     runtime_s: float = 0.0
+    timing_ms: Optional[Dict[str, float]] = None
     config: Optional[Dict[str, Any]] = None
     error: Optional[str] = None
 
@@ -188,6 +189,7 @@ class PBRStageResult:
             "roughness_path": self.roughness_path,
             "ao_path": self.ao_path,
             "runtime_seconds": self.runtime_s,
+            "timing_ms": dict(self.timing_ms or {}),
             "config": self.config or {},
         }
 
@@ -293,14 +295,18 @@ def generate_pbr_stage(
     try:
         logger.info("Generating PBR maps...")
         pbr_t0 = time.time()
+        pbr_perf_t0 = time.perf_counter()
 
         # Use to_pbr_config() for consistent parameter conversion
         pbr_config = config.to_pbr_config()
 
         # Generate maps from depth
+        pbr_generate_t0 = time.perf_counter()
         normal_map, roughness_map, ao_map = generate_pbr_maps(depth, config=pbr_config)
+        pbr_generate_ms = round((time.perf_counter() - pbr_generate_t0) * 1000.0, 3)
 
         # Write PBR maps
+        pbr_write_t0 = time.perf_counter()
         pbr_dir = output_root / "pbr"
         pbr_dir.mkdir(parents=True, exist_ok=True)
 
@@ -314,8 +320,10 @@ def generate_pbr_stage(
             output_dir=pbr_dir,
             base_name=sanitized_stem,
         )
+        pbr_write_ms = round((time.perf_counter() - pbr_write_t0) * 1000.0, 3)
 
         pbr_runtime = time.time() - pbr_t0
+        pbr_total_ms = round((time.perf_counter() - pbr_perf_t0) * 1000.0, 3)
         logger.info(
             "PBR maps generated in %.2fs: %s",
             pbr_runtime,
@@ -328,6 +336,11 @@ def generate_pbr_stage(
             roughness_path=str(pbr_paths["roughness"]),
             ao_path=str(pbr_paths["ao"]),
             runtime_s=pbr_runtime,
+            timing_ms={
+                "generate_maps": pbr_generate_ms,
+                "write_maps": pbr_write_ms,
+                "total": pbr_total_ms,
+            },
             config={
                 "normal_strength": pbr_config.normal_strength,
                 "normal_blur_radius": pbr_config.normal_blur_radius,

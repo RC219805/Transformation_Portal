@@ -82,6 +82,25 @@ def _bounding_box(mask: np.ndarray) -> tuple[int, int, int, int] | None:
     return int(xs.min()), int(ys.min()), int(xs.max()) + 1, int(ys.max()) + 1
 
 
+def _validated_plan_bbox(
+    bbox: Any,
+    mask: np.ndarray,
+    image_shape: Tuple[int, int],
+) -> tuple[int, int, int, int] | None:
+    if not isinstance(bbox, (list, tuple)) or len(bbox) != 4:
+        return None
+    img_h, img_w = image_shape
+    try:
+        x0, y0, x1, y1 = [int(value) for value in bbox]
+    except (TypeError, ValueError):
+        return None
+    if x0 < 0 or y0 < 0 or x1 > img_w or y1 > img_h or x1 <= x0 or y1 <= y0:
+        return None
+    if not np.any(mask[y0:y1, x0:x1] > 0.5):
+        return None
+    return x0, y0, x1, y1
+
+
 def _roi_mean_gradient_energy(roi_normalized: np.ndarray) -> float:
     """Mean gradient magnitude of a normalized [0, 1] float32 ROI.
 
@@ -397,7 +416,9 @@ def apply_pixel_ops(
             )
             continue
 
-        bbox = _bounding_box(mask_2d)
+        bbox = _validated_plan_bbox(plan_entry.get("bbox"), mask_2d, image.shape[:2])
+        if bbox is None:
+            bbox = _bounding_box(mask_2d)
         if bbox is None:
             telemetry["blocked"].append(
                 {

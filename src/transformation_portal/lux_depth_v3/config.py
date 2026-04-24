@@ -403,6 +403,10 @@ class EnhanceConfig:
     # If True, raise on backend errors
     # instead of falling back to stub
     strict_backend: bool = False
+    # Exact-result segmentation cache policy for real segmentation runs.
+    # "off" disables cache lookup/write; "read_write" reuses validated masks
+    # and records cache provenance in Materials V3 metadata.
+    material_segmentation_cache_policy: str = "read_write"
     # SAM2 variant when backend="sam2":
     # base or large
     sam2_model_size: str = "base"

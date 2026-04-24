@@ -25,6 +25,7 @@ Performance:
 
 import inspect
 import os
+import time
 from typing import Any, Dict, Literal, Optional, cast
 
 import numpy as np
@@ -315,6 +316,7 @@ class MaterialBackend:
             self._warn_backend_resolution(decision)
 
         # Route to appropriate backend (returns metadata tuple now)
+        start_total = time.perf_counter()
         result = None
         if decision.executed_backend == "pbr_fusion":
             result = self._generate_pbr_fusion(rgb, mask, depth, material_hint, config, decision)
@@ -347,6 +349,10 @@ class MaterialBackend:
             )
 
         # Wrap into PBRTextures contract
+        if metadata is not None:
+            timing_ms = dict(getattr(metadata, "timing_ms", {}) or {})
+            timing_ms.setdefault("total", round((time.perf_counter() - start_total) * 1000.0, 3))
+            metadata.timing_ms = timing_ms
         return PBRTextures(
             albedo=albedo,
             normal=normal,
