@@ -184,7 +184,7 @@ def test_video_mode_uses_cached_repo_checkpoint_without_loading_image_pipeline(
     class _FakeVideoPredictor:
         def init_state(self, **kwargs: Any) -> dict[str, Any]:
             assert kwargs["video_path"] == str(video_dir)
-            return {"num_frames": 1, "video_height": 8, "video_width": 8}
+            return {"num_frames": 3, "video_height": 8, "video_width": 8}
 
         def add_new_points(self, **kwargs: Any) -> tuple[None, np.ndarray, np.ndarray]:
             assert kwargs["frame_idx"] == 0
@@ -194,6 +194,7 @@ def test_video_mode_uses_cached_repo_checkpoint_without_loading_image_pipeline(
         def propagate_in_video(self, inference_state: dict[str, Any]):
             del inference_state
             yield 0, np.array([1], dtype=np.int32), np.ones((1, 8, 8), dtype=np.float32)
+            yield 1, np.array([1], dtype=np.int32), np.zeros((1, 8, 8), dtype=np.float32)
 
         def reset_state(self, inference_state: dict[str, Any]) -> None:
             del inference_state
@@ -240,8 +241,13 @@ def test_video_mode_uses_cached_repo_checkpoint_without_loading_image_pipeline(
             "device": "cpu",
         }
     ]
-    assert result.masks.shape == (1, 8, 8)
-    assert result.temporal_ids.tolist() == [1]
+    assert result.masks.shape == (3, 8, 8)
+    assert result.temporal_ids.tolist() == [1, 1, 1]
+    assert result.metadata[0].is_empty is False
+    assert result.metadata[1].is_empty is True
+    assert result.metadata[2].is_empty is True
+    assert int(result.masks[1].sum()) == 0
+    assert int(result.masks[2].sum()) == 0
 
 
 def test_clone_for_device_preserves_loading_contract(segmentation_surface: tuple[Any, Any], checkpoint_path: str) -> None:
