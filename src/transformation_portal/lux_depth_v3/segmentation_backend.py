@@ -61,6 +61,40 @@ _LAST_SEGMENTATION_RUNTIME_METADATA: ContextVar[Optional[Dict[str, Any]]] = Cont
     default=None,
 )
 
+
+def _coerce_unit_confidence(value: Any) -> Optional[float]:
+    try:
+        confidence = float(value)
+    except (TypeError, ValueError):
+        return None
+    if 0.0 <= confidence <= 1.0 and np.isfinite(confidence):
+        return confidence
+    return None
+
+
+def _coerce_material_result(value: Any) -> Tuple[np.ndarray, Optional[float]]:
+    if isinstance(value, tuple) and len(value) == 2:
+        mask, confidence = value
+        return mask, _coerce_unit_confidence(confidence)
+    return value, None
+
+
+def _record_material_confidence_metadata(material_confidences: Dict[str, float]) -> None:
+    if not material_confidences:
+        return
+
+    runtime_metadata = _LAST_SEGMENTATION_RUNTIME_METADATA.get() or {}
+    scores = list(material_confidences.values())
+    runtime_metadata["material_confidences"] = dict(material_confidences)
+    runtime_metadata["confidence_summary"] = {
+        "count": len(scores),
+        "min": float(min(scores)),
+        "mean": float(np.mean(scores)),
+        "max": float(max(scores)),
+    }
+    _LAST_SEGMENTATION_RUNTIME_METADATA.set(runtime_metadata)
+
+
 # Lazy imports for ML dependencies
 try:
     import torch
@@ -1525,8 +1559,16 @@ def segment_materials(
                 _LAST_SEGMENTATION_RUNTIME_METADATA.set(dict(runtime_metadata))
 
         # Extract masks from (mask, confidence) tuples for backward compatibility
-        # The public API returns Dict[str, np.ndarray] while backends return Dict[str, Tuple[np.ndarray, float]]
-        masks = {material: mask for material, (mask, confidence) in results.items()}
+        # while preserving real classifier confidence for downstream Materials V3
+        # decisions through runtime metadata.
+        masks: Dict[str, np.ndarray] = {}
+        material_confidences: Dict[str, float] = {}
+        for material, value in results.items():
+            mask, confidence = _coerce_material_result(value)
+            masks[material] = mask
+            if confidence is not None:
+                material_confidences[material] = confidence
+        _record_material_confidence_metadata(material_confidences)
 
         logger.debug(
             f"Segmentation completed using {backend.info.name}: " f"{len(masks)} materials detected: {list(masks.keys())}"

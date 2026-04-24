@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+import math
 from typing import Any, Dict, List
 
 from .pixel_ops_registry import OP_REGISTRY
 
 
 def _material_confidence_threshold(material_key: str, config: Any) -> float:
-    """Return the fail-closed confidence threshold for material pixel ops."""
+    """Return the fail-closed threshold for material classifier confidence."""
     base_threshold = float(getattr(config, "min_mean_conf", 0.2))
     try:
         from .materials_v3_taxonomy import DEFAULT_MATERIAL_METADATA
@@ -19,6 +20,20 @@ def _material_confidence_threshold(material_key: str, config: Any) -> float:
     if material_threshold is None:
         return base_threshold
     return max(base_threshold, float(material_threshold))
+
+
+def _material_confidence(stats: Dict[str, Any]) -> float | None:
+    """Return explicit classifier confidence when the segmentation path provides it."""
+    for key in ("material_confidence", "classification_confidence", "classifier_confidence"):
+        if key not in stats:
+            continue
+        try:
+            confidence = float(stats[key])
+        except (TypeError, ValueError):
+            continue
+        if 0.0 <= confidence <= 1.0 and math.isfinite(confidence):
+            return confidence
+    return None
 
 
 def _pixel_ops_enabled(material_key: str, config: Any) -> tuple[bool, str]:
@@ -61,12 +76,19 @@ def decide_pixel_ops(
     if implemented:
         # Coverage threshold check - respect config.min_coverage_px instead of hard-coded value
         min_coverage = getattr(config, "min_coverage_px", 500)  # Default to 500 if not set
-        confidence_threshold = _material_confidence_threshold(material_key, config)
         mean_conf = float(stats.get("mean_conf", 0.0))
+        base_confidence_threshold = float(getattr(config, "min_mean_conf", 0.2))
+        material_confidence = _material_confidence(stats)
         if stats["coverage_px"] < min_coverage:
             eligible = False
             reason = "below_coverage_threshold"
-        elif mean_conf < confidence_threshold:
+        elif material_confidence is not None and material_confidence < _material_confidence_threshold(
+            material_key,
+            config,
+        ):
+            eligible = False
+            reason = "below_confidence_threshold"
+        elif material_confidence is None and mean_conf < base_confidence_threshold:
             eligible = False
             reason = "below_confidence_threshold"
         else:

@@ -16,6 +16,22 @@ _LOW_TEX_MAX_FEATHER_SIGMA = 12.0
 _LOW_TEX_DELTA_PERCENTILE_MAX_SAMPLES = 262_144
 
 
+def _validated_recommended_ops(plan_decision: Any, ops_for_material: Dict[str, Any]) -> list[str]:
+    """Return serialized op names only when they still match the current registry."""
+    default_recommended_ops = list(ops_for_material.keys())
+    if not isinstance(plan_decision, dict):
+        return default_recommended_ops
+
+    serialized_recommended_ops = plan_decision.get("recommended_ops")
+    if not isinstance(serialized_recommended_ops, (list, tuple)):
+        return default_recommended_ops
+
+    validated_recommended_ops = [
+        op_name for op_name in serialized_recommended_ops if isinstance(op_name, str) and op_name in ops_for_material
+    ]
+    return validated_recommended_ops or default_recommended_ops
+
+
 def _canonical_mask(mask: np.ndarray) -> np.ndarray:
     """Canonicalize mask to 2D (H, W) float32 format.
 
@@ -353,10 +369,9 @@ def apply_pixel_ops(
         # cached or stale plans from bypassing newer fail-closed guards.
         decision = decide_pixel_ops(material_key, plan_entry, config, registry=registry)
         plan_decision = plan_entry.get("pixel_ops")
-        if isinstance(plan_decision, dict) and plan_decision.get("recommended_ops"):
-            decision["recommended_ops"] = plan_decision["recommended_ops"]
         ops_for_material = registry.get(material_key, {})
-        recommended_ops = decision.get("recommended_ops") or list(ops_for_material.keys())
+        recommended_ops = _validated_recommended_ops(plan_decision, ops_for_material)
+        decision["recommended_ops"] = recommended_ops
         if not decision.get("will_apply", False):
             telemetry["blocked"].append(
                 {

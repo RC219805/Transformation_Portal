@@ -160,7 +160,7 @@ def generate_response_plan(
         r_reason = pixel_ops["reason"]
         histogram[r_reason] = histogram.get(r_reason, 0) + 1
 
-        plan["per_class"][mat_key] = {
+        plan_entry = {
             "present": True,
             "coverage_px": stats["coverage_px"],
             "mean_conf": stats["mean_conf"],
@@ -169,6 +169,9 @@ def generate_response_plan(
             "pixel_ops": pixel_ops,
             "edge_signals": edge_signals,
         }
+        if "material_confidence" in stats:
+            plan_entry["material_confidence"] = stats["material_confidence"]
+        plan["per_class"][mat_key] = plan_entry
 
     plan["summary"]["skipped_reasons_histogram"] = histogram
     return plan

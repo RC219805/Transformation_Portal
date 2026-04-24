@@ -5,6 +5,7 @@ from dataclasses import dataclass
 import numpy as np
 import pytest
 
+from transformation_portal.lux_depth_v3.materials_v3 import MaterialsV3Engine
 from transformation_portal.lux_depth_v3.pixel_ops_decider import decide_pixel_ops
 from transformation_portal.lux_depth_v3.pixel_ops_executor import _compute_delta_stats, apply_pixel_ops
 from transformation_portal.lux_depth_v3.pixel_ops_registry import (
@@ -19,6 +20,7 @@ pytestmark = pytest.mark.unit
 
 @dataclass
 class DummyConfig:
+    enable_materials_v3: bool = True
     enabled: bool = True
     apply_pixel_ops: bool = True
     glass_response_enabled: bool = True
@@ -56,7 +58,8 @@ def test_decider_blocks_low_confidence_material_masks():
     config = DummyConfig()
     stats = {
         "coverage_px": 2000,
-        "mean_conf": 0.1,
+        "mean_conf": 0.6,
+        "material_confidence": 0.1,
         "edge_conf": 0.6,
     }
 
@@ -66,6 +69,21 @@ def test_decider_blocks_low_confidence_material_masks():
     assert decision["eligible"] is False
     assert decision["reason"] == "below_confidence_threshold"
     assert "below_confidence_threshold" in decision["blocked_by"]
+
+
+def test_decider_does_not_apply_taxonomy_threshold_to_mask_coverage_mean():
+    config = DummyConfig()
+    stats = {
+        "coverage_px": 2000,
+        "mean_conf": 0.25,
+        "edge_conf": 0.6,
+    }
+
+    decision = decide_pixel_ops("foliage", stats, config, registry=OP_REGISTRY)
+
+    assert decision["will_apply"] is True
+    assert decision["eligible"] is True
+    assert decision["reason"] == "material_present_with_coverage"
 
 
 def test_apply_pixel_ops_emits_telemetry():
@@ -88,7 +106,8 @@ def test_apply_pixel_ops_blocks_low_confidence_material_masks():
         "per_class": {
             "foliage": {
                 "coverage_px": int(mask.sum()),
-                "mean_conf": 0.1,
+                "mean_conf": 0.6,
+                "material_confidence": 0.1,
                 "edge_conf": 0.6,
             }
         }
@@ -112,7 +131,8 @@ def test_apply_pixel_ops_rechecks_stale_plan_decisions():
         "per_class": {
             "foliage": {
                 "coverage_px": int(mask.sum()),
-                "mean_conf": 0.1,
+                "mean_conf": 0.6,
+                "material_confidence": 0.1,
                 "edge_conf": 0.6,
                 "pixel_ops": {
                     "eligible": True,
@@ -133,6 +153,72 @@ def test_apply_pixel_ops_rechecks_stale_plan_decisions():
     assert np.array_equal(output, image)
     assert telemetry["applied"] == []
     assert telemetry["blocked"][0]["reason"] == "below_confidence_threshold"
+
+
+def test_apply_pixel_ops_falls_back_when_serialized_recommended_ops_is_not_a_sequence():
+    config = DummyConfig()
+    image = np.ones((64, 64, 3), dtype=np.uint8) * 48
+    mask = np.zeros((64, 64), dtype=np.float32)
+    mask[8:56, 8:56] = 1.0
+    segmentation_result = {"materials": {"glass": mask}}
+    response_plan = {
+        "per_class": {
+            "glass": {
+                "coverage_px": int(mask.sum()),
+                "mean_conf": 0.6,
+                "edge_conf": 0.4,
+                "pixel_ops": {"recommended_ops": "brightness_boost"},
+            }
+        }
+    }
+
+    _, telemetry = apply_pixel_ops(image, segmentation_result, response_plan, config, registry=OP_REGISTRY)
+
+    assert telemetry["blocked"] == []
+    assert telemetry["applied"][0]["ops"] == list(OP_REGISTRY["glass"].keys())
+
+
+def test_apply_pixel_ops_filters_serialized_recommended_ops_against_registry():
+    config = DummyConfig()
+    image = np.ones((64, 64, 3), dtype=np.uint8) * 48
+    mask = np.zeros((64, 64), dtype=np.float32)
+    mask[8:56, 8:56] = 1.0
+    segmentation_result = {"materials": {"glass": mask}}
+    response_plan = {
+        "per_class": {
+            "glass": {
+                "coverage_px": int(mask.sum()),
+                "mean_conf": 0.6,
+                "edge_conf": 0.4,
+                "pixel_ops": {"recommended_ops": ["stale_op", "brightness_boost", 17]},
+            }
+        }
+    }
+
+    _, telemetry = apply_pixel_ops(image, segmentation_result, response_plan, config, registry=OP_REGISTRY)
+
+    assert telemetry["blocked"] == []
+    assert telemetry["applied"][0]["ops"] == ["brightness_boost"]
+
+
+def test_materials_v3_engine_uses_segmentation_material_confidence_for_pixel_ops():
+    config = DummyConfig()
+    image = np.ones((64, 64, 3), dtype=np.uint8) * 48
+    mask = np.ones((64, 64), dtype=np.float32)
+    engine = MaterialsV3Engine(config)
+
+    result = engine.process(
+        image,
+        {
+            "materials": {"foliage": mask},
+            "segmentation_metadata": {"material_confidences": {"foliage": 0.1}},
+        },
+    )
+
+    plan_entry = result["materials_v3_response_plan"]["per_class"]["foliage"]
+    assert plan_entry["material_confidence"] == pytest.approx(0.1)
+    assert plan_entry["pixel_ops"]["reason"] == "below_confidence_threshold"
+    assert result["materials_v3_pixel_ops"]["blocked"][0]["reason"] == "below_confidence_threshold"
 
 
 def test_apply_pixel_ops_disabled_still_emits_object():
