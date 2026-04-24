@@ -221,8 +221,11 @@ class BinaryUnionTileMerger:
             contributions[y0:y1, x0:x1] += 1
 
         probabilities = np.zeros((height, width), dtype=np.float32)
-        multi = (contributions > 1) & (weights > 0.0)
-        probabilities[multi] = weighted[multi] / weights[multi]
+        multi = contributions > 1
+        weighted_multi = multi & (weights > 0.0)
+        probabilities[weighted_multi] = weighted[weighted_multi] / weights[weighted_multi]
+        zero_weight_multi = multi & (weights <= 0.0)
+        probabilities[zero_weight_multi] = single_source[zero_weight_multi]
         single = contributions == 1
         probabilities[single] = single_source[single]
         full_mask = np.zeros((H, W), dtype=bool)

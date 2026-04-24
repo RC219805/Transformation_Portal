@@ -347,6 +347,33 @@ def test_tiling_window_modes_preserve_smooth_binary_union(window):
     assert result.metadata[0].bbox == (0, 0, 14, 8)
 
 
+@pytest.mark.parametrize("window", ["hann", "cosine", "linear"])
+def test_tiling_window_modes_preserve_one_pixel_overlap_seams(window):
+    left = _tile_instance(tile_id="left", width=4, height=8, label="sky", confidence=0.9)
+    right = _tile_instance(tile_id="right", width=4, height=8, label="sky", confidence=0.9)
+
+    result = _run_two_tile_merge(
+        left_instance=left,
+        right_instance=right,
+        left_tile=TileSpec(tile_id="left", bbox=BBox(0, 0, 4, 8), overlap_px=1, pad_mode="reflect"),
+        right_tile=TileSpec(tile_id="right", bbox=BBox(3, 0, 7, 8), overlap_px=1, pad_mode="reflect"),
+        width=7,
+        config=SegmentationTilingConfig(
+            enabled=True,
+            tile_size_px=4,
+            overlap_px=1,
+            merge=MergeConfig(
+                window=window,
+                instance_merge=InstanceMergeConfig(enabled=True, iou_threshold=0.35),
+            ),
+        ),
+    )
+
+    assert result.masks.shape == (1, 8, 7)
+    assert int(result.masks[0].sum()) == 56
+    assert result.metadata[0].bbox == (0, 0, 7, 8)
+
+
 def test_tiling_merge_avoids_full_image_bool_masks_per_candidate(monkeypatch):
     import transformation_portal.spatial_ai.segmentation.tiling.merger as merger_module
 
