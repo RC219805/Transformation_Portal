@@ -907,6 +907,10 @@ class SAM2Backend:
         if self.enable_material_classification and self._material_classifier is not None:
             try:
                 if not self._material_classifier.is_available():
+                    if self.material_classification_strict:
+                        raise RuntimeError(
+                            "Material classification is enabled in strict mode, but the classifier is unavailable."
+                        )
                     return
                 logger.info("Running material classification...")
                 material_results = self._material_classifier.classify_masks(image_uint8, masks)

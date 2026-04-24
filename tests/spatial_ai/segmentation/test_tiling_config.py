@@ -38,6 +38,27 @@ def test_from_dict_requires_explicit_enable_opt_in():
     assert cfg.enabled is False
 
 
+def test_from_dict_allows_legacy_unsupported_values_when_tiling_disabled():
+    cfg = SegmentationTilingConfig.from_dict(
+        {
+            "enabled": False,
+            "policy": "content_adaptive",
+            "apply_to_modes": ["auto", "points", "bbox"],
+            "max_concurrency": 2,
+            "merge": {
+                "mode": "weighted_soft",
+                "instance_merge": {"embedding_cosine_threshold": 0.8},
+            },
+        }
+    )
+    assert cfg.enabled is False
+    assert cfg.policy == "content_adaptive"
+    assert cfg.apply_to_modes == ("auto", "points", "bbox")
+    assert cfg.max_concurrency == 2
+    assert cfg.merge.mode == "weighted_soft"
+    assert cfg.merge.instance_merge.embedding_cosine_threshold == pytest.approx(0.8)
+
+
 def test_from_dict_rejects_prompt_tiling_until_roi_tiling_exists():
     with pytest.raises(ValueError, match="supports only auto mode"):
         SegmentationTilingConfig.from_dict({"enabled": True, "apply_to_modes": ["auto", "points"]})

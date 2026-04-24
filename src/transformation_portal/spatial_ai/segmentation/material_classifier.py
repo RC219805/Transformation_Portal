@@ -203,6 +203,11 @@ class MaterialClassifier:
             Label is None if confidence below threshold.
         """
         if not self.is_available():
+            if self.strict:
+                raise RuntimeError(
+                    "Material classification is enabled in strict mode, but CLIP is unavailable. "
+                    "Install transformers and torch, or disable strict material classification."
+                )
             logger.warning("CLIP not available, returning unlabeled")
             return [(None, None) for _ in range(len(masks))]
 

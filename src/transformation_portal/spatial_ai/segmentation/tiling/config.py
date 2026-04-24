@@ -28,23 +28,13 @@ class InstanceMergeConfig:
             raise ValueError(
                 f"instance_merge.embedding_cosine_threshold must be in [-1,1], got {self.embedding_cosine_threshold}"
             )
-        if self.embedding_cosine_threshold is not None:
-            raise ValueError("instance_merge.embedding_cosine_threshold is not supported by the current SAM2 tiling merger")
 
 
 @dataclass
 class MergeConfig:
-    mode: Literal["binary_union"] = "binary_union"
+    mode: str = "binary_union"
     window: Literal["hann", "cosine", "linear"] = "hann"
     instance_merge: InstanceMergeConfig = field(default_factory=InstanceMergeConfig)
-
-    def __post_init__(self) -> None:
-        if self.mode != "binary_union":
-            raise ValueError(
-                f"merge.mode={self.mode!r} is not supported by the current SAM2 tiling merger; use 'binary_union'"
-            )
-        if self.window not in {"hann", "cosine", "linear"}:
-            raise ValueError(f"merge.window must be one of ['hann', 'cosine', 'linear'], got {self.window!r}")
 
 
 @dataclass
@@ -64,7 +54,7 @@ class ValidationConfig:
 @dataclass
 class SegmentationTilingConfig:
     enabled: bool = False
-    policy: Literal["uniform"] = "uniform"
+    policy: str = "uniform"
     tile_size_px: int = 1536
     overlap_px: int = 256
     pad_mode: Literal["reflect", "edge", "constant"] = "reflect"
@@ -84,15 +74,26 @@ class SegmentationTilingConfig:
             raise ValueError(f"overlap_px ({self.overlap_px}) must be < tile_size_px ({self.tile_size_px})")
         if self.max_concurrency <= 0:
             raise ValueError("max_concurrency must be >= 1")
-        if self.policy != "uniform":
-            raise ValueError(f"policy={self.policy!r} is not supported by the current SAM2 tiling planner; use 'uniform'")
-        unsupported_modes = set(self.apply_to_modes) - {"auto"}
-        if unsupported_modes:
-            raise ValueError(
-                "SAM2 tiling currently supports only auto mode; unsupported apply_to_modes=" f"{sorted(unsupported_modes)}"
-            )
-        if self.enabled and self.max_concurrency != 1:
-            raise ValueError("SAM2 tiling currently runs serially; max_concurrency must be 1")
+        if self.enabled:
+            if self.policy != "uniform":
+                raise ValueError(f"policy={self.policy!r} is not supported by the current SAM2 tiling planner; use 'uniform'")
+            unsupported_modes = set(self.apply_to_modes) - {"auto"}
+            if unsupported_modes:
+                raise ValueError(
+                    "SAM2 tiling currently supports only auto mode; unsupported apply_to_modes=" f"{sorted(unsupported_modes)}"
+                )
+            if self.max_concurrency != 1:
+                raise ValueError("SAM2 tiling currently runs serially; max_concurrency must be 1")
+            if self.merge.mode != "binary_union":
+                raise ValueError(
+                    f"merge.mode={self.merge.mode!r} is not supported by the current SAM2 tiling merger; " "use 'binary_union'"
+                )
+            if self.merge.window not in {"hann", "cosine", "linear"}:
+                raise ValueError(f"merge.window must be one of ['hann', 'cosine', 'linear'], got {self.merge.window!r}")
+            if self.merge.instance_merge.embedding_cosine_threshold is not None:
+                raise ValueError(
+                    "instance_merge.embedding_cosine_threshold is not supported by the current SAM2 tiling merger"
+                )
 
     @staticmethod
     def from_dict(data: Optional[Mapping[str, Any]]) -> "SegmentationTilingConfig":

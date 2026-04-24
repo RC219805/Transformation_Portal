@@ -198,6 +198,40 @@ class TestSAM2MaterialClassificationIntegration:
         assert result.metadata[0].material_confidence is None
 
     @patch.object(SAM2Backend, "_load_model")
+    def test_auto_mode_with_strict_material_classification_unavailable_raises(self, mock_load_model, tmp_path):
+        """Strict material classification should fail when the classifier is unavailable."""
+        checkpoint = tmp_path / "test.pt"
+        checkpoint.write_bytes(b"dummy")
+
+        backend = SAM2Backend(
+            model_size="base",
+            device="cpu",
+            checkpoint_path=str(checkpoint),
+            enable_material_classification=True,
+            material_classification_strict=True,
+        )
+
+        backend._mask_generator = MagicMock()
+        backend._mask_generator.generate.return_value = [
+            {
+                "segmentation": np.ones((64, 64), dtype=bool),
+                "predicted_iou": 0.9,
+                "stability_score": 0.95,
+                "area": 1000,
+                "bbox": [10, 10, 30, 30],
+            }
+        ]
+        backend._material_classifier.is_available = MagicMock(return_value=False)
+
+        seg_input = SegmentationInput(
+            image=np.ones((64, 64, 3), dtype=np.float32),
+            gamma=1.0,
+            mode="auto",
+        )
+        with pytest.raises(RuntimeError, match="SAM2 auto mode segmentation failed"):
+            backend.segment(seg_input)
+
+    @patch.object(SAM2Backend, "_load_model")
     def test_auto_mode_with_material_classification_failure_returns_unlabeled(self, mock_load_model, tmp_path):
         """Optional material failures should not fail segmentation by default."""
         checkpoint = tmp_path / "test.pt"
