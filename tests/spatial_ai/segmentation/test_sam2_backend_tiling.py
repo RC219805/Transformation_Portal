@@ -7,7 +7,11 @@ import pytest
 
 from transformation_portal.spatial_ai.segmentation.contracts import MaskMetadata, SegmentationInput, SegmentationResult
 from transformation_portal.spatial_ai.segmentation.sam2_backend import SAM2Backend
-from transformation_portal.spatial_ai.segmentation.tiling.config import SegmentationTilingConfig
+from transformation_portal.spatial_ai.segmentation.tiling.config import (
+    InstanceMergeConfig,
+    MergeConfig,
+    SegmentationTilingConfig,
+)
 from transformation_portal.spatial_ai.segmentation.tiling.engine import TiledSegmentationEngine
 from transformation_portal.spatial_ai.segmentation.tiling.types import (
     BBox,
@@ -18,6 +22,121 @@ from transformation_portal.spatial_ai.segmentation.tiling.types import (
 )
 
 pytestmark = pytest.mark.unit
+
+
+class _TwoTilePlanner:
+    def __init__(self, left: TileSpec, right: TileSpec):
+        self.left = left
+        self.right = right
+
+    def plan(self, *, image_hash, W, H, config, global_hints, prompts, mode):
+        del config, global_hints, prompts, mode
+        return TileManifest(
+            image_hash=image_hash,
+            W=W,
+            H=H,
+            tile_size_px=8,
+            overlap_px=2,
+            stride_px=6,
+            policy="uniform",
+            seed=0,
+            tiles=(self.left, self.right),
+        )
+
+
+class _TileInstanceBackend:
+    name = "stub"
+    device = "cpu"
+
+    def __init__(self, instances_by_tile):
+        self.instances_by_tile = instances_by_tile
+
+    def global_seed_pass(self, **kwargs):
+        del kwargs
+        return None
+
+    def segment_tile(self, **kwargs):
+        tile_spec = kwargs["tile_spec"]
+        return tuple(self.instances_by_tile[tile_spec.tile_id])
+
+
+def _tile_instance(
+    *,
+    tile_id: str,
+    width: int,
+    height: int,
+    label: str | None = None,
+    confidence: float | None = None,
+    score: float = 0.8,
+    stability_score: float = 0.9,
+) -> TileInstance:
+    return TileInstance(
+        local_id=f"{tile_id}:0",
+        score=score,
+        stability_score=stability_score,
+        soft_mask=SoftMaskPatch(
+            bbox=BBox(0, 0, width, height),
+            values=np.ones((height, width), dtype=np.float32),
+            space="prob",
+        ),
+        material_label=label,
+        material_confidence=confidence,
+    )
+
+
+def _run_two_tile_merge(*, left_instance, right_instance, config, left_tile=None, right_tile=None, width=14):
+    backend = SAM2Backend.__new__(SAM2Backend)
+    engine = backend._build_default_tiled_engine()
+    if left_tile is None:
+        left_tile = TileSpec(tile_id="left", bbox=BBox(0, 0, 8, 8), overlap_px=2, pad_mode="reflect")
+    if right_tile is None:
+        right_tile = TileSpec(tile_id="right", bbox=BBox(6, 0, 14, 8), overlap_px=2, pad_mode="reflect")
+    engine = TiledSegmentationEngine(
+        planner=_TwoTilePlanner(left_tile, right_tile),
+        merger=engine.merger,
+        validator=engine.validator,
+    )
+    seg_input = SegmentationInput(image=np.zeros((8, width, 3), dtype=np.float32), gamma=1.0, mode="auto")
+    return engine.run(
+        backend=_TileInstanceBackend({"left": [left_instance], "right": [right_instance]}),
+        seg_input=seg_input,
+        image_hash="abc",
+        config=config,
+    )
+
+
+def _run_single_tile_merge(*, instances, config):
+    backend = SAM2Backend.__new__(SAM2Backend)
+    engine = backend._build_default_tiled_engine()
+    tile = TileSpec(tile_id="tile", bbox=BBox(0, 0, 8, 8), overlap_px=0, pad_mode="reflect")
+
+    class _SingleTilePlanner:
+        def plan(self, *, image_hash, W, H, config, global_hints, prompts, mode):
+            del config, global_hints, prompts, mode
+            return TileManifest(
+                image_hash=image_hash,
+                W=W,
+                H=H,
+                tile_size_px=8,
+                overlap_px=0,
+                stride_px=8,
+                policy="uniform",
+                seed=0,
+                tiles=(tile,),
+            )
+
+    engine = TiledSegmentationEngine(
+        planner=_SingleTilePlanner(),
+        merger=engine.merger,
+        validator=engine.validator,
+    )
+    seg_input = SegmentationInput(image=np.zeros((8, 8, 3), dtype=np.float32), gamma=1.0, mode="auto")
+    return engine.run(
+        backend=_TileInstanceBackend({"tile": instances}),
+        seg_input=seg_input,
+        image_hash="abc",
+        config=config,
+    )
 
 
 def test_segment_routes_to_tiled_engine_when_enabled(tmp_path):
@@ -166,6 +285,107 @@ def test_tiling_zero_area_instances_returns_empty_result(tmp_path):
     assert result.masks.shape == (0, 8, 8)
     assert result.scores.shape == (0,)
     assert result.metadata == []
+
+
+def test_tiling_merges_large_smooth_region_across_tile_overlap():
+    left = _tile_instance(tile_id="left", width=8, height=8, label="sky", confidence=0.9, score=0.8)
+    right = _tile_instance(tile_id="right", width=8, height=8, label="sky", confidence=0.7, score=0.6)
+
+    result = _run_two_tile_merge(
+        left_instance=left,
+        right_instance=right,
+        config=SegmentationTilingConfig(
+            enabled=True,
+            tile_size_px=8,
+            overlap_px=2,
+            merge=MergeConfig(instance_merge=InstanceMergeConfig(enabled=True, iou_threshold=0.35)),
+        ),
+    )
+
+    assert result.masks.shape == (1, 8, 14)
+    assert int(result.masks[0].sum()) == 112
+    assert result.metadata[0].bbox == (0, 0, 14, 8)
+    assert result.metadata[0].material_label == "sky"
+    assert result.metadata[0].material_confidence == pytest.approx(0.8)
+    assert result.scores[0] == pytest.approx(0.7)
+
+
+def test_tiling_does_not_merge_conflicting_material_labels():
+    left = _tile_instance(tile_id="left", width=8, height=8, label="sky", confidence=0.9)
+    right = _tile_instance(tile_id="right", width=8, height=8, label="water", confidence=0.8)
+
+    result = _run_two_tile_merge(
+        left_instance=left,
+        right_instance=right,
+        config=SegmentationTilingConfig(
+            enabled=True,
+            tile_size_px=8,
+            overlap_px=2,
+            merge=MergeConfig(instance_merge=InstanceMergeConfig(enabled=True, iou_threshold=0.35)),
+        ),
+    )
+
+    assert result.masks.shape == (2, 8, 14)
+    assert [item.material_label for item in result.metadata] == ["sky", "water"]
+
+
+def test_tiling_preserves_instances_when_instance_merge_disabled():
+    left = _tile_instance(tile_id="left", width=8, height=8, label="sky")
+    right = _tile_instance(tile_id="right", width=8, height=8, label="sky")
+
+    result = _run_two_tile_merge(
+        left_instance=left,
+        right_instance=right,
+        config=SegmentationTilingConfig(
+            enabled=True,
+            tile_size_px=8,
+            overlap_px=2,
+            merge=MergeConfig(instance_merge=InstanceMergeConfig(enabled=False, iou_threshold=0.35)),
+        ),
+    )
+
+    assert result.masks.shape == (2, 8, 14)
+    assert [item.area for item in result.metadata] == [64, 64]
+
+
+def test_tiling_does_not_merge_same_tile_instances():
+    first = _tile_instance(tile_id="tile", width=8, height=8, label="sky")
+    second = _tile_instance(tile_id="tile", width=8, height=8, label="sky", score=0.6)
+
+    result = _run_single_tile_merge(
+        instances=[first, second],
+        config=SegmentationTilingConfig(
+            enabled=True,
+            tile_size_px=8,
+            overlap_px=0,
+            merge=MergeConfig(instance_merge=InstanceMergeConfig(enabled=True, iou_threshold=0.35)),
+        ),
+    )
+
+    assert result.masks.shape == (2, 8, 8)
+    assert [item.area for item in result.metadata] == [64, 64]
+
+
+def test_tiling_skips_non_overlapping_tile_pairs():
+    left = _tile_instance(tile_id="left", width=8, height=8, label="sky")
+    right = _tile_instance(tile_id="right", width=8, height=8, label="sky")
+
+    result = _run_two_tile_merge(
+        left_instance=left,
+        right_instance=right,
+        left_tile=TileSpec(tile_id="left", bbox=BBox(0, 0, 8, 8), overlap_px=0, pad_mode="reflect"),
+        right_tile=TileSpec(tile_id="right", bbox=BBox(8, 0, 16, 8), overlap_px=0, pad_mode="reflect"),
+        width=16,
+        config=SegmentationTilingConfig(
+            enabled=True,
+            tile_size_px=8,
+            overlap_px=0,
+            merge=MergeConfig(instance_merge=InstanceMergeConfig(enabled=True, iou_threshold=0.0)),
+        ),
+    )
+
+    assert result.masks.shape == (2, 8, 16)
+    assert [item.area for item in result.metadata] == [64, 64]
 
 
 def test_stable_image_hash_is_deterministic_for_identical_input(tmp_path):

@@ -557,6 +557,75 @@ class SAM2Backend:
                 )
 
         class _Merger:
+            @staticmethod
+            def _labels_conflict(left: Any, right: Any) -> bool:
+                left_label = left.get("material_label")
+                right_label = right.get("material_label")
+                return bool(left_label and right_label and left_label != right_label)
+
+            @staticmethod
+            def _bbox_overlap_window(left_bbox: BBox, right_bbox: BBox) -> Optional[tuple[int, int, int, int]]:
+                x0 = max(left_bbox.x0, right_bbox.x0)
+                y0 = max(left_bbox.y0, right_bbox.y0)
+                x1 = min(left_bbox.x1, right_bbox.x1)
+                y1 = min(left_bbox.y1, right_bbox.y1)
+                if x1 <= x0 or y1 <= y0:
+                    return None
+                return x0, y0, x1, y1
+
+            @staticmethod
+            def _iou(left: Any, right: Any, overlap_window: tuple[int, int, int, int]) -> float:
+                x0, y0, x1, y1 = overlap_window
+                intersection = int(np.count_nonzero(left["mask"][y0:y1, x0:x1] & right["mask"][y0:y1, x0:x1]))
+                if intersection <= 0:
+                    return 0.0
+                union = int(left["area"]) + int(right["area"]) - intersection
+                return float(intersection / union) if union > 0 else 0.0
+
+            @staticmethod
+            def _overlap_band_continuity(left: Any, right: Any, overlap_window: tuple[int, int, int, int]) -> float:
+                x0, y0, x1, y1 = overlap_window
+                left_band = left["mask"][y0:y1, x0:x1]
+                right_band = right["mask"][y0:y1, x0:x1]
+                left_area = int(np.count_nonzero(left_band))
+                right_area = int(np.count_nonzero(right_band))
+                denominator = min(left_area, right_area)
+                if denominator <= 0:
+                    return 0.0
+                overlap_area = int(np.count_nonzero(left_band & right_band))
+                return float(overlap_area / denominator)
+
+            @staticmethod
+            def _bbox_from_mask(mask: np.ndarray) -> tuple[int, int, int, int]:
+                ys, xs = np.where(mask)
+                return (
+                    int(xs.min()),
+                    int(ys.min()),
+                    int(xs.max() - xs.min() + 1),
+                    int(ys.max() - ys.min() + 1),
+                )
+
+            @staticmethod
+            def _weighted_mean(items: list[Any], key: str) -> float:
+                total_area = sum(int(item["area"]) for item in items)
+                if total_area <= 0:
+                    return 0.0
+                return float(sum(float(item[key]) * int(item["area"]) for item in items) / total_area)
+
+            @staticmethod
+            def _weighted_confidence(items: list[Any], label: Any) -> Optional[float]:
+                if not label:
+                    return None
+                weighted = [
+                    (float(item["material_confidence"]), int(item["area"]))
+                    for item in items
+                    if item.get("material_label") == label and item.get("material_confidence") is not None
+                ]
+                total_area = sum(area for _, area in weighted)
+                if total_area <= 0:
+                    return None
+                return float(sum(conf * area for conf, area in weighted) / total_area)
+
             def merge(
                 self,
                 *,
@@ -568,10 +637,9 @@ class SAM2Backend:
                 global_hints: Any,
                 merge_config: Any,
             ) -> tuple[np.ndarray, np.ndarray, list[MaskMetadata], dict[str, Any]]:
-                del image_hash, manifest, global_hints, merge_config
-                masks = []
-                scores = []
-                metadata = []
+                del image_hash, manifest, global_hints
+                candidates = []
+                skipped_zero_area = 0
                 for tile_result in tile_results:
                     for instance in tile_result.instances:
                         full = np.zeros((H, W), dtype=bool)
@@ -585,40 +653,136 @@ class SAM2Backend:
                         y1 = min(tile_result.tile_spec.bbox.y0 + local_bbox.y1, H)
                         region = probs[: max(0, y1 - y0), : max(0, x1 - x0)]
                         if x1 <= x0 or y1 <= y0 or region.size == 0:
+                            skipped_zero_area += 1
                             continue
                         full[y0:y1, x0:x1] = region > 0.5
                         area = int(full.sum())
                         if area <= 0:
+                            skipped_zero_area += 1
                             continue
-                        ys, xs = np.where(full)
-                        metadata.append(
-                            MaskMetadata(
-                                area=area,
-                                bbox=(
-                                    int(xs.min()),
-                                    int(ys.min()),
-                                    int(xs.max() - xs.min() + 1),
-                                    int(ys.max() - ys.min() + 1),
-                                ),
-                                stability_score=float(np.clip(instance.stability_score, 0.0, 1.0)),
-                                material_label=instance.material_label,
-                                material_confidence=instance.material_confidence,
-                            )
+                        candidates.append(
+                            {
+                                "mask": full,
+                                "area": area,
+                                "score": float(np.clip(instance.score, 0.0, 1.0)),
+                                "stability_score": float(np.clip(instance.stability_score, 0.0, 1.0)),
+                                "material_label": instance.material_label,
+                                "material_confidence": instance.material_confidence,
+                                "tile_id": tile_result.tile_id,
+                                "tile_bbox": tile_result.tile_spec.bbox,
+                            }
                         )
-                        masks.append(full)
-                        scores.append(float(np.clip(instance.score, 0.0, 1.0)))
+
+                merge_stats = {
+                    "unions_performed": 0,
+                    "instances_in": len(candidates),
+                    "instances_out": len(candidates),
+                    "skipped_zero_area": skipped_zero_area,
+                    "seam_metrics": {},
+                    "warnings": [],
+                }
+
+                if not candidates:
+                    return (
+                        np.zeros((0, H, W), dtype=bool),
+                        np.zeros((0,), dtype=np.float32),
+                        [],
+                        merge_stats,
+                    )
+
+                instance_merge = getattr(merge_config, "instance_merge", None)
+                merge_enabled = bool(getattr(instance_merge, "enabled", False))
+                if merge_enabled:
+                    parent = list(range(len(candidates)))
+                    iou_threshold = float(getattr(instance_merge, "iou_threshold", 0.35))
+                    border_only = bool(getattr(instance_merge, "border_only", True))
+                    continuity_threshold = 0.80
+
+                    def find(idx: int) -> int:
+                        while parent[idx] != idx:
+                            parent[idx] = parent[parent[idx]]
+                            idx = parent[idx]
+                        return idx
+
+                    def union(left_idx: int, right_idx: int) -> None:
+                        left_root = find(left_idx)
+                        right_root = find(right_idx)
+                        if left_root == right_root:
+                            return
+                        parent[right_root] = left_root
+
+                    for left_idx in range(len(candidates)):
+                        for right_idx in range(left_idx + 1, len(candidates)):
+                            left = candidates[left_idx]
+                            right = candidates[right_idx]
+                            if left["tile_id"] == right["tile_id"]:
+                                continue
+                            if self._labels_conflict(left, right):
+                                continue
+                            overlap_window = self._bbox_overlap_window(left["tile_bbox"], right["tile_bbox"])
+                            if overlap_window is None:
+                                continue
+                            if border_only and self._overlap_band_continuity(left, right, overlap_window) <= 0.0:
+                                continue
+                            if self._iou(left, right, overlap_window) >= iou_threshold:
+                                union(left_idx, right_idx)
+                                continue
+                            if self._overlap_band_continuity(left, right, overlap_window) >= continuity_threshold:
+                                union(left_idx, right_idx)
+
+                    grouped: dict[int, list[Any]] = {}
+                    for idx, candidate in enumerate(candidates):
+                        grouped.setdefault(find(idx), []).append(candidate)
+                    groups = list(grouped.values())
+                else:
+                    groups = [[candidate] for candidate in candidates]
+
+                masks = []
+                scores = []
+                metadata = []
+                unions_performed = 0
+                for group in groups:
+                    union_mask = np.zeros((H, W), dtype=bool)
+                    for item in group:
+                        union_mask |= item["mask"]
+                    area = int(np.count_nonzero(union_mask))
+                    if area <= 0:
+                        continue
+
+                    labels = [item.get("material_label") for item in group if item.get("material_label")]
+                    material_label = labels[0] if labels and all(label == labels[0] for label in labels) else None
+                    material_confidence = self._weighted_confidence(group, material_label)
+                    score = float(np.clip(self._weighted_mean(group, "score"), 0.0, 1.0))
+                    stability_score = float(np.clip(self._weighted_mean(group, "stability_score"), 0.0, 1.0))
+
+                    metadata.append(
+                        MaskMetadata(
+                            area=area,
+                            bbox=self._bbox_from_mask(union_mask),
+                            stability_score=stability_score,
+                            material_label=material_label,
+                            material_confidence=material_confidence,
+                        )
+                    )
+                    masks.append(union_mask)
+                    scores.append(score)
+                    unions_performed += max(0, len(group) - 1)
+
+                merge_stats["unions_performed"] = unions_performed
+                merge_stats["instances_out"] = len(masks)
+
                 if not masks:
                     return (
                         np.zeros((0, H, W), dtype=bool),
                         np.zeros((0,), dtype=np.float32),
                         [],
-                        {"unions_performed": 0, "seam_metrics": {}, "warnings": []},
+                        merge_stats,
                     )
                 return (
                     np.stack(masks).astype(bool, copy=False),
                     np.array(scores, dtype=np.float32),
                     metadata,
-                    {"unions_performed": 0, "seam_metrics": {}, "warnings": []},
+                    merge_stats,
                 )
 
         class _Validator:
