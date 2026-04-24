@@ -567,6 +567,10 @@ def test_segment_materials_sam2_backend_with_mock(sample_image, config_sam2, mon
     assert masks["glass"].shape == sample_image.shape[:2]
     assert masks["glass"].dtype == np.float32
     assert float(masks["glass"].max()) == 1.0
+    metadata = get_last_segmentation_runtime_metadata()
+    assert metadata is not None
+    assert metadata["material_confidences"]["glass"] == pytest.approx(0.91)
+    assert metadata["confidence_summary"]["count"] == 1
 
 
 def test_segment_materials_sam2_backend_forwards_generator_and_tiling_config(sample_image, monkeypatch):
