@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from typing import Callable, Optional
 
@@ -51,10 +52,10 @@ class TiledSegmentationEngine:
             mode=seg_input.mode,
         )
 
-        tile_results: list[TileSegmentationResult] = []
         n_tiles = max(1, len(manifest.tiles))
 
-        for i, tile in enumerate(manifest.tiles):
+        def process_tile(index: int) -> tuple[int, TileSegmentationResult]:
+            tile = manifest.tiles[index]
             t0 = time.time()
             x0, y0, x1, y1 = tile.bbox.x0, tile.bbox.y0, tile.bbox.x1, tile.bbox.y1
             tile_img = seg_input.image[y0:y1, x0:x1, :]
@@ -69,18 +70,36 @@ class TiledSegmentationEngine:
                 rng_seed=rng_seed,
             )
 
-            tile_results.append(
+            return (
+                index,
                 TileSegmentationResult(
                     image_hash=image_hash,
                     tile_id=tile.tile_id,
                     tile_spec=tile,
                     instances=tuple(instances),
                     runtime_s=time.time() - t0,
-                )
+                ),
             )
 
-            if on_progress:
-                on_progress(((i + 1) / n_tiles) * 100.0)
+        tile_results_by_index: list[Optional[TileSegmentationResult]] = [None] * len(manifest.tiles)
+        if config.max_concurrency == 1 or len(manifest.tiles) <= 1:
+            for i in range(len(manifest.tiles)):
+                idx, tile_result = process_tile(i)
+                tile_results_by_index[idx] = tile_result
+                if on_progress:
+                    on_progress(((i + 1) / n_tiles) * 100.0)
+        else:
+            completed = 0
+            with ThreadPoolExecutor(max_workers=config.max_concurrency) as executor:
+                futures = {executor.submit(process_tile, i): i for i in range(len(manifest.tiles))}
+                for future in as_completed(futures):
+                    idx, tile_result = future.result()
+                    tile_results_by_index[idx] = tile_result
+                    completed += 1
+                    if on_progress:
+                        on_progress((completed / n_tiles) * 100.0)
+
+        tile_results = [tile_result for tile_result in tile_results_by_index if tile_result is not None]
 
         masks, scores, metadata, merge_stats = self.merger.merge(
             image_hash=image_hash,
@@ -93,7 +112,10 @@ class TiledSegmentationEngine:
         )
 
         if self.validator and config.validation.enabled:
-            self.validator.validate(manifest=manifest, merge_stats=merge_stats, config=config)
+            ok, details = self.validator.validate(manifest=manifest, merge_stats=merge_stats, config=config)
+            if not ok:
+                reason = details.get("warning") or details
+                raise RuntimeError(f"SAM2 tiling validation failed: {reason}")
 
         return SegmentationResult(
             masks=masks,

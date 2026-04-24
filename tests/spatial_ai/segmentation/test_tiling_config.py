@@ -69,9 +69,9 @@ def test_from_dict_rejects_content_adaptive_policy_until_implemented():
         SegmentationTilingConfig.from_dict({"enabled": True, "policy": "content_adaptive"})
 
 
-def test_from_dict_rejects_parallel_tiling_until_implemented():
-    with pytest.raises(ValueError, match="max_concurrency must be 1"):
-        SegmentationTilingConfig.from_dict({"enabled": True, "max_concurrency": 2})
+def test_from_dict_accepts_parallel_tiling_when_enabled():
+    cfg = SegmentationTilingConfig.from_dict({"enabled": True, "max_concurrency": 2})
+    assert cfg.max_concurrency == 2
 
 
 def test_from_dict_rejects_unsupported_soft_merge_options():

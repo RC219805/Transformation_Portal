@@ -11,8 +11,11 @@ from transformation_portal.spatial_ai.segmentation.tiling.config import (
     InstanceMergeConfig,
     MergeConfig,
     SegmentationTilingConfig,
+    ValidationConfig,
 )
 from transformation_portal.spatial_ai.segmentation.tiling.engine import TiledSegmentationEngine
+from transformation_portal.spatial_ai.segmentation.tiling.merger import BinaryUnionTileMerger
+from transformation_portal.spatial_ai.segmentation.tiling.planner import UniformTilingPlanner
 from transformation_portal.spatial_ai.segmentation.tiling.types import (
     BBox,
     SoftMaskPatch,
@@ -20,6 +23,7 @@ from transformation_portal.spatial_ai.segmentation.tiling.types import (
     TileManifest,
     TileSpec,
 )
+from transformation_portal.spatial_ai.segmentation.tiling.validator import SeamMergeValidator
 
 pytestmark = pytest.mark.unit
 
@@ -287,6 +291,15 @@ def test_tiling_zero_area_instances_returns_empty_result(tmp_path):
     assert result.metadata == []
 
 
+def test_default_tiled_engine_uses_extracted_components():
+    backend = SAM2Backend.__new__(SAM2Backend)
+    engine = backend._build_default_tiled_engine()
+
+    assert isinstance(engine.planner, UniformTilingPlanner)
+    assert isinstance(engine.merger, BinaryUnionTileMerger)
+    assert isinstance(engine.validator, SeamMergeValidator)
+
+
 def test_tiling_merges_large_smooth_region_across_tile_overlap():
     left = _tile_instance(tile_id="left", width=8, height=8, label="sky", confidence=0.9, score=0.8)
     right = _tile_instance(tile_id="right", width=8, height=8, label="sky", confidence=0.7, score=0.6)
@@ -308,6 +321,181 @@ def test_tiling_merges_large_smooth_region_across_tile_overlap():
     assert result.metadata[0].material_label == "sky"
     assert result.metadata[0].material_confidence == pytest.approx(0.8)
     assert result.scores[0] == pytest.approx(0.7)
+
+
+@pytest.mark.parametrize("window", ["hann", "cosine", "linear"])
+def test_tiling_window_modes_preserve_smooth_binary_union(window):
+    left = _tile_instance(tile_id="left", width=8, height=8, label="sky", confidence=0.9)
+    right = _tile_instance(tile_id="right", width=8, height=8, label="sky", confidence=0.9)
+
+    result = _run_two_tile_merge(
+        left_instance=left,
+        right_instance=right,
+        config=SegmentationTilingConfig(
+            enabled=True,
+            tile_size_px=8,
+            overlap_px=2,
+            merge=MergeConfig(
+                window=window,
+                instance_merge=InstanceMergeConfig(enabled=True, iou_threshold=0.35),
+            ),
+        ),
+    )
+
+    assert result.masks.shape == (1, 8, 14)
+    assert int(result.masks[0].sum()) == 112
+    assert result.metadata[0].bbox == (0, 0, 14, 8)
+
+
+@pytest.mark.parametrize("window", ["hann", "cosine", "linear"])
+def test_tiling_window_modes_preserve_one_pixel_overlap_seams(window):
+    left = _tile_instance(tile_id="left", width=4, height=8, label="sky", confidence=0.9)
+    right = _tile_instance(tile_id="right", width=4, height=8, label="sky", confidence=0.9)
+
+    result = _run_two_tile_merge(
+        left_instance=left,
+        right_instance=right,
+        left_tile=TileSpec(tile_id="left", bbox=BBox(0, 0, 4, 8), overlap_px=1, pad_mode="reflect"),
+        right_tile=TileSpec(tile_id="right", bbox=BBox(3, 0, 7, 8), overlap_px=1, pad_mode="reflect"),
+        width=7,
+        config=SegmentationTilingConfig(
+            enabled=True,
+            tile_size_px=4,
+            overlap_px=1,
+            merge=MergeConfig(
+                window=window,
+                instance_merge=InstanceMergeConfig(enabled=True, iou_threshold=0.35),
+            ),
+        ),
+    )
+
+    assert result.masks.shape == (1, 8, 7)
+    assert int(result.masks[0].sum()) == 56
+    assert result.metadata[0].bbox == (0, 0, 7, 8)
+
+
+def test_tiling_merge_avoids_full_image_bool_masks_per_candidate(monkeypatch):
+    import transformation_portal.spatial_ai.segmentation.tiling.merger as merger_module
+
+    class _NumpyProxy:
+        def __init__(self, wrapped):
+            self._wrapped = wrapped
+            self.full_image_bool_zeros = 0
+
+        def __getattr__(self, name):
+            return getattr(self._wrapped, name)
+
+        def zeros(self, shape, *args, **kwargs):
+            dtype = kwargs.get("dtype", args[0] if args else None)
+            if shape == (8, 14) and dtype is bool:
+                self.full_image_bool_zeros += 1
+            return self._wrapped.zeros(shape, *args, **kwargs)
+
+    proxy = _NumpyProxy(np)
+    monkeypatch.setattr(merger_module, "np", proxy)
+
+    left = _tile_instance(tile_id="left", width=8, height=8, label="sky")
+    right = _tile_instance(tile_id="right", width=8, height=8, label="sky")
+
+    result = _run_two_tile_merge(
+        left_instance=left,
+        right_instance=right,
+        config=SegmentationTilingConfig(
+            enabled=True,
+            tile_size_px=8,
+            overlap_px=2,
+            merge=MergeConfig(instance_merge=InstanceMergeConfig(enabled=True, iou_threshold=0.35)),
+        ),
+    )
+
+    assert result.masks.shape == (1, 8, 14)
+    assert proxy.full_image_bool_zeros == 1
+
+
+def test_tiling_parallel_matches_serial_output_ordering():
+    class _PerTileBackend:
+        name = "stub"
+        device = "cpu"
+
+        def global_seed_pass(self, **kwargs):
+            del kwargs
+            return None
+
+        def segment_tile(self, **kwargs):
+            tile_spec = kwargs["tile_spec"]
+            tile_idx = int(tile_spec.tile_id.split("_")[1])
+            return (
+                TileInstance(
+                    local_id=f"{tile_spec.tile_id}:0",
+                    score=0.5 + tile_idx * 0.01,
+                    stability_score=0.9,
+                    soft_mask=SoftMaskPatch(
+                        bbox=BBox(0, 0, tile_spec.bbox.w, tile_spec.bbox.h),
+                        values=np.ones((tile_spec.bbox.h, tile_spec.bbox.w), dtype=np.float32),
+                        space="prob",
+                    ),
+                ),
+            )
+
+    def run(max_concurrency):
+        engine = TiledSegmentationEngine(
+            planner=UniformTilingPlanner(),
+            merger=BinaryUnionTileMerger(),
+            validator=SeamMergeValidator(),
+        )
+        return engine.run(
+            backend=_PerTileBackend(),
+            seg_input=SegmentationInput(image=np.zeros((4, 4, 3), dtype=np.float32), gamma=1.0, mode="auto"),
+            image_hash="abc",
+            config=SegmentationTilingConfig(
+                enabled=True,
+                tile_size_px=2,
+                overlap_px=0,
+                max_concurrency=max_concurrency,
+                merge=MergeConfig(instance_merge=InstanceMergeConfig(enabled=False)),
+            ),
+        )
+
+    serial = run(1)
+    parallel = run(3)
+
+    assert parallel.scores.tolist() == serial.scores.tolist()
+    assert [item.bbox for item in parallel.metadata] == [item.bbox for item in serial.metadata]
+    assert np.array_equal(parallel.masks, serial.masks)
+
+
+def test_tiling_validator_rejects_excessive_seam_discontinuity():
+    manifest = TileManifest(
+        image_hash="abc",
+        W=8,
+        H=8,
+        tile_size_px=8,
+        overlap_px=2,
+        stride_px=6,
+        policy="uniform",
+        seed=0,
+        tiles=(),
+    )
+    stats = {
+        "seam_metrics": {
+            "merged_pair_count": 1,
+            "max_merged_discontinuity": 0.5,
+            "mean_merged_discontinuity": 0.5,
+        },
+        "warnings": [],
+    }
+    ok, details = SeamMergeValidator().validate(
+        manifest=manifest,
+        merge_stats=stats,
+        config=SegmentationTilingConfig(
+            enabled=True,
+            validation=ValidationConfig(enabled=True, seam_discontinuity_threshold=0.25),
+        ),
+    )
+
+    assert ok is False
+    assert details["ok"] is False
+    assert "exceeds threshold" in stats["warnings"][0]
 
 
 def test_tiling_does_not_merge_conflicting_material_labels():

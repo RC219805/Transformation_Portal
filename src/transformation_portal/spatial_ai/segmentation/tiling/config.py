@@ -82,8 +82,6 @@ class SegmentationTilingConfig:
                 raise ValueError(
                     "SAM2 tiling currently supports only auto mode; unsupported apply_to_modes=" f"{sorted(unsupported_modes)}"
                 )
-            if self.max_concurrency != 1:
-                raise ValueError("SAM2 tiling currently runs serially; max_concurrency must be 1")
             if self.merge.mode != "binary_union":
                 raise ValueError(
                     f"merge.mode={self.merge.mode!r} is not supported by the current SAM2 tiling merger; " "use 'binary_union'"
