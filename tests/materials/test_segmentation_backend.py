@@ -949,6 +949,29 @@ def test_tensor_values_1d_does_not_swallow_unexpected_tensor_errors():
         _tensor_values_1d(TensorLike())
 
 
+def test_tensor_values_1d_does_not_swallow_unexpected_runtime_errors():
+    """Only the known torch/NumPy ABI bridge failure may fall back to ``tolist``."""
+
+    class TensorLike:
+        def detach(self):
+            return self
+
+        def cpu(self):
+            return self
+
+        def float(self):
+            return self
+
+        def numpy(self):
+            raise RuntimeError("unexpected torch conversion failure")
+
+        def tolist(self):
+            raise AssertionError("unexpected RuntimeError must not fall back to tolist")
+
+    with pytest.raises(RuntimeError, match="unexpected torch conversion failure"):
+        _tensor_values_1d(TensorLike())
+
+
 def test_segment_materials_cache_key_invalidates_on_config_change(sample_image, tmp_path, monkeypatch):
     """Cache keys should include segmentation-affecting configuration."""
     import transformation_portal.lux_depth_v3.segmentation_backend as seg_module

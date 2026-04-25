@@ -54,7 +54,7 @@ def main() -> int:
         print(f"Depth backend benchmark error: {exc}", file=sys.stderr)
         return 2
     if args.emit_comparison_report == "on":
-        print(Path(args.output_dir) / "depth_backend_comparison_report.json")
+        print(report["report_path"])
     blocked = [item["backend"] for item in report["backends"] if item["status"] == "license_blocked"]
     if blocked:
         print("License-blocked backend(s): " + ", ".join(blocked))

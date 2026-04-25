@@ -707,8 +707,10 @@ def build_apex_eval_report(
         reason = item["canonical_scoring_blocked_reason"]
         if item["asset_status"]["status"] == "ready" and reason:
             blocked_reason_counts[reason] = blocked_reason_counts.get(reason, 0) + 1
+    report_path = output_root / "apex_eval_report.json"
     report = {
         "schema_version": APEX_EVAL_REPORT_VERSION,
+        "report_path": str(report_path),
         "evalset": {
             "evalset_id": evalset.evalset_id,
             "version": evalset.version,
@@ -733,7 +735,6 @@ def build_apex_eval_report(
         },
         "assets": assets_report,
     }
-    report_path = output_root / "apex_eval_report.json"
     with report_path.open("w", encoding="utf-8") as handle:
         dump_json(report, handle, sort_keys=True, indent=2, ensure_ascii=False, allow_nan=False)
         handle.write("\n")
@@ -932,8 +933,10 @@ def build_depth_backend_benchmark_report(
         backend_report["runtime_ms"] = float(np.mean(runtimes)) if runtimes else None
         backend_reports.append(backend_report)
 
+    report_path = output_root / "depth_backend_comparison_report.json"
     report = {
         "schema_version": DEPTH_BACKEND_BENCHMARK_REPORT_VERSION,
+        "report_path": str(report_path),
         "evalset": {
             "evalset_id": evalset.evalset_id,
             "version": evalset.version,
@@ -943,7 +946,6 @@ def build_depth_backend_benchmark_report(
         "quality_tier": quality_tier,
         "backends": backend_reports,
     }
-    report_path = output_root / "depth_backend_comparison_report.json"
     with report_path.open("w", encoding="utf-8") as handle:
         dump_json(report, handle, sort_keys=True, indent=2, ensure_ascii=False, allow_nan=False)
         handle.write("\n")

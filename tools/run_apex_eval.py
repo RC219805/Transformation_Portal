@@ -40,7 +40,7 @@ def main() -> int:
         print(f"APEX eval error: {exc}", file=sys.stderr)
         return 2
     if args.emit_report == "on":
-        print(Path(args.output_dir) / "apex_eval_report.json")
+        print(report["report_path"])
     missing = [item["asset_id"] for item in report["assets"] if item["asset_status"]["status"] not in {"ready"}]
     if missing:
         print("APEX eval report emitted with non-ready assets: " + ", ".join(missing))

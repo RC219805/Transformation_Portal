@@ -319,6 +319,30 @@ def test_run_apex_eval_returns_stable_input_error_for_bad_candidate_output(tmp_p
     assert "expected candidate:asset_id=path" in captured.err
 
 
+def test_run_apex_eval_prints_resolved_report_path(tmp_path, monkeypatch, capsys):
+    module = _load_tool_module("run_apex_eval.py", "run_apex_eval_resolved_path_unit")
+    resolved_report = tmp_path / "resolved" / "apex_eval_report.json"
+
+    def fake_build_report(*args, **kwargs):
+        return {"report_path": str(resolved_report), "assets": []}
+
+    monkeypatch.setattr(module, "build_apex_eval_report", fake_build_report)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "run_apex_eval.py",
+            "--evalset",
+            "evalsets/picacho_apex",
+            "--output-dir",
+            "relative-output",
+        ],
+    )
+
+    assert module.main() == 0
+    assert capsys.readouterr().out.strip() == str(resolved_report)
+
+
 def test_benchmark_depth_backends_returns_stable_input_error_for_missing_evalset(tmp_path, monkeypatch, capsys):
     module = _load_tool_module("benchmark_depth_backends.py", "benchmark_depth_backends_missing_evalset_unit")
 
@@ -340,6 +364,32 @@ def test_benchmark_depth_backends_returns_stable_input_error_for_missing_evalset
     captured = capsys.readouterr()
     assert "Depth backend benchmark error:" in captured.err
     assert "missing_evalset" in captured.err
+
+
+def test_benchmark_depth_backends_prints_resolved_report_path(tmp_path, monkeypatch, capsys):
+    module = _load_tool_module("benchmark_depth_backends.py", "benchmark_depth_backends_resolved_path_unit")
+    resolved_report = tmp_path / "resolved" / "depth_backend_comparison_report.json"
+
+    def fake_build_report(*args, **kwargs):
+        return {"report_path": str(resolved_report), "backends": []}
+
+    monkeypatch.setattr(module, "build_depth_backend_benchmark_report", fake_build_report)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "benchmark_depth_backends.py",
+            "--evalset",
+            "evalsets/picacho_apex",
+            "--backends",
+            "da3-metric",
+            "--output-dir",
+            "relative-output",
+        ],
+    )
+
+    assert module.main() == 0
+    assert capsys.readouterr().out.strip() == str(resolved_report)
 
 
 def test_visible_delta_metrics_marks_lpips_unavailable_as_partial(tmp_path, monkeypatch):
