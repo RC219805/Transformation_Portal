@@ -1,0 +1,67 @@
+{
+  "assets": [
+    {
+      "asset_id": "picacho_kitchen_750_v2_en",
+      "asset_ref": "input_images/750Picacho_Kitchen_jpg_ed31bfc4_v2_en.tiff",
+      "expected_materials": [
+        "glass",
+        "stone",
+        "wood"
+      ],
+      "manual_quality_score": null,
+      "notes": "Interior kitchen source for glass, stone, and wood finishing risk.",
+      "reject_if": [
+        "glass over-brightening",
+        "stone crunchiness",
+        "depth edge tearing"
+      ],
+      "risk_zones": [
+        "interior_glass_stone_wood",
+        "specular_reflection"
+      ],
+      "scene_type": "picacho_kitchen",
+      "sha256": "048410f39d34f676ee6f7a670f568dcbf3940bceb59f8b5c0071b2b1c205ff8a"
+    },
+    {
+      "asset_id": "picacho_pool_750_v2_enhanced",
+      "asset_ref": "input_images/750Picacho_Pool_jpg_58014ff8_v2_enhanced.tiff",
+      "expected_materials": [
+        "water",
+        "stone",
+        "foliage",
+        "glass",
+        "sky"
+      ],
+      "manual_quality_score": null,
+      "notes": "Exterior pool source for water, sky, foliage, glass, and stone boundary risk.",
+      "reject_if": [
+        "haloing",
+        "water plasticity",
+        "foliage oversaturation",
+        "glass over-brightening",
+        "depth edge tearing"
+      ],
+      "risk_zones": [
+        "sky_pool_boundary",
+        "water_glass_boundary",
+        "exterior_foliage_stone_glass"
+      ],
+      "scene_type": "picacho_pool",
+      "sha256": "4b641138578e1bea4bb3cf93e9f3d91853e7c631de48f20133362596773accb9"
+    }
+  ],
+  "description": "Referenced Picacho APEX visual-quality seed corpus for maximum-quality Depth Pro/DA3 and Materials V3 evaluation.",
+  "evalset_id": "picacho_apex",
+  "metadata": {
+    "asset_policy": "referenced_assets_only",
+    "quality_trajectory": [
+      "depth_edge_fidelity",
+      "material_precision",
+      "pixel_op_false_positive_risk",
+      "visible_delta_metrics",
+      "manual_apex_score"
+    ]
+  },
+  "schema_version": "apex_evalset.v1",
+  "version": "v1"
+}

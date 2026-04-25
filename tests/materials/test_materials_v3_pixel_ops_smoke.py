@@ -27,6 +27,7 @@ class DummyConfig:
     min_coverage_px: int = 500
     min_mean_conf: float = 0.2
     refinement_strategy: str = "canary"
+    quality_tier: str = "standard"
 
 
 def _make_inputs():
@@ -69,6 +70,43 @@ def test_decider_blocks_low_confidence_material_masks():
     assert decision["eligible"] is False
     assert decision["reason"] == "below_confidence_threshold"
     assert "below_confidence_threshold" in decision["blocked_by"]
+
+
+def test_apex_decider_rejects_raw_clip_similarity_as_pixel_op_authority():
+    config = DummyConfig(quality_tier="apex")
+    stats = {
+        "coverage_px": 2000,
+        "mean_conf": 0.6,
+        "material_confidence": 0.9,
+        "confidence_score_type": "raw_clip_similarity",
+        "edge_conf": 0.6,
+    }
+
+    decision = decide_pixel_ops("water", stats, config, registry=OP_REGISTRY)
+
+    assert decision["will_apply"] is False
+    assert decision["reason"] == "unsupported_confidence_score_type"
+    assert "unsupported_confidence_score_type" in decision["blocked_by"]
+
+
+def test_apex_decider_accepts_calibrated_clip_softmax_margin_confidence():
+    config = DummyConfig(quality_tier="apex")
+    stats = {
+        "coverage_px": 2000,
+        "mean_conf": 0.6,
+        "material_confidence": 0.82,
+        "confidence_score_type": "clip_softmax_margin_v1",
+        "clip_softmax_probability": 0.82,
+        "clip_top2_margin": 0.24,
+        "calibration_version": "materials_v3_calibration_v1",
+        "edge_conf": 0.6,
+    }
+
+    decision = decide_pixel_ops("water", stats, config, registry=OP_REGISTRY)
+
+    assert decision["will_apply"] is True
+    assert decision["authority_score_type_accepted"] is True
+    assert decision["confidence_score_type"] == "clip_softmax_margin_v1"
 
 
 def test_decider_does_not_apply_taxonomy_threshold_to_mask_coverage_mean():
@@ -219,6 +257,39 @@ def test_materials_v3_engine_uses_segmentation_material_confidence_for_pixel_ops
     assert plan_entry["material_confidence"] == pytest.approx(0.1)
     assert plan_entry["pixel_ops"]["reason"] == "below_confidence_threshold"
     assert result["materials_v3_pixel_ops"]["blocked"][0]["reason"] == "below_confidence_threshold"
+
+
+def test_materials_v3_engine_propagates_confidence_contract_fields():
+    config = DummyConfig(quality_tier="apex")
+    image = np.ones((64, 64, 3), dtype=np.uint8) * 48
+    mask = np.ones((64, 64), dtype=np.float32)
+    engine = MaterialsV3Engine(config)
+
+    result = engine.process(
+        image,
+        {
+            "materials": {"water": mask},
+            "segmentation_metadata": {
+                "material_confidences": {"water": 0.78},
+                "material_confidence_evidence": {
+                    "water": {
+                        "material_confidence": 0.78,
+                        "confidence_score_type": "clip_softmax_margin_v1",
+                        "raw_clip_similarity": 0.24,
+                        "clip_softmax_probability": 0.78,
+                        "clip_top2_margin": 0.11,
+                        "calibration_version": "materials_v3_calibration_v1",
+                    }
+                },
+            },
+        },
+    )
+
+    plan_entry = result["materials_v3_response_plan"]["per_class"]["water"]
+    assert plan_entry["material_confidence"] == pytest.approx(0.78)
+    assert plan_entry["confidence_score_type"] == "clip_softmax_margin_v1"
+    assert plan_entry["raw_clip_similarity"] == pytest.approx(0.24)
+    assert result["materials_v3_pixel_ops"]["applied"][0]["confidence_score_type"] == "clip_softmax_margin_v1"
 
 
 def test_apply_pixel_ops_disabled_still_emits_object():

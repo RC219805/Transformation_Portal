@@ -179,8 +179,16 @@ def generate_response_plan(
             "pixel_ops": pixel_ops,
             "edge_signals": edge_signals,
         }
-        if "material_confidence" in stats:
-            plan_entry["material_confidence"] = stats["material_confidence"]
+        for confidence_key in (
+            "material_confidence",
+            "confidence_score_type",
+            "raw_clip_similarity",
+            "clip_softmax_probability",
+            "clip_top2_margin",
+            "calibration_version",
+        ):
+            if confidence_key in stats:
+                plan_entry[confidence_key] = stats[confidence_key]
         plan["per_class"][mat_key] = plan_entry
 
     plan["summary"]["skipped_reasons_histogram"] = histogram

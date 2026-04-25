@@ -60,6 +60,11 @@ from .protocols.segmentation_backend import SegmentationBackend, SegmentationBac
 
 logger = logging.getLogger(__name__)
 
+CLIP_SOFTMAX_MARGIN_SCORE_TYPE = "clip_softmax_margin_v1"
+HEURISTIC_MATERIAL_SCORE_TYPE = "heuristic_material_confidence_v1"
+MATERIAL_CLASSIFIER_SCORE_TYPE = "material_classifier_probability_v1"
+MATERIALS_V3_CALIBRATION_VERSION = "materials_v3_calibration_v1"
+
 _LAST_SEGMENTATION_RUNTIME_METADATA: ContextVar[Optional[Dict[str, Any]]] = ContextVar(
     "_LAST_SEGMENTATION_RUNTIME_METADATA",
     default=None,
@@ -94,12 +99,15 @@ def _split_material_results(results: Mapping[str, Any]) -> Tuple[Dict[str, np.nd
     return masks, material_confidences
 
 
-def _material_confidence_metadata(material_confidences: Dict[str, float]) -> Dict[str, Any]:
+def _material_confidence_metadata(
+    material_confidences: Dict[str, float],
+    evidence: Optional[Dict[str, Dict[str, Any]]] = None,
+) -> Dict[str, Any]:
     if not material_confidences:
         return {}
 
     scores = list(material_confidences.values())
-    return {
+    metadata: Dict[str, Any] = {
         "material_confidences": dict(material_confidences),
         "confidence_summary": {
             "count": len(scores),
@@ -108,6 +116,41 @@ def _material_confidence_metadata(material_confidences: Dict[str, float]) -> Dic
             "max": float(max(scores)),
         },
     }
+    if evidence:
+        metadata["material_confidence_evidence"] = {
+            str(material): dict(values)
+            for material, values in evidence.items()
+            if material in material_confidences and isinstance(values, dict)
+        }
+    return metadata
+
+
+def _tensor_values_1d(value: Any) -> np.ndarray:
+    """Convert torch/fake tensor rows into a 1D float32 array."""
+    if hasattr(value, "detach") and hasattr(value, "cpu"):
+        try:
+            value = value.detach().cpu()
+            if hasattr(value, "float"):
+                value = value.float()
+            if hasattr(value, "numpy"):
+                return np.asarray(value.numpy(), dtype=np.float32).reshape(-1)
+        except Exception:
+            pass
+    if hasattr(value, "values"):
+        return np.asarray(value.values, dtype=np.float32).reshape(-1)
+    return np.asarray(value, dtype=np.float32).reshape(-1)
+
+
+def _softmax_probabilities(values: np.ndarray, logit_scale: float = 20.0) -> np.ndarray:
+    if values.size == 0:
+        return values.astype(np.float32)
+    logits = values.astype(np.float32) * float(logit_scale)
+    shifted = logits - float(np.max(logits))
+    exp_values = np.exp(shifted)
+    total = float(exp_values.sum())
+    if total <= 0.0 or not np.isfinite(total):
+        return np.zeros_like(values, dtype=np.float32)
+    return (exp_values / total).astype(np.float32)
 
 
 # Lazy imports for ML dependencies
@@ -514,6 +557,7 @@ class EfficientSAMBackend:
         self._clip_text_features: Any = None
         self._clip_text_prompt_signature: Optional[Tuple[str, ...]] = None
         self._clip_classification_timing_ms: Dict[str, float] = {}
+        self._material_confidence_evidence: Dict[str, Dict[str, Any]] = {}
         self._sky_top_region_fraction = float(sky_top_region_fraction)
         self._sky_gradient_threshold = float(sky_gradient_threshold)
         self._sky_brightness_threshold = float(sky_brightness_threshold)
@@ -603,6 +647,10 @@ class EfficientSAMBackend:
             metadata["clip_runtime"] = dict(self._clip_runtime_metadata)
         if self._clip_classification_timing_ms:
             metadata["clip_classification"] = {"timing_ms": dict(self._clip_classification_timing_ms)}
+        if self._material_confidence_evidence:
+            metadata["material_confidence_evidence"] = {
+                str(material): dict(values) for material, values in self._material_confidence_evidence.items()
+            }
         if not metadata:
             return None
         return metadata
@@ -962,6 +1010,7 @@ class EfficientSAMBackend:
             This provides better material detection than pure heuristics alone.
         """
         self._clip_classification_timing_ms = {}
+        self._material_confidence_evidence = {}
         t_total = time.perf_counter()
 
         # If no SAM segments, generate heuristic segments first
@@ -1052,7 +1101,15 @@ class EfficientSAMBackend:
                 # Initialize material masks with tracking for confidence scores
                 h, w = image.shape[:2]
                 material_data: Dict[str, Dict[str, Any]] = {
-                    name: {"mask": np.zeros((h, w), dtype=np.float32), "scores": [], "areas": []} for name in material_prompts
+                    name: {
+                        "mask": np.zeros((h, w), dtype=np.float32),
+                        "scores": [],
+                        "raw_similarities": [],
+                        "softmax_probabilities": [],
+                        "top2_margins": [],
+                        "areas": [],
+                    }
+                    for name in material_prompts
                 }
 
                 # Convert image to PIL for preprocessing
@@ -1100,14 +1157,27 @@ class EfficientSAMBackend:
                 for row_idx, (seg_idx, segment) in enumerate(region_segments):
                     mask = segment["segmentation"]
                     similarities = similarity_batch[row_idx]
-                    best_idx = similarities.argmax().item()
+                    similarity_values = _tensor_values_1d(similarities)
+                    probabilities = _softmax_probabilities(similarity_values)
+                    if similarity_values.size == 0:
+                        continue
+                    best_idx = int(np.argmax(similarity_values))
                     best_material = list(material_prompts.keys())[best_idx]
-                    best_score = similarities[best_idx].item()
+                    raw_similarity = float(similarity_values[best_idx])
+                    softmax_probability = float(probabilities[best_idx]) if probabilities.size else 0.0
+                    if probabilities.size >= 2:
+                        top2 = np.partition(probabilities, -2)[-2:]
+                        top2_margin = float(top2[-1] - top2[-2])
+                    else:
+                        top2_margin = float(softmax_probability)
 
-                    # Only add if confidence is reasonable (> 0.2)
-                    if best_score > 0.2:
-                        # Track confidence score and segment area for weighted averaging
-                        material_data[best_material]["scores"].append(best_score)
+                    # Only add if calibrated probability is reasonable (> 0.2)
+                    if softmax_probability > 0.2:
+                        # Track calibrated confidence, raw evidence, and segment area for weighted averaging.
+                        material_data[best_material]["scores"].append(softmax_probability)
+                        material_data[best_material]["raw_similarities"].append(raw_similarity)
+                        material_data[best_material]["softmax_probabilities"].append(softmax_probability)
+                        material_data[best_material]["top2_margins"].append(top2_margin)
                         material_data[best_material]["areas"].append(segment["area"])
 
                         # Add segment mask to material (using max to handle overlaps)
@@ -1119,11 +1189,14 @@ class EfficientSAMBackend:
                         match_str = "✓" if heuristic_label == best_material else f"({heuristic_label}→{best_material})"
                         logger.debug(
                             f"Segment {seg_idx}: {best_material} {match_str} "
-                            f"score={best_score:.3f}, area={segment['area']}px"
+                            f"raw_similarity={raw_similarity:.3f}, "
+                            f"softmax_probability={softmax_probability:.3f}, "
+                            f"top2_margin={top2_margin:.3f}, area={segment['area']}px"
                         )
 
                 # Compute aggregate confidence per material (area-weighted average)
                 material_masks: Dict[str, Tuple[np.ndarray, float]] = {}
+                material_evidence: Dict[str, Dict[str, Any]] = {}
                 for name, data in material_data.items():
                     mask = data["mask"]
                     scores = data["scores"]
@@ -1135,15 +1208,38 @@ class EfficientSAMBackend:
                             # Area-weighted average of CLIP scores for this material
                             total_area = sum(areas)
                             weighted_conf = sum(s * a for s, a in zip(scores, areas)) / total_area
+                            raw_scores = data["raw_similarities"]
+                            probs = data["softmax_probabilities"]
+                            margins = data["top2_margins"]
+                            weighted_raw = sum(s * a for s, a in zip(raw_scores, areas)) / total_area
+                            weighted_prob = sum(s * a for s, a in zip(probs, areas)) / total_area
+                            weighted_margin = sum(s * a for s, a in zip(margins, areas)) / total_area
                             material_masks[name] = (mask, float(weighted_conf))
+                            material_evidence[name] = {
+                                "material_confidence": float(weighted_conf),
+                                "confidence_score_type": CLIP_SOFTMAX_MARGIN_SCORE_TYPE,
+                                "raw_clip_similarity": float(weighted_raw),
+                                "clip_softmax_probability": float(weighted_prob),
+                                "clip_top2_margin": float(weighted_margin),
+                                "calibration_version": MATERIALS_V3_CALIBRATION_VERSION,
+                            }
                         else:
                             # No scores (shouldn't happen, but handle gracefully)
                             material_masks[name] = (mask, 0.5)
+                            material_evidence[name] = {
+                                "material_confidence": 0.5,
+                                "confidence_score_type": "missing_clip_score_fallback",
+                                "raw_clip_similarity": None,
+                                "clip_softmax_probability": None,
+                                "clip_top2_margin": None,
+                                "calibration_version": None,
+                            }
 
                 logger.info(
                     f"CLIP classified {len(segments)} segments into {len(material_masks)} materials: "
                     f"{', '.join(f'{m} ({c:.0%})' for m, (_, c) in material_masks.items())}"
                 )
+                self._material_confidence_evidence = material_evidence
                 self._clip_classification_timing_ms["total"] = round((time.perf_counter() - t_total) * 1000.0, 3)
                 return material_masks
 
@@ -1259,6 +1355,17 @@ class EfficientSAMBackend:
         if stone_mask.sum() > 500:
             masks["stone"] = (stone_mask.astype(np.float32), 0.5)
 
+        self._material_confidence_evidence = {
+            material: {
+                "material_confidence": float(confidence),
+                "confidence_score_type": HEURISTIC_MATERIAL_SCORE_TYPE,
+                "raw_clip_similarity": None,
+                "clip_softmax_probability": None,
+                "clip_top2_margin": None,
+                "calibration_version": None,
+            }
+            for material, (_, confidence) in masks.items()
+        }
         return masks
 
     def _bootstrap_sky(self, image: np.ndarray, config: Any) -> Dict[str, Any]:
@@ -1617,6 +1724,17 @@ class SAM2SegmentationBackend(EfficientSAMBackend):
                 len(segments),
                 list(material_buckets.keys()),
             )
+            self._material_confidence_evidence = {
+                material: {
+                    "material_confidence": float(bucket[1]),
+                    "confidence_score_type": MATERIAL_CLASSIFIER_SCORE_TYPE,
+                    "raw_clip_similarity": None,
+                    "clip_softmax_probability": None,
+                    "clip_top2_margin": None,
+                    "calibration_version": MATERIALS_V3_CALIBRATION_VERSION,
+                }
+                for material, bucket in material_buckets.items()
+            }
             return {k: (v[0], float(v[1])) for k, v in material_buckets.items()}
 
         # No explicit labels: reuse existing CLIP/heuristic material labeling.

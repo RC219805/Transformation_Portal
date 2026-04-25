@@ -7,6 +7,20 @@ from typing import Any, Dict, List
 
 from .pixel_ops_registry import OP_REGISTRY
 
+APEX_PIXEL_OP_AUTHORITY_SCORE_TYPES = frozenset(
+    {
+        "clip_softmax_margin_v1",
+        "material_classifier_probability_v1",
+    }
+)
+RAW_OR_UNSUPPORTED_SCORE_TYPES = frozenset(
+    {
+        "raw_clip_similarity",
+        "heuristic_material_confidence_v1",
+        "missing_clip_score_fallback",
+    }
+)
+
 
 def _material_confidence_threshold(material_key: str, config: Any) -> float:
     """Return the fail-closed threshold for material classifier confidence."""
@@ -33,6 +47,34 @@ def _material_confidence(stats: Dict[str, Any]) -> float | None:
             continue
         if 0.0 <= confidence <= 1.0 and math.isfinite(confidence):
             return confidence
+    return None
+
+
+def _is_apex_tier(config: Any) -> bool:
+    return str(getattr(config, "quality_tier", "")).strip().lower() == "apex"
+
+
+def _confidence_score_type(stats: Dict[str, Any]) -> str | None:
+    value = stats.get("confidence_score_type")
+    if value is None:
+        return None
+    normalized = str(value).strip()
+    return normalized or None
+
+
+def _apex_confidence_authority_blocker(stats: Dict[str, Any], config: Any) -> str | None:
+    """Return the fail-closed reason when APEX lacks calibrated confidence."""
+    if not _is_apex_tier(config):
+        return None
+    if _material_confidence(stats) is None:
+        return "missing_material_confidence"
+    score_type = _confidence_score_type(stats)
+    if score_type is None:
+        return "missing_confidence_score_type"
+    if score_type in RAW_OR_UNSUPPORTED_SCORE_TYPES:
+        return "unsupported_confidence_score_type"
+    if score_type not in APEX_PIXEL_OP_AUTHORITY_SCORE_TYPES:
+        return "unsupported_confidence_score_type"
     return None
 
 
@@ -79,9 +121,13 @@ def decide_pixel_ops(
         mean_conf = float(stats.get("mean_conf", 0.0))
         base_confidence_threshold = float(getattr(config, "min_mean_conf", 0.2))
         material_confidence = _material_confidence(stats)
+        apex_confidence_blocker = _apex_confidence_authority_blocker(stats, config)
         if stats["coverage_px"] < min_coverage:
             eligible = False
             reason = "below_coverage_threshold"
+        elif apex_confidence_blocker is not None:
+            eligible = False
+            reason = apex_confidence_blocker
         elif material_confidence is not None and material_confidence < _material_confidence_threshold(
             material_key,
             config,
@@ -134,4 +180,10 @@ def decide_pixel_ops(
         "will_apply": will_apply,
         "blocked_by": blocked_by,
         "reason": reason,
+        "material_confidence": material_confidence,
+        "confidence_score_type": _confidence_score_type(stats),
+        "authority_score_type_accepted": (
+            not _is_apex_tier(config)
+            or (_confidence_score_type(stats) in APEX_PIXEL_OP_AUTHORITY_SCORE_TYPES and material_confidence is not None)
+        ),
     }

@@ -572,6 +572,7 @@ def test_segment_materials_sam2_backend_with_mock(sample_image, config_sam2, mon
     metadata = get_last_segmentation_runtime_metadata()
     assert metadata is not None
     assert metadata["material_confidences"]["glass"] == pytest.approx(0.91)
+    assert metadata["material_confidence_evidence"]["glass"]["confidence_score_type"] == "material_classifier_probability_v1"
     assert metadata["confidence_summary"]["count"] == 1
 
 
@@ -896,6 +897,8 @@ def test_efficientsam_clip_classification_batches_segments(sample_image, monkeyp
     assert result["stone"][1] == pytest.approx(1.0)
     metadata = backend.get_runtime_metadata()
     assert metadata["clip_classification"]["timing_ms"]["batch_size"] == 2.0
+    assert metadata["material_confidence_evidence"]["glass"]["confidence_score_type"] == "clip_softmax_margin_v1"
+    assert metadata["material_confidence_evidence"]["glass"]["raw_clip_similarity"] == pytest.approx(1.0)
 
 
 def test_segment_materials_cache_key_invalidates_on_config_change(sample_image, tmp_path, monkeypatch):

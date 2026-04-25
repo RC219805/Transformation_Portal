@@ -44,6 +44,22 @@ def _extract_material_confidences(segmentation_result: Dict[str, Any]) -> Dict[s
     return confidences
 
 
+def _extract_material_confidence_evidence(segmentation_result: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
+    evidence: Dict[str, Dict[str, Any]] = {}
+    sources = [segmentation_result.get("material_confidence_evidence")]
+    segmentation_metadata = segmentation_result.get("segmentation_metadata")
+    if isinstance(segmentation_metadata, dict):
+        sources.append(segmentation_metadata.get("material_confidence_evidence"))
+
+    for source in sources:
+        if not isinstance(source, dict):
+            continue
+        for material_key, value in source.items():
+            if isinstance(value, dict):
+                evidence[str(material_key)] = dict(value)
+    return evidence
+
+
 def _split_mask_and_confidence(value: Any, fallback_confidence: Optional[float]) -> tuple[Any, Optional[float]]:
     if isinstance(value, tuple) and len(value) == 2:
         mask, confidence = value
@@ -56,7 +72,12 @@ class MaterialsV3Engine:
     def __init__(self, config: Any) -> None:
         self.config = config
 
-    def _compute_mask_stats(self, mask: np.ndarray, material_confidence: Optional[float] = None) -> Dict[str, Any]:
+    def _compute_mask_stats(
+        self,
+        mask: np.ndarray,
+        material_confidence: Optional[float] = None,
+        confidence_evidence: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
         """Compute basic coverage/confidence stats."""
         mask_2d = np.asarray(mask, dtype=np.float32)
         if mask_2d.ndim == 3 and mask_2d.shape[-1] == 1:
@@ -82,6 +103,20 @@ class MaterialsV3Engine:
         }
         if material_confidence is not None:
             stats["material_confidence"] = material_confidence
+        if isinstance(confidence_evidence, dict):
+            for key in (
+                "confidence_score_type",
+                "raw_clip_similarity",
+                "clip_softmax_probability",
+                "clip_top2_margin",
+                "calibration_version",
+            ):
+                if key in confidence_evidence:
+                    stats[key] = confidence_evidence[key]
+            if "material_confidence" in confidence_evidence:
+                evidence_conf = _coerce_unit_confidence(confidence_evidence.get("material_confidence"))
+                if evidence_conf is not None:
+                    stats["material_confidence"] = evidence_conf
         return stats
 
     def process(
@@ -99,6 +134,7 @@ class MaterialsV3Engine:
         raw_materials = segmentation_result.get("materials") or segmentation_result.get("material_masks") or {}
         segmentation_metadata = segmentation_result.get("segmentation_metadata")
         material_confidences = _extract_material_confidences(segmentation_result)
+        material_confidence_evidence = _extract_material_confidence_evidence(segmentation_result)
         materials = {}
         for mat_key, value in raw_materials.items():
             material_key = str(mat_key)
@@ -110,7 +146,12 @@ class MaterialsV3Engine:
 
         per_class_stats = {}
         for mat_key, mask in segmentation_result.get("materials", {}).items():
-            stats = self._compute_mask_stats(mask, material_confidences.get(str(mat_key)))
+            material_key = str(mat_key)
+            stats = self._compute_mask_stats(
+                mask,
+                material_confidences.get(material_key),
+                material_confidence_evidence.get(material_key),
+            )
             per_class_stats[mat_key] = stats
         timing_ms["stats"] = round((time.perf_counter() - t_stats) * 1000.0, 3)
 
