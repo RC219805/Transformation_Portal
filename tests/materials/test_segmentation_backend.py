@@ -35,6 +35,7 @@ from transformation_portal.lux_depth_v3.segmentation_backend import (
     SAM2SegmentationBackend,
     StubBackend,
     _get_backend_instance,
+    _tensor_values_1d,
     get_last_segmentation_runtime_metadata,
     segment_materials,
 )
@@ -899,6 +900,33 @@ def test_efficientsam_clip_classification_batches_segments(sample_image, monkeyp
     assert metadata["clip_classification"]["timing_ms"]["batch_size"] == 2.0
     assert metadata["material_confidence_evidence"]["glass"]["confidence_score_type"] == "clip_softmax_margin_v1"
     assert metadata["material_confidence_evidence"]["glass"]["raw_clip_similarity"] == pytest.approx(1.0)
+
+
+def test_tensor_values_1d_falls_back_to_tolist_when_numpy_bridge_unavailable():
+    """Torch tensors can lose ``.numpy()`` support when NumPy ABI versions drift."""
+
+    class TensorLike:
+        def detach(self):
+            return self
+
+        def cpu(self):
+            return self
+
+        def float(self):
+            return self
+
+        def numpy(self):
+            raise RuntimeError("Numpy is not available")
+
+        def tolist(self):
+            return [0.1, 0.9, 0.2]
+
+        def values(self):
+            raise AssertionError("callable values method must not be treated as tensor data")
+
+    values = _tensor_values_1d(TensorLike())
+
+    assert values.tolist() == pytest.approx([0.1, 0.9, 0.2])
 
 
 def test_segment_materials_cache_key_invalidates_on_config_change(sample_image, tmp_path, monkeypatch):

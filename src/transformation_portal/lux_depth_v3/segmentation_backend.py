@@ -135,11 +135,18 @@ def _tensor_values_1d(value: Any) -> np.ndarray:
             if hasattr(value, "float"):
                 value = value.float()
             if hasattr(value, "numpy"):
-                return np.asarray(value.numpy(), dtype=np.float32).reshape(-1)
+                try:
+                    return np.asarray(value.numpy(), dtype=np.float32).reshape(-1)
+                except RuntimeError as exc:
+                    if "Numpy is not available" not in str(exc):
+                        raise
+            if hasattr(value, "tolist"):
+                return np.asarray(value.tolist(), dtype=np.float32).reshape(-1)
         except Exception:
             pass
-    if hasattr(value, "values"):
-        return np.asarray(value.values, dtype=np.float32).reshape(-1)
+    values = getattr(value, "values", None)
+    if values is not None and not callable(values):
+        return np.asarray(values, dtype=np.float32).reshape(-1)
     return np.asarray(value, dtype=np.float32).reshape(-1)
 
 
