@@ -182,8 +182,11 @@ def build_apex_evidence_bundle(
             if isinstance(candidate_output, Mapping):
                 candidate_output_path = candidate_output.get("path")
             candidate_output_path = candidate_output_path or candidate.get("output_path")
+            candidate_status = candidate.get("status")
             candidate_output_status = (
-                "present" if candidate_output_path and candidate.get("status") != "missing_candidate" else "missing"
+                "present"
+                if candidate_output_path and candidate_status not in {"missing_candidate", "missing_candidate_output"}
+                else "missing"
             )
             metrics_valid = _metrics_valid(candidate)
             case_verdict = (

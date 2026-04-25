@@ -138,6 +138,31 @@ def test_legacy_visible_delta_metrics_do_not_authorize_promotion(tmp_path):
     assert bundle["cases"][0]["metrics_status"] == "invalid"
 
 
+def test_legacy_missing_candidate_output_stays_missing_in_evidence_bundle(tmp_path):
+    report = _apex_report(tmp_path)
+    report["assets"][0]["candidates"][0] = {
+        "candidate": "materials_v3",
+        "status": "missing_candidate_output",
+        "output_path": str(tmp_path / "missing_candidate16.tif"),
+        "metrics": {},
+    }
+    evidence = _materials_evidence(tmp_path / "materials.json")
+
+    bundle = build_apex_evidence_bundle(
+        report,
+        output_dir=tmp_path / "bundle",
+        candidate_evidence={"materials_v3": {"unit_image": evidence}},
+        repo_root=tmp_path,
+    )
+
+    assert bundle["promotion_verdict"] == "blocked"
+    assert "missing_candidate_output" in bundle["promotion_blocked_reasons"]
+    case = bundle["cases"][0]
+    assert case["candidate_output"]["status"] == "missing"
+    assert case["candidate_output"]["path"] == str(tmp_path / "missing_candidate16.tif")
+    assert case["metrics_status"] == "invalid"
+
+
 def test_evidence_bundle_relative_output_uses_report_context(tmp_path):
     report = _apex_report(tmp_path)
     evidence = _materials_evidence(tmp_path / "materials.json")
