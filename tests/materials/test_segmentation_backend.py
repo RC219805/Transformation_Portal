@@ -35,6 +35,7 @@ from transformation_portal.lux_depth_v3.segmentation_backend import (
     SAM2SegmentationBackend,
     StubBackend,
     _get_backend_instance,
+    _tensor_values_1d,
     get_last_segmentation_runtime_metadata,
     segment_materials,
 )
@@ -348,7 +349,19 @@ def test_segment_materials_exposes_runtime_metadata(monkeypatch, sample_image):
             return {"glass": (np.ones((2, 2), dtype=np.float32), 0.9)}
 
         def get_runtime_metadata(self):
-            return {"clip_runtime": {"offline_mode": True, "weights_source": "cache_path"}}
+            return {
+                "clip_runtime": {"offline_mode": True, "weights_source": "cache_path"},
+                "material_confidence_evidence": {
+                    "glass": {
+                        "material_confidence": 0.9,
+                        "confidence_score_type": "material_classifier_probability_v1",
+                    },
+                    "stone": {
+                        "material_confidence": 0.2,
+                        "confidence_score_type": "material_classifier_probability_v1",
+                    },
+                },
+            }
 
     monkeypatch.setattr(seg_module, "_get_backend_instance", lambda *_args, **_kwargs: _FakeBackend())
 
@@ -359,6 +372,9 @@ def test_segment_materials_exposes_runtime_metadata(monkeypatch, sample_image):
     metadata = get_last_segmentation_runtime_metadata()
     assert metadata is not None
     assert metadata["clip_runtime"]["weights_source"] == "cache_path"
+    assert set(metadata["material_confidence_evidence"]) == {"glass"}
+    score_type = metadata["material_confidence_evidence"]["glass"]["confidence_score_type"]
+    assert score_type == "material_classifier_probability_v1"
 
 
 @pytest.mark.ml
@@ -572,6 +588,7 @@ def test_segment_materials_sam2_backend_with_mock(sample_image, config_sam2, mon
     metadata = get_last_segmentation_runtime_metadata()
     assert metadata is not None
     assert metadata["material_confidences"]["glass"] == pytest.approx(0.91)
+    assert metadata["material_confidence_evidence"]["glass"]["confidence_score_type"] == "material_classifier_probability_v1"
     assert metadata["confidence_summary"]["count"] == 1
 
 
@@ -768,7 +785,19 @@ def test_segment_materials_cache_hit_skips_backend(sample_image, tmp_path, monke
             return {"glass": (glass_mask, 0.91)}
 
         def get_runtime_metadata(self):
-            return {"clip_runtime": {"weights_source": "test"}}
+            return {
+                "clip_runtime": {"weights_source": "test"},
+                "material_confidence_evidence": {
+                    "glass": {
+                        "material_confidence": 0.91,
+                        "confidence_score_type": "material_classifier_probability_v1",
+                    },
+                    "stone": {
+                        "material_confidence": 0.2,
+                        "confidence_score_type": "material_classifier_probability_v1",
+                    },
+                },
+            }
 
     monkeypatch.setattr(seg_module, "_get_backend_instance", lambda *args, **kwargs: FakeBackend())
     config = EnhanceConfig(
@@ -791,6 +820,8 @@ def test_segment_materials_cache_hit_skips_backend(sample_image, tmp_path, monke
     assert second_metadata["backend"] == "efficientsam"
     assert first_metadata["material_confidences"]["glass"] == pytest.approx(0.91)
     assert second_metadata["material_confidences"]["glass"] == pytest.approx(0.91)
+    assert set(first_metadata["material_confidence_evidence"]) == {"glass"}
+    assert set(second_metadata["material_confidence_evidence"]) == {"glass"}
     assert second_metadata["confidence_summary"]["count"] == 1
 
 
@@ -896,6 +927,78 @@ def test_efficientsam_clip_classification_batches_segments(sample_image, monkeyp
     assert result["stone"][1] == pytest.approx(1.0)
     metadata = backend.get_runtime_metadata()
     assert metadata["clip_classification"]["timing_ms"]["batch_size"] == 2.0
+    assert metadata["material_confidence_evidence"]["glass"]["confidence_score_type"] == "clip_softmax_margin_v1"
+    assert metadata["material_confidence_evidence"]["glass"]["raw_clip_similarity"] == pytest.approx(1.0)
+
+
+def test_tensor_values_1d_falls_back_to_tolist_when_numpy_bridge_unavailable():
+    """Torch tensors can lose ``.numpy()`` support when NumPy ABI versions drift."""
+
+    class TensorLike:
+        def detach(self):
+            return self
+
+        def cpu(self):
+            return self
+
+        def float(self):
+            return self
+
+        def numpy(self):
+            raise RuntimeError("Numpy is not available")
+
+        def tolist(self):
+            return [0.1, 0.9, 0.2]
+
+        def values(self):
+            raise AssertionError("callable values method must not be treated as tensor data")
+
+    values = _tensor_values_1d(TensorLike())
+
+    assert values.tolist() == pytest.approx([0.1, 0.9, 0.2])
+
+
+def test_tensor_values_1d_does_not_swallow_unexpected_tensor_errors():
+    """Unexpected tensor conversion failures should remain visible to callers."""
+
+    class TensorLike:
+        def detach(self):
+            return self
+
+        def cpu(self):
+            return self
+
+        def float(self):
+            return self
+
+        def numpy(self):
+            raise AssertionError("unexpected tensor conversion failure")
+
+    with pytest.raises(AssertionError, match="unexpected tensor conversion failure"):
+        _tensor_values_1d(TensorLike())
+
+
+def test_tensor_values_1d_does_not_swallow_unexpected_runtime_errors():
+    """Only the known torch/NumPy ABI bridge failure may fall back to ``tolist``."""
+
+    class TensorLike:
+        def detach(self):
+            return self
+
+        def cpu(self):
+            return self
+
+        def float(self):
+            return self
+
+        def numpy(self):
+            raise RuntimeError("unexpected torch conversion failure")
+
+        def tolist(self):
+            raise AssertionError("unexpected RuntimeError must not fall back to tolist")
+
+    with pytest.raises(RuntimeError, match="unexpected torch conversion failure"):
+        _tensor_values_1d(TensorLike())
 
 
 def test_segment_materials_cache_key_invalidates_on_config_change(sample_image, tmp_path, monkeypatch):

@@ -372,6 +372,98 @@ def test_apex_strict_gate_requires_non_empty_material_masks(tmp_path, mock_depth
         orchestrator._enforce_apex_materials_gate({"materials": {}})
 
 
+def test_apex_strict_gate_fails_when_material_masks_apply_zero_pixel_ops(
+    tmp_path,
+    mock_depth_backend,
+    mock_da3_available,
+):
+    """APEX + Materials V3 should not silently succeed when all implemented ops are blocked."""
+    config = EnhanceConfig(
+        quality_tier="apex",
+        enable_materials_v3=True,
+        enable_material_segmentation=True,
+        material_segmentation_backend="sam2",
+        strict_backend=True,
+        apply_pixel_ops=True,
+        depth_device="cpu",
+        enable_v2=False,
+    )
+    orchestrator = EnhanceOrchestrator(config, tmp_path)
+    mask = np.ones((8, 8), dtype=np.float32)
+    materials_result = {
+        "material_masks": {"water": mask},
+        "materials_v3_pixel_ops": {
+            "enabled": True,
+            "applied": [],
+            "blocked": [
+                {
+                    "material": "water",
+                    "reason": "below_confidence_threshold",
+                    "blocked_by": ["below_confidence_threshold"],
+                }
+            ],
+        },
+    }
+
+    with pytest.raises(ApexStrictGateError, match="APEX_MATERIALS_PIXEL_OPS_EMPTY") as exc_info:
+        orchestrator._enforce_apex_materials_pixel_ops_gate(materials_result)
+
+    assert exc_info.value.code == "APEX_MATERIALS_PIXEL_OPS_EMPTY"
+    assert exc_info.value.details["blocked_reasons"] == {"below_confidence_threshold": 1}
+    assert exc_info.value.details["implemented_materials"] == ["water"]
+
+
+def test_apex_materials_stage_invokes_zero_pixel_ops_gate(
+    tmp_path,
+    mock_depth_backend,
+    mock_da3_available,
+):
+    """The live Materials V3 stage should fail before persisting a silent no-op handoff."""
+    config = EnhanceConfig(
+        quality_tier="apex",
+        enable_materials_v3=True,
+        enable_material_segmentation=True,
+        material_segmentation_backend="sam2",
+        strict_backend=True,
+        apply_pixel_ops=True,
+        depth_device="cpu",
+        enable_v2=False,
+        emit_master16=False,
+        emit_upscaled16=False,
+    )
+    orchestrator = EnhanceOrchestrator(config, tmp_path)
+    mask = np.ones((32, 32), dtype=np.float32)
+    segmentation_metadata = {
+        "material_confidences": {"water": 0.9},
+        "material_confidence_evidence": {
+            "water": {
+                "material_confidence": 0.9,
+                "confidence_score_type": "raw_clip_similarity",
+                "raw_clip_similarity": 0.9,
+                "clip_softmax_probability": None,
+                "clip_top2_margin": None,
+                "calibration_version": None,
+            }
+        },
+    }
+
+    with (
+        patch("transformation_portal.lux_depth_v3.segmentation_backend.segment_materials", return_value={"water": mask}),
+        patch(
+            "transformation_portal.lux_depth_v3.segmentation_backend.get_last_segmentation_runtime_metadata",
+            return_value=segmentation_metadata,
+        ),
+        pytest.raises(ApexStrictGateError, match="APEX_MATERIALS_PIXEL_OPS_EMPTY") as exc_info,
+    ):
+        orchestrator._run_materials_v3_stage(
+            preprocessed_array=np.ones((32, 32, 3), dtype=np.float32) * 0.5,
+            depth_map=np.ones((32, 32), dtype=np.float32),
+            output_key=Path("apex/noop"),
+        )
+
+    assert exc_info.value.details["blocked_reasons"] == {"unsupported_confidence_score_type": 1}
+
+
 def test_apex_strict_gate_not_applied_outside_apex(tmp_path, mock_depth_backend, mock_da3_available):
     """Standard tier should not enforce apex-only gate constraints."""
     config = EnhanceConfig(

@@ -398,6 +398,8 @@ def apply_pixel_ops(
                     "reason": decision.get("reason", "not_recommended"),
                     "blocked_by": decision.get("blocked_by", []),
                     "recommended_ops": recommended_ops,
+                    "material_confidence": decision.get("material_confidence"),
+                    "confidence_score_type": decision.get("confidence_score_type"),
                 }
             )
             continue
@@ -558,6 +560,8 @@ def apply_pixel_ops(
                 "timing_ms": round(elapsed_ms, 3),
                 "delta_stats": delta_stats,
                 "feather_sigma": feather_sigma,
+                "material_confidence": decision.get("material_confidence"),
+                "confidence_score_type": decision.get("confidence_score_type"),
                 "bbox_padding": pad,
                 "low_tex_guard": {
                     "applied": bool(is_low_tex_large),

@@ -35,7 +35,7 @@ from enum import Enum
 from functools import lru_cache
 from multiprocessing import cpu_count
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, cast
+from typing import Any, Callable, Dict, List, Mapping, Optional, cast
 
 import numpy as np
 
@@ -2838,6 +2838,7 @@ class EnhanceOrchestrator:
                         artifact_shape=artifact_shape,
                         processing_shape=_shape_2d(preprocessed_array),
                     )
+                self._enforce_apex_materials_pixel_ops_gate(materials_v3_result)
 
                 material_masks = materials_v3_result.get("material_masks")
                 if isinstance(material_masks, dict) and material_masks:
@@ -4721,6 +4722,67 @@ class EnhanceOrchestrator:
                 " with 0 Materials V3"
                 " operations.",
             )
+
+    @staticmethod
+    def _pixel_ops_blocked_reasons(pixel_ops: Mapping[str, Any]) -> Dict[str, int]:
+        histogram: Dict[str, int] = {}
+        blocked = pixel_ops.get("blocked")
+        if not isinstance(blocked, list):
+            return histogram
+        for entry in blocked:
+            if not isinstance(entry, dict):
+                continue
+            reasons = entry.get("blocked_by")
+            if isinstance(reasons, list) and reasons:
+                for reason in reasons:
+                    reason_key = str(reason)
+                    histogram[reason_key] = histogram.get(reason_key, 0) + 1
+            else:
+                reason_key = str(entry.get("reason") or "unknown")
+                histogram[reason_key] = histogram.get(reason_key, 0) + 1
+        return histogram
+
+    def _enforce_apex_materials_pixel_ops_gate(self, materials_v3_result: Optional[Dict[str, Any]]) -> None:
+        """Fail closed when APEX Materials V3 silently produces no pixel ops."""
+        if not self._is_apex_materials_gate_enabled():
+            return
+        if not bool(getattr(self.config, "apply_pixel_ops", False)):
+            return
+        if not isinstance(materials_v3_result, dict):
+            return
+
+        material_masks = materials_v3_result.get("material_masks")
+        if not isinstance(material_masks, dict) or not material_masks:
+            return
+
+        from .pixel_ops_registry import OP_REGISTRY
+
+        implemented_materials = [
+            material
+            for material in material_masks
+            if any(op.implemented for op in OP_REGISTRY.get(str(material), {}).values())
+        ]
+        if not implemented_materials:
+            return
+
+        pixel_ops = materials_v3_result.get("materials_v3_pixel_ops")
+        if not isinstance(pixel_ops, dict):
+            return
+        applied_ops = pixel_ops.get("applied")
+        if isinstance(applied_ops, list) and applied_ops:
+            return
+
+        blocked_reasons = self._pixel_ops_blocked_reasons(pixel_ops)
+        raise ApexStrictGateError(
+            "APEX_MATERIALS_PIXEL_OPS_EMPTY",
+            "Material masks were detected, but every implemented Materials V3 pixel operation was blocked.",
+            details={
+                "material_count": len(material_masks),
+                "implemented_materials": [str(material) for material in implemented_materials],
+                "applied_ops_count": 0,
+                "blocked_reasons": blocked_reasons,
+            },
+        )
 
     def _load_cached_depth(
         self,
