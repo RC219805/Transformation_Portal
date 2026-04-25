@@ -84,4 +84,6 @@ The first non-synthetic APEX evidence workflow is documented in:
 
 `docs/validation/APEX_REAL_CANONICAL_EVIDENCE_RUNBOOK.md`
 
-Generated evidence outputs must remain uncommitted unless a later redacted-fixture policy explicitly allows them.
+Generated evidence outputs must remain uncommitted unless they satisfy the redacted fixture policy:
+
+`docs/validation/APEX_REDACTED_EVIDENCE_FIXTURE_POLICY.md`
