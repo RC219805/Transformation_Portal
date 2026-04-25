@@ -197,23 +197,51 @@ def asset_status(evalset: ApexEvalSet, asset: ApexEvalAsset) -> dict[str, Any]:
     }
 
 
+def _visible_delta_unavailable(status: str, **extra: Any) -> dict[str, Any]:
+    return {
+        "status": status,
+        "ssim": None,
+        "lpips": None,
+        "delta_e_proxy_mean_abs": None,
+        "delta_e_proxy_max_abs": None,
+        "metric_warnings": [],
+        **extra,
+    }
+
+
+def _load_rgb_image(path: Path, *, role: str) -> tuple[np.ndarray | None, dict[str, Any] | None]:
+    from PIL import Image, UnidentifiedImageError
+
+    try:
+        with Image.open(path) as image:
+            rgb = image.convert("RGB")
+            return np.asarray(rgb, dtype=np.float32) / 255.0, None
+    except (OSError, ValueError, UnidentifiedImageError) as exc:
+        return None, _visible_delta_unavailable(
+            "unreadable_image",
+            unreadable_role=role,
+            unreadable_path=str(path),
+            error=str(exc),
+        )
+
+
 def visible_delta_metrics(reference: Path, candidate: Path) -> dict[str, Any]:
     """Compute deterministic visible-delta metrics for two rendered images."""
-    from PIL import Image
+    ref, ref_error = _load_rgb_image(reference, role="reference")
+    if ref_error is not None:
+        return ref_error
+    cand, cand_error = _load_rgb_image(candidate, role="candidate")
+    if cand_error is not None:
+        return cand_error
 
-    ref = np.asarray(Image.open(reference).convert("RGB"), dtype=np.float32) / 255.0
-    cand = np.asarray(Image.open(candidate).convert("RGB"), dtype=np.float32) / 255.0
+    assert ref is not None
+    assert cand is not None
     if ref.shape != cand.shape:
-        return {
-            "status": "shape_mismatch",
-            "reference_shape": list(ref.shape),
-            "candidate_shape": list(cand.shape),
-            "ssim": None,
-            "lpips": None,
-            "delta_e_proxy_mean_abs": None,
-            "delta_e_proxy_max_abs": None,
-            "metric_warnings": [],
-        }
+        return _visible_delta_unavailable(
+            "shape_mismatch",
+            reference_shape=list(ref.shape),
+            candidate_shape=list(cand.shape),
+        )
 
     abs_delta = np.abs(cand - ref)
     metric_warnings: list[str] = []

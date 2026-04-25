@@ -929,6 +929,26 @@ def test_tensor_values_1d_falls_back_to_tolist_when_numpy_bridge_unavailable():
     assert values.tolist() == pytest.approx([0.1, 0.9, 0.2])
 
 
+def test_tensor_values_1d_does_not_swallow_unexpected_tensor_errors():
+    """Unexpected tensor conversion failures should remain visible to callers."""
+
+    class TensorLike:
+        def detach(self):
+            return self
+
+        def cpu(self):
+            return self
+
+        def float(self):
+            return self
+
+        def numpy(self):
+            raise AssertionError("unexpected tensor conversion failure")
+
+    with pytest.raises(AssertionError, match="unexpected tensor conversion failure"):
+        _tensor_values_1d(TensorLike())
+
+
 def test_segment_materials_cache_key_invalidates_on_config_change(sample_image, tmp_path, monkeypatch):
     """Cache keys should include segmentation-affecting configuration."""
     import transformation_portal.lux_depth_v3.segmentation_backend as seg_module

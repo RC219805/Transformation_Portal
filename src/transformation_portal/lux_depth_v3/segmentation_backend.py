@@ -142,8 +142,8 @@ def _tensor_values_1d(value: Any) -> np.ndarray:
                         raise
             if hasattr(value, "tolist"):
                 return np.asarray(value.tolist(), dtype=np.float32).reshape(-1)
-        except Exception:
-            pass
+        except (AttributeError, RuntimeError, TypeError, ValueError):
+            logger.debug("Tensor-like value conversion failed; falling back to array coercion", exc_info=True)
     values = getattr(value, "values", None)
     if values is not None and not callable(values):
         return np.asarray(values, dtype=np.float32).reshape(-1)

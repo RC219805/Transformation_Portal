@@ -50,6 +50,16 @@ def _write_evalset(root: Path, asset_path: Path, *, sha256: str | None = None) -
     return path
 
 
+def _load_tool_module(script_name: str, module_name: str):
+    script_path = Path(__file__).resolve().parents[2] / "tools" / script_name
+    spec = importlib.util.spec_from_file_location(module_name, script_path)
+    assert spec is not None
+    assert spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def test_apex_eval_report_tracks_ready_assets_and_candidate_metrics(tmp_path):
     image_path = tmp_path / "input.png"
     candidate_path = tmp_path / "candidate.png"
@@ -97,12 +107,7 @@ def test_run_apex_eval_returns_nonzero_for_non_ready_assets(tmp_path, monkeypatc
     image_path.unlink()
     output_dir = tmp_path / "report"
 
-    script_path = Path(__file__).resolve().parents[2] / "tools" / "run_apex_eval.py"
-    spec = importlib.util.spec_from_file_location("run_apex_eval_unit", script_path)
-    assert spec is not None
-    assert spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
+    module = _load_tool_module("run_apex_eval.py", "run_apex_eval_unit")
 
     monkeypatch.setattr(
         sys,
@@ -123,6 +128,52 @@ def test_run_apex_eval_returns_nonzero_for_non_ready_assets(tmp_path, monkeypatc
     assert "non-ready assets: unit_image" in capsys.readouterr().out
 
 
+def test_run_apex_eval_returns_stable_input_error_for_bad_candidate_output(tmp_path, monkeypatch, capsys):
+    module = _load_tool_module("run_apex_eval.py", "run_apex_eval_bad_candidate_unit")
+
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "run_apex_eval.py",
+            "--evalset",
+            str(tmp_path / "missing_evalset"),
+            "--output-dir",
+            str(tmp_path / "report"),
+            "--candidate-output",
+            "not-valid",
+        ],
+    )
+
+    assert module.main() == 2
+    captured = capsys.readouterr()
+    assert "APEX eval error:" in captured.err
+    assert "expected candidate:asset_id=path" in captured.err
+
+
+def test_benchmark_depth_backends_returns_stable_input_error_for_missing_evalset(tmp_path, monkeypatch, capsys):
+    module = _load_tool_module("benchmark_depth_backends.py", "benchmark_depth_backends_missing_evalset_unit")
+
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "benchmark_depth_backends.py",
+            "--evalset",
+            str(tmp_path / "missing_evalset"),
+            "--backends",
+            "da3-metric",
+            "--output-dir",
+            str(tmp_path / "benchmark"),
+        ],
+    )
+
+    assert module.main() == 2
+    captured = capsys.readouterr()
+    assert "Depth backend benchmark error:" in captured.err
+    assert "missing_evalset" in captured.err
+
+
 def test_visible_delta_metrics_marks_lpips_unavailable_as_partial(tmp_path, monkeypatch):
     reference_path = tmp_path / "reference.png"
     candidate_path = tmp_path / "candidate.png"
@@ -137,6 +188,21 @@ def test_visible_delta_metrics_marks_lpips_unavailable_as_partial(tmp_path, monk
     assert metrics["lpips"] is None
     assert "lpips_unavailable" in metrics["metric_warnings"]
     assert metrics["ssim"] == pytest.approx(1.0)
+
+
+def test_visible_delta_metrics_reports_unreadable_candidate(tmp_path):
+    reference_path = tmp_path / "reference.png"
+    candidate_path = tmp_path / "candidate.txt"
+    Image.fromarray(np.zeros((8, 8, 3), dtype=np.uint8)).save(reference_path)
+    candidate_path.write_text("not an image", encoding="utf-8")
+
+    metrics = visible_delta_metrics(reference_path, candidate_path)
+
+    assert metrics["status"] == "unreadable_image"
+    assert metrics["unreadable_role"] == "candidate"
+    assert metrics["unreadable_path"] == str(candidate_path)
+    assert metrics["ssim"] is None
+    assert metrics["lpips"] is None
 
 
 def test_load_apex_evalset_rejects_checksum_drift_in_report(tmp_path):

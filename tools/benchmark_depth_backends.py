@@ -9,6 +9,7 @@ a runner callable for tests and for future live-execution wiring.
 from __future__ import annotations
 
 import argparse
+import sys
 from pathlib import Path
 
 from transformation_portal.evals.apex_visual import build_depth_backend_benchmark_report
@@ -40,14 +41,18 @@ def main() -> int:
     args = parser.parse_args()
 
     backends = [item.strip() for item in args.backends.split(",") if item.strip()]
-    report = build_depth_backend_benchmark_report(
-        Path(args.evalset),
-        backends=backends,
-        quality_tier=args.quality_tier,
-        output_dir=Path(args.output_dir),
-        non_commercial_ok=args.non_commercial_ok,
-        accept_depth_pro_license=args.accept_apple_depth_pro_research_license,
-    )
+    try:
+        report = build_depth_backend_benchmark_report(
+            Path(args.evalset),
+            backends=backends,
+            quality_tier=args.quality_tier,
+            output_dir=Path(args.output_dir),
+            non_commercial_ok=args.non_commercial_ok,
+            accept_depth_pro_license=args.accept_apple_depth_pro_research_license,
+        )
+    except (OSError, ValueError) as exc:
+        print(f"Depth backend benchmark error: {exc}", file=sys.stderr)
+        return 2
     if args.emit_comparison_report == "on":
         print(Path(args.output_dir) / "depth_backend_comparison_report.json")
     blocked = [item["backend"] for item in report["backends"] if item["status"] == "license_blocked"]

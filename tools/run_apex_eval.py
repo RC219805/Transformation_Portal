@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import sys
 from pathlib import Path
 
 from transformation_portal.evals.apex_visual import build_apex_eval_report, parse_candidate_outputs
@@ -28,12 +29,16 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    candidate_outputs = parse_candidate_outputs(args.candidate_output)
-    report = build_apex_eval_report(
-        Path(args.evalset),
-        output_dir=Path(args.output_dir),
-        candidate_outputs=candidate_outputs,
-    )
+    try:
+        candidate_outputs = parse_candidate_outputs(args.candidate_output)
+        report = build_apex_eval_report(
+            Path(args.evalset),
+            output_dir=Path(args.output_dir),
+            candidate_outputs=candidate_outputs,
+        )
+    except (OSError, ValueError) as exc:
+        print(f"APEX eval error: {exc}", file=sys.stderr)
+        return 2
     if args.emit_report == "on":
         print(Path(args.output_dir) / "apex_eval_report.json")
     missing = [item["asset_id"] for item in report["assets"] if item["asset_status"]["status"] not in {"ready"}]
