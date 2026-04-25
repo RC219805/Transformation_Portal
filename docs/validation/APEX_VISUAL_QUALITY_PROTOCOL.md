@@ -43,6 +43,12 @@ validated 16-bit source references.
 Large source images are not committed as eval artifacts. The runner reports missing assets as `missing_asset` and
 checksum drift as `checksum_mismatch`.
 
+Canonical assets may be resolved from an external asset root using `--asset-root` or `APEX_EVAL_ASSET_ROOT`.
+Resolution order is absolute manifest path, explicit CLI asset root, environment asset root, then repository-relative
+behavior. Reports include portable `asset_resolution` metadata by default and do not emit full local resolved paths.
+Relative `asset_ref` and `reference_path` values that escape the selected asset root fail closed with
+`path_escapes_asset_root`.
+
 Camera-original RAW files such as DNG, CR2/CR3, NEF, ARW, RAF, ORF, and RW2 may be recorded as provenance assets.
 They are not canonical scoring targets. `source_raw_path`, `raw_development_profile`, ICC/profile fields, and
 working-color fields are metadata-only in the v1 provenance contract; they are not resolved, loaded, or
@@ -75,6 +81,16 @@ Run:
   --emit-report on
 ```
 
+For external canonical assets:
+
+```bash
+APEX_EVAL_ASSET_ROOT=/Volumes/apex_eval_assets \
+.venv/bin/python tools/run_apex_eval.py \
+  --evalset evalsets/apex_real_estate_v1/evalset.example.json \
+  --output-dir output/apex_eval \
+  --emit-report on
+```
+
 The output is `apex_eval_report.json`. It records corpus readiness and, when candidate outputs are supplied,
 visible-delta metrics:
 
@@ -101,6 +117,18 @@ Depth benchmark reports also separate model input derivation from the evaluation
 depth backends may consume normalized 8-bit or downsampled tensors, but benchmark cases must still record the
 16-bit source path as `evaluation_target` when one exists. RAW and working-color provenance belongs under
 `evaluation_target`, not `model_input`.
+
+APEX evidence bundles may attach existing candidate outputs and explicit Materials V3 telemetry:
+
+```bash
+.venv/bin/python tools/run_apex_eval.py \
+  --evalset evalsets/apex_real_estate_v1/evalset.example.json \
+  --asset-root /Volumes/apex_eval_assets \
+  --output-dir output/apex_eval \
+  --candidate-output materials_v3:pool_water_stone_001=output/pool_materials_v3_master16.tif \
+  --candidate-evidence materials_v3:pool_water_stone_001=output/pool_materials_v3_evidence.json \
+  --emit-evidence-bundle on
+```
 
 ## 16-Bit Working Path
 

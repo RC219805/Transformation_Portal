@@ -20,6 +20,18 @@ Depth Pro is a quality yardstick, not a deployable default.
   --emit-comparison-report on
 ```
 
+For external canonical assets, pass an asset root explicitly or set `APEX_EVAL_ASSET_ROOT`:
+
+```bash
+.venv/bin/python tools/benchmark_depth_backends.py \
+  --evalset evalsets/apex_real_estate_v1/evalset.example.json \
+  --asset-root /Volumes/apex_eval_assets \
+  --backends da3-metric,depth_pro \
+  --quality-tier apex \
+  --output-dir output/depth_backend_benchmark \
+  --emit-comparison-report on
+```
+
 Depth Pro remains `license_blocked` unless the operator explicitly passes:
 
 ```bash
@@ -41,6 +53,7 @@ The tool emits `depth_backend_comparison_report.json` with:
 - provenance, skip, and error fields
 
 The default command is offline-safe and records assets as `not_executed` until a live execution runner is wired in. Unit tests must not download models.
+Report metadata includes portable asset-resolution fields and omits full local resolved paths by default.
 
 ## Promotion Rule
 
