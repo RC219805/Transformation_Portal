@@ -92,7 +92,7 @@ APEX_EVAL_ASSET_ROOT=/Volumes/apex_eval_assets \
 ```
 
 The output is `apex_eval_report.json`. It records corpus readiness and, when candidate outputs are supplied,
-visible-delta metrics:
+authoritative `apex_metrics.v1` candidate metrics:
 
 ```bash
 .venv/bin/python tools/run_apex_eval.py \
@@ -112,6 +112,12 @@ Readiness and canonical scoring eligibility are separate report concepts. A read
 Each asset report records `asset_role`, `reference_bit_depth`, `reference_format`, `reference_color_space`,
 `canonical_scoring_eligible`, and `canonical_scoring_blocked_reason`. Optional RAW, ICC/profile, and working-color
 provenance fields are emitted only when present.
+
+Candidate-output scoring compares against `reference_path`, not `asset_ref`. For canonical assets, the reference and
+candidate output must be readable 16-bit TIFF/TIF images with matching dimensions; mismatches fail closed and are not
+resized. Candidate entries use `metric_contract=apex_metrics.v1` and `metrics_authoritative=true` only when
+`compute_apex_metrics` produced valid metric-status evidence. Legacy visible-delta-only metrics are compatibility
+evidence and are not promotion-authoritative.
 
 Depth benchmark reports also separate model input derivation from the evaluation target. Depth Pro, DA3, and other
 depth backends may consume normalized 8-bit or downsampled tensors, but benchmark cases must still record the

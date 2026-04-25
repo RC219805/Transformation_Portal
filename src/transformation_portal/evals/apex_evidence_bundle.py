@@ -9,6 +9,7 @@ from typing import Any, Iterable, Mapping
 from transformation_portal.ingest.canonical_json import dump_json
 
 APEX_EVIDENCE_BUNDLE_VERSION = "apex_evidence_bundle.v1"
+APEX_METRIC_CONTRACT_VERSION = "apex_metrics.v1"
 APEX_MATERIALS_PIXEL_OPS_EMPTY = "APEX_MATERIALS_PIXEL_OPS_EMPTY"
 
 
@@ -74,17 +75,35 @@ def _metrics_valid(candidate: Mapping[str, Any]) -> bool:
     status = candidate.get("status")
     if status in {
         "missing_candidate_output",
+        "missing_candidate",
+        "missing_reference",
         "source_not_ready",
         "shape_mismatch",
+        "dimension_mismatch",
         "invalid_candidate_dimensions",
         "unreadable_image",
+        "unreadable_reference",
+        "unreadable_candidate",
+        "unsupported_reference_bit_depth",
+        "unsupported_candidate_bit_depth",
+        "metrics_not_computed",
     }:
+        return False
+    if status != "ok":
+        return False
+    if candidate.get("metric_contract") != APEX_METRIC_CONTRACT_VERSION:
+        return False
+    if candidate.get("metrics_authoritative") is not True:
         return False
     metrics = candidate.get("metrics")
     if not isinstance(metrics, Mapping):
         return False
     for value in metrics.values():
-        if isinstance(value, Mapping) and value.get("status") in {"invalid_input", "dimension_mismatch"}:
+        if isinstance(value, Mapping) and value.get("status") in {
+            "invalid_input",
+            "dimension_mismatch",
+            "unsupported_bit_depth",
+        }:
             return False
     return True
 
@@ -158,7 +177,14 @@ def build_apex_evidence_bundle(
             evidence_path = candidate_evidence.get(candidate_id, {}).get(str(asset.get("asset_id")))
             evidence_payload = _load_evidence(evidence_path, repo_root=repo) if evidence_path is not None else None
             materials = _materials_status(candidate_id, evidence_payload)
-            candidate_output_status = "present" if candidate.get("output_path") else "missing"
+            candidate_output = candidate.get("candidate_output")
+            candidate_output_path = None
+            if isinstance(candidate_output, Mapping):
+                candidate_output_path = candidate_output.get("path")
+            candidate_output_path = candidate_output_path or candidate.get("output_path")
+            candidate_output_status = (
+                "present" if candidate_output_path and candidate.get("status") != "missing_candidate" else "missing"
+            )
             metrics_valid = _metrics_valid(candidate)
             case_verdict = (
                 "pass"
@@ -179,13 +205,14 @@ def build_apex_evidence_bundle(
                         "allow_downsampled_model_inference": asset.get("allow_downsampled_model_inference"),
                     },
                     "evaluation_target": {
-                        "path": asset.get("reference_path"),
+                        "path": candidate.get("evaluation_target_path") or asset.get("reference_path"),
                         "evaluate_at_native_resolution": asset.get("evaluate_at_native_resolution"),
                         "preserve_16bit_intermediates": asset.get("preserve_16bit_intermediates"),
+                        "reference_resolution": candidate.get("reference_resolution"),
                     },
                     "candidate_output": {
                         "status": candidate_output_status,
-                        "path": candidate.get("output_path"),
+                        "path": candidate_output_path,
                     },
                     "materials_v3": materials,
                     "depth": {},
