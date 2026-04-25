@@ -77,7 +77,7 @@ def test_validation_docs_apex_commands_use_current_cli_options():
         if unknown_options:
             failures.append(f"{doc_path.relative_to(REPO_ROOT)} {script_path}: {', '.join(unknown_options)}")
 
-    assert failures == []
+    assert not failures
 
 
 def test_real_canonical_runbook_audit_command_uses_current_cli_options():
@@ -99,8 +99,8 @@ def test_real_canonical_runbook_evidence_command_uses_current_cli_options():
     assert all(options <= known_options for options in commands)
 
 
-def test_real_canonical_runbook_evidence_command_documents_required_flags():
-    required = {
+def test_real_canonical_runbook_scoped_evidence_example_documents_scope_flags():
+    scoped_example_flags = {
         "--asset-root",
         "--candidate-output",
         "--candidate-evidence",
@@ -110,7 +110,7 @@ def test_real_canonical_runbook_evidence_command_documents_required_flags():
     }
     commands = _commands_for_doc(REAL_CANONICAL_RUNBOOK, "tools/run_apex_eval.py")
 
-    assert any(required.issubset(options) for options in commands)
+    assert any(scoped_example_flags.issubset(options) for options in commands)
 
 
 def test_real_canonical_runbook_full_manifest_command_mentions_all_three_asset_ids():

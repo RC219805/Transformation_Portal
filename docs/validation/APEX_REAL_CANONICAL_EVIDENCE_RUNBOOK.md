@@ -112,9 +112,10 @@ export APEX_EVAL_ASSET_ROOT="$HOME/apex_eval_assets"
   --synthetic-data off
 ```
 
-## Expected Fail-Closed Reasons
+## Evidence Statuses And Promotion Reasons
 
-Promotion can be blocked by:
+Asset audit and candidate comparison entries can report per-asset or
+per-candidate statuses such as:
 
 - `missing_asset`
 - `path_escapes_asset_root`
@@ -126,6 +127,16 @@ Promotion can be blocked by:
 - `unsupported_candidate_bit_depth`
 - `dimension_mismatch`
 - `metrics_not_computed`
+
+These statuses are useful for troubleshooting the underlying asset or candidate
+failure. They are not all emitted directly as run-level
+`promotion_blocked_reasons`.
+
+Evidence bundle `promotion_blocked_reasons` currently include:
+
+- `zero_canonical_eligible_assets`
+- `missing_candidate_output`
+- `invalid_metrics`
 - `missing_materials_v3_evidence`
 - `synthetic_data`
 - `APEX_MATERIALS_PIXEL_OPS_EMPTY`
