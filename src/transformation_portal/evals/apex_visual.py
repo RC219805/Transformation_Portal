@@ -13,6 +13,7 @@ import json
 import math
 import re
 import time
+import zipfile
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Iterable, Mapping, Sequence
@@ -723,6 +724,84 @@ def _candidate_report_base(
     return payload
 
 
+def _invalid_mask_metric(reason: str, comparison: Mapping[str, Any]) -> dict[str, Any]:
+    return {
+        "status": "invalid_input",
+        "reason": reason,
+        "value": None,
+        "comparison": dict(comparison),
+    }
+
+
+def _mask_evidence_not_supplied() -> dict[str, Any]:
+    return {"status": "not_supplied"}
+
+
+def _invalid_mask_evidence(reason: str, reported_path: str) -> dict[str, Any]:
+    return {
+        "status": "invalid",
+        "reason": reason,
+        "reported_path": reported_path,
+    }
+
+
+def _candidate_mask_path(mask_value: Path | str, *, repo_root: Path) -> tuple[Path, str]:
+    mask_path = Path(mask_value)
+    reported_path = str(mask_value)
+    if not mask_path.is_absolute():
+        mask_path = repo_root / mask_path
+    return mask_path, reported_path
+
+
+def _load_candidate_mask_union(
+    mask_value: Path | str | None,
+    *,
+    repo_root: Path,
+    expected_shape: tuple[int, int],
+) -> tuple[np.ndarray | None, dict[str, Any]]:
+    if mask_value is None:
+        return None, _mask_evidence_not_supplied()
+
+    mask_path, reported_path = _candidate_mask_path(mask_value, repo_root=repo_root)
+    if not mask_path.is_file():
+        return None, _invalid_mask_evidence("candidate_mask_missing", reported_path)
+
+    try:
+        with np.load(mask_path, allow_pickle=False) as payload:
+            keys = sorted(payload.files)
+            if not keys:
+                return None, _invalid_mask_evidence("candidate_mask_empty", reported_path)
+
+            union = np.zeros(expected_shape, dtype=bool)
+            valid_mask_count = 0
+            for key in keys:
+                array = np.asarray(payload[key])
+                if array.ndim != 2:
+                    continue
+                if array.shape != expected_shape:
+                    return None, _invalid_mask_evidence("candidate_mask_dimension_mismatch", reported_path)
+                union |= array.astype(bool)
+                valid_mask_count += 1
+    except (OSError, ValueError, TypeError, EOFError, zipfile.BadZipFile):
+        return None, _invalid_mask_evidence("candidate_mask_invalid_npz", reported_path)
+
+    if valid_mask_count == 0:
+        return None, _invalid_mask_evidence("candidate_mask_no_2d_arrays", reported_path)
+    union_nonzero_pixels = int(np.count_nonzero(union))
+    if union_nonzero_pixels == 0:
+        return None, _invalid_mask_evidence("candidate_mask_empty", reported_path)
+
+    return union, {
+        "status": "ok",
+        "reported_path": reported_path,
+        "format": "npz",
+        "mask_count": valid_mask_count,
+        "union_shape": [int(expected_shape[0]), int(expected_shape[1])],
+        "union_nonzero_pixels": union_nonzero_pixels,
+        "source": "candidate_mask",
+    }
+
+
 def _read_image_array(path: Path, *, require_16bit_tiff: bool, role: str) -> tuple[np.ndarray | None, str | None, str | None]:
     if require_16bit_tiff:
         array, metadata = load_16bit_tiff(path)
@@ -752,11 +831,13 @@ def _candidate_metrics_report(
     asset_report_status: Mapping[str, Any],
     candidate_name: str,
     output_value: Path | str | None,
+    mask_value: Path | str | None = None,
 ) -> dict[str, Any]:
     reference_resolution = evalset.resolve_reference(asset)
     candidate_path = Path(output_value) if output_value is not None else None
     if candidate_path is not None and not candidate_path.is_absolute():
         candidate_path = evalset.repo_root / candidate_path
+    mask_evidence = _mask_evidence_not_supplied() if mask_value is None else None
 
     if candidate_path is None or not candidate_path.is_file():
         return _candidate_report_base(
@@ -765,6 +846,7 @@ def _candidate_metrics_report(
             candidate_path=candidate_path,
             reference_resolution=reference_resolution,
             reason="candidate_output_missing",
+            extra={"mask_evidence": mask_evidence or _mask_evidence_not_supplied()},
         )
 
     if asset_report_status.get("status") != "ready":
@@ -774,6 +856,7 @@ def _candidate_metrics_report(
             candidate_path=candidate_path,
             reference_resolution=reference_resolution,
             reason=f"asset_status_{asset_report_status.get('status')}",
+            extra={"mask_evidence": mask_evidence or _mask_evidence_not_supplied()},
         )
 
     reference_path = reference_resolution.resolved_path
@@ -784,6 +867,7 @@ def _candidate_metrics_report(
             candidate_path=candidate_path,
             reference_resolution=reference_resolution,
             reason="reference_path_missing_or_unresolved",
+            extra={"mask_evidence": mask_evidence or _mask_evidence_not_supplied()},
         )
 
     canonical_comparison = (
@@ -803,6 +887,7 @@ def _candidate_metrics_report(
             candidate_path=candidate_path,
             reference_resolution=reference_resolution,
             reason=reference_reason,
+            extra={"mask_evidence": mask_evidence or _mask_evidence_not_supplied()},
         )
 
     candidate, candidate_status, candidate_reason = _read_image_array(
@@ -817,13 +902,20 @@ def _candidate_metrics_report(
             candidate_path=candidate_path,
             reference_resolution=reference_resolution,
             reason=candidate_reason,
+            extra={"mask_evidence": mask_evidence or _mask_evidence_not_supplied()},
         )
 
     assert reference is not None
     assert candidate is not None
+    mask, mask_evidence = _load_candidate_mask_union(
+        mask_value,
+        repo_root=evalset.repo_root,
+        expected_shape=(int(reference.shape[0]), int(reference.shape[1])),
+    )
     metrics = compute_apex_metrics(
         reference,
         candidate,
+        mask=mask,
         working_color_space=asset.working_color_space,
         working_transfer_function=asset.working_transfer_function,
     )
@@ -836,6 +928,7 @@ def _candidate_metrics_report(
             reference_resolution=reference_resolution,
             metrics=metrics,
             reason="dimension_mismatch",
+            extra={"mask_evidence": mask_evidence},
         )
     if visible_status != "ok":
         return _candidate_report_base(
@@ -845,6 +938,21 @@ def _candidate_metrics_report(
             reference_resolution=reference_resolution,
             metrics=metrics,
             reason=visible_status or "metrics_not_computed",
+            extra={"mask_evidence": mask_evidence},
+        )
+    if mask_evidence.get("status") == "invalid":
+        reason = str(mask_evidence.get("reason") or "candidate_mask_invalid")
+        comparison = metrics.get("visible_delta", {}).get("comparison") or {}
+        metrics["outside_mask_delta"] = _invalid_mask_metric(reason, comparison)
+        metrics["seam_halo_score"] = _invalid_mask_metric(reason, comparison)
+        return _candidate_report_base(
+            candidate_name=candidate_name,
+            status="metrics_not_computed",
+            candidate_path=candidate_path,
+            reference_resolution=reference_resolution,
+            metrics=metrics,
+            reason=reason,
+            extra={"mask_evidence": mask_evidence},
         )
     return _candidate_report_base(
         candidate_name=candidate_name,
@@ -853,6 +961,7 @@ def _candidate_metrics_report(
         reference_resolution=reference_resolution,
         metrics=metrics,
         metrics_authoritative=True,
+        extra={"mask_evidence": mask_evidence},
     )
 
 
@@ -861,6 +970,7 @@ def build_apex_eval_report(
     *,
     output_dir: Path | str,
     candidate_outputs: Mapping[str, Mapping[str, Path | str]] | None = None,
+    candidate_masks: Mapping[str, Mapping[str, Path | str]] | None = None,
     repo_root: Path | None = None,
     asset_root: Path | str | None = None,
 ) -> dict[str, Any]:
@@ -877,6 +987,7 @@ def build_apex_eval_report(
     output_root.mkdir(parents=True, exist_ok=True)
 
     candidate_outputs = candidate_outputs or {}
+    candidate_masks = candidate_masks or {}
     assets_report = []
     for asset in evalset.assets:
         status = asset_status(evalset, asset)
@@ -908,7 +1019,10 @@ def build_apex_eval_report(
             "reference_resolution": status["reference_resolution"],
         }
         candidates = []
-        for candidate_name, outputs in sorted(candidate_outputs.items()):
+        candidate_names = sorted(set(candidate_outputs) | set(candidate_masks))
+        for candidate_name in candidate_names:
+            outputs = candidate_outputs.get(candidate_name, {})
+            masks = candidate_masks.get(candidate_name, {})
             candidates.append(
                 _candidate_metrics_report(
                     evalset=evalset,
@@ -916,6 +1030,7 @@ def build_apex_eval_report(
                     asset_report_status=status,
                     candidate_name=candidate_name,
                     output_value=outputs.get(asset.asset_id),
+                    mask_value=masks.get(asset.asset_id),
                 )
             )
 
@@ -1192,15 +1307,25 @@ def build_depth_backend_benchmark_report(
     return report
 
 
-def parse_candidate_outputs(values: Iterable[str]) -> dict[str, dict[str, Path]]:
-    """Parse ``candidate:asset_id=path`` CLI values."""
+def _parse_candidate_path_map(values: Iterable[str], *, label: str) -> dict[str, dict[str, Path]]:
+    """Parse ``candidate:asset_id=path`` CLI path mappings."""
     parsed: dict[str, dict[str, Path]] = {}
     for value in values:
         candidate_part, sep, output_path = value.partition("=")
         if sep != "=":
-            raise ValueError(f"Invalid candidate output {value!r}; expected candidate:asset_id=path")
+            raise ValueError(f"Invalid {label} {value!r}; expected candidate:asset_id=path")
         candidate, sep, asset_id = candidate_part.partition(":")
         if sep != ":" or not candidate or not asset_id:
-            raise ValueError(f"Invalid candidate output {value!r}; expected candidate:asset_id=path")
+            raise ValueError(f"Invalid {label} {value!r}; expected candidate:asset_id=path")
         parsed.setdefault(candidate, {})[asset_id] = Path(output_path)
     return parsed
+
+
+def parse_candidate_outputs(values: Iterable[str]) -> dict[str, dict[str, Path]]:
+    """Parse ``candidate:asset_id=path`` candidate output CLI values."""
+    return _parse_candidate_path_map(values, label="candidate output")
+
+
+def parse_candidate_masks(values: Iterable[str]) -> dict[str, dict[str, Path]]:
+    """Parse ``candidate:asset_id=path`` candidate mask CLI values."""
+    return _parse_candidate_path_map(values, label="candidate mask")

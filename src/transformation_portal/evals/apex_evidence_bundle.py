@@ -234,6 +234,7 @@ def build_apex_evidence_bundle(
                         "path": candidate_output_path,
                     },
                     "materials_v3": materials,
+                    "mask_evidence": candidate.get("mask_evidence") or {"status": "not_supplied"},
                     "depth": {},
                     "metrics": candidate.get("metrics") or {},
                     "metrics_status": "valid" if metrics_valid else "invalid",

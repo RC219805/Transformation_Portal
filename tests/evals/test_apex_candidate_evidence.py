@@ -147,6 +147,15 @@ def _multi_apex_report(tmp_path: Path, *, candidate_asset_ids: set[str]):
 
 def test_candidate_output_and_materials_telemetry_attach_to_bundle(tmp_path):
     report = _apex_report(tmp_path)
+    report["assets"][0]["candidates"][0]["mask_evidence"] = {
+        "status": "ok",
+        "reported_path": "external/materials_v3_masks.npz",
+        "format": "npz",
+        "mask_count": 1,
+        "union_shape": [8, 8],
+        "union_nonzero_pixels": 16,
+        "source": "candidate_mask",
+    }
     evidence = _materials_evidence(tmp_path / "materials.json")
 
     bundle = build_apex_evidence_bundle(
@@ -163,7 +172,55 @@ def test_candidate_output_and_materials_telemetry_attach_to_bundle(tmp_path):
     assert case["materials_v3"]["status"] == "ok"
     assert case["materials_v3"]["applied_ops_count"] == 4
     assert case["materials_v3"]["confidence_authority"]["raw_clip_similarity_authorized_pixel_ops"] is False
+    assert case["mask_evidence"] == {
+        "status": "ok",
+        "reported_path": "external/materials_v3_masks.npz",
+        "format": "npz",
+        "mask_count": 1,
+        "union_shape": [8, 8],
+        "union_nonzero_pixels": 16,
+        "source": "candidate_mask",
+    }
     assert (tmp_path / "bundle" / "evidence_bundle.json").is_file()
+
+
+def test_invalid_explicit_mask_evidence_blocks_promotion_via_invalid_metrics(tmp_path):
+    report = _apex_report(tmp_path)
+    candidate = report["assets"][0]["candidates"][0]
+    candidate["status"] = "metrics_not_computed"
+    candidate["metrics_authoritative"] = False
+    candidate["mask_evidence"] = {
+        "status": "invalid",
+        "reason": "candidate_mask_dimension_mismatch",
+        "reported_path": "external/materials_v3_masks.npz",
+    }
+    candidate["metrics"]["outside_mask_delta"] = {
+        "status": "invalid_input",
+        "reason": "candidate_mask_dimension_mismatch",
+        "value": None,
+        "comparison": {},
+    }
+    candidate["metrics"]["seam_halo_score"] = {
+        "status": "invalid_input",
+        "reason": "candidate_mask_dimension_mismatch",
+        "value": None,
+        "comparison": {},
+    }
+    evidence = _materials_evidence(tmp_path / "materials.json")
+
+    bundle = build_apex_evidence_bundle(
+        report,
+        output_dir=tmp_path / "bundle",
+        candidate_evidence={"materials_v3": {"unit_image": evidence}},
+        repo_root=tmp_path,
+    )
+
+    case = bundle["cases"][0]
+    assert bundle["promotion_verdict"] == "blocked"
+    assert "invalid_metrics" in bundle["promotion_blocked_reasons"]
+    assert case["metrics_status"] == "invalid"
+    assert case["mask_evidence"]["status"] == "invalid"
+    assert case["metrics"]["outside_mask_delta"]["status"] != "mask_missing"
 
 
 def test_legacy_visible_delta_metrics_do_not_authorize_promotion(tmp_path):

@@ -17,6 +17,7 @@ from transformation_portal.evals.apex_visual import (
     build_apex_eval_report,
     build_depth_backend_benchmark_report,
     load_apex_evalset,
+    parse_candidate_masks,
     sha256_file,
     visible_delta_metrics,
 )
@@ -212,6 +213,156 @@ def test_candidate_metrics_compare_against_reference_path_not_asset_ref(tmp_path
     assert candidate["evaluation_target_path"] == str(reference_path.relative_to(tmp_path))
     assert candidate["reference_resolution"]["reported_path"] == str(reference_path.relative_to(tmp_path))
     assert candidate["metrics"]["visible_delta"]["value"] == pytest.approx(0.0)
+
+
+def test_parse_candidate_masks_uses_candidate_asset_mapping():
+    parsed = parse_candidate_masks(["materials_v3:asset_1=output/masks.npz"])
+
+    assert parsed == {"materials_v3": {"asset_1": Path("output/masks.npz")}}
+
+
+def test_candidate_mask_npz_enables_mask_aware_metrics(tmp_path):
+    reference_path = tmp_path / "reference16.tif"
+    candidate_path = tmp_path / "candidate16.tif"
+    mask_path = tmp_path / "materials_v3_masks.npz"
+    reference = np.zeros((8, 8), dtype=np.uint16)
+    candidate = reference.copy()
+    candidate[1:7, 1:7] = 50000
+    mask = np.zeros((8, 8), dtype=np.float32)
+    mask[2:6, 2:6] = 1.0
+    Image.fromarray(reference, mode="I;16").save(reference_path)
+    Image.fromarray(candidate, mode="I;16").save(candidate_path)
+    np.savez(mask_path, z_mask=mask, a_mask=np.zeros((8, 8), dtype=np.float32))
+    evalset_path = _write_evalset(
+        tmp_path,
+        reference_path,
+        dataset_tier="canonical_apex",
+        asset_overrides={
+            "asset_role": "canonical_apex_reference",
+            "canonical_bit_depth": 16,
+            "canonical_format": "tiff",
+            "canonical_scoring_eligible": True,
+            "evaluate_at_native_resolution": True,
+            "preserve_16bit_intermediates": True,
+        },
+    )
+
+    report = build_apex_eval_report(
+        evalset_path,
+        output_dir=tmp_path / "report",
+        candidate_outputs={"materials_v3": {"unit_image": candidate_path}},
+        candidate_masks={"materials_v3": {"unit_image": mask_path}},
+        repo_root=tmp_path,
+    )
+
+    candidate_report = report["assets"][0]["candidates"][0]
+    assert candidate_report["status"] == "ok"
+    assert candidate_report["metrics_authoritative"] is True
+    assert candidate_report["metrics"]["outside_mask_delta"]["status"] == "ok"
+    assert candidate_report["metrics"]["outside_mask_delta"]["value"] > 0.0
+    assert candidate_report["metrics"]["seam_halo_score"]["status"] == "ok"
+    assert candidate_report["metrics"]["seam_halo_score"]["value"] > 0.0
+    assert candidate_report["mask_evidence"] == {
+        "status": "ok",
+        "reported_path": str(mask_path),
+        "format": "npz",
+        "mask_count": 2,
+        "union_shape": [8, 8],
+        "union_nonzero_pixels": 16,
+        "source": "candidate_mask",
+    }
+
+
+def test_absent_candidate_mask_preserves_mask_missing_metric_status(tmp_path):
+    reference_path = tmp_path / "reference16.tif"
+    candidate_path = tmp_path / "candidate16.tif"
+    Image.fromarray(np.zeros((8, 8), dtype=np.uint16), mode="I;16").save(reference_path)
+    Image.fromarray(np.zeros((8, 8), dtype=np.uint16), mode="I;16").save(candidate_path)
+    evalset_path = _write_evalset(
+        tmp_path,
+        reference_path,
+        dataset_tier="canonical_apex",
+        asset_overrides={
+            "asset_role": "canonical_apex_reference",
+            "canonical_bit_depth": 16,
+            "canonical_format": "tiff",
+            "canonical_scoring_eligible": True,
+            "evaluate_at_native_resolution": True,
+            "preserve_16bit_intermediates": True,
+        },
+    )
+
+    report = build_apex_eval_report(
+        evalset_path,
+        output_dir=tmp_path / "report",
+        candidate_outputs={"materials_v3": {"unit_image": candidate_path}},
+        repo_root=tmp_path,
+    )
+
+    candidate_report = report["assets"][0]["candidates"][0]
+    assert candidate_report["mask_evidence"] == {"status": "not_supplied"}
+    assert candidate_report["metrics"]["outside_mask_delta"]["status"] == "mask_missing"
+    assert candidate_report["metrics"]["seam_halo_score"]["status"] == "not_applicable"
+    assert candidate_report["metrics"]["seam_halo_score"]["reason"] == "mask_missing"
+
+
+@pytest.mark.parametrize(
+    ("mask_builder", "expected_reason"),
+    [
+        (lambda path: None, "candidate_mask_missing"),
+        (lambda path: path.write_text("not an npz", encoding="utf-8"), "candidate_mask_invalid_npz"),
+        (lambda path: np.savez(path), "candidate_mask_empty"),
+        (lambda path: np.savez(path, glass=np.zeros((8, 8), dtype=np.float32)), "candidate_mask_empty"),
+        (lambda path: np.savez(path, overlay=np.ones((8, 8, 3), dtype=np.float32)), "candidate_mask_no_2d_arrays"),
+        (lambda path: np.savez(path, glass=np.ones((4, 4), dtype=np.float32)), "candidate_mask_dimension_mismatch"),
+    ],
+)
+def test_invalid_explicit_candidate_mask_blocks_without_mask_missing_fallback(
+    tmp_path,
+    mask_builder,
+    expected_reason,
+):
+    reference_path = tmp_path / "reference16.tif"
+    candidate_path = tmp_path / "candidate16.tif"
+    mask_path = tmp_path / "materials_v3_masks.npz"
+    Image.fromarray(np.zeros((8, 8), dtype=np.uint16), mode="I;16").save(reference_path)
+    Image.fromarray(np.zeros((8, 8), dtype=np.uint16), mode="I;16").save(candidate_path)
+    mask_builder(mask_path)
+    evalset_path = _write_evalset(
+        tmp_path,
+        reference_path,
+        dataset_tier="canonical_apex",
+        asset_overrides={
+            "asset_role": "canonical_apex_reference",
+            "canonical_bit_depth": 16,
+            "canonical_format": "tiff",
+            "canonical_scoring_eligible": True,
+            "evaluate_at_native_resolution": True,
+            "preserve_16bit_intermediates": True,
+        },
+    )
+
+    report = build_apex_eval_report(
+        evalset_path,
+        output_dir=tmp_path / "report",
+        candidate_outputs={"materials_v3": {"unit_image": candidate_path}},
+        candidate_masks={"materials_v3": {"unit_image": mask_path}},
+        repo_root=tmp_path,
+    )
+
+    candidate_report = report["assets"][0]["candidates"][0]
+    assert candidate_report["status"] == "metrics_not_computed"
+    assert candidate_report["metrics_authoritative"] is False
+    assert candidate_report["mask_evidence"] == {
+        "status": "invalid",
+        "reason": expected_reason,
+        "reported_path": str(mask_path),
+    }
+    assert candidate_report["metrics"]["outside_mask_delta"]["status"] == "invalid_input"
+    assert candidate_report["metrics"]["outside_mask_delta"]["reason"] == expected_reason
+    assert candidate_report["metrics"]["outside_mask_delta"]["status"] != "mask_missing"
+    assert candidate_report["metrics"]["seam_halo_score"]["status"] == "invalid_input"
+    assert candidate_report["metrics"]["seam_halo_score"]["reason"] == expected_reason
 
 
 def test_candidate_dimension_mismatch_fails_closed_without_resizing(tmp_path):
@@ -780,6 +931,33 @@ def test_run_apex_eval_uses_report_output_dir_for_evidence_bundle(tmp_path, monk
     assert module.main() == 0
     assert calls["output_dir"] == resolved_report.parent
     assert calls["repo_root"] == repo_root
+
+
+def test_run_apex_eval_passes_candidate_masks_to_report_builder(tmp_path, monkeypatch):
+    module = _load_tool_module("run_apex_eval.py", "run_apex_eval_candidate_masks_unit")
+    calls = {}
+
+    def fake_build_report(*args, **kwargs):
+        calls.update(kwargs)
+        return {"report_path": str(tmp_path / "apex_eval_report.json"), "assets": []}
+
+    monkeypatch.setattr(module, "build_apex_eval_report", fake_build_report)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "run_apex_eval.py",
+            "--evalset",
+            "evalsets/picacho_apex",
+            "--output-dir",
+            str(tmp_path / "report"),
+            "--candidate-mask",
+            "materials_v3:unit_image=output/materials_v3_masks.npz",
+        ],
+    )
+
+    assert module.main() == 0
+    assert calls["candidate_masks"] == {"materials_v3": {"unit_image": Path("output/materials_v3_masks.npz")}}
 
 
 def test_benchmark_depth_backends_returns_stable_input_error_for_missing_evalset(tmp_path, monkeypatch, capsys):
