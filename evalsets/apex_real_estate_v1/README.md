@@ -4,6 +4,8 @@ This evalset is the initial real canonical APEX real-estate corpus.
 
 The repository commits metadata only. Canonical 16-bit TIFF/TIF references, RAW files, ICC/profile assets, delivery derivatives, candidate outputs, and generated evidence bundles must remain outside git.
 
+`evalset_id` and top-level `version` identify the `apex_real_estate_v1` corpus family. `metadata.manifest_revision` tracks the initial metadata-only real manifest revision.
+
 ## External asset root
 
 Expected local layout:
@@ -71,9 +73,10 @@ Do NOT commit:
 *.raf
 *.orf
 *.rw2
-large *.jpg
 output/
 ```
+
+Large delivery JPEGs, including files under `delivery_8bit/`, must stay under the external asset root.
 
 ## Next step
 

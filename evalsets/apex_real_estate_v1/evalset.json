@@ -1,7 +1,7 @@
 {
   "schema_version": "apex_evalset.v1",
   "evalset_id": "apex_real_estate_v1",
-  "version": "v0",
+  "version": "v1",
   "dataset_tier": "canonical_apex",
   "canonical_bit_depth": 16,
   "canonical_color_space": "ProPhoto RGB",
@@ -9,7 +9,8 @@
   "description": "Initial metadata-only real canonical APEX real-estate corpus. Canonical 16-bit TIFF/TIF references live outside git under an operator-provided asset root.",
   "metadata": {
     "asset_policy": "external_assets_only",
-    "initial_assets": 3,
+    "manifest_revision": "v0",
+    "minimum_initial_assets": 3,
     "target_assets": "8-12"
   },
   "assets": [
