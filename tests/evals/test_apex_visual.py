@@ -24,27 +24,39 @@ from transformation_portal.evals.apex_visual import (
 pytestmark = pytest.mark.unit
 
 
-def _write_evalset(root: Path, asset_path: Path, *, sha256: str | None = None) -> Path:
+def _write_evalset(
+    root: Path,
+    asset_path: Path,
+    *,
+    sha256: str | None = None,
+    dataset_tier: str = "smoke_or_readiness",
+    evalset_overrides: dict | None = None,
+    asset_overrides: dict | None = None,
+) -> Path:
     evalset_dir = root / "evalsets" / "apex"
-    evalset_dir.mkdir(parents=True)
+    evalset_dir.mkdir(parents=True, exist_ok=True)
+    asset_payload = {
+        "asset_id": "unit_image",
+        "asset_ref": str(asset_path.relative_to(root)),
+        "sha256": sha256 or sha256_file(asset_path),
+        "scene_type": "pool_exterior",
+        "expected_materials": ["water", "stone"],
+        "risk_zones": ["water_glass_boundary"],
+        "reject_if": ["haloing"],
+        "manual_quality_score": None,
+    }
+    if asset_overrides:
+        asset_payload.update(asset_overrides)
     payload = {
         "schema_version": APEX_EVALSET_SCHEMA_VERSION,
         "evalset_id": "unit_apex",
         "version": "v1",
         "description": "unit",
-        "assets": [
-            {
-                "asset_id": "unit_image",
-                "asset_ref": str(asset_path.relative_to(root)),
-                "sha256": sha256 or sha256_file(asset_path),
-                "scene_type": "pool_exterior",
-                "expected_materials": ["water", "stone"],
-                "risk_zones": ["water_glass_boundary"],
-                "reject_if": ["haloing"],
-                "manual_quality_score": None,
-            }
-        ],
+        "dataset_tier": dataset_tier,
+        "assets": [asset_payload],
     }
+    if evalset_overrides:
+        payload.update(evalset_overrides)
     path = evalset_dir / "evalset.json"
     path.write_text(json.dumps(payload), encoding="utf-8")
     return path
@@ -88,6 +100,127 @@ def test_apex_eval_report_tracks_ready_assets_and_candidate_metrics(tmp_path):
     assert (tmp_path / "report" / "apex_eval_report.json").is_file()
 
 
+def test_jpeg_delivery_asset_is_ready_but_not_canonical_scoring_eligible(tmp_path):
+    image_path = tmp_path / "delivery.jpg"
+    Image.fromarray(np.zeros((8, 8, 3), dtype=np.uint8)).save(image_path, format="JPEG")
+    evalset_path = _write_evalset(
+        tmp_path,
+        image_path,
+        asset_overrides={
+            "asset_role": "delivery_preview",
+            "canonical_bit_depth": 8,
+            "canonical_format": "jpeg",
+            "canonical_color_space": "srgb",
+            "canonical_scoring_eligible": True,
+        },
+    )
+
+    report = build_apex_eval_report(evalset_path, output_dir=tmp_path / "report", repo_root=tmp_path)
+
+    assert report["evalset"]["ready_asset_count"] == 1
+    assert report["evalset"]["canonical_scoring_eligible_count"] == 0
+    assert report["evalset"]["noncanonical_asset_count"] == 1
+    asset = report["assets"][0]
+    assert asset["asset_status"]["status"] == "ready"
+    assert asset["asset_role"] == "delivery_preview"
+    assert asset["reference_bit_depth"] == 8
+    assert asset["reference_format"] == "jpeg"
+    assert asset["canonical_scoring_eligible"] is False
+    assert asset["canonical_scoring_blocked_reason"] == "noncanonical_dataset_tier"
+
+
+def test_jpeg_cannot_be_promoted_to_canonical_apex_reference(tmp_path):
+    image_path = tmp_path / "misdeclared_reference.jpg"
+    Image.fromarray(np.zeros((8, 8, 3), dtype=np.uint8)).save(image_path, format="JPEG")
+    evalset_path = _write_evalset(
+        tmp_path,
+        image_path,
+        dataset_tier="canonical_apex",
+        asset_overrides={
+            "asset_role": "canonical_apex_reference",
+            "canonical_bit_depth": 8,
+            "canonical_format": "jpeg",
+            "canonical_color_space": "srgb",
+            "canonical_scoring_eligible": True,
+            "evaluate_at_native_resolution": True,
+            "preserve_16bit_intermediates": True,
+        },
+    )
+
+    report = build_apex_eval_report(evalset_path, output_dir=tmp_path / "report", repo_root=tmp_path)
+
+    assert report["evalset"]["ready_asset_count"] == 1
+    assert report["evalset"]["canonical_scoring_eligible_count"] == 0
+    asset = report["assets"][0]
+    assert asset["canonical_scoring_eligible"] is False
+    assert asset["canonical_scoring_blocked_reason"] == "non_16bit_reference"
+
+
+def test_rendering_asset_is_smoke_only_even_with_canonical_like_fields(tmp_path):
+    image_path = tmp_path / "rendering.png"
+    Image.fromarray(np.zeros((8, 8, 3), dtype=np.uint8)).save(image_path)
+    evalset_path = _write_evalset(
+        tmp_path,
+        image_path,
+        dataset_tier="synthetic_smoke",
+        asset_overrides={
+            "asset_role": "synthetic_smoke",
+            "canonical_bit_depth": 16,
+            "canonical_format": "tiff",
+            "canonical_color_space": "documented_source_profile",
+            "canonical_scoring_eligible": True,
+            "evaluate_at_native_resolution": True,
+            "preserve_16bit_intermediates": True,
+        },
+    )
+
+    report = build_apex_eval_report(evalset_path, output_dir=tmp_path / "report", repo_root=tmp_path)
+
+    assert report["evalset"]["dataset_tier"] == "synthetic_smoke"
+    assert report["evalset"]["canonical_scoring_eligible_count"] == 0
+    assert report["evalset"]["noncanonical_asset_count"] == 1
+    asset = report["assets"][0]
+    assert asset["asset_role"] == "synthetic_smoke"
+    assert asset["canonical_scoring_eligible"] is False
+    assert asset["canonical_scoring_blocked_reason"] == "noncanonical_dataset_tier"
+
+
+def test_16bit_tiff_reference_is_canonical_scoring_eligible(tmp_path):
+    image_path = tmp_path / "reference16.tif"
+    Image.fromarray(np.zeros((8, 8), dtype=np.uint16), mode="I;16").save(image_path)
+    evalset_path = _write_evalset(
+        tmp_path,
+        image_path,
+        dataset_tier="canonical_apex",
+        evalset_overrides={
+            "canonical_bit_depth": 16,
+            "canonical_format": "tiff",
+            "canonical_color_space": "documented_source_profile",
+        },
+        asset_overrides={
+            "asset_role": "canonical_apex_reference",
+            "canonical_bit_depth": 16,
+            "canonical_format": "tiff",
+            "canonical_color_space": "documented_source_profile",
+            "canonical_scoring_eligible": True,
+            "evaluate_at_native_resolution": True,
+            "preserve_16bit_intermediates": True,
+        },
+    )
+
+    report = build_apex_eval_report(evalset_path, output_dir=tmp_path / "report", repo_root=tmp_path)
+
+    assert report["evalset"]["ready_asset_count"] == 1
+    assert report["evalset"]["canonical_scoring_eligible_count"] == 1
+    assert report["evalset"]["noncanonical_asset_count"] == 0
+    asset = report["assets"][0]
+    assert asset["asset_role"] == "canonical_apex_reference"
+    assert asset["reference_bit_depth"] == 16
+    assert asset["reference_format"] == "tiff"
+    assert asset["canonical_scoring_eligible"] is True
+    assert asset["canonical_scoring_blocked_reason"] is None
+
+
 def test_apex_eval_report_marks_missing_assets(tmp_path):
     image_path = tmp_path / "input.png"
     Image.fromarray(np.zeros((8, 8, 3), dtype=np.uint8)).save(image_path)
@@ -97,6 +230,8 @@ def test_apex_eval_report_marks_missing_assets(tmp_path):
     report = build_apex_eval_report(evalset_path, output_dir=tmp_path / "report", repo_root=tmp_path)
 
     assert report["evalset"]["ready_asset_count"] == 0
+    assert report["evalset"]["canonical_scoring_eligible_count"] == 0
+    assert report["evalset"]["missing_asset_count"] == 1
     assert report["assets"][0]["asset_status"]["status"] == "missing_asset"
 
 
@@ -235,9 +370,23 @@ def test_depth_backend_benchmark_blocks_depth_pro_without_license(tmp_path):
 
 
 def test_depth_backend_benchmark_uses_mocked_runner(tmp_path):
-    image_path = tmp_path / "input.png"
-    Image.fromarray(np.zeros((8, 8, 3), dtype=np.uint8)).save(image_path)
-    evalset_path = _write_evalset(tmp_path, image_path)
+    image_path = tmp_path / "reference16.tif"
+    Image.fromarray(np.zeros((8, 8), dtype=np.uint16), mode="I;16").save(image_path)
+    evalset_path = _write_evalset(
+        tmp_path,
+        image_path,
+        dataset_tier="canonical_apex",
+        asset_overrides={
+            "asset_role": "canonical_apex_reference",
+            "canonical_bit_depth": 16,
+            "canonical_format": "tiff",
+            "canonical_color_space": "documented_source_profile",
+            "canonical_scoring_eligible": True,
+            "evaluate_at_native_resolution": True,
+            "allow_downsampled_model_inference": True,
+            "preserve_16bit_intermediates": True,
+        },
+    )
 
     def runner(backend, asset, output_dir, quality_tier):
         assert backend == "da3_metric"
@@ -251,7 +400,7 @@ def test_depth_backend_benchmark_uses_mocked_runner(tmp_path):
             status="success",
             runtime_ms=12.5,
             depth_map=depth,
-            provenance={"model": "mock"},
+            provenance={"model": "mock", "model_input": {"input_resolution": [1024, 768]}},
         )
 
     report = build_depth_backend_benchmark_report(
@@ -265,6 +414,14 @@ def test_depth_backend_benchmark_uses_mocked_runner(tmp_path):
 
     backend = report["backends"][0]
     assert backend["status"] == "ready"
-    assert backend["assets"][0]["status"] == "success"
-    assert backend["assets"][0]["metrics"]["runtime_ms"] == pytest.approx(12.5)
+    asset = backend["assets"][0]
+    assert asset["status"] == "success"
+    assert asset["metrics"]["runtime_ms"] == pytest.approx(12.5)
+    assert asset["model_input"]["derived_from"] == str(image_path.relative_to(tmp_path))
+    assert asset["model_input"]["input_bit_depth"] == 8
+    assert asset["model_input"]["input_resolution"] == [1024, 768]
+    assert asset["model_input"]["downsampled_for_inference"] is True
+    assert asset["evaluation_target"]["path"] == str(image_path.relative_to(tmp_path))
+    assert asset["evaluation_target"]["bit_depth"] == 16
+    assert asset["evaluation_target"]["evaluate_at_native_resolution"] is True
     assert backend["depth_edge_score"] is not None

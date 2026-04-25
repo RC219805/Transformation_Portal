@@ -26,6 +26,28 @@ APEX_EVALSET_SCHEMA_VERSION = "apex_evalset.v1"
 APEX_EVAL_REPORT_VERSION = "apex_eval_report.v1"
 DEPTH_BACKEND_BENCHMARK_REPORT_VERSION = "depth_backend_benchmark_report.v1"
 DEPTH_PRO_BACKENDS = {"depth_pro"}
+CANONICAL_APEX_DATASET_TIER = "canonical_apex"
+DEFAULT_DATASET_TIER = "smoke_or_readiness"
+CANONICAL_APEX_ASSET_ROLE = "canonical_apex_reference"
+DEFAULT_ASSET_ROLE = "compatibility_fixture"
+DATASET_TIERS = frozenset(
+    {
+        CANONICAL_APEX_DATASET_TIER,
+        DEFAULT_DATASET_TIER,
+        "delivery_preview",
+        "synthetic_smoke",
+        "compatibility_fixture",
+    }
+)
+ASSET_ROLES = frozenset(
+    {
+        CANONICAL_APEX_ASSET_ROLE,
+        "delivery_preview",
+        "synthetic_smoke",
+        "compatibility_fixture",
+    }
+)
+CANONICAL_REFERENCE_FORMATS = frozenset({"tif", "tiff"})
 
 
 def _lpips_available() -> bool:
@@ -36,6 +58,58 @@ def _lpips_available() -> bool:
     except ImportError:
         return False
     return True
+
+
+def _normalize_optional_str(value: Any) -> str | None:
+    if value is None:
+        return None
+    normalized = str(value).strip()
+    return normalized or None
+
+
+def _optional_int(value: Any) -> int | None:
+    if value is None:
+        return None
+    return int(value)
+
+
+def _optional_bool(value: Any) -> bool | None:
+    if value is None:
+        return None
+    return _bool_with_default(value, False)
+
+
+def _bool_with_default(value: Any, default: bool) -> bool:
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {"1", "true", "yes", "on"}:
+            return True
+        if normalized in {"0", "false", "no", "off"}:
+            return False
+    return bool(value)
+
+
+def _normalized_format(asset: "ApexEvalAsset") -> str | None:
+    explicit = _normalize_optional_str(asset.canonical_format)
+    if explicit:
+        return explicit.lower().lstrip(".")
+    path_hint = asset.reference_path or asset.asset_ref
+    suffix = Path(path_hint).suffix.lower().lstrip(".")
+    if suffix in {"jpg", "jpeg"}:
+        return "jpeg"
+    return suffix or None
+
+
+def _reference_bit_depth(asset: "ApexEvalAsset") -> int | None:
+    if asset.canonical_bit_depth is not None:
+        return int(asset.canonical_bit_depth)
+    if _normalized_format(asset) == "jpeg":
+        return 8
+    return None
 
 
 @dataclass(frozen=True)
@@ -49,6 +123,17 @@ class ApexEvalAsset:
     expected_materials: tuple[str, ...]
     risk_zones: tuple[str, ...]
     reject_if: tuple[str, ...]
+    asset_role: str = DEFAULT_ASSET_ROLE
+    reference_path: str | None = None
+    delivery_path: str | None = None
+    canonical_bit_depth: int | None = None
+    canonical_format: str | None = None
+    canonical_color_space: str | None = None
+    evaluate_at_native_resolution: bool = False
+    allow_downsampled_model_inference: bool = True
+    preserve_16bit_intermediates: bool = False
+    canonical_scoring_eligible: bool | None = None
+    canonical_scoring_blocked_reason: str | None = None
     manual_quality_score: float | None = None
     notes: str | None = None
 
@@ -65,6 +150,16 @@ class ApexEvalAsset:
             if not 0.0 <= manual_score <= 1.0:
                 raise ValueError("manual_quality_score must be null or in [0, 1]")
 
+        asset_role = str(payload.get("asset_role") or DEFAULT_ASSET_ROLE)
+        if asset_role not in ASSET_ROLES:
+            raise ValueError(f"Unsupported APEX asset_role {asset_role!r}")
+
+        canonical_bit_depth = _optional_int(payload.get("canonical_bit_depth"))
+        canonical_format = _normalize_optional_str(payload.get("canonical_format"))
+        reference_path = _normalize_optional_str(payload.get("reference_path")) or str(payload["asset_ref"])
+        delivery_path = _normalize_optional_str(payload.get("delivery_path"))
+        canonical_eligible = _optional_bool(payload.get("canonical_scoring_eligible"))
+
         return cls(
             asset_id=str(payload["asset_id"]),
             asset_ref=str(payload["asset_ref"]),
@@ -73,6 +168,17 @@ class ApexEvalAsset:
             expected_materials=tuple(str(item) for item in payload.get("expected_materials", [])),
             risk_zones=tuple(str(item) for item in payload.get("risk_zones", [])),
             reject_if=tuple(str(item) for item in payload.get("reject_if", [])),
+            asset_role=asset_role,
+            reference_path=reference_path,
+            delivery_path=delivery_path,
+            canonical_bit_depth=canonical_bit_depth,
+            canonical_format=canonical_format,
+            canonical_color_space=_normalize_optional_str(payload.get("canonical_color_space")),
+            evaluate_at_native_resolution=_bool_with_default(payload.get("evaluate_at_native_resolution"), False),
+            allow_downsampled_model_inference=_bool_with_default(payload.get("allow_downsampled_model_inference"), True),
+            preserve_16bit_intermediates=_bool_with_default(payload.get("preserve_16bit_intermediates"), False),
+            canonical_scoring_eligible=canonical_eligible,
+            canonical_scoring_blocked_reason=_normalize_optional_str(payload.get("canonical_scoring_blocked_reason")),
             manual_quality_score=manual_score,
             notes=(str(payload["notes"]) if payload.get("notes") is not None else None),
         )
@@ -86,6 +192,17 @@ class ApexEvalAsset:
             "expected_materials": list(self.expected_materials),
             "risk_zones": list(self.risk_zones),
             "reject_if": list(self.reject_if),
+            "asset_role": self.asset_role,
+            "reference_path": self.reference_path,
+            "delivery_path": self.delivery_path,
+            "canonical_bit_depth": self.canonical_bit_depth,
+            "canonical_format": self.canonical_format,
+            "canonical_color_space": self.canonical_color_space,
+            "evaluate_at_native_resolution": self.evaluate_at_native_resolution,
+            "allow_downsampled_model_inference": self.allow_downsampled_model_inference,
+            "preserve_16bit_intermediates": self.preserve_16bit_intermediates,
+            "canonical_scoring_eligible": self.canonical_scoring_eligible,
+            "canonical_scoring_blocked_reason": self.canonical_scoring_blocked_reason,
             "manual_quality_score": self.manual_quality_score,
             "notes": self.notes,
         }
@@ -101,10 +218,20 @@ class ApexEvalSet:
     assets: tuple[ApexEvalAsset, ...]
     source_path: Path
     repo_root: Path
+    dataset_tier: str = DEFAULT_DATASET_TIER
+    canonical_bit_depth: int | None = None
+    canonical_format: str | None = None
+    canonical_color_space: str | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
 
     def resolve_asset_path(self, asset: ApexEvalAsset) -> Path:
         path = Path(asset.asset_ref)
+        if path.is_absolute():
+            return path
+        return self.repo_root / path
+
+    def resolve_reference_path(self, asset: ApexEvalAsset) -> Path:
+        path = Path(asset.reference_path or asset.asset_ref)
         if path.is_absolute():
             return path
         return self.repo_root / path
@@ -153,6 +280,9 @@ def load_apex_evalset(evalset_path: Path | str, *, repo_root: Path | None = None
     if not isinstance(assets_raw, list) or not assets_raw:
         raise ValueError("APEX evalset must contain a non-empty assets list")
     assets = tuple(ApexEvalAsset.from_mapping(item) for item in assets_raw)
+    dataset_tier = str(payload.get("dataset_tier") or DEFAULT_DATASET_TIER)
+    if dataset_tier not in DATASET_TIERS:
+        raise ValueError(f"Unsupported APEX dataset_tier {dataset_tier!r}")
     return ApexEvalSet(
         evalset_id=str(payload.get("evalset_id") or path.parent.name),
         version=str(payload.get("version") or "v1"),
@@ -160,6 +290,10 @@ def load_apex_evalset(evalset_path: Path | str, *, repo_root: Path | None = None
         assets=assets,
         source_path=path,
         repo_root=root,
+        dataset_tier=dataset_tier,
+        canonical_bit_depth=_optional_int(payload.get("canonical_bit_depth")),
+        canonical_format=_normalize_optional_str(payload.get("canonical_format")),
+        canonical_color_space=_normalize_optional_str(payload.get("canonical_color_space")),
         metadata=dict(payload.get("metadata") or {}),
     )
 
@@ -172,6 +306,69 @@ def sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
+def _canonical_scoring_status(
+    evalset: ApexEvalSet,
+    asset: ApexEvalAsset,
+    *,
+    asset_ready: bool,
+) -> dict[str, Any]:
+    reference_format = _normalized_format(asset)
+    reference_bit_depth = _reference_bit_depth(asset)
+    eligible = True
+    blocked_reason: str | None = None
+
+    if not asset_ready:
+        eligible = False
+        blocked_reason = "asset_not_ready"
+    elif evalset.dataset_tier != CANONICAL_APEX_DATASET_TIER:
+        eligible = False
+        blocked_reason = "noncanonical_dataset_tier"
+    elif asset.asset_role != CANONICAL_APEX_ASSET_ROLE:
+        eligible = False
+        blocked_reason = "asset_role_not_canonical"
+    elif reference_bit_depth is None:
+        eligible = False
+        blocked_reason = "missing_16bit_reference"
+    elif reference_bit_depth < 16:
+        eligible = False
+        blocked_reason = "non_16bit_reference"
+    elif reference_format not in CANONICAL_REFERENCE_FORMATS:
+        eligible = False
+        blocked_reason = "non_tiff_reference"
+    elif not asset.evaluate_at_native_resolution:
+        eligible = False
+        blocked_reason = "native_resolution_evaluation_required"
+    elif not asset.preserve_16bit_intermediates:
+        eligible = False
+        blocked_reason = "preserve_16bit_intermediates_required"
+    elif asset.canonical_scoring_eligible is False:
+        eligible = False
+        blocked_reason = asset.canonical_scoring_blocked_reason or "canonical_scoring_disabled"
+
+    if not eligible and asset.canonical_scoring_blocked_reason:
+        blocked_reason = asset.canonical_scoring_blocked_reason
+
+    return {
+        "asset_role": asset.asset_role,
+        "reference_path": asset.reference_path or asset.asset_ref,
+        "delivery_path": asset.delivery_path,
+        "reference_bit_depth": reference_bit_depth,
+        "reference_format": reference_format,
+        "reference_color_space": asset.canonical_color_space,
+        "evaluate_at_native_resolution": asset.evaluate_at_native_resolution,
+        "allow_downsampled_model_inference": asset.allow_downsampled_model_inference,
+        "preserve_16bit_intermediates": asset.preserve_16bit_intermediates,
+        "canonical_scoring_eligible": eligible,
+        "canonical_scoring_blocked_reason": None if eligible else blocked_reason,
+    }
+
+
+def canonical_scoring_status(evalset: ApexEvalSet, asset: ApexEvalAsset) -> dict[str, Any]:
+    """Return canonical APEX quality scoring eligibility for an eval asset."""
+    path = evalset.resolve_asset_path(asset)
+    return _canonical_scoring_status(evalset, asset, asset_ready=path.is_file() and sha256_file(path) == asset.sha256)
+
+
 def asset_status(evalset: ApexEvalSet, asset: ApexEvalAsset) -> dict[str, Any]:
     path = evalset.resolve_asset_path(asset)
     if not path.is_file():
@@ -182,6 +379,7 @@ def asset_status(evalset: ApexEvalSet, asset: ApexEvalAsset) -> dict[str, Any]:
             "resolved_path": str(path),
             "expected_sha256": asset.sha256,
             "actual_sha256": None,
+            **_canonical_scoring_status(evalset, asset, asset_ready=False),
         }
 
     actual_sha = sha256_file(path)
@@ -194,6 +392,7 @@ def asset_status(evalset: ApexEvalSet, asset: ApexEvalAsset) -> dict[str, Any]:
         "expected_sha256": asset.sha256,
         "actual_sha256": actual_sha,
         "size_bytes": int(path.stat().st_size),
+        **_canonical_scoring_status(evalset, asset, asset_ready=status == "ready"),
     }
 
 
@@ -295,6 +494,19 @@ def build_apex_eval_report(
     assets_report = []
     for asset in evalset.assets:
         status = asset_status(evalset, asset)
+        canonical_fields = {
+            "asset_role": status["asset_role"],
+            "reference_path": status["reference_path"],
+            "delivery_path": status["delivery_path"],
+            "reference_bit_depth": status["reference_bit_depth"],
+            "reference_format": status["reference_format"],
+            "reference_color_space": status["reference_color_space"],
+            "evaluate_at_native_resolution": status["evaluate_at_native_resolution"],
+            "allow_downsampled_model_inference": status["allow_downsampled_model_inference"],
+            "preserve_16bit_intermediates": status["preserve_16bit_intermediates"],
+            "canonical_scoring_eligible": status["canonical_scoring_eligible"],
+            "canonical_scoring_blocked_reason": status["canonical_scoring_blocked_reason"],
+        }
         candidates = []
         for candidate_name, outputs in sorted(candidate_outputs.items()):
             output_value = outputs.get(asset.asset_id)
@@ -347,12 +559,25 @@ def build_apex_eval_report(
         assets_report.append(
             {
                 **asset.to_dict(),
+                **canonical_fields,
                 "asset_status": status,
                 "candidates": candidates,
             }
         )
 
     ready_count = sum(1 for item in assets_report if item["asset_status"]["status"] == "ready")
+    canonical_count = sum(
+        1 for item in assets_report if item["asset_status"]["status"] == "ready" and item["canonical_scoring_eligible"]
+    )
+    missing_count = sum(1 for item in assets_report if item["asset_status"]["status"] == "missing_asset")
+    noncanonical_count = sum(
+        1 for item in assets_report if item["asset_status"]["status"] == "ready" and not item["canonical_scoring_eligible"]
+    )
+    blocked_reason_counts: dict[str, int] = {}
+    for item in assets_report:
+        reason = item["canonical_scoring_blocked_reason"]
+        if item["asset_status"]["status"] == "ready" and reason:
+            blocked_reason_counts[reason] = blocked_reason_counts.get(reason, 0) + 1
     report = {
         "schema_version": APEX_EVAL_REPORT_VERSION,
         "evalset": {
@@ -360,8 +585,16 @@ def build_apex_eval_report(
             "version": evalset.version,
             "description": evalset.description,
             "source_path": str(evalset.source_path),
+            "dataset_tier": evalset.dataset_tier,
+            "canonical_bit_depth": evalset.canonical_bit_depth,
+            "canonical_format": evalset.canonical_format,
+            "canonical_color_space": evalset.canonical_color_space,
             "asset_count": len(evalset.assets),
             "ready_asset_count": ready_count,
+            "canonical_scoring_eligible_count": canonical_count,
+            "missing_asset_count": missing_count,
+            "noncanonical_asset_count": noncanonical_count,
+            "canonical_scoring_blocked_reason_counts": blocked_reason_counts,
         },
         "quality_trajectory": {
             "depth_pro_role": "research_quality_yardstick",
@@ -418,6 +651,37 @@ def _architectural_plausibility(depth_map: np.ndarray | None) -> float | None:
     return float(np.clip(spread * (1.0 - saturation), 0.0, 1.0))
 
 
+def _depth_case_io_metadata(evalset: ApexEvalSet, asset: ApexEvalAsset) -> tuple[dict[str, Any], dict[str, Any]]:
+    reference_path = asset.reference_path or asset.asset_ref
+    resolved_reference = str(evalset.resolve_reference_path(asset))
+    reference_bit_depth = _reference_bit_depth(asset)
+    reference_format = _normalized_format(asset)
+    downsampled = bool(asset.allow_downsampled_model_inference)
+    model_input = {
+        "derived_from": reference_path,
+        "resolved_derived_from": resolved_reference,
+        "input_bit_depth": 8 if downsampled else reference_bit_depth,
+        "input_color_space": "srgb" if downsampled else asset.canonical_color_space,
+        "input_resolution": None,
+        "downsampled_for_inference": downsampled,
+    }
+    evaluation_target = {
+        "path": reference_path,
+        "resolved_path": resolved_reference,
+        "bit_depth": reference_bit_depth,
+        "format": reference_format,
+        "color_space": asset.canonical_color_space,
+        "evaluate_at_native_resolution": asset.evaluate_at_native_resolution,
+    }
+    return model_input, evaluation_target
+
+
+def _merge_mapping(base: dict[str, Any], override: Any) -> dict[str, Any]:
+    if isinstance(override, Mapping):
+        return {**base, **dict(override)}
+    return base
+
+
 def build_depth_backend_benchmark_report(
     evalset_path: Path | str,
     *,
@@ -460,12 +724,15 @@ def build_depth_backend_benchmark_report(
         runtimes: list[float] = []
         for asset in evalset.assets:
             source_status = asset_status(evalset, asset)
+            model_input, evaluation_target = _depth_case_io_metadata(evalset, asset)
             if source_status["status"] != "ready":
                 backend_report["assets"].append(
                     {
                         "asset_id": asset.asset_id,
                         "status": source_status["status"],
                         "source": source_status,
+                        "model_input": model_input,
+                        "evaluation_target": evaluation_target,
                     }
                 )
                 continue
@@ -475,6 +742,8 @@ def build_depth_backend_benchmark_report(
                         "asset_id": asset.asset_id,
                         "status": "not_executed",
                         "source": source_status,
+                        "model_input": model_input,
+                        "evaluation_target": evaluation_target,
                         "metrics": {
                             "depth_edge_score": None,
                             "boundary_halo_risk": None,
@@ -496,13 +765,16 @@ def build_depth_backend_benchmark_report(
             if edge_score is not None:
                 asset_scores.append(edge_score)
             runtimes.append(runtime_ms)
+            provenance = dict(run_result.provenance)
             backend_report["assets"].append(
                 {
                     "asset_id": asset.asset_id,
                     "status": run_result.status,
                     "source": source_status,
                     "depth_path": run_result.depth_path,
-                    "provenance": run_result.provenance,
+                    "model_input": _merge_mapping(model_input, provenance.get("model_input")),
+                    "evaluation_target": _merge_mapping(evaluation_target, provenance.get("evaluation_target")),
+                    "provenance": provenance,
                     "error": run_result.error,
                     "metrics": {
                         "depth_edge_score": edge_score,

@@ -3,6 +3,15 @@
     {
       "asset_id": "picacho_kitchen_750_v2_en",
       "asset_ref": "input_images/750Picacho_Kitchen_jpg_ed31bfc4_v2_en.tiff",
+      "asset_role": "delivery_preview",
+      "allow_downsampled_model_inference": true,
+      "canonical_bit_depth": null,
+      "canonical_color_space": "derived_from_jpeg_source",
+      "canonical_format": "tiff",
+      "canonical_scoring_blocked_reason": "missing_16bit_reference",
+      "canonical_scoring_eligible": false,
+      "delivery_path": "input_images/750Picacho_Kitchen_jpg_ed31bfc4_v2_en.tiff",
+      "evaluate_at_native_resolution": false,
       "expected_materials": [
         "glass",
         "stone",
@@ -19,12 +28,23 @@
         "interior_glass_stone_wood",
         "specular_reflection"
       ],
+      "preserve_16bit_intermediates": false,
+      "reference_path": "input_images/750Picacho_Kitchen_jpg_ed31bfc4_v2_en.tiff",
       "scene_type": "picacho_kitchen",
       "sha256": "048410f39d34f676ee6f7a670f568dcbf3940bceb59f8b5c0071b2b1c205ff8a"
     },
     {
       "asset_id": "picacho_pool_750_v2_enhanced",
       "asset_ref": "input_images/750Picacho_Pool_jpg_58014ff8_v2_enhanced.tiff",
+      "asset_role": "delivery_preview",
+      "allow_downsampled_model_inference": true,
+      "canonical_bit_depth": null,
+      "canonical_color_space": "derived_from_jpeg_source",
+      "canonical_format": "tiff",
+      "canonical_scoring_blocked_reason": "missing_16bit_reference",
+      "canonical_scoring_eligible": false,
+      "delivery_path": "input_images/750Picacho_Pool_jpg_58014ff8_v2_enhanced.tiff",
+      "evaluate_at_native_resolution": false,
       "expected_materials": [
         "water",
         "stone",
@@ -46,14 +66,21 @@
         "water_glass_boundary",
         "exterior_foliage_stone_glass"
       ],
+      "preserve_16bit_intermediates": false,
+      "reference_path": "input_images/750Picacho_Pool_jpg_58014ff8_v2_enhanced.tiff",
       "scene_type": "picacho_pool",
       "sha256": "4b641138578e1bea4bb3cf93e9f3d91853e7c631de48f20133362596773accb9"
     }
   ],
+  "canonical_bit_depth": null,
+  "canonical_color_space": null,
+  "canonical_format": null,
   "description": "Referenced Picacho APEX visual-quality seed corpus for maximum-quality Depth Pro/DA3 and Materials V3 evaluation.",
+  "dataset_tier": "smoke_or_readiness",
   "evalset_id": "picacho_apex",
   "metadata": {
     "asset_policy": "referenced_assets_only",
+    "canonical_scoring_blocked_reason": "missing_16bit_reference",
     "quality_trajectory": [
       "depth_edge_fidelity",
       "material_precision",
