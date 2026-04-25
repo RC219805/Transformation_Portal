@@ -2244,8 +2244,8 @@ PUBLIC_HTTP_ERROR_MESSAGES = {
 }
 
 
-def _is_api_v1_path(path: str) -> bool:
-    return path.startswith("/v1/")
+def _is_versioned_api_path(path: str) -> bool:
+    return path.startswith(("/v1/", "/v2/"))
 
 
 def _http_status_error_code(status_code: int) -> str:
@@ -2751,7 +2751,10 @@ def _preset_descriptor(pipeline: str, preset_name: str) -> Optional[Dict[str, An
 
 def _allowed_preset_names(pipeline: str) -> set[str]:
     presets = PRESET_CATALOG.get(pipeline) or []
-    return {str(entry.get("name") or "").strip() for entry in presets if entry.get("name")}
+    names = {str(entry.get("name") or "").strip() for entry in presets if entry.get("name")}
+    if pipeline == "lux-depth-v3":
+        names.add("custom")
+    return names
 
 
 def _portal_issue(
@@ -4638,17 +4641,17 @@ def _record_portal_rum(payload: Dict[str, Any], request: Request) -> Tuple[Optio
 def _is_mutating_job_endpoint(method: str, path: str) -> bool:
     if method != "POST":
         return False
-    if path == "/v1/jobs":
+    if path in {"/v1/jobs", "/v2/jobs"}:
         return True
-    return bool(re.fullmatch(r"/v1/jobs/[^/]+/cancel", path))
+    return bool(re.fullmatch(r"/v[12]/jobs/[^/]+/cancel", path))
 
 
 def _is_job_events_endpoint(path: str) -> bool:
-    return bool(re.fullmatch(r"/v1/jobs/[^/]+/events", path))
+    return bool(re.fullmatch(r"/v[12]/jobs/[^/]+/events", path))
 
 
 def _is_protected_job_endpoint(path: str) -> bool:
-    return path == "/v1/jobs" or path.startswith("/v1/jobs/")
+    return path in {"/v1/jobs", "/v2/jobs"} or path.startswith(("/v1/jobs/", "/v2/jobs/"))
 
 
 def _is_protected_api_key_endpoint(path: str) -> bool:
@@ -4731,7 +4734,7 @@ def _enforce_content_length_limit(request: Request) -> Optional[JSONResponse]:
     try:
         size = int(content_length)
     except ValueError:
-        if _is_api_v1_path(request.url.path):
+        if _is_versioned_api_path(request.url.path):
             return _error_response(
                 400,
                 code="INVALID_ARGUMENT",
@@ -4748,7 +4751,7 @@ def _enforce_content_length_limit(request: Request) -> Optional[JSONResponse]:
 
     limit_bytes = _request_body_limit_bytes(request.url.path)
     if size > limit_bytes:
-        if _is_api_v1_path(request.url.path):
+        if _is_versioned_api_path(request.url.path):
             return _error_response(
                 413,
                 code="REQUEST_TOO_LARGE",
@@ -5765,7 +5768,15 @@ def _index_job_artifacts(job: Job) -> List[Dict[str, Any]]:
     return items
 
 
-def _serialize_job(job: Job, *, include_logs: bool = True) -> Dict[str, Any]:
+def _job_api_prefix(api_version: str = "v1") -> str:
+    return "/v2/jobs" if str(api_version) == "v2" else "/v1/jobs"
+
+
+def _job_events_url(job_id: str, *, api_version: str = "v1") -> str:
+    return f"{_job_api_prefix(api_version)}/{job_id}/events"
+
+
+def _serialize_job(job: Job, *, include_logs: bool = True, api_version: str = "v1") -> Dict[str, Any]:
     if job.state not in ACTIVE_JOB_STATES and job.state != "canceled":
         _refresh_job_run_summary(job)
     data = {
@@ -5777,7 +5788,7 @@ def _serialize_job(job: Job, *, include_logs: bool = True) -> Dict[str, Any]:
         "state": job.state,
         "progress": job.progress,
         "exit_code": job.exit_code,
-        "events_url": f"/v1/jobs/{job.id}/events",
+        "events_url": _job_events_url(job.id, api_version=api_version),
         "artifacts": job.artifacts,
         "error": job.error,
         "run_summary": job.run_summary or None,
@@ -7065,7 +7076,7 @@ async def http_exception_handler(
     request: Request,
     exc: StarletteHTTPException,
 ) -> JSONResponse:
-    if not _is_api_v1_path(request.url.path):
+    if not _is_versioned_api_path(request.url.path):
         return JSONResponse(
             status_code=exc.status_code,
             content={"detail": exc.detail},
@@ -7099,7 +7110,7 @@ async def request_validation_handler(
     request: Request,
     exc: RequestValidationError,
 ) -> JSONResponse:
-    if not _is_api_v1_path(request.url.path):
+    if not _is_versioned_api_path(request.url.path):
         return await fastapi_request_validation_exception_handler(
             request,
             exc,
@@ -7122,7 +7133,7 @@ async def security_layer(
     request: Request,
     call_next: Callable[[Request], Any],
 ) -> Response:
-    should_echo_traceparent = request.url.path == "/portal/bootstrap" or request.url.path.startswith("/v1/")
+    should_echo_traceparent = request.url.path == "/portal/bootstrap" or _is_versioned_api_path(request.url.path)
     if should_echo_traceparent:
         _portal_request_trace_context(request)
 
@@ -7171,7 +7182,7 @@ async def security_layer(
     response = await call_next(request)
     for name, value in SECURITY_HEADERS.items():
         response.headers.setdefault(name, value)
-    if request.url.path.startswith("/v1/"):
+    if _is_versioned_api_path(request.url.path):
         response.headers.setdefault("Cache-Control", "no-store")
     if should_echo_traceparent:
         response.headers.setdefault("traceparent", request.state.trace_context.traceparent)
@@ -7576,6 +7587,15 @@ async def stage_portal_uploads(request: Request) -> JSONResponse:
 
 @app.post("/v1/jobs")
 async def create_job(payload: Dict[str, Any]) -> JSONResponse:
+    return await _create_job(payload, api_version="v1")
+
+
+@app.post("/v2/jobs")
+async def create_job_v2(payload: Dict[str, Any]) -> JSONResponse:
+    return await _create_job(payload, api_version="v2")
+
+
+async def _create_job(payload: Dict[str, Any], *, api_version: str = "v1") -> JSONResponse:
     try:
         preview = _build_config_preview(
             payload,
@@ -7714,7 +7734,7 @@ async def create_job(payload: Dict[str, Any]) -> JSONResponse:
             data={
                 "id": jid,
                 "state": job.state,
-                "events_url": f"/v1/jobs/{jid}/events",
+                "events_url": _job_events_url(jid, api_version=api_version),
             },
             error=None,
         )
@@ -7723,6 +7743,15 @@ async def create_job(payload: Dict[str, Any]) -> JSONResponse:
 
 @app.get("/v1/jobs")
 async def list_jobs(limit: int = JOB_LIST_LIMIT) -> JSONResponse:
+    return _list_jobs(limit=limit, api_version="v1")
+
+
+@app.get("/v2/jobs")
+async def list_jobs_v2(limit: int = JOB_LIST_LIMIT) -> JSONResponse:
+    return _list_jobs(limit=limit, api_version="v2")
+
+
+def _list_jobs(*, limit: int = JOB_LIST_LIMIT, api_version: str = "v1") -> JSONResponse:
     _cleanup_expired_jobs(_now())
     bounded_limit = max(1, min(limit, JOB_LIST_LIMIT))
     jobs_sorted = sorted(
@@ -7730,7 +7759,10 @@ async def list_jobs(limit: int = JOB_LIST_LIMIT) -> JSONResponse:
         key=lambda item: item.created_at,
         reverse=True,
     )
-    serialized = [_serialize_job(job, include_logs=False) for job in jobs_sorted[:bounded_limit]]
+    serialized = [
+        _serialize_job(job, include_logs=False, api_version=api_version)
+        for job in jobs_sorted[:bounded_limit]
+    ]
 
     return JSONResponse(
         _api_envelope(
@@ -7748,6 +7780,15 @@ async def list_jobs(limit: int = JOB_LIST_LIMIT) -> JSONResponse:
 
 @app.get("/v1/jobs/{job_id}")
 async def get_job(job_id: str, include_logs: bool = True) -> JSONResponse:
+    return _get_job(job_id, include_logs=include_logs, api_version="v1")
+
+
+@app.get("/v2/jobs/{job_id}")
+async def get_job_v2(job_id: str, include_logs: bool = True) -> JSONResponse:
+    return _get_job(job_id, include_logs=include_logs, api_version="v2")
+
+
+def _get_job(job_id: str, *, include_logs: bool = True, api_version: str = "v1") -> JSONResponse:
     _cleanup_expired_jobs(_now())
     job = JOBS.get(job_id)
     if not job:
@@ -7761,7 +7802,7 @@ async def get_job(job_id: str, include_logs: bool = True) -> JSONResponse:
         _api_envelope(
             "tp.orchestrator.job_status.v1",
             success=True,
-            data=_serialize_job(job, include_logs=bool(include_logs)),
+            data=_serialize_job(job, include_logs=bool(include_logs), api_version=api_version),
             error=None,
         )
     )
@@ -7769,6 +7810,15 @@ async def get_job(job_id: str, include_logs: bool = True) -> JSONResponse:
 
 @app.get("/v1/jobs/{job_id}/artifacts/{artifact_path:path}")
 async def get_job_artifact(job_id: str, artifact_path: str) -> Response:
+    return await _get_job_artifact(job_id, artifact_path)
+
+
+@app.get("/v2/jobs/{job_id}/artifacts/{artifact_path:path}")
+async def get_job_artifact_v2(job_id: str, artifact_path: str) -> Response:
+    return await _get_job_artifact(job_id, artifact_path)
+
+
+async def _get_job_artifact(job_id: str, artifact_path: str) -> Response:
     _cleanup_expired_jobs(_now())
     job = JOBS.get(job_id)
     if not job:
@@ -7847,6 +7897,15 @@ async def get_job_artifact(job_id: str, artifact_path: str) -> Response:
 
 @app.post("/v1/jobs/{job_id}/cancel")
 async def cancel_job(job_id: str) -> JSONResponse:
+    return await _cancel_job(job_id)
+
+
+@app.post("/v2/jobs/{job_id}/cancel")
+async def cancel_job_v2(job_id: str) -> JSONResponse:
+    return await _cancel_job(job_id)
+
+
+async def _cancel_job(job_id: str) -> JSONResponse:
     job = JOBS.get(job_id)
     if not job:
         return _error_response(
@@ -7868,6 +7927,21 @@ async def cancel_job(job_id: str) -> JSONResponse:
 
 @app.get("/v1/jobs/{job_id}/events")
 async def job_events(
+    request: Request,
+    job_id: str,
+) -> Response:
+    return await _job_events(request, job_id)
+
+
+@app.get("/v2/jobs/{job_id}/events")
+async def job_events_v2(
+    request: Request,
+    job_id: str,
+) -> Response:
+    return await _job_events(request, job_id)
+
+
+async def _job_events(
     request: Request,
     job_id: str,
 ) -> Response:

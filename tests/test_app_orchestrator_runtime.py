@@ -4117,8 +4117,12 @@ def test_cleanup_expired_jobs_prunes_old_finished_entries() -> None:
 def test_mutating_job_route_detection() -> None:
     assert orchestrator_app._is_mutating_job_endpoint("POST", "/v1/jobs") is True
     assert orchestrator_app._is_mutating_job_endpoint("POST", "/v1/jobs/job_123/cancel") is True
+    assert orchestrator_app._is_mutating_job_endpoint("POST", "/v2/jobs") is True
+    assert orchestrator_app._is_mutating_job_endpoint("POST", "/v2/jobs/job_123/cancel") is True
     assert orchestrator_app._is_mutating_job_endpoint("GET", "/v1/jobs/job_123") is False
     assert orchestrator_app._is_mutating_job_endpoint("GET", "/v1/jobs/job_123/events") is False
+    assert orchestrator_app._is_mutating_job_endpoint("GET", "/v2/jobs/job_123") is False
+    assert orchestrator_app._is_mutating_job_endpoint("GET", "/v2/jobs/job_123/events") is False
 
 
 def test_extract_client_ip_does_not_trust_forwarded_header_by_default() -> None:
@@ -4201,6 +4205,7 @@ def test_request_body_limit_uses_upload_override_for_staging_path() -> None:
         orchestrator_app.MAX_REQUEST_BYTES = 256
         orchestrator_app.MAX_UPLOAD_REQUEST_BYTES = 64
         assert orchestrator_app._request_body_limit_bytes("/v1/jobs") == 256
+        assert orchestrator_app._request_body_limit_bytes("/v2/jobs") == 256
         assert orchestrator_app._request_body_limit_bytes("/v1/uploads/staging") == 64
         assert orchestrator_app._public_http_error_message(413, "/v1/uploads/staging") == (
             "request body too large (max 64 bytes)"
@@ -4526,6 +4531,8 @@ def test_api_key_validation_accepts_query_param_when_explicitly_enabled() -> Non
         orchestrator_app.ALLOW_SSE_QUERY_API_KEY = True
         request = _build_request("GET", "/v1/jobs/job_1/events", query_string="api_key=query-secret")
         assert orchestrator_app._has_valid_api_key(request) is True
+        v2_request = _build_request("GET", "/v2/jobs/job_1/events", query_string="api_key=query-secret")
+        assert orchestrator_app._has_valid_api_key(v2_request) is True
     finally:
         orchestrator_app.API_KEY_SECRET = previous_key
         orchestrator_app.ALLOW_SSE_QUERY_API_KEY = previous_flag
@@ -4545,11 +4552,15 @@ def test_protected_job_route_detection() -> None:
     assert orchestrator_app._is_protected_job_endpoint("/v1/jobs") is True
     assert orchestrator_app._is_protected_job_endpoint("/v1/jobs/job_123") is True
     assert orchestrator_app._is_protected_job_endpoint("/v1/jobs/job_123/events") is True
+    assert orchestrator_app._is_protected_job_endpoint("/v2/jobs") is True
+    assert orchestrator_app._is_protected_job_endpoint("/v2/jobs/job_123") is True
+    assert orchestrator_app._is_protected_job_endpoint("/v2/jobs/job_123/events") is True
     assert orchestrator_app._is_protected_job_endpoint("/ready") is False
 
 
 def test_protected_api_key_route_detection() -> None:
     assert orchestrator_app._is_protected_api_key_endpoint("/v1/jobs") is True
+    assert orchestrator_app._is_protected_api_key_endpoint("/v2/jobs") is True
     assert orchestrator_app._is_protected_api_key_endpoint("/v1/config-metadata") is True
     assert orchestrator_app._is_protected_api_key_endpoint("/v1/config-preview") is True
     assert orchestrator_app._is_protected_api_key_endpoint("/v1/portal/events") is True

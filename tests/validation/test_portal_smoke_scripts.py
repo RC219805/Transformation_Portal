@@ -15,6 +15,7 @@ pytestmark = pytest.mark.unit
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 PORTAL_BROWSER_SCRIPT_PATH = PROJECT_ROOT / "scripts/validation/validate_portal_browser_smoke.py"
+PORTAL_LUX_MATERIALS_SCRIPT_PATH = PROJECT_ROOT / "scripts/validation/validate_portal_lux_materials_live.py"
 FRONTDOOR_BROWSER_SCRIPT_PATH = PROJECT_ROOT / "scripts" / "validation" / "validate_frontdoor_browser_smoke.py"
 ORCHESTRATOR_HTTP_SCRIPT_PATH = PROJECT_ROOT / "scripts/validation/validate_orchestrator_http_smoke.py"
 AUDIT_PIPELINE_READINESS_SCRIPT_PATH = PROJECT_ROOT / "scripts/validation/audit_pipeline_readiness.py"
@@ -334,6 +335,194 @@ def test_orchestrator_http_smoke_covers_readiness_and_fail_closed_archive_prereq
     assert "rights-apply" in content
     assert "bag-build" in content
     assert "mets-export" in content
+
+
+def test_portal_lux_materials_payload_enforces_required_efficientsam_contract(tmp_path: Path):
+    module = _load_module(PORTAL_LUX_MATERIALS_SCRIPT_PATH, "tests_validate_portal_lux_materials_payload")
+
+    payload = module._build_lux_materials_payload(
+        input_dir=tmp_path / "input",
+        output_dir=tmp_path / "output",
+    )
+
+    args = payload["args"]
+    assert payload["pipeline"] == "lux-depth-v3"
+    assert args["quality_tier"] == "apex"
+    assert args["depth_backend"] == "da3"
+    assert args["depth_device"] == "cpu"
+    assert args["materials_v3"] is True
+    assert args["enable_segmentation"] is True
+    assert args["segmentation_backend"] == "efficientsam"
+    assert args["strict_segmentation"] is True
+    assert args["pbr"] is True
+    assert args["emit_report"] is True
+    assert args["emit_run_card"] is True
+    assert args["run_card_version"] == "v2"
+    assert args["enable_v2"] is False
+    assert args["non_commercial_ok"] is True
+
+
+def test_portal_lux_materials_payload_adds_sam2_overrides(tmp_path: Path):
+    module = _load_module(PORTAL_LUX_MATERIALS_SCRIPT_PATH, "tests_validate_portal_lux_materials_sam2_payload")
+    checkpoint = tmp_path / "sam2.pt"
+
+    payload = module._build_lux_materials_payload(
+        input_dir=tmp_path / "input",
+        output_dir=tmp_path / "output",
+        segmentation_backend="sam2",
+        sam2_checkpoint_path=checkpoint,
+        sam2_model_size="large",
+    )
+
+    args = payload["args"]
+    assert args["segmentation_backend"] == "sam2"
+    assert args["sam2_model_size"] == "large"
+    assert args["sam2_checkpoint_path"] == str(checkpoint)
+    assert args["sam2_max_concurrency"] == 1
+
+
+def test_portal_lux_materials_preview_validation_requires_contract_flags(tmp_path: Path):
+    module = _load_module(PORTAL_LUX_MATERIALS_SCRIPT_PATH, "tests_validate_portal_lux_materials_preview")
+    payload = module._build_lux_materials_payload(input_dir=tmp_path / "input", output_dir=tmp_path / "output")
+
+    preview = {
+        "field_errors": [],
+        "normalized_args": dict(payload["args"]),
+        "execution_args": dict(payload["args"]),
+        "argv_preview": (
+            "python -m transformation_portal.lux_depth_v3 --materials-v3 on "
+            "--enable-segmentation on --segmentation-backend efficientsam "
+            "--strict-segmentation --non-commercial-ok true"
+        ),
+    }
+
+    module._validate_lux_preview(preview, expected_backend="efficientsam")
+
+
+def test_portal_lux_materials_preview_validation_fails_closed_on_field_errors(tmp_path: Path):
+    module = _load_module(PORTAL_LUX_MATERIALS_SCRIPT_PATH, "tests_validate_portal_lux_materials_preview_errors")
+    payload = module._build_lux_materials_payload(input_dir=tmp_path / "input", output_dir=tmp_path / "output")
+    preview = {
+        "field_errors": [{"field": "segmentation_backend", "code": "invalid_segmentation_backend"}],
+        "normalized_args": dict(payload["args"]),
+        "execution_args": dict(payload["args"]),
+        "argv_preview": "",
+    }
+
+    with pytest.raises(module.SmokeFailure, match="Preview returned field errors") as exc_info:
+        module._validate_lux_preview(preview, expected_backend="efficientsam")
+
+    assert exc_info.value.kind == "contract"
+
+
+def test_portal_lux_materials_output_validation_checks_masks_manifest_and_run_card(tmp_path: Path):
+    import numpy as np
+
+    module = _load_module(PORTAL_LUX_MATERIALS_SCRIPT_PATH, "tests_validate_portal_lux_materials_outputs")
+    output_dir = tmp_path / "output"
+    segmentation_dir = output_dir / "segmentation"
+    manifests_dir = output_dir / "manifests"
+    segmentation_dir.mkdir(parents=True)
+    manifests_dir.mkdir(parents=True)
+
+    mask_relative_path = "segmentation/fixture_materials_v3_masks.npz"
+    mask_path = output_dir / mask_relative_path
+    np.savez_compressed(mask_path, glass=np.ones((2, 2), dtype=np.float32))
+
+    manifest_relative_path = "manifests/fixture_combined.json"
+    (output_dir / manifest_relative_path).write_text(
+        json.dumps(
+            {
+                "materials_v3": {
+                    "enabled": True,
+                    "version": "3.1",
+                    "segmentation_metadata": {
+                        "backend": "efficientsam",
+                        "mask_count": 1,
+                        "mask_artifact_path": str(mask_path),
+                        "errors": [],
+                    },
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    run_card_path = output_dir / "run_card_fixture.json"
+    run_card_path.write_text(
+        json.dumps(
+            {
+                "result_summary": [
+                    {
+                        "segmentation_status": {
+                            "enabled": True,
+                            "backend": "efficientsam",
+                            "mask_count": 1,
+                            "errors": [],
+                            "mask_artifact_path": mask_relative_path,
+                        }
+                    }
+                ],
+                "artifact_index": [
+                    {
+                        "relative_path": mask_relative_path,
+                        "artifact_type": "segmentation_mask_npz",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = module._validate_lux_outputs(
+        {
+            "artifacts": {
+                "output_dir": str(output_dir),
+                "items": [
+                    {"relative_path": mask_relative_path},
+                    {"relative_path": manifest_relative_path},
+                ],
+            }
+        },
+        expected_backend="efficientsam",
+    )
+
+    assert result["mask_relative_path"] == mask_relative_path
+    assert result["manifest_relative_path"] == manifest_relative_path
+    assert result["run_card_path"] == str(run_card_path)
+    assert result["mask_stats"]["non_empty_mask_count"] == 1
+
+
+def test_portal_lux_materials_sam2_prerequisite_reports_missing_checkpoint(tmp_path: Path):
+    module = _load_module(PORTAL_LUX_MATERIALS_SCRIPT_PATH, "tests_validate_portal_lux_materials_sam2_prereq")
+
+    reason = module._sam2_prerequisite_failure(tmp_path / "missing-sam2.pt")
+
+    assert reason is not None
+    assert reason.startswith("checkpoint_missing:")
+
+
+def test_portal_lux_materials_terminal_failure_classifies_missing_runtime_as_environment():
+    module = _load_module(PORTAL_LUX_MATERIALS_SCRIPT_PATH, "tests_validate_portal_lux_materials_failure_kind")
+
+    kind = module._classify_terminal_job_failure(
+        {
+            "data": {
+                "error": {"code": "RUNNER_EXIT_NONZERO"},
+                "logs_tail": ["ModuleNotFoundError: No module named 'torchvision'"],
+            }
+        }
+    )
+
+    assert kind == "environment"
+
+
+def test_portal_lux_materials_script_documents_sam2_optional_gate():
+    content = PORTAL_LUX_MATERIALS_SCRIPT_PATH.read_text(encoding="utf-8")
+
+    assert "TP_PORTAL_LUX_RUN_SAM2" in content
+    assert "TP_PORTAL_LUX_REQUIRE_SAM2" in content
+    assert "sam2_skipped" in content
+    assert "segmentation_mask_npz" in content
 
 
 def test_frontdoor_browser_parse_args_does_not_probe_chrome_for_explicit_override(monkeypatch: pytest.MonkeyPatch):
