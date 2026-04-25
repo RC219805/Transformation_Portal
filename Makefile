@@ -27,7 +27,7 @@ PHASE6_SMOKE_TESTS := \
 	tests/test_lux_render_pipeline_smoke.py \
 	tests/lux_depth_v3/test_orchestrator_smoke.py
 
-.PHONY: help test-fast test-novideo test-full test-integration test-structure test-utils test-orchestrator-contract test-orchestrator-http-contract test-portal-contract test-frontdoor-contract test-archive-gate-contract seed-frontdoor-user run-frontdoor-local validate-orchestrator-http validate-portal-browser validate-frontdoor-browser validate-frontdoor-deployment-gate audit-pipeline-readiness coverage-fast-scope coverage-report coverage-diff coverage-package venv repair-core-venv setup clean \
+.PHONY: help test-fast test-novideo test-full test-integration test-structure test-utils test-orchestrator-contract test-orchestrator-http-contract test-portal-contract test-frontdoor-contract test-archive-gate-contract seed-frontdoor-user run-frontdoor-local validate-orchestrator-http validate-portal-lux-materials-live validate-portal-browser validate-frontdoor-browser validate-frontdoor-deployment-gate audit-pipeline-readiness coverage-fast-scope coverage-report coverage-diff coverage-package venv repair-core-venv setup clean \
         lint lint-parity ci ci-full pre-commit install-hooks quality-check fix-quality validate-ci organize-docs check-json-serialization check-piptools-cache \
         check-python-headers check-yaml-governance check-stale-docs lock lock-prod lock-ci lock-dev install-core install-ml install-ml-core install-ml-raw install-ml-sam2 install-ml-coreml docs docs-clean \
         check check-test-markers check-ci-sync check-todo-governance check-environment check-portal-asset-budgets validate-full validate-quick clean-frontdoor clean-all check-worktree \
@@ -63,6 +63,7 @@ help:
 	@echo "  coverage-diff      Check diff coverage against main branch (≥85% required)"
 	@echo "  coverage-package   Generate package-level coverage baseline report for ratcheting"
 	@echo "  validate-orchestrator-http  Run the live orchestrator HTTP smoke audit"
+	@echo "  validate-portal-lux-materials-live  Run live Lux Materials V3 segmentation backend smoke"
 	@echo "  validate-portal-browser  Run the live browser smoke audit with an isolated local backend"
 	@echo "  validate-frontdoor-browser  Run the live browser smoke audit with isolated local backend/frontdoor runtimes"
 	@echo "  validate-frontdoor-deployment-gate  Run the manual shared-deployment frontdoor posture gate"
@@ -303,6 +304,10 @@ run-frontdoor-local:
 validate-orchestrator-http:
 	@echo "Running live orchestrator HTTP smoke validation..."
 	@"$(PY)" scripts/validation/validate_orchestrator_http_smoke.py
+
+validate-portal-lux-materials-live:
+	@echo "Running live Lux Materials V3 segmentation backend smoke validation..."
+	@TP_API_KEY="$${TP_API_KEY:-contract-secret}" "$(PY)" scripts/validation/validate_portal_lux_materials_live.py --api-key "$${TP_API_KEY:-contract-secret}"
 
 validate-portal-browser:
 	@echo "Running live portal browser smoke validation..."

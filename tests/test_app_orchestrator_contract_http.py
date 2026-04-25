@@ -1129,6 +1129,7 @@ def test_lux_config_preview_preserves_custom_preset_and_advanced_sam2_controls(
                 "preset": "custom",
                 "enable_segmentation": True,
                 "segmentation_backend": "sam2",
+                "strict_segmentation": True,
                 "sam2_model_size": "large",
                 "sam2_tiling_enabled": True,
                 "sam2_tile_size_px": 1536,
@@ -1153,6 +1154,7 @@ def test_lux_config_preview_preserves_custom_preset_and_advanced_sam2_controls(
     preview = body["data"]
     normalized = preview["normalized_args"]
 
+    assert preview["field_errors"] == []
     assert normalized["preset"] == "custom"
     assert normalized["segmentation_backend"] == "sam2"
     assert normalized["sam2_model_size"] == "large"
@@ -1170,6 +1172,66 @@ def test_lux_config_preview_preserves_custom_preset_and_advanced_sam2_controls(
     assert preview["execution_args"]["preset"] == "custom"
     assert preview["execution_args"]["sam2_tiling_enabled"] is True
     assert preview["execution_args"]["run_card_version"] == "v2"
+
+
+@pytest.mark.parametrize(
+    ("jobs_path", "expected_events_prefix"),
+    [
+        ("/v1/jobs", "/v1/jobs"),
+        ("/v2/jobs", "/v2/jobs"),
+    ],
+)
+def test_lux_jobs_dispatch_accepts_custom_manual_preset(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    jobs_path: str,
+    expected_events_prefix: str,
+) -> None:
+    async def fake_run_job(job, _argv):  # noqa: ANN001
+        job.state = "succeeded"
+        job.exit_code = 0
+        now = orchestrator_app._now()
+        job.done_published_at = now
+        job.finished_at = now
+
+    monkeypatch.setattr(orchestrator_app, "_run_job", fake_run_job)
+    input_dir = (tmp_path / "manual-input").resolve()
+    output_dir = (tmp_path / "manual-output").resolve()
+    input_dir.mkdir(parents=True, exist_ok=True)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    (input_dir / "frame.jpg").write_bytes(b"fixture-image")
+
+    response = client.post(
+        jobs_path,
+        json={
+            "pipeline": "lux-depth-v3",
+            "args": {
+                "input_dir": str(input_dir),
+                "output_dir": str(output_dir),
+                "preset": "custom",
+                "quality_tier": "apex",
+                "depth_backend": "da3",
+                "enable_segmentation": True,
+                "segmentation_backend": "sam2",
+                "strict_segmentation": True,
+                "materials_v3": True,
+                "pbr": True,
+                "emit_run_card": True,
+                "run_card_version": "v2",
+                "non_commercial_ok": True,
+            },
+        },
+    )
+    body = response.json()
+
+    assert response.status_code == 200
+    assert body["schema"] == "tp.orchestrator.job.v1"
+    assert body["success"] is True
+    assert body["data"]["events_url"].startswith(f"{expected_events_prefix}/job_")
+    job = orchestrator_app.JOBS[body["data"]["id"]]
+    assert job.request["args"]["preset"] == "custom"
+    assert job.effective_request["args"]["preset"] == "custom"
 
 
 def test_config_preview_contract_sanitizes_archive_validation_errors(
@@ -1685,6 +1747,18 @@ def test_jobs_list_and_detail_include_recovery_fields(client: TestClient) -> Non
     assert detail_body["data"]["artifacts"]["items"][0]["display_hint"]["label"] == "Manifest"
     assert detail_body["data"]["error"]["code"] == "RUNNER_ERROR"
 
+    v2_list_response = client.get("/v2/jobs")
+    v2_list_body = v2_list_response.json()
+    assert v2_list_response.status_code == 200
+    assert v2_list_body["schema"] == "tp.orchestrator.jobs.v1"
+    assert v2_list_body["data"]["jobs"][0]["events_url"] == f"/v2/jobs/{job.id}/events"
+
+    v2_detail_response = client.get(f"/v2/jobs/{job.id}")
+    v2_detail_body = v2_detail_response.json()
+    assert v2_detail_response.status_code == 200
+    assert v2_detail_body["schema"] == "tp.orchestrator.job_status.v1"
+    assert v2_detail_body["data"]["events_url"] == f"/v2/jobs/{job.id}/events"
+
 
 def test_partial_run_card_promotes_reviewable_failed_job_state(tmp_path: Path) -> None:
     output_dir = tmp_path / "out"
@@ -1993,9 +2067,11 @@ def test_jobs_list_and_detail_include_partial_run_summary(client: TestClient) ->
     assert detail_body["data"]["run_summary"]["error_count"] == 1
 
 
+@pytest.mark.parametrize("jobs_base", ["/v1/jobs", "/v2/jobs"])
 def test_job_artifact_endpoint_serves_indexed_binary_without_exposing_absolute_path(
     client: TestClient,
     tmp_path,
+    jobs_base: str,
 ) -> None:
     output_dir = tmp_path / "out"
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -2011,7 +2087,7 @@ def test_job_artifact_endpoint_serves_indexed_binary_without_exposing_absolute_p
     orchestrator_app.JOBS[job.id] = job
     orchestrator_app._index_job_artifacts(job)
 
-    response = client.get(f"/v1/jobs/{job.id}/artifacts/renders/hero.png")
+    response = client.get(f"{jobs_base}/{job.id}/artifacts/renders/hero.png")
 
     assert response.status_code == 200
     assert response.headers["Cache-Control"] == "no-store"
@@ -2129,7 +2205,8 @@ def test_job_artifact_endpoint_returns_typed_not_found_for_missing_file(
     assert body["error"]["details"]["path"] == "missing.png"
 
 
-def test_v1_routes_enforce_api_key_for_reads_and_events(client: TestClient) -> None:
+@pytest.mark.parametrize("jobs_base", ["/v1/jobs", "/v2/jobs"])
+def test_versioned_job_routes_enforce_api_key_for_reads_and_events(client: TestClient, jobs_base: str) -> None:
     orchestrator_app.API_KEY_SECRET = "contract-secret"
     now = orchestrator_app._now()
     finished_job = orchestrator_app.Job(
@@ -2144,19 +2221,19 @@ def test_v1_routes_enforce_api_key_for_reads_and_events(client: TestClient) -> N
     orchestrator_app.JOBS[finished_job.id] = finished_job
     orchestrator_app.EVENT_SUBSCRIBERS[finished_job.id] = {}
 
-    list_unauthorized = client.get("/v1/jobs", headers={"x-api-key": "wrong"})
+    list_unauthorized = client.get(jobs_base, headers={"x-api-key": "wrong"})
     assert list_unauthorized.status_code == 401
     assert list_unauthorized.json()["error"]["code"] == "UNAUTHORIZED"
 
-    list_authorized = client.get("/v1/jobs", headers={"x-api-key": "contract-secret"})
+    list_authorized = client.get(jobs_base, headers={"x-api-key": "contract-secret"})
     assert list_authorized.status_code == 200
     assert list_authorized.json()["success"] is True
 
-    events_unauthorized = client.get(f"/v1/jobs/{finished_job.id}/events", headers={"x-api-key": "wrong"})
+    events_unauthorized = client.get(f"{jobs_base}/{finished_job.id}/events", headers={"x-api-key": "wrong"})
     assert events_unauthorized.status_code == 401
     assert events_unauthorized.json()["error"]["code"] == "UNAUTHORIZED"
 
-    events_authorized = client.get(f"/v1/jobs/{finished_job.id}/events", headers={"x-api-key": "contract-secret"})
+    events_authorized = client.get(f"{jobs_base}/{finished_job.id}/events", headers={"x-api-key": "contract-secret"})
     assert events_authorized.status_code == 200
     assert "event: state" in events_authorized.text
     assert "event: done" in events_authorized.text
