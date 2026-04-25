@@ -775,7 +775,18 @@ def _load_candidate_mask_union(
         return None, _invalid_mask_evidence("candidate_mask_missing", reported_path)
 
     try:
-        with np.load(mask_path, allow_pickle=False) as payload:
+        loaded_payload = np.load(mask_path, allow_pickle=False)
+    except (OSError, ValueError, TypeError, EOFError, zipfile.BadZipFile):
+        return None, _invalid_mask_evidence("candidate_mask_invalid_npz", reported_path)
+
+    if not hasattr(loaded_payload, "files"):
+        close_payload = getattr(loaded_payload, "close", None)
+        if callable(close_payload):
+            close_payload()
+        return None, _invalid_mask_evidence("candidate_mask_invalid_npz", reported_path)
+
+    try:
+        with loaded_payload as payload:
             keys = sorted(payload.files)
             if not keys:
                 return None, _invalid_mask_evidence("candidate_mask_empty", reported_path)
@@ -790,7 +801,7 @@ def _load_candidate_mask_union(
                     return None, _invalid_mask_evidence("candidate_mask_dimension_mismatch", reported_path)
                 union |= array.astype(bool)
                 valid_mask_count += 1
-    except (OSError, ValueError, TypeError, EOFError, zipfile.BadZipFile):
+    except (AttributeError, OSError, ValueError, TypeError, EOFError, zipfile.BadZipFile):
         return None, _invalid_mask_evidence("candidate_mask_invalid_npz", reported_path)
 
     if valid_mask_count == 0:

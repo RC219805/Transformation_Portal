@@ -343,11 +343,17 @@ def test_candidate_mask_supplied_but_output_missing_is_not_evaluated(tmp_path):
     }
 
 
+def _write_npy_mask_payload(path: Path) -> None:
+    with path.open("wb") as handle:
+        np.save(handle, np.ones((8, 8), dtype=np.float32))
+
+
 @pytest.mark.parametrize(
     ("mask_builder", "expected_reason"),
     [
         (lambda path: None, "candidate_mask_missing"),
         (lambda path: path.write_text("not an npz", encoding="utf-8"), "candidate_mask_invalid_npz"),
+        (_write_npy_mask_payload, "candidate_mask_invalid_npz"),
         (lambda path: np.savez(path), "candidate_mask_empty"),
         (lambda path: np.savez(path, glass=np.zeros((8, 8), dtype=np.float32)), "candidate_mask_empty"),
         (lambda path: np.savez(path, overlay=np.ones((8, 8, 3), dtype=np.float32)), "candidate_mask_no_2d_arrays"),
