@@ -1,0 +1,128 @@
+{
+  "assets": [
+    {
+      "asset_id": "pool_water_stone_001",
+      "asset_ref": "apex_real_estate_v1/reference_16bit/pool_water_stone_001_master16.tif",
+      "asset_role": "canonical_apex_reference",
+      "allow_downsampled_model_inference": true,
+      "canonical_bit_depth": 16,
+      "canonical_color_space": "ProPhoto RGB",
+      "canonical_format": "tiff",
+      "canonical_icc_profile_name": "ProPhoto RGB",
+      "canonical_icc_profile_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "canonical_scoring_eligible": true,
+      "delivery_path": "apex_real_estate_v1/delivery_8bit/pool_water_stone_001_delivery.jpg",
+      "evaluate_at_native_resolution": true,
+      "expected_materials": [
+        "water",
+        "stone",
+        "foliage",
+        "sky"
+      ],
+      "manual_quality_score": null,
+      "preserve_16bit_intermediates": true,
+      "raw_development_profile": "apex_real_estate_v1/raw_profiles/apex_real_estate_v1.xmp",
+      "raw_development_settings_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "reference_path": "apex_real_estate_v1/reference_16bit/pool_water_stone_001_master16.tif",
+      "reject_if": [
+        "halo",
+        "material_bleed",
+        "water_overclarity",
+        "sky_color_drift",
+        "stone_texture_clipping"
+      ],
+      "risk_zones": [
+        "pool_edge",
+        "sky_pool_boundary"
+      ],
+      "scene_type": "pool_exterior",
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "source_raw_format": "dng",
+      "source_raw_path": "apex_real_estate_v1/source_raw/pool_water_stone_001.dng",
+      "source_raw_sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "working_color_space": "ProPhoto RGB",
+      "working_transfer_function": "linear"
+    },
+    {
+      "asset_id": "kitchen_glass_metal_001",
+      "asset_ref": "apex_real_estate_v1/reference_16bit/kitchen_glass_metal_001_master16.tif",
+      "asset_role": "canonical_apex_reference",
+      "allow_downsampled_model_inference": true,
+      "canonical_bit_depth": 16,
+      "canonical_color_space": "ProPhoto RGB",
+      "canonical_format": "tiff",
+      "canonical_scoring_eligible": true,
+      "delivery_path": "apex_real_estate_v1/delivery_8bit/kitchen_glass_metal_001_delivery.jpg",
+      "evaluate_at_native_resolution": true,
+      "expected_materials": [
+        "glass",
+        "stone",
+        "metal",
+        "wood"
+      ],
+      "manual_quality_score": null,
+      "preserve_16bit_intermediates": true,
+      "reference_path": "apex_real_estate_v1/reference_16bit/kitchen_glass_metal_001_master16.tif",
+      "reject_if": [
+        "glass_overbrightening",
+        "metal_halo",
+        "stone_texture_clipping"
+      ],
+      "risk_zones": [
+        "countertop_edge",
+        "appliance_reflections"
+      ],
+      "scene_type": "kitchen_interior",
+      "sha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "working_color_space": "ProPhoto RGB",
+      "working_transfer_function": "linear"
+    },
+    {
+      "asset_id": "exterior_foliage_sky_001",
+      "asset_ref": "apex_real_estate_v1/reference_16bit/exterior_foliage_sky_001_master16.tif",
+      "asset_role": "canonical_apex_reference",
+      "allow_downsampled_model_inference": true,
+      "canonical_bit_depth": 16,
+      "canonical_color_space": "ProPhoto RGB",
+      "canonical_format": "tiff",
+      "canonical_scoring_eligible": true,
+      "delivery_path": "apex_real_estate_v1/delivery_8bit/exterior_foliage_sky_001_delivery.jpg",
+      "evaluate_at_native_resolution": true,
+      "expected_materials": [
+        "foliage",
+        "sky",
+        "stucco",
+        "stone"
+      ],
+      "manual_quality_score": null,
+      "preserve_16bit_intermediates": true,
+      "reference_path": "apex_real_estate_v1/reference_16bit/exterior_foliage_sky_001_master16.tif",
+      "reject_if": [
+        "foliage_oversaturation",
+        "sky_color_drift",
+        "facade_boundary_bleed"
+      ],
+      "risk_zones": [
+        "tree_roofline",
+        "sky_facade_boundary"
+      ],
+      "scene_type": "exterior_foliage_sky",
+      "sha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "working_color_space": "ProPhoto RGB",
+      "working_transfer_function": "linear"
+    }
+  ],
+  "canonical_bit_depth": 16,
+  "canonical_color_space": "ProPhoto RGB",
+  "canonical_format": "tiff",
+  "dataset_tier": "canonical_apex",
+  "description": "Example metadata-only canonical APEX real-estate corpus. Image binaries live outside the repository under APEX_EVAL_ASSET_ROOT.",
+  "evalset_id": "apex_real_estate_v1",
+  "metadata": {
+    "asset_policy": "external_assets_only",
+    "minimum_initial_assets": 3,
+    "target_assets": "8-12"
+  },
+  "schema_version": "apex_evalset.v1",
+  "version": "example"
+}

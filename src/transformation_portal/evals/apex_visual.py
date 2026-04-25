@@ -19,6 +19,8 @@ from typing import Any, Callable, Iterable, Mapping, Sequence
 
 import numpy as np
 
+from transformation_portal.evals.asset_resolver import ResolvedAsset, resolve_manifest_path
+from transformation_portal.evals.image_metadata import inspect_reference_image, normalize_image_format
 from transformation_portal.evals.metrics import lpips_score, ssim
 from transformation_portal.ingest.canonical_json import dump_json
 from transformation_portal.lux_depth_v3.model_registry import MODEL_REGISTRY, UsageClass
@@ -96,15 +98,7 @@ def _bool_with_default(value: Any, default: bool) -> bool:
 
 
 def _normalize_image_format(value: Any) -> str | None:
-    normalized = _normalize_optional_str(value)
-    if normalized is None:
-        return None
-    normalized = normalized.lower().lstrip(".")
-    if normalized == "jpg":
-        return "jpeg"
-    if normalized == "tif":
-        return "tiff"
-    return normalized
+    return normalize_image_format(value)
 
 
 def _normalize_source_raw_format(value: Any) -> str | None:
@@ -184,38 +178,7 @@ def _tiff_bit_depth(path: Path) -> int | None:
 
 
 def _reference_image_metadata(path: Path) -> dict[str, Any]:
-    metadata: dict[str, Any] = {
-        "detected_reference_format": None,
-        "detected_reference_bit_depth": None,
-        "observable_reference_metadata_status": "missing_reference_asset",
-        "observable_reference_metadata_error": None,
-    }
-    if not path.is_file():
-        return metadata
-
-    from PIL import Image, UnidentifiedImageError
-
-    try:
-        with Image.open(path) as image:
-            detected_format = _normalize_image_format(image.format or path.suffix)
-            detected_bit_depth = _bit_depth_from_pil_mode(image.mode)
-    except (OSError, ValueError, UnidentifiedImageError) as exc:
-        metadata["observable_reference_metadata_status"] = "unreadable_reference_image"
-        metadata["observable_reference_metadata_error"] = str(exc)
-        return metadata
-
-    if detected_format == "tiff":
-        tiff_bit_depth = _tiff_bit_depth(path)
-        detected_bit_depth = tiff_bit_depth if tiff_bit_depth is not None else detected_bit_depth
-    if detected_format == "jpeg" and detected_bit_depth is None:
-        detected_bit_depth = 8
-
-    metadata["detected_reference_format"] = detected_format
-    metadata["detected_reference_bit_depth"] = detected_bit_depth
-    metadata["observable_reference_metadata_status"] = (
-        "ok" if detected_format is not None and detected_bit_depth is not None else "missing_observable_reference_metadata"
-    )
-    return metadata
+    return inspect_reference_image(path)
 
 
 @dataclass(frozen=True)
@@ -367,23 +330,29 @@ class ApexEvalSet:
     assets: tuple[ApexEvalAsset, ...]
     source_path: Path
     repo_root: Path
+    asset_root: Path | None = None
     dataset_tier: str = DEFAULT_DATASET_TIER
     canonical_bit_depth: int | None = None
     canonical_format: str | None = None
     canonical_color_space: str | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
 
+    def resolve_asset(self, asset: ApexEvalAsset) -> ResolvedAsset:
+        return resolve_manifest_path(asset.asset_ref, repo_root=self.repo_root, asset_root=self.asset_root)
+
+    def resolve_reference(self, asset: ApexEvalAsset) -> ResolvedAsset:
+        return resolve_manifest_path(
+            asset.reference_path or asset.asset_ref, repo_root=self.repo_root, asset_root=self.asset_root
+        )
+
     def resolve_asset_path(self, asset: ApexEvalAsset) -> Path:
-        path = Path(asset.asset_ref)
-        if path.is_absolute():
-            return path
-        return self.repo_root / path
+        resolved = self.resolve_asset(asset).resolved_path
+        return resolved if resolved is not None else self.repo_root / asset.asset_ref
 
     def resolve_reference_path(self, asset: ApexEvalAsset) -> Path:
-        path = Path(asset.reference_path or asset.asset_ref)
-        if path.is_absolute():
-            return path
-        return self.repo_root / path
+        reported = asset.reference_path or asset.asset_ref
+        resolved = self.resolve_reference(asset).resolved_path
+        return resolved if resolved is not None else self.repo_root / reported
 
 
 @dataclass(frozen=True)
@@ -412,7 +381,12 @@ def repository_root(start: Path | None = None) -> Path:
     return Path.cwd().resolve()
 
 
-def load_apex_evalset(evalset_path: Path | str, *, repo_root: Path | None = None) -> ApexEvalSet:
+def load_apex_evalset(
+    evalset_path: Path | str,
+    *,
+    repo_root: Path | None = None,
+    asset_root: Path | str | None = None,
+) -> ApexEvalSet:
     """Load an APEX evalset JSON file or directory containing ``evalset.json``."""
     root = (repo_root or repository_root()).resolve()
     path = Path(evalset_path)
@@ -439,6 +413,7 @@ def load_apex_evalset(evalset_path: Path | str, *, repo_root: Path | None = None
         assets=assets,
         source_path=path,
         repo_root=root,
+        asset_root=Path(asset_root).expanduser() if asset_root is not None and str(asset_root).strip() else None,
         dataset_tier=dataset_tier,
         canonical_bit_depth=_optional_int(payload.get("canonical_bit_depth")),
         canonical_format=_normalize_optional_str(payload.get("canonical_format")),
@@ -461,12 +436,19 @@ def _canonical_scoring_status(
     *,
     asset_ready: bool,
     reference_metadata: Mapping[str, Any] | None = None,
+    path_blocked_reason: str | None = None,
+    path_field: str | None = None,
 ) -> dict[str, Any]:
     reference_metadata = reference_metadata or {}
     declared_format = _normalized_format(asset)
     declared_bit_depth = _reference_bit_depth(asset)
     detected_format = _normalize_image_format(reference_metadata.get("detected_reference_format"))
     detected_bit_depth = _optional_int(reference_metadata.get("detected_reference_bit_depth"))
+    detected_dimensions = reference_metadata.get("detected_reference_dimensions")
+    detected_mode = reference_metadata.get("detected_reference_mode")
+    detected_channel_count = reference_metadata.get("detected_reference_channel_count")
+    detected_icc_profile_name = reference_metadata.get("detected_reference_icc_profile_name")
+    detected_icc_profile_sha256 = reference_metadata.get("detected_reference_icc_profile_sha256")
     metadata_status = str(reference_metadata.get("observable_reference_metadata_status") or "not_checked")
     metadata_error = _normalize_optional_str(reference_metadata.get("observable_reference_metadata_error"))
     reference_format = detected_format or declared_format
@@ -474,7 +456,10 @@ def _canonical_scoring_status(
     eligible = True
     blocked_reason: str | None = None
 
-    if not asset_ready:
+    if path_blocked_reason:
+        eligible = False
+        blocked_reason = path_blocked_reason
+    elif not asset_ready:
         eligible = False
         blocked_reason = "asset_not_ready"
     elif evalset.dataset_tier != CANONICAL_APEX_DATASET_TIER:
@@ -511,7 +496,7 @@ def _canonical_scoring_status(
         eligible = False
         blocked_reason = asset.canonical_scoring_blocked_reason or "canonical_scoring_disabled"
 
-    if not eligible and asset.canonical_scoring_blocked_reason:
+    if not eligible and asset.canonical_scoring_blocked_reason and not path_blocked_reason:
         blocked_reason = asset.canonical_scoring_blocked_reason
 
     return {
@@ -524,6 +509,11 @@ def _canonical_scoring_status(
         "declared_reference_format": declared_format,
         "detected_reference_bit_depth": detected_bit_depth,
         "detected_reference_format": detected_format,
+        "detected_reference_dimensions": detected_dimensions,
+        "detected_reference_mode": detected_mode,
+        "detected_reference_channel_count": detected_channel_count,
+        "detected_reference_icc_profile_name": detected_icc_profile_name,
+        "detected_reference_icc_profile_sha256": detected_icc_profile_sha256,
         "observable_reference_metadata_status": metadata_status,
         "observable_reference_metadata_error": metadata_error,
         "reference_color_space": asset.canonical_color_space,
@@ -532,42 +522,76 @@ def _canonical_scoring_status(
         "preserve_16bit_intermediates": asset.preserve_16bit_intermediates,
         "canonical_scoring_eligible": eligible,
         "canonical_scoring_blocked_reason": None if eligible else blocked_reason,
+        "path_field": path_field if path_blocked_reason else None,
     }
 
 
 def canonical_scoring_status(evalset: ApexEvalSet, asset: ApexEvalAsset) -> dict[str, Any]:
     """Return canonical APEX quality scoring eligibility for an eval asset."""
-    path = evalset.resolve_asset_path(asset)
-    reference_metadata = _reference_image_metadata(evalset.resolve_reference_path(asset)) if path.is_file() else None
+    asset_resolution = evalset.resolve_asset(asset)
+    reference_resolution = evalset.resolve_reference(asset)
+    path = asset_resolution.resolved_path
+    reference_path = reference_resolution.resolved_path
+    path_blocked_reason = None
+    path_field = None
+    if asset_resolution.escaped_asset_root:
+        path_blocked_reason = "path_escapes_asset_root"
+        path_field = "asset_ref"
+    elif reference_resolution.escaped_asset_root:
+        path_blocked_reason = "path_escapes_asset_root"
+        path_field = "reference_path"
+    reference_metadata = _reference_image_metadata(reference_path) if path is not None and path.is_file() else None
     return _canonical_scoring_status(
         evalset,
         asset,
-        asset_ready=path.is_file() and sha256_file(path) == asset.sha256,
+        asset_ready=path is not None and path.is_file() and sha256_file(path) == asset.sha256,
         reference_metadata=reference_metadata,
+        path_blocked_reason=path_blocked_reason,
+        path_field=path_field,
     )
 
 
 def asset_status(evalset: ApexEvalSet, asset: ApexEvalAsset) -> dict[str, Any]:
-    path = evalset.resolve_asset_path(asset)
-    if not path.is_file():
+    asset_resolution = evalset.resolve_asset(asset)
+    reference_resolution = evalset.resolve_reference(asset)
+    path = asset_resolution.resolved_path
+    reference_path = reference_resolution.resolved_path
+    path_blocked_reason = None
+    path_field = None
+    if asset_resolution.escaped_asset_root:
+        path_blocked_reason = "path_escapes_asset_root"
+        path_field = "asset_ref"
+    elif reference_resolution.escaped_asset_root:
+        path_blocked_reason = "path_escapes_asset_root"
+        path_field = "reference_path"
+
+    if path is None or not path.is_file() or path_blocked_reason:
         return {
             "asset_id": asset.asset_id,
             "status": "missing_asset",
             "asset_ref": asset.asset_ref,
-            "resolved_path": str(path),
+            "asset_resolution": asset_resolution.to_report_dict(),
+            "reference_resolution": reference_resolution.to_report_dict(),
             "expected_sha256": asset.sha256,
             "actual_sha256": None,
-            **_canonical_scoring_status(evalset, asset, asset_ready=False),
+            **_canonical_scoring_status(
+                evalset,
+                asset,
+                asset_ready=False,
+                path_blocked_reason=path_blocked_reason,
+                path_field=path_field,
+            ),
         }
 
     actual_sha = sha256_file(path)
     status = "ready" if actual_sha == asset.sha256 else "checksum_mismatch"
-    reference_metadata = _reference_image_metadata(evalset.resolve_reference_path(asset))
+    reference_metadata = _reference_image_metadata(reference_path)
     return {
         "asset_id": asset.asset_id,
         "status": status,
         "asset_ref": asset.asset_ref,
-        "resolved_path": str(path),
+        "asset_resolution": asset_resolution.to_report_dict(),
+        "reference_resolution": reference_resolution.to_report_dict(),
         "expected_sha256": asset.sha256,
         "actual_sha256": actual_sha,
         "size_bytes": int(path.stat().st_size),
@@ -621,7 +645,7 @@ def visible_delta_metrics(reference: Path, candidate: Path) -> dict[str, Any]:
     assert cand is not None
     if ref.shape != cand.shape:
         return _visible_delta_unavailable(
-            "shape_mismatch",
+            "invalid_candidate_dimensions",
             reference_shape=list(ref.shape),
             candidate_shape=list(cand.shape),
         )
@@ -661,6 +685,7 @@ def build_apex_eval_report(
     output_dir: Path | str,
     candidate_outputs: Mapping[str, Mapping[str, Path | str]] | None = None,
     repo_root: Path | None = None,
+    asset_root: Path | str | None = None,
 ) -> dict[str, Any]:
     """Build and persist an APEX eval report.
 
@@ -668,7 +693,7 @@ def build_apex_eval_report(
     When no candidate output is provided, the report still validates corpus
     readiness and leaves visual-delta metrics unset.
     """
-    evalset = load_apex_evalset(evalset_path, repo_root=repo_root)
+    evalset = load_apex_evalset(evalset_path, repo_root=repo_root, asset_root=asset_root)
     output_root = Path(output_dir)
     if not output_root.is_absolute():
         output_root = evalset.repo_root / output_root
@@ -688,6 +713,11 @@ def build_apex_eval_report(
             "declared_reference_format": status["declared_reference_format"],
             "detected_reference_bit_depth": status["detected_reference_bit_depth"],
             "detected_reference_format": status["detected_reference_format"],
+            "detected_reference_dimensions": status["detected_reference_dimensions"],
+            "detected_reference_mode": status["detected_reference_mode"],
+            "detected_reference_channel_count": status["detected_reference_channel_count"],
+            "detected_reference_icc_profile_name": status["detected_reference_icc_profile_name"],
+            "detected_reference_icc_profile_sha256": status["detected_reference_icc_profile_sha256"],
             "observable_reference_metadata_status": status["observable_reference_metadata_status"],
             "observable_reference_metadata_error": status["observable_reference_metadata_error"],
             "reference_color_space": status["reference_color_space"],
@@ -696,6 +726,9 @@ def build_apex_eval_report(
             "preserve_16bit_intermediates": status["preserve_16bit_intermediates"],
             "canonical_scoring_eligible": status["canonical_scoring_eligible"],
             "canonical_scoring_blocked_reason": status["canonical_scoring_blocked_reason"],
+            "path_field": status["path_field"],
+            "asset_resolution": status["asset_resolution"],
+            "reference_resolution": status["reference_resolution"],
         }
         candidates = []
         for candidate_name, outputs in sorted(candidate_outputs.items()):
@@ -731,7 +764,17 @@ def build_apex_eval_report(
                     }
                 )
                 continue
-            metrics = visible_delta_metrics(Path(status["resolved_path"]), candidate_path)
+            source_path = evalset.resolve_asset(asset).resolved_path
+            if source_path is None:
+                candidates.append(
+                    {
+                        "candidate": candidate_name,
+                        "status": "source_not_ready",
+                        "metrics": {},
+                    }
+                )
+                continue
+            metrics = visible_delta_metrics(source_path, candidate_path)
             candidates.append(
                 {
                     "candidate": candidate_name,
@@ -848,7 +891,7 @@ def _depth_case_io_metadata(
     source_status: Mapping[str, Any] | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     reference_path = asset.reference_path or asset.asset_ref
-    resolved_reference = str(evalset.resolve_reference_path(asset))
+    reference_resolution = evalset.resolve_reference(asset)
     reference_bit_depth = (
         _optional_int(source_status.get("reference_bit_depth")) if source_status is not None else _reference_bit_depth(asset)
     )
@@ -857,22 +900,25 @@ def _depth_case_io_metadata(
         if source_status is not None
         else _normalized_format(asset)
     )
+    reference_dimensions = source_status.get("detected_reference_dimensions") if source_status is not None else None
     downsampled = bool(asset.allow_downsampled_model_inference)
     model_input = {
         "derived_from": reference_path,
-        "resolved_derived_from": resolved_reference,
         "input_bit_depth": 8 if downsampled else reference_bit_depth,
         "input_color_space": "srgb" if downsampled else asset.canonical_color_space,
         "input_resolution": None,
+        "reference_resolution_dimensions": reference_dimensions,
         "downsampled_for_inference": downsampled,
+        "reference_resolution": reference_resolution.to_report_dict(),
     }
     evaluation_target = {
         "path": reference_path,
-        "resolved_path": resolved_reference,
         "bit_depth": reference_bit_depth,
         "format": reference_format,
+        "dimensions": reference_dimensions,
         "color_space": asset.canonical_color_space,
         "evaluate_at_native_resolution": asset.evaluate_at_native_resolution,
+        "reference_resolution": reference_resolution.to_report_dict(),
     }
     evaluation_target.update(asset.provenance_dict())
     return model_input, evaluation_target
@@ -894,9 +940,10 @@ def build_depth_backend_benchmark_report(
     accept_depth_pro_license: bool = False,
     runner: DepthBackendRunner | None = None,
     repo_root: Path | None = None,
+    asset_root: Path | str | None = None,
 ) -> dict[str, Any]:
     """Build a governed depth backend comparison report."""
-    evalset = load_apex_evalset(evalset_path, repo_root=repo_root)
+    evalset = load_apex_evalset(evalset_path, repo_root=repo_root, asset_root=asset_root)
     output_root = Path(output_dir)
     if not output_root.is_absolute():
         output_root = evalset.repo_root / output_root

@@ -30,6 +30,7 @@ def main() -> int:
     parser.add_argument("--backends", required=True, help="Comma-separated backend ids, e.g. da3-metric,depth_pro.")
     parser.add_argument("--quality-tier", default="apex", help="Quality tier recorded in the report.")
     parser.add_argument("--output-dir", required=True, help="Directory for depth_backend_comparison_report.json.")
+    parser.add_argument("--asset-root", default=None, help="Optional external asset root for evalset asset paths.")
     parser.add_argument(
         "--emit-comparison-report",
         choices=("on", "off"),
@@ -55,6 +56,7 @@ def main() -> int:
             output_dir=Path(args.output_dir),
             non_commercial_ok=args.non_commercial_ok,
             accept_depth_pro_license=args.accept_apple_depth_pro_research_license,
+            asset_root=args.asset_root,
         )
     except (OSError, ValueError) as exc:
         print(f"Depth backend benchmark error: {exc}", file=sys.stderr)
