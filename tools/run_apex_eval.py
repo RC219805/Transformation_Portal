@@ -7,7 +7,11 @@ import argparse
 import sys
 from pathlib import Path
 
-from transformation_portal.evals.apex_visual import build_apex_eval_report, parse_candidate_outputs
+from transformation_portal.evals.apex_visual import (
+    build_apex_eval_report,
+    parse_candidate_masks,
+    parse_candidate_outputs,
+)
 from transformation_portal.evals.apex_evidence_bundle import build_apex_evidence_bundle, parse_candidate_evidence
 
 
@@ -22,6 +26,13 @@ def build_parser() -> argparse.ArgumentParser:
         default=[],
         metavar="CANDIDATE:ASSET_ID=PATH",
         help="Optional candidate output image for APEX metric evaluation. May be repeated.",
+    )
+    parser.add_argument(
+        "--candidate-mask",
+        action="append",
+        default=[],
+        metavar="CANDIDATE:ASSET_ID=PATH",
+        help="Optional candidate Materials V3 mask NPZ for mask-aware APEX metrics. May be repeated.",
     )
     parser.add_argument(
         "--emit-report",
@@ -63,11 +74,13 @@ def main() -> int:
 
     try:
         candidate_outputs = parse_candidate_outputs(args.candidate_output)
+        candidate_masks = parse_candidate_masks(args.candidate_mask)
         candidate_evidence = parse_candidate_evidence(args.candidate_evidence)
         report = build_apex_eval_report(
             Path(args.evalset),
             output_dir=Path(args.output_dir),
             candidate_outputs=candidate_outputs,
+            candidate_masks=candidate_masks,
             asset_root=args.asset_root,
         )
         if args.emit_evidence_bundle == "on" or candidate_evidence:
