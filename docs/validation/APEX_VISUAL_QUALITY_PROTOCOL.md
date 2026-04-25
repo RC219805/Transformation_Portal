@@ -133,8 +133,15 @@ APEX evidence bundles may attach existing candidate outputs and explicit Materia
   --output-dir output/apex_eval \
   --candidate-output materials_v3:pool_water_stone_001=output/pool_materials_v3_master16.tif \
   --candidate-evidence materials_v3:pool_water_stone_001=output/pool_materials_v3_evidence.json \
-  --emit-evidence-bundle on
+  --run-scope-asset-id pool_water_stone_001 \
+  --emit-evidence-bundle on \
+  --synthetic-data off
 ```
+
+When a run scope is provided, every scoped canonical asset must have candidate output evidence before promotion can be
+eligible. When run scope is omitted, candidate outputs and required candidate telemetry must cover every canonical asset
+in the manifest. Missing Materials V3 telemetry, invalid `apex_metrics.v1` statuses, unsupported bit depth, dimension
+mismatch, `APEX_MATERIALS_PIXEL_OPS_EMPTY`, raw CLIP pixel-op authority, or `synthetic_data=true` blocks promotion.
 
 ## 16-Bit Working Path
 
