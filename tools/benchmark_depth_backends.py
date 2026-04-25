@@ -41,6 +41,12 @@ def main() -> int:
     args = parser.parse_args()
 
     backends = [item.strip() for item in args.backends.split(",") if item.strip()]
+    if not backends:
+        print(
+            "Depth backend benchmark error: --backends must include at least one backend id.",
+            file=sys.stderr,
+        )
+        return 2
     try:
         report = build_depth_backend_benchmark_report(
             Path(args.evalset),

@@ -349,7 +349,19 @@ def test_segment_materials_exposes_runtime_metadata(monkeypatch, sample_image):
             return {"glass": (np.ones((2, 2), dtype=np.float32), 0.9)}
 
         def get_runtime_metadata(self):
-            return {"clip_runtime": {"offline_mode": True, "weights_source": "cache_path"}}
+            return {
+                "clip_runtime": {"offline_mode": True, "weights_source": "cache_path"},
+                "material_confidence_evidence": {
+                    "glass": {
+                        "material_confidence": 0.9,
+                        "confidence_score_type": "material_classifier_probability_v1",
+                    },
+                    "stone": {
+                        "material_confidence": 0.2,
+                        "confidence_score_type": "material_classifier_probability_v1",
+                    },
+                },
+            }
 
     monkeypatch.setattr(seg_module, "_get_backend_instance", lambda *_args, **_kwargs: _FakeBackend())
 
@@ -360,6 +372,9 @@ def test_segment_materials_exposes_runtime_metadata(monkeypatch, sample_image):
     metadata = get_last_segmentation_runtime_metadata()
     assert metadata is not None
     assert metadata["clip_runtime"]["weights_source"] == "cache_path"
+    assert set(metadata["material_confidence_evidence"]) == {"glass"}
+    score_type = metadata["material_confidence_evidence"]["glass"]["confidence_score_type"]
+    assert score_type == "material_classifier_probability_v1"
 
 
 @pytest.mark.ml
@@ -770,7 +785,19 @@ def test_segment_materials_cache_hit_skips_backend(sample_image, tmp_path, monke
             return {"glass": (glass_mask, 0.91)}
 
         def get_runtime_metadata(self):
-            return {"clip_runtime": {"weights_source": "test"}}
+            return {
+                "clip_runtime": {"weights_source": "test"},
+                "material_confidence_evidence": {
+                    "glass": {
+                        "material_confidence": 0.91,
+                        "confidence_score_type": "material_classifier_probability_v1",
+                    },
+                    "stone": {
+                        "material_confidence": 0.2,
+                        "confidence_score_type": "material_classifier_probability_v1",
+                    },
+                },
+            }
 
     monkeypatch.setattr(seg_module, "_get_backend_instance", lambda *args, **kwargs: FakeBackend())
     config = EnhanceConfig(
@@ -793,6 +820,8 @@ def test_segment_materials_cache_hit_skips_backend(sample_image, tmp_path, monke
     assert second_metadata["backend"] == "efficientsam"
     assert first_metadata["material_confidences"]["glass"] == pytest.approx(0.91)
     assert second_metadata["material_confidences"]["glass"] == pytest.approx(0.91)
+    assert set(first_metadata["material_confidence_evidence"]) == {"glass"}
+    assert set(second_metadata["material_confidence_evidence"]) == {"glass"}
     assert second_metadata["confidence_summary"]["count"] == 1
 
 

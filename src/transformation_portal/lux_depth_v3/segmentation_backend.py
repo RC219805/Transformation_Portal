@@ -127,6 +127,17 @@ def _material_confidence_metadata(
     return metadata
 
 
+def _material_confidence_evidence_from_metadata(
+    metadata: Optional[Dict[str, Any]],
+) -> Optional[Dict[str, Dict[str, Any]]]:
+    if not isinstance(metadata, dict):
+        return None
+    evidence = metadata.get("material_confidence_evidence")
+    if not isinstance(evidence, dict):
+        return None
+    return {str(material): dict(values) for material, values in evidence.items() if isinstance(values, dict)}
+
+
 def _tensor_values_1d(value: Any) -> np.ndarray:
     """Convert torch/fake tensor rows into a 1D float32 array."""
     if hasattr(value, "detach") and hasattr(value, "cpu"):
@@ -1966,7 +1977,11 @@ def segment_materials(
             if cached is not None:
                 cached_results, cached_metadata = cached
                 masks, material_confidences = _split_material_results(cached_results)
-                confidence_metadata = _material_confidence_metadata(material_confidences)
+                cached_runtime = cached_metadata.get("runtime_metadata")
+                confidence_metadata = _material_confidence_metadata(
+                    material_confidences,
+                    evidence=_material_confidence_evidence_from_metadata(cached_runtime),
+                )
                 timing_ms["total"] = round((time.perf_counter() - t_total) * 1000.0, 3)
                 metadata: Dict[str, Any] = {
                     "cache_hit": True,
@@ -1978,7 +1993,6 @@ def segment_materials(
                     "device": device,
                     "model_size": sam2_model_size if backend_name == "sam2" else None,
                 }
-                cached_runtime = cached_metadata.get("runtime_metadata")
                 if isinstance(cached_runtime, dict):
                     metadata.update(cached_runtime)
                 metadata.update(confidence_metadata)
@@ -2030,7 +2044,10 @@ def segment_materials(
         # while preserving real classifier confidence for downstream Materials V3
         # decisions through runtime metadata.
         masks, material_confidences = _split_material_results(results)
-        confidence_metadata = _material_confidence_metadata(material_confidences)
+        confidence_metadata = _material_confidence_metadata(
+            material_confidences,
+            evidence=_material_confidence_evidence_from_metadata(runtime_metadata),
+        )
         runtime_metadata_for_cache = dict(runtime_metadata) if isinstance(runtime_metadata, dict) else {}
         runtime_metadata_for_cache.update(confidence_metadata)
 

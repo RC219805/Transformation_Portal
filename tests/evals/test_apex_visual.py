@@ -366,6 +366,33 @@ def test_benchmark_depth_backends_returns_stable_input_error_for_missing_evalset
     assert "missing_evalset" in captured.err
 
 
+def test_benchmark_depth_backends_rejects_empty_backend_list(tmp_path, monkeypatch, capsys):
+    module = _load_tool_module("benchmark_depth_backends.py", "benchmark_depth_backends_empty_backends_unit")
+
+    def fail_build_report(*args, **kwargs):
+        raise AssertionError("empty backend list must fail before report generation")
+
+    monkeypatch.setattr(module, "build_depth_backend_benchmark_report", fail_build_report)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "benchmark_depth_backends.py",
+            "--evalset",
+            "evalsets/picacho_apex",
+            "--backends",
+            ",,,",
+            "--output-dir",
+            str(tmp_path),
+        ],
+    )
+
+    assert module.main() == 2
+    captured = capsys.readouterr()
+    assert "--backends must include at least one backend id" in captured.err
+    assert not captured.out
+
+
 def test_benchmark_depth_backends_prints_resolved_report_path(tmp_path, monkeypatch, capsys):
     module = _load_tool_module("benchmark_depth_backends.py", "benchmark_depth_backends_resolved_path_unit")
     resolved_report = tmp_path / "resolved" / "depth_backend_comparison_report.json"
