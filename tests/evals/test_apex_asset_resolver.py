@@ -11,7 +11,12 @@ import numpy as np
 import pytest
 from PIL import Image
 
-from transformation_portal.evals.apex_visual import APEX_EVALSET_SCHEMA_VERSION, build_apex_eval_report, sha256_file
+from transformation_portal.evals.apex_visual import (
+    APEX_EVALSET_SCHEMA_VERSION,
+    build_apex_eval_report,
+    load_apex_evalset,
+    sha256_file,
+)
 
 pytestmark = pytest.mark.unit
 
@@ -154,6 +159,16 @@ def test_asset_root_traversal_fails_closed_for_asset_ref(tmp_path):
     assert asset["asset_resolution"]["escaped_asset_root"] is True
 
 
+def test_legacy_resolve_asset_path_rejects_asset_root_escape(tmp_path):
+    repo_root = tmp_path / "repo"
+    asset_root = tmp_path / "assets"
+    evalset_path = _write_evalset(repo_root, asset_ref="../outside.tif", sha256="0" * 64)
+    evalset = load_apex_evalset(evalset_path, repo_root=repo_root, asset_root=asset_root)
+
+    with pytest.raises(ValueError, match="escapes asset root"):
+        evalset.resolve_asset_path(evalset.assets[0])
+
+
 def test_asset_root_traversal_fails_closed_for_reference_path(tmp_path):
     repo_root = tmp_path / "repo"
     asset_root = tmp_path / "assets"
@@ -173,6 +188,23 @@ def test_asset_root_traversal_fails_closed_for_reference_path(tmp_path):
     assert asset["canonical_scoring_blocked_reason"] == "path_escapes_asset_root"
     assert asset["path_field"] == "reference_path"
     assert asset["reference_resolution"]["escaped_asset_root"] is True
+
+
+def test_legacy_resolve_reference_path_rejects_asset_root_escape(tmp_path):
+    repo_root = tmp_path / "repo"
+    asset_root = tmp_path / "assets"
+    image_path = asset_root / "apex_real_estate_v1" / "reference_16bit" / "reference16.tif"
+    _write_image(image_path)
+    evalset_path = _write_evalset(
+        repo_root,
+        asset_ref="apex_real_estate_v1/reference_16bit/reference16.tif",
+        reference_path="../outside.tif",
+        sha256=sha256_file(image_path),
+    )
+    evalset = load_apex_evalset(evalset_path, repo_root=repo_root, asset_root=asset_root)
+
+    with pytest.raises(ValueError, match="escapes asset root"):
+        evalset.resolve_reference_path(evalset.assets[0])
 
 
 def test_source_raw_path_is_not_resolved_or_readiness_checked(tmp_path):
@@ -235,3 +267,31 @@ def test_audit_exit_codes_are_deterministic(tmp_path, monkeypatch):
         ["audit_apex_assets.py", "--evalset", str(tmp_path / "missing"), "--output-dir", str(tmp_path / "audit4")],
     )
     assert module.main() == 3
+
+
+def test_audit_uses_eval_report_output_directory_for_relative_output(tmp_path, monkeypatch):
+    module = _load_tool_module("audit_apex_assets.py", "audit_apex_assets_output_dir_unit")
+    repo_root = tmp_path / "repo"
+    cwd = tmp_path / "outside_cwd"
+    cwd.mkdir()
+    image_path = repo_root / "reference16.tif"
+    _write_image(image_path)
+    evalset_path = _write_evalset(repo_root, asset_ref="reference16.tif", sha256=sha256_file(image_path))
+    monkeypatch.chdir(cwd)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "audit_apex_assets.py",
+            "--evalset",
+            str(evalset_path),
+            "--output-dir",
+            "audit",
+            "--repo-root",
+            str(repo_root),
+        ],
+    )
+
+    assert module.main() == 0
+    assert (repo_root / "audit" / "apex_asset_audit_report.json").is_file()
+    assert not (cwd / "audit" / "apex_asset_audit_report.json").exists()

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib
 from pathlib import Path
 from typing import Any
 
@@ -42,8 +43,14 @@ def load_16bit_tiff(path: Path) -> tuple[np.ndarray | None, dict[str, Any]]:
     if bit_depth is None or bit_depth < 16:
         return None, {"status": "unsupported_bit_depth", "reason": "reference_bit_depth_below_16", **metadata}
 
-    with Image.open(path) as image:
-        arr = np.asarray(image)
+    try:
+        tifffile = importlib.import_module("tifffile")
+    except ImportError:
+        return None, {"status": "invalid_input", "reason": "tifffile_unavailable", **metadata}
+    try:
+        arr = np.asarray(tifffile.imread(path))
+    except (OSError, ValueError, TypeError) as exc:
+        return None, {"status": "invalid_input", "reason": "tiff_read_failed", "error": str(exc), **metadata}
     arr_bit_depth = bit_depth_from_dtype(arr.dtype)
     if arr_bit_depth is None or arr_bit_depth < 16:
         return None, {"status": "unsupported_bit_depth", "reason": "loaded_bit_depth_below_16", **metadata}
@@ -75,7 +82,12 @@ def write_16bit_master(array: np.ndarray, path: Path) -> dict[str, Any]:
     if bit_depth is None or bit_depth < 16:
         raise ValueError("16-bit master output requires an integer or float array with at least 16 bits")
     path.parent.mkdir(parents=True, exist_ok=True)
-    Image.fromarray(arr).save(path, format="TIFF")
+    try:
+        tifffile = importlib.import_module("tifffile")
+    except ImportError as exc:
+        raise RuntimeError("16-bit TIFF master output requires tifffile") from exc
+    photometric = "rgb" if arr.ndim == 3 and arr.shape[-1] in {3, 4} else "minisblack"
+    tifffile.imwrite(path, arr, photometric=photometric)
     return {
         "artifact_role": ARTIFACT_WORKING_16,
         "path": str(path),

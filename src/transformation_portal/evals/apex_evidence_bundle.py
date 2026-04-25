@@ -138,10 +138,15 @@ def build_apex_evidence_bundle(
 ) -> dict[str, Any]:
     """Build and persist an APEX evidence bundle from an eval report."""
     candidate_evidence = candidate_evidence or {}
-    repo = repo_root or Path.cwd()
+    report_repo_root = (
+        apex_report.get("evalset", {}).get("repo_root") if isinstance(apex_report.get("evalset"), Mapping) else None
+    )
+    repo = repo_root or (Path(str(report_repo_root)) if report_repo_root else Path.cwd())
     output_root = Path(output_dir)
     if not output_root.is_absolute():
-        output_root = repo / output_root
+        report_path_value = apex_report.get("report_path")
+        report_parent = Path(str(report_path_value)).parent if report_path_value else None
+        output_root = (report_parent if report_parent and report_parent.is_absolute() else repo) / output_root
     output_root.mkdir(parents=True, exist_ok=True)
 
     cases: list[dict[str, Any]] = []

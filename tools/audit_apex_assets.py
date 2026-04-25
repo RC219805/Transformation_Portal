@@ -24,6 +24,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Audit APEX evalset assets.")
     parser.add_argument("--evalset", required=True, help="Evalset directory or evalset.json path.")
     parser.add_argument("--asset-root", default=None, help="Optional external asset root for evalset asset paths.")
+    parser.add_argument("--repo-root", default=None, help="Optional repository root for relative evalset/output paths.")
     parser.add_argument(
         "--output-dir",
         default="output/apex_asset_audit",
@@ -42,12 +43,13 @@ def main() -> int:
             Path(args.evalset),
             output_dir=Path(args.output_dir),
             asset_root=args.asset_root,
+            repo_root=Path(args.repo_root) if args.repo_root else None,
         )
     except (OSError, ValueError) as exc:
         print(f"APEX asset audit error: {exc}", file=sys.stderr)
         return 3
 
-    audit_path = Path(args.output_dir)
+    audit_path = Path(str(report["report_path"])).parent
     if not audit_path.is_absolute():
         audit_path = Path.cwd() / audit_path
     audit_path.mkdir(parents=True, exist_ok=True)

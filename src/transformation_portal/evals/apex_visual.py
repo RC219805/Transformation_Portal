@@ -346,13 +346,21 @@ class ApexEvalSet:
         )
 
     def resolve_asset_path(self, asset: ApexEvalAsset) -> Path:
-        resolved = self.resolve_asset(asset).resolved_path
-        return resolved if resolved is not None else self.repo_root / asset.asset_ref
+        resolution = self.resolve_asset(asset)
+        if resolution.escaped_asset_root:
+            raise ValueError(f"APEX asset_ref escapes asset root: {asset.asset_ref}")
+        if resolution.resolved_path is None:
+            raise ValueError(f"APEX asset_ref did not resolve to a filesystem path: {asset.asset_ref}")
+        return resolution.resolved_path
 
     def resolve_reference_path(self, asset: ApexEvalAsset) -> Path:
         reported = asset.reference_path or asset.asset_ref
-        resolved = self.resolve_reference(asset).resolved_path
-        return resolved if resolved is not None else self.repo_root / reported
+        resolution = self.resolve_reference(asset)
+        if resolution.escaped_asset_root:
+            raise ValueError(f"APEX reference_path escapes asset root: {reported}")
+        if resolution.resolved_path is None:
+            raise ValueError(f"APEX reference_path did not resolve to a filesystem path: {reported}")
+        return resolution.resolved_path
 
 
 @dataclass(frozen=True)
@@ -645,9 +653,10 @@ def visible_delta_metrics(reference: Path, candidate: Path) -> dict[str, Any]:
     assert cand is not None
     if ref.shape != cand.shape:
         return _visible_delta_unavailable(
-            "invalid_candidate_dimensions",
+            "shape_mismatch",
             reference_shape=list(ref.shape),
             candidate_shape=list(cand.shape),
+            status_aliases=["invalid_candidate_dimensions"],
         )
 
     abs_delta = np.abs(cand - ref)
@@ -820,6 +829,7 @@ def build_apex_eval_report(
             "version": evalset.version,
             "description": evalset.description,
             "source_path": str(evalset.source_path),
+            "repo_root": str(evalset.repo_root),
             "dataset_tier": evalset.dataset_tier,
             "canonical_bit_depth": evalset.canonical_bit_depth,
             "canonical_format": evalset.canonical_format,

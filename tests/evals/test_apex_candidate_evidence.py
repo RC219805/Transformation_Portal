@@ -111,6 +111,21 @@ def test_candidate_output_and_materials_telemetry_attach_to_bundle(tmp_path):
     assert (tmp_path / "bundle" / "evidence_bundle.json").is_file()
 
 
+def test_evidence_bundle_relative_output_uses_report_context(tmp_path):
+    report = _apex_report(tmp_path)
+    evidence = _materials_evidence(tmp_path / "materials.json")
+
+    bundle = build_apex_evidence_bundle(
+        report,
+        output_dir="nested_bundle",
+        candidate_evidence={"materials_v3": {"unit_image": evidence}},
+    )
+
+    expected = tmp_path / "report" / "nested_bundle" / "evidence_bundle.json"
+    assert bundle["report_path"] == str(expected)
+    assert expected.is_file()
+
+
 def test_missing_materials_telemetry_blocks_materials_v3_promotion(tmp_path):
     report = _apex_report(tmp_path)
 

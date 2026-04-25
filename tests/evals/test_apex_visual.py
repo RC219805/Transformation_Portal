@@ -539,6 +539,44 @@ def test_run_apex_eval_prints_resolved_report_path(tmp_path, monkeypatch, capsys
     assert capsys.readouterr().out.strip() == str(resolved_report)
 
 
+def test_run_apex_eval_uses_report_output_dir_for_evidence_bundle(tmp_path, monkeypatch):
+    module = _load_tool_module("run_apex_eval.py", "run_apex_eval_evidence_output_dir_unit")
+    repo_root = tmp_path / "repo"
+    resolved_report = repo_root / "resolved" / "apex_eval_report.json"
+    calls = {}
+
+    def fake_build_report(*args, **kwargs):
+        return {
+            "report_path": str(resolved_report),
+            "evalset": {"repo_root": str(repo_root), "canonical_scoring_eligible_count": 0},
+            "assets": [],
+        }
+
+    def fake_build_bundle(report, **kwargs):
+        calls.update(kwargs)
+        return {"report_path": str(resolved_report.parent / "evidence_bundle.json")}
+
+    monkeypatch.setattr(module, "build_apex_eval_report", fake_build_report)
+    monkeypatch.setattr(module, "build_apex_evidence_bundle", fake_build_bundle)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "run_apex_eval.py",
+            "--evalset",
+            "evalsets/picacho_apex",
+            "--output-dir",
+            "relative-output",
+            "--emit-evidence-bundle",
+            "on",
+        ],
+    )
+
+    assert module.main() == 0
+    assert calls["output_dir"] == resolved_report.parent
+    assert calls["repo_root"] == repo_root
+
+
 def test_benchmark_depth_backends_returns_stable_input_error_for_missing_evalset(tmp_path, monkeypatch, capsys):
     module = _load_tool_module("benchmark_depth_backends.py", "benchmark_depth_backends_missing_evalset_unit")
 
@@ -644,6 +682,18 @@ def test_visible_delta_metrics_reports_unreadable_candidate(tmp_path):
     assert metrics["unreadable_path"] == str(candidate_path)
     assert metrics["ssim"] is None
     assert metrics["lpips"] is None
+
+
+def test_visible_delta_metrics_preserves_shape_mismatch_status_alias(tmp_path):
+    reference_path = tmp_path / "reference.png"
+    candidate_path = tmp_path / "candidate.png"
+    Image.fromarray(np.zeros((8, 8, 3), dtype=np.uint8)).save(reference_path)
+    Image.fromarray(np.zeros((4, 4, 3), dtype=np.uint8)).save(candidate_path)
+
+    metrics = visible_delta_metrics(reference_path, candidate_path)
+
+    assert metrics["status"] == "shape_mismatch"
+    assert metrics["status_aliases"] == ["invalid_candidate_dimensions"]
 
 
 def test_load_apex_evalset_rejects_checksum_drift_in_report(tmp_path):

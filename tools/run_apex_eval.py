@@ -66,12 +66,15 @@ def main() -> int:
             asset_root=args.asset_root,
         )
         if args.emit_evidence_bundle == "on" or candidate_evidence:
+            resolved_output_dir = Path(str(report["report_path"])).parent
+            report_repo_root = report.get("evalset", {}).get("repo_root")
             build_apex_evidence_bundle(
                 report,
-                output_dir=Path(args.output_dir),
+                output_dir=resolved_output_dir,
                 candidate_evidence=candidate_evidence,
                 run_scope_asset_ids=args.run_scope_asset_id,
                 synthetic_data=args.synthetic_data == "on",
+                repo_root=Path(str(report_repo_root)) if report_repo_root else None,
             )
     except (OSError, ValueError) as exc:
         print(f"APEX eval error: {exc}", file=sys.stderr)

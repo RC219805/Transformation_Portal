@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
+import tifffile
 from PIL import Image
 
 from transformation_portal.evals.image_io import (
@@ -84,6 +85,25 @@ def test_working_16_and_delivery8_write_helpers(tmp_path):
     assert delivery["artifact_role"] == ARTIFACT_DELIVERY_8BIT
     assert delivery["bit_depth"] == 8
     assert delivery_path.is_file()
+
+
+def test_16bit_rgb_tiff_round_trip_preserves_uint16_precision(tmp_path):
+    arr = np.zeros((8, 8, 3), dtype=np.uint16)
+    arr[..., 0] = 1024
+    arr[..., 1] = 32768
+    arr[..., 2] = 65535
+    path = tmp_path / "rgb_master16.tif"
+
+    master = write_16bit_master(arr, path)
+    loaded, metadata = load_16bit_tiff(path)
+
+    assert master["bit_depth"] == 16
+    assert metadata["status"] == "ok"
+    assert loaded is not None
+    assert loaded.dtype == np.uint16
+    assert loaded.shape == arr.shape
+    np.testing.assert_array_equal(loaded, arr)
+    np.testing.assert_array_equal(tifffile.imread(path), arr)
 
 
 def test_write_16bit_master_rejects_8bit_input(tmp_path):
