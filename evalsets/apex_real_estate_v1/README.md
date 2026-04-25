@@ -78,16 +78,10 @@ output/
 
 Large delivery JPEGs, including files under `delivery_8bit/`, must stay under the external asset root.
 
-## Next step
+## Real evidence runbook
 
-After this manifest lands, the next PR documents the first real evidence run using:
+The first non-synthetic APEX evidence workflow is documented in:
 
-```text
---candidate-output
---candidate-evidence
---emit-evidence-bundle on
---synthetic-data off
---run-scope-asset-id
-```
+`docs/validation/APEX_REAL_CANONICAL_EVIDENCE_RUNBOOK.md`
 
-Generated outputs must remain uncommitted.
+Generated evidence outputs must remain uncommitted unless a later redacted-fixture policy explicitly allows them.

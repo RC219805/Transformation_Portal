@@ -16,6 +16,12 @@ APEX_CLI_MODULES = {
     "tools/audit_apex_assets.py": "audit_apex_assets_docs_unit",
     "tools/run_apex_eval.py": "run_apex_eval_docs_unit",
 }
+REAL_CANONICAL_RUNBOOK = "APEX_REAL_CANONICAL_EVIDENCE_RUNBOOK.md"
+REAL_CANONICAL_ASSET_IDS = {
+    "pool_water_stone_001",
+    "kitchen_glass_metal_001",
+    "exterior_foliage_sky_001",
+}
 
 
 def _load_tool_module(script_path: str, module_name: str):
@@ -54,6 +60,14 @@ def _documented_apex_commands() -> list[tuple[Path, str, set[str]]]:
     return commands
 
 
+def _commands_for_doc(doc_name: str, script_path: str) -> list[set[str]]:
+    return [
+        options
+        for doc_path, documented_script_path, options in _documented_apex_commands()
+        if doc_path.name == doc_name and documented_script_path == script_path
+    ]
+
+
 def test_validation_docs_apex_commands_use_current_cli_options():
     known_options = {script_path: _parser_options(script_path) for script_path in APEX_CLI_MODULES}
     failures = []
@@ -63,7 +77,46 @@ def test_validation_docs_apex_commands_use_current_cli_options():
         if unknown_options:
             failures.append(f"{doc_path.relative_to(REPO_ROOT)} {script_path}: {', '.join(unknown_options)}")
 
-    assert failures == []
+    assert not failures
+
+
+def test_real_canonical_runbook_audit_command_uses_current_cli_options():
+    script_path = "tools/audit_apex_assets.py"
+    known_options = _parser_options(script_path)
+    commands = _commands_for_doc(REAL_CANONICAL_RUNBOOK, script_path)
+
+    assert commands
+    assert all(options <= known_options for options in commands)
+    assert any("--require-canonical" in options for options in commands)
+
+
+def test_real_canonical_runbook_evidence_command_uses_current_cli_options():
+    script_path = "tools/run_apex_eval.py"
+    known_options = _parser_options(script_path)
+    commands = _commands_for_doc(REAL_CANONICAL_RUNBOOK, script_path)
+
+    assert commands
+    assert all(options <= known_options for options in commands)
+
+
+def test_real_canonical_runbook_scoped_evidence_example_documents_scope_flags():
+    scoped_example_flags = {
+        "--asset-root",
+        "--candidate-output",
+        "--candidate-evidence",
+        "--run-scope-asset-id",
+        "--emit-evidence-bundle",
+        "--synthetic-data",
+    }
+    commands = _commands_for_doc(REAL_CANONICAL_RUNBOOK, "tools/run_apex_eval.py")
+
+    assert any(scoped_example_flags.issubset(options) for options in commands)
+
+
+def test_real_canonical_runbook_full_manifest_command_mentions_all_three_asset_ids():
+    text = (REPO_ROOT / "docs" / "validation" / REAL_CANONICAL_RUNBOOK).read_text(encoding="utf-8")
+
+    assert REAL_CANONICAL_ASSET_IDS <= set(re.findall(r"\b[a-z]+(?:_[a-z0-9]+)+\b", text))
 
 
 def test_evidence_bundle_command_example_documents_run_scope_and_synthetic_mode():
