@@ -6,11 +6,24 @@ import json
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
+from transformation_portal.evals.apex_metrics import (
+    METRIC_STATUS_DIMENSION_MISMATCH,
+    METRIC_STATUS_INVALID_INPUT,
+    METRIC_STATUS_UNSUPPORTED_BIT_DEPTH,
+    METRIC_STATUSES,
+)
 from transformation_portal.ingest.canonical_json import dump_json
 
 APEX_EVIDENCE_BUNDLE_VERSION = "apex_evidence_bundle.v1"
 APEX_METRIC_CONTRACT_VERSION = "apex_metrics.v1"
 APEX_MATERIALS_PIXEL_OPS_EMPTY = "APEX_MATERIALS_PIXEL_OPS_EMPTY"
+_PROMOTION_BLOCKING_METRIC_STATUSES = frozenset(
+    {
+        METRIC_STATUS_INVALID_INPUT,
+        METRIC_STATUS_UNSUPPORTED_BIT_DEPTH,
+        METRIC_STATUS_DIMENSION_MISMATCH,
+    }
+)
 
 
 def parse_candidate_evidence(values: Iterable[str]) -> dict[str, dict[str, Path]]:
@@ -98,12 +111,15 @@ def _metrics_valid(candidate: Mapping[str, Any]) -> bool:
     metrics = candidate.get("metrics")
     if not isinstance(metrics, Mapping):
         return False
+    if not metrics:
+        return False
     for value in metrics.values():
-        if isinstance(value, Mapping) and value.get("status") in {
-            "invalid_input",
-            "dimension_mismatch",
-            "unsupported_bit_depth",
-        }:
+        if not isinstance(value, Mapping):
+            return False
+        metric_status = value.get("status")
+        if metric_status not in METRIC_STATUSES:
+            return False
+        if metric_status in _PROMOTION_BLOCKING_METRIC_STATUSES:
             return False
     return True
 

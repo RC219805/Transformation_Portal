@@ -11,7 +11,7 @@ from transformation_portal.evals.apex_visual import build_apex_eval_report, pars
 from transformation_portal.evals.apex_evidence_bundle import build_apex_evidence_bundle, parse_candidate_evidence
 
 
-def main() -> int:
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Emit an APEX visual quality eval report.")
     parser.add_argument("--evalset", required=True, help="Evalset directory or evalset.json path.")
     parser.add_argument("--output-dir", required=True, help="Directory for apex_eval_report.json.")
@@ -21,7 +21,7 @@ def main() -> int:
         action="append",
         default=[],
         metavar="CANDIDATE:ASSET_ID=PATH",
-        help="Optional candidate output image for visible-delta metrics. May be repeated.",
+        help="Optional candidate output image for APEX metric evaluation. May be repeated.",
     )
     parser.add_argument(
         "--emit-report",
@@ -54,6 +54,11 @@ def main() -> int:
         default="off",
         help="Emit evidence_bundle.json alongside the APEX eval report.",
     )
+    return parser
+
+
+def main() -> int:
+    parser = build_parser()
     args = parser.parse_args()
 
     try:

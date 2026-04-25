@@ -20,7 +20,7 @@ def _bool_flag(value: str) -> bool:
     raise argparse.ArgumentTypeError(f"Expected boolean-like value, got {value!r}")
 
 
-def main() -> int:
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Audit APEX evalset assets.")
     parser.add_argument("--evalset", required=True, help="Evalset directory or evalset.json path.")
     parser.add_argument("--asset-root", default=None, help="Optional external asset root for evalset asset paths.")
@@ -36,6 +36,11 @@ def main() -> int:
         default=False,
         help="Fail when no canonical assets are eligible or canonical assets are missing/invalid.",
     )
+    return parser
+
+
+def main() -> int:
+    parser = build_parser()
     args = parser.parse_args()
 
     try:

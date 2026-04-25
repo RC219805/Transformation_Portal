@@ -57,6 +57,40 @@ def _write_evalset(root: Path, asset_path: Path, *, asset_id: str = "unit_image"
     return path
 
 
+def _write_multi_asset_evalset(root: Path, asset_paths: dict[str, Path]) -> Path:
+    payload = {
+        "schema_version": APEX_EVALSET_SCHEMA_VERSION,
+        "evalset_id": "unit_canonical_multi",
+        "version": "v1",
+        "description": "unit multi",
+        "dataset_tier": "canonical_apex",
+        "assets": [
+            {
+                "asset_id": asset_id,
+                "asset_ref": str(asset_path.relative_to(root)),
+                "sha256": sha256_file(asset_path),
+                "asset_role": "canonical_apex_reference",
+                "reference_path": str(asset_path.relative_to(root)),
+                "canonical_bit_depth": 16,
+                "canonical_format": "tiff",
+                "canonical_scoring_eligible": True,
+                "evaluate_at_native_resolution": True,
+                "preserve_16bit_intermediates": True,
+                "scene_type": "pool_exterior",
+                "expected_materials": ["water", "stone"],
+                "risk_zones": ["pool_edge"],
+                "reject_if": ["halo"],
+            }
+            for asset_id, asset_path in asset_paths.items()
+        ],
+    }
+    evalset_dir = root / "evalsets" / "apex_multi"
+    evalset_dir.mkdir(parents=True, exist_ok=True)
+    path = evalset_dir / "evalset.json"
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    return path
+
+
 def _materials_evidence(path: Path, *, applied_ops_count: int = 4, raw_authorized: bool = False) -> Path:
     payload = {
         "materials_v3_enabled": True,
@@ -82,6 +116,27 @@ def _apex_report(tmp_path: Path, *, candidate: bool = True):
     _write_16bit(candidate_path)
     evalset_path = _write_evalset(tmp_path, image_path)
     outputs = {"materials_v3": {"unit_image": candidate_path}} if candidate else {}
+    return build_apex_eval_report(
+        evalset_path,
+        output_dir=tmp_path / "report",
+        candidate_outputs=outputs,
+        repo_root=tmp_path,
+    )
+
+
+def _multi_apex_report(tmp_path: Path, *, candidate_asset_ids: set[str]):
+    asset_paths = {
+        "pool_image": tmp_path / "reference_pool16.tif",
+        "kitchen_image": tmp_path / "reference_kitchen16.tif",
+    }
+    for asset_path in asset_paths.values():
+        _write_16bit(asset_path)
+    evalset_path = _write_multi_asset_evalset(tmp_path, asset_paths)
+    outputs: dict[str, dict[str, Path]] = {"materials_v3": {}}
+    for asset_id in candidate_asset_ids:
+        candidate_path = tmp_path / f"{asset_id}_candidate16.tif"
+        _write_16bit(candidate_path)
+        outputs["materials_v3"][asset_id] = candidate_path
     return build_apex_eval_report(
         evalset_path,
         output_dir=tmp_path / "report",
@@ -188,6 +243,77 @@ def test_missing_materials_telemetry_blocks_materials_v3_promotion(tmp_path):
     assert bundle["cases"][0]["materials_v3"]["status"] == "missing_evidence"
 
 
+def test_unscoped_multi_asset_promotion_requires_all_canonical_candidate_outputs(tmp_path):
+    report = _multi_apex_report(tmp_path, candidate_asset_ids={"pool_image"})
+    evidence = _materials_evidence(tmp_path / "pool_materials.json")
+
+    bundle = build_apex_evidence_bundle(
+        report,
+        output_dir=tmp_path / "bundle",
+        candidate_evidence={"materials_v3": {"pool_image": evidence}},
+        repo_root=tmp_path,
+    )
+
+    cases_by_asset = {case["asset_id"]: case for case in bundle["cases"]}
+    assert bundle["promotion_verdict"] == "blocked"
+    assert "missing_candidate_output" in bundle["promotion_blocked_reasons"]
+    assert "invalid_metrics" in bundle["promotion_blocked_reasons"]
+    assert cases_by_asset["pool_image"]["candidate_output"]["status"] == "present"
+    assert cases_by_asset["kitchen_image"]["candidate_output"]["status"] == "missing"
+    assert cases_by_asset["kitchen_image"]["metrics_status"] == "invalid"
+
+
+def test_run_scope_requires_candidate_for_every_scoped_canonical_asset(tmp_path):
+    report = _multi_apex_report(tmp_path, candidate_asset_ids={"pool_image"})
+    evidence = _materials_evidence(tmp_path / "pool_materials.json")
+
+    bundle = build_apex_evidence_bundle(
+        report,
+        output_dir=tmp_path / "bundle",
+        candidate_evidence={"materials_v3": {"pool_image": evidence}},
+        run_scope_asset_ids=["pool_image", "kitchen_image"],
+        repo_root=tmp_path,
+    )
+
+    assert bundle["promotion_verdict"] == "blocked"
+    assert "missing_candidate_output" in bundle["promotion_blocked_reasons"]
+    assert "invalid_metrics" in bundle["promotion_blocked_reasons"]
+
+
+def test_run_scope_can_promote_complete_subset_without_unscoped_assets(tmp_path):
+    report = _multi_apex_report(tmp_path, candidate_asset_ids={"pool_image"})
+    evidence = _materials_evidence(tmp_path / "pool_materials.json")
+
+    bundle = build_apex_evidence_bundle(
+        report,
+        output_dir=tmp_path / "bundle",
+        candidate_evidence={"materials_v3": {"pool_image": evidence}},
+        run_scope_asset_ids=["pool_image"],
+        repo_root=tmp_path,
+    )
+
+    assert bundle["promotion_verdict"] == "eligible"
+    assert bundle["promotion_blocked_reasons"] == []
+
+
+def test_materials_v3_telemetry_required_for_every_scoped_candidate(tmp_path):
+    report = _multi_apex_report(tmp_path, candidate_asset_ids={"pool_image", "kitchen_image"})
+    evidence = _materials_evidence(tmp_path / "pool_materials.json")
+
+    bundle = build_apex_evidence_bundle(
+        report,
+        output_dir=tmp_path / "bundle",
+        candidate_evidence={"materials_v3": {"pool_image": evidence}},
+        run_scope_asset_ids=["pool_image", "kitchen_image"],
+        repo_root=tmp_path,
+    )
+
+    cases_by_asset = {case["asset_id"]: case for case in bundle["cases"]}
+    assert bundle["promotion_verdict"] == "blocked"
+    assert "missing_materials_v3_evidence" in bundle["promotion_blocked_reasons"]
+    assert cases_by_asset["kitchen_image"]["materials_v3"]["status"] == "missing_evidence"
+
+
 def test_run_scope_asset_ids_limit_promotion_scope(tmp_path):
     report = _apex_report(tmp_path)
     evidence = _materials_evidence(tmp_path / "materials.json")
@@ -218,6 +344,47 @@ def test_synthetic_data_blocks_promotion(tmp_path):
 
     assert bundle["promotion_verdict"] == "blocked"
     assert "synthetic_data" in bundle["promotion_blocked_reasons"]
+
+
+@pytest.mark.parametrize(
+    "metric_status",
+    [
+        "invalid_input",
+        "unsupported_bit_depth",
+        "dimension_mismatch",
+    ],
+)
+def test_invalid_metric_status_blocks_promotion(tmp_path, metric_status):
+    report = _apex_report(tmp_path)
+    report["assets"][0]["candidates"][0]["metrics"]["visible_delta"]["status"] = metric_status
+    evidence = _materials_evidence(tmp_path / "materials.json")
+
+    bundle = build_apex_evidence_bundle(
+        report,
+        output_dir=tmp_path / "bundle",
+        candidate_evidence={"materials_v3": {"unit_image": evidence}},
+        repo_root=tmp_path,
+    )
+
+    assert bundle["promotion_verdict"] == "blocked"
+    assert "invalid_metrics" in bundle["promotion_blocked_reasons"]
+    assert bundle["cases"][0]["metrics_status"] == "invalid"
+
+
+def test_metric_without_explicit_v1_status_blocks_promotion(tmp_path):
+    report = _apex_report(tmp_path)
+    report["assets"][0]["candidates"][0]["metrics"]["visible_delta"] = {"value": 0.0}
+    evidence = _materials_evidence(tmp_path / "materials.json")
+
+    bundle = build_apex_evidence_bundle(
+        report,
+        output_dir=tmp_path / "bundle",
+        candidate_evidence={"materials_v3": {"unit_image": evidence}},
+        repo_root=tmp_path,
+    )
+
+    assert bundle["promotion_verdict"] == "blocked"
+    assert "invalid_metrics" in bundle["promotion_blocked_reasons"]
 
 
 def test_zero_eligible_canonical_assets_blocks_promotion(tmp_path):
