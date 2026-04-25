@@ -737,6 +737,14 @@ def _mask_evidence_not_supplied() -> dict[str, Any]:
     return {"status": "not_supplied"}
 
 
+def _mask_evidence_not_evaluated(mask_value: Path | str, *, reason: str) -> dict[str, Any]:
+    return {
+        "status": "not_evaluated",
+        "reason": reason,
+        "reported_path": str(mask_value),
+    }
+
+
 def _invalid_mask_evidence(reason: str, reported_path: str) -> dict[str, Any]:
     return {
         "status": "invalid",
@@ -796,7 +804,7 @@ def _load_candidate_mask_union(
         "reported_path": reported_path,
         "format": "npz",
         "mask_count": valid_mask_count,
-        "union_shape": [int(expected_shape[0]), int(expected_shape[1])],
+        "union_shape": [int(expected_shape[1]), int(expected_shape[0])],
         "union_nonzero_pixels": union_nonzero_pixels,
         "source": "candidate_mask",
     }
@@ -839,6 +847,11 @@ def _candidate_metrics_report(
         candidate_path = evalset.repo_root / candidate_path
     mask_evidence = _mask_evidence_not_supplied() if mask_value is None else None
 
+    def mask_evidence_for_skip(reason: str) -> dict[str, Any]:
+        if mask_value is None:
+            return _mask_evidence_not_supplied()
+        return _mask_evidence_not_evaluated(mask_value, reason=reason)
+
     if candidate_path is None or not candidate_path.is_file():
         return _candidate_report_base(
             candidate_name=candidate_name,
@@ -846,17 +859,18 @@ def _candidate_metrics_report(
             candidate_path=candidate_path,
             reference_resolution=reference_resolution,
             reason="candidate_output_missing",
-            extra={"mask_evidence": mask_evidence or _mask_evidence_not_supplied()},
+            extra={"mask_evidence": mask_evidence_for_skip("candidate_output_missing")},
         )
 
     if asset_report_status.get("status") != "ready":
+        asset_status_reason = f"asset_status_{asset_report_status.get('status')}"
         return _candidate_report_base(
             candidate_name=candidate_name,
             status="metrics_not_computed",
             candidate_path=candidate_path,
             reference_resolution=reference_resolution,
-            reason=f"asset_status_{asset_report_status.get('status')}",
-            extra={"mask_evidence": mask_evidence or _mask_evidence_not_supplied()},
+            reason=asset_status_reason,
+            extra={"mask_evidence": mask_evidence_for_skip(asset_status_reason)},
         )
 
     reference_path = reference_resolution.resolved_path
@@ -867,7 +881,11 @@ def _candidate_metrics_report(
             candidate_path=candidate_path,
             reference_resolution=reference_resolution,
             reason="reference_path_missing_or_unresolved",
-            extra={"mask_evidence": mask_evidence or _mask_evidence_not_supplied()},
+            extra={
+                "mask_evidence": mask_evidence_for_skip(
+                    "reference_path_missing_or_unresolved",
+                ),
+            },
         )
 
     canonical_comparison = (
@@ -887,7 +905,11 @@ def _candidate_metrics_report(
             candidate_path=candidate_path,
             reference_resolution=reference_resolution,
             reason=reference_reason,
-            extra={"mask_evidence": mask_evidence or _mask_evidence_not_supplied()},
+            extra={
+                "mask_evidence": mask_evidence_for_skip(
+                    str(reference_reason or reference_status),
+                ),
+            },
         )
 
     candidate, candidate_status, candidate_reason = _read_image_array(
@@ -902,7 +924,11 @@ def _candidate_metrics_report(
             candidate_path=candidate_path,
             reference_resolution=reference_resolution,
             reason=candidate_reason,
-            extra={"mask_evidence": mask_evidence or _mask_evidence_not_supplied()},
+            extra={
+                "mask_evidence": mask_evidence_for_skip(
+                    str(candidate_reason or candidate_status),
+                ),
+            },
         )
 
     assert reference is not None
@@ -977,8 +1003,11 @@ def build_apex_eval_report(
     """Build and persist an APEX eval report.
 
     ``candidate_outputs`` maps candidate name to ``asset_id -> output path``.
-    When no candidate output is provided, the report still validates corpus
-    readiness and leaves candidate metrics unset.
+    ``candidate_masks`` maps candidate name to ``asset_id -> Materials V3 mask
+    NPZ path``. Candidate entries are emitted for the union of candidate names
+    present in either map, so mask-only candidate names still produce explicit
+    missing-output reports. When no candidate output is provided, the report
+    still validates corpus readiness and leaves candidate metrics unset.
     """
     evalset = load_apex_evalset(evalset_path, repo_root=repo_root, asset_root=asset_root)
     output_root = Path(output_dir)

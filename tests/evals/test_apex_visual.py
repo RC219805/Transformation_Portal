@@ -225,14 +225,14 @@ def test_candidate_mask_npz_enables_mask_aware_metrics(tmp_path):
     reference_path = tmp_path / "reference16.tif"
     candidate_path = tmp_path / "candidate16.tif"
     mask_path = tmp_path / "materials_v3_masks.npz"
-    reference = np.zeros((8, 8), dtype=np.uint16)
+    reference = np.zeros((6, 8), dtype=np.uint16)
     candidate = reference.copy()
-    candidate[1:7, 1:7] = 50000
-    mask = np.zeros((8, 8), dtype=np.float32)
-    mask[2:6, 2:6] = 1.0
+    candidate[1:5, 1:7] = 50000
+    mask = np.zeros((6, 8), dtype=np.float32)
+    mask[2:4, 2:6] = 1.0
     Image.fromarray(reference, mode="I;16").save(reference_path)
     Image.fromarray(candidate, mode="I;16").save(candidate_path)
-    np.savez(mask_path, z_mask=mask, a_mask=np.zeros((8, 8), dtype=np.float32))
+    np.savez(mask_path, z_mask=mask, a_mask=np.zeros((6, 8), dtype=np.float32))
     evalset_path = _write_evalset(
         tmp_path,
         reference_path,
@@ -267,8 +267,8 @@ def test_candidate_mask_npz_enables_mask_aware_metrics(tmp_path):
         "reported_path": str(mask_path),
         "format": "npz",
         "mask_count": 2,
-        "union_shape": [8, 8],
-        "union_nonzero_pixels": 16,
+        "union_shape": [8, 6],
+        "union_nonzero_pixels": 8,
         "source": "candidate_mask",
     }
 
@@ -304,6 +304,43 @@ def test_absent_candidate_mask_preserves_mask_missing_metric_status(tmp_path):
     assert candidate_report["metrics"]["outside_mask_delta"]["status"] == "mask_missing"
     assert candidate_report["metrics"]["seam_halo_score"]["status"] == "not_applicable"
     assert candidate_report["metrics"]["seam_halo_score"]["reason"] == "mask_missing"
+
+
+def test_candidate_mask_supplied_but_output_missing_is_not_evaluated(tmp_path):
+    reference_path = tmp_path / "reference16.tif"
+    missing_candidate_path = tmp_path / "missing_candidate.tif"
+    mask_path = tmp_path / "materials_v3_masks.npz"
+    Image.fromarray(np.zeros((8, 8), dtype=np.uint16), mode="I;16").save(reference_path)
+    np.savez(mask_path, glass=np.ones((8, 8), dtype=np.float32))
+    evalset_path = _write_evalset(
+        tmp_path,
+        reference_path,
+        dataset_tier="canonical_apex",
+        asset_overrides={
+            "asset_role": "canonical_apex_reference",
+            "canonical_bit_depth": 16,
+            "canonical_format": "tiff",
+            "canonical_scoring_eligible": True,
+            "evaluate_at_native_resolution": True,
+            "preserve_16bit_intermediates": True,
+        },
+    )
+
+    report = build_apex_eval_report(
+        evalset_path,
+        output_dir=tmp_path / "report",
+        candidate_outputs={"materials_v3": {"unit_image": missing_candidate_path}},
+        candidate_masks={"materials_v3": {"unit_image": mask_path}},
+        repo_root=tmp_path,
+    )
+
+    candidate_report = report["assets"][0]["candidates"][0]
+    assert candidate_report["status"] == "missing_candidate"
+    assert candidate_report["mask_evidence"] == {
+        "status": "not_evaluated",
+        "reason": "candidate_output_missing",
+        "reported_path": str(mask_path),
+    }
 
 
 @pytest.mark.parametrize(
