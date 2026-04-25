@@ -23,6 +23,10 @@ from transformation_portal.evals.apex_visual import (
 
 pytestmark = pytest.mark.unit
 
+VALID_SOURCE_RAW_SHA = "a" * 64
+VALID_RAW_SETTINGS_SHA = "b" * 64
+VALID_ICC_SHA = "c" * 64
+
 
 def _write_evalset(
     root: Path,
@@ -60,6 +64,72 @@ def _write_evalset(
     path = evalset_dir / "evalset.json"
     path.write_text(json.dumps(payload), encoding="utf-8")
     return path
+
+
+def test_apex_eval_asset_omits_absent_provenance_fields(tmp_path):
+    image_path = tmp_path / "input.png"
+    Image.fromarray(np.zeros((8, 8, 3), dtype=np.uint8)).save(image_path)
+    evalset_path = _write_evalset(tmp_path, image_path)
+
+    evalset = load_apex_evalset(evalset_path, repo_root=tmp_path)
+    asset_payload = evalset.assets[0].to_dict()
+    report = build_apex_eval_report(evalset_path, output_dir=tmp_path / "report", repo_root=tmp_path)
+    report_asset = report["assets"][0]
+
+    for key in (
+        "source_raw_path",
+        "source_raw_format",
+        "source_raw_sha256",
+        "raw_development_profile",
+        "raw_development_settings_sha256",
+        "canonical_icc_profile_name",
+        "canonical_icc_profile_sha256",
+        "working_color_space",
+        "working_transfer_function",
+    ):
+        assert key not in asset_payload
+        assert key not in report_asset
+
+
+def test_apex_eval_asset_round_trips_provenance_fields(tmp_path):
+    image_path = tmp_path / "input.png"
+    Image.fromarray(np.zeros((8, 8, 3), dtype=np.uint8)).save(image_path)
+    evalset_path = _write_evalset(
+        tmp_path,
+        image_path,
+        asset_overrides={
+            "source_raw_path": "source_raw/example.dng",
+            "source_raw_format": ".DNG",
+            "source_raw_sha256": VALID_SOURCE_RAW_SHA,
+            "raw_development_profile": "Capture One Picacho APEX v1",
+            "raw_development_settings_sha256": VALID_RAW_SETTINGS_SHA,
+            "canonical_icc_profile_name": "ProPhoto RGB",
+            "canonical_icc_profile_sha256": VALID_ICC_SHA,
+            "working_color_space": "ProPhoto RGB",
+            "working_transfer_function": "linear",
+        },
+    )
+
+    evalset = load_apex_evalset(evalset_path, repo_root=tmp_path)
+    asset_payload = evalset.assets[0].to_dict()
+    report = build_apex_eval_report(evalset_path, output_dir=tmp_path / "report", repo_root=tmp_path)
+    report_asset = report["assets"][0]
+
+    expected = {
+        "source_raw_path": "source_raw/example.dng",
+        "source_raw_format": "dng",
+        "source_raw_sha256": VALID_SOURCE_RAW_SHA,
+        "raw_development_profile": "Capture One Picacho APEX v1",
+        "raw_development_settings_sha256": VALID_RAW_SETTINGS_SHA,
+        "canonical_icc_profile_name": "ProPhoto RGB",
+        "canonical_icc_profile_sha256": VALID_ICC_SHA,
+        "working_color_space": "ProPhoto RGB",
+        "working_transfer_function": "linear",
+    }
+    for key, value in expected.items():
+        assert asset_payload[key] == value
+        assert report_asset[key] == value
+    assert report_asset["asset_status"]["status"] == "ready"
 
 
 def _load_tool_module(script_name: str, module_name: str):
@@ -189,6 +259,59 @@ def test_misdeclared_8bit_tiff_is_not_canonical_scoring_eligible(tmp_path):
     assert asset["canonical_scoring_blocked_reason"] == "reference_bit_depth_below_16"
 
 
+def test_missing_raw_source_path_does_not_affect_asset_status(tmp_path):
+    image_path = tmp_path / "input.png"
+    Image.fromarray(np.zeros((8, 8, 3), dtype=np.uint8)).save(image_path)
+    evalset_path = _write_evalset(
+        tmp_path,
+        image_path,
+        asset_overrides={
+            "source_raw_path": "source_raw/missing_capture.dng",
+            "source_raw_format": "dng",
+            "source_raw_sha256": VALID_SOURCE_RAW_SHA,
+        },
+    )
+
+    report = build_apex_eval_report(evalset_path, output_dir=tmp_path / "report", repo_root=tmp_path)
+
+    assert report["evalset"]["ready_asset_count"] == 1
+    assert report["evalset"]["missing_asset_count"] == 0
+    asset = report["assets"][0]
+    assert asset["asset_status"]["status"] == "ready"
+    assert asset["source_raw_path"] == "source_raw/missing_capture.dng"
+    assert asset["canonical_scoring_eligible"] is False
+
+
+def test_raw_source_provenance_does_not_make_asset_canonical_scoring_eligible(tmp_path):
+    image_path = tmp_path / "reference8.tif"
+    Image.fromarray(np.zeros((8, 8, 3), dtype=np.uint8)).save(image_path, format="TIFF")
+    evalset_path = _write_evalset(
+        tmp_path,
+        image_path,
+        dataset_tier="canonical_apex",
+        asset_overrides={
+            "asset_role": "canonical_apex_reference",
+            "canonical_bit_depth": 8,
+            "canonical_format": "tiff",
+            "canonical_scoring_eligible": True,
+            "evaluate_at_native_resolution": True,
+            "preserve_16bit_intermediates": True,
+            "source_raw_path": "source_raw/example.dng",
+            "source_raw_format": "dng",
+            "source_raw_sha256": VALID_SOURCE_RAW_SHA,
+        },
+    )
+
+    report = build_apex_eval_report(evalset_path, output_dir=tmp_path / "report", repo_root=tmp_path)
+
+    asset = report["assets"][0]
+    assert asset["asset_status"]["status"] == "ready"
+    assert asset["source_raw_path"] == "source_raw/example.dng"
+    assert asset["source_raw_format"] == "dng"
+    assert asset["canonical_scoring_eligible"] is False
+    assert asset["canonical_scoring_blocked_reason"] == "reference_bit_depth_below_16"
+
+
 def test_rendering_asset_is_smoke_only_even_with_canonical_like_fields(tmp_path):
     image_path = tmp_path / "rendering.png"
     Image.fromarray(np.zeros((8, 8, 3), dtype=np.uint8)).save(image_path)
@@ -266,6 +389,79 @@ def test_apex_eval_report_marks_missing_assets(tmp_path):
     assert report["evalset"]["canonical_scoring_eligible_count"] == 0
     assert report["evalset"]["missing_asset_count"] == 1
     assert report["assets"][0]["asset_status"]["status"] == "missing_asset"
+
+
+@pytest.mark.parametrize("manual_score", [None, 0.0, 1.0])
+def test_manual_quality_score_accepts_normalized_values(tmp_path, manual_score):
+    image_path = tmp_path / "input.png"
+    Image.fromarray(np.zeros((8, 8, 3), dtype=np.uint8)).save(image_path)
+    evalset_path = _write_evalset(
+        tmp_path,
+        image_path,
+        asset_overrides={"manual_quality_score": manual_score},
+    )
+
+    asset = load_apex_evalset(evalset_path, repo_root=tmp_path).assets[0]
+
+    assert asset.manual_quality_score == manual_score
+
+
+@pytest.mark.parametrize("manual_score", [-0.01, 1.01])
+def test_manual_quality_score_rejects_out_of_range_values(tmp_path, manual_score):
+    image_path = tmp_path / "input.png"
+    Image.fromarray(np.zeros((8, 8, 3), dtype=np.uint8)).save(image_path)
+    evalset_path = _write_evalset(
+        tmp_path,
+        image_path,
+        asset_overrides={"manual_quality_score": manual_score},
+    )
+
+    with pytest.raises(ValueError, match="manual_quality_score"):
+        load_apex_evalset(evalset_path, repo_root=tmp_path)
+
+
+@pytest.mark.parametrize(
+    ("field_name", "invalid_value"),
+    [
+        ("source_raw_sha256", "a" * 63),
+        ("source_raw_sha256", "a" * 65),
+        ("source_raw_sha256", "A" * 64),
+        ("source_raw_sha256", ("a" * 63) + "g"),
+        ("raw_development_settings_sha256", "b" * 63),
+        ("canonical_icc_profile_sha256", "c" * 65),
+    ],
+)
+def test_provenance_sha_fields_require_lowercase_64_hex(tmp_path, field_name, invalid_value):
+    image_path = tmp_path / "input.png"
+    Image.fromarray(np.zeros((8, 8, 3), dtype=np.uint8)).save(image_path)
+    evalset_path = _write_evalset(
+        tmp_path,
+        image_path,
+        asset_overrides={field_name: invalid_value},
+    )
+
+    with pytest.raises(ValueError, match=field_name):
+        load_apex_evalset(evalset_path, repo_root=tmp_path)
+
+
+def test_empty_provenance_sha_fields_normalize_to_absent(tmp_path):
+    image_path = tmp_path / "input.png"
+    Image.fromarray(np.zeros((8, 8, 3), dtype=np.uint8)).save(image_path)
+    evalset_path = _write_evalset(
+        tmp_path,
+        image_path,
+        asset_overrides={
+            "source_raw_sha256": "",
+            "raw_development_settings_sha256": " ",
+            "canonical_icc_profile_sha256": None,
+        },
+    )
+
+    payload = load_apex_evalset(evalset_path, repo_root=tmp_path).assets[0].to_dict()
+
+    assert "source_raw_sha256" not in payload
+    assert "raw_development_settings_sha256" not in payload
+    assert "canonical_icc_profile_sha256" not in payload
 
 
 def test_run_apex_eval_returns_nonzero_for_non_ready_assets(tmp_path, monkeypatch, capsys):
@@ -495,6 +691,15 @@ def test_depth_backend_benchmark_uses_mocked_runner(tmp_path):
             "evaluate_at_native_resolution": True,
             "allow_downsampled_model_inference": True,
             "preserve_16bit_intermediates": True,
+            "source_raw_path": "source_raw/reference.dng",
+            "source_raw_format": ".DNG",
+            "source_raw_sha256": VALID_SOURCE_RAW_SHA,
+            "raw_development_profile": "Capture One Picacho APEX v1",
+            "raw_development_settings_sha256": VALID_RAW_SETTINGS_SHA,
+            "canonical_icc_profile_name": "ProPhoto RGB",
+            "canonical_icc_profile_sha256": VALID_ICC_SHA,
+            "working_color_space": "ProPhoto RGB",
+            "working_transfer_function": "linear",
         },
     )
 
@@ -531,7 +736,18 @@ def test_depth_backend_benchmark_uses_mocked_runner(tmp_path):
     assert asset["model_input"]["input_bit_depth"] == 8
     assert asset["model_input"]["input_resolution"] == [1024, 768]
     assert asset["model_input"]["downsampled_for_inference"] is True
+    assert "source_raw_path" not in asset["model_input"]
+    assert "working_color_space" not in asset["model_input"]
     assert asset["evaluation_target"]["path"] == str(image_path.relative_to(tmp_path))
     assert asset["evaluation_target"]["bit_depth"] == 16
     assert asset["evaluation_target"]["evaluate_at_native_resolution"] is True
+    assert asset["evaluation_target"]["source_raw_path"] == "source_raw/reference.dng"
+    assert asset["evaluation_target"]["source_raw_format"] == "dng"
+    assert asset["evaluation_target"]["source_raw_sha256"] == VALID_SOURCE_RAW_SHA
+    assert asset["evaluation_target"]["raw_development_profile"] == "Capture One Picacho APEX v1"
+    assert asset["evaluation_target"]["raw_development_settings_sha256"] == VALID_RAW_SETTINGS_SHA
+    assert asset["evaluation_target"]["canonical_icc_profile_name"] == "ProPhoto RGB"
+    assert asset["evaluation_target"]["canonical_icc_profile_sha256"] == VALID_ICC_SHA
+    assert asset["evaluation_target"]["working_color_space"] == "ProPhoto RGB"
+    assert asset["evaluation_target"]["working_transfer_function"] == "linear"
     assert backend["depth_edge_score"] is not None

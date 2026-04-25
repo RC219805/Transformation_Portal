@@ -11,6 +11,7 @@ import hashlib
 import importlib
 import json
 import math
+import re
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -48,6 +49,7 @@ ASSET_ROLES = frozenset(
     }
 )
 CANONICAL_REFERENCE_FORMATS = frozenset({"tif", "tiff"})
+PROVENANCE_SHA_RE = re.compile(r"^[0-9a-f]{64}$")
 
 
 def _lpips_available() -> bool:
@@ -102,6 +104,22 @@ def _normalize_image_format(value: Any) -> str | None:
         return "jpeg"
     if normalized == "tif":
         return "tiff"
+    return normalized
+
+
+def _normalize_source_raw_format(value: Any) -> str | None:
+    normalized = _normalize_optional_str(value)
+    if normalized is None:
+        return None
+    return normalized.lower().lstrip(".")
+
+
+def _optional_provenance_sha(value: Any, *, field_name: str) -> str | None:
+    normalized = _normalize_optional_str(value)
+    if normalized is None:
+        return None
+    if not PROVENANCE_SHA_RE.fullmatch(normalized):
+        raise ValueError(f"{field_name} must be a lowercase 64-character hexadecimal SHA-256 digest")
     return normalized
 
 
@@ -223,6 +241,15 @@ class ApexEvalAsset:
     canonical_scoring_eligible: bool | None = None
     canonical_scoring_blocked_reason: str | None = None
     manual_quality_score: float | None = None
+    source_raw_path: str | None = None
+    source_raw_format: str | None = None
+    source_raw_sha256: str | None = None
+    raw_development_profile: str | None = None
+    raw_development_settings_sha256: str | None = None
+    canonical_icc_profile_name: str | None = None
+    canonical_icc_profile_sha256: str | None = None
+    working_color_space: str | None = None
+    working_transfer_function: str | None = None
     notes: str | None = None
 
     @classmethod
@@ -268,11 +295,43 @@ class ApexEvalAsset:
             canonical_scoring_eligible=canonical_eligible,
             canonical_scoring_blocked_reason=_normalize_optional_str(payload.get("canonical_scoring_blocked_reason")),
             manual_quality_score=manual_score,
+            source_raw_path=_normalize_optional_str(payload.get("source_raw_path")),
+            source_raw_format=_normalize_source_raw_format(payload.get("source_raw_format")),
+            source_raw_sha256=_optional_provenance_sha(
+                payload.get("source_raw_sha256"),
+                field_name="source_raw_sha256",
+            ),
+            raw_development_profile=_normalize_optional_str(payload.get("raw_development_profile")),
+            raw_development_settings_sha256=_optional_provenance_sha(
+                payload.get("raw_development_settings_sha256"),
+                field_name="raw_development_settings_sha256",
+            ),
+            canonical_icc_profile_name=_normalize_optional_str(payload.get("canonical_icc_profile_name")),
+            canonical_icc_profile_sha256=_optional_provenance_sha(
+                payload.get("canonical_icc_profile_sha256"),
+                field_name="canonical_icc_profile_sha256",
+            ),
+            working_color_space=_normalize_optional_str(payload.get("working_color_space")),
+            working_transfer_function=_normalize_optional_str(payload.get("working_transfer_function")),
             notes=(str(payload["notes"]) if payload.get("notes") is not None else None),
         )
 
+    def provenance_dict(self) -> dict[str, Any]:
+        values = {
+            "source_raw_path": self.source_raw_path,
+            "source_raw_format": self.source_raw_format,
+            "source_raw_sha256": self.source_raw_sha256,
+            "raw_development_profile": self.raw_development_profile,
+            "raw_development_settings_sha256": self.raw_development_settings_sha256,
+            "canonical_icc_profile_name": self.canonical_icc_profile_name,
+            "canonical_icc_profile_sha256": self.canonical_icc_profile_sha256,
+            "working_color_space": self.working_color_space,
+            "working_transfer_function": self.working_transfer_function,
+        }
+        return {key: value for key, value in values.items() if value is not None}
+
     def to_dict(self) -> dict[str, Any]:
-        return {
+        payload = {
             "asset_id": self.asset_id,
             "asset_ref": self.asset_ref,
             "sha256": self.sha256,
@@ -294,6 +353,8 @@ class ApexEvalAsset:
             "manual_quality_score": self.manual_quality_score,
             "notes": self.notes,
         }
+        payload.update(self.provenance_dict())
+        return payload
 
 
 @dataclass(frozen=True)
@@ -813,6 +874,7 @@ def _depth_case_io_metadata(
         "color_space": asset.canonical_color_space,
         "evaluate_at_native_resolution": asset.evaluate_at_native_resolution,
     }
+    evaluation_target.update(asset.provenance_dict())
     return model_input, evaluation_target
 
 
