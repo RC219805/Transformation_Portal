@@ -93,15 +93,24 @@ def _bool_with_default(value: Any, default: bool) -> bool:
     return bool(value)
 
 
-def _normalized_format(asset: "ApexEvalAsset") -> str | None:
-    explicit = _normalize_optional_str(asset.canonical_format)
-    if explicit:
-        return explicit.lower().lstrip(".")
-    path_hint = asset.reference_path or asset.asset_ref
-    suffix = Path(path_hint).suffix.lower().lstrip(".")
-    if suffix in {"jpg", "jpeg"}:
+def _normalize_image_format(value: Any) -> str | None:
+    normalized = _normalize_optional_str(value)
+    if normalized is None:
+        return None
+    normalized = normalized.lower().lstrip(".")
+    if normalized == "jpg":
         return "jpeg"
-    return suffix or None
+    if normalized == "tif":
+        return "tiff"
+    return normalized
+
+
+def _normalized_format(asset: "ApexEvalAsset") -> str | None:
+    explicit = _normalize_image_format(asset.canonical_format)
+    if explicit:
+        return explicit
+    path_hint = asset.reference_path or asset.asset_ref
+    return _normalize_image_format(Path(path_hint).suffix)
 
 
 def _reference_bit_depth(asset: "ApexEvalAsset") -> int | None:
@@ -110,6 +119,85 @@ def _reference_bit_depth(asset: "ApexEvalAsset") -> int | None:
     if _normalized_format(asset) == "jpeg":
         return 8
     return None
+
+
+def _bit_depth_from_dtype(dtype: Any) -> int | None:
+    try:
+        np_dtype = np.dtype(dtype)
+    except TypeError:
+        return None
+    if np_dtype.kind == "b":
+        return 1
+    if np_dtype.kind in {"u", "i", "f"}:
+        return int(np_dtype.itemsize * 8)
+    return None
+
+
+def _bit_depth_from_pil_mode(mode: str | None) -> int | None:
+    if mode in {"1"}:
+        return 1
+    if mode in {"L", "LA", "P", "RGB", "RGBA", "CMYK", "YCbCr"}:
+        return 8
+    if mode in {"I;16", "I;16B", "I;16L"}:
+        return 16
+    if mode in {"I", "F"}:
+        return 32
+    return None
+
+
+def _tiff_bit_depth(path: Path) -> int | None:
+    try:
+        tifffile = importlib.import_module("tifffile")
+        with tifffile.TiffFile(path) as tiff:
+            if not tiff.pages:
+                return None
+            page = tiff.pages[0]
+            dtype_bits = _bit_depth_from_dtype(getattr(page, "dtype", None))
+            if dtype_bits is not None:
+                return dtype_bits
+            bits_per_sample = getattr(page, "bitspersample", None)
+            if isinstance(bits_per_sample, (tuple, list)):
+                return int(max(bits_per_sample)) if bits_per_sample else None
+            if bits_per_sample is not None:
+                return int(bits_per_sample)
+    except (ImportError, OSError, ValueError, TypeError, AttributeError, IndexError):
+        return None
+    return None
+
+
+def _reference_image_metadata(path: Path) -> dict[str, Any]:
+    metadata: dict[str, Any] = {
+        "detected_reference_format": None,
+        "detected_reference_bit_depth": None,
+        "observable_reference_metadata_status": "missing_reference_asset",
+        "observable_reference_metadata_error": None,
+    }
+    if not path.is_file():
+        return metadata
+
+    from PIL import Image, UnidentifiedImageError
+
+    try:
+        with Image.open(path) as image:
+            detected_format = _normalize_image_format(image.format or path.suffix)
+            detected_bit_depth = _bit_depth_from_pil_mode(image.mode)
+    except (OSError, ValueError, UnidentifiedImageError) as exc:
+        metadata["observable_reference_metadata_status"] = "unreadable_reference_image"
+        metadata["observable_reference_metadata_error"] = str(exc)
+        return metadata
+
+    if detected_format == "tiff":
+        tiff_bit_depth = _tiff_bit_depth(path)
+        detected_bit_depth = tiff_bit_depth if tiff_bit_depth is not None else detected_bit_depth
+    if detected_format == "jpeg" and detected_bit_depth is None:
+        detected_bit_depth = 8
+
+    metadata["detected_reference_format"] = detected_format
+    metadata["detected_reference_bit_depth"] = detected_bit_depth
+    metadata["observable_reference_metadata_status"] = (
+        "ok" if detected_format is not None and detected_bit_depth is not None else "missing_observable_reference_metadata"
+    )
+    return metadata
 
 
 @dataclass(frozen=True)
@@ -311,9 +399,17 @@ def _canonical_scoring_status(
     asset: ApexEvalAsset,
     *,
     asset_ready: bool,
+    reference_metadata: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
-    reference_format = _normalized_format(asset)
-    reference_bit_depth = _reference_bit_depth(asset)
+    reference_metadata = reference_metadata or {}
+    declared_format = _normalized_format(asset)
+    declared_bit_depth = _reference_bit_depth(asset)
+    detected_format = _normalize_image_format(reference_metadata.get("detected_reference_format"))
+    detected_bit_depth = _optional_int(reference_metadata.get("detected_reference_bit_depth"))
+    metadata_status = str(reference_metadata.get("observable_reference_metadata_status") or "not_checked")
+    metadata_error = _normalize_optional_str(reference_metadata.get("observable_reference_metadata_error"))
+    reference_format = detected_format or declared_format
+    reference_bit_depth = detected_bit_depth if detected_bit_depth is not None else declared_bit_depth
     eligible = True
     blocked_reason: str | None = None
 
@@ -326,12 +422,21 @@ def _canonical_scoring_status(
     elif asset.asset_role != CANONICAL_APEX_ASSET_ROLE:
         eligible = False
         blocked_reason = "asset_role_not_canonical"
+    elif metadata_status == "missing_reference_asset":
+        eligible = False
+        blocked_reason = "missing_reference_asset"
+    elif metadata_status != "ok":
+        eligible = False
+        blocked_reason = "missing_observable_reference_metadata"
+    elif declared_format is not None and reference_format != declared_format:
+        eligible = False
+        blocked_reason = "reference_format_mismatch"
     elif reference_bit_depth is None:
         eligible = False
         blocked_reason = "missing_16bit_reference"
     elif reference_bit_depth < 16:
         eligible = False
-        blocked_reason = "non_16bit_reference"
+        blocked_reason = "reference_bit_depth_below_16"
     elif reference_format not in CANONICAL_REFERENCE_FORMATS:
         eligible = False
         blocked_reason = "non_tiff_reference"
@@ -354,6 +459,12 @@ def _canonical_scoring_status(
         "delivery_path": asset.delivery_path,
         "reference_bit_depth": reference_bit_depth,
         "reference_format": reference_format,
+        "declared_reference_bit_depth": declared_bit_depth,
+        "declared_reference_format": declared_format,
+        "detected_reference_bit_depth": detected_bit_depth,
+        "detected_reference_format": detected_format,
+        "observable_reference_metadata_status": metadata_status,
+        "observable_reference_metadata_error": metadata_error,
         "reference_color_space": asset.canonical_color_space,
         "evaluate_at_native_resolution": asset.evaluate_at_native_resolution,
         "allow_downsampled_model_inference": asset.allow_downsampled_model_inference,
@@ -366,7 +477,13 @@ def _canonical_scoring_status(
 def canonical_scoring_status(evalset: ApexEvalSet, asset: ApexEvalAsset) -> dict[str, Any]:
     """Return canonical APEX quality scoring eligibility for an eval asset."""
     path = evalset.resolve_asset_path(asset)
-    return _canonical_scoring_status(evalset, asset, asset_ready=path.is_file() and sha256_file(path) == asset.sha256)
+    reference_metadata = _reference_image_metadata(evalset.resolve_reference_path(asset)) if path.is_file() else None
+    return _canonical_scoring_status(
+        evalset,
+        asset,
+        asset_ready=path.is_file() and sha256_file(path) == asset.sha256,
+        reference_metadata=reference_metadata,
+    )
 
 
 def asset_status(evalset: ApexEvalSet, asset: ApexEvalAsset) -> dict[str, Any]:
@@ -384,6 +501,7 @@ def asset_status(evalset: ApexEvalSet, asset: ApexEvalAsset) -> dict[str, Any]:
 
     actual_sha = sha256_file(path)
     status = "ready" if actual_sha == asset.sha256 else "checksum_mismatch"
+    reference_metadata = _reference_image_metadata(evalset.resolve_reference_path(asset))
     return {
         "asset_id": asset.asset_id,
         "status": status,
@@ -392,7 +510,12 @@ def asset_status(evalset: ApexEvalSet, asset: ApexEvalAsset) -> dict[str, Any]:
         "expected_sha256": asset.sha256,
         "actual_sha256": actual_sha,
         "size_bytes": int(path.stat().st_size),
-        **_canonical_scoring_status(evalset, asset, asset_ready=status == "ready"),
+        **_canonical_scoring_status(
+            evalset,
+            asset,
+            asset_ready=status == "ready",
+            reference_metadata=reference_metadata,
+        ),
     }
 
 
@@ -500,6 +623,12 @@ def build_apex_eval_report(
             "delivery_path": status["delivery_path"],
             "reference_bit_depth": status["reference_bit_depth"],
             "reference_format": status["reference_format"],
+            "declared_reference_bit_depth": status["declared_reference_bit_depth"],
+            "declared_reference_format": status["declared_reference_format"],
+            "detected_reference_bit_depth": status["detected_reference_bit_depth"],
+            "detected_reference_format": status["detected_reference_format"],
+            "observable_reference_metadata_status": status["observable_reference_metadata_status"],
+            "observable_reference_metadata_error": status["observable_reference_metadata_error"],
             "reference_color_space": status["reference_color_space"],
             "evaluate_at_native_resolution": status["evaluate_at_native_resolution"],
             "allow_downsampled_model_inference": status["allow_downsampled_model_inference"],
@@ -651,11 +780,21 @@ def _architectural_plausibility(depth_map: np.ndarray | None) -> float | None:
     return float(np.clip(spread * (1.0 - saturation), 0.0, 1.0))
 
 
-def _depth_case_io_metadata(evalset: ApexEvalSet, asset: ApexEvalAsset) -> tuple[dict[str, Any], dict[str, Any]]:
+def _depth_case_io_metadata(
+    evalset: ApexEvalSet,
+    asset: ApexEvalAsset,
+    source_status: Mapping[str, Any] | None = None,
+) -> tuple[dict[str, Any], dict[str, Any]]:
     reference_path = asset.reference_path or asset.asset_ref
     resolved_reference = str(evalset.resolve_reference_path(asset))
-    reference_bit_depth = _reference_bit_depth(asset)
-    reference_format = _normalized_format(asset)
+    reference_bit_depth = (
+        _optional_int(source_status.get("reference_bit_depth")) if source_status is not None else _reference_bit_depth(asset)
+    )
+    reference_format = (
+        _normalize_image_format(source_status.get("reference_format"))
+        if source_status is not None
+        else _normalized_format(asset)
+    )
     downsampled = bool(asset.allow_downsampled_model_inference)
     model_input = {
         "derived_from": reference_path,
@@ -724,7 +863,7 @@ def build_depth_backend_benchmark_report(
         runtimes: list[float] = []
         for asset in evalset.assets:
             source_status = asset_status(evalset, asset)
-            model_input, evaluation_target = _depth_case_io_metadata(evalset, asset)
+            model_input, evaluation_target = _depth_case_io_metadata(evalset, asset, source_status)
             if source_status["status"] != "ready":
                 backend_report["assets"].append(
                     {

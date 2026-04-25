@@ -153,7 +153,40 @@ def test_jpeg_cannot_be_promoted_to_canonical_apex_reference(tmp_path):
     assert report["evalset"]["canonical_scoring_eligible_count"] == 0
     asset = report["assets"][0]
     assert asset["canonical_scoring_eligible"] is False
-    assert asset["canonical_scoring_blocked_reason"] == "non_16bit_reference"
+    assert asset["canonical_scoring_blocked_reason"] == "reference_bit_depth_below_16"
+
+
+def test_misdeclared_8bit_tiff_is_not_canonical_scoring_eligible(tmp_path):
+    image_path = tmp_path / "misdeclared_reference.tif"
+    Image.fromarray(np.zeros((8, 8, 3), dtype=np.uint8)).save(image_path, format="TIFF")
+    evalset_path = _write_evalset(
+        tmp_path,
+        image_path,
+        dataset_tier="canonical_apex",
+        asset_overrides={
+            "asset_role": "canonical_apex_reference",
+            "canonical_bit_depth": 16,
+            "canonical_format": "tiff",
+            "canonical_color_space": "documented_source_profile",
+            "canonical_scoring_eligible": True,
+            "evaluate_at_native_resolution": True,
+            "preserve_16bit_intermediates": True,
+        },
+    )
+
+    report = build_apex_eval_report(evalset_path, output_dir=tmp_path / "report", repo_root=tmp_path)
+
+    assert report["evalset"]["ready_asset_count"] == 1
+    assert report["evalset"]["canonical_scoring_eligible_count"] == 0
+    assert report["evalset"]["noncanonical_asset_count"] == 1
+    asset = report["assets"][0]
+    assert asset["asset_status"]["status"] == "ready"
+    assert asset["declared_reference_bit_depth"] == 16
+    assert asset["detected_reference_bit_depth"] == 8
+    assert asset["reference_bit_depth"] == 8
+    assert asset["reference_format"] == "tiff"
+    assert asset["canonical_scoring_eligible"] is False
+    assert asset["canonical_scoring_blocked_reason"] == "reference_bit_depth_below_16"
 
 
 def test_rendering_asset_is_smoke_only_even_with_canonical_like_fields(tmp_path):
