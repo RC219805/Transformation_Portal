@@ -19,6 +19,15 @@ validated 16-bit source references.
 - `canonical_bit_depth`: canonical reference bit depth when known
 - `canonical_format`: canonical reference format when known
 - `canonical_color_space`: documented source profile or color space
+- `source_raw_path`: optional camera-original RAW provenance path; metadata only
+- `source_raw_format`: optional RAW provenance format, such as `dng`, `cr2`, `cr3`, `nef`, `arw`, `raf`, `orf`, or `rw2`
+- `source_raw_sha256`: optional camera-original RAW SHA-256 provenance digest
+- `raw_development_profile`: optional metadata label or settings reference for the RAW development profile
+- `raw_development_settings_sha256`: optional SHA-256 digest for pinned RAW development settings
+- `canonical_icc_profile_name`: optional embedded or declared canonical ICC/profile name
+- `canonical_icc_profile_sha256`: optional ICC/profile SHA-256 provenance digest
+- `working_color_space`: optional color space used for scoring/editing intermediates
+- `working_transfer_function`: optional transfer function used for scoring/editing intermediates
 - `evaluate_at_native_resolution`: whether final scoring must run at native reference resolution
 - `allow_downsampled_model_inference`: whether model-specific tensor inputs may be downsampled or normalized
 - `preserve_16bit_intermediates`: whether pixel operations must preserve 16-bit working data
@@ -28,10 +37,19 @@ validated 16-bit source references.
 - `expected_materials`: materials expected to be present
 - `risk_zones`: boundaries or surfaces likely to show artifacts
 - `reject_if`: visual defects that disqualify a candidate
-- `manual_quality_score`: nullable human APEX score placeholder
+- `manual_quality_score`: nullable normalized human APEX score in `[0.0, 1.0]`, where `1.0` indicates no
+  visible regression and APEX-quality improvement
 
 Large source images are not committed as eval artifacts. The runner reports missing assets as `missing_asset` and
 checksum drift as `checksum_mismatch`.
+
+Camera-original RAW files such as DNG, CR2/CR3, NEF, ARW, RAF, ORF, and RW2 may be recorded as provenance assets.
+They are not canonical scoring targets. `source_raw_path`, `raw_development_profile`, ICC/profile fields, and
+working-color fields are metadata-only in the v1 provenance contract; they are not resolved, loaded, or
+existence-checked, and they do not affect asset readiness or canonical scoring eligibility.
+
+Canonical APEX scoring is performed against a deterministic developed 16-bit RGB reference, preferably
+`*_master16.tif`, with pinned color-management and development settings.
 
 Canonical APEX scoring requires all of the following:
 
@@ -76,11 +94,13 @@ Readiness and canonical scoring eligibility are separate report concepts. A read
 - `canonical_scoring_blocked_reason_counts`: blocked reasons for ready noncanonical assets
 
 Each asset report records `asset_role`, `reference_bit_depth`, `reference_format`, `reference_color_space`,
-`canonical_scoring_eligible`, and `canonical_scoring_blocked_reason`.
+`canonical_scoring_eligible`, and `canonical_scoring_blocked_reason`. Optional RAW, ICC/profile, and working-color
+provenance fields are emitted only when present.
 
 Depth benchmark reports also separate model input derivation from the evaluation target. Depth Pro, DA3, and other
 depth backends may consume normalized 8-bit or downsampled tensors, but benchmark cases must still record the
-16-bit source path as `evaluation_target` when one exists.
+16-bit source path as `evaluation_target` when one exists. RAW and working-color provenance belongs under
+`evaluation_target`, not `model_input`.
 
 ## 16-Bit Working Path
 
@@ -115,6 +135,9 @@ APEX promotion requires a report-backed improvement path:
 - DA3 metric is the commercial-safe baseline.
 - Materials V3 pixel operations require calibrated material confidence.
 - APEX runs fail closed when masks exist, implemented operations exist, and zero Materials V3 pixel operations apply.
+  The strict APEX Materials V3 no-op failure code is `APEX_MATERIALS_PIXEL_OPS_EMPTY`.
+- Synthetic APEX performance reports are plumbing and regression evidence only. They are not real APEX image-quality
+  evidence.
 
 The long-term APEX score should combine depth edge fidelity, material precision, pixel-op false positive risk,
 visible delta metrics, and manual APEX score. A missed enhancement is acceptable; a wrong material edit is not.
