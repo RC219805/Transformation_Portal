@@ -119,6 +119,20 @@ def test_real_canonical_runbook_full_manifest_command_mentions_all_three_asset_i
     assert REAL_CANONICAL_ASSET_IDS <= set(re.findall(r"\b[a-z]+(?:_[a-z0-9]+)+\b", text))
 
 
+def test_real_canonical_runbook_documents_candidate_extraction_workflow():
+    text = (REPO_ROOT / "docs" / "validation" / REAL_CANONICAL_RUNBOOK).read_text(encoding="utf-8")
+
+    for required in (
+        "--keep-intermediates",
+        "temp/*_materials_v3_enhanced.tif",
+        "baselines/materials_v3",
+        "--candidate-output",
+        "--candidate-evidence",
+        "--synthetic-data off",
+    ):
+        assert required in text
+
+
 def test_evidence_bundle_command_example_documents_run_scope_and_synthetic_mode():
     commands = [
         options

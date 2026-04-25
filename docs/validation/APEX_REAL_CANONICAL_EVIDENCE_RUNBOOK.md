@@ -63,6 +63,51 @@ For APEX promotion, `raw_clip_similarity_authorized_pixel_ops` must be `false`.
 Raw CLIP similarity may appear as evidence, but it must not authorize pixel
 operations.
 
+## Candidate Generation / Extraction
+
+Candidate generation, candidate extraction, and candidate scoring are separate
+steps:
+
+- Candidate generation runs Lux Depth V3 with Materials V3 enabled.
+- Candidate extraction copies the generated 16-bit Materials V3 candidate and
+  telemetry into stable external baseline paths.
+- Candidate scoring runs `tools/run_apex_eval.py` against those extracted
+  external files.
+
+For manual Lux Depth V3 -> Materials V3 candidate extraction, the generation
+command must include `--keep-intermediates`. Without it, the pipeline may remove
+`temp/*_materials_v3_enhanced.tif` before the operator can copy the 16-bit
+Materials V3 candidate to the stable external baseline path.
+
+Use the same governed APEX settings that will be scored later:
+
+```bash
+python -m transformation_portal.lux_depth_v3 \
+  --quality-tier apex \
+  --materials-v3 on \
+  --enable-segmentation on \
+  --strict-segmentation \
+  --emit-master16 on \
+  --emit-run-card on \
+  --keep-intermediates \
+  --overwrite
+```
+
+Copy extracted artifacts to stable external baseline paths under
+`baselines/materials_v3`:
+
+```text
+$APEX_EVAL_ASSET_ROOT/apex_real_estate_v1/baselines/materials_v3/<asset_id>_materials_v3_master16.tif
+$APEX_EVAL_ASSET_ROOT/apex_real_estate_v1/baselines/materials_v3/<asset_id>_materials_v3_evidence.json
+```
+
+When mask-aware metrics are being scored, also copy Materials V3 mask bundles to
+stable external paths and pass them with `--candidate-mask`:
+
+```text
+$APEX_EVAL_ASSET_ROOT/apex_real_estate_v1/baselines/materials_v3/<asset_id>_materials_v3_masks.npz
+```
+
 ## Scoped Evidence Run
 
 Use an explicit run scope for a one-asset real evidence run:
