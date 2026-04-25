@@ -76,13 +76,15 @@ steps:
 
 For manual Lux Depth V3 -> Materials V3 candidate extraction, the generation
 command must include `--keep-intermediates`. Without it, the pipeline may remove
-`temp/*_materials_v3_enhanced.tif` before the operator can copy the 16-bit
-Materials V3 candidate to the stable external baseline path.
+`<output-dir>/temp/*_materials_v3_enhanced.*` before the operator can copy the
+16-bit Materials V3 candidate to the stable external baseline path.
 
 Use the same governed APEX settings that will be scored later:
 
 ```bash
 python -m transformation_portal.lux_depth_v3 \
+  --input-dir "$APEX_EVAL_ASSET_ROOT/apex_real_estate_v1/reference_16bit" \
+  --output-dir output/apex_candidate_generation \
   --quality-tier apex \
   --materials-v3 on \
   --enable-segmentation on \
@@ -99,13 +101,6 @@ Copy extracted artifacts to stable external baseline paths under
 ```text
 $APEX_EVAL_ASSET_ROOT/apex_real_estate_v1/baselines/materials_v3/<asset_id>_materials_v3_master16.tif
 $APEX_EVAL_ASSET_ROOT/apex_real_estate_v1/baselines/materials_v3/<asset_id>_materials_v3_evidence.json
-```
-
-When mask-aware metrics are being scored, also copy Materials V3 mask bundles to
-stable external paths and pass them with `--candidate-mask`:
-
-```text
-$APEX_EVAL_ASSET_ROOT/apex_real_estate_v1/baselines/materials_v3/<asset_id>_materials_v3_masks.npz
 ```
 
 ## Scoped Evidence Run

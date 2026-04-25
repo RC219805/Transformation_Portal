@@ -124,8 +124,10 @@ def test_real_canonical_runbook_documents_candidate_extraction_workflow():
 
     for required in (
         "--keep-intermediates",
-        "temp/*_materials_v3_enhanced.tif",
+        "<output-dir>/temp/*_materials_v3_enhanced.*",
         "baselines/materials_v3",
+        "--input-dir",
+        "--output-dir",
         "--candidate-output",
         "--candidate-evidence",
         "--synthetic-data off",
