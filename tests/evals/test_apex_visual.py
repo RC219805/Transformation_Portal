@@ -162,12 +162,217 @@ def test_apex_eval_report_tracks_ready_assets_and_candidate_metrics(tmp_path):
     asset = report["assets"][0]
     assert asset["asset_status"]["status"] == "ready"
     candidate = asset["candidates"][0]
-    assert candidate["status"] in {"ok", "partial_metrics"}
-    assert candidate["metrics"]["ssim"] == pytest.approx(1.0)
-    if candidate["status"] == "partial_metrics":
-        assert "lpips_unavailable" in candidate["metrics"]["metric_warnings"]
-        assert candidate["metrics"]["lpips"] is None
+    assert candidate["status"] == "ok"
+    assert candidate["metric_contract"] == "apex_metrics.v1"
+    assert candidate["metrics_authoritative"] is True
+    assert candidate["evaluation_target_path"] == str(image_path.relative_to(tmp_path))
+    assert candidate["metrics"]["visible_delta"]["status"] == "ok"
+    assert candidate["metrics"]["visible_delta"]["value"] == pytest.approx(0.0)
     assert (tmp_path / "report" / "apex_eval_report.json").is_file()
+
+
+def test_candidate_metrics_compare_against_reference_path_not_asset_ref(tmp_path):
+    delivery_path = tmp_path / "delivery_8bit" / "example_delivery.jpg"
+    reference_path = tmp_path / "reference_16bit" / "example_master16.tif"
+    candidate_path = tmp_path / "output" / "example_candidate_master16.tif"
+    delivery_path.parent.mkdir(parents=True)
+    reference_path.parent.mkdir(parents=True)
+    candidate_path.parent.mkdir(parents=True)
+    Image.fromarray(np.full((8, 8, 3), 255, dtype=np.uint8)).save(delivery_path, format="JPEG")
+    reference = np.zeros((8, 8), dtype=np.uint16)
+    reference[2:6, 2:6] = 32768
+    Image.fromarray(reference, mode="I;16").save(reference_path)
+    Image.fromarray(reference.copy(), mode="I;16").save(candidate_path)
+    evalset_path = _write_evalset(
+        tmp_path,
+        delivery_path,
+        dataset_tier="canonical_apex",
+        asset_overrides={
+            "asset_role": "canonical_apex_reference",
+            "reference_path": str(reference_path.relative_to(tmp_path)),
+            "canonical_bit_depth": 16,
+            "canonical_format": "tiff",
+            "canonical_color_space": "documented_source_profile",
+            "canonical_scoring_eligible": True,
+            "evaluate_at_native_resolution": True,
+            "preserve_16bit_intermediates": True,
+        },
+    )
+
+    report = build_apex_eval_report(
+        evalset_path,
+        output_dir=tmp_path / "report",
+        candidate_outputs={"materials_v3": {"unit_image": candidate_path}},
+        repo_root=tmp_path,
+    )
+
+    candidate = report["assets"][0]["candidates"][0]
+    assert report["evalset"]["canonical_scoring_eligible_count"] == 1
+    assert candidate["status"] == "ok"
+    assert candidate["evaluation_target_path"] == str(reference_path.relative_to(tmp_path))
+    assert candidate["reference_resolution"]["reported_path"] == str(reference_path.relative_to(tmp_path))
+    assert candidate["metrics"]["visible_delta"]["value"] == pytest.approx(0.0)
+
+
+def test_candidate_dimension_mismatch_fails_closed_without_resizing(tmp_path):
+    reference_path = tmp_path / "reference16.tif"
+    candidate_path = tmp_path / "candidate16.tif"
+    Image.fromarray(np.zeros((8, 8), dtype=np.uint16), mode="I;16").save(reference_path)
+    Image.fromarray(np.zeros((4, 4), dtype=np.uint16), mode="I;16").save(candidate_path)
+    evalset_path = _write_evalset(
+        tmp_path,
+        reference_path,
+        dataset_tier="canonical_apex",
+        asset_overrides={
+            "asset_role": "canonical_apex_reference",
+            "canonical_bit_depth": 16,
+            "canonical_format": "tiff",
+            "canonical_scoring_eligible": True,
+            "evaluate_at_native_resolution": True,
+            "preserve_16bit_intermediates": True,
+        },
+    )
+
+    report = build_apex_eval_report(
+        evalset_path,
+        output_dir=tmp_path / "report",
+        candidate_outputs={"materials_v3": {"unit_image": candidate_path}},
+        repo_root=tmp_path,
+    )
+
+    candidate = report["assets"][0]["candidates"][0]
+    assert candidate["status"] == "dimension_mismatch"
+    assert candidate["metrics_authoritative"] is False
+    assert candidate["metrics"]["visible_delta"]["status"] == "dimension_mismatch"
+
+
+def test_canonical_candidate_metrics_reject_unsupported_reference_bit_depth(tmp_path):
+    reference_path = tmp_path / "reference8.tif"
+    candidate_path = tmp_path / "candidate16.tif"
+    Image.fromarray(np.zeros((8, 8, 3), dtype=np.uint8)).save(reference_path, format="TIFF")
+    Image.fromarray(np.zeros((8, 8), dtype=np.uint16), mode="I;16").save(candidate_path)
+    evalset_path = _write_evalset(
+        tmp_path,
+        reference_path,
+        dataset_tier="canonical_apex",
+        asset_overrides={
+            "asset_role": "canonical_apex_reference",
+            "canonical_bit_depth": 16,
+            "canonical_format": "tiff",
+            "canonical_scoring_eligible": True,
+            "evaluate_at_native_resolution": True,
+            "preserve_16bit_intermediates": True,
+        },
+    )
+
+    report = build_apex_eval_report(
+        evalset_path,
+        output_dir=tmp_path / "report",
+        candidate_outputs={"materials_v3": {"unit_image": candidate_path}},
+        repo_root=tmp_path,
+    )
+
+    candidate = report["assets"][0]["candidates"][0]
+    assert candidate["status"] == "unsupported_reference_bit_depth"
+    assert candidate["metrics_authoritative"] is False
+
+
+def test_canonical_candidate_metrics_reject_unsupported_candidate_bit_depth(tmp_path):
+    reference_path = tmp_path / "reference16.tif"
+    candidate_path = tmp_path / "candidate8.tif"
+    Image.fromarray(np.zeros((8, 8), dtype=np.uint16), mode="I;16").save(reference_path)
+    Image.fromarray(np.zeros((8, 8, 3), dtype=np.uint8)).save(candidate_path, format="TIFF")
+    evalset_path = _write_evalset(
+        tmp_path,
+        reference_path,
+        dataset_tier="canonical_apex",
+        asset_overrides={
+            "asset_role": "canonical_apex_reference",
+            "canonical_bit_depth": 16,
+            "canonical_format": "tiff",
+            "canonical_scoring_eligible": True,
+            "evaluate_at_native_resolution": True,
+            "preserve_16bit_intermediates": True,
+        },
+    )
+
+    report = build_apex_eval_report(
+        evalset_path,
+        output_dir=tmp_path / "report",
+        candidate_outputs={"materials_v3": {"unit_image": candidate_path}},
+        repo_root=tmp_path,
+    )
+
+    candidate = report["assets"][0]["candidates"][0]
+    assert candidate["status"] == "unsupported_candidate_bit_depth"
+    assert candidate["metrics_authoritative"] is False
+
+
+def test_missing_and_unreadable_candidate_outputs_return_fail_closed_statuses(tmp_path):
+    reference_path = tmp_path / "reference16.tif"
+    unreadable_path = tmp_path / "candidate16.tif"
+    Image.fromarray(np.zeros((8, 8), dtype=np.uint16), mode="I;16").save(reference_path)
+    unreadable_path.write_text("not a tiff", encoding="utf-8")
+    evalset_path = _write_evalset(
+        tmp_path,
+        reference_path,
+        dataset_tier="canonical_apex",
+        asset_overrides={
+            "asset_role": "canonical_apex_reference",
+            "canonical_bit_depth": 16,
+            "canonical_format": "tiff",
+            "canonical_scoring_eligible": True,
+            "evaluate_at_native_resolution": True,
+            "preserve_16bit_intermediates": True,
+        },
+    )
+
+    report = build_apex_eval_report(
+        evalset_path,
+        output_dir=tmp_path / "report",
+        candidate_outputs={
+            "missing": {"unit_image": tmp_path / "missing_candidate.tif"},
+            "unreadable": {"unit_image": unreadable_path},
+        },
+        repo_root=tmp_path,
+    )
+
+    candidates = {candidate["candidate"]: candidate for candidate in report["assets"][0]["candidates"]}
+    assert candidates["missing"]["status"] == "missing_candidate"
+    assert candidates["missing"]["metrics_authoritative"] is False
+    assert candidates["unreadable"]["status"] == "unreadable_candidate"
+    assert candidates["unreadable"]["metrics_authoritative"] is False
+
+
+def test_unreadable_reference_output_returns_fail_closed_status(tmp_path):
+    reference_path = tmp_path / "reference16.tif"
+    candidate_path = tmp_path / "candidate16.tif"
+    reference_path.write_text("not a tiff", encoding="utf-8")
+    Image.fromarray(np.zeros((8, 8), dtype=np.uint16), mode="I;16").save(candidate_path)
+    evalset_path = _write_evalset(
+        tmp_path,
+        reference_path,
+        dataset_tier="canonical_apex",
+        asset_overrides={
+            "asset_role": "canonical_apex_reference",
+            "canonical_bit_depth": 16,
+            "canonical_format": "tiff",
+            "canonical_scoring_eligible": True,
+            "evaluate_at_native_resolution": True,
+            "preserve_16bit_intermediates": True,
+        },
+    )
+
+    report = build_apex_eval_report(
+        evalset_path,
+        output_dir=tmp_path / "report",
+        candidate_outputs={"materials_v3": {"unit_image": candidate_path}},
+        repo_root=tmp_path,
+    )
+
+    candidate = report["assets"][0]["candidates"][0]
+    assert candidate["status"] == "unreadable_reference"
+    assert candidate["metrics_authoritative"] is False
 
 
 def test_jpeg_delivery_asset_is_ready_but_not_canonical_scoring_eligible(tmp_path):

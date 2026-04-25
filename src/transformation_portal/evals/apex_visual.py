@@ -19,7 +19,9 @@ from typing import Any, Callable, Iterable, Mapping, Sequence
 
 import numpy as np
 
+from transformation_portal.evals.apex_metrics import compute_apex_metrics
 from transformation_portal.evals.asset_resolver import ResolvedAsset, resolve_manifest_path
+from transformation_portal.evals.image_io import load_16bit_tiff
 from transformation_portal.evals.image_metadata import inspect_reference_image, normalize_image_format
 from transformation_portal.evals.metrics import lpips_score, ssim
 from transformation_portal.ingest.canonical_json import dump_json
@@ -27,6 +29,7 @@ from transformation_portal.lux_depth_v3.model_registry import MODEL_REGISTRY, Us
 
 APEX_EVALSET_SCHEMA_VERSION = "apex_evalset.v1"
 APEX_EVAL_REPORT_VERSION = "apex_eval_report.v1"
+APEX_METRIC_CONTRACT_VERSION = "apex_metrics.v1"
 DEPTH_BACKEND_BENCHMARK_REPORT_VERSION = "depth_backend_benchmark_report.v1"
 DEPTH_PRO_BACKENDS = {"depth_pro"}
 CANONICAL_APEX_DATASET_TIER = "canonical_apex"
@@ -688,6 +691,171 @@ def visible_delta_metrics(reference: Path, candidate: Path) -> dict[str, Any]:
     }
 
 
+def _candidate_report_base(
+    *,
+    candidate_name: str,
+    status: str,
+    candidate_path: Path | None,
+    reference_resolution: ResolvedAsset,
+    metrics: Mapping[str, Any] | None = None,
+    metrics_authoritative: bool = False,
+    reason: str | None = None,
+    extra: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "candidate": candidate_name,
+        "status": status,
+        "metric_contract": APEX_METRIC_CONTRACT_VERSION,
+        "metrics_authoritative": bool(metrics_authoritative),
+        "evaluation_target_path": reference_resolution.reported_path,
+        "reference_resolution": reference_resolution.to_report_dict(),
+        "candidate_output": {
+            "path": str(candidate_path) if candidate_path is not None else None,
+        },
+        "metrics": dict(metrics or {}),
+    }
+    if candidate_path is not None:
+        payload["output_path"] = str(candidate_path)
+    if reason:
+        payload["reason"] = reason
+    if extra:
+        payload.update(dict(extra))
+    return payload
+
+
+def _read_image_array(path: Path, *, require_16bit_tiff: bool, role: str) -> tuple[np.ndarray | None, str | None, str | None]:
+    if require_16bit_tiff:
+        array, metadata = load_16bit_tiff(path)
+        if array is not None:
+            return array, None, None
+        reason = str(metadata.get("reason") or metadata.get("observable_reference_metadata_status") or "invalid_input")
+        if reason in {"non_tiff_reference", "reference_bit_depth_below_16", "loaded_bit_depth_below_16"}:
+            return None, f"unsupported_{role}_bit_depth", reason
+        return None, f"unreadable_{role}", reason
+
+    from PIL import Image, UnidentifiedImageError
+
+    try:
+        if _normalize_image_format(path.suffix) == "tiff":
+            tifffile = importlib.import_module("tifffile")
+            return np.asarray(tifffile.imread(path)), None, None
+        with Image.open(path) as image:
+            return np.asarray(image.convert("RGB")), None, None
+    except (ImportError, OSError, ValueError, TypeError, UnidentifiedImageError) as exc:
+        return None, f"unreadable_{role}", str(exc)
+
+
+def _candidate_metrics_report(
+    *,
+    evalset: ApexEvalSet,
+    asset: ApexEvalAsset,
+    asset_report_status: Mapping[str, Any],
+    candidate_name: str,
+    output_value: Path | str | None,
+) -> dict[str, Any]:
+    reference_resolution = evalset.resolve_reference(asset)
+    candidate_path = Path(output_value) if output_value is not None else None
+    if candidate_path is not None and not candidate_path.is_absolute():
+        candidate_path = evalset.repo_root / candidate_path
+
+    if candidate_path is None or not candidate_path.is_file():
+        return _candidate_report_base(
+            candidate_name=candidate_name,
+            status="missing_candidate",
+            candidate_path=candidate_path,
+            reference_resolution=reference_resolution,
+            reason="candidate_output_missing",
+        )
+
+    if asset_report_status.get("status") != "ready":
+        return _candidate_report_base(
+            candidate_name=candidate_name,
+            status="metrics_not_computed",
+            candidate_path=candidate_path,
+            reference_resolution=reference_resolution,
+            reason=f"asset_status_{asset_report_status.get('status')}",
+        )
+
+    reference_path = reference_resolution.resolved_path
+    if reference_path is None or reference_resolution.escaped_asset_root or not reference_path.is_file():
+        return _candidate_report_base(
+            candidate_name=candidate_name,
+            status="missing_reference",
+            candidate_path=candidate_path,
+            reference_resolution=reference_resolution,
+            reason="reference_path_missing_or_unresolved",
+        )
+
+    canonical_comparison = (
+        bool(asset_report_status.get("canonical_scoring_eligible"))
+        or evalset.dataset_tier == CANONICAL_APEX_DATASET_TIER
+        or asset.asset_role == CANONICAL_APEX_ASSET_ROLE
+    )
+    reference, reference_status, reference_reason = _read_image_array(
+        reference_path,
+        require_16bit_tiff=canonical_comparison,
+        role="reference",
+    )
+    if reference_status:
+        return _candidate_report_base(
+            candidate_name=candidate_name,
+            status=reference_status,
+            candidate_path=candidate_path,
+            reference_resolution=reference_resolution,
+            reason=reference_reason,
+        )
+
+    candidate, candidate_status, candidate_reason = _read_image_array(
+        candidate_path,
+        require_16bit_tiff=canonical_comparison,
+        role="candidate",
+    )
+    if candidate_status:
+        return _candidate_report_base(
+            candidate_name=candidate_name,
+            status=candidate_status,
+            candidate_path=candidate_path,
+            reference_resolution=reference_resolution,
+            reason=candidate_reason,
+        )
+
+    assert reference is not None
+    assert candidate is not None
+    metrics = compute_apex_metrics(
+        reference,
+        candidate,
+        working_color_space=asset.working_color_space,
+        working_transfer_function=asset.working_transfer_function,
+    )
+    visible_status = str(metrics.get("visible_delta", {}).get("status") or "")
+    if visible_status == "dimension_mismatch":
+        return _candidate_report_base(
+            candidate_name=candidate_name,
+            status="dimension_mismatch",
+            candidate_path=candidate_path,
+            reference_resolution=reference_resolution,
+            metrics=metrics,
+            reason="dimension_mismatch",
+        )
+    if visible_status != "ok":
+        return _candidate_report_base(
+            candidate_name=candidate_name,
+            status="metrics_not_computed",
+            candidate_path=candidate_path,
+            reference_resolution=reference_resolution,
+            metrics=metrics,
+            reason=visible_status or "metrics_not_computed",
+        )
+    return _candidate_report_base(
+        candidate_name=candidate_name,
+        status="ok",
+        candidate_path=candidate_path,
+        reference_resolution=reference_resolution,
+        metrics=metrics,
+        metrics_authoritative=True,
+    )
+
+
 def build_apex_eval_report(
     evalset_path: Path | str,
     *,
@@ -700,7 +868,7 @@ def build_apex_eval_report(
 
     ``candidate_outputs`` maps candidate name to ``asset_id -> output path``.
     When no candidate output is provided, the report still validates corpus
-    readiness and leaves visual-delta metrics unset.
+    readiness and leaves candidate metrics unset.
     """
     evalset = load_apex_evalset(evalset_path, repo_root=repo_root, asset_root=asset_root)
     output_root = Path(output_dir)
@@ -741,61 +909,14 @@ def build_apex_eval_report(
         }
         candidates = []
         for candidate_name, outputs in sorted(candidate_outputs.items()):
-            output_value = outputs.get(asset.asset_id)
-            if output_value is None:
-                candidates.append(
-                    {
-                        "candidate": candidate_name,
-                        "status": "missing_candidate_output",
-                        "metrics": {},
-                    }
-                )
-                continue
-            candidate_path = Path(output_value)
-            if not candidate_path.is_absolute():
-                candidate_path = evalset.repo_root / candidate_path
-            if status["status"] != "ready":
-                candidates.append(
-                    {
-                        "candidate": candidate_name,
-                        "status": "source_not_ready",
-                        "metrics": {},
-                    }
-                )
-                continue
-            if not candidate_path.is_file():
-                candidates.append(
-                    {
-                        "candidate": candidate_name,
-                        "status": "missing_candidate_output",
-                        "output_path": str(candidate_path),
-                        "metrics": {},
-                    }
-                )
-                continue
-            source_path = evalset.resolve_asset(asset).resolved_path
-            if source_path is None:
-                candidates.append(
-                    {
-                        "candidate": candidate_name,
-                        "status": "source_not_ready",
-                        "metrics": {},
-                    }
-                )
-                continue
-            metrics = visible_delta_metrics(source_path, candidate_path)
             candidates.append(
-                {
-                    "candidate": candidate_name,
-                    "status": metrics.pop("status"),
-                    "output_path": str(candidate_path),
-                    "metrics": {
-                        "depth_edge_fidelity": None,
-                        "material_precision": None,
-                        "pixel_op_false_positive_risk": None,
-                        **metrics,
-                    },
-                }
+                _candidate_metrics_report(
+                    evalset=evalset,
+                    asset=asset,
+                    asset_report_status=status,
+                    candidate_name=candidate_name,
+                    output_value=outputs.get(asset.asset_id),
+                )
             )
 
         assets_report.append(
