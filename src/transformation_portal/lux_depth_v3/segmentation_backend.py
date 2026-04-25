@@ -56,14 +56,16 @@ import numpy as np
 from transformation_portal.ingest.canonical_json import canonicalize_json, dump_json
 
 from .config import EnhanceConfig
+from .material_confidence_contract import (
+    CLIP_SOFTMAX_MARGIN_SCORE_TYPE,
+    HEURISTIC_MATERIAL_SCORE_TYPE,
+    MATERIAL_CLASSIFIER_SCORE_TYPE,
+    MATERIALS_V3_CALIBRATION_VERSION,
+    MISSING_CLIP_SCORE_FALLBACK_TYPE,
+)
 from .protocols.segmentation_backend import SegmentationBackend, SegmentationBackendInfo
 
 logger = logging.getLogger(__name__)
-
-CLIP_SOFTMAX_MARGIN_SCORE_TYPE = "clip_softmax_margin_v1"
-HEURISTIC_MATERIAL_SCORE_TYPE = "heuristic_material_confidence_v1"
-MATERIAL_CLASSIFIER_SCORE_TYPE = "material_classifier_probability_v1"
-MATERIALS_V3_CALIBRATION_VERSION = "materials_v3_calibration_v1"
 
 _LAST_SEGMENTATION_RUNTIME_METADATA: ContextVar[Optional[Dict[str, Any]]] = ContextVar(
     "_LAST_SEGMENTATION_RUNTIME_METADATA",
@@ -904,7 +906,7 @@ class EfficientSAMBackend:
         Returns:
             Dict[material_name, (mask, confidence)] where:
             - mask: (H, W) float32 [0.0-1.0]
-            - confidence: CLIP similarity or heuristic score [0.0-1.0]
+            - confidence: calibrated CLIP probability or heuristic score [0.0-1.0]
         """
         # Step 1: Run EfficientSAM to generate segment proposals
         segments = self._run_sam_inference(image)
@@ -1002,12 +1004,13 @@ class EfficientSAMBackend:
         Returns:
             Dict mapping material names to (mask, confidence) tuples:
             - mask: Aggregated binary mask (H, W) float32 [0.0-1.0]
-            - confidence: Average CLIP similarity score [0.0-1.0]
+            - confidence: area-weighted calibrated CLIP softmax probability [0.0-1.0]
 
         Note:
             If segments list is empty (which happens when SAM doesn't run),
             we first generate heuristic segments and then classify them with CLIP.
-            This provides better material detection than pure heuristics alone.
+            Raw CLIP similarity is retained as evidence metadata, not as
+            authoritative Materials V3 confidence.
         """
         self._clip_classification_timing_ms = {}
         self._material_confidence_evidence = {}
@@ -1167,7 +1170,9 @@ class EfficientSAMBackend:
                     softmax_probability = float(probabilities[best_idx]) if probabilities.size else 0.0
                     if probabilities.size >= 2:
                         top2 = np.partition(probabilities, -2)[-2:]
-                        top2_margin = float(top2[-1] - top2[-2])
+                        top1 = float(max(top2[0], top2[1]))
+                        top2_second = float(min(top2[0], top2[1]))
+                        top2_margin = top1 - top2_second
                     else:
                         top2_margin = float(softmax_probability)
 
@@ -1194,7 +1199,7 @@ class EfficientSAMBackend:
                             f"top2_margin={top2_margin:.3f}, area={segment['area']}px"
                         )
 
-                # Compute aggregate confidence per material (area-weighted average)
+                # Compute aggregate calibrated confidence per material (area-weighted average).
                 material_masks: Dict[str, Tuple[np.ndarray, float]] = {}
                 material_evidence: Dict[str, Dict[str, Any]] = {}
                 for name, data in material_data.items():
@@ -1205,7 +1210,7 @@ class EfficientSAMBackend:
                     # Only include materials with sufficient coverage
                     if mask.sum() > 500:
                         if scores:
-                            # Area-weighted average of CLIP scores for this material
+                            # Area-weighted average of calibrated CLIP probabilities for this material.
                             total_area = sum(areas)
                             weighted_conf = sum(s * a for s, a in zip(scores, areas)) / total_area
                             raw_scores = data["raw_similarities"]
@@ -1228,7 +1233,7 @@ class EfficientSAMBackend:
                             material_masks[name] = (mask, 0.5)
                             material_evidence[name] = {
                                 "material_confidence": 0.5,
-                                "confidence_score_type": "missing_clip_score_fallback",
+                                "confidence_score_type": MISSING_CLIP_SCORE_FALLBACK_TYPE,
                                 "raw_clip_similarity": None,
                                 "clip_softmax_probability": None,
                                 "clip_top2_margin": None,

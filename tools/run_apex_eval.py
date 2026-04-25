@@ -39,6 +39,7 @@ def main() -> int:
     missing = [item["asset_id"] for item in report["assets"] if item["asset_status"]["status"] not in {"ready"}]
     if missing:
         print("APEX eval report emitted with non-ready assets: " + ", ".join(missing))
+        return 1
     return 0
 
 

@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import importlib.util
 import json
+import sys
 from pathlib import Path
 
 import numpy as np
@@ -16,6 +18,7 @@ from transformation_portal.evals.apex_visual import (
     build_depth_backend_benchmark_report,
     load_apex_evalset,
     sha256_file,
+    visible_delta_metrics,
 )
 
 pytestmark = pytest.mark.unit
@@ -66,8 +69,12 @@ def test_apex_eval_report_tracks_ready_assets_and_candidate_metrics(tmp_path):
     assert report["evalset"]["ready_asset_count"] == 1
     asset = report["assets"][0]
     assert asset["asset_status"]["status"] == "ready"
-    assert asset["candidates"][0]["status"] == "ok"
-    assert asset["candidates"][0]["metrics"]["ssim"] == pytest.approx(1.0)
+    candidate = asset["candidates"][0]
+    assert candidate["status"] in {"ok", "partial_metrics"}
+    assert candidate["metrics"]["ssim"] == pytest.approx(1.0)
+    if candidate["status"] == "partial_metrics":
+        assert "lpips_unavailable" in candidate["metrics"]["metric_warnings"]
+        assert candidate["metrics"]["lpips"] is None
     assert (tmp_path / "report" / "apex_eval_report.json").is_file()
 
 
@@ -81,6 +88,55 @@ def test_apex_eval_report_marks_missing_assets(tmp_path):
 
     assert report["evalset"]["ready_asset_count"] == 0
     assert report["assets"][0]["asset_status"]["status"] == "missing_asset"
+
+
+def test_run_apex_eval_returns_nonzero_for_non_ready_assets(tmp_path, monkeypatch, capsys):
+    image_path = tmp_path / "input.png"
+    Image.fromarray(np.zeros((8, 8, 3), dtype=np.uint8)).save(image_path)
+    evalset_path = _write_evalset(tmp_path, image_path)
+    image_path.unlink()
+    output_dir = tmp_path / "report"
+
+    script_path = Path(__file__).resolve().parents[2] / "tools" / "run_apex_eval.py"
+    spec = importlib.util.spec_from_file_location("run_apex_eval_unit", script_path)
+    assert spec is not None
+    assert spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "run_apex_eval.py",
+            "--evalset",
+            str(evalset_path),
+            "--output-dir",
+            str(output_dir),
+            "--emit-report",
+            "off",
+        ],
+    )
+
+    assert module.main() == 1
+    assert (output_dir / "apex_eval_report.json").is_file()
+    assert "non-ready assets: unit_image" in capsys.readouterr().out
+
+
+def test_visible_delta_metrics_marks_lpips_unavailable_as_partial(tmp_path, monkeypatch):
+    reference_path = tmp_path / "reference.png"
+    candidate_path = tmp_path / "candidate.png"
+    image = np.zeros((8, 8, 3), dtype=np.uint8)
+    Image.fromarray(image).save(reference_path)
+    Image.fromarray(image.copy()).save(candidate_path)
+    monkeypatch.setattr("transformation_portal.evals.apex_visual._lpips_available", lambda: False)
+
+    metrics = visible_delta_metrics(reference_path, candidate_path)
+
+    assert metrics["status"] == "partial_metrics"
+    assert metrics["lpips"] is None
+    assert "lpips_unavailable" in metrics["metric_warnings"]
+    assert metrics["ssim"] == pytest.approx(1.0)
 
 
 def test_load_apex_evalset_rejects_checksum_drift_in_report(tmp_path):

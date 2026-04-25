@@ -1,0 +1,35 @@
+"""Shared Materials V3 confidence score-type contract."""
+
+from __future__ import annotations
+
+CLIP_SOFTMAX_MARGIN_SCORE_TYPE = "clip_softmax_margin_v1"
+HEURISTIC_MATERIAL_SCORE_TYPE = "heuristic_material_confidence_v1"
+MATERIAL_CLASSIFIER_SCORE_TYPE = "material_classifier_probability_v1"
+RAW_CLIP_SIMILARITY_SCORE_TYPE = "raw_clip_similarity"
+MISSING_CLIP_SCORE_FALLBACK_TYPE = "missing_clip_score_fallback"
+MATERIALS_V3_CALIBRATION_VERSION = "materials_v3_calibration_v1"
+
+APEX_PIXEL_OP_AUTHORITY_SCORE_TYPES = frozenset(
+    {
+        CLIP_SOFTMAX_MARGIN_SCORE_TYPE,
+        MATERIAL_CLASSIFIER_SCORE_TYPE,
+    }
+)
+RAW_OR_UNSUPPORTED_SCORE_TYPES = frozenset(
+    {
+        RAW_CLIP_SIMILARITY_SCORE_TYPE,
+        HEURISTIC_MATERIAL_SCORE_TYPE,
+        MISSING_CLIP_SCORE_FALLBACK_TYPE,
+    }
+)
+
+__all__ = [
+    "APEX_PIXEL_OP_AUTHORITY_SCORE_TYPES",
+    "CLIP_SOFTMAX_MARGIN_SCORE_TYPE",
+    "HEURISTIC_MATERIAL_SCORE_TYPE",
+    "MATERIAL_CLASSIFIER_SCORE_TYPE",
+    "MATERIALS_V3_CALIBRATION_VERSION",
+    "MISSING_CLIP_SCORE_FALLBACK_TYPE",
+    "RAW_CLIP_SIMILARITY_SCORE_TYPE",
+    "RAW_OR_UNSUPPORTED_SCORE_TYPES",
+]

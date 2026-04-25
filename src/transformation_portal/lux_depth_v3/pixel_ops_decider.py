@@ -5,21 +5,11 @@ from __future__ import annotations
 import math
 from typing import Any, Dict, List
 
+from .material_confidence_contract import (
+    APEX_PIXEL_OP_AUTHORITY_SCORE_TYPES,
+    RAW_OR_UNSUPPORTED_SCORE_TYPES,
+)
 from .pixel_ops_registry import OP_REGISTRY
-
-APEX_PIXEL_OP_AUTHORITY_SCORE_TYPES = frozenset(
-    {
-        "clip_softmax_margin_v1",
-        "material_classifier_probability_v1",
-    }
-)
-RAW_OR_UNSUPPORTED_SCORE_TYPES = frozenset(
-    {
-        "raw_clip_similarity",
-        "heuristic_material_confidence_v1",
-        "missing_clip_score_fallback",
-    }
-)
 
 
 def _material_confidence_threshold(material_key: str, config: Any) -> float:

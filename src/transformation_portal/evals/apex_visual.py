@@ -8,6 +8,7 @@ benchmark execution without forcing model downloads in unit tests.
 from __future__ import annotations
 
 import hashlib
+import importlib
 import json
 import math
 import time
@@ -25,6 +26,16 @@ APEX_EVALSET_SCHEMA_VERSION = "apex_evalset.v1"
 APEX_EVAL_REPORT_VERSION = "apex_eval_report.v1"
 DEPTH_BACKEND_BENCHMARK_REPORT_VERSION = "depth_backend_benchmark_report.v1"
 DEPTH_PRO_BACKENDS = {"depth_pro"}
+
+
+def _lpips_available() -> bool:
+    """Return whether LPIPS can produce authoritative visible-delta evidence."""
+    try:
+        importlib.import_module("lpips")
+        importlib.import_module("torch")
+    except ImportError:
+        return False
+    return True
 
 
 @dataclass(frozen=True)
@@ -201,25 +212,35 @@ def visible_delta_metrics(reference: Path, candidate: Path) -> dict[str, Any]:
             "lpips": None,
             "delta_e_proxy_mean_abs": None,
             "delta_e_proxy_max_abs": None,
+            "metric_warnings": [],
         }
 
     abs_delta = np.abs(cand - ref)
+    metric_warnings: list[str] = []
     try:
         ssim_value: float | None = float(ssim(cand, ref))
     except Exception:
         ssim_value = None
-    try:
-        lpips_value = float(lpips_score(cand, ref))
-        if not math.isfinite(lpips_value):
+        metric_warnings.append("ssim_unavailable")
+    if _lpips_available():
+        try:
+            lpips_value = float(lpips_score(cand, ref))
+            if not math.isfinite(lpips_value):
+                lpips_value = None
+                metric_warnings.append("lpips_nonfinite")
+        except Exception:
             lpips_value = None
-    except Exception:
+            metric_warnings.append("lpips_unavailable")
+    else:
         lpips_value = None
+        metric_warnings.append("lpips_unavailable")
     return {
-        "status": "ok",
+        "status": "partial_metrics" if metric_warnings else "ok",
         "ssim": ssim_value,
         "lpips": lpips_value,
         "delta_e_proxy_mean_abs": float(abs_delta.mean()),
         "delta_e_proxy_max_abs": float(abs_delta.max()),
+        "metric_warnings": metric_warnings,
     }
 
 
