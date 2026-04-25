@@ -143,5 +143,6 @@ Evidence bundle `promotion_blocked_reasons` currently include:
 - `raw_clip_similarity_authorized_pixel_ops`
 
 Generated reports and evidence bundles under `output/` are local validation
-artifacts. Do not commit them unless a later redacted-fixture policy explicitly
-allows that.
+artifacts. Do not commit them unless they satisfy the redacted fixture policy:
+
+`docs/validation/APEX_REDACTED_EVIDENCE_FIXTURE_POLICY.md`
