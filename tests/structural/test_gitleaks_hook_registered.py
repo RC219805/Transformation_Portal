@@ -12,6 +12,7 @@ is cheap and runs in Layer 1.
 from __future__ import annotations
 
 import re
+import sys
 from pathlib import Path
 from typing import List, Tuple
 
@@ -76,8 +77,21 @@ def _ci_gitleaks_pin() -> str:
     body = CI_FIREWALL_WORKFLOW.read_text(encoding="utf-8")
     # Search for the pinned archive name, e.g. gitleaks_8.21.2_linux_x64.tar.gz.
     match = re.search(r"gitleaks_(\d+\.\d+\.\d+)_linux_x64\.tar\.gz", body)
-    assert match, "could not locate gitleaks archive pin in ci-quality-firewall.yml"
-    return f"v{match.group(1)}"
+    if match:
+        return f"v{match.group(1)}"
+
+    # The hardened workflow keeps the version in one explicit shell variable and
+    # derives the archive name and release URL from that value before verifying a
+    # SHA256 pin. Accept that shape without weakening local/CI version parity.
+    version_match = re.search(r"GITLEAKS_VERSION=[\"'](\d+\.\d+\.\d+)[\"']", body)
+    assert version_match, "could not locate gitleaks archive pin in ci-quality-firewall.yml"
+    assert (
+        'archive="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"' in body
+    ), "ci-quality-firewall.yml must derive the gitleaks archive name from GITLEAKS_VERSION"
+    assert (
+        "releases/download/v${GITLEAKS_VERSION}/${archive}" in body
+    ), "ci-quality-firewall.yml must derive the gitleaks release URL from GITLEAKS_VERSION"
+    return f"v{version_match.group(1)}"
 
 
 def test_gitleaks_hook_registered() -> None:
@@ -119,6 +133,21 @@ def test_gitleaks_hook_rev_matches_ci_pin() -> None:
         f"gitleaks hook rev ({rev!r}) must match the CI archive pin ({expected!r}) "
         "so local and CI produce the same verdict."
     )
+
+
+def test_ci_gitleaks_pin_accepts_version_variable_archive(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    workflow = tmp_path / "ci-quality-firewall.yml"
+    workflow.write_text(
+        """
+          GITLEAKS_VERSION="8.21.2"
+          archive="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          wget -q "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/${archive}"
+        """,
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(sys.modules[__name__], "CI_FIREWALL_WORKFLOW", workflow)
+
+    assert _ci_gitleaks_pin() == "v8.21.2"
 
 
 def test_gitleaks_hook_args_match_ci_invocation() -> None:

@@ -9,7 +9,9 @@ name: Security Unified
 on:
   schedule:
     - cron: '0 6 * * *'
-    - cron: '27 22 * * 2'
+    # Staggered 20 minutes after codeql.yml (27 22 * * 2) to avoid a Tuesday-night runner
+    # contention spike when both security workflows fire at the same minute.
+    - cron: '47 22 * * 2'
 
   push:
     branches: [main]

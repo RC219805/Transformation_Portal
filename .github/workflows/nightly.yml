@@ -106,7 +106,8 @@ jobs:
             echo "baseline_file=$FIRST_BASELINE_FILE" >> "$GITHUB_OUTPUT"
             echo "has_baseline=true" >> "$GITHUB_OUTPUT"
           else
-            echo "No benchmark baseline file found; regression comparison will be skipped."
+            echo "::warning::No benchmark baseline file found at tools/benchmarks/baseline.json or tests/benchmarks/baselines/*.json — perf regression comparison will be skipped"
+            echo "⚠️ Perf regression comparison skipped: no baseline file present" >> "$GITHUB_STEP_SUMMARY"
             echo "has_baseline=false" >> "$GITHUB_OUTPUT"
           fi
 

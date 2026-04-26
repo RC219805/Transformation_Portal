@@ -22,12 +22,14 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  contents: write  # Required to submit dependencies to the dependency graph
+  contents: read
 
 jobs:
   submit-pypi:
     name: Submit Python Dependencies
     runs-on: ubuntu-latest
+    permissions:
+      contents: write  # Required to submit dependencies to the dependency graph
 
     steps:
       - name: Maximize available disk space
