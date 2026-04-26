@@ -843,6 +843,39 @@ def test_archive_gate_a_config_preview_blocks_archive_index_root_mismatch(
     assert preview["argv_preview"] == ""
 
 
+def test_archive_gate_a_config_preview_reports_missing_archive_root_on_root_field(
+    client: TestClient,
+    tmp_path: Path,
+) -> None:
+    archive_root = (tmp_path / "missing-root").resolve()
+    archive_index = (tmp_path / "archive_index_normalized.csv.gz").resolve()
+    _write_archive_index(archive_index, ["asset-001.dng"])
+    output_dir = (tmp_path / "preview-output").resolve()
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    response = client.post(
+        "/v1/config-preview",
+        json={
+            "pipeline": "archive-gate-a",
+            "args": {
+                "input_dir": str(tmp_path),
+                "output_dir": str(output_dir),
+                "archive_command": "fixity-scan",
+                "archive_root": str(archive_root),
+                "archive_index": str(archive_index),
+            },
+        },
+    )
+    body = response.json()
+
+    assert response.status_code == 200
+    preview = body["data"]
+    errors = {item["field"]: item for item in preview["field_errors"]}
+    assert errors["archive_root"]["code"] in {"missing", "not_a_directory"}
+    assert "archive_index" not in errors
+    assert preview["argv_preview"] == ""
+
+
 def test_config_preview_contract_normalizes_inactive_reconstruction_fields(
     client: TestClient,
     tmp_path: Path,
@@ -2527,6 +2560,42 @@ def test_archive_gate_pipeline_submission_rejects_archive_index_root_mismatch(
         "field": "archive_index",
         "reason": "archive_index_root_mismatch",
     }
+
+
+def test_archive_gate_pipeline_submission_reports_missing_archive_root_on_root_field(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    async def fake_run_job(job, _argv):  # noqa: ANN001
+        raise AssertionError("missing archive root must be rejected before dispatch")
+
+    monkeypatch.setattr(orchestrator_app, "_run_job", fake_run_job)
+    archive_index = tmp_path / "archive_index_normalized.csv.gz"
+    _write_archive_index(archive_index, ["asset-001.dng"])
+    archive_root = tmp_path / "missing-root"
+
+    response = client.post(
+        "/v1/jobs",
+        json={
+            "pipeline": "archive-gate-a",
+            "args": {
+                "input_dir": str(tmp_path),
+                "output_dir": str(tmp_path / "out"),
+                "archive_command": "fixity-scan",
+                "archive_index": str(archive_index),
+                "archive_root": str(archive_root),
+            },
+        },
+    )
+    body = response.json()
+
+    assert response.status_code == 400
+    assert body["schema"] == "tp.orchestrator.error.v1"
+    assert body["success"] is False
+    assert body["error"]["code"] == "INVALID_ARGUMENT"
+    assert body["error"]["details"]["field"] == "archive_root"
+    assert body["error"]["details"]["reason"] in {"missing", "not_a_directory"}
 
 
 def test_create_job_preserves_raw_request_and_internal_execution_args(

@@ -3593,6 +3593,182 @@ def test_archive_gate_a_readiness_is_ready_when_index_matches_root(tmp_path: Pat
     assert readiness["missing_prerequisites"] == []
 
 
+def test_archive_gate_a_readiness_reports_missing_archive_root_on_root_field(tmp_path: Path) -> None:
+    archive_index = tmp_path / "archive_index_normalized.csv.gz"
+    _write_archive_index(archive_index, ["asset-001.dng"])
+    missing_root = tmp_path / "missing-root"
+
+    readiness = orchestrator_app._archive_gate_readiness(
+        "archive-gate-a",
+        args={
+            "input_dir": str(tmp_path),
+            "output_dir": str(tmp_path / "out"),
+            "archive_command": "fixity-scan",
+            "archive_root": str(missing_root),
+            "archive_index": str(archive_index),
+        },
+        require_dispatch_inputs=True,
+    )
+
+    assert readiness["status"] == "blocked"
+    issues = {item["field"]: item for item in readiness["missing_prerequisites"] if "field" in item}
+    assert issues["archive_root"]["reason"] == "input_dir_required"
+    assert "archive_index_root_mismatch" not in {item["reason"] for item in readiness["missing_prerequisites"]}
+
+
+def test_archive_gate_a_readiness_rejects_symlink_archive_root(tmp_path: Path) -> None:
+    real_root = tmp_path / "real-root"
+    real_root.mkdir()
+    (real_root / "asset-001.dng").write_bytes(b"raw")
+    archive_index = tmp_path / "archive_index_normalized.csv.gz"
+    _write_archive_index(archive_index, ["asset-001.dng"])
+    link_root = tmp_path / "link-root"
+    try:
+        link_root.symlink_to(real_root, target_is_directory=True)
+    except OSError as exc:
+        pytest.skip(f"symlink creation unavailable: {exc}")
+
+    readiness = orchestrator_app._archive_gate_readiness(
+        "archive-gate-a",
+        args={
+            "input_dir": str(real_root),
+            "output_dir": str(tmp_path / "out"),
+            "archive_command": "fixity-scan",
+            "archive_root": str(link_root),
+            "archive_index": str(archive_index),
+        },
+        require_dispatch_inputs=True,
+    )
+
+    assert readiness["status"] == "blocked"
+    issues = {item["field"]: item for item in readiness["missing_prerequisites"] if "field" in item}
+    assert issues["archive_root"]["reason"] == "unsafe_path"
+    assert "archive_index_root_mismatch" not in {item["reason"] for item in readiness["missing_prerequisites"]}
+
+
+@pytest.mark.parametrize(
+    ("relpath", "reason"),
+    [
+        ("../escape.dng", "parent_traversal"),
+        ("/absolute.dng", "absolute_relpath"),
+        ("C:/absolute.dng", "drive_prefixed_relpath"),
+        ("", "empty_relpath"),
+        ("missing.dng", "missing"),
+        ("folder", "directory"),
+    ],
+)
+def test_archive_index_preflight_rejects_invalid_relpaths(tmp_path: Path, relpath: str, reason: str) -> None:
+    archive_root = tmp_path / "archive_root"
+    archive_root.mkdir()
+    (archive_root / "folder").mkdir()
+    archive_index = tmp_path / f"archive_index_{reason}.csv.gz"
+    _write_archive_index(archive_index, [relpath])
+
+    result = orchestrator_app._validate_archive_index_against_root(
+        archive_index,
+        archive_root,
+        scan_mode="full",
+    )
+
+    assert result["ok"] is False
+    assert result["blocked_rows"] == 1
+    assert result["examples"][0]["reason"] == reason
+
+
+def test_archive_index_preflight_rejects_symlink_relpath(tmp_path: Path) -> None:
+    archive_root = tmp_path / "archive_root"
+    archive_root.mkdir()
+    outside = tmp_path / "outside.dng"
+    outside.write_bytes(b"outside")
+    link_path = archive_root / "asset-link.dng"
+    try:
+        link_path.symlink_to(outside)
+    except OSError as exc:
+        pytest.skip(f"symlink creation unavailable: {exc}")
+    archive_index = tmp_path / "archive_index_symlink.csv.gz"
+    _write_archive_index(archive_index, ["asset-link.dng"])
+
+    result = orchestrator_app._validate_archive_index_against_root(
+        archive_index,
+        archive_root,
+        scan_mode="full",
+    )
+
+    assert result["ok"] is False
+    assert result["examples"][0]["reason"] == "symlink_traversal"
+
+
+def test_archive_index_preflight_rejects_missing_columns_and_bad_gzip(tmp_path: Path) -> None:
+    archive_root = tmp_path / "archive_root"
+    archive_root.mkdir()
+    missing_columns = tmp_path / "archive_index_missing_columns.csv"
+    missing_columns.write_text("relpath\nasset-001.dng\n", encoding="utf-8")
+    bad_gzip = tmp_path / "archive_index_bad.csv.gz"
+    bad_gzip.write_bytes(b"not a gzip stream")
+
+    missing_columns_result = orchestrator_app._validate_archive_index_against_root(
+        missing_columns,
+        archive_root,
+        scan_mode="full",
+    )
+    bad_gzip_result = orchestrator_app._validate_archive_index_against_root(
+        bad_gzip,
+        archive_root,
+        scan_mode="full",
+    )
+
+    assert missing_columns_result["ok"] is False
+    assert missing_columns_result["examples"][0]["reason"].startswith("missing_columns:")
+    assert bad_gzip_result["ok"] is False
+    assert bad_gzip_result["examples"][0]["reason"] == "archive_index_unreadable:BadGzipFile"
+
+
+def test_archive_index_preflight_preview_is_bounded_and_cached(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    archive_root = tmp_path / "archive_root"
+    archive_root.mkdir()
+    existing_relpaths = [f"asset-{idx:03d}.dng" for idx in range(orchestrator_app.ARCHIVE_INDEX_PREFLIGHT_PREVIEW_ROW_LIMIT)]
+    for relpath in existing_relpaths:
+        (archive_root / relpath).write_bytes(b"raw")
+    relpaths = [*existing_relpaths, "late-missing.dng"]
+    archive_index = tmp_path / "archive_index_bounded.csv.gz"
+    _write_archive_index(archive_index, relpaths)
+
+    with orchestrator_app._ARCHIVE_INDEX_PREFLIGHT_CACHE_LOCK:
+        orchestrator_app._ARCHIVE_INDEX_PREFLIGHT_CACHE.clear()
+
+    preview_result = orchestrator_app._validate_archive_index_against_root(
+        archive_index,
+        archive_root,
+        scan_mode="preview",
+    )
+    assert preview_result["ok"] is True
+    assert preview_result["truncated"] is True
+    assert preview_result["rows_total"] == orchestrator_app.ARCHIVE_INDEX_PREFLIGHT_PREVIEW_ROW_LIMIT
+
+    def fail_if_rescanned(*_args, **_kwargs):
+        raise AssertionError("cached preview result should avoid rescanning rows")
+
+    monkeypatch.setattr(orchestrator_app, "_validate_archive_index_relpath", fail_if_rescanned)
+    cached_preview = orchestrator_app._validate_archive_index_against_root(
+        archive_index,
+        archive_root,
+        scan_mode="preview",
+    )
+    assert cached_preview == preview_result
+
+    monkeypatch.undo()
+    full_result = orchestrator_app._validate_archive_index_against_root(
+        archive_index,
+        archive_root,
+        scan_mode="full",
+    )
+    assert full_result["ok"] is False
+    assert full_result["examples"][0]["reason"] == "missing"
+
+
 def test_archive_gate_b_readiness_fails_closed_without_manifest_jsonl() -> None:
     readiness = orchestrator_app._archive_gate_readiness(
         "archive-gate-b",
@@ -5359,8 +5535,9 @@ def test_create_job_preflight_sanitizes_exception_derived_messages(
 def test_create_job_uses_preview_errors_before_readiness_preflight(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    def fake_preview(_payload, *, readiness_snapshot=None):  # noqa: ANN001
+    def fake_preview(_payload, *, readiness_snapshot=None, archive_index_scan_mode="preview"):  # noqa: ANN001
         del readiness_snapshot
+        del archive_index_scan_mode
         return {
             "pipeline": "lux-depth-v3",
             "execution_args": {
