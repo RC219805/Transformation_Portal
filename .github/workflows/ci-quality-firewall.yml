@@ -201,8 +201,13 @@ jobs:
           set -euo pipefail
 
           # Install only the gitleaks binary to avoid scanning extracted archive docs/examples.
-          archive="gitleaks_8.21.2_linux_x64.tar.gz"
-          wget -q "https://github.com/gitleaks/gitleaks/releases/download/v8.21.2/${archive}"
+          # SHA256 pinned to the upstream gitleaks_8.21.2_checksums.txt entry; rejecting a
+          # mismatched download keeps a hijacked release asset out of the secret-scan path.
+          GITLEAKS_VERSION="8.21.2"
+          GITLEAKS_SHA256="5bc41815076e6ed6ef8fbecc9d9b75bcae31f39029ceb55da08086315316e3ba"
+          archive="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          wget -q "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/${archive}"
+          echo "${GITLEAKS_SHA256}  ${archive}" | sha256sum -c -
           tar -xzf "${archive}" gitleaks
           chmod +x gitleaks
           mkdir -p "${RUNNER_TEMP}/gitleaks-bin"
