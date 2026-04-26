@@ -1,0 +1,41 @@
+{
+  "schema_version": "apex_family_matrix.v1",
+  "default_governance": {
+    "non_commercial_ok": false,
+    "accept_depth_pro_license": false
+  },
+  "families": [
+    {
+      "depth_backend": "da3",
+      "segmentation_backend": "efficientsam",
+      "materials_version": 3,
+      "quality_tier": "apex",
+      "pbr_enabled": false,
+      "v2_enabled": false
+    },
+    {
+      "depth_backend": "da3",
+      "segmentation_backend": "sam2",
+      "materials_version": 3,
+      "quality_tier": "apex",
+      "pbr_enabled": false,
+      "v2_enabled": false
+    },
+    {
+      "depth_backend": "depth_pro",
+      "segmentation_backend": "efficientsam",
+      "materials_version": 3,
+      "quality_tier": "apex",
+      "pbr_enabled": false,
+      "v2_enabled": false
+    },
+    {
+      "depth_backend": "depth_pro",
+      "segmentation_backend": "sam2",
+      "materials_version": 3,
+      "quality_tier": "apex",
+      "pbr_enabled": false,
+      "v2_enabled": false
+    }
+  ]
+}

@@ -28,6 +28,12 @@ from transformation_portal.evals.apex_llava_integration import (
     create_production_harness,
     create_quality_max_harness,
 )
+from transformation_portal.evals.apex_model_family import (
+    build_apex_model_family_characterization_report,
+    collect_family_specs,
+    parse_family_spec,
+    parse_matrix_spec,
+)
 from transformation_portal.evals.apex_visual import (
     ApexEvalAsset,
     ApexEvalSet,
@@ -76,8 +82,12 @@ __all__ = [
     "ApexEvalSet",
     "DepthBackendRunResult",
     "build_apex_eval_report",
+    "build_apex_model_family_characterization_report",
     "build_depth_backend_benchmark_report",
+    "collect_family_specs",
     "load_apex_evalset",
+    "parse_family_spec",
+    "parse_matrix_spec",
     # Benchmark suite
     "BenchmarkResult",
     "BenchmarkSuite",
