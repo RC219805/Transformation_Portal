@@ -73,14 +73,20 @@ def _tile_instance(
     confidence: float | None = None,
     score: float = 0.8,
     stability_score: float = 0.9,
+    values: np.ndarray | None = None,
 ) -> TileInstance:
+    mask_values = (
+        np.ones((height, width), dtype=np.float32)
+        if values is None
+        else np.asarray(values, dtype=np.float32).reshape((height, width))
+    )
     return TileInstance(
         local_id=f"{tile_id}:0",
         score=score,
         stability_score=stability_score,
         soft_mask=SoftMaskPatch(
             bbox=BBox(0, 0, width, height),
-            values=np.ones((height, width), dtype=np.float32),
+            values=mask_values,
             space="prob",
         ),
         material_label=label,
@@ -300,9 +306,12 @@ def test_default_tiled_engine_uses_extracted_components():
     assert isinstance(engine.validator, SeamMergeValidator)
 
 
-def test_tiling_merges_large_smooth_region_across_tile_overlap():
+def test_tiling_merges_large_smooth_region_across_tile_overlap_when_global_iou_is_low():
     left = _tile_instance(tile_id="left", width=8, height=8, label="sky", confidence=0.9, score=0.8)
     right = _tile_instance(tile_id="right", width=8, height=8, label="sky", confidence=0.7, score=0.6)
+    global_iou = (2 * 8) / ((8 * 8) + (8 * 8) - (2 * 8))
+
+    assert global_iou < 0.35
 
     result = _run_two_tile_merge(
         left_instance=left,
@@ -317,6 +326,7 @@ def test_tiling_merges_large_smooth_region_across_tile_overlap():
 
     assert result.masks.shape == (1, 8, 14)
     assert int(result.masks[0].sum()) == 112
+    assert np.all(result.masks[0, :, 6:8])
     assert result.metadata[0].bbox == (0, 0, 14, 8)
     assert result.metadata[0].material_label == "sky"
     assert result.metadata[0].material_confidence == pytest.approx(0.8)
@@ -371,7 +381,36 @@ def test_tiling_window_modes_preserve_one_pixel_overlap_seams(window):
 
     assert result.masks.shape == (1, 8, 7)
     assert int(result.masks[0].sum()) == 56
+    assert np.all(result.masks[0, :, 3])
     assert result.metadata[0].bbox == (0, 0, 7, 8)
+
+
+def test_tiling_does_not_merge_same_label_regions_without_overlap_continuity():
+    left_values = np.zeros((8, 8), dtype=np.float32)
+    left_values[:, :7] = 1.0
+    right_values = np.zeros((8, 8), dtype=np.float32)
+    right_values[:, 1:] = 1.0
+    left = _tile_instance(tile_id="left", width=8, height=8, label="sky", confidence=0.9, values=left_values)
+    right = _tile_instance(tile_id="right", width=8, height=8, label="sky", confidence=0.9, values=right_values)
+
+    result = _run_two_tile_merge(
+        left_instance=left,
+        right_instance=right,
+        config=SegmentationTilingConfig(
+            enabled=True,
+            tile_size_px=8,
+            overlap_px=2,
+            merge=MergeConfig(instance_merge=InstanceMergeConfig(enabled=True, iou_threshold=0.35)),
+        ),
+    )
+
+    assert result.masks.shape == (2, 8, 14)
+    assert not np.any(result.masks[0] & result.masks[1])
+    assert np.all(result.masks[0, :, 6])
+    assert not np.any(result.masks[0, :, 7])
+    assert not np.any(result.masks[1, :, 6])
+    assert np.all(result.masks[1, :, 7])
+    assert [item.bbox for item in result.metadata] == [(0, 0, 7, 8), (7, 0, 7, 8)]
 
 
 def test_tiling_merge_avoids_full_image_bool_masks_per_candidate(monkeypatch):
