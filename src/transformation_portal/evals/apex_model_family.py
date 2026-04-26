@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import re
+from collections import Counter
 from itertools import product
 from pathlib import Path
 from typing import Any, Iterable, Mapping
@@ -51,6 +53,7 @@ from transformation_portal.evals.apex_redacted_summary_schema import (
     reject_raw_summary_path,
     validate_redacted_summary,
 )
+from transformation_portal.ingest.canonical_json import canonicalize_json, dump_json
 
 NOW_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
@@ -79,7 +82,7 @@ class ReconciliationError(ApexModelFamilyError):
 def canonical_json_bytes(value: Any) -> bytes:
     """Serialize a value using deterministic canonical JSON bytes."""
 
-    return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False).encode("utf-8")
+    return canonicalize_json(value)
 
 
 def sha256_bytes(data: bytes) -> str:
@@ -119,9 +122,12 @@ def parse_int(value: Any, *, field: str) -> int:
 
 def parse_float(value: Any, *, field: str) -> float:
     try:
-        return float(value)
+        parsed = float(value)
     except (TypeError, ValueError) as exc:
         raise ValueError(f"{field} must be numeric, got {value!r}") from exc
+    if not math.isfinite(parsed):
+        raise ValueError(f"{field} must be finite, got {value!r}")
+    return parsed
 
 
 def _normalize_token(value: Any) -> str:
@@ -340,7 +346,6 @@ def parse_redacted_summary_binding(value: str | Mapping[str, Any]) -> dict[str, 
             "metric_contract": payload.get("metric_contract"),
             "mask_evidence_status": payload.get("mask_evidence_status"),
             "evidence_ref": {
-                "summary_path": str(path),
                 "summary_sha256": summary_sha256,
                 "summary_schema_version": SUMMARY_SCHEMA_VERSION,
                 "originating_bundle_schema": "apex_evidence_bundle.v1",
@@ -453,7 +458,7 @@ def _bind_observations(
                     **_default_observation(),
                     "status": OBSERVATION_EVIDENCE_MISSING,
                     "source": SOURCE_REDACTED_SUMMARY_V1,
-                    "error": str(exc),
+                    "error_code": _observation_error_code(exc),
                 },
             }
         _bind_one_observation(bound, family_names, parsed)
@@ -467,6 +472,21 @@ def _bind_one_observation(bound: dict[str, dict[str, Any]], family_names: set[st
     if candidate_family in bound:
         raise ObservationBindingError(f"Duplicate observation for candidate_family {candidate_family!r}")
     bound[candidate_family] = dict(parsed["observation"])
+
+
+def _observation_error_code(exc: BaseException) -> str:
+    message = str(exc).lower()
+    if "raw artifact" in message:
+        return "raw_artifact_rejected"
+    if "path-like" in message:
+        return "path_like_value_rejected"
+    if "missing required" in message:
+        return "required_key_missing"
+    if "unsupported field" in message:
+        return "unsupported_field"
+    if "schema_version" in message:
+        return "schema_version_invalid"
+    return "redacted_summary_invalid"
 
 
 def _summary(rows: list[dict[str, Any]]) -> dict[str, int]:
@@ -517,11 +537,11 @@ def _self_check(rows: list[dict[str, Any]], summary: Mapping[str, int]) -> dict[
 
 def _comparison_groups(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     axes = {
-        "segmentation_axis": ("depth_backend", "quality_tier", "pbr_enabled", "v2_enabled"),
-        "depth_axis": ("segmentation_backend", "quality_tier", "pbr_enabled", "v2_enabled"),
-        "pbr_axis": ("depth_backend", "segmentation_backend", "quality_tier", "v2_enabled"),
-        "v2_axis": ("depth_backend", "segmentation_backend", "quality_tier", "pbr_enabled"),
-        "tier_axis": ("depth_backend", "segmentation_backend", "pbr_enabled", "v2_enabled"),
+        "segmentation_axis": ("materials_version", "depth_backend", "quality_tier", "pbr_enabled", "v2_enabled"),
+        "depth_axis": ("materials_version", "segmentation_backend", "quality_tier", "pbr_enabled", "v2_enabled"),
+        "pbr_axis": ("materials_version", "depth_backend", "segmentation_backend", "quality_tier", "v2_enabled"),
+        "v2_axis": ("materials_version", "depth_backend", "segmentation_backend", "quality_tier", "pbr_enabled"),
+        "tier_axis": ("materials_version", "depth_backend", "segmentation_backend", "pbr_enabled", "v2_enabled"),
     }
     groups = []
     for axis, fixed_fields in axes.items():
@@ -617,7 +637,7 @@ def build_apex_model_family_characterization_report(
     if not specs:
         raise ValueError("At least one family spec is required")
     family_names = [str(spec.get("candidate_family") or "") for spec in specs]
-    duplicate_names = sorted({name for name in family_names if family_names.count(name) > 1})
+    duplicate_names = sorted(name for name, count in Counter(family_names).items() if count > 1)
     if duplicate_names:
         raise DuplicateFamilyError(f"Duplicate candidate_family value(s): {', '.join(duplicate_names)}")
 
@@ -682,7 +702,9 @@ def build_apex_model_family_characterization_report(
 def write_report(report: Mapping[str, Any], output_path: Path, *, output_format: str) -> None:
     output_path.parent.mkdir(parents=True, exist_ok=True)
     if output_format == "json":
-        output_path.write_text(json.dumps(report, indent=2, sort_keys=True, ensure_ascii=False) + "\n", encoding="utf-8")
+        with output_path.open("w", encoding="utf-8") as handle:
+            dump_json(report, handle, indent=2, sort_keys=True, ensure_ascii=False, allow_nan=False)
+            handle.write("\n")
     elif output_format == "markdown":
         output_path.write_text(render_markdown(report), encoding="utf-8")
     else:

@@ -229,17 +229,24 @@ def test_redacted_summary_required_keys_and_unknown_keys_rejected(tmp_path: Path
 
 
 def test_redacted_summary_rejects_path_like_values_and_raw_artifacts(tmp_path: Path) -> None:
-    path_like = tmp_path / "path_like_summary.json"
-    payload = json.loads(VALID_SUMMARY.read_text(encoding="utf-8"))
-    payload["promotion_verdict"] = "/Users/example/output/file.tif"
-    path_like.write_text(json.dumps(payload), encoding="utf-8")
+    for value in (
+        "/Users/example/output/file.tif",
+        "/tmp/private/report.json",
+        "/home/user/data.json",
+        "./local/file.json",
+        "../secrets.json",
+    ):
+        path_like = tmp_path / f"path_like_{hashlib.sha256(value.encode('utf-8')).hexdigest()}.json"
+        payload = json.loads(VALID_SUMMARY.read_text(encoding="utf-8"))
+        payload["promotion_verdict"] = value
+        path_like.write_text(json.dumps(payload), encoding="utf-8")
 
-    with pytest.raises(ValueError, match="path-like"):
-        _build(
-            tmp_path,
-            family_specs=[DA3_ESAM_SPEC],
-            redacted_summaries=[f"candidate_family=materials_v3_da3_efficientsam_apex,path={path_like}"],
-        )
+        with pytest.raises(ValueError, match="path-like"):
+            _build(
+                tmp_path,
+                family_specs=[DA3_ESAM_SPEC],
+                redacted_summaries=[f"candidate_family=materials_v3_da3_efficientsam_apex,path={path_like}"],
+            )
 
     for raw_path in (RAW_RUN_CARD, RAW_BATCH):
         with pytest.raises(ValueError, match="raw artifact"):
@@ -279,7 +286,47 @@ def test_redacted_summary_observed_local_and_digest_includes_summary_hash(tmp_pa
     assert row["observation"]["status"] == "observed_local"
     assert row["observation"]["source"] == "redacted_summary_v1"
     assert row["observation"]["evidence_ref"]["summary_schema_version"] == "apex_redacted_summary.v1"
+    assert "summary_path" not in row["observation"]["evidence_ref"]
     assert first["input_digest"]["sha256"] != second["input_digest"]["sha256"]
+
+
+def test_non_finite_runtime_is_rejected_for_mock_and_redacted_summary(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="finite"):
+        _build(
+            tmp_path,
+            family_specs=[DA3_ESAM_SPEC],
+            observations=["candidate_family=materials_v3_da3_efficientsam_apex,source=mock_v1,status=mocked,runtime_ms=nan"],
+        )
+
+    non_finite = tmp_path / "non_finite_summary.json"
+    payload = json.loads(VALID_SUMMARY.read_text(encoding="utf-8"))
+    non_finite.write_text(
+        json.dumps({**payload, "runtime_ms": float("inf")}),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="finite"):
+        _build(
+            tmp_path,
+            family_specs=[DA3_ESAM_SPEC],
+            redacted_summaries=[f"candidate_family=materials_v3_da3_efficientsam_apex,path={non_finite}"],
+        )
+
+
+def test_allow_observation_invalid_uses_sanitized_error_code(tmp_path: Path) -> None:
+    report = build_apex_model_family_characterization_report(
+        family_specs=[DA3_ESAM_SPEC],
+        redacted_summaries=[f"candidate_family=materials_v3_da3_efficientsam_apex,path={RAW_RUN_CARD}"],
+        output_path=tmp_path / "report.json",
+        allow_observation_invalid=True,
+    )
+
+    observation = report["families"][0]["observation"]
+    assert observation["status"] == "evidence_missing"
+    assert observation["error_code"] == "raw_artifact_rejected"
+    serialized = canonical_json_bytes(report).decode("utf-8")
+    assert str(RAW_RUN_CARD) not in serialized
+    assert "run_card_raw_should_reject.json" not in serialized
 
 
 def test_input_digest_stable_under_key_reordering_and_excludes_now(tmp_path: Path) -> None:
@@ -324,6 +371,40 @@ def test_comparison_groups_require_two_members_and_closed_reasons(tmp_path: Path
         assert set(group["blocking_reasons"]) <= {"only_one_member", "member_not_comparable"}
     segmentation_groups = [group for group in groups if group["axis"] == "segmentation_axis"]
     assert any(len(group["members"]) >= 2 and not group["comparable"] for group in segmentation_groups)
+
+
+def test_comparison_groups_keep_materials_version_fixed(tmp_path: Path) -> None:
+    report = _build(
+        tmp_path,
+        family_specs=[
+            {
+                "depth_backend": "da3",
+                "segmentation_backend": "efficientsam",
+                "materials_version": 3,
+                "quality_tier": "apex",
+                "pbr_enabled": False,
+                "v2_enabled": False,
+            },
+            {
+                "depth_backend": "da3",
+                "segmentation_backend": "efficientsam",
+                "materials_version": 4,
+                "quality_tier": "apex",
+                "pbr_enabled": False,
+                "v2_enabled": False,
+            },
+        ],
+        observations=[
+            "candidate_family=materials_v3_da3_efficientsam_apex,source=mock_v1,status=mocked",
+            "candidate_family=materials_v4_da3_efficientsam_apex,source=mock_v1,status=mocked",
+        ],
+    )
+
+    for group in report["comparison_groups"]:
+        assert set(group["members"]) != {
+            "materials_v3_da3_efficientsam_apex",
+            "materials_v4_da3_efficientsam_apex",
+        }
 
 
 def test_self_check_reconciliation_counts(tmp_path: Path) -> None:
@@ -479,6 +560,7 @@ def test_static_ast_import_guard() -> None:
         "transformation_portal.evals.apex_model_family",
         "transformation_portal.evals.apex_model_family_schema",
         "transformation_portal.evals.apex_redacted_summary_schema",
+        "transformation_portal.ingest.canonical_json",
     }
     forbidden_prefixes = (
         "transformation_portal.depth",

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import re
 from pathlib import Path
 from typing import Any, Mapping
@@ -64,7 +65,8 @@ RAW_JSON_NAME_PATTERNS = (
     "_provenance.json",
 )
 PATH_VALUE_PATTERNS = (
-    re.compile(r"(^|[\"' ])/(Users|Volumes)/"),
+    re.compile(r"(^|[\"' ])/(?!/)"),
+    re.compile(r"(^|[\"' ])\.\.?/"),
     re.compile(r"^[A-Za-z]:\\"),
     re.compile(r"\.(tif|tiff|npz|npy|png)$", re.IGNORECASE),
     re.compile(r"(run_card_|batch_|_combined\.json|_combined_provenance\.json|_provenance\.json)", re.IGNORECASE),
@@ -88,6 +90,8 @@ def _reject_forbidden_value(value: Any, *, key: str) -> None:
         for item in value:
             _reject_forbidden_value(item, key=key)
         return
+    if isinstance(value, float) and not math.isfinite(value):
+        raise ValueError(f"Redacted summary field {key!r} must be finite")
     if not isinstance(value, str):
         return
     for pattern in PATH_VALUE_PATTERNS:
