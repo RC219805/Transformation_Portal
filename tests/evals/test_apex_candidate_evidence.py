@@ -9,6 +9,12 @@ import numpy as np
 import pytest
 from PIL import Image
 
+# build_apex_eval_report calls load_16bit_tiff under the hood; without tifffile
+# every reference read short-circuits to "unreadable_reference" with an empty
+# metrics dict, which makes downstream `metrics["visible_delta"]` mutations
+# KeyError. Skip the whole module rather than emit a misleading failure.
+pytest.importorskip("tifffile")
+
 from transformation_portal.evals.apex_evidence_bundle import (
     APEX_MATERIALS_PIXEL_OPS_EMPTY,
     build_apex_evidence_bundle,

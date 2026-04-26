@@ -24,6 +24,12 @@ from hypothesis import given
 from hypothesis import strategies as st
 from PIL import Image
 
+# Several tests in this module write 16-bit RGB TIFFs (PIL doesn't support that
+# uint16 RGB mode), so they unconditionally `import tifffile` mid-test. Skip the
+# whole module when tifffile isn't available rather than emitting per-test
+# ImportError noise.
+pytest.importorskip("tifffile")
+
 from transformation_portal.spatial_ai.ingest import (
     BitDepthViolationError,
     ColorSpaceError,

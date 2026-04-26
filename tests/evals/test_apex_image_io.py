@@ -4,6 +4,11 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
+
+# Skip the entire module when tifffile isn't installed; every test here exercises
+# 16-bit TIFF I/O directly.
+pytest.importorskip("tifffile")
+
 import tifffile
 from PIL import Image
 
