@@ -579,6 +579,52 @@ def test_build_run_card_result_summary_keeps_semantic_gate_failure_available(tmp
     }
 
 
+def test_build_run_card_result_summary_surfaces_failure_code_when_manifest_absent(tmp_path: Path) -> None:
+    """When a strict-gate failure prevents per-image manifest emission, the run-card
+    segmentation_status must surface the structured failure_code from the result row
+    instead of the historical 'missing_evidence' placeholder."""
+    output_root = tmp_path / "output"
+    orch = object.__new__(EnhanceOrchestrator)
+    orch.output_root = output_root
+    orch.config = EnhanceConfig(
+        enable_materials_v3=True,
+        enable_material_segmentation=True,
+        material_segmentation_backend="sam2",
+        strict_backend=True,
+        quality_tier="apex",
+    )
+    orch._active_run_card_segmentation_metadata = {}
+    orch._backend_metadata = SimpleNamespace(requested_backend="da3", resolution_reason=None)
+
+    summary = orch._build_run_card_result_summary(
+        [
+            {
+                "image": str(tmp_path / "inputs" / "image_04.png"),
+                "status": "error",
+                "backend": "da3",
+                "runtime_s": 0.42,
+                "manifest": None,
+                "error_code": "APEX_MATERIALS_PIXEL_OPS_EMPTY",
+                "error": "[APEX_MATERIALS_PIXEL_OPS_EMPTY] ...",
+                "error_details": {
+                    "material_count": 4,
+                    "implemented_materials": ["glass", "water", "foliage", "stone"],
+                    "applied_ops_count": 0,
+                    "blocked_reasons": {"missing_material_confidence": 4},
+                },
+            }
+        ]
+    )
+
+    segmentation_status = summary[0]["segmentation_status"]
+    assert segmentation_status["status"] == "failed"
+    assert segmentation_status["failure_code"] == "APEX_MATERIALS_PIXEL_OPS_EMPTY"
+    assert segmentation_status["failure_details"]["blocked_reasons"] == {"missing_material_confidence": 4}
+    assert segmentation_status["errors"] == ["APEX_MATERIALS_PIXEL_OPS_EMPTY"]
+    # The historical placeholder must not be emitted when we have a real failure code.
+    assert segmentation_status["status"] != "missing_evidence"
+
+
 @pytest.mark.parametrize("version", ["v1", "v2"])
 def test_run_card_schema_accepts_additive_quality_gate_and_capability(version: str) -> None:
     pytest.importorskip("jsonschema")

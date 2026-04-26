@@ -4773,16 +4773,79 @@ class EnhanceOrchestrator:
             return
 
         blocked_reasons = self._pixel_ops_blocked_reasons(pixel_ops)
+        details = {
+            "material_count": len(material_masks),
+            "implemented_materials": [str(material) for material in implemented_materials],
+            "applied_ops_count": 0,
+            "blocked_reasons": blocked_reasons,
+        }
+
+        # Soft-apex passthrough: if every implemented op is blocked solely
+        # because per-material classifier confidence sat below its APEX threshold,
+        # emit the output without pixel ops and surface a non-fatal warning rather
+        # than failing the strict gate. All other blocker mixes still fail closed.
+        if blocked_reasons and set(blocked_reasons.keys()) == {"below_confidence_threshold"}:
+            self._record_apex_materials_passthrough(materials_v3_result, details)
+            logger.warning(
+                "APEX Materials V3 passthrough:"
+                " every implemented op below confidence threshold"
+                " (materials=%s, blocked=%s)",
+                details["implemented_materials"],
+                blocked_reasons,
+            )
+            return
+
         raise ApexStrictGateError(
             "APEX_MATERIALS_PIXEL_OPS_EMPTY",
             "Material masks were detected, but every implemented Materials V3 pixel operation was blocked.",
-            details={
-                "material_count": len(material_masks),
-                "implemented_materials": [str(material) for material in implemented_materials],
-                "applied_ops_count": 0,
-                "blocked_reasons": blocked_reasons,
-            },
+            details=details,
         )
+
+    @staticmethod
+    def _record_apex_materials_passthrough(
+        materials_v3_result: Dict[str, Any],
+        details: Dict[str, Any],
+    ) -> None:
+        """Attach a non-fatal passthrough warning to the Materials V3 result.
+
+        Surfaces under both ``materials_v3_pixel_ops.passthrough_status`` (consumed
+        by the orchestrator's per-image manifest) and
+        ``materials_v3_metadata.segmentation_metadata.warnings`` (consumed by the
+        run-card summary cache).
+        """
+        from transformation_portal.evals.apex_evidence_bundle import (
+            APEX_MATERIALS_PASSTHROUGH_LOW_CONFIDENCE,
+        )
+
+        warning_payload = {
+            "code": APEX_MATERIALS_PASSTHROUGH_LOW_CONFIDENCE,
+            "message": (
+                "Materials V3 masks present but every implemented op was below"
+                " its confidence threshold; emitting output without pixel ops."
+            ),
+            "details": dict(details),
+        }
+
+        pixel_ops = materials_v3_result.get("materials_v3_pixel_ops")
+        if not isinstance(pixel_ops, dict):
+            pixel_ops = {}
+            materials_v3_result["materials_v3_pixel_ops"] = pixel_ops
+        pixel_ops["passthrough_status"] = warning_payload
+
+        materials_v3_metadata = materials_v3_result.setdefault("materials_v3_metadata", {})
+        if not isinstance(materials_v3_metadata, dict):
+            materials_v3_metadata = {}
+            materials_v3_result["materials_v3_metadata"] = materials_v3_metadata
+        segmentation_metadata = materials_v3_metadata.get("segmentation_metadata")
+        if not isinstance(segmentation_metadata, dict):
+            segmentation_metadata = {}
+        else:
+            segmentation_metadata = dict(segmentation_metadata)
+        warnings_list = list(segmentation_metadata.get("warnings") or [])
+        warnings_list.append(APEX_MATERIALS_PASSTHROUGH_LOW_CONFIDENCE)
+        segmentation_metadata["warnings"] = warnings_list
+        segmentation_metadata["pixel_ops_passthrough"] = warning_payload
+        materials_v3_metadata["segmentation_metadata"] = segmentation_metadata
 
     def _load_cached_depth(
         self,
@@ -6456,8 +6519,16 @@ class EnhanceOrchestrator:
     def _build_run_card_segmentation_status(
         self,
         segmentation_metadata: Optional[Dict[str, Any]],
+        result_failure_info: Optional[Mapping[str, Any]] = None,
     ) -> Optional[Dict[str, Any]]:
-        """Build explicit segmentation execution status for run-card summaries."""
+        """Build explicit segmentation execution status for run-card summaries.
+
+        When the per-image manifest is absent the segmentation cache is empty,
+        so ``segmentation_metadata`` is None even though the failure was a
+        well-defined gate violation already recorded on the result row. In that
+        case prefer the structured ``error_code`` / ``error_details`` from the
+        result over the historical ``missing_evidence`` placeholder.
+        """
         if not hasattr(self, "config"):
             return None
         backend = getattr(self.config, "material_segmentation_backend", None)
@@ -6491,6 +6562,27 @@ class EnhanceOrchestrator:
                 "confidence_summary": segmentation_metadata.get("confidence_summary"),
                 "warnings": list(segmentation_metadata.get("warnings") or []),
                 "errors": list(segmentation_metadata.get("errors") or []),
+                "pixel_ops_passthrough": segmentation_metadata.get("pixel_ops_passthrough"),
+            }
+        failure_code: Optional[str] = None
+        failure_details: Optional[Mapping[str, Any]] = None
+        if isinstance(result_failure_info, Mapping):
+            raw_code = result_failure_info.get("error_code")
+            if isinstance(raw_code, str) and raw_code.strip():
+                failure_code = raw_code.strip()
+            raw_details = result_failure_info.get("error_details")
+            if isinstance(raw_details, Mapping):
+                failure_details = dict(raw_details)
+        if failure_code is not None:
+            return {
+                "status": "failed",
+                "enabled": True,
+                "backend": backend,
+                "strict_backend": strict_backend,
+                "failure_code": failure_code,
+                "failure_details": failure_details,
+                "warnings": [],
+                "errors": [failure_code],
             }
         return {
             "status": "missing_evidence" if strict_backend else "not_recorded",
@@ -6544,7 +6636,10 @@ class EnhanceOrchestrator:
                     ),
                 ),
             }
-            segmentation_status = self._build_run_card_segmentation_status(segmentation_metadata)
+            segmentation_status = self._build_run_card_segmentation_status(
+                segmentation_metadata,
+                result_failure_info=result,
+            )
             if segmentation_status is not None:
                 row["segmentation_status"] = segmentation_status
             summary_rows.append(row)

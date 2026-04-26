@@ -469,6 +469,16 @@ class EnhanceConfig:
             0.0,
         )
 
+        # APEX tier auto-upgrade: when DA3 + DA2 both fail their depth gates on
+        # genuinely flat scenes (e.g. uniform sky / glare), recover via the V2
+        # stage with independent depth instead of failing the batch. The user
+        # can still pass an explicit non-default value to opt out.
+        if (
+            str(getattr(self, "quality_tier", "")).strip().lower() == "apex"
+            and self.depth_fallback == "fail"
+        ):
+            self.depth_fallback = "v2-auto"
+
     @property
     def enable_pbr(self) -> bool:
         """Alias for generate_pbr (backward compatibility)."""

@@ -107,8 +107,27 @@ class TestEnhanceConfig:
     @pytest.mark.parametrize("mode", ["fail", "skip", "v2-auto"])
     def test_enhance_config_accepts_valid_depth_fallback(self, mode):
         """Test that EnhanceConfig can be instantiated with valid depth_fallback values."""
-        config = EnhanceConfig(depth_fallback=mode)
+        # APEX tier auto-upgrades the default "fail" to "v2-auto"; pin a non-apex
+        # tier so the explicit value survives __post_init__.
+        config = EnhanceConfig(depth_fallback=mode, quality_tier="standard")
         assert config.depth_fallback == mode
+
+    def test_enhance_config_apex_tier_auto_upgrades_depth_fallback(self):
+        """APEX tier should auto-upgrade depth_fallback='fail' to 'v2-auto' so flat-scene
+        depth degeneracy (e.g. uniform sky) recovers via the V2 stage instead of failing
+        the batch."""
+        config = EnhanceConfig(quality_tier="apex")
+        assert config.depth_fallback == "v2-auto"
+
+    def test_enhance_config_apex_tier_preserves_explicit_depth_fallback(self):
+        """An explicit non-default depth_fallback must survive even on APEX tier."""
+        config = EnhanceConfig(quality_tier="apex", depth_fallback="skip")
+        assert config.depth_fallback == "skip"
+
+    def test_enhance_config_non_apex_tier_keeps_default_depth_fallback(self):
+        """Non-APEX tiers must keep depth_fallback='fail' (no auto-upgrade)."""
+        config = EnhanceConfig(quality_tier="standard")
+        assert config.depth_fallback == "fail"
 
     def test_enhance_config_normalizes_legacy_depth_backend_alias(self):
         """Legacy backend aliases should normalize to canonical IDs."""
