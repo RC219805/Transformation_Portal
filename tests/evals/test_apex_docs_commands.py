@@ -14,6 +14,7 @@ pytestmark = pytest.mark.unit
 REPO_ROOT = Path(__file__).resolve().parents[2]
 APEX_CLI_MODULES = {
     "tools/audit_apex_assets.py": "audit_apex_assets_docs_unit",
+    "tools/characterize_apex_model_families.py": "characterize_apex_model_families_docs_unit",
     "tools/run_apex_eval.py": "run_apex_eval_docs_unit",
 }
 REAL_CANONICAL_RUNBOOK = "APEX_REAL_CANONICAL_EVIDENCE_RUNBOOK.md"

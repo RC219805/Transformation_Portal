@@ -1,0 +1,23 @@
+{
+  "schema_version": "apex_redacted_summary.v1",
+  "source_evidence_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "candidate_family": "materials_v3_da3_efficientsam_apex",
+  "depth_backend": "da3",
+  "segmentation_backend": "efficientsam",
+  "quality_tier": "apex",
+  "pbr_enabled": false,
+  "v2_enabled": false,
+  "fallback_used": false,
+  "runtime_ms": 1234.0,
+  "promotion_verdict": "eligible",
+  "metric_contract": "apex_metrics.v1",
+  "mask_evidence_status": "ok",
+  "outside_mask_delta_status": "ok",
+  "seam_halo_score_status": "ok",
+  "applied_ops_count": 4,
+  "blocked_ops_count": 2,
+  "canonical_asset_count": 3,
+  "case_count": 3,
+  "passing_case_count": 3,
+  "metrics_valid_count": 3
+}
