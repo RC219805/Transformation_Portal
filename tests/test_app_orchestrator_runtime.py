@@ -6,6 +6,8 @@ from __future__ import annotations
 
 import asyncio
 import concurrent.futures
+import csv
+import gzip
 import hashlib
 import importlib
 import io
@@ -49,6 +51,26 @@ class _FakeRequest:
 def _flag_value(argv: list[str], flag: str) -> str:
     idx = argv.index(flag)
     return argv[idx + 1]
+
+
+def _write_archive_index(path: Path, relpaths: list[str]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    opener = gzip.open if path.name.endswith(".gz") else open
+    with opener(path, "wt", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(
+            handle,
+            fieldnames=["origin_drive", "partition", "relpath"],
+            lineterminator="\n",
+        )
+        writer.writeheader()
+        for relpath in relpaths:
+            writer.writerow(
+                {
+                    "origin_drive": "local",
+                    "partition": "test",
+                    "relpath": relpath,
+                }
+            )
 
 
 @lru_cache(maxsize=1)
@@ -3342,6 +3364,10 @@ def test_argv_archive_gate_a_defaults_to_fixity_scan_runner() -> None:
     assert _flag_value(argv, "--archive-index") == expected_archive_index
     assert _flag_value(argv, "--archive-root") == expected_archive_root
     assert _flag_value(argv, "--out-dir") == expected_out_dir
+    assert "--strict" in argv
+    assert "--strict-identity" in argv
+    assert "--no-strict" not in argv
+    assert "--no-strict-identity" not in argv
 
 
 def test_argv_archive_gate_b_allows_command_override_and_sign_maps_to_bagit_validation() -> None:
@@ -3518,6 +3544,53 @@ def test_archive_gate_a_readiness_is_degraded_until_archive_index_is_supplied() 
     assert readiness["status"] == "degraded"
     assert readiness["canonical_command"] == "fixity-scan"
     assert readiness["missing_prerequisites"][0]["reason"] == "archive_index_required"
+
+
+def test_archive_gate_a_readiness_blocks_fixture_index_against_nonmatching_root(tmp_path: Path) -> None:
+    raw_root = tmp_path / "Raw_16-bit_Source"
+    raw_root.mkdir()
+    (raw_root / "DJI_0018.DNG").write_bytes(b"raw")
+    fixture_index = orchestrator_app.REPO_ROOT / "tests" / "fixtures" / "archive_small" / "archive_index_normalized.csv.gz"
+
+    readiness = orchestrator_app._archive_gate_readiness(
+        "archive-gate-a",
+        args={
+            "input_dir": str(raw_root),
+            "output_dir": str(tmp_path / "out"),
+            "archive_command": "fixity-scan",
+            "archive_root": str(raw_root),
+            "archive_index": str(fixture_index),
+        },
+        require_dispatch_inputs=True,
+    )
+
+    assert readiness["status"] == "blocked"
+    issues = {item["reason"]: item for item in readiness["missing_prerequisites"]}
+    assert issues["archive_index_root_mismatch"]["field"] == "archive_index"
+    assert "3/3 rows blocked" in issues["archive_index_root_mismatch"]["message"]
+
+
+def test_archive_gate_a_readiness_is_ready_when_index_matches_root(tmp_path: Path) -> None:
+    archive_root = tmp_path / "archive_root"
+    archive_root.mkdir()
+    (archive_root / "asset-001.dng").write_bytes(b"raw")
+    archive_index = tmp_path / "archive_index_normalized.csv.gz"
+    _write_archive_index(archive_index, ["asset-001.dng"])
+
+    readiness = orchestrator_app._archive_gate_readiness(
+        "archive-gate-a",
+        args={
+            "input_dir": str(archive_root),
+            "output_dir": str(tmp_path / "out"),
+            "archive_command": "fixity-scan",
+            "archive_root": str(archive_root),
+            "archive_index": str(archive_index),
+        },
+        require_dispatch_inputs=True,
+    )
+
+    assert readiness["status"] == "ready"
+    assert readiness["missing_prerequisites"] == []
 
 
 def test_archive_gate_b_readiness_fails_closed_without_manifest_jsonl() -> None:

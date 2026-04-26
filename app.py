@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import asyncio
+import csv
+import gzip
 import hashlib
 import hmac
 import json
@@ -1229,6 +1231,8 @@ ARCHIVE_GATE_ALLOWED_COMMANDS = {
     "archive-gate-b": {"bag-build", "bag-validate", "dedup-plan"},
     "archive-gate-c": {"mets-export", "prov-export", "stac-export"},
 }
+ARCHIVE_INDEX_REQUIRED_COLUMNS = {"origin_drive", "partition", "relpath"}
+ARCHIVE_INDEX_PREFLIGHT_EXAMPLE_LIMIT = 5
 ALLOWED_QUALITY = {"standard", "premium", "apex"}
 ALLOWED_BACKENDS = {"da3", "depth_pro"}
 ALLOWED_DEPTH_DEVICES = {"cpu", "cuda", "mps"}
@@ -1273,6 +1277,7 @@ VALIDATION_REASON_CODES = {
     "Invalid archive integer option": "invalid_archive_integer_option",
 }
 PORTAL_SAFE_ERROR_MESSAGES = {
+    "archive_index_root_mismatch": "Archive index rows must resolve under the selected archive root.",
     "archive_index_required": "An archive index artifact is required before dispatch.",
     "archive_runner_unavailable": "The selected archive command is unavailable in this environment.",
     "bag_dir_required": "A bag directory is required before dispatch.",
@@ -1714,6 +1719,242 @@ def _validate_existing_path(
     return resolved, None
 
 
+def _archive_index_preflight_example(
+    *,
+    row: int,
+    relpath: str,
+    reason: str,
+) -> Dict[str, Any]:
+    return {
+        "row": row,
+        "relpath": relpath,
+        "reason": reason,
+    }
+
+
+def _archive_index_preflight_result(
+    *,
+    rows_total: int,
+    blocked_rows: int,
+    examples: List[Dict[str, Any]],
+) -> Dict[str, Any]:
+    return {
+        "ok": blocked_rows == 0 and rows_total > 0,
+        "rows_total": rows_total,
+        "blocked_rows": blocked_rows,
+        "examples": examples[:ARCHIVE_INDEX_PREFLIGHT_EXAMPLE_LIMIT],
+    }
+
+
+def _archive_index_preflight_message(result: Mapping[str, Any]) -> str:
+    rows_total = int(result.get("rows_total") or 0)
+    blocked_rows = int(result.get("blocked_rows") or 0)
+    examples = result.get("examples") if isinstance(result.get("examples"), list) else []
+    example_text = "; ".join(
+        f"row {item.get('row')}: {item.get('relpath')!r} ({item.get('reason')})"
+        for item in examples[:ARCHIVE_INDEX_PREFLIGHT_EXAMPLE_LIMIT]
+        if isinstance(item, Mapping)
+    )
+    if not example_text:
+        example_text = "no valid archive index rows found"
+    if rows_total == 0:
+        return (
+            "Archive index does not match the selected archive root: "
+            f"{blocked_rows} blocking issue before row validation. Examples: {example_text}."
+        )
+    return (
+        "Archive index does not match the selected archive root: "
+        f"{blocked_rows}/{rows_total} rows blocked. Examples: {example_text}."
+    )
+
+
+def _is_drive_prefixed_relpath(raw_relpath: str) -> bool:
+    return bool(re.match(r"^[A-Za-z]:", raw_relpath))
+
+
+def _validate_archive_index_relpath(
+    raw_relpath: Any,
+    *,
+    archive_root: Path,
+) -> Tuple[bool, str, str]:
+    relpath = str(raw_relpath or "").strip()
+    if not relpath:
+        return False, relpath, "empty_relpath"
+    if "\x00" in relpath:
+        return False, relpath, "nul_relpath"
+    if relpath.startswith(("/", "\\")):
+        return False, relpath, "absolute_relpath"
+    if _is_drive_prefixed_relpath(relpath):
+        return False, relpath, "drive_prefixed_relpath"
+
+    normalized = relpath.replace("\\", "/")
+    parts = tuple(part for part in normalized.split("/") if part and part != ".")
+    if not parts:
+        return False, relpath, "empty_relpath"
+    if any(part == ".." for part in parts):
+        return False, relpath, "parent_traversal"
+
+    target = archive_root.joinpath(*parts)
+    try:
+        target_real = Path(os.path.realpath(target))
+        target_real.relative_to(archive_root)
+    except (OSError, RuntimeError, ValueError):
+        return False, relpath, "outside_archive_root"
+
+    current = archive_root
+    for part in parts:
+        current = current / part
+        try:
+            current.lstat()
+        except FileNotFoundError:
+            return False, relpath, "missing"
+        except (OSError, RuntimeError):
+            return False, relpath, "unreadable"
+        if current.is_symlink():
+            return False, relpath, "symlink_traversal"
+
+    try:
+        if current.is_dir():
+            return False, relpath, "directory"
+        if not current.is_file():
+            return False, relpath, "not_regular_file"
+    except (OSError, RuntimeError):
+        return False, relpath, "unreadable"
+
+    return True, relpath, "ok"
+
+
+def _validate_archive_index_against_root(
+    archive_index: Path,
+    archive_root: Path,
+) -> Dict[str, Any]:
+    try:
+        archive_root_real = Path(os.path.realpath(archive_root))
+    except (OSError, RuntimeError, ValueError):
+        return _archive_index_preflight_result(
+            rows_total=0,
+            blocked_rows=1,
+            examples=[
+                _archive_index_preflight_example(
+                    row=0,
+                    relpath=str(archive_root),
+                    reason="archive_root_invalid",
+                )
+            ],
+        )
+
+    try:
+        if archive_root_real.is_symlink():
+            return _archive_index_preflight_result(
+                rows_total=0,
+                blocked_rows=1,
+                examples=[
+                    _archive_index_preflight_example(
+                        row=0,
+                        relpath=str(archive_root),
+                        reason="archive_root_symlink",
+                    )
+                ],
+            )
+        if not archive_root_real.is_dir():
+            return _archive_index_preflight_result(
+                rows_total=0,
+                blocked_rows=1,
+                examples=[
+                    _archive_index_preflight_example(
+                        row=0,
+                        relpath=str(archive_root),
+                        reason="archive_root_not_directory",
+                    )
+                ],
+            )
+    except (OSError, RuntimeError):
+        return _archive_index_preflight_result(
+            rows_total=0,
+            blocked_rows=1,
+            examples=[
+                _archive_index_preflight_example(
+                    row=0,
+                    relpath=str(archive_root),
+                    reason="archive_root_unreadable",
+                )
+            ],
+        )
+
+    rows_total = 0
+    blocked_rows = 0
+    examples: List[Dict[str, Any]] = []
+
+    try:
+        opener: Callable[..., Any]
+        opener = gzip.open if archive_index.name.endswith(".gz") else open
+        with opener(archive_index, "rt", encoding="utf-8", newline="") as handle:
+            reader = csv.DictReader(handle)
+            fieldnames = set(reader.fieldnames or [])
+            missing_columns = sorted(ARCHIVE_INDEX_REQUIRED_COLUMNS - fieldnames)
+            if missing_columns:
+                return _archive_index_preflight_result(
+                    rows_total=0,
+                    blocked_rows=1,
+                    examples=[
+                        _archive_index_preflight_example(
+                            row=1,
+                            relpath="",
+                            reason=f"missing_columns:{','.join(missing_columns)}",
+                        )
+                    ],
+                )
+
+            for row_number, row in enumerate(reader, start=2):
+                rows_total += 1
+                ok, relpath, reason = _validate_archive_index_relpath(
+                    row.get("relpath"),
+                    archive_root=archive_root_real,
+                )
+                if ok:
+                    continue
+                blocked_rows += 1
+                if len(examples) < ARCHIVE_INDEX_PREFLIGHT_EXAMPLE_LIMIT:
+                    examples.append(
+                        _archive_index_preflight_example(
+                            row=row_number,
+                            relpath=relpath,
+                            reason=reason,
+                        )
+                    )
+    except (csv.Error, gzip.BadGzipFile, OSError, RuntimeError, UnicodeDecodeError) as exc:
+        return _archive_index_preflight_result(
+            rows_total=rows_total,
+            blocked_rows=max(1, blocked_rows),
+            examples=[
+                _archive_index_preflight_example(
+                    row=max(1, rows_total + 1),
+                    relpath=str(archive_index),
+                    reason=f"archive_index_unreadable:{type(exc).__name__}",
+                )
+            ],
+        )
+
+    if rows_total == 0:
+        return _archive_index_preflight_result(
+            rows_total=0,
+            blocked_rows=1,
+            examples=[
+                _archive_index_preflight_example(
+                    row=1,
+                    relpath="",
+                    reason="empty_archive_index",
+                )
+            ],
+        )
+
+    return _archive_index_preflight_result(
+        rows_total=rows_total,
+        blocked_rows=blocked_rows,
+        examples=examples,
+    )
+
+
 def _lux_depth_readiness(args: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     runner_available = _lux_depth_runner_available()
     canary_runtime = _resolve_lux_depth_canary_runtime()
@@ -1847,7 +2088,7 @@ def _archive_gate_readiness(
         if command == "fixity-scan":
             archive_index_value = _pick(args or {}, "archive_index", "archiveIndex", default="")
             if require_dispatch_inputs:
-                _, issue = _validate_existing_path(
+                archive_index_path, issue = _validate_existing_path(
                     archive_index_value,
                     field="archive_index",
                     allowed_roots=ALLOWED_PATH_ROOTS,
@@ -1857,6 +2098,37 @@ def _archive_gate_readiness(
                     required=True,
                 )
                 _append_issue(issue)
+                archive_root_value = _pick(
+                    args or {},
+                    "archive_root",
+                    "archiveRoot",
+                    default=_pick(args or {}, "input_dir", "inputDir", default=""),
+                )
+                archive_root_path, archive_root_issue = _validate_existing_path(
+                    archive_root_value,
+                    field="archive_root",
+                    allowed_roots=ALLOWED_INPUT_ROOTS,
+                    missing_reason="input_dir_required",
+                    missing_message="Provide an existing archive root before dispatch.",
+                    expected_type="dir",
+                    required=True,
+                )
+                _append_issue(archive_root_issue)
+                if archive_index_path and archive_root_path and issue is None and archive_root_issue is None:
+                    index_preflight = _validate_archive_index_against_root(
+                        Path(archive_index_path),
+                        Path(archive_root_path),
+                    )
+                    if not index_preflight["ok"]:
+                        issues.append(
+                            _readiness_issue(
+                                "archive_index_root_mismatch",
+                                severity="blocked",
+                                message=_archive_index_preflight_message(index_preflight),
+                                field="archive_index",
+                                path=archive_index_path,
+                            )
+                        )
             else:
                 issues.append(
                     _readiness_issue(
@@ -4392,6 +4664,51 @@ def _build_archive_config_preview(
             continue
         normalized_args[canonical_field] = parsed
 
+    archive_path_error_fields = {
+        str(item.get("field") or "")
+        for item in errors
+        if isinstance(item, Mapping)
+    }
+    if (
+        command == "fixity-scan"
+        and "archive_index" not in archive_path_error_fields
+        and "input_dir" not in archive_path_error_fields
+        and "archive_root" not in archive_path_error_fields
+    ):
+        archive_index_text = str(normalized_args.get("archive_index") or "").strip()
+        archive_root_text = str(
+            normalized_args.get("archive_root")
+            or normalized_args.get("input_dir")
+            or ""
+        ).strip()
+        if archive_index_text and archive_root_text:
+            try:
+                archive_index_path = _resolve_allowed_request_path(
+                    archive_index_text,
+                    ALLOWED_PATH_ROOTS,
+                )
+                archive_root_path = _resolve_allowed_request_path(
+                    archive_root_text,
+                    ALLOWED_INPUT_ROOTS,
+                )
+            except _PortalValidationReasonError:
+                archive_index_path = None
+                archive_root_path = None
+            if archive_index_path is not None and archive_root_path is not None:
+                index_preflight = _validate_archive_index_against_root(
+                    archive_index_path,
+                    archive_root_path,
+                )
+                if not index_preflight["ok"]:
+                    errors.append(
+                        _portal_issue(
+                            "archive_index",
+                            "archive_index_root_mismatch",
+                            _archive_index_preflight_message(index_preflight),
+                            suggestion="Rebuild the archive index from the selected archive root.",
+                        )
+                    )
+
     if readiness_snapshot is None:
         readiness_snapshot = _evaluate_pipeline_readiness(
             pipeline,
@@ -5890,13 +6207,7 @@ def _archive_gate_argv(
                 str(workers),
             ]
         )
-        strict = _pick(args, "strict")
-        if strict is not None:
-            argv.append("--strict" if _as_bool(strict) else "--no-strict")
-        strict_identity = _pick(args, "strict_identity", "strictIdentity")
-        if strict_identity is not None:
-            flag = "--strict-identity" if _as_bool(strict_identity) else "--no-strict-identity"
-            argv.append(flag)
+        argv.extend(["--strict", "--strict-identity"])
         validate_schemas = _pick(args, "validate_schemas", "validateSchemas")
         if validate_schemas is not None:
             flag = "--validate-schemas" if _as_bool(validate_schemas, default=True) else "--no-validate-schemas"
