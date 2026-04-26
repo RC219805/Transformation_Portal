@@ -75,11 +75,12 @@ def _tile_instance(
     stability_score: float = 0.9,
     values: np.ndarray | None = None,
 ) -> TileInstance:
-    mask_values = (
-        np.ones((height, width), dtype=np.float32)
-        if values is None
-        else np.asarray(values, dtype=np.float32).reshape((height, width))
-    )
+    if values is None:
+        mask_values = np.ones((height, width), dtype=np.float32)
+    else:
+        mask_values = np.asarray(values, dtype=np.float32)
+        if mask_values.shape != (height, width):
+            raise ValueError(f"tile instance values must have shape {(height, width)}, got {mask_values.shape}")
     return TileInstance(
         local_id=f"{tile_id}:0",
         score=score,
@@ -92,6 +93,13 @@ def _tile_instance(
         material_label=label,
         material_confidence=confidence,
     )
+
+
+def test_tile_instance_fixture_rejects_mismatched_mask_shape():
+    values = np.ones((4, 8), dtype=np.float32)
+
+    with pytest.raises(ValueError, match=r"shape \(8, 4\), got \(4, 8\)"):
+        _tile_instance(tile_id="tile", width=4, height=8, values=values)
 
 
 def _run_two_tile_merge(*, left_instance, right_instance, config, left_tile=None, right_tile=None, width=14):
