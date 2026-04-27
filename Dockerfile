@@ -28,6 +28,12 @@ RUN pip install --no-cache-dir -e .
 ENV DEVICE=cpu
 EXPOSE 8000
 
+# Health probe hits the FastAPI orchestrator's /healthz endpoint (app.py).
+# Uses Python stdlib so we don't have to install curl in the slim base.
+# start-period gives uvicorn time to bind before failures count.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=3).read()" || exit 1
+
 CMD ["python", "-m", "transformation_portal.cli"]
 
 # Stage 3: GPU image (CUDA support)
@@ -51,6 +57,9 @@ RUN pip3 install --no-cache-dir -e .
 ENV DEVICE=cuda
 EXPOSE 8000
 
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+    CMD python3 -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=3).read()" || exit 1
+
 CMD ["python3", "-m", "transformation_portal.cli"]
 
 # Stage 4: Apple Silicon optimized (M-series chips)
@@ -68,5 +77,8 @@ RUN pip install --no-cache-dir -e ".[ml]"
 
 ENV DEVICE=mps
 EXPOSE 8000
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=3).read()" || exit 1
 
 CMD ["python", "-m", "transformation_portal.cli"]
