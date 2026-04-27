@@ -9,6 +9,8 @@ response validation in CI's contract tests.
 
 from __future__ import annotations
 
+from typing import Any
+
 import pytest
 from pydantic import ValidationError
 
@@ -21,9 +23,78 @@ from transformation_portal.api.v1 import (
     ReadyResponse,
 )
 
+pytestmark = pytest.mark.unit
+
+
+def _lux_depth_pipeline_payload() -> dict[str, Any]:
+    return {
+        "status": "ready",
+        "canonical_command": "lux-depth-v3",
+        "missing_prerequisites": [],
+        "runner_details": {
+            "type": "python_module",
+            "available": True,
+            "module": "transformation_portal.lux_depth_v3",
+            "command": ["/usr/bin/python", "-m", "transformation_portal.lux_depth_v3"],
+            "python_executable": "/usr/bin/python",
+        },
+        "notes": ["Base readiness covers runner invocation, path safety, and orchestrator preflight."],
+        "canary_status": "ready",
+    }
+
+
+def _archive_gate_pipeline_payload(
+    pipeline: str,
+    *,
+    status: str,
+    missing_prerequisites: list[dict[str, Any]],
+) -> dict[str, Any]:
+    command_by_pipeline = {
+        "archive-gate-a": "fixity-scan",
+        "archive-gate-b": "bag-build",
+        "archive-gate-c": "mets-export",
+    }
+    note_by_pipeline = {
+        "archive-gate-a": "Canonical archive-gate-a dispatch expects fixity-scan with an existing archive index.",
+        "archive-gate-b": "Canonical dispatch for this archive stage requires a prior rights-manifest artifact.",
+        "archive-gate-c": "Canonical dispatch for this archive stage requires a prior rights-manifest artifact.",
+    }
+    command = command_by_pipeline[pipeline]
+    return {
+        "status": status,
+        "canonical_command": command,
+        "missing_prerequisites": missing_prerequisites,
+        "runner_details": {
+            "type": "python_script",
+            "available": True,
+            "script_path": "/repo/tools/archive_governance.py",
+            "python_executable": "/usr/bin/python",
+            "command": ["/usr/bin/python", "/repo/tools/archive_governance.py", "--json", command],
+        },
+        "notes": [note_by_pipeline[pipeline]],
+    }
+
+
+def _archive_index_required_issue() -> dict[str, Any]:
+    return {
+        "reason": "archive_index_required",
+        "severity": "degraded",
+        "message": "An existing archive index is required at dispatch time.",
+        "field": "archive_index",
+    }
+
+
+def _rights_manifest_required_issue() -> dict[str, Any]:
+    return {
+        "reason": "rights_manifest_required",
+        "severity": "blocked",
+        "message": "A rights-manifest JSONL artifact from a prior archive stage is required.",
+        "field": "manifest_jsonl",
+    }
+
 
 class TestHealthzResponse:
-    """Mirrors ``app.py`` line 7831: ``JSONResponse({"ok": True, "time": _now()})``."""
+    """Mirrors ``healthz()``: ``JSONResponse({"ok": True, "time": _now()})``."""
 
     def test_minimal_valid_input(self) -> None:
         h = HealthzResponse(ok=True, time=1234.5)
@@ -44,7 +115,7 @@ class TestHealthzResponse:
 
 
 class TestReadyResponse:
-    """Mirrors ``app.py`` line 7842: minimal vs verbose shapes."""
+    """Mirrors ``ready()``: minimal vs verbose shapes."""
 
     def test_minimal_shape_when_verbose_false(self) -> None:
         # When TP_READY_VERBOSE=false, the handler returns just ok/time/version.
@@ -112,26 +183,41 @@ class TestReadinessServer:
 
     def test_extra_keys_rejected(self) -> None:
         with pytest.raises(ValidationError):
-            ReadinessServer(time=1.0, version="0.1.0", auth_mode="direct_debug", backend_live=True, x="y")  # type: ignore[call-arg]
+            ReadinessServer(
+                time=1.0,
+                version="0.1.0",
+                auth_mode="direct_debug",
+                backend_live=True,
+                x="y",  # type: ignore[call-arg]
+            )
 
 
 class TestReadinessData:
     def test_envelope_payload_shape(self) -> None:
         data = ReadinessData(
             server=ReadinessServer(time=1.0, version="0.1.0", auth_mode="direct_debug", backend_live=True),
-            pipelines={"lux-depth-v3": {"ready": True}, "archive-gate-a": {"ready": False, "reason": "x"}},
+            pipelines={
+                "lux-depth-v3": _lux_depth_pipeline_payload(),
+                "archive-gate-a": _archive_gate_pipeline_payload(
+                    "archive-gate-a",
+                    status="degraded",
+                    missing_prerequisites=[_archive_index_required_issue()],
+                ),
+            },
         )
         dumped = data.model_dump(mode="json")
         assert set(dumped.keys()) == {"server", "pipelines"}
-        assert dumped["pipelines"]["lux-depth-v3"]["ready"] is True
-        assert dumped["pipelines"]["archive-gate-a"]["reason"] == "x"
+        assert dumped["pipelines"]["lux-depth-v3"]["status"] == "ready"
+        assert dumped["pipelines"]["lux-depth-v3"]["canonical_command"] == "lux-depth-v3"
+        assert dumped["pipelines"]["archive-gate-a"]["status"] == "degraded"
+        assert dumped["pipelines"]["archive-gate-a"]["missing_prerequisites"][0]["reason"] == "archive_index_required"
 
 
 class TestReadinessEnvelope:
     """``ApiEnvelope[ReadinessData]`` — the wire shape of GET /v1/readiness."""
 
     def test_full_round_trip_matches_handler_shape(self) -> None:
-        # Construct the envelope the way the handler does at app.py:7888-7901.
+        # Construct the envelope the way readiness() does through _api_envelope.
         env = ReadinessEnvelope(
             schema="tp.orchestrator.readiness.v1",
             success=True,
@@ -143,10 +229,22 @@ class TestReadinessEnvelope:
                     backend_live=True,
                 ),
                 pipelines={
-                    "lux-depth-v3": {"ready": True},
-                    "archive-gate-a": {"ready": True},
-                    "archive-gate-b": {"ready": False, "reason": "manifest_missing"},
-                    "archive-gate-c": {"ready": True},
+                    "lux-depth-v3": _lux_depth_pipeline_payload(),
+                    "archive-gate-a": _archive_gate_pipeline_payload(
+                        "archive-gate-a",
+                        status="degraded",
+                        missing_prerequisites=[_archive_index_required_issue()],
+                    ),
+                    "archive-gate-b": _archive_gate_pipeline_payload(
+                        "archive-gate-b",
+                        status="blocked",
+                        missing_prerequisites=[_rights_manifest_required_issue()],
+                    ),
+                    "archive-gate-c": _archive_gate_pipeline_payload(
+                        "archive-gate-c",
+                        status="blocked",
+                        missing_prerequisites=[_rights_manifest_required_issue()],
+                    ),
                 },
             ),
         )
@@ -158,11 +256,15 @@ class TestReadinessEnvelope:
         assert dumped["error"] is None
         # Payload shape
         assert dumped["data"]["server"]["backend_live"] is True
-        assert dumped["data"]["pipelines"]["archive-gate-b"]["reason"] == "manifest_missing"
+        archive_gate_b = dumped["data"]["pipelines"]["archive-gate-b"]
+        assert archive_gate_b["status"] == "blocked"
+        assert archive_gate_b["missing_prerequisites"][0]["reason"] == "rights_manifest_required"
 
     def test_alias_is_apienvelope_specialization(self) -> None:
         # ReadinessEnvelope is just sugar for ApiEnvelope[ReadinessData];
-        # the underlying type identity matters for FastAPI's OpenAPI generation.
+        # the underlying generic specialization matters for FastAPI's OpenAPI
+        # generation, but parameterized generic object identity is not stable
+        # across all Python/Pydantic versions.
         # NOTE: by design, the alias does NOT lock the schema field to
         # "tp.orchestrator.readiness.v1" — any valid SchemaName is accepted at
         # the model layer, and the route handler is responsible for setting the
@@ -170,7 +272,10 @@ class TestReadinessEnvelope:
         # api/v1/ (only ErrorEnvelope locks its schema, because there's a single
         # canonical error schema). If a future refactor wants per-route schema
         # locking, that's a subclassing exercise, not an alias change.
-        assert ReadinessEnvelope is ApiEnvelope[ReadinessData]
+        metadata = ReadinessEnvelope.__pydantic_generic_metadata__
+        assert issubclass(ReadinessEnvelope, ApiEnvelope)
+        assert metadata["origin"] is ApiEnvelope
+        assert metadata["args"] == (ReadinessData,)
 
     def test_unrecognised_schema_string_rejected_at_literal_level(self) -> None:
         # The SchemaName Literal does still reject unknown strings — the
