@@ -1134,6 +1134,69 @@ def test_run_apex_eval_explicit_evidence_overrides_manifest_derivation(tmp_path,
     assert captured["candidate_evidence"] == {"materials_v3": {"unit_image": explicit_evidence}}
 
 
+@pytest.mark.parametrize(
+    "candidate, asset_id",
+    [
+        ("materials_v3", "../escape"),
+        ("materials_v3", "subdir/asset"),
+        ("materials_v3", "asset\\backslash"),
+        ("materials_v3", ".."),
+        ("materials_v3", ""),
+        ("../mat", "asset_1"),
+        ("mat$bad", "asset_1"),
+    ],
+)
+def test_run_apex_eval_rejects_unsafe_evidence_path_components(tmp_path, monkeypatch, capsys, candidate, asset_id):
+    """The derived-evidence path is constructed from CLI-supplied candidate and
+    asset_id strings; reject any value containing path separators, '..', or
+    other characters that could escape the derived_evidence/ directory."""
+    from transformation_portal.lux_depth_v3.manifest import CombinedManifest, MaterialsV3Metadata
+
+    module = _load_tool_module("run_apex_eval.py", f"run_apex_eval_unsafe_{abs(hash((candidate, asset_id))):x}")
+
+    manifest = CombinedManifest()
+    manifest.materials_v3 = MaterialsV3Metadata.from_dict({"enabled": True, "schema_version": "1.1"})
+    manifest_path = tmp_path / "image_manifest.json"
+    manifest.save(manifest_path)
+
+    output_dir = tmp_path / "report"
+    output_dir.mkdir()
+
+    def fake_build_report(*args, **kwargs):
+        return {
+            "report_path": str(output_dir / "apex_eval_report.json"),
+            "assets": [],
+            "evalset": {"repo_root": str(tmp_path)},
+        }
+
+    monkeypatch.setattr(module, "build_apex_eval_report", fake_build_report)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "run_apex_eval.py",
+            "--evalset",
+            "evalsets/picacho_apex",
+            "--output-dir",
+            str(output_dir),
+            "--candidate-evidence-from-manifest",
+            f"{candidate}:{asset_id}={manifest_path}",
+        ],
+    )
+
+    # parse_candidate_evidence rejects empty asset_id / candidate at parse time
+    # (returns its own ValueError). For values that pass parsing but fail the
+    # safety check, the tool exits 2 and prints the role-specific reason.
+    rc = module.main()
+    assert rc == 2
+    err = capsys.readouterr().err
+    assert "APEX eval error:" in err
+    # No file should have been created in the derived-evidence directory
+    # regardless of which guard rejected the input.
+    derived_files = list((output_dir / "derived_evidence").glob("*")) if (output_dir / "derived_evidence").exists() else []
+    assert derived_files == []
+
+
 def test_benchmark_depth_backends_returns_stable_input_error_for_missing_evalset(tmp_path, monkeypatch, capsys):
     module = _load_tool_module("benchmark_depth_backends.py", "benchmark_depth_backends_missing_evalset_unit")
 

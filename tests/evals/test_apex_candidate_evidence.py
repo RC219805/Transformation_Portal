@@ -7,15 +7,9 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+import tifffile  # noqa: F401  # imported for fail-fast: build_apex_eval_report uses tifffile downstream
 from PIL import Image
 
-# build_apex_eval_report calls load_16bit_tiff under the hood; without tifffile
-# every reference read short-circuits to "unreadable_reference" with an empty
-# metrics dict, which makes downstream `metrics["visible_delta"]` mutations
-# KeyError. Skip the whole module rather than emit a misleading failure.
-pytest.importorskip("tifffile")
-
-# pylint: disable=wrong-import-position  # importorskip must precede project imports.
 from transformation_portal.evals.apex_evidence_bundle import (
     APEX_MATERIALS_PASSTHROUGH_LOW_CONFIDENCE,
     APEX_MATERIALS_PIXEL_OPS_EMPTY,
@@ -705,6 +699,97 @@ def test_derive_materials_v3_evidence_propagates_soft_passthrough(tmp_path):
     assert evidence["masks_exist"] is True
     assert evidence["blocked_reason_counts"] == {"below_confidence_threshold": 4}
     assert evidence["passthrough_status"] == passthrough_payload
+
+
+def test_derive_materials_v3_evidence_blocks_promotion_on_non_confidence_blockers(tmp_path):
+    """When a manifest records blocked pixel ops with reasons that imply an
+    implemented op was registered (e.g. missing_material_confidence,
+    below_coverage_threshold), and no soft-passthrough record is present, the
+    derived evidence must report ``implemented_ops_exist=True`` so the bundle's
+    ``_materials_status`` correctly emits APEX_MATERIALS_PIXEL_OPS_EMPTY.
+
+    Regression for chatgpt-codex-connector + copilot-pull-request-reviewer
+    feedback on PR #1556: under-reporting implemented_ops_exist would let a
+    `--candidate-evidence-from-manifest` flow promote a case that should be
+    blocked at promotion time."""
+    manifest_path = tmp_path / "manifest.json"
+    _write_materials_v3_manifest(
+        manifest_path,
+        materials_v3={
+            "enabled": True,
+            "schema_version": "1.1",
+            "pixel_ops": {
+                "enabled": True,
+                "applied": [],
+                "blocked": [
+                    {
+                        "material": "glass",
+                        "reason": "missing_material_confidence",
+                        "blocked_by": ["missing_material_confidence"],
+                    },
+                    {
+                        "material": "water",
+                        "reason": "below_coverage_threshold",
+                        "blocked_by": ["below_coverage_threshold"],
+                    },
+                ],
+            },
+            "segmentation_metadata": {"mask_count": 2},
+        },
+    )
+
+    derived = derive_materials_v3_evidence_from_manifest(manifest_path)
+
+    assert derived["applied_ops_count"] == 0
+    assert derived["implemented_ops_exist"] is True
+    assert derived["blocked_reason_counts"] == {
+        "missing_material_confidence": 1,
+        "below_coverage_threshold": 1,
+    }
+    assert "passthrough_status" not in derived
+
+    # Round-trip through the bundle and assert the gate now fires.
+    evidence_path = tmp_path / "materials.json"
+    evidence_path.write_text(json.dumps(derived), encoding="utf-8")
+    report = _apex_report(tmp_path)
+    bundle = build_apex_evidence_bundle(
+        report,
+        output_dir=tmp_path / "bundle",
+        candidate_evidence={"materials_v3": {"unit_image": evidence_path}},
+        repo_root=tmp_path,
+    )
+
+    assert bundle["promotion_verdict"] == "blocked"
+    assert APEX_MATERIALS_PIXEL_OPS_EMPTY in bundle["promotion_blocked_reasons"]
+    assert bundle["cases"][0]["materials_v3"]["failure_code"] == APEX_MATERIALS_PIXEL_OPS_EMPTY
+
+
+def test_derive_materials_v3_evidence_no_implementation_blockers_do_not_imply_ops(tmp_path):
+    """The ``no_implementation`` blocker reason explicitly means a material had
+    no registered op. Such manifests must keep ``implemented_ops_exist=False``
+    so the bundle's failure gate is not falsely triggered for runs that never
+    had registered ops to apply."""
+    manifest_path = tmp_path / "manifest.json"
+    _write_materials_v3_manifest(
+        manifest_path,
+        materials_v3={
+            "enabled": True,
+            "schema_version": "1.1",
+            "pixel_ops": {
+                "enabled": True,
+                "applied": [],
+                "blocked": [
+                    {"material": "sky", "reason": "no_implementation", "blocked_by": ["no_implementation"]},
+                ],
+            },
+        },
+    )
+
+    derived = derive_materials_v3_evidence_from_manifest(manifest_path)
+
+    assert derived["applied_ops_count"] == 0
+    assert derived["implemented_ops_exist"] is False
+    assert derived["blocked_reason_counts"] == {"no_implementation": 1}
 
 
 def test_derived_evidence_promotes_through_apex_bundle(tmp_path):

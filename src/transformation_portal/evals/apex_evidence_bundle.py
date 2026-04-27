@@ -133,9 +133,27 @@ def derive_materials_v3_evidence_from_manifest(manifest_path: Path | str) -> dic
         or (isinstance(mask_artifact_path, str) and mask_artifact_path.strip())
     )
 
-    # Implemented ops were available iff something was applied (proves it) or
-    # the soft-passthrough payload enumerated implemented materials.
-    implemented_ops_exist = bool(applied_list) or bool(passthrough_implemented_materials)
+    # Implemented ops were available iff something was applied (proves it), the
+    # soft-passthrough payload enumerated implemented materials, OR the manifest
+    # recorded blocked pixel ops with a reason that implies an implemented op
+    # was registered. The only blocker that does NOT imply a registered op is
+    # ``no_implementation`` (the material has no implemented op in OP_REGISTRY);
+    # ``pixel_ops_disabled`` and ``<material>_response_disabled`` similarly
+    # gate the registered op behind a config switch rather than evidencing its
+    # existence. All other blockers (below_coverage_threshold,
+    # below_confidence_threshold, missing_material_confidence,
+    # missing_confidence_score_type, unsupported_confidence_score_type,
+    # not_recommended, ...) imply the op was registered and considered.
+    _NON_OP_EVIDENCING_BLOCKERS = {
+        "no_implementation",
+        "pixel_ops_disabled",
+    }
+    op_evidencing_blockers = {
+        reason: count
+        for reason, count in blocked_reason_counts.items()
+        if reason not in _NON_OP_EVIDENCING_BLOCKERS and not reason.endswith("_response_disabled")
+    }
+    implemented_ops_exist = bool(applied_list or passthrough_implemented_materials or op_evidencing_blockers)
 
     evidence: dict[str, Any] = {
         "materials_v3_enabled": True,
