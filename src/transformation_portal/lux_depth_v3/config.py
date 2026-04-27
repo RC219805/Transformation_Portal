@@ -246,8 +246,11 @@ class EnhanceConfig:
     # (readiness + inference)
     da3_subprocess_timeout_seconds: int = 900
 
-    # Fallback configuration
-    depth_fallback: str = "fail"  # Options: "fail", "skip", "v2-auto"
+    # Fallback configuration. Operator-facing values: "fail", "skip", "v2-auto",
+    # "apex-strict". The "apex-strict" sentinel canonicalizes to "fail" and
+    # suppresses the APEX tier's auto-upgrade to "v2-auto" — use it when an
+    # operator explicitly wants fail-closed depth on APEX.
+    depth_fallback: str = "fail"
     v2_timeout: int = 300
     # Allow synthetic depth backend when no
     # ML deps (test/CI only)
@@ -469,12 +472,21 @@ class EnhanceConfig:
             0.0,
         )
 
+        # `apex-strict` is an operator-facing sentinel that opts out of the APEX
+        # tier auto-upgrade below. Canonicalize to "fail" so all downstream
+        # branches (orchestrator runtime, manifest serializer, validator) only
+        # ever see the documented {fail, skip, v2-auto} value set.
+        apex_strict_explicit = self.depth_fallback == "apex-strict"
+        if apex_strict_explicit:
+            self.depth_fallback = "fail"
+
         # APEX tier auto-upgrade: when DA3 + DA2 both fail their depth gates on
         # genuinely flat scenes (e.g. uniform sky / glare), recover via the V2
-        # stage with independent depth instead of failing the batch. The user
-        # can still pass an explicit non-default value to opt out.
+        # stage with independent depth instead of failing the batch. Skip the
+        # upgrade when the operator explicitly chose `apex-strict`.
         if (
-            str(getattr(self, "quality_tier", "")).strip().lower() == "apex"
+            not apex_strict_explicit
+            and str(getattr(self, "quality_tier", "")).strip().lower() == "apex"
             and self.depth_fallback == "fail"
         ):
             self.depth_fallback = "v2-auto"

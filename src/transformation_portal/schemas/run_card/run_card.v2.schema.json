@@ -828,6 +828,85 @@
               }
             },
             "additionalProperties": true
+          },
+          "segmentation_status": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "status": {
+                "type": "string",
+                "minLength": 1
+              },
+              "enabled": {
+                "type": "boolean"
+              },
+              "backend": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "strict_backend": {
+                "type": "boolean"
+              },
+              "reason": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "mask_artifact_path": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "mask_count": {
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "confidence_summary": {
+                "type": [
+                  "object",
+                  "null"
+                ]
+              },
+              "warnings": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "errors": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "failure_code": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "failure_details": {
+                "type": [
+                  "object",
+                  "null"
+                ]
+              },
+              "pixel_ops_passthrough": {
+                "type": [
+                  "object",
+                  "null"
+                ]
+              }
+            },
+            "additionalProperties": true
           }
         },
         "additionalProperties": true

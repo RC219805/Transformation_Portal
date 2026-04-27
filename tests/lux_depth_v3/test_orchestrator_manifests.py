@@ -391,6 +391,46 @@ class TestManifestLoading:
         assert loaded.backend_selection is not None
         assert loaded.backend_selection.resolved_backend == "da3"
 
+    def test_materials_v3_segmentation_metadata_passthrough_roundtrips(self, tmp_path: Path) -> None:
+        """The APEX Materials V3 soft-passthrough warning lands inside
+        ``materials_v3.segmentation_metadata`` as ``pixel_ops_passthrough`` and
+        ``warnings``. Both must survive a manifest write/read roundtrip so the
+        run-card cache and downstream consumers see the non-fatal signal."""
+        from transformation_portal.lux_depth_v3.manifest import CombinedManifest, MaterialsV3Metadata
+
+        passthrough_payload = {
+            "code": "APEX_MATERIALS_PASSTHROUGH_LOW_CONFIDENCE",
+            "message": "Materials V3 masks present but every implemented op was below confidence threshold.",
+            "details": {
+                "material_count": 4,
+                "implemented_materials": ["glass", "water", "foliage", "stone"],
+                "applied_ops_count": 0,
+                "blocked_reasons": {"below_confidence_threshold": 4},
+            },
+        }
+        materials_v3 = MaterialsV3Metadata(
+            enabled=True,
+            segmentation_metadata={
+                "warnings": ["APEX_MATERIALS_PASSTHROUGH_LOW_CONFIDENCE"],
+                "errors": [],
+                "pixel_ops_passthrough": passthrough_payload,
+                "mask_artifact_path": None,
+            },
+        )
+
+        manifest = CombinedManifest()
+        manifest.materials_v3 = materials_v3
+
+        manifest_path = tmp_path / "passthrough_manifest.json"
+        manifest.save(manifest_path)
+        loaded = CombinedManifest.load(manifest_path)
+
+        assert loaded.materials_v3 is not None
+        seg_meta = loaded.materials_v3.segmentation_metadata
+        assert seg_meta is not None
+        assert seg_meta["warnings"] == ["APEX_MATERIALS_PASSTHROUGH_LOW_CONFIDENCE"]
+        assert seg_meta["pixel_ops_passthrough"] == passthrough_payload
+
 
 class TestManifestEnvironment:
     """Test environment metadata in manifests."""

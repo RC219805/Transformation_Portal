@@ -8,6 +8,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **APEX Materials V3 — Soft Passthrough on Confidence-Only Blocks:** When every implemented Materials V3 pixel op is blocked solely by `below_confidence_threshold`, the strict gate now emits the output without pixel ops and surfaces a non-fatal `APEX_MATERIALS_PASSTHROUGH_LOW_CONFIDENCE` warning instead of failing the batch. Mixed blocker sets (missing material confidence, missing implementation, etc.) still fail closed with `APEX_MATERIALS_PIXEL_OPS_EMPTY`.
+  - **Run-card visibility:** the warning surfaces under `result_summary[].segmentation_status.pixel_ops_passthrough` and `.warnings`.
+  - **Promotion-eligibility:** evidence producers may mirror the orchestrator's `materials_v3_pixel_ops.passthrough_status` into the per-candidate evidence file as `passthrough_status: {code: "APEX_MATERIALS_PASSTHROUGH_LOW_CONFIDENCE"}`. When that signal is present `_materials_status` keeps `failure_code = None` so promotion is no longer blocked.
+- **APEX Tier — Depth Fallback Auto-Upgrade:** `EnhanceConfig` now flips `depth_fallback="fail"` to `"v2-auto"` when `quality_tier == "apex"`, so flat-distribution scenes (DA3 plateau + DA2 saturation-low) recover via the V2 stage with independent depth instead of failing the batch.
+- **`apex-strict` Depth Fallback Sentinel:** Operators who want strict fail-closed depth on APEX can pass `depth_fallback="apex-strict"`. The validator accepts the new value, `EnhanceConfig.__post_init__` canonicalizes it to `"fail"`, and the apex auto-upgrade is suppressed for that run.
+- **Run-Card Schema — `segmentation_status` Declaration:** The v2 schema now declares the full `segmentation_status` object shape on each `result_summary` item, including `failure_code`, `failure_details`, and `pixel_ops_passthrough` fields. Existing additivity (`additionalProperties: true`) is preserved.
+
+### Changed
+- **Run-Card `segmentation_status` Reporting:** When a per-image manifest is absent because the image hit a structured gate failure (e.g. `APEX_MATERIALS_PIXEL_OPS_EMPTY`, `APEX_DEPTH_PLATEAU`), the run-card row now reports `status: "failed"` with the structured `failure_code` + `failure_details` from the result row, replacing the previous `missing_evidence` placeholder. Downstream consumers that key on `segmentation_status.status` should expect `"failed"` (with a structured `failure_code`) for these cases going forward.
+
+### Added
 - **ADR-043 Orchestrator Decomposition (Complete):** Refactored monolithic EnhanceOrchestrator class into 5 focused modules
   - **New Modules:** `execution_engine.py` (PBR/V2 stage helpers, ~860 LOC), `config_resolver.py` (preset/config management, ~550 LOC), `pipeline_coordinator.py` (backend selection, ~620 LOC), `artifact_manager.py` (output hashing/indexing, ~420 LOC), `validators/run_card_validator.py` (schema validation, ~310 LOC)
   - **Test Coverage:** 182+ unit tests across decomposed modules with backward compatibility verification

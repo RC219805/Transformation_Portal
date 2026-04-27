@@ -129,6 +129,28 @@ class TestEnhanceConfig:
         config = EnhanceConfig(quality_tier="standard")
         assert config.depth_fallback == "fail"
 
+    def test_enhance_config_apex_strict_opts_out_of_auto_upgrade(self):
+        """`apex-strict` is the operator escape hatch for the APEX auto-upgrade.
+        It must canonicalize to "fail" and bypass the upgrade to "v2-auto"."""
+        config = EnhanceConfig(quality_tier="apex", depth_fallback="apex-strict")
+        assert config.depth_fallback == "fail"
+
+    def test_enhance_config_apex_strict_canonicalizes_on_non_apex_tier(self):
+        """Outside APEX, `apex-strict` still canonicalizes to "fail" (the
+        non-apex auto-upgrade branch is a no-op so the result is identical
+        to passing "fail" directly)."""
+        config = EnhanceConfig(quality_tier="standard", depth_fallback="apex-strict")
+        assert config.depth_fallback == "fail"
+
+    def test_validate_depth_fallback_accepts_apex_strict(self):
+        """The security validator must permit the new sentinel value so external
+        config loaders don't reject it before EnhanceConfig sees it."""
+        from transformation_portal.lux_depth_v3.security import validate_depth_fallback
+
+        assert validate_depth_fallback("apex-strict") == "apex-strict"
+        with pytest.raises(ValueError, match="Invalid depth fallback"):
+            validate_depth_fallback("not-a-real-mode")
+
     def test_enhance_config_normalizes_legacy_depth_backend_alias(self):
         """Legacy backend aliases should normalize to canonical IDs."""
         with pytest.warns(FutureWarning, match="depth_anything_v3"):

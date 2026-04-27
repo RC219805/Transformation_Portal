@@ -16,6 +16,7 @@ from PIL import Image
 pytest.importorskip("tifffile")
 
 from transformation_portal.evals.apex_evidence_bundle import (
+    APEX_MATERIALS_PASSTHROUGH_LOW_CONFIDENCE,
     APEX_MATERIALS_PIXEL_OPS_EMPTY,
     build_apex_evidence_bundle,
     parse_candidate_evidence,
@@ -483,6 +484,85 @@ def test_apex_materials_pixel_ops_empty_fails_apex_case(tmp_path):
     assert bundle["promotion_verdict"] == "blocked"
     assert APEX_MATERIALS_PIXEL_OPS_EMPTY in bundle["promotion_blocked_reasons"]
     assert bundle["cases"][0]["case_verdict"] == "fail"
+    assert bundle["cases"][0]["materials_v3"]["failure_code"] == APEX_MATERIALS_PIXEL_OPS_EMPTY
+
+
+def test_apex_materials_passthrough_promotes_when_only_confidence_blocked(tmp_path):
+    """Soft-passthrough evidence (applied_ops_count == 0 + passthrough_status code)
+    must not block promotion. Mirrors the orchestrator's runtime decision to emit
+    output without pixel ops when every implemented op was below confidence."""
+    report = _apex_report(tmp_path)
+    evidence_path = tmp_path / "materials.json"
+    payload = {
+        "materials_v3_enabled": True,
+        "pixel_ops_enabled": True,
+        "masks_exist": True,
+        "implemented_ops_exist": True,
+        "applied_ops_count": 0,
+        "blocked_reason_counts": {"below_confidence_threshold": 4},
+        "confidence_authority": {
+            "raw_clip_similarity_authorized_pixel_ops": False,
+            "calibrated_score_type": "clip_softmax_margin_v1",
+            "calibration_version": "unit",
+        },
+        "passthrough_status": {
+            "code": APEX_MATERIALS_PASSTHROUGH_LOW_CONFIDENCE,
+            "message": "Materials V3 masks present but every implemented op was below confidence threshold.",
+            "details": {
+                "material_count": 4,
+                "implemented_materials": ["glass", "water", "foliage", "stone"],
+                "applied_ops_count": 0,
+                "blocked_reasons": {"below_confidence_threshold": 4},
+            },
+        },
+    }
+    evidence_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    bundle = build_apex_evidence_bundle(
+        report,
+        output_dir=tmp_path / "bundle",
+        candidate_evidence={"materials_v3": {"unit_image": evidence_path}},
+        repo_root=tmp_path,
+    )
+
+    case_materials = bundle["cases"][0]["materials_v3"]
+    assert case_materials["status"] == "ok"
+    assert case_materials["failure_code"] is None
+    assert case_materials["passthrough_status"]["code"] == APEX_MATERIALS_PASSTHROUGH_LOW_CONFIDENCE
+    assert case_materials["applied_ops_count"] == 0
+    assert APEX_MATERIALS_PIXEL_OPS_EMPTY not in bundle["promotion_blocked_reasons"]
+
+
+def test_apex_materials_unknown_passthrough_code_does_not_bypass_gate(tmp_path):
+    """Only the canonical passthrough code excuses applied_ops_count == 0; an
+    unrelated or missing passthrough code must still block promotion."""
+    report = _apex_report(tmp_path)
+    evidence_path = tmp_path / "materials.json"
+    payload = {
+        "materials_v3_enabled": True,
+        "pixel_ops_enabled": True,
+        "masks_exist": True,
+        "implemented_ops_exist": True,
+        "applied_ops_count": 0,
+        "blocked_reason_counts": {"missing_material_confidence": 2, "below_confidence_threshold": 1},
+        "confidence_authority": {
+            "raw_clip_similarity_authorized_pixel_ops": False,
+            "calibrated_score_type": "clip_softmax_margin_v1",
+            "calibration_version": "unit",
+        },
+        "passthrough_status": {"code": "SOME_OTHER_WARNING"},
+    }
+    evidence_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    bundle = build_apex_evidence_bundle(
+        report,
+        output_dir=tmp_path / "bundle",
+        candidate_evidence={"materials_v3": {"unit_image": evidence_path}},
+        repo_root=tmp_path,
+    )
+
+    assert bundle["promotion_verdict"] == "blocked"
+    assert APEX_MATERIALS_PIXEL_OPS_EMPTY in bundle["promotion_blocked_reasons"]
     assert bundle["cases"][0]["materials_v3"]["failure_code"] == APEX_MATERIALS_PIXEL_OPS_EMPTY
 
 

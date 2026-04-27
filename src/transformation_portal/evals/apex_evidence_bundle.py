@@ -59,6 +59,21 @@ def _materials_status(candidate: str, evidence: Mapping[str, Any] | None) -> dic
     raw_authorized = bool(authority.get("raw_clip_similarity_authorized_pixel_ops"))
     applied_ops_count = int(evidence.get("applied_ops_count") or 0)
     blocked_reason_counts = dict(evidence.get("blocked_reason_counts") or {})
+
+    # Soft-passthrough: the orchestrator records this when masks exist and every
+    # implemented op was blocked solely by below_confidence_threshold, emitting
+    # the output without pixel ops. Producers of the per-candidate evidence
+    # mirror that signal here as ``passthrough_status`` so promotion isn't blocked
+    # by an ``applied_ops_count == 0`` that the orchestrator already accepted.
+    raw_passthrough = evidence.get("passthrough_status")
+    passthrough_status: dict[str, Any] | None = None
+    if isinstance(raw_passthrough, Mapping):
+        passthrough_status = dict(raw_passthrough)
+    passthrough_active = (
+        passthrough_status is not None
+        and str(passthrough_status.get("code") or "") == APEX_MATERIALS_PASSTHROUGH_LOW_CONFIDENCE
+    )
+
     status = "ok"
     failure_code = None
     if (
@@ -68,6 +83,7 @@ def _materials_status(candidate: str, evidence: Mapping[str, Any] | None) -> dic
         and bool(evidence.get("masks_exist"))
         and bool(evidence.get("implemented_ops_exist"))
         and applied_ops_count == 0
+        and not passthrough_active
     ):
         status = "failed"
         failure_code = APEX_MATERIALS_PIXEL_OPS_EMPTY
@@ -82,6 +98,7 @@ def _materials_status(candidate: str, evidence: Mapping[str, Any] | None) -> dic
         "confidence_authority": authority,
         "apex_pixel_ops_authority": not raw_authorized and status == "ok",
         "failure_code": failure_code,
+        "passthrough_status": passthrough_status,
     }
 
 
