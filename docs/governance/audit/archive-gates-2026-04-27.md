@@ -254,25 +254,44 @@ python scripts/validation/audit_pipeline_readiness.py \
 Exit code `0` and `payload.success == true` indicate a clean run.
 
 To produce a snapshot equivalent to the committed JSON, apply the
-three normalization steps from §1.1 to the verbatim output:
+three normalization steps from §1.1 to the verbatim output. The
+`generated_at` timestamp will naturally differ per run; every other
+field should match byte-for-byte.
 
 ```bash
+# Run from anywhere inside the repo checkout - ROOT is derived from git.
 python - <<'PY'
-import json, pathlib
-ROOT = str(pathlib.Path(__file__).resolve().parents[0]) + "/"  # repo root
+import json, pathlib, subprocess
+
+ROOT = pathlib.Path(
+    subprocess.check_output(
+        ["git", "rev-parse", "--show-toplevel"], text=True
+    ).strip()
+)
+ROOT_PREFIX = str(ROOT) + "/"
+
 src = pathlib.Path("/tmp/archive-gates-readiness.json")
 data = json.loads(src.read_text())
+
+# 1. Drop ephemeral output_dir.
 data["data"].pop("output_dir", None)
+
+# 2. Drop machine-local runner_details from every pipeline entry.
 for entry in data["data"]["pipelines"].values():
     entry.pop("runner_details", None)
     for sub in ("dispatch_readiness", "blocked_without_manifest"):
         if isinstance(entry.get(sub), dict):
             entry[sub].pop("runner_details", None)
+
+# 3. Relativize fixture paths.
 fx = data["data"]["fixtures"]
 for k, v in list(fx.items()):
-    if isinstance(v, str) and v.startswith(ROOT):
-        fx[k] = v[len(ROOT):]
-out = pathlib.Path("docs/governance/audit/archive-gates-2026-04-27.json")
-out.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    if isinstance(v, str) and v.startswith(ROOT_PREFIX):
+        fx[k] = v[len(ROOT_PREFIX):]
+
+out = ROOT / "docs/governance/audit/archive-gates-2026-04-27.json"
+out.write_text(
+    json.dumps(data, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+)
 PY
 ```
