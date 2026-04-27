@@ -237,7 +237,10 @@ def validate_depth_fallback(fallback: Optional[str]) -> Optional[str]:
     Ensures the fallback strategy is a supported option.
 
     Args:
-        fallback: Fallback strategy (fail/skip/v2-auto, or None)
+        fallback: Fallback strategy (fail/skip/v2-auto/apex-strict, or None).
+            ``apex-strict`` is an operator-facing alias requesting fail-closed
+            depth behavior on the APEX tier; ``EnhanceConfig.__post_init__``
+            canonicalizes it to ``fail`` and skips the apex auto-upgrade.
 
     Returns:
         Validated fallback strategy or None
@@ -257,7 +260,7 @@ def validate_depth_fallback(fallback: Optional[str]) -> Optional[str]:
     fallback = fallback.lower().strip()
 
     # Valid fallback strategies matching the documented interface
-    valid_fallbacks = {"fail", "skip", "v2-auto"}
+    valid_fallbacks = {"fail", "skip", "v2-auto", "apex-strict"}
 
     if fallback in valid_fallbacks:
         return fallback

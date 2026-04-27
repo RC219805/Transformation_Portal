@@ -347,6 +347,10 @@ def build_materials_fingerprint_payload(config: EnhanceConfig) -> Dict[str, Any]
     return {
         "enable_materials_v3": bool(config.enable_materials_v3),
         "apply_pixel_ops": bool(config.apply_pixel_ops),
+        # APEX Materials V3 strict-gate policy version. Bumped when the gate's
+        # blocker semantics change so cache replays don't serve verdicts under
+        # old policy. v2 introduces soft-passthrough on confidence-only blocks.
+        "pixel_ops_strict_policy_version": "v2",
         "enable_material_segmentation": bool(config.enable_material_segmentation),
         "material_segmentation_backend": str(config.material_segmentation_backend),
         "strict_backend": bool(config.strict_backend),
@@ -437,6 +441,12 @@ def build_apex_depth_gate_fingerprint_payload(config: EnhanceConfig) -> Dict[str
         "min_gradient_energy": float(config.apex_depth_min_gradient_energy),
         "threshold_epsilon": float(config.apex_depth_threshold_epsilon),
         "hist_bins": int(config.apex_depth_hist_bins),
+        # `depth_fallback` is part of the gate policy: APEX auto-upgrades
+        # "fail" → "v2-auto" (different recovery on flat scenes), and the
+        # operator can opt back into strict-fail with `apex-strict`. Two runs
+        # with the same depth thresholds but different fallbacks produce
+        # observably different outputs, so cache replays must invalidate.
+        "depth_fallback": str(config.depth_fallback),
     }
 
 

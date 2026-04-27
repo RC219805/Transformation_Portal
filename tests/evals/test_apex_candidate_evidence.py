@@ -7,11 +7,14 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+import tifffile  # noqa: F401  # imported for fail-fast: build_apex_eval_report uses tifffile downstream
 from PIL import Image
 
 from transformation_portal.evals.apex_evidence_bundle import (
+    APEX_MATERIALS_PASSTHROUGH_LOW_CONFIDENCE,
     APEX_MATERIALS_PIXEL_OPS_EMPTY,
     build_apex_evidence_bundle,
+    derive_materials_v3_evidence_from_manifest,
     parse_candidate_evidence,
 )
 from transformation_portal.evals.apex_visual import APEX_EVALSET_SCHEMA_VERSION, build_apex_eval_report, sha256_file
@@ -480,6 +483,85 @@ def test_apex_materials_pixel_ops_empty_fails_apex_case(tmp_path):
     assert bundle["cases"][0]["materials_v3"]["failure_code"] == APEX_MATERIALS_PIXEL_OPS_EMPTY
 
 
+def test_apex_materials_passthrough_promotes_when_only_confidence_blocked(tmp_path):
+    """Soft-passthrough evidence (applied_ops_count == 0 + passthrough_status code)
+    must not block promotion. Mirrors the orchestrator's runtime decision to emit
+    output without pixel ops when every implemented op was below confidence."""
+    report = _apex_report(tmp_path)
+    evidence_path = tmp_path / "materials.json"
+    payload = {
+        "materials_v3_enabled": True,
+        "pixel_ops_enabled": True,
+        "masks_exist": True,
+        "implemented_ops_exist": True,
+        "applied_ops_count": 0,
+        "blocked_reason_counts": {"below_confidence_threshold": 4},
+        "confidence_authority": {
+            "raw_clip_similarity_authorized_pixel_ops": False,
+            "calibrated_score_type": "clip_softmax_margin_v1",
+            "calibration_version": "unit",
+        },
+        "passthrough_status": {
+            "code": APEX_MATERIALS_PASSTHROUGH_LOW_CONFIDENCE,
+            "message": "Materials V3 masks present but every implemented op was below confidence threshold.",
+            "details": {
+                "material_count": 4,
+                "implemented_materials": ["glass", "water", "foliage", "stone"],
+                "applied_ops_count": 0,
+                "blocked_reasons": {"below_confidence_threshold": 4},
+            },
+        },
+    }
+    evidence_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    bundle = build_apex_evidence_bundle(
+        report,
+        output_dir=tmp_path / "bundle",
+        candidate_evidence={"materials_v3": {"unit_image": evidence_path}},
+        repo_root=tmp_path,
+    )
+
+    case_materials = bundle["cases"][0]["materials_v3"]
+    assert case_materials["status"] == "ok"
+    assert case_materials["failure_code"] is None
+    assert case_materials["passthrough_status"]["code"] == APEX_MATERIALS_PASSTHROUGH_LOW_CONFIDENCE
+    assert case_materials["applied_ops_count"] == 0
+    assert APEX_MATERIALS_PIXEL_OPS_EMPTY not in bundle["promotion_blocked_reasons"]
+
+
+def test_apex_materials_unknown_passthrough_code_does_not_bypass_gate(tmp_path):
+    """Only the canonical passthrough code excuses applied_ops_count == 0; an
+    unrelated or missing passthrough code must still block promotion."""
+    report = _apex_report(tmp_path)
+    evidence_path = tmp_path / "materials.json"
+    payload = {
+        "materials_v3_enabled": True,
+        "pixel_ops_enabled": True,
+        "masks_exist": True,
+        "implemented_ops_exist": True,
+        "applied_ops_count": 0,
+        "blocked_reason_counts": {"missing_material_confidence": 2, "below_confidence_threshold": 1},
+        "confidence_authority": {
+            "raw_clip_similarity_authorized_pixel_ops": False,
+            "calibrated_score_type": "clip_softmax_margin_v1",
+            "calibration_version": "unit",
+        },
+        "passthrough_status": {"code": "SOME_OTHER_WARNING"},
+    }
+    evidence_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    bundle = build_apex_evidence_bundle(
+        report,
+        output_dir=tmp_path / "bundle",
+        candidate_evidence={"materials_v3": {"unit_image": evidence_path}},
+        repo_root=tmp_path,
+    )
+
+    assert bundle["promotion_verdict"] == "blocked"
+    assert APEX_MATERIALS_PIXEL_OPS_EMPTY in bundle["promotion_blocked_reasons"]
+    assert bundle["cases"][0]["materials_v3"]["failure_code"] == APEX_MATERIALS_PIXEL_OPS_EMPTY
+
+
 def test_raw_clip_similarity_cannot_authorize_pixel_ops(tmp_path):
     report = _apex_report(tmp_path)
     evidence = _materials_evidence(tmp_path / "materials.json", raw_authorized=True)
@@ -499,3 +581,261 @@ def test_parse_candidate_evidence_uses_candidate_asset_mapping():
     parsed = parse_candidate_evidence(["materials_v3:asset_1=output/evidence.json"])
 
     assert parsed == {"materials_v3": {"asset_1": Path("output/evidence.json")}}
+
+
+def _write_materials_v3_manifest(path: Path, *, materials_v3: dict) -> Path:
+    """Write a minimal CombinedManifest with only the materials_v3 block."""
+    from transformation_portal.lux_depth_v3.manifest import CombinedManifest, MaterialsV3Metadata
+
+    manifest = CombinedManifest()
+    manifest.materials_v3 = MaterialsV3Metadata.from_dict(materials_v3)
+    manifest.save(path)
+    return path
+
+
+def test_derive_materials_v3_evidence_handles_disabled_materials(tmp_path):
+    """When materials_v3.enabled is False the evidence reports a clean disabled
+    state with no implemented ops, no masks, and no passthrough record."""
+    manifest_path = tmp_path / "manifest.json"
+    _write_materials_v3_manifest(
+        manifest_path,
+        materials_v3={"enabled": False, "schema_version": "1.1"},
+    )
+
+    evidence = derive_materials_v3_evidence_from_manifest(manifest_path)
+
+    assert evidence == {
+        "materials_v3_enabled": False,
+        "pixel_ops_enabled": False,
+        "masks_exist": False,
+        "implemented_ops_exist": False,
+        "applied_ops_count": 0,
+        "blocked_reason_counts": {},
+        "confidence_authority": {},
+    }
+    assert "passthrough_status" not in evidence
+
+
+def test_derive_materials_v3_evidence_records_applied_ops(tmp_path):
+    """A run that applied at least one pixel op produces evidence with
+    `applied_ops_count > 0`, `implemented_ops_exist=True`, `masks_exist=True`,
+    and no passthrough record (the gate didn't soft-pass)."""
+    manifest_path = tmp_path / "manifest.json"
+    _write_materials_v3_manifest(
+        manifest_path,
+        materials_v3={
+            "enabled": True,
+            "schema_version": "1.1",
+            "pixel_ops": {
+                "enabled": True,
+                "applied": [
+                    {"material": "water", "op": "saturation_pull"},
+                ],
+                "blocked": [
+                    {"material": "stone", "reason": "below_coverage_threshold", "blocked_by": ["below_coverage_threshold"]},
+                ],
+            },
+            "segmentation_metadata": {"mask_count": 2},
+        },
+    )
+
+    evidence = derive_materials_v3_evidence_from_manifest(manifest_path)
+
+    assert evidence["materials_v3_enabled"] is True
+    assert evidence["pixel_ops_enabled"] is True
+    assert evidence["applied_ops_count"] == 1
+    assert evidence["implemented_ops_exist"] is True
+    assert evidence["masks_exist"] is True
+    assert evidence["blocked_reason_counts"] == {"below_coverage_threshold": 1}
+    assert "passthrough_status" not in evidence
+
+
+def test_derive_materials_v3_evidence_propagates_soft_passthrough(tmp_path):
+    """When the orchestrator recorded a soft-passthrough on the manifest, the
+    evidence helper must surface `passthrough_status` and keep
+    `implemented_ops_exist=True` so promotion isn't blocked by
+    `applied_ops_count == 0`."""
+    passthrough_payload = {
+        "code": APEX_MATERIALS_PASSTHROUGH_LOW_CONFIDENCE,
+        "message": "Materials V3 masks present but every implemented op was below confidence threshold.",
+        "details": {
+            "material_count": 4,
+            "implemented_materials": ["glass", "water", "foliage", "stone"],
+            "applied_ops_count": 0,
+            "blocked_reasons": {"below_confidence_threshold": 4},
+        },
+    }
+    manifest_path = tmp_path / "manifest.json"
+    _write_materials_v3_manifest(
+        manifest_path,
+        materials_v3={
+            "enabled": True,
+            "schema_version": "1.1",
+            "pixel_ops": {
+                "enabled": True,
+                "applied": [],
+                "blocked": [
+                    {
+                        "material": material,
+                        "reason": "below_confidence_threshold",
+                        "blocked_by": ["below_confidence_threshold"],
+                    }
+                    for material in ("glass", "water", "foliage", "stone")
+                ],
+                "passthrough_status": passthrough_payload,
+            },
+            "segmentation_metadata": {
+                "warnings": [APEX_MATERIALS_PASSTHROUGH_LOW_CONFIDENCE],
+                "pixel_ops_passthrough": passthrough_payload,
+            },
+        },
+    )
+
+    evidence = derive_materials_v3_evidence_from_manifest(manifest_path)
+
+    assert evidence["materials_v3_enabled"] is True
+    assert evidence["applied_ops_count"] == 0
+    assert evidence["implemented_ops_exist"] is True
+    assert evidence["masks_exist"] is True
+    assert evidence["blocked_reason_counts"] == {"below_confidence_threshold": 4}
+    assert evidence["passthrough_status"] == passthrough_payload
+
+
+def test_derive_materials_v3_evidence_blocks_promotion_on_non_confidence_blockers(tmp_path):
+    """When a manifest records blocked pixel ops with reasons that imply an
+    implemented op was registered (e.g. missing_material_confidence,
+    below_coverage_threshold), and no soft-passthrough record is present, the
+    derived evidence must report ``implemented_ops_exist=True`` so the bundle's
+    ``_materials_status`` correctly emits APEX_MATERIALS_PIXEL_OPS_EMPTY.
+
+    Regression for chatgpt-codex-connector + copilot-pull-request-reviewer
+    feedback on PR #1556: under-reporting implemented_ops_exist would let a
+    `--candidate-evidence-from-manifest` flow promote a case that should be
+    blocked at promotion time."""
+    manifest_path = tmp_path / "manifest.json"
+    _write_materials_v3_manifest(
+        manifest_path,
+        materials_v3={
+            "enabled": True,
+            "schema_version": "1.1",
+            "pixel_ops": {
+                "enabled": True,
+                "applied": [],
+                "blocked": [
+                    {
+                        "material": "glass",
+                        "reason": "missing_material_confidence",
+                        "blocked_by": ["missing_material_confidence"],
+                    },
+                    {
+                        "material": "water",
+                        "reason": "below_coverage_threshold",
+                        "blocked_by": ["below_coverage_threshold"],
+                    },
+                ],
+            },
+            "segmentation_metadata": {"mask_count": 2},
+        },
+    )
+
+    derived = derive_materials_v3_evidence_from_manifest(manifest_path)
+
+    assert derived["applied_ops_count"] == 0
+    assert derived["implemented_ops_exist"] is True
+    assert derived["blocked_reason_counts"] == {
+        "missing_material_confidence": 1,
+        "below_coverage_threshold": 1,
+    }
+    assert "passthrough_status" not in derived
+
+    # Round-trip through the bundle and assert the gate now fires.
+    evidence_path = tmp_path / "materials.json"
+    evidence_path.write_text(json.dumps(derived), encoding="utf-8")
+    report = _apex_report(tmp_path)
+    bundle = build_apex_evidence_bundle(
+        report,
+        output_dir=tmp_path / "bundle",
+        candidate_evidence={"materials_v3": {"unit_image": evidence_path}},
+        repo_root=tmp_path,
+    )
+
+    assert bundle["promotion_verdict"] == "blocked"
+    assert APEX_MATERIALS_PIXEL_OPS_EMPTY in bundle["promotion_blocked_reasons"]
+    assert bundle["cases"][0]["materials_v3"]["failure_code"] == APEX_MATERIALS_PIXEL_OPS_EMPTY
+
+
+def test_derive_materials_v3_evidence_no_implementation_blockers_do_not_imply_ops(tmp_path):
+    """The ``no_implementation`` blocker reason explicitly means a material had
+    no registered op. Such manifests must keep ``implemented_ops_exist=False``
+    so the bundle's failure gate is not falsely triggered for runs that never
+    had registered ops to apply."""
+    manifest_path = tmp_path / "manifest.json"
+    _write_materials_v3_manifest(
+        manifest_path,
+        materials_v3={
+            "enabled": True,
+            "schema_version": "1.1",
+            "pixel_ops": {
+                "enabled": True,
+                "applied": [],
+                "blocked": [
+                    {"material": "sky", "reason": "no_implementation", "blocked_by": ["no_implementation"]},
+                ],
+            },
+        },
+    )
+
+    derived = derive_materials_v3_evidence_from_manifest(manifest_path)
+
+    assert derived["applied_ops_count"] == 0
+    assert derived["implemented_ops_exist"] is False
+    assert derived["blocked_reason_counts"] == {"no_implementation": 1}
+
+
+def test_derived_evidence_promotes_through_apex_bundle(tmp_path):
+    """End-to-end: derive evidence from a soft-passthrough manifest, dump it,
+    and verify build_apex_evidence_bundle returns case_verdict='pass' with no
+    APEX_MATERIALS_PIXEL_OPS_EMPTY block."""
+    passthrough_payload = {
+        "code": APEX_MATERIALS_PASSTHROUGH_LOW_CONFIDENCE,
+        "details": {
+            "implemented_materials": ["glass", "water"],
+            "applied_ops_count": 0,
+            "blocked_reasons": {"below_confidence_threshold": 2},
+        },
+    }
+    manifest_path = tmp_path / "image_manifest.json"
+    _write_materials_v3_manifest(
+        manifest_path,
+        materials_v3={
+            "enabled": True,
+            "schema_version": "1.1",
+            "pixel_ops": {
+                "enabled": True,
+                "applied": [],
+                "blocked": [
+                    {"material": m, "reason": "below_confidence_threshold", "blocked_by": ["below_confidence_threshold"]}
+                    for m in ("glass", "water")
+                ],
+                "passthrough_status": passthrough_payload,
+            },
+        },
+    )
+
+    derived = derive_materials_v3_evidence_from_manifest(manifest_path)
+    evidence_path = tmp_path / "materials.json"
+    evidence_path.write_text(json.dumps(derived), encoding="utf-8")
+
+    report = _apex_report(tmp_path)
+    bundle = build_apex_evidence_bundle(
+        report,
+        output_dir=tmp_path / "bundle",
+        candidate_evidence={"materials_v3": {"unit_image": evidence_path}},
+        repo_root=tmp_path,
+    )
+
+    case_materials = bundle["cases"][0]["materials_v3"]
+    assert case_materials["status"] == "ok"
+    assert case_materials["failure_code"] is None
+    assert case_materials["passthrough_status"]["code"] == APEX_MATERIALS_PASSTHROUGH_LOW_CONFIDENCE
+    assert APEX_MATERIALS_PIXEL_OPS_EMPTY not in bundle["promotion_blocked_reasons"]

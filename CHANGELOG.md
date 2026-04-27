@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **APEX Materials V3 — Soft Passthrough on Confidence-Only Blocks:** When every implemented Materials V3 pixel op is blocked solely by `below_confidence_threshold`, the strict gate now emits the output without pixel ops and surfaces a non-fatal `APEX_MATERIALS_PASSTHROUGH_LOW_CONFIDENCE` warning instead of failing the batch. Mixed blocker sets (missing material confidence, missing implementation, etc.) still fail closed with `APEX_MATERIALS_PIXEL_OPS_EMPTY`.
+  - **Run-card visibility:** the warning surfaces under `result_summary[].segmentation_status.pixel_ops_passthrough` and `.warnings`.
+  - **Promotion-eligibility:** evidence producers may mirror the orchestrator's `materials_v3_pixel_ops.passthrough_status` into the per-candidate evidence file as `passthrough_status: {code: "APEX_MATERIALS_PASSTHROUGH_LOW_CONFIDENCE"}`. When that signal is present `_materials_status` keeps `failure_code = None` so promotion is no longer blocked.
+- **APEX Tier — Depth Fallback Auto-Upgrade:** `EnhanceConfig` now flips `depth_fallback="fail"` to `"v2-auto"` when `quality_tier == "apex"`, so flat-distribution scenes (DA3 plateau + DA2 saturation-low) recover via the V2 stage with independent depth instead of failing the batch.
+- **`apex-strict` Depth Fallback Sentinel:** Operators who want strict fail-closed depth on APEX can pass `depth_fallback="apex-strict"`. The validator accepts the new value, `EnhanceConfig.__post_init__` canonicalizes it to `"fail"`, and the apex auto-upgrade is suppressed for that run.
+- **Run-Card Schema — `segmentation_status` Declaration:** The v2 schema now declares the full `segmentation_status` object shape on each `result_summary` item, including `failure_code`, `failure_details`, and `pixel_ops_passthrough` fields. Existing additivity (`additionalProperties: true`) is preserved.
+- **`derive_materials_v3_evidence_from_manifest` helper + `tools/run_apex_eval.py --candidate-evidence-from-manifest`:** Single source of truth for promotion evidence — the orchestrator's `MaterialsV3Metadata` is rendered directly into the shape `_materials_status` consumes, and the CLI tool writes the JSON automatically into `<output-dir>/derived_evidence/<candidate>__<asset_id>.evidence.json`. Candidate / asset_id components are validated against `[A-Za-z0-9._-]+` to prevent path traversal.
 - **ADR-043 Orchestrator Decomposition (Complete):** Refactored monolithic EnhanceOrchestrator class into 5 focused modules
   - **New Modules:** `execution_engine.py` (PBR/V2 stage helpers, ~860 LOC), `config_resolver.py` (preset/config management, ~550 LOC), `pipeline_coordinator.py` (backend selection, ~620 LOC), `artifact_manager.py` (output hashing/indexing, ~420 LOC), `validators/run_card_validator.py` (schema validation, ~310 LOC)
   - **Test Coverage:** 182+ unit tests across decomposed modules with backward compatibility verification
@@ -15,18 +22,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Architectural Benefits:** Reduced merge conflicts, improved testability, faster onboarding (modules avg 400-860 LOC), single-responsibility enforcement
   - **No Breaking Changes:** All Phase 6 re-exports complete, no circular imports
   - See: `docs/architecture/ADR-043-orchestrator-decomposition.md`
-
-### Changed
-- **Materials Governance Boundary:** Top-level material presets now declare `preset_family: materials_pbr`, typoed family markers fail closed across schema/health/compliance validation, placeholder scanning is shared between preset health and compliance validation, and execution-phase materials runtime requirements now explicitly advertise artifact attestation + isolated worker expectations.
-- **Material PBR Stable Preset v5.1.0:** Promoted the stable `material_pbr.yaml` preset from `5.0.0` to `5.1.0` to record the explicit family-marker governance change without violating the preset immutability contract.
-- **Ingest Contract v1.0.2:** Bumped ingest schema version from `1.0.1` to `1.0.2` for schema-governance compliance on `schemas.py` updates.
-- **Ingest Contract Documentation:** Updated `docs/apex/ingest_contract.md` to reflect schema version `1.0.2`.
-- **Ingest Contract v1.0.1:** Bumped ingest schema version from `1.0.0` to `1.0.1` for metadata normalization semantics hardening.
-- **EXIF Normalization Semantics:** `ExifMetadata` now normalizes real-world EXIF string forms (for example `"4.5 mm"` and `"8 8 8"`) into numeric schema types before strict validation.
-- **rawpy/libraw Toolchain Capture:** Ingest provenance now tolerates `rawpy` version shape differences (`rawpy.version.version`, `rawpy.__version__`, tuple-style `libraw_version`) without contract shape changes.
-- **Contract Surface:** No JSON envelope or field shape changes; machine-mode contract (`tp.meta.machine.v1`) remains unchanged.
-
-### Added
 - **Machine-Readable JSON Output Mode (tp.meta.machine.v1):** Deterministic JSON API for metadata CLI automation
   - **`--json` Flag:** Emit structured JSON with stable envelope (schema, command, success, exit_code, data, error)
   - **Deterministic Serialization:** `sort_keys=True` ensures consistent key ordering across runs and platforms
@@ -40,8 +35,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Optional Pretty-Print:** `--json-pretty` for human-readable JSON (2-space indent)
   - **File Output:** `--json-output <path>` writes JSON to file, keeps stdout clean
   - See: [Machine Mode Contract](docs/api/MACHINE_MODE_CONTRACT.md), PR #1024
-
-### Added
 - **FP Probe Version Governance (ADR-030):** Production-grade probe versioning for cross-ISA determinism
   - **Governance Contract:** `probe_version` is now a semantic contract with explicit bump criteria
   - **Locking Test:** `test_probe_version_locked()` enforces conscious version increments
@@ -61,6 +54,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Performance:** 4.28s/MP @ 12MP (meets <5s/MP Quality Firewall target), <500MB memory
   - **62 Material Tests:** Comprehensive coverage including backend fallback, device placement, contract validation
   - See: [Performance Baselines](docs/performance/PHASE5_PBR_BASELINES.md)
+
+### Changed
+- **Run-Card `segmentation_status` Reporting:** When a per-image manifest is absent because the image hit a structured gate failure (e.g. `APEX_MATERIALS_PIXEL_OPS_EMPTY`, `APEX_DEPTH_PLATEAU`), the run-card row now reports `status: "failed"` with the structured `failure_code` + `failure_details` from the result row, replacing the previous `missing_evidence` placeholder. Downstream consumers that key on `segmentation_status.status` should expect `"failed"` (with a structured `failure_code`) for these cases going forward.
+- **Materials Governance Boundary:** Top-level material presets now declare `preset_family: materials_pbr`, typoed family markers fail closed across schema/health/compliance validation, placeholder scanning is shared between preset health and compliance validation, and execution-phase materials runtime requirements now explicitly advertise artifact attestation + isolated worker expectations.
+- **Material PBR Stable Preset v5.1.0:** Promoted the stable `material_pbr.yaml` preset from `5.0.0` to `5.1.0` to record the explicit family-marker governance change without violating the preset immutability contract.
+- **Ingest Contract v1.0.2:** Bumped ingest schema version from `1.0.1` to `1.0.2` for schema-governance compliance on `schemas.py` updates.
+- **Ingest Contract Documentation:** Updated `docs/apex/ingest_contract.md` to reflect schema version `1.0.2`.
+- **Ingest Contract v1.0.1:** Bumped ingest schema version from `1.0.0` to `1.0.1` for metadata normalization semantics hardening.
+- **EXIF Normalization Semantics:** `ExifMetadata` now normalizes real-world EXIF string forms (for example `"4.5 mm"` and `"8 8 8"`) into numeric schema types before strict validation.
+- **rawpy/libraw Toolchain Capture:** Ingest provenance now tolerates `rawpy` version shape differences (`rawpy.version.version`, `rawpy.__version__`, tuple-style `libraw_version`) without contract shape changes.
+- **Contract Surface:** No JSON envelope or field shape changes; machine-mode contract (`tp.meta.machine.v1`) remains unchanged.
 
 ### Removed
 - **Archived Obsolete Module:** `depth_canonical` module superseded by ADR-019 backend architecture

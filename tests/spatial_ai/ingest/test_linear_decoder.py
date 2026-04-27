@@ -20,6 +20,7 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+import tifffile  # noqa: F401  # imported for fail-fast; per-test bodies use tifffile.imwrite
 from hypothesis import given
 from hypothesis import strategies as st
 from PIL import Image

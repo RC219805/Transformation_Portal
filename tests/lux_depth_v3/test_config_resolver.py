@@ -499,6 +499,41 @@ class TestBuildFingerprintPayloads:
         assert "min_gradient_energy" in payload
         assert payload["low_saturation_warning_band"] == pytest.approx(0.0075)
         assert payload["threshold_epsilon"] == pytest.approx(1e-6)
+        # APEX tier auto-upgrades depth_fallback "fail" -> "v2-auto"; that
+        # policy must be in the gate fingerprint so cache replays don't serve
+        # outputs from the previous fail-closed regime.
+        assert payload["depth_fallback"] == "v2-auto"
+
+    def test_apex_depth_gate_fingerprint_distinguishes_apex_strict_from_default(self):
+        """`apex-strict` opt-out produces a different gate fingerprint than the
+        default APEX run (auto-upgraded to v2-auto), so caches do not collide."""
+        from transformation_portal.lux_depth_v3.config import EnhanceConfig
+        from transformation_portal.lux_depth_v3.config_resolver import (
+            build_apex_depth_gate_fingerprint_payload,
+        )
+
+        default_apex = EnhanceConfig(quality_tier="apex")
+        strict_apex = EnhanceConfig(quality_tier="apex", depth_fallback="apex-strict")
+
+        default_payload = build_apex_depth_gate_fingerprint_payload(default_apex)
+        strict_payload = build_apex_depth_gate_fingerprint_payload(strict_apex)
+
+        assert default_payload["depth_fallback"] == "v2-auto"
+        assert strict_payload["depth_fallback"] == "fail"
+        assert default_payload != strict_payload
+
+    def test_materials_fingerprint_includes_pixel_ops_strict_policy_version(self):
+        """The materials soft-passthrough is a global behavior change with no
+        config knob; the policy version in the fingerprint marks the regime
+        and bumps when blocker semantics shift, invalidating stale caches."""
+        from transformation_portal.lux_depth_v3.config import EnhanceConfig
+        from transformation_portal.lux_depth_v3.config_resolver import (
+            build_materials_fingerprint_payload,
+        )
+
+        payload = build_materials_fingerprint_payload(EnhanceConfig(enable_materials_v3=True))
+
+        assert payload["pixel_ops_strict_policy_version"] == "v2"
 
     def test_fingerprint_changes_when_low_saturation_warning_band_changes(self):
         """APEX gate fingerprint should change when the warning band changes."""

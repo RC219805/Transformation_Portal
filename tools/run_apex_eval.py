@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import re
 import sys
 from pathlib import Path
 
@@ -12,7 +13,35 @@ from transformation_portal.evals.apex_visual import (
     parse_candidate_masks,
     parse_candidate_outputs,
 )
-from transformation_portal.evals.apex_evidence_bundle import build_apex_evidence_bundle, parse_candidate_evidence
+from transformation_portal.evals.apex_evidence_bundle import (
+    build_apex_evidence_bundle,
+    derive_materials_v3_evidence_from_manifest,
+    parse_candidate_evidence,
+)
+from transformation_portal.ingest.canonical_json import dump_json
+
+
+# Restrict candidate / asset_id to characters that are safe to embed in a
+# filename without risk of path traversal or unintended subdirectory creation.
+# `parse_candidate_evidence` does not validate these components, so the CLI
+# layer enforces the contract before constructing any filesystem path.
+_SAFE_PATH_COMPONENT_RE = re.compile(r"^[A-Za-z0-9._-]+$")
+
+
+def _ensure_safe_path_component(role: str, value: str) -> str:
+    """Reject candidate / asset_id strings that would be unsafe as a filename.
+
+    Raises:
+        ValueError when the value is empty, contains path separators, contains
+        ``..`` traversal segments, or contains any character outside the safe
+        set ``[A-Za-z0-9._-]``.
+    """
+    if not value or value in {".", ".."} or not _SAFE_PATH_COMPONENT_RE.fullmatch(value):
+        raise ValueError(
+            f"Unsafe {role} {value!r}; must match {_SAFE_PATH_COMPONENT_RE.pattern} "
+            "(letters, digits, '.', '_', '-')."
+        )
+    return value
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -48,6 +77,21 @@ def build_parser() -> argparse.ArgumentParser:
         help="Optional candidate telemetry JSON for evidence bundles. May be repeated.",
     )
     parser.add_argument(
+        "--candidate-evidence-from-manifest",
+        action="append",
+        default=[],
+        metavar="CANDIDATE:ASSET_ID=PATH",
+        help=(
+            "Derive candidate telemetry JSON directly from a per-image manifest. "
+            "PATH points at the manifest written by EnhanceOrchestrator; the "
+            "tool renders MaterialsV3Metadata into the evidence schema and "
+            "writes <output-dir>/derived_evidence/<candidate>__<asset_id>.evidence.json. "
+            "CANDIDATE and ASSET_ID must match [A-Za-z0-9._-]+ (no path "
+            "separators or '..' segments). Explicit --candidate-evidence wins "
+            "for the same candidate+asset_id. May be repeated."
+        ),
+    )
+    parser.add_argument(
         "--run-scope-asset-id",
         action="append",
         default=[],
@@ -76,6 +120,7 @@ def main() -> int:
         candidate_outputs = parse_candidate_outputs(args.candidate_output)
         candidate_masks = parse_candidate_masks(args.candidate_mask)
         candidate_evidence = parse_candidate_evidence(args.candidate_evidence)
+        manifest_evidence_sources = parse_candidate_evidence(args.candidate_evidence_from_manifest)
         report = build_apex_eval_report(
             Path(args.evalset),
             output_dir=Path(args.output_dir),
@@ -83,6 +128,43 @@ def main() -> int:
             candidate_masks=candidate_masks,
             asset_root=args.asset_root,
         )
+        if manifest_evidence_sources:
+            resolved_output_dir = Path(str(report["report_path"])).parent
+            derived_dir = resolved_output_dir / "derived_evidence"
+            derived_dir.mkdir(parents=True, exist_ok=True)
+            derived_dir_resolved = derived_dir.resolve()
+            for candidate, asset_paths in manifest_evidence_sources.items():
+                _ensure_safe_path_component("candidate", candidate)
+                candidate_slot = candidate_evidence.setdefault(candidate, {})
+                for asset_id, manifest_path in asset_paths.items():
+                    _ensure_safe_path_component("asset_id", asset_id)
+                    if asset_id in candidate_slot:
+                        # Explicit --candidate-evidence wins; skip derivation.
+                        continue
+                    derived = derive_materials_v3_evidence_from_manifest(manifest_path)
+                    derived_path = derived_dir / f"{candidate}__{asset_id}.evidence.json"
+                    # Defense-in-depth: even after the regex check, confirm the
+                    # resolved write target is inside the derived-evidence dir.
+                    if derived_dir_resolved not in derived_path.resolve().parents:
+                        raise ValueError(
+                            f"Refusing to write derived evidence outside {derived_dir_resolved}: "
+                            f"{derived_path}"
+                        )
+                    # Use the project's canonical JSON writer so the derived file
+                    # matches the strict / portable contract used by
+                    # ``build_apex_evidence_bundle`` (sort_keys, indent=2,
+                    # ensure_ascii=False, allow_nan=False) plus a trailing newline.
+                    with derived_path.open("w", encoding="utf-8") as handle:
+                        dump_json(
+                            derived,
+                            handle,
+                            sort_keys=True,
+                            indent=2,
+                            ensure_ascii=False,
+                            allow_nan=False,
+                        )
+                        handle.write("\n")
+                    candidate_slot[asset_id] = derived_path
         if args.emit_evidence_bundle == "on" or candidate_evidence:
             resolved_output_dir = Path(str(report["report_path"])).parent
             report_repo_root = report.get("evalset", {}).get("repo_root")

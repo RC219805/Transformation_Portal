@@ -377,7 +377,7 @@ def test_apex_strict_gate_fails_when_material_masks_apply_zero_pixel_ops(
     mock_depth_backend,
     mock_da3_available,
 ):
-    """APEX + Materials V3 should not silently succeed when all implemented ops are blocked."""
+    """APEX + Materials V3 should fail closed when ops are blocked for any reason other than confidence-only."""
     config = EnhanceConfig(
         quality_tier="apex",
         enable_materials_v3=True,
@@ -398,8 +398,8 @@ def test_apex_strict_gate_fails_when_material_masks_apply_zero_pixel_ops(
             "blocked": [
                 {
                     "material": "water",
-                    "reason": "below_confidence_threshold",
-                    "blocked_by": ["below_confidence_threshold"],
+                    "reason": "missing_material_confidence",
+                    "blocked_by": ["missing_material_confidence"],
                 }
             ],
         },
@@ -409,8 +409,141 @@ def test_apex_strict_gate_fails_when_material_masks_apply_zero_pixel_ops(
         orchestrator._enforce_apex_materials_pixel_ops_gate(materials_result)
 
     assert exc_info.value.code == "APEX_MATERIALS_PIXEL_OPS_EMPTY"
-    assert exc_info.value.details["blocked_reasons"] == {"below_confidence_threshold": 1}
+    assert exc_info.value.details["blocked_reasons"] == {"missing_material_confidence": 1}
     assert exc_info.value.details["implemented_materials"] == ["water"]
+
+
+def test_apex_passthrough_constant_re_exported_from_evals_for_back_compat():
+    """``APEX_MATERIALS_PASSTHROUGH_LOW_CONFIDENCE`` and
+    ``APEX_MATERIALS_PIXEL_OPS_EMPTY`` are owned by ``lux_depth_v3.apex_codes``
+    (the orchestrator layer that emits them). The evals layer re-exports both
+    so existing imports keep working without lux_depth_v3 depending on evals.
+    """
+    from transformation_portal.evals.apex_evidence_bundle import APEX_MATERIALS_PASSTHROUGH_LOW_CONFIDENCE as evals_passthrough
+    from transformation_portal.evals.apex_evidence_bundle import APEX_MATERIALS_PIXEL_OPS_EMPTY as evals_failure
+    from transformation_portal.lux_depth_v3.apex_codes import APEX_MATERIALS_PASSTHROUGH_LOW_CONFIDENCE as lux_passthrough
+    from transformation_portal.lux_depth_v3.apex_codes import APEX_MATERIALS_PIXEL_OPS_EMPTY as lux_failure
+
+    # Same string values, same object identity (re-export, not a copy).
+    assert evals_passthrough == lux_passthrough == "APEX_MATERIALS_PASSTHROUGH_LOW_CONFIDENCE"
+    assert evals_failure == lux_failure == "APEX_MATERIALS_PIXEL_OPS_EMPTY"
+    assert evals_passthrough is lux_passthrough
+    assert evals_failure is lux_failure
+
+
+def test_record_apex_materials_passthrough_is_idempotent(
+    tmp_path,
+    mock_depth_backend,
+    mock_da3_available,
+):
+    """Re-entrant invocation (e.g. from a retry path) must not duplicate the
+    APEX_MATERIALS_PASSTHROUGH_LOW_CONFIDENCE warning code in the run-card
+    warnings list. Run-card consumers should see a stable single-entry list
+    regardless of how many times the orchestrator records the passthrough."""
+    config = EnhanceConfig(
+        quality_tier="apex",
+        enable_materials_v3=True,
+        enable_material_segmentation=True,
+        material_segmentation_backend="sam2",
+        strict_backend=True,
+        apply_pixel_ops=True,
+        depth_device="cpu",
+        enable_v2=False,
+    )
+    orchestrator = EnhanceOrchestrator(config, tmp_path)
+    materials_result = {"materials_v3_pixel_ops": {}}
+    details = {
+        "material_count": 1,
+        "implemented_materials": ["glass"],
+        "applied_ops_count": 0,
+        "blocked_reasons": {"below_confidence_threshold": 1},
+    }
+
+    orchestrator._record_apex_materials_passthrough(materials_result, details)
+    orchestrator._record_apex_materials_passthrough(materials_result, details)
+    orchestrator._record_apex_materials_passthrough(materials_result, details)
+
+    seg_meta = materials_result["materials_v3_metadata"]["segmentation_metadata"]
+    assert seg_meta["warnings"] == ["APEX_MATERIALS_PASSTHROUGH_LOW_CONFIDENCE"]
+
+
+def test_apex_strict_gate_soft_passthrough_when_only_confidence_blockers(
+    tmp_path,
+    mock_depth_backend,
+    mock_da3_available,
+):
+    """When every implemented op is blocked solely by below_confidence_threshold, the gate
+    must emit a non-fatal passthrough warning instead of failing the batch."""
+    config = EnhanceConfig(
+        quality_tier="apex",
+        enable_materials_v3=True,
+        enable_material_segmentation=True,
+        material_segmentation_backend="sam2",
+        strict_backend=True,
+        apply_pixel_ops=True,
+        depth_device="cpu",
+        enable_v2=False,
+    )
+    orchestrator = EnhanceOrchestrator(config, tmp_path)
+    mask = np.ones((8, 8), dtype=np.float32)
+    materials_result = {
+        "material_masks": {"glass": mask, "water": mask, "foliage": mask, "stone": mask},
+        "materials_v3_pixel_ops": {
+            "enabled": True,
+            "applied": [],
+            "blocked": [
+                {"material": material, "reason": "below_confidence_threshold", "blocked_by": ["below_confidence_threshold"]}
+                for material in ("glass", "water", "foliage", "stone")
+            ],
+        },
+    }
+
+    orchestrator._enforce_apex_materials_pixel_ops_gate(materials_result)
+
+    pixel_ops = materials_result["materials_v3_pixel_ops"]
+    assert "passthrough_status" in pixel_ops
+    passthrough = pixel_ops["passthrough_status"]
+    assert passthrough["code"] == "APEX_MATERIALS_PASSTHROUGH_LOW_CONFIDENCE"
+    assert passthrough["details"]["blocked_reasons"] == {"below_confidence_threshold": 4}
+    assert sorted(passthrough["details"]["implemented_materials"]) == ["foliage", "glass", "stone", "water"]
+
+    seg_meta = materials_result["materials_v3_metadata"]["segmentation_metadata"]
+    assert "APEX_MATERIALS_PASSTHROUGH_LOW_CONFIDENCE" in seg_meta["warnings"]
+    assert seg_meta["pixel_ops_passthrough"] == passthrough
+
+
+def test_apex_strict_gate_still_fails_when_confidence_mixed_with_other_blockers(
+    tmp_path,
+    mock_depth_backend,
+    mock_da3_available,
+):
+    """Mixed blockers must still fail closed; only pure confidence-only is recoverable."""
+    config = EnhanceConfig(
+        quality_tier="apex",
+        enable_materials_v3=True,
+        enable_material_segmentation=True,
+        material_segmentation_backend="sam2",
+        strict_backend=True,
+        apply_pixel_ops=True,
+        depth_device="cpu",
+        enable_v2=False,
+    )
+    orchestrator = EnhanceOrchestrator(config, tmp_path)
+    mask = np.ones((8, 8), dtype=np.float32)
+    materials_result = {
+        "material_masks": {"glass": mask, "water": mask},
+        "materials_v3_pixel_ops": {
+            "enabled": True,
+            "applied": [],
+            "blocked": [
+                {"material": "glass", "reason": "below_confidence_threshold", "blocked_by": ["below_confidence_threshold"]},
+                {"material": "water", "reason": "below_coverage_threshold", "blocked_by": ["below_coverage_threshold"]},
+            ],
+        },
+    }
+
+    with pytest.raises(ApexStrictGateError, match="APEX_MATERIALS_PIXEL_OPS_EMPTY"):
+        orchestrator._enforce_apex_materials_pixel_ops_gate(materials_result)
 
 
 def test_apex_materials_stage_invokes_zero_pixel_ops_gate(
