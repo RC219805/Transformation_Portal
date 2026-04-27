@@ -1,0 +1,186 @@
+{
+  "data": {
+    "fixtures": {
+      "archive_index": "/home/user/Transformation_Portal/tests/fixtures/archive_small/archive_index_normalized.csv.gz",
+      "archive_root": "/home/user/Transformation_Portal/tests/fixtures/archive_small/archive_root",
+      "hash_manifest": "/home/user/Transformation_Portal/tests/fixtures/archive_small/golden/hash_manifest.csv.gz",
+      "rights_policy": "/home/user/Transformation_Portal/policy/archive/rights_flags.yml"
+    },
+    "generated_at": "2026-04-27T04:36:30Z",
+    "output_dir": "/tmp/tp-audit-readiness-iRtrlZ",
+    "pipelines": {
+      "archive-gate-a": {
+        "artifacts": [
+          "hash_manifest.csv.gz",
+          "hash_summary.json",
+          "merkle_roots.json"
+        ],
+        "baseline_status": "degraded",
+        "canonical_command": "fixity-scan",
+        "command_exit_code": 0,
+        "dispatch_readiness": {
+          "canonical_command": "fixity-scan",
+          "missing_prerequisites": [],
+          "notes": [
+            "Canonical archive-gate-a dispatch expects fixity-scan with an existing archive index."
+          ],
+          "runner_details": {
+            "available": true,
+            "command": [
+              "/home/user/Transformation_Portal/.venv/bin/python",
+              "/home/user/Transformation_Portal/tools/archive_governance.py",
+              "--json",
+              "fixity-scan"
+            ],
+            "python_executable": "/home/user/Transformation_Portal/.venv/bin/python",
+            "script_path": "/home/user/Transformation_Portal/tools/archive_governance.py",
+            "type": "python_script"
+          },
+          "status": "ready"
+        },
+        "manifest_chain": {
+          "manifest_build_exit_code": 0,
+          "manifest_jsonl": "archive_manifest_v2.jsonl",
+          "rights_apply_exit_code": 0,
+          "rights_manifest_jsonl": "archive_manifest_v2.rights.jsonl"
+        }
+      },
+      "archive-gate-b": {
+        "artifacts": [
+          "bag/bagit.txt",
+          "bag_build_report.json"
+        ],
+        "baseline_status": "blocked",
+        "blocked_without_manifest": {
+          "canonical_command": "bag-build",
+          "missing_prerequisites": [
+            {
+              "field": "manifest_jsonl",
+              "message": "Provide an existing rights-manifest JSONL artifact before dispatch.",
+              "reason": "rights_manifest_required",
+              "severity": "blocked"
+            }
+          ],
+          "notes": [
+            "Canonical dispatch for this archive stage requires a prior rights-manifest artifact."
+          ],
+          "runner_details": {
+            "available": true,
+            "command": [
+              "/home/user/Transformation_Portal/.venv/bin/python",
+              "/home/user/Transformation_Portal/tools/archive_governance.py",
+              "--json",
+              "bag-build"
+            ],
+            "python_executable": "/home/user/Transformation_Portal/.venv/bin/python",
+            "script_path": "/home/user/Transformation_Portal/tools/archive_governance.py",
+            "type": "python_script"
+          },
+          "status": "blocked"
+        },
+        "canonical_command": "bag-build",
+        "command_exit_code": 0,
+        "dispatch_readiness": {
+          "canonical_command": "bag-build",
+          "missing_prerequisites": [],
+          "notes": [
+            "Canonical dispatch for this archive stage requires a prior rights-manifest artifact."
+          ],
+          "runner_details": {
+            "available": true,
+            "command": [
+              "/home/user/Transformation_Portal/.venv/bin/python",
+              "/home/user/Transformation_Portal/tools/archive_governance.py",
+              "--json",
+              "bag-build"
+            ],
+            "python_executable": "/home/user/Transformation_Portal/.venv/bin/python",
+            "script_path": "/home/user/Transformation_Portal/tools/archive_governance.py",
+            "type": "python_script"
+          },
+          "status": "ready"
+        }
+      },
+      "archive-gate-c": {
+        "artifacts": [
+          "mets_export.xml",
+          "mets_summary.json"
+        ],
+        "baseline_status": "blocked",
+        "blocked_without_manifest": {
+          "canonical_command": "mets-export",
+          "missing_prerequisites": [
+            {
+              "field": "manifest_jsonl",
+              "message": "Provide an existing rights-manifest JSONL artifact before dispatch.",
+              "reason": "rights_manifest_required",
+              "severity": "blocked"
+            }
+          ],
+          "notes": [
+            "Canonical dispatch for this archive stage requires a prior rights-manifest artifact."
+          ],
+          "runner_details": {
+            "available": true,
+            "command": [
+              "/home/user/Transformation_Portal/.venv/bin/python",
+              "/home/user/Transformation_Portal/tools/archive_governance.py",
+              "--json",
+              "mets-export"
+            ],
+            "python_executable": "/home/user/Transformation_Portal/.venv/bin/python",
+            "script_path": "/home/user/Transformation_Portal/tools/archive_governance.py",
+            "type": "python_script"
+          },
+          "status": "blocked"
+        },
+        "canonical_command": "mets-export",
+        "command_exit_code": 0,
+        "dispatch_readiness": {
+          "canonical_command": "mets-export",
+          "missing_prerequisites": [],
+          "notes": [
+            "Canonical dispatch for this archive stage requires a prior rights-manifest artifact."
+          ],
+          "runner_details": {
+            "available": true,
+            "command": [
+              "/home/user/Transformation_Portal/.venv/bin/python",
+              "/home/user/Transformation_Portal/tools/archive_governance.py",
+              "--json",
+              "mets-export"
+            ],
+            "python_executable": "/home/user/Transformation_Portal/.venv/bin/python",
+            "script_path": "/home/user/Transformation_Portal/tools/archive_governance.py",
+            "type": "python_script"
+          },
+          "status": "ready"
+        }
+      },
+      "lux-depth-v3": {
+        "base_status": "ready",
+        "canary_status": "unavailable",
+        "canonical_command": "lux-depth-v3",
+        "missing_prerequisites": [],
+        "notes": [
+          "Base readiness covers runner invocation, path safety, and orchestrator preflight.",
+          "Canary readiness is reported separately and does not block base dispatch.",
+          "No DA3 canary runtime contract was found; model execution remains optional and unverified."
+        ],
+        "runner_details": {
+          "available": true,
+          "command": [
+            "/home/user/Transformation_Portal/.venv/bin/python",
+            "-m",
+            "transformation_portal.lux_depth_v3"
+          ],
+          "module": "transformation_portal.lux_depth_v3",
+          "python_executable": "/home/user/Transformation_Portal/.venv/bin/python",
+          "type": "python_module"
+        }
+      }
+    }
+  },
+  "schema": "tp.orchestrator.pipeline_readiness_audit.v1",
+  "success": true
+}
