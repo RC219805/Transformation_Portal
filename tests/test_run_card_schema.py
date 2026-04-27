@@ -675,6 +675,102 @@ def test_run_card_schema_accepts_additive_quality_gate_and_capability(version: s
 
 
 @pytest.mark.parametrize("version", ["v1", "v2"])
+def test_run_card_schema_accepts_segmentation_status_with_failure_code(version: str) -> None:
+    """Lock the schema/code agreement: a result_summary row that carries a
+    failed segmentation_status with the new structured fields (failure_code,
+    failure_details) must validate. Regression for the run-card change that
+    replaced the misleading 'missing_evidence' placeholder with the actual
+    error_code from the result row."""
+    pytest.importorskip("jsonschema")
+    payload = _valid_run_card_payload()
+    payload["run_card_version"] = version
+    payload["result_summary"] = [
+        {
+            "image": "image_05.png",
+            "status": "error",
+            "backend": "da3",
+            "runtime_s": 0.42,
+            "segmentation_status": {
+                "status": "failed",
+                "enabled": True,
+                "backend": "sam2",
+                "strict_backend": True,
+                "warnings": [],
+                "errors": ["APEX_MATERIALS_PIXEL_OPS_EMPTY"],
+                "failure_code": "APEX_MATERIALS_PIXEL_OPS_EMPTY",
+                "failure_details": {
+                    "material_count": 4,
+                    "implemented_materials": ["glass", "water", "foliage", "stone"],
+                    "applied_ops_count": 0,
+                    "blocked_reasons": {"missing_material_confidence": 4},
+                },
+            },
+        }
+    ]
+    if version == "v2":
+        payload.pop("artifact_merkle_root", None)
+        payload["artifact_tree"] = {
+            "algorithm": "ct-sha256-v1",
+            "leaf_format": "tp.run_card.artifact_leaf.v1",
+            "leaf_count": 0,
+            "root_sha256": "f" * 64,
+            "artifacts": [],
+        }
+
+    _validate_run_card_payload(payload, _run_card_schema_path(version))
+
+
+@pytest.mark.parametrize("version", ["v1", "v2"])
+def test_run_card_schema_accepts_segmentation_status_with_pixel_ops_passthrough(version: str) -> None:
+    """Lock the schema/code agreement for the soft-passthrough success path:
+    a successful row that surfaces APEX_MATERIALS_PASSTHROUGH_LOW_CONFIDENCE
+    via segmentation_status.pixel_ops_passthrough and segmentation_status.warnings
+    must validate against the schema."""
+    pytest.importorskip("jsonschema")
+    payload = _valid_run_card_payload()
+    payload["run_card_version"] = version
+    payload["result_summary"] = [
+        {
+            "image": "image_06.png",
+            "status": "ok",
+            "backend": "da3",
+            "runtime_s": 1.10,
+            "segmentation_status": {
+                "status": "ok",
+                "enabled": True,
+                "backend": "sam2",
+                "strict_backend": True,
+                "mask_artifact_path": "segmentation/image_06_materials_v3_masks.npz",
+                "mask_count": 4,
+                "warnings": ["APEX_MATERIALS_PASSTHROUGH_LOW_CONFIDENCE"],
+                "errors": [],
+                "pixel_ops_passthrough": {
+                    "code": "APEX_MATERIALS_PASSTHROUGH_LOW_CONFIDENCE",
+                    "message": "Materials V3 masks present but every implemented op was below confidence threshold.",
+                    "details": {
+                        "material_count": 4,
+                        "implemented_materials": ["glass", "water", "foliage", "stone"],
+                        "applied_ops_count": 0,
+                        "blocked_reasons": {"below_confidence_threshold": 4},
+                    },
+                },
+            },
+        }
+    ]
+    if version == "v2":
+        payload.pop("artifact_merkle_root", None)
+        payload["artifact_tree"] = {
+            "algorithm": "ct-sha256-v1",
+            "leaf_format": "tp.run_card.artifact_leaf.v1",
+            "leaf_count": 0,
+            "root_sha256": "a" * 64,
+            "artifacts": [],
+        }
+
+    _validate_run_card_payload(payload, _run_card_schema_path(version))
+
+
+@pytest.mark.parametrize("version", ["v1", "v2"])
 def test_run_card_schema_accepts_additive_model_contract(version: str) -> None:
     payload = _valid_run_card_payload()
     payload["run_card_version"] = version

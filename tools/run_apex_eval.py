@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from pathlib import Path
 
@@ -12,7 +13,11 @@ from transformation_portal.evals.apex_visual import (
     parse_candidate_masks,
     parse_candidate_outputs,
 )
-from transformation_portal.evals.apex_evidence_bundle import build_apex_evidence_bundle, parse_candidate_evidence
+from transformation_portal.evals.apex_evidence_bundle import (
+    build_apex_evidence_bundle,
+    derive_materials_v3_evidence_from_manifest,
+    parse_candidate_evidence,
+)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -48,6 +53,20 @@ def build_parser() -> argparse.ArgumentParser:
         help="Optional candidate telemetry JSON for evidence bundles. May be repeated.",
     )
     parser.add_argument(
+        "--candidate-evidence-from-manifest",
+        action="append",
+        default=[],
+        metavar="CANDIDATE:ASSET_ID=PATH",
+        help=(
+            "Derive candidate telemetry JSON directly from a per-image manifest. "
+            "PATH points at the manifest written by EnhanceOrchestrator; the "
+            "tool renders MaterialsV3Metadata into the evidence schema and "
+            "writes <output-dir>/derived_evidence/<candidate>__<asset_id>.json. "
+            "Explicit --candidate-evidence wins for the same candidate+asset_id. "
+            "May be repeated."
+        ),
+    )
+    parser.add_argument(
         "--run-scope-asset-id",
         action="append",
         default=[],
@@ -76,6 +95,7 @@ def main() -> int:
         candidate_outputs = parse_candidate_outputs(args.candidate_output)
         candidate_masks = parse_candidate_masks(args.candidate_mask)
         candidate_evidence = parse_candidate_evidence(args.candidate_evidence)
+        manifest_evidence_sources = parse_candidate_evidence(args.candidate_evidence_from_manifest)
         report = build_apex_eval_report(
             Path(args.evalset),
             output_dir=Path(args.output_dir),
@@ -83,6 +103,20 @@ def main() -> int:
             candidate_masks=candidate_masks,
             asset_root=args.asset_root,
         )
+        if manifest_evidence_sources:
+            resolved_output_dir = Path(str(report["report_path"])).parent
+            derived_dir = resolved_output_dir / "derived_evidence"
+            derived_dir.mkdir(parents=True, exist_ok=True)
+            for candidate, asset_paths in manifest_evidence_sources.items():
+                candidate_slot = candidate_evidence.setdefault(candidate, {})
+                for asset_id, manifest_path in asset_paths.items():
+                    if asset_id in candidate_slot:
+                        # Explicit --candidate-evidence wins; skip derivation.
+                        continue
+                    derived = derive_materials_v3_evidence_from_manifest(manifest_path)
+                    derived_path = derived_dir / f"{candidate}__{asset_id}.evidence.json"
+                    derived_path.write_text(json.dumps(derived, sort_keys=True), encoding="utf-8")
+                    candidate_slot[asset_id] = derived_path
         if args.emit_evidence_bundle == "on" or candidate_evidence:
             resolved_output_dir = Path(str(report["report_path"])).parent
             report_repo_root = report.get("evalset", {}).get("repo_root")

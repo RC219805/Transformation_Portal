@@ -1003,6 +1003,136 @@ def test_run_apex_eval_passes_candidate_masks_to_report_builder(tmp_path, monkey
     assert calls["candidate_masks"] == {"materials_v3": {"unit_image": Path("output/materials_v3_masks.npz")}}
 
 
+def test_run_apex_eval_derives_evidence_from_manifest(tmp_path, monkeypatch):
+    """`--candidate-evidence-from-manifest` materializes a manifest into the
+    candidate evidence JSON and feeds it to the bundle builder, closing the
+    operator loop end-to-end without hand-authored evidence files."""
+    from transformation_portal.evals.apex_evidence_bundle import (
+        APEX_MATERIALS_PASSTHROUGH_LOW_CONFIDENCE,
+    )
+    from transformation_portal.lux_depth_v3.manifest import CombinedManifest, MaterialsV3Metadata
+
+    module = _load_tool_module("run_apex_eval.py", "run_apex_eval_evidence_from_manifest_unit")
+
+    # Build a per-image manifest carrying soft-passthrough state.
+    passthrough_payload = {
+        "code": APEX_MATERIALS_PASSTHROUGH_LOW_CONFIDENCE,
+        "details": {
+            "implemented_materials": ["glass"],
+            "applied_ops_count": 0,
+            "blocked_reasons": {"below_confidence_threshold": 1},
+        },
+    }
+    manifest = CombinedManifest()
+    manifest.materials_v3 = MaterialsV3Metadata.from_dict(
+        {
+            "enabled": True,
+            "schema_version": "1.1",
+            "pixel_ops": {
+                "enabled": True,
+                "applied": [],
+                "blocked": [{"material": "glass", "reason": "below_confidence_threshold",
+                             "blocked_by": ["below_confidence_threshold"]}],
+                "passthrough_status": passthrough_payload,
+            },
+        }
+    )
+    manifest_path = tmp_path / "image_manifest.json"
+    manifest.save(manifest_path)
+
+    output_dir = tmp_path / "report"
+    output_dir.mkdir()
+    report_path = output_dir / "apex_eval_report.json"
+    captured: dict = {}
+
+    def fake_build_report(*args, **kwargs):
+        return {"report_path": str(report_path), "assets": [], "evalset": {"repo_root": str(tmp_path)}}
+
+    def fake_build_bundle(*args, **kwargs):
+        captured["candidate_evidence"] = kwargs.get("candidate_evidence")
+        return {"report_path": str(output_dir / "evidence_bundle.json")}
+
+    monkeypatch.setattr(module, "build_apex_eval_report", fake_build_report)
+    monkeypatch.setattr(module, "build_apex_evidence_bundle", fake_build_bundle)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "run_apex_eval.py",
+            "--evalset",
+            "evalsets/picacho_apex",
+            "--output-dir",
+            str(output_dir),
+            "--candidate-evidence-from-manifest",
+            f"materials_v3:unit_image={manifest_path}",
+        ],
+    )
+
+    assert module.main() == 0
+    derived_path = output_dir / "derived_evidence" / "materials_v3__unit_image.evidence.json"
+    assert derived_path.is_file()
+
+    payload = json.loads(derived_path.read_text(encoding="utf-8"))
+    assert payload["materials_v3_enabled"] is True
+    assert payload["passthrough_status"]["code"] == APEX_MATERIALS_PASSTHROUGH_LOW_CONFIDENCE
+
+    assert captured["candidate_evidence"] == {"materials_v3": {"unit_image": derived_path}}
+
+
+def test_run_apex_eval_explicit_evidence_overrides_manifest_derivation(tmp_path, monkeypatch):
+    """When both --candidate-evidence and --candidate-evidence-from-manifest
+    target the same candidate+asset, the explicit evidence path wins so an
+    operator can override the derived shape without touching the manifest."""
+    from transformation_portal.lux_depth_v3.manifest import CombinedManifest, MaterialsV3Metadata
+
+    module = _load_tool_module("run_apex_eval.py", "run_apex_eval_evidence_override_unit")
+
+    manifest = CombinedManifest()
+    manifest.materials_v3 = MaterialsV3Metadata.from_dict({"enabled": True, "schema_version": "1.1"})
+    manifest_path = tmp_path / "image_manifest.json"
+    manifest.save(manifest_path)
+
+    explicit_evidence = tmp_path / "operator_authored.json"
+    explicit_evidence.write_text(json.dumps({"materials_v3_enabled": True}), encoding="utf-8")
+
+    output_dir = tmp_path / "report"
+    output_dir.mkdir()
+    report_path = output_dir / "apex_eval_report.json"
+    captured: dict = {}
+
+    def fake_build_report(*args, **kwargs):
+        return {"report_path": str(report_path), "assets": [], "evalset": {"repo_root": str(tmp_path)}}
+
+    def fake_build_bundle(*args, **kwargs):
+        captured["candidate_evidence"] = kwargs.get("candidate_evidence")
+        return {"report_path": str(output_dir / "evidence_bundle.json")}
+
+    monkeypatch.setattr(module, "build_apex_eval_report", fake_build_report)
+    monkeypatch.setattr(module, "build_apex_evidence_bundle", fake_build_bundle)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "run_apex_eval.py",
+            "--evalset",
+            "evalsets/picacho_apex",
+            "--output-dir",
+            str(output_dir),
+            "--candidate-evidence",
+            f"materials_v3:unit_image={explicit_evidence}",
+            "--candidate-evidence-from-manifest",
+            f"materials_v3:unit_image={manifest_path}",
+        ],
+    )
+
+    assert module.main() == 0
+    # The derived file must NOT have been written for unit_image because the
+    # explicit override wins.
+    derived_path = output_dir / "derived_evidence" / "materials_v3__unit_image.evidence.json"
+    assert not derived_path.exists()
+    assert captured["candidate_evidence"] == {"materials_v3": {"unit_image": explicit_evidence}}
+
+
 def test_benchmark_depth_backends_returns_stable_input_error_for_missing_evalset(tmp_path, monkeypatch, capsys):
     module = _load_tool_module("benchmark_depth_backends.py", "benchmark_depth_backends_missing_evalset_unit")
 
