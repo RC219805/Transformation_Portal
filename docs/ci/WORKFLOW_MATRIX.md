@@ -25,10 +25,10 @@ Every `.github/workflows/*.yml` file, current as of the timestamp above. The **R
 | 2 | `ci.yml` | CI Quality Firewall (push) | push (main, develop) | Post-merge | 579 | **Investigate → Selective port into `build.yml`** — overlaps with `build.yml` on `lint`, `typecheck`, `test-core`, `test-ml`, but has **unique jobs** that build.yml does not currently provide: `security` (bandit + pip-audit on the push commit range), `coverage-gate`, `build` (packaging artifact), `repo-hygiene`, `quality-summary`. **Before retiring, port each unique job into `build.yml`** (or confirm it's shadowed by `security-unified.yml` / `enforcement.yml`) and **expand `build.yml`'s push branches to include `develop`** so post-merge coverage on `develop` isn't dropped. Naive deletion would lose real signal. |
 | 3 | `ci-quality-firewall.yml` | CI Quality Firewall (post-CI) | workflow_run, manual | Post-merge | 951 | **Investigate → Retire** — `workflow_run` gating fires *after* `build.yml`; if `build.yml` is truly required, this is redundant. Largest single workflow file. |
 | 4 | `enforcement.yml` | Enforcement | push, PR, schedule | ⚠️ Partial | 211 | **Keep** — owns action-pin, banned-deps, HF-revision, artifact-boundary, layer-1/2 tests, golden-regression. Distinct from `build.yml` test surface. |
-| 5 | `quality-gate.yml` | Quality Gate | PR, push | ⚠️ Advisory | 41 | **Investigate → Replace with pre-commit** — calls `pre-commit run --all-files`. If pre-commit hooks are run by devs locally and by `build.yml`'s lint job, this duplicates. |
+| 5 | `quality-gate.yml` | Quality Gate | PR, push | ⚠️ Advisory | 41 | **Investigate → Replace with pre-commit** — runs `scripts/lint_runner.sh advisory` and `scripts/setup/pre-commit-check.sh --all`. If those advisory lint and pre-commit checks are run by devs locally and by `build.yml`'s lint job, this duplicates. |
 | 6 | `codeql.yml` | CodeQL Advanced | push, PR, schedule | ✅ Required | 112 | **Keep** — GitHub semantic SAST; can't be replicated by other workflows. |
 | 7 | `security-unified.yml` | Security Unified | schedule, push, PR, manual | ✅ Required | 255 | **Keep** — pip-audit + security gates; distinct from CodeQL. |
-| 8 | `dependency-review.yml` | Dependency Review | PR | ✅ Required | 30 | **Keep** — GitHub-native PR dependency check; minimal cost. |
+| 8 | `dependency-review.yml` | Dependency Review | PR | ⚠️ Advisory (warn-only) | 30 | **Keep** — GitHub-native PR dependency check; minimal cost. The workflow sets `warn-only: true` and the job name is "Dependency Review (advisory)", so findings never fail a PR — they only post warnings. |
 | 9 | `dependency-submission.yml` | Dependency Submission | push, PR, manual | ❌ No | 256 | **Keep** — feeds GitHub dependency graph; distinct concern. |
 | 10 | `dependency-update.yml` | Dependency Updates | schedule, manual | ❌ No | 174 | **Keep** — Dependabot supplement; scheduled. |
 | 11 | `secure-install-pilot.yml` | Secure Install Pilot | PR | ⚠️ Advisory | 62 | **Investigate** — pilot/experimental; check whether the pilot has graduated or should be retired. |
@@ -44,7 +44,7 @@ Every `.github/workflows/*.yml` file, current as of the timestamp above. The **R
 | 21 | `determinism-cross-isa.yml` | Determinism Harness / Cross-ISA Parity | PR | ⚠️ Advisory | 195 | **Merge → `determinism.yml`** |
 | 22 | `docs.yml` | Documentation | PR, push, manual | ⚠️ Advisory | 128 | **Keep** — multi-job (build, validate-markdown, navigation); coherent. |
 | 23 | `frontdoor-deployment-gate.yml` | Frontdoor Deployment Gate | manual only | Manual | 117 | **Keep** — operational gate for frontdoor deploys. |
-| 24 | `diagnostic-trial.yml` | diagnostic-trial | PR, manual | ⚠️ Advisory | 188 | **Investigate** — purpose unclear from name; may be a stale experiment. |
+| 24 | `diagnostic-trial.yml` | diagnostic-trial | PR, manual | ⚠️ Advisory | 188 | **Keep / revisit naming** — advisory determinism/provenance diagnostic gate running `scripts/diagnostics/full_chain_determinism_trial.sh` plus bundle-root and evidence-manifest checks. Concrete behavior, just badly named. |
 | 25 | `submit-pypi.yml` | Submit to PyPI | push (tag), manual | Release | 139 | **Keep** — release pipeline. |
 | 26 | `tag_retention_prune_preservation_tags.yml` | Tag Retention (Preservation Tags) | schedule, manual | ❌ No | 40 | **Keep** — periodic cleanup. |
 | 27 | `ai-code-review.yml` | AI Code Review | PR | ❌ No | 285 | **Investigate → Consolidate or retire** — frequent rate-limit failures on recent PRs (#1558 saw 4/4 calls error out). Either fold into `ai-advisory.yml` (proposed) or accept the noise. |
@@ -52,7 +52,14 @@ Every `.github/workflows/*.yml` file, current as of the timestamp above. The **R
 | 29 | `smart-issue-management.yml` | Smart Issue Management | issues, pull_request_target | ❌ No | 337 | **Investigate → Consolidate or retire** — same. |
 | 30 | `issue_printer.yml` | Print Issue Info | issues | ❌ No | 24 | **Retire** — 24 lines that print title/body to job logs. No artifact, no enforcement. Pure noise. |
 
-**Legend:** Required = listed in branch protection / `CI Gate`. Advisory = runs but does not block. Post-merge = runs only on push to main.
+**Legend** (Blocking? column reflects effective PR-merge enforcement, not just whether the workflow runs):
+- **✅ Required** — failing the workflow blocks the PR (listed in branch protection or aggregated by `CI Gate`).
+- **⚠️ Advisory** — the workflow runs but its findings do not block merge. Includes `warn-only` actions, jobs explicitly tagged "(advisory)", and workflows not gated by `CI Gate` / branch protection.
+- **⚠️ Partial** — some jobs in the workflow are required, others are advisory.
+- **Post-merge** — runs only on push (no PR coverage).
+- **Manual** — `workflow_dispatch` only.
+- **Release** — fires on tag push or release event.
+- **❌ No** — non-blocking by design (scheduled monitoring, dependency graph submission, issue automation, etc.).
 
 ---
 
@@ -100,7 +107,7 @@ These need maintainer judgment, not mechanical merging.
 
 9. **`secure-install-pilot.yml`** — explicitly a pilot. Check whether it has graduated, in which case fold its jobs into `security-unified.yml`; if dormant, retire.
 
-10. **`diagnostic-trial.yml`** — purpose not obvious from name; needs the original author's input.
+10. **`diagnostic-trial.yml`** — concrete behavior is now clear (advisory determinism/provenance diagnostic gate; runs `scripts/diagnostics/full_chain_determinism_trial.sh` plus bundle-root and evidence-manifest checks), but the name doesn't reflect that. Either rename to `determinism-trial.yml` or fold the jobs into a future `determinism.yml` (see Tier B item 5). No retirement candidate.
 
 ### Tier D — Keep as-is
 
@@ -206,6 +213,7 @@ For conditional job execution on PRs, use `dorny/paths-filter` instead of unreli
 
 | Date | Change | Rationale |
 |------|--------|-----------|
+| 2026-04-27 | Second review pass: `quality-gate.yml` description corrected (runs `lint_runner.sh advisory` + `pre-commit-check.sh --all`, not `pre-commit run --all-files`); `dependency-review.yml` reclassified as ⚠️ Advisory (warn-only) since the workflow uses `warn-only: true` and self-identifies as "(advisory)"; `diagnostic-trial.yml` row + Tier C item 10 now describe its actual behavior (determinism/provenance diagnostic gate running `scripts/diagnostics/full_chain_determinism_trial.sh` + bundle-root and evidence-manifest checks); legend expanded to disambiguate Required / Advisory / Partial / Post-merge / Manual / Release / No. | Address review feedback on row accuracy and column-semantics ambiguity. |
 | 2026-04-27 | Review-driven corrections: `ci.yml` row now lists actually-unique jobs (security/coverage-gate/build/repo-hygiene/quality-summary) and flags the `develop` branch coverage risk; `ml-slow-suite` row corrects the conflated schedule (nightly = 2 AM, ml-slow = 3:30 AM); LOC column re-labeled as approximate; Tier B count math corrected (5, not 6); status-snapshot phasing rephrased to match the 8-PR roadmap. | Address review feedback on the inventory accuracy. |
 | 2026-04-27 | Complete inventory rebuild (30 workflows) + consolidation roadmap | Prior revision listed 12; the missing 18 went undocumented. Phase 1.4 of remediation plan from PR #1558. |
 | 2026-03-26 | Added link to Dependabot PR governance documentation | Cross-reference dependency update policy |
