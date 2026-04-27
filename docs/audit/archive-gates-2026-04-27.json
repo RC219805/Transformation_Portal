@@ -7,7 +7,6 @@
       "rights_policy": "/home/user/Transformation_Portal/policy/archive/rights_flags.yml"
     },
     "generated_at": "2026-04-27T04:36:30Z",
-    "output_dir": "/tmp/tp-audit-readiness-iRtrlZ",
     "pipelines": {
       "archive-gate-a": {
         "artifacts": [
@@ -24,18 +23,6 @@
           "notes": [
             "Canonical archive-gate-a dispatch expects fixity-scan with an existing archive index."
           ],
-          "runner_details": {
-            "available": true,
-            "command": [
-              "/home/user/Transformation_Portal/.venv/bin/python",
-              "/home/user/Transformation_Portal/tools/archive_governance.py",
-              "--json",
-              "fixity-scan"
-            ],
-            "python_executable": "/home/user/Transformation_Portal/.venv/bin/python",
-            "script_path": "/home/user/Transformation_Portal/tools/archive_governance.py",
-            "type": "python_script"
-          },
           "status": "ready"
         },
         "manifest_chain": {
@@ -64,18 +51,6 @@
           "notes": [
             "Canonical dispatch for this archive stage requires a prior rights-manifest artifact."
           ],
-          "runner_details": {
-            "available": true,
-            "command": [
-              "/home/user/Transformation_Portal/.venv/bin/python",
-              "/home/user/Transformation_Portal/tools/archive_governance.py",
-              "--json",
-              "bag-build"
-            ],
-            "python_executable": "/home/user/Transformation_Portal/.venv/bin/python",
-            "script_path": "/home/user/Transformation_Portal/tools/archive_governance.py",
-            "type": "python_script"
-          },
           "status": "blocked"
         },
         "canonical_command": "bag-build",
@@ -86,18 +61,6 @@
           "notes": [
             "Canonical dispatch for this archive stage requires a prior rights-manifest artifact."
           ],
-          "runner_details": {
-            "available": true,
-            "command": [
-              "/home/user/Transformation_Portal/.venv/bin/python",
-              "/home/user/Transformation_Portal/tools/archive_governance.py",
-              "--json",
-              "bag-build"
-            ],
-            "python_executable": "/home/user/Transformation_Portal/.venv/bin/python",
-            "script_path": "/home/user/Transformation_Portal/tools/archive_governance.py",
-            "type": "python_script"
-          },
           "status": "ready"
         }
       },
@@ -120,18 +83,6 @@
           "notes": [
             "Canonical dispatch for this archive stage requires a prior rights-manifest artifact."
           ],
-          "runner_details": {
-            "available": true,
-            "command": [
-              "/home/user/Transformation_Portal/.venv/bin/python",
-              "/home/user/Transformation_Portal/tools/archive_governance.py",
-              "--json",
-              "mets-export"
-            ],
-            "python_executable": "/home/user/Transformation_Portal/.venv/bin/python",
-            "script_path": "/home/user/Transformation_Portal/tools/archive_governance.py",
-            "type": "python_script"
-          },
           "status": "blocked"
         },
         "canonical_command": "mets-export",
@@ -142,18 +93,6 @@
           "notes": [
             "Canonical dispatch for this archive stage requires a prior rights-manifest artifact."
           ],
-          "runner_details": {
-            "available": true,
-            "command": [
-              "/home/user/Transformation_Portal/.venv/bin/python",
-              "/home/user/Transformation_Portal/tools/archive_governance.py",
-              "--json",
-              "mets-export"
-            ],
-            "python_executable": "/home/user/Transformation_Portal/.venv/bin/python",
-            "script_path": "/home/user/Transformation_Portal/tools/archive_governance.py",
-            "type": "python_script"
-          },
           "status": "ready"
         }
       },
@@ -166,18 +105,7 @@
           "Base readiness covers runner invocation, path safety, and orchestrator preflight.",
           "Canary readiness is reported separately and does not block base dispatch.",
           "No DA3 canary runtime contract was found; model execution remains optional and unverified."
-        ],
-        "runner_details": {
-          "available": true,
-          "command": [
-            "/home/user/Transformation_Portal/.venv/bin/python",
-            "-m",
-            "transformation_portal.lux_depth_v3"
-          ],
-          "module": "transformation_portal.lux_depth_v3",
-          "python_executable": "/home/user/Transformation_Portal/.venv/bin/python",
-          "type": "python_module"
-        }
+        ]
       }
     }
   },

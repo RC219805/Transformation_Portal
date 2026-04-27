@@ -169,7 +169,8 @@ the gates correctly refuse dispatch until required inputs are supplied.
    runs only locally; nothing in `.github/workflows/` exercises the
    archive-gate JSON contract end-to-end on PRs. A nightly or
    pre-merge job that publishes the readiness matrix as an artifact
-   would catch contract drift before it ships.
+   would catch contract drift before it ships. Scoped at
+   [`follow-ups/ci-wire-audit-pipeline-readiness.md`](./follow-ups/ci-wire-audit-pipeline-readiness.md).
 2. **Persist the readiness matrix on each run.** The script already
    supports `--json-output`; consider adopting a dated path under
    `docs/audit/` (or an artifact bucket) so historical matrices are
