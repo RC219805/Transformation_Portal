@@ -3,3 +3,6 @@
 
 # chore(format): black+isort baseline (no logic changes)
 d35d12479ee23f7af99da964d55f684e5e4108aa
+
+# chore(gate-0): black reformat of app.py — Gate 0 closure (no logic changes)
+1073d409fafecb36af0c89f6daebcbc3aee8814d

@@ -299,6 +299,15 @@ jobs:
           python -m pip install jsonschema==4.23.0
           python scripts/validation/validate_compliance_schemas.py
 
+      # Promoted from ci.yml (post-merge) to build.yml (PR gate) per remediation Phase 0.2.
+      # gitleaks-action needs full git history for the <before>..<after> scan range,
+      # which the lightweight job already provides via fetch-depth: 0 above.
+      - name: Check for secrets with gitleaks
+        uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7  # v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_CONFIG: .gitleaks.toml
+
   dependency-constraints:
     name: Validate dependency constraints (ADR-032)
     needs: [preflight]
@@ -486,8 +495,19 @@ jobs:
       - name: Type check with mypy (critical modules)
         # mypy hard-fails for critical modules.
         # This normalizes typecheck policy with ci.yml (parity debt reduction).
+        #
+        # Phase 0.3 expansion: mypy now also enforces a vetted slice of core/.
+        # Per docs/ci/TYPE_CHECKING_POLICY.md, additions to this whitelist must
+        # pass `mypy --config-file=mypy.ini <path>` before being added here.
+        # Expand the list as packages are cleaned up; do NOT enable
+        # `core/` as a whole until all 21 currently-failing files are fixed.
         run: |
-          mypy src/transformation_portal/lux_depth_v3/ --config-file=mypy.ini
+          mypy --config-file=mypy.ini \
+            src/transformation_portal/lux_depth_v3/ \
+            src/transformation_portal/core/geometry/ \
+            src/transformation_portal/core/processing/ \
+            src/transformation_portal/core/ml_dependency_health.py \
+            src/transformation_portal/core/da3_runtime.py
 
   test:
     needs: [preflight, lint, typecheck]

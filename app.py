@@ -4857,11 +4857,7 @@ def _build_archive_config_preview(
             continue
         normalized_args[canonical_field] = parsed
 
-    archive_path_error_fields = {
-        str(item.get("field") or "")
-        for item in errors
-        if isinstance(item, Mapping)
-    }
+    archive_path_error_fields = {str(item.get("field") or "") for item in errors if isinstance(item, Mapping)}
     if (
         command == "fixity-scan"
         and "archive_index" not in archive_path_error_fields
@@ -4869,8 +4865,7 @@ def _build_archive_config_preview(
         and "archive_root" not in archive_path_error_fields
     ):
         archive_index_text = str(
-            _pick(args, "archive_index", "archiveIndex", default=normalized_args.get("archive_index") or "")
-            or ""
+            _pick(args, "archive_index", "archiveIndex", default=normalized_args.get("archive_index") or "") or ""
         ).strip()
         archive_root_was_explicit = _pick(args, "archive_root", "archiveRoot", default=None) is not None
         archive_root_text = str(
@@ -8278,10 +8273,7 @@ def _list_jobs(*, limit: int = JOB_LIST_LIMIT, api_version: str = "v1") -> JSONR
         key=lambda item: item.created_at,
         reverse=True,
     )
-    serialized = [
-        _serialize_job(job, include_logs=False, api_version=api_version)
-        for job in jobs_sorted[:bounded_limit]
-    ]
+    serialized = [_serialize_job(job, include_logs=False, api_version=api_version) for job in jobs_sorted[:bounded_limit]]
 
     return JSONResponse(
         _api_envelope(

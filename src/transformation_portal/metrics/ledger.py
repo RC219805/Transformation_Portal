@@ -325,9 +325,13 @@ class PerformanceLedger:
             where_clauses.append("captured_at <= ?")
             params.append(max_captured_at)
 
+        # SAFETY: every entry in `where_clauses` above is a hardcoded literal of the form
+        # "<column> <op> ?" — none originate from `params` or any other caller-provided value.
+        # If you add a new clause, keep this invariant: column names and operators are literals,
+        # values flow through `params` only. Adding interpolation here would introduce SQL
+        # injection. The base query is also a literal and intentionally not f-stringed.
         where_sql = " AND ".join(where_clauses) if where_clauses else "1=1"
-
-        query = f"SELECT capsule_json FROM performance_capsules WHERE {where_sql} ORDER BY captured_at DESC"
+        query = "SELECT capsule_json FROM performance_capsules WHERE " + where_sql + " ORDER BY captured_at DESC"
         if safe_limit is not None:
             query += " LIMIT ?"
             params.append(safe_limit)

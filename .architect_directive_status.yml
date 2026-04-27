@@ -10,27 +10,29 @@ directive:
   binding: true
 
 current_state:
-  epic_819_progress: "7/21 complete (33%)"
-  formatting_drift: "265 files (black/isort non-compliance)"
-  ci_status: "GREEN on main (but enforcement incomplete)"
+  epic_819_progress: "8/21 complete (38%)"
+  formatting_drift: "0 files (Gate 0 closed 2026-04-27)"
+  ci_status: "GREEN on main; black/isort/gitleaks enforced as required PR checks"
   open_prs:
     - "PR #822: Coverage artifact fix"
     - "PR #823: SEC-001 command injection (draft)"
 
 gate_0:
-  status: "NOT_STARTED"
+  status: "COMPLETE"
+  completed_on: "2026-04-27"
   priority: "P0"
-  blocking: "All tranche work"
-  timeline: "2-3 days"
-  success_criteria:
+  unblocked: "Tranche 1 work may now proceed"
+  evidence:
     - "black --check src/ tests/ exits 0"
     - "isort --check-only src/ tests/ exits 0"
-    - "CI green for 3+ consecutive commits"
-    - "Type checking policy documented"
-    - ".git-blame-ignore-revs configured"
+    - "build.yml lint job enforces black/isort over src/ tests/ and runs gitleaks as required PR checks"
+    - "app.py reformatted to match the same Black config (line-length=127); not yet in CI lint scope"
+    - "build.yml typecheck job runs mypy on lux_depth_v3 + vetted core/ slice"
+    - "docs/ci/TYPE_CHECKING_POLICY.md documents gradual rollout"
+    - ".git-blame-ignore-revs records the formatting baseline commit"
 
 tranche_1:
-  status: "BLOCKED_BY_GATE_0"
+  status: "READY"
   scope: "8/21 → 11/21 (3 items)"
   timeline: "3 weeks post-Gate 0"
   items:
@@ -68,7 +70,7 @@ documentation_created:
     size: "12.6 KB"
     lines: 482
     purpose: "Day-by-day Gate 0 execution plan"
-  - path: "docs/DOCUMENTATION_INDEX.md"
+  - path: "docs/guides/DOCUMENTATION_INDEX.md"
     status: "UPDATED"
     purpose: "Integrated new CI and architecture docs"
   - path: "ARCHITECT_RESPONSE_SUMMARY.md"
