@@ -5,8 +5,9 @@
 **Audited commit:** `974429333acf9575f2d4d73f6cfbf4a4d12cefde`
 **Generated at (UTC):** `2026-04-27T04:36:30Z`
 **Tool:** `scripts/validation/audit_pipeline_readiness.py` (invoked via `make audit-pipeline-readiness`)
-**Raw payload:** [`archive-gates-2026-04-27.json`](./archive-gates-2026-04-27.json)
-(schema `tp.orchestrator.pipeline_readiness_audit.v1`)
+**Normalized payload:** [`archive-gates-2026-04-27.json`](./archive-gates-2026-04-27.json)
+(schema `tp.orchestrator.pipeline_readiness_audit.v1`; see §1.1 for the
+exact normalization applied to the harness's stdout before commit)
 
 ## 1. Context & scope
 
@@ -45,6 +46,42 @@ recorded in §6.
 | Rights policy | `policy/archive/rights_flags.yml` |
 
 3 entries, 55 payload bytes, sha256.
+
+### 1.1 JSON normalization
+
+The committed JSON is a **normalized** snapshot of the harness's stdout
+— not its verbatim output — so it remains portable, diffable across
+machines, and free of local filesystem layout. The transformations
+applied before commit are:
+
+1. **Removed `data.output_dir`.** The harness writes a per-run temp
+   directory (e.g., `/tmp/tp-pipeline-readiness-audit-XXXXXX`) which
+   is ephemeral and machine-specific.
+2. **Removed every `runner_details` block** under
+   `data.pipelines.<name>.dispatch_readiness`,
+   `data.pipelines.<name>.blocked_without_manifest`, and
+   `data.pipelines.lux-depth-v3`. These embedded the runner's Python
+   interpreter path and tool path (e.g.,
+   `/.../.venv/bin/python`,
+   `/.../tools/archive_governance.py`) which differ between
+   environments and add no contract value — the canonical command
+   that was executed is also recorded as `canonical_command`.
+3. **Rewrote `data.fixtures.*`** from absolute paths
+   (`/.../tests/fixtures/archive_small/...`) to repo-relative paths
+   (`tests/fixtures/archive_small/...`,
+   `policy/archive/rights_flags.yml`).
+
+All other fields produced by the harness — `schema`, `success`,
+per-gate `baseline_status`, `canonical_command`,
+`command_exit_code`, `dispatch_readiness.status`,
+`dispatch_readiness.missing_prerequisites`,
+`blocked_without_manifest.status`,
+`blocked_without_manifest.missing_prerequisites`, `manifest_chain`,
+`artifacts`, `generated_at`, and the `lux-depth-v3` baseline metadata
+— are preserved verbatim with the harness's `indent=2,
+sort_keys=True` formatting. After normalization the JSON re-passes
+all 12 contract checks listed in §2. To regenerate the verbatim
+(unnormalized) output for an audit, see §9.
 
 ## 2. Pass/fail summary
 
@@ -202,12 +239,40 @@ prioritization.
 
 ```bash
 # from repo root, with .venv set up (make venv && make setup)
+
+# (a) Verbatim harness output (with machine-local paths intact -
+# useful for local diagnostics, not suitable for committing as-is):
 make audit-pipeline-readiness
-# or, to persist the readiness matrix used by this report:
+
+# (b) Same payload written to a JSON file:
 python scripts/validation/audit_pipeline_readiness.py \
-    --json-output docs/governance/audit/archive-gates-2026-04-27.json \
+    --json-output /tmp/archive-gates-readiness.json \
     --output-dir "$(mktemp -d -t tp-audit-readiness-XXXXXX)" \
     --keep-output
 ```
 
 Exit code `0` and `payload.success == true` indicate a clean run.
+
+To produce a snapshot equivalent to the committed JSON, apply the
+three normalization steps from §1.1 to the verbatim output:
+
+```bash
+python - <<'PY'
+import json, pathlib
+ROOT = str(pathlib.Path(__file__).resolve().parents[0]) + "/"  # repo root
+src = pathlib.Path("/tmp/archive-gates-readiness.json")
+data = json.loads(src.read_text())
+data["data"].pop("output_dir", None)
+for entry in data["data"]["pipelines"].values():
+    entry.pop("runner_details", None)
+    for sub in ("dispatch_readiness", "blocked_without_manifest"):
+        if isinstance(entry.get(sub), dict):
+            entry[sub].pop("runner_details", None)
+fx = data["data"]["fixtures"]
+for k, v in list(fx.items()):
+    if isinstance(v, str) and v.startswith(ROOT):
+        fx[k] = v[len(ROOT):]
+out = pathlib.Path("docs/governance/audit/archive-gates-2026-04-27.json")
+out.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+PY
+```

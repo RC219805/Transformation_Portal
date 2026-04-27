@@ -1,10 +1,10 @@
 {
   "data": {
     "fixtures": {
-      "archive_index": "/home/user/Transformation_Portal/tests/fixtures/archive_small/archive_index_normalized.csv.gz",
-      "archive_root": "/home/user/Transformation_Portal/tests/fixtures/archive_small/archive_root",
-      "hash_manifest": "/home/user/Transformation_Portal/tests/fixtures/archive_small/golden/hash_manifest.csv.gz",
-      "rights_policy": "/home/user/Transformation_Portal/policy/archive/rights_flags.yml"
+      "archive_index": "tests/fixtures/archive_small/archive_index_normalized.csv.gz",
+      "archive_root": "tests/fixtures/archive_small/archive_root",
+      "hash_manifest": "tests/fixtures/archive_small/golden/hash_manifest.csv.gz",
+      "rights_policy": "policy/archive/rights_flags.yml"
     },
     "generated_at": "2026-04-27T04:36:30Z",
     "pipelines": {
