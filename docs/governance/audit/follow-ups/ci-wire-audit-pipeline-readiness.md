@@ -1,7 +1,7 @@
 # Follow-up: wire `make audit-pipeline-readiness` into CI
 
 **Status:** scoped, not implemented
-**Source:** `docs/audit/archive-gates-2026-04-27.md` §7 #1
+**Source:** `docs/governance/audit/archive-gates-2026-04-27.md` §7 #1
 **Branch (when picked up):** new branch off `main`
 **Estimated effort:** ~1–2 hours including a dry-run debug pass.
 

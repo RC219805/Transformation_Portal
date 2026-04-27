@@ -49,7 +49,7 @@ recorded in §6.
 ## 2. Pass/fail summary
 
 All 12 contract checks against
-`docs/audit/archive-gates-2026-04-27.json` passed:
+`docs/governance/audit/archive-gates-2026-04-27.json` passed:
 
 ```
 PASS  schema == tp.orchestrator.pipeline_readiness_audit.v1
@@ -173,7 +173,7 @@ the gates correctly refuse dispatch until required inputs are supplied.
    [`follow-ups/ci-wire-audit-pipeline-readiness.md`](./follow-ups/ci-wire-audit-pipeline-readiness.md).
 2. **Persist the readiness matrix on each run.** The script already
    supports `--json-output`; consider adopting a dated path under
-   `docs/audit/` (or an artifact bucket) so historical matrices are
+   `docs/governance/audit/` (or an artifact bucket) so historical matrices are
    diffable.
 3. **Add a non-empty rights-classification fixture.** The current
    fixture leaves all 3 entries `default`-classified
@@ -205,7 +205,7 @@ prioritization.
 make audit-pipeline-readiness
 # or, to persist the readiness matrix used by this report:
 python scripts/validation/audit_pipeline_readiness.py \
-    --json-output docs/audit/archive-gates-2026-04-27.json \
+    --json-output docs/governance/audit/archive-gates-2026-04-27.json \
     --output-dir "$(mktemp -d -t tp-audit-readiness-XXXXXX)" \
     --keep-output
 ```
