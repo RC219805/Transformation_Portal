@@ -1073,9 +1073,17 @@ def test_run_apex_eval_derives_evidence_from_manifest(tmp_path, monkeypatch):
     derived_path = output_dir / "derived_evidence" / "materials_v3__unit_image.evidence.json"
     assert derived_path.is_file()
 
-    payload = json.loads(derived_path.read_text(encoding="utf-8"))
+    raw = derived_path.read_text(encoding="utf-8")
+    # Match the canonical writer used by build_apex_evidence_bundle: 2-space
+    # indent, sort_keys, and a trailing newline. Locks the contract that
+    # derived evidence files are byte-portable and standards-compliant.
+    assert raw.endswith("\n")
+    assert raw.startswith("{\n  ")  # indent=2 leading line
+    payload = json.loads(raw)
     assert payload["materials_v3_enabled"] is True
     assert payload["passthrough_status"]["code"] == APEX_MATERIALS_PASSTHROUGH_LOW_CONFIDENCE
+    # Keys are sorted (canonical ordering).
+    assert list(payload.keys()) == sorted(payload.keys())
 
     assert captured["candidate_evidence"] == {"materials_v3": {"unit_image": derived_path}}
 

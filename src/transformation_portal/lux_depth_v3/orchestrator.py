@@ -4811,11 +4811,10 @@ class EnhanceOrchestrator:
         Surfaces under both ``materials_v3_pixel_ops.passthrough_status`` (consumed
         by the orchestrator's per-image manifest) and
         ``materials_v3_metadata.segmentation_metadata.warnings`` (consumed by the
-        run-card summary cache).
+        run-card summary cache). Idempotent: repeat calls (e.g. on retry / re-entry)
+        do not duplicate the warning code in the warnings list.
         """
-        from transformation_portal.evals.apex_evidence_bundle import (
-            APEX_MATERIALS_PASSTHROUGH_LOW_CONFIDENCE,
-        )
+        from .apex_codes import APEX_MATERIALS_PASSTHROUGH_LOW_CONFIDENCE
 
         warning_payload = {
             "code": APEX_MATERIALS_PASSTHROUGH_LOW_CONFIDENCE,
@@ -4842,7 +4841,8 @@ class EnhanceOrchestrator:
         else:
             segmentation_metadata = dict(segmentation_metadata)
         warnings_list = list(segmentation_metadata.get("warnings") or [])
-        warnings_list.append(APEX_MATERIALS_PASSTHROUGH_LOW_CONFIDENCE)
+        if APEX_MATERIALS_PASSTHROUGH_LOW_CONFIDENCE not in warnings_list:
+            warnings_list.append(APEX_MATERIALS_PASSTHROUGH_LOW_CONFIDENCE)
         segmentation_metadata["warnings"] = warnings_list
         segmentation_metadata["pixel_ops_passthrough"] = warning_payload
         materials_v3_metadata["segmentation_metadata"] = segmentation_metadata

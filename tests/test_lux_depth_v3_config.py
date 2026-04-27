@@ -149,6 +149,43 @@ class TestEnhanceConfig:
         with pytest.raises(ValueError, match="Invalid depth fallback"):
             validate_depth_fallback("not-a-real-mode")
 
+    @pytest.mark.parametrize(
+        "raw_value, expected_final",
+        [
+            ("APEX-STRICT", "fail"),
+            ("  apex-strict  ", "fail"),
+            ("Apex-Strict", "fail"),
+            ("V2-AUTO", "v2-auto"),
+            ("  skip ", "skip"),
+        ],
+    )
+    def test_enhance_config_normalizes_depth_fallback_casing_and_whitespace(self, raw_value, expected_final):
+        """Direct EnhanceConfig() construction must canonicalize casing/whitespace
+        on `depth_fallback` so callers that bypass the security validator still
+        get the documented `apex-strict` opt-out (and the auto-upgrade) applied
+        consistently. Pin a non-apex tier so the auto-upgrade path is inert and
+        we observe pure normalization."""
+        config = EnhanceConfig(quality_tier="standard", depth_fallback=raw_value)
+        assert config.depth_fallback == expected_final
+
+    def test_enhance_config_rejects_unknown_depth_fallback_value(self):
+        """Unknown depth_fallback values must fail fast at __post_init__ instead
+        of silently leaking downstream — matches the security validator's
+        contract."""
+        with pytest.raises(ValueError, match="Invalid depth fallback"):
+            EnhanceConfig(depth_fallback="not-a-real-mode")
+
+    def test_enhance_config_rejects_non_string_depth_fallback(self):
+        """Non-string depth_fallback values are an outright contract violation."""
+        with pytest.raises(ValueError, match="depth_fallback must be a string"):
+            EnhanceConfig(depth_fallback=42)  # type: ignore[arg-type]
+
+    def test_enhance_config_apex_strict_normalized_casing_still_opts_out(self):
+        """The opt-out must work for casing/whitespace variants on the APEX
+        tier — the canonical sentinel comparison happens AFTER normalization."""
+        config = EnhanceConfig(quality_tier="apex", depth_fallback="APEX-STRICT")
+        assert config.depth_fallback == "fail"  # auto-upgrade suppressed
+
     def test_enhance_config_normalizes_legacy_depth_backend_alias(self):
         """Legacy backend aliases should normalize to canonical IDs."""
         with pytest.warns(FutureWarning, match="depth_anything_v3"):

@@ -14,10 +14,17 @@ from transformation_portal.evals.apex_metrics import (
 )
 from transformation_portal.ingest.canonical_json import dump_json
 
+# Re-export the orchestrator-owned APEX gate codes from this module so existing
+# imports (``from transformation_portal.evals.apex_evidence_bundle import
+# APEX_MATERIALS_PIXEL_OPS_EMPTY, ...``) keep working without forcing
+# ``lux_depth_v3`` to depend on ``evals``.
+from transformation_portal.lux_depth_v3.apex_codes import (
+    APEX_MATERIALS_PASSTHROUGH_LOW_CONFIDENCE,
+    APEX_MATERIALS_PIXEL_OPS_EMPTY,
+)
+
 APEX_EVIDENCE_BUNDLE_VERSION = "apex_evidence_bundle.v1"
 APEX_METRIC_CONTRACT_VERSION = "apex_metrics.v1"
-APEX_MATERIALS_PIXEL_OPS_EMPTY = "APEX_MATERIALS_PIXEL_OPS_EMPTY"
-APEX_MATERIALS_PASSTHROUGH_LOW_CONFIDENCE = "APEX_MATERIALS_PASSTHROUGH_LOW_CONFIDENCE"
 _PROMOTION_BLOCKING_METRIC_STATUSES = frozenset(
     {
         METRIC_STATUS_INVALID_INPUT,

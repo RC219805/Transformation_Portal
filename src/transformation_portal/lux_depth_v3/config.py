@@ -472,6 +472,20 @@ class EnhanceConfig:
             0.0,
         )
 
+        # Normalize and validate ``depth_fallback`` before any policy branch
+        # reads it. Callers that bypass ``security.validate_depth_fallback``
+        # (e.g. constructing ``EnhanceConfig`` directly with casing/whitespace
+        # variants like "APEX-STRICT" or " apex-strict ") still get the same
+        # sentinel handling and the same fail-fast on bad values.
+        from .security import validate_depth_fallback
+
+        if isinstance(self.depth_fallback, str):
+            self.depth_fallback = validate_depth_fallback(self.depth_fallback) or "fail"
+        else:
+            # Non-string values are an outright contract violation; surface
+            # before silently accepting them.
+            raise ValueError(f"depth_fallback must be a string; got {type(self.depth_fallback).__name__}")
+
         # `apex-strict` is an operator-facing sentinel that opts out of the APEX
         # tier auto-upgrade below. Canonicalize to "fail" so all downstream
         # branches (orchestrator runtime, manifest serializer, validator) only

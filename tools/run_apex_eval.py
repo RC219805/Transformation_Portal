@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import argparse
-import json
 import re
 import sys
 from pathlib import Path
@@ -19,6 +18,7 @@ from transformation_portal.evals.apex_evidence_bundle import (
     derive_materials_v3_evidence_from_manifest,
     parse_candidate_evidence,
 )
+from transformation_portal.ingest.canonical_json import dump_json
 
 
 # Restrict candidate / asset_id to characters that are safe to embed in a
@@ -150,7 +150,20 @@ def main() -> int:
                             f"Refusing to write derived evidence outside {derived_dir_resolved}: "
                             f"{derived_path}"
                         )
-                    derived_path.write_text(json.dumps(derived, sort_keys=True), encoding="utf-8")
+                    # Use the project's canonical JSON writer so the derived file
+                    # matches the strict / portable contract used by
+                    # ``build_apex_evidence_bundle`` (sort_keys, indent=2,
+                    # ensure_ascii=False, allow_nan=False) plus a trailing newline.
+                    with derived_path.open("w", encoding="utf-8") as handle:
+                        dump_json(
+                            derived,
+                            handle,
+                            sort_keys=True,
+                            indent=2,
+                            ensure_ascii=False,
+                            allow_nan=False,
+                        )
+                        handle.write("\n")
                     candidate_slot[asset_id] = derived_path
         if args.emit_evidence_bundle == "on" or candidate_evidence:
             resolved_output_dir = Path(str(report["report_path"])).parent
