@@ -41,6 +41,11 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 from starlette.responses import Response, StreamingResponse
 
+from transformation_portal.api.v1 import (
+    HealthzResponse,
+    ReadinessEnvelope,
+    ReadyResponse,
+)
 from transformation_portal.determinism.trace import get_or_create_trace_context
 from transformation_portal.ingest.upload_staging import (
     DEFAULT_CAPTURE_METADATA_CONFIG_PATH,
@@ -7819,7 +7824,7 @@ async def portal_bootstrap() -> JSONResponse:
     )
 
 
-@app.get("/healthz")
+@app.get("/healthz", response_model=HealthzResponse)
 async def healthz() -> JSONResponse:
     """Lightweight health check endpoint for managed front door and load balancers.
 
@@ -7834,7 +7839,15 @@ async def healthz() -> JSONResponse:
     )
 
 
-@app.get("/ready")
+@app.get(
+    "/ready",
+    response_model=ReadyResponse,
+    # Preserve current wire shape: when TP_READY_VERBOSE=false, the handler
+    # returns a dict WITHOUT the cli/jobs/security keys. Without this flag,
+    # FastAPI would fill in those Optional fields as null and emit them,
+    # which is a wire-format change external probes shouldn't see.
+    response_model_exclude_none=True,
+)
 async def ready() -> Dict[str, Any]:
     response: Dict[str, Any] = {
         "ok": True,
@@ -7867,7 +7880,7 @@ async def ready() -> Dict[str, Any]:
     return response
 
 
-@app.get("/v1/readiness")
+@app.get("/v1/readiness", response_model=ReadinessEnvelope)
 async def readiness() -> JSONResponse:
     pipeline_data: Dict[str, Any] = {}
     for pipeline_name in ("lux-depth-v3", "archive-gate-a", "archive-gate-b", "archive-gate-c"):
