@@ -255,6 +255,16 @@ lux-depth-v3 \
 - Includes PBR map generation, Materials V3, and all deliverables
 - Suitable for final production and client deliverables
 
+#### APEX Gate Policy
+
+APEX mode enforces fail-closed quality gates with two explicit recovery paths:
+
+- **Depth fallback auto-upgrade.** When `quality_tier=apex` is selected, `depth_fallback` is auto-upgraded from the default `"fail"` to `"v2-auto"`. Flat-distribution scenes that fail both DA3 (`APEX_DEPTH_PLATEAU`) and DA2 (`APEX_DEPTH_SATURATION_LOW`) recover via the V2 stage with independent depth instead of failing the batch. The run card records the full attempt history.
+  - **Opt out:** pass `depth_fallback="apex-strict"` to keep fail-closed depth on APEX. The validator accepts the value, `EnhanceConfig` canonicalizes it to `"fail"`, and the auto-upgrade is suppressed for that run.
+- **Materials V3 soft-passthrough on confidence-only blocks.** When masks are detected and every implemented pixel op is blocked solely by `below_confidence_threshold`, the strict gate emits the output without applying pixel ops and surfaces a non-fatal `APEX_MATERIALS_PASSTHROUGH_LOW_CONFIDENCE` warning instead of `APEX_MATERIALS_PIXEL_OPS_EMPTY`. The warning lands in the run card under `result_summary[].segmentation_status.pixel_ops_passthrough` and `.warnings`.
+  - Mixed blocker sets (e.g. `missing_material_confidence`, `unsupported_confidence_score_type`, `below_coverage_threshold`) still fail closed.
+  - To carry the soft-pass through APEX promotion, derive the per-candidate evidence from each per-image manifest with `transformation_portal.evals.apex_evidence_bundle.derive_materials_v3_evidence_from_manifest`, dump it to JSON, and pass it via `--candidate-evidence materials_v3:<asset_id>=<path>`.
+
 ## Output Deliverables
 
 When APEX mode is enabled with all emit flags, the following outputs are generated:

@@ -41,6 +41,116 @@ def parse_candidate_evidence(values: Iterable[str]) -> dict[str, dict[str, Path]
     return parsed
 
 
+def _aggregate_blocked_reason_counts(blocked: Any) -> dict[str, int]:
+    """Aggregate per-material `blocked` entries into a histogram of reason counts.
+
+    Mirrors ``EnhanceOrchestrator._pixel_ops_blocked_reasons`` so that evidence
+    derived from a manifest matches what the orchestrator would have written
+    directly. Each entry contributes one count per ``blocked_by`` reason, falling
+    back to ``reason`` when ``blocked_by`` is missing or empty.
+    """
+    histogram: dict[str, int] = {}
+    if not isinstance(blocked, list):
+        return histogram
+    for entry in blocked:
+        if not isinstance(entry, Mapping):
+            continue
+        reasons = entry.get("blocked_by")
+        if isinstance(reasons, list) and reasons:
+            for reason in reasons:
+                key = str(reason)
+                histogram[key] = histogram.get(key, 0) + 1
+        else:
+            key = str(entry.get("reason") or "unknown")
+            histogram[key] = histogram.get(key, 0) + 1
+    return histogram
+
+
+def derive_materials_v3_evidence_from_manifest(manifest_path: Path | str) -> dict[str, Any]:
+    """Derive a per-candidate Materials V3 evidence payload from a per-image manifest.
+
+    The orchestrator's ``MaterialsV3Metadata`` is the single source of truth for
+    what happened during a Materials V3 run. This helper renders that metadata
+    into the shape ``_materials_status`` consumes, so soft-passthrough decisions
+    (and the rest of the pixel-ops telemetry) flow into APEX promotion without
+    operator-side wiring of the evidence file.
+
+    The returned dict is JSON-serializable and can be passed directly to
+    ``build_apex_evidence_bundle`` via ``candidate_evidence`` after dumping to
+    disk, or used in-process by callers that build the bundle programmatically.
+    """
+    from transformation_portal.lux_depth_v3.manifest import CombinedManifest
+
+    manifest = CombinedManifest.load(Path(manifest_path))
+    materials_v3 = manifest.materials_v3
+
+    if materials_v3 is None or not bool(materials_v3.enabled):
+        return {
+            "materials_v3_enabled": False,
+            "pixel_ops_enabled": False,
+            "masks_exist": False,
+            "implemented_ops_exist": False,
+            "applied_ops_count": 0,
+            "blocked_reason_counts": {},
+            "confidence_authority": {},
+        }
+
+    pixel_ops = materials_v3.pixel_ops if isinstance(materials_v3.pixel_ops, Mapping) else {}
+    pixel_ops_enabled = bool(pixel_ops.get("enabled"))
+    applied = pixel_ops.get("applied")
+    blocked = pixel_ops.get("blocked")
+    applied_list = applied if isinstance(applied, list) else []
+    applied_ops_count = len(applied_list)
+    blocked_reason_counts = _aggregate_blocked_reason_counts(blocked)
+
+    # Prefer the canonical pixel_ops.passthrough_status; fall back to the
+    # mirrored copy under segmentation_metadata.pixel_ops_passthrough that the
+    # run-card cache reads.
+    raw_passthrough = pixel_ops.get("passthrough_status")
+    seg_meta = materials_v3.segmentation_metadata if isinstance(materials_v3.segmentation_metadata, Mapping) else {}
+    if not isinstance(raw_passthrough, Mapping):
+        fallback = seg_meta.get("pixel_ops_passthrough") if isinstance(seg_meta, Mapping) else None
+        if isinstance(fallback, Mapping):
+            raw_passthrough = fallback
+
+    passthrough_implemented_materials: list[str] = []
+    if isinstance(raw_passthrough, Mapping):
+        details = raw_passthrough.get("details")
+        if isinstance(details, Mapping):
+            raw_list = details.get("implemented_materials")
+            if isinstance(raw_list, list):
+                passthrough_implemented_materials = [str(m) for m in raw_list]
+
+    mask_artifact_path = seg_meta.get("mask_artifact_path") if isinstance(seg_meta, Mapping) else None
+    raw_mask_count = seg_meta.get("mask_count") if isinstance(seg_meta, Mapping) else None
+    mask_count = raw_mask_count if isinstance(raw_mask_count, int) else None
+
+    masks_exist = bool(
+        applied_list
+        or blocked_reason_counts
+        or passthrough_implemented_materials
+        or (mask_count is not None and mask_count > 0)
+        or (isinstance(mask_artifact_path, str) and mask_artifact_path.strip())
+    )
+
+    # Implemented ops were available iff something was applied (proves it) or
+    # the soft-passthrough payload enumerated implemented materials.
+    implemented_ops_exist = bool(applied_list) or bool(passthrough_implemented_materials)
+
+    evidence: dict[str, Any] = {
+        "materials_v3_enabled": True,
+        "pixel_ops_enabled": pixel_ops_enabled,
+        "masks_exist": masks_exist,
+        "implemented_ops_exist": implemented_ops_exist,
+        "applied_ops_count": applied_ops_count,
+        "blocked_reason_counts": blocked_reason_counts,
+        "confidence_authority": {},
+    }
+    if isinstance(raw_passthrough, Mapping):
+        evidence["passthrough_status"] = dict(raw_passthrough)
+    return evidence
+
+
 def _load_evidence(path: Path, *, repo_root: Path) -> dict[str, Any]:
     resolved = path if path.is_absolute() else repo_root / path
     payload = json.loads(resolved.read_text(encoding="utf-8"))

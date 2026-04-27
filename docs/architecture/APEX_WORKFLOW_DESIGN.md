@@ -660,6 +660,36 @@ basic → standard → premium → apex
                            ↘ research (for 3D workflows)
 ```
 
+### APEX Gate Policy
+
+The `apex` tier enforces fail-closed quality gates. Two policy switches govern recovery behavior; both are observable in run-card output and the gate fingerprint:
+
+- **Depth fallback auto-upgrade.** `EnhanceConfig.__post_init__` flips the default `depth_fallback="fail"` to `"v2-auto"` when `quality_tier == "apex"`. Flat-distribution scenes that fail both DA3 (`APEX_DEPTH_PLATEAU` — `upper_iqr ≤ 1e-4`) and DA2 (`APEX_DEPTH_SATURATION_LOW` — `> 2 %` low-saturation pixels) recover via the V2 stage with independent depth instead of failing the batch. The run card records the full attempt history (`DA3 → DA2 → v2-auto`).
+  - **Operator escape hatch:** pass `depth_fallback="apex-strict"` to keep fail-closed depth on APEX. The validator (`security.validate_depth_fallback`) accepts the value, `__post_init__` canonicalizes it to `"fail"`, and the auto-upgrade is suppressed for that run.
+  - The fingerprint payload (`build_apex_depth_gate_fingerprint_payload`) includes `depth_fallback` so cache replays under one policy do not serve outputs from the other.
+- **Materials V3 soft-passthrough on confidence-only blocks.** `_enforce_apex_materials_pixel_ops_gate` narrows the original fail-closed condition: when masks exist and every implemented pixel op is blocked solely by `below_confidence_threshold`, the gate emits the output without applying pixel ops and surfaces a non-fatal `APEX_MATERIALS_PASSTHROUGH_LOW_CONFIDENCE` warning instead of `APEX_MATERIALS_PIXEL_OPS_EMPTY`.
+  - Mixed blocker sets (`missing_material_confidence`, `unsupported_confidence_score_type`, `below_coverage_threshold`, `no_implementation`, …) still fail closed.
+  - The warning is mirrored in two places: `materials_v3.pixel_ops.passthrough_status` (canonical, consumed by the orchestrator's per-image manifest) and `materials_v3.segmentation_metadata.pixel_ops_passthrough` (consumed by the run-card cache).
+  - The materials fingerprint payload (`build_materials_fingerprint_payload`) carries `pixel_ops_strict_policy_version` to mark this regime; bumping it invalidates caches when blocker semantics change.
+
+### APEX Promotion Eligibility & Soft-Passthrough
+
+Promotion via `build_apex_evidence_bundle` reads a per-candidate evidence JSON file. To carry the soft-passthrough decision through to promotion (so the four images we previously rescued at runtime no longer block promotion), derive the evidence directly from each per-image manifest:
+
+```python
+from pathlib import Path
+import json
+from transformation_portal.evals.apex_evidence_bundle import (
+    derive_materials_v3_evidence_from_manifest,
+)
+
+evidence = derive_materials_v3_evidence_from_manifest(Path("output/.../image_manifest.json"))
+Path("output/.../materials_v3_evidence.json").write_text(json.dumps(evidence))
+# Then: tools/run_apex_eval.py --candidate-evidence materials_v3:<asset_id>=<evidence_path>
+```
+
+The orchestrator's `MaterialsV3Metadata` is the single source of truth; the helper renders it into the shape `_materials_status` consumes. When `passthrough_status.code == "APEX_MATERIALS_PASSTHROUGH_LOW_CONFIDENCE"`, the bundle keeps `failure_code = None` and promotion proceeds.
+
 ---
 
 ## Feature Matrix
