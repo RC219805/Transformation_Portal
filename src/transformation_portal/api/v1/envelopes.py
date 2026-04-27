@@ -15,9 +15,11 @@ Generic over the ``data`` payload type so route models can declare e.g.
 Implementation note: the wire field is ``schema``, but ``schema`` shadows
 ``pydantic.BaseModel.schema()`` (deprecated in v2 but still defined). To avoid
 the resulting warning while keeping the wire key correct, the Python attribute
-is named ``schema_`` and serializes via alias. ``populate_by_name=True`` lets
-callers continue to construct with ``schema=`` kwarg; ``serialize_by_alias=True``
-makes ``model_dump()`` emit ``schema`` by default.
+is named ``schema_`` and uses ``schema`` as its alias. Callers can construct
+with ``schema=`` via the alias regardless of config; ``populate_by_name=True``
+*additionally* allows construction with the field name ``schema_=``, which
+internal call sites that prefer the unambiguous python-name form may use.
+``serialize_by_alias=True`` makes ``model_dump()`` emit ``schema`` by default.
 """
 
 from __future__ import annotations

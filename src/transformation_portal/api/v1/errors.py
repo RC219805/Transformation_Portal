@@ -20,7 +20,11 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 ErrorCode = Literal[
-    # HTTP-status-derived codes (see HTTP_STATUS_ERROR_CODES in app.py)
+    # Top-level envelope error codes emitted by orchestrator HTTP surfaces.
+    # Most are HTTP-status-derived (see HTTP_STATUS_ERROR_CODES in app.py),
+    # while some — such as AUTH_CONFIGURATION_ERROR — are emitted directly
+    # by middleware on a 503 response when the auth env-var contract is
+    # incomplete.
     "AUTH_CONFIGURATION_ERROR",
     "FORBIDDEN",
     "HTTP_ERROR",

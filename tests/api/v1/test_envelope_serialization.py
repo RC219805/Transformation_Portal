@@ -188,7 +188,6 @@ class TestErrorEnvelope:
         ours = ErrorEnvelope(error=ErrorObject(code="NOT_FOUND", message="no such job", details=None)).model_dump(mode="json")
         assert ours == target
         assert ours["error"]["details"] == {}
-        assert ours["error"]["details"] == {}
 
     def test_schema_field_is_locked_to_error_schema(self) -> None:
         env = ErrorEnvelope(error=ErrorObject(code="NOT_FOUND", message="x"))
