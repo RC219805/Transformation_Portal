@@ -23,9 +23,10 @@ gate_0:
   priority: "P0"
   unblocked: "Tranche 1 work may now proceed"
   evidence:
-    - "black --check src/ tests/ app.py exits 0"
-    - "isort --check-only src/ tests/ app.py exits 0"
-    - "build.yml lint job runs black/isort/gitleaks as required PR checks"
+    - "black --check src/ tests/ exits 0"
+    - "isort --check-only src/ tests/ exits 0"
+    - "build.yml lint job enforces black/isort over src/ tests/ and runs gitleaks as required PR checks"
+    - "app.py reformatted to match the same Black config (line-length=127); not yet in CI lint scope"
     - "build.yml typecheck job runs mypy on lux_depth_v3 + vetted core/ slice"
     - "docs/ci/TYPE_CHECKING_POLICY.md documents gradual rollout"
     - ".git-blame-ignore-revs records the formatting baseline commit"

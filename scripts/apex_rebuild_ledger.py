@@ -68,7 +68,8 @@ def rebuild_ledger(input_dir: Path, db_path: Path, clean: bool = False) -> int:
         with sqlite3.connect(db_path) as conn:
             cursor = conn.cursor()
             # Check which tables exist.
-            # SAFETY: `placeholders` is `?,?,...` only; every value flows through `params`.
+            # SAFETY: `placeholders` is `?,?,...` only; every value flows through
+            # `tables_to_truncate`, which is bound as the parameter sequence below.
             placeholders = ",".join("?" for _ in tables_to_truncate)
             existing_tables = {
                 row[0]
