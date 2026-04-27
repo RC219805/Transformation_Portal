@@ -1,123 +1,144 @@
 # CI Workflow Matrix
 
-**Purpose**: Canonical reference for all GitHub Actions workflows
+**Purpose**: Canonical reference for all GitHub Actions workflows. Tracks the full inventory and the consolidation roadmap.
 **Owner**: Transformation Portal Architect
-**Last Updated**: 2026-03-25
+**Last Updated**: 2026-04-27
+
+---
+
+## Status Snapshot
+
+- **Workflow files**: 30 (`.github/workflows/*.yml`), ~7,700 lines total
+- **Required PR check**: `build.yml` → `CI Gate` (single aggregated check)
+- **Consolidation target**: 30 → ~18 workflows over 3 incremental PRs (see [Consolidation Roadmap](#consolidation-roadmap))
+- **Prior matrix doc** (2026-03-25) listed 12 workflows — this revision corrects the omission of 18 that exist on disk.
+
+---
+
+## Complete Inventory
+
+Every `.github/workflows/*.yml` file, current as of the timestamp above. The **Recommendation** column is the proposal — *not yet executed*. Discuss before acting.
+
+| # | File | Name | Triggers | Blocking? | LOC | Recommendation |
+|---|------|------|----------|-----------|-----|----------------|
+| 1 | `build.yml` | CI (Lint, Tests & Manifest) | push, PR, manual | ✅ Required | 1101 | **Keep** — primary PR gate; aggregated `CI Gate` check |
+| 2 | `ci.yml` | CI Quality Firewall (push) | push (main, develop) | Post-merge | 579 | **Investigate → Merge into `build.yml`** — runs the same lint/typecheck/test/security/build/coverage jobs as `build.yml` but only on push. Most jobs are duplicative once `build.yml` runs on push too. Risk: `repo-hygiene` job may be unique; verify before retiring. |
+| 3 | `ci-quality-firewall.yml` | CI Quality Firewall (post-CI) | workflow_run, manual | Post-merge | 951 | **Investigate → Retire** — `workflow_run` gating fires *after* `build.yml`; if `build.yml` is truly required, this is redundant. Largest single workflow file. |
+| 4 | `enforcement.yml` | Enforcement | push, PR, schedule | ⚠️ Partial | 211 | **Keep** — owns action-pin, banned-deps, HF-revision, artifact-boundary, layer-1/2 tests, golden-regression. Distinct from `build.yml` test surface. |
+| 5 | `quality-gate.yml` | Quality Gate | PR, push | ⚠️ Advisory | 41 | **Investigate → Replace with pre-commit** — calls `pre-commit run --all-files`. If pre-commit hooks are run by devs locally and by `build.yml`'s lint job, this duplicates. |
+| 6 | `codeql.yml` | CodeQL Advanced | push, PR, schedule | ✅ Required | 112 | **Keep** — GitHub semantic SAST; can't be replicated by other workflows. |
+| 7 | `security-unified.yml` | Security Unified | schedule, push, PR, manual | ✅ Required | 255 | **Keep** — pip-audit + security gates; distinct from CodeQL. |
+| 8 | `dependency-review.yml` | Dependency Review | PR | ✅ Required | 30 | **Keep** — GitHub-native PR dependency check; minimal cost. |
+| 9 | `dependency-submission.yml` | Dependency Submission | push, PR, manual | ❌ No | 256 | **Keep** — feeds GitHub dependency graph; distinct concern. |
+| 10 | `dependency-update.yml` | Dependency Updates | schedule, manual | ❌ No | 174 | **Keep** — Dependabot supplement; scheduled. |
+| 11 | `secure-install-pilot.yml` | Secure Install Pilot | PR | ⚠️ Advisory | 62 | **Investigate** — pilot/experimental; check whether the pilot has graduated or should be retired. |
+| 12 | `nightly.yml` | Nightly Deep Checks | schedule (2 AM UTC), manual | ❌ No | 459 | **Keep** — owns stress, benchmarks, memory leak, deep dep audit, full integration. |
+| 13 | `ml-slow-suite.yml` | ML Slow Suite | schedule (3:30 AM UTC), manual | ❌ No | 155 | **Merge → `nightly.yml`** — same scheduled cadence; conceptual overlap with nightly's slow tests. Add as a `ml-slow` job inside nightly. |
+| 14 | `performance-monitor.yml` | Performance Monitor | schedule (3:30 AM UTC), manual | ❌ No | 224 | **Keep** — schedule-only by design (baseline persistence); distinct from nightly benchmarks. |
+| 15 | `apex_performance.yml` | APEX Performance Matrix | PR, push, manual, schedule | ⚠️ Advisory | 442 | **Keep** — APEX-specific matrix runner with synthetic-data PR comments. Standalone domain. |
+| 16 | `apex_policy_validation.yml` | APEX Policy Validation | PR, push | ✅ Required | 123 | **Merge → `contract-validations.yml`** (proposed new) |
+| 17 | `evalsuite_contract_validation.yml` | Eval Suite Contract Validation | push, PR, manual | ✅ Required | 95 | **Merge → `contract-validations.yml`** |
+| 18 | `ingest_contract_validation.yml` | Ingest Contract Validation | PR, push, manual | ✅ Required | 219 | **Merge → `contract-validations.yml`** |
+| 19 | `machine_mode_contract_validation.yml` | Machine Mode Contract Validation | push, PR, manual | ✅ Required | 157 | **Merge → `contract-validations.yml`** |
+| 20 | `determinism-gate.yml` | determinism-gate | PR | ✅ Required | 205 | **Merge → `determinism.yml`** (proposed) — combine with cross-ISA |
+| 21 | `determinism-cross-isa.yml` | Determinism Harness / Cross-ISA Parity | PR | ⚠️ Advisory | 195 | **Merge → `determinism.yml`** |
+| 22 | `docs.yml` | Documentation | PR, push, manual | ⚠️ Advisory | 128 | **Keep** — multi-job (build, validate-markdown, navigation); coherent. |
+| 23 | `frontdoor-deployment-gate.yml` | Frontdoor Deployment Gate | manual only | Manual | 117 | **Keep** — operational gate for frontdoor deploys. |
+| 24 | `diagnostic-trial.yml` | diagnostic-trial | PR, manual | ⚠️ Advisory | 188 | **Investigate** — purpose unclear from name; may be a stale experiment. |
+| 25 | `submit-pypi.yml` | Submit to PyPI | push (tag), manual | Release | 139 | **Keep** — release pipeline. |
+| 26 | `tag_retention_prune_preservation_tags.yml` | Tag Retention (Preservation Tags) | schedule, manual | ❌ No | 40 | **Keep** — periodic cleanup. |
+| 27 | `ai-code-review.yml` | AI Code Review | PR | ❌ No | 285 | **Investigate → Consolidate or retire** — frequent rate-limit failures on recent PRs (#1558 saw 4/4 calls error out). Either fold into `ai-advisory.yml` (proposed) or accept the noise. |
+| 28 | `summary.yml` | Issue Summarizer | issue_comment, PR, issues | ❌ No | 279 | **Investigate → Consolidate or retire** — same rate-limit story as ai-code-review. |
+| 29 | `smart-issue-management.yml` | Smart Issue Management | issues, pull_request_target | ❌ No | 337 | **Investigate → Consolidate or retire** — same. |
+| 30 | `issue_printer.yml` | Print Issue Info | issues | ❌ No | 24 | **Retire** — 24 lines that print title/body to job logs. No artifact, no enforcement. Pure noise. |
+
+**Legend:** Required = listed in branch protection / `CI Gate`. Advisory = runs but does not block. Post-merge = runs only on push to main.
+
+---
+
+## Recommendations Grouped by Tier
+
+### Tier A — Definitely retire / merge (low risk, high confidence)
+
+These are clear wins. Aggregated reduction: **3 fewer workflows**.
+
+1. **Retire `issue_printer.yml`** — 24 lines, prints to logs, zero downstream consumers. Search the repo for "Print Issue Info" or `issue_printer` to confirm no documentation references it. Then delete.
+
+2. **Merge `ci.yml` into `build.yml`** — `ci.yml` already documents itself as "post-merge validation only" but `build.yml` already runs on `push`. The unique value is `repo-hygiene` and possibly `coverage-gate`/`build` jobs. Audit each, port any unique job into `build.yml` guarded by `if: github.event_name == 'push'`, then delete.
+
+3. **Retire `ci-quality-firewall.yml`** — 951 lines (largest workflow file) of `workflow_run` secondary gating. If `build.yml` is required at branch protection, this re-litigates the same checks. Confirm by listing what jobs `ci-quality-firewall.yml` runs that `build.yml` doesn't, then delete.
+
+### Tier B — Consolidate domains (medium effort, clear benefit)
+
+Aggregated reduction: **6 fewer workflows**.
+
+4. **Create `contract-validations.yml`** combining four single-purpose contract validators:
+   - `apex_policy_validation.yml` (123 lines)
+   - `evalsuite_contract_validation.yml` (95 lines)
+   - `ingest_contract_validation.yml` (219 lines)
+   - `machine_mode_contract_validation.yml` (157 lines)
+
+   Each becomes a job in the unified workflow. Triggers: `pull_request, push, workflow_dispatch`. Use `paths:` filters per job so only affected validators run when their files change. Estimated combined size after dedupe of setup steps: ~400 lines (vs. 594 today).
+
+5. **Create `determinism.yml`** combining the two determinism workflows (`determinism-gate.yml` + `determinism-cross-isa.yml`). 400 lines combined → likely ~300 after dedupe.
+
+6. **Merge `ml-slow-suite.yml` into `nightly.yml`** as a `ml-slow` job. Same schedule (3:30 AM), shared concern (long-running ML coverage).
+
+### Tier C — Investigate before acting
+
+These need maintainer judgment, not mechanical merging.
+
+7. **Three AI advisory workflows** (`ai-code-review.yml`, `summary.yml`, `smart-issue-management.yml`, total 901 lines). They share a hardening baseline (per `AI_WORKFLOWS_HARDENING_STATUS.md`) and currently fail with rate-limit errors on most PRs. Options:
+   - **Consolidate** into one `ai-advisory.yml` with three jobs sharing setup (saves ~200 LOC)
+   - **Retire** if the value-to-noise ratio is unfavorable (recent PR #1558: 4 of 4 AI calls errored)
+   - **Keep separate** if isolation is desirable for independent ownership
+
+8. **`quality-gate.yml`** — likely redundant with pre-commit + `build.yml`'s lint job. Confirm what it adds.
+
+9. **`secure-install-pilot.yml`** — explicitly a pilot. Check whether it has graduated, in which case fold its jobs into `security-unified.yml`; if dormant, retire.
+
+10. **`diagnostic-trial.yml`** — purpose not obvious from name; needs the original author's input.
+
+### Tier D — Keep as-is
+
+`build.yml`, `enforcement.yml`, `codeql.yml`, `security-unified.yml`, `dependency-review.yml`, `dependency-submission.yml`, `dependency-update.yml`, `nightly.yml`, `performance-monitor.yml`, `apex_performance.yml`, `docs.yml`, `frontdoor-deployment-gate.yml`, `submit-pypi.yml`, `tag_retention_prune_preservation_tags.yml`. Each owns a distinct concern.
+
+---
+
+## Consolidation Roadmap
+
+Sequence the work so each PR is independently revertible.
+
+| PR | Tier | Scope | Net workflow count |
+|----|------|-------|---------------------|
+| 1 | A | Retire `issue_printer.yml` | 30 → 29 |
+| 2 | A | Audit `ci.yml`'s unique jobs; port into `build.yml`; delete `ci.yml` | 29 → 28 |
+| 3 | A | Audit `ci-quality-firewall.yml`'s unique jobs; retire | 28 → 27 |
+| 4 | B | Create `contract-validations.yml`; delete the four single-purpose validators | 27 → 24 |
+| 5 | B | Create `determinism.yml`; delete the two single-purpose determinism workflows | 24 → 23 |
+| 6 | B | Merge `ml-slow-suite.yml` into `nightly.yml` | 23 → 22 |
+| 7 | C | Discuss & resolve AI advisory consolidation | 22 → 20 (if consolidated) |
+| 8 | C | Resolve `quality-gate.yml`, `secure-install-pilot.yml`, `diagnostic-trial.yml` | 20 → ~18 |
+
+After Tier A + B alone: 30 → 22. After Tier C: ~18 (depending on calls). The "~10" target from the architectural review is achievable but requires consolidating things like the `dependency-*` family into `security.yml`, which trades clarity for count.
+
+**Each PR should:**
+- Verify on a feature branch that the consolidated workflow runs all the original checks
+- Update branch-protection required-checks list (if any retired workflow was required)
+- Re-run `make validate-ci` to confirm the workflow contract validators still pass
+- Add an entry to the [Change Log](#change-log) below
 
 ---
 
 ## Workflow Design Principles
 
-1. **`build.yml` is the blocking CI gate** - All PR merge requirements go through this workflow
-2. **Scheduled workflows own their domain** - `nightly.yml`, `ml-slow-suite.yml`, `performance-monitor.yml` are non-blocking validation
-3. **Actions are SHA-pinned** - All third-party actions reference commit SHAs for supply-chain security
-4. **Issue creation is deduplicated** - Automated workflows check for existing open issues before creating new ones
+(Unchanged from prior revision; preserved for continuity.)
 
----
-
-## Active Workflows
-
-| Workflow | File | Trigger | Blocking | Purpose |
-|----------|------|---------|----------|---------|
-| **CI (Lint, Tests & Manifest)** | `build.yml` | PR, push to main, manual | ✅ Yes | Primary quality gate with preflight classifier |
-| **Quality Gate** | `quality-gate.yml` | PR, push to main | ⚠️ Advisory | Formatting and structure checks |
-| **Security Unified** | `security-unified.yml` | Schedule, PR, push to main, manual | ✅ Yes | Dependency scanning (pip-audit), security gates |
-| **CodeQL** | `codeql.yml` | PR, push to main, schedule | ✅ Yes | GitHub semantic code analysis |
-| **Enforcement** | `enforcement.yml` | PR, push to main/develop, schedule | ⚠️ Partial | Policy enforcement (action pins, banned deps, HF revisions, artifact boundary) |
-| **Dependency Submission** | `dependency-submission.yml` | Push to main/develop, PR, manual | ❌ No | Submit dependencies to GitHub dependency graph |
-| **Performance Monitor** | `performance-monitor.yml` | Schedule (3:30 AM UTC), manual | ❌ No | Performance regression tracking (schedule-only) |
-| **Nightly** | `nightly.yml` | Schedule (2 AM UTC), manual | ❌ No | Extended validation: stress tests, benchmarks, memory, integration |
-| **ML Slow Suite** | `ml-slow-suite.yml` | Schedule (3:30 AM UTC), manual | ❌ No | Slow ML test coverage |
-| **AI Code Review** | `ai-code-review.yml` | PR | ❌ No | AI-powered code review comments (advisory) |
-| **Issue Summarizer** | `summary.yml` | Issues, PRs, comments | ❌ No | AI-powered issue/PR summarization |
-| **Smart Issue Management** | `smart-issue-management.yml` | Issues, PRs (opened/labeled) | ❌ No | AI-powered issue triage and labeling |
-
----
-
-## Workflow Responsibilities
-
-### Primary Quality Gate: `build.yml`
-
-**Purpose**: Enforce code quality, type safety, and test coverage
-**Runs on**: Every PR and push to main
-**Blocking**: Yes (required for merge)
-
-**Key Features**:
-- **Preflight classifier**: Determines if full or lightweight suite runs based on changed files
-- **SHA-pinned actions**: All third-party actions pinned to commit SHAs
-- **Concurrency control**: Cancels outdated runs on new pushes
-
-**Jobs**:
-1. **Preflight**: Classify changes to determine suite scope
-2. **Lightweight checks**: pip-tools cache, docs structure, sanity checks
-3. **Lint** (Python 3.12): flake8, pylint, black, isort
-4. **Test - Core** (Python 3.11, 3.12): `pytest -m "not ml and not slow and not benchmark"`
-5. **Test - ML** (Python 3.11): `pytest -m "ml and not slow and not benchmark"`
-6. **Manifest Validation**: MANIFEST.in correctness
-7. **Coverage Gate**: Minimum coverage enforcement
-
-### Enforcement: `enforcement.yml`
-
-**Purpose**: Policy enforcement and governance checks
-**Runs on**: PR, push to main/develop, nightly schedule
-**Blocking**: Partial (some jobs are required)
-
-**Key Features**:
-- **Reliable change detection**: Uses `dorny/paths-filter` for accurate PR file detection
-- **ML-aware**: Only runs ML tier when ML-related files change
-
-**Jobs**:
-1. **Changes**: Classify file changes for conditional job execution
-2. **Action Pins**: Verify all workflow actions are SHA-pinned
-3. **Banned Dependencies**: Check for prohibited packages
-4. **HF Revision Policy**: Validate HuggingFace model revisions
-5. **Layer 1 Tests**: Fast unit/regression tests
-6. **Layer 2 ML Tests**: ML-specific tests (conditional)
-7. **Golden Regression**: Golden path contract tests (conditional)
-8. **Artifact Boundary**: Ensure no large artifacts in git
-
-### Performance Monitor: `performance-monitor.yml`
-
-**Purpose**: Performance regression detection
-**Runs on**: Schedule (3:30 AM UTC daily), manual dispatch
-**Blocking**: No
-
-**Key Features**:
-- **Schedule-only**: Does NOT run on PRs (baseline persistence requires cross-run storage)
-- **Baseline reading**: Reads from `tools/benchmarks/baseline.json` if present (baseline refresh is manual)
-- **Proper status classification**: Distinguishes no tests, passed, regression, and generic failure states
-- **Deduplicated issues**: Checks for existing open issues before creating new ones
-
-### Nightly Deep Checks: `nightly.yml`
-
-**Purpose**: Extended validation suite
-**Runs on**: Schedule (2 AM UTC daily), manual dispatch
-**Blocking**: No
-
-**Key Features**:
-- **Concurrency control**: Prevents overlapping scheduled runs
-- **Baseline reading**: Uses repo-stored baseline (`tools/benchmarks/baseline.json`) if available
-- **Proper status classification**: Distinguishes regression vs generic benchmark failure
-- **Deduplicated issues**: Updates existing issues instead of creating duplicates
-
-**Jobs**:
-1. **Stress Tests**: Long-running endurance tests
-2. **Performance Benchmarks**: Regression testing with proper baseline handling
-3. **Memory Leak Detection**: Memory growth profiling
-4. **Deep Dependency Audit**: pip-audit + SBOM generation
-5. **Full Integration Tests**: Complete integration suite
-6. **Nightly Summary**: Aggregated results and failure notification
-
-### ML Slow Suite: `ml-slow-suite.yml`
-
-**Purpose**: Slow ML test coverage
-**Runs on**: Schedule (3:30 AM UTC daily), manual dispatch
-**Blocking**: No
-
-**Key Features**:
-- **Concurrency control**: Prevents overlapping scheduled runs
-- **Model caching**: Caches HuggingFace models
-- **Deduplicated issues**: Updates existing issues instead of creating duplicates
+1. **`build.yml` is the blocking CI gate** — All PR merge requirements go through this workflow's `CI Gate` aggregator job.
+2. **Scheduled workflows own their domain** — `nightly.yml`, `performance-monitor.yml` are non-blocking validation.
+3. **Actions are SHA-pinned** — All third-party actions reference commit SHAs for supply-chain security. Enforcement: `enforcement.yml` → `action-pins` job.
+4. **Issue creation is deduplicated** — Automated workflows check for existing open issues before creating new ones.
+5. **Concurrency control** — All workflows use `concurrency:` to cancel outdated runs on new pushes.
 
 ---
 
@@ -125,20 +146,20 @@
 
 ### Action Pinning
 
-All workflows must pin third-party actions to commit SHAs:
 ```yaml
-# ✅ Good - SHA pinned
+# ✅ Good — SHA pinned
 - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
 
-# ❌ Bad - floating tag
+# ❌ Bad — floating tag
 - uses: actions/checkout@v6
 ```
 
-Enforcement: `enforcement.yml` → `action-pins` job
+Enforcement: `enforcement.yml` → `action-pins` job.
 
 ### Issue Deduplication
 
 Automated failure notifications must check for existing open issues:
+
 ```javascript
 const { data: issues } = await github.rest.issues.listForRepo({
   owner: context.repo.owner,
@@ -159,6 +180,7 @@ if (existingIssue) {
 ### PR Change Detection
 
 For conditional job execution on PRs, use `dorny/paths-filter` instead of unreliable `github.event.head_commit.modified`:
+
 ```yaml
 - uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36  # v3.0.2
   with:
@@ -171,7 +193,9 @@ For conditional job execution on PRs, use `dorny/paths-filter` instead of unreli
 
 ## Related Documentation
 
-- [Dependabot PR Governance](../governance/DEPENDABOT_PR_GOVERNANCE.md) - Triage policy and merge criteria for Dependabot-generated PRs
+- [`.github/workflows/AI_WORKFLOWS_HARDENING_STATUS.md`](../../.github/workflows/AI_WORKFLOWS_HARDENING_STATUS.md) — PR #1028 AI workflow hardening report (specific to the three AI advisory workflows)
+- [`.github/workflows/AI_WORKFLOW_PATTERN.md`](../../.github/workflows/AI_WORKFLOW_PATTERN.md) — Pattern for advisory workflows
+- [`docs/governance/DEPENDABOT_PR_GOVERNANCE.md`](../governance/DEPENDABOT_PR_GOVERNANCE.md) — Dependabot triage policy
 
 ---
 
@@ -179,6 +203,7 @@ For conditional job execution on PRs, use `dorny/paths-filter` instead of unreli
 
 | Date | Change | Rationale |
 |------|--------|-----------|
+| 2026-04-27 | Complete inventory rebuild (30 workflows) + consolidation roadmap | Prior revision listed 12; the missing 18 went undocumented. Phase 1.4 of remediation plan from PR #1558. |
 | 2026-03-26 | Added link to Dependabot PR governance documentation | Cross-reference dependency update policy |
 | 2026-03-25 | Major update: Fixed enforcement.yml PR detection, performance-monitor.yml baseline handling, nightly.yml deduplication, pinned all actions | Address workflow correctness bugs and governance hygiene |
 | 2026-02-04 | Initial creation | Baseline documentation |
