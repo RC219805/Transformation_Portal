@@ -438,8 +438,7 @@ def test_apex_strict_gate_soft_passthrough_when_only_confidence_blockers(
             "enabled": True,
             "applied": [],
             "blocked": [
-                {"material": material, "reason": "below_confidence_threshold",
-                 "blocked_by": ["below_confidence_threshold"]}
+                {"material": material, "reason": "below_confidence_threshold", "blocked_by": ["below_confidence_threshold"]}
                 for material in ("glass", "water", "foliage", "stone")
             ],
         },
@@ -483,10 +482,8 @@ def test_apex_strict_gate_still_fails_when_confidence_mixed_with_other_blockers(
             "enabled": True,
             "applied": [],
             "blocked": [
-                {"material": "glass", "reason": "below_confidence_threshold",
-                 "blocked_by": ["below_confidence_threshold"]},
-                {"material": "water", "reason": "below_coverage_threshold",
-                 "blocked_by": ["below_coverage_threshold"]},
+                {"material": "glass", "reason": "below_confidence_threshold", "blocked_by": ["below_confidence_threshold"]},
+                {"material": "water", "reason": "below_coverage_threshold", "blocked_by": ["below_coverage_threshold"]},
             ],
         },
     }

@@ -1031,8 +1031,9 @@ def test_run_apex_eval_derives_evidence_from_manifest(tmp_path, monkeypatch):
             "pixel_ops": {
                 "enabled": True,
                 "applied": [],
-                "blocked": [{"material": "glass", "reason": "below_confidence_threshold",
-                             "blocked_by": ["below_confidence_threshold"]}],
+                "blocked": [
+                    {"material": "glass", "reason": "below_confidence_threshold", "blocked_by": ["below_confidence_threshold"]}
+                ],
                 "passthrough_status": passthrough_payload,
             },
         }

@@ -9,6 +9,7 @@ import pytest
 # 16-bit TIFF I/O directly.
 pytest.importorskip("tifffile")
 
+# pylint: disable=wrong-import-position  # importorskip must precede project imports.
 import tifffile
 from PIL import Image
 

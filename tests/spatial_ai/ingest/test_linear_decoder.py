@@ -30,6 +30,8 @@ from PIL import Image
 # ImportError noise.
 pytest.importorskip("tifffile")
 
+# pylint: disable=wrong-import-position  # importorskip must precede project imports.
+
 from transformation_portal.spatial_ai.ingest import (
     BitDepthViolationError,
     ColorSpaceError,

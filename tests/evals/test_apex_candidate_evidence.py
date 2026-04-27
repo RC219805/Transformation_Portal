@@ -15,6 +15,7 @@ from PIL import Image
 # KeyError. Skip the whole module rather than emit a misleading failure.
 pytest.importorskip("tifffile")
 
+# pylint: disable=wrong-import-position  # importorskip must precede project imports.
 from transformation_portal.evals.apex_evidence_bundle import (
     APEX_MATERIALS_PASSTHROUGH_LOW_CONFIDENCE,
     APEX_MATERIALS_PIXEL_OPS_EMPTY,
@@ -637,8 +638,7 @@ def test_derive_materials_v3_evidence_records_applied_ops(tmp_path):
                     {"material": "water", "op": "saturation_pull"},
                 ],
                 "blocked": [
-                    {"material": "stone", "reason": "below_coverage_threshold",
-                     "blocked_by": ["below_coverage_threshold"]},
+                    {"material": "stone", "reason": "below_coverage_threshold", "blocked_by": ["below_coverage_threshold"]},
                 ],
             },
             "segmentation_metadata": {"mask_count": 2},
@@ -681,8 +681,11 @@ def test_derive_materials_v3_evidence_propagates_soft_passthrough(tmp_path):
                 "enabled": True,
                 "applied": [],
                 "blocked": [
-                    {"material": material, "reason": "below_confidence_threshold",
-                     "blocked_by": ["below_confidence_threshold"]}
+                    {
+                        "material": material,
+                        "reason": "below_confidence_threshold",
+                        "blocked_by": ["below_confidence_threshold"],
+                    }
                     for material in ("glass", "water", "foliage", "stone")
                 ],
                 "passthrough_status": passthrough_payload,
@@ -726,8 +729,7 @@ def test_derived_evidence_promotes_through_apex_bundle(tmp_path):
                 "enabled": True,
                 "applied": [],
                 "blocked": [
-                    {"material": m, "reason": "below_confidence_threshold",
-                     "blocked_by": ["below_confidence_threshold"]}
+                    {"material": m, "reason": "below_confidence_threshold", "blocked_by": ["below_confidence_threshold"]}
                     for m in ("glass", "water")
                 ],
                 "passthrough_status": passthrough_payload,
