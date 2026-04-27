@@ -489,7 +489,13 @@ jobs:
         run: |
           set -euo pipefail
           python -m pip install --upgrade pip
-          pip install mypy types-PyYAML
+          # Pin to the same versions present in requirements/{base,dev}.txt so
+          # the typecheck environment matches the rest of CI. We can't use
+          # `pip install -c requirements/all.txt` because that file contains
+          # `coverage[toml]==...` and pip rejects extras in constraint files
+          # ("ERROR: Constraints cannot have extras"). Inline-pinning is the
+          # cleanest workaround that still respects the lockfile.
+          pip install "mypy==1.20.1" "types-PyYAML==6.0.12.20260408" "pydantic==2.13.3"
           pip install -e . --no-deps
 
       - name: Type check with mypy (critical modules)
@@ -497,12 +503,15 @@ jobs:
         # This normalizes typecheck policy with ci.yml (parity debt reduction).
         #
         # Phase 0.3 expansion: mypy now also enforces a vetted slice of core/.
+        # Phase 1.2 PR A expansion: the new api/ package is fully typed and
+        # mypy-strict from the start, so it joins the whitelist.
         # Per docs/ci/TYPE_CHECKING_POLICY.md, additions to this whitelist must
         # pass `mypy --config-file=mypy.ini <path>` before being added here.
         # Expand the list as packages are cleaned up; do NOT enable
         # `core/` as a whole until all 21 currently-failing files are fixed.
         run: |
           mypy --config-file=mypy.ini \
+            src/transformation_portal/api/ \
             src/transformation_portal/lux_depth_v3/ \
             src/transformation_portal/core/geometry/ \
             src/transformation_portal/core/processing/ \
