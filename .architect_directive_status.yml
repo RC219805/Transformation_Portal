@@ -69,7 +69,7 @@ documentation_created:
     size: "12.6 KB"
     lines: 482
     purpose: "Day-by-day Gate 0 execution plan"
-  - path: "docs/DOCUMENTATION_INDEX.md"
+  - path: "docs/guides/DOCUMENTATION_INDEX.md"
     status: "UPDATED"
     purpose: "Integrated new CI and architecture docs"
   - path: "ARCHITECT_RESPONSE_SUMMARY.md"
