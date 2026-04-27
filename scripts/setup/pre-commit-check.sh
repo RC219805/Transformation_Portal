@@ -51,6 +51,7 @@ ALLOWED_ROOT_FILES=(
     ".pre-commit-config.yaml"
     ".auto-organize.sh"
     ".architect_directive_status.yml"
+    ".env.example"
     "PKG-INFO"
     "MANIFEST.in"
     "__init__.py"
