@@ -489,7 +489,11 @@ jobs:
         run: |
           set -euo pipefail
           python -m pip install --upgrade pip
-          pip install mypy types-PyYAML pydantic
+          # Pin via the repo's governed lockfile so the typecheck environment
+          # matches the rest of CI. mypy, types-pyyaml, and pydantic are all
+          # in requirements/all.txt; -c constrains versions without forcing
+          # us to install the entire lockfile.
+          pip install -c requirements/all.txt mypy types-PyYAML pydantic
           pip install -e . --no-deps
 
       - name: Type check with mypy (critical modules)

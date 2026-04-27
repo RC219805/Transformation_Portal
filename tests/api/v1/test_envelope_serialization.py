@@ -207,16 +207,23 @@ class TestErrorCodeVocabulary:
     @pytest.mark.parametrize(
         "code",
         [
+            # HTTP-status-derived
             "AUTH_CONFIGURATION_ERROR",
             "FORBIDDEN",
             "HTTP_ERROR",
             "INTERNAL_ERROR",
             "INVALID_ARGUMENT",
+            "METHOD_NOT_ALLOWED",
             "NOT_FOUND",
             "RATE_LIMITED",
             "REQUEST_TOO_LARGE",
             "SERVICE_UNAVAILABLE",
             "UNAUTHORIZED",
+            # Runner-failure
+            "RUNNER_ERROR",
+            "RUNNER_EXIT_NONZERO",
+            "RUNNER_NOT_FOUND",
+            "RUNNER_PARTIAL_FAILURE",
         ],
     )
     def test_every_known_error_code_is_accepted(self, code: ErrorCode) -> None:
