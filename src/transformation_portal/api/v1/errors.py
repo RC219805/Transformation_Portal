@@ -5,15 +5,19 @@ Mirrors the wire shape of ``app.py:_error_obj``:
     {"code": code, "message": message, "details": details or {}}
 
 Note that ``details`` is never ``None`` on the wire — the helper coerces a
-missing or ``None`` argument to ``{}``. ``ErrorObject`` reproduces that
-behavior by defaulting ``details`` to an empty dict, not ``None``.
+missing or ``None`` argument to ``{}`` via ``details or {}``. ``ErrorObject``
+reproduces that behavior by defaulting ``details`` to an empty dict AND by
+coercing an explicit ``None`` to ``{}`` via a ``mode="before"`` validator,
+so callers that pass an ``Optional[dict]`` (e.g. routes that reuse a helper
+returning ``None`` when there are no structured details) don't trip a
+ValidationError that would turn an intended 4xx into a 500.
 """
 
 from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 ErrorCode = Literal[
     # HTTP-status-derived codes (see HTTP_STATUS_ERROR_CODES in app.py)
@@ -52,3 +56,16 @@ class ErrorObject(BaseModel):
     code: ErrorCode
     message: str
     details: dict[str, Any] = Field(default_factory=dict)
+
+    @field_validator("details", mode="before")
+    @classmethod
+    def _coerce_none_details_to_empty(cls, value: Any) -> Any:
+        """Match ``app.py:_error_obj``'s ``details or {}`` coercion.
+
+        Callers that pass an Optional[dict] (e.g. forwarding a helper return
+        value that's None when there are no structured details) shouldn't
+        hit a ValidationError. Pre-validate by collapsing ``None`` to ``{}``.
+        """
+        if value is None:
+            return {}
+        return value

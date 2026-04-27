@@ -172,6 +172,22 @@ class TestErrorEnvelope:
         )
         ours = ErrorEnvelope(error=ErrorObject(code="NOT_FOUND", message="no such job")).model_dump(mode="json")
         assert ours == target
+
+    def test_explicit_none_details_coerces_to_empty_dict(self) -> None:
+        # _error_obj does `details or {}` so passing details=None is valid and
+        # produces {}. ErrorObject must accept the same input shape — otherwise
+        # routes that forward an Optional[dict] would raise ValidationError and
+        # turn intended 4xx errors into 500s. The mode="before" field validator
+        # coerces None -> {}.
+        target = _api_envelope(
+            "tp.orchestrator.error.v1",
+            success=False,
+            data=None,
+            error=_error_obj("NOT_FOUND", "no such job", None),
+        )
+        ours = ErrorEnvelope(error=ErrorObject(code="NOT_FOUND", message="no such job", details=None)).model_dump(mode="json")
+        assert ours == target
+        assert ours["error"]["details"] == {}
         assert ours["error"]["details"] == {}
 
     def test_schema_field_is_locked_to_error_schema(self) -> None:
