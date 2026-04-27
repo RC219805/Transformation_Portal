@@ -11,6 +11,7 @@ Exit codes:
     3: Zero capsules ingested
     4: Some files failed to ingest
 """
+
 import argparse
 import json
 import logging
@@ -66,20 +67,25 @@ def rebuild_ledger(input_dir: Path, db_path: Path, clean: bool = False) -> int:
         tables_to_truncate = ["performance_capsules", "apex_runs"]
         with sqlite3.connect(db_path) as conn:
             cursor = conn.cursor()
-            # Check which tables exist
+            # Check which tables exist.
+            # SAFETY: `placeholders` is `?,?,...` only; every value flows through `params`.
             placeholders = ",".join("?" for _ in tables_to_truncate)
             existing_tables = {
                 row[0]
                 for row in cursor.execute(
-                    f"SELECT name FROM sqlite_master " f"WHERE type='table' AND name IN ({placeholders})",
+                    "SELECT name FROM sqlite_master WHERE type='table' AND name IN (" + placeholders + ")",
                     tables_to_truncate,
                 ).fetchall()
             }
-            # Truncate each existing table
+            # Truncate each existing table.
+            # SAFETY: `table_name` only iterates over the hardcoded `tables_to_truncate` literal
+            # above; sqlite does not parameterize identifiers, so interpolation is unavoidable.
+            # Do NOT change `tables_to_truncate` to accept caller-supplied names without adding
+            # a strict whitelist check here.
             for table_name in tables_to_truncate:
                 if table_name in existing_tables:
                     logger.info(f"  Truncating {table_name}...")
-                    cursor.execute(f"DELETE FROM {table_name}")
+                    cursor.execute(f"DELETE FROM {table_name}")  # noqa: S608  # see SAFETY note above
             conn.commit()
         logger.info("✅ Clean complete")
 
