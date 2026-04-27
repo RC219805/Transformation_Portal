@@ -10,19 +10,19 @@
 
 - **Workflow files**: 30 (`.github/workflows/*.yml`), ~7,700 lines total
 - **Required PR check**: `build.yml` → `CI Gate` (single aggregated check)
-- **Consolidation target**: 30 → ~18 workflows over 3 incremental PRs (see [Consolidation Roadmap](#consolidation-roadmap))
+- **Consolidation target**: 30 → ~18 workflows via phased incremental PRs (see [Consolidation Roadmap](#consolidation-roadmap))
 - **Prior matrix doc** (2026-03-25) listed 12 workflows — this revision corrects the omission of 18 that exist on disk.
 
 ---
 
 ## Complete Inventory
 
-Every `.github/workflows/*.yml` file, current as of the timestamp above. The **Recommendation** column is the proposal — *not yet executed*. Discuss before acting.
+Every `.github/workflows/*.yml` file, current as of the timestamp above. The **Recommendation** column is the proposal — *not yet executed*. Discuss before acting. **Approx. LOC** values are inventory estimates from `wc -l` and may differ slightly depending on how trailing newlines are counted; treat them as ballpark sizes, not authoritative line counts.
 
-| # | File | Name | Triggers | Blocking? | LOC | Recommendation |
-|---|------|------|----------|-----------|-----|----------------|
+| # | File | Name | Triggers | Blocking? | Approx. LOC | Recommendation |
+|---|------|------|----------|-----------|-------------|----------------|
 | 1 | `build.yml` | CI (Lint, Tests & Manifest) | push, PR, manual | ✅ Required | 1101 | **Keep** — primary PR gate; aggregated `CI Gate` check |
-| 2 | `ci.yml` | CI Quality Firewall (push) | push (main, develop) | Post-merge | 579 | **Investigate → Merge into `build.yml`** — runs the same lint/typecheck/test/security/build/coverage jobs as `build.yml` but only on push. Most jobs are duplicative once `build.yml` runs on push too. Risk: `repo-hygiene` job may be unique; verify before retiring. |
+| 2 | `ci.yml` | CI Quality Firewall (push) | push (main, develop) | Post-merge | 579 | **Investigate → Selective port into `build.yml`** — overlaps with `build.yml` on `lint`, `typecheck`, `test-core`, `test-ml`, but has **unique jobs** that build.yml does not currently provide: `security` (bandit + pip-audit on the push commit range), `coverage-gate`, `build` (packaging artifact), `repo-hygiene`, `quality-summary`. **Before retiring, port each unique job into `build.yml`** (or confirm it's shadowed by `security-unified.yml` / `enforcement.yml`) and **expand `build.yml`'s push branches to include `develop`** so post-merge coverage on `develop` isn't dropped. Naive deletion would lose real signal. |
 | 3 | `ci-quality-firewall.yml` | CI Quality Firewall (post-CI) | workflow_run, manual | Post-merge | 951 | **Investigate → Retire** — `workflow_run` gating fires *after* `build.yml`; if `build.yml` is truly required, this is redundant. Largest single workflow file. |
 | 4 | `enforcement.yml` | Enforcement | push, PR, schedule | ⚠️ Partial | 211 | **Keep** — owns action-pin, banned-deps, HF-revision, artifact-boundary, layer-1/2 tests, golden-regression. Distinct from `build.yml` test surface. |
 | 5 | `quality-gate.yml` | Quality Gate | PR, push | ⚠️ Advisory | 41 | **Investigate → Replace with pre-commit** — calls `pre-commit run --all-files`. If pre-commit hooks are run by devs locally and by `build.yml`'s lint job, this duplicates. |
@@ -33,7 +33,7 @@ Every `.github/workflows/*.yml` file, current as of the timestamp above. The **R
 | 10 | `dependency-update.yml` | Dependency Updates | schedule, manual | ❌ No | 174 | **Keep** — Dependabot supplement; scheduled. |
 | 11 | `secure-install-pilot.yml` | Secure Install Pilot | PR | ⚠️ Advisory | 62 | **Investigate** — pilot/experimental; check whether the pilot has graduated or should be retired. |
 | 12 | `nightly.yml` | Nightly Deep Checks | schedule (2 AM UTC), manual | ❌ No | 459 | **Keep** — owns stress, benchmarks, memory leak, deep dep audit, full integration. |
-| 13 | `ml-slow-suite.yml` | ML Slow Suite | schedule (3:30 AM UTC), manual | ❌ No | 155 | **Merge → `nightly.yml`** — same scheduled cadence; conceptual overlap with nightly's slow tests. Add as a `ml-slow` job inside nightly. |
+| 13 | `ml-slow-suite.yml` | ML Slow Suite | schedule (3:30 AM UTC), manual | ❌ No | 155 | **Merge → `nightly.yml`** — overlapping concern (long-running ML coverage). Note schedule differs (`nightly.yml` runs `0 2 * * *`, `ml-slow-suite.yml` runs `30 3 * * *`); the merger needs to either preserve both crons (two `cron:` entries with a job-level guard on schedule) or pick one — choosing 3:30 AM UTC keeps the ML cache warm from the 2 AM nightly run. Decide before consolidation. |
 | 14 | `performance-monitor.yml` | Performance Monitor | schedule (3:30 AM UTC), manual | ❌ No | 224 | **Keep** — schedule-only by design (baseline persistence); distinct from nightly benchmarks. |
 | 15 | `apex_performance.yml` | APEX Performance Matrix | PR, push, manual, schedule | ⚠️ Advisory | 442 | **Keep** — APEX-specific matrix runner with synthetic-data PR comments. Standalone domain. |
 | 16 | `apex_policy_validation.yml` | APEX Policy Validation | PR, push | ✅ Required | 123 | **Merge → `contract-validations.yml`** (proposed new) |
@@ -64,13 +64,16 @@ These are clear wins. Aggregated reduction: **3 fewer workflows**.
 
 1. **Retire `issue_printer.yml`** — 24 lines, prints to logs, zero downstream consumers. Search the repo for "Print Issue Info" or `issue_printer` to confirm no documentation references it. Then delete.
 
-2. **Merge `ci.yml` into `build.yml`** — `ci.yml` already documents itself as "post-merge validation only" but `build.yml` already runs on `push`. The unique value is `repo-hygiene` and possibly `coverage-gate`/`build` jobs. Audit each, port any unique job into `build.yml` guarded by `if: github.event_name == 'push'`, then delete.
+2. **Selectively port `ci.yml` into `build.yml`, then retire `ci.yml`** — `ci.yml` shares `lint`, `typecheck`, `test-core`, `test-ml` with `build.yml`, but **owns unique jobs**: `security` (bandit + pip-audit on the push commit range), `coverage-gate`, `build` (packaging artifact), `repo-hygiene`, `quality-summary`. Before retiring:
+   - Port each unique job into `build.yml` guarded by `if: github.event_name == 'push'` (or confirm it's already shadowed — e.g., `security-unified.yml` runs pip-audit; `enforcement.yml` runs banned-deps).
+   - **Expand `build.yml`'s push branches to include `develop`** (currently only `main`); otherwise retiring `ci.yml` silently drops post-merge coverage on the `develop` branch.
+   - Update branch-protection required-checks list if `ci.yml` jobs are listed there.
 
 3. **Retire `ci-quality-firewall.yml`** — 951 lines (largest workflow file) of `workflow_run` secondary gating. If `build.yml` is required at branch protection, this re-litigates the same checks. Confirm by listing what jobs `ci-quality-firewall.yml` runs that `build.yml` doesn't, then delete.
 
 ### Tier B — Consolidate domains (medium effort, clear benefit)
 
-Aggregated reduction: **6 fewer workflows**.
+Aggregated reduction: **5 fewer workflows** (4 contract validators → 1 = net −3; 2 determinism → 1 = net −1; ml-slow → nightly = net −1).
 
 4. **Create `contract-validations.yml`** combining four single-purpose contract validators:
    - `apex_policy_validation.yml` (123 lines)
@@ -82,7 +85,7 @@ Aggregated reduction: **6 fewer workflows**.
 
 5. **Create `determinism.yml`** combining the two determinism workflows (`determinism-gate.yml` + `determinism-cross-isa.yml`). 400 lines combined → likely ~300 after dedupe.
 
-6. **Merge `ml-slow-suite.yml` into `nightly.yml`** as a `ml-slow` job. Same schedule (3:30 AM), shared concern (long-running ML coverage).
+6. **Merge `ml-slow-suite.yml` into `nightly.yml`** as a `ml-slow` job. **Different cron schedules** (`nightly.yml` = 2 AM UTC; `ml-slow-suite.yml` = 3:30 AM UTC) — the consolidation must consciously choose one schedule (or define two `cron:` entries on the unified workflow with a job-level guard). 3:30 AM UTC keeps the ML cache warm from the 2 AM nightly run, but either choice is a real operational change vs. today.
 
 ### Tier C — Investigate before acting
 
@@ -203,6 +206,7 @@ For conditional job execution on PRs, use `dorny/paths-filter` instead of unreli
 
 | Date | Change | Rationale |
 |------|--------|-----------|
+| 2026-04-27 | Review-driven corrections: `ci.yml` row now lists actually-unique jobs (security/coverage-gate/build/repo-hygiene/quality-summary) and flags the `develop` branch coverage risk; `ml-slow-suite` row corrects the conflated schedule (nightly = 2 AM, ml-slow = 3:30 AM); LOC column re-labeled as approximate; Tier B count math corrected (5, not 6); status-snapshot phasing rephrased to match the 8-PR roadmap. | Address review feedback on the inventory accuracy. |
 | 2026-04-27 | Complete inventory rebuild (30 workflows) + consolidation roadmap | Prior revision listed 12; the missing 18 went undocumented. Phase 1.4 of remediation plan from PR #1558. |
 | 2026-03-26 | Added link to Dependabot PR governance documentation | Cross-reference dependency update policy |
 | 2026-03-25 | Major update: Fixed enforcement.yml PR detection, performance-monitor.yml baseline handling, nightly.yml deduplication, pinned all actions | Address workflow correctness bugs and governance hygiene |
