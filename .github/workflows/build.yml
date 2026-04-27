@@ -489,11 +489,13 @@ jobs:
         run: |
           set -euo pipefail
           python -m pip install --upgrade pip
-          # Pin via the repo's governed lockfile so the typecheck environment
-          # matches the rest of CI. mypy, types-pyyaml, and pydantic are all
-          # in requirements/all.txt; -c constrains versions without forcing
-          # us to install the entire lockfile.
-          pip install -c requirements/all.txt mypy types-PyYAML pydantic
+          # Pin to the same versions present in requirements/{base,dev}.txt so
+          # the typecheck environment matches the rest of CI. We can't use
+          # `pip install -c requirements/all.txt` because that file contains
+          # `coverage[toml]==...` and pip rejects extras in constraint files
+          # ("ERROR: Constraints cannot have extras"). Inline-pinning is the
+          # cleanest workaround that still respects the lockfile.
+          pip install "mypy==1.20.1" "types-PyYAML==6.0.12.20260408" "pydantic==2.13.3"
           pip install -e . --no-deps
 
       - name: Type check with mypy (critical modules)
