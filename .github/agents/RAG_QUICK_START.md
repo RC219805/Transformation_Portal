@@ -2,6 +2,10 @@
 
 Quick reference for using the RAG-enhanced Transformation Portal Specialist agent.
 
+Current baseline: `main` through PR #1562. This is support material for
+repository retrieval; live role boundaries are defined by `.github/agents/README.md`,
+`.github/copilot-instructions.md`, and `docs/architecture/agent_governance.md`.
+
 ## What is RAG?
 
 **Retrieval-Augmented Generation (RAG)** enhances the agent by:
@@ -65,7 +69,7 @@ python .github/agents/rag_system/templates.py \
 python .github/agents/rag_system/templates.py \
     --type bug \
     --description "ImportError: No module named torch" \
-    --context "Python 3.10, Ubuntu 20.04"
+    --context "Python 3.11, Ubuntu 22.04"
 
 # CI workflow change template
 python .github/agents/rag_system/templates.py \

@@ -15,6 +15,8 @@ AGENTS_DIR = REPO_ROOT / ".github" / "agents"
 AGENT_README = AGENTS_DIR / "README.md"
 CUSTOM_AGENT_GUIDE = REPO_ROOT / "docs" / "guides" / "CUSTOM_AGENT_GUIDE.md"
 DOCUMENTATION_MAP = REPO_ROOT / "docs" / "governance" / "DOCUMENTATION_MAP.md"
+DOCUMENTATION_STATE_AUDIT = REPO_ROOT / "docs" / "governance" / "DOCUMENTATION_STATE_AUDIT_2026-04-27.md"
+COPILOT_INSTRUCTIONS = REPO_ROOT / ".github" / "copilot-instructions.md"
 
 EXPECTED_PROFILES = {
     "transformation-portal-architect.md": {
@@ -34,8 +36,11 @@ EXPECTED_PROFILES = {
         "required_references": [
             "docs/architecture/agent_governance.md",
             "docs/governance/DOCUMENTATION_MAP.md",
+            "docs/governance/DOCUMENTATION_STATE_AUDIT_2026-04-27.md",
             "AGENTS.md",
+            ".github/copilot-instructions.md",
             "docs/architecture/ARCHITECTURE.md",
+            "docs/ci/WORKFLOW_MATRIX.md",
             "docs/api/MACHINE_MODE_CONTRACT.md",
             "docs/apex/ingest_contract.md",
             "docs/architecture/ADR-043-orchestrator-decomposition.md",
@@ -67,6 +72,9 @@ EXPECTED_PROFILES = {
         "required_references": [
             "docs/architecture/agent_governance.md",
             "AGENTS.md",
+            ".github/copilot-instructions.md",
+            "docs/governance/DOCUMENTATION_MAP.md",
+            "docs/governance/DOCUMENTATION_STATE_AUDIT_2026-04-27.md",
             "docs/architecture/PORTAL_OPERATOR_CONSOLE_MODERNIZATION_RFC.md",
             "docs/architecture/PORTAL_EDGE_HARDENING_IMPLEMENTATION_STANDARD.md",
             "docs/architecture/DNA_UX_UI_STRATEGY_REBASELINE_2026-04-08.md",
@@ -79,6 +87,7 @@ EXPECTED_PROFILES = {
             "/v1/*",
             "data-ui",
             "node 22",
+            "/healthz",
         ],
     },
     "transformation-portal-specialist.md": {
@@ -98,6 +107,10 @@ EXPECTED_PROFILES = {
         "required_references": [
             "docs/architecture/agent_governance.md",
             "AGENTS.md",
+            ".github/copilot-instructions.md",
+            "docs/README.md",
+            "docs/governance/DOCUMENTATION_MAP.md",
+            "docs/governance/DOCUMENTATION_STATE_AUDIT_2026-04-27.md",
             "docs/api/MACHINE_MODE_CONTRACT.md",
             "docs/apex/ingest_contract.md",
             "docs/architecture/ADR-043-orchestrator-decomposition.md",
@@ -112,6 +125,7 @@ EXPECTED_PROFILES = {
             "ci/cd",
             "security",
             "public interface",
+            "/v1/readiness",
         ],
     },
 }
@@ -247,7 +261,10 @@ def test_agent_readme_exists_and_indexes_live_profiles() -> None:
         assert config["name"] in content, f"README must name profile: {config['name']}"
 
     assert "CUSTOM_AGENT_GUIDE.md" in content
+    assert "copilot-instructions.md" in content
     assert "DOCUMENTATION_MAP.md" in content
+    assert "DOCUMENTATION_STATE_AUDIT_2026-04-27.md" in content
+    assert "AGENT_QUICK_REFERENCE.md" in content
     assert "agent_governance.md" in content
     assert "AGENTS.md" in content
 
@@ -255,10 +272,15 @@ def test_agent_readme_exists_and_indexes_live_profiles() -> None:
 def test_canonical_docs_exist_and_reference_custom_agents() -> None:
     guide = _read(CUSTOM_AGENT_GUIDE)
     documentation_map = _read(DOCUMENTATION_MAP)
+    documentation_state_audit = _read(DOCUMENTATION_STATE_AUDIT)
+    copilot_instructions = _read(COPILOT_INSTRUCTIONS)
 
     assert "custom agent" in guide.lower()
     assert "Custom Agents" in documentation_map
     assert "CUSTOM_AGENT_GUIDE.md" in documentation_map
+    assert "PR #1562" in documentation_state_audit
+    assert "Current baseline" in copilot_instructions
+    assert "DOCUMENTATION_MAP.md" in copilot_instructions
 
 
 @pytest.mark.parametrize(

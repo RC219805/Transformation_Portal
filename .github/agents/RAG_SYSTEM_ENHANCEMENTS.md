@@ -2,6 +2,10 @@
 
 This document describes the enhanced features added to the RAG (Retrieval-Augmented Generation) system.
 
+Current baseline: `main` through PR #1562. This document supports repository
+retrieval workflows; it does not override live custom-agent profiles,
+`.github/copilot-instructions.md`, or `docs/architecture/agent_governance.md`.
+
 ## What's New
 
 ### 1. Persistent Caching ✅

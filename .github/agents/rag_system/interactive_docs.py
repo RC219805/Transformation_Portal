@@ -395,7 +395,7 @@ class InteractiveDocumentationSystem:
             description=f"Learn how to use the {workflow_pattern} workflow.",
             difficulty=difficulty,
             estimated_time_minutes=estimated_time,
-            prerequisites=["Python 3.10+", "Basic image processing knowledge"],
+            prerequisites=["Python 3.11+", "Basic image processing knowledge"],
             steps=steps,
             code_examples=code_examples,
             related_apis=related_apis,

@@ -2,6 +2,12 @@
 
 **Transformation Portal - Building Custom Plugins**
 
+> Historical guide.
+>
+> This November 2025 plugin guide is not currently listed as maintained
+> operator guidance. Check [Documentation Map](../governance/DOCUMENTATION_MAP.md)
+> before using it as an implementation contract.
+
 Version: 1.0.0
 Last Updated: 2025-11-08
 

@@ -2,6 +2,10 @@
 
 Retrieval-Augmented Generation (RAG) system that enhances the Transformation Portal Specialist custom agent with:
 
+Current baseline: `main` through PR #1562. This package supports retrieval and
+citation workflows; live agent behavior is governed by `.github/agents/README.md`,
+`.github/copilot-instructions.md`, and `docs/architecture/agent_governance.md`.
+
 1. **Repository content indexing** with intelligent chunking
 2. **Hybrid retrieval** combining BM25 sparse and dense vector search
 3. **Result reranking** for improved precision
@@ -187,7 +191,7 @@ PYTHONPATH=.github/agents python -m rag_system.templates \
 PYTHONPATH=.github/agents python -m rag_system.templates \
     --type bug \
     --description "ImportError: No module named 'torch'" \
-    --context "Python 3.10, Ubuntu 20.04"
+    --context "Python 3.11, Ubuntu 22.04"
 
 # Validate response schema
 PYTHONPATH=.github/agents python -m rag_system.templates \

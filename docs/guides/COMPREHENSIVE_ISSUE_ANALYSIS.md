@@ -1,4 +1,10 @@
 # Comprehensive Issue Analysis - Transformation Portal
+
+> Historical 2025 issue analysis.
+>
+> Current repository status and documentation navigation live in
+> [README](../../README.md) and [Documentation Map](../governance/DOCUMENTATION_MAP.md).
+
 **Generated:** 2025-11-08
 **Updated:** 2025-11-08 (All critical issues RESOLVED)
 **Repository:** /Users/rc/Transformation_Portal
@@ -493,7 +499,7 @@ convert_problem_tiffs.py
 **Current Root-Level Docs:**
 ```
 README.md
-START_HERE.md
+docs/README.md and docs/governance/DOCUMENTATION_MAP.md now replace the old root quickstart entry point
 HEALTH_CHECK_REPORT.md
 AUDIT_SUMMARY.txt
 EXEC_SUMMARY.txt

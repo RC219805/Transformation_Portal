@@ -2,6 +2,10 @@
 LUXURY ESTATE MASTER PIPELINE v1.1.0 - FILES CHANGED SUMMARY
 ================================================================================
 
+HISTORICAL PROJECT RECORD
+This file records November 2025 v1.1.0 pipeline work. It is not current
+operator guidance. Use docs/governance/DOCUMENTATION_MAP.md for maintained docs.
+
 Implementation Date: November 10, 2025
 Version: 1.1.0 (from 1.0.0)
 Quality Grade: 94.0/100 (maintained)
@@ -88,7 +92,7 @@ FILES CREATED (5)
    - Performance benchmarks
    - Support
 
-4. PIPELINE_V1.1.0_CHANGES.md
+4. Historical pipeline v1.1.0 changelog
    Status: NEW
    Lines: 500+
    Purpose: Detailed change log

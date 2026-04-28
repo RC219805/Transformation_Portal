@@ -231,7 +231,9 @@ graded = apply_lut(
     fallback_mode: "cpu"
 ```
 
-See [Configuration Guide](config/README.md) for all options.
+See the current configuration guidance in
+`docs/guides/LUX_DEPTH_CONFIG_KNOB_CHECKLIST.md` or the documentation map for
+all maintained options.
 
 ### Troubleshooting
 
@@ -310,10 +312,10 @@ class {ClassName}:
 
 ### Related Documentation
 
-- [Depth Pipeline Guide](docs/depth_pipeline/DEPTH_PIPELINE_README.md)
-- [Material Response Guide](assets/luts/material_response/_Material_Response_Technical_Guide.md)
-- [Performance Optimization](docs/performance/PERFORMANCE_OPTIMIZATION.md)
-- [API Reference](docs/API_REFERENCE.md)
+- [Lux Depth V3 CLI Guide](../../../../docs/cli/LUX_DEPTH_V3_CLI_GUIDE.md)
+- [Material PBR Guide](../../../../docs/guides/MATERIAL_PBR_GUIDE.md)
+- [Performance Monitoring Guide](../../../../docs/performance/README.md)
+- [API Reference](../../../../docs/api/index.rst)
 
 ### Changelog
 
@@ -478,7 +480,7 @@ class ClassName:
 **Goal**: {What you'll accomplish with this guide}
 
 **Prerequisites**:
-- Python 3.10+
+- Python 3.11+
 - Required packages: `{package1}`, `{package2}`
 - Optional: GPU with CUDA or Apple Silicon
 
@@ -589,9 +591,9 @@ if __name__ == '__main__':
 - [ ] {Optimization or customization}
 
 **Further Reading**:
-- [Related Guide](link)
-- [API Reference](link)
-- [Performance Tips](link)
+- Related guide: `{related_guide_url}`
+- API reference: `{api_reference_url}`
+- Performance tips: `{performance_tips_url}`
 ```
 
 ---

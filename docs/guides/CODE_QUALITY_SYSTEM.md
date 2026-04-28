@@ -1,7 +1,8 @@
-> ⚠️ **DEPRECATED**
+> **Historical / superseded**
 >
 > This document has been superseded by [CODE_QUALITY_STANDARDS.md](CODE_QUALITY_STANDARDS.md).
-> Please use that document instead. This file will be removed on 2026-03-06.
+> For current engineering workflow guidance, use [AGENTS.md](../../AGENTS.md)
+> and the validation targets in the root [README](../../README.md).
 
 # Code Quality Control System
 
@@ -140,7 +141,7 @@ def enhance_image(img, strength=0.7):
 ```
 ✅ ALLOWED:
   - README.md (project overview)
-  - START_HERE.md (quickstart)
+  - docs/README.md and docs/governance/DOCUMENTATION_MAP.md (current documentation entry points)
   - MIGRATION_GUIDE.md (migration docs)
   - DEPRECATION_POLICY.md (policy docs)
 

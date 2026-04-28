@@ -2,6 +2,19 @@
 
 This policy defines where documentation belongs and how long it should be retained.
 
+## Current vs Historical Guidance
+
+Current operator guidance is discoverable from `README.md`, `docs/README.md`,
+and `docs/governance/DOCUMENTATION_MAP.md`. A document outside those navigation
+paths may still be useful evidence, but it is not current guidance unless the
+document itself states that it is maintained and a current index links to it.
+
+Historical documents may retain old dates, point-in-time status, former command
+examples, and superseded project conclusions. They must not be linked from
+current navigation as live runbooks. When a historical document is easy to
+mistake for current guidance, add a short banner or directory-level README that
+points readers back to the documentation map.
+
 ## Strict Topology Contract
 
 - `docs/README.md` is the only allowed file directly under `docs/`.
@@ -80,6 +93,8 @@ Approved top-level directories:
 | PR-specific | `docs/pr_archive/` | Historical |
 | Execution logs | `docs/historical/` | Historical |
 | Session notes and deliverable snapshots | `docs/historical/` | Historical |
+| Project-specific 2025 reports | `docs/750_picacho/`, `docs/projects/`, `docs/quality_analysis/`, `docs/visual_review/` | Historical |
+| Superseded depth/pipeline evaluations | `docs/depth_model/`, `docs/depth_pipeline/`, `docs/pipeline/`, `docs/pipeline_docs/` | Historical unless promoted in `DOCUMENTATION_MAP.md` |
 
 ## Deterministic Placement Rules
 
@@ -87,6 +102,9 @@ Approved top-level directories:
 - Any point-in-time execution output (for example push summaries, completion reports, session reports) belongs in `docs/historical/`.
 - Documentation indexes and organization policy docs belong in `docs/governance/`.
 - The `docs/` root is reserved for `README.md` only, with no exceptions.
+- Do not add `START_HERE`, `PIPELINE_V1.1.0`, or other dated project-era files
+  to current navigation. Point readers to the documentation map and current
+  Lux Depth V3 / portal guides instead.
 
 ## Enforcement
 

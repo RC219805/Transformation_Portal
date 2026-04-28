@@ -1,5 +1,10 @@
 # Workflow Improvements - November 8, 2025
 
+> Historical CI improvement note.
+>
+> This file records November 2025 workflow work. Current CI inventory and
+> recommendations live in [WORKFLOW_MATRIX.md](WORKFLOW_MATRIX.md).
+
 ## Summary
 
 Enhanced code quality control and CI/CD robustness for the Transformation Portal repository.
@@ -55,9 +60,9 @@ UNIFIED_*.md
    - Verify import statements are in scope
 
 2. **Documentation Management**
-   - Keep only 4 essential markdown files in root:
+   - Historical root-doc recommendation from November 2025:
      - README.md
-     - START_HERE.md
+     - docs/README.md and docs/governance/DOCUMENTATION_MAP.md now replace the old root quickstart entry point
      - MIGRATION_GUIDE.md
      - DEPRECATION_POLICY.md
    - Move all session summaries to `docs/sessions/`

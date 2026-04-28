@@ -1,5 +1,12 @@
 # Transformation Portal - System Status Report
 
+> Historical status snapshot.
+>
+> This file records November 2025 local environment state. It is not the current
+> repository status source. Use the root [README](../../README.md),
+> [Documentation Map](../governance/DOCUMENTATION_MAP.md), and
+> [CI Workflow Matrix](../ci/WORKFLOW_MATRIX.md).
+
 **Date:** November 11, 2025
 **Status:** ✅ Fully Operational
 

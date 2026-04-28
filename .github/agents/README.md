@@ -2,6 +2,11 @@
 
 This directory is the live custom-agent configuration surface for the Transformation Portal repository.
 
+Current baseline: `main` through PR #1562. Keep this directory aligned with
+`AGENTS.md`, `.github/copilot-instructions.md`,
+`docs/governance/DOCUMENTATION_MAP.md`, and
+`docs/governance/DOCUMENTATION_STATE_AUDIT_2026-04-27.md`.
+
 ## Live Profiles
 
 ### Transformation Portal Architect
@@ -14,22 +19,25 @@ This directory is the live custom-agent configuration surface for the Transforma
 
 - File: `portal-app-steward.md`
 - Role: execution-focused browser-surface steward for the managed frontdoor, portal shell, manifest-backed portal assets, and browser validation contract
-- Use for: `web/secure-landing/`, `/`, `/login`, `/portal`, `/portal/bootstrap`, `/portal/assets/*`, `/portal/video/*`, `/healthz`, `portal.html`, `public/portal-assets/*`, and browser-contract docs/tests that stay within existing contracts
+- Use for: `web/secure-landing/`, `/`, `/login`, `/portal`, `/portal/bootstrap`, `/portal/assets/*`, `/portal/video/*`, managed `/healthz`, `portal.html`, `public/portal-assets/*`, selector stability, Node 22 frontdoor validation, and browser-contract docs/tests that stay within existing contracts
 
 ### Transformation Portal Specialist
 
 - File: `transformation-portal-specialist.md`
 - Role: execution-focused backend, Lux Depth, archive, ingest, and machine-mode implementation agent inside current repository governance boundaries
-- Use for: `app.py`, typed `/v1/*` behavior, `/ready`, Lux Depth V3, archive-gate, ingest, machine-mode, and targeted docs/tests/tooling work that stays within existing contracts
+- Use for: `app.py`, typed `/v1/*` behavior, backend `/healthz`, `/ready`, `/v1/readiness`, Lux Depth V3, archive-gate, ingest, machine-mode, and targeted docs/tests/tooling work that stays within existing contracts
 
 ## Canonical References
 
 The live profiles should stay aligned with:
 
 - [AGENTS.md](../../AGENTS.md)
+- [copilot-instructions.md](../copilot-instructions.md)
 - [DOCUMENTATION_MAP.md](../../docs/governance/DOCUMENTATION_MAP.md)
+- [DOCUMENTATION_STATE_AUDIT_2026-04-27.md](../../docs/governance/DOCUMENTATION_STATE_AUDIT_2026-04-27.md)
 - [agent_governance.md](../../docs/architecture/agent_governance.md)
 - [CUSTOM_AGENT_GUIDE.md](../../docs/guides/CUSTOM_AGENT_GUIDE.md)
+- [AGENT_QUICK_REFERENCE.md](../../docs/reference/AGENT_QUICK_REFERENCE.md)
 - [transformation-portal-architect.md](./transformation-portal-architect.md)
 - [portal-app-steward.md](./portal-app-steward.md)
 - [transformation-portal-specialist.md](./transformation-portal-specialist.md)
@@ -46,9 +54,9 @@ On GitHub.com and in supported IDEs, select the custom agent from the agents pic
 
 Use the narrowest agent surface that matches the task:
 
-- `@portal-app-steward` for homepage, login, portal shell, bootstrap, selector, asset-manifest, and browser-validation work
-- `@transformation-portal-specialist` for backend/orchestrator, archive, ingest, machine-mode, and Lux Depth work
-- `@transformation-portal-architect` for dependency, CI/CD, security, route-contract, or ADR-bound decisions
+- `@portal-app-steward` for homepage, login, portal shell, bootstrap, selector, asset-manifest, managed frontdoor health, and browser-validation work
+- `@transformation-portal-specialist` for backend/orchestrator health/readiness, archive, ingest, machine-mode, and Lux Depth work
+- `@transformation-portal-architect` for dependency, CI/CD, security, docs topology, route-contract, or ADR-bound decisions
 
 ## Support Material
 

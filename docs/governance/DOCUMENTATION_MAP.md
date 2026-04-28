@@ -1,169 +1,110 @@
 # Documentation Map
 
-**Purpose:** Single source of truth for finding documentation in Transformation Portal.
+**Purpose:** Current source of truth for finding maintained Transformation
+Portal documentation.
 
-**Last Updated:** 2026-03-25
+**Last Updated:** 2026-04-27
 **Maintainer:** Repository Architect
+**Current baseline:** `main` through PR #1562.
 
----
+Historical reports remain available for audit context, but they are not current
+operator guidance unless they are linked here as canonical documents.
 
-## 🎯 Start Here
+## Start Here
 
 | Topic | Canonical Document | Purpose |
-|-------|-------------------|---------|
-| **First Steps** | [README.md](../../README.md) | Project overview, installation, quick start |
-| **Setup & Installation** | [SETUP_GUIDE.md](../guides/SETUP_GUIDE.md) | Detailed installation for all tiers |
-| **Contributing** | [CONTRIBUTING.md](../../CONTRIBUTING.md) | How to contribute code, docs, issues |
-| **Security** | [SECURITY.md](../../SECURITY.md) | Security policy, reporting vulnerabilities |
-| **Security Hardening Report** | [security_best_practices_report.md](security_best_practices_report.md) | Security findings and remediation status |
+| --- | --- | --- |
+| Repository overview | [README.md](../../README.md) | Project overview, install path, current operational surfaces |
+| Documentation index | [docs/README.md](../README.md) | Current docs navigation and historical-boundary guidance |
+| Documentation state audit | [DOCUMENTATION_STATE_AUDIT_2026-04-27.md](DOCUMENTATION_STATE_AUDIT_2026-04-27.md) | Repo-wide docs classification after PR #1562 |
+| Setup | [SETUP_GUIDE.md](../guides/SETUP_GUIDE.md) | Local environment setup and dependency bring-up |
+| Contribution workflow | [CONTRIBUTING.md](../../CONTRIBUTING.md) | Code, docs, issue, and PR expectations |
+| Security | [SECURITY.md](../../SECURITY.md) | Security policy and reporting |
 
----
+## Current Operational Docs
 
-## 📚 Core Documentation
+| Area | Canonical Document | Status |
+| --- | --- | --- |
+| Portal / orchestrator | [Portal + Orchestrator Quickstart](../guides/PORTAL_ORCHESTRATOR_QUICKSTART.md) | Maintained |
+| Secure front door | [Portal Secure Front Door Quickstart](../guides/PORTAL_SECURE_FRONTDOOR_QUICKSTART.md) | Maintained |
+| API / OpenAPI contracts | [API docs](../api/) | Maintained |
+| Machine-mode metadata API | [Machine Mode Contract](../api/MACHINE_MODE_CONTRACT.md) | Maintained |
+| Archive machine-mode API | [Archive Machine Mode Contract](../api/ARCHIVE_MACHINE_MODE_CONTRACT.md) | Maintained |
+| Lux Depth V3 CLI | [Lux Depth V3 CLI Guide](../cli/LUX_DEPTH_V3_CLI_GUIDE.md) | Maintained |
+| Lux Depth V3 troubleshooting | [Lux Depth V3 Troubleshooting](../guides/LUX_DEPTH_V3_TROUBLESHOOTING.md) | Maintained |
+| Context-aware rendering | [Context-Aware Rendering](../guides/CONTEXT_AWARE_RENDERING.md) | Maintained |
+| PBR processing | [PBR Processor Quickstart](../guides/PBR_PROCESSOR_QUICKSTART.md) | Maintained |
+| Supported formats | [Supported File Formats](../guides/SUPPORTED_FILE_FORMATS.md) | Maintained |
 
-### Development
+## Governance, CI, And Validation
 
-| Topic | Canonical Document | Status |
-|-------|-------------------|--------|
-| **Architecture Overview** | [docs/architecture/ARCHITECTURE.md](../architecture/ARCHITECTURE.md) | ✅ Stable |
-| **Ingest Determinism Policy (ADR-030)** | [docs/architecture/ADR-030-phase2-deterministic-raw-ingest.md](../architecture/ADR-030-phase2-deterministic-raw-ingest.md) | ✅ Implemented (Phase II) |
-| **Determinism Harness Spec (SPEC-DH-001)** | [docs/architecture/specifications/SPEC-DH-001.md](../architecture/specifications/SPEC-DH-001.md) | ✅ LOCKED (Phase II) |
-| **Certified Bounded Determinism Analysis (ANALYSIS-DH-001)** | [docs/architecture/analysis/ANALYSIS-DH-001.md](../architecture/analysis/ANALYSIS-DH-001.md) | ✅ Informative (Phase II) |
-| **API Reference** | [docs/api/](../api/) | ✅ Stable (Sphinx) |
-| **Code Quality Standards** | [CODE_QUALITY_STANDARDS.md](../guides/CODE_QUALITY_STANDARDS.md) | ✅ Stable |
-| **Custom Agents** | [CUSTOM_AGENT_GUIDE.md](../guides/CUSTOM_AGENT_GUIDE.md) | ✅ Stable |
-| **TODO Inventory** | [docs/analysis/TODO_INVENTORY.md](../analysis/TODO_INVENTORY.md) | ✅ Stable (v2.4.0) |
-| **TODO Quick Reference** | [docs/architecture/TODO_INVENTORY_QUICK_REF.md](../architecture/TODO_INVENTORY_QUICK_REF.md) | ✅ Stable (aligned with v2.4.0) |
+| Area | Canonical Document | Status |
+| --- | --- | --- |
+| Documentation policy | [DOCUMENTATION_POLICY.md](DOCUMENTATION_POLICY.md) | Maintained |
+| Repository organization | [REPO_ORGANIZATION.md](REPO_ORGANIZATION.md) | Maintained |
+| Custom Agents | [CUSTOM_AGENT_GUIDE.md](../guides/CUSTOM_AGENT_GUIDE.md) | Maintained; live profiles are under `.github/agents/` |
+| Agent quick reference | [AGENT_QUICK_REFERENCE.md](../reference/AGENT_QUICK_REFERENCE.md) | Maintained |
+| Agent governance | [agent_governance.md](../architecture/agent_governance.md) | Maintained |
+| Copilot instructions | [.github/copilot-instructions.md](../../.github/copilot-instructions.md) | Maintained repo-wide Copilot guidance |
+| CI workflow inventory | [WORKFLOW_MATRIX.md](../ci/WORKFLOW_MATRIX.md) | Maintained; current 30-workflow inventory |
+| CI/CD workflow guide | [CI_CD_WORKFLOWS.md](../ci_cd/CI_CD_WORKFLOWS.md) | Maintained |
+| Branch protection | [BRANCH_PROTECTION_SETUP.md](../ci/BRANCH_PROTECTION_SETUP.md) | Maintained |
+| Dependency pinning | [ADR-032 Dependency Pinning Strategy](../architecture/ADR-032-dependency-pinning-strategy.md) | Maintained |
+| Test marker policy | [ADR-044 Test Marker Enforcement](../architecture/ADR-044-test-marker-enforcement.md) | Maintained |
+| Security hardening report | [security_best_practices_report.md](security_best_practices_report.md) | Maintained status record |
 
-### CI/CD & Operations
-
-| Topic | Canonical Document | Status |
-|-------|-------------------|--------|
-| **CI/CD Workflows** | [docs/ci_cd/CI_CD_WORKFLOWS.md](../ci_cd/CI_CD_WORKFLOWS.md) | ✅ Stable |
-| **Workflow Reference** | [.github/workflows/build.yml](../../.github/workflows/build.yml) | ✅ Stable (Primary CI) |
-| **Branch Protection** | [BRANCH_PROTECTION_SETUP.md](../ci/BRANCH_PROTECTION_SETUP.md) | ✅ Stable |
-
-### Pipelines & Processing
-
-| Topic | Canonical Document | Status |
-|-------|-------------------|--------|
-| **Luxury Estate Pipeline** | [docs/pipeline/LUXURY_ESTATE_PIPELINE_README.md](../pipeline/LUXURY_ESTATE_PIPELINE_README.md) | ✅ Stable |
-| **PBR Processing** | [PBR_PROCESSOR_QUICKSTART.md](../guides/PBR_PROCESSOR_QUICKSTART.md) | ✅ Stable |
-| **Lux Depth V3 CLI** | [LUX_DEPTH_V3_CLI_GUIDE.md](../cli/LUX_DEPTH_V3_CLI_GUIDE.md) | ✅ Stable |
-| **Lux Depth V3 Troubleshooting** | [LUX_DEPTH_V3_TROUBLESHOOTING.md](../guides/LUX_DEPTH_V3_TROUBLESHOOTING.md) | ✅ Stable |
-| **Elite Pipeline** | [ELITE_PIPELINE_GUIDE.md](../guides/ELITE_PIPELINE_GUIDE.md) | ✅ Stable |
-
-### Quick References
+## Architecture And Contracts
 
 | Topic | Canonical Document | Status |
-|-------|-------------------|--------|
-| **CLI Reference** | [docs/cli/CLI_REFERENCE.md](../cli/CLI_REFERENCE.md) | ✅ Stable |
-| **PBR Presets** | [PBR_PRESETS_QUICK_REFERENCE.md](../reference/PBR_PRESETS_QUICK_REFERENCE.md) | ✅ Stable |
-| **Agent Quick Ref** | [AGENT_QUICK_REFERENCE.md](../reference/AGENT_QUICK_REFERENCE.md) | ✅ Stable |
+| --- | --- | --- |
+| Architecture overview | [ARCHITECTURE.md](../architecture/ARCHITECTURE.md) | Maintained |
+| ADR index | [architecture/README.md](../architecture/README.md) | Maintained |
+| Depth backend unification | [ADR-019](../architecture/ADR-019-depth-backend-unification.md) | Maintained |
+| DA3 non-commercial research tier | [ADR-0015](../architecture/adr-0015-da3-1-1-non-commercial-research-tier.md) | Maintained |
+| Portal orchestrator roadmap | [PORTAL_ORCHESTRATOR_ROADMAP.md](../architecture/PORTAL_ORCHESTRATOR_ROADMAP.md) | Maintained planning doc |
+| Portal front door roadmap | [PORTAL_FRONTDOOR_ROADMAP.md](../architecture/PORTAL_FRONTDOOR_ROADMAP.md) | Maintained planning doc |
+| APEX workflow design | [APEX_WORKFLOW_DESIGN.md](../architecture/APEX_WORKFLOW_DESIGN.md) | Maintained |
+| Deterministic RAW ingest | [ADR-030](../architecture/ADR-030-phase2-deterministic-raw-ingest.md) | Maintained |
+| Determinism harness spec | [SPEC-DH-001](../architecture/specifications/SPEC-DH-001.md) | Locked |
 
----
+## APEX And Archive Gates
 
-## 🗂️ Specialized Topics
+| Topic | Canonical Document | Status |
+| --- | --- | --- |
+| APEX governance | [APEX Governance Status](../apex/GOVERNANCE_STATUS.md) | Maintained |
+| APEX contract | [APEX Contract](../apex/APEX_CONTRACT.md) | Maintained |
+| APEX model-family characterization | [APEX Model Family Characterization Protocol](../validation/APEX_MODEL_FAMILY_CHARACTERIZATION_PROTOCOL.md) | Maintained |
+| APEX canonical corpus bootstrap | [APEX Canonical Corpus Bootstrap](../validation/APEX_CANONICAL_CORPUS_BOOTSTRAP.md) | Maintained |
+| Archive gates state audit | [Archive Gates A/B/C Audit](audit/archive-gates-2026-04-27.md) | Current audit evidence |
+| Archive gate follow-up | [Wire Audit Pipeline Readiness](audit/follow-ups/ci-wire-audit-pipeline-readiness.md) | Follow-up scope |
 
-### Format Support
-- **File Formats:** [SUPPORTED_FILE_FORMATS.md](../guides/SUPPORTED_FILE_FORMATS.md)
-- **TIFF Handling:** [TIFF_FIX_QUICKREF.md](../reference/TIFF_FIX_QUICKREF.md)
+## Historical And Archive Boundaries
 
-### Advanced Features
-- **Temporal Architecture:** [TEMPORAL_ARCHITECTURE_QUICKREF.md](../architecture/TEMPORAL_ARCHITECTURE_QUICKREF.md)
-- **RAG System:** [RAG_SYSTEM_COMPLETE_GUIDE.md](../guides/RAG_SYSTEM_COMPLETE_GUIDE.md)
-- **VFX Extensions:** [VFX_EXTENSION_GUIDE.md](../guides/VFX_EXTENSION_GUIDE.md)
+| Area | Classification | Use |
+| --- | --- | --- |
+| `docs/750_picacho/`, `docs/projects/`, `docs/quality_analysis/`, `docs/visual_review/` | Historical project records | Dated project evidence, not current operator guidance |
+| `docs/depth_model/`, `docs/depth_pipeline/`, `docs/pipeline/`, `docs/pipeline_docs/` | Superseded or historical pipeline/depth material | Use current Lux Depth V3 docs and ADRs instead |
+| `docs/deliverables/`, `docs/project-status/`, `docs/reports/`, `docs/status/`, `docs/summaries/`, `docs/session_summaries/`, `docs/sessions/`, `docs/historical/`, `docs/verification/` | Point-in-time reports | Audit context only |
+| `docs/pr_archive/`, `docs/pr_reports/`, `docs/pr_summaries/` | PR-specific records | Review and merge history only |
+| `docs/_archive/` | Archive-only | Retired or consolidated material |
 
-### Troubleshooting
-- **General Troubleshooting:** [TROUBLESHOOTING.md](../guides/TROUBLESHOOTING.md)
-- **Known Issues:** [docs/incidents/](../incidents/)
+## Maintenance Protocol
 
----
+1. Check this map before creating new documentation.
+2. Update the canonical document when one exists.
+3. Put new documents in an approved top-level directory from
+   [DOCUMENTATION_POLICY.md](DOCUMENTATION_POLICY.md).
+4. Update this map when a new document becomes current guidance.
+5. Label duplicate or stale material historical, archive it, or remove it from
+   current navigation.
 
-## 📦 Directory Organization
+## Validation
 
-```
-docs/
-├── README.md
-├── governance/
-│   ├── DOCUMENTATION_MAP.md  ← You are here
-│   ├── DOCUMENTATION_POLICY.md
-│   └── REPO_ORGANIZATION.md
-├── architecture/             ← Architecture ADRs + specs + analysis
-├── api/                      ← API documentation
-├── ci/                       ← CI/CD governance docs
-├── cli/                      ← CLI references
-├── historical/               ← Historical execution artifacts
-├── pipeline/                 ← Pipeline-specific documentation
-├── pr_archive/               ← PR-specific archives
-└── reference/                ← Cheat sheets and quick refs
-```
-
----
-
-## Canonical Topology
-
-Legacy root-level duplicates have been retired. Canonical documentation now lives only in approved subdirectories such as:
-
-- [architecture/](../architecture/)
-- [ci/](../ci/)
-- [cli/](../cli/)
-- [guides/](../guides/)
-- [historical/](../historical/)
-- [performance/](../performance/)
-- [reference/](../reference/)
-
----
-
-## 📋 Maintenance Protocol
-
-### When Creating New Documentation:
-1. Check this map first - does a canonical doc already exist?
-2. If yes, update the canonical doc (don't create a new one)
-3. If no, create in appropriate subdirectory
-4. Update this map with new canonical doc
-
-### When Updating Documentation:
-1. Update the canonical doc only
-2. Add deprecation notice to duplicates
-3. Schedule removal after 30 days
-
-### Deprecation Template:
-```markdown
-> ⚠️ **DEPRECATED**
->
-> This document has been superseded by [CANONICAL_DOC.md](path/to/canonical.md).
-> Please use that document instead. This file will be removed on YYYY-MM-DD.
-```
-
----
-
-## 🔍 Finding Documentation
-
-**Quick Search:**
 ```bash
-# Find doc by keyword
-grep -R "keyword" docs/
-
-# List all guides
-ls docs/guides/
-
-# View map
-cat docs/governance/DOCUMENTATION_MAP.md
+make check-docs
+make check-stale-docs
+python scripts/governance/check_docs_structure.py --all
 ```
 
-**GitHub Search:**
-Use GitHub's search with `path:docs/` filter.
-
----
-
-## 📝 Status Legend
-
-- ✅ **Stable:** Complete, maintained, canonical
-- 🔄 **In Progress:** Being actively updated
-- ⚠️ **Deprecated:** Being phased out, see replacement
-- 📦 **Archived:** Historical reference only
-
----
-
-**Questions?** See [CONTRIBUTING.md](../../CONTRIBUTING.md) or open an issue.
+Use `rg` for targeted stale-reference checks before merging documentation
+changes.

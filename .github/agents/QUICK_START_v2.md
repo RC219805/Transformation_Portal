@@ -2,6 +2,7 @@
 
 **Status**: Ready to Use
 **Scope**: Governed execution inside current repository contracts
+**Current baseline**: `main` through PR #1562
 
 ---
 
@@ -13,10 +14,10 @@ Use for managed browser-boundary work:
 
 - `web/secure-landing/`
 - `/`, `/login`, `/portal`, `/portal/bootstrap`
-- `/portal/assets/*`, `/portal/video/*`, `/healthz`
+- `/portal/assets/*`, `/portal/video/*`, managed `/healthz`
 - `portal.html`
 - `public/portal-assets/*`
-- selector stability, bundle rebuilds, and browser validation
+- selector stability, bundle rebuilds, Node 22 frontdoor validation, and browser validation
 
 Fast prompt patterns:
 
@@ -38,7 +39,7 @@ Use for backend and governed execution work:
 
 - `app.py`
 - typed `/v1/*` behavior
-- `/ready`
+- backend `/healthz`, `/ready`, and `/v1/readiness`
 - Lux Depth V3
 - archive-gate
 - machine-mode and ingest
@@ -82,6 +83,7 @@ Escalate to the Architect when work touches:
 
 - `pyproject.toml`, `requirements/`, lockfiles, dependency bans, or new models/runtimes
 - `.github/workflows/*`, CI Gate composition, release automation, or deployment behavior
+- documentation topology, live custom-agent role boundaries, or Copilot instructions
 - security-sensitive input handling or trust-boundary changes
 - public CLI/HTTP/schema/import-surface changes
 - ADR ambiguity or rewrite decisions such as reopening the portal migration question
@@ -108,5 +110,8 @@ Use the smallest command set that proves the change. If a broader command is nee
 - `transformation-portal-specialist.md`
 - `transformation-portal-architect.md`
 - `README.md`
+- `../copilot-instructions.md`
+- `../../docs/governance/DOCUMENTATION_MAP.md`
+- `../../docs/governance/DOCUMENTATION_STATE_AUDIT_2026-04-27.md`
 - `docs/guides/CUSTOM_AGENT_GUIDE.md`
 - `docs/reference/AGENT_QUICK_REFERENCE.md`

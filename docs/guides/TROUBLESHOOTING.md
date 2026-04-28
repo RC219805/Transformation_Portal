@@ -1,5 +1,11 @@
 # Troubleshooting Guide
 
+> Historical general troubleshooting guide.
+>
+> This guide captures November 2025 issues. Current Lux Depth V3 troubleshooting
+> lives in [LUX_DEPTH_V3_TROUBLESHOOTING.md](LUX_DEPTH_V3_TROUBLESHOOTING.md);
+> current navigation lives in [Documentation Map](../governance/DOCUMENTATION_MAP.md).
+
 This guide addresses common issues encountered when using the Transformation Portal. Issues are organized by priority and include solutions implemented as of November 2025.
 
 ## Table of Contents
@@ -388,8 +394,8 @@ top -l 1 | grep PhysMem  # macOS
 
 1. **Check documentation**:
    - [SETUP_GUIDE.md](SETUP_GUIDE.md) - Detailed installation
-   - [README.md](../README.md) - Feature overview
-   - [PIPELINE_OPERATIONS_GUIDE.md](PIPELINE_OPERATIONS_GUIDE.md) - Usage examples
+   - [README.md](../../README.md) - Feature overview
+   - [PIPELINE_OPERATIONS_GUIDE.md](../pipeline_docs/PIPELINE_OPERATIONS_GUIDE.md) - Usage examples
 
 2. **Run diagnostics**:
    ```bash
