@@ -78,6 +78,10 @@ def _portal_html_content() -> str:
     return orchestrator_app._get_portal_asset_bundle().html
 
 
+def _mark_da3_runtime_available(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(orchestrator_app, "_resolve_lux_depth_canary_runtime", lambda: Path(sys.executable))
+
+
 @lru_cache(maxsize=1)
 def _portal_asset_urls_from_html() -> set[str]:
     return set(re.findall(r'["\'](/portal/assets/[^"\']+)["\']', _portal_html_content()))
@@ -2184,6 +2188,14 @@ def test_portal_preview_metadata_worker_modes_and_export_contract_are_wired() ->
     reconcile_body = _extract_js_function_body(content, "_reconcilePreviewRepairedPaths")
     setter_body = _extract_js_function_body(content, "_setBuildSurfacePathFieldValue")
 
+    assert 'modelKey: "da3-metric",' in state_source
+    assert 'id="modelKey"' in content
+    assert "c.modelKey = _resolveDa3ModelKey(c.modelKey);" in update_body
+    assert "safeBindText(els.modelKey, null, 'modelKey');" in bind_body
+    assert (
+        "model_catalog: data.model_catalog && typeof data.model_catalog === 'object' ? data.model_catalog : {},"
+        in metadata_body
+    )
     assert 'maxWorkersMode: "auto",' in state_source
     assert 'maxGpuWorkersMode: "auto",' in state_source
     assert 'id="maxWorkersMode"' in content
@@ -2336,6 +2348,7 @@ def test_lux_cli_parity_links_portal_canonical_args_and_backend_argv() -> None:
         "preset": "--preset",
         "quality_tier": "--quality-tier",
         "depth_backend": "--depth-backend",
+        "model_key": "--model-key",
         "depth_device": "--depth-device",
         "enable_segmentation": "--enable-segmentation",
         "segmentation_backend": "--segmentation-backend",
@@ -2397,7 +2410,7 @@ def test_lux_cli_parity_links_portal_canonical_args_and_backend_argv() -> None:
         "args": {
             "input_dir": "./input_images",
             "output_dir": "./output/lux_depth_v3_apex_verify",
-            "preset": "depth-anything-v3.1-research-m4",
+            "preset": "depth-pro-research-m4",
             "quality_tier": "apex",
             "depth_backend": "depth_pro",
             "depth_device": "cpu",
@@ -2454,11 +2467,11 @@ def test_lux_cli_parity_links_portal_canonical_args_and_backend_argv() -> None:
     }
     argv = orchestrator_app._argv_from_request(payload)
 
-    expected_present_flags = {flag for key, flag in arg_to_flag.items() if key != "quiet"}
+    expected_present_flags = {flag for key, flag in arg_to_flag.items() if key not in {"model_key", "quiet"}}
     for flag in expected_present_flags:
         assert flag in argv, f"backend argv missing flag '{flag}'"
 
-    assert _flag_value(argv, "--preset") == "depth-anything-v3.1-research-m4"
+    assert _flag_value(argv, "--preset") == "depth-pro-research-m4"
     assert _flag_value(argv, "--quality-tier") == "apex"
     assert _flag_value(argv, "--depth-backend") == "depth_pro"
     assert _flag_value(argv, "--depth-device") == "cpu"
@@ -2537,7 +2550,7 @@ def test_lux_ui_backend_and_direct_cli_paths_share_config_fingerprint(tmp_path: 
         "args": {
             "input_dir": str(input_dir),
             "output_dir": str(tmp_path / "output_ui"),
-            "preset": "depth-anything-v3.1-research-m4",
+            "preset": "depth-pro-research-m4",
             "quality_tier": "apex",
             "depth_backend": "depth_pro",
             "depth_device": "cpu",
@@ -2573,7 +2586,7 @@ def test_lux_ui_backend_and_direct_cli_paths_share_config_fingerprint(tmp_path: 
         "--output-dir",
         str(tmp_path / "output_cli"),
         "--preset",
-        "depth-anything-v3.1-research-m4",
+        "depth-pro-research-m4",
         "--quality-tier",
         "apex",
         "--depth-backend",
@@ -2639,6 +2652,50 @@ def test_argv_normalization_includes_segmentation_controls() -> None:
     assert _flag_value(argv, "--segmentation-backend") == "sam2"
     assert _flag_value(argv, "--sam2-model-size") == "large"
     assert "--strict-segmentation" in argv
+
+
+def test_portal_default_da3_dispatch_uses_metric_model_without_research_ack() -> None:
+    payload: Dict[str, object] = {
+        "pipeline": "lux-depth-v3",
+        "args": {
+            "input_dir": "./input_images",
+            "output_dir": "./output",
+            "depth_backend": "da3",
+        },
+    }
+
+    preview = orchestrator_app._build_lux_config_preview(payload["args"])  # type: ignore[arg-type]
+    errors = {item["code"] for item in preview["field_errors"]}
+    argv = orchestrator_app._argv_from_request(payload)
+
+    assert "da3_model_non_commercial_required" not in errors
+    assert preview["execution_args"]["model_key"] == "da3-metric"
+    assert _flag_value(argv, "--depth-backend") == "da3"
+    assert _flag_value(argv, "--model-key") == "da3-metric"
+    assert "--non-commercial-ok" not in argv
+
+
+def test_portal_da3_research_model_requires_noncommercial_ack() -> None:
+    payload: Dict[str, object] = {
+        "pipeline": "lux-depth-v3",
+        "args": {
+            "input_dir": "./input_images",
+            "output_dir": "./output",
+            "depth_backend": "da3",
+            "model_key": "da3-research",
+        },
+    }
+
+    preview = orchestrator_app._build_lux_config_preview(payload["args"])  # type: ignore[arg-type]
+    errors = {item["code"] for item in preview["field_errors"]}
+
+    assert "da3_model_non_commercial_required" in errors
+
+    payload["args"]["non_commercial_ok"] = True  # type: ignore[index]
+    argv = orchestrator_app._argv_from_request(payload)
+
+    assert _flag_value(argv, "--model-key") == "da3-research"
+    assert _flag_value(argv, "--non-commercial-ok") == "true"
 
 
 def test_argv_normalization_includes_sam2_tiling_and_generator_controls() -> None:
@@ -4201,6 +4258,32 @@ def test_lux_depth_readiness_separates_base_ready_from_canary_unavailable(
     assert readiness["missing_prerequisites"] == []
 
 
+def test_lux_depth_readiness_blocks_selected_da3_when_runtime_missing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        orchestrator_app,
+        "_module_available",
+        lambda module_name: module_name == orchestrator_app.LUX_DEPTH_MODULE,
+    )
+    monkeypatch.setattr(orchestrator_app, "_resolve_lux_depth_canary_runtime", lambda: None)
+
+    readiness = orchestrator_app._lux_depth_readiness(
+        {
+            "depth_backend": "da3",
+            "model_key": "da3-metric",
+            "input_dir": "./input_images",
+            "output_dir": "./output",
+        }
+    )
+
+    assert readiness["status"] == "blocked"
+    assert readiness["selected_model"]["model_key"] == "da3-metric"
+    assert readiness["selected_model"]["canonical_model_key"] == "da3_metric"
+    assert readiness["selected_model"]["runtime_available"] is False
+    assert any(item["reason"] == "da3_runtime_unavailable" for item in readiness["missing_prerequisites"])
+
+
 def test_run_job_is_async_and_does_not_block_event_loop() -> None:
     async def scenario() -> None:
         job = orchestrator_app.Job(id="job_async", created_at=orchestrator_app._now())
@@ -5596,6 +5679,7 @@ def test_create_job_preserves_raw_request_and_stores_effective_request(
         job.finished_at = now
 
     monkeypatch.setattr(orchestrator_app, "_run_job", fake_run_job)
+    _mark_da3_runtime_available(monkeypatch)
 
     try:
         response = asyncio.run(
@@ -5659,7 +5743,8 @@ def test_create_job_archive_gate_rejects_unsafe_input_dir_before_argv() -> None:
     assert orchestrator_app.JOBS == {}
 
 
-def test_create_job_rejects_when_concurrency_limit_is_reached() -> None:
+def test_create_job_rejects_when_concurrency_limit_is_reached(monkeypatch: pytest.MonkeyPatch) -> None:
+    _mark_da3_runtime_available(monkeypatch)
     previous_limit = orchestrator_app.MAX_CONCURRENT_JOBS
     try:
         orchestrator_app.MAX_CONCURRENT_JOBS = 1

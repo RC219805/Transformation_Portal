@@ -18,6 +18,7 @@ DEFAULT_REF="95a2adea1a8180104bf51937409034bdec70a244"
 REF="${DA3_RUNTIME_REF:-${DEFAULT_REF}}"
 DEFAULT_FETCH_REF="refs/pull/110/head"
 FETCH_REF="${DA3_RUNTIME_FETCH_REF:-${DEFAULT_FETCH_REF}}"
+FETCH_LOCAL_REF="refs/remotes/da3-runtime/fetch-ref"
 DA3_RUNTIME_CONTRACT="${DA3_RUNTIME_CONTRACT:-pr110-numpy2-optional-colmap-xformers}"
 DA3_NUMPY_SPEC="${DA3_NUMPY_SPEC:-numpy>=2.0,<3}"
 DA3_PROFILE="${DA3_PROFILE:-baseline}"
@@ -41,7 +42,7 @@ OPTIONS:
   --checkout-dir PATH   Override the Depth Anything 3 checkout path
   --venv-dir PATH       Override the isolated DA3 venv path
   --profile PROFILE     Dependency profile: baseline, colmap, xformers, or comma-combined
-  --ref REF             Git ref to checkout after clone/update (default: ${DEFAULT_REF})
+  --ref REF             Commit SHA/tag/local ref to checkout after clone/update (default: ${DEFAULT_REF})
   --fetch-ref REF        Remote ref to fetch before checkout (default: ${DEFAULT_FETCH_REF})
   --dry-run             Print commands without executing them
   --skip-verify         Skip the DA3 worker readiness check
@@ -186,11 +187,16 @@ fi
 
 log "Synchronizing Depth Anything 3 checkout to ${REF}"
 run git -C "${CHECKOUT_DIR}" fetch --tags origin
+CHECKOUT_REF="${REF}"
 if [[ -n "${FETCH_REF}" ]]; then
-    run git -C "${CHECKOUT_DIR}" fetch origin "${FETCH_REF}"
+    run git -C "${CHECKOUT_DIR}" fetch origin "+${FETCH_REF}:${FETCH_LOCAL_REF}"
+    if [[ "${REF}" == "${FETCH_REF}" ]]; then
+        CHECKOUT_REF="${FETCH_LOCAL_REF}"
+        log "Using fetched remote ref for checkout: ${FETCH_REF} -> ${FETCH_LOCAL_REF}"
+    fi
 fi
-run git -C "${CHECKOUT_DIR}" checkout "${REF}"
-run git -C "${CHECKOUT_DIR}" reset --hard "${REF}"
+run git -C "${CHECKOUT_DIR}" checkout "${CHECKOUT_REF}"
+run git -C "${CHECKOUT_DIR}" reset --hard "${CHECKOUT_REF}"
 git_clean_checkout "${CHECKOUT_DIR}" "${VENV_DIR}"
 
 if [[ ! -d "${VENV_DIR}" ]]; then

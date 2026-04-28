@@ -480,6 +480,40 @@ def test_install_da3_runtime_optional_profiles_add_requested_deps(tmp_path: Path
     assert "xformers" in pip_install_lines
 
 
+def test_install_da3_runtime_can_checkout_remote_only_fetch_ref(tmp_path: Path) -> None:
+    repo_root = tmp_path / "repo"
+    script_path = _copy_repo_file(DA3_RUNTIME_INSTALLER_PATH, repo_root / "scripts" / "setup" / "install_da3_runtime.sh")
+    _copy_repo_file(RESOLVER_PATH, repo_root / "scripts" / "setup" / "resolve_python_311.sh")
+
+    fakebin = tmp_path / "fakebin"
+    _write_fake_python(fakebin / "python3.11", version="3.11.15", real_python=sys.executable)
+    env = {**os.environ, "PATH": f"{fakebin}:/usr/bin:/bin"}
+    result = subprocess.run(
+        [
+            "bash",
+            str(script_path),
+            "--dry-run",
+            "--skip-verify",
+            "--ref",
+            "refs/pull/110/head",
+            "--fetch-ref",
+            "refs/pull/110/head",
+        ],
+        cwd=repo_root,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "+ git -C" in result.stdout
+    assert "fetch origin +refs/pull/110/head:refs/remotes/da3-runtime/fetch-ref" in result.stdout
+    assert "Using fetched remote ref for checkout: refs/pull/110/head -> refs/remotes/da3-runtime/fetch-ref" in result.stdout
+    assert "checkout refs/remotes/da3-runtime/fetch-ref" in result.stdout
+    assert "reset --hard refs/remotes/da3-runtime/fetch-ref" in result.stdout
+
+
 def test_install_raw_runtime_uses_resolved_python_for_venv_creation(tmp_path: Path) -> None:
     repo_root = tmp_path / "repo"
     script_path = _copy_repo_file(RAW_RUNTIME_INSTALLER_PATH, repo_root / "scripts" / "setup" / "install_raw_runtime.sh")

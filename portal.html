@@ -756,12 +756,21 @@ Contract notes:
                             </div>
                             <span class="micro-status">Deliverables first, research controls second</span>
                         </div>
-                        <div>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
                             <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="depthBackend">Depth Backend</label>
-                            <select id="depthBackend" class="w-full sm:w-1/2 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2.5 text-[13px] font-mono transition-colors cursor-pointer">
+                            <select id="depthBackend" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2.5 text-[13px] font-mono transition-colors cursor-pointer">
                                 <option value="da3" selected>da3 (Depth Anything v3)</option>
                                 <option value="depth_pro">depth_pro (Research-Only)</option>
                             </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="modelKey">DA3 Model</label>
+                                <select id="modelKey" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2.5 text-[13px] font-mono transition-colors cursor-pointer">
+                                    <option value="da3-metric" selected>da3-metric (Apache-2.0)</option>
+                                    <option value="da3-research">da3-research (CC-BY-NC)</option>
+                                </select>
+                            </div>
                         </div>
                         <fieldset class="group-bare">
                             <legend class="sr-only">Segmentation</legend>

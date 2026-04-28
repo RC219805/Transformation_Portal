@@ -11,6 +11,7 @@ import importlib
 import json
 import logging
 import re
+import sys
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
@@ -107,6 +108,10 @@ def _reset_orchestrator_globals() -> None:
 def _client_fixture() -> TestClient:
     with TestClient(orchestrator_app.app, headers={"x-api-key": "contract-secret"}) as test_client:
         yield test_client
+
+
+def _mark_da3_runtime_available(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(orchestrator_app, "_resolve_lux_depth_canary_runtime", lambda: Path(sys.executable))
 
 
 def test_ready_keeps_non_enveloped_shape(client: TestClient) -> None:
@@ -615,7 +620,13 @@ def test_presets_contract_for_lux_depth_pipeline(client: TestClient) -> None:
     assert body["data"]["pipeline"] == "lux-depth-v3"
     premium = next(item for item in body["data"]["presets"] if item["name"] == "premium")
     assert premium["recommended_args"]["quality_tier"] == "premium"
+    assert premium["recommended_args"]["model_key"] == "da3-metric"
     assert premium["advanced_sections"] == []
+    da3_research = next(item for item in body["data"]["presets"] if item["name"] == "depth-anything-v3.1-research-m4")
+    assert da3_research["recommended_args"]["depth_backend"] == "da3"
+    assert da3_research["recommended_args"]["model_key"] == "da3-research"
+    depth_pro = next(item for item in body["data"]["presets"] if item["name"] == "depth-pro-research-m4")
+    assert depth_pro["recommended_args"]["depth_backend"] == "depth_pro"
 
 
 def test_config_metadata_contract_for_lux_depth_pipeline(client: TestClient) -> None:
@@ -631,6 +642,10 @@ def test_config_metadata_contract_for_lux_depth_pipeline(client: TestClient) -> 
     assert body["data"]["fields"]["reconstruction_iterations"]["recommended"]["balanced"] == 1000
     assert body["data"]["fields"]["raw_wb_mode"]["kind"] == "locked"
     assert body["data"]["backend_catalog"]["da3"]["policy_posture"]["code"] == "governed_default"
+    assert body["data"]["backend_catalog"]["da3"]["default_model_key"] == "da3-metric"
+    da3_model_options = {item["value"]: item for item in body["data"]["fields"]["model_key"]["options"]}
+    assert da3_model_options["da3-metric"]["requires_non_commercial_ok"] is False
+    assert da3_model_options["da3-research"]["requires_non_commercial_ok"] is True
     assert body["data"]["backend_catalog"]["depth_pro"]["required_acknowledgments"][0]["field"] == "non_commercial_ok"
     assert body["data"]["backend_catalog"]["sam2"]["checkpoint_expectation"]["field"] == "sam2_checkpoint_path"
     assert body["data"]["debug_bundle_policy"]["acknowledgement_required"] is True
@@ -1291,6 +1306,7 @@ def test_lux_jobs_dispatch_accepts_custom_manual_preset(
         job.finished_at = now
 
     monkeypatch.setattr(orchestrator_app, "_run_job", fake_run_job)
+    _mark_da3_runtime_available(monkeypatch)
     input_dir = (tmp_path / "manual-input").resolve()
     output_dir = (tmp_path / "manual-output").resolve()
     input_dir.mkdir(parents=True, exist_ok=True)
@@ -2610,6 +2626,7 @@ def test_create_job_preserves_raw_request_and_internal_execution_args(
         job.finished_at = now
 
     monkeypatch.setattr(orchestrator_app, "_run_job", fake_run_job)
+    _mark_da3_runtime_available(monkeypatch)
 
     response = client.post(
         "/v1/jobs",
@@ -2999,7 +3016,12 @@ def test_archive_gate_c_prov_export_rejects_missing_manifest(client: TestClient)
     assert body["error"]["details"]["field"] == "manifest_jsonl"
 
 
-def test_v1_jobs_rejects_when_max_concurrent_jobs_reached(client: TestClient, tmp_path) -> None:
+def test_v1_jobs_rejects_when_max_concurrent_jobs_reached(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path,
+) -> None:
+    _mark_da3_runtime_available(monkeypatch)
     # Use per-test isolated directories under tmp_path so the test stays
     # parallel-safe under pytest-xdist (no shared repo-root paths).
     previous_limit = orchestrator_app.MAX_CONCURRENT_JOBS
@@ -3199,6 +3221,7 @@ def test_job_events_stream_emits_state_log_progress_artifact_done(client: TestCl
         job.finished_at = now
 
     monkeypatch.setattr(orchestrator_app, "_run_job", fake_run_job)
+    _mark_da3_runtime_available(monkeypatch)
 
     # Use per-test isolated paths so the SSE stream test stays parallel-safe
     # under pytest-xdist (no shared repo-root directories).
