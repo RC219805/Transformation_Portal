@@ -151,6 +151,8 @@ apex_dual_depth_preset:
 - **DA3:** Provides artistically optimized relative depth for depth-aware tone mapping, atmospheric effects, and perceptual enhancement
 - **Fusion:** Weighted blend preserves metric accuracy while incorporating artistic refinement
 
+Explicit `depth_backend="depth_pro"` runs serialize the resolved model identity as `apple/ml-depth-pro` across effective config, per-image manifest config fingerprints, depth cache fingerprints, and run-card fingerprints. DA3 runs keep the existing DA3 `model_variant` names.
+
 ---
 
 ## Pipeline Stages
@@ -671,6 +673,18 @@ The `apex` tier enforces fail-closed quality gates. Two policy switches govern r
   - Mixed blocker sets (`missing_material_confidence`, `unsupported_confidence_score_type`, `below_coverage_threshold`, `no_implementation`, …) still fail closed.
   - The warning is mirrored in two places: `materials_v3.pixel_ops.passthrough_status` (canonical, consumed by the orchestrator's per-image manifest) and `materials_v3.segmentation_metadata.pixel_ops_passthrough` (consumed by the run-card cache).
   - The materials fingerprint payload (`build_materials_fingerprint_payload`) carries `pixel_ops_strict_policy_version` to mark this regime; bumping it invalidates caches when blocker semantics change.
+
+Run-card material telemetry keeps the counting bases separate:
+
+- `result_summary[].segmentation_status.materials_summary.masks_generated` / `mask_count` describe Materials V3/SAM2 mask candidates.
+- `pixel_ops_applied` / `pixel_ops_applied_count` describe Materials V3 material pixel operations actually executed.
+- `blocked_count` describes confidence/fail-closed candidate operations rejected by the Materials V3 pixel-op policy.
+- V2 reports separately expose `enhancement_metadata.material_masks_supplied`, `material_masks_supplied_count`, and `v2_material_adjustments_applied`.
+- Deprecated V2 `enhancement_metadata.materials_applied` remains a boolean compatibility alias for `v2_material_adjustments_applied`; it no longer means mask keys supplied.
+
+The advisory warning `APEX_MATERIALS_SEGMENTATION_DOMINATES_NO_PIXEL_OPS` appears only when SAM2 runtime is available, total image runtime is positive, SAM2 runtime share is at least 90%, masks exist, and Materials V3 applied zero pixel ops. It is runtime-cost telemetry, not a failure code.
+
+For V2 TIFF output, ICC profiles are preserved when available, with PIL `icc_profile` preferred and TIFF tag `34675` used as fallback. EXIF remains intentionally stripped for deterministic TIFF output; reports mark the result as partial metadata preservation when ICC is carried forward and EXIF is not written.
 
 ### APEX Promotion Eligibility & Soft-Passthrough
 

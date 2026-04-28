@@ -905,6 +905,111 @@
                   "object",
                   "null"
                 ]
+              },
+              "materials_summary": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "required": [
+                  "masks_generated",
+                  "mask_count",
+                  "pixel_ops_applied",
+                  "pixel_ops_applied_count",
+                  "blocked_count",
+                  "passthrough_code"
+                ],
+                "properties": {
+                  "masks_generated": {
+                    "type": "boolean"
+                  },
+                  "mask_count": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "pixel_ops_applied": {
+                    "type": "boolean"
+                  },
+                  "pixel_ops_applied_count": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "blocked_count": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "passthrough_code": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                },
+                "additionalProperties": false
+              },
+              "performance_warnings": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "code",
+                    "severity",
+                    "message",
+                    "details"
+                  ],
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "APEX_MATERIALS_SEGMENTATION_DOMINATES_NO_PIXEL_OPS"
+                      ]
+                    },
+                    "severity": {
+                      "type": "string",
+                      "enum": [
+                        "advisory"
+                      ]
+                    },
+                    "message": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "details": {
+                      "type": "object",
+                      "required": [
+                        "sam2_runtime_ms",
+                        "total_runtime_ms",
+                        "sam2_runtime_share",
+                        "pixel_ops_applied_count",
+                        "mask_count"
+                      ],
+                      "properties": {
+                        "sam2_runtime_ms": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "total_runtime_ms": {
+                          "type": "number",
+                          "exclusiveMinimum": 0
+                        },
+                        "sam2_runtime_share": {
+                          "type": "number",
+                          "minimum": 0.9
+                        },
+                        "pixel_ops_applied_count": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "mask_count": {
+                          "type": "integer",
+                          "minimum": 1
+                        }
+                      },
+                      "additionalProperties": false
+                    }
+                  },
+                  "additionalProperties": false
+                }
               }
             },
             "additionalProperties": true

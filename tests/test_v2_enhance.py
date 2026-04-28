@@ -15,6 +15,8 @@ from PIL import Image, ImageOps
 from transformation_portal.lux_depth_v3.v2_enhance import (
     V2EnhancementError,
     _apply_exif_orientation_to_array,
+    _extract_icc_profile,
+    _normalize_icc_profile_payload,
     canonical_asset_stem,
     emitted_v2_suffix_for_bit_depth,
     enhance_image,
@@ -308,6 +310,125 @@ class TestEnhanceImage:
             assert report["io"]["save_degraded"] is False
             assert "runtime_s" in report
             assert expected_output.exists()
+
+    def test_enhance_image_reports_no_material_masks_supplied(self, tmp_path):
+        """V2 metadata should separate mask handoff from pixel adjustments."""
+        input_path = tmp_path / "input.png"
+        output_path = tmp_path / "output.png"
+        test_image = np.full((12, 12, 3), 128, dtype=np.uint8)
+        Image.fromarray(test_image, mode="RGB").save(input_path)
+
+        report = enhance_image(
+            input_path,
+            output_path,
+            config=V2EnhancementConfig(
+                enhancement_strength=0.1,
+                clarity_strength=0.0,
+                material_strength=1.0,
+            ),
+        )
+
+        metadata = report["enhancement_metadata"]
+        assert metadata["material_masks_supplied"] is False
+        assert metadata["material_masks_supplied_count"] == 0
+        assert metadata["v2_material_adjustments_applied"] is False
+        assert metadata["materials_applied"] is False
+
+    def test_enhance_image_reports_supported_material_adjustment_applied(self, tmp_path):
+        """Supported non-empty masks should report actual V2 material adjustment."""
+        input_path = tmp_path / "input.png"
+        output_path = tmp_path / "output.png"
+        test_image = np.full((12, 12, 3), 128, dtype=np.uint8)
+        Image.fromarray(test_image, mode="RGB").save(input_path)
+
+        report = enhance_image(
+            input_path,
+            output_path,
+            material_masks={"glass": np.ones((12, 12), dtype=np.float32)},
+            config=V2EnhancementConfig(
+                enhancement_strength=0.0,
+                clarity_strength=0.0,
+                material_strength=1.0,
+            ),
+        )
+
+        metadata = report["enhancement_metadata"]
+        assert metadata["material_masks_supplied"] is True
+        assert metadata["material_masks_supplied_count"] == 1
+        assert metadata["v2_material_adjustments_applied"] is True
+        assert metadata["materials_applied"] is True
+
+    def test_enhance_image_reports_empty_material_mask_supplied_but_not_applied(self, tmp_path):
+        """Empty masks count as supplied but cannot apply V2 pixel adjustment."""
+        input_path = tmp_path / "input.png"
+        output_path = tmp_path / "output.png"
+        test_image = np.full((12, 12, 3), 128, dtype=np.uint8)
+        Image.fromarray(test_image, mode="RGB").save(input_path)
+
+        report = enhance_image(
+            input_path,
+            output_path,
+            material_masks={"wood": np.zeros((12, 12), dtype=np.float32)},
+            config=V2EnhancementConfig(
+                enhancement_strength=0.0,
+                clarity_strength=0.0,
+                material_strength=1.0,
+            ),
+        )
+
+        metadata = report["enhancement_metadata"]
+        assert metadata["material_masks_supplied"] is True
+        assert metadata["material_masks_supplied_count"] == 1
+        assert metadata["v2_material_adjustments_applied"] is False
+        assert metadata["materials_applied"] is False
+
+    def test_enhance_image_reports_unsupported_mask_supplied_but_not_applied(self, tmp_path):
+        """Unsupported masks from handoff are not V2 material adjustments."""
+        input_path = tmp_path / "input.png"
+        output_path = tmp_path / "output.png"
+        test_image = np.full((12, 12, 3), 128, dtype=np.uint8)
+        Image.fromarray(test_image, mode="RGB").save(input_path)
+
+        report = enhance_image(
+            input_path,
+            output_path,
+            material_masks={"water": np.ones((12, 12), dtype=np.float32)},
+            config=V2EnhancementConfig(
+                enhancement_strength=0.0,
+                clarity_strength=0.0,
+                material_strength=1.0,
+            ),
+        )
+
+        metadata = report["enhancement_metadata"]
+        assert metadata["material_masks_supplied"] is True
+        assert metadata["material_masks_supplied_count"] == 1
+        assert metadata["v2_material_adjustments_applied"] is False
+        assert metadata["materials_applied"] is False
+
+    def test_enhance_image_reports_masks_supplied_without_material_strength(self, tmp_path):
+        """Material-strength-disabled handoffs should not imply V2 pixel adjustment."""
+        input_path = tmp_path / "input.png"
+        output_path = tmp_path / "output.png"
+        test_image = np.full((12, 12, 3), 128, dtype=np.uint8)
+        Image.fromarray(test_image, mode="RGB").save(input_path)
+
+        report = enhance_image(
+            input_path,
+            output_path,
+            material_masks={"glass": np.ones((12, 12), dtype=np.float32)},
+            config=V2EnhancementConfig(
+                enhancement_strength=0.1,
+                clarity_strength=0.0,
+                material_strength=0.0,
+            ),
+        )
+
+        metadata = report["enhancement_metadata"]
+        assert metadata["material_masks_supplied"] is True
+        assert metadata["material_masks_supplied_count"] == 1
+        assert metadata["v2_material_adjustments_applied"] is False
+        assert metadata["materials_applied"] is False
 
     def test_enhance_image_with_depth_map(self, tmp_path):
         """Test enhancement with depth map."""
@@ -1063,6 +1184,69 @@ class TestEnhanceImage:
         assert report["io"]["exif_preservation_mode"] == "normalized"
         assert report["io"]["exif_orientation_normalized"] is True
         assert report["io"]["source_exif_orientation"] == 6
+
+    def test_extract_icc_profile_prefers_pil_info(self):
+        """PIL-exposed ICC payload is the first source of truth."""
+        icc_bytes = bytes(range(1, 12))
+        image = Image.new("RGB", (1, 1))
+        image.info["icc_profile"] = icc_bytes
+
+        assert _extract_icc_profile(image) == icc_bytes
+
+    def test_normalize_icc_profile_payload_tolerates_common_forms(self):
+        """ICC fallback normalization accepts bytes, bytearrays, ints, and chunks."""
+        assert _normalize_icc_profile_payload(b"abc") == b"abc"
+        assert _normalize_icc_profile_payload(bytearray(b"abc")) == b"abc"
+        assert _normalize_icc_profile_payload([65, 66, 67]) == b"ABC"
+        assert _normalize_icc_profile_payload((b"ab", bytearray(b"cd"))) == b"abcd"
+        assert _normalize_icc_profile_payload(b"") is None
+        assert _normalize_icc_profile_payload([999]) is None
+        assert _normalize_icc_profile_payload((b"ab", object())) is None
+
+    def test_16bit_tiff_preserves_icc_from_tag_34675_and_strips_exif(self, tmp_path):
+        """V2 TIFF output should preserve ICC only and report partial metadata."""
+        tifffile = pytest.importorskip("tifffile")
+
+        input_path = tmp_path / "input_with_icc_tag.tif"
+        output_path = tmp_path / "output_with_icc_tag.tif"
+        icc_bytes = b"test-icc-profile"
+        source = np.full((4, 5, 3), 32768, dtype=np.uint16)
+        tifffile.imwrite(
+            input_path,
+            source,
+            photometric="rgb",
+            compression=None,
+            extratags=[
+                (274, "H", 1, 1, False),
+                (315, "s", len("transformation-portal") + 1, "transformation-portal", False),
+                (34675, "B", len(icc_bytes), icc_bytes, False),
+            ],
+        )
+
+        with Image.open(input_path) as opened:
+            assert _extract_icc_profile(opened) == icc_bytes
+
+        report = enhance_image(
+            input_path,
+            output_path,
+            config=V2EnhancementConfig(
+                enhancement_strength=0.1,
+                clarity_strength=0.0,
+                material_strength=0.0,
+            ),
+        )
+
+        assert report["status"] == "success"
+        assert report["io"]["save_backend"] == "tifffile"
+        assert report["io"]["icc_preserved"] is True
+        assert report["io"]["exif_preservation_mode"] == "none"
+        assert report["io"]["metadata_preservation_mode"] == "partial"
+
+        with tifffile.TiffFile(report["output"]) as tif:
+            icc_tag = tif.pages[0].tags.get(34675)
+            assert icc_tag is not None
+            assert _normalize_icc_profile_payload(icc_tag.value) == icc_bytes
+            assert tif.pages[0].tags.get(315) is None
 
     def test_enhance_image_handles_palette_mode(self, tmp_path):
         """Test that palette (P) mode images are converted to RGB."""

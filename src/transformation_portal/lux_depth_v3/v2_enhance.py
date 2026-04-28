@@ -46,6 +46,50 @@ class V2EnhancementError(Exception):
     pass
 
 
+def _normalize_icc_profile_payload(value: Any) -> bytes | None:
+    """Normalize common PIL/TIFF ICC payload forms to bytes."""
+    if value is None:
+        return None
+    if isinstance(value, bytes):
+        return value or None
+    if isinstance(value, bytearray):
+        payload = bytes(value)
+        return payload or None
+    if isinstance(value, (list, tuple)):
+        if not value:
+            return None
+        if all(isinstance(item, int) for item in value):
+            try:
+                payload = bytes(value)
+            except ValueError:
+                return None
+            return payload or None
+        chunks: list[bytes] = []
+        for item in value:
+            chunk = _normalize_icc_profile_payload(item)
+            if chunk is None:
+                return None
+            chunks.append(chunk)
+        payload = b"".join(chunks)
+        return payload or None
+    return None
+
+
+def _extract_icc_profile(pil_image: Image.Image) -> bytes | None:
+    """Extract ICC profile from PIL metadata, falling back to TIFF tag 34675."""
+    icc_profile = _normalize_icc_profile_payload(pil_image.info.get("icc_profile"))
+    if icc_profile is not None:
+        return icc_profile
+
+    tag_v2 = getattr(pil_image, "tag_v2", None)
+    if tag_v2 is None:
+        return None
+    try:
+        return _normalize_icc_profile_payload(tag_v2.get(34675))
+    except Exception:
+        return None
+
+
 _DERIVED_STEM_SUFFIXES = (
     "_materials_v3_enhanced",
     "_v2_enhanced",
@@ -355,7 +399,7 @@ def load_image_preserve_bit_depth(input_path: Path, allow_8bit_output: bool = Fa
     with Image.open(input_path) as pil_image:
         # Extract metadata before any processing
         metadata = {
-            "icc_profile": pil_image.info.get("icc_profile"),
+            "icc_profile": _extract_icc_profile(pil_image),
             "exif": pil_image.info.get("exif"),
             "format": pil_image.format,
             "mode": pil_image.mode,

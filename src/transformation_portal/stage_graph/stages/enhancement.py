@@ -18,6 +18,7 @@ import numpy as np
 from ..stage import Stage, StageContext, StageResult, StageStatus
 
 _LOW_TEXTURE_PROXY_MAX_SIDE = 1024
+_V2_MATERIAL_ADJUSTMENT_MATERIALS = frozenset({"wood", "metal", "glass"})
 
 
 class EnhancementStage(Stage):
@@ -94,7 +95,12 @@ class EnhancementStage(Stage):
             )
 
         depth_map = context.get_artifact("depth_map")
-        material_masks = context.get_artifact("material_masks", {})
+        material_masks = self._normalize_material_masks(
+            context.get_artifact("material_masks", {}),
+            image,
+        )
+        material_masks_supplied_count = len(material_masks)
+        v2_material_adjustments_applied = self._v2_material_adjustments_would_apply(material_masks)
 
         start = time.time()
 
@@ -113,7 +119,12 @@ class EnhancementStage(Stage):
                     "enhancement_strength": self.enhancement_strength,
                     "clarity_strength": self.clarity_strength,
                     "material_strength": self.material_strength,
-                    "materials_applied": list(material_masks.keys()),
+                    "material_masks_supplied": material_masks_supplied_count > 0,
+                    "material_masks_supplied_count": material_masks_supplied_count,
+                    "v2_material_adjustments_applied": v2_material_adjustments_applied,
+                    # Deprecated compatibility alias. This now means actual V2
+                    # material adjustment, not "material mask keys supplied".
+                    "materials_applied": v2_material_adjustments_applied,
                 },
             },
             duration_ms=duration_ms,
@@ -123,6 +134,53 @@ class EnhancementStage(Stage):
                 "processing_ms": duration_ms,
             },
         )
+
+    @staticmethod
+    def _normalize_material_masks(
+        material_masks: object,
+        image: np.ndarray,
+    ) -> Dict[str, np.ndarray]:
+        """Drop malformed masks before V2 handoff counting or application."""
+        if not isinstance(material_masks, dict) or not isinstance(image, np.ndarray) or image.ndim < 2:
+            return {}
+
+        target_shape = tuple(image.shape[:2])
+        normalized: Dict[str, np.ndarray] = {}
+        for raw_material_name, raw_mask in material_masks.items():
+            material_name = str(raw_material_name).strip()
+            if not material_name:
+                continue
+            try:
+                mask = np.asarray(raw_mask)
+            except (TypeError, ValueError):
+                continue
+            if mask.ndim != 2 or tuple(mask.shape) != target_shape:
+                continue
+            if np.iscomplexobj(mask) or not (np.issubdtype(mask.dtype, np.number) or np.issubdtype(mask.dtype, np.bool_)):
+                continue
+            try:
+                mask = mask.astype(np.float32, copy=False)
+            except (TypeError, ValueError):
+                continue
+            if not np.all(np.isfinite(mask)):
+                continue
+            normalized[material_name] = mask
+        return normalized
+
+    def _v2_material_adjustments_would_apply(self, material_masks: Dict[str, np.ndarray]) -> bool:
+        """Return true when V2 will apply at least one material adjustment."""
+        if not material_masks or self.material_strength <= 0:
+            return False
+
+        for material_name, mask in material_masks.items():
+            if material_name not in _V2_MATERIAL_ADJUSTMENT_MATERIALS:
+                continue
+            try:
+                if np.asarray(mask).max() != 0:
+                    return True
+            except (TypeError, ValueError):
+                continue
+        return False
 
     def get_cache_key(self, context: StageContext) -> str:
         """Generate cache key based on all inputs."""
@@ -141,12 +199,25 @@ class EnhancementStage(Stage):
             depth_hash = hashlib.sha256(depth_map.tobytes()).hexdigest()[:8]
 
         # Hash material masks
-        material_masks = context.get_artifact("material_masks", {})
+        material_masks = self._normalize_material_masks(
+            context.get_artifact("material_masks", {}),
+            image,
+        )
         material_hash = ""
         if material_masks:
             # Sort keys for deterministic order
             sorted_keys = sorted(material_masks.keys())
-            material_bytes = b"".join(material_masks[k].tobytes() for k in sorted_keys)
+            material_parts: list[bytes] = []
+            for material_name in sorted_keys:
+                material_name_bytes = material_name.encode("utf-8")
+                material_parts.extend(
+                    (
+                        len(material_name_bytes).to_bytes(4, byteorder="big"),
+                        material_name_bytes,
+                        material_masks[material_name].tobytes(),
+                    )
+                )
+            material_bytes = b"".join(material_parts)
             material_hash = hashlib.sha256(material_bytes).hexdigest()[:8]
 
         # Configuration

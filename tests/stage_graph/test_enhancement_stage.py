@@ -130,7 +130,11 @@ class TestEnhancementStageMaterialProcessing:
 
         assert result.status == StageStatus.COMPLETED
         assert result.metadata["has_materials"] is True
-        assert "wood" in result.artifacts["enhancement_metadata"]["materials_applied"]
+        metadata = result.artifacts["enhancement_metadata"]
+        assert metadata["material_masks_supplied"] is True
+        assert metadata["material_masks_supplied_count"] == 1
+        assert metadata["v2_material_adjustments_applied"] is True
+        assert metadata["materials_applied"] is True
 
     def test_applies_metal_material_enhancement(self) -> None:
         """Metal material mask should boost contrast."""
@@ -152,13 +156,17 @@ class TestEnhancementStageMaterialProcessing:
         result = stage.compute(context)
 
         assert result.status == StageStatus.COMPLETED
-        assert "metal" in result.artifacts["enhancement_metadata"]["materials_applied"]
+        metadata = result.artifacts["enhancement_metadata"]
+        assert metadata["material_masks_supplied"] is True
+        assert metadata["material_masks_supplied_count"] == 1
+        assert metadata["v2_material_adjustments_applied"] is True
+        assert metadata["materials_applied"] is True
 
     def test_empty_mask_does_not_modify_image(self) -> None:
         """Empty material mask (all zeros) should not modify the image pixels.
 
-        The mask key is still reported in materials_applied (it was provided),
-        but the actual enhancement is skipped because mask.max() == 0.
+        The mask handoff is still reported, but the deprecated
+        materials_applied alias stays false because mask.max() == 0.
         """
         image = np.full((32, 32, 3), 128, dtype=np.uint8)
         empty_mask = np.zeros((32, 32), dtype=np.float32)
@@ -178,10 +186,98 @@ class TestEnhancementStageMaterialProcessing:
         result = stage.compute(context)
 
         assert result.status == StageStatus.COMPLETED
-        # Mask key is reported (it was provided)
-        assert "wood" in result.artifacts["enhancement_metadata"]["materials_applied"]
+        metadata = result.artifacts["enhancement_metadata"]
+        assert metadata["material_masks_supplied"] is True
+        assert metadata["material_masks_supplied_count"] == 1
+        assert metadata["v2_material_adjustments_applied"] is False
+        assert metadata["materials_applied"] is False
         # Image should be unchanged since empty mask causes skip
         assert np.array_equal(result.artifacts["enhanced_image"], image)
+
+    def test_signed_nonzero_mask_reports_material_adjustment_applied(self) -> None:
+        """Signed non-zero masks should report true when V2 applies blending."""
+        image = np.full((32, 32, 3), 128, dtype=np.uint8)
+        signed_mask = np.full((32, 32), -0.25, dtype=np.float32)
+
+        stage = EnhancementStage(
+            enhancement_strength=0.0,
+            clarity_strength=0.0,
+            material_strength=1.0,
+        )
+        context = StageContext(
+            artifacts={
+                "image": image,
+                "material_masks": {"wood": signed_mask},
+            }
+        )
+
+        result = stage.compute(context)
+
+        assert result.status == StageStatus.COMPLETED
+        metadata = result.artifacts["enhancement_metadata"]
+        assert metadata["material_masks_supplied"] is True
+        assert metadata["material_masks_supplied_count"] == 1
+        assert metadata["v2_material_adjustments_applied"] is True
+        assert metadata["materials_applied"] is True
+        assert not np.array_equal(result.artifacts["enhanced_image"], image)
+
+    def test_unsupported_material_mask_is_supplied_but_not_applied(self) -> None:
+        """Unsupported material keys should not imply V2 pixel adjustment."""
+        image = np.full((32, 32, 3), 128, dtype=np.uint8)
+        water_mask = np.ones((32, 32), dtype=np.float32)
+
+        stage = EnhancementStage(
+            enhancement_strength=0.0,
+            clarity_strength=0.0,
+            material_strength=1.0,
+        )
+        context = StageContext(
+            artifacts={
+                "image": image,
+                "material_masks": {"water": water_mask},
+            }
+        )
+
+        result = stage.compute(context)
+
+        assert result.status == StageStatus.COMPLETED
+        metadata = result.artifacts["enhancement_metadata"]
+        assert metadata["material_masks_supplied"] is True
+        assert metadata["material_masks_supplied_count"] == 1
+        assert metadata["v2_material_adjustments_applied"] is False
+        assert metadata["materials_applied"] is False
+
+    def test_malformed_material_masks_are_dropped_before_handoff_count(self) -> None:
+        """Malformed masks should not be counted, hashed, or applied."""
+        image = np.full((32, 32, 3), 128, dtype=np.uint8)
+
+        stage = EnhancementStage(
+            enhancement_strength=0.0,
+            clarity_strength=0.0,
+            material_strength=1.0,
+        )
+        context = StageContext(
+            artifacts={
+                "image": image,
+                "material_masks": {
+                    "wood": np.ones((16, 16), dtype=np.float32),
+                    "metal": "not-a-mask",
+                    "glass": np.full((32, 32), np.nan, dtype=np.float32),
+                },
+            }
+        )
+
+        result = stage.compute(context)
+
+        assert result.status == StageStatus.COMPLETED
+        metadata = result.artifacts["enhancement_metadata"]
+        assert metadata["material_masks_supplied"] is False
+        assert metadata["material_masks_supplied_count"] == 0
+        assert metadata["v2_material_adjustments_applied"] is False
+        assert metadata["materials_applied"] is False
+        assert result.metadata["has_materials"] is False
+        assert np.array_equal(result.artifacts["enhanced_image"], image)
+        assert stage.get_cache_key(context).startswith("enhance_")
 
 
 class TestEnhancementStageCacheKey:
@@ -242,6 +338,17 @@ class TestEnhancementStageCacheKey:
         key2 = stage.get_cache_key(context)
 
         assert key1 == key2
+
+    def test_cache_key_changes_with_material_name_for_same_mask(self) -> None:
+        """Material cache hash must include names because V2 behavior depends on them."""
+        image = np.full((32, 32, 3), 128, dtype=np.uint8)
+        mask = np.ones((32, 32), dtype=np.float32)
+
+        stage = EnhancementStage(enhancement_strength=0.0, clarity_strength=0.0)
+        wood_context = StageContext(artifacts={"image": image, "material_masks": {"wood": mask}})
+        metal_context = StageContext(artifacts={"image": image, "material_masks": {"metal": mask}})
+
+        assert stage.get_cache_key(wood_context) != stage.get_cache_key(metal_context)
 
 
 class TestEnhancementStageBitDepth:
@@ -398,7 +505,10 @@ class TestEnhancementStageMetadata:
         assert metadata["enhancement_strength"] == 0.7
         assert metadata["clarity_strength"] == 0.5
         assert metadata["material_strength"] == 0.6
-        assert "materials_applied" in metadata
+        assert metadata["material_masks_supplied"] is False
+        assert metadata["material_masks_supplied_count"] == 0
+        assert metadata["v2_material_adjustments_applied"] is False
+        assert metadata["materials_applied"] is False
 
     def test_duration_recorded(self) -> None:
         """Processing duration should be recorded."""

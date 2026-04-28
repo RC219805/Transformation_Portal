@@ -18,6 +18,11 @@ pytestmark = [
     pytest.mark.unit,
 ]
 
+from transformation_portal.evals import apex_evidence_bundle
+from transformation_portal.lux_depth_v3 import apex_codes
+from transformation_portal.lux_depth_v3.apex_codes import (
+    APEX_MATERIALS_SEGMENTATION_DOMINATES_NO_PIXEL_OPS,
+)
 from transformation_portal.lux_depth_v3.config import EnhanceConfig, ModelVariant
 from transformation_portal.lux_depth_v3.model_resolution import ModelRequest, resolve_model_contract
 from transformation_portal.lux_depth_v3.orchestrator import (
@@ -33,6 +38,16 @@ from transformation_portal.lux_depth_v3.orchestrator import (
 from transformation_portal.lux_depth_v3.run_card_contract import render_run_card_output_relative_path
 from transformation_portal.lux_depth_v3.security import HashMode
 from transformation_portal.schemas.run_card import load_run_card_schema
+
+
+def test_apex_segmentation_dominance_warning_code_is_centralized() -> None:
+    """APEX advisory codes should be centralized and re-exported for consumers."""
+    assert APEX_MATERIALS_SEGMENTATION_DOMINATES_NO_PIXEL_OPS == "APEX_MATERIALS_SEGMENTATION_DOMINATES_NO_PIXEL_OPS"
+    assert "APEX_MATERIALS_SEGMENTATION_DOMINATES_NO_PIXEL_OPS" in apex_codes.__all__
+    assert (
+        apex_evidence_bundle.APEX_MATERIALS_SEGMENTATION_DOMINATES_NO_PIXEL_OPS
+        == APEX_MATERIALS_SEGMENTATION_DOMINATES_NO_PIXEL_OPS
+    )
 
 
 def _valid_run_card_payload() -> dict:
@@ -625,6 +640,170 @@ def test_build_run_card_result_summary_surfaces_failure_code_when_manifest_absen
     assert segmentation_status["status"] != "missing_evidence"
 
 
+def test_build_run_card_result_summary_reports_materials_summary_and_warning(tmp_path: Path) -> None:
+    output_root = tmp_path / "output"
+    manifest_path = output_root / "manifests" / "image_05_combined.json"
+    orch = object.__new__(EnhanceOrchestrator)
+    orch.output_root = output_root
+    orch.config = EnhanceConfig(
+        enable_materials_v3=True,
+        enable_material_segmentation=True,
+        material_segmentation_backend="sam2",
+        strict_backend=True,
+    )
+    passthrough = {
+        "code": "APEX_MATERIALS_PASSTHROUGH_LOW_CONFIDENCE",
+        "message": "Materials V3 masks present but every implemented op was below confidence threshold.",
+        "details": {
+            "material_count": 4,
+            "implemented_materials": ["glass", "water", "foliage", "stone"],
+            "applied_ops_count": 0,
+            "blocked_reasons": {"below_confidence_threshold": 4},
+        },
+    }
+    orch._active_run_card_segmentation_metadata = {
+        str(manifest_path): {
+            "status": "ok",
+            "backend": "sam2",
+            "mask_artifact_path": str(output_root / "segmentation" / "image_05_materials_v3_masks.npz"),
+            "mask_count": 4,
+            "timing_ms": {"backend_segment": 900.0},
+            "pixel_ops_applied_count": 0,
+            "pixel_ops_blocked_count": 4,
+            "warnings": ["APEX_MATERIALS_PASSTHROUGH_LOW_CONFIDENCE"],
+            "pixel_ops_passthrough": passthrough,
+        }
+    }
+    orch._backend_metadata = SimpleNamespace(requested_backend="da3", resolution_reason=None)
+
+    summary = orch._build_run_card_result_summary(
+        [
+            {
+                "image": str(tmp_path / "inputs" / "image_05.png"),
+                "status": "ok",
+                "backend": "da3",
+                "runtime_s": 1.0,
+                "manifest": str(manifest_path),
+            }
+        ]
+    )
+
+    segmentation_status = summary[0]["segmentation_status"]
+    assert segmentation_status["materials_summary"] == {
+        "masks_generated": True,
+        "mask_count": 4,
+        "pixel_ops_applied": False,
+        "pixel_ops_applied_count": 0,
+        "blocked_count": 4,
+        "passthrough_code": "APEX_MATERIALS_PASSTHROUGH_LOW_CONFIDENCE",
+    }
+    assert segmentation_status["performance_warnings"] == [
+        {
+            "code": APEX_MATERIALS_SEGMENTATION_DOMINATES_NO_PIXEL_OPS,
+            "severity": "advisory",
+            "message": "SAM2 dominated runtime but no material pixel operations were applied.",
+            "details": {
+                "sam2_runtime_ms": 900.0,
+                "total_runtime_ms": 1000.0,
+                "sam2_runtime_share": 0.9,
+                "pixel_ops_applied_count": 0,
+                "mask_count": 4,
+            },
+        }
+    ]
+
+
+def test_extract_run_card_segmentation_metadata_enriches_pixel_ops_counts() -> None:
+    passthrough = {
+        "code": "APEX_MATERIALS_PASSTHROUGH_LOW_CONFIDENCE",
+        "details": {
+            "applied_ops_count": 0,
+            "blocked_reasons": {"below_confidence_threshold": 2},
+        },
+    }
+
+    metadata = EnhanceOrchestrator._extract_run_card_segmentation_metadata(
+        {
+            "material_masks": {
+                "glass": np.ones((2, 2), dtype=np.float32),
+                "water": np.ones((2, 2), dtype=np.float32),
+            },
+            "materials_v3_pixel_ops": {
+                "applied": [],
+                "blocked": [
+                    {"material": "glass", "reason": "below_confidence_threshold"},
+                    {"material": "water", "reason": "below_confidence_threshold"},
+                ],
+                "passthrough_status": passthrough,
+            },
+            "materials_v3_metadata": {
+                "segmentation_metadata": {
+                    "status": "ok",
+                    "backend": "sam2",
+                }
+            },
+        }
+    )
+
+    assert metadata is not None
+    assert metadata["mask_count"] == 2
+    assert metadata["pixel_ops_applied_count"] == 0
+    assert metadata["pixel_ops_blocked_count"] == 2
+    assert metadata["pixel_ops_passthrough"] == passthrough
+
+
+@pytest.mark.parametrize(
+    ("sam2_runtime_ms", "runtime_s", "mask_count", "pixel_ops_applied_count", "expected_warning"),
+    [
+        (899.9, 1.0, 4, 0, False),
+        (900.0, 1.0, 4, 0, True),
+        (950.0, 1.0, 4, 0, True),
+        (950.0, 1.0, 4, 1, False),
+        (950.0, 1.0, 0, 0, False),
+        (950.0, 0.0, 4, 0, False),
+        (950.0, None, 4, 0, False),
+        (None, 1.0, 4, 0, False),
+    ],
+)
+def test_run_card_segmentation_performance_warning_boundaries(
+    sam2_runtime_ms: float | None,
+    runtime_s: float | None,
+    mask_count: int,
+    pixel_ops_applied_count: int,
+    expected_warning: bool,
+) -> None:
+    timing_ms = {}
+    if sam2_runtime_ms is not None:
+        timing_ms["backend_segment"] = sam2_runtime_ms
+    materials_summary = {
+        "mask_count": mask_count,
+        "pixel_ops_applied_count": pixel_ops_applied_count,
+    }
+
+    warnings = EnhanceOrchestrator._build_run_card_segmentation_performance_warnings(
+        {"backend": "sam2", "timing_ms": timing_ms},
+        runtime_s=runtime_s,
+        materials_summary=materials_summary,
+    )
+
+    assert bool(warnings) is expected_warning
+
+
+def test_run_card_segmentation_performance_warning_requires_sam2_backend() -> None:
+    materials_summary = {
+        "mask_count": 4,
+        "pixel_ops_applied_count": 0,
+    }
+
+    warnings = EnhanceOrchestrator._build_run_card_segmentation_performance_warnings(
+        {"backend": "efficientsam", "timing_ms": {"backend_segment": 950.0}},
+        runtime_s=1.0,
+        materials_summary=materials_summary,
+    )
+
+    assert warnings == []
+
+
 @pytest.mark.parametrize("version", ["v1", "v2"])
 def test_run_card_schema_accepts_additive_quality_gate_and_capability(version: str) -> None:
     pytest.importorskip("jsonschema")
@@ -754,6 +933,28 @@ def test_run_card_schema_accepts_segmentation_status_with_pixel_ops_passthrough(
                         "blocked_reasons": {"below_confidence_threshold": 4},
                     },
                 },
+                "materials_summary": {
+                    "masks_generated": True,
+                    "mask_count": 4,
+                    "pixel_ops_applied": False,
+                    "pixel_ops_applied_count": 0,
+                    "blocked_count": 4,
+                    "passthrough_code": "APEX_MATERIALS_PASSTHROUGH_LOW_CONFIDENCE",
+                },
+                "performance_warnings": [
+                    {
+                        "code": APEX_MATERIALS_SEGMENTATION_DOMINATES_NO_PIXEL_OPS,
+                        "severity": "advisory",
+                        "message": "SAM2 dominated runtime but no material pixel operations were applied.",
+                        "details": {
+                            "sam2_runtime_ms": 990.0,
+                            "total_runtime_ms": 1100.0,
+                            "sam2_runtime_share": 0.9,
+                            "pixel_ops_applied_count": 0,
+                            "mask_count": 4,
+                        },
+                    }
+                ],
             },
         }
     ]
@@ -768,6 +969,63 @@ def test_run_card_schema_accepts_segmentation_status_with_pixel_ops_passthrough(
         }
 
     _validate_run_card_payload(payload, _run_card_schema_path(version))
+
+
+def test_run_card_v2_schema_rejects_unknown_materials_performance_warning_code() -> None:
+    """The v2 schema should lock known advisory Materials V3 warning codes."""
+    pytest.importorskip("jsonschema")
+    payload = _valid_run_card_payload()
+    payload["run_card_version"] = "v2"
+    payload.pop("artifact_merkle_root", None)
+    payload["artifact_tree"] = {
+        "algorithm": "ct-sha256-v1",
+        "leaf_format": "tp.run_card.artifact_leaf.v1",
+        "leaf_count": 0,
+        "root_sha256": "b" * 64,
+        "artifacts": [],
+    }
+    payload["result_summary"] = [
+        {
+            "image": "image_07.png",
+            "status": "ok",
+            "backend": "da3",
+            "runtime_s": 1.10,
+            "segmentation_status": {
+                "status": "ok",
+                "enabled": True,
+                "backend": "sam2",
+                "strict_backend": True,
+                "mask_count": 4,
+                "warnings": [],
+                "errors": [],
+                "materials_summary": {
+                    "masks_generated": True,
+                    "mask_count": 4,
+                    "pixel_ops_applied": False,
+                    "pixel_ops_applied_count": 0,
+                    "blocked_count": 4,
+                    "passthrough_code": None,
+                },
+                "performance_warnings": [
+                    {
+                        "code": "UNKNOWN_WARNING",
+                        "severity": "advisory",
+                        "message": "Unknown warning should not validate.",
+                        "details": {
+                            "sam2_runtime_ms": 990.0,
+                            "total_runtime_ms": 1100.0,
+                            "sam2_runtime_share": 0.9,
+                            "pixel_ops_applied_count": 0,
+                            "mask_count": 4,
+                        },
+                    }
+                ],
+            },
+        }
+    ]
+
+    with pytest.raises(RuntimeError):
+        _validate_run_card_payload(payload, _run_card_schema_path("v2"))
 
 
 @pytest.mark.parametrize("version", ["v1", "v2"])
@@ -1231,6 +1489,25 @@ def test_config_fingerprint_uses_raw_preset_requested_when_enum_unset():
     assert fingerprint["preset_resolved"] == "backend:depth_pro"
     assert fingerprint["raw_ingest_profile"] == "tp.raw_ingest.deterministic_v1"
     assert len(fingerprint["raw_ingest_settings_hash"]) == 64
+
+
+def test_run_card_effective_config_normalizes_explicit_depth_pro_model_identity() -> None:
+    orch = object.__new__(EnhanceOrchestrator)
+    orch.config = EnhanceConfig(
+        depth_backend="depth_pro",
+        model_variant=ModelVariant.METRIC_LARGE,
+        emit_run_card=True,
+    )
+
+    effective_config = orch._build_run_card_effective_config(
+        run_card_version="v2",
+        include_proofs=True,
+    )
+
+    assert effective_config["depth_backend"] == "depth_pro"
+    assert effective_config["model_variant"] == "apple/ml-depth-pro"
+    assert effective_config["run_card_version"] == "v2"
+    assert effective_config["run_card_include_proofs"] is True
 
 
 def test_run_card_config_fingerprint_hashes_resolved_checkpoint_sha() -> None:

@@ -21,6 +21,7 @@ from transformation_portal.ingest.canonical_json import dump_json
 from transformation_portal.lux_depth_v3.apex_codes import (
     APEX_MATERIALS_PASSTHROUGH_LOW_CONFIDENCE,
     APEX_MATERIALS_PIXEL_OPS_EMPTY,
+    APEX_MATERIALS_SEGMENTATION_DOMINATES_NO_PIXEL_OPS,
 )
 
 APEX_EVIDENCE_BUNDLE_VERSION = "apex_evidence_bundle.v1"

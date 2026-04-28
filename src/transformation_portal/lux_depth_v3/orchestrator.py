@@ -57,6 +57,7 @@ from ..spatial_ai.reconstruction.contracts import (  # noqa: E501
     LicenseRestrictionError as ReconstructionLicenseRestrictionError,
 )
 from ._backend_contract import normalize_backend_id, normalize_backend_provenance
+from .apex_codes import APEX_MATERIALS_SEGMENTATION_DOMINATES_NO_PIXEL_OPS
 
 # ADR-043: Artifact management extracted to artifact_manager.py
 # NOTE: xxHash support is now handled in artifact_manager.py (ADR-043)
@@ -6093,7 +6094,7 @@ class EnhanceOrchestrator:
     ) -> Dict[str, Any]:
         """Build replayable batch-level config from the resolved execution contract."""
         return {
-            "model": self._model_variant.value.name,
+            "model": config_fingerprint.get("model_variant") or self._model_variant.value.name,
             "depth_backend": backend_selection.get("resolved"),
             "model_id": backend_selection.get("model_id"),
             "model_artifact_filename": backend_selection.get("model_artifact_filename"),
@@ -6503,8 +6504,8 @@ class EnhanceOrchestrator:
         """Render an output-root-relative path suitable for run-card summaries."""
         return render_run_card_output_relative_path(path_value, self.output_root)
 
-    @staticmethod
-    def _extract_run_card_segmentation_metadata(materials_v3_result: Any) -> Optional[Dict[str, Any]]:
+    @classmethod
+    def _extract_run_card_segmentation_metadata(cls, materials_v3_result: Any) -> Optional[Dict[str, Any]]:
         """Extract a replay-safe copy of Materials V3 segmentation metadata."""
         if not isinstance(materials_v3_result, dict):
             return None
@@ -6514,12 +6515,157 @@ class EnhanceOrchestrator:
         segmentation_metadata = materials_v3_metadata.get("segmentation_metadata")
         if not isinstance(segmentation_metadata, dict):
             return None
-        return copy.deepcopy(segmentation_metadata)
+        normalized = copy.deepcopy(segmentation_metadata)
+
+        material_masks = materials_v3_result.get("material_masks")
+        if isinstance(material_masks, dict) and normalized.get("mask_count") is None:
+            normalized["mask_count"] = len(material_masks)
+
+        pixel_ops = materials_v3_result.get("materials_v3_pixel_ops")
+        if isinstance(pixel_ops, dict):
+            applied = pixel_ops.get("applied")
+            blocked = pixel_ops.get("blocked")
+            if isinstance(applied, list) and normalized.get("pixel_ops_applied_count") is None:
+                normalized["pixel_ops_applied_count"] = len(applied)
+            if isinstance(blocked, list) and normalized.get("pixel_ops_blocked_count") is None:
+                normalized["pixel_ops_blocked_count"] = len(blocked)
+
+            passthrough = pixel_ops.get("passthrough_status")
+            if isinstance(passthrough, dict) and not isinstance(
+                normalized.get("pixel_ops_passthrough"),
+                dict,
+            ):
+                normalized["pixel_ops_passthrough"] = copy.deepcopy(passthrough)
+
+            if normalized.get("pixel_ops_blocked_count") is None:
+                blocked_reasons = cls._pixel_ops_blocked_reasons(pixel_ops)
+                if blocked_reasons:
+                    normalized["pixel_ops_blocked_count"] = sum(blocked_reasons.values())
+        return normalized
+
+    @staticmethod
+    def _coerce_nonnegative_int(value: Any) -> Optional[int]:
+        if isinstance(value, bool):
+            return None
+        try:
+            coerced = int(value)
+        except (TypeError, ValueError):
+            return None
+        if coerced < 0:
+            return None
+        return coerced
+
+    @classmethod
+    def _build_run_card_materials_summary(
+        cls,
+        segmentation_metadata: Mapping[str, Any],
+    ) -> Dict[str, Any]:
+        """Summarize Materials V3/SAM2 semantics without conflating V2 handoff."""
+        mask_count = cls._coerce_nonnegative_int(segmentation_metadata.get("mask_count")) or 0
+
+        passthrough = segmentation_metadata.get("pixel_ops_passthrough")
+        passthrough_details = passthrough.get("details") if isinstance(passthrough, Mapping) else None
+        passthrough_details = passthrough_details if isinstance(passthrough_details, Mapping) else {}
+
+        pixel_ops_applied_count = cls._coerce_nonnegative_int(
+            segmentation_metadata.get("pixel_ops_applied_count"),
+        )
+        if pixel_ops_applied_count is None:
+            pixel_ops_applied_count = cls._coerce_nonnegative_int(
+                passthrough_details.get("applied_ops_count"),
+            )
+        if pixel_ops_applied_count is None:
+            pixel_ops_applied_count = 0
+
+        blocked_count = cls._coerce_nonnegative_int(
+            segmentation_metadata.get("pixel_ops_blocked_count"),
+        )
+        if blocked_count is None:
+            blocked_reasons = passthrough_details.get("blocked_reasons")
+            if isinstance(blocked_reasons, Mapping):
+                blocked_count = sum(
+                    count
+                    for count in (cls._coerce_nonnegative_int(value) for value in blocked_reasons.values())
+                    if count is not None
+                )
+        if blocked_count is None:
+            blocked_count = 0
+
+        passthrough_code = None
+        if isinstance(passthrough, Mapping):
+            raw_code = passthrough.get("code")
+            if isinstance(raw_code, str) and raw_code.strip():
+                passthrough_code = raw_code.strip()
+
+        return {
+            "masks_generated": mask_count > 0,
+            "mask_count": mask_count,
+            "pixel_ops_applied": pixel_ops_applied_count > 0,
+            "pixel_ops_applied_count": pixel_ops_applied_count,
+            "blocked_count": blocked_count,
+            "passthrough_code": passthrough_code,
+        }
+
+    @classmethod
+    def _build_run_card_segmentation_performance_warnings(
+        cls,
+        segmentation_metadata: Mapping[str, Any],
+        *,
+        runtime_s: Optional[Any],
+        materials_summary: Mapping[str, Any],
+    ) -> List[Dict[str, Any]]:
+        backend_name = str(segmentation_metadata.get("backend") or "").strip().lower()
+        if backend_name != "sam2":
+            return []
+
+        timing_ms = segmentation_metadata.get("timing_ms")
+        if not isinstance(timing_ms, Mapping):
+            return []
+
+        raw_sam2_runtime_ms = timing_ms.get("backend_segment")
+        if raw_sam2_runtime_ms is None or runtime_s is None:
+            return []
+
+        try:
+            sam2_runtime_ms = float(raw_sam2_runtime_ms)
+            total_runtime_ms = float(runtime_s) * 1000.0
+        except (TypeError, ValueError):
+            return []
+
+        if (
+            not np.isfinite(sam2_runtime_ms)
+            or not np.isfinite(total_runtime_ms)
+            or sam2_runtime_ms < 0
+            or total_runtime_ms <= 0
+        ):
+            return []
+
+        mask_count = cls._coerce_nonnegative_int(materials_summary.get("mask_count")) or 0
+        pixel_ops_applied_count = cls._coerce_nonnegative_int(materials_summary.get("pixel_ops_applied_count")) or 0
+        sam2_runtime_share = sam2_runtime_ms / total_runtime_ms
+        if sam2_runtime_share < 0.90 or mask_count <= 0 or pixel_ops_applied_count != 0:
+            return []
+
+        return [
+            {
+                "code": APEX_MATERIALS_SEGMENTATION_DOMINATES_NO_PIXEL_OPS,
+                "severity": "advisory",
+                "message": "SAM2 dominated runtime but no material pixel operations were applied.",
+                "details": {
+                    "sam2_runtime_ms": sam2_runtime_ms,
+                    "total_runtime_ms": total_runtime_ms,
+                    "sam2_runtime_share": round(sam2_runtime_share, 4),
+                    "pixel_ops_applied_count": pixel_ops_applied_count,
+                    "mask_count": mask_count,
+                },
+            }
+        ]
 
     def _build_run_card_segmentation_status(
         self,
         segmentation_metadata: Optional[Dict[str, Any]],
         result_failure_info: Optional[Mapping[str, Any]] = None,
+        runtime_s: Optional[Any] = None,
     ) -> Optional[Dict[str, Any]]:
         """Build explicit segmentation execution status for run-card summaries.
 
@@ -6550,6 +6696,7 @@ class EnhanceOrchestrator:
                 "strict_backend": strict_backend,
             }
         if isinstance(segmentation_metadata, dict):
+            materials_summary = self._build_run_card_materials_summary(segmentation_metadata)
             return {
                 "status": str(segmentation_metadata.get("status") or "ok"),
                 "enabled": True,
@@ -6563,6 +6710,12 @@ class EnhanceOrchestrator:
                 "warnings": list(segmentation_metadata.get("warnings") or []),
                 "errors": list(segmentation_metadata.get("errors") or []),
                 "pixel_ops_passthrough": segmentation_metadata.get("pixel_ops_passthrough"),
+                "materials_summary": materials_summary,
+                "performance_warnings": self._build_run_card_segmentation_performance_warnings(
+                    segmentation_metadata,
+                    runtime_s=runtime_s,
+                    materials_summary=materials_summary,
+                ),
             }
         failure_code: Optional[str] = None
         failure_details: Optional[Mapping[str, Any]] = None
@@ -6639,6 +6792,7 @@ class EnhanceOrchestrator:
             segmentation_status = self._build_run_card_segmentation_status(
                 segmentation_metadata,
                 result_failure_info=result,
+                runtime_s=result.get("runtime_s"),
             )
             if segmentation_status is not None:
                 row["segmentation_status"] = segmentation_status
