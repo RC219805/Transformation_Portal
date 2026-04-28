@@ -239,6 +239,72 @@ class CIValidator:
 
         return valid
 
+    def validate_build_coverage_contract(self, workflow_path: Path, config: Dict) -> bool:
+        """Validate the canonical PR gate coverage artifact contract."""
+        if workflow_path.name != "build.yml":
+            return True
+
+        valid = True
+        jobs = config.get("jobs", {})
+        test_job = jobs.get("test") if isinstance(jobs, dict) else None
+        if not isinstance(test_job, dict):
+            self.log_error("build.yml:test: Missing test job for coverage artifact contract")
+            return False
+
+        steps = test_job.get("steps", [])
+        if not isinstance(steps, list):
+            self.log_error("build.yml:test: Steps must be a list for coverage artifact contract")
+            return False
+
+        run_tests_step = self._find_step_by_name(steps, "Run tests")
+        if run_tests_step is None:
+            self.log_error("build.yml:test: Missing 'Run tests' step for coverage artifact contract")
+            valid = False
+        else:
+            run_script = run_tests_step.get("run", "")
+            if not isinstance(run_script, str) or 'COV_FLAGS="--no-cov"' not in run_script:
+                self.log_error('build.yml:test: ML test leg must keep COV_FLAGS="--no-cov" for fast PR feedback')
+                valid = False
+
+        upload_step = self._find_step_by_name(steps, "Upload coverage reports")
+        if upload_step is None:
+            self.log_error("build.yml:test: Missing 'Upload coverage reports' step for coverage artifact contract")
+            return False
+
+        expected_if = "always() && matrix.test-type == 'core'"
+        if upload_step.get("if") != expected_if:
+            self.log_error(
+                "build.yml:test: Coverage upload step must be guarded by "
+                f"{expected_if!r} because only core legs generate coverage artifacts"
+            )
+            valid = False
+
+        with_config = upload_step.get("with", {})
+        upload_paths = self._normalize_upload_paths(with_config.get("path") if isinstance(with_config, dict) else None)
+        for required_path in ("coverage.xml", "htmlcov/"):
+            if required_path not in upload_paths:
+                self.log_error(f"build.yml:test: Coverage upload path must include {required_path!r}")
+                valid = False
+
+        return valid
+
+    @staticmethod
+    def _find_step_by_name(steps: List[Dict], name: str) -> Optional[Dict]:
+        """Return the first workflow step with the supplied display name."""
+        for step in steps:
+            if isinstance(step, dict) and step.get("name") == name:
+                return step
+        return None
+
+    @staticmethod
+    def _normalize_upload_paths(path_config: object) -> Set[str]:
+        """Return normalized artifact upload paths from workflow action config."""
+        if isinstance(path_config, str):
+            return {line.strip() for line in path_config.splitlines() if line.strip()}
+        if isinstance(path_config, list):
+            return {str(item).strip() for item in path_config if str(item).strip()}
+        return set()
+
     def validate_workflow(self, workflow_path: Path) -> bool:
         """Validate a single workflow file."""
         print(f"\n→ Validating {workflow_path.name}...")
@@ -256,6 +322,7 @@ class CIValidator:
             self.validate_checkout_action(workflow_path, config),
             self.validate_common_issues(workflow_path, config),
             self.validate_flake8_config(workflow_path, config),
+            self.validate_build_coverage_contract(workflow_path, config),
         ]
 
         return all(validations)
