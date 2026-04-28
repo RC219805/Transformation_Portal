@@ -194,6 +194,33 @@ class TestEnhancementStageMaterialProcessing:
         # Image should be unchanged since empty mask causes skip
         assert np.array_equal(result.artifacts["enhanced_image"], image)
 
+    def test_signed_nonzero_mask_reports_material_adjustment_applied(self) -> None:
+        """Signed non-zero masks should report true when V2 applies blending."""
+        image = np.full((32, 32, 3), 128, dtype=np.uint8)
+        signed_mask = np.full((32, 32), -0.25, dtype=np.float32)
+
+        stage = EnhancementStage(
+            enhancement_strength=0.0,
+            clarity_strength=0.0,
+            material_strength=1.0,
+        )
+        context = StageContext(
+            artifacts={
+                "image": image,
+                "material_masks": {"wood": signed_mask},
+            }
+        )
+
+        result = stage.compute(context)
+
+        assert result.status == StageStatus.COMPLETED
+        metadata = result.artifacts["enhancement_metadata"]
+        assert metadata["material_masks_supplied"] is True
+        assert metadata["material_masks_supplied_count"] == 1
+        assert metadata["v2_material_adjustments_applied"] is True
+        assert metadata["materials_applied"] is True
+        assert not np.array_equal(result.artifacts["enhanced_image"], image)
+
     def test_unsupported_material_mask_is_supplied_but_not_applied(self) -> None:
         """Unsupported material keys should not imply V2 pixel adjustment."""
         image = np.full((32, 32, 3), 128, dtype=np.uint8)

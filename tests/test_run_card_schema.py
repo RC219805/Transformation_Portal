@@ -18,6 +18,11 @@ pytestmark = [
     pytest.mark.unit,
 ]
 
+from transformation_portal.evals import apex_evidence_bundle
+from transformation_portal.lux_depth_v3 import apex_codes
+from transformation_portal.lux_depth_v3.apex_codes import (
+    APEX_MATERIALS_SEGMENTATION_DOMINATES_NO_PIXEL_OPS,
+)
 from transformation_portal.lux_depth_v3.config import EnhanceConfig, ModelVariant
 from transformation_portal.lux_depth_v3.model_resolution import ModelRequest, resolve_model_contract
 from transformation_portal.lux_depth_v3.orchestrator import (
@@ -33,6 +38,16 @@ from transformation_portal.lux_depth_v3.orchestrator import (
 from transformation_portal.lux_depth_v3.run_card_contract import render_run_card_output_relative_path
 from transformation_portal.lux_depth_v3.security import HashMode
 from transformation_portal.schemas.run_card import load_run_card_schema
+
+
+def test_apex_segmentation_dominance_warning_code_is_centralized() -> None:
+    """APEX advisory codes should be centralized and re-exported for consumers."""
+    assert APEX_MATERIALS_SEGMENTATION_DOMINATES_NO_PIXEL_OPS == "APEX_MATERIALS_SEGMENTATION_DOMINATES_NO_PIXEL_OPS"
+    assert "APEX_MATERIALS_SEGMENTATION_DOMINATES_NO_PIXEL_OPS" in apex_codes.__all__
+    assert (
+        apex_evidence_bundle.APEX_MATERIALS_SEGMENTATION_DOMINATES_NO_PIXEL_OPS
+        == APEX_MATERIALS_SEGMENTATION_DOMINATES_NO_PIXEL_OPS
+    )
 
 
 def _valid_run_card_payload() -> dict:
@@ -684,7 +699,7 @@ def test_build_run_card_result_summary_reports_materials_summary_and_warning(tmp
     }
     assert segmentation_status["performance_warnings"] == [
         {
-            "code": "APEX_MATERIALS_SEGMENTATION_DOMINATES_NO_PIXEL_OPS",
+            "code": APEX_MATERIALS_SEGMENTATION_DOMINATES_NO_PIXEL_OPS,
             "severity": "advisory",
             "message": "SAM2 dominated runtime but no material pixel operations were applied.",
             "details": {
@@ -928,7 +943,7 @@ def test_run_card_schema_accepts_segmentation_status_with_pixel_ops_passthrough(
                 },
                 "performance_warnings": [
                     {
-                        "code": "APEX_MATERIALS_SEGMENTATION_DOMINATES_NO_PIXEL_OPS",
+                        "code": APEX_MATERIALS_SEGMENTATION_DOMINATES_NO_PIXEL_OPS,
                         "severity": "advisory",
                         "message": "SAM2 dominated runtime but no material pixel operations were applied.",
                         "details": {

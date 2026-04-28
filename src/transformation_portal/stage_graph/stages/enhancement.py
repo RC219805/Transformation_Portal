@@ -176,7 +176,7 @@ class EnhancementStage(Stage):
             if material_name not in _V2_MATERIAL_ADJUSTMENT_MATERIALS:
                 continue
             try:
-                if np.asarray(mask).max() > 0:
+                if np.asarray(mask).max() != 0:
                     return True
             except (TypeError, ValueError):
                 continue

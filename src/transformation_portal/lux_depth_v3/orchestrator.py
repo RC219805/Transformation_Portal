@@ -57,6 +57,7 @@ from ..spatial_ai.reconstruction.contracts import (  # noqa: E501
     LicenseRestrictionError as ReconstructionLicenseRestrictionError,
 )
 from ._backend_contract import normalize_backend_id, normalize_backend_provenance
+from .apex_codes import APEX_MATERIALS_SEGMENTATION_DOMINATES_NO_PIXEL_OPS
 
 # ADR-043: Artifact management extracted to artifact_manager.py
 # NOTE: xxHash support is now handled in artifact_manager.py (ADR-043)
@@ -204,7 +205,6 @@ from .execution_engine import (
 )
 
 logger = logging.getLogger(__name__)
-APEX_MATERIALS_SEGMENTATION_DOMINATES_NO_PIXEL_OPS = "APEX_MATERIALS_SEGMENTATION_DOMINATES_NO_PIXEL_OPS"
 
 
 class ApexStrictGateError(RuntimeError):
