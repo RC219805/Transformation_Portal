@@ -16,7 +16,6 @@ import pytest
 from pydantic import ValidationError
 
 from transformation_portal.api.v1 import (
-    ApiEnvelope,
     ErrorObject,
     JobBriefData,
     JobCreateRequest,
@@ -321,13 +320,61 @@ class TestJobEnvelopes:
         assert dumped["schema"] == "tp.orchestrator.jobs.v1"
         assert dumped["data"]["total"] == 0
 
-    def test_envelope_aliases_are_apienvelope_specializations(self) -> None:
-        # Same alias-not-subclass design as ReadinessEnvelope. Locking the
-        # schema field to a single Literal would require a subclass per
-        # envelope; we deliberately don't.
-        assert JobEnvelope is ApiEnvelope[JobBriefData]
-        assert JobStatusEnvelope is ApiEnvelope[JobStatusData]
-        assert JobsListEnvelope is ApiEnvelope[JobsListData]
+    def test_envelope_aliases_carry_typed_data_payloads(self) -> None:
+        # Behavioral check that each alias's `data` field is bound to the
+        # right payload type. We avoid `assert JobEnvelope is ApiEnvelope[T]`
+        # — that relies on Pydantic's internal generic-specialization cache,
+        # which isn't part of the public contract and could change across
+        # Pydantic versions without breaking real semantics. Per-route alias
+        # design is still documented inline; this test just verifies the
+        # observable behavior (rejects wrong-shape payloads, accepts
+        # right-shape payloads) instead of object identity.
+
+        # JobEnvelope.data must be a valid JobBriefData (requires id + state).
+        with pytest.raises(ValidationError):
+            JobEnvelope(
+                schema="tp.orchestrator.job.v1",
+                success=True,
+                data={"not": "a job"},  # missing id, state
+            )
+        # JobsListEnvelope.data must be a valid JobsListData (jobs/total/returned).
+        with pytest.raises(ValidationError):
+            JobsListEnvelope(
+                schema="tp.orchestrator.jobs.v1",
+                success=True,
+                data={"jobs": []},  # missing total, returned
+            )
+        # JobStatusEnvelope.data must be a valid JobStatusData.
+        with pytest.raises(ValidationError):
+            JobStatusEnvelope(
+                schema="tp.orchestrator.job_status.v1",
+                success=True,
+                data={"id": "x"},  # missing pipeline, created_at, state, ...
+            )
+
+        # And the corresponding right-shape payloads must succeed:
+        JobEnvelope(
+            schema="tp.orchestrator.job.v1",
+            success=True,
+            data=JobBriefData(id="x", state="queued"),
+        )
+        JobsListEnvelope(
+            schema="tp.orchestrator.jobs.v1",
+            success=True,
+            data=JobsListData(jobs=[], total=0, returned=0),
+        )
+        JobStatusEnvelope(
+            schema="tp.orchestrator.job_status.v1",
+            success=True,
+            data=JobStatusData(
+                id="x",
+                pipeline="lux-depth-v3",
+                created_at=1.0,
+                state="queued",
+                progress=0,
+                events_url="/v1/jobs/x/events",
+            ),
+        )
 
     def test_unrecognised_schema_string_rejected_at_literal_level(self) -> None:
         # SchemaName Literal still rejects unknown strings even though the
