@@ -43,6 +43,9 @@ from starlette.responses import Response, StreamingResponse
 
 from transformation_portal.api.v1 import (
     HealthzResponse,
+    JobEnvelope,
+    JobsListEnvelope,
+    JobStatusEnvelope,
     ReadinessEnvelope,
     ReadyResponse,
 )
@@ -8364,12 +8367,12 @@ async def stage_portal_uploads(request: Request) -> JSONResponse:
     )
 
 
-@app.post("/v1/jobs")
+@app.post("/v1/jobs", response_model=JobEnvelope)
 async def create_job(payload: Dict[str, Any]) -> JSONResponse:
     return await _create_job(payload, api_version="v1")
 
 
-@app.post("/v2/jobs")
+@app.post("/v2/jobs", response_model=JobEnvelope)
 async def create_job_v2(payload: Dict[str, Any]) -> JSONResponse:
     return await _create_job(payload, api_version="v2")
 
@@ -8521,12 +8524,12 @@ async def _create_job(payload: Dict[str, Any], *, api_version: str = "v1") -> JS
     )
 
 
-@app.get("/v1/jobs")
+@app.get("/v1/jobs", response_model=JobsListEnvelope)
 async def list_jobs(limit: int = JOB_LIST_LIMIT) -> JSONResponse:
     return _list_jobs(limit=limit, api_version="v1")
 
 
-@app.get("/v2/jobs")
+@app.get("/v2/jobs", response_model=JobsListEnvelope)
 async def list_jobs_v2(limit: int = JOB_LIST_LIMIT) -> JSONResponse:
     return _list_jobs(limit=limit, api_version="v2")
 
@@ -8555,12 +8558,12 @@ def _list_jobs(*, limit: int = JOB_LIST_LIMIT, api_version: str = "v1") -> JSONR
     )
 
 
-@app.get("/v1/jobs/{job_id}")
+@app.get("/v1/jobs/{job_id}", response_model=JobStatusEnvelope)
 async def get_job(job_id: str, include_logs: bool = True) -> JSONResponse:
     return _get_job(job_id, include_logs=include_logs, api_version="v1")
 
 
-@app.get("/v2/jobs/{job_id}")
+@app.get("/v2/jobs/{job_id}", response_model=JobStatusEnvelope)
 async def get_job_v2(job_id: str, include_logs: bool = True) -> JSONResponse:
     return _get_job(job_id, include_logs=include_logs, api_version="v2")
 
@@ -8672,12 +8675,12 @@ async def _get_job_artifact(job_id: str, artifact_path: str) -> Response:
     )
 
 
-@app.post("/v1/jobs/{job_id}/cancel")
+@app.post("/v1/jobs/{job_id}/cancel", response_model=JobEnvelope)
 async def cancel_job(job_id: str) -> JSONResponse:
     return await _cancel_job(job_id)
 
 
-@app.post("/v2/jobs/{job_id}/cancel")
+@app.post("/v2/jobs/{job_id}/cancel", response_model=JobEnvelope)
 async def cancel_job_v2(job_id: str) -> JSONResponse:
     return await _cancel_job(job_id)
 
