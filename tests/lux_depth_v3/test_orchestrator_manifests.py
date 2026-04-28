@@ -270,6 +270,21 @@ class TestConfigFingerprint:
         assert manifest1["config_fingerprint"]["depth_backend"] == manifest2["config_fingerprint"]["depth_backend"]
         assert manifest1["config_fingerprint"]["model_variant"] == manifest2["config_fingerprint"]["model_variant"]
 
+    def test_depth_pro_manifest_config_fingerprint_uses_depth_pro_model_id(self, tmp_path: Path) -> None:
+        """Per-image manifests serialize the resolved Depth Pro model identity."""
+        from transformation_portal.lux_depth_v3.manifest import CombinedManifest
+
+        orchestrator = _create_orchestrator(tmp_path, depth_backend="depth_pro")
+        fingerprint = orchestrator.compute_config_fingerprint()
+        manifest_path = tmp_path / "depth_pro_manifest.json"
+
+        CombinedManifest(config_fingerprint=fingerprint).save(manifest_path)
+        with open(manifest_path) as f:
+            manifest = json.load(f)
+
+        assert manifest["config_fingerprint"]["depth_backend"] == "depth_pro"
+        assert manifest["config_fingerprint"]["model_variant"] == "apple/ml-depth-pro"
+
 
 class TestBackendSelectionMetadata:
     """Test backend selection metadata in manifests."""

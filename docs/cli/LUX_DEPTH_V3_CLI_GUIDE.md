@@ -181,6 +181,7 @@ lux-depth-v3 \
 
 - `--depth-backend TEXT`: Depth estimation backend
   - Options: `da3` (default backend family), `depth_pro` (research-only)
+  - Explicit `depth_pro` runs report `model_variant: "apple/ml-depth-pro"` in effective config, manifests, depth cache fingerprints, and run-card fingerprints.
 - `--model-key TEXT`: Canonical model selector within the chosen backend family
   - Public options in this release: `da3`, `da3-research`, `da3-metric`
   - `da3` / `da3-research`: Research-default DA3 selector; requires `--non-commercial-ok "true"`
@@ -263,6 +264,8 @@ APEX mode enforces fail-closed quality gates with two explicit recovery paths:
   - **Opt out:** there is no standalone `--depth-fallback` flag in this CLI. `depth_fallback="apex-strict"` is a value consumed by config-loaded or programmatic flows that construct `EnhanceConfig` directly (for example via the Python API or a YAML preset). Set it there to suppress the auto-upgrade; the validator accepts the value, `EnhanceConfig` canonicalizes it to `"fail"`, and the apex run keeps fail-closed depth.
 - **Materials V3 soft-passthrough on confidence-only blocks.** When masks are detected and every implemented pixel op is blocked solely by `below_confidence_threshold`, the strict gate emits the output without applying pixel ops and surfaces a non-fatal `APEX_MATERIALS_PASSTHROUGH_LOW_CONFIDENCE` warning instead of `APEX_MATERIALS_PIXEL_OPS_EMPTY`. The warning lands in the run card under `result_summary[].segmentation_status.pixel_ops_passthrough` and `.warnings`.
   - Mixed blocker sets (e.g. `missing_material_confidence`, `unsupported_confidence_score_type`, `below_coverage_threshold`) still fail closed.
+  - Mask handoff, mask generation, confidence gating, and pixel-op execution are distinct states. Run cards expose `result_summary[].segmentation_status.materials_summary` with `masks_generated`, `mask_count`, `pixel_ops_applied`, `pixel_ops_applied_count`, `blocked_count`, and `passthrough_code`.
+  - If SAM2 consumes at least 90% of a per-image runtime, masks exist, and Materials V3 applies zero pixel ops, the run card adds advisory `performance_warnings[]` code `APEX_MATERIALS_SEGMENTATION_DOMINATES_NO_PIXEL_OPS`. This is cost telemetry only; it does not fail the run or change enhancement behavior.
   - To carry the soft-pass through APEX promotion, derive the per-candidate evidence from each per-image manifest with `transformation_portal.evals.apex_evidence_bundle.derive_materials_v3_evidence_from_manifest`, dump it to JSON, and pass it via `--candidate-evidence materials_v3:<asset_id>=<path>`.
 
 ## Output Deliverables
@@ -289,6 +292,15 @@ When APEX mode is enabled with all emit flags, the following outputs are generat
 - `*.attestation.native.json`: Repo-native detached attestation for a v2 run card (when signed)
 - `*.attestation.dsse.json`: DSSE + in-toto detached attestation sidecar (when signed)
 - `*.attestation.dsse.sigstore.bundle.json`: Optional Sigstore verification bundle (when signed with `cosign`)
+
+V2 reports expose material handoff and actual V2 material adjustment separately under `enhancement_metadata`:
+
+- `material_masks_supplied`: `true` when at least one normalized material mask entry reached V2.
+- `material_masks_supplied_count`: count of normalized mask entries handed to V2.
+- `v2_material_adjustments_applied`: `true` only when V2 applied at least one supported, non-empty material adjustment with material strength enabled.
+- `materials_applied`: deprecated boolean compatibility alias for `v2_material_adjustments_applied`; do not interpret it as supplied mask keys.
+
+For deterministic V2 TIFF output, ICC profiles are preserved when available, including TIFF tag `34675` fallback extraction. EXIF remains stripped; reports use `metadata_preservation_mode: "partial"` when ICC is preserved and EXIF is intentionally not written.
 
 ## Run Card Verification and Signing
 

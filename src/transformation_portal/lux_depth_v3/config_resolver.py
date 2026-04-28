@@ -42,6 +42,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from ..core.da3_runtime import REPO_LOCAL_DA3_PYTHON, find_repo_root, repo_local_da3_python_path
 from ..core.raw_runtime import RAW_RUNTIME_ENV_VAR, REPO_LOCAL_RAW_PYTHON, repo_local_raw_python_path
 from ..ingest.canonical_json import canonicalize_json
+from ._backend_contract import normalize_backend_id
 from .config import DA3Config, EnhanceConfig, ModelVariant, Preset
 from .manifest import ConfigFingerprint
 from .model_resolution import ModelRequest, ResolvedModel, resolve_model_contract
@@ -49,6 +50,7 @@ from .model_resolution import ModelRequest, ResolvedModel, resolve_model_contrac
 logger = logging.getLogger(__name__)
 _REPO_LOCAL_DEPTH_PRO_PYTHON_PARTS = (".venv-depth-pro", "bin", "python")
 REPO_LOCAL_DEPTH_PRO_PYTHON = f"./{'/'.join(_REPO_LOCAL_DEPTH_PRO_PYTHON_PARTS)}"
+DEPTH_PRO_MODEL_ID = "apple/ml-depth-pro"
 
 
 def _repo_local_da3_python_path() -> Optional[Path]:
@@ -236,6 +238,23 @@ def _compat_model_variant_for_resolved_key(canonical_key: str) -> ModelVariant:
     if canonical_key == "da3_small":
         return ModelVariant.METRIC_SMALL
     return ModelVariant.METRIC_LARGE
+
+
+def resolved_model_identity_for_backend(
+    config: EnhanceConfig,
+    model_variant: Optional[ModelVariant] = None,
+    *,
+    backend_id: Optional[Any] = None,
+) -> str:
+    """Return the model identity serialized into replay/cache fingerprints."""
+    normalized_backend = normalize_backend_id(
+        backend_id if backend_id is not None else getattr(config, "depth_backend", None),
+    )
+    if normalized_backend == "depth_pro":
+        return DEPTH_PRO_MODEL_ID
+
+    mv = model_variant or config.model_variant or ModelVariant.METRIC_LARGE
+    return mv.value.name
 
 
 def discover_presets(pipeline: str = "lux_depth_v3") -> List[PresetInfo]:
@@ -473,7 +492,7 @@ def build_depth_cache_payload(
     effective_raw_python = resolve_effective_raw_python_executable(config)
 
     return {
-        "model_variant": mv.value.name,
+        "model_variant": resolved_model_identity_for_backend(config, mv),
         "model_key": getattr(config, "model_key", None),
         "raw_model_id": getattr(config, "raw_model_id", None),
         "depth_device": config.depth_device,
@@ -509,7 +528,7 @@ def compute_config_fingerprint(
     effective_raw_python = resolve_effective_raw_python_executable(config)
 
     return ConfigFingerprint(
-        model_variant=mv.value.name,
+        model_variant=resolved_model_identity_for_backend(config, mv),
         depth_quantization=config.depth_quantization,
         depth_device=config.depth_device,
         preset=config.preset.value if config.preset else None,

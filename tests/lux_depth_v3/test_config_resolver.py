@@ -346,6 +346,37 @@ class TestComputeConfigFingerprint:
 
         assert fp1.to_sha256() == fp2.to_sha256()
 
+    def test_depth_pro_model_identity_normalized_in_fingerprint(self):
+        """Explicit Depth Pro runs should not serialize a stale DA3 model variant."""
+        from transformation_portal.lux_depth_v3.config import EnhanceConfig
+        from transformation_portal.lux_depth_v3.config_resolver import (
+            build_depth_cache_payload,
+            compute_config_fingerprint,
+        )
+
+        config = EnhanceConfig(depth_backend="depth_pro")
+        fingerprint = compute_config_fingerprint(config)
+        cache_payload = build_depth_cache_payload(config)
+
+        assert fingerprint.model_variant == "apple/ml-depth-pro"
+        assert cache_payload["model_variant"] == "apple/ml-depth-pro"
+        assert compute_config_fingerprint(config).to_sha256() == fingerprint.to_sha256()
+
+    def test_non_depth_pro_model_identity_remains_da3_variant(self):
+        """DA3 paths retain the existing model-variant fingerprint contract."""
+        from transformation_portal.lux_depth_v3.config import EnhanceConfig, ModelVariant
+        from transformation_portal.lux_depth_v3.config_resolver import (
+            build_depth_cache_payload,
+            compute_config_fingerprint,
+        )
+
+        config = EnhanceConfig(depth_backend="da3", model_variant=ModelVariant.METRIC_SMALL)
+        fingerprint = compute_config_fingerprint(config)
+        cache_payload = build_depth_cache_payload(config)
+
+        assert fingerprint.model_variant == ModelVariant.METRIC_SMALL.value.name
+        assert cache_payload["model_variant"] == ModelVariant.METRIC_SMALL.value.name
+
     def test_fingerprint_changes_with_config(self):
         """Test that fingerprint changes when config changes."""
         from transformation_portal.lux_depth_v3.config import EnhanceConfig
