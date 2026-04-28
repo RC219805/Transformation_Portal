@@ -1,44 +1,10 @@
-# Documentation Index
+# Superseded Documentation Index
 
-This directory contains organized documentation for the Transformation Portal.
+This older guide-level index is retained only to avoid breaking inbound links.
+Current documentation navigation lives in:
 
-## Directory Structure
+- [docs/README.md](../README.md)
+- [Documentation Map](../governance/DOCUMENTATION_MAP.md)
+- [Documentation State Audit](../governance/DOCUMENTATION_STATE_AUDIT_2026-04-27.md)
 
-### `/migration`
-Migration guides and version upgrade documentation.
-
-### `/deprecation`
-Deprecation notices and legacy system documentation.
-
-### `/guides`
-User guides, tutorials, and how-to documentation.
-
-### `/reference`
-Technical reference documentation, workflow guides, and bug fix logs.
-
-### `/archive`
-Historical documentation and archived materials.
-
-## Root Documentation
-
-Essential documentation remains in the repository root:
-- `README.md` - Project overview and quick start
-- `START_HERE.md` - Onboarding guide
-- `CONTRIBUTING.md` - Contribution guidelines
-- `LICENSE` - License information
-
-## Recently Moved Files
-
-- [750_PICACHO_DEPTH_MODEL_RECOMMENDATION.md](docs/reference/750_PICACHO_DEPTH_MODEL_RECOMMENDATION.md)
-- [IMPLEMENTATION_COMPLETE.md](docs/reference/IMPLEMENTATION_COMPLETE.md)
-- [750_PICACHO_DECISION_SUMMARY.md](docs/reference/750_PICACHO_DECISION_SUMMARY.md)
-- [PHASE2_PLAN.md](docs/reference/PHASE2_PLAN.md)
-- [750_PICACHO_POOL_QUALITY_REVIEW.md](docs/reference/750_PICACHO_POOL_QUALITY_REVIEW.md)
-- [COMMIT_SUMMARY_OLD.md](docs/archive/COMMIT_SUMMARY_OLD.md)
-- [DEPRECATION_POLICY.md](docs/deprecation/DEPRECATION_POLICY.md)
-- [QUALITY_CONTROL_READY.md](docs/reference/QUALITY_CONTROL_READY.md)
-- [PHASE2_SUMMARY.md](docs/reference/PHASE2_SUMMARY.md)
-- [MIGRATION_GUIDE.md](docs/migration/MIGRATION_GUIDE.md)
-- [SESSION_SUMMARY.md](docs/reference/SESSION_SUMMARY.md)
-- [LUT_AND_PIPELINE_ANALYSIS.md](docs/reference/LUT_AND_PIPELINE_ANALYSIS.md)
-- [INPUT_FILE_SPECIFICATIONS.md](docs/reference/INPUT_FILE_SPECIFICATIONS.md)
+Do not add new links here.

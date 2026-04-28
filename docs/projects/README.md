@@ -1,5 +1,12 @@
 # 750 Picacho Lane - Project Documentation Index
 
+> Historical project record.
+>
+> This index describes 2025 750 Picacho project work. It is retained for audit
+> context and should not be used as current Transformation Portal operator
+> guidance. Start from [Documentation Map](../governance/DOCUMENTATION_MAP.md)
+> for maintained docs.
+
 **Project:** 750 Picacho Lane Luxury Estate Rendering
 **Location:** Santa Barbara, California
 **Status:** Quality Enhancement Phase

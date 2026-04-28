@@ -1,5 +1,11 @@
 # Codebase Quality Standards
 
+> Historical 2025 baseline.
+>
+> This document preserves earlier quality-control guidance. Current repo
+> workflow guidance lives in [AGENTS.md](../../AGENTS.md), [README](../../README.md),
+> and [Documentation Map](../governance/DOCUMENTATION_MAP.md).
+
 ## Overview
 This document defines the quality standards and automated safeguards for the Transformation Portal codebase to prevent recurring issues identified in CI/CD workflows.
 
@@ -39,7 +45,7 @@ if HAS_IMAGEIO:
 - **Session summaries** → `docs/sessions/`
 - **Project docs** → `docs/projects/{project_name}/`
 - **Integration guides** → `docs/guides/`
-- **Root only**: README.md, START_HERE.md, MIGRATION_GUIDE.md, DEPRECATION_POLICY.md
+- **Current entry points**: README.md, docs/README.md, docs/governance/DOCUMENTATION_MAP.md, and policy documents
 
 ### 4. **Import Organization**
 **Problem**: Imports at wrong position, circular dependencies

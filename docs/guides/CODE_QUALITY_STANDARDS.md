@@ -1,5 +1,10 @@
 # Code Quality Improvements & Standards
 
+> Historical 2025 quality snapshot.
+>
+> Current engineering workflow guidance lives in [AGENTS.md](../../AGENTS.md),
+> [README](../../README.md), and [Documentation Map](../governance/DOCUMENTATION_MAP.md).
+
 ## Current Status
 
 **Last Updated:** 2025-11-09

@@ -19,6 +19,9 @@ In production, place the front door behind Cloudflare Tunnel + Access and keep t
 ## Required Environment
 
 Create front-door env vars from `web/secure-landing/.env.example`.
+The repository root `.env.example` is the Docker/FastAPI template; it is not a
+replacement for the front-door template because the Node app has separate proxy,
+Cloudflare Access, user-source, and session-store settings.
 
 ```bash
 export TP_FASTAPI_ORIGIN="http://127.0.0.1:8000"

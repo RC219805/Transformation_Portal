@@ -1,7 +1,8 @@
-> ⚠️ **DEPRECATED**
+> **Historical / superseded**
 >
 > This document has been superseded by [CODE_QUALITY_STANDARDS.md](CODE_QUALITY_STANDARDS.md).
-> Please use that document instead. This file will be removed on 2026-03-06.
+> For current engineering workflow guidance, use [AGENTS.md](../../AGENTS.md)
+> and the validation targets in the root [README](../../README.md).
 
 # Quality Control System Implementation
 

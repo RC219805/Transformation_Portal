@@ -1,6 +1,12 @@
 # RAG System - Complete Integration Guide
 **Transformation Portal - Knowledge-Enhanced Processing**
 
+> Historical guide.
+>
+> This file records an earlier RAG-system integration design. Check
+> [Documentation Map](../governance/DOCUMENTATION_MAP.md) before treating it as
+> current implementation guidance.
+
 ## Overview
 
 The RAG (Retrieval-Augmented Generation) system provides intelligent, context-aware assistance for the Transformation Portal. It indexes repository documentation, code, and configuration to enable:
@@ -383,9 +389,9 @@ python cli.py search "known term" --top-k 10
 ## Resources
 
 ### Documentation
-- [RAG System README](.github/agents/rag_system/README.md)
+- Historical RAG system README path: `.github/agents/rag_system/README.md`
 - [Architecture Overview](../architecture/ARCHITECTURE.md)
-- [API Reference](.github/agents/rag_system/API.md)
+- Historical RAG system API path: `.github/agents/rag_system/API.md`
 
 ### References
 - Sentence Transformers: https://www.sbert.net/

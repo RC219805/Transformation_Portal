@@ -2,6 +2,11 @@
 
 Comprehensive guide for the enhanced RAG system with artifact classification and knowledge integration capabilities.
 
+Current baseline: `main` through PR #1562. This is RAG support material, not a
+live role-boundary document. Live agent authority remains in `.github/agents/README.md`,
+the profile files, `.github/copilot-instructions.md`, and
+`docs/architecture/agent_governance.md`.
+
 ## Overview
 
 The RAG system has been enhanced with two powerful new components:

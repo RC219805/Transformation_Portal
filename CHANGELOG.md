@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Repository State Through PR #1562:** Current documentation and operator surfaces have been refreshed to match the April 27, 2026 `main` baseline.
+  - **Typed API v1 foundation:** PRs #1561 and #1562 added the `transformation_portal.api.v1` envelope/schema foundation and wired typed response models onto health/readiness routes without changing the established `/healthz`, `/ready`, or `/v1/readiness` wire contracts.
+  - **Docker and environment wiring:** PR #1559 added container `HEALTHCHECK` coverage plus root `.env.example` / Compose `env_file` wiring for safer local and deployment defaults.
+  - **CI hardening:** PRs #1553, #1558, and #1560 hardened workflow behavior and refreshed `docs/ci/WORKFLOW_MATRIX.md` with the current 30-workflow inventory and consolidation roadmap.
+  - **Archive gates:** PRs #1555 and #1557 stabilized archive-gate fixity preflight behavior and captured the April 27, 2026 Gates A/B/C readiness audit evidence.
+  - **APEX / Materials V3:** PRs #1552, #1554, and #1556 added offline model-family characterization, SAM2 tile-merge regression coverage, real failure-code surfacing, confidence-only pixel-op passthrough, and V2 fallback behavior.
+  - **Agent and Copilot guidance:** Live custom-agent, Copilot, and RAG-template instructions now align with the PR #1562 documentation map, Python 3.11+ baseline, Node 22 frontdoor contract, current Architect/Steward/Specialist roles, and typed API health/readiness state.
 - **APEX Materials V3 — Soft Passthrough on Confidence-Only Blocks:** When every implemented Materials V3 pixel op is blocked solely by `below_confidence_threshold`, the strict gate now emits the output without pixel ops and surfaces a non-fatal `APEX_MATERIALS_PASSTHROUGH_LOW_CONFIDENCE` warning instead of failing the batch. Mixed blocker sets (missing material confidence, missing implementation, etc.) still fail closed with `APEX_MATERIALS_PIXEL_OPS_EMPTY`.
   - **Run-card visibility:** the warning surfaces under `result_summary[].segmentation_status.pixel_ops_passthrough` and `.warnings`.
   - **Promotion-eligibility:** evidence producers may mirror the orchestrator's `materials_v3_pixel_ops.passthrough_status` into the per-candidate evidence file as `passthrough_status: {code: "APEX_MATERIALS_PASSTHROUGH_LOW_CONFIDENCE"}`. When that signal is present `_materials_status` keeps `failure_code = None` so promotion is no longer blocked.
@@ -99,7 +106,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Fix #6:** Output directory trap in input_discovery.py - Explicitly exclude output_dir when scanning to prevent processing own outputs
   - Impact: Data integrity (EXIF, dimensions, alpha), performance (batch stats, parallel I/O), robustness (output exclusion)
   - Tests: 15 new regression tests, all 83 lux_depth_v3 tests passing
-  - See: [CRITICAL_FIXES_SUMMARY.md](CRITICAL_FIXES_SUMMARY.md)
+  - See: [Critical Fixes Summary](docs/implementation_notes/CRITICAL_FIXES_SUMMARY.md)
 
 ### Added
 - **Performance Ledger v1.7 Upgrade:** Major enhancement with backward compatibility
@@ -114,7 +121,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Performance:** NumPy mode maintains v1.0 speed, pure Python ~50x slower (acceptable for small datasets)
   - **Tests:** 50+ new tests (CLI integration, property-based math validation, benchmarks)
   - **Migration Guide:** `docs/performance_ledger_v1.7_migration.md`
-  - See: [Performance Ledger v1.7 Verdict](PERFORMANCE_LEDGER_V1.7_VERDICT.md)
+  - See: [Performance Ledger v1.7 Verdict](docs/performance/PERFORMANCE_LEDGER_V1.7_VERDICT.md)
 
 - **Backend Registry Integration (ADR-019):** Depth backend orchestration with fallback
   - DA3Backend adapter wrapping DA3InferenceEngine for unified interface
@@ -125,7 +132,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - CLI flags: `--depth-backend {da3,depth_pro}`
   - Tests: Unit tests for DA3Backend, integration tests for orchestrator
   - Docs: README updated with backend selection guide
-  - See: [ADR-019: Backend Registry Integration](docs/architecture/decisions/ADR-019-REVISED-DECISION.md)
+  - See: [ADR-019: Depth Backend Unification](docs/architecture/ADR-019-depth-backend-unification.md)
 
 - **Performance Ledger (ADR-023 Phase 2):** Standalone tool for performance regression detection
   - Parse manifests from batch runs and compute runtime statistics

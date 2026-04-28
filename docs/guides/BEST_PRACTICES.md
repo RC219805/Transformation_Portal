@@ -1,5 +1,11 @@
 # Quality Control & Best Practices
 
+> Historical project guidance.
+>
+> This 750 Picacho-era guide contains dated paths and pipeline examples. Current
+> operator guidance lives in [Documentation Map](../governance/DOCUMENTATION_MAP.md)
+> and the active Lux Depth V3 docs.
+
 ## 750 Picacho Lane Project - Best Practices Summary
 
 ### Source File Management
@@ -108,7 +114,7 @@ ls -1 | wc -l  # Should output: 6
 - **Maximum 10 markdown files in root**
 - Move session notes to `docs/sessions/`
 - Move technical guides to `docs/guides/`
-- Keep only: README.md, START_HERE.md, MIGRATION_GUIDE.md, DEPRECATION_POLICY.md, CONTRIBUTING.md
+- Current navigation uses README.md, docs/README.md, and docs/governance/DOCUMENTATION_MAP.md; this historical note originally referenced a removed root quickstart entry point.
 
 #### 2. **Python Code Quality**
 ```bash

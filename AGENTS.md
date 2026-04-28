@@ -8,6 +8,23 @@ Quick reference for common workflows and commands in this repo.
 - When parallel work needs consolidation, first fast-forward local `main` to `origin/main`, then create a single integration branch from that updated base and replay the intended commits there.
 - After validation lands, retire obsolete Desktop worktrees and prune their local-only branches so `Transformation_Portal/` remains the canonical checkout.
 
+## Agent and documentation authority
+- Current documentation baseline is `main` through PR #1562.
+- Current docs navigation lives in `README.md`, `docs/README.md`, `docs/governance/DOCUMENTATION_MAP.md`, and `docs/governance/DOCUMENTATION_STATE_AUDIT_2026-04-27.md`.
+- Historical docs may keep old dates and project facts, but they are not current operator guidance unless the documentation map promotes them.
+- Live Copilot/custom-agent instructions are:
+  - `.github/copilot-instructions.md`
+  - `.github/agents/README.md`
+  - `.github/agents/QUICK_START_v2.md`
+  - `.github/agents/transformation-portal-architect.md`
+  - `.github/agents/portal-app-steward.md`
+  - `.github/agents/transformation-portal-specialist.md`
+  - `docs/architecture/agent_governance.md`
+  - `docs/guides/CUSTOM_AGENT_GUIDE.md`
+  - `docs/reference/AGENT_QUICK_REFERENCE.md`
+- Historical or milestone-style agent/RAG notes under `.github/agents/_archive/` or `.github/agents/rag_system/_archive/` are not live instructions.
+- Use the narrowest live profile for agent work: Architect for governance/contract/CI/security decisions, Steward for managed browser boundary work, and Specialist for backend/Lux Depth/archive/ingest/machine-mode execution.
+
 ## Common commands (Makefile)
 - `make venv` create local `.venv` with a Python 3.11+ interpreter, or fail closed if an existing `.venv` is unsupported.
 - `make setup` install package in editable mode.

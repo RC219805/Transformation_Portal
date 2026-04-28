@@ -341,7 +341,7 @@ def test_{bug_name}_edge_case_2():
 
 ### CI/CD
 - [ ] All CI checks pass
-- [ ] Tests pass on Python 3.10, 3.11, 3.12
+- [ ] Tests pass on supported Python 3.11+ lanes
 - [ ] Tests pass on Ubuntu and macOS (if applicable)
 - [ ] No new security vulnerabilities
 
@@ -625,7 +625,7 @@ Traceback (most recent call last):
 ImportError: No module named 'tifffile'
 ```
 
-**Environment**: Python 3.10, Ubuntu 20.04
+**Environment**: Python 3.11, Ubuntu 22.04
 
 **Output**:
 ```json

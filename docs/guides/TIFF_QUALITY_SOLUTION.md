@@ -1,5 +1,10 @@
 # TIFF Quality Issue - Complete Solution
 
+> Historical project fix note.
+>
+> This file preserves a 2025 TIFF-quality investigation. For current pipeline
+> and validation guidance, start from [Documentation Map](../governance/DOCUMENTATION_MAP.md).
+
 ## Problem Summary
 
 The TIFF files were showing **significant quality degradation** compared to JPEG files, despite TIFFs being intended as the high-quality master format.

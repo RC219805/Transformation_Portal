@@ -8,3 +8,5 @@ Examples:
 - Review response bundles tied to a single merge event
 
 These files are historical records and should not be used as active product docs.
+For current guidance, start from
+[Documentation Map](../governance/DOCUMENTATION_MAP.md).

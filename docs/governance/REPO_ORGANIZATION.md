@@ -27,6 +27,12 @@ The repository organization system solves the recurring problem of files accumul
 3. **Maintaining consistency** across the entire codebase
 4. **Making the repository easier to navigate** for both humans and tools
 
+Current documentation navigation is intentionally narrow: `README.md`,
+`docs/README.md`, and `docs/governance/DOCUMENTATION_MAP.md` define live
+guidance. Older project reports and session artifacts stay in approved docs
+directories as historical evidence, but they should not be treated as current
+runbooks unless promoted in the documentation map.
+
 ### Key Features
 
 - ✅ **Automatic file organization** with `.auto-organize.sh`
@@ -63,12 +69,15 @@ Transformation_Portal/
 │   ├── output/                 # Output data
 │   ├── cache/                  # Cached results
 │   └── sample_images/          # Sample images for testing
-├── docs/                       # Documentation
-│   ├── guides/                 # How-to guides and tutorials
-│   ├── architecture/           # Architecture documentation
-│   ├── api/                    # API documentation
-│   ├── deployment/             # Deployment guides
-│   └── version_history/        # Changelogs and version notes
+├── docs/                       # Maintained docs plus historical records
+│   ├── README.md               # Current documentation entry point
+│   ├── governance/             # Documentation map, policy, organization
+│   ├── guides/                 # Current guides plus older project guides
+│   ├── architecture/           # Architecture docs and ADR history
+│   ├── api/                    # API and machine-mode contracts
+│   ├── ci/                     # CI governance and workflow matrix
+│   ├── historical/             # Point-in-time records
+│   └── _archive/               # Retired or consolidated documentation
 ├── scripts/                    # All scripts
 │   ├── setup/                  # Installation and setup scripts
 │   ├── automation/             # Automation scripts
@@ -302,11 +311,15 @@ The organization system uses these rules to classify files:
 ### Documentation Files (.md, .txt)
 
 - Root README: stays in root (main entry point)
-- Guide/Tutorial: → `docs/guides/`
-- Architecture: → `docs/architecture/`
-- API docs: → `docs/api/`
-- Deployment: → `docs/deployment/`
-- Version history: → `docs/version_history/`
+- Current docs navigation: -> `docs/README.md` and `docs/governance/DOCUMENTATION_MAP.md`
+- Guide/Tutorial: -> `docs/guides/`
+- Architecture: -> `docs/architecture/`
+- API docs: -> `docs/api/`
+- Deployment: -> `docs/deployment/`
+- Version history: -> `docs/version_history/`
+- PR-specific or merge-event records: -> `docs/pr_archive/`
+- Point-in-time status, session, or delivery artifacts: -> `docs/historical/`
+- Retired or consolidated material: -> `docs/_archive/`
 
 ### Scripts (.sh, .py)
 
@@ -435,6 +448,10 @@ For questions or issues with the organization system:
 
 ## Version History
 
+- **v1.1.0** (April 2026): Documentation governance refresh
+  - Re-established `docs/README.md` and `DOCUMENTATION_MAP.md` as current navigation
+  - Classified old project reports, depth-model notes, and pipeline v1.1.0 material as historical unless explicitly promoted
+  - Added repo-wide documentation state audit through PR #1562
 - **v1.0.0** (November 2025): Initial release of automated organization system
   - Created `.auto-organize.sh` main script
   - Created pre-commit hook system
@@ -443,6 +460,6 @@ For questions or issues with the organization system:
 
 ---
 
-**Last Updated**: November 2025
+**Last Updated**: 2026-04-27
 **Maintained By**: Transformation Portal Team
 **License**: Same as main repository

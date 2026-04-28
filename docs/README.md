@@ -1,122 +1,71 @@
 # Transformation Portal Documentation
 
-This directory contains comprehensive documentation for the Transformation Portal project.
+This directory contains both maintained operator documentation and historical
+records. Use this page for current navigation; point-in-time reports remain in
+place for audit context but are not live runbooks unless they are linked below
+as canonical documents.
 
-## 📁 Directory Structure
+**Current baseline:** `main` through PR #1562, April 27, 2026.
 
-### `/750_picacho/` - 750 Picacho Project Documentation
-Complete documentation for the 750 Picacho luxury estate processing project.
+## Start Here
 
-**Files**:
-- `750_PICACHO_QUALITY_ASSESSMENT.md` - Comprehensive quality analysis (941 lines)
-- `750_PICACHO_FINAL_REPORT.md` - Executive summary
-- `750_PICACHO_PIPELINE_RESULTS.md` - Processing results
-- `750_PICACHO_v1.0_vs_v1.1_COMPARISON.md` - Version comparison
-- `750_PICACHO_V1.1_UPGRADE_SUMMARY.md` - Upgrade summary
-- `QUALITY_ANALYSIS_SUMMARY.txt` - Quick reference
+| Need | Current Document |
+| --- | --- |
+| Repository overview and setup | [Main README](../README.md) |
+| Full documentation map | [Documentation Map](governance/DOCUMENTATION_MAP.md) |
+| Documentation state audit | [2026-04-27 Documentation State Audit](governance/DOCUMENTATION_STATE_AUDIT_2026-04-27.md) |
+| Local setup and environment checks | [Setup Guide](guides/SETUP_GUIDE.md) |
+| Portal and orchestrator contracts | [Portal + Orchestrator Quickstart](guides/PORTAL_ORCHESTRATOR_QUICKSTART.md) |
+| Managed front door | [Portal Secure Front Door Quickstart](guides/PORTAL_SECURE_FRONTDOOR_QUICKSTART.md) |
+| Lux Depth V3 CLI | [Lux Depth V3 CLI Guide](cli/LUX_DEPTH_V3_CLI_GUIDE.md) |
+| CI workflow inventory | [Workflow Matrix](ci/WORKFLOW_MATRIX.md) |
 
-### `/pipeline/` - Pipeline Documentation
-Documentation for luxury estate and elite architectural pipelines.
+## Current Maintained Surfaces
 
-**Files**:
-- `LUXURY_ESTATE_PIPELINE_README.md` - Main pipeline guide
-- `LUXURY_ESTATE_PIPELINE_QUICKSTART.md` - Quick start guide
-- `LUXURY_ESTATE_PIPELINE_CHECKLIST.md` - Production checklist
-- `ELITE_PIPELINE_README.md` - Elite pipeline documentation
-- `ELITE_PIPELINE_SUMMARY.md` - Summary overview
-- `PIPELINE_FIXES_DOCUMENTATION.md` - v1.1.0 fixes (500+ lines)
-- `PIPELINE_FIXES_QUICKSTART.md` - Quick start (400+ lines)
-- `PIPELINE_V1.1.0_CHANGES.md` - Change log
-- `README_PIPELINE_FIXES.md` - Navigation guide
+| Area | Canonical Docs | Notes |
+| --- | --- | --- |
+| Portal / API | [Portal Quickstart](guides/PORTAL_ORCHESTRATOR_QUICKSTART.md), [API docs](api/) | `/healthz`, `/ready`, and `/v1/readiness` are current health/readiness surfaces. PR #1562 added typed OpenAPI response models while preserving the existing wire contracts. |
+| Secure front door | [Front Door Quickstart](guides/PORTAL_SECURE_FRONTDOOR_QUICKSTART.md) | Node 22.x is the enforced local/runtime contract for `web/secure-landing`. |
+| Docker / environment | [Main README](../README.md), [`.env.example`](../.env.example) | Docker Compose reads the root `.env` template with `required: false`; set `TP_API_KEY` for non-throwaway runs. |
+| CI / validation | [Workflow Matrix](ci/WORKFLOW_MATRIX.md), [CI/CD Workflows](ci_cd/CI_CD_WORKFLOWS.md) | The current GitHub Actions inventory contains 30 workflows after the Phase 1.4 refresh. |
+| Agent / Copilot guidance | [Custom Agent Guide](guides/CUSTOM_AGENT_GUIDE.md), [Agent Quick Reference](reference/AGENT_QUICK_REFERENCE.md), [Copilot Instructions](../.github/copilot-instructions.md) | Live agent behavior is governed by `.github/agents/`, Copilot instructions, and `docs/architecture/agent_governance.md`. |
+| Archive gates | [Archive Machine Contract](api/ARCHIVE_MACHINE_MODE_CONTRACT.md), [2026-04-27 Archive Gates Audit](governance/audit/archive-gates-2026-04-27.md) | Gates A/B/C are documented with the April 27 readiness audit and normalized JSON evidence. |
+| APEX / Materials | [APEX Governance Status](apex/GOVERNANCE_STATUS.md), [APEX Workflow Design](architecture/APEX_WORKFLOW_DESIGN.md), [APEX Model Family Characterization](validation/APEX_MODEL_FAMILY_CHARACTERIZATION_PROTOCOL.md) | Recent merges added offline model-family characterization, failure-code surfacing, confidence-only pixel-op passthrough, V2 fallback, and SAM2 tile-merge regression coverage. |
+| Dependency policy | [ADR-032](architecture/ADR-032-dependency-pinning-strategy.md), [AGENTS.md](../AGENTS.md) | Layered lockfiles and target-owned ML lanes are the current dependency governance model. |
 
-### `/quality_analysis/` - Quality Analysis Framework
-Quality assessment and improvement documentation.
+## Historical And Archive Material
 
-**Files**:
-- `QA_Improvements.md` - QA framework (1,040 lines)
-- `Corrective_Action_Plan.md` - Remediation roadmap (983 lines)
-- `Immediate_Recommendations.md` - Action plan (933 lines)
+The repo intentionally retains older project reports, PR notes, quality studies,
+and session artifacts. Treat these directories as historical unless a current
+map explicitly links a document as canonical:
 
-### `/visual_review/` - Expert Visual Review Analysis
-Expert feedback integration and root cause analysis.
+- `docs/750_picacho/`, `docs/projects/`, and `docs/quality_analysis/` contain
+  2025 project-specific analysis and delivery records.
+- `docs/depth_model/`, `docs/pipeline/`, and `docs/pipeline_docs/` contain older
+  depth-model and luxury-pipeline evaluation material. Current depth behavior is
+  described in the main README, CLI guide, and ADR-019/ADR-0015.
+- `docs/reports/`, `docs/status/`, `docs/session_summaries/`,
+  `docs/sessions/`, `docs/historical/`, and `docs/pr_archive/` are
+  point-in-time records.
+- `docs/_archive/` contains intentionally retired or consolidated material.
 
-**Files**:
-- `CRITICAL_VISUAL_REVIEW_FINDINGS.md` - Critical findings summary
-- `Visual_Feedback_Analysis_Summary.md` - Executive overview
-- `Root_Cause_Analysis.md` - Technical autopsy
-- `Analysis_Complete.md` - Navigation guide
+Do not use historical documents as operator runbooks without first checking the
+current documentation map.
 
-### `/depth_model/` - Depth Model Upgrade Project
-Depth Anything V2/V3 and Depth Pro evaluation and implementation.
+## Documentation Governance
 
-**Files**:
-- `DEPTH_MODEL_UPGRADE_RECOMMENDATION.md` - V2 vs V3 vs Depth Pro comparison
-- `DEPTH_MODEL_UPGRADE_SUMMARY.md` - Project overview
-- `PHASE1_EXECUTION_COMPLETE.md` - Phase 1 completion
-- `PHASE1_REPORT.md` - Technical report
-- `PHASE2_STRATEGY.md` - Next phase plan
+- `docs/README.md` is the only maintained file allowed directly under `docs/`.
+- New documents must live in an approved top-level directory from
+  [Documentation Retention Policy](governance/DOCUMENTATION_POLICY.md).
+- Current navigation belongs in [Documentation Map](governance/DOCUMENTATION_MAP.md);
+  duplicate or superseded material should be archived, labeled historical, or
+  removed from current indexes.
+- Validate documentation structure with:
 
-### Governance and Archives
-- `governance/DOCUMENTATION_POLICY.md` - Documentation classification and retention policy
-- `historical/` - Session/execution/push artifacts retained for historical audit context
-- `pr_archive/` - PR-specific summaries and resolution documentation
-- Legacy dependency and status snapshots (`guides/LAYERED_DEPENDENCIES_IMPLEMENTATION.md`, `status/REPOSITORY_STATUS_REPORT.md`) are historical context only; current dependency policy is defined by `requirements/base.in` and `docs/architecture/ADR-032-dependency-pinning-strategy.md`.
+```bash
+make check-docs
+make check-stale-docs
+python scripts/governance/check_docs_structure.py --all
+```
 
----
-
-## 📊 Quick Links
-
-### Getting Started
-- [Main README](../README.md)
-- [Start Here](../START_HERE.md)
-- [Luxury Estate Pipeline Quickstart](pipeline/LUXURY_ESTATE_PIPELINE_QUICKSTART.md)
-
-### Quality & Testing
-- [750 Picacho Quality Assessment](750_picacho/750_PICACHO_QUALITY_ASSESSMENT.md)
-- [QA Improvements Framework](quality_analysis/QA_Improvements.md)
-- [Critical Visual Review Findings](visual_review/CRITICAL_VISUAL_REVIEW_FINDINGS.md)
-
-### Pipeline Documentation
-- [Luxury Estate Pipeline](pipeline/LUXURY_ESTATE_PIPELINE_README.md)
-- [Elite Pipeline](pipeline/ELITE_PIPELINE_README.md)
-- [Pipeline Fixes (v1.1.0)](pipeline/PIPELINE_FIXES_DOCUMENTATION.md)
-
-### Technical Analysis
-- [Depth Model Upgrade](depth_model/DEPTH_MODEL_UPGRADE_RECOMMENDATION.md)
-- [Root Cause Analysis](visual_review/Root_Cause_Analysis.md)
-- [Corrective Action Plan](quality_analysis/Corrective_Action_Plan.md)
-
----
-
-## 📈 Documentation Statistics
-
-- **Total Documentation**: 2,500+ lines
-- **Quality Assessment**: 941 lines
-- **Visual Review Analysis**: 800+ lines
-- **Depth Model Upgrade**: 500+ lines
-- **Pipeline Documentation**: 800+ lines
-
----
-
-## 🎯 Key Projects Documented
-
-### 750 Picacho Luxury Estate
-- **Status**: Production-ready
-- **Quality**: 94.0/100 (Grade A - Excellent)
-- **Processing**: 13.68s per image
-- **Output**: 18 files (master TIFFs, delivery JPEGs, previews)
-
-### Pipeline Upgrades
-- **v1.0.0**: Production baseline (expert validated)
-- **v1.1.0**: Experimental (deprecated, quality issues)
-- **v1.2.0**: Planned improvements
-
-### Depth Model Enhancement
-- **Phase 1**: Complete (V2 model fix)
-- **Phase 2**: Ready (V2-Large upgrade)
-- **Phase 3**: Planned (Depth Pro integration)
-
----
-
-**Last Updated**: November 10, 2025
-**Documentation Version**: 1.1.0
+**Last Updated:** 2026-04-27

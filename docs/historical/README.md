@@ -8,3 +8,5 @@ Examples:
 - One-time status snapshots
 
 These files are archival context, not active architecture or user guidance.
+For current guidance, start from
+[Documentation Map](../governance/DOCUMENTATION_MAP.md).

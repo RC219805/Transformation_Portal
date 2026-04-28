@@ -2,6 +2,12 @@
 
 You are working in a governed production repository for **luxury real estate / ArchViz rendering, ingest, archive, and portal orchestration**.
 
+Current baseline: `main` through PR #1562. Use the root `README.md`,
+`docs/README.md`, `docs/governance/DOCUMENTATION_MAP.md`, and
+`docs/governance/DOCUMENTATION_STATE_AUDIT_2026-04-27.md` for current
+navigation. Historical project reports may retain old dates and facts; do not
+treat them as live guidance unless the documentation map promotes them.
+
 This codebase is broader than a single enhancement pipeline. It includes:
 
 - **Lux Depth V3**: depth-aware orchestration, PBR map generation, Materials V3, optional V2 enhancement, and governed deliverables
@@ -9,6 +15,21 @@ This codebase is broader than a single enhancement pipeline. It includes:
 - **Ingest + provenance + machine-mode contracts**: audit-grade metadata capture, typed JSON automation, evidence projection, and detached attestation flows
 - **Archive / fixity / governance tooling**: manifests, Merkle roots, signatures, rights policy, and export utilities
 - **Workflow assets**: ComfyUI examples/templates and operational scripts for repeatable execution
+
+Recent current-state contract anchors:
+
+- PR #1561/#1562 added the typed API v1 envelope/schema foundation and typed
+  OpenAPI response models for `/healthz`, `/ready`, and `/v1/readiness` while
+  preserving existing wire shapes.
+- The managed front door in `web/secure-landing/` is Node 22.x only.
+- Root `.env.example` is the Docker/FastAPI template; `web/secure-landing/.env.example`
+  is the managed front-door template.
+- `docs/ci/WORKFLOW_MATRIX.md` is the current 30-workflow GitHub Actions inventory.
+- `docs/governance/audit/archive-gates-2026-04-27.md` is the current archive
+  Gates A/B/C readiness audit evidence.
+- APEX current state includes offline model-family characterization, SAM2
+  tile-merge regression coverage, real failure-code surfacing, confidence-only
+  Materials V3 passthrough, and V2 fallback behavior.
 
 Optimize for:
 
@@ -30,7 +51,9 @@ This repository is **not** a generic CRUD portal, government portal, or health I
 Treat these as binding until a versioned change explicitly says otherwise:
 
 - `lux-depth-v3` CLI behavior and `python -m transformation_portal.lux_depth_v3`
-- Portal / orchestrator HTTP behavior, including readiness and job endpoints
+- Portal / orchestrator HTTP behavior, including `/healthz`, `/ready`,
+  `/v1/readiness`, job endpoints, typed OpenAPI response models, and typed
+  `/v1/*` envelopes
 - Import surfaces for both `transformation_portal` **and** `tp`
 - Schema-backed automation and provenance contracts:
   - ingest contract (`v1.0.2`)
@@ -140,8 +163,22 @@ Place work in the right zone.
 | `workflows/` | ComfyUI examples/templates | Treat as workflow assets/examples, not hidden production logic |
 | `tests/` | Contract, regression, ML, smoke, enforcement, security, performance coverage | Match marker policy and keep default lanes fast |
 | `docs/` | Architecture, contracts, governance, troubleshooting, guides | Update whenever behavior or workflow changes |
+| `.github/agents/` | Live custom-agent profiles and support docs | Keep aligned with `docs/architecture/agent_governance.md`, `docs/guides/CUSTOM_AGENT_GUIDE.md`, and `tests/test_custom_agent_config.py` |
 
 Additional repo areas such as `assets/`, `textures/`, `archive/`, `artifacts/`, `data/`, `dashboard/`, and project-specific directories are first-class parts of the repository. Do not treat them as disposable clutter.
+
+Custom-agent surface:
+
+- `@transformation-portal-architect` governs contracts, dependency policy, CI/CD,
+  security posture, docs topology, and architecture.
+- `@portal-app-steward` owns managed browser-boundary execution for the
+  frontdoor, portal shell, manifest-backed assets, selectors, and browser
+  validation.
+- `@transformation-portal-specialist` owns backend/orchestrator, Lux Depth,
+  archive, ingest, machine-mode, and governed non-browser execution work inside
+  existing contracts.
+- `.github/agents/_archive/` and `.github/agents/rag_system/_archive/` are
+  historical and must not define live agent behavior.
 
 ---
 

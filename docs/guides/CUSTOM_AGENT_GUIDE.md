@@ -10,6 +10,11 @@ The repository now has three live custom agent profiles:
 
 These roles are complementary. The Architect defines system invariants. The Steward and Specialist execute inside them.
 
+Current baseline: `main` through PR #1562. Current documentation navigation
+lives in `README.md`, `docs/README.md`,
+`docs/governance/DOCUMENTATION_MAP.md`, and
+`docs/governance/DOCUMENTATION_STATE_AUDIT_2026-04-27.md`.
+
 ## Live Agent Roles
 
 ### Transformation Portal Architect
@@ -18,6 +23,7 @@ Use `@transformation-portal-architect` when the task involves:
 
 - dependency or runtime policy
 - CI/CD or workflow enforcement
+- documentation topology, Copilot instructions, or live custom-agent role boundaries
 - security posture or trust-boundary changes
 - public HTTP, CLI, schema, or packaging contracts
 - ADR interpretation or architectural trade-offs
@@ -34,11 +40,11 @@ Use `@portal-app-steward` when the task involves the managed browser boundary:
 
 - `web/secure-landing/`
 - `/`, `/login`, `/portal`, `/portal/bootstrap`
-- `/portal/assets/*`, `/portal/video/*`, `/healthz`
+- `/portal/assets/*`, `/portal/video/*`, managed `/healthz`
 - `portal.html`
 - `public/portal-assets/*`
 - `config/portal_asset_manifest.json`
-- browser-smoke selectors, bootstrap states, and frontdoor/portal validation
+- browser-smoke selectors, bootstrap states, Node 22 frontdoor checks, and frontdoor/portal validation
 
 The Steward is the first-choice execution agent for browser-surface work. It should preserve route, auth, asset, and browser-validation contracts and treat direct-debug as secondary to managed mode.
 
@@ -61,7 +67,7 @@ Examples:
 Use `@transformation-portal-specialist` when the task involves governed non-browser execution surfaces:
 
 - `app.py`
-- `/ready`
+- backend `/healthz`, `/ready`, and `/v1/readiness`
 - typed `/v1/*` behavior
 - Lux Depth V3
 - archive-gate
@@ -98,6 +104,15 @@ If browser work requires backend contract changes:
 2. Steward owns the browser-side plan and validation.
 3. Specialist owns the backend implementation that changes typed behavior or backend hardening.
 
+Current backend contract anchors:
+
+- `/healthz`, `/ready`, and `/v1/readiness` expose typed OpenAPI response
+  models while keeping existing wire contracts stable.
+- `/v1/readiness` keeps transport success separate from per-pipeline
+  `ready` / `degraded` / `blocked` execution truth.
+- Archive Gates A/B/C readiness evidence is captured in
+  `docs/governance/audit/archive-gates-2026-04-27.md`.
+
 ## Working With The Agents
 
 Best prompt pattern:
@@ -129,7 +144,10 @@ The live custom agent surface is defined by:
 - `.github/agents/portal-app-steward.md`
 - `.github/agents/transformation-portal-specialist.md`
 - `.github/agents/README.md`
+- `.github/copilot-instructions.md`
 - `docs/architecture/agent_governance.md`
+- `docs/governance/DOCUMENTATION_MAP.md`
+- `docs/governance/DOCUMENTATION_STATE_AUDIT_2026-04-27.md`
 
 Supporting quick references:
 
@@ -144,9 +162,12 @@ When role boundaries or live guidance change, update the source of truth togethe
 
 1. the relevant profile under `.github/agents/`
 2. `.github/agents/README.md`
-3. this guide
-4. `docs/reference/AGENT_QUICK_REFERENCE.md`
-5. `tests/test_custom_agent_config.py`
+3. `.github/agents/QUICK_START_v2.md`
+4. `.github/copilot-instructions.md` when repo-wide Copilot behavior changes
+5. this guide
+6. `docs/reference/AGENT_QUICK_REFERENCE.md`
+7. `docs/governance/DOCUMENTATION_MAP.md` when canonical navigation changes
+8. `tests/test_custom_agent_config.py`
 
 Do not leave the README, guide, quick reference, and contract test out of sync.
 

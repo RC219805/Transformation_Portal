@@ -1,5 +1,11 @@
 # 750 Picacho Great Room Enhancement - START HERE
 
+> Historical project record.
+>
+> This was a 2025 750 Picacho project entry point. It is not the current
+> Transformation Portal start page. Use [Documentation Map](../governance/DOCUMENTATION_MAP.md)
+> or the root [README](../../README.md) for maintained guidance.
+
 **Status:** ✅ **COMPLETE & PRODUCTION READY**
 **Date:** November 5, 2025
 **Confidence:** 95%

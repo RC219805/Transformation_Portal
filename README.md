@@ -18,11 +18,17 @@ It combines orchestrated depth estimation, PBR map generation, material-aware fi
 
 `main` tracks the active development branch for the repository.
 
+Current documentation baseline: `main` through PR #1562 (April 27, 2026).
+Recent merged work added typed API v1 envelopes and OpenAPI response models for
+health/readiness routes, Docker health/env wiring, CI workflow hardening and a
+30-workflow matrix, archive-gate readiness evidence, and APEX fallback /
+failure-code hardening.
+
 For reproducible installs, pin a specific release tag from [GitHub Releases](https://github.com/RC219805/Transformation_Portal/releases) instead of relying on branch prose. The release badge above reflects the latest tagged GitHub release.
 
 Core entry points:
 - `lux-depth-v3` for orchestrated depth, PBR, materials, and enhancement workflows
-- Portal/orchestrator HTTP surfaces with liveness (`/ready`, `/healthz`) plus operator-truth readiness at `/v1/readiness`
+- Portal/orchestrator HTTP surfaces with liveness (`/healthz`, `/ready`) plus operator-truth readiness at `/v1/readiness`
 - Determinism, manifest, run-card, and provenance layers for governed execution
 
 Quick discovery:
@@ -44,8 +50,13 @@ pip install "git+https://github.com/RC219805/Transformation_Portal.git@<release-
 Replace `<release-tag>` with a tag from [GitHub Releases](https://github.com/RC219805/Transformation_Portal/releases).
 
 Key docs:
+- [Documentation Index](docs/README.md)
+- [Documentation Map](docs/governance/DOCUMENTATION_MAP.md)
 - [Portal + Orchestrator Quickstart](docs/guides/PORTAL_ORCHESTRATOR_QUICKSTART.md)
 - [Portal Secure Front Door Quickstart](docs/guides/PORTAL_SECURE_FRONTDOOR_QUICKSTART.md)
+- [CI Workflow Matrix](docs/ci/WORKFLOW_MATRIX.md)
+- [Archive Gates A/B/C Audit](docs/governance/audit/archive-gates-2026-04-27.md)
+- [Custom Agent Guide](docs/guides/CUSTOM_AGENT_GUIDE.md)
 - [Portal Orchestrator Roadmap (Re-Baselined)](docs/architecture/PORTAL_ORCHESTRATOR_ROADMAP.md)
 - [Portal Frontdoor Roadmap](docs/architecture/PORTAL_FRONTDOOR_ROADMAP.md)
 - [DNA UX/UI Strategy Re-baseline](docs/architecture/DNA_UX_UI_STRATEGY_REBASELINE_2026-04-08.md)
@@ -59,10 +70,11 @@ Portal surfaces:
   - `/` public Dynamic Neural Access homepage
   - `/login` operator login
   - `/portal` governed operator console
-- `GET /healthz` is the managed front-door liveness contract, `GET /ready` is backend liveness, and `GET /v1/readiness` is the execution-readiness matrix for the four governed pipelines.
+- `GET /healthz` is the managed front-door liveness contract, `GET /ready` is backend liveness, and `GET /v1/readiness` is the execution-readiness matrix for the four governed pipelines. The backend health/readiness routes now have typed OpenAPI response models while preserving their existing wire shapes.
 - Shared public branding assets now live at `web/secure-landing/public/brand/dna-symbol-*.svg`, `web/secure-landing/public/brand/dna-lockup-*.svg`, and `web/secure-landing/public/video/dna-loop.mp4`.
 - Direct FastAPI portal access is now a `direct_debug` workflow for local troubleshooting, not the preferred production browser path.
 - The front door is a Node app. `web/secure-landing` now documents and enforces **Node 22.x only** for install, dev, test, build, and start flows.
+- Docker Compose reads root `.env` values using the checked-in `.env.example` template and allows missing env files for local defaults; set `TP_API_KEY` for any non-throwaway orchestrator run.
 
 ---
 
@@ -211,7 +223,7 @@ All processing manifests include backend selection metadata:
 - `resolution_status`: "success" or "fallback"
 - `resolution_reason`: Explanation if fallback occurred
 
-See [ADR-019: Backend Registry Integration](docs/architecture/decisions/ADR-019-REVISED-DECISION.md) for architectural details.
+See [ADR-019: Depth Backend Unification](docs/architecture/ADR-019-depth-backend-unification.md) for architectural details.
 
 ---
 
@@ -444,12 +456,18 @@ For deeper performance workflows, see:
 ## Documentation
 
 Start here:
+- [Documentation Index](docs/README.md)
 - [Documentation Map](docs/governance/DOCUMENTATION_MAP.md)
 - [Setup Guide](docs/guides/SETUP_GUIDE.md)
 - [Architecture Overview](docs/architecture/ARCHITECTURE.md)
 - [Lux Depth V3 CLI Guide](docs/cli/LUX_DEPTH_V3_CLI_GUIDE.md)
 - [Lux Depth V3 Troubleshooting](docs/guides/LUX_DEPTH_V3_TROUBLESHOOTING.md)
 - [API Documentation](docs/api/)
+
+Historical project reports, PR summaries, and 2025 pipeline/depth-model notes are
+retained under `docs/` for audit context. Use the documentation map and
+[2026-04-27 documentation state audit](docs/governance/DOCUMENTATION_STATE_AUDIT_2026-04-27.md)
+to distinguish current guidance from archive-only material.
 
 ---
 
@@ -483,4 +501,4 @@ Resources:
 
 ---
 
-Last Updated: 2026-03-13
+Last Updated: 2026-04-27

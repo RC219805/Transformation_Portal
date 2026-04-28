@@ -2,6 +2,10 @@
   750 PICACHO ELITE PIPELINE - COMPLETE PROJECT SUMMARY
 ════════════════════════════════════════════════════════════════════════════════
 
+HISTORICAL PROJECT RECORD
+This file records November 2025 750 Picacho pipeline work. It is not current
+operator guidance. Use docs/governance/DOCUMENTATION_MAP.md for maintained docs.
+
 PROJECT DATE: November 9-10, 2025
 SCOPE: Design, implement, execute, and analyze luxury estate image processing
 STATUS: ✅ COMPLETE - Production-ready with comprehensive documentation
@@ -153,7 +157,7 @@ DOCUMENTATION (2,500+ lines):
   ✓ IMPLEMENTATION_COMPLETE.md
   ✓ PIPELINE_FIXES_DOCUMENTATION.md (500+ lines)
   ✓ PIPELINE_FIXES_QUICKSTART.md (400+ lines)
-  ✓ PIPELINE_V1.1.0_CHANGES.md (500+ lines)
+  - Historical pipeline v1.1.0 changelog (500+ lines)
   ✓ LUXURY_ESTATE_PIPELINE_README.md
   ✓ README_PIPELINE_FIXES.md
   ✓ examples_luxury_estate_pipeline.py (8 examples)

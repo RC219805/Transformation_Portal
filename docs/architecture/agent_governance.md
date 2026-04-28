@@ -8,9 +8,15 @@ This policy applies to:
 - `@transformation-portal-architect`
 - `@portal-app-steward`
 - `@transformation-portal-specialist`
+- `.github/copilot-instructions.md`
 - Any future repository agents that implement, review, or propose changes
 
 This policy governs agent decision-making and escalation. It does not replace human review, CI enforcement, or branch protections.
+
+Current baseline: `main` through PR #1562. Current documentation navigation is
+defined by `README.md`, `docs/README.md`,
+`docs/governance/DOCUMENTATION_MAP.md`, and
+`docs/governance/DOCUMENTATION_STATE_AUDIT_2026-04-27.md`.
 
 ## Authority Model
 
@@ -30,13 +36,14 @@ When guidance conflicts, the following precedence applies:
 **Architect**
 - Final authority on: security posture, dependency governance, CI/CD policy, cross-module contracts, public API/CLI stability, architectural direction.
 - Owns enforcement design: policies should be machine-checkable where feasible.
+- Owns live agent/Copilot instruction boundaries and documentation topology.
 
 **Steward**
-- Execution authority only for the managed browser boundary: `web/secure-landing/`, `portal.html`, manifest-backed portal assets, and browser-surface validation/docs work inside existing contracts.
+- Execution authority only for the managed browser boundary: `web/secure-landing/`, `portal.html`, manifest-backed portal assets, managed `/healthz`, and browser-surface validation/docs work inside existing contracts.
 - Must stop and escalate when escalation criteria are met.
 
 **Specialist**
-- Execution authority only for backend/orchestrator, archive, ingest, machine-mode, Lux Depth, and other governed non-browser surfaces within governance constraints.
+- Execution authority only for backend/orchestrator, backend `/healthz`, `/ready`, `/v1/readiness`, archive, ingest, machine-mode, Lux Depth, and other governed non-browser surfaces within governance constraints.
 - Must stop and escalate when escalation criteria are met.
 
 ## Stop-and-Escalate Protocol
@@ -77,6 +84,13 @@ Hard-block constraints are an allowed enforcement tool:
 - Changes to `.github/workflows/*`, reusable workflows, or action pinning policy.
 - Release automation, packaging/publishing, artifact retention rules, container builds, deployment configuration.
 - Introducing new required checks, changing required gates, or bypassing enforcement.
+
+### B2) Agent and Documentation Topology
+- Changes to `.github/copilot-instructions.md`, `.github/agents/*`,
+  `docs/guides/CUSTOM_AGENT_GUIDE.md`, `docs/reference/AGENT_QUICK_REFERENCE.md`,
+  or `tests/test_custom_agent_config.py`.
+- Changes to canonical documentation navigation or classification boundaries.
+- Promoting historical or archive-only docs into live guidance.
 
 ### C) Security Posture and Untrusted Input Handling
 - Any changes affecting handling of:
@@ -120,6 +134,9 @@ For merge-ready changes:
 The following are governance-controlled artifacts and require Architect review:
 - this policy file
 - agent role definitions under `.github/agents/`
+- `.github/copilot-instructions.md`
+- `docs/guides/CUSTOM_AGENT_GUIDE.md`
+- `docs/reference/AGENT_QUICK_REFERENCE.md`
 - ADRs and security policy documents
 - dependency bans and enforcement scripts
 

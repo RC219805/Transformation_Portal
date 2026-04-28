@@ -205,7 +205,7 @@ class TestRAGPipeline:
         template = PromptTemplates.bug_triage(
             error_log="ImportError: No module named 'torch'",
             reproduction_steps="Run python pipeline.py",
-            environment="Python 3.10, Ubuntu 20.04",
+            environment="Python 3.11, Ubuntu 22.04",
         )
 
         assert isinstance(template, str), "Template should be a string"

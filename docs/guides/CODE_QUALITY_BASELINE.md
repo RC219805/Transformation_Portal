@@ -1,7 +1,8 @@
-> ⚠️ **DEPRECATED**
+> **Historical / superseded**
 >
 > This document has been superseded by [CODE_QUALITY_STANDARDS.md](CODE_QUALITY_STANDARDS.md).
-> Please use that document instead. This file will be removed on 2026-03-06.
+> For current engineering workflow guidance, use [AGENTS.md](../../AGENTS.md)
+> and the validation targets in the root [README](../../README.md).
 
 # Code Quality Baseline - November 8, 2025
 
@@ -48,7 +49,8 @@ except ImportError:
 ```
 /
 ├── README.md                    # Main project README
-├── START_HERE.md               # Quick start guide
+├── docs/README.md              # Current documentation entry point
+├── docs/governance/DOCUMENTATION_MAP.md
 ├── DEPRECATION_POLICY.md       # Policy documentation
 ├── MIGRATION_GUIDE.md          # Migration instructions
 └── docs/
@@ -70,7 +72,7 @@ except ImportError:
 ### Documentation
 1. **Root Limit**: Maximum 10 markdown files in repository root
 2. **Organization**: Session, project, and technical docs in `docs/` subdirectories
-3. **Essential Root Files Only**: README, START_HERE, and policy documents
+3. **Essential Current Entry Points**: README, docs/README.md, Documentation Map, and policy documents
 
 ### Testing
 1. **All Tests Pass**: 100% test suite passing before merge

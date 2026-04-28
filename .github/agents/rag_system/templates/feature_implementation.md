@@ -425,7 +425,7 @@ python {script_name}.py input.jpg output/ --{feature-name} --{feature-name}-inte
 ```
 
 ### 3. Configuration Documentation
-**File to update**: `config/README.md` or inline comments
+**File to update**: the maintained docs surface listed in `docs/governance/DOCUMENTATION_MAP.md`, or inline comments near the governed config schema/preset
 
 ```yaml
 # config/{preset_name}.yaml
@@ -482,7 +482,7 @@ python {script_name}.py input.jpg output/ --{feature-name} --{feature-name}-inte
 
 ### CI/CD
 - [ ] All CI checks pass
-- [ ] Tests pass on Python 3.10, 3.11, 3.12
+- [ ] Tests pass on supported Python 3.11+ lanes
 - [ ] Linting passes (flake8, pylint)
 - [ ] No new security vulnerabilities (CodeQL)
 

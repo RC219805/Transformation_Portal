@@ -1,7 +1,7 @@
-> ⚠️ **DEPRECATED**
+> **Historical / superseded**
 >
 > This document has been merged into [ARCHITECTURE.md](ARCHITECTURE.md).
-> Please use that document instead. This file will be removed on 2026-03-06.
+> Use that document for current architecture guidance.
 
 # Temporal Architecture Philosophy
 
@@ -322,7 +322,7 @@ python -m pytest tests/
 ```
 
 **Manual Migration**:
-See [MIGRATION_GUIDE.md](../MIGRATION_GUIDE.md) for step-by-step instructions.
+See [MIGRATION_GUIDE.md](../migration/MIGRATION_GUIDE.md) for step-by-step instructions.
 
 ## Observability
 
