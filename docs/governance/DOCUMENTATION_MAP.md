@@ -46,6 +46,7 @@ operator guidance unless they are linked here as canonical documents.
 | Agent quick reference | [AGENT_QUICK_REFERENCE.md](../reference/AGENT_QUICK_REFERENCE.md) | Maintained |
 | Agent governance | [agent_governance.md](../architecture/agent_governance.md) | Maintained |
 | Copilot instructions | [.github/copilot-instructions.md](../../.github/copilot-instructions.md) | Maintained repo-wide Copilot guidance |
+| Skill progression tracks | [SKILL_PROGRESS_TRACKS.md](../guides/SKILL_PROGRESS_TRACKS.md) | Maintained; maps recurring PR review themes to training drills |
 | CI workflow inventory | [WORKFLOW_MATRIX.md](../ci/WORKFLOW_MATRIX.md) | Maintained; current 30-workflow inventory |
 | CI/CD workflow guide | [CI_CD_WORKFLOWS.md](../ci_cd/CI_CD_WORKFLOWS.md) | Maintained |
 | Branch protection | [BRANCH_PROTECTION_SETUP.md](../ci/BRANCH_PROTECTION_SETUP.md) | Maintained |

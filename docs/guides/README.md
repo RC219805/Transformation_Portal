@@ -12,3 +12,4 @@ Use these current entry points first:
 - [Portal Secure Front Door Quickstart](PORTAL_SECURE_FRONTDOOR_QUICKSTART.md)
 - [Lux Depth V3 Troubleshooting](LUX_DEPTH_V3_TROUBLESHOOTING.md)
 - [Context-Aware Rendering](CONTEXT_AWARE_RENDERING.md)
+- [Skill Progress Tracks](SKILL_PROGRESS_TRACKS.md)
