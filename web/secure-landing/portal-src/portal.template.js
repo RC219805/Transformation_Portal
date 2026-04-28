@@ -265,6 +265,7 @@ const els = {
     rightsManifestStatus: _domId('rightsManifestStatus'),
     qualityTier: _domId('qualityTier'),
     depthBackend: _domId('depthBackend'),
+    modelKey: _domId('modelKey'),
     depthDevice: _domId('depthDevice'),
     segmentationBackendField: _domId('segmentationBackendField'),
     sam2ModelSizeField: _domId('sam2ModelSizeField'),
@@ -6420,6 +6421,7 @@ const TRUTHY_VALUES = new Set(['1', 'true', 'yes', 'on']);
 const FALSY_VALUES = new Set(['0', 'false', 'no', 'off']);
 const LUX_QUALITY_TIERS = new Set(['standard', 'premium', 'apex']);
 const LUX_DEPTH_BACKENDS = new Set(['da3', 'depth_pro']);
+const LUX_DA3_MODEL_KEYS = new Set(['da3-metric', 'da3-research']);
 const LUX_SEGMENTATION_BACKENDS = new Set(['stub', 'efficientsam', 'sam2']);
 const SAM2_MODEL_SIZES = new Set(['base', 'large']);
 const LUX_GROUPING_MODES = new Set(['single', 'parent_dir']);
@@ -6458,6 +6460,13 @@ function _resolveDepthBackend(value) {
     const normalized = canonicalDepthBackend(value);
     if (LUX_DEPTH_BACKENDS.has(normalized)) return normalized;
     return 'da3';
+}
+
+function _resolveDa3ModelKey(value) {
+    const normalized = String(value || '').trim().toLowerCase().replace(/_/g, '-');
+    if (LUX_DA3_MODEL_KEYS.has(normalized)) return normalized;
+    if (normalized === 'da3') return 'da3-research';
+    return 'da3-metric';
 }
 
 function _resolveSegmentationBackend(value) {
@@ -7130,6 +7139,12 @@ function applyLuxMetadataToControls() {
     const maxGpuWorkersField = _metadataField('max_gpu_workers');
     const iterationsField = _metadataField('reconstruction_iterations');
     const logLevelField = _metadataField('log_level');
+    const modelKeyField = _metadataField('model_key');
+
+    if (els.modelKey && modelKeyField?.options) {
+        _setSelectOptions(els.modelKey, modelKeyField.options, state.config.modelKey);
+        state.config.modelKey = _resolveDa3ModelKey(els.modelKey.value || state.config.modelKey);
+    }
 
     if (els.reconstruction.groupingMode && groupingField?.options) {
         _setSelectOptions(els.reconstruction.groupingMode, groupingField.options, state.config.reconstruction?.groupingMode);
@@ -7329,6 +7344,7 @@ async function fetchConfigMetadata(pipelineName = state.pipeline, silent = false
             debug_bundle_policy: {},
             advanced_sections: [],
             backend_catalog: {},
+            model_catalog: {},
         };
         renderReviewSurfaces();
         return;
@@ -7352,6 +7368,7 @@ async function fetchConfigMetadata(pipelineName = state.pipeline, silent = false
             debug_bundle_policy: data.debug_bundle_policy && typeof data.debug_bundle_policy === 'object' ? data.debug_bundle_policy : {},
             advanced_sections: Array.isArray(data.advanced_sections) ? data.advanced_sections.map((item) => String(item || '')) : [],
             backend_catalog: data.backend_catalog && typeof data.backend_catalog === 'object' ? data.backend_catalog : {},
+            model_catalog: data.model_catalog && typeof data.model_catalog === 'object' ? data.model_catalog : {},
         };
         applyLuxMetadataToControls();
         renderReviewSurfaces();
@@ -7784,6 +7801,9 @@ function buildCanonicalLuxDepthArgs(config) {
     const depthBackend = _resolveDepthBackend(
         _textOrFallback(els.depthBackend ? els.depthBackend.value : config.depthBackend, config.depthBackend || 'da3')
     );
+    const modelKey = _resolveDa3ModelKey(
+        _textOrFallback(els.modelKey ? els.modelKey.value : config.modelKey, config.modelKey || 'da3-metric')
+    );
     const depthDevice = _textOrFallback(
         els.depthDevice ? els.depthDevice.value : config.depthDevice,
         config.depthDevice || ''
@@ -7978,6 +7998,7 @@ function buildCanonicalLuxDepthArgs(config) {
         preset,
         quality_tier: qualityTier,
         depth_backend: depthBackend,
+        model_key: modelKey,
         enable_segmentation: segmentationEnable,
         segmentation_backend: segmentationBackend,
         strict_segmentation: strictSegmentation,
@@ -8073,6 +8094,7 @@ function applyPresetRecommendedArgs(presetName) {
     c.preset = String(preset.name || presetName || c.preset || 'premium');
     if (Object.prototype.hasOwnProperty.call(recommended, 'quality_tier')) c.qualityTier = _resolveQualityTier(recommended.quality_tier);
     if (Object.prototype.hasOwnProperty.call(recommended, 'depth_backend')) c.depthBackend = _resolveDepthBackend(recommended.depth_backend);
+    if (Object.prototype.hasOwnProperty.call(recommended, 'model_key')) c.modelKey = _resolveDa3ModelKey(recommended.model_key);
     if (Object.prototype.hasOwnProperty.call(recommended, 'depth_device')) c.depthDevice = _textOrFallback(recommended.depth_device, c.depthDevice);
 
     c.segmentation = c.segmentation || {};
@@ -8307,6 +8329,7 @@ function updateUIFromState() {
 
     const c = state.config;
     c.depthBackend = _resolveDepthBackend(c.depthBackend);
+    c.modelKey = _resolveDa3ModelKey(c.modelKey);
     c.segmentation = c.segmentation || {};
     c.segmentation.enable = parseBoolLike(c.segmentation.enable, false);
     c.segmentation.backend = _resolveSegmentationBackend(c.segmentation.backend);
@@ -8378,6 +8401,7 @@ function updateUIFromState() {
     if (els.rightsManifestPath) els.rightsManifestPath.value = c.gate.manifestJsonl;
     if (els.qualityTier) els.qualityTier.value = c.qualityTier;
     if (els.depthBackend) els.depthBackend.value = c.depthBackend;
+    if (els.modelKey) els.modelKey.value = c.modelKey;
     if (els.depthDevice) els.depthDevice.value = c.depthDevice;
     if (els.segmentation.backend) els.segmentation.backend.value = c.segmentation.backend;
     if (els.segmentation.sam2ModelSize) els.segmentation.sam2ModelSize.value = c.segmentation.sam2ModelSize;
@@ -8790,6 +8814,9 @@ function renderCLI() {
         cliLines.push(`  --preset ${q(payload.args.preset)}`);
         cliLines.push(`  --quality-tier ${q(payload.args.quality_tier)}`);
         cliLines.push(`  --depth-backend ${q(payload.args.depth_backend)}`);
+        if (payload.args.depth_backend === 'da3') {
+            cliLines.push(`  --model-key ${q(payload.args.model_key || 'da3-metric')}`);
+        }
         if (payload.args.depth_device) {
             cliLines.push(`  --depth-device ${q(payload.args.depth_device)}`);
         }
@@ -8928,6 +8955,7 @@ function bindInputs() {
         const lookup = {
             ':qualityTier': 'quality_tier',
             ':depthBackend': 'depth_backend',
+            ':modelKey': 'model_key',
             'segmentation:backend': 'segmentation_backend',
             'segmentation:sam2TilingEnabled': 'sam2_tiling_enabled',
             'segmentation:sam2TileSizePx': 'sam2_tile_size_px',
@@ -9086,6 +9114,7 @@ function bindInputs() {
     safeBindInput(els.rightsManifestPath, 'gate', 'manifestJsonl');
     safeBindText(els.qualityTier, null, 'qualityTier');
     safeBindText(els.depthBackend, null, 'depthBackend');
+    safeBindText(els.modelKey, null, 'modelKey');
     safeBindText(els.depthDevice, null, 'depthDevice');
     safeBindText(els.segmentation.backend, 'segmentation', 'backend');
     safeBindText(els.segmentation.sam2ModelSize, 'segmentation', 'sam2ModelSize');
@@ -10414,6 +10443,7 @@ if (els.fileInput) els.fileInput.addEventListener('change', async (e) => {
             c.preset = data.args.preset || c.preset;
             c.qualityTier = _resolveQualityTier(data.args.quality_tier || c.qualityTier);
             c.depthBackend = _resolveDepthBackend(data.args.depth_backend || c.depthBackend);
+            c.modelKey = _resolveDa3ModelKey(data.args.model_key || c.modelKey);
             c.depthDevice = data.args.depth_device || c.depthDevice;
             c.segmentation = c.segmentation || {};
             c.segmentation.enable = parseBoolLike(data.args.enable_segmentation, c.segmentation.enable);

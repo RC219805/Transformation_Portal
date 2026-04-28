@@ -56,6 +56,7 @@ from transformation_portal.ingest.upload_staging import (
     parse_client_manifest_relative_paths,
     stage_upload_batch,
 )
+from transformation_portal.lux_depth_v3.model_registry import resolve_model_spec, resolve_registry_key, visible_cli_model_specs
 from transformation_portal.lux_depth_v3.run_card_contract import infer_run_card_version
 
 # ----------------------------
@@ -1068,6 +1069,7 @@ PRESET_CATALOG: Dict[str, List[Dict[str, Any]]] = {
             "recommended_args": {
                 "quality_tier": "premium",
                 "depth_backend": "da3",
+                "model_key": "da3-metric",
                 "enable_segmentation": True,
                 "segmentation_backend": "efficientsam",
                 "strict_segmentation": True,
@@ -1094,6 +1096,7 @@ PRESET_CATALOG: Dict[str, List[Dict[str, Any]]] = {
             "recommended_args": {
                 "quality_tier": "standard",
                 "depth_backend": "da3",
+                "model_key": "da3-metric",
                 "enable_segmentation": False,
                 "segmentation_backend": "stub",
                 "strict_segmentation": False,
@@ -1116,6 +1119,34 @@ PRESET_CATALOG: Dict[str, List[Dict[str, Any]]] = {
             "label": "v3.1-m4 (Experimental)",
             "stability": "experimental",
             "description": "Research-only preset" " requiring non-commercial" " acknowledgments",
+            "is_research": True,
+            "recommended_args": {
+                "quality_tier": "apex",
+                "depth_backend": "da3",
+                "model_key": "da3-research",
+                "enable_segmentation": True,
+                "segmentation_backend": "sam2",
+                "strict_segmentation": True,
+                "materials_v3": True,
+                "pbr": True,
+                "emit_master16": True,
+                "emit_upscaled16": True,
+                "emit_report": True,
+                "emit_run_card": True,
+                "run_card_version": "v2",
+                "run_card_include_proofs": False,
+                "emit_marketing": False,
+                "enable_v2": True,
+                "v2_preset": "default",
+                "enable_reconstruction": False,
+            },
+            "advanced_sections": ["governance", "advanced"],
+        },
+        {
+            "name": "depth-pro-research-m4",
+            "label": "Depth Pro research (Experimental)",
+            "stability": "experimental",
+            "description": "Depth Pro research-only preset requiring non-commercial and Apple acknowledgments",
             "is_research": True,
             "recommended_args": {
                 "quality_tier": "apex",
@@ -1261,6 +1292,11 @@ ALLOWED_RAW_INGEST_MODES = {"auto", "force_rawpy", "force_preview"}
 ALLOWED_RAW_WB_MODES = {"camera"}
 ALLOWED_RAW_DEMOSAIC = {"AHD"}
 ALLOWED_LOG_LEVELS = {"DEBUG", "INFO", "WARNING", "ERROR"}
+PORTAL_DEFAULT_DA3_MODEL_KEY = "da3-metric"
+PORTAL_DA3_MODEL_KEY_BY_REGISTRY_KEY = {
+    "da3_metric": "da3-metric",
+    "da3_research": "da3-research",
+}
 DEPTH_BACKEND_ALIASES = {
     "depth_anything_v3": "da3",
     "depth-anything-v3": "da3",
@@ -1275,6 +1311,7 @@ VALIDATION_REASON_CODES = {
     "SAM2 checkpoint path exceeds checksum verification size limit": "checkpoint_file_too_large",
     "Invalid quality_tier": "invalid_quality_tier",
     "Invalid depth_backend": "invalid_depth_backend",
+    "Invalid model_key": "invalid_model_key",
     "Invalid segmentation_backend": "invalid_segmentation_backend",
     "Invalid sam2_model_size": "invalid_sam2_model_size",
     "Invalid reconstruction_tier": "invalid_reconstruction_tier",
@@ -1306,6 +1343,7 @@ PORTAL_SAFE_ERROR_MESSAGES = {
     "invalid_event_type": "The telemetry event type is not supported.",
     "invalid_field": "The telemetry field is not supported.",
     "invalid_log_level": "The selected log level is not supported.",
+    "invalid_model_key": "The selected DA3 model is not supported.",
     "invalid_path_value": "One or more configured paths are invalid.",
     "invalid_pipeline": "The selected pipeline is not supported.",
     "invalid_quality_tier": "The selected quality tier is not supported.",
@@ -1324,6 +1362,8 @@ PORTAL_SAFE_ERROR_MESSAGES = {
     "policy_yaml_required": "A rights policy YAML file is required before dispatch.",
     "rights_manifest_required": "A rights-manifest JSONL artifact is required before dispatch.",
     "runner_unavailable": "The selected pipeline runner is unavailable in this environment.",
+    "da3_runtime_unavailable": "The selected DA3 runtime is unavailable.",
+    "da3_model_non_commercial_required": "The selected DA3 model requires non-commercial acknowledgment.",
     "untrusted_checkpoint_path": "Managed SAM2 checkpoint overrides must use a repo-controlled or checksum-verified file.",
     "unsafe_path": "Configured paths must stay within the allowed workspace roots.",
     "unsupported_pipeline": "The selected pipeline is not supported.",
@@ -1372,6 +1412,7 @@ PORTAL_ALLOWED_EVENT_FIELDS = {
     "max_workers",
     "max_gpu_workers_mode",
     "max_workers_mode",
+    "model_key",
     "non_commercial_ok",
     "quality_tier",
     "raw_ingest_mode",
@@ -1445,6 +1486,7 @@ LUX_PORTAL_DEFAULT_ARGS: Dict[str, Any] = {
     "preset": "premium",
     "quality_tier": "apex",
     "depth_backend": "da3",
+    "model_key": "da3-metric",
     "depth_device": "cpu",
     "enable_segmentation": False,
     "segmentation_backend": "stub",
@@ -1645,7 +1687,7 @@ def _resolve_lux_depth_canary_runtime() -> Optional[Path]:
         if candidate.exists():
             return candidate.resolve()
 
-    repo_local = REPO_ROOT / ".venv-da3" / "bin" / "python"
+    repo_local = REPO_ROOT / ".runtime" / "Depth-Anything-3" / ".venv-da3" / "bin" / "python"
     if repo_local.exists():
         return repo_local.resolve()
     return None
@@ -2129,8 +2171,18 @@ def _lux_depth_readiness(args: Optional[Dict[str, Any]] = None) -> Dict[str, Any
     issues: List[Dict[str, Any]] = []
     notes = [
         "Base readiness covers runner invocation, path safety, and orchestrator preflight.",
-        "Canary readiness is reported separately and does not block base dispatch.",
+        "Canary readiness is reported separately; selected DA3 dispatch requires a runnable DA3 runtime.",
     ]
+    selected_model: Dict[str, Any] = {
+        "backend": "",
+        "model_key": "",
+        "canonical_model_key": "",
+        "repo_id": "",
+        "license_id": "",
+        "requires_non_commercial_ok": False,
+        "runtime_available": None,
+        "status": "not_selected",
+    }
     if not runner_available:
         issues.append(
             _readiness_issue(
@@ -2147,6 +2199,78 @@ def _lux_depth_readiness(args: Optional[Dict[str, Any]] = None) -> Dict[str, Any
         notes.append("No DA3 canary runtime contract was found; model execution remains optional and unverified.")
 
     if args is not None:
+        selected_backend = _canonical_depth_backend(_pick(args, "depth_backend", "depthBackend", default="da3")) or "da3"
+        if selected_backend == "da3":
+            selected_model_key = _canonical_da3_model_key(
+                _pick(args, "model_key", "modelKey", default=PORTAL_DEFAULT_DA3_MODEL_KEY)
+            )
+            selected_spec = _da3_model_spec_for_portal_key(selected_model_key)
+            selected_model.update(
+                {
+                    "backend": "da3",
+                    "model_key": selected_model_key,
+                    "canonical_model_key": getattr(selected_spec, "key", "") if selected_spec is not None else "",
+                    "repo_id": getattr(selected_spec, "repo_id", "") if selected_spec is not None else "",
+                    "license_id": getattr(selected_spec, "license_id", "") if selected_spec is not None else "",
+                    "requires_non_commercial_ok": (
+                        bool(getattr(selected_spec, "requires_non_commercial_ok", False))
+                        if selected_spec is not None
+                        else False
+                    ),
+                    "runtime_available": canary_runtime is not None,
+                    "status": "ready" if canary_runtime is not None and selected_spec is not None else "blocked",
+                }
+            )
+            if selected_spec is None:
+                issues.append(
+                    _readiness_issue(
+                        "invalid_model_key",
+                        severity="blocked",
+                        message="The selected DA3 model is not supported.",
+                        field="model_key",
+                    )
+                )
+            if (
+                selected_spec is not None
+                and bool(getattr(selected_spec, "requires_non_commercial_ok", False))
+                and not _as_bool(
+                    _pick(args, "non_commercial_ok", "nonCommercialOk", default=False),
+                    default=False,
+                )
+            ):
+                issues.append(
+                    _readiness_issue(
+                        "da3_model_non_commercial_required",
+                        severity="blocked",
+                        message="The selected DA3 research model requires a non-commercial acknowledgment.",
+                        field="non_commercial_ok",
+                    )
+                )
+            if canary_runtime is None:
+                issues.append(
+                    _readiness_issue(
+                        "da3_runtime_unavailable",
+                        severity="blocked",
+                        message=(
+                            "The selected DA3 backend requires the repo-local DA3 runtime before dispatch. "
+                            "Run ./scripts/setup/install_da3_runtime.sh or set TRANSFORMATION_PORTAL_DA3_PYTHON."
+                        ),
+                        field="depth_backend",
+                    )
+                )
+        elif selected_backend == "depth_pro":
+            selected_model.update(
+                {
+                    "backend": "depth_pro",
+                    "model_key": "apple/ml-depth-pro",
+                    "canonical_model_key": "depth_pro",
+                    "repo_id": "apple/ml-depth-pro",
+                    "license_id": "apple-depth-pro-research",
+                    "requires_non_commercial_ok": True,
+                    "runtime_available": None,
+                    "status": "research_ack_required",
+                }
+            )
         for field, keys, roots in (
             ("input_dir", ("input_dir", "inputDir"), ALLOWED_INPUT_ROOTS),
             ("output_dir", ("output_dir", "outputDir"), ALLOWED_OUTPUT_ROOTS),
@@ -2182,6 +2306,7 @@ def _lux_depth_readiness(args: Optional[Dict[str, Any]] = None) -> Dict[str, Any
         },
         "notes": notes,
         "canary_status": canary_status,
+        "selected_model": selected_model,
     }
 
 
@@ -3199,6 +3324,52 @@ def _canonical_depth_backend(value: Any) -> str:
     return DEPTH_BACKEND_ALIASES.get(backend, backend)
 
 
+def _portal_da3_model_key_for_registry_key(registry_key: str) -> str:
+    return PORTAL_DA3_MODEL_KEY_BY_REGISTRY_KEY.get(registry_key, registry_key)
+
+
+def _canonical_da3_model_key(value: Any) -> str:
+    raw = str(value or "").strip()
+    if not raw:
+        return PORTAL_DEFAULT_DA3_MODEL_KEY
+    registry_key = resolve_registry_key(raw)
+    if registry_key is None or registry_key not in PORTAL_DA3_MODEL_KEY_BY_REGISTRY_KEY:
+        return ""
+    return _portal_da3_model_key_for_registry_key(registry_key)
+
+
+def _da3_model_spec_for_portal_key(model_key: str) -> Optional[Any]:
+    if not model_key:
+        return None
+    spec = resolve_model_spec(model_key)
+    if spec is None or getattr(spec, "family", "") != "da3":
+        return None
+    return spec
+
+
+def _lux_da3_model_options() -> List[Dict[str, Any]]:
+    options: List[Dict[str, Any]] = []
+    for spec in visible_cli_model_specs():
+        if getattr(spec, "family", "") != "da3":
+            continue
+        value = _portal_da3_model_key_for_registry_key(str(spec.key))
+        usage_class = getattr(getattr(spec, "usage_class", None), "value", getattr(spec, "usage_class", "unknown"))
+        requires_non_commercial = bool(getattr(spec, "requires_non_commercial_ok", False))
+        options.append(
+            {
+                "value": value,
+                "canonical_key": spec.key,
+                "label": "DA3 Research" if requires_non_commercial else "DA3 Metric",
+                "repo_id": spec.repo_id,
+                "license_id": spec.license_id,
+                "usage_class": str(usage_class),
+                "requires_non_commercial_ok": requires_non_commercial,
+                "policy_posture": "research_only" if requires_non_commercial else "commercial_ok",
+            }
+        )
+    return options
+
+
 def _preset_descriptor(pipeline: str, preset_name: str) -> Optional[Dict[str, Any]]:
     presets = PRESET_CATALOG.get(pipeline) or []
     for preset in presets:
@@ -3710,12 +3881,15 @@ def _lux_config_metadata() -> Dict[str, Any]:
             "da3": {
                 "label": "DA3",
                 "kind": "depth_backend",
-                "operator_summary": ("Default managed depth backend for standard Lux runs."),
+                "operator_summary": (
+                    "Default managed depth backend for standard Lux runs. The portal default uses "
+                    "the Apache-2.0 DA3 metric model unless a research model is selected explicitly."
+                ),
                 "policy_posture": {
                     "code": "governed_default",
                     "label": "Governed default",
                     "detail": (
-                        "Treat the managed preset and backend-owned release" " policy as the operator source of truth."
+                        "Treat the selected DA3 model key and backend-owned release policy as the operator source of truth."
                     ),
                 },
                 "required_acknowledgments": [],
@@ -3730,6 +3904,8 @@ def _lux_config_metadata() -> Dict[str, Any]:
                 },
                 "model_provider_label": "Depth Anything",
                 "model_display_label": "Depth Anything v3",
+                "default_model_key": PORTAL_DEFAULT_DA3_MODEL_KEY,
+                "model_selector_field": "model_key",
             },
             "depth_pro": {
                 "label": "Depth Pro",
@@ -3828,6 +4004,9 @@ def _lux_config_metadata() -> Dict[str, Any]:
                 "model_display_label": "Portal stub",
             },
         },
+        "model_catalog": {
+            "da3": _lux_da3_model_options(),
+        },
         "debug_bundle_policy": {
             "acknowledgement_required": True,
             "destination_template": LUX_DEBUG_BUNDLE_DESTINATION_TEMPLATE,
@@ -3841,6 +4020,16 @@ def _lux_config_metadata() -> Dict[str, Any]:
             "sensitivity": "camera_metadata_and_source_images",
         },
         "fields": {
+            "model_key": {
+                "label": "DA3 Model",
+                "kind": "enum",
+                "default": PORTAL_DEFAULT_DA3_MODEL_KEY,
+                "helper_text": (
+                    "Selects the DA3 registry model. DA3 Metric is Apache-2.0; DA3 Research requires "
+                    "a non-commercial acknowledgment."
+                ),
+                "options": _lux_da3_model_options(),
+            },
             "reconstruction_tier": {
                 "label": "Reconstruction Tier",
                 "kind": "enum",
@@ -3966,6 +4155,11 @@ def _lux_estimate_summary(normalized_args: Dict[str, Any]) -> Dict[str, Any]:
         gpu_score += 1
         research_risk = "research_only"
         reasons.append("depth_pro_research_backend")
+    if str(normalized_args.get("depth_backend") or "") == "da3":
+        spec = _da3_model_spec_for_portal_key(str(normalized_args.get("model_key") or PORTAL_DEFAULT_DA3_MODEL_KEY))
+        if spec is not None and bool(getattr(spec, "requires_non_commercial_ok", False)):
+            research_risk = "research_only"
+            reasons.append("da3_research_model")
     if str(normalized_args.get("segmentation_backend") or "") == "sam2" and _as_bool(
         normalized_args.get("enable_segmentation"),
         False,
@@ -4108,6 +4302,24 @@ def _build_lux_config_preview(
         )
         depth_backend = str(defaults["depth_backend"])
     normalized_args["depth_backend"] = depth_backend
+
+    da3_model_key = ""
+    da3_model_spec: Optional[Any] = None
+    if depth_backend == "da3":
+        da3_model_key = _canonical_da3_model_key(_pick(args, "model_key", "modelKey", default=defaults["model_key"]))
+        da3_model_spec = _da3_model_spec_for_portal_key(da3_model_key)
+        if da3_model_spec is None:
+            errors.append(
+                _portal_issue(
+                    "model_key",
+                    "invalid_model_key",
+                    "The selected DA3 model is not supported.",
+                    suggestion="Choose da3-metric for Apache-2.0 usage or da3-research with a non-commercial acknowledgment.",
+                )
+            )
+            da3_model_key = str(defaults["model_key"])
+            da3_model_spec = _da3_model_spec_for_portal_key(da3_model_key)
+        normalized_args["model_key"] = da3_model_key
 
     depth_device = str(
         _pick(args, "depth_device", "depthDevice", default=defaults["depth_device"]) or defaults["depth_device"]
@@ -4524,6 +4736,21 @@ def _build_lux_config_preview(
                     suggestion="Acknowledge the Apple Depth Pro research license to continue.",
                 )
             )
+
+    if (
+        depth_backend == "da3"
+        and da3_model_spec is not None
+        and bool(getattr(da3_model_spec, "requires_non_commercial_ok", False))
+        and not normalized_args["non_commercial_ok"]
+    ):
+        errors.append(
+            _portal_issue(
+                "non_commercial_ok",
+                "da3_model_non_commercial_required",
+                "The selected DA3 research model requires a non-commercial acknowledgment.",
+                suggestion="Acknowledge non-commercial use or switch the DA3 model to da3-metric.",
+            )
+        )
 
     if "v3.1" in str(normalized_args["preset"]).lower() and not normalized_args["non_commercial_ok"]:
         errors.append(
@@ -6971,6 +7198,18 @@ def _argv_from_request(
             )
         )
         preset = str(_pick(args, "preset", default="premium") or "premium").strip() or "premium"
+        model_key = ""
+        da3_model_spec: Optional[Any] = None
+        if backend == "da3":
+            model_key = _canonical_da3_model_key(
+                _pick(
+                    args,
+                    "model_key",
+                    "modelKey",
+                    default=PORTAL_DEFAULT_DA3_MODEL_KEY,
+                )
+            )
+            da3_model_spec = _da3_model_spec_for_portal_key(model_key)
         depth_device_raw = _pick(args, "depth_device", "depthDevice")
         depth_device = str(depth_device_raw).strip() if depth_device_raw is not None else ""
         save_float_depth = _pick(
@@ -7109,6 +7348,18 @@ def _argv_from_request(
             raise _PortalValidationReasonError("Invalid quality_tier", reason="invalid_quality_tier")
         if backend not in ALLOWED_BACKENDS:
             raise _PortalValidationReasonError("Invalid depth_backend", reason="invalid_depth_backend")
+        if backend == "da3" and da3_model_spec is None:
+            raise _PortalValidationReasonError("Invalid model_key", reason="invalid_model_key")
+        if (
+            backend == "da3"
+            and da3_model_spec is not None
+            and bool(getattr(da3_model_spec, "requires_non_commercial_ok", False))
+            and not _as_bool(_pick(args, "non_commercial_ok", "nonCommercialOk", default=False), default=False)
+        ):
+            raise _PortalValidationReasonError(
+                "DA3 model requires non-commercial acknowledgment",
+                reason="da3_model_non_commercial_required",
+            )
         if segmentation_backend not in ALLOWED_SEGMENTATION_BACKENDS:
             raise _PortalValidationReasonError(
                 "Invalid segmentation_backend",
@@ -7316,6 +7567,8 @@ def _argv_from_request(
 
         if depth_device:
             argv.extend(["--depth-device", str(depth_device)])
+        if backend == "da3":
+            argv.extend(["--model-key", model_key])
 
         argv.extend(
             [

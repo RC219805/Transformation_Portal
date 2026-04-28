@@ -21,8 +21,8 @@ Installs the automated repository organization system, including the standard re
 ### `install_da3_runtime.sh`
 
 Bootstraps the repo-local Depth Anything 3 subprocess runtime used by
-the auto-discovered `./.venv-da3/bin/python` contract and by explicit
-`--da3-python` overrides.
+the auto-discovered `./.runtime/Depth-Anything-3/.venv-da3/bin/python`
+contract and by explicit `--da3-python` overrides.
 
 **Usage:**
 ```bash
@@ -31,10 +31,20 @@ the auto-discovered `./.venv-da3/bin/python` contract and by explicit
 
 **What it does:**
 - Clones Depth Anything 3 into `.runtime/Depth-Anything-3` if it is missing
-- Synchronizes that checkout to the validated default ref unless `--ref` overrides it
+- Fetches the validated PR #110 runtime-contract ref by default, then synchronizes
+  the checkout to the pinned commit unless `--ref` / `DA3_RUNTIME_REF` and
+  `--fetch-ref` / `DA3_RUNTIME_FETCH_REF` override it
 - Resolves a Python 3.11+ bootstrap interpreter (preferring the repo `.venv` when available)
-- Creates the isolated DA3 venv at `./.venv-da3`
-- Installs a pinned DA3-compatible dependency set without upstream `xformers`
+- Creates the isolated DA3 venv at `.runtime/Depth-Anything-3/.venv-da3`
+- Installs the pinned DA3-compatible baseline dependency profile without
+  `pycolmap` or `xformers`
+- Supports explicit `colmap` and `xformers` profiles when those optional
+  feature lanes are requested. `pycolmap` is pinned by the script. `xformers`
+  is intentionally operator-managed by default because compatible wheels vary
+  by torch/platform; set `DA3_XFORMERS_SPEC` to a pinned pip spec when your
+  environment has a known-good wheel.
+- Uses the PR #110-style dependency contract for the default ref: NumPy 2,
+  optional `pycolmap`, optional `xformers`, and baseline `open3d`
 - Captures a runtime package snapshot at `.runtime/da3-pip-freeze.txt`
 - Runs the DA3 worker readiness check used by the subprocess adapter
 

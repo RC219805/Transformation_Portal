@@ -907,13 +907,13 @@ class TestCLIConfiguration:
                     "--output-dir",
                     str(tmp_path / "output"),
                     "--da3-python",
-                    "./.venv-da3/bin/python",
+                    "./.runtime/Depth-Anything-3/.venv-da3/bin/python",
                     *DEFAULT_APACHE_MODEL_ARGS,
                 ],
             )
 
         assert captured_config is not None
-        assert captured_config.da3_python_executable == "./.venv-da3/bin/python"
+        assert captured_config.da3_python_executable == "./.runtime/Depth-Anything-3/.venv-da3/bin/python"
 
     def test_raw_python_flag_sets_config(self, tmp_path):
         """--raw-python should be forwarded into EnhanceConfig."""

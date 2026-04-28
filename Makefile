@@ -162,7 +162,7 @@ repair-core-venv:
 	@"$(PY)" -m pip install -e . --no-deps
 	@"$(PY)" -m pip check
 	@echo "Repo .venv repaired."
-	@echo "Reminder: install Depth Anything 3 into .venv-da3 with ./scripts/setup/install_da3_runtime.sh"
+	@echo "Reminder: install Depth Anything 3 into .runtime/Depth-Anything-3/.venv-da3 with ./scripts/setup/install_da3_runtime.sh"
 
 # ML Layer Install Targets
 # These support fine-grained ML capability installation per the layered strategy.

@@ -158,7 +158,9 @@ class TestEffectiveDa3RuntimeResolution:
 
         monkeypatch.setattr(config_resolver, "__file__", str(module_path))
 
-        assert config_resolver._repo_local_da3_python_path() == (tmp_path / ".venv-da3" / "bin" / "python")
+        assert config_resolver._repo_local_da3_python_path() == (
+            tmp_path / ".runtime" / "Depth-Anything-3" / ".venv-da3" / "bin" / "python"
+        )
 
     def test_prefers_explicit_config(self, monkeypatch, tmp_path):
         """Explicit config should win over env and repo-local discovery."""

@@ -5,6 +5,7 @@ export function createPortalConfigState() {
     outputDir: "./output/lux_depth_v3_apex",
     qualityTier: "premium",
     depthBackend: "da3",
+    modelKey: "da3-metric",
     depthDevice: "cpu",
     segmentation: {
       enable: true,
@@ -79,7 +80,8 @@ export function createPortalMetadataState() {
     estimate_bands: {},
     debug_bundle_policy: {},
     advanced_sections: [],
-    backend_catalog: {}
+    backend_catalog: {},
+    model_catalog: {}
   };
 }
 
