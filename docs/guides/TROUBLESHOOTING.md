@@ -394,7 +394,7 @@ top -l 1 | grep PhysMem  # macOS
 
 1. **Check documentation**:
    - [SETUP_GUIDE.md](SETUP_GUIDE.md) - Detailed installation
-   - [README.md](../README.md) - Feature overview
+   - [README.md](../../README.md) - Feature overview
    - [PIPELINE_OPERATIONS_GUIDE.md](../pipeline_docs/PIPELINE_OPERATIONS_GUIDE.md) - Usage examples
 
 2. **Run diagnostics**:
