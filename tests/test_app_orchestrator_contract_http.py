@@ -11,7 +11,6 @@ import importlib
 import json
 import logging
 import re
-import sys
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
@@ -108,10 +107,6 @@ def _reset_orchestrator_globals() -> None:
 def _client_fixture() -> TestClient:
     with TestClient(orchestrator_app.app, headers={"x-api-key": "contract-secret"}) as test_client:
         yield test_client
-
-
-def _mark_da3_runtime_available(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(orchestrator_app, "_resolve_lux_depth_canary_runtime", lambda: Path(sys.executable))
 
 
 def test_ready_keeps_non_enveloped_shape(client: TestClient) -> None:
@@ -1295,6 +1290,7 @@ def test_lux_jobs_dispatch_accepts_custom_manual_preset(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
+    mark_da3_runtime_available: None,
     jobs_path: str,
     expected_events_prefix: str,
 ) -> None:
@@ -1306,7 +1302,6 @@ def test_lux_jobs_dispatch_accepts_custom_manual_preset(
         job.finished_at = now
 
     monkeypatch.setattr(orchestrator_app, "_run_job", fake_run_job)
-    _mark_da3_runtime_available(monkeypatch)
     input_dir = (tmp_path / "manual-input").resolve()
     output_dir = (tmp_path / "manual-output").resolve()
     input_dir.mkdir(parents=True, exist_ok=True)
@@ -2617,6 +2612,7 @@ def test_archive_gate_pipeline_submission_reports_missing_archive_root_on_root_f
 def test_create_job_preserves_raw_request_and_internal_execution_args(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
+    mark_da3_runtime_available: None,
 ) -> None:
     async def fake_run_job(job, _argv):  # noqa: ANN001
         job.state = "succeeded"
@@ -2626,7 +2622,6 @@ def test_create_job_preserves_raw_request_and_internal_execution_args(
         job.finished_at = now
 
     monkeypatch.setattr(orchestrator_app, "_run_job", fake_run_job)
-    _mark_da3_runtime_available(monkeypatch)
 
     response = client.post(
         "/v1/jobs",
@@ -3020,8 +3015,8 @@ def test_v1_jobs_rejects_when_max_concurrent_jobs_reached(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
     tmp_path,
+    mark_da3_runtime_available: None,
 ) -> None:
-    _mark_da3_runtime_available(monkeypatch)
     # Use per-test isolated directories under tmp_path so the test stays
     # parallel-safe under pytest-xdist (no shared repo-root paths).
     previous_limit = orchestrator_app.MAX_CONCURRENT_JOBS
@@ -3174,7 +3169,12 @@ def test_http_exception_handler_preserves_safe_413_detail_for_v1_requests() -> N
     assert body["error"]["details"] == {"path": "/v1/jobs"}
 
 
-def test_job_events_stream_emits_state_log_progress_artifact_done(client: TestClient, monkeypatch, tmp_path) -> None:
+def test_job_events_stream_emits_state_log_progress_artifact_done(
+    client: TestClient,
+    monkeypatch,
+    tmp_path,
+    mark_da3_runtime_available: None,
+) -> None:
     async def fake_run_job(job, _argv):  # noqa: ANN001
         job.state = "running"
         job.started_at = orchestrator_app._now()
@@ -3221,7 +3221,6 @@ def test_job_events_stream_emits_state_log_progress_artifact_done(client: TestCl
         job.finished_at = now
 
     monkeypatch.setattr(orchestrator_app, "_run_job", fake_run_job)
-    _mark_da3_runtime_available(monkeypatch)
 
     # Use per-test isolated paths so the SSE stream test stays parallel-safe
     # under pytest-xdist (no shared repo-root directories).

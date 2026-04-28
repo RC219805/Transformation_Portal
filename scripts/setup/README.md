@@ -39,7 +39,10 @@ contract and by explicit `--da3-python` overrides.
 - Installs the pinned DA3-compatible baseline dependency profile without
   `pycolmap` or `xformers`
 - Supports explicit `colmap` and `xformers` profiles when those optional
-  feature lanes are requested
+  feature lanes are requested. `pycolmap` is pinned by the script. `xformers`
+  is intentionally operator-managed by default because compatible wheels vary
+  by torch/platform; set `DA3_XFORMERS_SPEC` to a pinned pip spec when your
+  environment has a known-good wheel.
 - Uses the PR #110-style dependency contract for the default ref: NumPy 2,
   optional `pycolmap`, optional `xformers`, and baseline `open3d`
 - Captures a runtime package snapshot at `.runtime/da3-pip-freeze.txt`

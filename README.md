@@ -176,7 +176,10 @@ The repo-local DA3 setup script pins the upstream checkout to a validated ref un
 `.runtime/da3-pip-freeze.txt` snapshot for debugging/provenance, and leaves the
 main repo `.venv` unchanged. The default DA3 contract uses the PR #110-style
 packaging split: NumPy 2, baseline `open3d`, and optional `pycolmap` / `xformers`
-profiles rather than upstream `.[all]`. Use `--da3-python` only when you want to
+profiles rather than upstream `.[all]`. `pycolmap` is pinned by the setup script;
+`xformers` is intentionally operator-managed by default because compatible wheels
+vary by torch/platform. Set `DA3_XFORMERS_SPEC` to a pinned pip spec for an
+environment with a known-good wheel. Use `--da3-python` only when you want to
 override that repo-local runtime. Explicit `--depth-backend da3` requests are now
 strict: if DA3 cannot be initialized, the command raises an actionable error
 instead of silently downgrading to DA2.

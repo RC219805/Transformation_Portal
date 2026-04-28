@@ -78,10 +78,6 @@ def _portal_html_content() -> str:
     return orchestrator_app._get_portal_asset_bundle().html
 
 
-def _mark_da3_runtime_available(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(orchestrator_app, "_resolve_lux_depth_canary_runtime", lambda: Path(sys.executable))
-
-
 @lru_cache(maxsize=1)
 def _portal_asset_urls_from_html() -> set[str]:
     return set(re.findall(r'["\'](/portal/assets/[^"\']+)["\']', _portal_html_content()))
@@ -5670,6 +5666,7 @@ def test_create_job_uses_preview_errors_before_readiness_preflight(
 
 def test_create_job_preserves_raw_request_and_stores_effective_request(
     monkeypatch: pytest.MonkeyPatch,
+    mark_da3_runtime_available: None,
 ) -> None:
     async def fake_run_job(job, _argv):  # noqa: ANN001
         job.state = "succeeded"
@@ -5679,7 +5676,6 @@ def test_create_job_preserves_raw_request_and_stores_effective_request(
         job.finished_at = now
 
     monkeypatch.setattr(orchestrator_app, "_run_job", fake_run_job)
-    _mark_da3_runtime_available(monkeypatch)
 
     try:
         response = asyncio.run(
@@ -5743,8 +5739,10 @@ def test_create_job_archive_gate_rejects_unsafe_input_dir_before_argv() -> None:
     assert orchestrator_app.JOBS == {}
 
 
-def test_create_job_rejects_when_concurrency_limit_is_reached(monkeypatch: pytest.MonkeyPatch) -> None:
-    _mark_da3_runtime_available(monkeypatch)
+def test_create_job_rejects_when_concurrency_limit_is_reached(
+    monkeypatch: pytest.MonkeyPatch,
+    mark_da3_runtime_available: None,
+) -> None:
     previous_limit = orchestrator_app.MAX_CONCURRENT_JOBS
     try:
         orchestrator_app.MAX_CONCURRENT_JOBS = 1

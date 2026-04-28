@@ -21,6 +21,7 @@ FETCH_REF="${DA3_RUNTIME_FETCH_REF:-${DEFAULT_FETCH_REF}}"
 FETCH_LOCAL_REF="refs/remotes/da3-runtime/fetch-ref"
 DA3_RUNTIME_CONTRACT="${DA3_RUNTIME_CONTRACT:-pr110-numpy2-optional-colmap-xformers}"
 DA3_NUMPY_SPEC="${DA3_NUMPY_SPEC:-numpy>=2.0,<3}"
+DA3_XFORMERS_SPEC="${DA3_XFORMERS_SPEC:-xformers}"
 DA3_PROFILE="${DA3_PROFILE:-baseline}"
 DRY_RUN=false
 SKIP_VERIFY=false
@@ -47,6 +48,11 @@ OPTIONS:
   --dry-run             Print commands without executing them
   --skip-verify         Skip the DA3 worker readiness check
   --help                Show this help text
+
+Environment:
+  DA3_XFORMERS_SPEC     Optional xformers pip spec. The default "xformers" is
+                        intentionally unpinned and operator-managed because
+                        compatible wheels vary by torch/platform.
 EOF
 }
 
@@ -242,10 +248,15 @@ if [[ "${DA3_INSTALL_PYCOLMAP}" == "1" ]]; then
     OPTIONAL_DEPS+=("pycolmap==4.0.2")
 fi
 if [[ "${DA3_INSTALL_XFORMERS}" == "1" ]]; then
-    OPTIONAL_DEPS+=("xformers")
+    OPTIONAL_DEPS+=("${DA3_XFORMERS_SPEC}")
+    if [[ "${DA3_XFORMERS_SPEC}" == "xformers" ]]; then
+        log "DA3 optional xformers spec: xformers (operator-managed; intentionally unpinned by default for platform wheel resolution)"
+    else
+        log "DA3 optional xformers spec: ${DA3_XFORMERS_SPEC} (operator-provided override)"
+    fi
 fi
 
-log "Installing pinned DA3-compatible ${DA3_PROFILE} dependencies"
+log "Installing DA3 ${DA3_PROFILE} dependency profile (baseline stack pinned; optional profile specs shown above)"
 if [[ ${#OPTIONAL_DEPS[@]} -gt 0 ]]; then
     run "${PYTHON_BIN}" -m pip install "${BASE_DEPS[@]}" "${OPTIONAL_DEPS[@]}"
 else

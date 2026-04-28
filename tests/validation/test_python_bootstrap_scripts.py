@@ -475,6 +475,10 @@ def test_install_da3_runtime_optional_profiles_add_requested_deps(tmp_path: Path
     assert "DA3 runtime ref: custom-da3-ref" in result.stdout
     assert "DA3 runtime fetch ref: refs/heads/custom-contract" in result.stdout
     assert "DA3 dependency profile: colmap,xformers" in result.stdout
+    assert (
+        "DA3 optional xformers spec: xformers "
+        "(operator-managed; intentionally unpinned by default for platform wheel resolution)"
+    ) in result.stdout
     pip_install_lines = "\n".join(_dry_run_pip_install_lines(result.stdout))
     assert "pycolmap==4.0.2" in pip_install_lines
     assert "xformers" in pip_install_lines

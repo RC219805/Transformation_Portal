@@ -24,7 +24,9 @@ or if PYTHONPATH is set correctly.
 from __future__ import annotations
 
 import ast
+import importlib
 import os
+import sys
 from collections.abc import Callable
 from itertools import product
 from pathlib import Path
@@ -41,6 +43,13 @@ def pytest_configure(config):
     """
     # Enable synthetic backend fallback for tests (safety guard for production)
     os.environ["TP_ALLOW_SYNTHETIC_FALLBACK"] = "1"
+
+
+@pytest.fixture
+def mark_da3_runtime_available(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Make selected-DA3 dispatch tests independent of local DA3 installation."""
+    orchestrator_app = importlib.import_module("app")
+    monkeypatch.setattr(orchestrator_app, "_resolve_lux_depth_canary_runtime", lambda: Path(sys.executable))
 
 
 def _eval_markexpr_ast(node: ast.AST, values: dict[str, bool]) -> bool:

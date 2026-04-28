@@ -29,7 +29,6 @@ from __future__ import annotations
 import importlib
 import os
 import signal
-import sys
 from pathlib import Path
 from typing import Iterator
 
@@ -42,7 +41,7 @@ orchestrator_app = importlib.import_module("app")
 
 
 @pytest.fixture(autouse=True)
-def _reset_orchestrator_state(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+def _reset_orchestrator_state(tmp_path: Path, mark_da3_runtime_available: None) -> Iterator[None]:
     previous_api_key = orchestrator_app.API_KEY_SECRET
     previous_enforce = orchestrator_app.ENFORCE_JOB_API_KEY
     previous_input_roots = orchestrator_app.ALLOWED_INPUT_ROOTS
@@ -60,7 +59,6 @@ def _reset_orchestrator_state(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -
     orchestrator_app.ALLOWED_INPUT_ROOTS = [allowed_root]
     orchestrator_app.ALLOWED_OUTPUT_ROOTS = [allowed_root]
     orchestrator_app.ALLOWED_PATH_ROOTS = [allowed_root]
-    monkeypatch.setattr(orchestrator_app, "_resolve_lux_depth_canary_runtime", lambda: Path(sys.executable))
     try:
         yield
     finally:
