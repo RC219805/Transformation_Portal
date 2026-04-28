@@ -902,11 +902,22 @@ class ArtifactStore:
 
         Returns:
             Cache size in MB.
+
+        Design notes:
+            This is advisory accounting. Concurrent store() calls may rename
+            temp files while this method walks artifacts/, so vanished entries
+            are skipped instead of failing an already committed write.
         """
         total_size = 0
         for path in self.artifacts_dir.rglob("*"):
-            if path.is_file():
+            try:
+                if not path.is_file():
+                    continue
+                if _is_artifact_temp_name(path.name):
+                    continue
                 total_size += path.stat().st_size
+            except OSError:
+                logger.debug("Skipping concurrently removed cache entry during size accounting: %s", path)
         return total_size / (1024 * 1024)
 
     def get_stats(self) -> Dict[str, Any]:

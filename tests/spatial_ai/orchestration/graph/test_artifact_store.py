@@ -304,6 +304,35 @@ class TestArtifactStore:
         assert size_mb > 0.0
         assert size_mb < 10.0  # Compressed, should be < 10MB
 
+    def test_cache_size_ignores_temp_files_that_disappear_during_accounting(
+        self, monkeypatch: pytest.MonkeyPatch, store: ArtifactStore
+    ):
+        """Advisory size accounting should not fail committed writes under concurrent renames."""
+        prefix_dir = store.artifacts_dir / "a4"
+        prefix_dir.mkdir(parents=True)
+        temp_file = prefix_dir / ".provenance_tmp_vanished.json"
+        temp_file.write_text("uncommitted", encoding="utf-8")
+
+        assert store.get_cache_size_mb() == 0.0
+
+        class VanishingPath:
+            name = ".provenance_tmp_vanished.json"
+
+            def is_file(self) -> bool:
+                return True
+
+            def stat(self) -> object:
+                raise FileNotFoundError(self.name)
+
+        class FakeArtifactsDir:
+            def rglob(self, pattern: str) -> object:
+                assert pattern == "*"
+                return iter([VanishingPath()])
+
+        monkeypatch.setattr(store, "artifacts_dir", FakeArtifactsDir())
+
+        assert store.get_cache_size_mb() == 0.0
+
     def test_two_level_directory_hierarchy(self, store: ArtifactStore, cache_dir: Path):
         """Test artifacts are stored in two-level directory hierarchy."""
         # Generate a key that starts with "ab" for testing directory structure
