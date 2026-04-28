@@ -8,7 +8,7 @@ existing wire-contract tests in
 routes end-to-end; these exercise the models in isolation so a regression
 is caught before it reaches the contract tests.
 
-Test fixtures use real shapes drawn from ``app.py:PRESET_CATALOG``,
+Test fixtures use real shapes drawn from ``PRESET_CATALOG``,
 ``_lux_config_metadata``, and ``_build_lux_config_preview``. If those
 helpers' wire shapes drift, these tests should fail loudly.
 """
@@ -31,13 +31,15 @@ from transformation_portal.api.v1 import (
     PresetsSinglePipelineData,
 )
 
+pytestmark = pytest.mark.unit
+
 # ---------------------------------------------------------------------------
 # PresetEntry — single preset within /v1/presets data
 # ---------------------------------------------------------------------------
 
 
 class TestPresetEntry:
-    """Mirrors entries in app.py:PRESET_CATALOG (line 1061)."""
+    """Mirrors entries in app.py:PRESET_CATALOG."""
 
     def test_real_premium_preset_from_catalog(self) -> None:
         # Real premium preset from app.py:PRESET_CATALOG.
@@ -82,9 +84,21 @@ class TestPresetEntry:
             stability="stable",
             description="d",
             is_research=False,
+            recommended_args={},
+            advanced_sections=[],
             future_field="not_yet_modelled",
         )
         assert preset.model_dump(mode="json")["future_field"] == "not_yet_modelled"
+
+    def test_recommended_args_and_advanced_sections_required(self) -> None:
+        with pytest.raises(ValidationError):
+            PresetEntry(
+                name="x",
+                label="x",
+                stability="stable",
+                description="d",
+                is_research=False,
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -140,6 +154,8 @@ class TestPresetsAllPipelinesData:
                             stability="stable",
                             description="d",
                             is_research=False,
+                            recommended_args={},
+                            advanced_sections=[],
                         ),
                     ],
                 ),
@@ -157,7 +173,7 @@ class TestPresetsAllPipelinesData:
 
 class TestConfigMetadataData:
     """Mirrors the contract-stable subset of _lux_config_metadata output
-    (app.py:3869), as asserted in
+    as asserted in
     tests/test_app_orchestrator_contract_http.py::test_config_metadata_contract_for_lux_depth_pipeline.
     """
 
@@ -218,22 +234,32 @@ class TestConfigMetadataData:
 
 class TestConfigPreviewData:
     """Mirrors the contract-stable subset of _build_config_preview output
-    (app.py:5190), as asserted in
+    as asserted in
     test_lux_config_preview_returns_execution_args_and_repair_warning_for_repo_local_shorthand.
     """
 
-    def test_empty_preview_accepted(self) -> None:
-        # All fields are Optional — different pipelines emit different subsets.
-        data = ConfigPreviewData()
+    def test_minimal_stable_wire_shape(self) -> None:
+        data = ConfigPreviewData(
+            pipeline="lux-depth-v3",
+            normalized_args={},
+            execution_args={},
+            argv_preview="",
+            field_errors=[],
+            field_warnings=[],
+            inactive_fields=[],
+            readiness={},
+            estimate_summary={},
+            debug_bundle_summary={},
+            next_best_action=None,
+        )
         dumped = data.model_dump(mode="json")
-        assert dumped["pipeline"] is None
-        assert dumped["field_errors"] is None
+        assert dumped["pipeline"] == "lux-depth-v3"
+        assert dumped["argv_preview"] == ""
+        assert dumped["next_best_action"] is None
 
     def test_realistic_lux_preview_shape(self) -> None:
         data = ConfigPreviewData(
             pipeline="lux-depth-v3",
-            field_warnings=[{"code": "repo_local_path_repaired", "field": "input_dir"}],
-            field_errors=[],
             normalized_args={
                 "input_dir": "./tests/fixtures/archive_small/archive_root",
                 "output_dir": "./tests/fixtures/portal_contract_output/x",
@@ -242,21 +268,61 @@ class TestConfigPreviewData:
                 "input_dir": "./tests/fixtures/archive_small/archive_root",
                 "output_dir": "./tests/fixtures/portal_contract_output/x",
             },
+            argv_preview="python -m transformation_portal.cli --input-dir ./tests/fixtures/archive_small/archive_root",
+            field_errors=[],
+            field_warnings=[{"code": "repo_local_path_repaired", "field": "input_dir"}],
+            inactive_fields=[],
             readiness={"ready": True},
+            estimate_summary={"runtime": "medium"},
+            debug_bundle_summary={"enabled": False},
+            next_best_action={
+                "action": "review_warning",
+                "field": "input_dir",
+                "label": "Resolve input dir",
+                "detail": "Review the repaired path.",
+                "tone": "warning",
+            },
         )
         dumped = data.model_dump(mode="json")
         assert dumped["field_warnings"][0]["code"] == "repo_local_path_repaired"
         assert dumped["execution_args"]["input_dir"].startswith("./tests/")
         assert dumped["readiness"]["ready"] is True
+        assert dumped["estimate_summary"]["runtime"] == "medium"
+        assert dumped["next_best_action"]["tone"] == "warning"
 
     def test_pipeline_specific_extras_pass_through(self) -> None:
         # Different pipelines emit pipeline-specific keys; extra="allow"
         # accommodates them without a model bump.
         data = ConfigPreviewData(
             pipeline="archive-gate-a",
+            normalized_args={},
+            execution_args={},
+            argv_preview="",
+            field_errors=[],
+            field_warnings=[],
+            inactive_fields=[],
+            readiness={},
+            estimate_summary={},
+            debug_bundle_summary={},
+            next_best_action=None,
             archive_index_summary={"rows_total": 100},
         )
         assert data.model_dump(mode="json")["archive_index_summary"]["rows_total"] == 100
+
+    def test_stable_wire_keys_required(self) -> None:
+        with pytest.raises(ValidationError):
+            ConfigPreviewData(
+                pipeline="lux-depth-v3",
+                normalized_args={},
+                execution_args={},
+                field_errors=[],
+                field_warnings=[],
+                inactive_fields=[],
+                readiness={},
+                estimate_summary={},
+                debug_bundle_summary={},
+                next_best_action=None,
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -336,7 +402,16 @@ class TestConfigEnvelopes:
             success=True,
             data=ConfigPreviewData(
                 pipeline="lux-depth-v3",
+                normalized_args={},
+                execution_args={},
+                argv_preview="",
+                field_errors=[],
                 field_warnings=[{"code": "warn"}],
+                inactive_fields=[],
+                readiness={},
+                estimate_summary={},
+                debug_bundle_summary={},
+                next_best_action=None,
             ),
         )
         dumped = env.model_dump(mode="json")

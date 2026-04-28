@@ -15,21 +15,21 @@ so ``response_model`` is **OpenAPI-only** — no runtime serialisation by
 FastAPI. Wire shapes are unchanged by this PR; the models exist to type
 the OpenAPI schema and provide a stable surface for typed callers.
 
-A note on conservative typing: ``_lux_config_metadata`` (app.py:3869) and
-``_build_lux_config_preview`` (app.py:4250) return deep, churning,
-pipeline-specific dicts. Fully typing every nested shape would chain this
-module to large swaths of pipeline logic and force a model bump on every
-internal change. The pragmatic choice here is to type the **stable
-top-level shape** and use ``dict[str, Any]`` (with ``extra="allow"``) for
-the inner pipeline-specific structures.
+A note on conservative typing: ``_lux_config_metadata`` and
+``_build_lux_config_preview`` return deep, churning, pipeline-specific
+dicts. Fully typing every nested shape would chain this module to large
+swaths of pipeline logic and force a model bump on every internal change.
+The pragmatic choice here is to type the **stable top-level shape** and use
+``dict[str, Any]`` (with ``extra="allow"``) for the inner
+pipeline-specific structures.
 
 ``ConfigPreviewRequest`` is defined for type-discipline / future use but is
 **not yet wired** as the handler parameter — same reasoning as
 ``JobCreateRequest`` (Phase 1.2 PR C). Wiring it would shift FastAPI's
 422 to the orchestrator's 400 envelope (the existing
-``RequestValidationError`` handler at app.py:7879 already does that
-conversion for /v[12]/* paths), but the conversion drops specific
-error-reason codes. That trade-off deserves its own PR.
+``RequestValidationError`` handler already does that conversion for
+/v[12]/* paths), but the conversion drops specific error-reason codes.
+That trade-off deserves its own PR.
 """
 
 from __future__ import annotations
@@ -48,7 +48,7 @@ from transformation_portal.api.v1.envelopes import ApiEnvelope
 class PresetEntry(BaseModel):
     """A single preset within a pipeline's preset catalog.
 
-    Mirrors the dicts in ``app.py:PRESET_CATALOG`` (line 1061). The
+    Mirrors the dicts in ``app.py:PRESET_CATALOG``. The
     ``recommended_args`` payload is pipeline-specific and modelled as
     ``dict[str, Any]`` rather than a typed sub-class — the keys are the
     union of every pipeline-specific dispatch arg, and adding new presets
@@ -62,8 +62,8 @@ class PresetEntry(BaseModel):
     stability: str
     description: str
     is_research: bool
-    recommended_args: dict[str, Any] = Field(default_factory=dict)
-    advanced_sections: list[str] = Field(default_factory=list)
+    recommended_args: dict[str, Any]
+    advanced_sections: list[str]
 
 
 class PipelinePresetGroup(BaseModel):
@@ -109,7 +109,7 @@ PresetsData = Union[PresetsSinglePipelineData, PresetsAllPipelinesData]
 class ConfigMetadataData(BaseModel):
     """Payload for ``tp.orchestrator.config_metadata.v1``.
 
-    Top-level shape from ``_lux_config_metadata`` (app.py:3869). The nested
+    Top-level shape from ``_lux_config_metadata``. The nested
     structures (``fields``, ``backend_catalog``, ``model_catalog``,
     ``debug_bundle_policy``) carry pipeline-specific shapes that churn
     frequently — they're modelled as ``dict[str, Any]`` rather than
@@ -141,25 +141,29 @@ class ConfigMetadataData(BaseModel):
 class ConfigPreviewData(BaseModel):
     """Payload for ``tp.orchestrator.config_preview.v1``.
 
-    Output shape from ``_build_config_preview`` (app.py:5190), which
-    delegates per pipeline to ``_build_lux_config_preview`` or
-    ``_build_archive_config_preview``. Each pipeline produces a different
-    subset of top-level fields; nothing is universally required.
+    Output shape from ``_build_config_preview``, which delegates per
+    pipeline to ``_build_lux_config_preview`` or
+    ``_build_archive_config_preview``.
 
-    The fields documented here are common across pipelines, sourced from
-    contract assertions in
-    ``tests/test_app_orchestrator_contract_http.py::test_lux_config_preview_returns_execution_args_and_repair_warning_for_repo_local_shorthand``.
-    All are Optional; ``extra="allow"`` accommodates pipeline-specific keys.
+    The preview contract has a stable top-level shape across supported
+    pipelines. Model those stable keys explicitly so generated OpenAPI
+    matches the wire response, while keeping nested dict/list contents
+    intentionally lenient and still allowing pipeline-specific extra keys.
     """
 
     model_config = ConfigDict(extra="allow")
 
-    pipeline: str | None = None
-    field_errors: list[dict[str, Any]] | None = None
-    field_warnings: list[dict[str, Any]] | None = None
-    normalized_args: dict[str, Any] | None = None
-    execution_args: dict[str, Any] | None = None
-    readiness: dict[str, Any] | None = None
+    pipeline: str
+    normalized_args: dict[str, Any]
+    execution_args: dict[str, Any]
+    argv_preview: str
+    field_errors: list[dict[str, Any]]
+    field_warnings: list[dict[str, Any]]
+    inactive_fields: list[dict[str, Any]]
+    readiness: dict[str, Any]
+    estimate_summary: dict[str, Any]
+    debug_bundle_summary: dict[str, Any]
+    next_best_action: dict[str, Any] | None
 
 
 # ---------------------------------------------------------------------------
