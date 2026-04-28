@@ -6622,8 +6622,12 @@ class EnhanceOrchestrator:
         if not isinstance(timing_ms, Mapping):
             return []
 
+        raw_sam2_runtime_ms = timing_ms.get("backend_segment")
+        if raw_sam2_runtime_ms is None or runtime_s is None:
+            return []
+
         try:
-            sam2_runtime_ms = float(timing_ms.get("backend_segment"))
+            sam2_runtime_ms = float(raw_sam2_runtime_ms)
             total_runtime_ms = float(runtime_s) * 1000.0
         except (TypeError, ValueError):
             return []
