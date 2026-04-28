@@ -174,8 +174,9 @@ Drill 1 - test mask semantics with adversarial fixtures:
 
 Drill 2 - centralize APEX codes and artifact writing:
 
-- Target files: `lux_depth_v3.apex_codes`, eval helpers, and CLI artifact
-  writers.
+- Target files: `src/transformation_portal/lux_depth_v3/apex_codes.py`
+  (`transformation_portal.lux_depth_v3.apex_codes`), eval helpers, and CLI
+  artifact writers.
 - Expected behavior: stable warning/failure codes live in the canonical module
   and are re-exported only for compatibility; JSON artifacts use the repo
   canonical helper with `allow_nan=False`, deterministic key order, UTF-8, and

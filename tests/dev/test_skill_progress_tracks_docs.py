@@ -73,3 +73,11 @@ def test_skill_progress_tracks_lock_reviewed_skill_names() -> None:
 
     for heading in EXPECTED_TRACKS:
         assert f"## {heading}" in text
+
+
+def test_apex_track_uses_canonical_apex_codes_import_path() -> None:
+    section = _section(_read(TRACKS_PATH), "APEX Evidence Semantics")
+
+    assert "`transformation_portal.lux_depth_v3.apex_codes`" in section
+    assert "`src/transformation_portal/lux_depth_v3/apex_codes.py`" in section
+    assert "`lux_depth_v3.apex_codes`" not in section
