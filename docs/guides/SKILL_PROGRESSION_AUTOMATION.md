@@ -108,6 +108,11 @@ Automation prose should turn that into:
 
 The helper does not write training tasks itself. It provides the ranked evidence for the automation prompt to summarize.
 
+When a ranked theme recurs, map it to the concrete drills in
+[Skill Progress Tracks](SKILL_PROGRESS_TRACKS.md). The tracks turn the top
+automation themes into repo-backed practice tasks with evidence anchors,
+acceptance tests, and review checklists.
+
 ## Memory and Failure Handling
 
 Memory remains external to the repo:
