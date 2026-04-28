@@ -10,7 +10,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Optional
 
-_REPO_LOCAL_DA3_PYTHON_PARTS = (".venv-da3", "bin", "python")
+_REPO_LOCAL_DA3_PYTHON_PARTS = (".runtime", "Depth-Anything-3", ".venv-da3", "bin", "python")
 REPO_LOCAL_DA3_PYTHON = f"./{'/'.join(_REPO_LOCAL_DA3_PYTHON_PARTS)}"
 
 

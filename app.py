@@ -1645,7 +1645,7 @@ def _resolve_lux_depth_canary_runtime() -> Optional[Path]:
         if candidate.exists():
             return candidate.resolve()
 
-    repo_local = REPO_ROOT / ".venv-da3" / "bin" / "python"
+    repo_local = REPO_ROOT / ".runtime" / "Depth-Anything-3" / ".venv-da3" / "bin" / "python"
     if repo_local.exists():
         return repo_local.resolve()
     return None

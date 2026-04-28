@@ -36,6 +36,10 @@ def _copy_repo_file(source: Path, destination: Path) -> Path:
     return destination
 
 
+def _dry_run_pip_install_lines(output: str) -> list[str]:
+    return [line for line in output.splitlines() if " -m pip install " in line]
+
+
 def _write_fake_python(path: Path, *, version: str, real_python: str) -> Path:
     version_parts = version.split(".")
     major = int(version_parts[0])
@@ -388,8 +392,6 @@ def test_install_da3_runtime_uses_resolved_python_for_venv_creation(tmp_path: Pa
             "--skip-verify",
             "--checkout-dir",
             str(repo_root / ".runtime" / "Depth-Anything-3"),
-            "--venv-dir",
-            str(repo_root / ".venv-da3"),
         ],
         cwd=repo_root,
         env=env,
@@ -399,8 +401,83 @@ def test_install_da3_runtime_uses_resolved_python_for_venv_creation(tmp_path: Pa
     )
 
     assert result.returncode == 0, result.stdout + result.stderr
+    default_venv = repo_root / ".runtime" / "Depth-Anything-3" / ".venv-da3"
     assert f"Using bootstrap interpreter: {python311}" in result.stdout
-    assert f"+ {python311} -m venv {repo_root / '.venv-da3'}" in result.stdout
+    assert f"+ {python311} -m venv {default_venv}" in result.stdout
+    assert "DA3 runtime contract: pr110-numpy2-optional-colmap-xformers" in result.stdout
+    assert "DA3 runtime ref: 95a2adea1a8180104bf51937409034bdec70a244" in result.stdout
+    assert "DA3 runtime fetch ref: refs/pull/110/head" in result.stdout
+    assert "DA3 dependency profile: baseline" in result.stdout
+    assert "DA3 NumPy spec: numpy>=2.0,<3" in result.stdout
+    assert "Preserving DA3 venv during checkout clean: .venv-da3" in result.stdout
+    assert f"+ git -C {repo_root / '.runtime' / 'Depth-Anything-3'} clean -fd -e .venv-da3" in result.stdout
+
+
+def test_install_da3_runtime_baseline_profile_omits_optional_deps(tmp_path: Path) -> None:
+    repo_root = tmp_path / "repo"
+    script_path = _copy_repo_file(DA3_RUNTIME_INSTALLER_PATH, repo_root / "scripts" / "setup" / "install_da3_runtime.sh")
+    _copy_repo_file(RESOLVER_PATH, repo_root / "scripts" / "setup" / "resolve_python_311.sh")
+
+    fakebin = tmp_path / "fakebin"
+    _write_fake_python(fakebin / "python3.11", version="3.11.15", real_python=sys.executable)
+    env = {**os.environ, "PATH": f"{fakebin}:/usr/bin:/bin"}
+    result = subprocess.run(
+        [
+            "bash",
+            str(script_path),
+            "--dry-run",
+            "--skip-verify",
+        ],
+        cwd=repo_root,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    pip_install_lines = "\n".join(_dry_run_pip_install_lines(result.stdout))
+    assert "DA3 NumPy spec: numpy>=2.0,<3" in result.stdout
+    assert "numpy==1.26.4" not in pip_install_lines
+    assert "pycolmap==" not in pip_install_lines
+    assert "xformers" not in pip_install_lines
+
+
+def test_install_da3_runtime_optional_profiles_add_requested_deps(tmp_path: Path) -> None:
+    repo_root = tmp_path / "repo"
+    script_path = _copy_repo_file(DA3_RUNTIME_INSTALLER_PATH, repo_root / "scripts" / "setup" / "install_da3_runtime.sh")
+    _copy_repo_file(RESOLVER_PATH, repo_root / "scripts" / "setup" / "resolve_python_311.sh")
+
+    fakebin = tmp_path / "fakebin"
+    _write_fake_python(fakebin / "python3.11", version="3.11.15", real_python=sys.executable)
+    env = {**os.environ, "PATH": f"{fakebin}:/usr/bin:/bin"}
+    result = subprocess.run(
+        [
+            "bash",
+            str(script_path),
+            "--dry-run",
+            "--skip-verify",
+            "--profile",
+            "colmap,xformers",
+            "--ref",
+            "custom-da3-ref",
+            "--fetch-ref",
+            "refs/heads/custom-contract",
+        ],
+        cwd=repo_root,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "DA3 runtime ref: custom-da3-ref" in result.stdout
+    assert "DA3 runtime fetch ref: refs/heads/custom-contract" in result.stdout
+    assert "DA3 dependency profile: colmap,xformers" in result.stdout
+    pip_install_lines = "\n".join(_dry_run_pip_install_lines(result.stdout))
+    assert "pycolmap==4.0.2" in pip_install_lines
+    assert "xformers" in pip_install_lines
 
 
 def test_install_raw_runtime_uses_resolved_python_for_venv_creation(tmp_path: Path) -> None:

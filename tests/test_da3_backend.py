@@ -152,7 +152,7 @@ def test_da3_backend_relative_python_executable_anchors_to_repo_root(monkeypatch
     """Relative DA3 Python paths should anchor to the discovered repo root."""
     repo_root = tmp_path / "repo"
     repo_root.mkdir()
-    python_executable = repo_root / ".venv-da3" / "bin" / "python"
+    python_executable = repo_root / ".runtime" / "Depth-Anything-3" / ".venv-da3" / "bin" / "python"
     python_executable.parent.mkdir(parents=True)
     python_executable.write_text("#!/bin/sh\n", encoding="utf-8")
 
@@ -164,7 +164,7 @@ def test_da3_backend_relative_python_executable_anchors_to_repo_root(monkeypatch
     backend = DA3Backend(
         _licensed_da3_config(
             depth_device="cpu",
-            da3_python_executable="./.venv-da3/bin/python",
+            da3_python_executable="./.runtime/Depth-Anything-3/.venv-da3/bin/python",
         )
     )
 

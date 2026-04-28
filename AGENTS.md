@@ -154,7 +154,7 @@ Quick reference for common workflows and commands in this repo.
 - `./scripts/pipelines/run_800_picacho_efficientsam_validation.sh` run the 800 Picacho EfficientSAM production validation pass with DA3, Materials V3, V2 tone mapping, and PBR enabled.
 - `./scripts/pipelines/run_sealed_eval_72h.sh --archive-index <path> --archive-root <path>` run sealed pre/post fixity verification around an optional eval command and emit an audit package.
 - `./scripts/pipelines/hdr_production_pipeline.sh` interactive HDR video mastering workflow that pairs source footage with a 3D LUT and writes web deliverables.
-- `./scripts/setup/install_da3_runtime.sh` install the repo-local DA3 subprocess runtime (validated `.runtime/Depth-Anything-3` ref + auto-discovered `./.venv-da3/bin/python` contract + `.runtime/da3-pip-freeze.txt` snapshot).
+- `./scripts/setup/install_da3_runtime.sh` install the repo-local DA3 subprocess runtime (validated `.runtime/Depth-Anything-3` ref + auto-discovered `./.runtime/Depth-Anything-3/.venv-da3/bin/python` contract + `.runtime/da3-pip-freeze.txt` snapshot).
 - `./scripts/setup/install_depth_pro_runtime.sh` install the repo-local Depth Pro subprocess runtime (pinned `torch==2.7.1` / `torchvision==0.22.1` / `numpy==1.26.4` + pinned Apple `ml-depth-pro` ref + auto-discovered `./.venv-depth-pro/bin/python` contract + `.runtime/depth-pro-pip-freeze.txt` snapshot).
 - `./scripts/setup/install_raw_runtime.sh` install the repo-local RAW subprocess runtime (auto-discovered `./.venv-raw/bin/python` contract + `.runtime/raw-pip-freeze.txt` snapshot).
 - `./scripts/setup/run_frontdoor_local.sh` start the local managed frontdoor only when the backend is ready, auth env is set, and `localhost:3000` is free.

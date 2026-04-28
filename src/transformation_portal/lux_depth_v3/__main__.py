@@ -352,7 +352,8 @@ def main(
         help=(
             "Optional Python executable for an isolated Depth Anything 3 environment. "
             "Use this to keep DA3 out of the main Transformation Portal venv or to override "
-            "the auto-discovered repo-local runtime at ./.venv-da3/bin/python "
+            "the auto-discovered repo-local runtime at "
+            "./.runtime/Depth-Anything-3/.venv-da3/bin/python "
             "(bootstrap with ./scripts/setup/install_da3_runtime.sh)."
         ),
     ),
