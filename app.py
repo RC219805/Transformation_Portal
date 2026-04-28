@@ -42,10 +42,13 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 from starlette.responses import Response, StreamingResponse
 
 from transformation_portal.api.v1 import (
+    ConfigMetadataEnvelope,
+    ConfigPreviewEnvelope,
     HealthzResponse,
     JobEnvelope,
     JobsListEnvelope,
     JobStatusEnvelope,
+    PresetsEnvelope,
     ReadinessEnvelope,
     ReadyResponse,
 )
@@ -8160,7 +8163,7 @@ async def readiness() -> JSONResponse:
     )
 
 
-@app.get("/v1/presets")
+@app.get("/v1/presets", response_model=PresetsEnvelope)
 async def list_presets(pipeline: Optional[str] = None) -> JSONResponse:
     if pipeline is not None and pipeline not in PRESET_CATALOG:
         return _error_response(
@@ -8200,7 +8203,7 @@ async def list_presets(pipeline: Optional[str] = None) -> JSONResponse:
     )
 
 
-@app.get("/v1/config-metadata")
+@app.get("/v1/config-metadata", response_model=ConfigMetadataEnvelope)
 async def config_metadata(pipeline: str) -> JSONResponse:
     pipeline_name = str(pipeline or "").strip()
     if pipeline_name != "lux-depth-v3":
@@ -8221,7 +8224,7 @@ async def config_metadata(pipeline: str) -> JSONResponse:
     )
 
 
-@app.post("/v1/config-preview")
+@app.post("/v1/config-preview", response_model=ConfigPreviewEnvelope)
 async def config_preview(payload: Dict[str, Any]) -> JSONResponse:
     try:
         preview = _build_config_preview(payload)

@@ -1,5 +1,18 @@
 """Public typed surface for orchestrator v1 HTTP contracts."""
 
+from transformation_portal.api.v1.config import (
+    ConfigMetadataData,
+    ConfigMetadataEnvelope,
+    ConfigPreviewData,
+    ConfigPreviewEnvelope,
+    ConfigPreviewRequest,
+    PipelinePresetGroup,
+    PresetEntry,
+    PresetsAllPipelinesData,
+    PresetsData,
+    PresetsEnvelope,
+    PresetsSinglePipelineData,
+)
 from transformation_portal.api.v1.envelopes import ApiEnvelope, ErrorEnvelope
 from transformation_portal.api.v1.errors import ErrorCode, ErrorObject
 from transformation_portal.api.v1.health import (
@@ -23,6 +36,11 @@ from transformation_portal.api.v1.schemas import SchemaName
 
 __all__ = [
     "ApiEnvelope",
+    "ConfigMetadataData",
+    "ConfigMetadataEnvelope",
+    "ConfigPreviewData",
+    "ConfigPreviewEnvelope",
+    "ConfigPreviewRequest",
     "ErrorCode",
     "ErrorEnvelope",
     "ErrorObject",
@@ -35,6 +53,12 @@ __all__ = [
     "JobState",
     "JobStatusData",
     "JobStatusEnvelope",
+    "PipelinePresetGroup",
+    "PresetEntry",
+    "PresetsAllPipelinesData",
+    "PresetsData",
+    "PresetsEnvelope",
+    "PresetsSinglePipelineData",
     "ReadinessData",
     "ReadinessEnvelope",
     "ReadinessServer",
