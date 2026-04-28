@@ -339,6 +339,17 @@ class TestEnhancementStageCacheKey:
 
         assert key1 == key2
 
+    def test_cache_key_changes_with_material_name_for_same_mask(self) -> None:
+        """Material cache hash must include names because V2 behavior depends on them."""
+        image = np.full((32, 32, 3), 128, dtype=np.uint8)
+        mask = np.ones((32, 32), dtype=np.float32)
+
+        stage = EnhancementStage(enhancement_strength=0.0, clarity_strength=0.0)
+        wood_context = StageContext(artifacts={"image": image, "material_masks": {"wood": mask}})
+        metal_context = StageContext(artifacts={"image": image, "material_masks": {"metal": mask}})
+
+        assert stage.get_cache_key(wood_context) != stage.get_cache_key(metal_context)
+
 
 class TestEnhancementStageBitDepth:
     """Tests for bit depth preservation."""

@@ -207,7 +207,17 @@ class EnhancementStage(Stage):
         if material_masks:
             # Sort keys for deterministic order
             sorted_keys = sorted(material_masks.keys())
-            material_bytes = b"".join(material_masks[k].tobytes() for k in sorted_keys)
+            material_parts: list[bytes] = []
+            for material_name in sorted_keys:
+                material_name_bytes = material_name.encode("utf-8")
+                material_parts.extend(
+                    (
+                        len(material_name_bytes).to_bytes(4, byteorder="big"),
+                        material_name_bytes,
+                        material_masks[material_name].tobytes(),
+                    )
+                )
+            material_bytes = b"".join(material_parts)
             material_hash = hashlib.sha256(material_bytes).hexdigest()[:8]
 
         # Configuration
