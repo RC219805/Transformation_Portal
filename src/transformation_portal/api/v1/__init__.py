@@ -9,6 +9,16 @@ from transformation_portal.api.v1.health import (
     ReadinessServer,
     ReadyResponse,
 )
+from transformation_portal.api.v1.jobs import (
+    JobBriefData,
+    JobCreateRequest,
+    JobEnvelope,
+    JobsListData,
+    JobsListEnvelope,
+    JobState,
+    JobStatusData,
+    JobStatusEnvelope,
+)
 from transformation_portal.api.v1.schemas import SchemaName
 
 __all__ = [
@@ -17,6 +27,14 @@ __all__ = [
     "ErrorEnvelope",
     "ErrorObject",
     "HealthzResponse",
+    "JobBriefData",
+    "JobCreateRequest",
+    "JobEnvelope",
+    "JobsListData",
+    "JobsListEnvelope",
+    "JobState",
+    "JobStatusData",
+    "JobStatusEnvelope",
     "ReadinessData",
     "ReadinessEnvelope",
     "ReadinessServer",
