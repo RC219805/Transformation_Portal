@@ -33,6 +33,18 @@ from transformation_portal.api.v1.jobs import (
     JobStatusEnvelope,
 )
 from transformation_portal.api.v1.schemas import SchemaName
+from transformation_portal.api.v1.telemetry import (
+    PortalEventData,
+    PortalEventEnvelope,
+    PortalRumIngestData,
+    PortalRumIngestEnvelope,
+)
+from transformation_portal.api.v1.uploads import (
+    UploadArtifacts,
+    UploadStagingData,
+    UploadStagingEnvelope,
+    UploadSummary,
+)
 
 __all__ = [
     "ApiEnvelope",
@@ -54,6 +66,10 @@ __all__ = [
     "JobStatusData",
     "JobStatusEnvelope",
     "PipelinePresetGroup",
+    "PortalEventData",
+    "PortalEventEnvelope",
+    "PortalRumIngestData",
+    "PortalRumIngestEnvelope",
     "PresetEntry",
     "PresetsAllPipelinesData",
     "PresetsData",
@@ -64,4 +80,8 @@ __all__ = [
     "ReadinessServer",
     "ReadyResponse",
     "SchemaName",
+    "UploadArtifacts",
+    "UploadStagingData",
+    "UploadStagingEnvelope",
+    "UploadSummary",
 ]
