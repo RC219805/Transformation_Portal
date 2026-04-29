@@ -295,14 +295,12 @@ class NVDiffRecBackend:
             return
 
         try:
-            from huggingface_hub import snapshot_download
             import os
             import sys
 
-            logger.info(
-                f"Downloading NVDiffRec source from {self.model_repo_id}"
-                f"@{self.model_revision[:12]}..."
-            )
+            from huggingface_hub import snapshot_download
+
+            logger.info(f"Downloading NVDiffRec source from {self.model_repo_id}" f"@{self.model_revision[:12]}...")
             cache_dir = str(self.cache_dir) if self.cache_dir else None
             local_dir = snapshot_download(
                 repo_id=self.model_repo_id,
@@ -326,10 +324,7 @@ class NVDiffRecBackend:
             missing = [
                 m
                 for m in required
-                if not (
-                    os.path.isdir(os.path.join(local_dir, m))
-                    or os.path.isfile(os.path.join(local_dir, m + ".py"))
-                )
+                if not (os.path.isdir(os.path.join(local_dir, m)) or os.path.isfile(os.path.join(local_dir, m + ".py")))
             ]
             if missing:
                 raise RuntimeError(
@@ -433,10 +428,7 @@ class NVDiffRecBackend:
                     "has_materials": True,
                 },
             )
-            logger.info(
-                f"NVDiffRec mock reconstruction complete: {num_gaussians} primitives, "
-                f"time={elapsed:.1f}s"
-            )
+            logger.info(f"NVDiffRec mock reconstruction complete: {num_gaussians} primitives, " f"time={elapsed:.1f}s")
             return scene
 
         # Production path — real NVDiffRec DMTet joint optimization.
@@ -449,8 +441,8 @@ class NVDiffRecBackend:
             import importlib
             import sys
 
-            import torch
             import nvdiffrast.torch as dr
+            import torch
 
             local_dir = self._model["local_dir"]
             if local_dir not in sys.path:
@@ -499,17 +491,12 @@ class NVDiffRecBackend:
                 from PIL import Image as _PILImage
 
                 target_imgs = [
-                    torch.from_numpy(np.array(_PILImage.open(p)).astype(np.float32) / 255.0).to(
-                        self.device
-                    )
+                    torch.from_numpy(np.array(_PILImage.open(p)).astype(np.float32) / 255.0).to(self.device)
                     for p in request.image_paths
                 ]
 
             # Build per-view model-view-projection matrices from pinhole intrinsics.
-            mvp_matrices = [
-                torch.from_numpy(self._build_mvp_matrix(cam)).to(self.device)
-                for cam in request.cameras
-            ]
+            mvp_matrices = [torch.from_numpy(self._build_mvp_matrix(cam)).to(self.device) for cam in request.cameras]
 
             # Joint Adam optimizer for geometry and material parameters.
             all_params = list(geom.parameters()) + list(mat_params.values())
@@ -541,8 +528,8 @@ class NVDiffRecBackend:
                 else:
                     # target is (1, H, W, C); compute per-view mean color as (1, C),
                     # then expand to (V, C) for per-vertex attribute interpolation.
-                    fallback_rgb = target[..., :3].mean(dim=(1, 2)).to(
-                        device=mesh.v_pos.device, dtype=mesh.v_pos.dtype
+                    fallback_rgb = (
+                        target[..., :3].mean(dim=(1, 2)).to(device=mesh.v_pos.device, dtype=mesh.v_pos.dtype)
                     )  # (1, 3)
                     v_attr = fallback_rgb.expand(mesh.v_pos.shape[0], -1)  # (V, 3)
                 col, _ = dr.interpolate(v_attr[None], rast, mesh.t_pos_idx.int())
