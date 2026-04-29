@@ -19,7 +19,6 @@ from transformation_portal.api.v1 import (
     UploadSummary,
 )
 
-
 # Reference shape from StagedUploadResult.to_response_data().
 # Filenames and paths mirror the constants in upload_staging.py:
 #   BASELINE_MANIFEST_FILENAME = "baseline_manifest.tp.meta.baseline_manifest.v1.json"
@@ -129,9 +128,7 @@ class TestUploadStagingData:
         data = UploadStagingData(**_SAMPLE_RESPONSE_DATA)
         dumped = data.model_dump(mode="json")
         assert dumped["batch_id"] == _SAMPLE_RESPONSE_DATA["batch_id"]
-        assert dumped["artifacts"]["baseline_manifest_path"] == (
-            _SAMPLE_RESPONSE_DATA["artifacts"]["baseline_manifest_path"]
-        )
+        assert dumped["artifacts"]["baseline_manifest_path"] == (_SAMPLE_RESPONSE_DATA["artifacts"]["baseline_manifest_path"])
         assert dumped["summary"]["file_count"] == 3
 
     def test_extra_top_level_keys_are_preserved(self) -> None:

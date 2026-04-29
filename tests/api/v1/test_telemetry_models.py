@@ -18,7 +18,6 @@ from transformation_portal.api.v1 import (
     PortalRumIngestEnvelope,
 )
 
-
 # ---------------------------------------------------------------------------
 # PortalEventData — payload for tp.orchestrator.portal_event.v1
 # ---------------------------------------------------------------------------
