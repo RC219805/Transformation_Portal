@@ -335,16 +335,21 @@ class TestNVDiffRecPreset:
 class TestNVDiffRecProductionLoadPath:
     """Tests for the production _load_model() HuggingFace download path."""
 
-    def test_load_model_raises_on_network_failure_with_real_revision(self):
-        """Production _load_model() raises RuntimeError when HF download fails.
+    def test_load_model_raises_on_network_failure_with_real_revision(self, monkeypatch):
+        """Production _load_model() wraps download errors as RuntimeError.
 
-        In CI there is no real HuggingFace access and no actual NVDiffRec repo
-        at 'nvidia/nvdiffrec'. Providing a non-placeholder revision triggers the
-        real download path, which must raise RuntimeError (not NotImplementedError).
+        Monkeypatches snapshot_download so the test is deterministic and
+        never makes a real network request regardless of environment.
         """
+
+        def _fail(**kwargs):
+            raise OSError("simulated network failure")
+
+        monkeypatch.setattr("huggingface_hub.snapshot_download", _fail)
+
         backend = NVDiffRecBackend(
             tier="apex_research",
-            model_revision="a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",  # fake but non-placeholder
+            model_revision="a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",  # non-placeholder
             skip_preflight=True,
         )
         with pytest.raises(RuntimeError, match="NVDiffRec model loading failed"):

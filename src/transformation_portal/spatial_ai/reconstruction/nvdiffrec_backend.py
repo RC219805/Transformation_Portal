@@ -50,6 +50,10 @@ import numpy as np
 
 logger = logging.getLogger(__name__)
 
+# Allowlist of HuggingFace repo IDs permitted to add entries to sys.path.
+# Prevents untrusted model_repo_id values from shadowing stdlib/installed modules.
+_ALLOWED_NVDIFFREC_REPO_IDS: frozenset = frozenset({"nvidia/nvdiffrec"})
+
 
 class NVDiffRecLicenseError(Exception):
     """Raised when NVDIFFREC license requirements are not met.
@@ -311,31 +315,44 @@ class NVDiffRecBackend:
             # NVDiffRec is a source repository with compiled CUDA extensions.
             # Key modules live at the repo root: geometry/ directory and render/ directory.
             # Guard: only prepend paths from the allowlisted repo to prevent stdlib shadowing.
-            _ALLOWED_REPO_IDS = frozenset({"nvidia/nvdiffrec"})
-            if self.model_repo_id not in _ALLOWED_REPO_IDS:
+            if self.model_repo_id not in _ALLOWED_NVDIFFREC_REPO_IDS:
                 raise RuntimeError(
                     f"sys.path injection refused for untrusted repo_id '{self.model_repo_id}'. "
-                    f"Allowed: {sorted(_ALLOWED_REPO_IDS)}"
-                )
-            if local_dir not in sys.path:
-                sys.path.insert(0, local_dir)
-
-            required = ["geometry", "render"]
-            missing = [
-                m
-                for m in required
-                if not (os.path.isdir(os.path.join(local_dir, m)) or os.path.isfile(os.path.join(local_dir, m + ".py")))
-            ]
-            if missing:
-                raise RuntimeError(
-                    f"NVDiffRec repo at '{local_dir}' is missing required "
-                    f"modules: {missing}. Ensure model_repo_id="
-                    f"'{self.model_repo_id}' points to the NVDiffRec source repo."
+                    f"Allowed: {sorted(_ALLOWED_NVDIFFREC_REPO_IDS)}"
                 )
 
-            self._model = {"local_dir": local_dir}
-            self._model_loaded = True
-            logger.info(f"NVDiffRec source loaded from '{local_dir}'")
+            # Track insertion so we can clean up on failure without leaving a
+            # partial/broken path entry in the global import path.
+            path_inserted = False
+            load_succeeded = False
+            try:
+                if local_dir not in sys.path:
+                    sys.path.insert(0, local_dir)
+                    path_inserted = True
+
+                required = ["geometry", "render"]
+                missing = [
+                    m
+                    for m in required
+                    if not (os.path.isdir(os.path.join(local_dir, m)) or os.path.isfile(os.path.join(local_dir, m + ".py")))
+                ]
+                if missing:
+                    raise RuntimeError(
+                        f"NVDiffRec repo at '{local_dir}' is missing required "
+                        f"modules: {missing}. Ensure model_repo_id="
+                        f"'{self.model_repo_id}' points to the NVDiffRec source repo."
+                    )
+
+                self._model = {"local_dir": local_dir}
+                self._model_loaded = True
+                load_succeeded = True
+                logger.info(f"NVDiffRec source loaded from '{local_dir}'")
+            finally:
+                if path_inserted and not load_succeeded:
+                    try:
+                        sys.path.remove(local_dir)
+                    except ValueError:
+                        pass
 
         except Exception as e:
             logger.error(f"Failed to load NVDiffRec: {e}")
@@ -490,10 +507,11 @@ class NVDiffRecBackend:
             else:
                 from PIL import Image as _PILImage
 
-                target_imgs = [
-                    torch.from_numpy(np.array(_PILImage.open(p)).astype(np.float32) / 255.0).to(self.device)
-                    for p in request.image_paths
-                ]
+                target_imgs = []
+                for p in request.image_paths:
+                    with _PILImage.open(p) as _img:
+                        arr = np.array(_img.convert("RGB"), dtype=np.float32) / 255.0
+                    target_imgs.append(torch.from_numpy(arr).to(self.device))
 
             # Build per-view model-view-projection matrices from pinhole intrinsics.
             mvp_matrices = [torch.from_numpy(self._build_mvp_matrix(cam)).to(self.device) for cam in request.cameras]
