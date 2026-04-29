@@ -2,8 +2,9 @@
 
 Quick reference for using the RAG-enhanced Transformation Portal Specialist agent.
 
-Current baseline: `main` through PR #1562. This is support material for
-repository retrieval; live role boundaries are defined by `.github/agents/README.md`,
+Current documentation baseline: repo-wide refresh audit dated April 29, 2026,
+building on `main` through PR #1562. This is support material for repository
+retrieval; live role boundaries are defined by `.github/agents/README.md`,
 `.github/copilot-instructions.md`, and `docs/architecture/agent_governance.md`.
 
 ## What is RAG?

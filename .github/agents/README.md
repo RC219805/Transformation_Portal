@@ -2,9 +2,11 @@
 
 This directory is the live custom-agent configuration surface for the Transformation Portal repository.
 
-Current baseline: `main` through PR #1562. Keep this directory aligned with
+Current documentation baseline: repo-wide refresh audit dated April 29, 2026,
+building on `main` through PR #1562. Keep this directory aligned with
 `AGENTS.md`, `.github/copilot-instructions.md`,
-`docs/governance/DOCUMENTATION_MAP.md`, and
+`docs/governance/DOCUMENTATION_MAP.md`,
+`docs/governance/DOCUMENTATION_REFRESH_AUDIT_2026-04-29.md`, and
 `docs/governance/DOCUMENTATION_STATE_AUDIT_2026-04-27.md`.
 
 ## Live Profiles
@@ -34,6 +36,7 @@ The live profiles should stay aligned with:
 - [AGENTS.md](../../AGENTS.md)
 - [copilot-instructions.md](../copilot-instructions.md)
 - [DOCUMENTATION_MAP.md](../../docs/governance/DOCUMENTATION_MAP.md)
+- [DOCUMENTATION_REFRESH_AUDIT_2026-04-29.md](../../docs/governance/DOCUMENTATION_REFRESH_AUDIT_2026-04-29.md)
 - [DOCUMENTATION_STATE_AUDIT_2026-04-27.md](../../docs/governance/DOCUMENTATION_STATE_AUDIT_2026-04-27.md)
 - [agent_governance.md](../../docs/architecture/agent_governance.md)
 - [CUSTOM_AGENT_GUIDE.md](../../docs/guides/CUSTOM_AGENT_GUIDE.md)

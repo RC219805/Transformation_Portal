@@ -18,7 +18,8 @@ It combines orchestrated depth estimation, PBR map generation, material-aware fi
 
 `main` tracks the active development branch for the repository.
 
-Current documentation baseline: `main` through PR #1562 (April 27, 2026).
+Current documentation baseline: repo-wide refresh audit dated April 29, 2026,
+building on `main` through PR #1562 (April 27, 2026).
 Recent merged work added typed API v1 envelopes and OpenAPI response models for
 health/readiness routes, Docker health/env wiring, CI workflow hardening and a
 30-workflow matrix, archive-gate readiness evidence, and APEX fallback /
@@ -52,6 +53,7 @@ Replace `<release-tag>` with a tag from [GitHub Releases](https://github.com/RC2
 Key docs:
 - [Documentation Index](docs/README.md)
 - [Documentation Map](docs/governance/DOCUMENTATION_MAP.md)
+- [2026-04-29 Documentation Refresh Audit](docs/governance/DOCUMENTATION_REFRESH_AUDIT_2026-04-29.md)
 - [Portal + Orchestrator Quickstart](docs/guides/PORTAL_ORCHESTRATOR_QUICKSTART.md)
 - [Portal Secure Front Door Quickstart](docs/guides/PORTAL_SECURE_FRONTDOOR_QUICKSTART.md)
 - [CI Workflow Matrix](docs/ci/WORKFLOW_MATRIX.md)
@@ -473,7 +475,7 @@ Start here:
 
 Historical project reports, PR summaries, and 2025 pipeline/depth-model notes are
 retained under `docs/` for audit context. Use the documentation map and
-[2026-04-27 documentation state audit](docs/governance/DOCUMENTATION_STATE_AUDIT_2026-04-27.md)
+[2026-04-29 documentation refresh audit](docs/governance/DOCUMENTATION_REFRESH_AUDIT_2026-04-29.md)
 to distinguish current guidance from archive-only material.
 
 ---
@@ -508,4 +510,4 @@ Resources:
 
 ---
 
-Last Updated: 2026-04-27
+Last Updated: 2026-04-29

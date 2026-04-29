@@ -3,9 +3,10 @@
 **Purpose:** Current source of truth for finding maintained Transformation
 Portal documentation.
 
-**Last Updated:** 2026-04-27
+**Last Updated:** 2026-04-29
 **Maintainer:** Repository Architect
-**Current baseline:** `main` through PR #1562.
+**Current baseline:** repo-wide refresh audit dated April 29, 2026, building on
+`main` through PR #1562.
 
 Historical reports remain available for audit context, but they are not current
 operator guidance unless they are linked here as canonical documents.
@@ -16,6 +17,7 @@ operator guidance unless they are linked here as canonical documents.
 | --- | --- | --- |
 | Repository overview | [README.md](../../README.md) | Project overview, install path, current operational surfaces |
 | Documentation index | [docs/README.md](../README.md) | Current docs navigation and historical-boundary guidance |
+| Documentation refresh audit | [DOCUMENTATION_REFRESH_AUDIT_2026-04-29.md](DOCUMENTATION_REFRESH_AUDIT_2026-04-29.md) | Repo-wide inventory and classification refresh |
 | Documentation state audit | [DOCUMENTATION_STATE_AUDIT_2026-04-27.md](DOCUMENTATION_STATE_AUDIT_2026-04-27.md) | Repo-wide docs classification after PR #1562 |
 | Setup | [SETUP_GUIDE.md](../guides/SETUP_GUIDE.md) | Local environment setup and dependency bring-up |
 | Contribution workflow | [CONTRIBUTING.md](../../CONTRIBUTING.md) | Code, docs, issue, and PR expectations |
@@ -41,6 +43,7 @@ operator guidance unless they are linked here as canonical documents.
 | Area | Canonical Document | Status |
 | --- | --- | --- |
 | Documentation policy | [DOCUMENTATION_POLICY.md](DOCUMENTATION_POLICY.md) | Maintained |
+| Documentation inventory | [documentation-inventory-2026-04-29.csv](audit/documentation-inventory-2026-04-29.csv) | Current repo-wide classification ledger |
 | Repository organization | [REPO_ORGANIZATION.md](REPO_ORGANIZATION.md) | Maintained |
 | Custom Agents | [CUSTOM_AGENT_GUIDE.md](../guides/CUSTOM_AGENT_GUIDE.md) | Maintained; live profiles are under `.github/agents/` |
 | Agent quick reference | [AGENT_QUICK_REFERENCE.md](../reference/AGENT_QUICK_REFERENCE.md) | Maintained |
@@ -83,7 +86,7 @@ operator guidance unless they are linked here as canonical documents.
 
 | Area | Classification | Use |
 | --- | --- | --- |
-| `docs/750_picacho/`, `docs/projects/`, `docs/quality_analysis/`, `docs/visual_review/` | Historical project records | Dated project evidence, not current operator guidance |
+| `docs/750_picacho/`, `docs/analysis/`, `docs/projects/`, `docs/quality_analysis/`, `docs/visual_review/` | Historical or mixed project records | Dated project evidence and investigations; not current operator guidance unless linked above |
 | `docs/depth_model/`, `docs/depth_pipeline/`, `docs/pipeline/`, `docs/pipeline_docs/` | Superseded or historical pipeline/depth material | Use current Lux Depth V3 docs and ADRs instead |
 | `docs/deliverables/`, `docs/project-status/`, `docs/reports/`, `docs/status/`, `docs/summaries/`, `docs/session_summaries/`, `docs/sessions/`, `docs/historical/`, `docs/verification/` | Point-in-time reports | Audit context only |
 | `docs/pr_archive/`, `docs/pr_reports/`, `docs/pr_summaries/` | PR-specific records | Review and merge history only |
@@ -104,7 +107,7 @@ operator guidance unless they are linked here as canonical documents.
 ```bash
 make check-docs
 make check-stale-docs
-python scripts/governance/check_docs_structure.py --all
+python3 scripts/governance/check_docs_structure.py --all
 ```
 
 Use `rg` for targeted stale-reference checks before merging documentation

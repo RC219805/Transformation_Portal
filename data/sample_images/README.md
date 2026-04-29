@@ -137,9 +137,9 @@ All sample images are:
 
 ## 📚 Documentation
 
-- **Binary file guidelines**: `BINARY_FILE_BEST_PRACTICES.md`
-- **Download script**: `scripts/download_samples.py`
-- **Pipeline operations**: `docs/PIPELINE_OPERATIONS_GUIDE.md`
+- **Binary file guidelines**: [BINARY_FILE_BEST_PRACTICES.md](../../docs/fixes/BINARY_FILE_BEST_PRACTICES.md)
+- **Download script**: [download_samples.py](../../scripts/download_samples.py)
+- **Pipeline operations**: [PIPELINE_OPERATIONS_GUIDE.md](../../docs/pipeline_docs/PIPELINE_OPERATIONS_GUIDE.md)
 
 ---
 
