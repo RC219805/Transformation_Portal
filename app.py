@@ -48,9 +48,12 @@ from transformation_portal.api.v1 import (
     JobEnvelope,
     JobsListEnvelope,
     JobStatusEnvelope,
+    PortalEventEnvelope,
+    PortalRumIngestEnvelope,
     PresetsEnvelope,
     ReadinessEnvelope,
     ReadyResponse,
+    UploadStagingEnvelope,
 )
 from transformation_portal.determinism.trace import get_or_create_trace_context
 from transformation_portal.ingest.upload_staging import (
@@ -8246,7 +8249,7 @@ async def config_preview(payload: Dict[str, Any]) -> JSONResponse:
     )
 
 
-@app.post("/v1/portal/events")
+@app.post("/v1/portal/events", response_model=PortalEventEnvelope)
 async def portal_events(payload: Dict[str, Any]) -> JSONResponse:
     record, reason = _record_portal_event(payload)
     if reason is not None:
@@ -8270,7 +8273,7 @@ async def portal_events(payload: Dict[str, Any]) -> JSONResponse:
     )
 
 
-@app.post("/v1/portal/rum")
+@app.post("/v1/portal/rum", response_model=PortalRumIngestEnvelope)
 async def portal_rum(request: Request, payload: Dict[str, Any]) -> JSONResponse:
     if not _portal_rum_enabled(_portal_actor_from_request(request)):
         return JSONResponse(
@@ -8304,7 +8307,7 @@ async def portal_rum(request: Request, payload: Dict[str, Any]) -> JSONResponse:
     )
 
 
-@app.post("/v1/uploads/staging")
+@app.post("/v1/uploads/staging", response_model=UploadStagingEnvelope)
 async def stage_portal_uploads(request: Request) -> JSONResponse:
     if not _portal_staged_uploads_enabled(_portal_actor_from_request(request)):
         return _error_response(
