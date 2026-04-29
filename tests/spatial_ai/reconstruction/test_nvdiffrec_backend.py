@@ -340,7 +340,9 @@ class TestNVDiffRecProductionLoadPath:
 
         Monkeypatches snapshot_download so the test is deterministic and
         never makes a real network request regardless of environment.
+        Skips if huggingface_hub is not installed (e.g. minimal CI lane).
         """
+        pytest.importorskip("huggingface_hub", reason="huggingface_hub required for production load path test")
 
         def _fail(**kwargs):
             raise OSError("simulated network failure")
