@@ -40,20 +40,23 @@ class TestPortalEventData:
         assert dumped["accepted"] is True
         assert dumped["event"]["event_type"] == "config_exported"
 
-    def test_rejected_with_none_event_validates(self) -> None:
-        data = PortalEventData(accepted=False)
-        dumped = data.model_dump(mode="json")
-        assert dumped["accepted"] is False
-        assert dumped["event"] is None
-
     def test_extra_keys_are_preserved(self) -> None:
         data = PortalEventData(accepted=True, event={"x": 1}, future_field="y")
         dumped = data.model_dump(mode="json")
         assert dumped["future_field"] == "y"
 
+    def test_accepted_literal_true_rejects_false(self) -> None:
+        # portal_events never emits accepted=False; Literal[True] enforces this.
+        with pytest.raises(ValidationError):
+            PortalEventData(accepted=False, event={"x": 1})  # type: ignore[arg-type]
+
     def test_accepted_is_required(self) -> None:
         with pytest.raises(ValidationError):
             PortalEventData(event={"x": 1})  # type: ignore[call-arg]
+
+    def test_event_is_required(self) -> None:
+        with pytest.raises(ValidationError):
+            PortalEventData(accepted=True)  # type: ignore[call-arg]
 
 
 class TestPortalEventEnvelope:
@@ -102,12 +105,11 @@ class TestPortalEventEnvelope:
 
 class TestPortalRumIngestData:
     def test_disabled_path_validates(self) -> None:
-        # Mirrors app.py portal_rum handler when RUM is disabled
+        # Mirrors app.py portal_rum handler when RUM is disabled:
+        # emits {"accepted": False, "disabled": True} — "event" key absent.
         data = PortalRumIngestData(accepted=False, disabled=True)
-        dumped = data.model_dump(mode="json")
-        assert dumped["accepted"] is False
-        assert dumped["disabled"] is True
-        assert dumped["event"] is None
+        dumped = data.model_dump(mode="json", exclude_none=True)
+        assert dumped == {"accepted": False, "disabled": True}
 
     def test_accepted_path_with_event_validates(self) -> None:
         record = {
@@ -124,10 +126,12 @@ class TestPortalRumIngestData:
             "cohort_bucket": 42,
             "auth_mode": "direct",
         }
+        # Mirrors app.py portal_rum handler on the accepted path:
+        # emits {"accepted": True, "event": record} — "disabled" key absent.
         data = PortalRumIngestData(accepted=True, event=record)
-        dumped = data.model_dump(mode="json")
+        dumped = data.model_dump(mode="json", exclude_none=True)
         assert dumped["accepted"] is True
-        assert dumped["disabled"] is None
+        assert "disabled" not in dumped
         assert dumped["event"]["event_type"] == "page_view"
 
     def test_extra_keys_are_preserved(self) -> None:

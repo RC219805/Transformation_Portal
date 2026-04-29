@@ -29,7 +29,7 @@ error-reason codes produced by the validation helpers.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict
 
@@ -39,8 +39,12 @@ from transformation_portal.api.v1.envelopes import ApiEnvelope
 class PortalEventData(BaseModel):
     """Payload for ``tp.orchestrator.portal_event.v1``.
 
-    Mirrors the ``data`` dict returned by ``portal_events`` in ``app.py``:
-    ``{"accepted": True, "event": record}``.
+    The ``portal_events`` handler has exactly one non-error response shape:
+    ``{"accepted": True, "event": record}``. Invalid payloads return an
+    ``ErrorEnvelope`` — ``PortalEventData`` is never emitted with
+    ``accepted=False``. ``accepted`` is therefore narrowed to
+    ``Literal[True]`` and ``event`` is required (never ``None`` on the
+    success path).
 
     ``event`` holds the sanitised record written by ``_record_portal_event``
     (schema, timestamp, event_type, pipeline, surface, field, metadata,
@@ -50,22 +54,25 @@ class PortalEventData(BaseModel):
 
     model_config = ConfigDict(extra="allow")
 
-    accepted: bool
-    event: dict[str, Any] | None = None
+    accepted: Literal[True]
+    event: dict[str, Any]
 
 
 class PortalRumIngestData(BaseModel):
     """Payload for ``tp.orchestrator.portal_rum_ingest.v1``.
 
-    Three shapes are possible:
+    Two non-error shapes are possible:
 
     - RUM disabled: ``{"accepted": False, "disabled": True}``
-    - Invalid payload (→ error envelope, not this model)
-    - Accepted: ``{"accepted": True, "event": record}``
+    - Accepted:     ``{"accepted": True, "event": record}``
 
-    ``disabled`` is ``None`` on the accepted path; ``event`` is ``None``
-    on the disabled path. Both are Optional so a single model covers all
-    non-error shapes. ``extra="allow"`` accommodates future additions.
+    Invalid payloads return an ``ErrorEnvelope``, not this model.
+
+    ``disabled`` and ``event`` are Optional so a single model covers both
+    non-error shapes. On the wire, the existing handler *omits* the
+    opposite-path key rather than emitting it with ``null`` — for example,
+    ``disabled`` is absent on the accepted path, and ``event`` is absent on
+    the disabled path. ``extra="allow"`` accommodates future additions.
     """
 
     model_config = ConfigDict(extra="allow")
