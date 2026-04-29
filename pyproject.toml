@@ -102,8 +102,8 @@ ml = [
 spatial-ai = [
     "transformation-portal[ml-core]",
     "huggingface-hub>=0.19",
-    # SAM2: pip install segment-anything-2 (requires scripted bootstrap for weights)
-    "segment-anything-2>=1.0; python_version >= '3.10'",
+    # SAM2: pip install sam2 (requires scripted bootstrap for weights)
+    "sam2>=1.0; python_version >= '3.10'",
     # nvdiffrast (compiled CUDA extension) must be installed separately:
     # git clone https://github.com/NVlabs/nvdiffrast && pip install -e .
 ]

@@ -374,11 +374,10 @@ class TestNVDiffRecProductionLoadPath:
 
 
 class TestNVDiffRecMockPathBehaviour:
-    """Verify mock-path reconstruction after the production-path split."""
+    """Verify mock-path reconstruction after the production-path split.
 
-    @pytest.fixture(autouse=True)
-    def skip_without_torch(self):
-        pytest.importorskip("torch", reason="torch required for reconstruction tests")
+    These tests run without torch — the mock path uses only numpy.
+    """
 
     def _make_request(self, num_views: int = 2) -> "MultiViewReconstructionRequest":
         cameras = [
@@ -389,7 +388,6 @@ class TestNVDiffRecMockPathBehaviour:
         images = [rng.random((48, 64, 3)).astype(np.float32) for _ in range(num_views)]
         return MultiViewReconstructionRequest(cameras=cameras, images=images, tier="apex_research")
 
-    @pytest.mark.ml
     def test_mock_convergence_is_max_iterations(self):
         """Mock path sets convergence='max_iterations' (valid Literal value)."""
         backend = NVDiffRecBackend(
@@ -401,7 +399,6 @@ class TestNVDiffRecMockPathBehaviour:
         scene = backend.reconstruct_with_materials(self._make_request(), config)
         assert scene.convergence == "max_iterations"
 
-    @pytest.mark.ml
     def test_mock_output_is_deterministic_with_seed(self):
         """Same seed produces identical mock output."""
         backend = NVDiffRecBackend(

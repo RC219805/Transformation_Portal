@@ -312,6 +312,13 @@ class NVDiffRecBackend:
 
             # NVDiffRec is a source repository with compiled CUDA extensions.
             # Key modules live at the repo root: geometry/ directory and render/ directory.
+            # Guard: only prepend paths from the allowlisted repo to prevent stdlib shadowing.
+            _ALLOWED_REPO_IDS = frozenset({"nvidia/nvdiffrec"})
+            if self.model_repo_id not in _ALLOWED_REPO_IDS:
+                raise RuntimeError(
+                    f"sys.path injection refused for untrusted repo_id '{self.model_repo_id}'. "
+                    f"Allowed: {sorted(_ALLOWED_REPO_IDS)}"
+                )
             if local_dir not in sys.path:
                 sys.path.insert(0, local_dir)
 
@@ -382,62 +389,63 @@ class NVDiffRecBackend:
         num_views = request.num_views
         logger.info(f"NVDIFFREC reconstruction: {num_views} views, {config.iterations} iterations")
 
-        # Set deterministic seed if provided
+        if self._model is None:
+            # Placeholder / mock path — deterministic output, no GPU required.
+            # Uses numpy default_rng directly; torch is not imported on this path.
+            rng = np.random.default_rng(config.optimization_seed)
+            num_gaussians = 1000
+            positions = rng.random((num_gaussians, 3)).astype(np.float32) * 2 - 1
+            colors = rng.random((num_gaussians, 3)).astype(np.float32)
+            scales = np.ones((num_gaussians, 3), dtype=np.float32) * 0.01
+            rotations = np.zeros((num_gaussians, 4), dtype=np.float32)
+            rotations[:, 0] = 1.0
+            opacities = np.ones((num_gaussians, 1), dtype=np.float32) * 0.5
+            recon_cameras = self._create_reconstruction_cameras(request)
+            elapsed = time.time() - start_time
+            scene = Scene3D(
+                splats=GaussianSplat(
+                    positions=positions,
+                    colors=colors,
+                    scales=scales,
+                    rotations=rotations,
+                    opacities=opacities,
+                    metadata={"backend": "nvdiffrec"},
+                ),
+                cameras=recon_cameras,
+                rmse=0.03,
+                iteration=config.iterations,
+                convergence="max_iterations",
+                metadata={
+                    "backend": "nvdiffrec",
+                    "license_class": "research_only",
+                    "tier": self.tier,
+                    "device": self.device,
+                    "repo_id": self.model_repo_id,
+                    "revision": self.model_revision,
+                    "num_views": num_views,
+                    "num_gaussians": num_gaussians,
+                    "elapsed_seconds": elapsed,
+                    "requested_iterations": config.iterations,
+                    "actual_iterations": config.iterations,
+                    "optimization_seed": config.optimization_seed,
+                    "dmtet_resolution": config.dmtet_resolution,
+                    "texture_resolution": config.texture_resolution,
+                    "has_materials": True,
+                },
+            )
+            logger.info(
+                f"NVDiffRec mock reconstruction complete: {num_gaussians} primitives, "
+                f"time={elapsed:.1f}s"
+            )
+            return scene
+
+        # Production path — real NVDiffRec DMTet joint optimization.
+        # Set deterministic seed before the optimization loop; restore afterward.
         saved_state = None
         if config.optimization_seed is not None:
             saved_state = self._setup_deterministic_seed(config.optimization_seed)
 
         try:
-            if self._model is None:
-                # Placeholder / mock path — deterministic output, no GPU required.
-                rng = np.random.default_rng(config.optimization_seed)
-                num_gaussians = 1000
-                positions = rng.random((num_gaussians, 3)).astype(np.float32) * 2 - 1
-                colors = rng.random((num_gaussians, 3)).astype(np.float32)
-                scales = np.ones((num_gaussians, 3), dtype=np.float32) * 0.01
-                rotations = np.zeros((num_gaussians, 4), dtype=np.float32)
-                rotations[:, 0] = 1.0
-                opacities = np.ones((num_gaussians, 1), dtype=np.float32) * 0.5
-                recon_cameras = self._create_reconstruction_cameras(request)
-                elapsed = time.time() - start_time
-                scene = Scene3D(
-                    splats=GaussianSplat(
-                        positions=positions,
-                        colors=colors,
-                        scales=scales,
-                        rotations=rotations,
-                        opacities=opacities,
-                        metadata={"backend": "nvdiffrec"},
-                    ),
-                    cameras=recon_cameras,
-                    rmse=0.03,
-                    iteration=config.iterations,
-                    convergence="max_iterations",
-                    metadata={
-                        "backend": "nvdiffrec",
-                        "license_class": "research_only",
-                        "tier": self.tier,
-                        "device": self.device,
-                        "repo_id": self.model_repo_id,
-                        "revision": self.model_revision,
-                        "num_views": num_views,
-                        "num_gaussians": num_gaussians,
-                        "elapsed_seconds": elapsed,
-                        "requested_iterations": config.iterations,
-                        "actual_iterations": config.iterations,
-                        "optimization_seed": config.optimization_seed,
-                        "dmtet_resolution": config.dmtet_resolution,
-                        "texture_resolution": config.texture_resolution,
-                        "has_materials": True,
-                    },
-                )
-                logger.info(
-                    f"NVDiffRec mock reconstruction complete: {num_gaussians} primitives, "
-                    f"time={elapsed:.1f}s"
-                )
-                return scene
-
-            # Production path — real NVDiffRec DMTet joint optimization.
             import importlib
             import sys
 
@@ -446,7 +454,7 @@ class NVDiffRecBackend:
 
             local_dir = self._model["local_dir"]
             if local_dir not in sys.path:
-                sys.path.insert(0, local_dir)
+                sys.path.insert(0, local_dir)  # allowlist enforced in _load_model
 
             geometry_mod = importlib.import_module("geometry")
             render_mod = importlib.import_module("render")
@@ -528,7 +536,15 @@ class NVDiffRecBackend:
                 rast, _ = dr.rasterize(glctx, v_pos_clip, mesh.t_pos_idx.int(), (h, w))
 
                 # Interpolate vertex attributes (color / albedo).
-                v_attr = mesh.v_color if hasattr(mesh, "v_color") else target.expand(mesh.v_pos.shape[0], -1)
+                if hasattr(mesh, "v_color"):
+                    v_attr = mesh.v_color
+                else:
+                    # target is (1, H, W, C); compute per-view mean color as (1, C),
+                    # then expand to (V, C) for per-vertex attribute interpolation.
+                    fallback_rgb = target[..., :3].mean(dim=(1, 2)).to(
+                        device=mesh.v_pos.device, dtype=mesh.v_pos.dtype
+                    )  # (1, 3)
+                    v_attr = fallback_rgb.expand(mesh.v_pos.shape[0], -1)  # (V, 3)
                 col, _ = dr.interpolate(v_attr[None], rast, mesh.t_pos_idx.int())
 
                 # Photometric L2 loss in linear light space.
@@ -650,7 +666,7 @@ class NVDiffRecBackend:
         """Build 4x4 perspective projection matrix from pinhole camera intrinsics.
 
         Uses identity model-view transform — CoreCameraParams carries no extrinsics.
-        Returns an OpenGL-convention clip-space matrix (column-major, y-up).
+        Returns a row-major (4, 4) float32 ndarray in OpenGL clip-space convention (y-up).
         """
         fx, fy = cam.fx, cam.fy
         cx, cy = cam.cx, cam.cy
