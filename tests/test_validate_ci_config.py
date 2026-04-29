@@ -31,6 +31,16 @@ def _mutated_build_workflow(tmp_path: Path, old: str, new: str) -> Path:
     return path
 
 
+def _build_workflow_without_upload_path(tmp_path: Path, upload_path: str) -> Path:
+    lines = BUILD_WORKFLOW_PATH.read_text(encoding="utf-8").splitlines(keepends=True)
+    filtered_lines = [line for line in lines if line.strip() != upload_path]
+    assert len(filtered_lines) == len(lines) - 1
+
+    path = tmp_path / "build.yml"
+    path.write_text("".join(filtered_lines), encoding="utf-8")
+    return path
+
+
 def test_build_workflow_coverage_contract_passes_repo_config() -> None:
     validator, config = _load_config(BUILD_WORKFLOW_PATH)
 
@@ -55,11 +65,33 @@ def test_build_workflow_ml_leg_keeps_no_cov_fast_path(tmp_path: Path) -> None:
     validator, config = _load_config(workflow_path)
 
     assert validator.validate_build_coverage_contract(workflow_path, config) is False
-    assert any('ML test leg must keep COV_FLAGS="--no-cov"' in error for error in validator.errors)
+    assert any("must scope '--no-cov' to the ML matrix leg" in error for error in validator.errors)
+
+
+def test_build_workflow_ml_no_cov_must_be_scoped_to_ml_branch(tmp_path: Path) -> None:
+    workflow_path = _mutated_build_workflow(
+        tmp_path,
+        'if [ "${{ matrix.test-type }}" = "ml" ]; then',
+        "if true; then",
+    )
+    validator, config = _load_config(workflow_path)
+
+    assert validator.validate_build_coverage_contract(workflow_path, config) is False
+    assert any("must scope '--no-cov' to the ML matrix leg" in error for error in validator.errors)
+
+
+def test_build_workflow_core_leg_keeps_xml_coverage_generation(tmp_path: Path) -> None:
+    workflow_path = _mutated_build_workflow(tmp_path, "--cov-report=xml ", "")
+    validator, config = _load_config(workflow_path)
+
+    assert validator.validate_build_coverage_contract(workflow_path, config) is False
+    assert any(
+        "Core test leg must retain coverage generation flags: '--cov-report=xml'" in error for error in validator.errors
+    )
 
 
 def test_build_workflow_coverage_upload_keeps_html_artifact_path(tmp_path: Path) -> None:
-    workflow_path = _mutated_build_workflow(tmp_path, "            htmlcov/\n", "")
+    workflow_path = _build_workflow_without_upload_path(tmp_path, "htmlcov/")
     validator, config = _load_config(workflow_path)
 
     assert validator.validate_build_coverage_contract(workflow_path, config) is False

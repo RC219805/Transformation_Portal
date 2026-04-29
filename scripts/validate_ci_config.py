@@ -35,6 +35,18 @@ class CIValidator:
 
     MIN_CHECKOUT_MAJOR = 4
     REQUIRED_FLAKE8_FATAL_CODES = {"E9", "F63", "F7", "F82"}
+    ML_NO_COV_BLOCK_PATTERN = re.compile(
+        r'if\s+\[\s*"\$\{\{\s*matrix\.test-type\s*\}\}"\s*=\s*"ml"\s*\]\s*;\s*then\s*\n\s*'
+        r'COV_FLAGS="--no-cov"'
+    )
+    CORE_COV_FLAGS_PATTERN = re.compile(r'else\s*\n\s*COV_FLAGS="(?P<flags>[^"]*)"')
+    REQUIRED_CORE_COVERAGE_FLAGS = (
+        "--cov=src/transformation_portal",
+        "--cov=lux_depth_v3",
+        "--cov-report=xml",
+        "--cov-report=html",
+        "--cov-fail-under",
+    )
 
     def __init__(self, repo_root: Path, fix_mode: bool = False):
         self.repo_root = repo_root
@@ -261,10 +273,7 @@ class CIValidator:
             self.log_error("build.yml:test: Missing 'Run tests' step for coverage artifact contract")
             valid = False
         else:
-            run_script = run_tests_step.get("run", "")
-            if not isinstance(run_script, str) or 'COV_FLAGS="--no-cov"' not in run_script:
-                self.log_error('build.yml:test: ML test leg must keep COV_FLAGS="--no-cov" for fast PR feedback')
-                valid = False
+            valid = self._validate_run_tests_coverage_contract(run_tests_step.get("run")) and valid
 
         upload_step = self._find_step_by_name(steps, "Upload coverage reports")
         if upload_step is None:
@@ -285,6 +294,34 @@ class CIValidator:
             if required_path not in upload_paths:
                 self.log_error(f"build.yml:test: Coverage upload path must include {required_path!r}")
                 valid = False
+
+        return valid
+
+    def _validate_run_tests_coverage_contract(self, run_script: object) -> bool:
+        """Validate coverage flag scoping in the build.yml Run tests shell script."""
+        valid = True
+        if not isinstance(run_script, str):
+            self.log_error("build.yml:test: 'Run tests' step must define a run script")
+            return False
+
+        if not self.ML_NO_COV_BLOCK_PATTERN.search(run_script):
+            self.log_error(
+                "build.yml:test: 'Run tests' must scope '--no-cov' to the ML matrix leg with an explicit "
+                "matrix.test-type == 'ml' conditional"
+            )
+            valid = False
+
+        core_flags_match = self.CORE_COV_FLAGS_PATTERN.search(run_script)
+        if core_flags_match is None:
+            self.log_error("build.yml:test: Core test leg must define COV_FLAGS in the non-ML branch")
+            return False
+
+        core_flags = core_flags_match.group("flags")
+        missing_core_flags = [flag for flag in self.REQUIRED_CORE_COVERAGE_FLAGS if flag not in core_flags]
+        if missing_core_flags:
+            missing = ", ".join(repr(flag) for flag in missing_core_flags)
+            self.log_error(f"build.yml:test: Core test leg must retain coverage generation flags: {missing}")
+            valid = False
 
         return valid
 
