@@ -5834,6 +5834,12 @@ def _artifact_display_label(role: str) -> str:
     }.get(role, "File")
 
 
+_STEM_NOISE_RE = re.compile(
+    r"(master16|upscaled16|final|result|render|beauty|marketing|depth|preview"
+    r"|thumb|debug|segmentation|overlay|mask|albedo|normal|roughness|metallic|ao)"
+)
+
+
 def _artifact_compare_group(relative_path: str, path: Path) -> str:
     if not _artifact_is_previewable(path):
         return ""
@@ -5842,11 +5848,7 @@ def _artifact_compare_group(relative_path: str, path: Path) -> str:
     if parent == ".":
         parent = ""
     raw_stem = artifact_path.stem.lower()
-    simplified_stem = re.sub(
-        r"(master16|upscaled16|final|result|render|beauty|marketing|depth|preview|thumb|debug|segmentation|overlay|mask|albedo|normal|roughness|metallic|ao)",
-        " ",
-        raw_stem,
-    )
+    simplified_stem = _STEM_NOISE_RE.sub(" ", raw_stem)
     normalized_stem = re.sub(r"[^a-z0-9]+", "-", simplified_stem).strip("-")
     if not normalized_stem:
         normalized_stem = re.sub(r"[^a-z0-9]+", "-", raw_stem).strip("-")

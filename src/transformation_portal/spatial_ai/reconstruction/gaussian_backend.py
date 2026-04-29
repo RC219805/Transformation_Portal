@@ -28,7 +28,6 @@ from __future__ import annotations
 import logging
 import random
 import time
-from functools import lru_cache
 from typing import Any, Dict, List, Literal, Optional, Tuple
 
 import numpy as np
@@ -230,10 +229,13 @@ class GaussianBackend:
             return "cpu"
 
     def _load_model(self):
-        """Lazy load Gaussian Splatting model.
+        """Lazy load Gaussian Splatting model checkpoint from HuggingFace Hub.
 
-        Uses HuggingFace hub for model management.
-        Revision placeholder enforces explicit verification.
+        Production use requires a pinned model_revision (40-char hex SHA).
+        To obtain the verified SHA run:
+            python scripts/validation/verify_3dgs_artifacts.py
+        See also: docs/analysis/OUTSTANDING_TODOS_EXPERIMENTAL_FEATURES.md §3DGS
+        and docs/spatial_ai/HUGGINGFACE_MODEL_PINNING.md §Phase-2.3.
         """
         if self._model_loaded:
             return
@@ -241,32 +243,27 @@ class GaussianBackend:
         if "NEEDS_VERIFICATION" in self.model_revision:
             logger.warning(
                 f"Model revision '{self.model_revision}' contains placeholder. "
-                "Using mock implementation for testing. "
-                "Replace with verified commit hash for production."
+                "Using mock implementation. "
+                "Replace with verified commit SHA to enable production reconstruction."
             )
-            self._model = None  # Mock mode
+            self._model = None  # Mock mode — optimization runs without pre-trained weights
             self._model_loaded = True
             return
 
-        try:
-            # In production, load actual model from HuggingFace
-            # from huggingface_hub import hf_hub_download
-            # model_path = hf_hub_download(
-            #     repo_id=self.model_repo,
-            #     filename="gaussian_splatting.pth",
-            #     revision=self.model_revision,
-            #     cache_dir=self.cache_dir,
-            # )
-            # self._model = load_gaussian_model(model_path, device=self.device)
-
-            # For now, use mock implementation
-            self._model = None
-            self._model_loaded = True
-            logger.info(f"Gaussian Splatting model loaded (repo={self.model_repo})")
-
-        except Exception as e:
-            logger.error(f"Failed to load Gaussian Splatting model: {e}")
-            raise RuntimeError(f"Model loading failed: {e}") from e
+        # Production path: download is deferred until the checkpoint format is
+        # verified and can be wired into the Gaussian initialization in reconstruct().
+        # Steps needed before enabling:
+        #   1. Pin model_revision via: python scripts/validation/verify_3dgs_artifacts.py
+        #   2. Confirm the filename and format in graphdeco-inria/gaussian-splatting
+        #   3. Load checkpoint and initialize self._gaussians_init from it
+        # Until then, raise so callers get a clear error rather than a silent
+        # no-op download.
+        raise NotImplementedError(
+            f"GaussianBackend production checkpoint loading is pending SHA verification. "
+            f"model_revision='{self.model_revision}' is a non-placeholder revision but "
+            "checkpoint integration into the optimization loop is not yet implemented. "
+            "Run: python scripts/validation/verify_3dgs_artifacts.py"
+        )
 
     def reconstruct(
         self,

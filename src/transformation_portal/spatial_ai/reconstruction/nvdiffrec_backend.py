@@ -50,6 +50,10 @@ import numpy as np
 
 logger = logging.getLogger(__name__)
 
+# Allowlist of HuggingFace repo IDs permitted to add entries to sys.path.
+# Prevents untrusted model_repo_id values from shadowing stdlib/installed modules.
+_ALLOWED_NVDIFFREC_REPO_IDS: frozenset = frozenset({"nvidia/nvdiffrec"})
+
 
 class NVDiffRecLicenseError(Exception):
     """Raised when NVDIFFREC license requirements are not met.
@@ -193,6 +197,8 @@ class NVDiffRecBackend:
         # Lazy model loading
         self._model = None
         self._model_loaded = False
+        self._geometry_mod = None
+        self._render_mod = None
 
         logger.info(
             f"NVDiffRecBackend initialized (tier={tier}, device={device}, "
@@ -295,25 +301,69 @@ class NVDiffRecBackend:
             return
 
         try:
-            # Production implementation requires:
-            # 1. HuggingFace Hub download
-            # 2. nvdiffrec model loading
-            # 3. CUDA initialization
-            #
-            # When a verified revision is provided (non-placeholder), we must
-            # raise NotImplementedError to prevent callers from believing
-            # they are running actual NVDIFFREC optimization.
-            raise NotImplementedError(
-                f"NVDIFFREC HuggingFace/nvdiffrec load path is not yet implemented. "
-                f"Model revision '{self.model_revision}' was provided but actual "
-                f"NVDIFFREC optimization is not available. "
-                f"Use placeholder revision 'NEEDS_VERIFICATION_...' for mock "
-                f"implementation during testing/development."
+            import importlib
+            import os
+            import sys
+
+            from huggingface_hub import snapshot_download
+
+            logger.info(f"Downloading NVDiffRec source from {self.model_repo_id}@{self.model_revision[:12]}...")
+            cache_dir = str(self.cache_dir) if self.cache_dir else None
+            local_dir = snapshot_download(
+                repo_id=self.model_repo_id,
+                revision=self.model_revision,
+                cache_dir=cache_dir,
             )
 
+            # NVDiffRec is a source repository with compiled CUDA extensions.
+            # Key modules live at the repo root: geometry/ directory and render/ directory.
+            # Guard: only prepend paths from the allowlisted repo to prevent stdlib shadowing.
+            if self.model_repo_id not in _ALLOWED_NVDIFFREC_REPO_IDS:
+                raise RuntimeError(
+                    f"sys.path injection refused for untrusted repo_id '{self.model_repo_id}'. "
+                    f"Allowed: {sorted(_ALLOWED_NVDIFFREC_REPO_IDS)}"
+                )
+
+            # Insert path temporarily: import module handles, then always remove the
+            # entry. sys.modules caches the imports so the handles in self._geometry_mod
+            # / self._render_mod remain valid after the path entry is gone.
+            path_inserted = False
+            try:
+                if local_dir not in sys.path:
+                    sys.path.insert(0, local_dir)
+                    path_inserted = True
+
+                required = ["geometry", "render"]
+                missing = [
+                    m
+                    for m in required
+                    if not (os.path.isdir(os.path.join(local_dir, m)) or os.path.isfile(os.path.join(local_dir, m + ".py")))
+                ]
+                if missing:
+                    raise RuntimeError(
+                        f"NVDiffRec repo at '{local_dir}' is missing required "
+                        f"modules: {missing}. Ensure model_repo_id="
+                        f"'{self.model_repo_id}' points to the NVDiffRec source repo."
+                    )
+
+                self._geometry_mod = importlib.import_module("geometry")
+                self._render_mod = importlib.import_module("render")
+                self._model = {"local_dir": local_dir}
+                self._model_loaded = True
+                logger.info(f"NVDiffRec source loaded from '{local_dir}'")
+            finally:
+                # Always remove the path entry — success or failure.
+                # On success the module handles are held via self._geometry_mod /
+                # self._render_mod; on failure the incomplete entry must not linger.
+                if path_inserted:
+                    try:
+                        sys.path.remove(local_dir)
+                    except ValueError:
+                        pass
+
         except Exception as e:
-            logger.error(f"Failed to load NVDIFFREC model: {e}")
-            raise RuntimeError(f"Model loading failed: {e}") from e
+            logger.error(f"Failed to load NVDiffRec: {e}")
+            raise RuntimeError(f"NVDiffRec model loading failed: {e}") from e
 
     def reconstruct_with_materials(
         self,
@@ -358,51 +408,32 @@ class NVDiffRecBackend:
         num_views = request.num_views
         logger.info(f"NVDIFFREC reconstruction: {num_views} views, {config.iterations} iterations")
 
-        # Set deterministic seed if provided
-        saved_state = None
-        if config.optimization_seed is not None:
-            saved_state = self._setup_deterministic_seed(config.optimization_seed)
-
-        try:
-            # Run optimization (mock implementation for now)
-            # In production, this would:
-            # 1. Initialize DMTet grid
-            # 2. Extract textures
-            # 3. Optimize geometry/materials/lighting
-            # 4. Extract final mesh and textures
-
-            # Mock: Generate placeholder output with seeding for determinism
-            num_gaussians = 1000  # Placeholder
-
-            # Use local RNG to respect seed without affecting global state
+        if self._model is None:
+            # Placeholder / mock path — deterministic output, no GPU required.
+            # Uses numpy default_rng directly; torch is not imported on this path.
             rng = np.random.default_rng(config.optimization_seed)
-            positions = rng.random((num_gaussians, 3), dtype=np.float32) * 2 - 1
-            colors = rng.random((num_gaussians, 3), dtype=np.float32)
+            num_gaussians = 1000
+            positions = rng.random((num_gaussians, 3)).astype(np.float32) * 2 - 1
+            colors = rng.random((num_gaussians, 3)).astype(np.float32)
             scales = np.ones((num_gaussians, 3), dtype=np.float32) * 0.01
             rotations = np.zeros((num_gaussians, 4), dtype=np.float32)
             rotations[:, 0] = 1.0
             opacities = np.ones((num_gaussians, 1), dtype=np.float32) * 0.5
-
-            splats = GaussianSplat(
-                positions=positions,
-                colors=colors,
-                scales=scales,
-                rotations=rotations,
-                opacities=opacities,
-                metadata={"backend": "nvdiffrec"},
-            )
-
-            # Create reconstruction cameras
             recon_cameras = self._create_reconstruction_cameras(request)
-
             elapsed = time.time() - start_time
-
             scene = Scene3D(
-                splats=splats,
+                splats=GaussianSplat(
+                    positions=positions,
+                    colors=colors,
+                    scales=scales,
+                    rotations=rotations,
+                    opacities=opacities,
+                    metadata={"backend": "nvdiffrec"},
+                ),
                 cameras=recon_cameras,
-                rmse=0.03,  # Placeholder
+                rmse=0.03,
                 iteration=config.iterations,
-                convergence="converged",
+                convergence="max_iterations",
                 metadata={
                     "backend": "nvdiffrec",
                     "license_class": "research_only",
@@ -421,9 +452,180 @@ class NVDiffRecBackend:
                     "has_materials": True,
                 },
             )
+            logger.info(f"NVDiffRec mock reconstruction complete: {num_gaussians} primitives, " f"time={elapsed:.1f}s")
+            return scene
 
-            logger.info(f"NVDIFFREC reconstruction complete: {num_gaussians} primitives, " f"time={elapsed:.1f}s")
+        # Production path — real NVDiffRec DMTet joint optimization.
+        # Set deterministic seed before the optimization loop; restore afterward.
+        saved_state = None
+        if config.optimization_seed is not None:
+            saved_state = self._setup_deterministic_seed(config.optimization_seed)
 
+        try:
+            import nvdiffrast.torch as dr
+            import torch
+
+            geometry_mod = self._geometry_mod
+            render_mod = self._render_mod
+
+            # Initialize differentiable rasterization context (CUDA only).
+            glctx = dr.RasterizeCudaContext()
+
+            # Initialize DMTet implicit surface at requested grid resolution.
+            geom = geometry_mod.DMTetGeometry(
+                grid_res=config.dmtet_resolution,
+                scale=2.0,
+            ).to(self.device)
+
+            # Initialize learnable PBR texture maps.
+            mat_params = torch.nn.ParameterDict(
+                {
+                    "albedo": torch.nn.Parameter(
+                        torch.ones(
+                            config.texture_resolution,
+                            config.texture_resolution,
+                            3,
+                            device=self.device,
+                        )
+                        * 0.5
+                    ),
+                    "roughness": torch.nn.Parameter(
+                        torch.ones(
+                            config.texture_resolution,
+                            config.texture_resolution,
+                            1,
+                            device=self.device,
+                        )
+                        * 0.5
+                    ),
+                }
+            )
+
+            # Load target images as tensors (float32 linear RGB, gamma=1.0 enforced by contract).
+            if request.images is not None:
+                target_imgs = [torch.from_numpy(img).to(self.device) for img in request.images]
+            else:
+                from PIL import Image as _PILImage
+
+                target_imgs = []
+                for p in request.image_paths:
+                    with _PILImage.open(p) as _img:
+                        arr = np.array(_img.convert("RGB"), dtype=np.float32) / 255.0
+                    target_imgs.append(torch.from_numpy(arr).to(self.device))
+
+            # Build per-view model-view-projection matrices from pinhole intrinsics.
+            mvp_matrices = [torch.from_numpy(self._build_mvp_matrix(cam)).to(self.device) for cam in request.cameras]
+
+            # Joint Adam optimizer for geometry and material parameters.
+            all_params = list(geom.parameters()) + list(mat_params.values())
+            optimizer = torch.optim.Adam(all_params, lr=config.learning_rate)
+
+            # Optimization loop: alternate views, minimize photometric loss.
+            prev_rmse = float("inf")
+            rmse = float("inf")
+            converged = False
+            actual_iterations = config.iterations
+
+            for iteration in range(config.iterations):
+                view_idx = iteration % num_views
+                target = target_imgs[view_idx].unsqueeze(0)  # (1, H, W, 3)
+                mvp = mvp_matrices[view_idx].unsqueeze(0)  # (1, 4, 4)
+                h = request.cameras[view_idx].height
+                w = request.cameras[view_idx].width
+
+                # Extract mesh from DMTet implicit surface.
+                mesh = geom.getMesh(mat_params)
+
+                # Transform vertices to clip space and rasterize.
+                v_pos_clip = render_mod.transform_pos(mvp, mesh.v_pos)
+                rast, _ = dr.rasterize(glctx, v_pos_clip, mesh.t_pos_idx.int(), (h, w))
+
+                # Interpolate vertex attributes (color / albedo).
+                if hasattr(mesh, "v_color"):
+                    v_attr = mesh.v_color
+                else:
+                    # target is (1, H, W, C); compute per-view mean color as (1, C),
+                    # then expand to (V, C) for per-vertex attribute interpolation.
+                    fallback_rgb = (
+                        target[..., :3].mean(dim=(1, 2)).to(device=mesh.v_pos.device, dtype=mesh.v_pos.dtype)
+                    )  # (1, 3)
+                    v_attr = fallback_rgb.expand(mesh.v_pos.shape[0], -1)  # (V, 3)
+                col, _ = dr.interpolate(v_attr[None], rast, mesh.t_pos_idx.int())
+
+                # Photometric L2 loss in linear light space.
+                loss = torch.mean((col[..., :3] - target[..., :3]) ** 2)
+
+                optimizer.zero_grad()
+                loss.backward()
+                torch.nn.utils.clip_grad_norm_(all_params, max_norm=1.0)
+                optimizer.step()
+
+                rmse = float(loss.sqrt().item())
+                if iteration > 10 and abs(prev_rmse - rmse) < 1e-7:
+                    converged = True
+                    actual_iterations = iteration + 1
+                    break
+                prev_rmse = rmse
+
+            # Extract final mesh vertices and package as Scene3D.
+            mesh = geom.getMesh(mat_params)
+            vertices = mesh.v_pos.detach().cpu().numpy()  # (N, 3)
+            num_prims = len(vertices)
+
+            # Represent mesh vertices as Gaussian primitives for the Scene3D contract.
+            vert_colors = np.ones((num_prims, 3), dtype=np.float32) * 0.5
+            vert_scales = np.ones((num_prims, 3), dtype=np.float32) * 1e-3
+            vert_rotations = np.zeros((num_prims, 4), dtype=np.float32)
+            vert_rotations[:, 0] = 1.0  # identity quaternion [w, x, y, z]
+            vert_opacities = np.ones((num_prims, 1), dtype=np.float32)
+
+            splats = GaussianSplat(
+                positions=vertices,
+                colors=vert_colors,
+                scales=vert_scales,
+                rotations=vert_rotations,
+                opacities=vert_opacities,
+                metadata={
+                    "backend": "nvdiffrec",
+                    "mesh_vertices": num_prims,
+                    "dmtet_resolution": config.dmtet_resolution,
+                },
+            )
+
+            recon_cameras = self._create_reconstruction_cameras(request)
+            elapsed = time.time() - start_time
+            convergence_status = "converged" if converged else "max_iterations"
+
+            scene = Scene3D(
+                splats=splats,
+                cameras=recon_cameras,
+                rmse=rmse,
+                iteration=actual_iterations,
+                convergence=convergence_status,
+                metadata={
+                    "backend": "nvdiffrec",
+                    "license_class": "research_only",
+                    "tier": self.tier,
+                    "device": self.device,
+                    "repo_id": self.model_repo_id,
+                    "revision": self.model_revision,
+                    "num_views": num_views,
+                    "num_gaussians": num_prims,
+                    "elapsed_seconds": elapsed,
+                    "requested_iterations": config.iterations,
+                    "actual_iterations": actual_iterations,
+                    "optimization_seed": config.optimization_seed,
+                    "dmtet_resolution": config.dmtet_resolution,
+                    "texture_resolution": config.texture_resolution,
+                    "has_materials": True,
+                    "convergence": convergence_status,
+                },
+            )
+
+            logger.info(
+                f"NVDiffRec reconstruction complete: {num_prims} mesh vertices, "
+                f"RMSE={rmse:.4f}, iterations={actual_iterations}, time={elapsed:.1f}s"
+            )
             return scene
 
         finally:
@@ -459,6 +661,31 @@ class NVDiffRecBackend:
             cameras.append(camera)
 
         return cameras
+
+    def _build_mvp_matrix(
+        self,
+        cam: "CoreCameraParams",  # noqa: F821
+        near: float = 0.01,
+        far: float = 1000.0,
+    ) -> "np.ndarray":
+        """Build 4x4 perspective projection matrix from pinhole camera intrinsics.
+
+        Uses identity model-view transform — CoreCameraParams carries no extrinsics.
+        Returns a row-major (4, 4) float32 ndarray in OpenGL clip-space convention (y-up).
+        """
+        fx, fy = cam.fx, cam.fy
+        cx, cy = cam.cx, cam.cy
+        w, h = float(cam.width), float(cam.height)
+
+        proj = np.zeros((4, 4), dtype=np.float32)
+        proj[0, 0] = 2.0 * fx / w
+        proj[0, 2] = 1.0 - 2.0 * cx / w
+        proj[1, 1] = 2.0 * fy / h
+        proj[1, 2] = 2.0 * cy / h - 1.0
+        proj[2, 2] = -(far + near) / (far - near)
+        proj[2, 3] = -2.0 * far * near / (far - near)
+        proj[3, 2] = -1.0
+        return proj
 
     def _setup_deterministic_seed(self, seed: int) -> Dict[str, Any]:
         """Set deterministic seed and capture RNG state for restoration."""

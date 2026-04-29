@@ -92,6 +92,21 @@ ml = [
     "transformers>=4.40",
     "rawpy>=0.18.0",
 ]
+# Spatial AI research pipeline (Phase 2) — SAM2 + NVDiffRec + 3DGS
+# SAM2 requires a non-standard scripted install in addition to the package:
+#   ./scripts/bootstrap/install_ml_stack.sh --profile core-cpu,sam2
+# NVDiffRec requires manual install of nvdiffrast compiled CUDA extensions:
+#   ./scripts/bootstrap/install_ml_stack.sh --profile nvdiffrec
+# 3DGS (graphdeco-inria/gaussian-splatting) requires SHA verification:
+#   python scripts/validation/verify_3dgs_artifacts.py
+spatial-ai = [
+    "transformation-portal[ml-core]",
+    "huggingface-hub>=0.19",
+    # SAM2: pip install sam2 (requires scripted bootstrap for weights)
+    "sam2>=1.0; python_version >= '3.10'",
+    # nvdiffrast (compiled CUDA extension) must be installed separately:
+    # git clone https://github.com/NVlabs/nvdiffrast && pip install -e .
+]
 # Optional detached signing support for archive attestation CLIs
 archive-signing = [
     "cryptography>=46.0,<47",
