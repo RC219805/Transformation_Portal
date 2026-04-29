@@ -250,27 +250,20 @@ class GaussianBackend:
             self._model_loaded = True
             return
 
-        try:
-            from huggingface_hub import hf_hub_download
-
-            logger.info(
-                f"Downloading Gaussian Splatting checkpoint from "
-                f"{self.model_repo}@{self.model_revision[:12]}..."
-            )
-            cache_dir = str(self.cache_dir) if self.cache_dir else None
-            model_path = hf_hub_download(
-                repo_id=self.model_repo,
-                filename="gaussian_splatting.pth",
-                revision=self.model_revision,
-                cache_dir=cache_dir,
-            )
-            self._model = torch.load(model_path, map_location=self.device, weights_only=True)
-            self._model_loaded = True
-            logger.info(f"Gaussian Splatting model loaded from '{model_path}'")
-
-        except Exception as e:
-            logger.error(f"Failed to load Gaussian Splatting model: {e}")
-            raise RuntimeError(f"Model loading failed: {e}") from e
+        # Production path: download is deferred until the checkpoint format is
+        # verified and can be wired into the Gaussian initialization in reconstruct().
+        # Steps needed before enabling:
+        #   1. Pin model_revision via: python scripts/validation/verify_3dgs_artifacts.py
+        #   2. Confirm the filename and format in graphdeco-inria/gaussian-splatting
+        #   3. Load checkpoint and initialize self._gaussians_init from it
+        # Until then, raise so callers get a clear error rather than a silent
+        # no-op download.
+        raise NotImplementedError(
+            f"GaussianBackend production checkpoint loading is pending SHA verification. "
+            f"model_revision='{self.model_revision}' is a non-placeholder revision but "
+            "checkpoint integration into the optimization loop is not yet implemented. "
+            "Run: python scripts/validation/verify_3dgs_artifacts.py"
+        )
 
     def reconstruct(
         self,
