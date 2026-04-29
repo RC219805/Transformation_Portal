@@ -330,3 +330,119 @@ class TestNVDiffRecPreset:
         assert "license_notice" in preset
         assert "NVIDIA Source Code License" in preset["license_notice"]
         assert "non-commercial" in preset["license_notice"].lower()
+
+
+class TestNVDiffRecProductionLoadPath:
+    """Tests for the production _load_model() HuggingFace download path."""
+
+    def test_load_model_raises_on_network_failure_with_real_revision(self):
+        """Production _load_model() raises RuntimeError when HF download fails.
+
+        In CI there is no real HuggingFace access and no actual NVDiffRec repo
+        at 'nvidia/nvdiffrec'. Providing a non-placeholder revision triggers the
+        real download path, which must raise RuntimeError (not NotImplementedError).
+        """
+        backend = NVDiffRecBackend(
+            tier="apex_research",
+            model_revision="a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",  # fake but non-placeholder
+            skip_preflight=True,
+        )
+        with pytest.raises(RuntimeError, match="NVDiffRec model loading failed"):
+            backend._load_model()
+
+    def test_load_model_mock_path_sets_model_to_none(self):
+        """Placeholder revision keeps _model=None (mock mode)."""
+        backend = NVDiffRecBackend(
+            tier="apex_research",
+            model_revision="NEEDS_VERIFICATION_placeholder",
+            skip_preflight=True,
+        )
+        backend._load_model()
+        assert backend._model is None
+        assert backend._model_loaded is True
+
+    def test_load_model_idempotent(self):
+        """Calling _load_model() twice does not re-run the load logic."""
+        backend = NVDiffRecBackend(
+            tier="apex_research",
+            model_revision="NEEDS_VERIFICATION_placeholder",
+            skip_preflight=True,
+        )
+        backend._load_model()
+        backend._load_model()  # second call must be a no-op
+        assert backend._model_loaded is True
+
+
+class TestNVDiffRecMockPathBehaviour:
+    """Verify mock-path reconstruction after the production-path split."""
+
+    @pytest.fixture(autouse=True)
+    def skip_without_torch(self):
+        pytest.importorskip("torch", reason="torch required for reconstruction tests")
+
+    def _make_request(self, num_views: int = 2) -> "MultiViewReconstructionRequest":
+        cameras = [
+            CoreCameraParams(fx=400.0, fy=400.0, cx=32.0, cy=24.0, width=64, height=48, source="explicit")
+            for _ in range(num_views)
+        ]
+        rng = np.random.default_rng(99)
+        images = [rng.random((48, 64, 3)).astype(np.float32) for _ in range(num_views)]
+        return MultiViewReconstructionRequest(cameras=cameras, images=images, tier="apex_research")
+
+    @pytest.mark.ml
+    def test_mock_convergence_is_max_iterations(self):
+        """Mock path sets convergence='max_iterations' (valid Literal value)."""
+        backend = NVDiffRecBackend(
+            tier="apex_research",
+            model_revision="NEEDS_VERIFICATION_placeholder",
+            skip_preflight=True,
+        )
+        config = NVDiffRecConfig(iterations=5, optimization_seed=7)
+        scene = backend.reconstruct_with_materials(self._make_request(), config)
+        assert scene.convergence == "max_iterations"
+
+    @pytest.mark.ml
+    def test_mock_output_is_deterministic_with_seed(self):
+        """Same seed produces identical mock output."""
+        backend = NVDiffRecBackend(
+            tier="apex_research",
+            model_revision="NEEDS_VERIFICATION_placeholder",
+            skip_preflight=True,
+        )
+        config = NVDiffRecConfig(iterations=5, optimization_seed=42)
+        request = self._make_request()
+        scene_a = backend.reconstruct_with_materials(request, config)
+        scene_b = backend.reconstruct_with_materials(request, config)
+        np.testing.assert_array_equal(scene_a.splats.positions, scene_b.splats.positions)
+
+
+class TestNVDiffRecBuildMvpMatrix:
+    """Tests for the _build_mvp_matrix helper."""
+
+    def test_returns_4x4_float32(self):
+        """_build_mvp_matrix returns a (4, 4) float32 array."""
+        backend = NVDiffRecBackend(
+            tier="apex_research",
+            model_revision="NEEDS_VERIFICATION_placeholder",
+            skip_preflight=True,
+        )
+        cam = CoreCameraParams(fx=800.0, fy=800.0, cx=320.0, cy=240.0, width=640, height=480, source="explicit")
+        mvp = backend._build_mvp_matrix(cam)
+        assert mvp.shape == (4, 4)
+        assert mvp.dtype == np.float32
+
+    def test_focal_length_reflected_in_matrix(self):
+        """Focal length and principal point appear in the correct matrix entries."""
+        backend = NVDiffRecBackend(
+            tier="apex_research",
+            model_revision="NEEDS_VERIFICATION_placeholder",
+            skip_preflight=True,
+        )
+        cam = CoreCameraParams(fx=400.0, fy=500.0, cx=200.0, cy=150.0, width=400, height=300, source="explicit")
+        mvp = backend._build_mvp_matrix(cam)
+        # proj[0,0] = 2*fx/w = 2*400/400 = 2.0
+        assert abs(mvp[0, 0] - 2.0) < 1e-5
+        # proj[1,1] = 2*fy/h = 2*500/300 ≈ 3.333
+        assert abs(mvp[1, 1] - (2.0 * 500.0 / 300.0)) < 1e-5
+        # bottom-left entry is -1 (perspective divide)
+        assert mvp[3, 2] == -1.0
