@@ -197,6 +197,8 @@ class NVDiffRecBackend:
         # Lazy model loading
         self._model = None
         self._model_loaded = False
+        self._geometry_mod = None
+        self._render_mod = None
 
         logger.info(
             f"NVDiffRecBackend initialized (tier={tier}, device={device}, "
@@ -299,12 +301,13 @@ class NVDiffRecBackend:
             return
 
         try:
+            import importlib
             import os
             import sys
 
             from huggingface_hub import snapshot_download
 
-            logger.info(f"Downloading NVDiffRec source from {self.model_repo_id}" f"@{self.model_revision[:12]}...")
+            logger.info(f"Downloading NVDiffRec source from {self.model_repo_id}@{self.model_revision[:12]}...")
             cache_dir = str(self.cache_dir) if self.cache_dir else None
             local_dir = snapshot_download(
                 repo_id=self.model_repo_id,
@@ -321,10 +324,10 @@ class NVDiffRecBackend:
                     f"Allowed: {sorted(_ALLOWED_NVDIFFREC_REPO_IDS)}"
                 )
 
-            # Track insertion so we can clean up on failure without leaving a
-            # partial/broken path entry in the global import path.
+            # Insert path temporarily: import module handles, then always remove the
+            # entry. sys.modules caches the imports so the handles in self._geometry_mod
+            # / self._render_mod remain valid after the path entry is gone.
             path_inserted = False
-            load_succeeded = False
             try:
                 if local_dir not in sys.path:
                     sys.path.insert(0, local_dir)
@@ -343,12 +346,16 @@ class NVDiffRecBackend:
                         f"'{self.model_repo_id}' points to the NVDiffRec source repo."
                     )
 
+                self._geometry_mod = importlib.import_module("geometry")
+                self._render_mod = importlib.import_module("render")
                 self._model = {"local_dir": local_dir}
                 self._model_loaded = True
-                load_succeeded = True
                 logger.info(f"NVDiffRec source loaded from '{local_dir}'")
             finally:
-                if path_inserted and not load_succeeded:
+                # Always remove the path entry — success or failure.
+                # On success the module handles are held via self._geometry_mod /
+                # self._render_mod; on failure the incomplete entry must not linger.
+                if path_inserted:
                     try:
                         sys.path.remove(local_dir)
                     except ValueError:
@@ -455,18 +462,11 @@ class NVDiffRecBackend:
             saved_state = self._setup_deterministic_seed(config.optimization_seed)
 
         try:
-            import importlib
-            import sys
-
             import nvdiffrast.torch as dr
             import torch
 
-            local_dir = self._model["local_dir"]
-            if local_dir not in sys.path:
-                sys.path.insert(0, local_dir)  # allowlist enforced in _load_model
-
-            geometry_mod = importlib.import_module("geometry")
-            render_mod = importlib.import_module("render")
+            geometry_mod = self._geometry_mod
+            render_mod = self._render_mod
 
             # Initialize differentiable rasterization context (CUDA only).
             glctx = dr.RasterizeCudaContext()

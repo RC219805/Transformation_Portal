@@ -192,15 +192,12 @@ class TestNVDiffRecBackendProvenance:
 
 
 class TestNVDiffRecBackendReconstruction:
-    """Tests for reconstruction functionality (mock mode).
+    """Tests for reconstruction functionality (mock mode, torch-free).
 
-    NOTE: These tests require torch and are marked as ML tests.
+    All tests use NEEDS_VERIFICATION_* placeholder revisions, so
+    reconstruct_with_materials() takes the numpy mock path and never
+    imports torch. No GPU or ml-core extras required.
     """
-
-    @pytest.fixture(autouse=True)
-    def skip_without_torch(self):
-        """Skip if torch not available."""
-        pytest.importorskip("torch", reason="torch required for reconstruction tests")
 
     def _make_cameras(self, count: int) -> list:
         """Create test cameras."""
@@ -214,7 +211,6 @@ class TestNVDiffRecBackendReconstruction:
         np.random.seed(seed)
         return [np.random.rand(48, 64, 3).astype(np.float32) for _ in range(count)]
 
-    @pytest.mark.ml
     def test_reconstruct_with_materials_returns_scene(self):
         """reconstruct_with_materials returns Scene3D."""
         backend = NVDiffRecBackend(
@@ -240,7 +236,6 @@ class TestNVDiffRecBackendReconstruction:
         assert scene.metadata["backend"] == "nvdiffrec"
         assert scene.metadata["license_class"] == "research_only"
 
-    @pytest.mark.ml
     def test_reconstruction_metadata_completeness(self):
         """Reconstruction metadata contains required fields."""
         backend = NVDiffRecBackend(
@@ -380,10 +375,13 @@ class TestNVDiffRecProductionLoadPath:
         assert backend._model_loaded is True
 
 
+@pytest.mark.unit
 class TestNVDiffRecMockPathBehaviour:
-    """Verify mock-path reconstruction after the production-path split.
+    """Verify torch-free mock-path reconstruction after the production-path split.
 
-    These tests run without torch — the mock path uses only numpy.
+    These tests intentionally exercise NEEDS_VERIFICATION_* placeholder revisions
+    and must remain runnable without torch. The mock path uses only numpy, so this
+    coverage belongs in the unit lane rather than ML-gated test selection.
     """
 
     def _make_request(self, num_views: int = 2) -> "MultiViewReconstructionRequest":
