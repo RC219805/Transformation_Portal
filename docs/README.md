@@ -5,7 +5,8 @@ records. Use this page for current navigation; point-in-time reports remain in
 place for audit context but are not live runbooks unless they are linked below
 as canonical documents.
 
-**Current baseline:** `main` through PR #1562, April 27, 2026.
+**Current baseline:** repo-wide refresh audit dated April 29, 2026, building on
+`main` through PR #1562.
 
 ## Start Here
 
@@ -13,6 +14,7 @@ as canonical documents.
 | --- | --- |
 | Repository overview and setup | [Main README](../README.md) |
 | Full documentation map | [Documentation Map](governance/DOCUMENTATION_MAP.md) |
+| Documentation refresh audit | [2026-04-29 Documentation Refresh Audit](governance/DOCUMENTATION_REFRESH_AUDIT_2026-04-29.md) |
 | Documentation state audit | [2026-04-27 Documentation State Audit](governance/DOCUMENTATION_STATE_AUDIT_2026-04-27.md) |
 | Local setup and environment checks | [Setup Guide](guides/SETUP_GUIDE.md) |
 | Portal and orchestrator contracts | [Portal + Orchestrator Quickstart](guides/PORTAL_ORCHESTRATOR_QUICKSTART.md) |
@@ -61,12 +63,15 @@ current documentation map.
 - Current navigation belongs in [Documentation Map](governance/DOCUMENTATION_MAP.md);
   duplicate or superseded material should be archived, labeled historical, or
   removed from current indexes.
+- Repo-wide classification evidence lives in
+  [2026-04-29 Documentation Refresh Audit](governance/DOCUMENTATION_REFRESH_AUDIT_2026-04-29.md)
+  and its inventory CSV.
 - Validate documentation structure with:
 
 ```bash
 make check-docs
 make check-stale-docs
-python scripts/governance/check_docs_structure.py --all
+python3 scripts/governance/check_docs_structure.py --all
 ```
 
-**Last Updated:** 2026-04-27
+**Last Updated:** 2026-04-29
