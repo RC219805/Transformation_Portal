@@ -13,7 +13,6 @@ import pytest
 from pydantic import ValidationError
 
 from transformation_portal.api.v1 import (
-    ApiEnvelope,
     UploadArtifacts,
     UploadStagingData,
     UploadStagingEnvelope,
@@ -21,15 +20,22 @@ from transformation_portal.api.v1 import (
 )
 
 
-# Reference shape from StagedUploadResult.to_response_data()
+# Reference shape from StagedUploadResult.to_response_data().
+# Filenames and paths mirror the constants in upload_staging.py:
+#   BASELINE_MANIFEST_FILENAME = "baseline_manifest.tp.meta.baseline_manifest.v1.json"
+#   CAPTURE_METADATA_FILENAME  = "capture_metadata.tp.meta.capture.v1.json"
+#   UPLOAD_RECEIPT_FILENAME    = "upload_receipt.tp.orchestrator.upload_staging.v1.json"
+# portal_dir is built as batch_root / "_portal" (upload_staging.py:472).
+_BATCH = "upload_1700000000_abcd1234"
+_PORTAL = f"/uploads/batches/{_BATCH}/_portal"
 _SAMPLE_RESPONSE_DATA: dict = {
-    "batch_id": "upload_1700000000_abcd1234",
-    "input_dir": "/uploads/batches/upload_1700000000_abcd1234/input",
-    "metadata_dir": "/uploads/batches/upload_1700000000_abcd1234/portal",
+    "batch_id": _BATCH,
+    "input_dir": f"/uploads/batches/{_BATCH}/input",
+    "metadata_dir": _PORTAL,
     "artifacts": {
-        "baseline_manifest_path": "/uploads/batches/upload_1700000000_abcd1234/portal/baseline_manifest.json",
-        "capture_metadata_path": "/uploads/batches/upload_1700000000_abcd1234/portal/capture_metadata.json",
-        "upload_receipt_path": "/uploads/batches/upload_1700000000_abcd1234/portal/upload_receipt.json",
+        "baseline_manifest_path": f"{_PORTAL}/baseline_manifest.tp.meta.baseline_manifest.v1.json",
+        "capture_metadata_path": f"{_PORTAL}/capture_metadata.tp.meta.capture.v1.json",
+        "upload_receipt_path": f"{_PORTAL}/upload_receipt.tp.orchestrator.upload_staging.v1.json",
     },
     "received_at_epoch_seconds": 1700000000.0,
     "summary": {
@@ -51,9 +57,9 @@ _SAMPLE_RESPONSE_DATA: dict = {
 class TestUploadArtifacts:
     def test_valid_shape_validates(self) -> None:
         arts = UploadArtifacts(**_SAMPLE_RESPONSE_DATA["artifacts"])
-        assert arts.baseline_manifest_path.endswith("baseline_manifest.json")
-        assert arts.capture_metadata_path.endswith("capture_metadata.json")
-        assert arts.upload_receipt_path.endswith("upload_receipt.json")
+        assert arts.baseline_manifest_path.endswith("baseline_manifest.tp.meta.baseline_manifest.v1.json")
+        assert arts.capture_metadata_path.endswith("capture_metadata.tp.meta.capture.v1.json")
+        assert arts.upload_receipt_path.endswith("upload_receipt.tp.orchestrator.upload_staging.v1.json")
 
     def test_extra_keys_are_preserved(self) -> None:
         arts = UploadArtifacts(
@@ -161,5 +167,25 @@ class TestUploadStagingEnvelope:
         assert dumped["data"]["batch_id"] == _SAMPLE_RESPONSE_DATA["batch_id"]
         assert dumped["data"]["summary"]["file_count"] == 3
 
-    def test_envelope_alias_is_api_envelope(self) -> None:
-        assert UploadStagingEnvelope is ApiEnvelope[UploadStagingData]
+    def test_envelope_validates_upload_staging_data_shape(self) -> None:
+        payload = UploadStagingEnvelope(
+            **{
+                "schema": "tp.orchestrator.upload_staging.v1",
+                "success": True,
+                "data": _SAMPLE_RESPONSE_DATA,
+                "error": None,
+            }
+        )
+        assert isinstance(payload.data, UploadStagingData)
+        assert payload.data.batch_id == _SAMPLE_RESPONSE_DATA["batch_id"]
+
+        invalid_data = {k: v for k, v in _SAMPLE_RESPONSE_DATA.items() if k != "batch_id"}
+        with pytest.raises(ValidationError):
+            UploadStagingEnvelope(
+                **{
+                    "schema": "tp.orchestrator.upload_staging.v1",
+                    "success": True,
+                    "data": invalid_data,
+                    "error": None,
+                }
+            )

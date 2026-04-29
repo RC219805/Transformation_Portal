@@ -12,7 +12,6 @@ import pytest
 from pydantic import ValidationError
 
 from transformation_portal.api.v1 import (
-    ApiEnvelope,
     PortalEventData,
     PortalEventEnvelope,
     PortalRumIngestData,
@@ -73,8 +72,28 @@ class TestPortalEventEnvelope:
         assert dumped["success"] is True
         assert dumped["data"]["accepted"] is True
 
-    def test_envelope_alias_is_api_envelope(self) -> None:
-        assert PortalEventEnvelope is ApiEnvelope[PortalEventData]
+    def test_envelope_validates_portal_event_data_shape(self) -> None:
+        payload = PortalEventEnvelope(
+            **{
+                "schema": "tp.orchestrator.portal_event.v1",
+                "success": True,
+                "data": {"accepted": True, "event": {"event_type": "config_exported"}},
+                "error": None,
+            }
+        )
+        assert payload.data.accepted is True
+        assert payload.data.event is not None
+        assert payload.data.event["event_type"] == "config_exported"
+
+        with pytest.raises(ValidationError):
+            PortalEventEnvelope(
+                **{
+                    "schema": "tp.orchestrator.portal_event.v1",
+                    "success": True,
+                    "data": {"event": {"event_type": "config_exported"}},
+                    "error": None,
+                }
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -152,5 +171,25 @@ class TestPortalRumIngestEnvelope:
         dumped = payload.model_dump(mode="json")
         assert dumped["data"]["event"]["value"] == 1.23
 
-    def test_envelope_alias_is_api_envelope(self) -> None:
-        assert PortalRumIngestEnvelope is ApiEnvelope[PortalRumIngestData]
+    def test_envelope_validates_portal_rum_ingest_data_shape(self) -> None:
+        payload = PortalRumIngestEnvelope(
+            **{
+                "schema": "tp.orchestrator.portal_rum_ingest.v1",
+                "success": True,
+                "data": {"accepted": True, "event": {"event_type": "timing", "value": 1.23}},
+                "error": None,
+            }
+        )
+        assert payload.data.accepted is True
+        assert payload.data.event is not None
+        assert payload.data.event["value"] == 1.23
+
+        with pytest.raises(ValidationError):
+            PortalRumIngestEnvelope(
+                **{
+                    "schema": "tp.orchestrator.portal_rum_ingest.v1",
+                    "success": True,
+                    "data": {"event": {"event_type": "timing"}},
+                    "error": None,
+                }
+            )
