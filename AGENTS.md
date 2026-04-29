@@ -65,7 +65,7 @@ Quick reference for common workflows and commands in this repo.
 - `make clean-all` remove all build artifacts (Python + Node).
 - `make lint` run flake8 + pylint (non-blocking).
 - `make lint-parity` run the GitHub lint job locally with the CI-pinned Python 3.12 lint environment.
-- `make ci` run local CI checks (lint + check-json-serialization + check-python-headers + check-yaml-governance + check-piptools-cache + check-requirements-lock-contract + check-ci-sync + test-fast + test-orchestrator-contract + test-frontdoor-contract).
+- `make ci` run local CI checks (lint + check-json-serialization + check-python-headers + check-yaml-governance + check-piptools-cache + check-requirements-lock-contract + check-ci-sync + check-portal-asset-budgets + test-fast + test-orchestrator-contract + test-frontdoor-contract).
 - `make ci-full` run comprehensive local CI (`./scripts/local_ci_check.sh`).
 - `make ci-quick` run quick local CI (`./scripts/local_ci_check.sh --quick`).
 - `make pre-commit` run pre-commit hooks with CI-aligned Black/isort versions.
@@ -75,7 +75,7 @@ Quick reference for common workflows and commands in this repo.
 - `make check-quality` dry-run quality auto-fix checks (`scripts/auto_fix_quality.py --dry-run`).
 - `make check-environment` run pre-flight environment validation through the resolved repo interpreter.
 - `make check-worktree` check if git worktree is clean after builds (`scripts/validation/check_worktree_clean.sh`).
-- `make validate-ci` validate GitHub Actions configs plus gitleaks, dependency-update, and Dependabot workflow contracts.
+- `make validate-ci` validate GitHub Actions configs plus workflow concurrency, gitleaks, dependency-update, and Dependabot workflow contracts.
 - `make check-json-serialization` fail when raw `json.dump`/`json.dumps` usage is detected outside approved modules.
 - `make check-python-headers` fail when Python header lines 1-2 contain invalid encoding-cookie-like text outside valid PEP 263 declarations.
 - `make check-yaml-governance` fail when raw `yaml.safe_load` usage appears outside the shared preset loader or explicitly exempt non-preset loaders.
@@ -89,10 +89,14 @@ Quick reference for common workflows and commands in this repo.
 - `make organize-docs` move markdown files into `docs/` (repo hygiene).
 - `make check-docs` dry-run docs organization.
 - `make check-stale-docs` detect changed-file references to deleted or moved docs root paths.
+- `python3 scripts/governance/check_docs_structure.py --all` run the canonical documentation structure validator across all docs.
 - `make lock` regenerate all requirements lockfiles.
 - `make lock-prod` regenerate `requirements.lock.txt`.
 - `make lock-ci` regenerate `requirements-ci.lock.txt`.
 - `make lock-dev` regenerate `requirements-dev.lock.txt`.
+- `make compile-ml-darwin-arm64`, `make update-ml-darwin-arm64`, and `make check-ml-darwin-arm64` delegate to the Darwin arm64 target-owned ML lock workflow under `requirements/` with `LOCK_PYTHON_VERSION=3.11`.
+- `make compile-ml-linux-x86_64`, `make update-ml-linux-x86_64`, and `make check-ml-linux-x86_64` fail closed through the frozen unsupported Linux x86_64 ML lock lane.
+- `make compile-ml-darwin-x86_64`, `make update-ml-darwin-x86_64`, and `make check-ml-darwin-x86_64` fail closed through the frozen Darwin x86_64 ML lock lane.
 - `cd requirements && make compile LOCK_PYTHON_VERSION=3.11` compile only the generic checked-in layered lockfiles (`all/base/dev/ci/security/tools-archive`).
 - `cd requirements && make compile-ml-darwin-arm64 LOCK_PYTHON_VERSION=3.11` compile the Darwin arm64 target-owned ML lock on native Darwin arm64 only.
 - `cd requirements && make compile-ml-linux-x86_64 LOCK_PYTHON_VERSION=3.11` fail closed because the Linux x86_64 target-owned ML lock is frozen as an unsupported historical lane.
@@ -129,6 +133,13 @@ Quick reference for common workflows and commands in this repo.
 - `./scripts/validation/run_full_validation_suite.sh --quick` skip browser smokes for faster iteration.
 - `./scripts/validation/run_full_validation_suite.sh --skip-frontdoor` Python-only validation.
 - `./scripts/validation/check_worktree_clean.sh` verify git worktree is clean after builds.
+
+## Docker workflows
+- `docker compose up --build transformation-portal-cpu` build/run the CPU FastAPI service on host port `8000`; Compose reads root `.env` with `required: false`, but set `TP_API_KEY` for non-throwaway runs.
+- `docker compose up --build transformation-portal-gpu` build/run the CUDA service on host port `8001` with the NVIDIA runtime.
+- `docker compose run --rm transformation-portal-worker` run the one-shot batch processor against mounted `./input`, `./output`, and `./config`.
+- `docker compose up --build transformation-portal-monitor` run the optional monitor dashboard on host port `8080`; this service has its own Compose healthcheck.
+- `Dockerfile` image healthchecks for `cpu`, `gpu`, and `apple-silicon` hit `/healthz` on container port `8000`; avoid adding Compose service healthchecks for `cpu`/`gpu` unless intentionally overriding image healthchecks.
 
 ## ML Layer Bootstrap Script (ADR-032 Platform Matrix)
 ### Core profiles (mutually exclusive)
