@@ -35,6 +35,18 @@ class CIValidator:
 
     MIN_CHECKOUT_MAJOR = 4
     REQUIRED_FLAKE8_FATAL_CODES = {"E9", "F63", "F7", "F82"}
+    ML_NO_COV_BLOCK_PATTERN = re.compile(
+        r'if\s+\[\s*"\$\{\{\s*matrix\.test-type\s*\}\}"\s*=\s*"ml"\s*\]\s*;\s*then\s*\n\s*'
+        r'COV_FLAGS="--no-cov"'
+    )
+    CORE_COV_FLAGS_PATTERN = re.compile(r'else\s*\n\s*COV_FLAGS="(?P<flags>[^"]*)"')
+    REQUIRED_CORE_COVERAGE_FLAGS = (
+        "--cov=src/transformation_portal",
+        "--cov=lux_depth_v3",
+        "--cov-report=xml",
+        "--cov-report=html",
+        "--cov-fail-under",
+    )
 
     def __init__(self, repo_root: Path, fix_mode: bool = False):
         self.repo_root = repo_root
@@ -239,6 +251,97 @@ class CIValidator:
 
         return valid
 
+    def validate_build_coverage_contract(self, workflow_path: Path, config: Dict) -> bool:
+        """Validate the canonical PR gate coverage artifact contract."""
+        if workflow_path.name != "build.yml":
+            return True
+
+        valid = True
+        jobs = config.get("jobs", {})
+        test_job = jobs.get("test") if isinstance(jobs, dict) else None
+        if not isinstance(test_job, dict):
+            self.log_error("build.yml:test: Missing test job for coverage artifact contract")
+            return False
+
+        steps = test_job.get("steps", [])
+        if not isinstance(steps, list):
+            self.log_error("build.yml:test: Steps must be a list for coverage artifact contract")
+            return False
+
+        run_tests_step = self._find_step_by_name(steps, "Run tests")
+        if run_tests_step is None:
+            self.log_error("build.yml:test: Missing 'Run tests' step for coverage artifact contract")
+            valid = False
+        else:
+            valid = self._validate_run_tests_coverage_contract(run_tests_step.get("run")) and valid
+
+        upload_step = self._find_step_by_name(steps, "Upload coverage reports")
+        if upload_step is None:
+            self.log_error("build.yml:test: Missing 'Upload coverage reports' step for coverage artifact contract")
+            return False
+
+        expected_if = "always() && matrix.test-type == 'core'"
+        if upload_step.get("if") != expected_if:
+            self.log_error(
+                "build.yml:test: Coverage upload step must be guarded by "
+                f"{expected_if!r} because only core legs generate coverage artifacts"
+            )
+            valid = False
+
+        with_config = upload_step.get("with", {})
+        upload_paths = self._normalize_upload_paths(with_config.get("path") if isinstance(with_config, dict) else None)
+        for required_path in ("coverage.xml", "htmlcov/"):
+            if required_path not in upload_paths:
+                self.log_error(f"build.yml:test: Coverage upload path must include {required_path!r}")
+                valid = False
+
+        return valid
+
+    def _validate_run_tests_coverage_contract(self, run_script: object) -> bool:
+        """Validate coverage flag scoping in the build.yml Run tests shell script."""
+        valid = True
+        if not isinstance(run_script, str):
+            self.log_error("build.yml:test: 'Run tests' step must define a run script")
+            return False
+
+        if not self.ML_NO_COV_BLOCK_PATTERN.search(run_script):
+            self.log_error(
+                "build.yml:test: 'Run tests' must scope '--no-cov' to the ML matrix leg with an explicit "
+                "matrix.test-type == 'ml' conditional"
+            )
+            valid = False
+
+        core_flags_match = self.CORE_COV_FLAGS_PATTERN.search(run_script)
+        if core_flags_match is None:
+            self.log_error("build.yml:test: Core test leg must define COV_FLAGS in the non-ML branch")
+            return False
+
+        core_flags = core_flags_match.group("flags")
+        missing_core_flags = [flag for flag in self.REQUIRED_CORE_COVERAGE_FLAGS if flag not in core_flags]
+        if missing_core_flags:
+            missing = ", ".join(repr(flag) for flag in missing_core_flags)
+            self.log_error(f"build.yml:test: Core test leg must retain coverage generation flags: {missing}")
+            valid = False
+
+        return valid
+
+    @staticmethod
+    def _find_step_by_name(steps: List[Dict], name: str) -> Optional[Dict]:
+        """Return the first workflow step with the supplied display name."""
+        for step in steps:
+            if isinstance(step, dict) and step.get("name") == name:
+                return step
+        return None
+
+    @staticmethod
+    def _normalize_upload_paths(path_config: object) -> Set[str]:
+        """Return normalized artifact upload paths from workflow action config."""
+        if isinstance(path_config, str):
+            return {line.strip() for line in path_config.splitlines() if line.strip()}
+        if isinstance(path_config, list):
+            return {str(item).strip() for item in path_config if str(item).strip()}
+        return set()
+
     def validate_workflow(self, workflow_path: Path) -> bool:
         """Validate a single workflow file."""
         print(f"\n→ Validating {workflow_path.name}...")
@@ -256,6 +359,7 @@ class CIValidator:
             self.validate_checkout_action(workflow_path, config),
             self.validate_common_issues(workflow_path, config),
             self.validate_flake8_config(workflow_path, config),
+            self.validate_build_coverage_contract(workflow_path, config),
         ]
 
         return all(validations)
