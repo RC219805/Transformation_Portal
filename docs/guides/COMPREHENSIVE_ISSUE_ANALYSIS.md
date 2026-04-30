@@ -638,7 +638,7 @@ dependencies = [...]  # All dependencies listed as required
 ```toml
 [project.optional-dependencies]
 ml = [
-    "torch>=2.0,<3",
+    "torch>=2.8.0,<3",
     "diffusers>=0.20,<1",
     "transformers>=4.35.0,<5",
 ]

@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """CI validation script to detect unsafe torch.load() usage.
 
-This script scans the codebase for raw torch.load() calls that don't use
-weights_only=True, which would bypass CVE-2025-32434 mitigation.
+This script scans the codebase for raw torch.load() calls that do not use
+weights_only=True, which would bypass mandatory checkpoint-loading hardening.
 
 SECURITY CONTEXT:
     CVE-2025-32434 is a critical RCE vulnerability (CVSS 9.8) in torch.load().
-    Instead of upgrading torch (which would break CAS determinism), we mitigate
-    at runtime by enforcing weights_only=True on all torch.load() calls.
+    Supported repository lanes require a patched PyTorch baseline. Runtime
+    enforcement of weights_only=True remains mandatory defense in depth.
 
     This CI gate ensures no raw torch.load() usage slips through code review.
 
@@ -31,11 +31,13 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterator, List, Sequence
 
-
 # Directories to skip
 SKIP_DIRS = {
     ".git",
     ".venv",
+    ".venv-da3",
+    ".venv-depth-pro",
+    ".runtime",
     "venv",
     "__pycache__",
     ".pytest_cache",
@@ -52,30 +54,26 @@ ALLOWED_FILES = {
     "src/transformation_portal/core/security/torch_security.py",
     # Test files for security module
     "tests/test_torch_security.py",
+    "tests/security/test_platform_security_profile.py",
     # This validation script discusses torch.load in documentation
     "scripts/validation/check_unsafe_torch_load.py",
 }
 
 # Pattern to detect torch.load() calls
 # This matches: torch.load(...) where ... doesn't contain weights_only=True
-TORCH_LOAD_PATTERN = re.compile(
-    r'\btorch\.load\s*\('
-)
+TORCH_LOAD_PATTERN = re.compile(r"\btorch\.load\s*\(")
 
 # Pattern to detect safe usage with weights_only=True
-SAFE_USAGE_PATTERN = re.compile(
-    r'\btorch\.load\s*\([^)]*weights_only\s*=\s*True'
-)
+SAFE_USAGE_PATTERN = re.compile(r"\btorch\.load\s*\([^)]*weights_only\s*=\s*True")
 
 # Pattern to detect our safe_load() wrapper
-SAFE_LOAD_PATTERN = re.compile(
-    r'\bsafe_load\s*\('
-)
+SAFE_LOAD_PATTERN = re.compile(r"\bsafe_load\s*\(")
 
 
 @dataclass
 class Violation:
     """Represents an unsafe torch.load() usage."""
+
     file: Path
     line_number: int
     line_content: str
@@ -113,7 +111,7 @@ def is_in_string(line: str, pattern: re.Pattern) -> bool:
     if not match:
         return False
 
-    before_match = line[:match.start()]
+    before_match = line[: match.start()]
 
     # Track quote context more carefully
     # We look for unmatched quotes by scanning character by character
@@ -123,7 +121,7 @@ def is_in_string(line: str, pattern: re.Pattern) -> bool:
     while i < len(before_match):
         char = before_match[i]
         # Handle escape sequences
-        if i + 1 < len(before_match) and before_match[i] == '\\':
+        if i + 1 < len(before_match) and before_match[i] == "\\":
             i += 2  # Skip escaped character
             continue
         # Track quote state
@@ -233,7 +231,8 @@ def main(args: Sequence[str] | None = None) -> int:
         description="Check for unsafe torch.load() usage in codebase",
     )
     parser.add_argument(
-        "--verbose", "-v",
+        "--verbose",
+        "-v",
         action="store_true",
         help="Show verbose output including scanned files",
     )
@@ -295,7 +294,7 @@ def main(args: Sequence[str] | None = None) -> int:
     # Report results
     print()
     print("=" * 72)
-    print("TORCH.LOAD() SECURITY CHECK (CVE-2025-32434)")
+    print("TORCH.LOAD() CHECKPOINT HARDENING CHECK")
     print("=" * 72)
     print()
     print(f"Files scanned: {files_scanned}")
@@ -320,7 +319,7 @@ def main(args: Sequence[str] | None = None) -> int:
 
         print("-" * 72)
         print()
-        print("⛔ CI GATE FAILED: Unsafe torch.load() usage violates security policy")
+        print("CI GATE FAILED: Unsafe torch.load() usage violates security policy")
         print()
         print("Resolution:")
         print("  1. Import: from transformation_portal.core.security.torch_security import safe_load")
@@ -329,7 +328,7 @@ def main(args: Sequence[str] | None = None) -> int:
         print()
         print("Documentation:")
         print("  - See: src/transformation_portal/core/security/torch_security.py")
-        print("  - See: SECURITY.md for CVE-2025-32434 mitigation policy")
+        print("  - See: SECURITY.md for checkpoint-loading hardening policy")
         print()
 
         if parsed.ci_mode:

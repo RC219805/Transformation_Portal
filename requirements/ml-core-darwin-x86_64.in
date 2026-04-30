@@ -18,14 +18,15 @@
 #
 # SECURITY NOTE (CVE-2025-32434):
 #   torch < 2.6.0 has a critical RCE vulnerability via torch.load()
-#   MITIGATION: All torch.load() calls use weights_only=True at runtime
-#   This preserves CAS determinism while mitigating the vulnerability.
+#   This frozen lane is not a supported remediation target. weights_only=True
+#   remains mandatory defense in depth, but it is not considered a complete
+#   fix for this historical torch baseline.
 #
 # See: requirements/README.md for layering rationale.
 
 # --- PyTorch (macOS, deterministic) ---
 # CAS DETERMINISM: Pinned versions for reproducible environment fingerprints
-# SECURITY: CVE-2025-32434 mitigated via weights_only=True at runtime
+# SECURITY: frozen unsupported lane; do not treat runtime hardening as a fix
 torch==2.2.2  # CAS determinism: cross-platform reproducibility
 torchvision==0.17.2  # CAS determinism: matches torch 2.2.2
 

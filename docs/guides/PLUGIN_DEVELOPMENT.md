@@ -365,8 +365,8 @@ my_plugin/
   "license": "MIT",
   "homepage": "https://github.com/yourusername/my_plugin",
   "dependencies": [
-    "torch>=2.0",
-    "torchvision>=0.15"
+    "torch>=2.8.0",
+    "torchvision>=0.23.0"
   ],
   "min_portal_version": "0.1.0"
 }

@@ -199,10 +199,11 @@ class PlatformMatrix:
         Security Context:
             The supported Apple Silicon lane now pins torch==2.8.0.
             Linux and macOS Intel remain frozen unsupported historical ML lanes.
-            All platforms must use weights_only=True for torch.load() calls.
+            All platforms must use weights_only=True for torch.load() calls as
+            defense in depth.
         """
         base_mitigation = (
-            "All torch.load() calls must use weights_only=True. "
+            "All torch.load() calls must use weights_only=True as defense in depth. "
             "Use transformation_portal.core.security.torch_security.safe_load() "
             "or explicitly pass weights_only=True."
         )
@@ -214,10 +215,11 @@ class PlatformMatrix:
                 "platform": self.canonical_target,
                 "cve_2025_32434_note": (
                     "macOS Intel (x86_64) remains on the frozen torch==2.2.2 lane, "
-                    "which is vulnerable to CVE-2025-32434 and no longer supported for ML workloads."
+                    "which is vulnerable to CVE-2025-32434 and no longer supported for ML workloads. "
+                    "weights_only=True is not considered a complete remediation for this lane."
                 ),
                 "mitigation": base_mitigation,
-                "secure": False,  # macOS Intel has no torch>=2.6.0 wheels (dropped platform support)
+                "secure": False,  # macOS Intel has no supported torch>=2.8.0 baseline.
                 "ml_supported": allow_bypass,  # Only if explicitly bypassed
             }
         if self.is_apple_silicon:
@@ -265,7 +267,7 @@ class PlatformMatrix:
         """Emit warning if ML stack has known security considerations.
 
         Call this when initializing ML workloads to alert users about
-        security mitigations required for CVE-2025-32434.
+        security hardening required for checkpoint loading.
 
         Note: This is a warning, not a hard fail. Use assert_ml_supported()
         for enforcement.
@@ -567,7 +569,7 @@ def compute_cas_identity(
 # CAS Identity Schema Version (ADR-032)
 # Increment this when CAS identity computation changes to invalidate old artifacts
 # v1: Initial schema (platform_id, env_fingerprint, lockfile_hash)
-# v2: Added security_profile for CVE-2025-32434 mitigation tracking
+# v2: Added security_profile for checkpoint-loading security tracking
 CAS_IDENTITY_SCHEMA_VERSION = "adr-032-v2"
 
 

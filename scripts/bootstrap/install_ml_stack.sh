@@ -285,19 +285,19 @@ install_profile() {
     local platform_id
 
     # SECURITY BLOCK: macOS Intel (x86_64) is NOT SUPPORTED for ML workloads
-    # CVE-2025-32434 cannot be fully mitigated on this platform due to
-    # lack of secure PyTorch wheels. This is a HARD FAIL, not a warning.
+    # CVE-2025-32434 cannot be remediated on this platform due to lack of
+    # supported secure PyTorch wheels. This is a HARD FAIL, not a warning.
     if [[ "$(python_platform_os)" == "Darwin" ]] && [[ "$(python_platform_arch)" == "x86_64" ]]; then
         log_error "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
         log_error "SECURITY BLOCK: macOS Intel (x86_64) ML Stack NOT SUPPORTED"
         log_error "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
         log_error ""
-        log_error "PyTorch does not provide torch>=2.6.0 wheels for macOS Intel."
+        log_error "PyTorch does not provide the repo-supported torch>=2.8.0 baseline for macOS Intel."
         log_error "The frozen macOS Intel lane remains on torch==2.2.2, which is"
         log_error "vulnerable to CVE-2025-32434 (CVSS 9.8 Critical RCE via torch.load)."
         log_error ""
-        log_error "While runtime mitigation (weights_only=True) exists, macOS Intel"
-        log_error "cannot receive a secure PyTorch version upgrade path."
+        log_error "While runtime hardening (weights_only=True) remains mandatory,"
+        log_error "macOS Intel cannot receive a supported PyTorch version upgrade path."
         log_error ""
         log_error "REQUIRED ACTION:"
         log_error "  Migrate to macOS Apple Silicon (arm64) or Linux."
