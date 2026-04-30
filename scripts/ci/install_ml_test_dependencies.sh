@@ -48,8 +48,8 @@ if [[ -n "${ml_lockfile}" ]]; then
   fi
   "${python_bin}" -m pip install -r "${ml_lockfile}"
 else
-  echo "No TP_CI_ML_LOCKFILE set; installing secure pyproject ML extras for CI."
-  "${python_bin}" -m pip install -e ".[ml]"
+  echo "No TP_CI_ML_LOCKFILE set; installing secure pyproject ML core extras for CI."
+  "${python_bin}" -m pip install -e ".[ml-core]"
   project_installed=1
 fi
 

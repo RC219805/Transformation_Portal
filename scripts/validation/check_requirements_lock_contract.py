@@ -7,8 +7,8 @@ This validator enforces the following contracts:
 3. Non-core optional and retired unsupported ML lockfiles must not be checked in
 4. Darwin arm64 ML inputs must preserve the supported security baseline
 5. Known-bad runtime combinations must be rejected in lockfiles
-7. The lock ownership manifest must cover every governed checked-in lock exactly once
-8. Generic lockfiles must retain platform-marked core runtime packages declared in base.in
+6. The lock ownership manifest must cover every governed checked-in lock exactly once
+7. Generic lockfiles must retain platform-marked core runtime packages declared in base.in
 
 CONTRACT SEPARATION:
 - Target-owned ML lockfiles: ml-core-darwin-arm64
