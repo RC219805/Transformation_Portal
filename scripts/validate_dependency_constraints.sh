@@ -137,6 +137,8 @@ get_approved_exception() {
         "flake8") echo "dev.in|Linter: new rules are improvements"; return 0 ;;
         "pylint") echo "dev.in|Linter: CLI stable across minor versions"; return 0 ;;
         "types-PyYAML") echo "dev.in|Type stubs: must track PyYAML version"; return 0 ;;
+        "torch") echo "ml-core.in|Supported ML floor; target-owned locks and operator indexes control upper resolution"; return 0 ;;
+        "torchvision") echo "ml-core.in|Supported ML floor paired with torch; target-owned locks control upper resolution"; return 0 ;;
         "PyYAML") echo "ml.in|Config parser: strong backward compatibility"; return 0 ;;
         "colour-science") echo "ml.in|Color math library: stable API"; return 0 ;;
         "coremltools") echo "ml.in|Apple ML tools: platform-specific updates"; return 0 ;;
@@ -149,7 +151,7 @@ get_approved_exception() {
 
 # Production files (require range pins or strict pins)
 PRODUCTION_FILES=("base.in" "ml.in")
-TARGET_OWNED_ML_INPUTS=("ml-core-darwin-x86_64.in" "ml-core-darwin-arm64.in" "ml-core-linux.in")
+TARGET_OWNED_ML_INPUTS=("ml-core-darwin-arm64.in")
 
 echo -e "${BLUE}${BOLD}🔍 Validating dependency constraints...${NC}\n"
 load_banned_packages
@@ -207,12 +209,6 @@ validate_target_owned_ml_freshness() {
     local check_output=""
 
     case "$basename" in
-        "ml-core-darwin-x86_64.in")
-            if [[ $VERBOSE -eq 1 ]]; then
-                echo "INFO: $basename is frozen and excluded from freshness regeneration checks."
-            fi
-            return 0
-            ;;
         "ml-core-darwin-arm64.in")
             host_os="$(current_host_system)"
             host_arch="$(current_host_arch)"
@@ -221,12 +217,6 @@ validate_target_owned_ml_freshness() {
             fi
             check_target="check-ml-darwin-arm64"
             compile_fix="Run 'cd requirements && make compile-ml-darwin-arm64' on native Darwin arm64."
-            ;;
-        "ml-core-linux.in")
-            if [[ $VERBOSE -eq 1 ]]; then
-                echo "INFO: $basename is frozen and excluded from freshness regeneration checks."
-            fi
-            return 0
             ;;
         *)
             return 0

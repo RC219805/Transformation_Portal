@@ -3,24 +3,23 @@
 
 This validator enforces the following contracts:
 1. All checked-in lockfiles must be generated with the expected Python version
-2. Checked-in ML lockfiles are limited to the target-owned core contract
-3. Non-core optional ML lockfiles must not be checked in as host-generated artifacts
-4. Darwin x86_64 and arm64 ML inputs must preserve their target-specific contracts
-5. Target-owned core lockfiles must not collapse to identical dependency graphs
-6. Known-bad torch/transformers/numpy runtime combinations must be rejected in lockfiles
+2. Checked-in ML lockfiles are limited to the supported Apple Silicon target-owned contract
+3. Non-core optional and retired unsupported ML lockfiles must not be checked in
+4. Darwin arm64 ML inputs must preserve the supported security baseline
+5. Known-bad runtime combinations must be rejected in lockfiles
 7. The lock ownership manifest must cover every governed checked-in lock exactly once
 8. Generic lockfiles must retain platform-marked core runtime packages declared in base.in
 
 CONTRACT SEPARATION:
-- Target-owned ML lockfiles: ml-core-darwin-x86_64, ml-core-darwin-arm64, ml-core-linux
+- Target-owned ML lockfiles: ml-core-darwin-arm64
 - Non-core optional ML layers are not part of the checked-in lockfile contract
 - Scripted-only layers: ml-sam2 (requires non-standard install semantics)
 
 TARGET MATRIX (ADR-032):
 - Target-owned ML lockfiles:
-  - ml-core-darwin-x86_64.txt (macOS Intel frozen baseline)
   - ml-core-darwin-arm64.txt (macOS Apple Silicon secure baseline)
-  - ml-core-linux.txt (Linux x86_64 frozen historical baseline)
+- Retired unsupported Linux and macOS Intel lockfiles must remain absent from
+  the installable requirements surface.
 - Non-core optional ML lockfiles must be absent from the checked-in repository state
 - Target-owned ML core lockfiles must not carry the wrong OS markers
 
@@ -57,9 +56,7 @@ CORE_LOCK_FILES = (
 
 # Target-owned ML core lockfiles (pip-compile multi-platform fix)
 PLATFORM_ML_CORE_LOCK_FILES = (
-    "ml-core-darwin-x86_64.txt",
     "ml-core-darwin-arm64.txt",
-    "ml-core-linux.txt",
 )
 GOVERNED_LOCK_FILES = CORE_LOCK_FILES + PLATFORM_ML_CORE_LOCK_FILES
 
@@ -76,6 +73,12 @@ NONCORE_OPTIONAL_ML_LOCK_FILES = (
     "ml-research.txt",
     "ml.txt",
 )
+RETIRED_UNSUPPORTED_ML_REQUIREMENT_FILES = (
+    "ml-core-darwin-x86_64.in",
+    "ml-core-darwin-x86_64.txt",
+    "ml-core-linux.in",
+    "ml-core-linux.txt",
+)
 
 # Scripted-only ML layers (NOT standard lockfile contract)
 # These require non-standard install semantics via bootstrap script
@@ -84,17 +87,9 @@ SCRIPTED_ONLY_ML_LAYERS = ("ml-sam2.txt",)
 # All lockfiles for header validation (includes scripted for consistency checking)
 ALL_LOCK_FILES = GOVERNED_LOCK_FILES + SCRIPTED_ONLY_ML_LAYERS
 PLATFORM_LOCK_FORBIDDEN_PATTERNS = {
-    "ml-core-darwin-x86_64.txt": (
-        r"""platform_system\s*==\s*["']Linux["']""",
-        r"""platform_system\s*!=\s*["']Darwin["']""",
-    ),
     "ml-core-darwin-arm64.txt": (
         r"""platform_system\s*==\s*["']Linux["']""",
         r"""platform_system\s*!=\s*["']Darwin["']""",
-    ),
-    "ml-core-linux.txt": (
-        r"""platform_system\s*==\s*["']Darwin["']""",
-        r"""platform_system\s*!=\s*["']Linux["']""",
     ),
 }
 LOCK_VERSION_PATTERN = re.compile(r"^LOCK_PYTHON_VERSION\s+\?=\s+([0-9.]+)\s*$")
@@ -103,10 +98,7 @@ PACKAGE_PIN_PATTERN = re.compile(r"^([A-Za-z0-9_.-]+)==([^\s;#]+)")
 NUMERIC_VERSION_PATTERN = re.compile(r"\d+")
 REQUIREMENT_NAME_PATTERN = re.compile(r"^([A-Za-z0-9_.-]+)")
 
-DARWIN_X86_NUMPY_GUARD_PATTERN = re.compile(r"^numpy\s*<\s*2(?:\.0+)?(?:\s|$)", re.IGNORECASE)
-DARWIN_X86_TRANSFORMERS_GUARD_PATTERN = re.compile(r"^transformers[^#\n]*<\s*5(?:\.0+)?(?:\s|$)", re.IGNORECASE)
 DARWIN_ARM64_COREML_PATTERN = re.compile(r"^coremltools\b[^\n]*$", re.IGNORECASE)
-LINUX_TRANSFORMERS_GUARD_PATTERN = re.compile(r"^transformers[^#\n]*<\s*5(?:\.0+)?(?:\s|$)", re.IGNORECASE)
 DARWIN_LOCKFILE_FORBIDDEN_PACKAGES = ("triton",)
 DARWIN_LOCKFILE_FORBIDDEN_PREFIXES = ("nvidia-",)
 GENERIC_LINUX_KEYRING_REQUIRED_PACKAGES = {
@@ -124,8 +116,8 @@ GENERIC_BASE_RUNTIME_LOCKS = ("all.txt", "base.txt")
 
 SUPPORTED_TORCH_PIN = "2.8.0"
 SUPPORTED_TORCHVISION_PIN = "0.23.0"
-FROZEN_DARWIN_X86_TORCH_PIN = "2.2.2"
-FROZEN_DARWIN_X86_TORCHVISION_PIN = "0.17.2"
+SUPPORTED_TRANSFORMERS_MIN = "5.0.0"
+SUPPORTED_TRANSFORMERS_INPUT_RANGE = "transformers>=5.0.0,<5.1"
 
 
 def read_expected_lock_python_version() -> str:
@@ -190,6 +182,20 @@ def validate_noncore_optional_lockfiles_absent() -> list[str]:
     return errors
 
 
+def validate_retired_unsupported_ml_requirement_files_absent() -> list[str]:
+    """Return errors when retired unsupported ML manifests re-enter requirements/."""
+    errors: list[str] = []
+
+    for requirement_name in RETIRED_UNSUPPORTED_ML_REQUIREMENT_FILES:
+        requirement_path = REQUIREMENTS_DIR / requirement_name
+        if requirement_path.is_file():
+            errors.append(
+                f"{requirement_path} is a retired unsupported ML manifest; keep historical "
+                "Linux/macOS Intel lane details in docs, not in scan-visible requirements files"
+            )
+    return errors
+
+
 def validate_platform_lock_markers() -> list[str]:
     """Ensure platform-specific ML lockfiles do not carry the wrong OS markers."""
     errors: list[str] = []
@@ -219,16 +225,14 @@ def validate_ml_layer_structure() -> list[str]:
     but only standard layers follow the lockfile contract.
 
     Platform matrix (ADR-032):
-    - Platform-specific core: ml-core-darwin-x86_64.in, ml-core-darwin-arm64.in, ml-core-linux.in
+    - Platform-specific core: ml-core-darwin-arm64.in
     - Acceleration layers: ml-cpu.in, ml-mps.in, ml-cuda.in
     - Capability layers: ml-raw.in, ml-coreml.in, ml-research.in
     """
     errors: list[str] = []
     # Platform-specific lockfile layers (must exist)
     platform_in_files = [
-        "ml-core-darwin-x86_64.in",
         "ml-core-darwin-arm64.in",
-        "ml-core-linux.in",
     ]
     # Standard lockfile layers (must exist)
     standard_in_files = [
@@ -369,7 +373,7 @@ def validate_darwin_lock_purity() -> list[str]:
     """Fail if Darwin lockfiles contain Linux/CUDA-only packages."""
     errors: list[str] = []
 
-    for lock_name in ("ml-core-darwin-x86_64.txt", "ml-core-darwin-arm64.txt"):
+    for lock_name in ("ml-core-darwin-arm64.txt",):
         lock_path = REQUIREMENTS_DIR / lock_name
         if not lock_path.is_file():
             continue
@@ -397,34 +401,8 @@ def _normalized_lock_body(lock_path: Path) -> tuple[str, ...]:
 
 
 def validate_darwin_input_guards() -> list[str]:
-    """Ensure Darwin x86_64 and arm64 ML inputs preserve their lane-specific contracts."""
+    """Ensure Darwin arm64 ML input preserves the supported security baseline."""
     errors: list[str] = []
-    darwin_x86_input = REQUIREMENTS_DIR / "ml-core-darwin-x86_64.in"
-    if darwin_x86_input.is_file():
-        non_comment_lines = [
-            line.strip()
-            for line in darwin_x86_input.read_text(encoding="utf-8").splitlines()
-            if line.strip() and not line.lstrip().startswith("#")
-        ]
-        if not _has_exact_pin(non_comment_lines, "torch", FROZEN_DARWIN_X86_TORCH_PIN):
-            errors.append(
-                f"{darwin_x86_input} must keep torch=={FROZEN_DARWIN_X86_TORCH_PIN} while the macOS Intel lane remains frozen."
-            )
-        if not _has_exact_pin(non_comment_lines, "torchvision", FROZEN_DARWIN_X86_TORCHVISION_PIN):
-            errors.append(
-                f"{darwin_x86_input} must keep torchvision=={FROZEN_DARWIN_X86_TORCHVISION_PIN} aligned with the frozen macOS Intel torch baseline."
-            )
-        if not any(DARWIN_X86_NUMPY_GUARD_PATTERN.search(line) for line in non_comment_lines):
-            errors.append(
-                f"{darwin_x86_input} must pin numpy<2 so the macOS Intel torch 2.2.x baseline "
-                "does not resolve to NumPy 2 ABI-incompatible wheels."
-            )
-        if not any(DARWIN_X86_TRANSFORMERS_GUARD_PATTERN.search(line) for line in non_comment_lines):
-            errors.append(
-                f"{darwin_x86_input} must cap transformers below 5 to preserve compatibility "
-                "with the macOS Intel torch 2.2.x baseline."
-            )
-
     darwin_arm64_input = REQUIREMENTS_DIR / "ml-core-darwin-arm64.in"
     if not darwin_arm64_input.is_file():
         return errors
@@ -442,10 +420,9 @@ def validate_darwin_input_guards() -> list[str]:
         errors.append(
             f"{darwin_arm64_input} must pin torchvision=={SUPPORTED_TORCHVISION_PIN} alongside the supported Apple Silicon torch baseline."
         )
-    if any(DARWIN_X86_NUMPY_GUARD_PATTERN.search(line) for line in arm64_non_comment_lines):
+    if SUPPORTED_TRANSFORMERS_INPUT_RANGE not in arm64_non_comment_lines:
         errors.append(
-            f"{darwin_arm64_input} must not inherit the Intel-only numpy<2 guard. "
-            "Keep conservative NumPy caps scoped to the x86_64 lock input."
+            f"{darwin_arm64_input} must declare {SUPPORTED_TRANSFORMERS_INPUT_RANGE!r} for the supported Transformers security baseline."
         )
     if not any(DARWIN_ARM64_COREML_PATTERN.search(line) for line in arm64_non_comment_lines):
         errors.append(
@@ -455,33 +432,9 @@ def validate_darwin_input_guards() -> list[str]:
     return errors
 
 
-def validate_linux_input_guards() -> list[str]:
-    """Linux historical lane is frozen and excluded from supported-lane input checks."""
-    return []
-
-
 def validate_platform_lock_divergence() -> list[str]:
-    """Ensure platform-specific ML core lockfiles do not collapse to the same graph."""
-    darwin_lock = REQUIREMENTS_DIR / "ml-core-darwin-x86_64.txt"
-    darwin_arm64_lock = REQUIREMENTS_DIR / "ml-core-darwin-arm64.txt"
-    linux_lock = REQUIREMENTS_DIR / "ml-core-linux.txt"
-    errors: list[str] = []
-
-    if darwin_lock.is_file() and darwin_arm64_lock.is_file():
-        if _normalized_lock_body(darwin_lock) == _normalized_lock_body(darwin_arm64_lock):
-            errors.append(
-                "requirements/ml-core-darwin-x86_64.txt and requirements/ml-core-darwin-arm64.txt resolve "
-                "to identical dependency graphs; regenerate them from target-correct Darwin arch inputs."
-            )
-
-    if darwin_lock.is_file() and linux_lock.is_file():
-        if _normalized_lock_body(darwin_lock) == _normalized_lock_body(linux_lock):
-            errors.append(
-                "requirements/ml-core-darwin-x86_64.txt and requirements/ml-core-linux.txt resolve "
-                "to identical dependency graphs; regenerate them from target-correct platform inputs."
-            )
-
-    return errors
+    """Retained for API compatibility; there is only one active ML lock lane."""
+    return []
 
 
 def validate_platform_lock_runtime_compatibility() -> list[str]:
@@ -497,30 +450,6 @@ def validate_platform_lock_runtime_compatibility() -> list[str]:
         torch_version = packages.get("torch")
         torchvision_version = packages.get("torchvision")
         transformers_version = packages.get("transformers")
-        numpy_version = packages.get("numpy")
-
-        if (
-            torch_version is not None
-            and transformers_version is not None
-            and _parse_numeric_version(torch_version) < (2, 4)
-            and _parse_numeric_version(transformers_version) >= (5, 3)
-        ):
-            errors.append(
-                f"{lock_path} pins torch=={torch_version} with transformers=={transformers_version}. "
-                "That pairing disables the transformers torch backend in this repository's supported environments."
-            )
-
-        if (
-            lock_name == "ml-core-darwin-x86_64.txt"
-            and torch_version is not None
-            and numpy_version is not None
-            and _parse_numeric_version(torch_version) < (2, 4)
-            and _parse_numeric_version(numpy_version) >= (2,)
-        ):
-            errors.append(
-                f"{lock_path} pins torch=={torch_version} with numpy=={numpy_version}. "
-                "The Darwin torch 2.2.x baseline must keep numpy<2 to avoid ABI breakage."
-            )
 
         if lock_name == "ml-core-darwin-arm64.txt" and "coremltools" not in packages:
             errors.append(
@@ -544,6 +473,14 @@ def validate_platform_lock_runtime_compatibility() -> list[str]:
             errors.append(
                 f"{lock_path} must rotate to torchvision=={SUPPORTED_TORCHVISION_PIN} for the supported Apple Silicon security baseline."
             )
+        if (
+            lock_name == "ml-core-darwin-arm64.txt"
+            and transformers_version is not None
+            and _parse_numeric_version(transformers_version) < _parse_numeric_version(SUPPORTED_TRANSFORMERS_MIN)
+        ):
+            errors.append(
+                f"{lock_path} must rotate to transformers>={SUPPORTED_TRANSFORMERS_MIN} for the supported Transformers security baseline."
+            )
     return errors
 
 
@@ -560,11 +497,11 @@ def main() -> int:
     errors.extend(validate_lock_ownership_manifest())
     errors.extend(validate_lockfile_headers(expected_python))
     errors.extend(validate_noncore_optional_lockfiles_absent())
+    errors.extend(validate_retired_unsupported_ml_requirement_files_absent())
     errors.extend(validate_generic_base_runtime_platform_marker_pins())
     errors.extend(validate_generic_linux_keyring_pins())
     errors.extend(validate_platform_lock_markers())
     errors.extend(validate_darwin_input_guards())
-    errors.extend(validate_linux_input_guards())
     errors.extend(validate_platform_lock_divergence())
     errors.extend(validate_darwin_lock_purity())
     errors.extend(validate_platform_lock_runtime_compatibility())

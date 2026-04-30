@@ -155,7 +155,7 @@ def test_generic_stale_warning_preserves_make_compile_guidance(tmp_path: Path) -
     assert "Consider addressing warnings for best practices." in result.stdout
 
 
-def test_frozen_target_owned_ml_input_skips_stale_warning_and_emits_verbose_note(tmp_path: Path) -> None:
+def test_retired_darwin_x86_64_input_no_longer_gets_target_owned_skip(tmp_path: Path) -> None:
     repo_root = tmp_path / "repo"
     _prepare_validator_repo(repo_root)
 
@@ -169,12 +169,12 @@ def test_frozen_target_owned_ml_input_skips_stale_warning_and_emits_verbose_note
 
     result = _run_validator(repo_root, verbose=True)
 
-    assert result.returncode == 0, result.stdout + result.stderr
-    assert "Compiled .txt file is stale" not in result.stdout
-    assert "INFO: ml-core-darwin-x86_64.in is frozen and excluded from freshness regeneration checks." in result.stdout
+    assert result.returncode == 2, result.stdout + result.stderr
+    assert "ml-core-darwin-x86_64.in: Compiled .txt file is stale" in result.stdout
+    assert "frozen and excluded from freshness regeneration checks" not in result.stdout
 
 
-def test_frozen_linux_target_owned_ml_input_skips_stale_warning_and_emits_verbose_note(tmp_path: Path) -> None:
+def test_retired_linux_input_no_longer_gets_target_owned_skip(tmp_path: Path) -> None:
     repo_root = tmp_path / "repo"
     _prepare_validator_repo(repo_root)
 
@@ -188,9 +188,9 @@ def test_frozen_linux_target_owned_ml_input_skips_stale_warning_and_emits_verbos
 
     result = _run_validator(repo_root, verbose=True)
 
-    assert result.returncode == 0, result.stdout + result.stderr
-    assert "Compiled .txt file is stale" not in result.stdout
-    assert "INFO: ml-core-linux.in is frozen and excluded from freshness regeneration checks." in result.stdout
+    assert result.returncode == 2, result.stdout + result.stderr
+    assert "ml-core-linux.in: Compiled .txt file is stale" in result.stdout
+    assert "frozen and excluded from freshness regeneration checks" not in result.stdout
 
 
 @pytest.mark.parametrize(

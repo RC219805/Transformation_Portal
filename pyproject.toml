@@ -62,12 +62,12 @@ classifiers = [
 # Platform-Specific Layers:
 #   coreml    Apple CoreML acceleration (macOS only)
 
-# ML Core - Cross-platform ML baseline (minimal spec, see ml-core.in for pins)
+# ML Core - supported ML baseline (minimal spec, see ml-core.in for pins)
 ml-core = [
     "torch>=2.8.0",
     "torchvision>=0.23.0",
     "diffusers>=0.30",
-    "transformers>=4.40",
+    "transformers>=5.0.0,<5.1",
     "huggingface-hub>=0.19",
     "accelerate>=0.20",
 ]
@@ -79,7 +79,7 @@ coreml = [
 raw = [
     "rawpy>=0.18.0",
 ]
-# Standard ML umbrella - cross-platform layers only (ml-core + ml-raw)
+# Standard ML umbrella - supported metadata layers only (ml-core + ml-raw)
 # Does NOT include: sam2 (scripted-only), coreml (platform-specific), research (experimental)
 # For additional capabilities:
 #   SAM2:   ./scripts/bootstrap/install_ml_stack.sh --profile core-cpu,sam2
@@ -89,7 +89,7 @@ ml = [
     "torch>=2.8.0",
     "torchvision>=0.23.0",
     "diffusers>=0.30",
-    "transformers>=4.40",
+    "transformers>=5.0.0,<5.1",
     "rawpy>=0.18.0",
 ]
 # Spatial AI research pipeline (Phase 2) — SAM2 + NVDiffRec + 3DGS

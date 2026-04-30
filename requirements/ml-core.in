@@ -1,55 +1,37 @@
 # Optional ML core runtime
-# Cross-platform deterministic ML feature baseline.
-# This file must remain installable on supported CI + local platforms.
-# Run `make compile` in this directory to generate pinned ml-core.txt
+# Supported ML metadata baseline.
+# This file documents the secure package floor for optional editable installs.
+# Checked-in installable ML locks are target-owned; only Apple Silicon is active.
 #
 # PLATFORM MATRIX (ADR-032):
-#   OS:    Darwin (macOS), Linux
-#   ISA:   arm64 (Apple Silicon), x86_64 (Intel/AMD)
-#   Accel: cpu (default), mps (macOS ARM64), cuda (Linux x86_64)
+#   OS:    Darwin (macOS)
+#   ISA:   arm64 (Apple Silicon)
+#   Accel: cpu (default), mps (macOS ARM64)
 #
 # IMPORTANT:
-# - Lockfiles must be compiled per-platform / per-index policy
-# - CPU-only lockfiles should use the PyTorch CPU index in compilation
+# - Only the Apple Silicon target-owned lock is checked in as supported
 # - This layer EXCLUDES platform-specific packages (rawpy, coremltools)
 # - This layer EXCLUDES SAM2 due to build-time torch requirements
 # - Accel is EXPLICIT via profile, never inferred from OS
 #
 # SECURITY NOTE:
-# - The supported Apple Silicon lane now anchors on torch==2.8.0 /
-#   torchvision==0.23.0.
-# - The frozen Darwin x86_64 and Linux lanes remain unsupported historical
-#   baselines until retirement.
+# - Supported ML metadata now anchors on torch>=2.8.0 /
+#   torchvision>=0.23.0.
+# - Retired Darwin x86_64 and Linux locks are removed from installable
+#   requirements surfaces and must not drive dependency graph alerts.
 # - All torch.load() calls MUST use weights_only=True as defense in depth.
 # - See: src/transformation_portal/core/security/torch_security.py for safe loading.
 #
 # See: requirements/README.md for layering rationale.
 
-# --- PyTorch (deterministic, platform-aware) ---
-# Supported lanes align with the repo-owned secure subprocess runtime.
-#
-# Platform-specific version notes:
-# - macOS Intel (x86_64): frozen torch 2.2.2 historical baseline
-# - macOS Apple Silicon (arm64): supported torch 2.8.0 baseline
-# - Linux (all arch): frozen torch 2.8.0 historical baseline
-#
+# --- PyTorch secure baseline ---
 # NOTE: When updating torch versions, verify SAM2/CLIP compatibility.
-
-# macOS Intel (no modern torch builds after 2.2.x)
-torch==2.2.2 ; platform_system == "Darwin" and platform_machine == "x86_64"  # CAS determinism
-torchvision==0.17.2 ; platform_system == "Darwin" and platform_machine == "x86_64"  # CAS determinism
-
-# macOS Apple Silicon (MPS)
-torch==2.8.0 ; platform_system == "Darwin" and platform_machine == "arm64"  # Supported Apple Silicon baseline
-torchvision==0.23.0 ; platform_system == "Darwin" and platform_machine == "arm64"  # Supported Apple Silicon pair
-
-# Linux frozen historical baseline
-torch==2.8.0 ; platform_system == "Linux"  # Frozen historical pin
-torchvision==0.23.0 ; platform_system == "Linux"  # Frozen historical companion pin
+torch>=2.8.0
+torchvision>=0.23.0
 
 # Diffusion / HuggingFace ecosystem
 diffusers>=0.36.0,<1
-transformers>=4.57.0,<5
+transformers>=5.0.0,<5.1
 huggingface-hub>=0.19.0,<2
 accelerate>=0.20.0,<2
 

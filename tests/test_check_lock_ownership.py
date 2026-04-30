@@ -30,13 +30,11 @@ def manifest_fixture() -> dict[str, dict[str, object]]:
         "ci.txt": _entry(target_id="generic", status="active", allowed_contexts=["ubuntu-x64-generic"]),
         "security.txt": _entry(target_id="generic", status="active", allowed_contexts=["ubuntu-x64-generic"]),
         "tools-archive.txt": _entry(target_id="generic", status="active", allowed_contexts=["ubuntu-x64-generic"]),
-        "ml-core-linux.txt": _entry(target_id="linux-x86_64", status="frozen", allowed_contexts=[]),
         "ml-core-darwin-arm64.txt": _entry(
             target_id="darwin-arm64",
             status="active",
             allowed_contexts=["local-darwin-arm64"],
         ),
-        "ml-core-darwin-x86_64.txt": _entry(target_id="darwin-x86_64", status="frozen", allowed_contexts=[]),
     }
 
 
@@ -64,11 +62,12 @@ def test_load_lock_ownership_parses_manifest_without_pyyaml(tmp_path: Path) -> N
                 "    status: active",
                 "    allowed_contexts:",
                 "      - ubuntu-x64-generic",
-                "  ml-core-darwin-x86_64.txt:",
-                "    target_id: darwin-x86_64",
+                "  ml-core-darwin-arm64.txt:",
+                "    target_id: darwin-arm64",
                 '    python_version: "3.11"',
-                "    status: frozen",
-                "    allowed_contexts: []",
+                "    status: active",
+                "    allowed_contexts:",
+                "      - local-darwin-arm64",
             ]
         )
         + "\n",
@@ -79,7 +78,11 @@ def test_load_lock_ownership_parses_manifest_without_pyyaml(tmp_path: Path) -> N
 
     assert manifest == {
         "all.txt": _entry(target_id="generic", status="active", allowed_contexts=["ubuntu-x64-generic"]),
-        "ml-core-darwin-x86_64.txt": _entry(target_id="darwin-x86_64", status="frozen", allowed_contexts=[]),
+        "ml-core-darwin-arm64.txt": _entry(
+            target_id="darwin-arm64",
+            status="active",
+            allowed_contexts=["local-darwin-arm64"],
+        ),
     }
 
 
@@ -157,22 +160,22 @@ def test_load_lock_ownership_rejects_duplicate_field_key(tmp_path: Path) -> None
 
 def test_malformed_manifest_entry_reports_contract_errors_without_keyerror() -> None:
     manifest = manifest_fixture()
-    manifest["ml-core-linux.txt"] = {
-        "target_id": "linux-x86_64",
+    manifest["ml-core-darwin-arm64.txt"] = {
+        "target_id": "darwin-arm64",
         "python_version": "3.11",
         # Missing status and malformed allowed_contexts would previously trigger KeyError.
-        "allowed_contexts": "ubuntu-x64-linux",
+        "allowed_contexts": "local-darwin-arm64",
     }
 
     errors = ownership.validate_changed_files_against_context(
         manifest,
-        changed_files=["requirements/ml-core-linux.txt"],
-        contexts=["ubuntu-x64-linux"],
+        changed_files=["requirements/ml-core-darwin-arm64.txt"],
+        contexts=["local-darwin-arm64"],
     )
 
     assert errors == [
-        "requirements/lock_ownership.yml entry 'ml-core-linux.txt' must declare status as one of ['active', 'frozen']",
-        "requirements/lock_ownership.yml entry 'ml-core-linux.txt' must declare allowed_contexts as a list of strings",
+        "requirements/lock_ownership.yml entry 'ml-core-darwin-arm64.txt' must declare status as one of ['active', 'frozen']",
+        "requirements/lock_ownership.yml entry 'ml-core-darwin-arm64.txt' must declare allowed_contexts as a list of strings",
     ]
 
 
@@ -214,38 +217,11 @@ def test_darwin_arm64_context_accepts_only_darwin_arm64_lock() -> None:
 
     errors = ownership.validate_changed_files_against_context(
         manifest,
-        changed_files=["requirements/ml-core-linux.txt"],
+        changed_files=["requirements/base.txt"],
         contexts=["local-darwin-arm64"],
     )
 
     assert errors == [
-        "requirements/ml-core-linux.txt is frozen for target 'linux-x86_64'; off-lane regeneration is not permitted"
-    ]
-
-
-def test_frozen_darwin_x86_64_lock_is_always_rejected() -> None:
-    manifest = manifest_fixture()
-
-    errors = ownership.validate_changed_files_against_context(
-        manifest,
-        changed_files=["requirements/ml-core-darwin-x86_64.txt"],
-        contexts=["local-darwin-arm64"],
-    )
-
-    assert errors == [
-        "requirements/ml-core-darwin-x86_64.txt is frozen for target 'darwin-x86_64'; off-lane regeneration is not permitted"
-    ]
-
-
-def test_frozen_linux_lock_is_always_rejected() -> None:
-    manifest = manifest_fixture()
-
-    errors = ownership.validate_changed_files_against_context(
-        manifest,
-        changed_files=["requirements/ml-core-linux.txt"],
-        contexts=["ubuntu-x64-generic"],
-    )
-
-    assert errors == [
-        "requirements/ml-core-linux.txt is frozen for target 'linux-x86_64'; off-lane regeneration is not permitted"
+        "requirements/base.txt is owned by contexts ['ubuntu-x64-generic']; current contexts "
+        "['local-darwin-arm64'] are not authoritative"
     ]

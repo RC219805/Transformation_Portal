@@ -216,14 +216,14 @@ Dependabot ML alert waves must be triaged by advisory reachability and lane supp
 | Scenario | Disposition | Notes |
 |----------|-------------|-------|
 | Supported target-owned lock (`ml-core-darwin-arm64.txt`) with a reachable vulnerable runtime dependency | Curated remediation PR | Prefer controlled lock/input rotation with focused validation |
-| Frozen/unsupported target-owned lock (`ml-core-linux.txt`, `ml-core-darwin-x86_64.txt`) | Dismiss `not_used` | Document that the lane is frozen, unsupported, and not part of supported ML posture |
+| Retired unsupported Linux/macOS Intel ML lane | Remove scan-visible manifest or dismiss `not_used` when no manifest exists | Document that the lane is retired, unsupported, and not part of supported ML posture |
 | Vulnerability only affects an unused dependency code path (for example `transformers.Trainer`) | Dismiss `not_used` | Include repo search evidence showing the vulnerable path is unreachable |
 
 ### ML review rules
 
 1. Treat repeated alerts across target-owned ML lockfiles as a single advisory wave.
 2. Do not take a broad or pre-release dependency upgrade just to clear the dashboard.
-3. Keep frozen Darwin x86_64 and Linux historical lanes out of supported baseline decisions.
+3. Keep retired Darwin x86_64 and Linux historical lanes out of supported baseline decisions.
 4. Keep managed checkpoint and model-load trust boundaries tight while rotating versions.
 5. Record dismissals and supported-lane remediation evidence in a dedicated triage artifact.
 

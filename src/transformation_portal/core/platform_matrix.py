@@ -35,7 +35,6 @@ Example:
 from __future__ import annotations
 
 import hashlib
-import os
 import platform
 import subprocess
 from dataclasses import dataclass, field
@@ -98,10 +97,7 @@ class PlatformAccel(str, Enum):
 
 
 ML_CORE_LOCKFILE_BY_PLATFORM: dict[tuple[PlatformOS, PlatformISA], str] = {
-    (PlatformOS.DARWIN, PlatformISA.X86_64): "ml-core-darwin-x86_64.txt",
     (PlatformOS.DARWIN, PlatformISA.ARM64): "ml-core-darwin-arm64.txt",
-    (PlatformOS.LINUX, PlatformISA.X86_64): "ml-core-linux.txt",
-    (PlatformOS.LINUX, PlatformISA.ARM64): "ml-core-linux.txt",
 }
 
 
@@ -198,7 +194,8 @@ class PlatformMatrix:
 
         Security Context:
             The supported Apple Silicon lane now pins torch==2.8.0.
-            Linux and macOS Intel remain frozen unsupported historical ML lanes.
+            Linux and macOS Intel ML locks are retired unsupported manifests and
+            are not installable checked-in requirement files.
             All platforms must use weights_only=True for torch.load() calls as
             defense in depth.
         """
@@ -209,18 +206,16 @@ class PlatformMatrix:
         )
 
         if self.is_macos_intel:
-            # Check for bypass environment variable
-            allow_bypass = os.environ.get("TP_ALLOW_MACOS_INTEL_ML", "0") == "1"
             return {
                 "platform": self.canonical_target,
                 "cve_2025_32434_note": (
-                    "macOS Intel (x86_64) remains on the frozen torch==2.2.2 lane, "
-                    "which is vulnerable to CVE-2025-32434 and no longer supported for ML workloads. "
-                    "weights_only=True is not considered a complete remediation for this lane."
+                    "macOS Intel (x86_64) ML lockfiles are retired unsupported manifests. "
+                    "No checked-in macOS Intel ML lock is supported or installable for ML workloads. "
+                    "weights_only=True remains required hardening but is not a remediation for retired baselines."
                 ),
                 "mitigation": base_mitigation,
                 "secure": False,  # macOS Intel has no supported torch>=2.8.0 baseline.
-                "ml_supported": allow_bypass,  # Only if explicitly bypassed
+                "ml_supported": False,
             }
         if self.is_apple_silicon:
             return {
@@ -237,8 +232,8 @@ class PlatformMatrix:
             return {
                 "platform": self.canonical_target,
                 "cve_2025_32434_note": (
-                    "Linux ML remains a frozen unsupported historical lane. "
-                    "Use a repo-managed secure subprocess runtime instead of the checked-in ML core lock."
+                    "Linux ML lockfiles are retired unsupported manifests. "
+                    "Use a repo-managed secure subprocess runtime instead of a checked-in Linux ML core lock."
                 ),
                 "mitigation": base_mitigation,
                 "secure": False,
@@ -259,8 +254,7 @@ class PlatformMatrix:
             raise RuntimeError(
                 f"ML stack not supported on {status['platform']}. "
                 f"{status['cve_2025_32434_note']} "
-                "Migrate to macOS Apple Silicon or a repo-managed secure subprocess runtime. "
-                "To bypass macOS Intel (NOT RECOMMENDED): export TP_ALLOW_MACOS_INTEL_ML=1"
+                "Migrate to macOS Apple Silicon or a repo-managed secure subprocess runtime."
             )
 
     def warn_if_insecure_ml_platform(self) -> None:
@@ -441,7 +435,8 @@ def determine_ml_core_lockfile_name(matrix: Optional[PlatformMatrix] = None) -> 
         return ML_CORE_LOCKFILE_BY_PLATFORM[(effective_matrix.os, effective_matrix.isa)]
     except KeyError as exc:
         raise ValueError(
-            f"No ML core lockfile contract for platform {effective_matrix.os.value}/{effective_matrix.isa.value}"
+            "No supported checked-in ML core lockfile contract for platform "
+            f"{effective_matrix.os.value}/{effective_matrix.isa.value}"
         ) from exc
 
 

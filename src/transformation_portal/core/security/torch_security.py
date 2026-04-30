@@ -500,7 +500,7 @@ def get_canonical_security_profile() -> dict[str, Any]:
             'minimum_supported_torch_version': '2.8.0',
             'torch_load_enforced': True,
             'weights_only': True,
-            'cve_mitigation': 'cve-2025-32434-v1'
+            'cve_mitigation': 'fixed-by-supported-torch-baseline'
         }
     """
     return {

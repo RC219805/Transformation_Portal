@@ -74,7 +74,7 @@ def test_detect_transformers_torch_runtime_issue_reports_disabled_backend(monkey
 
 
 def test_detect_transformers_torch_version_issue_allows_repo_baseline(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The supported torch 2.8.x + transformers 4.57.x baseline must not be rejected."""
+    """The supported torch 2.8.x + transformers 5.x baseline must not be rejected."""
     monkeypatch.setattr(
         "transformation_portal.core.ml_dependency_health._installed_version",
         lambda _distribution: "2.4.3",
@@ -84,13 +84,13 @@ def test_detect_transformers_torch_version_issue_allows_repo_baseline(monkeypatc
         lambda: False,
     )
 
-    message = detect_transformers_torch_version_issue("2.8.0", "4.57.6")
+    message = detect_transformers_torch_version_issue("2.8.0", "5.0.0")
 
     assert message is None
 
 
-def test_detect_transformers_torch_version_issue_allows_frozen_intel_lane(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The frozen Darwin x86_64 2.2.x lane remains compatible with transformers 4.57.x."""
+def test_detect_transformers_torch_version_issue_rejects_retired_old_baseline(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Retired old torch/transformers baselines are outside the supported runtime envelope."""
     monkeypatch.setattr(
         "transformation_portal.core.ml_dependency_health._installed_version",
         lambda _distribution: "1.26.4",
@@ -102,7 +102,9 @@ def test_detect_transformers_torch_version_issue_allows_frozen_intel_lane(monkey
 
     message = detect_transformers_torch_version_issue("2.2.2", "4.57.6")
 
-    assert message is None
+    assert message is not None
+    assert "supported security baseline 2.8.0" in message
+    assert "supported security baseline 5.0.0" in message
 
 
 def test_detect_transformers_torch_version_issue_rejects_transformers_53_with_old_torch(

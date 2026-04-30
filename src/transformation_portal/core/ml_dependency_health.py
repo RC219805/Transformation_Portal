@@ -15,6 +15,10 @@ OPTIONAL_IMPORT_EXCEPTIONS = (
     OSError,
     AttributeError,
 )
+MIN_SUPPORTED_TORCH_VERSION = (2, 8)
+MIN_SUPPORTED_TORCH_VERSION_TEXT = "2.8.0"
+MIN_SUPPORTED_TRANSFORMERS_VERSION = (5, 0)
+MIN_SUPPORTED_TRANSFORMERS_VERSION_TEXT = "5.0.0"
 
 
 def _version_tuple(raw_version: Any) -> Tuple[int, ...]:
@@ -81,6 +85,15 @@ def detect_transformers_torch_version_issue(
     torch_version_tuple = _version_tuple(torch_version)
     transformers_version_tuple = _version_tuple(transformers_version)
     details = []
+    if torch_version_tuple and torch_version_tuple < MIN_SUPPORTED_TORCH_VERSION:
+        details.append(
+            f"installed torch {torch_version} is below the supported security baseline " f"{MIN_SUPPORTED_TORCH_VERSION_TEXT}"
+        )
+    if transformers_version_tuple and transformers_version_tuple < MIN_SUPPORTED_TRANSFORMERS_VERSION:
+        details.append(
+            f"installed transformers {transformers_version} is below the supported security baseline "
+            f"{MIN_SUPPORTED_TRANSFORMERS_VERSION_TEXT}"
+        )
     if (
         torch_version_tuple
         and transformers_version_tuple
@@ -109,7 +122,8 @@ def detect_transformers_torch_version_issue(
         "outside the repository's supported runtime envelope."
     )
     message = (
-        f"{message} {'; '.join(details)}. Install a compatible ML stack via the repo bootstrap/lockfile flow, "
+        f"{message} {'; '.join(details)}. Install a compatible ML stack via the supported Apple Silicon "
+        "bootstrap/lockfile flow, "
         "or align torch and transformers to a mutually supported combination."
     )
     return message
@@ -148,7 +162,7 @@ def detect_transformers_torch_runtime_issue(
     if version_issue:
         message = f"{message} {version_issue}"
     message = (
-        f"{message} Install a compatible ML stack via the repo bootstrap/lockfile flow, "
+        f"{message} Install a compatible ML stack via the supported Apple Silicon bootstrap/lockfile flow, "
         "or align torch and transformers to a mutually supported combination."
     )
     return message

@@ -8,6 +8,10 @@
 
 accelerate==1.13.0
     # via -r ml-core-darwin-arm64.in
+annotated-doc==0.0.4
+    # via
+    #   -c base.txt
+    #   typer
 anyio==4.13.0
     # via
     #   -c base.txt
@@ -26,6 +30,10 @@ certifi==2026.2.25
     #   requests
 charset-normalizer==3.4.7
     # via requests
+click==8.3.2
+    # via
+    #   -c base.txt
+    #   typer
 colour-science==0.4.7
     # via -r ml-core-darwin-arm64.in
 controlnet-aux==0.0.10
@@ -60,8 +68,10 @@ hf-xet==1.4.3
 httpcore==1.0.9
     # via httpx
 httpx==0.28.1
-    # via diffusers
-huggingface-hub==0.36.2
+    # via
+    #   diffusers
+    #   huggingface-hub
+huggingface-hub==1.13.0
     # via
     #   -r ml-core-darwin-arm64.in
     #   accelerate
@@ -92,8 +102,16 @@ joblib==1.5.3
     #   scikit-learn
 lazy-loader==0.5
     # via scikit-image
+markdown-it-py==4.0.0
+    # via
+    #   -c base.txt
+    #   rich
 markupsafe==3.0.3
     # via jinja2
+mdurl==0.1.2
+    # via
+    #   -c base.txt
+    #   markdown-it-py
 memory-profiler==0.61.0
     # via -r ml-core-darwin-arm64.in
 mpmath==1.3.0
@@ -152,6 +170,10 @@ psutil==7.2.2
     #   memory-profiler
 pyaml==26.2.1
     # via coremltools
+pygments==2.20.0
+    # via
+    #   -c base.txt
+    #   rich
 pyyaml==6.0.3
     # via
     #   -r ml-core-darwin-arm64.in
@@ -166,10 +188,11 @@ regex==2026.4.4
     #   open-clip-torch
     #   transformers
 requests==2.33.1
+    # via diffusers
+rich==15.0.0
     # via
-    #   diffusers
-    #   huggingface-hub
-    #   transformers
+    #   -c base.txt
+    #   typer
 safetensors==0.7.0
     # via
     #   accelerate
@@ -194,6 +217,10 @@ scipy==1.17.1
     #   sentence-transformers
 sentence-transformers==5.4.1
     # via -r ml-core-darwin-arm64.in
+shellingham==1.5.4
+    # via
+    #   -c base.txt
+    #   typer
 sympy==1.14.0
     # via
     #   coremltools
@@ -237,10 +264,17 @@ tqdm==4.67.3
     #   open-clip-torch
     #   sentence-transformers
     #   transformers
-transformers==4.57.6
+transformers==5.0.0
     # via
     #   -r ml-core-darwin-arm64.in
     #   sentence-transformers
+typer==0.24.1
+    # via
+    #   -c base.txt
+    #   huggingface-hub
+    #   typer-slim
+typer-slim==0.24.0
+    # via transformers
 typing-extensions==4.15.0
     # via
     #   -c base.txt
