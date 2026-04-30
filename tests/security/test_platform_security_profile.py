@@ -99,6 +99,7 @@ class TestTorchSecurityEnforcement:
     def test_security_profile_hash_uses_canonical_json(self):
         """Test hash uses canonical JSON serialization."""
         from transformation_portal.core.security.torch_security import (
+            MINIMUM_SUPPORTED_TORCH_VERSION,
             SECURITY_PROFILE_VERSION,
             get_security_profile_hash,
         )
@@ -107,7 +108,8 @@ class TestTorchSecurityEnforcement:
         # Manually compute expected hash
         profile_data = {
             "policy_version": SECURITY_PROFILE_VERSION,
-            "cve_2025_32434_mitigation": "weights_only_enforced",
+            "minimum_supported_torch_version": MINIMUM_SUPPORTED_TORCH_VERSION,
+            "cve_2025_32434_posture": "fixed_by_supported_torch_baseline",
             "torch_load_policy": "weights_only_true",
         }
         expected_bytes = canonicalize_json(profile_data)
@@ -134,11 +136,30 @@ class TestTorchSecurityEnforcement:
         # Should return static policy values (matches actual implementation)
         assert "policy_version" in profile
         assert "cve_mitigation" in profile
+        assert "minimum_supported_torch_version" in profile
         assert "torch_load_enforced" in profile
         assert "weights_only" in profile
+        assert profile["minimum_supported_torch_version"] == "2.8.0"
+        assert profile["cve_mitigation"] == "fixed-by-supported-torch-baseline"
 
         # Should NOT include runtime state
         assert "enforcement_installed" not in profile
+
+    def test_torch_security_compliance_reports_supported_baseline(self):
+        """Test compliance status preserves legacy keys and reports supported baseline."""
+        from transformation_portal.core.security.torch_security import (
+            MINIMUM_SUPPORTED_TORCH_VERSION,
+            check_torch_security_compliance,
+        )
+
+        status = check_torch_security_compliance()
+
+        assert "torch_version" in status
+        assert "cve_2025_32434_vulnerable" in status
+        assert "mitigation_available" in status
+        assert "recommendation" in status
+        assert status["minimum_supported_torch_version"] == MINIMUM_SUPPORTED_TORCH_VERSION
+        assert "supported_security_baseline_met" in status
 
     def test_install_enforcement_idempotent(self):
         """Test install_global_enforcement is idempotent."""

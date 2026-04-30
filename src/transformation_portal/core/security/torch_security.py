@@ -1,16 +1,16 @@
 """PyTorch security utilities for checkpoint loading hardening.
 
-This module provides safe model loading functions that mitigate torch.load()
-checkpoint risks, including CVE-2025-32434 on legacy torch baselines.
+This module provides safe model loading functions that reduce checkpoint
+loading risk and preserve a single repository-wide torch.load() policy.
 
 MITIGATION STRATEGY:
-    Supported repository lanes now use torch >= 2.8.0, but runtime hardening
-    still enforces weights_only=True for all torch.load() calls. That keeps
-    the frozen Darwin x86_64 lane constrained, and it preserves a consistent
-    defense-in-depth posture across managed and subprocess runtimes.
+    Supported repository lanes require torch >= 2.8.0. Runtime hardening still
+    enforces weights_only=True for all torch.load() calls as defense in depth.
+    Frozen historical lanes are not considered remediated by runtime hardening.
 
     Benefits:
-    - Mitigates checkpoint RCE by disabling arbitrary code execution
+    - Keeps supported lanes on a patched PyTorch baseline
+    - Reduces checkpoint deserialization risk during model loading
     - Keeps managed/model-loading trust boundaries explicit
     - Maintains a single repository-wide torch.load() policy
 
@@ -19,7 +19,7 @@ CVE-2025-32434 Details:
     - CVSS Score: 9.8 (Critical)
     - Affected versions: torch < 2.6.0
     - Attack vector: Malicious .pt/.pth model files
-    - Mitigation: Use weights_only=True parameter
+    - Remediation: upgrade torch to a patched supported baseline
 
 ENFORCEMENT:
     This module provides MANDATORY global enforcement of safe_load() via:
@@ -51,7 +51,9 @@ from typing import Any, Optional, Union
 
 # Security profile version for CAS identity
 # Increment when security enforcement logic changes
-SECURITY_PROFILE_VERSION = "torch_safe_load_v1"
+SECURITY_PROFILE_VERSION = "torch_safe_load_v2"
+MINIMUM_SUPPORTED_TORCH_VERSION = "2.8.0"
+CVE_2025_32434_FIXED_TORCH_VERSION = "2.6.0"
 
 # Track whether enforcement has been installed
 _enforcement_installed = False
@@ -63,10 +65,11 @@ def safe_load(
     *,
     map_location: Optional[Any] = None,
 ) -> Any:
-    """Safely load PyTorch model weights with CVE-2025-32434 mitigation.
+    """Safely load PyTorch model weights with checkpoint hardening.
 
-    This function wraps torch.load() with weights_only=True to prevent
-    arbitrary code execution from malicious model files.
+    This function wraps torch.load() with weights_only=True to reduce
+    deserialization risk from model files. Supported deployments must still
+    use a patched torch baseline.
 
     Args:
         path: Path to the model file (.pt, .pth, etc.)
@@ -85,9 +88,9 @@ def safe_load(
         >>> model.load_state_dict(state_dict)
 
     Security:
-        This function enforces weights_only=True which disables arbitrary
-        code execution during model loading. Files containing custom classes
-        or functions will fail to load. This is intentional for security.
+        This function enforces weights_only=True for defense in depth. Files
+        containing custom classes or functions will fail to load. This is
+        intentional for security.
 
         If you need to load a file with custom objects, you must:
         1. Verify the source is trusted
@@ -113,13 +116,15 @@ def check_torch_security_compliance() -> dict[str, Any]:
         Dictionary with security compliance status:
         - torch_version: Installed torch version
         - cve_2025_32434_vulnerable: True if vulnerable to CVE-2025-32434
+        - minimum_supported_torch_version: Repository supported baseline
+        - supported_security_baseline_met: True if torch >= supported baseline
         - mitigation_available: True if weights_only mitigation is available
         - recommendation: Security recommendation string
 
     Example:
         >>> status = check_torch_security_compliance()
-        >>> if status["cve_2025_32434_vulnerable"]:
-        ...     print("Use safe_load() for all model loading")
+        >>> if not status["supported_security_baseline_met"]:
+        ...     print("Upgrade PyTorch to the supported baseline")
     """
     try:
         import torch
@@ -128,6 +133,8 @@ def check_torch_security_compliance() -> dict[str, Any]:
         return {
             "torch_version": None,
             "cve_2025_32434_vulnerable": None,
+            "minimum_supported_torch_version": MINIMUM_SUPPORTED_TORCH_VERSION,
+            "supported_security_baseline_met": False,
             "mitigation_available": False,
             "recommendation": "PyTorch not installed",
         }
@@ -136,35 +143,41 @@ def check_torch_security_compliance() -> dict[str, Any]:
 
     try:
         version = Version(torch_version)
-        vulnerable = version < Version("2.6.0")
+        vulnerable = version < Version(CVE_2025_32434_FIXED_TORCH_VERSION)
+        supported_baseline_met = version >= Version(MINIMUM_SUPPORTED_TORCH_VERSION)
     except Exception:
         # Non-standard version string
         vulnerable = True
+        supported_baseline_met = False
 
     return {
         "torch_version": torch_version,
         "cve_2025_32434_vulnerable": vulnerable,
+        "minimum_supported_torch_version": MINIMUM_SUPPORTED_TORCH_VERSION,
+        "supported_security_baseline_met": supported_baseline_met,
         "mitigation_available": True,
         "recommendation": (
-            "Use safe_load() or weights_only=True for all torch.load() calls"
-            if vulnerable
-            else "Torch version includes CVE-2025-32434 fix"
+            f"Upgrade PyTorch to >={MINIMUM_SUPPORTED_TORCH_VERSION}; "
+            "weights_only=True or safe_load() remain mandatory defense in depth"
+            if not supported_baseline_met
+            else "Torch version meets the supported security baseline; keep weights_only=True or safe_load() for defense in depth"
         ),
     }
 
 
 def warn_if_vulnerable() -> None:
-    """Emit a warning if torch is vulnerable to CVE-2025-32434.
+    """Emit a warning if torch is below the supported security baseline.
 
     This can be called at module import time to alert users of vulnerable
-    torch installations and the need for mitigation.
+    or unsupported torch installations.
     """
     status = check_torch_security_compliance()
-    if status.get("cve_2025_32434_vulnerable"):
+    if not status.get("supported_security_baseline_met", False) and status.get("torch_version") is not None:
         warnings.warn(
-            f"PyTorch {status['torch_version']} is vulnerable to CVE-2025-32434. "
-            "Always use weights_only=True with torch.load() or use "
-            "transformation_portal.core.security.torch_security.safe_load().",
+            f"PyTorch {status['torch_version']} does not meet the supported "
+            f"security baseline >= {MINIMUM_SUPPORTED_TORCH_VERSION}. "
+            "Upgrade torch; weights_only=True and safe_load() remain mandatory "
+            "checkpoint-loading hardening.",
             UserWarning,
             stacklevel=2,
         )
@@ -182,7 +195,7 @@ def _enforced_torch_load(
 
     This function is installed as a replacement for torch.load when
     global enforcement is active. It ensures all model loading uses
-    weights_only=True to mitigate CVE-2025-32434.
+    weights_only=True for checkpoint-loading defense in depth.
 
     Args:
         f: File path or file-like object
@@ -213,7 +226,8 @@ def _enforced_torch_load(
     if not weights_only:
         raise SecurityError(
             "CVE-2025-32434: weights_only=False is blocked for security. "
-            "Use weights_only=True or safe_load() to load model files. "
+            "Use a supported torch baseline plus weights_only=True or safe_load() "
+            "to load model files. "
             "If you must load untrusted custom objects, document the trust "
             "boundary and use _unsafe_torch_load_bypass() with security review."
         )
@@ -231,7 +245,7 @@ class SecurityError(RuntimeError):
     """Raised when a security policy is violated.
 
     This exception indicates that code attempted to bypass security
-    mitigations, such as using torch.load() without weights_only=True.
+    hardening, such as using torch.load() without weights_only=True.
     """
 
     pass
@@ -245,8 +259,8 @@ def install_global_enforcement() -> bool:
     """Install global enforcement of safe torch.load behavior.
 
     This function patches torch.load to enforce weights_only=True on ALL calls,
-    not just direct safe_load() usage. This ensures CVE-2025-32434 mitigation
-    is applied system-wide.
+    not just direct safe_load() usage. Supported deployments must also run on
+    a patched torch baseline.
 
     MUST be called at ML stack initialization before any model loading.
 
@@ -330,7 +344,7 @@ def uninstall_global_enforcement() -> bool:
         False if enforcement was not installed
 
     Security:
-        Calling this function removes CVE-2025-32434 protection.
+        Calling this function removes checkpoint-loading hardening.
         Only use for testing or in controlled environments.
     """
     global _enforcement_installed, _original_torch_load
@@ -360,7 +374,7 @@ def _unsafe_torch_load_bypass(
 ) -> Any:
     """Bypass security enforcement for trusted model files.
 
-    ⚠️ DANGER: This function bypasses CVE-2025-32434 protections.
+    DANGER: This function bypasses checkpoint-loading hardening.
 
     Only use this for:
     - Loading models with custom classes that CANNOT use weights_only=True
@@ -430,7 +444,8 @@ def get_security_profile_hash() -> str:
     # Runtime state (_enforcement_installed) would break determinism
     profile_data = {
         "policy_version": SECURITY_PROFILE_VERSION,
-        "cve_2025_32434_mitigation": "weights_only_enforced",
+        "minimum_supported_torch_version": MINIMUM_SUPPORTED_TORCH_VERSION,
+        "cve_2025_32434_posture": "fixed_by_supported_torch_baseline",
         "torch_load_policy": "weights_only_true",
     }
     # Use canonical JSON for deterministic hash (repo guardrail requires this)
@@ -461,7 +476,7 @@ def assert_enforcement_installed() -> None:
             "Torch security enforcement not installed. "
             "Call install_global_enforcement() at ML stack initialization "
             "BEFORE importing any modules that use torch.load(). "
-            "This is required for CVE-2025-32434 mitigation."
+            "This is required for checkpoint-loading hardening."
         )
 
 
@@ -481,7 +496,8 @@ def get_canonical_security_profile() -> dict[str, Any]:
     Example:
         >>> get_canonical_security_profile()
         {
-            'policy_version': 'torch_safe_load_v1',
+            'policy_version': 'torch_safe_load_v2',
+            'minimum_supported_torch_version': '2.8.0',
             'torch_load_enforced': True,
             'weights_only': True,
             'cve_mitigation': 'cve-2025-32434-v1'
@@ -489,7 +505,8 @@ def get_canonical_security_profile() -> dict[str, Any]:
     """
     return {
         "policy_version": SECURITY_PROFILE_VERSION,
+        "minimum_supported_torch_version": MINIMUM_SUPPORTED_TORCH_VERSION,
         "torch_load_enforced": True,  # Policy requirement, not runtime state
         "weights_only": True,  # Policy requirement
-        "cve_mitigation": "cve-2025-32434-v1",
+        "cve_mitigation": "fixed-by-supported-torch-baseline",
     }

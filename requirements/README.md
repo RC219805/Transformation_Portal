@@ -321,7 +321,10 @@ make install-ml-coreml
 make install-ml
 ```
 
-Or use the package extras (installs latest allowed versions, not pinned):
+Or use the package extras (installs latest allowed versions, not pinned).
+The ML extras require the supported PyTorch security baseline
+(`torch>=2.8.0`, `torchvision>=0.23.0`); frozen historical ML locks are
+not remediation targets for Dependabot alerts.
 
 ```bash
 # Install ML core support only
