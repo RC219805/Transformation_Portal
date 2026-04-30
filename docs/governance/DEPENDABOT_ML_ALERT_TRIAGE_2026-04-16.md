@@ -8,11 +8,16 @@ This triage record covers the 12 open Dependabot alerts that reduce to 4 advisor
 - `requirements/ml-core-darwin-arm64.txt`
 - `requirements/ml-core-darwin-x86_64.txt`
 
+Update on 2026-04-30: the Linux x86_64 and macOS Intel manifests listed here
+are now retired unsupported lanes and are no longer checked in as installable
+requirements files. Current policy lives in
+[Retired ML Lock Lanes - 2026-04-30](RETIRED_ML_LOCK_LANES_2026-04-30.md).
+
 Supported remediation targets:
 
 - `ml-core-darwin-arm64.txt`
 
-Frozen/unsupported lane:
+Retired unsupported lane:
 
 - `ml-core-linux.txt`
 - `ml-core-darwin-x86_64.txt`
@@ -21,18 +26,18 @@ Frozen/unsupported lane:
 
 | Alert | Advisory | Manifest | Disposition | Evidence / action |
 |-------|----------|----------|-------------|-------------------|
-| `#129` | PyTorch `torch.load` RCE (`GHSA-53q9-r3pm-6pq6`) | `requirements/ml-core-linux.txt` | Dismiss `not_used` | Linux x86_64 is a frozen unsupported historical ML lane |
+| `#129` | PyTorch `torch.load` RCE (`GHSA-53q9-r3pm-6pq6`) | `requirements/ml-core-linux.txt` | Dismiss `not_used` | Linux x86_64 is now a retired unsupported historical ML lane |
 | `#143` | PyTorch `torch.load` RCE (`GHSA-53q9-r3pm-6pq6`) | `requirements/ml-core-darwin-arm64.txt` | Remediate | Rotate Darwin arm64 lock/input to `torch==2.8.0`, `torchvision==0.23.0` |
-| `#146` | PyTorch `torch.load` RCE (`GHSA-53q9-r3pm-6pq6`) | `requirements/ml-core-darwin-x86_64.txt` | Dismiss `not_used` | Darwin x86_64 is a frozen unsupported ML lane |
-| `#128` | PyTorch improper resource shutdown (`GHSA-887c-mr87-cxwp`) | `requirements/ml-core-linux.txt` | Dismiss `not_used` | Linux x86_64 is a frozen unsupported historical ML lane |
+| `#146` | PyTorch `torch.load` RCE (`GHSA-53q9-r3pm-6pq6`) | `requirements/ml-core-darwin-x86_64.txt` | Dismiss `not_used` | Darwin x86_64 is now a retired unsupported ML lane |
+| `#128` | PyTorch improper resource shutdown (`GHSA-887c-mr87-cxwp`) | `requirements/ml-core-linux.txt` | Dismiss `not_used` | Linux x86_64 is now a retired unsupported historical ML lane |
 | `#142` | PyTorch improper resource shutdown (`GHSA-887c-mr87-cxwp`) | `requirements/ml-core-darwin-arm64.txt` | Remediate | GitHub advisory metadata on 2026-04-16 marks `torch<=2.7.1` as vulnerable, so supported lanes move to the first patched release line: `torch==2.8.0`, `torchvision==0.23.0` |
-| `#145` | PyTorch improper resource shutdown (`GHSA-887c-mr87-cxwp`) | `requirements/ml-core-darwin-x86_64.txt` | Dismiss `not_used` | Darwin x86_64 is a frozen unsupported ML lane |
-| `#127` | PyTorch local DoS (`GHSA-3749-ghw9-m3mg`) | `requirements/ml-core-linux.txt` | Dismiss `not_used` | Linux x86_64 is a frozen unsupported historical ML lane |
+| `#145` | PyTorch improper resource shutdown (`GHSA-887c-mr87-cxwp`) | `requirements/ml-core-darwin-x86_64.txt` | Dismiss `not_used` | Darwin x86_64 is now a retired unsupported ML lane |
+| `#127` | PyTorch local DoS (`GHSA-3749-ghw9-m3mg`) | `requirements/ml-core-linux.txt` | Dismiss `not_used` | Linux x86_64 is now a retired unsupported historical ML lane |
 | `#141` | PyTorch local DoS (`GHSA-3749-ghw9-m3mg`) | `requirements/ml-core-darwin-arm64.txt` | Remediate | Closed by the same Darwin arm64 torch uplift |
-| `#144` | PyTorch local DoS (`GHSA-3749-ghw9-m3mg`) | `requirements/ml-core-darwin-x86_64.txt` | Dismiss `not_used` | Darwin x86_64 is a frozen unsupported ML lane |
+| `#144` | PyTorch local DoS (`GHSA-3749-ghw9-m3mg`) | `requirements/ml-core-darwin-x86_64.txt` | Dismiss `not_used` | Darwin x86_64 is now a retired unsupported ML lane |
 | `#149` | `transformers.Trainer` RCE (`GHSA-69w3-r845-3855`) | `requirements/ml-core-linux.txt` | Dismiss `not_used` | Managed inference paths do not use the vulnerable training/resume flow |
 | `#147` | `transformers.Trainer` RCE (`GHSA-69w3-r845-3855`) | `requirements/ml-core-darwin-arm64.txt` | Dismiss `not_used` | Managed inference paths do not use the vulnerable training/resume flow |
-| `#148` | `transformers.Trainer` RCE (`GHSA-69w3-r845-3855`) | `requirements/ml-core-darwin-x86_64.txt` | Dismiss `not_used` | Frozen unsupported lane, plus non-reachable training path |
+| `#148` | `transformers.Trainer` RCE (`GHSA-69w3-r845-3855`) | `requirements/ml-core-darwin-x86_64.txt` | Dismiss `not_used` | Retired unsupported lane, plus non-reachable training path |
 
 ## Trainer Reachability Evidence
 

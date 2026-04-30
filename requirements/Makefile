@@ -18,14 +18,12 @@
 # TARGET-OWNED ML LOCKFILES (pip-compile cannot resolve multi-platform .in)
 # -------------------------------------------------------------------------
 # Target            Lockfile                    Baseline
-# darwin-x86_64     ml-core-darwin-x86_64.txt  torch 2.2.2 + numpy<2 + transformers<5 (frozen)
 # darwin-arm64      ml-core-darwin-arm64.txt   torch 2.8.0 + torchvision 0.23.0 + CoreML tooling
-# linux-x86_64      ml-core-linux.txt          frozen historical lock (unsupported)
+# darwin-x86_64     retired                    unsupported; no installable checked-in ML lock
+# linux-x86_64      retired                    unsupported; no installable checked-in ML lock
 #
 # Target-owned ML lockfiles:
-#   ml-core-darwin-x86_64.txt  macOS Intel conservative ML baseline (frozen pending authoritative lane)
 #   ml-core-darwin-arm64.txt   macOS Apple Silicon ML baseline
-#   ml-core-linux.txt          Linux x86_64 historical ML baseline (frozen unsupported lane)
 #
 # Non-core optional ML layers are not part of the checked-in lockfile contract.
 # Host-generated outputs for ml-core.txt, ml-cpu.txt, ml-mps.txt, ml-cuda.txt,
@@ -82,17 +80,16 @@ help:
 	@echo "  compile-ml-darwin-arm64    Compile the Darwin arm64 ML lock on native Darwin arm64 only"
 	@echo "  update-ml-darwin-arm64     Update the Darwin arm64 ML lock on native Darwin arm64 only"
 	@echo "  check-ml-darwin-arm64      Verify the Darwin arm64 ML lock on native Darwin arm64 only"
-	@echo "  compile-ml-linux-x86_64    Frozen lane - always fails closed"
-	@echo "  update-ml-linux-x86_64     Frozen lane - always fails closed"
-	@echo "  check-ml-linux-x86_64      Frozen lane - always fails closed"
-	@echo "  compile-ml-darwin-x86_64   Frozen lane - always fails closed"
-	@echo "  update-ml-darwin-x86_64    Frozen lane - always fails closed"
-	@echo "  check-ml-darwin-x86_64     Frozen lane - always fails closed"
+	@echo "  compile-ml-linux-x86_64    Retired unsupported lane - always fails closed"
+	@echo "  update-ml-linux-x86_64     Retired unsupported lane - always fails closed"
+	@echo "  check-ml-linux-x86_64      Retired unsupported lane - always fails closed"
+	@echo "  compile-ml-darwin-x86_64   Retired unsupported lane - always fails closed"
+	@echo "  update-ml-darwin-x86_64    Retired unsupported lane - always fails closed"
+	@echo "  check-ml-darwin-x86_64     Retired unsupported lane - always fails closed"
 	@echo ""
 	@echo "Target-owned ML lockfiles:"
-	@echo "  ml-core-darwin-x86_64.txt  macOS Intel conservative ML baseline (frozen)"
 	@echo "  ml-core-darwin-arm64.txt   macOS Apple Silicon ML baseline"
-	@echo "  ml-core-linux.txt          Linux x86_64 historical ML baseline (frozen unsupported lane)"
+	@echo "  macOS Intel/Linux          retired unsupported lanes; no checked-in installable ML lock"
 	@echo ""
 	@echo "Non-core optional ML layers are not part of the checked-in lock contract:"
 	@echo "  ml-core.txt, ml-cpu.txt, ml-mps.txt, ml-cuda.txt,"
@@ -192,13 +189,13 @@ require-darwin-arm64-authority:
 	fi
 
 refuse-darwin-x86_64-authority:
-	@echo "ERROR: ml-core-darwin-x86_64.txt is frozen pending an authoritative Darwin x86_64 lane decision."
-	@echo "ERROR: Do not regenerate this lockfile from local tooling or scheduled automation."
+	@echo "ERROR: macOS Intel ML lockfiles are retired unsupported manifests."
+	@echo "ERROR: Do not regenerate or reinstall retired vulnerable torch baselines."
 	@exit 1
 
 refuse-linux-x86_64-authority:
-	@echo "ERROR: ml-core-linux.txt is frozen as an unsupported historical lane."
-	@echo "ERROR: Do not regenerate this lockfile from local tooling or scheduled automation."
+	@echo "ERROR: Linux ML lockfiles are retired unsupported manifests."
+	@echo "ERROR: Do not regenerate or reinstall retired vulnerable torch baselines."
 	@exit 1
 
 ml-core-darwin-x86_64.txt: refuse-darwin-x86_64-authority

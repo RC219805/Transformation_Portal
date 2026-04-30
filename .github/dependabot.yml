@@ -9,9 +9,6 @@ updates:
     directory: "/"
     target-branch: "main"
     open-pull-requests-limit: 5
-    exclude-paths:
-      - "requirements/ml-core-linux.*"
-      - "requirements/ml-core-darwin-x86_64.*"
     schedule:
       interval: "weekly"
   - package-ecosystem: "github-actions"

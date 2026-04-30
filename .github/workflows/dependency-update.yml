@@ -86,8 +86,8 @@ jobs:
             --context ubuntu-x64-generic \
             --changed-files-file "${changed_files_path}"
 
-          if grep -Eq '^requirements/ml-core-darwin-arm64.txt$|^requirements/ml-core-darwin-x86_64.txt$|^requirements/ml-core-linux.txt$' "${changed_files_path}"; then
-            echo "ERROR: scheduled dependency automation must not modify target-owned or frozen ML locks."
+          if grep -Eq '^requirements/ml-core-darwin-arm64.txt$' "${changed_files_path}"; then
+            echo "ERROR: scheduled dependency automation must not modify target-owned ML locks."
             exit 1
           fi
 
@@ -152,8 +152,7 @@ jobs:
             ### 🎯 ML Layer Strategy
             scheduled automation updates generic locks only
             - `ml-core-darwin-arm64.txt` remains a manual Apple Silicon authoritative lane
-            - `ml-core-darwin-x86_64.txt` is frozen pending an authoritative lane decision
-            - `ml-core-linux.txt` is frozen as an unsupported historical lane
+            - retired Linux/macOS Intel ML lanes are not checked-in installable requirements
             - **ml-sam2.in** remains scripted-only and is not a standard checked-in lockfile
 
             ### 🔍 Security Report

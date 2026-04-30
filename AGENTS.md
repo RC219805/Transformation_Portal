@@ -95,23 +95,23 @@ Quick reference for common workflows and commands in this repo.
 - `make lock-ci` regenerate `requirements-ci.lock.txt`.
 - `make lock-dev` regenerate `requirements-dev.lock.txt`.
 - `make compile-ml-darwin-arm64`, `make update-ml-darwin-arm64`, and `make check-ml-darwin-arm64` delegate to the Darwin arm64 target-owned ML lock workflow under `requirements/` with `LOCK_PYTHON_VERSION=3.11`.
-- `make compile-ml-linux-x86_64`, `make update-ml-linux-x86_64`, and `make check-ml-linux-x86_64` fail closed through the frozen unsupported Linux x86_64 ML lock lane.
-- `make compile-ml-darwin-x86_64`, `make update-ml-darwin-x86_64`, and `make check-ml-darwin-x86_64` fail closed through the frozen Darwin x86_64 ML lock lane.
+- `make compile-ml-linux-x86_64`, `make update-ml-linux-x86_64`, and `make check-ml-linux-x86_64` fail closed through the retired unsupported Linux x86_64 ML lane.
+- `make compile-ml-darwin-x86_64`, `make update-ml-darwin-x86_64`, and `make check-ml-darwin-x86_64` fail closed through the retired unsupported Darwin x86_64 ML lane.
 - `cd requirements && make compile LOCK_PYTHON_VERSION=3.11` compile only the generic checked-in layered lockfiles (`all/base/dev/ci/security/tools-archive`).
 - `cd requirements && make compile-ml-darwin-arm64 LOCK_PYTHON_VERSION=3.11` compile the Darwin arm64 target-owned ML lock on native Darwin arm64 only.
-- `cd requirements && make compile-ml-linux-x86_64 LOCK_PYTHON_VERSION=3.11` fail closed because the Linux x86_64 target-owned ML lock is frozen as an unsupported historical lane.
-- `cd requirements && make compile-ml-darwin-x86_64 LOCK_PYTHON_VERSION=3.11` fail closed because the Darwin x86_64 target-owned ML lock is frozen pending an authoritative lane decision.
+- `cd requirements && make compile-ml-linux-x86_64 LOCK_PYTHON_VERSION=3.11` fail closed because the Linux x86_64 ML lane is retired and has no installable checked-in lockfile.
+- `cd requirements && make compile-ml-darwin-x86_64 LOCK_PYTHON_VERSION=3.11` fail closed because the Darwin x86_64 ML lane is retired and has no installable checked-in lockfile.
 - `cd requirements && make compile-ml-layers LOCK_PYTHON_VERSION=3.11` fail closed and direct operators to the explicit target-owned ML commands.
 - `cd requirements && make compile-accel LOCK_PYTHON_VERSION=3.11` fail closed and direct operators to the explicit target-owned ML commands.
 - `cd requirements && make compile-hash-pilot LOCK_PYTHON_VERSION=3.11` generate advisory hash-enforced pilot lockfiles into `requirements/.hash-pilot/`.
 - `cd requirements && make update LOCK_PYTHON_VERSION=3.11` update only the generic checked-in layered lockfiles.
 - `cd requirements && make update-ml-darwin-arm64 LOCK_PYTHON_VERSION=3.11` update the Darwin arm64 target-owned ML lock on native Darwin arm64 only.
-- `cd requirements && make update-ml-linux-x86_64 LOCK_PYTHON_VERSION=3.11` fail closed because the Linux x86_64 target-owned ML lock is frozen as an unsupported historical lane.
-- `cd requirements && make update-ml-darwin-x86_64 LOCK_PYTHON_VERSION=3.11` fail closed because the Darwin x86_64 target-owned ML lock is frozen pending an authoritative lane decision.
+- `cd requirements && make update-ml-linux-x86_64 LOCK_PYTHON_VERSION=3.11` fail closed because the Linux x86_64 ML lane is retired and has no installable checked-in lockfile.
+- `cd requirements && make update-ml-darwin-x86_64 LOCK_PYTHON_VERSION=3.11` fail closed because the Darwin x86_64 ML lane is retired and has no installable checked-in lockfile.
 - `cd requirements && make check LOCK_PYTHON_VERSION=3.11` verify only the generic checked-in layered lockfiles are current.
 - `cd requirements && make check-ml-darwin-arm64 LOCK_PYTHON_VERSION=3.11` verify the Darwin arm64 target-owned ML lock on native Darwin arm64 only.
-- `cd requirements && make check-ml-linux-x86_64 LOCK_PYTHON_VERSION=3.11` fail closed because the Linux x86_64 target-owned ML lock is frozen as an unsupported historical lane.
-- `cd requirements && make check-ml-darwin-x86_64 LOCK_PYTHON_VERSION=3.11` fail closed because the Darwin x86_64 target-owned ML lock is frozen pending an authoritative lane decision.
+- `cd requirements && make check-ml-linux-x86_64 LOCK_PYTHON_VERSION=3.11` fail closed because the Linux x86_64 ML lane is retired and has no installable checked-in lockfile.
+- `cd requirements && make check-ml-darwin-x86_64 LOCK_PYTHON_VERSION=3.11` fail closed because the Darwin x86_64 ML lane is retired and has no installable checked-in lockfile.
 - `cd requirements && make check-hash-pilot LOCK_PYTHON_VERSION=3.11` validate the pilot lockfiles with `pip install --dry-run --require-hashes`.
 - `python3 scripts/validation/check_requirements_lock_contract.py` validate layered lock contract (headers + target-owned purity/compatibility guards + lock ownership manifest coverage).
 - `make docs` build API docs with Sphinx.
@@ -143,9 +143,9 @@ Quick reference for common workflows and commands in this repo.
 
 ## ML Layer Bootstrap Script (ADR-032 Platform Matrix)
 ### Core profiles (mutually exclusive)
-- `./scripts/bootstrap/install_ml_stack.sh --profile core-cpu` install CPU baseline (darwin-*/linux-*-cpu).
+- `./scripts/bootstrap/install_ml_stack.sh --profile core-cpu` install the supported Apple Silicon CPU baseline.
 - `./scripts/bootstrap/install_ml_stack.sh --profile core-mps` install Apple Silicon MPS (darwin-arm64-mps, macOS ARM64 only).
-- `PYTORCH_INDEX=https://download.pytorch.org/whl/cu121 ./scripts/bootstrap/install_ml_stack.sh --profile core-cuda` install NVIDIA CUDA (linux-x86_64-cuda, Linux only).
+- `PYTORCH_INDEX=https://download.pytorch.org/whl/cu121 ./scripts/bootstrap/install_ml_stack.sh --profile core-cuda` fail closed because the Linux CUDA ML lane is retired unsupported.
 
 ### Capability layers (stack on core profile)
 - `./scripts/bootstrap/install_ml_stack.sh --profile core-cpu,raw` install ML baseline + RAW ingest.

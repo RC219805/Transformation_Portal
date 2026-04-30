@@ -18,16 +18,15 @@
 # Usage:
 #   ./scripts/bootstrap/install_ml_stack.sh --profile core-cpu
 #   ./scripts/bootstrap/install_ml_stack.sh --profile core-mps
-#   ./scripts/bootstrap/install_ml_stack.sh --profile core-cuda
 #   ./scripts/bootstrap/install_ml_stack.sh --profile core-cpu,raw
 #   ./scripts/bootstrap/install_ml_stack.sh --profile core-mps,sam2
 #   ./scripts/bootstrap/install_ml_stack.sh --profile full
 #   ./scripts/bootstrap/install_ml_stack.sh --help
 #
 # Core Profiles (mutually exclusive):
-#   core-cpu    CPU baseline (darwin-*/linux-*, CPU fallback)
+#   core-cpu    Apple Silicon CPU baseline (darwin-arm64 CPU fallback)
 #   core-mps    Apple Silicon MPS (darwin-arm64-mps)
-#   core-cuda   NVIDIA CUDA (linux-x86_64-cuda)
+#   core-cuda   Retired unsupported lane; fails closed
 #
 # Capability Layers (stack on core):
 #   raw         RAW camera file ingest (rawpy)
@@ -100,11 +99,11 @@ OPTIONS:
 
 PROFILES (Platform Matrix - ADR-032):
     Core profiles (mutually exclusive - choose one):
-      core-cpu    CPU baseline (darwin-*/linux-*, CPU fallback)
+      core-cpu    Apple Silicon CPU baseline (darwin-arm64 CPU fallback)
       core-mps    Apple Silicon MPS (darwin-arm64-mps)
-      core-cuda   NVIDIA CUDA (linux-x86_64-cuda)
+      core-cuda   Retired unsupported Linux CUDA lane (fails closed)
 
-    Capability layers (stack on top of core profile):
+    Capability layers (stack on top of a supported core profile):
       raw         RAW camera file ingest (rawpy)
       sam2        SAM2 segmentation backend (requires core-*)
       coreml      Apple CoreML conversion (macOS only)
@@ -114,24 +113,23 @@ PROFILES (Platform Matrix - ADR-032):
       full        Reserved until a trusted umbrella contract exists again
 
 PLATFORM TARGETS:
-    darwin-x86_64-cpu   macOS Intel (core-cpu)
     darwin-arm64-cpu    macOS Apple Silicon, CPU-only (core-cpu)
     darwin-arm64-mps    macOS Apple Silicon, Metal (core-mps)
-    linux-x86_64-cpu    Linux Intel/AMD, CPU (core-cpu)
-    linux-x86_64-cuda   Linux Intel/AMD, NVIDIA GPU (core-cuda)
+    darwin-x86_64-cpu   retired unsupported lane (fails closed)
+    linux-x86_64-*      retired unsupported lane (fails closed)
 
 ENVIRONMENT VARIABLES:
     PYTORCH_INDEX   Custom PyTorch index URL (default: https://download.pytorch.org/whl/cpu)
     PIP_OPTS        Additional pip options (e.g., --no-cache-dir)
 
 EXAMPLES:
-    # Install cross-platform CPU baseline
+    # Install Apple Silicon CPU baseline
     $(basename "$0") --profile core-cpu
 
     # Install Apple Silicon MPS acceleration
     $(basename "$0") --profile core-mps
 
-    # Install NVIDIA CUDA acceleration (Linux only)
+    # Retired Linux CUDA lane fails closed
     PYTORCH_INDEX=https://download.pytorch.org/whl/cu121 $(basename "$0") --profile core-cuda
 
     # Install SAM2 on top of a trusted core profile
@@ -236,8 +234,7 @@ python_platform_arch() {
     normalize_arch "${arch}"
 }
 
-# Detect current platform and return platform-specific lockfile
-# This is critical for deterministic pip-compile resolution (Issue 1 fix)
+# Detect current platform and return the supported platform-specific lockfile.
 detect_platform_lockfile() {
     local os_type arch
     os_type="$(python_platform_os)"
@@ -246,7 +243,7 @@ detect_platform_lockfile() {
     case "${os_type}" in
         Darwin)
             case "${arch}" in
-                x86_64) echo "ml-core-darwin-x86_64.txt" ;;
+                x86_64) echo "__unsupported_darwin_x86_64__" ;;
                 arm64) echo "ml-core-darwin-arm64.txt" ;;
                 *)
                     log_error "Unsupported Darwin architecture: ${arch}"
@@ -255,7 +252,7 @@ detect_platform_lockfile() {
             esac
             ;;
         Linux)
-            echo "ml-core-linux.txt"
+            echo "__unsupported_linux__"
             ;;
         *)
             log_error "Unsupported platform: ${os_type}"
@@ -293,28 +290,24 @@ install_profile() {
         log_error "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
         log_error ""
         log_error "PyTorch does not provide the repo-supported torch>=2.8.0 baseline for macOS Intel."
-        log_error "The frozen macOS Intel lane remains on torch==2.2.2, which is"
-        log_error "vulnerable to CVE-2025-32434 (CVSS 9.8 Critical RCE via torch.load)."
+        log_error "The historical macOS Intel PyTorch 2.2.x lockfile has been retired"
+        log_error "from installable requirements because it is vulnerable to CVE-2025-32434."
         log_error ""
         log_error "While runtime hardening (weights_only=True) remains mandatory,"
         log_error "macOS Intel cannot receive a supported PyTorch version upgrade path."
         log_error ""
         log_error "REQUIRED ACTION:"
-        log_error "  Migrate to macOS Apple Silicon (arm64) or Linux."
+        log_error "  Migrate to macOS Apple Silicon (arm64)."
         log_error ""
-        log_error "To bypass this block (NOT RECOMMENDED for production):"
-        log_error "  export TP_ALLOW_MACOS_INTEL_ML=1"
         log_error "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        exit 1
+    fi
 
-        # Allow bypass via environment variable for development/testing only
-        if [[ "${TP_ALLOW_MACOS_INTEL_ML:-}" != "1" ]]; then
-            exit 1
-        else
-            log_warn ""
-            log_warn "⚠️  TP_ALLOW_MACOS_INTEL_ML=1 detected - PROCEEDING AT YOUR OWN RISK"
-            log_warn "    This bypasses security policy. DO NOT use in production."
-            log_warn ""
-        fi
+    if [[ "$(python_platform_os)" == "Linux" ]]; then
+        log_error "Linux ML lockfiles are retired unsupported manifests."
+        log_error "No checked-in Linux ML stack may be installed from this bootstrap script."
+        log_error "Use the supported macOS Apple Silicon lane, or add a new governed Linux lane in a separate change."
+        exit 1
     fi
 
     case "${profile}" in
@@ -360,24 +353,9 @@ install_profile() {
             fi
             ;;
         core-cuda)
-            # NVIDIA CUDA acceleration (linux-x86_64-cuda)
-            if [[ "$(uname -s)" != "Linux" ]]; then
-                log_error "core-cuda profile requires Linux. Current platform: $(uname -s)"
-                exit 1
-            fi
-            platform_id="$(get_platform_id cuda)"
-
-            check_lockfile "ml-core-linux.txt"
-            log_info "Installing ML core layer + CUDA acceleration (${platform_id})..."
-            log_info "Using platform-specific lockfile: ml-core-linux.txt"
-            log_info "Using PyTorch CUDA index: ${PYTORCH_INDEX}"
-            log_warn "Ensure NVIDIA drivers (compatible with CUDA 12.x) are installed on the host system."
-            if [[ "${DRY_RUN}" == "true" ]]; then
-                log_info "[DRY-RUN] Would install: requirements/ml-core-linux.txt"
-                log_info "[DRY-RUN] With extra-index-url: ${PYTORCH_INDEX}"
-            else
-                "${pip_cmd[@]}" --extra-index-url "${PYTORCH_INDEX}" -r "${REQUIREMENTS_DIR}/ml-core-linux.txt"
-            fi
+            log_error "core-cuda is retired with the unsupported Linux ML lock lane."
+            log_error "Do not reinstall retired vulnerable torch baselines."
+            exit 1
             ;;
         raw)
             log_error "raw profile no longer has a trusted checked-in lockfile contract."
@@ -388,7 +366,7 @@ install_profile() {
             # SAM2 is a SCRIPTED-ONLY capability - not a standard lockfile contract.
             # It requires non-standard install semantics on some platforms.
             log_info "Installing ML SAM2 segmentation layer (SCRIPTED-ONLY)..."
-            log_warn "SAM2 requires ml-core dependencies. Ensure core-cpu/core-mps/core-cuda is installed first."
+            log_warn "SAM2 requires ml-core dependencies. Ensure core-cpu/core-mps is installed first."
 
             if [[ "${DRY_RUN}" == "true" ]]; then
                 log_info "[DRY-RUN] Would install sam2==1.1.0 with fallback to --no-build-isolation"
@@ -417,7 +395,7 @@ install_profile() {
                         log_info "SAM2 installed successfully with --no-build-isolation."
                     else
                         log_error "SAM2 installation failed. Platform may not be supported."
-                        log_error "Ensure PyTorch is installed first: ./scripts/bootstrap/install_ml_stack.sh --profile core-cpu"
+                        log_error "Ensure PyTorch is installed first on Apple Silicon: ./scripts/bootstrap/install_ml_stack.sh --profile core-cpu"
                         exit 2
                     fi
                 fi
