@@ -32,6 +32,7 @@ from transformation_portal.lux_depth_v3.segmentation_backend import (
     SAMVitHBackend,
     StubBackend,
     _get_backend_instance,
+    _get_sam_vit_h_instance,
     get_last_segmentation_runtime_metadata,
     segment_materials,
 )
@@ -293,6 +294,7 @@ def test_get_backend_instance_sam_vit_h_missing_checkpoint_fallback_to_stub(monk
     monkeypatch.setattr(seg_module, "SAM_AVAILABLE", True)
     monkeypatch.setattr(seg_module, "TORCH_AVAILABLE", True)
     seg_module._get_backend_instance.cache_clear()
+    seg_module._get_sam_vit_h_instance.cache_clear()
     try:
         backend = _get_backend_instance(
             "sam_vit_h",
@@ -303,6 +305,7 @@ def test_get_backend_instance_sam_vit_h_missing_checkpoint_fallback_to_stub(monk
         assert isinstance(backend, StubBackend)
     finally:
         seg_module._get_backend_instance.cache_clear()
+        seg_module._get_sam_vit_h_instance.cache_clear()
 
 
 def test_get_backend_instance_sam_vit_h_missing_checkpoint_strict_raises(monkeypatch):
@@ -312,6 +315,7 @@ def test_get_backend_instance_sam_vit_h_missing_checkpoint_strict_raises(monkeyp
     monkeypatch.setattr(seg_module, "SAM_AVAILABLE", True)
     monkeypatch.setattr(seg_module, "TORCH_AVAILABLE", True)
     seg_module._get_backend_instance.cache_clear()
+    seg_module._get_sam_vit_h_instance.cache_clear()
     try:
         with pytest.raises(RuntimeError, match="Failed to load sam_vit_h"):
             _get_backend_instance(
@@ -322,6 +326,7 @@ def test_get_backend_instance_sam_vit_h_missing_checkpoint_strict_raises(monkeyp
             )
     finally:
         seg_module._get_backend_instance.cache_clear()
+        seg_module._get_sam_vit_h_instance.cache_clear()
 
 
 def test_get_backend_instance_sam_vit_h_not_installed_fallback(monkeypatch):
@@ -330,11 +335,13 @@ def test_get_backend_instance_sam_vit_h_not_installed_fallback(monkeypatch):
 
     monkeypatch.setattr(seg_module, "SAM_AVAILABLE", False)
     seg_module._get_backend_instance.cache_clear()
+    seg_module._get_sam_vit_h_instance.cache_clear()
     try:
         backend = _get_backend_instance("sam_vit_h", device="cpu", strict=False)
         assert isinstance(backend, StubBackend)
     finally:
         seg_module._get_backend_instance.cache_clear()
+        seg_module._get_sam_vit_h_instance.cache_clear()
 
 
 def test_get_backend_instance_unknown_backend_raises():
@@ -424,6 +431,7 @@ def test_enhance_config_sam_vit_h_defaults():
     assert config.sam_vit_h_points_per_side == 32
     assert config.sam_vit_h_pred_iou_thresh == pytest.approx(0.88)
     assert config.sam_vit_h_confidence_threshold == pytest.approx(0.85)
+    assert config.sam_vit_h_expected_sha256 is None
 
 
 def test_enhance_config_sam_vit_h_overrides():

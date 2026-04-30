@@ -229,10 +229,14 @@ try:
     from segment_anything import sam_model_registry as _sam_model_registry
 
     SAM_AVAILABLE = True
+    _SAM_IMPORT_ERROR: str = ""
     sam_model_registry = _sam_model_registry
     SamAutomaticMaskGenerator = _SamAutomaticMaskGenerator
-except ImportError:
+except ImportError as _e:
     SAM_AVAILABLE = False
+    # Preserve the real error message — often a missing transitive dep (e.g. torch),
+    # not segment_anything itself being absent.
+    _SAM_IMPORT_ERROR = str(_e)
     sam_model_registry = None  # type: ignore
     SamAutomaticMaskGenerator = None  # type: ignore
 
@@ -1798,7 +1802,8 @@ class SAMVitHBackend:
     """SAM ViT-H segmentation backend for APEX Research tier.
 
     Wraps Meta's Segment Anything Model (ViT-H variant) for research-grade
-    universal segmentation. Used exclusively in the apex_research preset.
+    universal segmentation. Available via the apex_research preset and
+    directly via CLI (``--segmentation-backend sam_vit_h``).
 
     - Model: SAM ViT-H (Apache 2.0, Meta AI)
     - Checkpoint: sam_vit_h_4b8939.pth (~2.4 GB)
@@ -1810,7 +1815,9 @@ class SAMVitHBackend:
     CHECKPOINT_URL = "https://dl.fbaipublicfiles.com/segment_anything/sam_vit_h_4b8939.pth"
     CHECKPOINT_FILENAME = "sam_vit_h_4b8939.pth"
     # SHA-256 of the official SAM ViT-H checkpoint from Meta AI.
-    # Set to None to skip validation (e.g., while hash is being verified).
+    # None means validation is skipped by default.  Operators can supply a
+    # hash via EnhanceConfig.sam_vit_h_expected_sha256 to enable integrity
+    # checking without modifying this class constant.
     EXPECTED_SHA256: Optional[str] = None
 
     def __init__(
@@ -1840,24 +1847,31 @@ class SAMVitHBackend:
             description="Segment Anything Model ViT-H — research-grade universal segmentation (Apache 2.0)",
         )
 
-    def load(self, device: str = "auto", weights_path: Optional[Path] = None) -> None:
+    def load(
+        self,
+        device: str = "auto",
+        weights_path: Optional[Path] = None,
+        expected_sha256: Optional[str] = None,
+    ) -> None:
         """Load SAM ViT-H model.
 
         Args:
             device: Target device ("auto", "cpu", "mps", "cuda")
             weights_path: Optional checkpoint path override
+            expected_sha256: Optional SHA-256 hex digest to validate the checkpoint;
+                overrides the class-level EXPECTED_SHA256 constant.
 
         Raises:
             RuntimeError: If segment_anything or torch not installed
             FileNotFoundError: If checkpoint not found at any search path
-            RuntimeError: If SHA-256 validation fails (when EXPECTED_SHA256 is set)
+            RuntimeError: If SHA-256 validation fails
         """
         if self._model_loaded:
             return
 
         if not SAM_AVAILABLE:
             raise RuntimeError(
-                "segment_anything not installed.\n"
+                f"segment_anything is not available: {_SAM_IMPORT_ERROR}\n"
                 "Install with: pip install git+https://github.com/facebookresearch/segment-anything.git"
             )
         if not TORCH_AVAILABLE:
@@ -1866,8 +1880,9 @@ class SAMVitHBackend:
         resolved_device = self._resolve_device(device)
         checkpoint = self._resolve_checkpoint(weights_path)
 
-        if self.EXPECTED_SHA256:
-            self._validate_checkpoint_sha256(checkpoint, self.EXPECTED_SHA256)
+        effective_sha256 = expected_sha256 or self.EXPECTED_SHA256
+        if effective_sha256:
+            self._validate_checkpoint_sha256(checkpoint, effective_sha256)
 
         logger.info("Loading SAM ViT-H on %s (checkpoint: %s)", resolved_device, checkpoint)
         try:
@@ -2089,6 +2104,43 @@ class SAMVitHBackend:
 # =============================================================================
 
 
+@lru_cache(maxsize=1)  # Enforce a single loaded SAM ViT-H instance per process (~2.4 GB each).
+def _get_sam_vit_h_instance(
+    checkpoint_path: Optional[str] = None,
+    points_per_side: int = 32,
+    pred_iou_thresh: float = 0.88,
+    confidence_threshold: float = 0.85,
+    expected_sha256: Optional[str] = None,
+    device: str = "auto",
+    strict: bool = False,
+) -> SegmentationBackend:
+    """Load and cache exactly one SAMVitHBackend per process.
+
+    Separated from _get_backend_instance so its maxsize=1 constraint is
+    independent of the broader backend cache, preventing two SAM ViT-H
+    models from coexisting in memory when callers vary parameters.
+    """
+    backend: SegmentationBackend = SAMVitHBackend(
+        checkpoint_path=checkpoint_path,
+        points_per_side=points_per_side,
+        pred_iou_thresh=pred_iou_thresh,
+        confidence_threshold=confidence_threshold,
+    )
+    try:
+        backend.load(device=device, expected_sha256=expected_sha256)
+    except (FileNotFoundError, RuntimeError) as e:
+        if strict:
+            raise RuntimeError(f"Failed to load sam_vit_h backend: {e}") from e
+        logger.warning(
+            "Failed to load SAM ViT-H backend: %s\n"
+            "Checkpoint missing or dependencies unavailable. "
+            "Falling back to stub backend.",
+            e,
+        )
+        return _get_backend_instance("stub", device="cpu", strict=False)
+    return backend
+
+
 # Keep this small: SAM2 instances are heavyweight and multiple cached variants can exhaust memory.
 @lru_cache(maxsize=2)  # Cache backend instances by backend + device + model options
 def _get_backend_instance(
@@ -2111,6 +2163,7 @@ def _get_backend_instance(
     sam_vit_h_points_per_side: int = 32,
     sam_vit_h_pred_iou_thresh: float = 0.88,
     sam_vit_h_confidence_threshold: float = 0.85,
+    sam_vit_h_expected_sha256: Optional[str] = None,
     sky_top_region_fraction: float = 0.5,
     sky_gradient_threshold: float = 0.05,
     sky_brightness_threshold: float = 0.4,
@@ -2198,25 +2251,15 @@ def _get_backend_instance(
         return sam2_backend
 
     if backend_name == "sam_vit_h":
-        sam_vit_h_backend: SegmentationBackend = SAMVitHBackend(
+        return _get_sam_vit_h_instance(
             checkpoint_path=sam_vit_h_checkpoint_path,
             points_per_side=sam_vit_h_points_per_side,
             pred_iou_thresh=sam_vit_h_pred_iou_thresh,
             confidence_threshold=sam_vit_h_confidence_threshold,
+            expected_sha256=sam_vit_h_expected_sha256,
+            device=device,
+            strict=strict,
         )
-        try:
-            sam_vit_h_backend.load(device=device)
-        except (FileNotFoundError, RuntimeError) as e:
-            if strict:
-                raise RuntimeError(f"Failed to load {backend_name} backend: {e}") from e
-            logger.warning(
-                "Failed to load SAM ViT-H backend: %s\n"
-                "Checkpoint missing or dependencies unavailable. "
-                "Falling back to stub backend.",
-                e,
-            )
-            return _get_backend_instance("stub", device="cpu", strict=False)
-        return sam_vit_h_backend
 
     raise ValueError(
         f"Unknown segmentation backend: {backend_name}\n" f"Valid options: 'stub', 'efficientsam', 'sam2', 'sam_vit_h'"
@@ -2286,6 +2329,7 @@ def segment_materials(
     sam_vit_h_points_per_side = int(getattr(config, "sam_vit_h_points_per_side", 32))
     sam_vit_h_pred_iou_thresh = float(getattr(config, "sam_vit_h_pred_iou_thresh", 0.88))
     sam_vit_h_confidence_threshold = float(getattr(config, "sam_vit_h_confidence_threshold", 0.85))
+    sam_vit_h_expected_sha256 = getattr(config, "sam_vit_h_expected_sha256", None)
     sky_top_region_fraction = float(getattr(config, "sky_top_region_fraction", 0.5))
     sky_gradient_threshold = float(getattr(config, "sky_gradient_threshold", 0.05))
     sky_brightness_threshold = float(getattr(config, "sky_brightness_threshold", 0.4))
@@ -2383,6 +2427,7 @@ def segment_materials(
             sam_vit_h_points_per_side=sam_vit_h_points_per_side,
             sam_vit_h_pred_iou_thresh=sam_vit_h_pred_iou_thresh,
             sam_vit_h_confidence_threshold=sam_vit_h_confidence_threshold,
+            sam_vit_h_expected_sha256=sam_vit_h_expected_sha256,
             sky_top_region_fraction=sky_top_region_fraction,
             sky_gradient_threshold=sky_gradient_threshold,
             sky_brightness_threshold=sky_brightness_threshold,
