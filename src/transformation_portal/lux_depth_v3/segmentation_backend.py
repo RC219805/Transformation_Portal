@@ -1957,16 +1957,14 @@ class SAMVitHBackend:
             p = Path(weights_path)
             if not p.exists():
                 raise FileNotFoundError(
-                    f"SAM ViT-H checkpoint not found at specified path: {p}\n"
-                    f"Download from: {self.CHECKPOINT_URL}"
+                    f"SAM ViT-H checkpoint not found at specified path: {p}\n" f"Download from: {self.CHECKPOINT_URL}"
                 )
             return p
         if self._checkpoint_path:
             p = Path(self._checkpoint_path)
             if not p.exists():
                 raise FileNotFoundError(
-                    f"SAM ViT-H checkpoint not found at configured path: {p}\n"
-                    f"Download from: {self.CHECKPOINT_URL}"
+                    f"SAM ViT-H checkpoint not found at configured path: {p}\n" f"Download from: {self.CHECKPOINT_URL}"
                 )
             return p
         search_paths = [
@@ -2220,7 +2218,9 @@ def _get_backend_instance(
             return _get_backend_instance("stub", device="cpu", strict=False)
         return sam_vit_h_backend
 
-    raise ValueError(f"Unknown segmentation backend: {backend_name}\n" f"Valid options: 'stub', 'efficientsam', 'sam2', 'sam_vit_h'")
+    raise ValueError(
+        f"Unknown segmentation backend: {backend_name}\n" f"Valid options: 'stub', 'efficientsam', 'sam2', 'sam_vit_h'"
+    )
 
 
 def segment_materials(
