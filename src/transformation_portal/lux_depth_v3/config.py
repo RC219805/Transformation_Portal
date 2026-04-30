@@ -401,7 +401,7 @@ class EnhanceConfig:
     # Materials V3 segmentation backend (Phase 3)
     # Enable automatic material segmentation
     enable_material_segmentation: bool = False
-    # Options: stub, efficientsam, sam2
+    # Options: stub, efficientsam, sam2, sam_vit_h
     material_segmentation_backend: str = "stub"
     # If True, raise on backend errors
     # instead of falling back to stub
@@ -426,6 +426,15 @@ class EnhanceConfig:
     sam2_pred_iou_thresh: float = 0.88
     sam2_stability_score_thresh: float = 0.85
     sam2_crop_n_layers: int = 1
+    # SAM ViT-H backend (Phase 2, APEX Research tier)
+    sam_vit_h_checkpoint_path: Optional[str] = None
+    sam_vit_h_points_per_side: int = 32
+    sam_vit_h_pred_iou_thresh: float = 0.88
+    sam_vit_h_confidence_threshold: float = 0.85
+    # Optional SHA-256 hex digest for checkpoint integrity validation.
+    # None disables validation (default). Provide the hash to fail closed
+    # on corrupted or tampered checkpoints.
+    sam_vit_h_expected_sha256: Optional[str] = None
 
     # Emit flags (deliverables)
     emit_master16: bool = False  # Emit master 16-bit output

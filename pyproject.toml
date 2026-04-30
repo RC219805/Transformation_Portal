@@ -281,6 +281,7 @@ force_grid_wrap = 0
 use_parentheses = true
 ensure_newline_before_comments = true
 skip_glob = ["*/deprecated/*", "*/archive/*", "*/.venv/*", "*/venv/*"]
+
 [[tool.setuptools.ext-modules]]
 name = "transformation_portal.determinism._fpstate"
 sources = ["src/transformation_portal/determinism/_fpstate.c"]
