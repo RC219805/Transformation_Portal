@@ -405,6 +405,11 @@ def build_materials_fingerprint_payload(config: EnhanceConfig) -> Dict[str, Any]
         "sam2_pred_iou_thresh": float(config.sam2_pred_iou_thresh),
         "sam2_stability_score_thresh": float(config.sam2_stability_score_thresh),
         "sam2_crop_n_layers": int(config.sam2_crop_n_layers),
+        "sam_vit_h_checkpoint_path": getattr(config, "sam_vit_h_checkpoint_path", None),
+        "sam_vit_h_points_per_side": int(getattr(config, "sam_vit_h_points_per_side", 32)),
+        "sam_vit_h_pred_iou_thresh": float(getattr(config, "sam_vit_h_pred_iou_thresh", 0.88)),
+        "sam_vit_h_confidence_threshold": float(getattr(config, "sam_vit_h_confidence_threshold", 0.85)),
+        "sam_vit_h_expected_sha256": getattr(config, "sam_vit_h_expected_sha256", None),
     }
 
 

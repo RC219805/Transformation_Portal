@@ -351,3 +351,6 @@ local_artifacts/
 # secure-landing isolated Next build outputs
 web/secure-landing/.next-build-verify/
 web/secure-landing/.next-smoke-*/
+
+# uv lockfile — auto-generated on every uv run; not tracked
+uv.lock
