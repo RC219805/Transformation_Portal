@@ -7,12 +7,23 @@ using in-process numpy/PIL images with no filesystem access.
 
 from __future__ import annotations
 
+import types
+
 import numpy as np
 import pytest
 
 cv2 = pytest.importorskip("cv2")
 
 pytestmark = [pytest.mark.unit]
+
+
+@pytest.fixture(autouse=True)
+def _stub_cv2_saliency(monkeypatch):
+    """Stub cv2.saliency so tests run without opencv-contrib-python."""
+    stub = types.SimpleNamespace(
+        StaticSaliencyFineGrained_create=lambda: types.SimpleNamespace(computeSaliency=lambda img: (False, None))
+    )
+    monkeypatch.setattr(cv2, "saliency", stub, raising=False)
 
 
 # ---------------------------------------------------------------------------

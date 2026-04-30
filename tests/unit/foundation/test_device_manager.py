@@ -7,6 +7,7 @@ mocking the torch availability probes and platform calls.
 
 from __future__ import annotations
 
+from dataclasses import replace
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -388,8 +389,7 @@ class TestOptimizationConfig:
         from transformation_portal.foundation.device_manager import DeviceManager
 
         mgr = DeviceManager()
-        # _cpu_caps has 16 GB > 32 GB threshold is not met
-        caps = _cpu_caps()
+        caps = replace(_cpu_caps(), total_memory_gb=64.0)
         config = mgr._create_optimization_config(caps)
         assert config["enable_gradient_checkpointing"] is False
 

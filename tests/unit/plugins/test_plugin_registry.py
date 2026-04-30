@@ -323,7 +323,8 @@ class TestExternalPluginGating:
         monkeypatch.setenv("TRANSFORMATION_PORTAL_PLUGINS", str(tmp_path))
         registry = _make_registry(allow_external=True)
         paths = registry._get_default_plugin_paths()
-        assert any(str(tmp_path) in str(p) for p in paths)
+        expected = tmp_path.resolve()
+        assert any(p.resolve() == expected for p in paths)
 
 
 # ---------------------------------------------------------------------------

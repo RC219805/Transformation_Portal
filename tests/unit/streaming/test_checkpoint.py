@@ -28,7 +28,7 @@ class TestEvolutionaryCheckpoint:
         yesterday = date.today() - timedelta(days=1)
         ec = EvolutionaryCheckpoint(horizon=date.today() + timedelta(days=30), mutation_path="migrate_v2")
         result = ec.evolve_or_alert(today=yesterday)
-        # "stable" path — result is a human-readable string mentioning days remaining
+        # "stable" path returns a human-readable viability date.
         assert isinstance(result, str)
         assert len(result) > 0
 
