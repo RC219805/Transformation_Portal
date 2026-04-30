@@ -31,7 +31,7 @@ click==8.3.2
     #   -c all.txt
     #   typer
     #   uvicorn
-fastapi==0.136.0
+fastapi==0.136.1
     # via
     #   -c all.txt
     #   -r base.in
@@ -165,7 +165,7 @@ typing-inspection==0.4.2
     #   -c all.txt
     #   fastapi
     #   pydantic
-uvicorn==0.45.0
+uvicorn==0.46.0
     # via
     #   -c all.txt
     #   -r base.in
