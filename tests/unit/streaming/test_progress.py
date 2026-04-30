@@ -108,7 +108,7 @@ class TestProgressTracker:
         tracker.complete()
         assert tracker.get_state().completed is True
 
-    def test_complete_marks_completed_true(self):
+    def test_complete_preserves_current_progress(self):
         from transformation_portal.streaming.progress import ProgressTracker
 
         tracker = ProgressTracker(total=100)
@@ -116,6 +116,7 @@ class TestProgressTracker:
         tracker.complete()
         state = tracker.get_state()
         assert state.completed is True
+        assert state.current == 50
 
     def test_on_update_callback_fires(self):
         from transformation_portal.streaming.progress import ProgressTracker

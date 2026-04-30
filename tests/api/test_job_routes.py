@@ -1,4 +1,4 @@
-"""Integration tests for the job-lifecycle HTTP routes.
+"""Unit-level route contract tests for the job-lifecycle HTTP routes.
 
 Tests the FastAPI app's route handlers end-to-end via TestClient, covering:
   - GET /healthz
