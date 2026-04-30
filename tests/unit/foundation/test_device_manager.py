@@ -109,8 +109,6 @@ class TestDeviceCapabilitiesDataclass:
 
 class TestDeviceInfoDataclass:
     def test_contains_primary_device(self):
-        import torch
-
         from transformation_portal.foundation.device_manager import DeviceInfo, DeviceType
 
         caps = _cpu_caps()
@@ -177,8 +175,6 @@ class TestDeviceDetectionCPUFallback:
         assert info.capabilities.device_type == DeviceType.CPU
 
     def test_detect_returns_cpu_torch_device(self):
-        import torch
-
         with (
             patch("torch.backends.mps.is_available", return_value=False),
             patch("torch.cuda.is_available", return_value=False),
@@ -445,8 +441,6 @@ class TestPublicConvenienceMethods:
             mgr = _make_manager()
             assert mgr.device_info is None
             device = mgr.get_device()
-
-        import torch
 
         assert device == torch.device("cpu")
 

@@ -107,7 +107,7 @@ class TestToneMappingOutputRange:
             apply_tone_mapping,
         )
 
-        image = np.array(values, dtype=np.float32).reshape(1, 3, 3)
+        image = np.array(values, dtype=np.float32).reshape((1, 3, 3))
         config = ToneMappingConfig(method=ToneMappingMethod(method), exposure=exposure)
         result = apply_tone_mapping(image, config)
         assert result.min() >= -1e-5

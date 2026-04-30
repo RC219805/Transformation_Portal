@@ -277,7 +277,7 @@ class TestClear:
         registry.register(_make_plugin("p1", "processor"))
         registry.register(_make_plugin("p2", "enhancer"))
         registry.clear()
-        assert registry.list_plugins() == {}
+        assert not registry.list_plugins()
         assert len(registry._metadata_cache) == 0
 
     def test_clear_reinitialises_plugin_type_keys(self):
