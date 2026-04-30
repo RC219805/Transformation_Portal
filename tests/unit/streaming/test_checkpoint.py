@@ -114,7 +114,7 @@ class TestCheckpointSaveLoad:
     def test_load_missing_file_raises(self, tmp_path):
         from transformation_portal.streaming.checkpoint import Checkpoint
 
-        with pytest.raises((FileNotFoundError, Exception)):
+        with pytest.raises(FileNotFoundError):
             Checkpoint.load(tmp_path / "nonexistent.json")
 
     def test_progress_stored_correctly(self, tmp_path):

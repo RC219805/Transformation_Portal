@@ -9,8 +9,6 @@ from __future__ import annotations
 
 import pytest
 
-cv2 = pytest.importorskip("cv2")
-
 pytestmark = [pytest.mark.unit]
 
 _KNOWN_LOCATIONS = ["montecito", "santa_barbara", "hope_ranch", "riviera"]

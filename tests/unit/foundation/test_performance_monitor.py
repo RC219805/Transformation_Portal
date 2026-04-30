@@ -381,7 +381,7 @@ class TestBenchmark:
         from transformation_portal.foundation.performance_monitor import PerformanceMonitor
 
         monitor = PerformanceMonitor(device=CPU_DEVICE)
-        result = monitor.benchmark(lambda: None, num_iterations=5, warmup_iterations=1)
+        result = monitor.benchmark(lambda: sum(range(100)), num_iterations=5, warmup_iterations=1)
         assert result["throughput_per_sec"] > 0
 
 

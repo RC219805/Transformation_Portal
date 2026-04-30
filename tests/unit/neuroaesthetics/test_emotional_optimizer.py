@@ -7,12 +7,25 @@ seven emotional targets — using in-process numpy/PIL images.
 
 from __future__ import annotations
 
+import types
+
 import pytest
 
 cv2 = pytest.importorskip("cv2")
 pytest.importorskip("sklearn")
 
 pytestmark = [pytest.mark.unit]
+
+
+@pytest.fixture(autouse=True)
+def _stub_cv2_saliency(monkeypatch):
+    """Stub cv2.saliency so tests run without opencv-contrib-python."""
+    stub = types.SimpleNamespace(
+        StaticSaliencyFineGrained_create=lambda: types.SimpleNamespace(
+            computeSaliency=lambda img: (False, None)
+        )
+    )
+    monkeypatch.setattr(cv2, "saliency", stub, raising=False)
 
 
 # ---------------------------------------------------------------------------

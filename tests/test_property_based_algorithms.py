@@ -48,7 +48,6 @@ _cv2_available = _is_importable("cv2")
 _torch_available = _is_importable("torch")
 
 
-@pytest.mark.skipif(not _cv2_available, reason="cv2 not available")
 class TestAtmosphericPhysicalInvariants:
     @given(base_visibility=st.floats(min_value=0.1, max_value=100.0, allow_nan=False, allow_infinity=False))
     @settings(max_examples=50)
@@ -135,7 +134,7 @@ class TestToneMappingOutputRange:
 
 
 class TestCheckpointProgressRoundTrip:
-    @given(progress=st.floats(min_value=0.0, max_value=1.0, allow_nan=False, allow_infinity=False))
+    @given(progress=st.floats(min_value=0.0, max_value=100.0, allow_nan=False, allow_infinity=False))
     @settings(max_examples=50, suppress_health_check=[])
     def test_progress_survives_save_load(self, progress):
         import pathlib
