@@ -22,10 +22,7 @@ REQUIRED_UPDATES = {
 REQUIRED_TARGET_BRANCH = "main"
 REQUIRED_INTERVAL = "weekly"
 REQUIRED_OPEN_PR_LIMIT = 5
-REQUIRED_PIP_EXCLUDE_PATHS = {
-    "requirements/ml-core-linux.*",
-    "requirements/ml-core-darwin-x86_64.*",
-}
+REQUIRED_PIP_EXCLUDE_PATHS: set[str] = set()
 
 
 def _load_config(text: str) -> dict[str, Any]:
@@ -96,9 +93,9 @@ def validate_dependabot_config(text: str) -> list[str]:
 
         if pair == ("pip", "/"):
             exclude_paths = entry.get("exclude-paths")
-            if not isinstance(exclude_paths, list):
+            if REQUIRED_PIP_EXCLUDE_PATHS and not isinstance(exclude_paths, list):
                 errors.append("dependabot update ('pip', '/') must define exclude-paths as a list")
-            else:
+            elif isinstance(exclude_paths, list):
                 missing_excludes = REQUIRED_PIP_EXCLUDE_PATHS - {
                     value for value in exclude_paths if isinstance(value, str) and value
                 }

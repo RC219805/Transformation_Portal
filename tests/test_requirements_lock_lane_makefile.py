@@ -100,7 +100,7 @@ def test_darwin_arm64_target_fails_closed_off_lane(tmp_path: Path) -> None:
     assert "authoritative only on native Darwin arm64" in (result.stdout + result.stderr)
 
 
-def test_frozen_linux_x86_64_target_exits_nonzero_with_frozen_message(tmp_path: Path) -> None:
+def test_retired_linux_x86_64_target_exits_nonzero_with_retired_message(tmp_path: Path) -> None:
     repo_root = tmp_path / "repo"
     requirements_dir = repo_root / "requirements"
     requirements_dir.mkdir(parents=True)
@@ -117,10 +117,10 @@ def test_frozen_linux_x86_64_target_exits_nonzero_with_frozen_message(tmp_path: 
     )
 
     assert result.returncode != 0
-    assert "ml-core-linux.txt is frozen as an unsupported historical lane" in (result.stdout + result.stderr)
+    assert "Linux ML lockfiles are retired unsupported manifests" in (result.stdout + result.stderr)
 
 
-def test_frozen_darwin_x86_64_target_exits_nonzero_with_frozen_message(tmp_path: Path) -> None:
+def test_retired_darwin_x86_64_target_exits_nonzero_with_retired_message(tmp_path: Path) -> None:
     repo_root = tmp_path / "repo"
     requirements_dir = repo_root / "requirements"
     requirements_dir.mkdir(parents=True)
@@ -137,6 +137,4 @@ def test_frozen_darwin_x86_64_target_exits_nonzero_with_frozen_message(tmp_path:
     )
 
     assert result.returncode != 0
-    assert "ml-core-darwin-x86_64.txt is frozen pending an authoritative Darwin x86_64 lane decision" in (
-        result.stdout + result.stderr
-    )
+    assert "macOS Intel ML lockfiles are retired unsupported manifests" in (result.stdout + result.stderr)

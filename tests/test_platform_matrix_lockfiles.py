@@ -14,9 +14,10 @@ from transformation_portal.core.platform_matrix import (
 pytestmark = pytest.mark.unit
 
 
-def test_determine_ml_core_lockfile_name_for_darwin_intel() -> None:
+def test_determine_ml_core_lockfile_name_rejects_darwin_intel() -> None:
     matrix = PlatformMatrix(PlatformOS.DARWIN, PlatformISA.X86_64, PlatformAccel.CPU)
-    assert determine_ml_core_lockfile_name(matrix) == "ml-core-darwin-x86_64.txt"
+    with pytest.raises(ValueError, match="No supported checked-in ML core lockfile contract"):
+        determine_ml_core_lockfile_name(matrix)
 
 
 def test_determine_ml_core_lockfile_name_for_darwin_arm64() -> None:
@@ -24,23 +25,24 @@ def test_determine_ml_core_lockfile_name_for_darwin_arm64() -> None:
     assert determine_ml_core_lockfile_name(matrix) == "ml-core-darwin-arm64.txt"
 
 
-def test_determine_ml_core_lockfile_name_for_linux_arm64() -> None:
+def test_determine_ml_core_lockfile_name_rejects_linux_arm64() -> None:
     matrix = PlatformMatrix(PlatformOS.LINUX, PlatformISA.ARM64, PlatformAccel.CPU)
-    assert determine_ml_core_lockfile_name(matrix) == "ml-core-linux.txt"
+    with pytest.raises(ValueError, match="No supported checked-in ML core lockfile contract"):
+        determine_ml_core_lockfile_name(matrix)
 
 
 def test_resolve_platform_lockfile_returns_split_darwin_name() -> None:
     result = resolve_platform_lockfile()
     assert result is None or isinstance(result, Path)
     if result is not None and "darwin" in result.name:
-        assert result.name in {"ml-core-darwin-x86_64.txt", "ml-core-darwin-arm64.txt"}
+        assert result.name == "ml-core-darwin-arm64.txt"
 
 
-def test_linux_ml_security_posture_reports_frozen_historical_lane() -> None:
+def test_linux_ml_security_posture_reports_retired_historical_lane() -> None:
     matrix = PlatformMatrix(PlatformOS.LINUX, PlatformISA.X86_64, PlatformAccel.CPU)
 
     status = matrix.check_ml_security_posture()
 
     assert status["ml_supported"] is False
     assert status["secure"] is False
-    assert "frozen unsupported historical lane" in status["cve_2025_32434_note"]
+    assert "retired unsupported manifests" in status["cve_2025_32434_note"]

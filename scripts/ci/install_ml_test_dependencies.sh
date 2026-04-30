@@ -4,10 +4,11 @@ set -euo pipefail
 
 python_bin="${PYTHON_BIN:-python}"
 ci_requirements_file="${CI_REQUIREMENTS_FILE:-requirements-ci.txt}"
-ml_lockfile="${TP_CI_ML_LOCKFILE:-requirements/ml-core-linux.txt}"
+ml_lockfile="${TP_CI_ML_LOCKFILE:-}"
 raw_requirements_file="${TP_CI_ML_RAW_REQUIREMENTS_FILE:-requirements/ml-raw.in}"
 install_ci_requirements=1
 install_rawpy=0
+project_installed=0
 
 while (($#)); do
   case "$1" in
@@ -31,11 +32,6 @@ if [[ "${install_ci_requirements}" == "1" ]]; then
   "${python_bin}" -m pip install -r "${ci_requirements_file}"
 fi
 
-if [[ ! -f "${ml_lockfile}" ]]; then
-  echo "Missing ML lockfile: ${ml_lockfile}" >&2
-  exit 1
-fi
-
 # The CI base layer and the governed ML lockfile can select different cv2
 # distributions. Remove all OpenCV wheels before the ML install so the
 # environment ends with a single deterministic provider.
@@ -45,7 +41,18 @@ fi
   opencv-python-headless \
   opencv-contrib-python-headless >/dev/null 2>&1 || true
 
-"${python_bin}" -m pip install -r "${ml_lockfile}"
+if [[ -n "${ml_lockfile}" ]]; then
+  if [[ ! -f "${ml_lockfile}" ]]; then
+    echo "Missing ML lockfile: ${ml_lockfile}" >&2
+    exit 1
+  fi
+  "${python_bin}" -m pip install -r "${ml_lockfile}"
+else
+  echo "No TP_CI_ML_LOCKFILE set; installing secure pyproject ML core extras for CI."
+  "${python_bin}" -m pip install -e ".[ml-core]"
+  project_installed=1
+fi
+
 if [[ "${install_rawpy}" == "1" ]]; then
   if [[ ! -f "${raw_requirements_file}" ]]; then
     echo "Missing raw requirements file: ${raw_requirements_file}" >&2
@@ -53,7 +60,9 @@ if [[ "${install_rawpy}" == "1" ]]; then
   fi
   "${python_bin}" -m pip install -r "${raw_requirements_file}"
 fi
-"${python_bin}" -m pip install -e . --no-deps
+if [[ "${project_installed}" == "0" ]]; then
+  "${python_bin}" -m pip install -e . --no-deps
+fi
 "${python_bin}" -m pip check
 
 "${python_bin}" -c "import torch, transformers; print('torch', torch.__version__); print('transformers', transformers.__version__)"

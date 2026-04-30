@@ -12,13 +12,9 @@ requirements/
 ├── base.txt                # Core runtime dependencies (pinned)
 ├── ml.in                   # ML umbrella (references ml-*.in layers)
 ├── ml.txt                  # Removed umbrella lock (not part of checked-in contract)
-├── ml-core.in              # ML core layer - cross-platform (legacy)
-├── ml-core-darwin-x86_64.in  # ML core layer - macOS Intel conservative baseline
-├── ml-core-darwin-x86_64.txt # ML core layer - macOS Intel pinned lock
+├── ml-core.in              # Supported ML metadata baseline (no checked-in lock)
 ├── ml-core-darwin-arm64.in   # ML core layer - macOS Apple Silicon baseline
 ├── ml-core-darwin-arm64.txt  # ML core layer - macOS Apple Silicon pinned lock
-├── ml-core-linux.in          # ML core layer - Linux x86_64 historical baseline (frozen)
-├── ml-core-linux.txt         # ML core layer - Linux x86_64 historical lock (frozen)
 ├── ml-cpu.in               # ML CPU acceleration layer
 ├── ml-cpu.txt              # Deprecated optional ML lock (not checked in)
 ├── ml-mps.in               # ML MPS acceleration layer (Apple Silicon)
@@ -67,21 +63,18 @@ ML dependencies use an explicit platform matrix with three orthogonal axes:
 
 **IMPORTANT:** pip-compile cannot resolve multi-platform conditional dependencies in a single graph.
 
-To ensure deterministic builds, the checked-in ML contract is limited to target-owned core lockfiles:
+To ensure deterministic builds, the checked-in ML contract is limited to the supported target-owned core lockfile:
 
 | Target | Lockfile | Governed baseline |
 |----------|----------|-------------------|
-| macOS Intel (`darwin-x86_64`) | `ml-core-darwin-x86_64.txt` | `torch==2.2.2` + `numpy<2` + `transformers<5` (frozen pending retirement) |
-| macOS Apple Silicon (`darwin-arm64`) | `ml-core-darwin-arm64.txt` | `torch==2.8.0` + `torchvision==0.23.0` + pinned `coremltools` |
-| Linux x86_64 (`linux-x86_64`) | `ml-core-linux.txt` | frozen unsupported historical lane |
+| macOS Apple Silicon (`darwin-arm64`) | `ml-core-darwin-arm64.txt` | `torch==2.8.0` + `torchvision==0.23.0` + `transformers==5.0.0` + pinned `coremltools` |
 
 **Contract notes:**
-- Supported target-owned core locks anchor on torch 2.8.0 / torchvision 0.23.0.
-- The Intel Darwin lock is the conservative compatibility lane and must keep `numpy<2` and `transformers<5`.
+- Supported target-owned core locks anchor on torch 2.8.0 / torchvision 0.23.0 and Transformers 5.x.
 - The Apple Silicon Darwin lock must keep pinned `coremltools` and must remain free of Linux/CUDA-only packages.
 - Darwin target-owned lockfiles must never contain `nvidia-*` or `triton`.
-- The Linux lock is retained as a frozen historical manifest and must not drive supported-lane security baselines.
-- Target-owned core locks must not collapse to identical dependency graphs.
+- Linux and macOS Intel ML lanes are retired unsupported lanes and are not kept as installable `requirements/*.in` or `requirements/*.txt` manifests.
+- Historical Linux/macOS Intel lane rationale belongs in non-installable governance documentation, not scan-visible pip requirement files.
 
 **Important:** Acceleration is NEVER inferred from OS—it must be explicitly specified via profile.
 
@@ -91,7 +84,7 @@ Dependencies are organized into logical layers:
 
 - **base**: Core runtime essentials needed for the application to function
 - **ml**: Optional machine learning and deep learning dependencies (umbrella, no checked-in lockfile contract)
-- **ml-core**: Cross-platform ML baseline (torch with platform-aware pins, diffusers, transformers, etc.)
+- **ml-core**: Supported ML metadata baseline (torch, diffusers, transformers, etc.; no checked-in lock artifact)
 - **ml-cpu**: CPU acceleration layer (cross-platform capability, not a checked-in lock artifact)
 - **ml-mps**: MPS acceleration layer (Apple Silicon, Metal Performance Shaders; installed via bootstrap/profile flow)
 - **ml-cuda**: CUDA acceleration layer (Linux + NVIDIA GPU; installed via bootstrap/profile flow)
@@ -200,13 +193,11 @@ worth the operational cost.
 
 The pilot does not currently include:
 
-- `ml-core-darwin-x86_64.txt`
 - `ml-core-darwin-arm64.txt`
-- `ml-core-linux.txt`
 
-Those platform locks resolve through the PyTorch extra index and carry more
-cross-platform maintenance complexity than the base non-ML contract. The pilot
-keeps them out of scope until the team has a clear decision on the simpler
+The Apple Silicon platform lock resolves through the PyTorch extra index and
+carries more maintenance complexity than the base non-ML contract. The pilot
+keeps it out of scope until the team has a clear decision on the simpler
 layered install surface first.
 
 ### Running the advisory pilot locally
@@ -257,13 +248,13 @@ replace the standard `make compile` / `make check` flow.
 The bootstrap script provides profile-based installation with platform validation:
 
 ```bash
-# Install cross-platform CPU baseline
+# Install Apple Silicon CPU baseline
 ./scripts/bootstrap/install_ml_stack.sh --profile core-cpu
 
 # Install Apple Silicon MPS acceleration (macOS ARM64 only)
 ./scripts/bootstrap/install_ml_stack.sh --profile core-mps
 
-# Install NVIDIA CUDA acceleration (Linux only)
+# Linux and macOS Intel ML lanes are retired unsupported lanes and fail closed.
 PYTORCH_INDEX=https://download.pytorch.org/whl/cu121 ./scripts/bootstrap/install_ml_stack.sh --profile core-cuda
 
 # Install with SAM2 segmentation
@@ -285,12 +276,8 @@ To install the package with specific dependency sets:
 # Install core dependencies only
 pip install -r requirements/base.txt
 
-# Install ML core layer (target-owned baseline)
-pip install -r requirements/ml-core-darwin-x86_64.txt  # macOS Intel
-# or
+# Install ML core layer (supported target-owned baseline)
 pip install -r requirements/ml-core-darwin-arm64.txt   # macOS Apple Silicon
-# or
-pip install -r requirements/ml-core-linux.txt    # Linux x86_64 (historical unsupported lane)
 
 # Optional non-core ML layers no longer have trusted checked-in lockfiles.
 # Use target-specific bootstrap flows once those contracts exist again.
@@ -323,7 +310,7 @@ make install-ml
 
 Or use the package extras (installs latest allowed versions, not pinned).
 The ML extras require the supported PyTorch security baseline
-(`torch>=2.8.0`, `torchvision>=0.23.0`); frozen historical ML locks are
+(`torch>=2.8.0`, `torchvision>=0.23.0`); retired historical ML locks are
 not remediation targets for Dependabot alerts.
 
 ```bash
@@ -371,7 +358,6 @@ make compile
 ```bash
 cd requirements/
 make compile-ml-darwin-arm64      # native Darwin arm64 only
-make compile-ml-linux-x86_64      # native Linux x86_64 only
 ```
 
 5. Commit the `.in` file and any `.txt` files that are part of the checked-in contract for that layer
@@ -390,7 +376,6 @@ For target-owned ML locks, use the explicit authoritative-lane command instead:
 ```bash
 cd requirements/
 make update-ml-darwin-arm64
-make update-ml-linux-x86_64
 ```
 
 These commands respect the version constraints in the `.in` files but only the explicit target-owned commands may regenerate governed ML target locks.
@@ -409,7 +394,6 @@ For target-owned ML locks, use:
 ```bash
 cd requirements/
 make check-ml-darwin-arm64
-make check-ml-linux-x86_64
 ```
 
 ## 🔧 Makefile Targets
@@ -430,17 +414,16 @@ Target-owned ML commands:
   compile-ml-darwin-arm64    Compile the Darwin arm64 ML lock on native Darwin arm64 only
   update-ml-darwin-arm64     Update the Darwin arm64 ML lock on native Darwin arm64 only
   check-ml-darwin-arm64      Verify the Darwin arm64 ML lock on native Darwin arm64 only
-  compile-ml-linux-x86_64    Frozen lane - always fails closed
-  update-ml-linux-x86_64     Frozen lane - always fails closed
-  check-ml-linux-x86_64      Frozen lane - always fails closed
-  compile-ml-darwin-x86_64   Frozen lane - always fails closed
-  update-ml-darwin-x86_64    Frozen lane - always fails closed
-  check-ml-darwin-x86_64     Frozen lane - always fails closed
+  compile-ml-linux-x86_64    Retired unsupported lane - always fails closed
+  update-ml-linux-x86_64     Retired unsupported lane - always fails closed
+  check-ml-linux-x86_64      Retired unsupported lane - always fails closed
+  compile-ml-darwin-x86_64   Retired unsupported lane - always fails closed
+  update-ml-darwin-x86_64    Retired unsupported lane - always fails closed
+  check-ml-darwin-x86_64     Retired unsupported lane - always fails closed
 
 Target-owned ML lockfiles:
-  ml-core-darwin-x86_64.txt  macOS Intel ML baseline (frozen)
   ml-core-darwin-arm64.txt   macOS Apple Silicon ML baseline
-  ml-core-linux.txt          Linux x86_64 historical ML baseline (frozen unsupported lane)
+  macOS Intel/Linux          retired unsupported lanes; no checked-in installable ML lock
 
 Forbidden checked-in optional ML lock targets:
   ml-core.txt       not part of checked-in contract
@@ -476,10 +459,10 @@ Each ML layer has a specific contract:
 
 | Layer | Contract | Platform Target | Notes |
 |-------|----------|-----------------|-------|
-| ml-core | Platform-aware PyTorch (supported lanes on torch 2.8.0) | All | Base ML functionality |
-| ml-cpu | CPU-only, cross-platform | darwin-*/linux-*-cpu | No GPU packages |
+| ml-core | Supported PyTorch baseline (torch 2.8.0, torchvision 0.23.0, Transformers 5.x) | darwin-arm64 | Base ML functionality |
+| ml-cpu | CPU fallback for supported Apple Silicon baseline | darwin-arm64-cpu | No GPU packages |
 | ml-mps | Apple Silicon MPS | darwin-arm64-mps | Includes accelerate |
-| ml-cuda | NVIDIA CUDA | linux-x86_64-cuda | GPU packages allowed |
+| ml-cuda | Retired unsupported lane | linux-x86_64-cuda | Fails closed until a governed Linux lane exists |
 | ml-raw | Platform-scoped | Linux, macOS | rawpy wheel availability varies |
 | ml-sam2 | Scripted-only | All (may need --no-build-isolation) | Build-time torch dependency |
 | ml-coreml | macOS only | Darwin | coremltools |

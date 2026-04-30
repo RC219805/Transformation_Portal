@@ -269,6 +269,27 @@ def test_make_install_ml_core_selects_darwin_arm64_lockfile(tmp_path: Path) -> N
     assert str(fake_python) not in (result.stdout + result.stderr)
 
 
+def test_make_install_ml_core_rejects_retired_linux_lane(tmp_path: Path) -> None:
+    repo_root = tmp_path / "repo"
+    pip_log_path = repo_root / "pip-install.log"
+    _copy_repo_file(MAKEFILE_PATH, repo_root / "Makefile")
+    _copy_repo_file(RESOLVER_PATH, repo_root / "scripts" / "setup" / "resolve_python_311.sh")
+    _write_fake_ml_core_python(
+        repo_root / ".venv" / "bin" / "python",
+        version="3.11.15",
+        platform_system="Linux",
+        platform_machine="x86_64",
+        pip_log_path=pip_log_path,
+    )
+
+    env = {**os.environ, "PATH": "/usr/bin:/bin"}
+    result = subprocess.run(["make", "install-ml-core"], cwd=repo_root, env=env, capture_output=True, text=True, check=False)
+
+    assert result.returncode != 0
+    assert "no supported checked-in ML core lockfile for Linux/x86_64" in (result.stdout + result.stderr)
+    assert "Linux and macOS Intel ML lockfiles were retired from installable requirements" in (result.stdout + result.stderr)
+
+
 def test_make_install_ml_sam2_uses_core_mps_profile_on_darwin_arm64(tmp_path: Path) -> None:
     repo_root = tmp_path / "repo"
     pip_log_path = repo_root / "pip-install.log"
@@ -298,6 +319,35 @@ def test_make_install_ml_sam2_uses_core_mps_profile_on_darwin_arm64(tmp_path: Pa
     pip_commands = pip_log_path.read_text(encoding="utf-8")
     assert "-m pip install -e ." in pip_commands
     assert str(fake_python) not in (result.stdout + result.stderr)
+
+
+def test_install_ml_stack_rejects_retired_linux_lane(tmp_path: Path) -> None:
+    repo_root = tmp_path / "repo"
+    script_path = _copy_repo_file(ML_STACK_INSTALLER_PATH, repo_root / "scripts" / "bootstrap" / "install_ml_stack.sh")
+    resolver_path = repo_root / "scripts" / "setup" / "resolve_python_311.sh"
+    pip_log_path = repo_root / "pip-install.log"
+    fake_python = _write_fake_ml_core_python(
+        repo_root / ".venv" / "bin" / "python",
+        version="3.11.15",
+        platform_system="Linux",
+        platform_machine="x86_64",
+        pip_log_path=pip_log_path,
+    )
+    _write_executable(resolver_path, f"#!/bin/sh\nprintf '%s\\n' {shlex.quote(str(fake_python))}\n")
+    (repo_root / "requirements").mkdir(parents=True, exist_ok=True)
+
+    env = {**os.environ, "PATH": "/usr/bin:/bin"}
+    result = subprocess.run(
+        ["bash", str(script_path), "--profile", "core-cpu"],
+        cwd=repo_root,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode != 0
+    assert "Linux ML lockfiles are retired unsupported manifests" in (result.stdout + result.stderr)
 
 
 def test_validation_suite_uses_resolved_python_for_preflight(tmp_path: Path) -> None:

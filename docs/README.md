@@ -34,7 +34,7 @@ as canonical documents.
 | Skill progression | [Skill Progress Tracks](guides/SKILL_PROGRESS_TRACKS.md) | Maps recurring PR review themes to evidence-linked drills, acceptance tests, and review checklists. |
 | Archive gates | [Archive Machine Contract](api/ARCHIVE_MACHINE_MODE_CONTRACT.md), [2026-04-27 Archive Gates Audit](governance/audit/archive-gates-2026-04-27.md) | Gates A/B/C are documented with the April 27 readiness audit and normalized JSON evidence. |
 | APEX / Materials | [APEX Governance Status](apex/GOVERNANCE_STATUS.md), [APEX Workflow Design](architecture/APEX_WORKFLOW_DESIGN.md), [APEX Model Family Characterization](validation/APEX_MODEL_FAMILY_CHARACTERIZATION_PROTOCOL.md) | Recent merges added offline model-family characterization, failure-code surfacing, confidence-only pixel-op passthrough, V2 fallback, and SAM2 tile-merge regression coverage. |
-| Dependency policy | [ADR-032](architecture/ADR-032-dependency-pinning-strategy.md), [AGENTS.md](../AGENTS.md) | Layered lockfiles and target-owned ML lanes are the current dependency governance model. |
+| Dependency policy | [ADR-032](architecture/ADR-032-dependency-pinning-strategy.md), [Retired ML Lock Lanes](governance/RETIRED_ML_LOCK_LANES_2026-04-30.md), [AGENTS.md](../AGENTS.md) | Layered lockfiles and the Apple Silicon target-owned ML lane are the current dependency governance model. |
 
 ## Historical And Archive Material
 

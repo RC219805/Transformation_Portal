@@ -423,27 +423,20 @@ def resolve_platform_lockfile() -> Optional[Path]:
         This ensures lockfile paths are canonical (absolute, resolved),
         eliminating relative path ambiguity that could cause identity drift.
     """
-    import sys
-
     # Get repository root (relative to this module)
     try:
         module_path = Path(__file__).resolve()
         # Navigate up from src/transformation_portal/core/ to repo root
         repo_root = module_path.parent.parent.parent.parent
 
-        # Determine platform-specific lockfile
-        platform = sys.platform
+        # Determine platform-specific lockfile.
         try:
             matrix = PlatformMatrix.detect()
             lockfile = repo_root / "requirements" / determine_ml_core_lockfile_name(matrix)
         except ValueError:
-            # Fallback to generic lockfile on unsupported platforms.
-            if platform.startswith("linux"):
-                lockfile = repo_root / "requirements" / "ml-core-linux.txt"
-            else:
-                lockfile = repo_root / "requirements" / "ml-core.txt"
+            lockfile = None
 
-        if lockfile.exists():
+        if lockfile is not None and lockfile.exists():
             return lockfile.resolve()  # Canonical absolute path
 
         # Fall back to requirements.txt

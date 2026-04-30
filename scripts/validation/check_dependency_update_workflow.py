@@ -12,7 +12,8 @@ Contracts enforced:
 3. The workflow must run the ownership validator for the Ubuntu generic
    authoritative context only.
 4. The Create Pull Request body must mention the required lockfile / ML
-   contract references and must not mention superseded or frozen-lane updates.
+   contract references and must not mention superseded, retired, or frozen-lane
+   updates as installable manifests.
 5. Dependency-update audit reports must be written outside the git checkout
    and uploaded from that temp location only.
 """
@@ -49,8 +50,7 @@ REQUIRED_PR_BODY_REFERENCES = (
 REQUIRED_PR_BODY_SNIPPETS = (
     "scheduled automation updates generic locks only",
     "`ml-core-darwin-arm64.txt` remains a manual Apple Silicon authoritative lane",
-    "`ml-core-darwin-x86_64.txt` is frozen pending an authoritative lane decision",
-    "`ml-core-linux.txt` is frozen as an unsupported historical lane",
+    "retired Linux/macOS Intel ML lanes are not checked-in installable requirements",
 )
 
 REQUIRED_WORKFLOW_SNIPPETS = (
@@ -59,8 +59,6 @@ REQUIRED_WORKFLOW_SNIPPETS = (
     "scripts/validation/check_lock_ownership.py",
     "--context ubuntu-x64-generic",
     "requirements/ml-core-darwin-arm64.txt",
-    "requirements/ml-core-darwin-x86_64.txt",
-    "requirements/ml-core-linux.txt",
 )
 
 REQUIRED_INSTALL_TOOLCHAIN_SNIPPETS = (
@@ -104,6 +102,8 @@ FORBIDDEN_PR_BODY_SNIPPETS = (
     "- `requirements/ml-core-linux.txt` - Linux x86_64 ML core contract",
     "scheduled automation updates generic locks + `ml-core-linux.txt`",
     "- `ml-core-linux.txt` is the Linux x86_64 target-owned ML baseline",
+    "`ml-core-darwin-x86_64.txt` is frozen pending an authoritative lane decision",
+    "`ml-core-linux.txt` is frozen as an unsupported historical lane",
 )
 
 FORBIDDEN_REVIEW_TEXT = (

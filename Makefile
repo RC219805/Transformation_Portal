@@ -41,7 +41,7 @@ help:
 	@echo "  install-core       Install pinned core runtime + dev tooling dependencies into .venv"
 	@echo "  repair-core-venv   Recreate .venv and reinstall the pinned core environment"
 	@echo "  install-ml         Disabled: no trusted umbrella ML lockfile contract"
-	@echo "  install-ml-core    Install ML core layer only (cross-platform baseline)"
+	@echo "  install-ml-core    Install ML core layer only (supported Apple Silicon baseline)"
 	@echo "  install-ml-raw     Disabled: no trusted checked-in RAW lockfile contract"
 	@echo "  install-ml-sam2    Install ML SAM2 layer (optional segmentation)"
 	@echo "  install-ml-coreml  Disabled unless a trusted CoreML lockfile is present"
@@ -93,12 +93,12 @@ help:
 	@echo "  compile-ml-darwin-arm64  Compile target-owned Darwin arm64 ML lock via requirements/"
 	@echo "  update-ml-darwin-arm64   Update target-owned Darwin arm64 ML lock via requirements/"
 	@echo "  check-ml-darwin-arm64    Verify target-owned Darwin arm64 ML lock via requirements/"
-	@echo "  compile-ml-linux-x86_64  Compile target-owned Linux x86_64 ML lock via requirements/"
-	@echo "  update-ml-linux-x86_64   Update target-owned Linux x86_64 ML lock via requirements/"
-	@echo "  check-ml-linux-x86_64    Verify target-owned Linux x86_64 ML lock via requirements/"
-	@echo "  compile-ml-darwin-x86_64 Frozen target-owned Darwin x86_64 ML lock (fails closed)"
-	@echo "  update-ml-darwin-x86_64  Frozen target-owned Darwin x86_64 ML lock (fails closed)"
-	@echo "  check-ml-darwin-x86_64   Frozen target-owned Darwin x86_64 ML lock (fails closed)"
+	@echo "  compile-ml-linux-x86_64  Retired unsupported Linux ML lane (fails closed)"
+	@echo "  update-ml-linux-x86_64   Retired unsupported Linux ML lane (fails closed)"
+	@echo "  check-ml-linux-x86_64    Retired unsupported Linux ML lane (fails closed)"
+	@echo "  compile-ml-darwin-x86_64 Retired unsupported Darwin x86_64 ML lane (fails closed)"
+	@echo "  update-ml-darwin-x86_64  Retired unsupported Darwin x86_64 ML lane (fails closed)"
+	@echo "  check-ml-darwin-x86_64   Retired unsupported Darwin x86_64 ML lane (fails closed)"
 	@echo "  check-stale-docs   Detect changed-file references to deleted docs root paths"
 	@echo "  check-test-markers Audit test marker coverage (ADR-044)"
 	@echo "  check-ci-sync      Verify CI dependency files are in sync (no drift)"
@@ -173,11 +173,10 @@ install-ml: venv
 	@echo "Error: use target-specific bootstrap profiles instead, for example:"
 	@echo "Error:   ./scripts/bootstrap/install_ml_stack.sh --profile core-cpu"
 	@echo "Error:   ./scripts/bootstrap/install_ml_stack.sh --profile core-mps"
-	@echo "Error:   ./scripts/bootstrap/install_ml_stack.sh --profile core-cuda"
 	@exit 1
 
 install-ml-core: venv
-	@echo "Installing ML core layer (cross-platform baseline)..."
+	@echo "Installing ML core layer (supported Apple Silicon baseline)..."
 	@ml_lock=""; \
 	py_os="$$("$(PY)" -c 'import platform; print(platform.system())')"; \
 	py_arch="$$("$(PY)" -c 'import platform; print(platform.machine())')"; \
@@ -185,19 +184,16 @@ install-ml-core: venv
 		aarch64) py_arch="arm64" ;; \
 		amd64) py_arch="x86_64" ;; \
 	esac; \
-	if [ "$$py_os" = "Darwin" ] && [ "$$py_arch" = "x86_64" ] && [ -f requirements/ml-core-darwin-x86_64.txt ]; then \
-		ml_lock="requirements/ml-core-darwin-x86_64.txt"; \
-	elif [ "$$py_os" = "Darwin" ] && [ "$$py_arch" = "arm64" ] && [ -f requirements/ml-core-darwin-arm64.txt ]; then \
+	if [ "$$py_os" = "Darwin" ] && [ "$$py_arch" = "arm64" ] && [ -f requirements/ml-core-darwin-arm64.txt ]; then \
 		ml_lock="requirements/ml-core-darwin-arm64.txt"; \
-	elif [ "$$py_os" = "Linux" ] && [ -f requirements/ml-core-linux.txt ]; then \
-		ml_lock="requirements/ml-core-linux.txt"; \
 	fi; \
 	if [ -n "$$ml_lock" ]; then \
 		echo "Using $$ml_lock"; \
 		"$(PY)" -m pip install -r "$$ml_lock" && \
 		"$(PY)" -m pip install -e .; \
 	else \
-		echo "Error: platform-specific ML core lockfile not found. Run 'cd requirements && make compile' first."; \
+		echo "Error: no supported checked-in ML core lockfile for $$py_os/$$py_arch."; \
+		echo "Error: Linux and macOS Intel ML lockfiles were retired from installable requirements."; \
 		exit 1; \
 	fi
 
