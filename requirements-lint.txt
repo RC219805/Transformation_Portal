@@ -10,7 +10,7 @@ tqdm>=4.66,<5
 
 # Optional dependencies for specific tools
 typer>=0.12,<1  # CLI framework
-reportlab>=4.0,<5  # PDF generation (used in some tools)
+reportlab>=4.5.0,<5  # PDF generation (used in some tools)
 rawpy>=0.18.0,<1  # RAW image processing (used in some tools)
 
 # Testing framework (needed for linting test files in tools/)
