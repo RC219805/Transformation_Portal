@@ -58,7 +58,7 @@ cryptography==47.0.0
     # via
     #   -r dev.in
     #   secretstorage
-diff-cover==9.7.2
+diff-cover==10.2.0
     # via -r dev.in
 dill==0.4.1
     # via pylint

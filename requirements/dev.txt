@@ -50,7 +50,7 @@ cryptography==47.0.0
     # via
     #   -c all.txt
     #   -r dev.in
-diff-cover==9.7.2
+diff-cover==10.2.0
     # via
     #   -c all.txt
     #   -r dev.in
