@@ -21,9 +21,7 @@ pytestmark = [pytest.mark.unit]
 def _stub_cv2_saliency(monkeypatch):
     """Stub cv2.saliency so tests run without opencv-contrib-python."""
     stub = types.SimpleNamespace(
-        StaticSaliencyFineGrained_create=lambda: types.SimpleNamespace(
-            computeSaliency=lambda img: (False, None)
-        )
+        StaticSaliencyFineGrained_create=lambda: types.SimpleNamespace(computeSaliency=lambda img: (False, None))
     )
     monkeypatch.setattr(cv2, "saliency", stub, raising=False)
 
