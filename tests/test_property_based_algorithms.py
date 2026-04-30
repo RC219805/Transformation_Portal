@@ -25,10 +25,27 @@ except ImportError:
 
 pytestmark = [pytest.mark.unit]
 
-# Availability probes (do NOT use pytest.importorskip at module level — it
-# would skip the entire file when the optional dep is absent).
-_cv2_available = importlib.util.find_spec("cv2") is not None
-_torch_available = importlib.util.find_spec("torch") is not None
+
+def _is_importable(name: str) -> bool:
+    """Check whether a package can be imported without triggering side-effects.
+
+    Uses sys.modules as a fast path so that packages already loaded by earlier
+    test-collection steps are correctly detected even when their __spec__ is
+    None (a known torch quirk that makes importlib.util.find_spec raise
+    ValueError in some environments).
+    """
+    import sys
+
+    if name in sys.modules:
+        return True
+    try:
+        return importlib.util.find_spec(name) is not None
+    except ValueError:
+        return False
+
+
+_cv2_available = _is_importable("cv2")
+_torch_available = _is_importable("torch")
 
 
 @pytest.mark.skipif(not _cv2_available, reason="cv2 not available")
