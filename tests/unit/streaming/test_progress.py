@@ -108,7 +108,7 @@ class TestProgressTracker:
         tracker.complete()
         assert tracker.get_state().completed is True
 
-    def test_complete_updates_current_to_total(self):
+    def test_complete_marks_completed_true(self):
         from transformation_portal.streaming.progress import ProgressTracker
 
         tracker = ProgressTracker(total=100)

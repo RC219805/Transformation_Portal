@@ -50,18 +50,18 @@ class TestMetricTypeEnum:
         from transformation_portal.perceptual.metrics import MetricType
 
         values = {m.value for m in MetricType}
-        for expected in ("LPIPS", "FID", "BRISQUE", "NIQE", "PSNR", "SSIM", "MSE"):
+        for expected in ("lpips", "fid", "brisque", "niqe", "psnr", "ssim", "mse"):
             assert expected in values
 
     def test_psnr_value(self):
         from transformation_portal.perceptual.metrics import MetricType
 
-        assert MetricType.PSNR.value == "PSNR"
+        assert MetricType.PSNR.value == "psnr"
 
     def test_ssim_value(self):
         from transformation_portal.perceptual.metrics import MetricType
 
-        assert MetricType.SSIM.value == "SSIM"
+        assert MetricType.SSIM.value == "ssim"
 
 
 # ---------------------------------------------------------------------------
