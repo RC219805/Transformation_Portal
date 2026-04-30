@@ -7,8 +7,6 @@ all in-process with no filesystem or GPU dependencies.
 
 from __future__ import annotations
 
-import time
-
 import pytest
 
 pytestmark = [pytest.mark.unit]

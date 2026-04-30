@@ -7,6 +7,7 @@ real plugin implementations or filesystem discovery.
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any, Dict, Optional
 
 import pytest
@@ -297,14 +298,14 @@ class TestExternalPluginGating:
     def test_default_paths_do_not_include_home_dir(self):
         registry = _make_registry(allow_external=False)
         paths = registry._get_default_plugin_paths()
-        home = __import__("pathlib").Path.home()
-        assert not any(str(home) in str(p) for p in paths)
+        expected = (Path.home() / ".transformation_portal" / "plugins").resolve()
+        assert not any(p.resolve() == expected for p in paths)
 
     def test_external_enabled_includes_home_plugins_dir(self):
         registry = _make_registry(allow_external=True)
         paths = registry._get_default_plugin_paths()
-        home = __import__("pathlib").Path.home()
-        assert any(str(home) in str(p) for p in paths)
+        expected = (Path.home() / ".transformation_portal" / "plugins").resolve()
+        assert any(p.resolve() == expected for p in paths)
 
     def test_env_variable_controls_external_discovery(self, monkeypatch):
         monkeypatch.setenv("TRANSFORMATION_PORTAL_ENABLE_EXTERNAL_PLUGINS", "true")

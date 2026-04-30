@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import time
 from collections.abc import Iterator
-from typing import Any, Dict
+from typing import Any
 
 import pytest
 
@@ -52,12 +52,14 @@ def _client_fixture(monkeypatch) -> Iterator[Any]:
 
 @pytest.fixture(autouse=True)
 def _clear_jobs():
-    """Ensure the global JOBS dict is clean before and after each test."""
+    """Ensure the global JOBS dict and rate-limit buckets are clean before and after each test."""
     import app as orchestrator_app
 
     orchestrator_app.JOBS.clear()
+    orchestrator_app.RATE_LIMIT_BUCKETS.clear()
     yield
     orchestrator_app.JOBS.clear()
+    orchestrator_app.RATE_LIMIT_BUCKETS.clear()
 
 
 def _inject_job(job_id: str = "test-job-001", state: str = "queued") -> Any:

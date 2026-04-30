@@ -16,8 +16,12 @@ from __future__ import annotations
 import importlib
 
 import pytest
-from hypothesis import assume, given, settings
-from hypothesis import strategies as st
+
+try:
+    from hypothesis import assume, given, settings
+    from hypothesis import strategies as st
+except ImportError:
+    pytest.skip("hypothesis not installed", allow_module_level=True)
 
 pytestmark = [pytest.mark.unit]
 

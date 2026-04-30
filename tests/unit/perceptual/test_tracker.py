@@ -10,8 +10,6 @@ from __future__ import annotations
 
 import time
 from pathlib import Path
-from typing import Dict
-from unittest.mock import MagicMock
 
 import pytest
 

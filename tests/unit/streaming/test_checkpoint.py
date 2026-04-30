@@ -8,10 +8,8 @@ tmp_path, no network or GPU required.
 
 from __future__ import annotations
 
-import json
 import time
 from datetime import date, timedelta
-from pathlib import Path
 
 import pytest
 

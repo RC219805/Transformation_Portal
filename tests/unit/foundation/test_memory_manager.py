@@ -88,16 +88,12 @@ class TestMemoryPool:
         t = torch.zeros(256, 256)  # 256 KB
         assert pool.put(t) is False
 
-    def test_put_rejects_wrong_device(self):
+    def test_put_accepts_same_device_tensor(self):
         from transformation_portal.foundation.memory_manager import MemoryPool
 
         pool = MemoryPool(size_mb=100, device=CPU_DEVICE)
-        # Create a CPU tensor but pretend the pool targets a different device by
-        # constructing a pool for a different (non-existent) device name.
-        wrong_device_pool = MemoryPool(size_mb=100, device=torch.device("cpu"))
-        # A tensor already on cpu shouldn't be rejected — confirm acceptance
         t = torch.zeros(4, 4)
-        assert wrong_device_pool.put(t) is True
+        assert pool.put(t) is True
 
     def test_clear_empties_pool(self):
         from transformation_portal.foundation.memory_manager import MemoryPool

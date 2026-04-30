@@ -136,8 +136,14 @@ class TestSkyBlenderConstruction:
 # ---------------------------------------------------------------------------
 
 
+def _luma_depth(img: np.ndarray) -> np.ndarray:
+    """Cheap luma-based depth stub — avoids torch.hub.load/MiDaS network call."""
+    gray = img.mean(axis=2).astype(np.float32)
+    return 1.0 - gray / 255.0
+
+
 class TestSkyBlenderSmartRender:
-    def test_output_shape_matches_source(self):
+    def test_output_shape_matches_source(self, monkeypatch):
         """End-to-end smoke test: procedural sky generation, luma depth, cv2 blending."""
         from transformation_portal.atmosphere.atmospheric_model import AtmosphericParameters
         from transformation_portal.atmosphere.sky_blending import SkyBlender
@@ -148,6 +154,7 @@ class TestSkyBlenderSmartRender:
         atmo_params = AtmosphericParameters()
 
         blender = SkyBlender(skygan=None, atmosphere=None, device="cpu")
+        monkeypatch.setattr(blender, "_estimate_depth", _luma_depth)
         rendered, suggestion = blender.smart_render(
             source,
             sky_params,
@@ -159,7 +166,7 @@ class TestSkyBlenderSmartRender:
 
         assert rendered.shape == source.shape
 
-    def test_returns_correction_suggestion(self):
+    def test_returns_correction_suggestion(self, monkeypatch):
         from transformation_portal.atmosphere.atmospheric_model import AtmosphericParameters
         from transformation_portal.atmosphere.sky_blending import CorrectionSuggestion, SkyBlender
         from transformation_portal.atmosphere.skygan_generator import SkyParameters
@@ -169,6 +176,7 @@ class TestSkyBlenderSmartRender:
         atmo_params = AtmosphericParameters()
 
         blender = SkyBlender(device="cpu")
+        monkeypatch.setattr(blender, "_estimate_depth", _luma_depth)
         _, suggestion = blender.smart_render(
             source,
             sky_params,
@@ -180,13 +188,14 @@ class TestSkyBlenderSmartRender:
 
         assert isinstance(suggestion, CorrectionSuggestion)
 
-    def test_output_is_uint8(self):
+    def test_output_is_uint8(self, monkeypatch):
         from transformation_portal.atmosphere.atmospheric_model import AtmosphericParameters
         from transformation_portal.atmosphere.sky_blending import SkyBlender
         from transformation_portal.atmosphere.skygan_generator import SkyParameters
 
         source = np.full((40, 40, 3), 150, dtype=np.uint8)
         blender = SkyBlender(device="cpu")
+        monkeypatch.setattr(blender, "_estimate_depth", _luma_depth)
         rendered, _ = blender.smart_render(
             source,
             SkyParameters(),
