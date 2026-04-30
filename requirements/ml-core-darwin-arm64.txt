@@ -268,7 +268,7 @@ transformers==5.0.0
     # via
     #   -r ml-core-darwin-arm64.in
     #   sentence-transformers
-typer==0.24.1
+typer==0.25.1
     # via
     #   -c base.txt
     #   huggingface-hub

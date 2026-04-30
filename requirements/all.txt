@@ -307,7 +307,7 @@ tqdm==4.67.3
     # via -r base.in
 twine==6.2.0
     # via -r ci.in
-typer==0.24.1
+typer==0.25.1
     # via -r base.in
 types-pyyaml==6.0.12.20260408
     # via -r dev.in
