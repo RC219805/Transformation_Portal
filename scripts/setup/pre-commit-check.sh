@@ -35,7 +35,6 @@ ALLOWED_ROOT_FILES=(
     "Pipfile"
     "Pipfile.lock"
     "poetry.lock"
-    "uv.lock"
     "pytest.ini"
     "tox.ini"
     ".coveragerc"

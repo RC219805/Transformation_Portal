@@ -409,6 +409,7 @@ def build_materials_fingerprint_payload(config: EnhanceConfig) -> Dict[str, Any]
         "sam_vit_h_points_per_side": int(getattr(config, "sam_vit_h_points_per_side", 32)),
         "sam_vit_h_pred_iou_thresh": float(getattr(config, "sam_vit_h_pred_iou_thresh", 0.88)),
         "sam_vit_h_confidence_threshold": float(getattr(config, "sam_vit_h_confidence_threshold", 0.85)),
+        "sam_vit_h_expected_sha256": getattr(config, "sam_vit_h_expected_sha256", None),
     }
 
 

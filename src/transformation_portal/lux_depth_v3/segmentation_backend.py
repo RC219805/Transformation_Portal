@@ -382,6 +382,7 @@ def _build_segmentation_cache_key(
     sam_vit_h_points_per_side: int,
     sam_vit_h_pred_iou_thresh: float,
     sam_vit_h_confidence_threshold: float,
+    sam_vit_h_expected_sha256: Optional[str],
     sky_top_region_fraction: float,
     sky_gradient_threshold: float,
     sky_brightness_threshold: float,
@@ -415,6 +416,7 @@ def _build_segmentation_cache_key(
             "points_per_side": int(sam_vit_h_points_per_side),
             "pred_iou_thresh": float(sam_vit_h_pred_iou_thresh),
             "confidence_threshold": float(sam_vit_h_confidence_threshold),
+            "expected_sha256": sam_vit_h_expected_sha256,
         },
         "sky_bootstrap": {
             "top_region_fraction": float(sky_top_region_fraction),
@@ -2120,7 +2122,7 @@ def _get_sam_vit_h_instance(
     independent of the broader backend cache, preventing two SAM ViT-H
     models from coexisting in memory when callers vary parameters.
     """
-    backend: SegmentationBackend = SAMVitHBackend(
+    backend = SAMVitHBackend(
         checkpoint_path=checkpoint_path,
         points_per_side=points_per_side,
         pred_iou_thresh=pred_iou_thresh,
@@ -2365,6 +2367,7 @@ def segment_materials(
                 sam_vit_h_points_per_side=sam_vit_h_points_per_side,
                 sam_vit_h_pred_iou_thresh=sam_vit_h_pred_iou_thresh,
                 sam_vit_h_confidence_threshold=sam_vit_h_confidence_threshold,
+                sam_vit_h_expected_sha256=sam_vit_h_expected_sha256,
                 sky_top_region_fraction=sky_top_region_fraction,
                 sky_gradient_threshold=sky_gradient_threshold,
                 sky_brightness_threshold=sky_brightness_threshold,

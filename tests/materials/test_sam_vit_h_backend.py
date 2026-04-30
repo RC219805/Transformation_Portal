@@ -237,30 +237,34 @@ def test_sam_vit_h_segment_filters_low_iou(sample_image: np.ndarray):
     assert backend.segment(sample_image) == {}
 
 
-def test_masks_to_material_dict_merges_same_material(sample_image: np.ndarray):
-    """Multiple masks with the same label are merged via np.maximum."""
-    h, w = sample_image.shape[:2]
+def test_masks_to_material_dict_merges_same_material():
+    """Multiple masks with the same label are merged via np.maximum.
+
+    Uses a 100×100 image so each mask covers 625 px — above the 500 px
+    minimum area filter in _masks_to_material_dict.
+    """
+    h, w = 100, 100
     mask_a = np.zeros((h, w), dtype=bool)
-    mask_a[0:10, 0:10] = True
+    mask_a[0:25, 0:25] = True  # 625 px
     mask_b = np.zeros((h, w), dtype=bool)
-    mask_b[20:30, 20:30] = True
+    mask_b[30:55, 30:55] = True  # 625 px
 
     # Both masks are stone-colored (gray, low saturation, medium brightness)
     stone_image = np.full((h, w, 3), 120, dtype=np.uint8)
 
     raw = [
-        {"segmentation": mask_a, "predicted_iou": 0.88, "area": 100, "bbox": [0, 0, 10, 10]},
-        {"segmentation": mask_b, "predicted_iou": 0.91, "area": 100, "bbox": [20, 20, 10, 10]},
+        {"segmentation": mask_a, "predicted_iou": 0.88, "area": 625, "bbox": [0, 0, 25, 25]},
+        {"segmentation": mask_b, "predicted_iou": 0.91, "area": 625, "bbox": [30, 30, 25, 25]},
     ]
     backend = SAMVitHBackend(confidence_threshold=0.50)
     result = backend._masks_to_material_dict(stone_image, raw)
 
-    if "stone" in result:
-        merged_mask, conf = result["stone"]
-        # Both regions should be present in merged mask
-        assert merged_mask[5, 5] == pytest.approx(1.0)
-        assert merged_mask[25, 25] == pytest.approx(1.0)
-        assert conf == pytest.approx(0.91)
+    assert "stone" in result, f"Expected 'stone' label from gray stone_image; got keys: {list(result.keys())}"
+    merged_mask, conf = result["stone"]
+    # Both regions should be present in merged mask
+    assert merged_mask[12, 12] == pytest.approx(1.0)
+    assert merged_mask[42, 42] == pytest.approx(1.0)
+    assert conf == pytest.approx(0.91)
 
 
 # =============================================================================
