@@ -20,6 +20,7 @@ pytestmark = [pytest.mark.unit]
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_manager(**kwargs):
     """Import and instantiate DeviceManager (deferred so mocks are applied first)."""
     from transformation_portal.foundation.device_manager import DeviceManager
@@ -168,9 +169,7 @@ class TestDeviceDetectionCPUFallback:
                 "transformation_portal.foundation.device_manager.DeviceManager._detect_capabilities",
                 return_value=_cpu_caps(),
             ),
-            patch(
-                "transformation_portal.foundation.device_manager.DeviceManager._log_device_info"
-            ),
+            patch("transformation_portal.foundation.device_manager.DeviceManager._log_device_info"),
         ):
             mgr = _make_manager()
             info = mgr.detect_devices()
@@ -187,9 +186,7 @@ class TestDeviceDetectionCPUFallback:
                 "transformation_portal.foundation.device_manager.DeviceManager._detect_capabilities",
                 return_value=_cpu_caps(),
             ),
-            patch(
-                "transformation_portal.foundation.device_manager.DeviceManager._log_device_info"
-            ),
+            patch("transformation_portal.foundation.device_manager.DeviceManager._log_device_info"),
         ):
             mgr = _make_manager()
             info = mgr.detect_devices()
@@ -205,9 +202,7 @@ class TestDeviceDetectionCPUFallback:
                 "transformation_portal.foundation.device_manager.DeviceManager._detect_capabilities",
                 return_value=_cpu_caps(),
             ) as mock_detect,
-            patch(
-                "transformation_portal.foundation.device_manager.DeviceManager._log_device_info"
-            ),
+            patch("transformation_portal.foundation.device_manager.DeviceManager._log_device_info"),
         ):
             mgr = _make_manager()
             first = mgr.detect_devices()
@@ -445,9 +440,7 @@ class TestPublicConvenienceMethods:
                 "transformation_portal.foundation.device_manager.DeviceManager._detect_capabilities",
                 return_value=_cpu_caps(),
             ),
-            patch(
-                "transformation_portal.foundation.device_manager.DeviceManager._log_device_info"
-            ),
+            patch("transformation_portal.foundation.device_manager.DeviceManager._log_device_info"),
         ):
             mgr = _make_manager()
             assert mgr.device_info is None
@@ -465,9 +458,7 @@ class TestPublicConvenienceMethods:
                 "transformation_portal.foundation.device_manager.DeviceManager._detect_capabilities",
                 return_value=_cpu_caps(),
             ),
-            patch(
-                "transformation_portal.foundation.device_manager.DeviceManager._log_device_info"
-            ),
+            patch("transformation_portal.foundation.device_manager.DeviceManager._log_device_info"),
         ):
             mgr = _make_manager()
             caps = mgr.get_capabilities()
@@ -484,9 +475,7 @@ class TestPublicConvenienceMethods:
                 "transformation_portal.foundation.device_manager.DeviceManager._detect_capabilities",
                 return_value=_cpu_caps(),
             ),
-            patch(
-                "transformation_portal.foundation.device_manager.DeviceManager._log_device_info"
-            ),
+            patch("transformation_portal.foundation.device_manager.DeviceManager._log_device_info"),
         ):
             mgr = _make_manager()
             opt = mgr.get_optimization_config()

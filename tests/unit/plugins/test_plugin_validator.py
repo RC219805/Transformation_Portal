@@ -18,6 +18,7 @@ pytestmark = [pytest.mark.unit]
 # Test plugin factories
 # ---------------------------------------------------------------------------
 
+
 def _make_valid_plugin(
     name: str = "valid_plugin",
     version: str = "1.0.0",
@@ -83,9 +84,7 @@ class TestValidationResult:
         from transformation_portal.plugins.validator import ValidationIssue, ValidationResult, ValidationSeverity
 
         result = ValidationResult(plugin_name="test", is_valid=True)
-        result.add_issue(
-            ValidationIssue(code="ERR", message="error", severity=ValidationSeverity.ERROR)
-        )
+        result.add_issue(ValidationIssue(code="ERR", message="error", severity=ValidationSeverity.ERROR))
         assert result.is_valid is False
         assert result.errors_count == 1
 
@@ -93,9 +92,7 @@ class TestValidationResult:
         from transformation_portal.plugins.validator import ValidationIssue, ValidationResult, ValidationSeverity
 
         result = ValidationResult(plugin_name="test", is_valid=True)
-        result.add_issue(
-            ValidationIssue(code="WARN", message="warning", severity=ValidationSeverity.WARNING)
-        )
+        result.add_issue(ValidationIssue(code="WARN", message="warning", severity=ValidationSeverity.WARNING))
         assert result.is_valid is True
         assert result.warnings_count == 1
 
@@ -103,12 +100,8 @@ class TestValidationResult:
         from transformation_portal.plugins.validator import ValidationIssue, ValidationResult, ValidationSeverity
 
         result = ValidationResult(plugin_name="test", is_valid=True)
-        result.add_issue(
-            ValidationIssue(code="W1", message="warn", severity=ValidationSeverity.WARNING)
-        )
-        result.add_issue(
-            ValidationIssue(code="E1", message="err", severity=ValidationSeverity.ERROR)
-        )
+        result.add_issue(ValidationIssue(code="W1", message="warn", severity=ValidationSeverity.WARNING))
+        result.add_issue(ValidationIssue(code="E1", message="err", severity=ValidationSeverity.ERROR))
         warnings = result.get_issues_by_severity(ValidationSeverity.WARNING)
         assert len(warnings) == 1
         assert warnings[0].code == "W1"

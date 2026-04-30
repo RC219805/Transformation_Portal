@@ -21,6 +21,7 @@ pytestmark = [pytest.mark.unit]
 # Test helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_plugin(
     name: str = "test_plugin",
     plugin_type_str: str = "processor",

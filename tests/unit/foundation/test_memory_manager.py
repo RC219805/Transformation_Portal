@@ -205,9 +205,11 @@ class TestAllocation:
     def test_allocate_returns_tensor_with_correct_shape(self):
         from transformation_portal.foundation.memory_manager import MemoryConfig, MemoryManager
 
-        cfg = MemoryConfig(strategy=__import__(
-            "transformation_portal.foundation.memory_manager", fromlist=["AllocationStrategy"]
-        ).AllocationStrategy.IMMEDIATE)
+        cfg = MemoryConfig(
+            strategy=__import__(
+                "transformation_portal.foundation.memory_manager", fromlist=["AllocationStrategy"]
+            ).AllocationStrategy.IMMEDIATE
+        )
         mgr = MemoryManager(config=cfg, device=CPU_DEVICE)
         t = mgr.allocate((8, 8), torch.float32)
         assert t.shape == (8, 8)

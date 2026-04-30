@@ -98,7 +98,7 @@ class TestOperationProfile:
 
 class TestMetricsCollector:
     def test_record_metric_stores_entry(self):
-        from transformation_portal.foundation.performance_monitor import MetricType, MetricsCollector
+        from transformation_portal.foundation.performance_monitor import MetricsCollector, MetricType
 
         col = MetricsCollector()
         col.record_metric("test", MetricType.LATENCY, 42.0, "ms")
@@ -106,7 +106,7 @@ class TestMetricsCollector:
         assert col.metrics[0].value == pytest.approx(42.0)
 
     def test_record_metric_enforces_max(self):
-        from transformation_portal.foundation.performance_monitor import MetricType, MetricsCollector
+        from transformation_portal.foundation.performance_monitor import MetricsCollector, MetricType
 
         col = MetricsCollector(max_metrics=5)
         for i in range(10):
@@ -137,7 +137,7 @@ class TestMetricsCollector:
         assert col.get_operation_profile("nonexistent") is None
 
     def test_get_metrics_filter_by_type(self):
-        from transformation_portal.foundation.performance_monitor import MetricType, MetricsCollector
+        from transformation_portal.foundation.performance_monitor import MetricsCollector, MetricType
 
         col = MetricsCollector()
         col.record_metric("lat", MetricType.LATENCY, 10.0, "ms")
@@ -147,7 +147,7 @@ class TestMetricsCollector:
         assert len(latency_metrics) == 1
 
     def test_get_metrics_filter_by_name(self):
-        from transformation_portal.foundation.performance_monitor import MetricType, MetricsCollector
+        from transformation_portal.foundation.performance_monitor import MetricsCollector, MetricType
 
         col = MetricsCollector()
         col.record_metric("depth_latency", MetricType.LATENCY, 10.0, "ms")
@@ -156,7 +156,7 @@ class TestMetricsCollector:
         assert len(results) == 1
 
     def test_get_metrics_limit(self):
-        from transformation_portal.foundation.performance_monitor import MetricType, MetricsCollector
+        from transformation_portal.foundation.performance_monitor import MetricsCollector, MetricType
 
         col = MetricsCollector()
         for i in range(10):
@@ -171,7 +171,7 @@ class TestMetricsCollector:
         assert summary == {"status": "no_metrics"}
 
     def test_get_summary_has_by_type(self):
-        from transformation_portal.foundation.performance_monitor import MetricType, MetricsCollector
+        from transformation_portal.foundation.performance_monitor import MetricsCollector, MetricType
 
         col = MetricsCollector()
         col.record_metric("x", MetricType.LATENCY, 5.0, "ms")
@@ -180,7 +180,7 @@ class TestMetricsCollector:
         assert "latency" in summary["by_type"]
 
     def test_get_summary_statistics_correct(self):
-        from transformation_portal.foundation.performance_monitor import MetricType, MetricsCollector
+        from transformation_portal.foundation.performance_monitor import MetricsCollector, MetricType
 
         col = MetricsCollector()
         col.record_metric("a", MetricType.LATENCY, 10.0, "ms")
@@ -191,7 +191,7 @@ class TestMetricsCollector:
         assert stats["avg"] == pytest.approx(15.0)
 
     def test_clear_removes_all_data(self):
-        from transformation_portal.foundation.performance_monitor import MetricType, MetricsCollector
+        from transformation_portal.foundation.performance_monitor import MetricsCollector, MetricType
 
         col = MetricsCollector()
         col.record_metric("x", MetricType.LATENCY, 1.0, "ms")

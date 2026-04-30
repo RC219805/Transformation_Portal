@@ -18,6 +18,7 @@ pytestmark = [pytest.mark.unit]
 # Test helpers: minimal concrete PluginInterface implementations
 # ---------------------------------------------------------------------------
 
+
 def _make_plugin(name: str = "test_plugin", plugin_type_value: str = "processor"):
     """Create a minimal, concrete plugin for testing."""
     from transformation_portal.plugins.interface import PluginInterface, PluginMetadata, PluginType
