@@ -30,7 +30,7 @@ bandit==1.9.4
     # via -r ci.in
 black==26.3.1
     # via -r dev.in
-build==1.4.4
+build==1.5.0
     # via -r ci.in
 cachetools==7.0.5
     # via tox
