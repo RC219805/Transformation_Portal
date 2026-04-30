@@ -426,6 +426,11 @@ class EnhanceConfig:
     sam2_pred_iou_thresh: float = 0.88
     sam2_stability_score_thresh: float = 0.85
     sam2_crop_n_layers: int = 1
+    # SAM ViT-H backend (Phase 2, APEX Research tier)
+    sam_vit_h_checkpoint_path: Optional[str] = None
+    sam_vit_h_points_per_side: int = 32
+    sam_vit_h_pred_iou_thresh: float = 0.88
+    sam_vit_h_confidence_threshold: float = 0.85
 
     # Emit flags (deliverables)
     emit_master16: bool = False  # Emit master 16-bit output

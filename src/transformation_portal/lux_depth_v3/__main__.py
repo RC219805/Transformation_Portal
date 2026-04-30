@@ -127,7 +127,7 @@ Key Concepts:
       * Use --enable-segmentation "on" to enable
         automatic material detection
       * --segmentation-backend: Choose "stub"
-        (default), "efficientsam", or "sam2"
+        (default), "efficientsam", "sam2", or "sam_vit_h"
       * --strict-segmentation: Fail on backend
         errors instead of falling back to stub
 
@@ -802,7 +802,7 @@ def main(
             raise typer.Exit(code=1)
 
     # Validate segmentation backend
-    valid_segmentation_backends = ["stub", "efficientsam", "sam2"]
+    valid_segmentation_backends = ["stub", "efficientsam", "sam2", "sam_vit_h"]
     if segmentation_backend.lower() not in valid_segmentation_backends:
         error_msg = (
             "Invalid segmentation backend"
