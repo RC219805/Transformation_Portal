@@ -14,7 +14,7 @@ jsonschema>=4.21.0,<5
 httpx>=0.28,<1
 
 # Optional Phase 3.1 detached signing support (tools + tests)
-cryptography>=46.0,<47
+cryptography>=46.0,<48
 
 # Linters, formatters, type checkers
 mypy>=1.10
