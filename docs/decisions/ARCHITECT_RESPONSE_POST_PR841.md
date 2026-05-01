@@ -122,7 +122,7 @@ Phase 3: Backend Selection Truth
 ## Deliverables Created
 
 ### 1. Architecture Decision Record
-**File:** `docs/architecture/decisions/ADR-023-post-pr841-hardening.md`
+**File:** `docs/_archive/2026-Q1-consolidation/ADR-023-post-pr841-hardening.md` *(archived 2026-Q1)*
 
 Comprehensive ADR documenting:
 - Context and problem statement
@@ -158,7 +158,7 @@ Implementation skeleton with:
 - TODO markers for manifest schema integration
 
 ### 5. Implementation Guide
-**File:** `docs/architecture/decisions/ADR-023-implementation-guide.md`
+**File:** ~~`docs/architecture/decisions/ADR-023-implementation-guide.md`~~ *(deleted 2026-05-01 after audit; see Update notice at top of this doc)*
 
 Specialist-facing guide with:
 - Step-by-step implementation checklist
@@ -214,7 +214,7 @@ Specialist-facing guide with:
 4. Writing unit tests for both phases
 5. Integration testing with real batch runs
 
-**Implementation guide:** `docs/architecture/decisions/ADR-023-implementation-guide.md`
+**Implementation guide:** ~~`docs/architecture/decisions/ADR-023-implementation-guide.md`~~ *(deleted 2026-05-01; implementation complete — see Update notice at top of this doc)*
 
 ---
 
@@ -272,7 +272,7 @@ Specialist-facing guide with:
 
 ## Next Steps for Specialist
 
-1. **Read Implementation Guide:** `docs/architecture/decisions/ADR-023-implementation-guide.md`
+1. ~~**Read Implementation Guide:** `docs/architecture/decisions/ADR-023-implementation-guide.md`~~ *(deleted 2026-05-01; implementation complete — these "Next Steps" are historical and have been executed)*
 2. **Complete Phase 2:** Implement manifest parsing in `performance_ledger.py`
 3. **Complete Phase 3:** Add backend selection to manifest + orchestrator
 4. **Write Tests:** Unit + integration tests per checklist
@@ -291,11 +291,11 @@ The expert's analysis is sound and actionable. I have provided architectural bou
 
 ---
 
-**Files Changed:**
-- Created: `docs/architecture/decisions/ADR-023-post-pr841-hardening.md`
-- Created: `docs/architecture/decisions/ADR-023-implementation-guide.md`
+**Files Changed:** *(historical record from 2026-02-05; current locations updated 2026-05-01)*
+- Created: `docs/_archive/2026-Q1-consolidation/ADR-023-post-pr841-hardening.md` *(archived 2026-Q1)*
+- Created: ~~`docs/architecture/decisions/ADR-023-implementation-guide.md`~~ *(deleted 2026-05-01 after audit confirmed all TODOs shipped)*
 - Created: `docs/performance/README.md`
 - Created: `docs/performance/baselines/README.md`
-- Created: `tools/performance_ledger.py` (skeleton)
+- Created: `tools/performance_ledger.py` *(now at v1.7, far beyond the original skeleton)*
 
 **Status:** SUCCEEDED
