@@ -6,7 +6,8 @@
   "scripts": {
     "preinstall": "node ./scripts/check-node-version.mjs",
     "build:portal": "node ./scripts/guard-runtime.mjs && node ./scripts/build-portal-bundle.mjs",
-    "check:css-layer-dry-run": "node ./scripts/guard-runtime.mjs && node ./scripts/check-portal-css-layer-dry-run.mjs",
+    "check:css-layer-parity": "node ./scripts/guard-runtime.mjs && node ./scripts/check-portal-css-layer-parity.mjs",
+    "check:css-layer-dry-run": "npm run check:css-layer-parity",
     "dev": "npm run build:portal && node ./scripts/guard-runtime.mjs && next dev",
     "build": "npm run build:portal && node ./scripts/guard-runtime.mjs && next build",
     "lint:css": "stylelint \"portal-src/styles/**/*.css\" && node ./scripts/build-portal-bundle.mjs --check-css && node ./scripts/check-portal-css-contract.mjs && node ./scripts/check-portal-css-architecture.mjs",

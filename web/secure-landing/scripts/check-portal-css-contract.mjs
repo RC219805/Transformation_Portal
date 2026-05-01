@@ -30,16 +30,18 @@ const DISALLOWED_PATTERNS = [
   ["transition all shorthand", /transition\s*:\s*all\b/],
   ["transition-property all", /transition-property\s*:\s*all\b/],
   ["broken dark group hover selector", /\.group:hover\s+\.dark\s+\.dark\\:group-hover\\:text-white/],
-  ["shared token URL placeholder", /__PORTAL_SHARED_TOKENS_URL__/],
-  ["cascade layer rule", /@layer\b/]
+  ["shared token URL placeholder", /__PORTAL_SHARED_TOKENS_URL__/]
 ];
 const SOURCE_DISALLOWED_PATTERNS = DISALLOWED_PATTERNS.filter(([name]) => name !== "runtime @import");
 const INDEX_REQUIRED_PATTERNS = [
-  ["tokens import", /@import\s+"\.\/tokens\.css"\s*;/],
-  ["base import", /@import\s+"\.\/base\.css"\s*;/],
-  ["components import", /@import\s+"\.\/components\.current\.css"\s*;/],
-  ["utilities import", /@import\s+"\.\/utilities\.compat\.css"\s*;/],
-  ["overrides import", /@import\s+"\.\/overrides\.current\.css"\s*;/]
+  ["layer order", /@layer\s+tokens\s*,\s*base\s*,\s*components\s*,\s*utilities\s*,\s*overrides\s*;/],
+  ["shared tokens import", /@import\s+"(?:\.\.\/){4}web\/shared\/shared-ui-tokens\.css"\s+layer\(tokens\)\s*;/],
+  ["tokens import", /@import\s+"\.\/tokens\.css"\s+layer\(tokens\)\s*;/],
+  ["base import", /@import\s+"\.\/base\.css"\s+layer\(base\)\s*;/],
+  ["utilities import", /@import\s+"\.\/utilities\.compat\.css"\s+layer\(utilities\)\s*;/],
+  ["compatibility-order overrides import", /@import\s+"\.\/overrides\.compat\.css"\s+layer\(utilities\)\s*;/],
+  ["performance overrides import", /@import\s+"\.\/overrides\.performance\.css"\s+layer\(overrides\)\s*;/],
+  ["accessibility overrides import", /@import\s+"\.\/overrides\.accessibility\.css"\s+layer\(overrides\)\s*;/]
 ];
 const UTILITY_EXACT_CLASSES = new Set([
   "absolute",
@@ -211,7 +213,7 @@ for (const sourcePath of listCssFiles(PORTAL_CSS_SOURCE_DIR)) {
   const sourceLabel = path.relative(REPO_ROOT, sourcePath);
   const sourceContent = readFileSync(sourcePath, "utf-8");
   const disallowedPatterns =
-    sourcePath === PORTAL_CSS_INDEX_PATH || sourcePath === path.resolve(PORTAL_CSS_SOURCE_DIR, "components.current.css")
+    sourcePath === PORTAL_CSS_INDEX_PATH
       ? SOURCE_DISALLOWED_PATTERNS
       : DISALLOWED_PATTERNS;
   checkDisallowed(sourceLabel, sourceContent, failures, disallowedPatterns);

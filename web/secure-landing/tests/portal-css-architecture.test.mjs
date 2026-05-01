@@ -14,6 +14,21 @@ const ARCHITECTURE_BASELINE_PATH = path.join(
   "styles",
   "architecture-baseline.json"
 );
+const REPO_ROOT = path.resolve(FRONTDOOR_ROOT, "..", "..");
+const LAYER_PARITY_CONTRACT_PATH = path.join(
+  REPO_ROOT,
+  "tests",
+  "fixtures",
+  "portal-css",
+  "layer-parity-contract.json"
+);
+const LAYER_PARITY_BASELINE_PATH = path.join(
+  REPO_ROOT,
+  "tests",
+  "fixtures",
+  "portal-css",
+  "layer-parity-baseline.json"
+);
 const HOTSPOT_SELECTORS = [
   ".shell-bg",
   ".workspace-rail",
@@ -42,6 +57,8 @@ test("portal CSS lint script checks generated artifact freshness and architectur
   assert.match(lintCss, /build-portal-bundle\.mjs --check-css/);
   assert.match(lintCss, /check-portal-css-contract\.mjs/);
   assert.match(lintCss, /check-portal-css-architecture\.mjs/);
+  assert.match(String(packageJson.scripts["check:css-layer-parity"] || ""), /check-portal-css-layer-parity\.mjs/);
+  assert.match(String(packageJson.scripts["check:css-layer-dry-run"] || ""), /check:css-layer-parity/);
 
   assert.match(runNodeScript("scripts/build-portal-bundle.mjs", "--check-css"), /generated artifact is fresh/);
   assert.match(runNodeScript("scripts/check-portal-css-contract.mjs"), /portal css contract: OK/);
@@ -58,9 +75,16 @@ test("portal CSS architecture baseline keeps hotspot selectors consolidated", ()
   }
 });
 
-test("portal CSS layer dry run validates the transitional layered graph", () => {
-  const output = runNodeScript("scripts/check-portal-css-layer-dry-run.mjs");
-  assert.match(output, /portal css layer dry-run: OK/);
+test("portal CSS layer parity validates the production layered graph", () => {
+  const contract = JSON.parse(readFileSync(LAYER_PARITY_CONTRACT_PATH, "utf8"));
+  const baseline = JSON.parse(readFileSync(LAYER_PARITY_BASELINE_PATH, "utf8"));
+  const output = runNodeScript("scripts/check-portal-css-layer-parity.mjs");
+
+  assert.match(output, /portal css layer parity: OK/);
   assert.match(output, /representative selectors/);
   assert.match(output, /style properties tracked for browser parity/);
+  assert.deepEqual(baseline.representativeStyleSelectors, contract.representativeStyleSelectors);
+  assert.deepEqual(baseline.representativeStyleProperties, contract.representativeStyleProperties);
+  assert.ok(contract.representativeStyleProperties.includes("content-visibility"));
+  assert.ok(contract.representativeStyleSelectors.includes("[data-ui=\"staged-upload-shell\"]"));
 });

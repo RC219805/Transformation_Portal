@@ -11,7 +11,6 @@ const FRONTDOOR_ROOT = path.resolve(__dirname, "..");
 const REPO_ROOT = path.resolve(FRONTDOOR_ROOT, "..", "..");
 const PORTAL_CSS_SOURCE_DIR = path.resolve(FRONTDOOR_ROOT, "portal-src", "styles");
 const PORTAL_CSS_INDEX_PATH = path.resolve(PORTAL_CSS_SOURCE_DIR, "index.css");
-const PORTAL_COMPONENT_INDEX_PATH = path.resolve(PORTAL_CSS_SOURCE_DIR, "components.current.css");
 const PORTAL_CSS_ASSET_PATH = path.resolve(REPO_ROOT, "public", "portal-assets", "portal.css");
 const PORTAL_REVIEW_CSS_ASSET_PATH = path.resolve(REPO_ROOT, "public", "portal-assets", "portal-review.css");
 const PORTAL_HTML_PATH = path.resolve(REPO_ROOT, "portal.html");
@@ -24,17 +23,23 @@ const args = new Set(process.argv.slice(2));
 const WRITE_BASELINE = args.has("--write-baseline");
 const REPORT = args.has("--report") || WRITE_BASELINE;
 
-const EXPECTED_COMPONENT_IMPORTS = [
-  "./components/status-feedback.css",
-  "./components/shell-foundation.css",
-  "./components/console-context.css",
-  "./components/dispatch-surfaces.css",
-  "./components/workspace-performance.css",
-  "./components/responsive-layout.css",
-  "./components/operator-console-reset.css"
-];
-
 const EXPECTED_LAYER_ORDER = ["tokens", "base", "components", "utilities", "overrides"];
+const EXPECTED_LAYER_IMPORTS = [
+  ["../../../../web/shared/shared-ui-tokens.css", "tokens"],
+  ["./tokens.css", "tokens"],
+  ["./base.css", "base"],
+  ["./components/status-feedback.css", "components"],
+  ["./components/shell-foundation.css", "components"],
+  ["./components/console-context.css", "components"],
+  ["./components/dispatch-surfaces.css", "components"],
+  ["./components/responsive-layout.css", "components"],
+  ["./components/workspace-performance.css", "utilities"],
+  ["./utilities.operator-console-reset.css", "utilities"],
+  ["./utilities.compat.css", "utilities"],
+  ["./overrides.compat.css", "utilities"],
+  ["./overrides.performance.css", "overrides"],
+  ["./overrides.accessibility.css", "overrides"]
+];
 const HOTSPOT_SELECTORS = new Set([
   ".shell-bg",
   ".workspace-rail",
@@ -427,24 +432,123 @@ function checkUtilityCoverage(failures) {
   }
 }
 
-function checkComponentSplit(failures) {
-  const root = parseCss(PORTAL_COMPONENT_INDEX_PATH);
+function parseLayeredImport(params) {
+  const match = params.match(/^url\((["']?)(.+?)\1\)|^(["'])(.+?)\3/);
+  const source = match ? (match[2] || match[4] || "").trim() : "";
+  const layerMatch = params.match(/\blayer\(\s*([^)]+?)\s*\)/);
+  return [source, layerMatch ? layerMatch[1].trim() : ""];
+}
+
+function checkProductionLayerImports(failures) {
+  const root = parseCss(PORTAL_CSS_INDEX_PATH);
   const imports = [];
+  let declaredLayerOrder = null;
   root.each((node) => {
-    if (node.type === "atrule" && node.name === "import") {
-      const match = node.params.match(/^["'](.+)["']$/);
-      imports.push(match ? match[1] : node.params);
+    if (node.type === "comment") {
+      return;
+    }
+    if (node.type === "atrule" && node.name === "layer" && !node.nodes) {
+      declaredLayerOrder = layerDeclarationNames(node.params);
+    } else if (node.type === "atrule" && node.name === "import") {
+      imports.push(parseLayeredImport(node.params));
     } else if (node.type !== "comment") {
-      failures.push(`${relativePath(PORTAL_COMPONENT_INDEX_PATH)} should only contain component imports during the mechanical split phase`);
+      failures.push(`${relativePath(PORTAL_CSS_INDEX_PATH)} should only contain the layer declaration and layered imports`);
     }
   });
-  if (JSON.stringify(imports) !== JSON.stringify(EXPECTED_COMPONENT_IMPORTS)) {
-    failures.push(`${relativePath(PORTAL_COMPONENT_INDEX_PATH)} component import order drifted`);
+  if (JSON.stringify(declaredLayerOrder) !== JSON.stringify(EXPECTED_LAYER_ORDER)) {
+    failures.push(`${relativePath(PORTAL_CSS_INDEX_PATH)} declares unexpected layer order ${(declaredLayerOrder || []).join(", ")}`);
+  }
+  if (JSON.stringify(imports) !== JSON.stringify(EXPECTED_LAYER_IMPORTS)) {
+    failures.push(`${relativePath(PORTAL_CSS_INDEX_PATH)} production layer import order drifted`);
   }
 }
 
 function layerDeclarationNames(params) {
   return params.split(",").map((entry) => entry.trim()).filter(Boolean);
+}
+
+function checkSourceCssGovernance(cssFiles, failures) {
+  for (const filePath of cssFiles) {
+    const root = parseCss(filePath);
+    const source = relativePath(filePath);
+    root.walkAtRules((atRule) => {
+      if (atRule.name === "import" && filePath !== PORTAL_CSS_INDEX_PATH) {
+        failures.push(`${source} must not use @import; production imports belong in index.css`);
+      }
+      if (atRule.name === "layer" && filePath !== PORTAL_CSS_INDEX_PATH) {
+        failures.push(`${source} must not declare @layer; production layer ownership belongs in index.css`);
+      }
+    });
+  }
+}
+
+function previousOwnerComment(node) {
+  let current = node.prev();
+  while (current && current.type === "comment") {
+    const text = String(current.text || "");
+    if (text.includes("portal-override-owner:")) {
+      return text;
+    }
+    current = current.prev();
+  }
+  return "";
+}
+
+function fileOwnerComment(content) {
+  const match = content.match(/\/\*\s*portal-override-owner:\s*([\s\S]*?)\*\//);
+  return match ? match[0] : "";
+}
+
+function importantOwnerFor(decl, sourceContent) {
+  const contexts = atRuleContext(decl);
+  if (contexts.some((context) => context.includes("prefers-reduced-motion"))) {
+    return "reduced-motion";
+  }
+  const ruleOwner = previousOwnerComment(decl.parent);
+  if (ruleOwner) {
+    return ruleOwner;
+  }
+  return fileOwnerComment(sourceContent);
+}
+
+function checkImportantGovernance(cssFiles, failures) {
+  for (const filePath of cssFiles) {
+    const content = readText(filePath);
+    const root = parseCss(filePath, content);
+    const source = relativePath(filePath);
+    root.walkDecls((decl) => {
+      if (!decl.important) {
+        return;
+      }
+      const owner = importantOwnerFor(decl, content);
+      if (
+        !owner.includes("portal-override-owner:") &&
+        !owner.includes("reduced-motion") &&
+        !owner.includes("performance-lite") &&
+        !owner.includes("forced-colors") &&
+        !owner.includes("compatibility-final-order")
+      ) {
+        failures.push(`${source}:${decl.source?.start?.line || 0} has unowned !important declaration ${decl.prop}`);
+      }
+    });
+  }
+}
+
+function checkOverrideOwners(cssFiles, failures) {
+  for (const filePath of cssFiles.filter((entryPath) => path.basename(entryPath).startsWith("overrides."))) {
+    const content = readText(filePath);
+    const source = relativePath(filePath);
+    if (!content.includes("portal-override-owner:")) {
+      failures.push(`${source} missing portal-override-owner comment`);
+    }
+    if (path.basename(filePath) === "overrides.compat.css") {
+      for (const comment of content.matchAll(/\/\*\s*portal-override-owner:\s*compatibility-final-order[\s\S]*?\*\//g)) {
+        if (!comment[0].includes("reason:")) {
+          failures.push(`${source} compatibility-final-order owner comment missing reason`);
+        }
+      }
+    }
+  }
 }
 
 function checkLayerContract(failures) {
@@ -481,7 +585,10 @@ const cssFiles = listFiles(PORTAL_CSS_SOURCE_DIR, (entryPath) => entryPath.endsW
 const records = collectRuleRecords(cssFiles);
 const duplicates = collectDuplicateReport(records);
 
-checkComponentSplit(failures);
+checkProductionLayerImports(failures);
+checkSourceCssGovernance(cssFiles, failures);
+checkImportantGovernance(cssFiles, failures);
+checkOverrideOwners(cssFiles, failures);
 checkDuplicateBaseline(duplicates, failures);
 checkUtilityCoverage(failures);
 checkLayerContract(failures);
