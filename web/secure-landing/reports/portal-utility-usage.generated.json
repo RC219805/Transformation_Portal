@@ -1,0 +1,5415 @@
+{
+  "version": 1,
+  "summary": {
+    "utilityCount": 419,
+    "compatHoldCount": 0,
+    "deprecatedImported": false
+  },
+  "utilities": [
+    {
+      "className": "absolute",
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "active:scale-[0.98]",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "animate-pulse",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "antialiased",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "backdrop-blur-sm",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "backdrop-blur-xl",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "bg-amber-100",
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "bg-amber-50",
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "bg-amber-50/90",
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "bg-cyan-50",
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "bg-cyan-50/80",
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "bg-cyan-50/90",
+      "owner": "review-only",
+      "sources": [
+        "public/portal-assets/portal-review.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
+      ],
+      "cssFile": "utilities.dynamic.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.dynamic.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "bg-emerald-100",
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "bg-emerald-50",
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "bg-emerald-50/90",
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "bg-emerald-500",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "bg-gradient-to-r",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "bg-indigo-50",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "bg-indigo-500",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "bg-indigo-600",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "bg-red-100",
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "bg-red-50",
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "bg-red-50/90",
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "bg-slate-100",
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "bg-slate-200",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "bg-slate-300",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "bg-slate-50",
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "bg-slate-50/50",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "bg-slate-50/75",
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "bg-slate-50/80",
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal-review.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "bg-slate-50/90",
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "bg-slate-900/50",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "bg-slate-900/55",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "bg-slate-900/60",
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal-review.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "bg-slate-950/72",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "bg-white",
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "bg-white/70",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "bg-white/80",
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal-review.js",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "bg-white/90",
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "block",
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal-review.js",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "border-amber-200",
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "border-amber-300",
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "border-b",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "border-cyan-200",
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "border-cyan-300",
+      "owner": "review-only",
+      "sources": [
+        "public/portal-assets/portal-review.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
+      ],
+      "cssFile": "utilities.dynamic.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.dynamic.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "border-cyan-500",
+      "owner": "static",
+      "sources": [
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "border-dashed",
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal-review.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "border-emerald-200",
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "border-emerald-300",
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "border-indigo-300",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "border-red-200",
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "border-red-300",
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "border-slate-200",
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal-review.js",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "border-slate-300",
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "border-t",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "bottom-6",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "break-all",
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "break-words",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "cursor-not-allowed",
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal-review.js",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "cursor-pointer",
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "dark:bg-amber-900/10",
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "dark:bg-amber-900/20",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "dark:bg-amber-900/30",
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "dark:bg-amber-950/25",
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "dark:bg-amber-950/30",
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "dark:bg-amber-950/60",
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "dark:bg-black/60",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "dark:bg-black/70",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "dark:bg-black/80",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "dark:bg-cyan-900/20",
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal-review.js",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "dark:bg-emerald-900/10",
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "dark:bg-emerald-900/30",
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "dark:bg-emerald-950/25",
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "dark:bg-emerald-950/30",
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "dark:bg-emerald-950/50",
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "dark:bg-emerald-950/60",
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "dark:bg-indigo-900/20",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "dark:bg-red-900/10",
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "dark:bg-red-900/30",
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "dark:bg-red-950/25",
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "dark:bg-red-950/30",
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "dark:bg-red-950/50",
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "dark:bg-red-950/60",
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "dark:bg-slate-600",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "dark:bg-slate-800",
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "dark:bg-slate-800/50",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "dark:bg-slate-900",
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "dark:bg-slate-900/45",
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "dark:bg-slate-900/50",
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal-review.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "dark:bg-slate-900/60",
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "dark:bg-slate-900/70",
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal-review.js",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "dark:bg-slate-900/80",
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "dark:bg-slate-950/40",
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "dark:bg-slate-950/60",
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "dark:border-amber-700",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "dark:border-amber-800",
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "dark:border-amber-900/50",
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "dark:border-amber-900/60",
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "dark:border-cyan-900/60",
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal-review.js",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "dark:border-emerald-800",
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "dark:border-emerald-900/50",
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "dark:border-emerald-900/60",
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "dark:border-indigo-700",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "dark:border-red-800",
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "dark:border-red-900/50",
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "dark:border-red-900/60",
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "dark:border-slate-600",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "dark:border-slate-700",
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal-review.js",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "dark:border-slate-800",
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal-review.js",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "dark:group-hover:text-white",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "dark:hover:bg-slate-700",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "dark:hover:bg-slate-800",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "dark:hover:bg-slate-800/80",
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal-review.js",
+        "web/secure-landing/portal-src/portal.template.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "dark:hover:border-cyan-700",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "dark:hover:border-slate-600",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "dark:hover:text-cyan-300",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "dark:hover:text-indigo-300",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "dark:hover:text-slate-200",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "dark:hover:text-white",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "dark:shadow-soft-dark",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "dark:text-amber-100",
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "dark:text-amber-200",
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "dark:text-amber-300",
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "dark:text-amber-400",
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "dark:text-amber-500",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "dark:text-cyan-300",
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "dark:text-emerald-100",
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "dark:text-emerald-200",
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "dark:text-emerald-300",
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "dark:text-emerald-400",
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "dark:text-indigo-400",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "dark:text-red-100",
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "dark:text-red-200",
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "dark:text-red-300",
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "dark:text-red-400",
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "dark:text-slate-100",
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal-review.js",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "dark:text-slate-200",
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "dark:text-slate-300",
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal-review.js",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "dark:text-slate-400",
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal-review.js",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "dark:text-white",
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "disabled:cursor-not-allowed",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "disabled:opacity-50",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "duration-200",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "duration-300",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "ease-in-out",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "fixed",
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "flex",
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal-review.js",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "flex-1",
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "flex-col",
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "flex-wrap",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "focus:outline-none",
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "font-black",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "font-bold",
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal-review.js",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "font-extrabold",
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "font-medium",
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "font-mono",
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal-review.js",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "font-semibold",
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal-review.js",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "from-teal-700",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "gap-1",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "gap-1.5",
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "gap-2",
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "gap-3",
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "gap-4",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "gap-5",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "gap-6",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "gap-8",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "grid",
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/overrides.operator-console-reset.css",
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "grid-cols-1",
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "grid-cols-2",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "group",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "group-hover:text-slate-900",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "h-12",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "h-2",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "h-24",
+      "owner": "review-only",
+      "sources": [
+        "public/portal-assets/portal-review.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
+      ],
+      "cssFile": "utilities.dynamic.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.dynamic.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "h-4",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "h-5",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "h-full",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "hidden",
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal-review.js",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/components/responsive-layout.css",
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "hover:bg-slate-100",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "hover:bg-slate-50",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "hover:bg-white/90",
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal-review.js",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "hover:border-cyan-300",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "hover:border-indigo-400",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "hover:border-slate-300",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "hover:from-teal-600",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "hover:text-cyan-700",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "hover:text-indigo-600",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "hover:text-red-700",
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "hover:text-slate-600",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "hover:text-slate-900",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "hover:to-sky-500",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "hover:via-cyan-500",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "inline",
+      "owner": "review-only",
+      "sources": [
+        "public/portal-assets/portal-review.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
+      ],
+      "cssFile": "utilities.dynamic.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.dynamic.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "inline-flex",
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "inset-0",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "items-center",
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal-review.js",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "items-end",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "items-start",
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "justify-between",
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "justify-center",
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal-review.js",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "justify-end",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "leading-5",
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "leading-6",
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal-review.js",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "leading-7",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "leading-none",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "leading-relaxed",
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "leading-tight",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "left-[2px]",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "lg:col-span-12",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "lg:col-span-5",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "lg:col-span-7",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "lg:flex",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "lg:flex-row",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "lg:grid-cols-12",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "lg:grid-cols-3",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "lg:grid-cols-4",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "lg:items-end",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "lg:items-start",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "lg:justify-between",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "lg:mb-0",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "max-h-[220px]",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "max-h-[320px]",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "max-h-[350px]",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "max-h-[92vh]",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "max-w-[150px]",
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "max-w-2xl",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "max-w-3xl",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "max-w-5xl",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "max-w-6xl",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "max-w-7xl",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "max-w-sm",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "max-w-xs",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "mb-1.5",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "mb-2",
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "mb-3",
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "mb-4",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "mb-6",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "md:flex-row",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "md:grid-cols-2",
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "md:grid-cols-4",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "md:grid-cols-5",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "md:items-end",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "md:justify-between",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "min-h-[100px]",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "min-h-[120px]",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "min-h-[140px]",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "min-h-[160px]",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "min-h-[400px]",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "min-w-[3rem]",
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "min-w-0",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "ml-3",
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "ml-4",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "mt-0.5",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "mt-1",
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal-review.js",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "mt-2",
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal-review.js",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "mt-3",
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal-review.js",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "mt-4",
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "mt-5",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/overrides.operator-console-reset.css",
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "mt-6",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "mx-auto",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "object-contain",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "object-cover",
+      "owner": "review-only",
+      "sources": [
+        "public/portal-assets/portal-review.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
+      ],
+      "cssFile": "utilities.dynamic.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.dynamic.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "opacity-0",
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "opacity-100",
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "opacity-50",
+      "owner": "review-only",
+      "sources": [
+        "public/portal-assets/portal-review.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
+      ],
+      "cssFile": "utilities.dynamic.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.dynamic.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "opacity-60",
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "opacity-75",
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "outline-none",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "overflow-hidden",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "overflow-y-auto",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "p-3",
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal-review.js",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "p-4",
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "p-5",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "p-6",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "pb-3",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "pb-4",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "peer",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "peer-checked:bg-indigo-600",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "peer-checked:bg-red-500",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "peer-checked:translate-x-4",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "peer-focus-visible:ring-2",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "peer-focus-visible:ring-indigo-500",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "peer-focus-visible:ring-offset-2",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "peer-focus-visible:ring-red-500",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "pointer-events-auto",
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "pointer-events-none",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "pr-1",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "pr-2",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "pt-4",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "pt-5",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "px-1.5",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "px-2",
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "px-2.5",
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "px-3",
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "px-4",
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "px-5",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "px-6",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "py-0.5",
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "py-1",
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "py-1.5",
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "py-2",
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "py-2.5",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "py-3",
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "py-3.5",
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "py-4",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "py-5",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "py-8",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "relative",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "resize-y",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "right-6",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "ring-1",
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "ring-cyan-500/15",
+      "owner": "static",
+      "sources": [
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "rounded-[1.75rem]",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "rounded-2xl",
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal-review.js",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "rounded-full",
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "rounded-lg",
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "rounded-md",
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "rounded-xl",
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal-review.js",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "scale-100",
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "scale-95",
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "select-none",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "selection:bg-cyan-500/25",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "shadow-2xl",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "shadow-glow",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "shadow-lg",
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "shadow-md",
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "shadow-sm",
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal-review.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "shadow-soft",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "shrink-0",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "sm:col-span-2",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "sm:col-span-3",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "sm:flex-row",
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "sm:grid-cols-2",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "sm:grid-cols-3",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "sm:grid-cols-4",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "sm:items-center",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "sm:items-start",
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "sm:justify-between",
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "space-y-1",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "space-y-3",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "space-y-4",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "space-y-5",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "space-y-6",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "sr-only",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/overrides.operator-console-reset.css",
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "sticky",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "text-[10px]",
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal-review.js",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/overrides.operator-console-reset.css",
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "text-[11px]",
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal-review.js",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/overrides.operator-console-reset.css",
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "text-[12px]",
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal-review.js",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/overrides.operator-console-reset.css",
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "text-[13px]",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "text-[14px]",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "text-[9px]",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "text-2xl",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "text-3xl",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "text-amber-600",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "text-amber-700",
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "text-amber-800",
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "text-amber-900",
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "text-base",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "text-center",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "text-cyan-700",
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "text-emerald-700",
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "text-emerald-800",
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "text-emerald-900",
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "text-indigo-600",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "text-indigo-700",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "text-left",
+      "owner": "review-only",
+      "sources": [
+        "public/portal-assets/portal-review.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
+      ],
+      "cssFile": "utilities.dynamic.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.dynamic.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "text-lg",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "text-red-500",
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "text-red-600",
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "text-red-700",
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "text-red-800",
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "text-red-900",
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "text-right",
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "text-slate-300",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "text-slate-400",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "text-slate-500",
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal-review.js",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "text-slate-600",
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal-review.js",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "text-slate-700",
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "text-slate-800",
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal-review.js",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "text-slate-900",
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "text-slate-950",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "text-sm",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "text-white",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "text-xl",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "text-xs",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/overrides.operator-console-reset.css",
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "to-sky-600",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "top-[2px]",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "top-0",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "tracking-[0.14em]",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "tracking-[0.16em]",
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "tracking-[0.18em]",
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal-review.js",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "tracking-[0.24em]",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "tracking-tight",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "tracking-wide",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "tracking-wider",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "tracking-widest",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "transform",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "transition-[width]",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "transition-all",
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "transition-colors",
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal-review.js",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "transition-opacity",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "transition-transform",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "truncate",
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal-review.js",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "uppercase",
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal-review.js",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "via-cyan-600",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "w-0",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "w-12",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "w-2",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "w-4",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "w-40",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "w-8",
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "w-9",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "w-full",
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal-review.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "whitespace-pre-wrap",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "xl:grid-cols-3",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "xl:grid-cols-4",
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "xl:grid-cols-5",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "z-40",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    },
+    {
+      "className": "z-50",
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "cssOwners": [
+        "web/secure-landing/portal-src/styles/utilities.required.css"
+      ],
+      "status": "covered"
+    }
+  ]
+}

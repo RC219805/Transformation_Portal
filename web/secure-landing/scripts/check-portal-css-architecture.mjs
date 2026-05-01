@@ -34,8 +34,10 @@ const EXPECTED_LAYER_IMPORTS = [
   ["./components/dispatch-surfaces.css", "components"],
   ["./components/responsive-layout.css", "components"],
   ["./components/workspace-performance.css", "utilities"],
-  ["./utilities.operator-console-reset.css", "utilities"],
-  ["./utilities.compat.css", "utilities"],
+  ["./overrides.operator-console-reset.css", "utilities"],
+  ["./utilities.required.css", "utilities"],
+  ["./utilities.dynamic.css", "utilities"],
+  ["./utilities.compat-hold.css", "utilities"],
   ["./overrides.compat.css", "utilities"],
   ["./overrides.performance.css", "overrides"],
   ["./overrides.accessibility.css", "overrides"]
@@ -54,7 +56,9 @@ const HOTSPOT_SELECTORS = new Set([
 
 const UTILITY_EXACT_CLASSES = new Set([
   "absolute",
+  "antialiased",
   "block",
+  "border",
   "flex",
   "fixed",
   "grid",
@@ -65,6 +69,7 @@ const UTILITY_EXACT_CLASSES = new Set([
   "inline-flex",
   "peer",
   "relative",
+  "rounded",
   "sr-only",
   "sticky",
   "transform",
@@ -77,8 +82,9 @@ const UTILITY_OWNER_ALLOWLIST = new Map([
   ["performance-lite", "performance mode owner class"]
 ]);
 const UTILITY_PREFIX_PATTERN =
-  /^(?:-?m[trblxy]?-.+|p[trblxy]?-.+|space-[xy]-.+|gap-.+|grid-cols-.+|col-span-.+|row-span-.+|flex-.+|items-.+|justify-.+|self-.+|place-.+|w-.+|h-.+|min-w-.+|min-h-.+|max-w-.+|max-h-.+|rounded-.+|border-.+|bg-.+|from-.+|via-.+|to-.+|text-.+|font-.+|tracking-.+|leading-.+|shadow-.+|ring-.+|opacity-.+|overflow-.+|object-.+|inset-.+|top-.+|right-.+|bottom-.+|left-.+|z-.+|cursor-.+|pointer-events-.+|select-.+|resize-.+|whitespace-.+|break-.+|duration-.+|ease-.+|transition-.+|scale-.+|backdrop-.+|animate-.+|outline-.+|fill-.+|stroke-.+|order-.+|basis-.+|shrink-.+|grow-.+|underline|no-underline)$/;
+  /^(?:-?m[trblxy]?-.+|p[trblxy]?-.+|space-[xy]-.+|gap-.+|grid-cols-.+|col-span-.+|row-span-.+|flex-.+|items-.+|justify-.+|self-.+|place-.+|w-.+|h-.+|min-w-.+|min-h-.+|max-w-.+|max-h-.+|rounded-.+|border-.+|bg-.+|from-.+|via-.+|to-.+|text-.+|font-.+|tracking-.+|leading-.+|shadow-.+|ring-.+|opacity-.+|overflow-.+|object-.+|inset-.+|top-.+|right-.+|bottom-.+|left-.+|-?z-.+|cursor-.+|pointer-events-.+|select-.+|resize-.+|whitespace-.+|break-.+|duration-.+|ease-.+|transition-.+|translate-.+|scale-.+|backdrop-.+|animate-.+|outline-.+|fill-.+|stroke-.+|order-.+|basis-.+|shrink-.+|grow-.+|underline|no-underline)$/;
 const UTILITY_VARIANTS = new Set([
+  "active",
   "dark",
   "disabled",
   "focus",
@@ -88,6 +94,8 @@ const UTILITY_VARIANTS = new Set([
   "lg",
   "md",
   "peer-checked",
+  "peer-focus-visible",
+  "selection",
   "sm",
   "xl"
 ]);
@@ -374,6 +382,22 @@ function isUtilityLikeClassToken(token) {
   return UTILITY_EXACT_CLASSES.has(base) || UTILITY_PREFIX_PATTERN.test(base);
 }
 
+function unescapeCssClassToken(token) {
+  return token
+    .replace(/\\([:/.[\]()%#,])/g, "$1")
+    .replace(/\\([0-9a-fA-F]{1,6})\s?/g, (_match, value) => String.fromCodePoint(parseInt(value, 16)))
+    .replace(/\\/g, "");
+}
+
+function classTokensFromSelector(selector) {
+  const tokens = [];
+  const pattern = /\.((?:\\.|[A-Za-z0-9_-])+)/g;
+  for (const match of selector.matchAll(pattern)) {
+    tokens.push(unescapeCssClassToken(match[1]));
+  }
+  return Array.from(new Set(tokens));
+}
+
 function recordClassToken(token, sourceLabel, classTokens) {
   const normalized = token.trim();
   if (!isUtilityLikeClassToken(normalized)) {
@@ -541,13 +565,48 @@ function checkOverrideOwners(cssFiles, failures) {
     if (!content.includes("portal-override-owner:")) {
       failures.push(`${source} missing portal-override-owner comment`);
     }
-    if (path.basename(filePath) === "overrides.compat.css") {
-      for (const comment of content.matchAll(/\/\*\s*portal-override-owner:\s*compatibility-final-order[\s\S]*?\*\//g)) {
-        if (!comment[0].includes("reason:")) {
-          failures.push(`${source} compatibility-final-order owner comment missing reason`);
-        }
+    for (const comment of content.matchAll(/\/\*\s*portal-override-owner:\s*compatibility-final-order[\s\S]*?\*\//g)) {
+      if (!comment[0].includes("reason:")) {
+        failures.push(`${source} compatibility-final-order owner comment missing reason`);
       }
     }
+  }
+}
+
+function checkSelectorFileBoundaries(cssFiles, failures) {
+  for (const filePath of cssFiles) {
+    const source = relativePath(filePath);
+    const basename = path.basename(filePath);
+    const inUtilityFile = basename.startsWith("utilities.");
+    const inComponentFile = source.includes("portal-src/styles/components/");
+    if (!inUtilityFile && !inComponentFile) {
+      continue;
+    }
+
+    const root = parseCss(filePath);
+    root.walkRules((rule) => {
+      for (const selector of splitSelectorList(rule.selector)) {
+        const classTokens = classTokensFromSelector(selector)
+          .filter((token) => !UTILITY_OWNER_ALLOWLIST.has(token));
+        if (classTokens.length === 0) {
+          continue;
+        }
+        const utilityTokens = classTokens.filter(isUtilityLikeClassToken);
+        const componentTokens = classTokens.filter((token) => !isUtilityLikeClassToken(token));
+
+        if (inUtilityFile && componentTokens.length > 0) {
+          failures.push(`${source}:${rule.source?.start?.line || 0} has component-shaped selector in utilities file ${selector}`);
+        }
+        if (
+          inComponentFile &&
+          utilityTokens.length > 0 &&
+          componentTokens.length === 0 &&
+          !/[#[]/.test(selector)
+        ) {
+          failures.push(`${source}:${rule.source?.start?.line || 0} has utility-shaped selector in component file ${selector}`);
+        }
+      }
+    });
   }
 }
 
@@ -589,6 +648,7 @@ checkProductionLayerImports(failures);
 checkSourceCssGovernance(cssFiles, failures);
 checkImportantGovernance(cssFiles, failures);
 checkOverrideOwners(cssFiles, failures);
+checkSelectorFileBoundaries(cssFiles, failures);
 checkDuplicateBaseline(duplicates, failures);
 checkUtilityCoverage(failures);
 checkLayerContract(failures);

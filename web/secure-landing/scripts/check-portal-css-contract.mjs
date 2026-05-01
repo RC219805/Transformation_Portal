@@ -38,8 +38,11 @@ const INDEX_REQUIRED_PATTERNS = [
   ["shared tokens import", /@import\s+"(?:\.\.\/){4}web\/shared\/shared-ui-tokens\.css"\s+layer\(tokens\)\s*;/],
   ["tokens import", /@import\s+"\.\/tokens\.css"\s+layer\(tokens\)\s*;/],
   ["base import", /@import\s+"\.\/base\.css"\s+layer\(base\)\s*;/],
-  ["utilities import", /@import\s+"\.\/utilities\.compat\.css"\s+layer\(utilities\)\s*;/],
-  ["compatibility-order overrides import", /@import\s+"\.\/overrides\.compat\.css"\s+layer\(utilities\)\s*;/],
+  ["required utilities import", /@import\s+"\.\/utilities\.required\.css"\s+layer\(utilities\)\s*;/],
+  ["dynamic utilities import", /@import\s+"\.\/utilities\.dynamic\.css"\s+layer\(utilities\)\s*;/],
+  ["compat-hold utilities import", /@import\s+"\.\/utilities\.compat-hold\.css"\s+layer\(utilities\)\s*;/],
+  ["operator console compatibility import", /@import\s+"\.\/overrides\.operator-console-reset\.css"\s+layer\(utilities\)\s*;/],
+  ["compatibility utilities-order import", /@import\s+"\.\/overrides\.compat\.css"\s+layer\(utilities\)\s*;/],
   ["performance overrides import", /@import\s+"\.\/overrides\.performance\.css"\s+layer\(overrides\)\s*;/],
   ["accessibility overrides import", /@import\s+"\.\/overrides\.accessibility\.css"\s+layer\(overrides\)\s*;/]
 ];
@@ -68,7 +71,7 @@ const UTILITY_OWNER_ALLOWLIST = new Set([
   "performance-lite"
 ]);
 const UTILITY_PREFIX_PATTERN =
-  /^(?:-?m[trblxy]?-.+|p[trblxy]?-.+|space-[xy]-.+|gap-.+|grid-cols-.+|col-span-.+|row-span-.+|flex-.+|items-.+|justify-.+|self-.+|place-.+|w-.+|h-.+|min-w-.+|min-h-.+|max-w-.+|max-h-.+|rounded-.+|border-.+|bg-.+|from-.+|via-.+|to-.+|text-.+|font-.+|tracking-.+|leading-.+|shadow-.+|ring-.+|opacity-.+|overflow-.+|object-.+|inset-.+|top-.+|right-.+|bottom-.+|left-.+|z-.+|cursor-.+|pointer-events-.+|select-.+|resize-.+|whitespace-.+|break-.+|duration-.+|ease-.+|transition-.+|scale-.+|backdrop-.+|animate-.+|outline-.+|fill-.+|stroke-.+|order-.+|basis-.+|shrink-.+|grow-.+|underline|no-underline)$/;
+  /^(?:-?m[trblxy]?-.+|p[trblxy]?-.+|space-[xy]-.+|gap-.+|grid-cols-.+|col-span-.+|row-span-.+|flex-.+|items-.+|justify-.+|self-.+|place-.+|w-.+|h-.+|min-w-.+|min-h-.+|max-w-.+|max-h-.+|rounded-.+|border-.+|bg-.+|from-.+|via-.+|to-.+|text-.+|font-.+|tracking-.+|leading-.+|shadow-.+|ring-.+|opacity-.+|overflow-.+|object-.+|inset-.+|top-.+|right-.+|bottom-.+|left-.+|-?z-.+|cursor-.+|pointer-events-.+|select-.+|resize-.+|whitespace-.+|break-.+|duration-.+|ease-.+|transition-.+|translate-.+|scale-.+|backdrop-.+|animate-.+|outline-.+|fill-.+|stroke-.+|order-.+|basis-.+|shrink-.+|grow-.+|underline|no-underline)$/;
 const UTILITY_VARIANTS = new Set([
   "dark",
   "disabled",
