@@ -278,18 +278,6 @@
       "owners": []
     },
     {
-      "key": ".peer:checked ~ .peer-checked\\:bg-indigo-600|||",
-      "category": "identical",
-      "hotspot": false,
-      "owners": []
-    },
-    {
-      "key": ".peer:checked ~ .peer-checked\\:bg-red-500|||",
-      "category": "identical",
-      "hotspot": false,
-      "owners": []
-    },
-    {
       "key": ".peer:focus-visible ~ .peer-focus-visible\\:ring-indigo-500|||",
       "category": "additive",
       "hotspot": false,
@@ -370,12 +358,6 @@
     {
       "key": ".section-kicker|||",
       "category": "conflicting",
-      "hotspot": false,
-      "owners": []
-    },
-    {
-      "key": ".selection\\:bg-cyan-500\\/25::selection|||",
-      "category": "identical",
       "hotspot": false,
       "owners": []
     },

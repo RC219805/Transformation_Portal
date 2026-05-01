@@ -351,6 +351,50 @@ function appendNodeByCategory(targets, node, usage, counters) {
   }
 }
 
+function atRuleContext(node) {
+  const contexts = [];
+  let current = node.parent;
+  while (current) {
+    if (current.type === "atrule") {
+      contexts.unshift(`@${current.name} ${current.params || ""}`.trim());
+    }
+    current = current.parent;
+  }
+  return contexts;
+}
+
+function ruleDeclarationSignature(rule) {
+  const declarations = [];
+  rule.walkDecls((decl) => {
+    declarations.push(`${decl.prop.trim()}:${decl.value.trim()}${decl.important ? " !important" : ""}`);
+  });
+  return declarations.join(";");
+}
+
+function ruleSignature(rule) {
+  return `${atRuleContext(rule).join("|")}||${rule.selector.trim()}||${ruleDeclarationSignature(rule)}`;
+}
+
+function pruneDuplicateUtilityRules(root) {
+  const seen = new Set();
+  let removed = 0;
+  root.walkRules((rule) => {
+    const signature = ruleSignature(rule);
+    if (seen.has(signature)) {
+      rule.remove();
+      removed += 1;
+      return;
+    }
+    seen.add(signature);
+  });
+  root.walkAtRules((atRule) => {
+    if (atRule.nodes && atRule.nodes.length === 0) {
+      atRule.remove();
+    }
+  });
+  return removed;
+}
+
 function buildSplitCss() {
   const usage = collectUtilityClassTokens();
   const splitSourcePaths = existsSync(LEGACY_UTILITIES_PATH)
@@ -377,6 +421,9 @@ function buildSplitCss() {
       appendNodeByCategory(targets, node, usage, counters);
     }
   }
+  counters.dedupe = Object.values(targets)
+    .map((target) => pruneDuplicateUtilityRules(target))
+    .reduce((total, count) => total + count, 0);
 
   return {
     counters,
@@ -408,7 +455,7 @@ if (WRITE_SPLIT) {
     writeFileSync(filePath, content, "utf-8");
   }
   console.log(
-    `portal utility split: ${counters.required} required, ${counters.dynamic} dynamic, ${counters["compat-hold"]} compat-hold, ${counters.drop} pruned rules`
+    `portal utility split: ${counters.required} required, ${counters.dynamic} dynamic, ${counters["compat-hold"]} compat-hold, ${counters.drop} pruned rules, ${counters.dedupe || 0} duplicate rules removed`
   );
 }
 

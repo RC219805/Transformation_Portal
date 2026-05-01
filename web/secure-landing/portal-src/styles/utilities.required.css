@@ -50,10 +50,6 @@
   -moz-osx-font-smoothing: grayscale;
 }
 
-.selection\:bg-cyan-500\/25::selection {
-  background-color: rgba(6, 182, 212, 0.25);
-}
-
 .transition-colors {
   transition-property: color, background-color, border-color, text-decoration-color, fill, stroke;
   transition-timing-function: cubic-bezier(0.4,0,0.2,1);
@@ -777,10 +773,6 @@
   background-color: rgb(71 85 105);
 }
 
-.peer:checked ~ .peer-checked\:bg-indigo-600 {
-  background-color: rgb(79 70 229);
-}
-
 .left-\[2px\] {
   left: 2px;
 }
@@ -834,10 +826,6 @@
 
 .dark .dark\:text-red-400 {
   color: rgb(248 113 113);
-}
-
-.peer:checked ~ .peer-checked\:bg-red-500 {
-  background-color: rgb(239 68 68);
 }
 
 @media (min-width: 640px) {

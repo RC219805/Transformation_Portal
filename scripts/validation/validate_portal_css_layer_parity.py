@@ -180,6 +180,12 @@ UTILITY_PREFIXES = (
     "space-x",
     "space-y",
 )
+PORTAL_PARITY_FEATURE_ENV = {
+    "TP_PORTAL_UPLOAD_STAGING_ENABLED": "1",
+    "TP_PORTAL_STAGED_UPLOADS_ROLLOUT_PERCENT": "100",
+    "TP_PORTAL_ARTIFACT_VIEWER_MODAL_ROLLOUT_PERCENT": "100",
+    "TP_PORTAL_REVIEW_SURFACE_DEFER_ROLLOUT_PERCENT": "100",
+}
 
 
 def _parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
@@ -275,16 +281,53 @@ def _style_settle_expression() -> str:
     return "new Promise((resolve) => window.setTimeout(() => resolve(true), 450))"
 
 
+def _enable_portal_feature_rollouts_for_spawn() -> dict[str, Optional[str]]:
+    previous: dict[str, Optional[str]] = {}
+    if not {
+        "staged-uploads",
+        "artifact-viewer-modal",
+        "review-surface-defer",
+    }.intersection(LAYER_PARITY_STATES):
+        return previous
+    for name, value in PORTAL_PARITY_FEATURE_ENV.items():
+        previous[name] = os.environ.get(name)
+        os.environ[name] = value
+    return previous
+
+
+def _restore_env(previous: dict[str, Optional[str]]) -> None:
+    for name, value in previous.items():
+        if value is None:
+            os.environ.pop(name, None)
+        else:
+            os.environ[name] = value
+
+
 def _force_snapshot_state_expression() -> str:
     return r"""
 (() => {
   try {
-    window.localStorage.setItem('portal-theme', 'dark');
+    window.localStorage.setItem('tp_theme', 'dark');
+    window.localStorage.setItem('tp_theme_version', '2');
   } catch (_error) {}
   document.documentElement.classList.remove('light');
   document.documentElement.classList.add('dark');
-  if (document.body) {
-    document.body.classList.remove('performance-lite');
+  document.documentElement.classList.remove('performance-lite');
+  const portalState = typeof state === 'object' && state ? state : null;
+  if (portalState?.auth?.features) {
+    portalState.auth.features.artifactViewerModal = false;
+    portalState.auth.features.reviewSurfaceDeferred = false;
+    portalState.auth.features.stagedUploads = false;
+  }
+  if (typeof updateUIFromState === 'function') {
+    updateUIFromState();
+  }
+  const artifactViewerModal = document.getElementById('artifactViewerModal');
+  if (artifactViewerModal) {
+    artifactViewerModal.classList.add('hidden');
+    artifactViewerModal.classList.remove('flex');
+    artifactViewerModal.setAttribute('aria-hidden', 'true');
+    artifactViewerModal.dataset.overlayOpen = 'false';
   }
   return true;
 })()
@@ -294,15 +337,52 @@ def _force_snapshot_state_expression() -> str:
 def _force_census_state_expression(state: str) -> str:
     state_json = json.dumps(state)
     return f"""
-(() => {{
-  const state = {state_json};
+(async () => {{
+  const parityState = {state_json};
+  const theme = parityState === 'light' ? 'light' : 'dark';
   try {{
-    window.localStorage.setItem('portal-theme', state === 'light' ? 'light' : 'dark');
+    window.localStorage.setItem('tp_theme', theme);
+    window.localStorage.setItem('tp_theme_version', '2');
   }} catch (_error) {{}}
-  document.documentElement.classList.toggle('light', state === 'light');
-  document.documentElement.classList.toggle('dark', state !== 'light');
-  if (document.body) {{
-    document.body.classList.toggle('performance-lite', state === 'performance-lite');
+  const root = document.documentElement;
+  root.classList.toggle('light', theme === 'light');
+  root.classList.toggle('dark', theme === 'dark');
+  root.classList.toggle('performance-lite', parityState === 'performance-lite');
+
+  const portalState = typeof state === 'object' && state ? state : null;
+  if (portalState?.auth?.features) {{
+    if (parityState === 'staged-uploads') {{
+      portalState.auth.features.stagedUploads = true;
+      portalState.pipeline = 'lux-depth-v3';
+    }}
+    if (parityState === 'artifact-viewer-modal') {{
+      portalState.auth.features.artifactViewerModal = true;
+    }}
+    if (parityState === 'review-surface-defer') {{
+      portalState.auth.features.reviewSurfaceDeferred = true;
+    }}
+  }}
+  if (typeof updateUIFromState === 'function') {{
+    updateUIFromState();
+  }}
+  if (parityState === 'artifact-viewer-modal') {{
+    const modal = document.getElementById('artifactViewerModal');
+    if (modal) {{
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+      modal.setAttribute('aria-hidden', 'false');
+      modal.dataset.overlayOpen = 'true';
+    }}
+  }}
+  if (parityState === 'review-surface-defer') {{
+    if (typeof _primeDeferredReviewSurface === 'function') {{
+      _primeDeferredReviewSurface('parity-census');
+    }}
+    if (typeof _loadDeferredReviewSurface === 'function') {{
+      try {{
+        await _loadDeferredReviewSurface();
+      }} catch (_error) {{}}
+    }}
   }}
   return true;
 }})()
@@ -467,10 +547,14 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
         base_url = _base_url(str(args.base_url))
         if args.spawn_local_backend:
             print("portal-css-layer-parity: launching isolated local backend", flush=True)
-            runtime_handle = _spawn_local_backend(
-                str(args.api_key),
-                timeout_seconds=float(args.backend_startup_timeout_seconds),
-            )
+            previous_env = _enable_portal_feature_rollouts_for_spawn()
+            try:
+                runtime_handle = _spawn_local_backend(
+                    str(args.api_key),
+                    timeout_seconds=float(args.backend_startup_timeout_seconds),
+                )
+            finally:
+                _restore_env(previous_env)
             base_url = runtime_handle.base_url
             print(f"portal-css-layer-parity: isolated backend ready at {base_url}", flush=True)
 

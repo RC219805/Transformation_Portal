@@ -19,6 +19,12 @@ const ARCHITECTURE_BASELINE_PATH = path.join(
 const REPO_ROOT = path.resolve(FRONTDOOR_ROOT, "..", "..");
 const PORTAL_CSS_ASSET_PATH = path.join(REPO_ROOT, "public", "portal-assets", "portal.css");
 const LAYER_PARITY_SCRIPT_PATH = path.join(FRONTDOOR_ROOT, "scripts", "check-portal-css-layer-parity.mjs");
+const PYTHON_LAYER_PARITY_VALIDATOR_PATH = path.join(
+  REPO_ROOT,
+  "scripts",
+  "validation",
+  "validate_portal_css_layer_parity.py"
+);
 const LAYER_PARITY_CONTRACT_PATH = path.join(
   REPO_ROOT,
   "tests",
@@ -126,6 +132,23 @@ test("portal CSS layer parity checks nested generated keyframes", () => {
   const parityScript = readFileSync(LAYER_PARITY_SCRIPT_PATH, "utf8");
 
   assert.match(parityScript, /root\.walkAtRules\(["']keyframes["']/);
+});
+
+test("portal CSS parity census forces feature states and canonical theme hooks", () => {
+  const validator = readFileSync(PYTHON_LAYER_PARITY_VALIDATOR_PATH, "utf8");
+
+  assert.match(validator, /TP_PORTAL_UPLOAD_STAGING_ENABLED/);
+  assert.match(validator, /TP_PORTAL_STAGED_UPLOADS_ROLLOUT_PERCENT/);
+  assert.match(validator, /TP_PORTAL_ARTIFACT_VIEWER_MODAL_ROLLOUT_PERCENT/);
+  assert.match(validator, /TP_PORTAL_REVIEW_SURFACE_DEFER_ROLLOUT_PERCENT/);
+  assert.match(validator, /localStorage\.setItem\('tp_theme'/);
+  assert.doesNotMatch(validator, /portal-theme/);
+  assert.match(validator, /root = document\.documentElement/);
+  assert.match(validator, /root\.classList\.toggle\('performance-lite'/);
+  assert.doesNotMatch(validator, /body\.classList\.toggle\('performance-lite'/);
+  assert.match(validator, /portalState\.auth\.features\.stagedUploads = true/);
+  assert.match(validator, /portalState\.auth\.features\.artifactViewerModal = true/);
+  assert.match(validator, /portalState\.auth\.features\.reviewSurfaceDeferred = true/);
 });
 
 test("portal CSS layer dry-run compatibility writes the validated CSS artifact", () => {
