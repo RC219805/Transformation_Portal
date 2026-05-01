@@ -168,7 +168,7 @@ class TestComputePerZoneStats:
     def test_empty_capsules_returns_empty_dict(self):
         """No capsules → empty dict."""
         result = compute_per_zone_stats([], buckets=[_bucket()])
-        assert result == {}
+        assert not result
 
 
 class TestComputeGlobalStats:
@@ -184,7 +184,7 @@ class TestComputeGlobalStats:
     def test_empty_capsules_returns_empty(self):
         """No capsules → empty dict."""
         result = compute_global_stats([], buckets=[_bucket()])
-        assert result == {}
+        assert not result
 
 
 class TestComputeWorstZoneP95:

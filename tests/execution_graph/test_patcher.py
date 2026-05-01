@@ -177,7 +177,7 @@ class TestGeneratePatchDiff:
         """Identical pipelines produce an empty nodes diff."""
         p = _pipeline()
         diff = generate_patch_diff(p, p)
-        assert diff["nodes"] == {}
+        assert not diff["nodes"]
 
     def test_new_key_in_patched_appears_in_diff(self):
         """A key present only in the patched node is included."""

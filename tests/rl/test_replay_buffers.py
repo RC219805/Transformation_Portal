@@ -196,7 +196,7 @@ class TestRolloutBuffer:
         """Return a simple object with .item() → v (mimics torch.Tensor)."""
 
         class _V:
-            def item(self_):
+            def item(self):
                 return v
 
         return _V()
@@ -213,9 +213,9 @@ class TestRolloutBuffer:
         buf.add(state=0, action=0, reward=1.0, value=self._mock_value(0.5), log_prob=0.0, done=False)
         buf.clear()
         assert len(buf) == 0
-        assert buf.states == []
-        assert buf.actions == []
-        assert buf.rewards == []
+        assert not buf.states
+        assert not buf.actions
+        assert not buf.rewards
 
     def test_compute_returns_length_matches_steps(self):
         """compute_returns returns lists of same length as stored steps."""
@@ -285,7 +285,7 @@ class TestTemporalTransition:
     def test_info_default_empty(self):
         """info defaults to empty dict."""
         t = _temporal_transition()
-        assert t.info == {}
+        assert not t.info
 
 
 class TestEpisode:
@@ -369,7 +369,7 @@ class TestTemporalReplayBuffer:
     def test_sample_empty_returns_empty(self):
         """Sampling empty buffer returns []."""
         buf = TemporalReplayBuffer(capacity=100, seq_len=3)
-        assert buf.sample(5) == []
+        assert not buf.sample(5)
 
     def test_sample_has_transitions_key(self):
         """Each sample dict has 'transitions' key."""

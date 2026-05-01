@@ -204,7 +204,7 @@ class TestEncodeMetrics:
         from transformation_portal.rl.state_encoder import encode_metrics
 
         feats = encode_metrics({})
-        assert all(f == 0.0 or f == 1.0 for f in feats)  # lpips 0 → 1-0=1
+        assert all(f in (0.0, 1.0) for f in feats)  # lpips 0 → 1-0=1
 
 
 class TestEncodeDiffHistogram:
@@ -253,7 +253,9 @@ class TestEncodeNodeConfig:
         assert len(feats) == 8
         assert all(isinstance(f, float) for f in feats)
         # Values are finite; some may be non-zero due to bias/contrast offsets
-        assert all(f == f for f in feats)  # NaN check
+        import math
+
+        assert all(math.isfinite(f) for f in feats)
 
     def test_steps_normalized_by_1000(self):
         """steps=1000 → normalized to 1.0."""

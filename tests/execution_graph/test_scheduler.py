@@ -52,13 +52,13 @@ class TestSchedulerValidate:
     def test_empty_graph_valid(self):
         """validate() returns empty list for an empty graph."""
         s = PriorityDAGScheduler()
-        assert s.validate() == []
+        assert not s.validate()
 
     def test_single_node_valid(self):
         """A single node with no deps is valid."""
         s = PriorityDAGScheduler()
         s.add_node("a", _make_node())
-        assert s.validate() == []
+        assert not s.validate()
 
     def test_missing_dep_reported(self):
         """A dependency on an unknown node generates a validation error."""
@@ -82,7 +82,7 @@ class TestSchedulerValidate:
         s.add_node("a", _make_node())
         s.add_node("b", _make_node(), deps=["a"])
         s.add_node("c", _make_node(), deps=["b"])
-        assert s.validate() == []
+        assert not s.validate()
 
 
 class TestSchedulerRun:
@@ -188,7 +188,7 @@ class TestGetExecutionOrder:
 
     def test_empty_scheduler_returns_empty_list(self):
         """No nodes → empty order."""
-        assert PriorityDAGScheduler().get_execution_order() == []
+        assert not PriorityDAGScheduler().get_execution_order()
 
 
 class TestGetResourceSummary:

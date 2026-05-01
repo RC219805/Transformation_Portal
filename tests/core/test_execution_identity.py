@@ -84,6 +84,7 @@ class TestComputeCasId:
             stage_name="test_stage",
             input_ids=["sha256:abc"],
             config={"model": "test"},
+            lockfile_hash="sha256:lock",
         )
         assert isinstance(identity, ExecutionIdentity)
 
@@ -122,6 +123,7 @@ class TestComputeCasId:
             config={},
             code_hash="sha256:c",
             env_fingerprint="sha256:e",
+            lockfile_hash="sha256:lock",
         )
         assert identity.stage_name == "my_stage"
 
@@ -160,7 +162,7 @@ class TestExplainCacheMiss:
         """Same identity → differences list is empty."""
         i = self._make_identity()
         result = explain_cache_miss(i, i)
-        assert result["differences"] == []
+        assert not result["differences"]
 
 
 class TestCreateArtifactMetadata:

@@ -99,8 +99,8 @@ class TestMergeTimings:
 
     def test_empty_dicts_return_empty(self):
         """merge_timings() with no args or empty dicts → {}."""
-        assert merge_timings() == {}
-        assert merge_timings({}, {}) == {}
+        assert not merge_timings()
+        assert not merge_timings({}, {})
 
     def test_three_dicts_merged(self):
         """Three dicts are all summed together."""

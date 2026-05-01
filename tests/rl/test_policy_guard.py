@@ -60,7 +60,7 @@ class TestPolicyDecision:
     def test_default_warnings_empty(self):
         """Warnings list defaults to empty."""
         d = PolicyDecision(allowed=True, reason="ok")
-        assert d.warnings == []
+        assert not d.warnings
 
     def test_warnings_stored(self):
         """Warnings list is stored correctly."""
@@ -227,7 +227,7 @@ class TestEvaluateAction:
 class TestFilterActions:
     def test_empty_list_returns_empty(self):
         """filter_actions([]) → []."""
-        assert filter_actions([]) == []
+        assert not filter_actions([])
 
     def test_keeps_safe_actions(self):
         """All safe actions survive filtering."""
@@ -264,7 +264,7 @@ class TestFilterActions:
     def test_all_blocked_returns_empty(self):
         """All blocked actions → empty result."""
         actions = [_action("delete_node", index=0), _action("reset_config", index=1)]
-        assert filter_actions(actions) == []
+        assert not filter_actions(actions)
 
 
 class TestCreateActionMask:

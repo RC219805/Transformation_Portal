@@ -120,14 +120,14 @@ class TestAddDirichletNoise:
 
     def test_empty_priors_returned_unchanged(self):
         """Empty priors dict returns unchanged."""
-        assert add_dirichlet_noise({}) == {}
+        assert not add_dirichlet_noise({})
 
     def test_weight_zero_returns_unchanged_priors(self):
         """weight=0 → noisy = (1-0)*prior + 0*noise = original prior."""
         priors = {0: 0.6, 1: 0.4}
         noisy = add_dirichlet_noise(priors, alpha=0.3, weight=0.0)
-        for k in priors:
-            assert noisy[k] == pytest.approx(priors[k], abs=1e-6)
+        for k, v in priors.items():
+            assert noisy[k] == pytest.approx(v, abs=1e-6)
 
     def test_noisy_priors_sum_to_approx_one(self):
         """Mixed priors still sum to approximately 1.0."""
