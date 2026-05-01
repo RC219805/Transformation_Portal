@@ -26,7 +26,17 @@ class TestZoneResolverResolve:
 
     def test_override_skips_cache(self):
         """Override always returns the given value, ignoring cache."""
-        ZoneResolver.resolve()  # populate cache
+        with (
+            patch(
+                "transformation_portal.metrics.zone_resolver.ZoneResolver._resolve_kubernetes_zone",
+                return_value=None,
+            ),
+            patch(
+                "transformation_portal.metrics.zone_resolver.ZoneResolver._resolve_aws_zone",
+                return_value=None,
+            ),
+        ):
+            ZoneResolver.resolve()  # populate cache with "local", no external I/O
         assert ZoneResolver.resolve(override="explicit-zone") == "explicit-zone"
 
     def test_apex_zone_env_var_used(self, monkeypatch):
