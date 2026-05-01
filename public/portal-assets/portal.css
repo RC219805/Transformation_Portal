@@ -2994,7 +2994,7 @@ textarea,
   color: rgb(203 213 225);
 }
 .hidden {
-  display: none !important;
+  display: none;
 }
 @media (min-width: 1024px) {
 .lg\:flex {
@@ -3419,6 +3419,12 @@ textarea,
 }
 .inline-flex {
   display: inline-flex;
+}
+#overview-shell.hidden,
+#console-grid.hidden,
+#build-shell.hidden,
+#jobs-shell.hidden {
+  display: none;
 }
 .sr-only {
   position: absolute;

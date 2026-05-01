@@ -401,7 +401,15 @@ def _frontdoor_state_probe_expression() -> str:
   const hiddenById = (id) => {
     const el = document.getElementById(id);
     if (!el) return false;
-    return !visibleById(id);
+    const style = window.getComputedStyle(el);
+    const rect = el.getBoundingClientRect();
+    const isVisible = (
+      style.display !== 'none' &&
+      style.visibility !== 'hidden' &&
+      rect.width > 0 &&
+      rect.height > 0
+    );
+    return !isVisible;
   };
   return {
     title: document.title,
