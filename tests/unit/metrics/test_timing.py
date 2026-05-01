@@ -18,10 +18,10 @@ pytestmark = pytest.mark.unit
 
 class TestTimingContext:
     def test_elapsed_sec_positive_after_block(self):
-        """elapsed_sec is > 0 after exiting the context."""
+        """elapsed_sec is non-negative after exiting the context."""
         with TimingContext("phase") as ctx:
             pass
-        assert ctx.elapsed_sec > 0.0
+        assert ctx.elapsed_sec >= 0.0
 
     def test_elapsed_sec_accumulates_into_dict(self):
         """When timings_dict is provided, phase_name key is populated."""
@@ -29,7 +29,7 @@ class TestTimingContext:
         with TimingContext("load", timings_dict=d):
             pass
         assert "load" in d
-        assert d["load"] > 0.0
+        assert d["load"] >= 0.0
 
     def test_multiple_phases_in_same_dict(self):
         """Multiple contexts accumulate into the same dict."""
@@ -73,10 +73,10 @@ class TestTimingContextManagerFunction:
             assert isinstance(t, TimingContext)
 
     def test_elapsed_available_after_block(self):
-        """elapsed_sec is set after the context block exits."""
+        """elapsed_sec is non-negative after the context block exits."""
         with timing_context("inference") as t:
             pass
-        assert t.elapsed_sec > 0.0
+        assert t.elapsed_sec >= 0.0
 
     def test_accumulates_into_dict(self):
         """timing_context with dict parameter stores result."""

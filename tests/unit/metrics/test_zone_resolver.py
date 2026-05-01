@@ -44,14 +44,19 @@ class TestZoneResolverResolve:
         assert result == "zone-k8s-1"
 
     def test_fallback_to_local_when_no_env_and_no_network(self, monkeypatch):
-        """Falls back to 'local' when no env vars and AWS/k8s not reachable."""
+        """Falls back to 'local' when no env vars, k8s file, or AWS metadata."""
         monkeypatch.delenv("APEX_ZONE", raising=False)
         monkeypatch.delenv("KUBE_NODE_ZONE", raising=False)
 
-        # Mock AWS metadata to be unreachable
-        with patch(
-            "transformation_portal.metrics.zone_resolver.ZoneResolver._resolve_aws_zone",
-            return_value=None,
+        with (
+            patch(
+                "transformation_portal.metrics.zone_resolver.ZoneResolver._resolve_kubernetes_zone",
+                return_value=None,
+            ),
+            patch(
+                "transformation_portal.metrics.zone_resolver.ZoneResolver._resolve_aws_zone",
+                return_value=None,
+            ),
         ):
             result = ZoneResolver.resolve()
 
@@ -75,9 +80,15 @@ class TestZoneResolverIsMultiZone:
         """Zone 'local' → is_multi_zone() returns False."""
         monkeypatch.delenv("APEX_ZONE", raising=False)
         monkeypatch.delenv("KUBE_NODE_ZONE", raising=False)
-        with patch(
-            "transformation_portal.metrics.zone_resolver.ZoneResolver._resolve_aws_zone",
-            return_value=None,
+        with (
+            patch(
+                "transformation_portal.metrics.zone_resolver.ZoneResolver._resolve_kubernetes_zone",
+                return_value=None,
+            ),
+            patch(
+                "transformation_portal.metrics.zone_resolver.ZoneResolver._resolve_aws_zone",
+                return_value=None,
+            ),
         ):
             assert ZoneResolver.is_multi_zone() is False
 

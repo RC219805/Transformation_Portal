@@ -395,36 +395,3 @@ def can_run_da3_compute() -> bool:
         and has_transformers()
         and not is_offline_mode()
     )
-
-
-# =============================================================================
-# Shared fixtures for new coverage areas (RL, execution_graph, metrics)
-# =============================================================================
-
-
-@pytest.fixture
-def sample_metrics() -> dict:
-    """Minimal quality metrics dict for RL and metrics tests."""
-    return {"score": 0.75, "psnr": 32.0, "ssim": 0.91, "lpips": 0.08, "llava_score": 0.70}
-
-
-@pytest.fixture
-def sample_semantic_diff() -> dict:
-    """Minimal semantic diff dict for state encoding tests."""
-    return {
-        "changes": [
-            {"type": "geometry", "severity": "low"},
-            {"type": "texture", "severity": "medium"},
-        ]
-    }
-
-
-@pytest.fixture
-def sample_pipeline() -> dict:
-    """Minimal pipeline configuration dict with two nodes."""
-    return {
-        "nodes": [
-            {"id": "sam2", "config": {"threshold": 0.5, "steps": 100, "include_negative": False}},
-            {"id": "material_backend", "config": {"roughness_bias": 0.0, "metalness_bias": 0.0}},
-        ]
-    }
