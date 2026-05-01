@@ -1,0 +1,3455 @@
+{
+  "version": 1,
+  "phase": "phase-5-portal-css-ownership-drain",
+  "parityBaseline": "tests/fixtures/portal-css/layer-parity-baseline.json",
+  "summary": {
+    "utilityLayerImportsBefore": 6,
+    "utilityLayerImportsAfter": 3,
+    "compatHoldCount": 0,
+    "overridesCompatRuleCount": 9,
+    "overridesCompatBytes": 2406,
+    "drainedSelectorCount": 344
+  },
+  "moves": [
+    {
+      "selector": ".dark .workspace-rail",
+      "from": "components/workspace-performance.css",
+      "fromLayer": "utilities",
+      "to": "components/workspace-surfaces.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "workspace and state surface rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".workspace-rail-copy",
+      "from": "components/workspace-performance.css",
+      "fromLayer": "utilities",
+      "to": "components/workspace-surfaces.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "workspace and state surface rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".workspace-rail-text",
+      "from": "components/workspace-performance.css",
+      "fromLayer": "utilities",
+      "to": "components/workspace-surfaces.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "workspace and state surface rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".workspace-rail-links",
+      "from": "components/workspace-performance.css",
+      "fromLayer": "utilities",
+      "to": "components/workspace-surfaces.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "workspace and state surface rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".workspace-link-heading",
+      "from": "components/workspace-performance.css",
+      "fromLayer": "utilities",
+      "to": "components/workspace-surfaces.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "workspace and state surface rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".workspace-link:hover",
+      "from": "components/workspace-performance.css",
+      "fromLayer": "utilities",
+      "to": "components/workspace-surfaces.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "workspace and state surface rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".workspace-link:focus-visible",
+      "from": "components/workspace-performance.css",
+      "fromLayer": "utilities",
+      "to": "components/workspace-surfaces.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "workspace and state surface rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".workspace-link:hover",
+      "from": "components/workspace-performance.css",
+      "fromLayer": "utilities",
+      "to": "components/workspace-surfaces.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "workspace and state surface rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".workspace-link.is-active",
+      "from": "components/workspace-performance.css",
+      "fromLayer": "utilities",
+      "to": "components/workspace-surfaces.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "workspace and state surface rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".dark .workspace-link",
+      "from": "components/workspace-performance.css",
+      "fromLayer": "utilities",
+      "to": "components/workspace-surfaces.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "workspace and state surface rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".dark .workspace-link:hover",
+      "from": "components/workspace-performance.css",
+      "fromLayer": "utilities",
+      "to": "components/workspace-surfaces.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "workspace and state surface rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".dark .workspace-link:focus-visible",
+      "from": "components/workspace-performance.css",
+      "fromLayer": "utilities",
+      "to": "components/workspace-surfaces.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "workspace and state surface rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".dark .workspace-link.is-active",
+      "from": "components/workspace-performance.css",
+      "fromLayer": "utilities",
+      "to": "components/workspace-surfaces.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "workspace and state surface rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".workspace-link-label",
+      "from": "components/workspace-performance.css",
+      "fromLayer": "utilities",
+      "to": "components/workspace-surfaces.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "workspace and state surface rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".workspace-link-shortcut",
+      "from": "components/workspace-performance.css",
+      "fromLayer": "utilities",
+      "to": "components/workspace-surfaces.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "workspace and state surface rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".workspace-link-meta",
+      "from": "components/workspace-performance.css",
+      "fromLayer": "utilities",
+      "to": "components/workspace-surfaces.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "workspace and state surface rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".workspace-link.is-active .workspace-link-meta",
+      "from": "components/workspace-performance.css",
+      "fromLayer": "utilities",
+      "to": "components/workspace-surfaces.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "workspace and state surface rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".dark .workspace-link.is-active .workspace-link-meta",
+      "from": "components/workspace-performance.css",
+      "fromLayer": "utilities",
+      "to": "components/workspace-surfaces.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "workspace and state surface rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".dark .workspace-link-shortcut",
+      "from": "components/workspace-performance.css",
+      "fromLayer": "utilities",
+      "to": "components/workspace-surfaces.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "workspace and state surface rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".workspace-shortcut-hint",
+      "from": "components/workspace-performance.css",
+      "fromLayer": "utilities",
+      "to": "components/workspace-surfaces.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "workspace and state surface rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".micro-status",
+      "from": "components/workspace-performance.css",
+      "fromLayer": "utilities",
+      "to": "components/workspace-surfaces.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "workspace and state surface rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".surface-empty-state",
+      "from": "components/workspace-performance.css",
+      "fromLayer": "utilities",
+      "to": "components/workspace-surfaces.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "workspace and state surface rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".dark .surface-empty-state",
+      "from": "components/workspace-performance.css",
+      "fromLayer": "utilities",
+      "to": "components/workspace-surfaces.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "workspace and state surface rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".surface-empty-state--compact",
+      "from": "components/workspace-performance.css",
+      "fromLayer": "utilities",
+      "to": "components/workspace-surfaces.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "workspace and state surface rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".surface-empty-state[data-tone=\"warning\"]",
+      "from": "components/workspace-performance.css",
+      "fromLayer": "utilities",
+      "to": "components/workspace-surfaces.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "workspace and state surface rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".dark .surface-empty-state[data-tone=\"warning\"]",
+      "from": "components/workspace-performance.css",
+      "fromLayer": "utilities",
+      "to": "components/workspace-surfaces.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "workspace and state surface rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".surface-empty-state[data-tone=\"error\"]",
+      "from": "components/workspace-performance.css",
+      "fromLayer": "utilities",
+      "to": "components/workspace-surfaces.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "workspace and state surface rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".dark .surface-empty-state[data-tone=\"error\"]",
+      "from": "components/workspace-performance.css",
+      "fromLayer": "utilities",
+      "to": "components/workspace-surfaces.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "workspace and state surface rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".surface-empty-state[data-tone=\"info\"]",
+      "from": "components/workspace-performance.css",
+      "fromLayer": "utilities",
+      "to": "components/workspace-surfaces.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "workspace and state surface rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".surface-empty-kicker",
+      "from": "components/workspace-performance.css",
+      "fromLayer": "utilities",
+      "to": "components/workspace-surfaces.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "workspace and state surface rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".surface-empty-title",
+      "from": "components/workspace-performance.css",
+      "fromLayer": "utilities",
+      "to": "components/workspace-surfaces.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "workspace and state surface rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".surface-empty-detail",
+      "from": "components/workspace-performance.css",
+      "fromLayer": "utilities",
+      "to": "components/workspace-surfaces.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "workspace and state surface rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".surface-empty-action",
+      "from": "components/workspace-performance.css",
+      "fromLayer": "utilities",
+      "to": "components/workspace-surfaces.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "workspace and state surface rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".job-chip",
+      "from": "components/workspace-performance.css",
+      "fromLayer": "utilities",
+      "to": "components/workspace-surfaces.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "workspace and state surface rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".dark .job-chip",
+      "from": "components/workspace-performance.css",
+      "fromLayer": "utilities",
+      "to": "components/workspace-surfaces.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "workspace and state surface rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".sticky-shell",
+      "from": "components/workspace-performance.css",
+      "fromLayer": "utilities",
+      "to": "components/workspace-surfaces.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "workspace and state surface rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".command-frame",
+      "from": "components/workspace-performance.css",
+      "fromLayer": "utilities",
+      "to": "components/workspace-surfaces.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "workspace and state surface rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".log-surface",
+      "from": "components/workspace-performance.css",
+      "fromLayer": "utilities",
+      "to": "components/workspace-surfaces.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "workspace and state surface rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".dark .shell-bg",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".shell-noise",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".dark .shell-noise",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".portal-topbar",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".dark .portal-topbar",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".portal-topbar__inner",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".portal-brand-mark",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".dark .portal-brand-mark",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".portal-brand-asset",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".portal-brand-asset--dark",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".dark .portal-brand-asset--dark",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".dark .portal-brand-asset--light",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": "html:not(.light) .portal-brand-asset--light",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": "html:not(.light) .portal-brand-asset--dark",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".portal-topbar__actions",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".topbar-subtitle",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".dark .topbar-status",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".section-kicker",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".workspace-shell[data-ambient-active=\"true\"]",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".dark .workspace-shell[data-ambient-active=\"true\"]",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".workspace-shell--overview",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".dark .workspace-shell--overview",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".portal-context-shell",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".dark .portal-context-shell",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".portal-context-meta",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".stat-label",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".stat-value",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".overview-actions",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".overview-meta-grid",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".stat-tile",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".panel-subtle",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".dark .stat-tile",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".dark .panel-subtle",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".hero-action-primary",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".hero-action-secondary",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".dark .hero-action-secondary",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".dark .workspace-rail",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".workspace-rail-text",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".workspace-rail-links",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".workspace-link-label",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".workspace-link-meta",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".workspace-link-heading",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".dark .workspace-link",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".console-context-card",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".dark .console-context-card",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".console-context-label",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".console-context-value",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".console-context-meta",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".build-stepper-actions-inline",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".build-step-tabs",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".build-step-tab",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".dark .build-step-tab",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".build-step-tab:hover",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".build-step-tab:focus-visible",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".build-step-tab:hover",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".build-step-tab.is-active",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".dark .build-step-tab.is-active",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".build-step-tab.is-disabled",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".build-step-tabs",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".build-step-tab",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".build-step-index",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".build-step-copy",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".build-step-label",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".build-step-meta",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".dark .stepper-nav-btn",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".stepper-nav-btn-primary",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".field-status",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".surface-skeleton-card",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".dark .surface-skeleton-card",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".surface-loading",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".surface-loading::after",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".dark .surface-loading",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".review-status-banner",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".dark .review-status-banner",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".micro-status",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".job-chip",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": "#jobs-shell",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": "#queue-shell",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": "#jobs-shell",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": "#queue-shell",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": "#selected-job-shell",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": "#artifacts-shell",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": "#logs-shell",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": "body[data-console-view=\"review\"] #jobs-shell",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": "body[data-console-view=\"review\"] #selected-job-shell",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": "body[data-console-view=\"review\"] #artifacts-shell",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": "body[data-console-view=\"review\"] #logs-shell",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": "#jobList li[data-job-id]:focus-visible",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": "button:focus-visible",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": "a:focus-visible",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": "input:focus-visible",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": "select:focus-visible",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": "textarea:focus-visible",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": "[role=\"tab\"]:focus-visible",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": "summary:focus-visible",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": "button",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": "summary",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": "input:not([type=\"checkbox\"]):not([type=\"radio\"]):not([type=\"range\"])",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": "select",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": "textarea",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": "#build-shell label:not(.sr-only)",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".signal-badge",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".review-provenance-label",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".micro-status",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".job-chip",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".portal-topbar__inner",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".portal-topbar__actions",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".portal-topbar__actions > button",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": "#main-content",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".topbar-status",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".overview-actions",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".build-stepper-actions-inline",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".overview-actions",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".step-four-primary-lane",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".dispatch-tools-actions",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".overview-meta-grid",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".runtime-briefing-grid",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".artifact-viewer-meta-grid",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".surface-skeleton-grid",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".surface-skeleton-grid-tight",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".disclosure-summary",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".disclosure-summary-meta",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".workspace-link",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".build-step-tab",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": "#build-shell",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": "#queue-shell",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": "#selected-job-shell",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": "#artifacts-shell",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": "#logs-shell",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": "#console-context-shell",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".workspace-rail",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".portal-topbar__actions",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".portal-access-state__head",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": "#selectedJobShellContent > .mt-5.grid",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": "#artifactPreviewStage",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": "#artifactMetadataBar",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": "#artifactThumbnailRail",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": "#queue-shell .custom-scrollbar",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".surface-empty-state",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".console-context-ribbon",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".workspace-link-heading",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".review-provenance-grid",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".review-provenance-item-wide",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".portal-topbar__actions",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": ".portal-topbar__actions > button",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": "#artifactThumbnailRail",
+      "from": "overrides.operator-console-reset.css",
+      "fromLayer": "utilities",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "operator console rules no longer live in the utilities layer",
+      "parity": "green"
+    },
+    {
+      "selector": "html",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".shell-bg",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".workspace-rail",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".workspace-link",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".hero-action",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".operator-action-btn",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".stepper-nav-btn",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".dispatch-tool-btn",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".console-context-ribbon",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".topbar-status",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".dark .shell-bg",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".shell-noise",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".portal-topbar",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".portal-context-shell",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".workspace-shell",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".shell-panel",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".shell-panel-strong",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".panel-subtle",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".stat-tile",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".console-context-card",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".console-action-rail",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".build-pulse-card",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".runtime-briefing-card",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".review-status-banner",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".review-provenance-item",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".review-compare-summary",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": "#artifactPreviewStage",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": "#artifactMetadataBar",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": "#artifactMetadataCard",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": "#reconstructionRuntimeSummary",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".build-step-tab",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".portal-topbar",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".portal-context-shell",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".workspace-shell",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".shell-panel",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".shell-panel-strong",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".workspace-shell",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".shell-panel",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".shell-panel-strong",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".panel-subtle",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".stat-tile",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".console-context-card",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".console-action-rail",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".build-pulse-card",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".runtime-briefing-card",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".review-status-banner",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".review-provenance-item",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".review-compare-summary",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": "#artifactPreviewStage",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": "#artifactMetadataBar",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": "#artifactMetadataCard",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": "#reconstructionRuntimeSummary",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".build-step-tab",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".dark .workspace-shell",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".dark .shell-panel",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".dark .shell-panel-strong",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".dark .panel-subtle",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".dark .stat-tile",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".dark .console-context-card",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".dark .console-action-rail",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".dark .build-pulse-card",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".dark .runtime-briefing-card",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".dark .review-status-banner",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".dark .review-provenance-item",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".dark .review-compare-summary",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".dark #artifactPreviewStage",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".dark #artifactMetadataBar",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".dark #artifactMetadataCard",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".dark #reconstructionRuntimeSummary",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".dark .build-step-tab",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".section-kicker",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".stat-label",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".console-context-label",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".console-action-rail-kicker",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".build-pulse-label",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".review-status-kicker",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".review-provenance-label",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".micro-status",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".workspace-link-label",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".portal-context-shell",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".console-context-strip",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".console-context-card",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".build-pulse-card",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".runtime-briefing-card",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".review-provenance-item",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".console-action-rail",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".dark .console-action-rail",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".console-action-rail[data-tone=\"ready\"]",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".console-action-rail[data-tone=\"warning\"]",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".console-action-rail[data-tone=\"blocked\"]",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".review-status-banner[data-tone=\"ready\"]",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".review-status-banner[data-tone=\"warning\"]",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".review-status-banner[data-tone=\"error\"]",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".review-status-banner[data-tone=\"info\"]",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".console-action-rail[data-tone=\"ready\"]",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".review-status-banner[data-tone=\"ready\"]",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".console-action-rail[data-tone=\"warning\"]",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".review-status-banner[data-tone=\"warning\"]",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".console-action-rail[data-tone=\"blocked\"]",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".review-status-banner[data-tone=\"error\"]",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".review-status-banner[data-tone=\"info\"]",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": "#openRunDetailsBtn",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": "#artifactCompareBtn",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": "#themeBtn",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": "#shortcutsBtn",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".dark .workspace-link",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".workspace-link-heading",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".workspace-link-shortcut",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".hero-action-primary",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".operator-action-btn-primary",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".hero-action-secondary",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".operator-action-btn-secondary",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": "#openRunDetailsBtn",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": "#artifactCompareBtn",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": "#themeBtn",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": "#shortcutsBtn",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".dark .hero-action-secondary",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".dark .operator-action-btn-secondary",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".dark .stepper-nav-btn",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".dark .dispatch-tool-btn",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".dark #openRunDetailsBtn",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".dark #artifactCompareBtn",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".dark #themeBtn",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".dark #shortcutsBtn",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".quiet-disclosure",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".dark .quiet-disclosure",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".quiet-disclosure__summary",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".quiet-disclosure__summary::-webkit-details-marker",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".quiet-disclosure__title",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".quiet-disclosure__body",
+      "from": "overrides.compat.css",
+      "fromLayer": "utilities",
+      "to": "components/surface-normalization.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "surface normalization rules are component-owned after the ownership drain",
+      "parity": "green"
+    },
+    {
+      "selector": "#main-content",
+      "from": "mixed utility-layer compatibility sources",
+      "fromLayer": "utilities",
+      "to": "overrides.compat.css",
+      "toLayer": "overrides",
+      "classification": "compatibility-final-order",
+      "reason": "specific ID/action rules preserve Phase 3 computed-style parity after utility-layer drain",
+      "parity": "green"
+    },
+    {
+      "selector": "#queue-shell",
+      "from": "mixed utility-layer compatibility sources",
+      "fromLayer": "utilities",
+      "to": "overrides.compat.css",
+      "toLayer": "overrides",
+      "classification": "compatibility-final-order",
+      "reason": "specific ID/action rules preserve Phase 3 computed-style parity after utility-layer drain",
+      "parity": "green"
+    },
+    {
+      "selector": "#build-shell",
+      "from": "mixed utility-layer compatibility sources",
+      "fromLayer": "utilities",
+      "to": "overrides.compat.css",
+      "toLayer": "overrides",
+      "classification": "compatibility-final-order",
+      "reason": "specific ID/action rules preserve Phase 3 computed-style parity after utility-layer drain",
+      "parity": "green"
+    },
+    {
+      "selector": "#queue-shell",
+      "from": "mixed utility-layer compatibility sources",
+      "fromLayer": "utilities",
+      "to": "overrides.compat.css",
+      "toLayer": "overrides",
+      "classification": "compatibility-final-order",
+      "reason": "specific ID/action rules preserve Phase 3 computed-style parity after utility-layer drain",
+      "parity": "green"
+    },
+    {
+      "selector": "#selected-job-shell",
+      "from": "mixed utility-layer compatibility sources",
+      "fromLayer": "utilities",
+      "to": "overrides.compat.css",
+      "toLayer": "overrides",
+      "classification": "compatibility-final-order",
+      "reason": "specific ID/action rules preserve Phase 3 computed-style parity after utility-layer drain",
+      "parity": "green"
+    },
+    {
+      "selector": "#artifacts-shell",
+      "from": "mixed utility-layer compatibility sources",
+      "fromLayer": "utilities",
+      "to": "overrides.compat.css",
+      "toLayer": "overrides",
+      "classification": "compatibility-final-order",
+      "reason": "specific ID/action rules preserve Phase 3 computed-style parity after utility-layer drain",
+      "parity": "green"
+    },
+    {
+      "selector": "#logs-shell",
+      "from": "mixed utility-layer compatibility sources",
+      "fromLayer": "utilities",
+      "to": "overrides.compat.css",
+      "toLayer": "overrides",
+      "classification": "compatibility-final-order",
+      "reason": "specific ID/action rules preserve Phase 3 computed-style parity after utility-layer drain",
+      "parity": "green"
+    },
+    {
+      "selector": "#console-context-shell",
+      "from": "mixed utility-layer compatibility sources",
+      "fromLayer": "utilities",
+      "to": "overrides.compat.css",
+      "toLayer": "overrides",
+      "classification": "compatibility-final-order",
+      "reason": "specific ID/action rules preserve Phase 3 computed-style parity after utility-layer drain",
+      "parity": "green"
+    },
+    {
+      "selector": "#artifactPreviewStage",
+      "from": "mixed utility-layer compatibility sources",
+      "fromLayer": "utilities",
+      "to": "overrides.compat.css",
+      "toLayer": "overrides",
+      "classification": "compatibility-final-order",
+      "reason": "specific ID/action rules preserve Phase 3 computed-style parity after utility-layer drain",
+      "parity": "green"
+    },
+    {
+      "selector": "#artifactMetadataBar",
+      "from": "mixed utility-layer compatibility sources",
+      "fromLayer": "utilities",
+      "to": "overrides.compat.css",
+      "toLayer": "overrides",
+      "classification": "compatibility-final-order",
+      "reason": "specific ID/action rules preserve Phase 3 computed-style parity after utility-layer drain",
+      "parity": "green"
+    },
+    {
+      "selector": "#artifactThumbnailRail",
+      "from": "mixed utility-layer compatibility sources",
+      "fromLayer": "utilities",
+      "to": "overrides.compat.css",
+      "toLayer": "overrides",
+      "classification": "compatibility-final-order",
+      "reason": "specific ID/action rules preserve Phase 3 computed-style parity after utility-layer drain",
+      "parity": "green"
+    },
+    {
+      "selector": "#queue-shell .custom-scrollbar",
+      "from": "mixed utility-layer compatibility sources",
+      "fromLayer": "utilities",
+      "to": "overrides.compat.css",
+      "toLayer": "overrides",
+      "classification": "compatibility-final-order",
+      "reason": "specific ID/action rules preserve Phase 3 computed-style parity after utility-layer drain",
+      "parity": "green"
+    },
+    {
+      "selector": "#openRunDetailsBtn",
+      "from": "mixed utility-layer compatibility sources",
+      "fromLayer": "utilities",
+      "to": "overrides.compat.css",
+      "toLayer": "overrides",
+      "classification": "compatibility-final-order",
+      "reason": "specific ID/action rules preserve Phase 3 computed-style parity after utility-layer drain",
+      "parity": "green"
+    },
+    {
+      "selector": "#artifactCompareBtn",
+      "from": "mixed utility-layer compatibility sources",
+      "fromLayer": "utilities",
+      "to": "overrides.compat.css",
+      "toLayer": "overrides",
+      "classification": "compatibility-final-order",
+      "reason": "specific ID/action rules preserve Phase 3 computed-style parity after utility-layer drain",
+      "parity": "green"
+    },
+    {
+      "selector": "#themeBtn",
+      "from": "mixed utility-layer compatibility sources",
+      "fromLayer": "utilities",
+      "to": "overrides.compat.css",
+      "toLayer": "overrides",
+      "classification": "compatibility-final-order",
+      "reason": "specific ID/action rules preserve Phase 3 computed-style parity after utility-layer drain",
+      "parity": "green"
+    },
+    {
+      "selector": "#shortcutsBtn",
+      "from": "mixed utility-layer compatibility sources",
+      "fromLayer": "utilities",
+      "to": "overrides.compat.css",
+      "toLayer": "overrides",
+      "classification": "compatibility-final-order",
+      "reason": "specific ID/action rules preserve Phase 3 computed-style parity after utility-layer drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".hero-action-secondary",
+      "from": "mixed utility-layer compatibility sources",
+      "fromLayer": "utilities",
+      "to": "overrides.compat.css",
+      "toLayer": "overrides",
+      "classification": "compatibility-final-order",
+      "reason": "specific ID/action rules preserve Phase 3 computed-style parity after utility-layer drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".operator-action-btn-secondary",
+      "from": "mixed utility-layer compatibility sources",
+      "fromLayer": "utilities",
+      "to": "overrides.compat.css",
+      "toLayer": "overrides",
+      "classification": "compatibility-final-order",
+      "reason": "specific ID/action rules preserve Phase 3 computed-style parity after utility-layer drain",
+      "parity": "green"
+    },
+    {
+      "selector": "#openRunDetailsBtn",
+      "from": "mixed utility-layer compatibility sources",
+      "fromLayer": "utilities",
+      "to": "overrides.compat.css",
+      "toLayer": "overrides",
+      "classification": "compatibility-final-order",
+      "reason": "specific ID/action rules preserve Phase 3 computed-style parity after utility-layer drain",
+      "parity": "green"
+    },
+    {
+      "selector": "#artifactCompareBtn",
+      "from": "mixed utility-layer compatibility sources",
+      "fromLayer": "utilities",
+      "to": "overrides.compat.css",
+      "toLayer": "overrides",
+      "classification": "compatibility-final-order",
+      "reason": "specific ID/action rules preserve Phase 3 computed-style parity after utility-layer drain",
+      "parity": "green"
+    },
+    {
+      "selector": "#themeBtn",
+      "from": "mixed utility-layer compatibility sources",
+      "fromLayer": "utilities",
+      "to": "overrides.compat.css",
+      "toLayer": "overrides",
+      "classification": "compatibility-final-order",
+      "reason": "specific ID/action rules preserve Phase 3 computed-style parity after utility-layer drain",
+      "parity": "green"
+    },
+    {
+      "selector": "#shortcutsBtn",
+      "from": "mixed utility-layer compatibility sources",
+      "fromLayer": "utilities",
+      "to": "overrides.compat.css",
+      "toLayer": "overrides",
+      "classification": "compatibility-final-order",
+      "reason": "specific ID/action rules preserve Phase 3 computed-style parity after utility-layer drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".dark .hero-action-secondary",
+      "from": "mixed utility-layer compatibility sources",
+      "fromLayer": "utilities",
+      "to": "overrides.compat.css",
+      "toLayer": "overrides",
+      "classification": "compatibility-final-order",
+      "reason": "specific ID/action rules preserve Phase 3 computed-style parity after utility-layer drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".dark .operator-action-btn-secondary",
+      "from": "mixed utility-layer compatibility sources",
+      "fromLayer": "utilities",
+      "to": "overrides.compat.css",
+      "toLayer": "overrides",
+      "classification": "compatibility-final-order",
+      "reason": "specific ID/action rules preserve Phase 3 computed-style parity after utility-layer drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".dark .stepper-nav-btn",
+      "from": "mixed utility-layer compatibility sources",
+      "fromLayer": "utilities",
+      "to": "overrides.compat.css",
+      "toLayer": "overrides",
+      "classification": "compatibility-final-order",
+      "reason": "specific ID/action rules preserve Phase 3 computed-style parity after utility-layer drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".dark .dispatch-tool-btn",
+      "from": "mixed utility-layer compatibility sources",
+      "fromLayer": "utilities",
+      "to": "overrides.compat.css",
+      "toLayer": "overrides",
+      "classification": "compatibility-final-order",
+      "reason": "specific ID/action rules preserve Phase 3 computed-style parity after utility-layer drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".dark #openRunDetailsBtn",
+      "from": "mixed utility-layer compatibility sources",
+      "fromLayer": "utilities",
+      "to": "overrides.compat.css",
+      "toLayer": "overrides",
+      "classification": "compatibility-final-order",
+      "reason": "specific ID/action rules preserve Phase 3 computed-style parity after utility-layer drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".dark #artifactCompareBtn",
+      "from": "mixed utility-layer compatibility sources",
+      "fromLayer": "utilities",
+      "to": "overrides.compat.css",
+      "toLayer": "overrides",
+      "classification": "compatibility-final-order",
+      "reason": "specific ID/action rules preserve Phase 3 computed-style parity after utility-layer drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".dark #themeBtn",
+      "from": "mixed utility-layer compatibility sources",
+      "fromLayer": "utilities",
+      "to": "overrides.compat.css",
+      "toLayer": "overrides",
+      "classification": "compatibility-final-order",
+      "reason": "specific ID/action rules preserve Phase 3 computed-style parity after utility-layer drain",
+      "parity": "green"
+    },
+    {
+      "selector": ".dark #shortcutsBtn",
+      "from": "mixed utility-layer compatibility sources",
+      "fromLayer": "utilities",
+      "to": "overrides.compat.css",
+      "toLayer": "overrides",
+      "classification": "compatibility-final-order",
+      "reason": "specific ID/action rules preserve Phase 3 computed-style parity after utility-layer drain",
+      "parity": "green"
+    }
+  ]
+}

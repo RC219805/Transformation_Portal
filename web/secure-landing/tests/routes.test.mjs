@@ -2296,9 +2296,15 @@ test("shared UI tokens stay synced to the canonical source", () => {
   assert.match(portalCss, /__PORTAL_FONT_MONO_URL__/);
   assert.match(portalCssIndex, /@layer tokens, base, components, utilities, overrides;/);
   assert.match(portalCssIndex, /@import "\.\/tokens\.css" layer\(tokens\);/);
+  assert.match(portalCssIndex, /@import "\.\/components\/workspace-surfaces\.css" layer\(components\);/);
+  assert.match(portalCssIndex, /@import "\.\/components\/operator-console\.css" layer\(components\);/);
+  assert.match(portalCssIndex, /@import "\.\/components\/surface-normalization\.css" layer\(components\);/);
   assert.match(portalCssIndex, /@import "\.\/utilities\.required\.css" layer\(utilities\);/);
   assert.match(portalCssIndex, /@import "\.\/utilities\.dynamic\.css" layer\(utilities\);/);
   assert.match(portalCssIndex, /@import "\.\/utilities\.compat-hold\.css" layer\(utilities\);/);
+  assert.match(portalCssIndex, /@import "\.\/overrides\.compat\.css" layer\(overrides\);/);
+  assert.doesNotMatch(portalCssIndex, /overrides\.operator-console-reset\.css/);
+  assert.doesNotMatch(portalCssIndex, /workspace-performance\.css" layer\(utilities\)/);
   assert.doesNotMatch(portalCssIndex, /utilities\.deprecated\.css/);
   assert.match(portalCssIndex, /@import "\.\/overrides\.accessibility\.css" layer\(overrides\);/);
   const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
