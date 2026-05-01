@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -38,6 +38,13 @@ const FONT_PLACEHOLDERS = ["__PORTAL_FONT_SANS_URL__", "__PORTAL_FONT_MONO_URL__
 const layerParityContract = JSON.parse(readFileSync(LAYER_PARITY_CONTRACT_PATH, "utf-8"));
 const REPRESENTATIVE_STYLE_SELECTORS = layerParityContract.representativeStyleSelectors;
 const REPRESENTATIVE_PROPERTIES = layerParityContract.representativeStyleProperties;
+const writeCssIndex = process.argv.indexOf("--write-css");
+const writeCssPath = writeCssIndex >= 0 ? process.argv[writeCssIndex + 1] : "";
+
+if (writeCssIndex >= 0 && !writeCssPath) {
+  console.error("ERROR: --write-css requires an output path");
+  process.exit(1);
+}
 
 function relativePath(filePath) {
   return path.relative(REPO_ROOT, filePath);
@@ -137,12 +144,12 @@ function validateGeneratedCss(failures) {
         declaredLayerOrder = names;
       }
     }
-    if (node.type === "atrule" && node.name === "keyframes") {
-      if (keyframeNames.has(node.params)) {
-        failures.push(`${relativePath(PORTAL_CSS_ASSET_PATH)} duplicates @keyframes ${node.params}`);
-      }
-      keyframeNames.add(node.params);
+  });
+  root.walkAtRules("keyframes", (node) => {
+    if (keyframeNames.has(node.params)) {
+      failures.push(`${relativePath(PORTAL_CSS_ASSET_PATH)} duplicates @keyframes ${node.params}`);
     }
+    keyframeNames.add(node.params);
   });
   if (JSON.stringify(declaredLayerOrder) !== JSON.stringify(EXPECTED_LAYER_ORDER)) {
     failures.push(
@@ -159,17 +166,23 @@ function validateGeneratedCss(failures) {
       failures.push(`${relativePath(PORTAL_CSS_ASSET_PATH)} has unlayered ordinary selector rule ${rule.selector}`);
     }
   });
+
+  return css;
 }
 
 const failures = [];
 validateSourceIndex(failures);
-validateGeneratedCss(failures);
+const generatedCss = validateGeneratedCss(failures);
 
 if (failures.length > 0) {
   for (const failure of failures) {
     console.error(`ERROR: ${failure}`);
   }
   process.exit(1);
+}
+
+if (writeCssPath) {
+  writeFileSync(writeCssPath, generatedCss, "utf-8");
 }
 
 console.log(
