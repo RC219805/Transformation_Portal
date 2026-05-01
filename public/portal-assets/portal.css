@@ -2994,7 +2994,7 @@ textarea,
   color: rgb(203 213 225);
 }
 .hidden {
-  display: none;
+  display: none !important;
 }
 @media (min-width: 1024px) {
 .lg\:flex {

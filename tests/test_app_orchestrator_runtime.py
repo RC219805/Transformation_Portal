@@ -518,6 +518,17 @@ def test_portal_phase1_accessibility_tokens_align_focus_and_target_size() -> Non
     assert "#build-shell label:not(.sr-only)" in css_content
 
 
+def test_portal_hidden_utility_wins_over_later_display_utilities() -> None:
+    css_content = _portal_css_content()
+
+    hidden_rule = re.search(r"^\.hidden \{\s*display:\s*none\s*!important;\s*\}", css_content, re.M)
+    assert hidden_rule is not None
+    hidden_start = hidden_rule.start()
+    assert ".grid {" in css_content[hidden_start:]
+    assert ".inline-flex {" in css_content[hidden_start:]
+    assert ".lg\\:flex {" in css_content[hidden_start:]
+
+
 def test_portal_shell_veil_tokens_use_shell_namespace_and_ordered_opacity() -> None:
     css_content = _portal_css_content()
 
