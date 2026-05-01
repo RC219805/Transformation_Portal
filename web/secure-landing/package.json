@@ -6,9 +6,10 @@
   "scripts": {
     "preinstall": "node ./scripts/check-node-version.mjs",
     "build:portal": "node ./scripts/guard-runtime.mjs && node ./scripts/build-portal-bundle.mjs",
+    "check:css-layer-dry-run": "node ./scripts/guard-runtime.mjs && node ./scripts/check-portal-css-layer-dry-run.mjs",
     "dev": "npm run build:portal && node ./scripts/guard-runtime.mjs && next dev",
     "build": "npm run build:portal && node ./scripts/guard-runtime.mjs && next build",
-    "lint:css": "stylelint \"portal-src/styles/**/*.css\" && node ./scripts/check-portal-css-contract.mjs",
+    "lint:css": "stylelint \"portal-src/styles/**/*.css\" && node ./scripts/build-portal-bundle.mjs --check-css && node ./scripts/check-portal-css-contract.mjs && node ./scripts/check-portal-css-architecture.mjs",
     "start": "node ./scripts/guard-runtime.mjs && node ./scripts/start-standalone.mjs",
     "seed-frontdoor-user": "node ./scripts/guard-runtime.mjs && node ./scripts/seed-frontdoor-user.mjs",
     "test": "npm run build:portal && node ./scripts/guard-runtime.mjs && node --experimental-specifier-resolution=node --test tests/*.test.mjs"
@@ -29,6 +30,7 @@
   },
   "devDependencies": {
     "esbuild": "^0.28.0",
+    "postcss": "8.5.10",
     "stylelint": "^17.9.1"
   }
 }
