@@ -17,7 +17,9 @@ const ARCHITECTURE_BASELINE_PATH = path.join(
   "architecture-baseline.json"
 );
 const REPO_ROOT = path.resolve(FRONTDOOR_ROOT, "..", "..");
+const PORTAL_CSS_INDEX_PATH = path.join(FRONTDOOR_ROOT, "portal-src", "styles", "index.css");
 const PORTAL_CSS_ASSET_PATH = path.join(REPO_ROOT, "public", "portal-assets", "portal.css");
+const OWNERSHIP_DRAIN_REPORT_PATH = path.join(FRONTDOOR_ROOT, "reports", "portal-css-ownership-drain.json");
 const LAYER_PARITY_SCRIPT_PATH = path.join(FRONTDOOR_ROOT, "scripts", "check-portal-css-layer-parity.mjs");
 const PYTHON_LAYER_PARITY_VALIDATOR_PATH = path.join(
   REPO_ROOT,
@@ -112,6 +114,25 @@ test("portal CSS architecture baseline keeps hotspot selectors consolidated", ()
     const entry = duplicateKeys.find((candidate) => candidate.key === `${selector}|||`);
     assert.equal(entry, undefined, `unexpected duplicate baseline entry for ${selector}`);
   }
+});
+
+test("portal CSS ownership drain keeps utilities layer honest", () => {
+  const portalCssIndex = readFileSync(PORTAL_CSS_INDEX_PATH, "utf8");
+  const ownershipDrain = JSON.parse(readFileSync(OWNERSHIP_DRAIN_REPORT_PATH, "utf8"));
+
+  assert.match(portalCssIndex, /@import "\.\/utilities\.required\.css" layer\(utilities\);/);
+  assert.match(portalCssIndex, /@import "\.\/utilities\.dynamic\.css" layer\(utilities\);/);
+  assert.match(portalCssIndex, /@import "\.\/utilities\.compat-hold\.css" layer\(utilities\);/);
+  assert.doesNotMatch(portalCssIndex, /@import "\.\/overrides\.[^"]+" layer\(utilities\);/);
+  assert.doesNotMatch(portalCssIndex, /@import "\.\/components\/[^"]+" layer\(utilities\);/);
+  assert.doesNotMatch(portalCssIndex, /operator-console-reset/);
+  assert.equal(ownershipDrain.summary.utilityLayerImportsAfter, 3);
+  assert.equal(ownershipDrain.summary.compatHoldCount, 0);
+  assert.ok(ownershipDrain.summary.overridesCompatRuleCount > 0);
+  assert.ok(
+    ownershipDrain.moves.every((move) => move.parity === "green"),
+    "all ownership drain moves must be parity green"
+  );
 });
 
 test("portal CSS layer parity validates the production layered graph", () => {

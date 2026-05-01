@@ -143,13 +143,17 @@
       "key": ".dark .dispatch-tool-btn|||",
       "category": "conflicting",
       "hotspot": false,
-      "owners": []
+      "owners": [
+        "compatibility-final-order"
+      ]
     },
     {
       "key": ".dark .hero-action-secondary|||",
       "category": "conflicting",
       "hotspot": false,
-      "owners": []
+      "owners": [
+        "compatibility-final-order"
+      ]
     },
     {
       "key": ".dark .panel-subtle|||",
@@ -185,7 +189,9 @@
       "key": ".dark .stepper-nav-btn|||",
       "category": "conflicting",
       "hotspot": false,
-      "owners": []
+      "owners": [
+        "compatibility-final-order"
+      ]
     },
     {
       "key": ".dark .surface-loading|||",
@@ -239,7 +245,9 @@
       "key": ".hero-action-secondary|||",
       "category": "conflicting",
       "hotspot": false,
-      "owners": []
+      "owners": [
+        "compatibility-final-order"
+      ]
     },
     {
       "key": ".job-chip|||",
@@ -263,7 +271,9 @@
       "key": ".operator-action-btn-secondary|||",
       "category": "conflicting",
       "hotspot": false,
-      "owners": []
+      "owners": [
+        "compatibility-final-order"
+      ]
     },
     {
       "key": ".overview-actions|||@media (max-width: 767px)",
@@ -434,30 +444,6 @@
       "owners": []
     },
     {
-      "key": ".text-\\[10px\\]|||",
-      "category": "conflicting",
-      "hotspot": false,
-      "owners": []
-    },
-    {
-      "key": ".text-\\[11px\\]|||",
-      "category": "conflicting",
-      "hotspot": false,
-      "owners": []
-    },
-    {
-      "key": ".text-\\[12px\\]|||",
-      "category": "conflicting",
-      "hotspot": false,
-      "owners": []
-    },
-    {
-      "key": ".text-xs|||",
-      "category": "conflicting",
-      "hotspot": false,
-      "owners": []
-    },
-    {
       "key": ".workspace-link-heading|||",
       "category": "conflicting",
       "hotspot": false,
@@ -512,16 +498,12 @@
       "owners": []
     },
     {
-      "key": ".workspace-shell|||@media (prefers-reduced-motion: reduce)",
-      "category": "additive",
-      "hotspot": false,
-      "owners": []
-    },
-    {
       "key": "#artifactCompareBtn|||",
       "category": "additive",
       "hotspot": false,
-      "owners": []
+      "owners": [
+        "compatibility-final-order"
+      ]
     },
     {
       "key": "#artifactMetadataBar|||",
@@ -545,7 +527,9 @@
       "key": "#openRunDetailsBtn|||",
       "category": "additive",
       "hotspot": false,
-      "owners": []
+      "owners": [
+        "compatibility-final-order"
+      ]
     },
     {
       "key": "#reconstructionRuntimeSummary|||",
@@ -557,13 +541,17 @@
       "key": "#shortcutsBtn|||",
       "category": "additive",
       "hotspot": false,
-      "owners": []
+      "owners": [
+        "compatibility-final-order"
+      ]
     },
     {
       "key": "#themeBtn|||",
       "category": "additive",
       "hotspot": false,
-      "owners": []
+      "owners": [
+        "compatibility-final-order"
+      ]
     },
     {
       "key": "html|||",

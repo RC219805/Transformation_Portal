@@ -8,11 +8,12 @@
 @import "./components/console-context.css" layer(components);
 @import "./components/dispatch-surfaces.css" layer(components);
 @import "./components/responsive-layout.css" layer(components);
-@import "./components/workspace-performance.css" layer(utilities);
-@import "./overrides.operator-console-reset.css" layer(utilities);
+@import "./components/workspace-surfaces.css" layer(components);
+@import "./components/operator-console.css" layer(components);
+@import "./components/surface-normalization.css" layer(components);
 @import "./utilities.required.css" layer(utilities);
 @import "./utilities.dynamic.css" layer(utilities);
 @import "./utilities.compat-hold.css" layer(utilities);
-@import "./overrides.compat.css" layer(utilities);
+@import "./overrides.compat.css" layer(overrides);
 @import "./overrides.performance.css" layer(overrides);
 @import "./overrides.accessibility.css" layer(overrides);

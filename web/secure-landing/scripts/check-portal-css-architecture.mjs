@@ -18,6 +18,7 @@ const PORTAL_SOURCE_DIR = path.resolve(FRONTDOOR_ROOT, "portal-src");
 const PORTAL_ASSET_JS_PATH = path.resolve(REPO_ROOT, "public", "portal-assets", "portal.js");
 const PORTAL_REVIEW_JS_PATH = path.resolve(REPO_ROOT, "public", "portal-assets", "portal-review.js");
 const BASELINE_PATH = path.resolve(PORTAL_CSS_SOURCE_DIR, "architecture-baseline.json");
+const OWNERSHIP_DRAIN_REPORT_PATH = path.resolve(FRONTDOOR_ROOT, "reports", "portal-css-ownership-drain.json");
 
 const args = new Set(process.argv.slice(2));
 const WRITE_BASELINE = args.has("--write-baseline");
@@ -33,12 +34,13 @@ const EXPECTED_LAYER_IMPORTS = [
   ["./components/console-context.css", "components"],
   ["./components/dispatch-surfaces.css", "components"],
   ["./components/responsive-layout.css", "components"],
-  ["./components/workspace-performance.css", "utilities"],
-  ["./overrides.operator-console-reset.css", "utilities"],
+  ["./components/workspace-surfaces.css", "components"],
+  ["./components/operator-console.css", "components"],
+  ["./components/surface-normalization.css", "components"],
   ["./utilities.required.css", "utilities"],
   ["./utilities.dynamic.css", "utilities"],
   ["./utilities.compat-hold.css", "utilities"],
-  ["./overrides.compat.css", "utilities"],
+  ["./overrides.compat.css", "overrides"],
   ["./overrides.performance.css", "overrides"],
   ["./overrides.accessibility.css", "overrides"]
 ];
@@ -323,7 +325,13 @@ function baselineFromReport(duplicates) {
       key: duplicate.key,
       category: duplicate.category,
       hotspot: duplicate.hotspot,
-      owners: duplicate.hotspot ? ["compatibility-final-order"] : []
+      owners: duplicate.records.some((record) =>
+        record.source === "web/secure-landing/portal-src/styles/overrides.compat.css"
+      )
+        ? ["compatibility-final-order"]
+        : duplicate.hotspot
+          ? ["compatibility-final-order"]
+          : []
     }))
   };
 }
@@ -485,6 +493,30 @@ function checkProductionLayerImports(failures) {
   if (JSON.stringify(imports) !== JSON.stringify(EXPECTED_LAYER_IMPORTS)) {
     failures.push(`${relativePath(PORTAL_CSS_INDEX_PATH)} production layer import order drifted`);
   }
+  for (const [source, layerName] of imports) {
+    if (layerName === "utilities" && source.startsWith("./overrides.")) {
+      failures.push(`${relativePath(PORTAL_CSS_INDEX_PATH)} imports override source ${source} into layer(utilities)`);
+    }
+    if (layerName === "utilities" && source.startsWith("./components/")) {
+      failures.push(`${relativePath(PORTAL_CSS_INDEX_PATH)} imports component source ${source} into layer(utilities)`);
+    }
+    if (layerName !== "utilities" && /^\.\/utilities\./.test(source)) {
+      failures.push(`${relativePath(PORTAL_CSS_INDEX_PATH)} imports utility source ${source} into layer(${layerName})`);
+    }
+    if (
+      layerName === "utilities" &&
+      /(?:reset|compat)/.test(source) &&
+      source !== "./utilities.compat-hold.css"
+    ) {
+      failures.push(`${relativePath(PORTAL_CSS_INDEX_PATH)} imports transitional compatibility source ${source} into layer(utilities)`);
+    }
+    if (source === "./components/workspace-performance.css" && layerName === "utilities") {
+      failures.push(`${relativePath(PORTAL_CSS_INDEX_PATH)} imports workspace performance source through layer(utilities)`);
+    }
+    if (source === "./overrides.operator-console-reset.css") {
+      failures.push(`${relativePath(PORTAL_CSS_INDEX_PATH)} still imports transitional operator console reset source`);
+    }
+  }
 }
 
 function layerDeclarationNames(params) {
@@ -514,6 +546,18 @@ function previousOwnerComment(node) {
       return text;
     }
     current = current.prev();
+  }
+  return "";
+}
+
+function ownerCommentForNode(node) {
+  let current = node;
+  while (current) {
+    const owner = previousOwnerComment(current);
+    if (owner) {
+      return owner;
+    }
+    current = current.parent;
   }
   return "";
 }
@@ -569,6 +613,24 @@ function checkOverrideOwners(cssFiles, failures) {
       if (!comment[0].includes("reason:")) {
         failures.push(`${source} compatibility-final-order owner comment missing reason`);
       }
+      if (!comment[0].includes("removal-phase:")) {
+        failures.push(`${source} compatibility-final-order owner comment missing removal-phase`);
+      }
+    }
+    if (path.basename(filePath) === "overrides.compat.css") {
+      const root = parseCss(filePath, content);
+      root.walkRules((rule) => {
+        const owner = ownerCommentForNode(rule);
+        if (!owner.includes("portal-override-owner: compatibility-final-order")) {
+          failures.push(`${source}:${rule.source?.start?.line || 0} compatibility rule missing compatibility-final-order owner`);
+        }
+        if (!owner.includes("reason:")) {
+          failures.push(`${source}:${rule.source?.start?.line || 0} compatibility rule missing reason`);
+        }
+        if (!owner.includes("removal-phase:")) {
+          failures.push(`${source}:${rule.source?.start?.line || 0} compatibility rule missing removal-phase`);
+        }
+      });
     }
   }
 }
@@ -639,6 +701,74 @@ function checkLayerContract(failures) {
   });
 }
 
+function selectorSetForFile(filePath) {
+  const selectors = new Set();
+  const root = parseCss(filePath);
+  root.walkRules((rule) => {
+    for (const selector of splitSelectorList(rule.selector)) {
+      selectors.add(selector);
+    }
+  });
+  return selectors;
+}
+
+function ruleCountForFile(filePath) {
+  let count = 0;
+  parseCss(filePath).walkRules(() => {
+    count += 1;
+  });
+  return count;
+}
+
+function checkOwnershipDrainReport(failures) {
+  if (!existsSync(OWNERSHIP_DRAIN_REPORT_PATH)) {
+    failures.push(`${relativePath(OWNERSHIP_DRAIN_REPORT_PATH)} is missing`);
+    return;
+  }
+  const report = JSON.parse(readText(OWNERSHIP_DRAIN_REPORT_PATH));
+  const moves = Array.isArray(report.moves) ? report.moves : [];
+  const summary = report.summary || {};
+  if (summary.utilityLayerImportsAfter !== 3) {
+    failures.push(`${relativePath(OWNERSHIP_DRAIN_REPORT_PATH)} must record 3 utility-layer imports after Phase 5`);
+  }
+  if (summary.compatHoldCount !== 0) {
+    failures.push(`${relativePath(OWNERSHIP_DRAIN_REPORT_PATH)} must record 0 compat-hold utilities`);
+  }
+  for (const [index, move] of moves.entries()) {
+    for (const field of ["selector", "from", "fromLayer", "to", "toLayer", "classification", "parity"]) {
+      if (!move[field]) {
+        failures.push(`${relativePath(OWNERSHIP_DRAIN_REPORT_PATH)} move ${index} missing ${field}`);
+      }
+    }
+    if (move.parity !== "green") {
+      failures.push(`${relativePath(OWNERSHIP_DRAIN_REPORT_PATH)} move ${index} is not parity green`);
+    }
+    if (move.classification === "compatibility-final-order" && !move.reason) {
+      failures.push(`${relativePath(OWNERSHIP_DRAIN_REPORT_PATH)} compatibility move ${index} missing reason`);
+    }
+  }
+
+  const compatPath = path.resolve(PORTAL_CSS_SOURCE_DIR, "overrides.compat.css");
+  const compatSelectors = selectorSetForFile(compatPath);
+  const reportedCompatSelectors = new Set(
+    moves
+      .filter((move) => move.to === "overrides.compat.css")
+      .map((move) => move.selector)
+  );
+  for (const selector of compatSelectors) {
+    if (!reportedCompatSelectors.has(selector)) {
+      failures.push(`${relativePath(OWNERSHIP_DRAIN_REPORT_PATH)} missing overrides.compat.css selector ${selector}`);
+    }
+  }
+  if (summary.overridesCompatRuleCount !== ruleCountForFile(compatPath)) {
+    failures.push(`${relativePath(OWNERSHIP_DRAIN_REPORT_PATH)} overrides.compat.css rule count is stale`);
+  }
+  const compatBytes = Buffer.byteLength(readText(compatPath), "utf8");
+  if (summary.overridesCompatBytes !== compatBytes) {
+    failures.push(`${relativePath(OWNERSHIP_DRAIN_REPORT_PATH)} overrides.compat.css byte count is stale`);
+  }
+}
+
 const failures = [];
 const cssFiles = listFiles(PORTAL_CSS_SOURCE_DIR, (entryPath) => entryPath.endsWith(".css"));
 const records = collectRuleRecords(cssFiles);
@@ -652,6 +782,7 @@ checkSelectorFileBoundaries(cssFiles, failures);
 checkDuplicateBaseline(duplicates, failures);
 checkUtilityCoverage(failures);
 checkLayerContract(failures);
+checkOwnershipDrainReport(failures);
 
 if (REPORT) {
   const hotspotCount = duplicates.filter((duplicate) => duplicate.hotspot).length;

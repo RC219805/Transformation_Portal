@@ -38,11 +38,13 @@ const INDEX_REQUIRED_PATTERNS = [
   ["shared tokens import", /@import\s+"(?:\.\.\/){4}web\/shared\/shared-ui-tokens\.css"\s+layer\(tokens\)\s*;/],
   ["tokens import", /@import\s+"\.\/tokens\.css"\s+layer\(tokens\)\s*;/],
   ["base import", /@import\s+"\.\/base\.css"\s+layer\(base\)\s*;/],
+  ["workspace surfaces component import", /@import\s+"\.\/components\/workspace-surfaces\.css"\s+layer\(components\)\s*;/],
+  ["operator console component import", /@import\s+"\.\/components\/operator-console\.css"\s+layer\(components\)\s*;/],
+  ["surface normalization component import", /@import\s+"\.\/components\/surface-normalization\.css"\s+layer\(components\)\s*;/],
   ["required utilities import", /@import\s+"\.\/utilities\.required\.css"\s+layer\(utilities\)\s*;/],
   ["dynamic utilities import", /@import\s+"\.\/utilities\.dynamic\.css"\s+layer\(utilities\)\s*;/],
   ["compat-hold utilities import", /@import\s+"\.\/utilities\.compat-hold\.css"\s+layer\(utilities\)\s*;/],
-  ["operator console compatibility import", /@import\s+"\.\/overrides\.operator-console-reset\.css"\s+layer\(utilities\)\s*;/],
-  ["compatibility utilities-order import", /@import\s+"\.\/overrides\.compat\.css"\s+layer\(utilities\)\s*;/],
+  ["compatibility override import", /@import\s+"\.\/overrides\.compat\.css"\s+layer\(overrides\)\s*;/],
   ["performance overrides import", /@import\s+"\.\/overrides\.performance\.css"\s+layer\(overrides\)\s*;/],
   ["accessibility overrides import", /@import\s+"\.\/overrides\.accessibility\.css"\s+layer\(overrides\)\s*;/]
 ];
