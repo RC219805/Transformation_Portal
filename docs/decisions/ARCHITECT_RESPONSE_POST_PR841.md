@@ -4,6 +4,8 @@
 **Authority:** Transformation Portal Architect
 **Status:** ✅ APPROVED - Ready for Implementation
 
+> **Update (2026-05-01):** Implementation is complete. The companion `ADR-023-implementation-guide.md` referenced below was deleted on 2026-05-01 after audit confirmed all 8 of its planning TODOs shipped in production (`tools/performance_ledger.py` v1.7, `BackendSelectionMetadata` in `manifest.py` and `orchestrator.py`, covered by `tests/test_backend_selection.py`). The parent `ADR-023-post-pr841-hardening.md` and active-docs successors remain the authoritative record. See `docs/analysis/TODO_INVENTORY.md` §4.3.
+
 ---
 
 ## Executive Summary

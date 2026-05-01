@@ -1,9 +1,9 @@
 # TODO Inventory - Transformation Portal
 
-**Document Version:** 2.4.2
+**Document Version:** 2.4.3
 **Date:** May 1, 2026
-**Last Updated:** 2026-05-01 (CI governance enforcement + recount)
-**Previous Version:** 2.4.1 (2026-03-26)
+**Last Updated:** 2026-05-01 (ADR-023 audit closed; obsolete guide deleted)
+**Previous Version:** 2.4.2 (2026-05-01)
 
 ---
 
@@ -16,6 +16,11 @@ This document provides a **complete, categorized inventory** of all TODOs, NotIm
 - Audit trail for architectural decisions
 - Integration with issue tracking systems
 - Binding inventory enforced by Architect governance
+
+## Version 2.4.3 Changes (2026-05-01)
+
+**Major Updates:**
+- ✅ **§4.3 ADR-023 Manifest Implementation audit closed.** Audit confirmed all 8 implementation TODOs in the archived guide are shipped in production (Phase 2 in `tools/performance_ledger.py` v1.7; Phase 3 across `manifest.py`, `orchestrator.py`, and `tests/test_backend_selection.py`). The obsolete planning guide at `docs/_archive/2026-Q1-consolidation/ADR-023-implementation-guide.md` was deleted; the parent `ADR-023-post-pr841-hardening.md` (same archive directory) and active-docs successors remain the authoritative record. QW-4 in `docs/deliverables/QUICK_WINS.md` marked complete.
 
 ## Version 2.4.2 Changes (2026-05-01)
 
@@ -777,32 +782,16 @@ Multiple TODO items:
 
 ---
 
-### 4.3 ADR-023 Manifest Implementation
+### 4.3 ADR-023 Manifest Implementation — ✅ AUDIT COMPLETE (2026-05-01)
 
-**Status:** 🟢 QUICK WIN
+**Status:** ✅ COMPLETED
 **Priority:** P3 (Low)
-**Effort:** 2 hours
+**Effort:** 2 hours (actual)
 **Owner:** Specialist
 
-**Location:** `docs/architecture/decisions/ADR-023-implementation-guide.md`
+**Outcome:** Audit confirmed all 8 implementation TODOs in the guide are fully shipped in production. Phase 2 (`tools/performance_ledger.py` v1.7, 752 lines): `parse_manifests`, `extract_timings`, `compute_statistics`, and `main` (baseline + comparison modes) all complete. Phase 3 (`src/transformation_portal/lux_depth_v3/manifest.py` and `orchestrator.py`): `BackendSelectionMetadata` dataclass at `manifest.py:164–241` with `to_dict`/`from_dict` and schema versioning; `CombinedManifest` integration at `manifest.py:448` / deserialization at `manifest.py:518–519`; `_capture_backend_metadata` at `orchestrator.py:1279–1301`; truth-line logging at `orchestrator.py:5160–5167`. Phase 3 covered by `tests/test_backend_selection.py` (215 lines, 10+ cases including schema validation, serialization roundtrip, fallback handling, and backward compatibility).
 
-Multiple TODOs:
-- Line 28: "TODO: Implement actual manifest parsing logic"
-- Line 38: "TODO: Extract timing from actual manifest schema"
-- Line 53: "TODO: Replace placeholder with actual extraction"
-- Line 72: "TODO: Wire up the full workflow"
-
-**Context:**
-- These are **implementation guide placeholders**, not actual code TODOs
-- Guide shows example of what to implement
-- Actual manifest code may already exist in `src/transformation_portal/lux_depth_v3/manifest.py`
-
-**Decision:**
-- [ ] Audit `manifest.py` to see if TODOs already implemented
-- [ ] If implemented: Update ADR-023 guide to reference actual code
-- [ ] If not: Implement missing pieces (timing extraction, workflow wiring)
-
-**Recommendation:** Quick audit + documentation update (likely already implemented)
+The implementation guide itself (`docs/_archive/2026-Q1-consolidation/ADR-023-implementation-guide.md`) was a planning artifact in a frozen archive directory whose own header (lines 20–21) acknowledged the TODOs were stale. With implementation complete and the parent `ADR-023-post-pr841-hardening.md` (same archive directory) plus active-docs successors (`docs/architecture/performance_ledger_v1.7_review.md`, `docs/decisions/ARCHITECT_RESPONSE_POST_PR841.md`) covering the authoritative record, the obsolete guide was deleted rather than updated in place. The single intra-archive link in `ADR-023-v1.7-amendment.md` was repointed to the parent hardening ADR. Tracked separately as QW-4 in `docs/deliverables/QUICK_WINS.md`.
 
 ---
 
@@ -1437,10 +1426,10 @@ pytestmark = pytest.mark.skipif(not TORCH_AVAILABLE, reason="torch required for 
    - Test presets, backends, error cases
    - Add to CI workflow
 
-5. **Audit ADR-023 Manifest Implementation** (2h)
-   - Check if manifest timing extraction implemented
-   - Update ADR-023-implementation-guide.md
-   - Remove TODOs if already done
+5. **Audit ADR-023 Manifest Implementation** (2h) — ✅ COMPLETED 2026-05-01
+   - Audit confirmed all 8 implementation TODOs shipped in production
+   - Obsolete planning guide deleted from frozen archive
+   - See Section 4.3 for full outcome
 
 ---
 
@@ -1751,7 +1740,7 @@ raise NotImplementedError("TODO: Implement NVDIFFREC integration")
 
 ### Architecture & Decision Documents
 - **ADR-019-REVISED-DECISION.md** - Backend integration approval (IMPLEMENTED)
-- **ADR-023-implementation-guide.md** - Manifest implementation (verify status)
+- ~~**ADR-023-implementation-guide.md**~~ - Deleted 2026-05-01 (audit found all TODOs shipped; see §4.3)
 - **ADR-026-APEX-governance-framework.md** - APEX Research Ultra governance
 - **ADR-027-phase2-spatial-ai-extension.md** - Spatial AI Phase 2 roadmap
 - **ADR-029-execution-graph-abstraction.md** - Phase 3 execution graphs
