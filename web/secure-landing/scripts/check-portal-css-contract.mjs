@@ -1,4 +1,4 @@
-import { readFileSync, readdirSync, statSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -82,10 +82,16 @@ const UTILITY_VARIANTS = new Set([
 ]);
 
 function listCssFiles(directory) {
-  return readdirSync(directory)
-    .map((entry) => path.join(directory, entry))
-    .filter((entryPath) => statSync(entryPath).isFile() && entryPath.endsWith(".css"))
-    .sort();
+  const cssFiles = [];
+  for (const entry of readdirSync(directory, { withFileTypes: true })) {
+    const entryPath = path.join(directory, entry.name);
+    if (entry.isDirectory()) {
+      cssFiles.push(...listCssFiles(entryPath));
+    } else if (entry.isFile() && entry.name.endsWith(".css")) {
+      cssFiles.push(entryPath);
+    }
+  }
+  return cssFiles.sort();
 }
 
 function checkDisallowed(label, content, failures, patterns = DISALLOWED_PATTERNS) {
@@ -204,7 +210,10 @@ for (const [name, pattern] of INDEX_REQUIRED_PATTERNS) {
 for (const sourcePath of listCssFiles(PORTAL_CSS_SOURCE_DIR)) {
   const sourceLabel = path.relative(REPO_ROOT, sourcePath);
   const sourceContent = readFileSync(sourcePath, "utf-8");
-  const disallowedPatterns = sourcePath === PORTAL_CSS_INDEX_PATH ? SOURCE_DISALLOWED_PATTERNS : DISALLOWED_PATTERNS;
+  const disallowedPatterns =
+    sourcePath === PORTAL_CSS_INDEX_PATH || sourcePath === path.resolve(PORTAL_CSS_SOURCE_DIR, "components.current.css")
+      ? SOURCE_DISALLOWED_PATTERNS
+      : DISALLOWED_PATTERNS;
   checkDisallowed(sourceLabel, sourceContent, failures, disallowedPatterns);
 }
 

@@ -1,0 +1,605 @@
+{
+  "version": 1,
+  "duplicateKeys": [
+    {
+      "key": ".ambient-focus|||",
+      "category": "conflicting",
+      "hotspot": false,
+      "owners": []
+    },
+    {
+      "key": ".ambient-grid|||",
+      "category": "conflicting",
+      "hotspot": false,
+      "owners": []
+    },
+    {
+      "key": ".ambient-orb|||",
+      "category": "additive",
+      "hotspot": false,
+      "owners": []
+    },
+    {
+      "key": ".ambient-ring|||",
+      "category": "additive",
+      "hotspot": false,
+      "owners": []
+    },
+    {
+      "key": ".ambient-sweep|||",
+      "category": "conflicting",
+      "hotspot": false,
+      "owners": []
+    },
+    {
+      "key": ".ambient-veil|||",
+      "category": "conflicting",
+      "hotspot": false,
+      "owners": []
+    },
+    {
+      "key": ".build-pulse-card|||",
+      "category": "conflicting",
+      "hotspot": false,
+      "owners": []
+    },
+    {
+      "key": ".build-pulse-label|||",
+      "category": "conflicting",
+      "hotspot": false,
+      "owners": []
+    },
+    {
+      "key": ".build-step-tab:hover|||",
+      "category": "additive",
+      "hotspot": false,
+      "owners": []
+    },
+    {
+      "key": ".build-step-tab|||",
+      "category": "conflicting",
+      "hotspot": false,
+      "owners": []
+    },
+    {
+      "key": ".console-action-rail-kicker|||",
+      "category": "conflicting",
+      "hotspot": false,
+      "owners": []
+    },
+    {
+      "key": ".console-action-rail[data-tone=\"blocked\"]|||",
+      "category": "conflicting",
+      "hotspot": false,
+      "owners": []
+    },
+    {
+      "key": ".console-action-rail[data-tone=\"ready\"]|||",
+      "category": "conflicting",
+      "hotspot": false,
+      "owners": []
+    },
+    {
+      "key": ".console-action-rail[data-tone=\"warning\"]|||",
+      "category": "conflicting",
+      "hotspot": false,
+      "owners": []
+    },
+    {
+      "key": ".console-action-rail|||",
+      "category": "conflicting",
+      "hotspot": false,
+      "owners": []
+    },
+    {
+      "key": ".console-context-card|||",
+      "category": "conflicting",
+      "hotspot": false,
+      "owners": []
+    },
+    {
+      "key": ".console-context-label|||",
+      "category": "conflicting",
+      "hotspot": false,
+      "owners": []
+    },
+    {
+      "key": ".console-context-meta|||",
+      "category": "conflicting",
+      "hotspot": false,
+      "owners": []
+    },
+    {
+      "key": ".console-context-value|||",
+      "category": "conflicting",
+      "hotspot": false,
+      "owners": []
+    },
+    {
+      "key": ".dark .build-pulse-card|||",
+      "category": "conflicting",
+      "hotspot": false,
+      "owners": []
+    },
+    {
+      "key": ".dark .build-step-tab|||",
+      "category": "conflicting",
+      "hotspot": false,
+      "owners": []
+    },
+    {
+      "key": ".dark .console-action-rail|||",
+      "category": "conflicting",
+      "hotspot": false,
+      "owners": []
+    },
+    {
+      "key": ".dark .console-context-card|||",
+      "category": "conflicting",
+      "hotspot": false,
+      "owners": []
+    },
+    {
+      "key": ".dark .dispatch-tool-btn|||",
+      "category": "conflicting",
+      "hotspot": false,
+      "owners": []
+    },
+    {
+      "key": ".dark .hero-action-secondary|||",
+      "category": "conflicting",
+      "hotspot": false,
+      "owners": []
+    },
+    {
+      "key": ".dark .panel-subtle|||",
+      "category": "conflicting",
+      "hotspot": false,
+      "owners": []
+    },
+    {
+      "key": ".dark .review-status-banner|||",
+      "category": "additive",
+      "hotspot": false,
+      "owners": []
+    },
+    {
+      "key": ".dark .runtime-briefing-card|||",
+      "category": "conflicting",
+      "hotspot": false,
+      "owners": []
+    },
+    {
+      "key": ".dark .shell-bg|||",
+      "category": "conflicting",
+      "hotspot": false,
+      "owners": []
+    },
+    {
+      "key": ".dark .stat-tile|||",
+      "category": "conflicting",
+      "hotspot": false,
+      "owners": []
+    },
+    {
+      "key": ".dark .stepper-nav-btn|||",
+      "category": "conflicting",
+      "hotspot": false,
+      "owners": []
+    },
+    {
+      "key": ".dark .surface-loading|||",
+      "category": "additive",
+      "hotspot": false,
+      "owners": []
+    },
+    {
+      "key": ".dark .surface-skeleton-card|||",
+      "category": "conflicting",
+      "hotspot": false,
+      "owners": []
+    },
+    {
+      "key": ".dark .workspace-link|||",
+      "category": "conflicting",
+      "hotspot": false,
+      "owners": []
+    },
+    {
+      "key": ".dark .workspace-rail|||",
+      "category": "conflicting",
+      "hotspot": false,
+      "owners": []
+    },
+    {
+      "key": ".dark .workspace-shell[data-ambient-active=\"true\"]|||",
+      "category": "conflicting",
+      "hotspot": false,
+      "owners": []
+    },
+    {
+      "key": ".dispatch-tool-btn:hover|||",
+      "category": "additive",
+      "hotspot": false,
+      "owners": []
+    },
+    {
+      "key": ".focus\\:ring-amber-500:focus|||",
+      "category": "conflicting",
+      "hotspot": false,
+      "owners": []
+    },
+    {
+      "key": ".focus\\:ring-cyan-500:focus|||",
+      "category": "conflicting",
+      "hotspot": false,
+      "owners": []
+    },
+    {
+      "key": ".focus\\:ring-indigo-500:focus|||",
+      "category": "additive",
+      "hotspot": false,
+      "owners": []
+    },
+    {
+      "key": ".hero-action-primary|||",
+      "category": "conflicting",
+      "hotspot": false,
+      "owners": []
+    },
+    {
+      "key": ".hero-action-secondary|||",
+      "category": "conflicting",
+      "hotspot": false,
+      "owners": []
+    },
+    {
+      "key": ".job-chip|||",
+      "category": "conflicting",
+      "hotspot": false,
+      "owners": []
+    },
+    {
+      "key": ".micro-status|||",
+      "category": "conflicting",
+      "hotspot": false,
+      "owners": []
+    },
+    {
+      "key": ".operator-action-btn-primary|||",
+      "category": "conflicting",
+      "hotspot": false,
+      "owners": []
+    },
+    {
+      "key": ".operator-action-btn-secondary|||",
+      "category": "conflicting",
+      "hotspot": false,
+      "owners": []
+    },
+    {
+      "key": ".overview-actions|||@media (max-width: 767px)",
+      "category": "additive",
+      "hotspot": false,
+      "owners": []
+    },
+    {
+      "key": ".panel-subtle|||",
+      "category": "conflicting",
+      "hotspot": false,
+      "owners": []
+    },
+    {
+      "key": ".peer:checked ~ .peer-checked\\:bg-indigo-600|||",
+      "category": "identical",
+      "hotspot": false,
+      "owners": []
+    },
+    {
+      "key": ".peer:checked ~ .peer-checked\\:bg-red-500|||",
+      "category": "identical",
+      "hotspot": false,
+      "owners": []
+    },
+    {
+      "key": ".peer:focus-visible ~ .peer-focus-visible\\:ring-indigo-500|||",
+      "category": "additive",
+      "hotspot": false,
+      "owners": []
+    },
+    {
+      "key": ".peer:focus-visible ~ .peer-focus-visible\\:ring-red-500|||",
+      "category": "conflicting",
+      "hotspot": false,
+      "owners": []
+    },
+    {
+      "key": ".portal-context-shell|||",
+      "category": "conflicting",
+      "hotspot": false,
+      "owners": []
+    },
+    {
+      "key": ".portal-topbar|||",
+      "category": "conflicting",
+      "hotspot": false,
+      "owners": []
+    },
+    {
+      "key": ".review-compare-summary|||",
+      "category": "additive",
+      "hotspot": false,
+      "owners": []
+    },
+    {
+      "key": ".review-provenance-item|||",
+      "category": "additive",
+      "hotspot": false,
+      "owners": []
+    },
+    {
+      "key": ".review-provenance-label|||",
+      "category": "additive",
+      "hotspot": false,
+      "owners": []
+    },
+    {
+      "key": ".review-status-banner[data-tone=\"error\"]|||",
+      "category": "additive",
+      "hotspot": false,
+      "owners": []
+    },
+    {
+      "key": ".review-status-banner[data-tone=\"info\"]|||",
+      "category": "additive",
+      "hotspot": false,
+      "owners": []
+    },
+    {
+      "key": ".review-status-banner[data-tone=\"ready\"]|||",
+      "category": "additive",
+      "hotspot": false,
+      "owners": []
+    },
+    {
+      "key": ".review-status-banner[data-tone=\"warning\"]|||",
+      "category": "additive",
+      "hotspot": false,
+      "owners": []
+    },
+    {
+      "key": ".review-status-banner|||",
+      "category": "additive",
+      "hotspot": false,
+      "owners": []
+    },
+    {
+      "key": ".runtime-briefing-card|||",
+      "category": "conflicting",
+      "hotspot": false,
+      "owners": []
+    },
+    {
+      "key": ".section-kicker|||",
+      "category": "conflicting",
+      "hotspot": false,
+      "owners": []
+    },
+    {
+      "key": ".selection\\:bg-cyan-500\\/25::selection|||",
+      "category": "identical",
+      "hotspot": false,
+      "owners": []
+    },
+    {
+      "key": ".shell-noise|||",
+      "category": "additive",
+      "hotspot": false,
+      "owners": []
+    },
+    {
+      "key": ".shell-panel-strong|||",
+      "category": "conflicting",
+      "hotspot": false,
+      "owners": []
+    },
+    {
+      "key": ".shell-panel|||",
+      "category": "conflicting",
+      "hotspot": false,
+      "owners": []
+    },
+    {
+      "key": ".signal-badge|||",
+      "category": "conflicting",
+      "hotspot": false,
+      "owners": []
+    },
+    {
+      "key": ".skeleton-block|||",
+      "category": "additive",
+      "hotspot": false,
+      "owners": []
+    },
+    {
+      "key": ".skeleton-line|||",
+      "category": "additive",
+      "hotspot": false,
+      "owners": []
+    },
+    {
+      "key": ".skeleton-pill|||",
+      "category": "additive",
+      "hotspot": false,
+      "owners": []
+    },
+    {
+      "key": ".stat-label|||",
+      "category": "conflicting",
+      "hotspot": false,
+      "owners": []
+    },
+    {
+      "key": ".stat-tile|||",
+      "category": "conflicting",
+      "hotspot": false,
+      "owners": []
+    },
+    {
+      "key": ".surface-loading::after|||",
+      "category": "additive",
+      "hotspot": false,
+      "owners": []
+    },
+    {
+      "key": ".surface-loading|||",
+      "category": "additive",
+      "hotspot": false,
+      "owners": []
+    },
+    {
+      "key": ".surface-skeleton-card|||",
+      "category": "conflicting",
+      "hotspot": false,
+      "owners": []
+    },
+    {
+      "key": ".text-\\[10px\\]|||",
+      "category": "conflicting",
+      "hotspot": false,
+      "owners": []
+    },
+    {
+      "key": ".text-\\[11px\\]|||",
+      "category": "conflicting",
+      "hotspot": false,
+      "owners": []
+    },
+    {
+      "key": ".text-\\[12px\\]|||",
+      "category": "conflicting",
+      "hotspot": false,
+      "owners": []
+    },
+    {
+      "key": ".text-xs|||",
+      "category": "conflicting",
+      "hotspot": false,
+      "owners": []
+    },
+    {
+      "key": ".workspace-link-heading|||",
+      "category": "conflicting",
+      "hotspot": false,
+      "owners": []
+    },
+    {
+      "key": ".workspace-link-label|||",
+      "category": "conflicting",
+      "hotspot": false,
+      "owners": []
+    },
+    {
+      "key": ".workspace-link-meta|||",
+      "category": "conflicting",
+      "hotspot": false,
+      "owners": []
+    },
+    {
+      "key": ".workspace-link-shortcut|||",
+      "category": "conflicting",
+      "hotspot": false,
+      "owners": []
+    },
+    {
+      "key": ".workspace-link:hover|||",
+      "category": "additive",
+      "hotspot": false,
+      "owners": []
+    },
+    {
+      "key": ".workspace-rail-links|||",
+      "category": "conflicting",
+      "hotspot": false,
+      "owners": []
+    },
+    {
+      "key": ".workspace-rail-text|||",
+      "category": "conflicting",
+      "hotspot": false,
+      "owners": []
+    },
+    {
+      "key": ".workspace-shell[data-ambient-active=\"true\"]|||",
+      "category": "conflicting",
+      "hotspot": false,
+      "owners": []
+    },
+    {
+      "key": ".workspace-shell|||",
+      "category": "additive",
+      "hotspot": false,
+      "owners": []
+    },
+    {
+      "key": ".workspace-shell|||@media (prefers-reduced-motion: reduce)",
+      "category": "additive",
+      "hotspot": false,
+      "owners": []
+    },
+    {
+      "key": "#artifactCompareBtn|||",
+      "category": "additive",
+      "hotspot": false,
+      "owners": []
+    },
+    {
+      "key": "#artifactMetadataBar|||",
+      "category": "additive",
+      "hotspot": false,
+      "owners": []
+    },
+    {
+      "key": "#artifactMetadataCard|||",
+      "category": "additive",
+      "hotspot": false,
+      "owners": []
+    },
+    {
+      "key": "#artifactPreviewStage|||",
+      "category": "additive",
+      "hotspot": false,
+      "owners": []
+    },
+    {
+      "key": "#openRunDetailsBtn|||",
+      "category": "additive",
+      "hotspot": false,
+      "owners": []
+    },
+    {
+      "key": "#reconstructionRuntimeSummary|||",
+      "category": "additive",
+      "hotspot": false,
+      "owners": []
+    },
+    {
+      "key": "#shortcutsBtn|||",
+      "category": "additive",
+      "hotspot": false,
+      "owners": []
+    },
+    {
+      "key": "#themeBtn|||",
+      "category": "additive",
+      "hotspot": false,
+      "owners": []
+    },
+    {
+      "key": "html|||",
+      "category": "additive",
+      "hotspot": false,
+      "owners": []
+    }
+  ]
+}

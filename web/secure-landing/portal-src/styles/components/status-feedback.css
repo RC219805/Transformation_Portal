@@ -1,0 +1,47 @@
+/* ============================================================================
+ * 4. COMPONENTS
+ * ============================================================================ */
+
+.status-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background-color: #94a3b8; flex-shrink: 0; }
+.status-dot.running { background-color: #f59e0b; box-shadow: 0 0 8px #f59e0b; animation: pulse 2s infinite; }
+.status-dot.partial { background-color: #f59e0b; box-shadow: 0 0 8px rgba(245, 158, 11, 0.45); }
+.status-dot.succeeded, .status-dot.ready { background-color: #10b981; }
+.status-dot.failed, .status-dot.canceled, .status-dot.offline { background-color: #ef4444; }
+
+@keyframes pulse {
+    0% { opacity: 1; }
+    50% { opacity: 0.5; }
+    100% { opacity: 1; }
+}
+
+progress {
+    -webkit-appearance: none;
+    appearance: none;
+    border: none;
+    height: 6px;
+    border-radius: 3px;
+    background-color: #e2e8f0;
+    overflow: hidden;
+}
+.dark progress { background-color: #334155; }
+progress::-webkit-progress-bar { background-color: transparent; }
+progress::-webkit-progress-value { background-color: #4f46e5; transition: width 0.3s ease; }
+.dark progress::-webkit-progress-value { background-color: #6366f1; }
+progress::-moz-progress-bar { background-color: #4f46e5; transition: width 0.3s ease; }
+.dark progress::-moz-progress-bar { background-color: #6366f1; }
+
+.toast-enter { transform: translateY(10px); opacity: 0; }
+.toast-active {
+    transform: translateY(0);
+    opacity: 1;
+    transition:
+        transform 0.3s cubic-bezier(0.16, 1, 0.3, 1),
+        opacity 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.toast-exit {
+    transform: translateY(10px);
+    opacity: 0;
+    transition:
+        transform 0.2s ease,
+        opacity 0.2s ease;
+}

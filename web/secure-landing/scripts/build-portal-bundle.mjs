@@ -66,7 +66,7 @@ async function bundleCssEntry(entryPoint) {
   return outputText.trim() + "\n";
 }
 
-async function buildPortalCssAsset() {
+async function renderPortalCssAsset() {
   const fontTemplate = readFileSync(PORTAL_CSS_FONT_TEMPLATE_PATH, "utf-8");
   const sharedTokenCss = readFileSync(SHARED_TOKEN_SOURCE_PATH, "utf-8");
   const bundledPortalCss = await bundleCssEntry(PORTAL_CSS_INDEX_PATH);
@@ -85,7 +85,11 @@ async function buildPortalCssAsset() {
     }
   }
 
-  return writeIfChanged(PORTAL_CSS_ASSET_PATH, renderedCss);
+  return renderedCss;
+}
+
+async function buildPortalCssAsset() {
+  return writeIfChanged(PORTAL_CSS_ASSET_PATH, await renderPortalCssAsset());
 }
 
 function stripStandaloneLineComments(content) {
@@ -123,6 +127,18 @@ async function bundleText(entryPoint, options = {}) {
 }
 
 await ensureSupportedRuntime();
+
+if (process.argv.includes("--check-css")) {
+  const expectedCss = await renderPortalCssAsset();
+  const currentCss = existsSync(PORTAL_CSS_ASSET_PATH) ? readFileSync(PORTAL_CSS_ASSET_PATH, "utf-8") : "";
+  if (currentCss !== expectedCss) {
+    throw new Error(
+      `${path.relative(REPO_ROOT, PORTAL_CSS_ASSET_PATH)} is stale. Run npm run build:portal from ${path.relative(REPO_ROOT, FRONTDOOR_ROOT)}.`
+    );
+  }
+  console.log(`portal css generated artifact is fresh: ${path.relative(REPO_ROOT, PORTAL_CSS_ASSET_PATH)}`);
+  process.exit(0);
+}
 
 const portalTemplate = readFileSync(PORTAL_TEMPLATE_PATH, "utf-8");
 if (!portalTemplate.includes(PORTAL_INTERNALS_PLACEHOLDER)) {

@@ -133,6 +133,9 @@
 .max-w-7xl {
   max-width: 80rem;
 }
+.max-w-\[150px\] {
+  max-width: 150px;
+}
 .px-6 {
   padding-left: 1.5rem;
   padding-right: 1.5rem;
@@ -153,8 +156,14 @@
 .gap-4 {
   gap: 1rem;
 }
+.gap-1\.5 {
+  gap: 0.375rem;
+}
 .h-12 {
   height: 3rem;
+}
+.h-24 {
+  height: 6rem;
 }
 .w-12 {
   width: 3rem;
@@ -510,6 +519,9 @@
 .mb-1\.5 {
   margin-bottom: 0.375rem;
 }
+.mb-2 {
+  margin-bottom: 0.5rem;
+}
 .w-full {
   width: 100%;
 }
@@ -518,6 +530,9 @@
 }
 .border-slate-300 {
   border-color: rgb(203 213 225);
+}
+.border-cyan-300 {
+  border-color: rgb(103 232 249);
 }
 .bg-slate-50 {
   background-color: rgb(248 250 252);
@@ -653,6 +668,9 @@
 }
 .inline-flex {
   display: inline-flex;
+}
+.inline {
+  display: inline;
 }
 #overview-shell.hidden,
 #console-grid.hidden,
@@ -1001,6 +1019,9 @@
 .bg-cyan-50 {
   background-color: rgb(236 254 255);
 }
+.bg-cyan-50\/90 {
+  background-color: rgb(236 254 255 / 0.9);
+}
 .dark .dark\:bg-cyan-900\/20 {
   background-color: rgba(22, 78, 99, 0.2);
 }
@@ -1037,6 +1058,12 @@
 .text-center {
   text-align: center;
 }
+.text-left {
+  text-align: left;
+}
+.text-right {
+  text-align: right;
+}
 .pb-3 {
   padding-bottom: 0.75rem;
 }
@@ -1048,6 +1075,9 @@
 }
 .object-contain {
   object-fit: contain;
+}
+.object-cover {
+  object-fit: cover;
 }
 .max-h-\[320px\] {
   max-height: 320px;
@@ -1240,6 +1270,7 @@
 .bg-emerald-50 { background-color: rgb(236 253 245); }
 .bg-emerald-50\/90 { background-color: rgb(236 253 245 / 0.9); }
 .bg-red-100 { background-color: rgb(254 226 226); }
+.bg-red-50 { background-color: rgb(254 242 242); }
 .bg-red-50\/90 { background-color: rgb(254 242 242 / 0.9); }
 .bg-slate-50\/75 { background-color: rgb(248 250 252 / 0.75); }
 .bg-slate-50\/90 { background-color: rgb(248 250 252 / 0.9); }
@@ -1254,8 +1285,10 @@
 .text-emerald-800 { color: rgb(6 95 70); }
 .text-emerald-900 { color: rgb(6 78 59); }
 .text-red-700 { color: rgb(185 28 28); }
+.text-red-500 { color: rgb(239 68 68); }
 .text-red-800 { color: rgb(153 27 27); }
 .text-red-900 { color: rgb(127 29 29); }
+.hover\:text-red-700:hover { color: rgb(185 28 28); }
 
 .dark .dark\:bg-amber-900\/30 { background-color: rgb(120 53 15 / 0.3); }
 .dark .dark\:bg-amber-950\/25 { background-color: rgb(69 26 3 / 0.25); }
