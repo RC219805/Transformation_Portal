@@ -9,6 +9,25 @@
     transform: none !important;
     animation: none !important;
   }
+
+  .shell-bg,
+  .build-step-tab,
+  .workspace-link,
+  .hero-action,
+  .status-dot.running,
+  .status-dot.partial,
+  .skeleton-line,
+  .skeleton-block,
+  .skeleton-pill,
+  .toast-enter,
+  .toast-active,
+  .toast-exit,
+  .surface-loading,
+  .surface-loading::after {
+    animation: none !important;
+    transition: none !important;
+    transform: none !important;
+  }
 }
 
 /* portal-override-owner: prefers-contrast */

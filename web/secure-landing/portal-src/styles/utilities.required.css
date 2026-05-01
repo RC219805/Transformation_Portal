@@ -251,6 +251,7 @@
 
 .text-\[12px\] {
   font-size: 12px;
+  line-height: 1.45;
 }
 
 .text-slate-500 {
@@ -295,6 +296,7 @@
 
 .text-\[11px\] {
   font-size: 11px;
+  line-height: 1.45;
 }
 
 .font-mono {
@@ -441,6 +443,7 @@
 
 .text-\[10px\] {
   font-size: 10px;
+  line-height: 1.45;
 }
 
 .font-bold {

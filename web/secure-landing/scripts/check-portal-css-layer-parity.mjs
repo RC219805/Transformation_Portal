@@ -22,12 +22,13 @@ const EXPECTED_LAYER_IMPORTS = [
   ["./components/console-context.css", "components"],
   ["./components/dispatch-surfaces.css", "components"],
   ["./components/responsive-layout.css", "components"],
-  ["./components/workspace-performance.css", "utilities"],
-  ["./overrides.operator-console-reset.css", "utilities"],
+  ["./components/workspace-surfaces.css", "components"],
+  ["./components/operator-console.css", "components"],
+  ["./components/surface-normalization.css", "components"],
   ["./utilities.required.css", "utilities"],
   ["./utilities.dynamic.css", "utilities"],
   ["./utilities.compat-hold.css", "utilities"],
-  ["./overrides.compat.css", "utilities"],
+  ["./overrides.compat.css", "overrides"],
   ["./overrides.performance.css", "overrides"],
   ["./overrides.accessibility.css", "overrides"]
 ];
@@ -35,9 +36,11 @@ const FORBIDDEN_TRANSITIONAL_IMPORTS = [
   "./components.current.css",
   "./components/operator-console-reset.css",
   "./overrides.current.css",
+  "./overrides.operator-console-reset.css",
   "./utilities.compat.css",
   "./utilities.deprecated.css",
-  "./utilities.operator-console-reset.css"
+  "./utilities.operator-console-reset.css",
+  "./components/workspace-performance.css"
 ];
 const FONT_PLACEHOLDERS = ["__PORTAL_FONT_SANS_URL__", "__PORTAL_FONT_MONO_URL__"];
 const layerParityContract = JSON.parse(readFileSync(LAYER_PARITY_CONTRACT_PATH, "utf-8"));

@@ -2193,7 +2193,7 @@
       ],
       "cssFile": "utilities.required.css",
       "cssOwners": [
-        "web/secure-landing/portal-src/styles/overrides.operator-console-reset.css",
+        "web/secure-landing/portal-src/styles/components/operator-console.css",
         "web/secure-landing/portal-src/styles/utilities.required.css"
       ],
       "status": "covered"
@@ -3339,7 +3339,7 @@
       ],
       "cssFile": "utilities.required.css",
       "cssOwners": [
-        "web/secure-landing/portal-src/styles/overrides.operator-console-reset.css",
+        "web/secure-landing/portal-src/styles/components/operator-console.css",
         "web/secure-landing/portal-src/styles/utilities.required.css"
       ],
       "status": "covered"
@@ -4434,7 +4434,7 @@
       ],
       "cssFile": "utilities.required.css",
       "cssOwners": [
-        "web/secure-landing/portal-src/styles/overrides.operator-console-reset.css",
+        "web/secure-landing/portal-src/styles/components/operator-console.css",
         "web/secure-landing/portal-src/styles/utilities.required.css"
       ],
       "status": "covered"
@@ -4463,7 +4463,6 @@
       ],
       "cssFile": "utilities.required.css",
       "cssOwners": [
-        "web/secure-landing/portal-src/styles/overrides.operator-console-reset.css",
         "web/secure-landing/portal-src/styles/utilities.required.css"
       ],
       "status": "covered"
@@ -4480,7 +4479,6 @@
       ],
       "cssFile": "utilities.required.css",
       "cssOwners": [
-        "web/secure-landing/portal-src/styles/overrides.operator-console-reset.css",
         "web/secure-landing/portal-src/styles/utilities.required.css"
       ],
       "status": "covered"
@@ -4497,7 +4495,6 @@
       ],
       "cssFile": "utilities.required.css",
       "cssOwners": [
-        "web/secure-landing/portal-src/styles/overrides.operator-console-reset.css",
         "web/secure-landing/portal-src/styles/utilities.required.css"
       ],
       "status": "covered"
@@ -4974,7 +4971,6 @@
       ],
       "cssFile": "utilities.required.css",
       "cssOwners": [
-        "web/secure-landing/portal-src/styles/overrides.operator-console-reset.css",
         "web/secure-landing/portal-src/styles/utilities.required.css"
       ],
       "status": "covered"
