@@ -19,8 +19,12 @@ This document provides a **complete, categorized inventory** of all TODOs, NotIm
 
 ## Version 2.4.4 Changes (2026-05-01)
 
-**Major Updates:**
-- ✅ **Orphaned 2025 PR-review reports archived.** Four canonical files at `docs/pr_reports/` (`BUG_REPORT_CODE_REVIEW.md`, `PR_ACTIONABLE_FIXES.md`, `PR_CONSOLIDATION_ANALYSIS.md`, `PR_REVIEW_SUMMARY.md`, dated October 2025 / January 2025) were moved to `docs/_archive/2025-pr-review-cycle/` with a provenance README. Three dangling redirect stubs at `docs/development/pr/` were deleted (they pointed to the moved canonical files via relative paths and had no other purpose). The textual reference list in `docs/operations/CODEBASE_OPTIMIZATION_2025.md` was annotated to reflect the new archive locations. Mirrors the pattern established by the 2026-03-legacy-prs and 2026-Q1-consolidation archives.
+**Major Updates — 2025 reorganization residue swept:**
+- ✅ **Orphaned 2025 PR-review reports archived.** Four canonical files at `docs/pr_reports/` (`BUG_REPORT_CODE_REVIEW.md`, `PR_ACTIONABLE_FIXES.md`, `PR_CONSOLIDATION_ANALYSIS.md`, `PR_REVIEW_SUMMARY.md`, dated October 2025 / January 2025) moved to `docs/_archive/2025-pr-review-cycle/` with a provenance README.
+- ✅ **`CODEBASE_OPTIMIZATION_2025.md` archived.** Nov-2025 historical record at `docs/operations/` was orphaned (no incoming references) and described an already-complete reorganization. Moved to `docs/_archive/2025-pr-review-cycle/` alongside the related PR-review reports.
+- ✅ **All 12 redirect stubs from the 2025 reorg deleted.** Three at `docs/development/pr/` (pointed to the now-archived `pr_reports/` files), seven at `docs/development/` (pointed to canonical files in `docs/summaries/` / `docs/verification/`), and two at `docs/development/testing/` (pointed to `docs/summaries/`). Pre-deletion check: only one stub had a live incoming reference (a `TODO_INVENTORY.md` cleanup-tracking line that flagged it for removal); all others were dangling. Canonical copies in `docs/summaries/` and `docs/verification/` are untouched.
+- ✅ **`DOCUMENTATION_POLICY.md` and `DOCUMENTATION_MAP.md` taxonomies updated.** Dropped `docs/pr_reports/` from both listings (the directory is now empty post-archive). Sibling `docs/pr_archive/` (19 files) and `docs/pr_summaries/` (1 file) remain in the taxonomy.
+- ✅ **§6 "Old Verification Reports" cleanup closed.** The flagged `docs/development/VERIFICATION_COMPLETE.md` redirect stub is among the 12 deleted; canonical `docs/verification/VERIFICATION_COMPLETE.md` retained.
 
 ## Version 2.4.3 Changes (2026-05-01)
 
@@ -1257,8 +1261,8 @@ pytestmark = pytest.mark.skipif(not TORCH_AVAILABLE, reason="torch required for 
    - `docs/fixes/BINARY_FILE_BEST_PRACTICES.md` (lines 133, 140)
    - Reason: Cleanup completed per PRE_PUSH_AUDIT_REPORT.md
 
-3. **Old Verification Reports**
-   - `docs/development/VERIFICATION_COMPLETE.md` (multiple PENDING markers)
+3. **Old Verification Reports** — ✅ RESOLVED 2026-05-01
+   - ~~`docs/development/VERIFICATION_COMPLETE.md` (multiple PENDING markers)~~ — redirect stub deleted; canonical `docs/verification/VERIFICATION_COMPLETE.md` retained
    - Reason: Verification completed, report outdated
 
 **Recommendation:**

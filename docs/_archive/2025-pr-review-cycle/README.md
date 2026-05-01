@@ -10,13 +10,16 @@ This directory holds historical PR-review artifacts from a one-time consolidatio
 | `PR_ACTIONABLE_FIXES.md` | 2025-10-31 | Per-PR actionable issue list compiled by Copilot Coding Agent. |
 | `PR_CONSOLIDATION_ANALYSIS.md` | 2025-10-31 | Analysis of 5 open/draft PRs for consolidation. |
 | `PR_REVIEW_SUMMARY.md` | 2025-10-31 | Summary report for the consolidation cycle (status: ✅ COMPLETE at time of writing). |
+| `CODEBASE_OPTIMIZATION_2025.md` | 2025-11-04 | Top-level record of the 2025 optimization branch (`copilot/optimize-codebase-structure`). Status was ✅ Complete at archive time. Documents the original moves into `docs/development/`, `docs/pr_reports/`, etc. — many of which have since been reorganized again, so its file lists have been updated inline to reflect current archive locations. |
 
 ## Provenance
 
-These four reports lived at `docs/pr_reports/` from October 2025 until **2026-05-01**, when they were moved here as part of routine archive hygiene. At the time of the move, the files were:
+These five reports lived at `docs/pr_reports/` and `docs/operations/` from October–November 2025 until **2026-05-01**, when they were moved here as part of routine archive hygiene. At the time of the move:
 
-- Not linked from any active doc index (only mentioned by name in `docs/operations/CODEBASE_OPTIMIZATION_2025.md`, itself a Nov-2025 historical record).
-- Reachable via three compatibility stubs at `docs/development/pr/` that redirected to the canonical paths under `docs/pr_reports/`. Those stubs were deleted alongside the move.
+- Four `pr_reports/` files were not linked from any active doc index (only mentioned by name in `CODEBASE_OPTIMIZATION_2025.md`).
+- `CODEBASE_OPTIMIZATION_2025.md` itself had zero incoming references and a "Complete" status header — the work it describes is done.
+- Three compatibility stubs at `docs/development/pr/` and seven more at `docs/development/` (plus two at `docs/development/testing/`) redirected to either these archived files or to canonical files in `docs/summaries/` / `docs/verification/`. None had any live incoming references in active docs (one had a single reference from `docs/analysis/TODO_INVENTORY.md` flagging it for cleanup). All twelve stubs were deleted alongside the moves; `docs/summaries/` and `docs/verification/` retain the canonical copies.
+- `docs/governance/DOCUMENTATION_POLICY.md` and `docs/governance/DOCUMENTATION_MAP.md` were updated to drop `docs/pr_reports/` from their taxonomy listings (the directory is now empty post-move).
 
 ## Archive policy
 
