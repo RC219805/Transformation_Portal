@@ -1,0 +1,70 @@
+/* portal-override-owner: reduced-motion */
+@media (prefers-reduced-motion: reduce) {
+  .workspace-shell,
+  .workspace-shell[data-ambient-active="true"],
+  .build-pulse-card,
+  .runtime-briefing-card,
+  .console-context-card,
+  .portal-context-shell {
+    transform: none !important;
+    animation: none !important;
+  }
+}
+
+/* portal-override-owner: prefers-contrast */
+@media (prefers-contrast: more) {
+  :root {
+    --ux-panel-border: rgba(15, 23, 42, 0.42);
+    --shell-muted: #334155;
+    --shell-accent-text: #115e59;
+  }
+
+  .dark:root {
+    --ux-panel-border: rgba(226, 232, 240, 0.58);
+    --shell-muted: #dbeafe;
+    --shell-accent-text: #ccfbf1;
+  }
+
+  .workspace-link,
+  .operator-action-btn,
+  .hero-action,
+  .stepper-nav-btn,
+  .dispatch-tool-btn {
+    border-width: 2px;
+  }
+}
+
+/* portal-override-owner: forced-colors */
+@media (forced-colors: active) {
+  .workspace-link,
+  .operator-action-btn,
+  .hero-action,
+  .stepper-nav-btn,
+  .dispatch-tool-btn,
+  .shell-panel,
+  .shell-panel-strong,
+  .workspace-shell,
+  .portal-context-shell,
+  .console-context-card,
+  .build-pulse-card,
+  .review-status-banner {
+    border: 1px solid ButtonBorder;
+    background: Canvas;
+    color: CanvasText;
+    box-shadow: none;
+  }
+
+  .hero-action-primary,
+  .operator-action-btn-primary,
+  .stepper-nav-btn-primary {
+    background: ButtonFace;
+    color: ButtonText;
+    border-color: ButtonBorder;
+  }
+
+  .status-dot {
+    forced-color-adjust: none;
+    background: CanvasText;
+    box-shadow: none;
+  }
+}

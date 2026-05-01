@@ -50,6 +50,7 @@ Quick reference for common workflows and commands in this repo.
 - `make run-frontdoor-local` start the canonical local managed frontdoor on `http://localhost:3000` after verifying backend readiness, auth env, and no silent fallback to `:3001`; it auto-seeds the canonical local user fixture when no explicit frontdoor user source is configured.
 - `make validate-orchestrator-http` run the live orchestrator HTTP smoke against a running backend.
 - `make validate-portal-lux-materials-live` launch an isolated local backend, submit a live `lux-depth-v3` Materials V3 segmentation job through `/v1/config-preview` and `/v1/jobs` with the governed DA3 non-commercial acknowledgment, require EfficientSAM evidence, and optionally run SAM2 when `TP_PORTAL_LUX_RUN_SAM2=1` (hard gate with `TP_PORTAL_LUX_REQUIRE_SAM2=1`).
+- `make validate-portal-css-layer-parity` run the production portal CSS layer contract check and compare computed styles against the committed post-#1592 parity baseline.
 - `make validate-portal-browser` launch an isolated local backend, then run the live portal browser smoke; it seeds `TP_API_KEY=contract-secret` unless you override it.
 - `make validate-frontdoor-browser` launch isolated local backend and managed frontdoor runtimes, then run the live browser smoke; it auto-seeds the canonical local smoke credentials when it creates the managed frontdoor runtime itself.
 - `make validate-frontdoor-deployment-gate` run the manual shared-deployment frontdoor posture gate against a Cloudflare-fronted public hostname, a protected Vercel deployment URL, and either a public FastAPI probe URL or explicit non-public attestation.
@@ -129,6 +130,7 @@ Quick reference for common workflows and commands in this repo.
 - `./.venv/bin/python scripts/validation/check_local_environment.py --check validation-smoke` classify validation smoke failures as environment/tooling vs product regressions.
 - `./scripts/setup/ensure_node_version.sh` Node version enforcement wrapper with version manager detection.
 - `cd web/secure-landing && npm run build:portal` bundle the modularized portal sources back into the shipped `public/portal-assets/portal.js` asset and sync shared UI token primitives.
+- `cd web/secure-landing && npm run check:css-layer-parity` verify the production portal CSS layer graph, generated layer order, and unlayered-rule contract before running browser parity.
 - `./scripts/validation/run_full_validation_suite.sh` all-in-one validation orchestrator.
 - `./scripts/validation/run_full_validation_suite.sh --quick` skip browser smokes for faster iteration.
 - `./scripts/validation/run_full_validation_suite.sh --skip-frontdoor` Python-only validation.

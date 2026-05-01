@@ -1,16 +1,14 @@
 #!/usr/bin/env python3
-"""Compare current portal CSS against the proposed layered CSS graph in Chrome."""
+"""Compare production portal CSS computed styles against the committed layer baseline."""
 
 from __future__ import annotations
 
 import argparse
-import base64
 import json
 import os
 import shutil
 import subprocess
 import sys
-import tempfile
 from pathlib import Path
 from typing import Any, Dict, Iterable, Optional
 
@@ -35,12 +33,12 @@ def _repo_root() -> Path:
     return Path(__file__).resolve().parents[2]
 
 
-def _frontdoor_root() -> Path:
-    return _repo_root() / "web" / "secure-landing"
-
-
 def _layer_parity_contract_path() -> Path:
-    return _frontdoor_root() / "portal-src" / "styles" / "layer-parity-contract.json"
+    return _repo_root() / "tests" / "fixtures" / "portal-css" / "layer-parity-contract.json"
+
+
+def _layer_parity_baseline_path() -> Path:
+    return _repo_root() / "tests" / "fixtures" / "portal-css" / "layer-parity-baseline.json"
 
 
 def _load_layer_parity_contract() -> tuple[list[str], list[str]]:
@@ -58,11 +56,13 @@ def _parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--base-url", default=os.getenv("TP_ORCHESTRATOR_BASE_URL", "http://127.0.0.1:8000"))
     parser.add_argument("--api-key", default=os.getenv("TP_API_KEY", "contract-secret"))
+    parser.add_argument("--baseline-path", default=str(_layer_parity_baseline_path()))
     parser.add_argument("--chrome-binary", default=os.getenv("TP_PORTAL_BROWSER_BINARY", ""))
     parser.add_argument("--debugging-port", type=int, default=0)
     parser.add_argument("--timeout-seconds", type=float, default=30.0)
     parser.add_argument("--spawn-local-backend", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--backend-startup-timeout-seconds", type=float, default=30.0)
+    parser.add_argument("--write-baseline", action="store_true")
     return parser.parse_args(list(argv) if argv is not None else None)
 
 
@@ -121,53 +121,24 @@ def _style_snapshot_expression() -> str:
 """
 
 
-def _apply_layered_css_expression(layered_css: str) -> str:
-    encoded = base64.b64encode(layered_css.encode("utf-8")).decode("ascii")
-    return f"""
-(() => {{
-  for (const link of Array.from(document.querySelectorAll('link[rel="stylesheet"]'))) {{
-    if (String(link.href || '').includes('/portal/assets/portal.css')) {{
-      link.disabled = true;
-      link.setAttribute('data-layer-parity-disabled', 'true');
-    }}
-  }}
-  const previous = document.getElementById('portal-layer-parity-css');
-  if (previous) previous.remove();
-  const style = document.createElement('style');
-  style.id = 'portal-layer-parity-css';
-  style.textContent = atob('{encoded}');
-  document.head.appendChild(style);
-  return new Promise((resolve) => {{
-    requestAnimationFrame(() => {{
-      requestAnimationFrame(() => {{
-        window.setTimeout(() => resolve(true), 450);
-      }});
-    }});
-  }});
-}})()
-"""
-
-
 def _style_settle_expression() -> str:
     return "new Promise((resolve) => window.setTimeout(() => resolve(true), 450))"
 
 
-def _write_layered_css(temp_dir: Path) -> Path:
-    output_path = temp_dir / "portal-layered.css"
-    subprocess.run(
-        [
-            "node",
-            "./scripts/check-portal-css-layer-dry-run.mjs",
-            "--write-css",
-            str(output_path),
-        ],
-        cwd=_frontdoor_root(),
-        check=True,
-        text=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-    )
-    return output_path
+def _force_snapshot_state_expression() -> str:
+    return r"""
+(() => {
+  try {
+    window.localStorage.setItem('portal-theme', 'dark');
+  } catch (_error) {}
+  document.documentElement.classList.remove('light');
+  document.documentElement.classList.add('dark');
+  if (document.body) {
+    document.body.classList.remove('performance-lite');
+  }
+  return true;
+})()
+"""
 
 
 def _diff_snapshots(before: Dict[str, Any], after: Dict[str, Any]) -> list[str]:
@@ -186,6 +157,38 @@ def _diff_snapshots(before: Dict[str, Any], after: Dict[str, Any]) -> list[str]:
                         f"{selector} {key}: {before_values.get(key)!r} -> {after_values.get(key)!r}"
                     )
     return differences
+
+
+def _read_baseline(path: Path) -> Dict[str, Any]:
+    if not path.exists():
+        raise SmokeFailure(f"Layer parity baseline is missing: {path}")
+    baseline = json.loads(path.read_text(encoding="utf-8"))
+    selectors = baseline.get("representativeStyleSelectors")
+    properties = baseline.get("representativeStyleProperties")
+    if selectors != REPRESENTATIVE_STYLE_SELECTORS or properties != REPRESENTATIVE_STYLE_PROPERTIES:
+        raise SmokeFailure("Layer parity baseline contract does not match layer-parity-contract.json")
+    snapshot = baseline.get("snapshot")
+    if not isinstance(snapshot, dict):
+        raise SmokeFailure(f"Layer parity baseline has no snapshot object: {path}")
+    return snapshot
+
+
+def _write_baseline(path: Path, snapshot: Dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "representativeStyleSelectors": REPRESENTATIVE_STYLE_SELECTORS,
+                "representativeStyleProperties": REPRESENTATIVE_STYLE_PROPERTIES,
+                "snapshot": snapshot,
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
 
 
 def _launch_chrome(chrome_binary: str, port: int, profile_dir: Path) -> subprocess.Popen[str]:
@@ -216,7 +219,6 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
     chrome_process: Optional[subprocess.Popen[str]] = None
     connection: Optional[DevToolsConnection] = None
     profile_dir: Optional[Path] = None
-    temp_dir = Path(tempfile.mkdtemp(prefix="tp-portal-layer-parity-"))
 
     try:
         base_url = _base_url(str(args.base_url))
@@ -228,9 +230,6 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
             )
             base_url = runtime_handle.base_url
             print(f"portal-css-layer-parity: isolated backend ready at {base_url}", flush=True)
-
-        layered_css_path = _write_layered_css(temp_dir)
-        layered_css = layered_css_path.read_text(encoding="utf-8")
 
         profile_dir = _default_profile_dir()
         port = int(args.debugging_port or _find_free_port())
@@ -257,15 +256,27 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
             timeout_seconds=float(args.timeout_seconds),
             description="portal document ready",
         )
+        connection.evaluate(_force_snapshot_state_expression(), timeout_seconds=20.0)
         connection.evaluate(_style_settle_expression(), timeout_seconds=20.0)
-        before = connection.evaluate(_style_snapshot_expression(), timeout_seconds=20.0)
-        connection.evaluate(_apply_layered_css_expression(layered_css), timeout_seconds=20.0)
-        after = connection.evaluate(_style_snapshot_expression(), timeout_seconds=20.0)
-        differences = _diff_snapshots(before, after)
+        current = connection.evaluate(_style_snapshot_expression(), timeout_seconds=20.0)
+
+        baseline_path = Path(str(args.baseline_path))
+        if args.write_baseline:
+            _write_baseline(baseline_path, current)
+            print(
+                "portal-css-layer-parity: wrote baseline "
+                f"{baseline_path} ({len(REPRESENTATIVE_STYLE_SELECTORS)} selectors, "
+                f"{len(REPRESENTATIVE_STYLE_PROPERTIES)} properties)",
+                flush=True,
+            )
+            return 0
+
+        expected = _read_baseline(baseline_path)
+        differences = _diff_snapshots(expected, current)
         if differences:
             detail = "\n".join(differences[:40])
             suffix = f"\n... {len(differences) - 40} additional differences" if len(differences) > 40 else ""
-            raise SmokeFailure(f"Layered CSS computed-style parity failed:\n{detail}{suffix}")
+            raise SmokeFailure(f"Layered CSS computed-style parity failed against baseline:\n{detail}{suffix}")
 
         print(
             "portal-css-layer-parity: ok "
@@ -291,7 +302,6 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
             shutil.rmtree(profile_dir, ignore_errors=True)
         if runtime_handle is not None:
             _terminate_runtime(runtime_handle)
-        shutil.rmtree(temp_dir, ignore_errors=True)
 
 
 if __name__ == "__main__":

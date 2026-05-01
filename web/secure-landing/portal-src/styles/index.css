@@ -1,5 +1,16 @@
-@import "./tokens.css";
-@import "./base.css";
-@import "./components.current.css";
-@import "./utilities.compat.css";
-@import "./overrides.current.css";
+@layer tokens, base, components, utilities, overrides;
+
+@import "../../../../web/shared/shared-ui-tokens.css" layer(tokens);
+@import "./tokens.css" layer(tokens);
+@import "./base.css" layer(base);
+@import "./components/status-feedback.css" layer(components);
+@import "./components/shell-foundation.css" layer(components);
+@import "./components/console-context.css" layer(components);
+@import "./components/dispatch-surfaces.css" layer(components);
+@import "./components/responsive-layout.css" layer(components);
+@import "./components/workspace-performance.css" layer(utilities);
+@import "./utilities.operator-console-reset.css" layer(utilities);
+@import "./utilities.compat.css" layer(utilities);
+@import "./overrides.compat.css" layer(utilities);
+@import "./overrides.performance.css" layer(overrides);
+@import "./overrides.accessibility.css" layer(overrides);
