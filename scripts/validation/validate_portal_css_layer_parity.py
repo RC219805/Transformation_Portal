@@ -11,7 +11,6 @@ import shutil
 import subprocess
 import sys
 import tempfile
-import time
 from pathlib import Path
 from typing import Any, Dict, Iterable, Optional
 
@@ -32,57 +31,27 @@ from validate_portal_browser_smoke import (  # type: ignore
 )
 
 
-REPRESENTATIVE_STYLE_SELECTORS = [
-    "body.shell-bg",
-    ".portal-topbar",
-    '[data-ui="view-switcher"]',
-    '[data-ui="view-link"]',
-    '[data-ui="overview-summary"]',
-    '[data-ui="console-context-ribbon"]',
-    '[data-ui="build-stepper"]',
-    '[data-ui="dispatch-cta"]',
-    '[data-ui="queue-panel"]',
-    '[data-ui="inspector-panel"]',
-    '[data-ui="staged-upload-shell"]',
-    '[data-ui="staged-upload-progress"]',
-    '[data-ui="review-open"]',
-]
-REPRESENTATIVE_STYLE_PROPERTIES = [
-    "display",
-    "position",
-    "visibility",
-    "grid-template-columns",
-    "grid-template-areas",
-    "grid-column",
-    "width",
-    "min-width",
-    "max-width",
-    "height",
-    "min-height",
-    "max-height",
-    "margin",
-    "padding",
-    "color",
-    "background-color",
-    "border-color",
-    "box-shadow",
-    "opacity",
-    "transform",
-    "transition-property",
-    "z-index",
-    "overflow",
-    "font-size",
-    "line-height",
-    "font-weight",
-]
-
-
 def _repo_root() -> Path:
     return Path(__file__).resolve().parents[2]
 
 
 def _frontdoor_root() -> Path:
     return _repo_root() / "web" / "secure-landing"
+
+
+def _layer_parity_contract_path() -> Path:
+    return _frontdoor_root() / "portal-src" / "styles" / "layer-parity-contract.json"
+
+
+def _load_layer_parity_contract() -> tuple[list[str], list[str]]:
+    contract = json.loads(_layer_parity_contract_path().read_text(encoding="utf-8"))
+    return (
+        list(contract["representativeStyleSelectors"]),
+        list(contract["representativeStyleProperties"]),
+    )
+
+
+REPRESENTATIVE_STYLE_SELECTORS, REPRESENTATIVE_STYLE_PROPERTIES = _load_layer_parity_contract()
 
 
 def _parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:

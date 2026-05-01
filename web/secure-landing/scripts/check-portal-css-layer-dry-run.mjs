@@ -11,6 +11,7 @@ const FRONTDOOR_ROOT = path.resolve(__dirname, "..");
 const REPO_ROOT = path.resolve(FRONTDOOR_ROOT, "..", "..");
 const PORTAL_CSS_SOURCE_DIR = path.resolve(FRONTDOOR_ROOT, "portal-src", "styles");
 const PORTAL_CSS_FONT_TEMPLATE_PATH = path.resolve(PORTAL_CSS_SOURCE_DIR, "fonts.template.css");
+const LAYER_PARITY_CONTRACT_PATH = path.resolve(PORTAL_CSS_SOURCE_DIR, "layer-parity-contract.json");
 const EXPECTED_LAYER_ORDER = ["tokens", "base", "components", "utilities", "overrides"];
 const COMPONENT_IMPORTS = [
   "./components/status-feedback.css",
@@ -29,49 +30,9 @@ const TRANSITIONAL_UTILITY_IMPORTS = [
   "./overrides.current.css"
 ];
 const FONT_PLACEHOLDERS = ["__PORTAL_FONT_SANS_URL__", "__PORTAL_FONT_MONO_URL__"];
-const REPRESENTATIVE_STYLE_SELECTORS = [
-  "body.shell-bg",
-  "[data-ui=\"portal-topbar\"]",
-  "[data-ui=\"view-switcher\"]",
-  "[data-ui=\"view-link\"]",
-  "[data-ui=\"overview-summary\"]",
-  "[data-ui=\"console-context-ribbon\"]",
-  "[data-ui=\"build-stepper\"]",
-  "[data-ui=\"dispatch-cta\"]",
-  "[data-ui=\"queue-panel\"]",
-  "[data-ui=\"inspector-panel\"]",
-  "[data-ui=\"staged-upload-shell\"]",
-  "[data-ui=\"staged-upload-progress\"]",
-  "[data-ui=\"review-open\"]"
-];
-const REPRESENTATIVE_PROPERTIES = [
-  "display",
-  "position",
-  "visibility",
-  "grid-template-columns",
-  "grid-template-areas",
-  "grid-column",
-  "width",
-  "min-width",
-  "max-width",
-  "height",
-  "min-height",
-  "max-height",
-  "margin",
-  "padding",
-  "color",
-  "background-color",
-  "border-color",
-  "box-shadow",
-  "opacity",
-  "transform",
-  "transition-property",
-  "z-index",
-  "overflow",
-  "font-size",
-  "line-height",
-  "font-weight"
-];
+const layerParityContract = JSON.parse(readFileSync(LAYER_PARITY_CONTRACT_PATH, "utf-8"));
+const REPRESENTATIVE_STYLE_SELECTORS = layerParityContract.representativeStyleSelectors;
+const REPRESENTATIVE_PROPERTIES = layerParityContract.representativeStyleProperties;
 
 const writeCssIndex = process.argv.indexOf("--write-css");
 const writeCssPath = writeCssIndex >= 0 ? process.argv[writeCssIndex + 1] : "";
