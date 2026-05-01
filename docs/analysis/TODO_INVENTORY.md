@@ -1,9 +1,9 @@
 # TODO Inventory - Transformation Portal
 
-**Document Version:** 2.4.3
+**Document Version:** 2.4.4
 **Date:** May 1, 2026
-**Last Updated:** 2026-05-01 (ADR-023 audit closed; obsolete guide deleted)
-**Previous Version:** 2.4.2 (2026-05-01)
+**Last Updated:** 2026-05-01 (orphaned 2025 PR-review reports archived)
+**Previous Version:** 2.4.3 (2026-05-01)
 
 ---
 
@@ -16,6 +16,11 @@ This document provides a **complete, categorized inventory** of all TODOs, NotIm
 - Audit trail for architectural decisions
 - Integration with issue tracking systems
 - Binding inventory enforced by Architect governance
+
+## Version 2.4.4 Changes (2026-05-01)
+
+**Major Updates:**
+- ✅ **Orphaned 2025 PR-review reports archived.** Four canonical files at `docs/pr_reports/` (`BUG_REPORT_CODE_REVIEW.md`, `PR_ACTIONABLE_FIXES.md`, `PR_CONSOLIDATION_ANALYSIS.md`, `PR_REVIEW_SUMMARY.md`, dated October 2025 / January 2025) were moved to `docs/_archive/2025-pr-review-cycle/` with a provenance README. Three dangling redirect stubs at `docs/development/pr/` were deleted (they pointed to the moved canonical files via relative paths and had no other purpose). The textual reference list in `docs/operations/CODEBASE_OPTIMIZATION_2025.md` was annotated to reflect the new archive locations. Mirrors the pattern established by the 2026-03-legacy-prs and 2026-Q1-consolidation archives.
 
 ## Version 2.4.3 Changes (2026-05-01)
 

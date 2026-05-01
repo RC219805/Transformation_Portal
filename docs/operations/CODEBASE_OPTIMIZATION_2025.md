@@ -55,14 +55,14 @@ docs/
 - VFX_EXTENSION_FIX_SUMMARY.md
 - Validation_of_PR162_Integration.md
 
-**Moved to `docs/development/pr/`**:
-- PR100_FIX_SUMMARY.md
-- PR162_VERIFICATION_SUMMARY.md
-- PR98_ACTION_ITEMS.md
-- PR98_VERIFICATION_REPORT.md
-- PR_ACTIONABLE_FIXES.md
-- PR_CONSOLIDATION_ANALYSIS.md
-- PR_REVIEW_SUMMARY.md
+**Moved to `docs/development/pr/`**: *(updated 2026-05-01: redirect stubs and canonical files have been archived; see below)*
+- PR100_FIX_SUMMARY.md *(archived 2026-03 → `docs/_archive/2026-03-legacy-prs/`)*
+- PR162_VERIFICATION_SUMMARY.md *(archived 2026-03 → `docs/_archive/2026-03-legacy-prs/`)*
+- PR98_ACTION_ITEMS.md *(archived 2026-03 → `docs/_archive/2026-03-legacy-prs/`)*
+- PR98_VERIFICATION_REPORT.md *(archived 2026-03 → `docs/_archive/2026-03-legacy-prs/`)*
+- PR_ACTIONABLE_FIXES.md *(archived 2026-05 → `docs/_archive/2025-pr-review-cycle/`)*
+- PR_CONSOLIDATION_ANALYSIS.md *(archived 2026-05 → `docs/_archive/2025-pr-review-cycle/`)*
+- PR_REVIEW_SUMMARY.md *(archived 2026-05 → `docs/_archive/2025-pr-review-cycle/`)*
 
 **Moved to `docs/development/testing/`**:
 - CI_FIXES_SUMMARY.md
