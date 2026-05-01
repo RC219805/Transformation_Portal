@@ -1,5 +1,5 @@
-/* Operator console reset */
-
+/* portal-utility-owner: compatibility-order
+   reason: preserves post-#1592 operator console reset source order ahead of utilities.compat.css while utility pruning is deferred. */
 .dark .shell-bg {
     background:
         radial-gradient(circle at 14% 18%, rgba(34, 211, 238, 0.12), transparent 24%),

@@ -68,10 +68,8 @@ async function bundleCssEntry(entryPoint) {
 
 async function renderPortalCssAsset() {
   const fontTemplate = readFileSync(PORTAL_CSS_FONT_TEMPLATE_PATH, "utf-8");
-  const sharedTokenCss = readFileSync(SHARED_TOKEN_SOURCE_PATH, "utf-8");
   const bundledPortalCss = await bundleCssEntry(PORTAL_CSS_INDEX_PATH);
-  const cssBody = [sharedTokenCss, bundledPortalCss].join("\n");
-  const renderedCss = `${await minifyCssText(fontTemplate)}${await minifyCssText(cssBody)}`;
+  const renderedCss = `${await minifyCssText(fontTemplate)}${bundledPortalCss}`;
 
   if (renderedCss.includes("@import")) {
     throw new Error("Generated portal.css must not contain runtime @import rules");

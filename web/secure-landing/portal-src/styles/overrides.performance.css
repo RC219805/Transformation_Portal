@@ -1,0 +1,44 @@
+/* portal-override-owner: performance-lite */
+.deferred-shell {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 640px;
+}
+
+.deferred-shell[data-shell-size="compact"] {
+    contain-intrinsic-size: auto 360px;
+}
+
+.deferred-shell[data-shell-size="tall"] {
+    contain-intrinsic-size: auto 760px;
+}
+
+.performance-lite .ambient-stage,
+.performance-lite .ambient-veil,
+.performance-lite .ambient-grid,
+.performance-lite .ambient-sweep,
+.performance-lite .ambient-focus,
+.performance-lite .ambient-orb,
+.performance-lite .ambient-ring {
+    display: none;
+}
+
+.performance-lite .portal-video-media {
+    display: none;
+}
+
+.performance-lite .shell-bg {
+    animation: none;
+    background-size: 100% 100%, 110% 110%, 110% 110%, 100% 100%;
+}
+
+.performance-lite .shell-panel,
+.performance-lite .shell-panel-strong,
+.performance-lite .workspace-rail,
+.performance-lite header {
+    backdrop-filter: blur(12px);
+}
+
+.performance-lite .workspace-shell[data-ambient-active="true"] {
+    transform: none;
+    box-shadow: none;
+}

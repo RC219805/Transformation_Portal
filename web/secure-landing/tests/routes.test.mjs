@@ -2289,13 +2289,15 @@ test("shared UI tokens stay synced to the canonical source", () => {
   assert.notEqual(frontdoorTokens, canonicalTokens);
   assert.notEqual(portalTokens, canonicalTokens);
   assert.match(portalCss, /--ux-target-min-size\s*:/);
-  assert.doesNotMatch(portalCss, /@layer\b/);
+  assert.match(portalCss, /@layer\s+tokens\s*,\s*base\s*,\s*components\s*,\s*utilities\s*,\s*overrides\s*;/);
   assert.doesNotMatch(portalCss, /@import\b/);
   assert.doesNotMatch(portalCss, /__PORTAL_SHARED_TOKENS_URL__/);
   assert.match(portalCss, /__PORTAL_FONT_SANS_URL__/);
   assert.match(portalCss, /__PORTAL_FONT_MONO_URL__/);
-  assert.match(portalCssIndex, /@import "\.\/tokens\.css";/);
-  assert.match(portalCssIndex, /@import "\.\/utilities\.compat\.css";/);
+  assert.match(portalCssIndex, /@layer tokens, base, components, utilities, overrides;/);
+  assert.match(portalCssIndex, /@import "\.\/tokens\.css" layer\(tokens\);/);
+  assert.match(portalCssIndex, /@import "\.\/utilities\.compat\.css" layer\(utilities\);/);
+  assert.match(portalCssIndex, /@import "\.\/overrides\.accessibility\.css" layer\(overrides\);/);
   const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const cssClassLiteral = (value) => value.replace(/[^A-Za-z0-9_-]/g, (character) => `\\${character}`);
   for (const classToken of [
