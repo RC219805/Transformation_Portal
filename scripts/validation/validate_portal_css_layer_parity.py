@@ -199,7 +199,46 @@ def _parse_args(argv: Optional[Iterable[str]] = None) -> argparse.Namespace:
     parser.add_argument("--spawn-local-backend", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--backend-startup-timeout-seconds", type=float, default=30.0)
     parser.add_argument("--write-baseline", action="store_true")
+    parser.add_argument(
+        "--disable-compat-overrides",
+        action="store_true",
+        default=os.getenv("PORTAL_CSS_DISABLE_COMPAT_OVERRIDES") == "1",
+        help=(
+            "Rebuild portal.css with overrides.compat.css emitted as empty, run parity, then restore the "
+            "original asset. Proves component-layer semantic rules own the style without the compat override."
+        ),
+    )
     return parser.parse_args(list(argv) if argv is not None else None)
+
+
+def _portal_css_asset_path() -> Path:
+    return _repo_root() / "public" / "portal-assets" / "portal.css"
+
+
+def _portal_bundle_script_path() -> Path:
+    return _repo_root() / "web" / "secure-landing" / "scripts" / "build-portal-bundle.mjs"
+
+
+def _build_portal_css_with_compat_disabled() -> None:
+    script = _portal_bundle_script_path()
+    env = {**os.environ, "PORTAL_CSS_DISABLE_COMPAT_OVERRIDES": "1"}
+    try:
+        subprocess.run(
+            ["node", str(script)],
+            check=True,
+            env=env,
+            cwd=str(_repo_root()),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+    except FileNotFoundError as exc:
+        raise SmokeFailure(f"node binary not found while rebuilding portal.css: {exc}") from exc
+    except subprocess.CalledProcessError as exc:
+        raise SmokeFailure(
+            "PORTAL_CSS_DISABLE_COMPAT_OVERRIDES=1 build failed; "
+            f"stdout={exc.stdout!r} stderr={exc.stderr!r}"
+        ) from exc
 
 
 def _portal_shell_probe_expression() -> str:
@@ -542,8 +581,30 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
     chrome_process: Optional[subprocess.Popen[str]] = None
     connection: Optional[DevToolsConnection] = None
     profile_dir: Optional[Path] = None
+    portal_css_backup: Optional[bytes] = None
+    portal_css_path = _portal_css_asset_path()
+    probe_mode = bool(args.disable_compat_overrides)
 
     try:
+        if probe_mode:
+            if args.write_baseline:
+                raise SmokeFailure(
+                    "--write-baseline must not be combined with --disable-compat-overrides; "
+                    "the probe build is not a valid baseline source."
+                )
+            if not portal_css_path.exists():
+                raise SmokeFailure(
+                    f"Cannot enter compat-disabled probe mode: {portal_css_path} is missing. "
+                    "Run npm run build:portal first."
+                )
+            portal_css_backup = portal_css_path.read_bytes()
+            print(
+                "portal-css-layer-parity: probe mode active "
+                "(PORTAL_CSS_DISABLE_COMPAT_OVERRIDES=1); rebuilding portal.css without overrides.compat.css",
+                flush=True,
+            )
+            _build_portal_css_with_compat_disabled()
+
         base_url = _base_url(str(args.base_url))
         if args.spawn_local_backend:
             print("portal-css-layer-parity: launching isolated local backend", flush=True)
@@ -603,7 +664,13 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
         if differences:
             detail = "\n".join(differences[:40])
             suffix = f"\n... {len(differences) - 40} additional differences" if len(differences) > 40 else ""
-            raise SmokeFailure(f"Layered CSS computed-style parity failed against baseline:\n{detail}{suffix}")
+            mode_label = (
+                "compat-disabled probe parity failed: a candidate semantic rule does not own this style "
+                "without overrides.compat.css"
+                if probe_mode
+                else "Layered CSS computed-style parity failed against baseline"
+            )
+            raise SmokeFailure(f"{mode_label}:\n{detail}{suffix}")
 
         runtime_utility_classes = _collect_runtime_utility_classes(
             connection,
@@ -623,7 +690,8 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
 
         print(
             "portal-css-layer-parity: ok "
-            f"({len(REPRESENTATIVE_STYLE_SELECTORS)} selectors, "
+            f"({'compat-disabled probe; ' if probe_mode else ''}"
+            f"{len(REPRESENTATIVE_STYLE_SELECTORS)} selectors, "
             f"{len(REPRESENTATIVE_STYLE_PROPERTIES)} properties, "
             f"{len(runtime_utility_classes)} runtime utility classes)",
             flush=True,
@@ -646,6 +714,19 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
             shutil.rmtree(profile_dir, ignore_errors=True)
         if runtime_handle is not None:
             _terminate_runtime(runtime_handle)
+        if portal_css_backup is not None:
+            try:
+                portal_css_path.write_bytes(portal_css_backup)
+                print(
+                    f"portal-css-layer-parity: restored {portal_css_path} from pre-probe backup",
+                    flush=True,
+                )
+            except OSError as exc:
+                print(
+                    f"portal-css-layer-parity: WARNING failed to restore {portal_css_path}: {exc}",
+                    file=sys.stderr,
+                    flush=True,
+                )
 
 
 if __name__ == "__main__":

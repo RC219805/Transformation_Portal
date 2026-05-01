@@ -24,6 +24,29 @@ const PORTAL_SHARED_TOKEN_TARGET = path.resolve(REPO_ROOT, "public", "portal-ass
 const FRONTDOOR_SHARED_TOKEN_TARGET = path.resolve(FRONTDOOR_ROOT, "public", "shared-ui-tokens.css");
 const PORTAL_INTERNALS_PLACEHOLDER = "/* __PORTAL_INTERNALS__ */";
 const PORTAL_FONT_PLACEHOLDERS = ["__PORTAL_FONT_SANS_URL__", "__PORTAL_FONT_MONO_URL__"];
+const PORTAL_COMPAT_OVERRIDE_DISABLE_FLAG = "PORTAL_CSS_DISABLE_COMPAT_OVERRIDES";
+const PORTAL_COMPAT_OVERRIDE_PATH = path.resolve(PORTAL_CSS_SOURCE_DIR, "overrides.compat.css");
+
+function compatOverridesDisabled() {
+  return process.env[PORTAL_COMPAT_OVERRIDE_DISABLE_FLAG] === "1";
+}
+
+function emptyCompatOverridePlugin() {
+  return {
+    name: "portal-compat-overrides-empty",
+    setup(buildApi) {
+      buildApi.onLoad({ filter: /overrides\.compat\.css$/ }, (args) => {
+        if (path.resolve(args.path) !== PORTAL_COMPAT_OVERRIDE_PATH) {
+          return null;
+        }
+        return {
+          contents: "/* PORTAL_CSS_DISABLE_COMPAT_OVERRIDES=1: overrides.compat.css emitted as empty for parity probe */\n",
+          loader: "css"
+        };
+      });
+    }
+  };
+}
 
 function writeIfChanged(targetPath, content) {
   const nextContent = typeof content === "string" ? content : String(content);
@@ -50,6 +73,10 @@ async function writeMinifiedCssCopy(sourcePath, targetPath) {
 }
 
 async function bundleCssEntry(entryPoint) {
+  const plugins = [];
+  if (compatOverridesDisabled()) {
+    plugins.push(emptyCompatOverridePlugin());
+  }
   const bundleResult = await build({
     absWorkingDir: REPO_ROOT,
     bundle: true,
@@ -57,6 +84,7 @@ async function bundleCssEntry(entryPoint) {
     legalComments: "none",
     minify: true,
     outfile: "portal.css",
+    plugins,
     write: false
   });
   const outputText = bundleResult.outputFiles?.[0]?.text;
@@ -87,6 +115,11 @@ async function renderPortalCssAsset() {
 }
 
 async function buildPortalCssAsset() {
+  if (compatOverridesDisabled()) {
+    console.log(
+      `portal css probe mode: ${PORTAL_COMPAT_OVERRIDE_DISABLE_FLAG}=1 – overrides.compat.css emitted as empty; do not commit the resulting portal.css.`
+    );
+  }
   return writeIfChanged(PORTAL_CSS_ASSET_PATH, await renderPortalCssAsset());
 }
 
@@ -127,6 +160,11 @@ async function bundleText(entryPoint, options = {}) {
 await ensureSupportedRuntime();
 
 if (process.argv.includes("--check-css")) {
+  if (compatOverridesDisabled()) {
+    throw new Error(
+      `${PORTAL_COMPAT_OVERRIDE_DISABLE_FLAG}=1 is a parity-probe build flag and must not be combined with --check-css.`
+    );
+  }
   const expectedCss = await renderPortalCssAsset();
   const currentCss = existsSync(PORTAL_CSS_ASSET_PATH) ? readFileSync(PORTAL_CSS_ASSET_PATH, "utf-8") : "";
   if (currentCss !== expectedCss) {
