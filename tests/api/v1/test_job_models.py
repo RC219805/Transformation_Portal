@@ -15,6 +15,8 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
+pytestmark = pytest.mark.unit
+
 from transformation_portal.api.v1 import (
     ErrorObject,
     JobBriefData,

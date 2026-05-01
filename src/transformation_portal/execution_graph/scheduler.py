@@ -177,6 +177,8 @@ class PriorityDAGScheduler:
             rec_stack.add(node_id)
 
             for dep in self.nodes[node_id].deps:
+                if dep not in self.nodes:
+                    continue  # missing deps already reported above
                 if dep not in visited:
                     if has_cycle(dep):
                         return True

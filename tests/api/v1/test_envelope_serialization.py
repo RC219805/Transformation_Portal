@@ -24,6 +24,8 @@ from typing import Any
 
 import pytest
 
+pytestmark = pytest.mark.unit
+
 from transformation_portal.api.v1 import (
     ApiEnvelope,
     ErrorCode,
