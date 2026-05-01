@@ -130,6 +130,7 @@ Quick reference for common workflows and commands in this repo.
 - `./.venv/bin/python scripts/validation/check_local_environment.py --check validation-smoke` classify validation smoke failures as environment/tooling vs product regressions.
 - `./scripts/setup/ensure_node_version.sh` Node version enforcement wrapper with version manager detection.
 - `cd web/secure-landing && npm run build:portal` bundle the modularized portal sources back into the shipped `public/portal-assets/portal.js` asset and sync shared UI token primitives.
+- `cd web/secure-landing && npm run check:utility-ownership` validate the portal utility ownership manifest, generated usage report, and compat-hold/deprecated utility gates.
 - `cd web/secure-landing && npm run check:css-layer-parity` verify the production portal CSS layer graph, generated layer order, and unlayered-rule contract before running browser parity.
 - `./scripts/validation/run_full_validation_suite.sh` all-in-one validation orchestrator.
 - `./scripts/validation/run_full_validation_suite.sh --quick` skip browser smokes for faster iteration.

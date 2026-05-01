@@ -224,18 +224,6 @@
       "owners": []
     },
     {
-      "key": ".focus\\:ring-amber-500:focus|||",
-      "category": "conflicting",
-      "hotspot": false,
-      "owners": []
-    },
-    {
-      "key": ".focus\\:ring-cyan-500:focus|||",
-      "category": "conflicting",
-      "hotspot": false,
-      "owners": []
-    },
-    {
       "key": ".focus\\:ring-indigo-500:focus|||",
       "category": "additive",
       "hotspot": false,
@@ -286,18 +274,6 @@
     {
       "key": ".panel-subtle|||",
       "category": "conflicting",
-      "hotspot": false,
-      "owners": []
-    },
-    {
-      "key": ".peer:checked ~ .peer-checked\\:bg-indigo-600|||",
-      "category": "identical",
-      "hotspot": false,
-      "owners": []
-    },
-    {
-      "key": ".peer:checked ~ .peer-checked\\:bg-red-500|||",
-      "category": "identical",
       "hotspot": false,
       "owners": []
     },
@@ -382,12 +358,6 @@
     {
       "key": ".section-kicker|||",
       "category": "conflicting",
-      "hotspot": false,
-      "owners": []
-    },
-    {
-      "key": ".selection\\:bg-cyan-500\\/25::selection|||",
-      "category": "identical",
       "hotspot": false,
       "owners": []
     },
