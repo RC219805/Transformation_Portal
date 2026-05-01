@@ -86,17 +86,17 @@ Contract notes:
             </div>
 
             <div class="portal-topbar__actions flex items-center gap-3" data-ui="portal-topbar-actions">
-                <button id="shortcutsBtn" type="button" class="rounded-full border border-slate-200 dark:border-slate-700 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500 hover:text-slate-900 hover:border-slate-300 dark:text-slate-400 dark:hover:text-white dark:hover:border-slate-600 transition-colors">
+                <button id="shortcutsBtn" type="button" class="portal-action-control portal-action-control--topbar portal-action-control--shortcut rounded-full border border-slate-200 dark:border-slate-700 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500 hover:text-slate-900 hover:border-slate-300 dark:text-slate-400 dark:hover:text-white dark:hover:border-slate-600 transition-colors">
                     Shortcuts <span class="kbd">?</span>
                 </button>
-                <button id="themeBtn" type="button" class="rounded-full px-4 py-2 text-xs font-semibold border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors" aria-label="Theme preference: system. Click to switch to dark.">
+                <button id="themeBtn" type="button" class="portal-action-control portal-action-control--topbar rounded-full px-4 py-2 text-xs font-semibold border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors" aria-label="Theme preference: system. Click to switch to dark.">
                     Theme: System
                 </button>
             </div>
         </div>
     </header>
 
-    <main id="main-content" tabindex="-1" class="mx-auto max-w-7xl px-6 py-8 outline-none">
+    <main id="main-content" tabindex="-1" class="portal-main mx-auto max-w-7xl px-6 py-8 outline-none">
         <div class="portal-shell-grid">
         <!-- ============================================ -->
         <!-- 2. OVERVIEW VIEW                            -->
@@ -350,7 +350,7 @@ Contract notes:
             </div>
         </nav>
 
-        <section id="console-context-shell" class="workspace-shell portal-context-shell mb-6 lg:mb-0 rounded-2xl shell-panel px-6 py-5" data-ui="console-context-shell">
+        <section id="console-context-shell" class="portal-shell-card portal-shell-card--context workspace-shell portal-context-shell mb-6 lg:mb-0 rounded-2xl shell-panel px-6 py-5" data-ui="console-context-shell">
             <div class="portal-context-head flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
                 <div>
                     <p class="section-kicker">Current View</p>
@@ -406,7 +406,7 @@ Contract notes:
         <div id="console-grid" class="grid grid-cols-1 lg:grid-cols-12 gap-8 hidden">
 
             <!-- Left Column: Configuration -->
-            <section id="build-shell" class="lg:col-span-7 flex flex-col gap-6">
+            <section id="build-shell" class="portal-shell-card portal-shell-card--build lg:col-span-7 flex flex-col gap-6">
 
                 <!-- Orchestration Profile -->
                 <div id="profile-shell" data-ambient-zone="profile" data-ambient-focus-x="18" data-ambient-focus-y="28" data-ambient-shift-x="-22" data-ambient-shift-y="-4" data-ambient-stage-scale="1.02" data-ambient-stage-rotate="-0.45" data-ambient-color-a="#34d399" data-ambient-color-b="#f59e0b" data-ambient-color-c="#67e8f9" data-ambient-focus-color="#99f6e4" class="workspace-shell deferred-shell rounded-2xl shell-panel p-6 shadow-soft dark:shadow-soft-dark transition-colors duration-300" data-shell-size="compact" data-ui="connection-card">
@@ -1404,7 +1404,7 @@ Contract notes:
             <aside id="jobs-shell" class="lg:col-span-5 flex flex-col gap-6" data-ui="operate-grid">
 
                 <!-- Selected Job Inspector -->
-                <div id="selected-job-shell" data-ambient-zone="inspector" data-ambient-focus-x="78" data-ambient-focus-y="30" data-ambient-shift-x="18" data-ambient-shift-y="-2" data-ambient-stage-scale="1.032" data-ambient-stage-rotate="0.35" data-ambient-color-a="#38bdf8" data-ambient-color-b="#60a5fa" data-ambient-color-c="#22d3ee" data-ambient-focus-color="#bfdbfe" class="workspace-shell sticky-shell rounded-2xl shell-panel p-6 shadow-soft dark:shadow-soft-dark transition-colors duration-300" data-ui="inspector-panel">
+                <div id="selected-job-shell" data-ambient-zone="inspector" data-ambient-focus-x="78" data-ambient-focus-y="30" data-ambient-shift-x="18" data-ambient-shift-y="-2" data-ambient-stage-scale="1.032" data-ambient-stage-rotate="0.35" data-ambient-color-a="#38bdf8" data-ambient-color-b="#60a5fa" data-ambient-color-c="#22d3ee" data-ambient-focus-color="#bfdbfe" class="portal-shell-card portal-shell-card--inspector workspace-shell sticky-shell rounded-2xl shell-panel p-6 shadow-soft dark:shadow-soft-dark transition-colors duration-300" data-ui="inspector-panel">
                     <div class="flex items-start justify-between gap-3 pb-4 border-b border-slate-200 dark:border-slate-800">
                         <div>
                             <p class="section-kicker">Selected Job</p>
@@ -1416,7 +1416,7 @@ Contract notes:
                         <div class="flex flex-col items-end gap-2">
                             <span id="selectedJobStateBadge" class="signal-badge">Idle</span>
                             <span id="selectedJobFreshness" class="micro-status">No live telemetry</span>
-                            <button id="openRunDetailsBtn" type="button" class="rounded-full border border-slate-200 dark:border-slate-700 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-300 transition-colors hover:border-cyan-300 hover:text-cyan-700 dark:hover:border-cyan-700 dark:hover:text-cyan-300 disabled:opacity-50 disabled:cursor-not-allowed" disabled data-ui="review-open">
+                            <button id="openRunDetailsBtn" type="button" class="portal-action-control portal-action-control--review rounded-full border border-slate-200 dark:border-slate-700 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-300 transition-colors hover:border-cyan-300 hover:text-cyan-700 dark:hover:border-cyan-700 dark:hover:text-cyan-300 disabled:opacity-50 disabled:cursor-not-allowed" disabled data-ui="review-open">
                                 Open Review
                             </button>
                         </div>
@@ -1538,7 +1538,7 @@ Contract notes:
                 <!-- ============================================ -->
                 <!-- 4. OPERATE VIEW (Job Queue)                 -->
                 <!-- ============================================ -->
-                <div id="queue-shell" class="workspace-shell deferred-shell rounded-2xl shell-panel p-6 shadow-soft dark:shadow-soft-dark transition-colors duration-300 flex flex-col max-h-[350px]" data-shell-size="compact" data-ui="queue-panel">
+                <div id="queue-shell" class="portal-shell-card portal-shell-card--queue workspace-shell deferred-shell rounded-2xl shell-panel p-6 shadow-soft dark:shadow-soft-dark transition-colors duration-300 flex flex-col max-h-[350px]" data-shell-size="compact" data-ui="queue-panel">
                     <div class="flex items-center justify-between mb-4 pb-4 border-b border-slate-200 dark:border-slate-800">
                         <div>
                             <h2 class="text-[11px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">Job Queue</h2>
@@ -1587,11 +1587,11 @@ Contract notes:
                 <!-- ============================================ -->
                 <!-- 5. REVIEW VIEW (Artifacts)                  -->
                 <!-- ============================================ -->
-                <div id="artifacts-shell" data-ambient-zone="artifacts" data-ambient-focus-x="76" data-ambient-focus-y="64" data-ambient-shift-x="14" data-ambient-shift-y="12" data-ambient-stage-scale="1.03" data-ambient-stage-rotate="-0.2" data-ambient-color-a="#0ea5e9" data-ambient-color-b="#f59e0b" data-ambient-color-c="#14b8a6" data-ambient-focus-color="#fde68a" class="workspace-shell deferred-shell rounded-2xl shell-panel p-6 shadow-soft dark:shadow-soft-dark transition-colors duration-300" data-shell-size="compact" data-ui="review-surface">
+                <div id="artifacts-shell" data-ambient-zone="artifacts" data-ambient-focus-x="76" data-ambient-focus-y="64" data-ambient-shift-x="14" data-ambient-shift-y="12" data-ambient-stage-scale="1.03" data-ambient-stage-rotate="-0.2" data-ambient-color-a="#0ea5e9" data-ambient-color-b="#f59e0b" data-ambient-color-c="#14b8a6" data-ambient-focus-color="#fde68a" class="portal-shell-card portal-shell-card--artifacts workspace-shell deferred-shell rounded-2xl shell-panel p-6 shadow-soft dark:shadow-soft-dark transition-colors duration-300" data-shell-size="compact" data-ui="review-surface">
                     <div class="flex items-center justify-between mb-4 pb-3 border-b border-slate-200 dark:border-slate-800">
                         <h2 class="text-[11px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">Artifacts</h2>
                         <div class="flex items-center gap-2">
-                            <button id="artifactCompareBtn" type="button" class="hidden rounded-lg border border-slate-300 dark:border-slate-700 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">Compare</button>
+                            <button id="artifactCompareBtn" type="button" class="portal-action-control portal-action-control--compare hidden rounded-lg border border-slate-300 dark:border-slate-700 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">Compare</button>
                             <span id="artifactMeta" class="text-[11px] text-slate-500 dark:text-slate-400 font-mono">No job selected</span>
                         </div>
                     </div>
@@ -1620,7 +1620,7 @@ Contract notes:
                         </div>
                     </div>
                     <div id="artifactShellContent">
-                    <div id="artifactPreviewStage" class="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/50 p-4">
+                    <div id="artifactPreviewStage" class="artifact-review-stage rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/50 p-4">
                         <div id="artifactCompareStage" class="hidden grid grid-cols-1 md:grid-cols-2 gap-4">
                             <figure class="space-y-3">
                                 <img id="artifactPreviewImage" alt="Selected artifact preview" class="hidden w-full rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-900/60 object-contain max-h-[320px]" />
@@ -1636,7 +1636,7 @@ Contract notes:
                             Select a completed run to bring the primary review artifact, provenance context, and next actions into focus here.
                         </div>
                     </div>
-                    <div id="artifactMetadataBar" class="mt-4 flex flex-col gap-3 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/50 p-4">
+                    <div id="artifactMetadataBar" class="artifact-review-meta mt-4 flex flex-col gap-3 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/50 p-4">
                         <div class="flex flex-col gap-1">
                             <p id="artifactSelectionTitle" class="text-[12px] font-semibold text-slate-800 dark:text-slate-100">No artifact selected</p>
                             <p id="artifactSelectionMeta" class="text-[11px] font-mono text-slate-500 dark:text-slate-400">Preview, metadata, and actions will appear here when outputs are indexed.</p>
@@ -1706,7 +1706,7 @@ Contract notes:
                         </button>
                     </div>
                     <div class="mt-4 max-h-[220px] overflow-y-auto custom-scrollbar pr-1">
-                        <div id="artifactThumbnailRail" class="grid grid-cols-2 gap-3 lg:grid-cols-3"></div>
+                        <div id="artifactThumbnailRail" class="artifact-thumbnail-rail grid grid-cols-2 gap-3 lg:grid-cols-3"></div>
                         <div id="emptyArtifactState" class="surface-empty-state surface-empty-state--compact flex flex-col items-center justify-center py-4 text-center" data-ui="artifact-empty-state" data-tone="neutral">
                             <p class="surface-empty-kicker">Review</p>
                             <p id="emptyArtifactTitle" class="surface-empty-title">No indexed artifacts</p>
@@ -1718,7 +1718,7 @@ Contract notes:
                 </div>
 
                 <!-- Live Logs -->
-                <div id="logs-shell" class="workspace-shell deferred-shell hidden rounded-2xl shell-panel flex-col flex-1 min-h-[400px] overflow-hidden transition-colors duration-300 shadow-soft dark:shadow-soft-dark" data-shell-size="tall" data-ui="logs-panel">
+                <div id="logs-shell" class="portal-shell-card portal-shell-card--logs workspace-shell deferred-shell hidden rounded-2xl shell-panel flex-col flex-1 min-h-[400px] overflow-hidden transition-colors duration-300 shadow-soft dark:shadow-soft-dark" data-shell-size="tall" data-ui="logs-panel">
                     <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-900">
                         <div>
                             <h2 class="text-[11px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400 flex items-center gap-2">
