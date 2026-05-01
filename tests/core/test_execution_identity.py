@@ -84,6 +84,8 @@ class TestComputeCasId:
             stage_name="test_stage",
             input_ids=["sha256:abc"],
             config={"model": "test"},
+            code_hash="sha256:code",
+            env_fingerprint="sha256:env",
             lockfile_hash="sha256:lock",
         )
         assert isinstance(identity, ExecutionIdentity)
@@ -129,14 +131,14 @@ class TestComputeCasId:
 
 
 class TestExplainCacheMiss:
-    def _make_identity(self, config_hash: str = "sha256:cfg") -> ExecutionIdentity:
+    def _make_identity(self, lockfile_hash: str = "sha256:cfg") -> ExecutionIdentity:
         return compute_cas_id(
             stage_name="s",
             input_ids=[],
             config={},
             code_hash="sha256:code",
             env_fingerprint="sha256:env",
-            lockfile_hash=config_hash,
+            lockfile_hash=lockfile_hash,
         )
 
     def test_returns_dict_with_reason(self):
@@ -153,8 +155,8 @@ class TestExplainCacheMiss:
 
     def test_identifies_config_change(self):
         """Different lockfile_hash → difference listed."""
-        i1 = self._make_identity(config_hash="sha256:aaa")
-        i2 = self._make_identity(config_hash="sha256:bbb")
+        i1 = self._make_identity(lockfile_hash="sha256:aaa")
+        i2 = self._make_identity(lockfile_hash="sha256:bbb")
         result = explain_cache_miss(i1, i2)
         assert "lockfile_hash" in result["differences"]
 
