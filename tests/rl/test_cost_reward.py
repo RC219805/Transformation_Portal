@@ -38,7 +38,7 @@ def _metrics(score=1.0, psnr=40.0) -> dict:
 class TestSystemStats:
     def test_vram_gb_converts_bytes_correctly(self):
         """vram_gb = vram_bytes / 1024^3."""
-        stats = _stats(vram_bytes=1024 ** 3)
+        stats = _stats(vram_bytes=1024**3)
         assert stats.vram_gb == pytest.approx(1.0)
 
     def test_vram_gb_zero_when_no_vram(self):
@@ -47,12 +47,12 @@ class TestSystemStats:
 
     def test_vram_gb_large_value(self):
         """8 GB expressed correctly."""
-        stats = _stats(vram_bytes=8 * 1024 ** 3)
+        stats = _stats(vram_bytes=8 * 1024**3)
         assert stats.vram_gb == pytest.approx(8.0)
 
     def test_to_dict_includes_vram_gb(self):
         """to_dict() exposes computed vram_gb field."""
-        d = _stats(vram_bytes=2 * 1024 ** 3).to_dict()
+        d = _stats(vram_bytes=2 * 1024**3).to_dict()
         assert "vram_gb" in d
         assert d["vram_gb"] == pytest.approx(2.0)
 
@@ -79,7 +79,7 @@ class TestComputeCostReward:
     def test_vram_penalty_reduces_reward(self):
         """High VRAM usage lowers reward."""
         base = compute_cost_reward(_metrics(score=1.0), _stats(vram_bytes=0))
-        penalised = compute_cost_reward(_metrics(score=1.0), _stats(vram_bytes=10 * 1024 ** 3))
+        penalised = compute_cost_reward(_metrics(score=1.0), _stats(vram_bytes=10 * 1024**3))
         assert penalised < base
 
     def test_scale_events_penalty_reduces_reward(self):
@@ -113,13 +113,13 @@ class TestComputeCostReward:
     def test_exact_formula(self):
         """Reward matches the exact formula: quality - latency - vram - scaling - iteration."""
         w = CostWeights(quality=1.0, latency=0.05, vram=0.1, scaling=0.2, iteration=0.01)
-        stats = SystemStats(latency_sec=2.0, vram_bytes=2 * 1024 ** 3, scale_events=1, iteration_count=10)
+        stats = SystemStats(latency_sec=2.0, vram_bytes=2 * 1024**3, scale_events=1, iteration_count=10)
         expected = (
             1.0 * (0.8 - 0.0)  # quality
-            - 0.05 * 2.0         # latency
-            - 0.1 * 2.0          # vram
-            - 0.2 * 1            # scaling
-            - 0.01 * 10          # iteration
+            - 0.05 * 2.0  # latency
+            - 0.1 * 2.0  # vram
+            - 0.2 * 1  # scaling
+            - 0.01 * 10  # iteration
         )
         reward = compute_cost_reward({"score": 0.8}, stats, weights=w, baseline_score=0.0)
         assert reward == pytest.approx(expected)
@@ -139,7 +139,7 @@ class TestComputeCostRewardDetailed:
     def test_total_matches_simple_reward(self):
         """detailed.total matches compute_cost_reward()."""
         m = _metrics(score=0.75)
-        s = _stats(latency_sec=1.5, vram_bytes=1024 ** 3, scale_events=2)
+        s = _stats(latency_sec=1.5, vram_bytes=1024**3, scale_events=2)
         simple = compute_cost_reward(m, s)
         detailed = compute_cost_reward_detailed(m, s)
         assert detailed.total == pytest.approx(simple)
@@ -147,13 +147,7 @@ class TestComputeCostRewardDetailed:
     def test_breakdown_components_sum_to_total(self):
         """quality - penalties sum to total."""
         bd = compute_cost_reward_detailed(_metrics(score=0.9), _stats(latency_sec=1.0, scale_events=1))
-        expected = (
-            bd.quality_component
-            - bd.latency_penalty
-            - bd.vram_penalty
-            - bd.scaling_penalty
-            - bd.iteration_penalty
-        )
+        expected = bd.quality_component - bd.latency_penalty - bd.vram_penalty - bd.scaling_penalty - bd.iteration_penalty
         assert bd.total == pytest.approx(expected)
 
     def test_to_dict_has_all_keys(self):
@@ -164,12 +158,15 @@ class TestComputeCostRewardDetailed:
 
 
 class TestWeightPresets:
-    @pytest.mark.parametrize("preset", [
-        QUALITY_FIRST_WEIGHTS,
-        BALANCED_WEIGHTS,
-        EFFICIENCY_FIRST_WEIGHTS,
-        COST_SENSITIVE_WEIGHTS,
-    ])
+    @pytest.mark.parametrize(
+        "preset",
+        [
+            QUALITY_FIRST_WEIGHTS,
+            BALANCED_WEIGHTS,
+            EFFICIENCY_FIRST_WEIGHTS,
+            COST_SENSITIVE_WEIGHTS,
+        ],
+    )
     def test_preset_is_cost_weights_instance(self, preset):
         """Each preset is a CostWeights instance."""
         assert isinstance(preset, CostWeights)

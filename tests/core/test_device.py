@@ -39,7 +39,7 @@ class TestEstimateMemoryUsage:
         """Known resolution returns expected MB estimate."""
         # (1920x1080) * 3 channels * 2 bytes (FP16) * 6 overhead / 1024^2
         result = estimate_memory_usage((1080, 1920))
-        expected = (1080 * 1920 * 3 * 2 / (1024 ** 2)) * 6.0
+        expected = (1080 * 1920 * 3 * 2 / (1024**2)) * 6.0
         assert result == pytest.approx(expected)
 
     def test_higher_resolution_higher_memory(self):
@@ -105,7 +105,7 @@ class TestDeviceDetector:
         mock_torch = MagicMock()
         mock_torch.device.return_value = MagicMock()
         mock_psutil = MagicMock()
-        mock_psutil.virtual_memory.return_value.total = 16 * (1024 ** 3)
+        mock_psutil.virtual_memory.return_value.total = 16 * (1024**3)
 
         with (
             patch("transformation_portal.core.device.detector._get_torch", return_value=mock_torch),
@@ -122,7 +122,7 @@ class TestDeviceDetector:
         mock_torch = MagicMock()
         mock_torch.cuda.is_available.return_value = True
         mock_props = MagicMock()
-        mock_props.total_memory = 8 * (1024 ** 3)
+        mock_props.total_memory = 8 * (1024**3)
         mock_props.major = 8
         mock_props.minor = 0
         mock_props.name = "RTX 3080"
@@ -157,7 +157,7 @@ class TestDeviceDetector:
         mock_torch.backends.mps.is_available.return_value = False
         mock_torch.device.return_value = MagicMock()
         mock_psutil = MagicMock()
-        mock_psutil.virtual_memory.return_value.total = 16 * (1024 ** 3)
+        mock_psutil.virtual_memory.return_value.total = 16 * (1024**3)
 
         with (
             patch("transformation_portal.core.device.detector._get_torch", return_value=mock_torch),

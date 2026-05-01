@@ -128,7 +128,7 @@ class TestApplyFixes:
         pipeline = _pipeline()
         fixes = [
             _fix("apply_denoising", target="missing"),  # will fail
-            _fix("enable_seam_blending"),               # should succeed
+            _fix("enable_seam_blending"),  # should succeed
         ]
         patched, patch_set = apply_fixes(pipeline, fixes)
         assert len(patch_set.failed) == 1

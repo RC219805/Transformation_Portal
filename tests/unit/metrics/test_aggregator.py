@@ -128,6 +128,7 @@ class TestValidateWorkflowVersionConsistency:
         c2 = _capsule(6.0)
         # Override workflow_version to v2 via object replacement
         import dataclasses
+
         c2 = dataclasses.replace(c2, workflow_version="v2")
         with pytest.raises(ValueError, match="mixed workflow"):
             validate_workflow_version_consistency([c1, c2], strict=True)
@@ -135,6 +136,7 @@ class TestValidateWorkflowVersionConsistency:
     def test_mixed_versions_non_strict_no_exception(self):
         """Mixed versions with strict=False logs warning but doesn't raise."""
         import dataclasses
+
         c1 = _capsule(5.0)
         c2 = dataclasses.replace(_capsule(6.0), workflow_version="v2")
         validate_workflow_version_consistency([c1, c2], strict=False)
@@ -157,6 +159,7 @@ class TestComputePerZoneStats:
     def test_none_zone_maps_to_unknown(self):
         """Capsule with zone=None is grouped under 'unknown'."""
         import dataclasses
+
         c = dataclasses.replace(_capsule(5.0), zone=None)
         buckets = [_bucket()]
         result = compute_per_zone_stats([c], buckets=buckets)
@@ -188,12 +191,30 @@ class TestComputeWorstZoneP95:
     def test_returns_zone_with_highest_p95(self):
         """Zone with highest p95 across all buckets is returned."""
         stats_a = BucketStats(
-            bucket_name="b", count=25, p50=5.0, p95=20.0, p99=25.0, mean=10.0,
-            min=1.0, max=30.0, threshold_p50=10.0, threshold_p95=15.0, pass_fail="fail",
+            bucket_name="b",
+            count=25,
+            p50=5.0,
+            p95=20.0,
+            p99=25.0,
+            mean=10.0,
+            min=1.0,
+            max=30.0,
+            threshold_p50=10.0,
+            threshold_p95=15.0,
+            pass_fail="fail",
         )
         stats_b = BucketStats(
-            bucket_name="b", count=25, p50=5.0, p95=10.0, p99=12.0, mean=6.0,
-            min=1.0, max=15.0, threshold_p50=10.0, threshold_p95=15.0, pass_fail="pass",
+            bucket_name="b",
+            count=25,
+            p50=5.0,
+            p95=10.0,
+            p99=12.0,
+            mean=6.0,
+            min=1.0,
+            max=15.0,
+            threshold_p50=10.0,
+            threshold_p95=15.0,
+            pass_fail="pass",
         )
         per_zone = {"zone-a": {"b": stats_a}, "zone-b": {"b": stats_b}}
         worst_zone, worst_p95 = compute_worst_zone_p95(per_zone)

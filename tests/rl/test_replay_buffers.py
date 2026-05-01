@@ -38,6 +38,7 @@ def _temporal_transition(reward=1.0, done=False) -> TemporalTransition:
 # ReplayBuffer
 # ---------------------------------------------------------------------------
 
+
 class TestReplayBuffer:
     def test_add_increases_length(self):
         """Adding one transition increases buffer size to 1."""
@@ -129,6 +130,7 @@ class TestReplayBuffer:
 # PrioritizedReplayBuffer
 # ---------------------------------------------------------------------------
 
+
 class TestPrioritizedReplayBuffer:
     def test_add_with_default_priority(self):
         """Adding without explicit priority succeeds."""
@@ -188,12 +190,15 @@ class TestPrioritizedReplayBuffer:
 # RolloutBuffer
 # ---------------------------------------------------------------------------
 
+
 class TestRolloutBuffer:
     def _mock_value(self, v: float):
         """Return a simple object with .item() → v (mimics torch.Tensor)."""
+
         class _V:
             def item(self_):
                 return v
+
         return _V()
 
     def test_add_increases_length(self):
@@ -224,6 +229,7 @@ class TestRolloutBuffer:
     def test_compute_returns_finite(self):
         """All computed returns and advantages are finite numbers."""
         import math
+
         buf = RolloutBuffer()
         for i in range(3):
             buf.add(state=i, action=0, reward=1.0, value=self._mock_value(0.5), log_prob=0.0, done=False)
@@ -247,6 +253,7 @@ class TestRolloutBuffer:
 # Transition NamedTuple
 # ---------------------------------------------------------------------------
 
+
 class TestTransition:
     def test_required_fields(self):
         """Transition has all required fields."""
@@ -267,6 +274,7 @@ class TestTransition:
 # ---------------------------------------------------------------------------
 # TemporalTransition / Episode
 # ---------------------------------------------------------------------------
+
 
 class TestTemporalTransition:
     def test_default_done_false(self):
@@ -314,6 +322,7 @@ class TestEpisode:
 # ---------------------------------------------------------------------------
 # TemporalReplayBuffer
 # ---------------------------------------------------------------------------
+
 
 class TestTemporalReplayBuffer:
     def _make_episode(self, n: int, reward: float = 1.0) -> Episode:

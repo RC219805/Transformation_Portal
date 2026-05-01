@@ -91,6 +91,7 @@ class TestZoneResolverAWS:
     def test_aws_network_failure_returns_none(self):
         """Network OSError during AWS metadata → _resolve_aws_zone returns None."""
         import http.client
+
         with patch.object(http.client.HTTPConnection, "__init__", side_effect=OSError("refused")):
             result = ZoneResolver._resolve_aws_zone()
         assert result is None

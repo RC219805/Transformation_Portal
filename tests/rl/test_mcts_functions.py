@@ -151,21 +151,25 @@ class TestMCTSSearch:
     def _make_world_model(self):
         """Minimal world model mock: predict returns object with .next_state and .score."""
         from types import SimpleNamespace
+
         wm = MagicMock()
         wm.predict.return_value = SimpleNamespace(next_state="next_state", score=0.5)
         return wm
 
     def _uniform_action_fn(self, n_actions=3):
         """Returns uniform priors over n_actions."""
+
         def fn(state):
             actions = list(range(n_actions))
             priors = [1.0 / n_actions] * n_actions
             return actions, priors
+
         return fn
 
     def test_search_returns_integer(self):
         """MCTS.search() returns an int."""
         from transformation_portal.rl.mcts import MCTS
+
         mcts = MCTS(
             world_model=self._make_world_model(),
             action_fn=self._uniform_action_fn(3),
@@ -177,6 +181,7 @@ class TestMCTSSearch:
     def test_search_returns_valid_action_index(self):
         """Action index is in [0, n_actions)."""
         from transformation_portal.rl.mcts import MCTS
+
         n = 4
         mcts = MCTS(
             world_model=self._make_world_model(),
@@ -189,6 +194,7 @@ class TestMCTSSearch:
     def test_search_with_no_actions_returns_zero(self):
         """When action_fn returns empty list, search returns 0."""
         from transformation_portal.rl.mcts import MCTS
+
         mcts = MCTS(
             world_model=self._make_world_model(),
             action_fn=lambda state: ([], []),
@@ -199,6 +205,7 @@ class TestMCTSSearch:
     def test_mcts_search_convenience_function(self):
         """mcts_search() returns a valid int."""
         from transformation_portal.rl.mcts import mcts_search
+
         result = mcts_search(
             root_state="s0",
             world_model=self._make_world_model(),
