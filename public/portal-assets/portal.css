@@ -3420,6 +3420,12 @@ textarea,
 .inline-flex {
   display: inline-flex;
 }
+#overview-shell.hidden,
+#console-grid.hidden,
+#build-shell.hidden,
+#jobs-shell.hidden {
+  display: none;
+}
 .sr-only {
   position: absolute;
   width: 1px;

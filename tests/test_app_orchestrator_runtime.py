@@ -518,6 +518,32 @@ def test_portal_phase1_accessibility_tokens_align_focus_and_target_size() -> Non
     assert "#build-shell label:not(.sr-only)" in css_content
 
 
+def test_portal_routed_shell_hidden_rules_preserve_responsive_display_utilities() -> None:
+    html_content = _portal_html_content()
+    css_content = _portal_css_content()
+
+    hidden_rule = re.search(r"^\.hidden\s*\{(?P<body>.*?)^}", css_content, re.M | re.S)
+    assert hidden_rule is not None
+    hidden_body = hidden_rule.group("body")
+    assert re.search(r"display:\s*none;", hidden_body)
+    assert "!important" not in hidden_body
+    assert 'class="topbar-status hidden lg:flex"' in html_content
+
+    route_shell_rule = re.search(
+        (
+            r"^#overview-shell\.hidden,\s*"
+            r"^#console-grid\.hidden,\s*"
+            r"^#build-shell\.hidden,\s*"
+            r"^#jobs-shell\.hidden\s*\{(?P<body>.*?)^}"
+        ),
+        css_content,
+        re.M | re.S,
+    )
+    assert route_shell_rule is not None
+    assert re.search(r"display:\s*none;", route_shell_rule.group("body"))
+    assert "!important" not in route_shell_rule.group("body")
+
+
 def test_portal_shell_veil_tokens_use_shell_namespace_and_ordered_opacity() -> None:
     css_content = _portal_css_content()
 

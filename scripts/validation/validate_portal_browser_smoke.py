@@ -896,16 +896,13 @@ def _state_probe_expression() -> str:
       return row ? String(row.getAttribute('data-job-id') || '') : '';
     })(),
     buildViewVisible: (() => {
-      const el = document.getElementById('build-shell');
-      return !!(el && !el.classList.contains('hidden'));
+      return visible('build-shell');
     })(),
     operateViewVisible: (() => {
-      const el = document.getElementById('jobs-shell');
-      return !!(el && !el.classList.contains('hidden'));
+      return visible('jobs-shell');
     })(),
     overviewViewVisible: (() => {
-      const el = document.getElementById('overview-shell');
-      return !!(el && !el.classList.contains('hidden'));
+      return visible('overview-shell');
     })(),
     buildStepperVisible: !!document.querySelector('[data-ui="build-stepper"]'),
     activeBuildStep: (() => {

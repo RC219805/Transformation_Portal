@@ -391,9 +391,25 @@ def _frontdoor_state_probe_expression() -> str:
     const el = document.querySelector(selector);
     return el ? String(el.getAttribute(name) || '') : '';
   };
-  const hidden = (id) => {
+  const visibleById = (id) => {
     const el = document.getElementById(id);
-    return !!(el && el.classList.contains('hidden'));
+    if (!el) return false;
+    const style = window.getComputedStyle(el);
+    const rect = el.getBoundingClientRect();
+    return style.display !== 'none' && style.visibility !== 'hidden' && rect.width > 0 && rect.height > 0;
+  };
+  const hiddenById = (id) => {
+    const el = document.getElementById(id);
+    if (!el) return false;
+    const style = window.getComputedStyle(el);
+    const rect = el.getBoundingClientRect();
+    const isVisible = (
+      style.display !== 'none' &&
+      style.visibility !== 'hidden' &&
+      rect.width > 0 &&
+      rect.height > 0
+    );
+    return !isVisible;
   };
   return {
     title: document.title,
@@ -415,7 +431,10 @@ def _frontdoor_state_probe_expression() -> str:
     passwordPresent: !!document.querySelector('input[name="password"]'),
     authModeBadge: text('#authModeBadge'),
     currentView: document.body ? String(document.body.dataset.consoleView || '') : '',
-    apiKeySectionHidden: hidden('apiKeySection'),
+    apiKeySectionHidden: hiddenById('apiKeySection'),
+    buildViewVisible: visibleById('build-shell'),
+    overviewViewVisible: visibleById('overview-shell'),
+    operateViewVisible: visibleById('jobs-shell'),
     portalAccessStateReady: !!document.querySelector('[data-ui="portal-access-state"]')
   };
 })()
@@ -766,6 +785,9 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
                 and str(value.get("currentView", "")) == "build"
                 and "view=build" in str(value.get("locationSearch", ""))
                 and bool(value.get("apiKeySectionHidden"))
+                and bool(value.get("buildViewVisible"))
+                and not bool(value.get("overviewViewVisible"))
+                and not bool(value.get("operateViewVisible"))
                 and bool(value.get("portalAccessStateReady"))
                 and str(value.get("authModeBadge", "")).lower() == "managed"
             ),

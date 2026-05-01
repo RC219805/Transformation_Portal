@@ -164,6 +164,9 @@ def test_portal_browser_state_probe_tracks_contextual_action_controls():
     assert "reviewStatusState" in expression
     assert "connectionDetailsVisible" in expression
     assert "dispatchChecklistRows" in expression
+    assert "return visible('build-shell');" in expression
+    assert "return visible('jobs-shell');" in expression
+    assert "return visible('overview-shell');" in expression
     assert "enableSegmentationChecked" in expression
     assert "segmentationBackendValue" in expression
     assert "strictSegmentationChecked" in expression
@@ -679,6 +682,9 @@ def test_frontdoor_browser_waits_for_managed_portal_bootstrap_before_passing():
     assert 'and "returnTo=%2Fportal%3Fview%3Dbuild" in str(value.get("locationSearch", ""))' in content
     assert 'and str(value.get("currentView", "")) == "build"' in content
     assert 'and "view=build" in str(value.get("locationSearch", ""))' in content
+    assert 'and bool(value.get("buildViewVisible"))' in content
+    assert 'and not bool(value.get("overviewViewVisible"))' in content
+    assert 'and not bool(value.get("operateViewVisible"))' in content
     assert "/healthz" in content
     assert "--spawn-local-frontdoor" in content
     assert "--spawn-local-backend" in content
