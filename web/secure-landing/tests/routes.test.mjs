@@ -2266,7 +2266,10 @@ test("shared UI tokens stay synced to the canonical source", () => {
   const canonicalTokenPath = path.join(repoRoot, "web", "shared", "shared-ui-tokens.css");
   const frontdoorTokenPath = path.join(process.cwd(), "public", "shared-ui-tokens.css");
   const portalTokenPath = path.join(repoRoot, "public", "portal-assets", "shared-ui-tokens.css");
+  const portalCssPath = path.join(repoRoot, "public", "portal-assets", "portal.css");
+  const portalCssIndexPath = path.join(process.cwd(), "portal-src", "styles", "index.css");
   const buildScriptPath = path.join(process.cwd(), "scripts", "build-portal-bundle.mjs");
+  const cssContractScriptPath = path.join(process.cwd(), "scripts", "check-portal-css-contract.mjs");
   const canonicalTokens = readFileSync(canonicalTokenPath, "utf-8");
   const normalizedCanonicalTokens = `${transformSync(canonicalTokens, {
     loader: "css",
@@ -2275,14 +2278,49 @@ test("shared UI tokens stay synced to the canonical source", () => {
   }).code.trim()}\n`;
   const frontdoorTokens = readFileSync(frontdoorTokenPath, "utf-8");
   const portalTokens = readFileSync(portalTokenPath, "utf-8");
+  const portalCss = readFileSync(portalCssPath, "utf-8");
+  const portalCssIndex = readFileSync(portalCssIndexPath, "utf-8");
   const buildScript = readFileSync(buildScriptPath, "utf-8");
+  const cssContractScript = readFileSync(cssContractScriptPath, "utf-8");
 
   assert.match(canonicalTokens, /Canonical shared UI tokens/);
   assert.equal(frontdoorTokens, normalizedCanonicalTokens);
   assert.equal(portalTokens, normalizedCanonicalTokens);
   assert.notEqual(frontdoorTokens, canonicalTokens);
   assert.notEqual(portalTokens, canonicalTokens);
+  assert.match(portalCss, /--ux-target-min-size\s*:/);
+  assert.doesNotMatch(portalCss, /@layer\b/);
+  assert.doesNotMatch(portalCss, /@import\b/);
+  assert.doesNotMatch(portalCss, /__PORTAL_SHARED_TOKENS_URL__/);
+  assert.match(portalCss, /__PORTAL_FONT_SANS_URL__/);
+  assert.match(portalCss, /__PORTAL_FONT_MONO_URL__/);
+  assert.match(portalCssIndex, /@import "\.\/tokens\.css";/);
+  assert.match(portalCssIndex, /@import "\.\/utilities\.compat\.css";/);
+  const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const cssClassLiteral = (value) => value.replace(/[^A-Za-z0-9_-]/g, (character) => `\\${character}`);
+  for (const classToken of [
+    "lg:col-span-12",
+    "lg:mb-0",
+    "sm:grid-cols-4",
+    "hover:border-indigo-400",
+    "hover:border-slate-300",
+    "dark:hover:border-slate-600",
+    "dark:bg-slate-950/40",
+    "bg-slate-200",
+    "w-0",
+    "bg-indigo-500",
+    "transition-[width]",
+    "bg-slate-950/72",
+    "dark:bg-black/80",
+    "max-w-6xl"
+  ]) {
+    assert.match(portalCss, new RegExp(`\\.${escapeRegex(cssClassLiteral(classToken))}`));
+  }
   assert.match(buildScript, /const SHARED_TOKEN_SOURCE_PATH = path\.resolve\(REPO_ROOT, "web", "shared", "shared-ui-tokens\.css"\);/);
+  assert.match(buildScript, /const PORTAL_CSS_ASSET_PATH = path\.resolve\(REPO_ROOT, "public", "portal-assets", "portal\.css"\);/);
+  assert.match(buildScript, /const PORTAL_CSS_INDEX_PATH = path\.resolve\(PORTAL_CSS_SOURCE_DIR, "index\.css"\);/);
+  assert.match(buildScript, /async function bundleCssEntry\(entryPoint\)/);
+  assert.match(buildScript, /async function buildPortalCssAsset\(\)/);
   assert.match(buildScript, /async function writeMinifiedCssCopy\(sourcePath,\s*targetPath\)/);
   assert.match(buildScript, /loader: "css"/);
   assert.match(buildScript, /minify: true/);
@@ -2292,8 +2330,13 @@ test("shared UI tokens stay synced to the canonical source", () => {
   assert.doesNotMatch(buildScript, /minifyIdentifiers:\s*Boolean\(options\.minifyIdentifiers\)/);
   assert.doesNotMatch(buildScript, /minifySyntax:\s*Boolean\(options\.minifySyntax\)/);
   assert.doesNotMatch(buildScript, /minifyWhitespace:\s*Boolean\(options\.minifyWhitespace\)/);
+  assert.match(buildScript, /Generated portal\.css must not contain runtime @import rules/);
+  assert.match(buildScript, /Generated portal\.css missing required font placeholder/);
   assert.match(buildScript, /writeMinifiedCssCopy\(SHARED_TOKEN_SOURCE_PATH,\s*PORTAL_SHARED_TOKEN_TARGET\)/);
   assert.match(buildScript, /writeMinifiedCssCopy\(SHARED_TOKEN_SOURCE_PATH,\s*FRONTDOOR_SHARED_TOKEN_TARGET\)/);
+  assert.match(cssContractScript, /PORTAL_HTML_PATH/);
+  assert.match(cssContractScript, /PORTAL_TEMPLATE_SOURCE_PATH/);
+  assert.match(cssContractScript, /missing utility compatibility coverage/);
 });
 
 test("v1 POST rejects requests missing valid same-origin CSRF protections", async () => {

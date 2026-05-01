@@ -491,7 +491,9 @@ def test_portal_asset_endpoint_serves_css_and_js(client: TestClient) -> None:
     assert css_response.headers["content-type"] == orchestrator_app.PORTAL_ASSET_MEDIA_TYPES["portal.css"]
     assert "@font-face" in css_response.text
     assert "Portal Sans" in css_response.text
-    assert bundle.urls["shared-ui-tokens.css"] in css_response.text
+    assert "@import" not in css_response.text
+    assert "--ux-target-min-size:" in css_response.text
+    assert "__PORTAL_" not in css_response.text
     assert bundle.urls["fonts/portal-sans.woff2"] in css_response.text
     assert bundle.urls["fonts/portal-mono.woff2"] in css_response.text
     assert "https://fonts.googleapis.com" not in css_response.text

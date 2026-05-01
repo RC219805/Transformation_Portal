@@ -511,8 +511,8 @@ def test_portal_phase1_accessibility_tokens_align_focus_and_target_size() -> Non
     assert "--ux-focus-ring:" in shared_tokens
     assert "--ux-focus-shadow:" in shared_tokens
     assert re.search(r"--ux-target-min-size:\s*44px;", shared_tokens)
-    assert "font-size: var(--ux-body-size);" in css_content
-    assert css_content.count("--shell-border: var(--ux-panel-border);") >= 2
+    assert re.search(r"font-size:\s*var\(--ux-body-size\)", css_content)
+    assert len(re.findall(r"--shell-border:\s*var\(--ux-panel-border\)", css_content)) >= 2
     assert "--shell-border: rgba(148, 163, 184, 0.22);" not in css_content
     assert "summary:focus-visible" in css_content
     assert "#build-shell label:not(.sr-only)" in css_content
@@ -522,25 +522,25 @@ def test_portal_routed_shell_hidden_rules_preserve_responsive_display_utilities(
     html_content = _portal_html_content()
     css_content = _portal_css_content()
 
-    hidden_rule = re.search(r"^\.hidden\s*\{(?P<body>.*?)^}", css_content, re.M | re.S)
+    hidden_rule = re.search(r"\.hidden\s*\{(?P<body>[^}]*)}", css_content, re.S)
     assert hidden_rule is not None
     hidden_body = hidden_rule.group("body")
-    assert re.search(r"display:\s*none;", hidden_body)
+    assert re.search(r"display:\s*none;?", hidden_body)
     assert "!important" not in hidden_body
     assert 'class="topbar-status hidden lg:flex"' in html_content
 
     route_shell_rule = re.search(
         (
-            r"^#overview-shell\.hidden,\s*"
-            r"^#console-grid\.hidden,\s*"
-            r"^#build-shell\.hidden,\s*"
-            r"^#jobs-shell\.hidden\s*\{(?P<body>.*?)^}"
+            r"#overview-shell\.hidden,\s*"
+            r"#console-grid\.hidden,\s*"
+            r"#build-shell\.hidden,\s*"
+            r"#jobs-shell\.hidden\s*\{(?P<body>[^}]*)}"
         ),
         css_content,
-        re.M | re.S,
+        re.S,
     )
     assert route_shell_rule is not None
-    assert re.search(r"display:\s*none;", route_shell_rule.group("body"))
+    assert re.search(r"display:\s*none;?", route_shell_rule.group("body"))
     assert "!important" not in route_shell_rule.group("body")
 
 
@@ -552,15 +552,15 @@ def test_portal_shell_veil_tokens_use_shell_namespace_and_ordered_opacity() -> N
     assert "--shell-tint-faint:" in css_content
 
     def token_alpha(selector: str, token: str) -> float:
-        block_match = re.search(
-            rf"^{re.escape(selector)} \{{(?P<body>.*?)^\}}",
-            css_content,
-            re.M | re.S,
-        )
-        assert block_match is not None, f"{selector} token block missing"
+        block_body = None
+        for block_match in re.finditer(rf"{re.escape(selector)}\s*\{{(?P<body>[^}}]*)\}}", css_content):
+            if token in block_match.group("body"):
+                block_body = block_match.group("body")
+                break
+        assert block_body is not None, f"{selector} token block missing"
         value_match = re.search(
-            rf"{re.escape(token)}:\s*rgba\(\s*\d+,\s*\d+,\s*\d+,\s*(?P<alpha>0?\.\d+)\s*\);",
-            block_match.group("body"),
+            rf"{re.escape(token)}:\s*rgba\(\s*\d+,\s*\d+,\s*\d+,\s*(?P<alpha>(?:0?\.)?\d+)\s*\)",
+            block_body,
         )
         assert value_match is not None, f"{token} missing from {selector}"
         return float(value_match.group("alpha"))
@@ -589,7 +589,8 @@ def test_portal_html_externalizes_direct_debug_assets_without_third_party_hosts(
     assert f'src="{bundle.urls["portal.js"]}"' in html_content
     assert f'data-review-surface-js-url="{bundle.urls["portal-review.js"]}"' in html_content
     assert f'data-review-surface-css-url="{bundle.urls["portal-review.css"]}"' in html_content
-    assert bundle.urls["shared-ui-tokens.css"] in css_content
+    assert "@import" not in css_content
+    assert "--ux-target-min-size:" in css_content
     assert '<meta name="theme-color" content="#F4F7FB" media="(prefers-color-scheme: light)" />' in html_content
     assert '<meta name="theme-color" content="#020617" media="(prefers-color-scheme: dark)" />' in html_content
     assert "<style>" not in html_content
@@ -598,7 +599,7 @@ def test_portal_html_externalizes_direct_debug_assets_without_third_party_hosts(
     assert "https://fonts.googleapis.com" not in html_content
     assert "https://fonts.gstatic.com" not in html_content
     assert "tailwind.config" not in css_content
-    assert "Phase 1 local utility snapshot replacing Tailwind CDN for portal.html" in css_content
+    assert ".text-\\[10px\\]" in css_content
 
 
 def test_portal_html_signature_tracks_preloaded_font_fingerprint() -> None:
@@ -606,6 +607,21 @@ def test_portal_html_signature_tracks_preloaded_font_fingerprint() -> None:
     font_fingerprint = orchestrator_app._get_portal_direct_asset_fingerprint("fonts/portal-sans.woff2")
 
     assert ("fonts/portal-sans.woff2", font_fingerprint) in signature
+
+
+def test_portal_css_signature_tracks_active_template_token_assets_only() -> None:
+    signature = orchestrator_app._portal_css_signature()
+    sans_fingerprint = orchestrator_app._get_portal_direct_asset_fingerprint("fonts/portal-sans.woff2")
+    mono_fingerprint = orchestrator_app._get_portal_direct_asset_fingerprint("fonts/portal-mono.woff2")
+    shared_token_fingerprint = orchestrator_app._get_portal_direct_asset_fingerprint("shared-ui-tokens.css")
+
+    assert orchestrator_app._portal_css_dependency_asset_names() == (
+        "fonts/portal-sans.woff2",
+        "fonts/portal-mono.woff2",
+    )
+    assert ("fonts/portal-sans.woff2", sans_fingerprint) in signature
+    assert ("fonts/portal-mono.woff2", mono_fingerprint) in signature
+    assert ("shared-ui-tokens.css", shared_token_fingerprint) not in signature
 
 
 def test_portal_runtime_helpers_read_served_js_assets_from_rendered_html() -> None:
@@ -710,7 +726,8 @@ def test_portal_html_asset_references_are_covered_by_manifest() -> None:
 
     assert html_asset_urls
     assert {urlparse(asset_url).path for asset_url in html_asset_urls} <= manifest_asset_urls
-    assert normalized_asset_urls == manifest_asset_urls
+    assert "/portal/assets/shared-ui-tokens.css" in manifest_asset_urls
+    assert normalized_asset_urls == manifest_asset_urls - {"/portal/assets/shared-ui-tokens.css"}
     for asset_url in bundled_asset_urls:
         asset_name = _portal_asset_name(asset_url)
         assert _portal_asset_version(asset_url) == bundle.fingerprints[asset_name]
@@ -2000,41 +2017,30 @@ def test_portal_loading_tokens_and_reduced_motion_cover_overview_and_build_surfa
 
     assert ".skeleton-pill" in css
     assert ".surface-loading" in css
-    assert ".surface-loading::after" in css
-    assert ".status-dot.running," in css
-    assert ".status-dot.partial," in css
-    assert ".skeleton-pill," in css
-    assert ".toast-enter," in css
-    assert ".surface-loading::after {" in css
-    assert "transition: none !important;" in css
+    assert ".surface-loading:after" in css
+    assert re.search(r"\.status-dot\.running[^{}]*,\s*\.status-dot\.partial", css)
+    assert re.search(r"\.skeleton-pill[^{}]*,", css)
+    assert re.search(r"\.toast-enter[^{}]*,", css)
+    assert re.search(r"\.surface-loading:after\s*\{", css)
+    assert re.search(r"transition:\s*none!important", css)
 
 
 def test_portal_runtime_css_ships_short_viewport_modal_and_phone_stepper_rules() -> None:
     css = _portal_css_content()
-    base_stepper_rule = (
-        ".build-step-tabs {\n"
-        "    display: grid;\n"
-        "    grid-template-columns: repeat(4, minmax(0, 1fr));\n"
-        "    gap: 0.75rem;\n"
-        "}"
+    base_stepper_rule = re.search(
+        r"\.build-step-tabs\s*\{[^}]*display:\s*grid[^}]*grid-template-columns:\s*repeat\(4,minmax\(0,1fr\)\)[^}]*gap:\s*\.75rem",
+        css,
     )
-    phone_stepper_rule = (
-        "@media (max-width: 639px) {\n"
-        "    .build-step-tabs {\n"
-        "        grid-template-columns: repeat(2, minmax(0, 1fr));\n"
-        "        gap: 0.5rem;\n"
-        "    }\n"
-        "    .build-step-tab {\n"
-        "        min-height: 0;\n"
-        "    }\n"
-        "}"
+    phone_stepper_rule = re.search(
+        r"@media\(max-width:639px\)\{\.build-step-tabs\s*\{[^}]*grid-template-columns:\s*repeat\(2,minmax\(0,1fr\)\)[^}]*gap:\s*\.5rem[^}]*}\.build-step-tab\s*\{[^}]*min-height:\s*0",
+        css,
     )
 
-    assert ".max-h-\\[92vh\\] {" in css
-    assert "max-height: 92vh;" in css
-    assert base_stepper_rule in css
-    assert phone_stepper_rule in css
-    assert css.index(base_stepper_rule) < css.index(phone_stepper_rule)
+    assert ".max-h-\\[92vh\\]" in css
+    assert "max-height:92vh" in css
+    assert base_stepper_rule is not None
+    assert phone_stepper_rule is not None
+    assert base_stepper_rule.start() < phone_stepper_rule.start()
 
 
 def test_portal_preview_statuses_render_inline_for_build_fields() -> None:

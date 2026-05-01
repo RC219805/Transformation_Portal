@@ -273,7 +273,6 @@ PORTAL_DIRECT_FINGERPRINT_ASSET_NAMES = (
     "brand/dna-symbol-light.svg",
 )
 PORTAL_CSS_TEMPLATE_TOKENS = {
-    "__PORTAL_SHARED_TOKENS_URL__": "shared-ui-tokens.css",
     "__PORTAL_FONT_SANS_URL__": "fonts/portal-sans.woff2",
     "__PORTAL_FONT_MONO_URL__": "fonts/portal-mono.woff2",
 }
@@ -370,12 +369,16 @@ def _get_portal_direct_asset_fingerprint(asset_name: str) -> str:
     return _build_portal_direct_asset_fingerprint(asset_name, _portal_direct_asset_signature(asset_name))
 
 
+def _portal_css_dependency_asset_names() -> Tuple[str, ...]:
+    return tuple(dict.fromkeys(PORTAL_CSS_TEMPLATE_TOKENS.values()))
+
+
 def _portal_css_signature() -> Tuple[object, ...]:
     return (
         _portal_asset_signature(PORTAL_CSS_TEMPLATE_PATH),
         *(
             (asset_name, _get_portal_direct_asset_fingerprint(asset_name))
-            for asset_name in ("shared-ui-tokens.css", "fonts/portal-sans.woff2", "fonts/portal-mono.woff2")
+            for asset_name in _portal_css_dependency_asset_names()
         ),
     )
 
