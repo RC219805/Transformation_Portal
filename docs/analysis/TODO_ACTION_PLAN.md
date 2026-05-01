@@ -27,7 +27,7 @@ All source code TODOs in `src/` have been cleaned up. The remaining test TODOs a
 
 ### Recent Governance Completion (2026-05-01)
 
-- TODO governance scanner is now enforced in CI. `scripts/validation/scan_todo_inventory.py --check-governance` runs in the `hf-revision-policy` job of `.github/workflows/enforcement.yml`. PRs introducing ungoverned TODOs (no Phase / ADR / issue / owner / inventory reference) now fail.
+- TODO governance scanner is now enforced in CI. `scripts/validation/scan_todo_inventory.py --check-governance` runs in the `hf-revision-policy` job of `.github/workflows/enforcement.yml`. PRs introducing ungoverned action markers now fail. Enforced patterns: Python `# TODO:` / `# FIXME:` / `# HACK:` / `# XXX:` comments, `raise NotImplementedError(...)` AST nodes, and JS/TS `// TODO|FIXME|HACK|XXX` and block-comment markers. Enforced scopes: `src/`, `tests/`, `scripts/`, `tools/`, and `web/` (JS/TS). Required reference: `(Phase X)`, `(ADR-###)`, `(#1234)`, `(@owner)`, or `(TODO_INVENTORY.md ...)`. Bare `raise NotImplementedError` and abstract-method messages (e.g., "Subclass must implement") are auto-governed.
 - NotImplementedError baseline corrected from 12 (src-only, with arithmetic errors) to 25 (full scope across `src/`, `tests/`, `scripts/`, `tools/`). All instances remain properly governed.
 - Manual monthly inventory review is no longer the primary drift control; it now serves as a periodic narrative refresh on top of automated enforcement.
 

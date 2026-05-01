@@ -106,7 +106,7 @@ jobs:
       - name: Check YAML governance boundary
         run: python scripts/validation/check_yaml_governance_boundary.py
 
-      - name: Check TODO governance (no ungoverned TODOs in src/tests/scripts/tools)
+      - name: Check TODO governance (no ungoverned TODO/FIXME/HACK/XXX/NotImplementedError in src/, tests/, scripts/, tools/, web/)
         run: python scripts/validation/scan_todo_inventory.py --check-governance
 
   test-layer1:

@@ -194,7 +194,7 @@ All NotImplementedError must include context:
 A: 0 P0 blockers. 1 P1 item (branch protection - GitHub Admin task).
 
 **Q: How many items are technical debt?**
-A: Of the 25 NotImplementedError instances, only 3 are technical debt requiring future work (NVDIFFREC, MaterialGAN, ComfyUI subprocess). The rest are intentional stubs (abstract methods, phase gates, platform limitations).
+A: Of the 25 `NotImplementedError` instances the scanner reports, the majority are intentional stubs (abstract methods, bare-raise scaffolds, test protocol stubs, platform limitations). A handful are actionable phase gates / known gaps (e.g., single-view 3D reconstruction in `spatial_ai/orchestration/pipeline.py`, GaussianBackend pending checkpoint integration, non-linear interpolation in `scene_builder.py`). The canonical, line-accurate list is the scanner output — `python scripts/validation/scan_todo_inventory.py --json` — not a hand-maintained name list (which is what caused prior drift). Note: NVDIFFREC and MaterialGAN are *not* `NotImplementedError` raises; those backends fall back to the heuristic generator at `material_backend.py` and are tracked separately under research-deferred work.
 
 **Q: When should we update the inventory?**
 A: CI now enforces `--check-governance` on every PR via `enforcement.yml`, so ungoverned TODOs cannot land. Manual narrative refresh (counts, completion logs) still occurs monthly or per-release. This review: 2026-05-01.
