@@ -15,10 +15,15 @@ const PORTAL_INTERNAL_ENTRY = path.resolve(FRONTDOOR_ROOT, "portal-src", "intern
 const PORTAL_REVIEW_SURFACE_ENTRY = path.resolve(FRONTDOOR_ROOT, "portal-src", "review-surface-deferred.js");
 const PORTAL_ASSET_PATH = path.resolve(REPO_ROOT, "public", "portal-assets", "portal.js");
 const PORTAL_REVIEW_SURFACE_ASSET_PATH = path.resolve(REPO_ROOT, "public", "portal-assets", "portal-review.js");
+const PORTAL_CSS_ASSET_PATH = path.resolve(REPO_ROOT, "public", "portal-assets", "portal.css");
+const PORTAL_CSS_SOURCE_DIR = path.resolve(FRONTDOOR_ROOT, "portal-src", "styles");
+const PORTAL_CSS_INDEX_PATH = path.resolve(PORTAL_CSS_SOURCE_DIR, "index.css");
+const PORTAL_CSS_FONT_TEMPLATE_PATH = path.resolve(PORTAL_CSS_SOURCE_DIR, "fonts.template.css");
 const SHARED_TOKEN_SOURCE_PATH = path.resolve(REPO_ROOT, "web", "shared", "shared-ui-tokens.css");
 const PORTAL_SHARED_TOKEN_TARGET = path.resolve(REPO_ROOT, "public", "portal-assets", "shared-ui-tokens.css");
 const FRONTDOOR_SHARED_TOKEN_TARGET = path.resolve(FRONTDOOR_ROOT, "public", "shared-ui-tokens.css");
 const PORTAL_INTERNALS_PLACEHOLDER = "/* __PORTAL_INTERNALS__ */";
+const PORTAL_FONT_PLACEHOLDERS = ["__PORTAL_FONT_SANS_URL__", "__PORTAL_FONT_MONO_URL__"];
 
 function writeIfChanged(targetPath, content) {
   const nextContent = typeof content === "string" ? content : String(content);
@@ -42,6 +47,45 @@ async function minifyCssText(content) {
 async function writeMinifiedCssCopy(sourcePath, targetPath) {
   const sourceContent = readFileSync(sourcePath, "utf-8");
   return writeIfChanged(targetPath, await minifyCssText(sourceContent));
+}
+
+async function bundleCssEntry(entryPoint) {
+  const bundleResult = await build({
+    absWorkingDir: REPO_ROOT,
+    bundle: true,
+    entryPoints: [entryPoint],
+    legalComments: "none",
+    minify: true,
+    outfile: "portal.css",
+    write: false
+  });
+  const outputText = bundleResult.outputFiles?.[0]?.text;
+  if (!outputText) {
+    throw new Error(`esbuild did not emit CSS for ${path.relative(REPO_ROOT, entryPoint)}`);
+  }
+  return outputText.trim() + "\n";
+}
+
+async function buildPortalCssAsset() {
+  const fontTemplate = readFileSync(PORTAL_CSS_FONT_TEMPLATE_PATH, "utf-8");
+  const sharedTokenCss = readFileSync(SHARED_TOKEN_SOURCE_PATH, "utf-8");
+  const bundledPortalCss = await bundleCssEntry(PORTAL_CSS_INDEX_PATH);
+  const cssBody = [sharedTokenCss, bundledPortalCss].join("\n");
+  const renderedCss = `${await minifyCssText(fontTemplate)}${await minifyCssText(cssBody)}`;
+
+  if (renderedCss.includes("@import")) {
+    throw new Error("Generated portal.css must not contain runtime @import rules");
+  }
+  if (renderedCss.includes("__PORTAL_SHARED_TOKENS_URL__")) {
+    throw new Error("Generated portal.css must not contain the shared token URL placeholder");
+  }
+  for (const placeholder of PORTAL_FONT_PLACEHOLDERS) {
+    if (!renderedCss.includes(placeholder)) {
+      throw new Error(`Generated portal.css missing required font placeholder: ${placeholder}`);
+    }
+  }
+
+  return writeIfChanged(PORTAL_CSS_ASSET_PATH, renderedCss);
 }
 
 function stripStandaloneLineComments(content) {
@@ -106,17 +150,22 @@ const compactPortalBundle = (await transform(nextPortalBundle, {
   target: ["es2022"]
 })).code.trim();
 const portalChanged = writeIfChanged(PORTAL_ASSET_PATH, `${compactPortalBundle}\n`);
-const reviewSurfaceChanged = writeIfChanged(PORTAL_REVIEW_SURFACE_ASSET_PATH, deferredReviewSurfaceBundle.trim());
+const reviewSurfaceChanged = writeIfChanged(PORTAL_REVIEW_SURFACE_ASSET_PATH, `${deferredReviewSurfaceBundle.trim()}\n`);
+const portalCssChanged = await buildPortalCssAsset();
 const portalTokenChanged = await writeMinifiedCssCopy(SHARED_TOKEN_SOURCE_PATH, PORTAL_SHARED_TOKEN_TARGET);
 const frontdoorTokenChanged = await writeMinifiedCssCopy(SHARED_TOKEN_SOURCE_PATH, FRONTDOOR_SHARED_TOKEN_TARGET);
 
 const portalStats = statSync(PORTAL_ASSET_PATH);
 const reviewSurfaceStats = statSync(PORTAL_REVIEW_SURFACE_ASSET_PATH);
+const portalCssStats = statSync(PORTAL_CSS_ASSET_PATH);
 console.log(
   `portal bundle ${portalChanged ? "updated" : "unchanged"}: ${path.relative(REPO_ROOT, PORTAL_ASSET_PATH)} (${portalStats.size} bytes)`
 );
 console.log(
   `review surface bundle ${reviewSurfaceChanged ? "updated" : "unchanged"}: ${path.relative(REPO_ROOT, PORTAL_REVIEW_SURFACE_ASSET_PATH)} (${reviewSurfaceStats.size} bytes)`
+);
+console.log(
+  `portal css ${portalCssChanged ? "updated" : "unchanged"}: ${path.relative(REPO_ROOT, PORTAL_CSS_ASSET_PATH)} (${portalCssStats.size} bytes)`
 );
 console.log(
   `shared tokens ${portalTokenChanged ? "updated" : "unchanged"}: ${path.relative(REPO_ROOT, PORTAL_SHARED_TOKEN_TARGET)}`
