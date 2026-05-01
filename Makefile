@@ -309,6 +309,7 @@ validate-portal-lux-materials-live:
 validate-portal-css-layer-parity:
 	@echo "Validating production portal CSS layer parity..."
 	@./scripts/setup/ensure_node_version.sh
+	@cd web/secure-landing && node ./scripts/build-portal-bundle.mjs --check-css
 	@cd web/secure-landing && npm run check:css-layer-parity
 	@"$(PY)" scripts/validation/validate_portal_css_layer_parity.py
 

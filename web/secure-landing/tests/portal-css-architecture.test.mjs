@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 
 const __filename = fileURLToPath(import.meta.url);
 const FRONTDOOR_ROOT = path.resolve(path.dirname(__filename), "..");
+const MAKEFILE_PATH = path.resolve(FRONTDOOR_ROOT, "..", "..", "Makefile");
 const PACKAGE_JSON_PATH = path.join(FRONTDOOR_ROOT, "package.json");
 const ARCHITECTURE_BASELINE_PATH = path.join(
   FRONTDOOR_ROOT,
@@ -75,6 +76,23 @@ test("portal CSS lint script checks generated artifact freshness and architectur
   assert.match(runNodeScript("scripts/build-portal-bundle.mjs", "--check-css"), /generated artifact is fresh/);
   assert.match(runNodeScript("scripts/check-portal-css-contract.mjs"), /portal css contract: OK/);
   assert.match(runNodeScript("scripts/check-portal-css-architecture.mjs"), /portal css architecture: OK/);
+});
+
+test("portal CSS layer parity make target checks generated artifact freshness", () => {
+  const makefile = readFileSync(MAKEFILE_PATH, "utf8");
+  const start = makefile.indexOf("validate-portal-css-layer-parity:");
+  const end = makefile.indexOf("\nvalidate-portal-browser:", start);
+
+  assert.notEqual(start, -1, "missing validate-portal-css-layer-parity target");
+  assert.notEqual(end, -1, "missing validate-portal-browser target after CSS layer parity target");
+
+  const target = makefile.slice(start, end);
+  const freshnessCheckIndex = target.indexOf("build-portal-bundle.mjs --check-css");
+  const parityCheckIndex = target.indexOf("npm run check:css-layer-parity");
+
+  assert.notEqual(freshnessCheckIndex, -1, "CSS layer parity target must check generated artifact freshness");
+  assert.notEqual(parityCheckIndex, -1, "CSS layer parity target must run the layer parity check");
+  assert.ok(freshnessCheckIndex < parityCheckIndex, "freshness must be checked before parity validators");
 });
 
 test("portal CSS architecture baseline keeps hotspot selectors consolidated", () => {
