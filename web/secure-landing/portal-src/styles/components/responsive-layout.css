@@ -1,0 +1,78 @@
+@media (min-width: 1280px) {
+    .sticky-shell {
+        position: sticky;
+        top: 6rem;
+        z-index: 12;
+    }
+}
+
+@media (min-width: 1024px) {
+    .portal-shell-grid {
+        display: grid;
+        grid-template-columns: 13rem minmax(0, 1fr);
+        grid-template-areas:
+            "rail overview"
+            "rail context"
+            "rail console";
+        column-gap: 1.25rem;
+        row-gap: 1.25rem;
+        align-items: start;
+    }
+    .portal-shell-grid > #overview-shell { grid-area: overview; }
+    .portal-shell-grid > #console-context-shell { grid-area: context; }
+    .portal-shell-grid > #console-grid { grid-area: console; }
+    .portal-shell-grid > .portal-workspace-rail {
+        grid-area: rail;
+        position: sticky;
+        top: 5.5rem;
+        align-self: start;
+        padding: 0.85rem 0.75rem;
+        grid-template-columns: 1fr;
+        gap: 0.6rem;
+    }
+    .portal-shell-grid > .portal-workspace-rail .workspace-rail-links {
+        grid-template-columns: 1fr;
+        gap: 0.35rem;
+    }
+    .portal-shell-grid > .portal-workspace-rail .workspace-rail-text,
+    .portal-shell-grid > .portal-workspace-rail .workspace-shortcut-hint {
+        display: none;
+    }
+    .portal-shell-grid > .portal-workspace-rail .workspace-link {
+        min-height: 0;
+        padding: 0.6rem 0.7rem;
+        border-radius: 0.75rem;
+    }
+    .portal-shell-grid > .portal-workspace-rail .workspace-link-meta {
+        display: none;
+    }
+    #console-grid:has(> #jobs-shell.hidden) > #build-shell,
+    #console-grid:has(> #build-shell.hidden) > #jobs-shell {
+        grid-column: 1 / -1;
+    }
+    #buildStepperShell {
+        position: sticky;
+        top: 5.25rem;
+        z-index: 11;
+    }
+}
+
+@media (max-width: 767px) {
+    .workspace-rail-links {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 479px) {
+    .portal-overview-stats,
+    .portal-overview-stats-skeleton {
+        grid-template-columns: 1fr;
+    }
+    .workspace-rail-links {
+        grid-template-columns: 1fr;
+    }
+    .hero-action {
+        width: 100%;
+        justify-content: center;
+    }
+}

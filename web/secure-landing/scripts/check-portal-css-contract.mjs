@@ -204,7 +204,10 @@ for (const [name, pattern] of INDEX_REQUIRED_PATTERNS) {
 for (const sourcePath of listCssFiles(PORTAL_CSS_SOURCE_DIR)) {
   const sourceLabel = path.relative(REPO_ROOT, sourcePath);
   const sourceContent = readFileSync(sourcePath, "utf-8");
-  const disallowedPatterns = sourcePath === PORTAL_CSS_INDEX_PATH ? SOURCE_DISALLOWED_PATTERNS : DISALLOWED_PATTERNS;
+  const disallowedPatterns =
+    sourcePath === PORTAL_CSS_INDEX_PATH || sourcePath === path.resolve(PORTAL_CSS_SOURCE_DIR, "components.current.css")
+      ? SOURCE_DISALLOWED_PATTERNS
+      : DISALLOWED_PATTERNS;
   checkDisallowed(sourceLabel, sourceContent, failures, disallowedPatterns);
 }
 
