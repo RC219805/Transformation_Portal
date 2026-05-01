@@ -2296,7 +2296,10 @@ test("shared UI tokens stay synced to the canonical source", () => {
   assert.match(portalCss, /__PORTAL_FONT_MONO_URL__/);
   assert.match(portalCssIndex, /@layer tokens, base, components, utilities, overrides;/);
   assert.match(portalCssIndex, /@import "\.\/tokens\.css" layer\(tokens\);/);
-  assert.match(portalCssIndex, /@import "\.\/utilities\.compat\.css" layer\(utilities\);/);
+  assert.match(portalCssIndex, /@import "\.\/utilities\.required\.css" layer\(utilities\);/);
+  assert.match(portalCssIndex, /@import "\.\/utilities\.dynamic\.css" layer\(utilities\);/);
+  assert.match(portalCssIndex, /@import "\.\/utilities\.compat-hold\.css" layer\(utilities\);/);
+  assert.doesNotMatch(portalCssIndex, /utilities\.deprecated\.css/);
   assert.match(portalCssIndex, /@import "\.\/overrides\.accessibility\.css" layer\(overrides\);/);
   const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const cssClassLiteral = (value) => value.replace(/[^A-Za-z0-9_-]/g, (character) => `\\${character}`);

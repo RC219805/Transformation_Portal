@@ -1,0 +1,3727 @@
+{
+  "version": 1,
+  "maxCompatHold": 0,
+  "utilities": {
+    "absolute": {
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "active:scale-[0.98]": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "animate-pulse": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "antialiased": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "backdrop-blur-sm": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "backdrop-blur-xl": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "bg-amber-100": {
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "bg-amber-50": {
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "bg-amber-50/90": {
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "bg-cyan-50": {
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "bg-cyan-50/80": {
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "bg-cyan-50/90": {
+      "owner": "review-only",
+      "sources": [
+        "public/portal-assets/portal-review.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
+      ],
+      "cssFile": "utilities.dynamic.css",
+      "reason": "observed in deferred review surface JavaScript"
+    },
+    "bg-emerald-100": {
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "bg-emerald-50": {
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "bg-emerald-50/90": {
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "bg-emerald-500": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "bg-gradient-to-r": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "bg-indigo-50": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "bg-indigo-500": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "bg-indigo-600": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "bg-red-100": {
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "bg-red-50": {
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "bg-red-50/90": {
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "bg-slate-100": {
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "bg-slate-200": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "bg-slate-300": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "bg-slate-50": {
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "bg-slate-50/50": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "bg-slate-50/75": {
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "bg-slate-50/80": {
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal-review.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "bg-slate-50/90": {
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "bg-slate-900/50": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "bg-slate-900/55": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "bg-slate-900/60": {
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal-review.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "bg-slate-950/72": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "bg-white": {
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "bg-white/70": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "bg-white/80": {
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal-review.js",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "bg-white/90": {
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "block": {
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal-review.js",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "border-amber-200": {
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "border-amber-300": {
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "border-b": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "border-cyan-200": {
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "border-cyan-300": {
+      "owner": "review-only",
+      "sources": [
+        "public/portal-assets/portal-review.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
+      ],
+      "cssFile": "utilities.dynamic.css",
+      "reason": "observed in deferred review surface JavaScript"
+    },
+    "border-cyan-500": {
+      "owner": "static",
+      "sources": [
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "border-dashed": {
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal-review.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "border-emerald-200": {
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "border-emerald-300": {
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "border-indigo-300": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "border-red-200": {
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "border-red-300": {
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "border-slate-200": {
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal-review.js",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "border-slate-300": {
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "border-t": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "bottom-6": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "break-all": {
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "break-words": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "cursor-not-allowed": {
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal-review.js",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "cursor-pointer": {
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "dark:bg-amber-900/10": {
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "dark:bg-amber-900/20": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "dark:bg-amber-900/30": {
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "dark:bg-amber-950/25": {
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "dark:bg-amber-950/30": {
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "dark:bg-amber-950/60": {
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "dark:bg-black/60": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "dark:bg-black/70": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "dark:bg-black/80": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "dark:bg-cyan-900/20": {
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal-review.js",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "dark:bg-emerald-900/10": {
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "dark:bg-emerald-900/30": {
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "dark:bg-emerald-950/25": {
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "dark:bg-emerald-950/30": {
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "dark:bg-emerald-950/50": {
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "dark:bg-emerald-950/60": {
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "dark:bg-indigo-900/20": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "dark:bg-red-900/10": {
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "dark:bg-red-900/30": {
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "dark:bg-red-950/25": {
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "dark:bg-red-950/30": {
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "dark:bg-red-950/50": {
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "dark:bg-red-950/60": {
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "dark:bg-slate-600": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "dark:bg-slate-800": {
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "dark:bg-slate-800/50": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "dark:bg-slate-900": {
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "dark:bg-slate-900/45": {
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "dark:bg-slate-900/50": {
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal-review.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "dark:bg-slate-900/60": {
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "dark:bg-slate-900/70": {
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal-review.js",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "dark:bg-slate-900/80": {
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "dark:bg-slate-950/40": {
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "dark:bg-slate-950/60": {
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "dark:border-amber-700": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "dark:border-amber-800": {
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "dark:border-amber-900/50": {
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "dark:border-amber-900/60": {
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "dark:border-cyan-900/60": {
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal-review.js",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "dark:border-emerald-800": {
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "dark:border-emerald-900/50": {
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "dark:border-emerald-900/60": {
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "dark:border-indigo-700": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "dark:border-red-800": {
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "dark:border-red-900/50": {
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "dark:border-red-900/60": {
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "dark:border-slate-600": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "dark:border-slate-700": {
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal-review.js",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "dark:border-slate-800": {
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal-review.js",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "dark:group-hover:text-white": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "dark:hover:bg-slate-700": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "dark:hover:bg-slate-800": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "dark:hover:bg-slate-800/80": {
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal-review.js",
+        "web/secure-landing/portal-src/portal.template.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "dark:hover:border-cyan-700": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "dark:hover:border-slate-600": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "dark:hover:text-cyan-300": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "dark:hover:text-indigo-300": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "dark:hover:text-slate-200": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "dark:hover:text-white": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "dark:shadow-soft-dark": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "dark:text-amber-100": {
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "dark:text-amber-200": {
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "dark:text-amber-300": {
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "dark:text-amber-400": {
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "dark:text-amber-500": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "dark:text-cyan-300": {
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "dark:text-emerald-100": {
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "dark:text-emerald-200": {
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "dark:text-emerald-300": {
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "dark:text-emerald-400": {
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "dark:text-indigo-400": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "dark:text-red-100": {
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "dark:text-red-200": {
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "dark:text-red-300": {
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "dark:text-red-400": {
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "dark:text-slate-100": {
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal-review.js",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "dark:text-slate-200": {
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "dark:text-slate-300": {
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal-review.js",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "dark:text-slate-400": {
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal-review.js",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "dark:text-white": {
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "disabled:cursor-not-allowed": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "disabled:opacity-50": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "duration-200": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "duration-300": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "ease-in-out": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "fixed": {
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "flex": {
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal-review.js",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "flex-1": {
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "flex-col": {
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "flex-wrap": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "focus:outline-none": {
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "font-black": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "font-bold": {
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal-review.js",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "font-extrabold": {
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "font-medium": {
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "font-mono": {
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal-review.js",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "font-semibold": {
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal-review.js",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "from-teal-700": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "gap-1": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "gap-1.5": {
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "gap-2": {
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "gap-3": {
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "gap-4": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "gap-5": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "gap-6": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "gap-8": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "grid": {
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "grid-cols-1": {
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "grid-cols-2": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "group": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "group-hover:text-slate-900": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "h-12": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "h-2": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "h-24": {
+      "owner": "review-only",
+      "sources": [
+        "public/portal-assets/portal-review.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
+      ],
+      "cssFile": "utilities.dynamic.css",
+      "reason": "observed in deferred review surface JavaScript"
+    },
+    "h-4": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "h-5": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "h-full": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "hidden": {
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal-review.js",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "hover:bg-slate-100": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "hover:bg-slate-50": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "hover:bg-white/90": {
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal-review.js",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "hover:border-cyan-300": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "hover:border-indigo-400": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "hover:border-slate-300": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "hover:from-teal-600": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "hover:text-cyan-700": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "hover:text-indigo-600": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "hover:text-red-700": {
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "hover:text-slate-600": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "hover:text-slate-900": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "hover:to-sky-500": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "hover:via-cyan-500": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "inline": {
+      "owner": "review-only",
+      "sources": [
+        "public/portal-assets/portal-review.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
+      ],
+      "cssFile": "utilities.dynamic.css",
+      "reason": "observed in deferred review surface JavaScript"
+    },
+    "inline-flex": {
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "inset-0": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "items-center": {
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal-review.js",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "items-end": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "items-start": {
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "justify-between": {
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "justify-center": {
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal-review.js",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "justify-end": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "leading-5": {
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "leading-6": {
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal-review.js",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "leading-7": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "leading-none": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "leading-relaxed": {
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "leading-tight": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "left-[2px]": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "lg:col-span-12": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "lg:col-span-5": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "lg:col-span-7": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "lg:flex": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "lg:flex-row": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "lg:grid-cols-12": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "lg:grid-cols-3": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "lg:grid-cols-4": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "lg:items-end": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "lg:items-start": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "lg:justify-between": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "lg:mb-0": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "max-h-[220px]": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "max-h-[320px]": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "max-h-[350px]": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "max-h-[92vh]": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "max-w-[150px]": {
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "max-w-2xl": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "max-w-3xl": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "max-w-5xl": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "max-w-6xl": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "max-w-7xl": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "max-w-sm": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "max-w-xs": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "mb-1.5": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "mb-2": {
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "mb-3": {
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "mb-4": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "mb-6": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "md:flex-row": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "md:grid-cols-2": {
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "md:grid-cols-4": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "md:grid-cols-5": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "md:items-end": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "md:justify-between": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "min-h-[100px]": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "min-h-[120px]": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "min-h-[140px]": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "min-h-[160px]": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "min-h-[400px]": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "min-w-[3rem]": {
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "min-w-0": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "ml-3": {
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "ml-4": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "mt-0.5": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "mt-1": {
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal-review.js",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "mt-2": {
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal-review.js",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "mt-3": {
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal-review.js",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "mt-4": {
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "mt-5": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "mt-6": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "mx-auto": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "object-contain": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "object-cover": {
+      "owner": "review-only",
+      "sources": [
+        "public/portal-assets/portal-review.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
+      ],
+      "cssFile": "utilities.dynamic.css",
+      "reason": "observed in deferred review surface JavaScript"
+    },
+    "opacity-0": {
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "opacity-100": {
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "opacity-50": {
+      "owner": "review-only",
+      "sources": [
+        "public/portal-assets/portal-review.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
+      ],
+      "cssFile": "utilities.dynamic.css",
+      "reason": "observed in deferred review surface JavaScript"
+    },
+    "opacity-60": {
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "opacity-75": {
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "outline-none": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "overflow-hidden": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "overflow-y-auto": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "p-3": {
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal-review.js",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "p-4": {
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "p-5": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "p-6": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "pb-3": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "pb-4": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "peer": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "peer-checked:bg-indigo-600": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "peer-checked:bg-red-500": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "peer-checked:translate-x-4": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "peer-focus-visible:ring-2": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "peer-focus-visible:ring-indigo-500": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "peer-focus-visible:ring-offset-2": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "peer-focus-visible:ring-red-500": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "pointer-events-auto": {
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "pointer-events-none": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "pr-1": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "pr-2": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "pt-4": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "pt-5": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "px-1.5": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "px-2": {
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "px-2.5": {
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "px-3": {
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "px-4": {
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "px-5": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "px-6": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "py-0.5": {
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "py-1": {
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "py-1.5": {
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "py-2": {
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "py-2.5": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "py-3": {
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "py-3.5": {
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "py-4": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "py-5": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "py-8": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "relative": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "resize-y": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "right-6": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "ring-1": {
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "ring-cyan-500/15": {
+      "owner": "static",
+      "sources": [
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "rounded-[1.75rem]": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "rounded-2xl": {
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal-review.js",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "rounded-full": {
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "rounded-lg": {
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "rounded-md": {
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "rounded-xl": {
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal-review.js",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "scale-100": {
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "scale-95": {
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "select-none": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "selection:bg-cyan-500/25": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "shadow-2xl": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "shadow-glow": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "shadow-lg": {
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "shadow-md": {
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "shadow-sm": {
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal-review.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "shadow-soft": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "shrink-0": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "sm:col-span-2": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "sm:col-span-3": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "sm:flex-row": {
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "sm:grid-cols-2": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "sm:grid-cols-3": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "sm:grid-cols-4": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "sm:items-center": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "sm:items-start": {
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "sm:justify-between": {
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "space-y-1": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "space-y-3": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "space-y-4": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "space-y-5": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "space-y-6": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "sr-only": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "sticky": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "text-[10px]": {
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal-review.js",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "text-[11px]": {
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal-review.js",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "text-[12px]": {
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal-review.js",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "text-[13px]": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "text-[14px]": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "text-[9px]": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "text-2xl": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "text-3xl": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "text-amber-600": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "text-amber-700": {
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "text-amber-800": {
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "text-amber-900": {
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "text-base": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "text-center": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "text-cyan-700": {
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "text-emerald-700": {
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "text-emerald-800": {
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "text-emerald-900": {
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "text-indigo-600": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "text-indigo-700": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "text-left": {
+      "owner": "review-only",
+      "sources": [
+        "public/portal-assets/portal-review.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
+      ],
+      "cssFile": "utilities.dynamic.css",
+      "reason": "observed in deferred review surface JavaScript"
+    },
+    "text-lg": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "text-red-500": {
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "text-red-600": {
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "text-red-700": {
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "text-red-800": {
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "text-red-900": {
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "text-right": {
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "text-slate-300": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "text-slate-400": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "text-slate-500": {
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal-review.js",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "text-slate-600": {
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal-review.js",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "text-slate-700": {
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "text-slate-800": {
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal-review.js",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "text-slate-900": {
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "text-slate-950": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "text-sm": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "text-white": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "text-xl": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "text-xs": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "to-sky-600": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "top-[2px]": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "top-0": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "tracking-[0.14em]": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "tracking-[0.16em]": {
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "tracking-[0.18em]": {
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal-review.js",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "tracking-[0.24em]": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "tracking-tight": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "tracking-wide": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "tracking-wider": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "tracking-widest": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "transform": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "transition-[width]": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "transition-all": {
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "transition-colors": {
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal-review.js",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "transition-opacity": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "transition-transform": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "truncate": {
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal-review.js",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "uppercase": {
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal-review.js",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "via-cyan-600": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "w-0": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "w-12": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "w-2": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "w-4": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "w-40": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "w-8": {
+      "owner": "static",
+      "sources": [
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "w-9": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "w-full": {
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal-review.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "whitespace-pre-wrap": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "xl:grid-cols-3": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "xl:grid-cols-4": {
+      "owner": "static",
+      "sources": [
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "xl:grid-cols-5": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "z-40": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    },
+    "z-50": {
+      "owner": "static",
+      "sources": [
+        "portal.html"
+      ],
+      "cssFile": "utilities.required.css",
+      "reason": "observed in portal static markup or generated template output"
+    }
+  }
+}

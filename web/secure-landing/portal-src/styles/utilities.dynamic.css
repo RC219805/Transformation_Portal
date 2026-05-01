@@ -1,0 +1,21 @@
+/* portal-utility-owner: dynamic-state
+   reason: utility classes observed in JS, peer/state controls, or deferred review surfaces. */
+.h-24 {
+  height: 6rem;
+}
+.border-cyan-300 {
+  border-color: rgb(103 232 249);
+}
+.inline {
+  display: inline;
+}
+.bg-cyan-50\/90 {
+  background-color: rgb(236 254 255 / 0.9);
+}
+.text-left {
+  text-align: left;
+}
+.object-cover {
+  object-fit: cover;
+}
+.opacity-50 { opacity: 0.5; }

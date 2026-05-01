@@ -224,18 +224,6 @@
       "owners": []
     },
     {
-      "key": ".focus\\:ring-amber-500:focus|||",
-      "category": "conflicting",
-      "hotspot": false,
-      "owners": []
-    },
-    {
-      "key": ".focus\\:ring-cyan-500:focus|||",
-      "category": "conflicting",
-      "hotspot": false,
-      "owners": []
-    },
-    {
       "key": ".focus\\:ring-indigo-500:focus|||",
       "category": "additive",
       "hotspot": false,

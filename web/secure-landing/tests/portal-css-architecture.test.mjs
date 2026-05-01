@@ -70,12 +70,15 @@ test("portal CSS lint script checks generated artifact freshness and architectur
   assert.match(lintCss, /build-portal-bundle\.mjs --check-css/);
   assert.match(lintCss, /check-portal-css-contract\.mjs/);
   assert.match(lintCss, /check-portal-css-architecture\.mjs/);
+  assert.match(lintCss, /check-portal-utility-ownership\.mjs/);
+  assert.match(String(packageJson.scripts["check:utility-ownership"] || ""), /check-portal-utility-ownership\.mjs/);
   assert.match(String(packageJson.scripts["check:css-layer-parity"] || ""), /check-portal-css-layer-parity\.mjs/);
   assert.match(String(packageJson.scripts["check:css-layer-dry-run"] || ""), /check:css-layer-parity --/);
 
   assert.match(runNodeScript("scripts/build-portal-bundle.mjs", "--check-css"), /generated artifact is fresh/);
   assert.match(runNodeScript("scripts/check-portal-css-contract.mjs"), /portal css contract: OK/);
   assert.match(runNodeScript("scripts/check-portal-css-architecture.mjs"), /portal css architecture: OK/);
+  assert.match(runNodeScript("scripts/check-portal-utility-ownership.mjs"), /portal utility ownership: OK/);
 });
 
 test("portal CSS layer parity make target checks generated artifact freshness", () => {
