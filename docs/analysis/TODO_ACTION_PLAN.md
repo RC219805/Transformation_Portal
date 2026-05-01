@@ -1,9 +1,9 @@
 # TODO Action Plan - Transformation Portal
 
 **Generated**: 2026-03-13
-**Last Updated**: 2026-03-26
+**Last Updated**: 2026-05-01
 **Scope**: Comprehensive review of all outstanding TODOs across the codebase
-**Cross-Reference**: [TODO_INVENTORY.md](./TODO_INVENTORY.md) (v2.4.1)
+**Cross-Reference**: [TODO_INVENTORY.md](./TODO_INVENTORY.md) (v2.4.2)
 
 ---
 
@@ -24,6 +24,12 @@ This action plan consolidates findings from a codebase-wide TODO review and prov
 All source code TODOs in `src/` have been cleaned up. The remaining test TODOs are observational notes for performance tracking.
 
 > **Note on Documentation TODO counts:** The ~190 count represents **repository-wide TODO markers** found in markdown files (historical notes, status markers, archive candidates). This is distinct from the ~38 **experimental-feature-focused markers** tracked in `OUTSTANDING_TODOS_EXPERIMENTAL_FEATURES.md`. Neither set requires implementation action—they are documentation annotations retained for context.
+
+### Recent Governance Completion (2026-05-01)
+
+- TODO governance scanner is now enforced in CI. `scripts/validation/scan_todo_inventory.py --check-governance` runs in the `hf-revision-policy` job of `.github/workflows/enforcement.yml`. PRs introducing ungoverned TODOs (no Phase / ADR / issue / owner / inventory reference) now fail.
+- NotImplementedError baseline corrected from 12 (src-only, with arithmetic errors) to 25 (full scope across `src/`, `tests/`, `scripts/`, `tools/`). All instances remain properly governed.
+- Manual monthly inventory review is no longer the primary drift control; it now serves as a periodic narrative refresh on top of automated enforcement.
 
 ### Recent Governance Completion (2026-03-26)
 
@@ -354,7 +360,7 @@ The codebase demonstrates mature TODO management with proper documentation and c
 
 ---
 
-**Document Version**: 1.3.0
+**Document Version**: 1.4.0
 **Author**: Transformation Portal Architect Review
-**Last Updated**: 2026-03-25
-**Next Review**: Before v2.5.0 release planning
+**Last Updated**: 2026-05-01
+**Next Review**: Before v2.5.0 release planning (CI now blocks ungoverned TODOs at PR time)

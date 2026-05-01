@@ -106,6 +106,9 @@ jobs:
       - name: Check YAML governance boundary
         run: python scripts/validation/check_yaml_governance_boundary.py
 
+      - name: Check TODO governance (no ungoverned TODOs in src/tests/scripts/tools)
+        run: python scripts/validation/scan_todo_inventory.py --check-governance
+
   test-layer1:
     name: Layer 1 Tests (Fast)
     runs-on: ubuntu-latest
