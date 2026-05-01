@@ -139,34 +139,17 @@ Update binary file cleanup documentation to reflect completed status.
 
 ---
 
-### QW-4: Audit ADR-023 Manifest Implementation Status
+### QW-4: Audit ADR-023 Manifest Implementation Status — ✅ COMPLETED (2026-05-01)
 
 **Effort:** 2 hours
 **Impact:** Documentation accuracy
 **Risk:** None (audit only, no code changes)
 
-**Task:**
-Audit `src/transformation_portal/lux_depth_v3/manifest.py` to determine if ADR-023 TODOs are already implemented.
-
-**Steps:**
-1. Review `manifest.py` for timing extraction logic
-2. Check for workflow wiring to orchestrator
-3. Compare against ADR-023-implementation-guide.md TODOs
-4. Update guide to reference actual implementation
-5. Create follow-up ticket if TODOs genuinely missing
-
-**Locations:**
-- `src/transformation_portal/lux_depth_v3/manifest.py`
-- `docs/architecture/decisions/ADR-023-implementation-guide.md`
-
-**Deliverables:**
-- [ ] Audit findings document (1 paragraph summary)
-- [ ] Updated ADR-023 guide (if already implemented)
-- [ ] GitHub issue (if implementation missing)
+**Outcome:** Audit found all 8 implementation TODOs in `ADR-023-implementation-guide.md` are fully shipped in production: `parse_manifests` / `extract_timings` / `compute_statistics` / `main` in `tools/performance_ledger.py` (v1.7), `BackendSelectionMetadata` at `src/transformation_portal/lux_depth_v3/manifest.py:164–241` with full `to_dict`/`from_dict` and `CombinedManifest` integration (`manifest.py:448`, deserialization `manifest.py:518–519`), `_capture_backend_metadata` at `src/transformation_portal/lux_depth_v3/orchestrator.py:1279–1301`, and truth-line logging at `orchestrator.py:5160–5167`. Phase 3 is covered by `tests/test_backend_selection.py` (215 lines, 10+ cases). The guide itself was a planning artifact in the frozen `docs/_archive/2026-Q1-consolidation/` directory; with implementation complete and the parent `ADR-023-post-pr841-hardening.md` plus active-docs successors (`performance_ledger_v1.7_review.md`, `ARCHITECT_RESPONSE_POST_PR841.md`) covering the authoritative record, the obsolete guide was deleted rather than updated in place.
 
 **Acceptance:**
-- Clear status of each ADR-023 TODO
-- Documentation reflects actual code state
+- [x] Clear status of each ADR-023 TODO — all 8 implemented, no genuine gaps
+- [x] Documentation reflects actual code state — obsolete guide removed; active docs already accurate
 
 ---
 
@@ -434,7 +417,7 @@ Audit `src/transformation_portal/depth_canonical/` module to determine if it's s
 2. **QW-3:** Update binary cleanup docs (15min)
 3. **QW-6:** Rollback procedures (2h)
 4. **QW-7:** Branch protection guide (1h)
-5. **QW-4:** ADR-023 audit (2h)
+5. **QW-4:** ADR-023 audit (2h) — ✅ completed 2026-05-01
 
 ### Week 2: Code & Integration (5 hours)
 
@@ -455,7 +438,7 @@ Audit `src/transformation_portal/depth_canonical/` module to determine if it's s
 
 - **QW-6:** Rollback procedures (production safety)
 - **QW-7:** Branch protection (repository security)
-- **QW-4:** ADR-023 audit (documentation accuracy)
+- **QW-4:** ADR-023 audit (documentation accuracy) — ✅ completed 2026-05-01
 
 ### Medium Impact (Nice to Have)
 
