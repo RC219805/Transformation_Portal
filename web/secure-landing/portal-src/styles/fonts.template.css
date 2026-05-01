@@ -1,0 +1,11 @@
+@font-face {
+    font-family: "Portal Sans";
+    src: url("__PORTAL_FONT_SANS_URL__") format("woff2");
+    font-display: swap;
+}
+
+@font-face {
+    font-family: "Portal Mono";
+    src: url("__PORTAL_FONT_MONO_URL__") format("woff2");
+    font-display: swap;
+}

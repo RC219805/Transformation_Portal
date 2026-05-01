@@ -1,0 +1,88 @@
+/* ============================================================================
+ * 2. TOKENS
+ * ============================================================================ */
+
+html {
+    scroll-behavior: smooth;
+}
+
+body {
+    font-family: "Portal Sans", "Segoe UI", sans-serif;
+    font-size: var(--ux-body-size);
+    line-height: 1.5;
+}
+
+:root {
+    color-scheme: light;
+    --ux-panel-border: rgba(148, 163, 184, 0.22);
+    --ux-panel-border-strong: rgba(8, 145, 178, 0.3);
+    --shell-ink: #0f172a;
+    --shell-muted: #475569;
+    --shell-border: var(--ux-panel-border);
+    --shell-panel: rgba(255, 255, 255, 0.86);
+    --shell-panel-strong: rgba(255, 255, 255, 0.94);
+    --shell-accent-text: #0f766e;
+    --shell-accent-fill: #0e7490;
+    --shell-accent-fill-strong: #155e75;
+    --shell-on-accent: #ffffff;
+    --shell-accent: var(--shell-accent-text);
+    --shell-accent-soft: rgba(8, 145, 178, 0.1);
+    --shell-signal: #b45309;
+    --shell-danger: #b91c1c;
+    --shell-veil-soft: rgba(255, 255, 255, 0.72);
+    --shell-veil: rgba(255, 255, 255, 0.74);
+    --shell-veil-strong: rgba(255, 255, 255, 0.78);
+    --shell-tint-faint: rgba(148, 163, 184, 0.06);
+    --ambient-shift-x: 0px;
+    --ambient-shift-y: 0px;
+    --ambient-focus-x: 52%;
+    --ambient-focus-y: 26%;
+    --ambient-stage-x: 0px;
+    --ambient-stage-y: 0px;
+    --ambient-stage-scale: 1;
+    --ambient-stage-rotate: 0deg;
+    --ambient-color-a: 45 212 191;
+    --ambient-color-b: 245 158 11;
+    --ambient-color-c: 56 189 248;
+    --ambient-focus-color: 125 211 252;
+}
+
+.dark:root {
+    color-scheme: dark;
+    --ux-panel-border: rgba(100, 116, 139, 0.5);
+    --ux-panel-border-strong: rgba(103, 232, 249, 0.34);
+    --shell-ink: #e5eef6;
+    --shell-muted: #a8b6c8;
+    --shell-border: var(--ux-panel-border);
+    --shell-panel: var(--shell-veil-strong);
+    --shell-panel-strong: rgba(15, 23, 42, 0.9);
+    --shell-accent-text: #99f6e4;
+    --shell-accent-fill: #2dd4bf;
+    --shell-accent-fill-strong: #0f766e;
+    --shell-on-accent: #020617;
+    --shell-accent: var(--shell-accent-text);
+    --shell-accent-soft: rgba(45, 212, 191, 0.14);
+    --shell-signal: #fbbf24;
+    --shell-danger: #f87171;
+    --shell-veil-soft: rgba(15, 23, 42, 0.72);
+    --shell-veil: rgba(15, 23, 42, 0.74);
+    --shell-veil-strong: rgba(15, 23, 42, 0.76);
+    --ambient-color-a: 45 212 191;
+    --ambient-color-b: 96 165 250;
+    --ambient-color-c: 125 211 252;
+    --ambient-focus-color: 34 211 238;
+}
+
+/* Reduced motion preference */
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
+
+    .portal-video-media {
+        display: none;
+    }
+}
