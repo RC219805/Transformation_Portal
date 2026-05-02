@@ -115,11 +115,13 @@ class TestNativeAttestation:
             json.dumps({"signature": {"signature": "-----BEGIN PGP-----\n..."}}),
             encoding="utf-8",
         )
-        with patch.object(release_assessment, "verify_run_card_integrity", return_value=[]), \
-             patch.object(release_assessment, "validate_run_card_detached_attestation_surface"), \
-             patch.object(release_assessment, "bind_run_card_detached_attestation"), \
-             patch.object(release_assessment, "verify_run_card_attestation_self_hash"), \
-             patch.object(release_assessment, "gpg_verify_clearsign") as mock_gpg:
+        with (
+            patch.object(release_assessment, "verify_run_card_integrity", return_value=[]),
+            patch.object(release_assessment, "validate_run_card_detached_attestation_surface"),
+            patch.object(release_assessment, "bind_run_card_detached_attestation"),
+            patch.object(release_assessment, "verify_run_card_attestation_self_hash"),
+            patch.object(release_assessment, "gpg_verify_clearsign") as mock_gpg,
+        ):
             report = assess_run_card_release(
                 run_card_path=run_card,
                 require_native_attestation=True,
@@ -134,11 +136,13 @@ class TestNativeAttestation:
         run_card = _write_run_card(tmp_path, {"run_card_version": "v2"})
         native_path = run_card.with_suffix(".attestation.native.json")
         native_path.write_text(json.dumps({"signature": {}}), encoding="utf-8")
-        with patch.object(release_assessment, "verify_run_card_integrity", return_value=[]), \
-             patch.object(release_assessment, "validate_run_card_detached_attestation_surface"), \
-             patch.object(release_assessment, "bind_run_card_detached_attestation"), \
-             patch.object(release_assessment, "verify_run_card_attestation_self_hash"), \
-             patch.object(release_assessment, "gpg_verify_clearsign") as mock_gpg:
+        with (
+            patch.object(release_assessment, "verify_run_card_integrity", return_value=[]),
+            patch.object(release_assessment, "validate_run_card_detached_attestation_surface"),
+            patch.object(release_assessment, "bind_run_card_detached_attestation"),
+            patch.object(release_assessment, "verify_run_card_attestation_self_hash"),
+            patch.object(release_assessment, "gpg_verify_clearsign") as mock_gpg,
+        ):
             report = assess_run_card_release(
                 run_card_path=run_card,
                 require_native_attestation=True,
@@ -163,13 +167,15 @@ class TestDsseAttestation:
     def test_full_chain_passes_when_helpers_succeed(self, tmp_path):
         run_card = _write_run_card(tmp_path, {"run_card_version": "v2"})
         run_card.with_suffix(".attestation.dsse.json").write_text("{}", encoding="utf-8")
-        with patch.object(release_assessment, "verify_run_card_integrity", return_value=[]), \
-             patch.object(release_assessment, "decode_run_card_statement_from_envelope", return_value={}), \
-             patch.object(release_assessment, "validate_run_card_statement_binding"), \
-             patch.object(release_assessment, "decode_dsse_signature_bytes", return_value=b"sig"), \
-             patch.object(release_assessment, "decode_dsse_payload", return_value=b"payload"), \
-             patch.object(release_assessment, "pre_auth_encode", return_value=b"pae"), \
-             patch.object(release_assessment, "gpg_verify_detached_signature_bytes") as mock_gpg:
+        with (
+            patch.object(release_assessment, "verify_run_card_integrity", return_value=[]),
+            patch.object(release_assessment, "decode_run_card_statement_from_envelope", return_value={}),
+            patch.object(release_assessment, "validate_run_card_statement_binding"),
+            patch.object(release_assessment, "decode_dsse_signature_bytes", return_value=b"sig"),
+            patch.object(release_assessment, "decode_dsse_payload", return_value=b"payload"),
+            patch.object(release_assessment, "pre_auth_encode", return_value=b"pae"),
+            patch.object(release_assessment, "gpg_verify_detached_signature_bytes") as mock_gpg,
+        ):
             report = assess_run_card_release(
                 run_card_path=run_card,
                 require_dsse_attestation=True,
@@ -183,10 +189,12 @@ class TestDsseAttestation:
     def test_chain_passes_without_gpg_skips_detached_verify(self, tmp_path):
         run_card = _write_run_card(tmp_path, {"run_card_version": "v2"})
         run_card.with_suffix(".attestation.dsse.json").write_text("{}", encoding="utf-8")
-        with patch.object(release_assessment, "verify_run_card_integrity", return_value=[]), \
-             patch.object(release_assessment, "decode_run_card_statement_from_envelope", return_value={}), \
-             patch.object(release_assessment, "validate_run_card_statement_binding"), \
-             patch.object(release_assessment, "gpg_verify_detached_signature_bytes") as mock_gpg:
+        with (
+            patch.object(release_assessment, "verify_run_card_integrity", return_value=[]),
+            patch.object(release_assessment, "decode_run_card_statement_from_envelope", return_value={}),
+            patch.object(release_assessment, "validate_run_card_statement_binding"),
+            patch.object(release_assessment, "gpg_verify_detached_signature_bytes") as mock_gpg,
+        ):
             report = assess_run_card_release(
                 run_card_path=run_card,
                 require_dsse_attestation=True,
@@ -206,10 +214,7 @@ class TestSigstoreBundle:
             )
         bundle = _check(report, "sigstore_bundle")
         assert bundle["status"] == "FAIL"
-        assert any(
-            "cannot verify Sigstore bundle without DSSE attestation" in e
-            for e in bundle["details"]["errors"]
-        )
+        assert any("cannot verify Sigstore bundle without DSSE attestation" in e for e in bundle["details"]["errors"])
 
     def test_bundle_required_with_dsse_but_missing_bundle_yields_failure(self, tmp_path):
         run_card = _write_run_card(tmp_path, {"run_card_version": "v2"})
@@ -237,8 +242,10 @@ class TestSigstoreBundle:
             ),
             encoding="utf-8",
         )
-        with patch.object(release_assessment, "verify_run_card_integrity", return_value=[]), \
-             patch.object(release_assessment, "cosign_verify_blob") as mock_cosign:
+        with (
+            patch.object(release_assessment, "verify_run_card_integrity", return_value=[]),
+            patch.object(release_assessment, "cosign_verify_blob") as mock_cosign,
+        ):
             report = assess_run_card_release(
                 run_card_path=run_card,
                 require_sigstore_bundle=True,
@@ -258,8 +265,10 @@ class TestSigstoreBundle:
             json.dumps({"verificationMaterial": {"tlogEntries": []}}),
             encoding="utf-8",
         )
-        with patch.object(release_assessment, "verify_run_card_integrity", return_value=[]), \
-             patch.object(release_assessment, "cosign_verify_blob"):
+        with (
+            patch.object(release_assessment, "verify_run_card_integrity", return_value=[]),
+            patch.object(release_assessment, "cosign_verify_blob"),
+        ):
             report = assess_run_card_release(
                 run_card_path=run_card,
                 require_sigstore_bundle=True,
@@ -268,18 +277,17 @@ class TestSigstoreBundle:
         bundle = _check(report, "sigstore_bundle")
         assert bundle["status"] == "FAIL"
         assert bundle["details"]["rekor_inclusion"] is False
-        assert any(
-            "does not record Rekor inclusion evidence" in e
-            for e in bundle["details"]["errors"]
-        )
+        assert any("does not record Rekor inclusion evidence" in e for e in bundle["details"]["errors"])
 
     def test_bundle_without_verification_material_records_no_rekor(self, tmp_path):
         run_card = _write_run_card(tmp_path, {"run_card_version": "v2"})
         run_card.with_suffix(".attestation.dsse.json").write_text("{}", encoding="utf-8")
         bundle_path = run_card.with_suffix(".attestation.dsse.sigstore.bundle.json")
         bundle_path.write_text(json.dumps({}), encoding="utf-8")
-        with patch.object(release_assessment, "verify_run_card_integrity", return_value=[]), \
-             patch.object(release_assessment, "cosign_verify_blob"):
+        with (
+            patch.object(release_assessment, "verify_run_card_integrity", return_value=[]),
+            patch.object(release_assessment, "cosign_verify_blob"),
+        ):
             report = assess_run_card_release(
                 run_card_path=run_card,
                 require_sigstore_bundle=True,
@@ -294,12 +302,14 @@ class TestSigstoreBundle:
         run_card.with_suffix(".attestation.dsse.json").write_text("{}", encoding="utf-8")
         bundle_path = run_card.with_suffix(".attestation.dsse.sigstore.bundle.json")
         bundle_path.write_text(json.dumps({"verificationMaterial": {}}), encoding="utf-8")
-        with patch.object(release_assessment, "verify_run_card_integrity", return_value=[]), \
-             patch.object(
-                 release_assessment,
-                 "cosign_verify_blob",
-                 side_effect=RuntimeError("cosign signature mismatch"),
-             ):
+        with (
+            patch.object(release_assessment, "verify_run_card_integrity", return_value=[]),
+            patch.object(
+                release_assessment,
+                "cosign_verify_blob",
+                side_effect=RuntimeError("cosign signature mismatch"),
+            ),
+        ):
             report = assess_run_card_release(
                 run_card_path=run_card,
                 require_sigstore_bundle=True,

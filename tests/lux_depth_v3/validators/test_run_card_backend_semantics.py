@@ -79,18 +79,14 @@ class TestStructuralErrors:
         payload = _base_payload()
         payload["backend_summary"]["final_backends_used"] = []
         errors = collect_run_card_backend_semantic_errors(payload)
-        assert errors == [
-            "backend_summary.final_backends_used must be non-empty when success_count > 0"
-        ]
+        assert errors == ["backend_summary.final_backends_used must be non-empty when success_count > 0"]
 
     @pytest.mark.parametrize("primary", [None, "", 42, ["da3"]])
     def test_invalid_primary_short_circuits(self, primary):
         payload = _base_payload()
         payload["backend_summary"]["final_backends_used"] = [primary]
         errors = collect_run_card_backend_semantic_errors(payload)
-        assert errors == [
-            "backend_summary.final_backends_used[0] must be a non-empty string"
-        ]
+        assert errors == ["backend_summary.final_backends_used[0] must be a non-empty string"]
 
     @pytest.mark.parametrize("resolved", [None, "", 42, ["da3"]])
     def test_invalid_resolved_short_circuits(self, resolved):
@@ -200,28 +196,19 @@ class TestWrapperSemantics:
     def test_logical_equal_to_resolved_engine_is_rejected(self):
         payload = self._wrapper_payload(logical_backend="da3")
         errors = collect_run_card_backend_semantic_errors(payload)
-        assert any(
-            "logical_backend and backend_selection.resolved_engine must differ" in e
-            for e in errors
-        )
+        assert any("logical_backend and backend_selection.resolved_engine must differ" in e for e in errors)
 
     def test_resolved_engine_must_match_primary(self):
         payload = self._wrapper_payload(resolved_engine="depth_pro")
         # final_backends_used[0] is "da3"; resolved_engine declares "depth_pro".
         errors = collect_run_card_backend_semantic_errors(payload)
-        assert any(
-            "resolved_engine must match backend_summary.final_backends_used[0]" in e
-            for e in errors
-        )
+        assert any("resolved_engine must match backend_summary.final_backends_used[0]" in e for e in errors)
 
     def test_wrapper_with_nonzero_fallback_is_rejected(self):
         payload = self._wrapper_payload()
         payload["backend_summary"]["fallback_images"] = 2
         errors = collect_run_card_backend_semantic_errors(payload)
-        assert any(
-            "wrapper semantics are only valid when backend_summary.fallback_images == 0" in e
-            for e in errors
-        )
+        assert any("wrapper semantics are only valid when backend_summary.fallback_images == 0" in e for e in errors)
 
     def test_well_formed_wrapper_passes(self):
         payload = self._wrapper_payload()
