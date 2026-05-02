@@ -6,8 +6,8 @@
     "utilityLayerImportsBefore": 6,
     "utilityLayerImportsAfter": 3,
     "compatHoldCount": 0,
-    "overridesCompatRuleCount": 4,
-    "overridesCompatBytes": 2197,
+    "overridesCompatRuleCount": 3,
+    "overridesCompatBytes": 1711,
     "drainedSelectorCount": 344
   },
   "moves": [
@@ -3152,26 +3152,6 @@
       "parity": "green"
     },
     {
-      "selector": ".artifact-review-stage",
-      "from": "overrides.compat.css (Phase 5 selector)",
-      "fromLayer": "overrides",
-      "to": "overrides.compat.css",
-      "toLayer": "overrides",
-      "classification": "compatibility-final-order",
-      "reason": "Phase 6 semantic ownership: replaces ID-specific selector with additive semantic class hook (markup unchanged); rule remains in overrides layer because moving to components would let utilities-layer cascade win; removable in phase-7-utility-markup-migration",
-      "parity": "green"
-    },
-    {
-      "selector": ".artifact-review-meta",
-      "from": "overrides.compat.css (Phase 5 selector)",
-      "fromLayer": "overrides",
-      "to": "overrides.compat.css",
-      "toLayer": "overrides",
-      "classification": "compatibility-final-order",
-      "reason": "Phase 6 semantic ownership: replaces ID-specific selector with additive semantic class hook (markup unchanged); rule remains in overrides layer because moving to components would let utilities-layer cascade win; removable in phase-7-utility-markup-migration",
-      "parity": "green"
-    },
-    {
       "selector": ".portal-action-control",
       "from": "overrides.compat.css (Phase 5 selector)",
       "fromLayer": "overrides",
@@ -3349,6 +3329,26 @@
       "toLayer": "components",
       "classification": "component-owned",
       "reason": "Phase 7.E: dropped p-6/rounded-2xl (or px-6 py-5 / rounded-2xl on context) utilities from the panel shells in markup; per-modifier desktop padding/radius and the shared mobile-tightening rule now live in shell-foundation.css. Build-shell had no utilities to drop and inherits the mobile rule unchanged.",
+      "parity": "green"
+    },
+    {
+      "selector": ".artifact-review-meta",
+      "from": "overrides.compat.css",
+      "fromLayer": "overrides",
+      "to": "components/workspace-surfaces.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "Phase 7.F: dropped p-4 utility from #artifactPreviewStage and #artifactMetadataBar markup; padding (1rem desktop, 0.95rem mobile) is now component-owned in workspace-surfaces.css.",
+      "parity": "green"
+    },
+    {
+      "selector": ".artifact-review-stage",
+      "from": "overrides.compat.css",
+      "fromLayer": "overrides",
+      "to": "components/workspace-surfaces.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "Phase 7.F: dropped p-4 utility from #artifactPreviewStage and #artifactMetadataBar markup; padding (1rem desktop, 0.95rem mobile) is now component-owned in workspace-surfaces.css.",
       "parity": "green"
     }
   ]

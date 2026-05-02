@@ -1,16 +1,4 @@
 /* portal-override-owner: compatibility-final-order
-   reason: .artifact-review-* surface padding override utilities-layer p-4 class at <=767px;
-   moving to the components layer would let the utility win the cascade. Selectors migrated
-   from #artifactPreviewStage and #artifactMetadataBar to the Phase 6 semantic hooks.
-   removal-phase: phase-7-utility-markup-migration */
-@media (max-width: 767px) {
-  .artifact-review-stage,
-  .artifact-review-meta {
-    padding: 0.95rem;
-  }
-}
-
-/* portal-override-owner: compatibility-final-order
    reason: .portal-action-control min-height/border-radius override utilities-layer
    rounded-full/rounded-lg classes on the four action buttons; moving to the components layer
    would let those utilities win the cascade. Selector migrated from
