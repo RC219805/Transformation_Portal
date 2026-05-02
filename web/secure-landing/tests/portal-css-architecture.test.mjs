@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
@@ -100,6 +100,83 @@ function runNpmScript(...args) {
   });
 }
 
+function duplicateFixture() {
+  return {
+    key: ".owned|||components|||",
+    selector: ".owned",
+    layer: "components",
+    context: [],
+    stateContext: [],
+    category: "additive",
+    hotspot: false,
+    records: [
+      {
+        source: "web/secure-landing/portal-src/styles/components/example.css",
+        line: 1,
+        column: 1,
+        layer: "components",
+        declarationSignature: "left",
+        properties: ["display"]
+      },
+      {
+        source: "web/secure-landing/portal-src/styles/components/example.css",
+        line: 8,
+        column: 1,
+        layer: "components",
+        declarationSignature: "right",
+        properties: ["gap"]
+      }
+    ]
+  };
+}
+
+function baselineEntryFor(duplicate, overrides = {}) {
+  return {
+    key: duplicate.key,
+    selector: duplicate.selector,
+    layer: duplicate.layer,
+    atRuleContext: duplicate.context,
+    stateContext: duplicate.stateContext,
+    category: duplicate.category,
+    hotspot: duplicate.hotspot,
+    records: duplicate.records,
+    owners: ["portal-css-architecture"],
+    ownerReason:
+      duplicate.category === "conflicting"
+        ? "Intentional cascade: source order preserves the final declaration set."
+        : "Additive ownership: split declarations preserve computed-style parity.",
+    phase: "phase-9-duplicate-ownership-closure",
+    contextType: "component-family-shared-state",
+    disposition: "report-only",
+    removalStatus: "removable-later",
+    declarationConflict: duplicate.category,
+    parity: "green",
+    ...overrides
+  };
+}
+
+function runDuplicateBaselineFixture(baseline, duplicates) {
+  const tempDir = mkdtempSync(path.join(tmpdir(), "portal-duplicate-baseline-"));
+  const baselinePath = path.join(tempDir, "baseline.json");
+  const duplicatesPath = path.join(tempDir, "duplicates.json");
+  writeFileSync(baselinePath, `${JSON.stringify(baseline, null, 2)}\n`, "utf8");
+  writeFileSync(duplicatesPath, `${JSON.stringify({ duplicates }, null, 2)}\n`, "utf8");
+  try {
+    return runNodeScript("scripts/check-portal-css-architecture.mjs", "--check-duplicate-baseline-fixture", baselinePath, duplicatesPath);
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
+}
+
+function runDuplicateBaselineFixtureFailure(baseline, duplicates) {
+  try {
+    runDuplicateBaselineFixture(baseline, duplicates);
+  } catch (error) {
+    return `${error.stdout || ""}${error.stderr || ""}`;
+  }
+  assert.fail("duplicate baseline fixture unexpectedly passed");
+}
+
 test("portal CSS lint script checks generated artifact freshness and architecture gates", () => {
   const packageJson = JSON.parse(readFileSync(PACKAGE_JSON_PATH, "utf8"));
   const lintCss = String(packageJson.scripts["lint:css"] || "");
@@ -154,6 +231,75 @@ test("portal CSS sentinel fixtures enforce comments-only architecture", () => {
   }
 });
 
+test("portal CSS duplicate baseline fixtures enforce Phase 9 ownership", () => {
+  const duplicate = duplicateFixture();
+  const ownedBaseline = { version: 1, duplicateKeys: [baselineEntryFor(duplicate)] };
+
+  assert.match(
+    runDuplicateBaselineFixture(ownedBaseline, [duplicate]),
+    /portal css duplicate baseline fixture: OK/
+  );
+
+  for (const [name, baseline, expected] of [
+    [
+      "unowned duplicate baseline entry",
+      { version: 1, duplicateKeys: [baselineEntryFor(duplicate, { owners: undefined })] },
+      /missing owners/
+    ],
+    [
+      "empty owners",
+      { version: 1, duplicateKeys: [baselineEntryFor(duplicate, { owners: [] })] },
+      /missing owners/
+    ],
+    [
+      "missing ownerReason",
+      { version: 1, duplicateKeys: [baselineEntryFor(duplicate, { ownerReason: "" })] },
+      /missing ownerReason/
+    ],
+    [
+      "wrong phase",
+      { version: 1, duplicateKeys: [baselineEntryFor(duplicate, { phase: "phase-8-governance-sentinel" })] },
+      /must declare phase phase-9-duplicate-ownership-closure/
+    ],
+    [
+      "invalid disposition",
+      { version: 1, duplicateKeys: [baselineEntryFor(duplicate, { disposition: "consolidated-safe" })] },
+      /invalid disposition consolidated-safe/
+    ],
+    ["new duplicate absent from baseline", { version: 1, duplicateKeys: [] }, /new unclassified duplicate selector/]
+  ]) {
+    assert.match(runDuplicateBaselineFixtureFailure(baseline, [duplicate]), expected, name);
+  }
+
+  const hotspotDuplicate = { ...duplicate, key: ".shell-bg|||components|||", selector: ".shell-bg", hotspot: true };
+  assert.match(
+    runDuplicateBaselineFixtureFailure(
+      { version: 1, duplicateKeys: [baselineEntryFor(hotspotDuplicate)] },
+      [hotspotDuplicate]
+    ),
+    /hotspot duplicate context .* is forbidden/
+  );
+
+  const conflictingDuplicate = { ...duplicate, category: "conflicting" };
+  assert.match(
+    runDuplicateBaselineFixtureFailure(
+      {
+        version: 1,
+        duplicateKeys: [
+          baselineEntryFor(conflictingDuplicate, {
+            ownerReason: "Shared styling is intentionally retained.",
+            declarationConflict: "conflicting",
+            disposition: "keep-owned",
+            removalStatus: "permanent"
+          })
+        ]
+      },
+      [conflictingDuplicate]
+    ),
+    /must explain intended cascade\/source-order behavior/
+  );
+});
+
 test("portal CSS layer parity make target checks generated artifact freshness", () => {
   const makefile = readFileSync(MAKEFILE_PATH, "utf8");
   const start = makefile.indexOf("validate-portal-css-layer-parity:");
@@ -176,7 +322,7 @@ test("portal CSS architecture baseline keeps hotspot selectors consolidated", ()
   const duplicateKeys = baseline.duplicateKeys || [];
 
   for (const selector of HOTSPOT_SELECTORS) {
-    const entry = duplicateKeys.find((candidate) => candidate.key === `${selector}|||`);
+    const entry = duplicateKeys.find((candidate) => candidate.selector === selector);
     assert.equal(entry, undefined, `unexpected duplicate baseline entry for ${selector}`);
   }
 });
@@ -219,6 +365,25 @@ test("portal CSS ownership drain keeps utilities layer honest", () => {
   assert.ok(
     ownershipDrain.moves.every((move) => move.parity === "green"),
     "all ownership drain moves must be parity green"
+  );
+
+  const duplicateBaseline = JSON.parse(readFileSync(ARCHITECTURE_BASELINE_PATH, "utf8"));
+  assert.equal(ownershipDrain.phase9DuplicateState.phase, "phase-9-duplicate-ownership-closure");
+  assert.equal(ownershipDrain.phase9DuplicateState.baselinePath, "web/secure-landing/portal-src/styles/architecture-baseline.json");
+  assert.equal(ownershipDrain.phase9DuplicateState.duplicateContextCountBefore, 87);
+  assert.equal(ownershipDrain.phase9DuplicateState.duplicateContextCountAfter, duplicateBaseline.duplicateKeys.length);
+  assert.equal(ownershipDrain.phase9DuplicateState.ownedDuplicateContextCount, duplicateBaseline.duplicateKeys.length);
+  assert.equal(ownershipDrain.phase9DuplicateState.unownedDuplicateContextCount, 0);
+  assert.equal(ownershipDrain.phase9DuplicateState.hotspotDuplicateContextCount, 0);
+  assert.equal(ownershipDrain.phase9DuplicateState.consolidatedDuplicateContextCount, 0);
+  assert.equal(ownershipDrain.phase9DuplicateState.reclassifiedDuplicateContextCount, 1);
+  assert.equal(ownershipDrain.phase9DuplicateState.removedRawBytes, 0);
+  assert.equal(ownershipDrain.phase9DuplicateState.removedGzipBytes, 0);
+  assert.equal(ownershipDrain.phase9DuplicateState.sentinelStatePreserved, true);
+  assert.equal(ownershipDrain.phase9DuplicateState.parityBaselineChanged, false);
+  assert.ok(
+    duplicateBaseline.duplicateKeys.every((entry) => entry.phase === "phase-9-duplicate-ownership-closure"),
+    "all duplicate baseline entries must be Phase 9-owned"
   );
 });
 

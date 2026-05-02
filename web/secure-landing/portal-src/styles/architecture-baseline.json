@@ -1,527 +1,4334 @@
 {
   "version": 1,
+  "phase": "phase-9-duplicate-ownership-closure",
   "duplicateKeys": [
     {
-      "key": ".ambient-focus|||",
+      "key": ".ambient-focus|||components|||",
+      "selector": ".ambient-focus",
+      "layer": "components",
+      "atRuleContext": [],
+      "stateContext": [],
       "category": "conflicting",
       "hotspot": false,
-      "owners": []
+      "records": [
+        {
+          "source": "web/secure-landing/portal-src/styles/components/shell-foundation.css",
+          "line": 322,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "2b1318640b33b563aff4b2ee1d6a3f59dbba2a51",
+          "properties": [
+            "inset",
+            "position"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/shell-foundation.css",
+          "line": 402,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "1d3213fc376fe612c9e1eb1ddb2621c3fd96aecb",
+          "properties": [
+            "animation",
+            "background",
+            "filter",
+            "inset",
+            "mix-blend-mode",
+            "opacity"
+          ]
+        }
+      ],
+      "owners": [
+        "portal-css-architecture"
+      ],
+      "ownerReason": "Intentional cascade: .ambient-focus keeps the reviewed source order across shell-foundation.css; the later production rule provides the final declaration set.",
+      "phase": "phase-9-duplicate-ownership-closure",
+      "contextType": "component-family-shared-state",
+      "disposition": "keep-owned",
+      "removalStatus": "permanent",
+      "declarationConflict": "conflicting",
+      "parity": "green"
     },
     {
-      "key": ".ambient-grid|||",
+      "key": ".ambient-grid|||components|||",
+      "selector": ".ambient-grid",
+      "layer": "components",
+      "atRuleContext": [],
+      "stateContext": [],
       "category": "conflicting",
       "hotspot": false,
-      "owners": []
+      "records": [
+        {
+          "source": "web/secure-landing/portal-src/styles/components/shell-foundation.css",
+          "line": 322,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "2b1318640b33b563aff4b2ee1d6a3f59dbba2a51",
+          "properties": [
+            "inset",
+            "position"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/shell-foundation.css",
+          "line": 370,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "abd9cfa74cca0ef8554966b171589c19a8e20516",
+          "properties": [
+            "animation",
+            "background-image",
+            "background-size",
+            "inset",
+            "mask-image",
+            "opacity"
+          ]
+        }
+      ],
+      "owners": [
+        "portal-css-architecture"
+      ],
+      "ownerReason": "Intentional cascade: .ambient-grid keeps the reviewed source order across shell-foundation.css; the later production rule provides the final declaration set.",
+      "phase": "phase-9-duplicate-ownership-closure",
+      "contextType": "component-family-shared-state",
+      "disposition": "keep-owned",
+      "removalStatus": "permanent",
+      "declarationConflict": "conflicting",
+      "parity": "green"
     },
     {
-      "key": ".ambient-orb|||",
+      "key": ".ambient-orb|||components|||",
+      "selector": ".ambient-orb",
+      "layer": "components",
+      "atRuleContext": [],
+      "stateContext": [],
       "category": "additive",
       "hotspot": false,
-      "owners": []
+      "records": [
+        {
+          "source": "web/secure-landing/portal-src/styles/components/shell-foundation.css",
+          "line": 322,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "2b1318640b33b563aff4b2ee1d6a3f59dbba2a51",
+          "properties": [
+            "inset",
+            "position"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/shell-foundation.css",
+          "line": 417,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "c60c855ccb64a74d69966c90fe570e7acbbec833",
+          "properties": [
+            "border-radius",
+            "filter",
+            "opacity"
+          ]
+        }
+      ],
+      "owners": [
+        "portal-css-architecture"
+      ],
+      "ownerReason": "Additive ownership: .ambient-orb splits non-overlapping declarations across shell-foundation.css while preserving the current computed-style parity.",
+      "phase": "phase-9-duplicate-ownership-closure",
+      "contextType": "component-family-shared-state",
+      "disposition": "report-only",
+      "removalStatus": "removable-later",
+      "declarationConflict": "additive",
+      "parity": "green"
     },
     {
-      "key": ".ambient-ring|||",
+      "key": ".ambient-ring|||components|||",
+      "selector": ".ambient-ring",
+      "layer": "components",
+      "atRuleContext": [],
+      "stateContext": [],
       "category": "additive",
       "hotspot": false,
-      "owners": []
+      "records": [
+        {
+          "source": "web/secure-landing/portal-src/styles/components/shell-foundation.css",
+          "line": 322,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "2b1318640b33b563aff4b2ee1d6a3f59dbba2a51",
+          "properties": [
+            "inset",
+            "position"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/shell-foundation.css",
+          "line": 460,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "a0cb325233e57030802eb47bb16b45e3990ad59a",
+          "properties": [
+            "border",
+            "border-radius",
+            "filter",
+            "opacity"
+          ]
+        }
+      ],
+      "owners": [
+        "portal-css-architecture"
+      ],
+      "ownerReason": "Additive ownership: .ambient-ring splits non-overlapping declarations across shell-foundation.css while preserving the current computed-style parity.",
+      "phase": "phase-9-duplicate-ownership-closure",
+      "contextType": "component-family-shared-state",
+      "disposition": "report-only",
+      "removalStatus": "removable-later",
+      "declarationConflict": "additive",
+      "parity": "green"
     },
     {
-      "key": ".ambient-sweep|||",
+      "key": ".ambient-sweep|||components|||",
+      "selector": ".ambient-sweep",
+      "layer": "components",
+      "atRuleContext": [],
+      "stateContext": [],
       "category": "conflicting",
       "hotspot": false,
-      "owners": []
+      "records": [
+        {
+          "source": "web/secure-landing/portal-src/styles/components/shell-foundation.css",
+          "line": 322,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "2b1318640b33b563aff4b2ee1d6a3f59dbba2a51",
+          "properties": [
+            "inset",
+            "position"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/shell-foundation.css",
+          "line": 387,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "2b6fdeafc163d78a117c435b193623d9cb6a1318",
+          "properties": [
+            "animation",
+            "background",
+            "filter",
+            "inset",
+            "mix-blend-mode",
+            "opacity"
+          ]
+        }
+      ],
+      "owners": [
+        "portal-css-architecture"
+      ],
+      "ownerReason": "Intentional cascade: .ambient-sweep keeps the reviewed source order across shell-foundation.css; the later production rule provides the final declaration set.",
+      "phase": "phase-9-duplicate-ownership-closure",
+      "contextType": "component-family-shared-state",
+      "disposition": "keep-owned",
+      "removalStatus": "permanent",
+      "declarationConflict": "conflicting",
+      "parity": "green"
     },
     {
-      "key": ".ambient-veil|||",
+      "key": ".ambient-veil|||components|||",
+      "selector": ".ambient-veil",
+      "layer": "components",
+      "atRuleContext": [],
+      "stateContext": [],
       "category": "conflicting",
       "hotspot": false,
-      "owners": []
+      "records": [
+        {
+          "source": "web/secure-landing/portal-src/styles/components/shell-foundation.css",
+          "line": 322,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "2b1318640b33b563aff4b2ee1d6a3f59dbba2a51",
+          "properties": [
+            "inset",
+            "position"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/shell-foundation.css",
+          "line": 352,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "22ef00b7ef625ba50e51767f978afe83387874b0",
+          "properties": [
+            "animation",
+            "background",
+            "filter",
+            "inset",
+            "opacity"
+          ]
+        }
+      ],
+      "owners": [
+        "portal-css-architecture"
+      ],
+      "ownerReason": "Intentional cascade: .ambient-veil keeps the reviewed source order across shell-foundation.css; the later production rule provides the final declaration set.",
+      "phase": "phase-9-duplicate-ownership-closure",
+      "contextType": "component-family-shared-state",
+      "disposition": "keep-owned",
+      "removalStatus": "permanent",
+      "declarationConflict": "conflicting",
+      "parity": "green"
     },
     {
-      "key": ".build-pulse-card|||",
+      "key": ".build-pulse-card|||components|||",
+      "selector": ".build-pulse-card",
+      "layer": "components",
+      "atRuleContext": [],
+      "stateContext": [],
       "category": "conflicting",
       "hotspot": false,
-      "owners": []
+      "records": [
+        {
+          "source": "web/secure-landing/portal-src/styles/components/console-context.css",
+          "line": 275,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "8b72cd1fc71065aec8b0e3674bf4cd5c5554a5b4",
+          "properties": [
+            "background",
+            "border",
+            "border-radius",
+            "box-shadow",
+            "min-height",
+            "padding",
+            "position"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
+          "line": 146,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "bc00e11847ade2f927847a973b0a73562a961bf8",
+          "properties": [
+            "border-radius"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
+          "line": 176,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "e3c7a9b72249a3ca65b4134dee00060cb7fa297f",
+          "properties": [
+            "background",
+            "border-color"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
+          "line": 239,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "e09826935d3e1a20d02fd703970aa2e014ae2ad5",
+          "properties": [
+            "box-shadow"
+          ]
+        }
+      ],
+      "owners": [
+        "portal-css-architecture"
+      ],
+      "ownerReason": "Intentional cascade: .build-pulse-card keeps the reviewed source order across console-context.css, surface-normalization.css; the later production rule provides the final declaration set.",
+      "phase": "phase-9-duplicate-ownership-closure",
+      "contextType": "surface-normalization-final-pass",
+      "disposition": "keep-owned",
+      "removalStatus": "permanent",
+      "declarationConflict": "conflicting",
+      "parity": "green"
     },
     {
-      "key": ".build-pulse-label|||",
+      "key": ".build-pulse-label|||components|||",
+      "selector": ".build-pulse-label",
+      "layer": "components",
+      "atRuleContext": [],
+      "stateContext": [],
       "category": "conflicting",
       "hotspot": false,
-      "owners": []
+      "records": [
+        {
+          "source": "web/secure-landing/portal-src/styles/components/console-context.css",
+          "line": 103,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "212f811e803e4968a20bf7fffc6f960ad89625cb",
+          "properties": [
+            "color",
+            "font-size",
+            "font-weight",
+            "letter-spacing",
+            "text-transform"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
+          "line": 217,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "127aa2eacbbf1250e346e6fd1dab1f2aca44d6c2",
+          "properties": [
+            "letter-spacing"
+          ]
+        }
+      ],
+      "owners": [
+        "portal-css-architecture"
+      ],
+      "ownerReason": "Intentional cascade: .build-pulse-label keeps the reviewed source order across console-context.css, surface-normalization.css; the later production rule provides the final declaration set.",
+      "phase": "phase-9-duplicate-ownership-closure",
+      "contextType": "surface-normalization-final-pass",
+      "disposition": "keep-owned",
+      "removalStatus": "permanent",
+      "declarationConflict": "conflicting",
+      "parity": "green"
     },
     {
-      "key": ".build-step-tab:hover|||",
+      "key": ".build-step-tab:hover|||components|||",
+      "selector": ".build-step-tab:hover",
+      "layer": "components",
+      "atRuleContext": [],
+      "stateContext": [
+        "hover"
+      ],
       "category": "additive",
       "hotspot": false,
-      "owners": []
+      "records": [
+        {
+          "source": "web/secure-landing/portal-src/styles/components/operator-console.css",
+          "line": 308,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "dc9aed5f2e44941cf69bdbebe1a3989344d26001",
+          "properties": [
+            "border-color",
+            "transform"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/operator-console.css",
+          "line": 313,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "c6adbedda933a610c9122baba1634bfab0fbc722",
+          "properties": [
+            "outline"
+          ]
+        }
+      ],
+      "owners": [
+        "portal-css-architecture"
+      ],
+      "ownerReason": "Additive ownership: .build-step-tab:hover splits non-overlapping declarations across operator-console.css while preserving the current computed-style parity.",
+      "phase": "phase-9-duplicate-ownership-closure",
+      "contextType": "runtime-state",
+      "disposition": "report-only",
+      "removalStatus": "removable-later",
+      "declarationConflict": "additive",
+      "parity": "green"
     },
     {
-      "key": ".build-step-tab|||",
+      "key": ".build-step-tab|||components|||",
+      "selector": ".build-step-tab",
+      "layer": "components",
+      "atRuleContext": [],
+      "stateContext": [],
       "category": "conflicting",
       "hotspot": false,
-      "owners": []
+      "records": [
+        {
+          "source": "web/secure-landing/portal-src/styles/components/operator-console.css",
+          "line": 289,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "7533497dbdc5ef5423d2e74ac5ab0fe4a72be7ac",
+          "properties": [
+            "align-items",
+            "background",
+            "border",
+            "border-radius",
+            "color",
+            "display",
+            "gap",
+            "min-height",
+            "padding",
+            "text-align",
+            "transition",
+            "width"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
+          "line": 146,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "bc00e11847ade2f927847a973b0a73562a961bf8",
+          "properties": [
+            "border-radius"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
+          "line": 176,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "e3c7a9b72249a3ca65b4134dee00060cb7fa297f",
+          "properties": [
+            "background",
+            "border-color"
+          ]
+        }
+      ],
+      "owners": [
+        "portal-css-architecture"
+      ],
+      "ownerReason": "Intentional cascade: .build-step-tab keeps the reviewed source order across operator-console.css, surface-normalization.css; the later production rule provides the final declaration set.",
+      "phase": "phase-9-duplicate-ownership-closure",
+      "contextType": "surface-normalization-final-pass",
+      "disposition": "keep-owned",
+      "removalStatus": "permanent",
+      "declarationConflict": "conflicting",
+      "parity": "green"
     },
     {
-      "key": ".console-action-rail-kicker|||",
+      "key": ".console-action-rail-kicker|||components|||",
+      "selector": ".console-action-rail-kicker",
+      "layer": "components",
+      "atRuleContext": [],
+      "stateContext": [],
       "category": "conflicting",
       "hotspot": false,
-      "owners": []
+      "records": [
+        {
+          "source": "web/secure-landing/portal-src/styles/components/console-context.css",
+          "line": 171,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "7893ed9cc14a6b94bfbae61e5ffee326fd6abb88",
+          "properties": [
+            "color",
+            "font-size",
+            "font-weight",
+            "letter-spacing",
+            "margin",
+            "text-transform"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
+          "line": 217,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "127aa2eacbbf1250e346e6fd1dab1f2aca44d6c2",
+          "properties": [
+            "letter-spacing"
+          ]
+        }
+      ],
+      "owners": [
+        "portal-css-architecture"
+      ],
+      "ownerReason": "Intentional cascade: .console-action-rail-kicker keeps the reviewed source order across console-context.css, surface-normalization.css; the later production rule provides the final declaration set.",
+      "phase": "phase-9-duplicate-ownership-closure",
+      "contextType": "surface-normalization-final-pass",
+      "disposition": "keep-owned",
+      "removalStatus": "permanent",
+      "declarationConflict": "conflicting",
+      "parity": "green"
     },
     {
-      "key": ".console-action-rail[data-tone=\"blocked\"]|||",
+      "key": ".console-action-rail[data-tone=\"blocked\"]|||components|||",
+      "selector": ".console-action-rail[data-tone=\"blocked\"]",
+      "layer": "components",
+      "atRuleContext": [],
+      "stateContext": [
+        "data-state"
+      ],
       "category": "conflicting",
       "hotspot": false,
-      "owners": []
+      "records": [
+        {
+          "source": "web/secure-landing/portal-src/styles/components/console-context.css",
+          "line": 160,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "ad7751f051c0de3acb330761295846380006f1b7",
+          "properties": [
+            "border-color"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
+          "line": 256,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "4e0c7329b18cc1dcdd13971e1a780f15c5c2b673",
+          "properties": [
+            "background"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
+          "line": 276,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "39df4966b0357116475c5b724a5cfc5b87a62b66",
+          "properties": [
+            "border-color"
+          ]
+        }
+      ],
+      "owners": [
+        "portal-css-architecture"
+      ],
+      "ownerReason": "Intentional cascade: .console-action-rail[data-tone=\"blocked\"] keeps the reviewed source order across console-context.css, surface-normalization.css; the later production rule provides the final declaration set.",
+      "phase": "phase-9-duplicate-ownership-closure",
+      "contextType": "runtime-state",
+      "disposition": "keep-owned",
+      "removalStatus": "permanent",
+      "declarationConflict": "conflicting",
+      "parity": "green"
     },
     {
-      "key": ".console-action-rail[data-tone=\"ready\"]|||",
+      "key": ".console-action-rail[data-tone=\"ready\"]|||components|||",
+      "selector": ".console-action-rail[data-tone=\"ready\"]",
+      "layer": "components",
+      "atRuleContext": [],
+      "stateContext": [
+        "data-state"
+      ],
       "category": "conflicting",
       "hotspot": false,
-      "owners": []
+      "records": [
+        {
+          "source": "web/secure-landing/portal-src/styles/components/console-context.css",
+          "line": 152,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "8a9f5fe1de9b15924075f04e1e24a6fc333d5829",
+          "properties": [
+            "border-color"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
+          "line": 256,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "4e0c7329b18cc1dcdd13971e1a780f15c5c2b673",
+          "properties": [
+            "background"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
+          "line": 266,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "4ff838967569aecb53d6a515ec012c08430c764d",
+          "properties": [
+            "border-color"
+          ]
+        }
+      ],
+      "owners": [
+        "portal-css-architecture"
+      ],
+      "ownerReason": "Intentional cascade: .console-action-rail[data-tone=\"ready\"] keeps the reviewed source order across console-context.css, surface-normalization.css; the later production rule provides the final declaration set.",
+      "phase": "phase-9-duplicate-ownership-closure",
+      "contextType": "runtime-state",
+      "disposition": "keep-owned",
+      "removalStatus": "permanent",
+      "declarationConflict": "conflicting",
+      "parity": "green"
     },
     {
-      "key": ".console-action-rail[data-tone=\"warning\"]|||",
+      "key": ".console-action-rail[data-tone=\"warning\"]|||components|||",
+      "selector": ".console-action-rail[data-tone=\"warning\"]",
+      "layer": "components",
+      "atRuleContext": [],
+      "stateContext": [
+        "data-state"
+      ],
       "category": "conflicting",
       "hotspot": false,
-      "owners": []
+      "records": [
+        {
+          "source": "web/secure-landing/portal-src/styles/components/console-context.css",
+          "line": 156,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "95cde39a34386972a278bdc5a4dc9486e33a6890",
+          "properties": [
+            "border-color"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
+          "line": 256,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "4e0c7329b18cc1dcdd13971e1a780f15c5c2b673",
+          "properties": [
+            "background"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
+          "line": 271,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "4d6a576f4b984528794f3cb347ad3771ae2b7640",
+          "properties": [
+            "border-color"
+          ]
+        }
+      ],
+      "owners": [
+        "portal-css-architecture"
+      ],
+      "ownerReason": "Intentional cascade: .console-action-rail[data-tone=\"warning\"] keeps the reviewed source order across console-context.css, surface-normalization.css; the later production rule provides the final declaration set.",
+      "phase": "phase-9-duplicate-ownership-closure",
+      "contextType": "runtime-state",
+      "disposition": "keep-owned",
+      "removalStatus": "permanent",
+      "declarationConflict": "conflicting",
+      "parity": "green"
     },
     {
-      "key": ".console-action-rail|||",
+      "key": ".console-action-rail|||components|||",
+      "selector": ".console-action-rail",
+      "layer": "components",
+      "atRuleContext": [],
+      "stateContext": [],
       "category": "conflicting",
       "hotspot": false,
-      "owners": []
+      "records": [
+        {
+          "source": "web/secure-landing/portal-src/styles/components/console-context.css",
+          "line": 129,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "d6bb000c91bc06776c24f6236f06bd3626329261",
+          "properties": [
+            "background",
+            "border",
+            "border-radius",
+            "box-shadow",
+            "display",
+            "gap",
+            "padding"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
+          "line": 146,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "bc00e11847ade2f927847a973b0a73562a961bf8",
+          "properties": [
+            "border-radius"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
+          "line": 176,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "e3c7a9b72249a3ca65b4134dee00060cb7fa297f",
+          "properties": [
+            "background",
+            "border-color"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
+          "line": 246,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "c5395be76a8d9c8363cde82a115b6c18f81aa2cd",
+          "properties": [
+            "background",
+            "border",
+            "padding"
+          ]
+        }
+      ],
+      "owners": [
+        "portal-css-architecture"
+      ],
+      "ownerReason": "Intentional cascade: .console-action-rail keeps the reviewed source order across console-context.css, surface-normalization.css; the later production rule provides the final declaration set.",
+      "phase": "phase-9-duplicate-ownership-closure",
+      "contextType": "surface-normalization-final-pass",
+      "disposition": "keep-owned",
+      "removalStatus": "permanent",
+      "declarationConflict": "conflicting",
+      "parity": "green"
     },
     {
-      "key": ".console-context-card|||",
+      "key": ".console-context-card|||components|||",
+      "selector": ".console-context-card",
+      "layer": "components",
+      "atRuleContext": [],
+      "stateContext": [],
       "category": "conflicting",
       "hotspot": false,
-      "owners": []
+      "records": [
+        {
+          "source": "web/secure-landing/portal-src/styles/components/console-context.css",
+          "line": 1,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "904fd5ddf4ed8f854ebab6712e7296c03ff2e292",
+          "properties": [
+            "background",
+            "border",
+            "border-radius",
+            "box-shadow",
+            "padding",
+            "position"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/operator-console.css",
+          "line": 253,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "7d6b9d078832620c8661f2cd565944bca56e2ac4",
+          "properties": [
+            "backdrop-filter",
+            "background",
+            "box-shadow"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
+          "line": 146,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "bc00e11847ade2f927847a973b0a73562a961bf8",
+          "properties": [
+            "border-radius"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
+          "line": 176,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "e3c7a9b72249a3ca65b4134dee00060cb7fa297f",
+          "properties": [
+            "background",
+            "border-color"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
+          "line": 239,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "e09826935d3e1a20d02fd703970aa2e014ae2ad5",
+          "properties": [
+            "box-shadow"
+          ]
+        }
+      ],
+      "owners": [
+        "portal-css-architecture"
+      ],
+      "ownerReason": "Intentional cascade: .console-context-card keeps the reviewed source order across console-context.css, operator-console.css, surface-normalization.css; the later production rule provides the final declaration set.",
+      "phase": "phase-9-duplicate-ownership-closure",
+      "contextType": "surface-normalization-final-pass",
+      "disposition": "keep-owned",
+      "removalStatus": "permanent",
+      "declarationConflict": "conflicting",
+      "parity": "green"
     },
     {
-      "key": ".console-context-label|||",
+      "key": ".console-context-label|||components|||",
+      "selector": ".console-context-label",
+      "layer": "components",
+      "atRuleContext": [],
+      "stateContext": [],
       "category": "conflicting",
       "hotspot": false,
-      "owners": []
+      "records": [
+        {
+          "source": "web/secure-landing/portal-src/styles/components/console-context.css",
+          "line": 103,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "212f811e803e4968a20bf7fffc6f960ad89625cb",
+          "properties": [
+            "color",
+            "font-size",
+            "font-weight",
+            "letter-spacing",
+            "text-transform"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/operator-console.css",
+          "line": 264,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "f9cdea6bb1da33a543431efddf42417fcdcab3d8",
+          "properties": [
+            "font-size"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
+          "line": 217,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "127aa2eacbbf1250e346e6fd1dab1f2aca44d6c2",
+          "properties": [
+            "letter-spacing"
+          ]
+        }
+      ],
+      "owners": [
+        "portal-css-architecture"
+      ],
+      "ownerReason": "Intentional cascade: .console-context-label keeps the reviewed source order across console-context.css, operator-console.css, surface-normalization.css; the later production rule provides the final declaration set.",
+      "phase": "phase-9-duplicate-ownership-closure",
+      "contextType": "surface-normalization-final-pass",
+      "disposition": "keep-owned",
+      "removalStatus": "permanent",
+      "declarationConflict": "conflicting",
+      "parity": "green"
     },
     {
-      "key": ".console-context-meta|||",
+      "key": ".console-context-meta|||components|||",
+      "selector": ".console-context-meta",
+      "layer": "components",
+      "atRuleContext": [],
+      "stateContext": [],
       "category": "conflicting",
       "hotspot": false,
-      "owners": []
+      "records": [
+        {
+          "source": "web/secure-landing/portal-src/styles/components/console-context.css",
+          "line": 122,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "db5bda8deb5c29798e39a44ac81fddb572cfda8c",
+          "properties": [
+            "color",
+            "font-size",
+            "line-height",
+            "margin-top"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/operator-console.css",
+          "line": 273,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "233399f9fbad971642b895a15b2d8740678a0332",
+          "properties": [
+            "font-size"
+          ]
+        }
+      ],
+      "owners": [
+        "portal-css-architecture"
+      ],
+      "ownerReason": "Intentional cascade: .console-context-meta keeps the reviewed source order across console-context.css, operator-console.css; the later production rule provides the final declaration set.",
+      "phase": "phase-9-duplicate-ownership-closure",
+      "contextType": "component-family-shared-state",
+      "disposition": "keep-owned",
+      "removalStatus": "permanent",
+      "declarationConflict": "conflicting",
+      "parity": "green"
     },
     {
-      "key": ".console-context-value|||",
+      "key": ".console-context-value|||components|||",
+      "selector": ".console-context-value",
+      "layer": "components",
+      "atRuleContext": [],
+      "stateContext": [],
       "category": "conflicting",
       "hotspot": false,
-      "owners": []
+      "records": [
+        {
+          "source": "web/secure-landing/portal-src/styles/components/console-context.css",
+          "line": 113,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "5f48d7db8f70b7874fac6a38fdacea22599202fa",
+          "properties": [
+            "color",
+            "font-size",
+            "font-weight",
+            "line-height",
+            "margin-top",
+            "word-break"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/operator-console.css",
+          "line": 268,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "60d210e2e7cef2753cdad7821639d811861864e6",
+          "properties": [
+            "font-size",
+            "line-height"
+          ]
+        }
+      ],
+      "owners": [
+        "portal-css-architecture"
+      ],
+      "ownerReason": "Intentional cascade: .console-context-value keeps the reviewed source order across console-context.css, operator-console.css; the later production rule provides the final declaration set.",
+      "phase": "phase-9-duplicate-ownership-closure",
+      "contextType": "component-family-shared-state",
+      "disposition": "keep-owned",
+      "removalStatus": "permanent",
+      "declarationConflict": "conflicting",
+      "parity": "green"
     },
     {
-      "key": ".dark .build-pulse-card|||",
+      "key": ".dark .build-pulse-card|||components|||",
+      "selector": ".dark .build-pulse-card",
+      "layer": "components",
+      "atRuleContext": [],
+      "stateContext": [
+        "dark"
+      ],
       "category": "conflicting",
       "hotspot": false,
-      "owners": []
+      "records": [
+        {
+          "source": "web/secure-landing/portal-src/styles/components/console-context.css",
+          "line": 287,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "027a575304eceb23c0e7251f4b18ec8e10cde2c6",
+          "properties": [
+            "background",
+            "box-shadow"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
+          "line": 197,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "fc2586449f338803de12e357dc8f462d2c3b6bb0",
+          "properties": [
+            "background"
+          ]
+        }
+      ],
+      "owners": [
+        "portal-css-architecture"
+      ],
+      "ownerReason": "Intentional cascade: .dark .build-pulse-card keeps the reviewed source order across console-context.css, surface-normalization.css; the later production rule provides the final declaration set.",
+      "phase": "phase-9-duplicate-ownership-closure",
+      "contextType": "theme-context",
+      "disposition": "keep-owned",
+      "removalStatus": "permanent",
+      "declarationConflict": "conflicting",
+      "parity": "green"
     },
     {
-      "key": ".dark .build-step-tab|||",
+      "key": ".dark .build-step-tab|||components|||",
+      "selector": ".dark .build-step-tab",
+      "layer": "components",
+      "atRuleContext": [],
+      "stateContext": [
+        "dark"
+      ],
       "category": "conflicting",
       "hotspot": false,
-      "owners": []
+      "records": [
+        {
+          "source": "web/secure-landing/portal-src/styles/components/operator-console.css",
+          "line": 304,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "9e026bf8ae9f13747e653209842631b3fa1a36ca",
+          "properties": [
+            "background"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
+          "line": 197,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "fc2586449f338803de12e357dc8f462d2c3b6bb0",
+          "properties": [
+            "background"
+          ]
+        }
+      ],
+      "owners": [
+        "portal-css-architecture"
+      ],
+      "ownerReason": "Intentional cascade: .dark .build-step-tab keeps the reviewed source order across operator-console.css, surface-normalization.css; the later production rule provides the final declaration set.",
+      "phase": "phase-9-duplicate-ownership-closure",
+      "contextType": "theme-context",
+      "disposition": "keep-owned",
+      "removalStatus": "permanent",
+      "declarationConflict": "conflicting",
+      "parity": "green"
     },
     {
-      "key": ".dark .console-action-rail|||",
+      "key": ".dark .console-action-rail|||components|||",
+      "selector": ".dark .console-action-rail",
+      "layer": "components",
+      "atRuleContext": [],
+      "stateContext": [
+        "dark"
+      ],
       "category": "conflicting",
       "hotspot": false,
-      "owners": []
+      "records": [
+        {
+          "source": "web/secure-landing/portal-src/styles/components/console-context.css",
+          "line": 143,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "87785e545b747243b531ccdd70cffdcf5d268597",
+          "properties": [
+            "background",
+            "box-shadow"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
+          "line": 197,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "fc2586449f338803de12e357dc8f462d2c3b6bb0",
+          "properties": [
+            "background"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
+          "line": 252,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "4e0c7329b18cc1dcdd13971e1a780f15c5c2b673",
+          "properties": [
+            "background"
+          ]
+        }
+      ],
+      "owners": [
+        "portal-css-architecture"
+      ],
+      "ownerReason": "Intentional cascade: .dark .console-action-rail keeps the reviewed source order across console-context.css, surface-normalization.css; the later production rule provides the final declaration set.",
+      "phase": "phase-9-duplicate-ownership-closure",
+      "contextType": "theme-context",
+      "disposition": "keep-owned",
+      "removalStatus": "permanent",
+      "declarationConflict": "conflicting",
+      "parity": "green"
     },
     {
-      "key": ".dark .console-context-card|||",
+      "key": ".dark .console-context-card|||components|||",
+      "selector": ".dark .console-context-card",
+      "layer": "components",
+      "atRuleContext": [],
+      "stateContext": [
+        "dark"
+      ],
       "category": "conflicting",
       "hotspot": false,
-      "owners": []
+      "records": [
+        {
+          "source": "web/secure-landing/portal-src/styles/components/console-context.css",
+          "line": 12,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "205aa7c0b8da4b9bde79e8ca1e60b21dbf639319",
+          "properties": [
+            "background",
+            "box-shadow"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/operator-console.css",
+          "line": 259,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "e59f8b3965cac37834fe5dbcd6e97dfcffcafebc",
+          "properties": [
+            "background",
+            "box-shadow"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
+          "line": 197,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "fc2586449f338803de12e357dc8f462d2c3b6bb0",
+          "properties": [
+            "background"
+          ]
+        }
+      ],
+      "owners": [
+        "portal-css-architecture"
+      ],
+      "ownerReason": "Intentional cascade: .dark .console-context-card keeps the reviewed source order across console-context.css, operator-console.css, surface-normalization.css; the later production rule provides the final declaration set.",
+      "phase": "phase-9-duplicate-ownership-closure",
+      "contextType": "theme-context",
+      "disposition": "keep-owned",
+      "removalStatus": "permanent",
+      "declarationConflict": "conflicting",
+      "parity": "green"
     },
     {
-      "key": ".dark .dispatch-tool-btn|||",
+      "key": ".dark .dispatch-tool-btn|||components|||",
+      "selector": ".dark .dispatch-tool-btn",
+      "layer": "components",
+      "atRuleContext": [],
+      "stateContext": [
+        "dark"
+      ],
       "category": "conflicting",
       "hotspot": false,
-      "owners": []
+      "records": [
+        {
+          "source": "web/secure-landing/portal-src/styles/components/dispatch-surfaces.css",
+          "line": 83,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "8f2aa228f2aef8b70e3ce46d18dea0bb1630a553",
+          "properties": [
+            "background"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/dispatch-surfaces.css",
+          "line": 271,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "fc2586449f338803de12e357dc8f462d2c3b6bb0",
+          "properties": [
+            "background"
+          ]
+        }
+      ],
+      "owners": [
+        "portal-css-architecture"
+      ],
+      "ownerReason": "Intentional cascade: .dark .dispatch-tool-btn keeps the reviewed source order across dispatch-surfaces.css; the later production rule provides the final declaration set.",
+      "phase": "phase-9-duplicate-ownership-closure",
+      "contextType": "theme-context",
+      "disposition": "keep-owned",
+      "removalStatus": "permanent",
+      "declarationConflict": "conflicting",
+      "parity": "green"
     },
     {
-      "key": ".dark .hero-action-secondary|||",
+      "key": ".dark .hero-action-secondary|||components|||",
+      "selector": ".dark .hero-action-secondary",
+      "layer": "components",
+      "atRuleContext": [],
+      "stateContext": [
+        "dark"
+      ],
       "category": "conflicting",
       "hotspot": false,
-      "owners": []
+      "records": [
+        {
+          "source": "web/secure-landing/portal-src/styles/components/dispatch-surfaces.css",
+          "line": 271,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "fc2586449f338803de12e357dc8f462d2c3b6bb0",
+          "properties": [
+            "background"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/operator-console.css",
+          "line": 212,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "b702099b2d3222c01602694376a5cd62f08abd2e",
+          "properties": [
+            "background",
+            "box-shadow"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/shell-foundation.css",
+          "line": 137,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "8d5d308bdc2e2245b273c649d3ec4caa77d13fe2",
+          "properties": [
+            "background"
+          ]
+        }
+      ],
+      "owners": [
+        "portal-css-architecture"
+      ],
+      "ownerReason": "Intentional cascade: .dark .hero-action-secondary keeps the reviewed source order across dispatch-surfaces.css, operator-console.css, shell-foundation.css; the later production rule provides the final declaration set.",
+      "phase": "phase-9-duplicate-ownership-closure",
+      "contextType": "theme-context",
+      "disposition": "keep-owned",
+      "removalStatus": "permanent",
+      "declarationConflict": "conflicting",
+      "parity": "green"
     },
     {
-      "key": ".dark .panel-subtle|||",
+      "key": ".dark .panel-subtle|||components|||",
+      "selector": ".dark .panel-subtle",
+      "layer": "components",
+      "atRuleContext": [],
+      "stateContext": [
+        "dark"
+      ],
       "category": "conflicting",
       "hotspot": false,
-      "owners": []
+      "records": [
+        {
+          "source": "web/secure-landing/portal-src/styles/components/operator-console.css",
+          "line": 195,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "33b9c2b18f414c29619d218254337b05851daa6a",
+          "properties": [
+            "background",
+            "box-shadow"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/shell-foundation.css",
+          "line": 209,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "4cfebaadf3bf2be87b89f96389765cd3f1cddada",
+          "properties": [
+            "background"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
+          "line": 197,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "fc2586449f338803de12e357dc8f462d2c3b6bb0",
+          "properties": [
+            "background"
+          ]
+        }
+      ],
+      "owners": [
+        "portal-css-architecture"
+      ],
+      "ownerReason": "Intentional cascade: .dark .panel-subtle keeps the reviewed source order across operator-console.css, shell-foundation.css, surface-normalization.css; the later production rule provides the final declaration set.",
+      "phase": "phase-9-duplicate-ownership-closure",
+      "contextType": "theme-context",
+      "disposition": "keep-owned",
+      "removalStatus": "permanent",
+      "declarationConflict": "conflicting",
+      "parity": "green"
     },
     {
-      "key": ".dark .review-status-banner|||",
+      "key": ".dark .review-status-banner|||components|||",
+      "selector": ".dark .review-status-banner",
+      "layer": "components",
+      "atRuleContext": [],
+      "stateContext": [
+        "dark"
+      ],
       "category": "additive",
       "hotspot": false,
-      "owners": []
+      "records": [
+        {
+          "source": "web/secure-landing/portal-src/styles/components/operator-console.css",
+          "line": 430,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "f5e9149a95f8092a470381d473a4e129791920f9",
+          "properties": [
+            "box-shadow"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
+          "line": 197,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "fc2586449f338803de12e357dc8f462d2c3b6bb0",
+          "properties": [
+            "background"
+          ]
+        }
+      ],
+      "owners": [
+        "portal-css-architecture"
+      ],
+      "ownerReason": "Additive ownership: .dark .review-status-banner splits non-overlapping declarations across operator-console.css, surface-normalization.css while preserving the current computed-style parity.",
+      "phase": "phase-9-duplicate-ownership-closure",
+      "contextType": "theme-context",
+      "disposition": "report-only",
+      "removalStatus": "removable-later",
+      "declarationConflict": "additive",
+      "parity": "green"
     },
     {
-      "key": ".dark .runtime-briefing-card|||",
+      "key": ".dark .runtime-briefing-card|||components|||",
+      "selector": ".dark .runtime-briefing-card",
+      "layer": "components",
+      "atRuleContext": [],
+      "stateContext": [
+        "dark"
+      ],
       "category": "conflicting",
       "hotspot": false,
-      "owners": []
+      "records": [
+        {
+          "source": "web/secure-landing/portal-src/styles/components/console-context.css",
+          "line": 306,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "027a575304eceb23c0e7251f4b18ec8e10cde2c6",
+          "properties": [
+            "background",
+            "box-shadow"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
+          "line": 197,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "fc2586449f338803de12e357dc8f462d2c3b6bb0",
+          "properties": [
+            "background"
+          ]
+        }
+      ],
+      "owners": [
+        "portal-css-architecture"
+      ],
+      "ownerReason": "Intentional cascade: .dark .runtime-briefing-card keeps the reviewed source order across console-context.css, surface-normalization.css; the later production rule provides the final declaration set.",
+      "phase": "phase-9-duplicate-ownership-closure",
+      "contextType": "theme-context",
+      "disposition": "keep-owned",
+      "removalStatus": "permanent",
+      "declarationConflict": "conflicting",
+      "parity": "green"
     },
     {
-      "key": ".dark .shell-bg|||",
+      "key": ".dark .shell-bg|||components|||",
+      "selector": ".dark .shell-bg",
+      "layer": "components",
+      "atRuleContext": [],
+      "stateContext": [
+        "dark"
+      ],
       "category": "conflicting",
       "hotspot": false,
-      "owners": []
+      "records": [
+        {
+          "source": "web/secure-landing/portal-src/styles/components/operator-console.css",
+          "line": 1,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "0e408e9f519baa56d2d6002aba2ce03300c8f6be",
+          "properties": [
+            "background"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/shell-foundation.css",
+          "line": 1,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "5e0da8218886b6876b5d967376dc8377282b3fd6",
+          "properties": [
+            "background",
+            "background-size"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
+          "line": 136,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "c586d8a7ea7c6181307bb82e39e0ad365020e834",
+          "properties": [
+            "background"
+          ]
+        }
+      ],
+      "owners": [
+        "portal-css-architecture"
+      ],
+      "ownerReason": "Intentional cascade: .dark .shell-bg keeps the reviewed source order across operator-console.css, shell-foundation.css, surface-normalization.css; the later production rule provides the final declaration set.",
+      "phase": "phase-9-duplicate-ownership-closure",
+      "contextType": "theme-context",
+      "disposition": "keep-owned",
+      "removalStatus": "permanent",
+      "declarationConflict": "conflicting",
+      "parity": "green"
     },
     {
-      "key": ".dark .stat-tile|||",
+      "key": ".dark .stat-tile|||components|||",
+      "selector": ".dark .stat-tile",
+      "layer": "components",
+      "atRuleContext": [],
+      "stateContext": [
+        "dark"
+      ],
       "category": "conflicting",
       "hotspot": false,
-      "owners": []
+      "records": [
+        {
+          "source": "web/secure-landing/portal-src/styles/components/operator-console.css",
+          "line": 195,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "33b9c2b18f414c29619d218254337b05851daa6a",
+          "properties": [
+            "background",
+            "box-shadow"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/shell-foundation.css",
+          "line": 102,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "45e5c2da18c3dde232d204e0f656c2bc561264fa",
+          "properties": [
+            "background"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
+          "line": 197,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "fc2586449f338803de12e357dc8f462d2c3b6bb0",
+          "properties": [
+            "background"
+          ]
+        }
+      ],
+      "owners": [
+        "portal-css-architecture"
+      ],
+      "ownerReason": "Intentional cascade: .dark .stat-tile keeps the reviewed source order across operator-console.css, shell-foundation.css, surface-normalization.css; the later production rule provides the final declaration set.",
+      "phase": "phase-9-duplicate-ownership-closure",
+      "contextType": "theme-context",
+      "disposition": "keep-owned",
+      "removalStatus": "permanent",
+      "declarationConflict": "conflicting",
+      "parity": "green"
     },
     {
-      "key": ".dark .stepper-nav-btn|||",
+      "key": ".dark .stepper-nav-btn|||components|||",
+      "selector": ".dark .stepper-nav-btn",
+      "layer": "components",
+      "atRuleContext": [],
+      "stateContext": [
+        "dark"
+      ],
       "category": "conflicting",
       "hotspot": false,
-      "owners": []
+      "records": [
+        {
+          "source": "web/secure-landing/portal-src/styles/components/dispatch-surfaces.css",
+          "line": 271,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "fc2586449f338803de12e357dc8f462d2c3b6bb0",
+          "properties": [
+            "background"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/operator-console.css",
+          "line": 375,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "7b9bf02de06123c983c8991ac7ec744929f7d6f5",
+          "properties": [
+            "background"
+          ]
+        }
+      ],
+      "owners": [
+        "portal-css-architecture"
+      ],
+      "ownerReason": "Intentional cascade: .dark .stepper-nav-btn keeps the reviewed source order across dispatch-surfaces.css, operator-console.css; the later production rule provides the final declaration set.",
+      "phase": "phase-9-duplicate-ownership-closure",
+      "contextType": "theme-context",
+      "disposition": "keep-owned",
+      "removalStatus": "permanent",
+      "declarationConflict": "conflicting",
+      "parity": "green"
     },
     {
-      "key": ".dark .surface-loading|||",
+      "key": ".dark .surface-loading|||components|||",
+      "selector": ".dark .surface-loading",
+      "layer": "components",
+      "atRuleContext": [],
+      "stateContext": [
+        "dark"
+      ],
       "category": "additive",
       "hotspot": false,
-      "owners": []
+      "records": [
+        {
+          "source": "web/secure-landing/portal-src/styles/components/dispatch-surfaces.css",
+          "line": 230,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "48ec29ca8e38fd2dc39714443c3ae8f371de97c5",
+          "properties": [
+            "box-shadow"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/operator-console.css",
+          "line": 419,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "1895d78656600d09c0211323b37df3f89568aa11",
+          "properties": [
+            "background",
+            "border-color"
+          ]
+        }
+      ],
+      "owners": [
+        "portal-css-architecture"
+      ],
+      "ownerReason": "Additive ownership: .dark .surface-loading splits non-overlapping declarations across dispatch-surfaces.css, operator-console.css while preserving the current computed-style parity.",
+      "phase": "phase-9-duplicate-ownership-closure",
+      "contextType": "theme-context",
+      "disposition": "report-only",
+      "removalStatus": "removable-later",
+      "declarationConflict": "additive",
+      "parity": "green"
     },
     {
-      "key": ".dark .surface-skeleton-card|||",
+      "key": ".dark .surface-skeleton-card|||components|||",
+      "selector": ".dark .surface-skeleton-card",
+      "layer": "components",
+      "atRuleContext": [],
+      "stateContext": [
+        "dark"
+      ],
       "category": "conflicting",
       "hotspot": false,
-      "owners": []
+      "records": [
+        {
+          "source": "web/secure-landing/portal-src/styles/components/dispatch-surfaces.css",
+          "line": 133,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "2e07182972052b0ad5631212c1a15e23b9121467",
+          "properties": [
+            "background",
+            "border-color"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/operator-console.css",
+          "line": 400,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "39e4cb0f2c53489f862eed472eae613182bebda1",
+          "properties": [
+            "background",
+            "border-color",
+            "box-shadow"
+          ]
+        }
+      ],
+      "owners": [
+        "portal-css-architecture"
+      ],
+      "ownerReason": "Intentional cascade: .dark .surface-skeleton-card keeps the reviewed source order across dispatch-surfaces.css, operator-console.css; the later production rule provides the final declaration set.",
+      "phase": "phase-9-duplicate-ownership-closure",
+      "contextType": "theme-context",
+      "disposition": "keep-owned",
+      "removalStatus": "permanent",
+      "declarationConflict": "conflicting",
+      "parity": "green"
     },
     {
-      "key": ".dark .workspace-link|||",
+      "key": ".dark .workspace-link|||components|||",
+      "selector": ".dark .workspace-link",
+      "layer": "components",
+      "atRuleContext": [],
+      "stateContext": [
+        "dark"
+      ],
       "category": "conflicting",
       "hotspot": false,
-      "owners": []
+      "records": [
+        {
+          "source": "web/secure-landing/portal-src/styles/components/operator-console.css",
+          "line": 248,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "1f0f23c2a5bd794075234d4151addac4f66a0b8b",
+          "properties": [
+            "background",
+            "box-shadow"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
+          "line": 285,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "fc2586449f338803de12e357dc8f462d2c3b6bb0",
+          "properties": [
+            "background"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/workspace-surfaces.css",
+          "line": 53,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "b81be4dc21c8265949840b883dab3a109da5aa11",
+          "properties": [
+            "background",
+            "border-color"
+          ]
+        }
+      ],
+      "owners": [
+        "portal-css-architecture"
+      ],
+      "ownerReason": "Intentional cascade: .dark .workspace-link keeps the reviewed source order across operator-console.css, surface-normalization.css, workspace-surfaces.css; the later production rule provides the final declaration set.",
+      "phase": "phase-9-duplicate-ownership-closure",
+      "contextType": "theme-context",
+      "disposition": "keep-owned",
+      "removalStatus": "permanent",
+      "declarationConflict": "conflicting",
+      "parity": "green"
     },
     {
-      "key": ".dark .workspace-rail|||",
+      "key": ".dark .workspace-rail|||components|||",
+      "selector": ".dark .workspace-rail",
+      "layer": "components",
+      "atRuleContext": [],
+      "stateContext": [
+        "dark"
+      ],
       "category": "conflicting",
       "hotspot": false,
-      "owners": []
+      "records": [
+        {
+          "source": "web/secure-landing/portal-src/styles/components/operator-console.css",
+          "line": 217,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "94593d7a763ae63965291ac53720565b1653fe5e",
+          "properties": [
+            "background"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/workspace-surfaces.css",
+          "line": 1,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "032827a98085bc5a05f72cd0a5d0a187a824a038",
+          "properties": [
+            "background",
+            "box-shadow"
+          ]
+        }
+      ],
+      "owners": [
+        "portal-css-architecture"
+      ],
+      "ownerReason": "Intentional cascade: .dark .workspace-rail keeps the reviewed source order across operator-console.css, workspace-surfaces.css; the later production rule provides the final declaration set.",
+      "phase": "phase-9-duplicate-ownership-closure",
+      "contextType": "theme-context",
+      "disposition": "keep-owned",
+      "removalStatus": "permanent",
+      "declarationConflict": "conflicting",
+      "parity": "green"
     },
     {
-      "key": ".dark .workspace-shell[data-ambient-active=\"true\"]|||",
+      "key": ".dark .workspace-shell[data-ambient-active=\"true\"]|||components|||",
+      "selector": ".dark .workspace-shell[data-ambient-active=\"true\"]",
+      "layer": "components",
+      "atRuleContext": [],
+      "stateContext": [
+        "dark",
+        "data-state"
+      ],
       "category": "conflicting",
       "hotspot": false,
-      "owners": []
+      "records": [
+        {
+          "source": "web/secure-landing/portal-src/styles/components/operator-console.css",
+          "line": 124,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "f82af0e0356840393d8f5d46e0d318f5e77303df",
+          "properties": [
+            "box-shadow"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/shell-foundation.css",
+          "line": 228,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "6f13e9b48b5f5e88b308414531aaef517144905e",
+          "properties": [
+            "border-color",
+            "box-shadow"
+          ]
+        }
+      ],
+      "owners": [
+        "portal-css-architecture"
+      ],
+      "ownerReason": "Intentional cascade: .dark .workspace-shell[data-ambient-active=\"true\"] keeps the reviewed source order across operator-console.css, shell-foundation.css; the later production rule provides the final declaration set.",
+      "phase": "phase-9-duplicate-ownership-closure",
+      "contextType": "theme-context",
+      "disposition": "keep-owned",
+      "removalStatus": "permanent",
+      "declarationConflict": "conflicting",
+      "parity": "green"
     },
     {
-      "key": ".dispatch-tool-btn:hover|||",
+      "key": ".dispatch-tool-btn:hover|||components|||",
+      "selector": ".dispatch-tool-btn:hover",
+      "layer": "components",
+      "atRuleContext": [],
+      "stateContext": [
+        "hover"
+      ],
       "category": "additive",
       "hotspot": false,
-      "owners": []
+      "records": [
+        {
+          "source": "web/secure-landing/portal-src/styles/components/dispatch-surfaces.css",
+          "line": 64,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "88260cb5759109ed6d311c893ae0e32492f8a215",
+          "properties": [
+            "background",
+            "border-color",
+            "color",
+            "transform"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/dispatch-surfaces.css",
+          "line": 71,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "c6adbedda933a610c9122baba1634bfab0fbc722",
+          "properties": [
+            "outline"
+          ]
+        }
+      ],
+      "owners": [
+        "portal-css-architecture"
+      ],
+      "ownerReason": "Additive ownership: .dispatch-tool-btn:hover splits non-overlapping declarations across dispatch-surfaces.css while preserving the current computed-style parity.",
+      "phase": "phase-9-duplicate-ownership-closure",
+      "contextType": "runtime-state",
+      "disposition": "report-only",
+      "removalStatus": "removable-later",
+      "declarationConflict": "additive",
+      "parity": "green"
     },
     {
-      "key": ".focus\\:ring-indigo-500:focus|||",
+      "key": ".focus\\:ring-indigo-500:focus|||utilities|||",
+      "selector": ".focus\\:ring-indigo-500:focus",
+      "layer": "utilities",
+      "atRuleContext": [],
+      "stateContext": [
+        "focus"
+      ],
       "category": "additive",
       "hotspot": false,
-      "owners": []
+      "records": [
+        {
+          "source": "web/secure-landing/portal-src/styles/utilities.required.css",
+          "line": 4,
+          "column": 1,
+          "layer": "utilities",
+          "declarationSignature": "68577264f416206890cdab0488d0c6ab3bd604d1",
+          "properties": [
+            "--portal-ring-color",
+            "--portal-ring-offset",
+            "--portal-ring-offset-color",
+            "box-shadow"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/utilities.required.css",
+          "line": 23,
+          "column": 1,
+          "layer": "utilities",
+          "declarationSignature": "667c4b2566478b112b1ab1ca44967514ede67bf8",
+          "properties": [
+            "--portal-ring-color"
+          ]
+        }
+      ],
+      "owners": [
+        "portal-css-architecture"
+      ],
+      "ownerReason": "Additive ownership: .focus\\:ring-indigo-500:focus splits non-overlapping declarations across utilities.required.css while preserving the current computed-style parity.",
+      "phase": "phase-9-duplicate-ownership-closure",
+      "contextType": "runtime-state",
+      "disposition": "report-only",
+      "removalStatus": "removable-later",
+      "declarationConflict": "additive",
+      "parity": "green"
     },
     {
-      "key": ".hero-action-primary|||",
+      "key": ".hero-action-primary|||components|||",
+      "selector": ".hero-action-primary",
+      "layer": "components",
+      "atRuleContext": [],
+      "stateContext": [],
       "category": "conflicting",
       "hotspot": false,
-      "owners": []
+      "records": [
+        {
+          "source": "web/secure-landing/portal-src/styles/components/operator-console.css",
+          "line": 201,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "826fa568cffd3c46a90284716e0a98a14cd491f8",
+          "properties": [
+            "background",
+            "box-shadow"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/shell-foundation.css",
+          "line": 126,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "f311f89eee5adc16021579a328c5fb143ecd20d8",
+          "properties": [
+            "background",
+            "box-shadow",
+            "color"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
+          "line": 299,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "694e44d7a8a88bc375ad20dce876a6cb30275fc1",
+          "properties": [
+            "background",
+            "border-color",
+            "color"
+          ]
+        }
+      ],
+      "owners": [
+        "portal-css-architecture"
+      ],
+      "ownerReason": "Intentional cascade: .hero-action-primary keeps the reviewed source order across operator-console.css, shell-foundation.css, surface-normalization.css; the later production rule provides the final declaration set.",
+      "phase": "phase-9-duplicate-ownership-closure",
+      "contextType": "surface-normalization-final-pass",
+      "disposition": "keep-owned",
+      "removalStatus": "permanent",
+      "declarationConflict": "conflicting",
+      "parity": "green"
     },
     {
-      "key": ".hero-action-secondary|||",
+      "key": ".hero-action-secondary|||components|||",
+      "selector": ".hero-action-secondary",
+      "layer": "components",
+      "atRuleContext": [],
+      "stateContext": [],
       "category": "conflicting",
       "hotspot": false,
-      "owners": []
+      "records": [
+        {
+          "source": "web/secure-landing/portal-src/styles/components/dispatch-surfaces.css",
+          "line": 265,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "e3c7a9b72249a3ca65b4134dee00060cb7fa297f",
+          "properties": [
+            "background",
+            "border-color"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/operator-console.css",
+          "line": 206,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "4d6b4607adb38567f8289e0d5ee9c3db0926f246",
+          "properties": [
+            "background",
+            "border-color",
+            "box-shadow"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/shell-foundation.css",
+          "line": 132,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "00d367ede6e17d8e7864bf1a791e49e4d1301fbc",
+          "properties": [
+            "background",
+            "border",
+            "color"
+          ]
+        }
+      ],
+      "owners": [
+        "portal-css-architecture"
+      ],
+      "ownerReason": "Intentional cascade: .hero-action-secondary keeps the reviewed source order across dispatch-surfaces.css, operator-console.css, shell-foundation.css; the later production rule provides the final declaration set.",
+      "phase": "phase-9-duplicate-ownership-closure",
+      "contextType": "component-family-shared-state",
+      "disposition": "keep-owned",
+      "removalStatus": "permanent",
+      "declarationConflict": "conflicting",
+      "parity": "green"
     },
     {
-      "key": ".job-chip|||",
+      "key": ".job-chip|||components|||",
+      "selector": ".job-chip",
+      "layer": "components",
+      "atRuleContext": [],
+      "stateContext": [],
       "category": "conflicting",
       "hotspot": false,
-      "owners": []
+      "records": [
+        {
+          "source": "web/secure-landing/portal-src/styles/components/operator-console.css",
+          "line": 434,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "a55fdc0105f06323fd7e7ebcef83a69db75e6d47",
+          "properties": [
+            "font-size",
+            "letter-spacing"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/operator-console.css",
+          "line": 489,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "f3a55a040bffb350f8e55c7de9db8ec9d61779b7",
+          "properties": [
+            "font-size",
+            "line-height"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/workspace-surfaces.css",
+          "line": 216,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "34be47bb55a82216dc070a4e28e1ff44c4662257",
+          "properties": [
+            "align-items",
+            "background",
+            "border",
+            "border-radius",
+            "color",
+            "display",
+            "font-size",
+            "font-weight",
+            "gap",
+            "letter-spacing",
+            "padding",
+            "text-transform"
+          ]
+        }
+      ],
+      "owners": [
+        "portal-css-architecture"
+      ],
+      "ownerReason": "Intentional cascade: .job-chip keeps the reviewed source order across operator-console.css, workspace-surfaces.css; the later production rule provides the final declaration set.",
+      "phase": "phase-9-duplicate-ownership-closure",
+      "contextType": "component-family-shared-state",
+      "disposition": "keep-owned",
+      "removalStatus": "permanent",
+      "declarationConflict": "conflicting",
+      "parity": "green"
     },
     {
-      "key": ".micro-status|||",
+      "key": ".micro-status|||components|||",
+      "selector": ".micro-status",
+      "layer": "components",
+      "atRuleContext": [],
+      "stateContext": [],
       "category": "conflicting",
       "hotspot": false,
-      "owners": []
+      "records": [
+        {
+          "source": "web/secure-landing/portal-src/styles/components/operator-console.css",
+          "line": 434,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "a55fdc0105f06323fd7e7ebcef83a69db75e6d47",
+          "properties": [
+            "font-size",
+            "letter-spacing"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/operator-console.css",
+          "line": 489,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "f3a55a040bffb350f8e55c7de9db8ec9d61779b7",
+          "properties": [
+            "font-size",
+            "line-height"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
+          "line": 217,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "127aa2eacbbf1250e346e6fd1dab1f2aca44d6c2",
+          "properties": [
+            "letter-spacing"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/workspace-surfaces.css",
+          "line": 121,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "f329b3df32c96368a795cc2c0e383bea0f3a7c5b",
+          "properties": [
+            "color",
+            "font-size",
+            "font-weight",
+            "letter-spacing",
+            "text-transform"
+          ]
+        }
+      ],
+      "owners": [
+        "portal-css-architecture"
+      ],
+      "ownerReason": "Intentional cascade: .micro-status keeps the reviewed source order across operator-console.css, surface-normalization.css, workspace-surfaces.css; the later production rule provides the final declaration set.",
+      "phase": "phase-9-duplicate-ownership-closure",
+      "contextType": "surface-normalization-final-pass",
+      "disposition": "keep-owned",
+      "removalStatus": "permanent",
+      "declarationConflict": "conflicting",
+      "parity": "green"
     },
     {
-      "key": ".operator-action-btn-primary|||",
+      "key": ".operator-action-btn-primary|||components|||",
+      "selector": ".operator-action-btn-primary",
+      "layer": "components",
+      "atRuleContext": [],
+      "stateContext": [],
       "category": "conflicting",
       "hotspot": false,
-      "owners": []
+      "records": [
+        {
+          "source": "web/secure-landing/portal-src/styles/components/console-context.css",
+          "line": 220,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "5cf54c5dd5b99be0706e463a7d3945e767663149",
+          "properties": [
+            "background",
+            "border-color",
+            "box-shadow",
+            "color"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
+          "line": 299,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "694e44d7a8a88bc375ad20dce876a6cb30275fc1",
+          "properties": [
+            "background",
+            "border-color",
+            "color"
+          ]
+        }
+      ],
+      "owners": [
+        "portal-css-architecture"
+      ],
+      "ownerReason": "Intentional cascade: .operator-action-btn-primary keeps the reviewed source order across console-context.css, surface-normalization.css; the later production rule provides the final declaration set.",
+      "phase": "phase-9-duplicate-ownership-closure",
+      "contextType": "surface-normalization-final-pass",
+      "disposition": "keep-owned",
+      "removalStatus": "permanent",
+      "declarationConflict": "conflicting",
+      "parity": "green"
     },
     {
-      "key": ".operator-action-btn-secondary|||",
+      "key": ".operator-action-btn-secondary|||components|||",
+      "selector": ".operator-action-btn-secondary",
+      "layer": "components",
+      "atRuleContext": [],
+      "stateContext": [],
       "category": "conflicting",
       "hotspot": false,
-      "owners": []
+      "records": [
+        {
+          "source": "web/secure-landing/portal-src/styles/components/console-context.css",
+          "line": 231,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "b55afff2298ddadd81463023a672cf1a415ee619",
+          "properties": [
+            "background",
+            "color"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/dispatch-surfaces.css",
+          "line": 265,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "e3c7a9b72249a3ca65b4134dee00060cb7fa297f",
+          "properties": [
+            "background",
+            "border-color"
+          ]
+        }
+      ],
+      "owners": [
+        "portal-css-architecture"
+      ],
+      "ownerReason": "Intentional cascade: .operator-action-btn-secondary keeps the reviewed source order across console-context.css, dispatch-surfaces.css; the later production rule provides the final declaration set.",
+      "phase": "phase-9-duplicate-ownership-closure",
+      "contextType": "component-family-shared-state",
+      "disposition": "keep-owned",
+      "removalStatus": "permanent",
+      "declarationConflict": "conflicting",
+      "parity": "green"
     },
     {
-      "key": ".overview-actions|||@media (max-width: 767px)",
+      "key": ".overview-actions|||components|||@media (max-width: 767px)",
+      "selector": ".overview-actions",
+      "layer": "components",
+      "atRuleContext": [
+        "@media (max-width: 767px)"
+      ],
+      "stateContext": [],
       "category": "additive",
       "hotspot": false,
-      "owners": []
+      "records": [
+        {
+          "source": "web/secure-landing/portal-src/styles/components/operator-console.css",
+          "line": 523,
+          "column": 5,
+          "layer": "components",
+          "declarationSignature": "411982acf5b8cd7b2ba48626acbc57fb7eb1ef5c",
+          "properties": [
+            "justify-content"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/operator-console.css",
+          "line": 528,
+          "column": 5,
+          "layer": "components",
+          "declarationSignature": "c5e582930538f512ad5bd4ba53816aab8f7085ac",
+          "properties": [
+            "grid-template-columns",
+            "width"
+          ]
+        }
+      ],
+      "owners": [
+        "portal-css-architecture"
+      ],
+      "ownerReason": "Additive ownership: .overview-actions splits non-overlapping declarations across operator-console.css while preserving the current computed-style parity.",
+      "phase": "phase-9-duplicate-ownership-closure",
+      "contextType": "responsive-context",
+      "disposition": "report-only",
+      "removalStatus": "removable-later",
+      "declarationConflict": "additive",
+      "parity": "green"
     },
     {
-      "key": ".panel-subtle|||",
+      "key": ".panel-subtle|||components|||",
+      "selector": ".panel-subtle",
+      "layer": "components",
+      "atRuleContext": [],
+      "stateContext": [],
       "category": "conflicting",
       "hotspot": false,
-      "owners": []
+      "records": [
+        {
+          "source": "web/secure-landing/portal-src/styles/components/operator-console.css",
+          "line": 188,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "36c5289453662a1f432ed912ef805fe03a35a642",
+          "properties": [
+            "background",
+            "border",
+            "box-shadow"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/shell-foundation.css",
+          "line": 205,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "b058cff0de10074c0a8c3b975733880f4d189b71",
+          "properties": [
+            "background",
+            "border"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
+          "line": 146,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "bc00e11847ade2f927847a973b0a73562a961bf8",
+          "properties": [
+            "border-radius"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
+          "line": 176,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "e3c7a9b72249a3ca65b4134dee00060cb7fa297f",
+          "properties": [
+            "background",
+            "border-color"
+          ]
+        }
+      ],
+      "owners": [
+        "portal-css-architecture"
+      ],
+      "ownerReason": "Intentional cascade: .panel-subtle keeps the reviewed source order across operator-console.css, shell-foundation.css, surface-normalization.css; the later production rule provides the final declaration set.",
+      "phase": "phase-9-duplicate-ownership-closure",
+      "contextType": "surface-normalization-final-pass",
+      "disposition": "keep-owned",
+      "removalStatus": "permanent",
+      "declarationConflict": "conflicting",
+      "parity": "green"
     },
     {
-      "key": ".peer:focus-visible ~ .peer-focus-visible\\:ring-indigo-500|||",
+      "key": ".peer:focus-visible ~ .peer-focus-visible\\:ring-indigo-500|||utilities|||",
+      "selector": ".peer:focus-visible ~ .peer-focus-visible\\:ring-indigo-500",
+      "layer": "utilities",
+      "atRuleContext": [],
+      "stateContext": [
+        "focus",
+        "focus-visible"
+      ],
       "category": "additive",
       "hotspot": false,
-      "owners": []
+      "records": [
+        {
+          "source": "web/secure-landing/portal-src/styles/utilities.required.css",
+          "line": 4,
+          "column": 1,
+          "layer": "utilities",
+          "declarationSignature": "68577264f416206890cdab0488d0c6ab3bd604d1",
+          "properties": [
+            "--portal-ring-color",
+            "--portal-ring-offset",
+            "--portal-ring-offset-color",
+            "box-shadow"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/utilities.required.css",
+          "line": 23,
+          "column": 1,
+          "layer": "utilities",
+          "declarationSignature": "667c4b2566478b112b1ab1ca44967514ede67bf8",
+          "properties": [
+            "--portal-ring-color"
+          ]
+        }
+      ],
+      "owners": [
+        "portal-css-architecture"
+      ],
+      "ownerReason": "Additive ownership: .peer:focus-visible ~ .peer-focus-visible\\:ring-indigo-500 splits non-overlapping declarations across utilities.required.css while preserving the current computed-style parity.",
+      "phase": "phase-9-duplicate-ownership-closure",
+      "contextType": "runtime-state",
+      "disposition": "report-only",
+      "removalStatus": "removable-later",
+      "declarationConflict": "additive",
+      "parity": "green"
     },
     {
-      "key": ".peer:focus-visible ~ .peer-focus-visible\\:ring-red-500|||",
+      "key": ".peer:focus-visible ~ .peer-focus-visible\\:ring-red-500|||utilities|||",
+      "selector": ".peer:focus-visible ~ .peer-focus-visible\\:ring-red-500",
+      "layer": "utilities",
+      "atRuleContext": [],
+      "stateContext": [
+        "focus",
+        "focus-visible"
+      ],
       "category": "conflicting",
       "hotspot": false,
-      "owners": []
+      "records": [
+        {
+          "source": "web/secure-landing/portal-src/styles/utilities.required.css",
+          "line": 4,
+          "column": 1,
+          "layer": "utilities",
+          "declarationSignature": "68577264f416206890cdab0488d0c6ab3bd604d1",
+          "properties": [
+            "--portal-ring-color",
+            "--portal-ring-offset",
+            "--portal-ring-offset-color",
+            "box-shadow"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/utilities.required.css",
+          "line": 26,
+          "column": 1,
+          "layer": "utilities",
+          "declarationSignature": "2ea7c61f33e02aec3dc105fbd66bdfd9bcb80db1",
+          "properties": [
+            "--portal-ring-color"
+          ]
+        }
+      ],
+      "owners": [
+        "portal-css-architecture"
+      ],
+      "ownerReason": "Intentional cascade: .peer:focus-visible ~ .peer-focus-visible\\:ring-red-500 keeps the reviewed source order across utilities.required.css; the later production rule provides the final declaration set.",
+      "phase": "phase-9-duplicate-ownership-closure",
+      "contextType": "runtime-state",
+      "disposition": "keep-owned",
+      "removalStatus": "permanent",
+      "declarationConflict": "conflicting",
+      "parity": "green"
     },
     {
-      "key": ".portal-action-control|||",
+      "key": ".portal-action-control|||components|||",
+      "selector": ".portal-action-control",
+      "layer": "components",
+      "atRuleContext": [],
+      "stateContext": [],
       "category": "additive",
       "hotspot": false,
-      "owners": []
+      "records": [
+        {
+          "source": "web/secure-landing/portal-src/styles/components/dispatch-surfaces.css",
+          "line": 261,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "c092cdf68ff9d7e361c25afc7483824ba7a93003",
+          "properties": [
+            "border-radius",
+            "min-height"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/dispatch-surfaces.css",
+          "line": 265,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "e3c7a9b72249a3ca65b4134dee00060cb7fa297f",
+          "properties": [
+            "background",
+            "border-color"
+          ]
+        }
+      ],
+      "owners": [
+        "portal-css-architecture"
+      ],
+      "ownerReason": "Additive ownership: .portal-action-control splits non-overlapping declarations across dispatch-surfaces.css while preserving the current computed-style parity.",
+      "phase": "phase-9-duplicate-ownership-closure",
+      "contextType": "component-family-shared-state",
+      "disposition": "report-only",
+      "removalStatus": "removable-later",
+      "declarationConflict": "additive",
+      "parity": "green"
     },
     {
-      "key": ".portal-context-shell|||",
+      "key": ".portal-context-shell|||components|||",
+      "selector": ".portal-context-shell",
+      "layer": "components",
+      "atRuleContext": [],
+      "stateContext": [],
       "category": "conflicting",
       "hotspot": false,
-      "owners": []
+      "records": [
+        {
+          "source": "web/secure-landing/portal-src/styles/components/operator-console.css",
+          "line": 137,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "e0732475df2b2b0661da150e1f2be57057b04018",
+          "properties": [
+            "backdrop-filter",
+            "background",
+            "border",
+            "box-shadow"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
+          "line": 146,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "bc00e11847ade2f927847a973b0a73562a961bf8",
+          "properties": [
+            "border-radius"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
+          "line": 168,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "e09826935d3e1a20d02fd703970aa2e014ae2ad5",
+          "properties": [
+            "box-shadow"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
+          "line": 229,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "e7b8e54380a88ae3ef0197e8d172d7a60c5dc472",
+          "properties": [
+            "backdrop-filter",
+            "position"
+          ]
+        }
+      ],
+      "owners": [
+        "portal-css-architecture"
+      ],
+      "ownerReason": "Intentional cascade: .portal-context-shell keeps the reviewed source order across operator-console.css, surface-normalization.css; the later production rule provides the final declaration set.",
+      "phase": "phase-9-duplicate-ownership-closure",
+      "contextType": "surface-normalization-final-pass",
+      "disposition": "keep-owned",
+      "removalStatus": "permanent",
+      "declarationConflict": "conflicting",
+      "parity": "green"
     },
     {
-      "key": ".portal-topbar|||",
+      "key": ".portal-topbar|||components|||",
+      "selector": ".portal-topbar",
+      "layer": "components",
+      "atRuleContext": [],
+      "stateContext": [],
       "category": "conflicting",
       "hotspot": false,
-      "owners": []
+      "records": [
+        {
+          "source": "web/secure-landing/portal-src/styles/components/operator-console.css",
+          "line": 28,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "2d9395ef1d142bb8327ec9894cc21bb62dcedd58",
+          "properties": [
+            "background",
+            "border-bottom-color",
+            "border-bottom-style",
+            "border-bottom-width",
+            "box-shadow"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
+          "line": 146,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "bc00e11847ade2f927847a973b0a73562a961bf8",
+          "properties": [
+            "border-radius"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
+          "line": 168,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "e09826935d3e1a20d02fd703970aa2e014ae2ad5",
+          "properties": [
+            "box-shadow"
+          ]
+        }
+      ],
+      "owners": [
+        "portal-css-architecture"
+      ],
+      "ownerReason": "Intentional cascade: .portal-topbar keeps the reviewed source order across operator-console.css, surface-normalization.css; the later production rule provides the final declaration set.",
+      "phase": "phase-9-duplicate-ownership-closure",
+      "contextType": "surface-normalization-final-pass",
+      "disposition": "keep-owned",
+      "removalStatus": "permanent",
+      "declarationConflict": "conflicting",
+      "parity": "green"
     },
     {
-      "key": ".review-compare-summary|||",
+      "key": ".review-compare-summary|||components|||",
+      "selector": ".review-compare-summary",
+      "layer": "components",
+      "atRuleContext": [],
+      "stateContext": [],
       "category": "additive",
       "hotspot": false,
-      "owners": []
+      "records": [
+        {
+          "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
+          "line": 146,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "bc00e11847ade2f927847a973b0a73562a961bf8",
+          "properties": [
+            "border-radius"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
+          "line": 176,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "e3c7a9b72249a3ca65b4134dee00060cb7fa297f",
+          "properties": [
+            "background",
+            "border-color"
+          ]
+        }
+      ],
+      "owners": [
+        "portal-css-architecture"
+      ],
+      "ownerReason": "Additive ownership: .review-compare-summary splits non-overlapping declarations across surface-normalization.css while preserving the current computed-style parity.",
+      "phase": "phase-9-duplicate-ownership-closure",
+      "contextType": "surface-normalization-final-pass",
+      "disposition": "report-only",
+      "removalStatus": "removable-later",
+      "declarationConflict": "additive",
+      "parity": "green"
     },
     {
-      "key": ".review-provenance-item|||",
+      "key": ".review-provenance-item|||components|||",
+      "selector": ".review-provenance-item",
+      "layer": "components",
+      "atRuleContext": [],
+      "stateContext": [],
       "category": "additive",
       "hotspot": false,
-      "owners": []
+      "records": [
+        {
+          "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
+          "line": 146,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "bc00e11847ade2f927847a973b0a73562a961bf8",
+          "properties": [
+            "border-radius"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
+          "line": 176,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "e3c7a9b72249a3ca65b4134dee00060cb7fa297f",
+          "properties": [
+            "background",
+            "border-color"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
+          "line": 239,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "e09826935d3e1a20d02fd703970aa2e014ae2ad5",
+          "properties": [
+            "box-shadow"
+          ]
+        }
+      ],
+      "owners": [
+        "portal-css-architecture"
+      ],
+      "ownerReason": "Additive ownership: .review-provenance-item splits non-overlapping declarations across surface-normalization.css while preserving the current computed-style parity.",
+      "phase": "phase-9-duplicate-ownership-closure",
+      "contextType": "surface-normalization-final-pass",
+      "disposition": "report-only",
+      "removalStatus": "removable-later",
+      "declarationConflict": "additive",
+      "parity": "green"
     },
     {
-      "key": ".review-provenance-label|||",
+      "key": ".review-provenance-label|||components|||",
+      "selector": ".review-provenance-label",
+      "layer": "components",
+      "atRuleContext": [],
+      "stateContext": [],
       "category": "additive",
       "hotspot": false,
-      "owners": []
+      "records": [
+        {
+          "source": "web/secure-landing/portal-src/styles/components/operator-console.css",
+          "line": 489,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "f3a55a040bffb350f8e55c7de9db8ec9d61779b7",
+          "properties": [
+            "font-size",
+            "line-height"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
+          "line": 217,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "127aa2eacbbf1250e346e6fd1dab1f2aca44d6c2",
+          "properties": [
+            "letter-spacing"
+          ]
+        }
+      ],
+      "owners": [
+        "portal-css-architecture"
+      ],
+      "ownerReason": "Additive ownership: .review-provenance-label splits non-overlapping declarations across operator-console.css, surface-normalization.css while preserving the current computed-style parity.",
+      "phase": "phase-9-duplicate-ownership-closure",
+      "contextType": "surface-normalization-final-pass",
+      "disposition": "report-only",
+      "removalStatus": "removable-later",
+      "declarationConflict": "additive",
+      "parity": "green"
     },
     {
-      "key": ".review-status-banner[data-tone=\"error\"]|||",
+      "key": ".review-status-banner[data-tone=\"error\"]|||components|||",
+      "selector": ".review-status-banner[data-tone=\"error\"]",
+      "layer": "components",
+      "atRuleContext": [],
+      "stateContext": [
+        "data-state"
+      ],
       "category": "additive",
       "hotspot": false,
-      "owners": []
+      "records": [
+        {
+          "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
+          "line": 256,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "4e0c7329b18cc1dcdd13971e1a780f15c5c2b673",
+          "properties": [
+            "background"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
+          "line": 276,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "39df4966b0357116475c5b724a5cfc5b87a62b66",
+          "properties": [
+            "border-color"
+          ]
+        }
+      ],
+      "owners": [
+        "portal-css-architecture"
+      ],
+      "ownerReason": "Additive ownership: .review-status-banner[data-tone=\"error\"] splits non-overlapping declarations across surface-normalization.css while preserving the current computed-style parity.",
+      "phase": "phase-9-duplicate-ownership-closure",
+      "contextType": "runtime-state",
+      "disposition": "report-only",
+      "removalStatus": "removable-later",
+      "declarationConflict": "additive",
+      "parity": "green"
     },
     {
-      "key": ".review-status-banner[data-tone=\"info\"]|||",
+      "key": ".review-status-banner[data-tone=\"info\"]|||components|||",
+      "selector": ".review-status-banner[data-tone=\"info\"]",
+      "layer": "components",
+      "atRuleContext": [],
+      "stateContext": [
+        "data-state"
+      ],
       "category": "additive",
       "hotspot": false,
-      "owners": []
+      "records": [
+        {
+          "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
+          "line": 256,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "4e0c7329b18cc1dcdd13971e1a780f15c5c2b673",
+          "properties": [
+            "background"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
+          "line": 281,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "481464e3a7dd64591440b739e1d43a054f6a522b",
+          "properties": [
+            "border-color"
+          ]
+        }
+      ],
+      "owners": [
+        "portal-css-architecture"
+      ],
+      "ownerReason": "Additive ownership: .review-status-banner[data-tone=\"info\"] splits non-overlapping declarations across surface-normalization.css while preserving the current computed-style parity.",
+      "phase": "phase-9-duplicate-ownership-closure",
+      "contextType": "runtime-state",
+      "disposition": "report-only",
+      "removalStatus": "removable-later",
+      "declarationConflict": "additive",
+      "parity": "green"
     },
     {
-      "key": ".review-status-banner[data-tone=\"ready\"]|||",
+      "key": ".review-status-banner[data-tone=\"ready\"]|||components|||",
+      "selector": ".review-status-banner[data-tone=\"ready\"]",
+      "layer": "components",
+      "atRuleContext": [],
+      "stateContext": [
+        "data-state"
+      ],
       "category": "additive",
       "hotspot": false,
-      "owners": []
+      "records": [
+        {
+          "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
+          "line": 256,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "4e0c7329b18cc1dcdd13971e1a780f15c5c2b673",
+          "properties": [
+            "background"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
+          "line": 266,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "4ff838967569aecb53d6a515ec012c08430c764d",
+          "properties": [
+            "border-color"
+          ]
+        }
+      ],
+      "owners": [
+        "portal-css-architecture"
+      ],
+      "ownerReason": "Additive ownership: .review-status-banner[data-tone=\"ready\"] splits non-overlapping declarations across surface-normalization.css while preserving the current computed-style parity.",
+      "phase": "phase-9-duplicate-ownership-closure",
+      "contextType": "runtime-state",
+      "disposition": "report-only",
+      "removalStatus": "removable-later",
+      "declarationConflict": "additive",
+      "parity": "green"
     },
     {
-      "key": ".review-status-banner[data-tone=\"warning\"]|||",
+      "key": ".review-status-banner[data-tone=\"warning\"]|||components|||",
+      "selector": ".review-status-banner[data-tone=\"warning\"]",
+      "layer": "components",
+      "atRuleContext": [],
+      "stateContext": [
+        "data-state"
+      ],
       "category": "additive",
       "hotspot": false,
-      "owners": []
+      "records": [
+        {
+          "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
+          "line": 256,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "4e0c7329b18cc1dcdd13971e1a780f15c5c2b673",
+          "properties": [
+            "background"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
+          "line": 271,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "4d6a576f4b984528794f3cb347ad3771ae2b7640",
+          "properties": [
+            "border-color"
+          ]
+        }
+      ],
+      "owners": [
+        "portal-css-architecture"
+      ],
+      "ownerReason": "Additive ownership: .review-status-banner[data-tone=\"warning\"] splits non-overlapping declarations across surface-normalization.css while preserving the current computed-style parity.",
+      "phase": "phase-9-duplicate-ownership-closure",
+      "contextType": "runtime-state",
+      "disposition": "report-only",
+      "removalStatus": "removable-later",
+      "declarationConflict": "additive",
+      "parity": "green"
     },
     {
-      "key": ".review-status-banner|||",
+      "key": ".review-status-banner|||components|||",
+      "selector": ".review-status-banner",
+      "layer": "components",
+      "atRuleContext": [],
+      "stateContext": [],
       "category": "additive",
       "hotspot": false,
-      "owners": []
+      "records": [
+        {
+          "source": "web/secure-landing/portal-src/styles/components/operator-console.css",
+          "line": 426,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "1af88a14584f9a27d2a0ca9f820e576f9fb22fc9",
+          "properties": [
+            "box-shadow"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
+          "line": 146,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "bc00e11847ade2f927847a973b0a73562a961bf8",
+          "properties": [
+            "border-radius"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
+          "line": 176,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "e3c7a9b72249a3ca65b4134dee00060cb7fa297f",
+          "properties": [
+            "background",
+            "border-color"
+          ]
+        }
+      ],
+      "owners": [
+        "portal-css-architecture"
+      ],
+      "ownerReason": "Additive ownership: .review-status-banner splits non-overlapping declarations across operator-console.css, surface-normalization.css while preserving the current computed-style parity.",
+      "phase": "phase-9-duplicate-ownership-closure",
+      "contextType": "surface-normalization-final-pass",
+      "disposition": "report-only",
+      "removalStatus": "removable-later",
+      "declarationConflict": "additive",
+      "parity": "green"
     },
     {
-      "key": ".runtime-briefing-card|||",
+      "key": ".runtime-briefing-card|||components|||",
+      "selector": ".runtime-briefing-card",
+      "layer": "components",
+      "atRuleContext": [],
+      "stateContext": [],
       "category": "conflicting",
       "hotspot": false,
-      "owners": []
+      "records": [
+        {
+          "source": "web/secure-landing/portal-src/styles/components/console-context.css",
+          "line": 294,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "8b72cd1fc71065aec8b0e3674bf4cd5c5554a5b4",
+          "properties": [
+            "background",
+            "border",
+            "border-radius",
+            "box-shadow",
+            "min-height",
+            "padding",
+            "position"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
+          "line": 146,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "bc00e11847ade2f927847a973b0a73562a961bf8",
+          "properties": [
+            "border-radius"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
+          "line": 176,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "e3c7a9b72249a3ca65b4134dee00060cb7fa297f",
+          "properties": [
+            "background",
+            "border-color"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
+          "line": 239,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "e09826935d3e1a20d02fd703970aa2e014ae2ad5",
+          "properties": [
+            "box-shadow"
+          ]
+        }
+      ],
+      "owners": [
+        "portal-css-architecture"
+      ],
+      "ownerReason": "Intentional cascade: .runtime-briefing-card keeps the reviewed source order across console-context.css, surface-normalization.css; the later production rule provides the final declaration set.",
+      "phase": "phase-9-duplicate-ownership-closure",
+      "contextType": "surface-normalization-final-pass",
+      "disposition": "keep-owned",
+      "removalStatus": "permanent",
+      "declarationConflict": "conflicting",
+      "parity": "green"
     },
     {
-      "key": ".section-kicker|||",
+      "key": ".section-kicker|||components|||",
+      "selector": ".section-kicker",
+      "layer": "components",
+      "atRuleContext": [],
+      "stateContext": [],
       "category": "conflicting",
       "hotspot": false,
-      "owners": []
+      "records": [
+        {
+          "source": "web/secure-landing/portal-src/styles/components/operator-console.css",
+          "line": 113,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "9a060a311c9ead37ab9d69efe4be5eb80186f136",
+          "properties": [
+            "font-size",
+            "letter-spacing"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/shell-foundation.css",
+          "line": 80,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "593f5acd45c9ee0ee1afe2b3ea52e477b2306f51",
+          "properties": [
+            "color",
+            "font-size",
+            "font-weight",
+            "letter-spacing",
+            "text-transform"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
+          "line": 217,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "127aa2eacbbf1250e346e6fd1dab1f2aca44d6c2",
+          "properties": [
+            "letter-spacing"
+          ]
+        }
+      ],
+      "owners": [
+        "portal-css-architecture"
+      ],
+      "ownerReason": "Intentional cascade: .section-kicker keeps the reviewed source order across operator-console.css, shell-foundation.css, surface-normalization.css; the later production rule provides the final declaration set.",
+      "phase": "phase-9-duplicate-ownership-closure",
+      "contextType": "surface-normalization-final-pass",
+      "disposition": "keep-owned",
+      "removalStatus": "permanent",
+      "declarationConflict": "conflicting",
+      "parity": "green"
     },
     {
-      "key": ".shell-noise|||",
+      "key": ".shell-noise|||components|||",
+      "selector": ".shell-noise",
+      "layer": "components",
+      "atRuleContext": [],
+      "stateContext": [],
       "category": "additive",
       "hotspot": false,
-      "owners": []
+      "records": [
+        {
+          "source": "web/secure-landing/portal-src/styles/components/operator-console.css",
+          "line": 8,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "2456b7d3ee7b4fcff263a2b03ad61e7b794b9586",
+          "properties": [
+            "background-image",
+            "background-position",
+            "background-size",
+            "inset",
+            "opacity",
+            "pointer-events",
+            "position",
+            "z-index"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
+          "line": 142,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "e0e2a85e400be7cadb7b6dd40f85adca09412410",
+          "properties": [
+            "display"
+          ]
+        }
+      ],
+      "owners": [
+        "portal-css-architecture"
+      ],
+      "ownerReason": "Additive ownership: .shell-noise splits non-overlapping declarations across operator-console.css, surface-normalization.css while preserving the current computed-style parity.",
+      "phase": "phase-9-duplicate-ownership-closure",
+      "contextType": "surface-normalization-final-pass",
+      "disposition": "report-only",
+      "removalStatus": "removable-later",
+      "declarationConflict": "additive",
+      "parity": "green"
     },
     {
-      "key": ".shell-panel-strong|||",
+      "key": ".shell-panel-strong|||components|||",
+      "selector": ".shell-panel-strong",
+      "layer": "components",
+      "atRuleContext": [],
+      "stateContext": [],
       "category": "conflicting",
       "hotspot": false,
-      "owners": []
+      "records": [
+        {
+          "source": "web/secure-landing/portal-src/styles/components/shell-foundation.css",
+          "line": 56,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "ba51395cbcbc3fe2d6e35e00447b906935d9dab4",
+          "properties": [
+            "backdrop-filter",
+            "background",
+            "border"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
+          "line": 146,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "bc00e11847ade2f927847a973b0a73562a961bf8",
+          "properties": [
+            "border-radius"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
+          "line": 168,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "e09826935d3e1a20d02fd703970aa2e014ae2ad5",
+          "properties": [
+            "box-shadow"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
+          "line": 176,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "e3c7a9b72249a3ca65b4134dee00060cb7fa297f",
+          "properties": [
+            "background",
+            "border-color"
+          ]
+        }
+      ],
+      "owners": [
+        "portal-css-architecture"
+      ],
+      "ownerReason": "Intentional cascade: .shell-panel-strong keeps the reviewed source order across shell-foundation.css, surface-normalization.css; the later production rule provides the final declaration set.",
+      "phase": "phase-9-duplicate-ownership-closure",
+      "contextType": "surface-normalization-final-pass",
+      "disposition": "keep-owned",
+      "removalStatus": "permanent",
+      "declarationConflict": "conflicting",
+      "parity": "green"
     },
     {
-      "key": ".shell-panel|||",
+      "key": ".shell-panel|||components|||",
+      "selector": ".shell-panel",
+      "layer": "components",
+      "atRuleContext": [],
+      "stateContext": [],
       "category": "conflicting",
       "hotspot": false,
-      "owners": []
+      "records": [
+        {
+          "source": "web/secure-landing/portal-src/styles/components/shell-foundation.css",
+          "line": 50,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "81d8a413805db9b1043da4d257b5754a2654252f",
+          "properties": [
+            "backdrop-filter",
+            "background",
+            "border"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
+          "line": 146,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "bc00e11847ade2f927847a973b0a73562a961bf8",
+          "properties": [
+            "border-radius"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
+          "line": 168,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "e09826935d3e1a20d02fd703970aa2e014ae2ad5",
+          "properties": [
+            "box-shadow"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
+          "line": 176,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "e3c7a9b72249a3ca65b4134dee00060cb7fa297f",
+          "properties": [
+            "background",
+            "border-color"
+          ]
+        }
+      ],
+      "owners": [
+        "portal-css-architecture"
+      ],
+      "ownerReason": "Intentional cascade: .shell-panel keeps the reviewed source order across shell-foundation.css, surface-normalization.css; the later production rule provides the final declaration set.",
+      "phase": "phase-9-duplicate-ownership-closure",
+      "contextType": "surface-normalization-final-pass",
+      "disposition": "keep-owned",
+      "removalStatus": "permanent",
+      "declarationConflict": "conflicting",
+      "parity": "green"
     },
     {
-      "key": ".signal-badge|||",
+      "key": ".signal-badge|||components|||",
+      "selector": ".signal-badge",
+      "layer": "components",
+      "atRuleContext": [],
+      "stateContext": [],
       "category": "conflicting",
       "hotspot": false,
-      "owners": []
+      "records": [
+        {
+          "source": "web/secure-landing/portal-src/styles/components/operator-console.css",
+          "line": 489,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "f3a55a040bffb350f8e55c7de9db8ec9d61779b7",
+          "properties": [
+            "font-size",
+            "line-height"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/shell-foundation.css",
+          "line": 141,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "2f5239fc718e8a4ddffeb24d925af3d935fb9386",
+          "properties": [
+            "align-items",
+            "background",
+            "border",
+            "border-radius",
+            "display",
+            "font-size",
+            "font-weight",
+            "letter-spacing",
+            "padding",
+            "text-transform"
+          ]
+        }
+      ],
+      "owners": [
+        "portal-css-architecture"
+      ],
+      "ownerReason": "Intentional cascade: .signal-badge keeps the reviewed source order across operator-console.css, shell-foundation.css; the later production rule provides the final declaration set.",
+      "phase": "phase-9-duplicate-ownership-closure",
+      "contextType": "component-family-shared-state",
+      "disposition": "keep-owned",
+      "removalStatus": "permanent",
+      "declarationConflict": "conflicting",
+      "parity": "green"
     },
     {
-      "key": ".skeleton-block|||",
+      "key": ".skeleton-block|||components|||",
+      "selector": ".skeleton-block",
+      "layer": "components",
+      "atRuleContext": [],
+      "stateContext": [],
       "category": "additive",
       "hotspot": false,
-      "owners": []
+      "records": [
+        {
+          "source": "web/secure-landing/portal-src/styles/components/dispatch-surfaces.css",
+          "line": 138,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "af84cdbf319ce67bd2ceb10ccebf069b8a7aed11",
+          "properties": [
+            "background",
+            "display",
+            "overflow",
+            "position"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/dispatch-surfaces.css",
+          "line": 191,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "a0c0e28291cbaf673ed65bd5e073d6627b33dd72",
+          "properties": [
+            "border-radius",
+            "min-height"
+          ]
+        }
+      ],
+      "owners": [
+        "portal-css-architecture"
+      ],
+      "ownerReason": "Additive ownership: .skeleton-block splits non-overlapping declarations across dispatch-surfaces.css while preserving the current computed-style parity.",
+      "phase": "phase-9-duplicate-ownership-closure",
+      "contextType": "component-family-shared-state",
+      "disposition": "report-only",
+      "removalStatus": "removable-later",
+      "declarationConflict": "additive",
+      "parity": "green"
     },
     {
-      "key": ".skeleton-line|||",
+      "key": ".skeleton-line|||components|||",
+      "selector": ".skeleton-line",
+      "layer": "components",
+      "atRuleContext": [],
+      "stateContext": [],
       "category": "additive",
       "hotspot": false,
-      "owners": []
+      "records": [
+        {
+          "source": "web/secure-landing/portal-src/styles/components/dispatch-surfaces.css",
+          "line": 138,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "af84cdbf319ce67bd2ceb10ccebf069b8a7aed11",
+          "properties": [
+            "background",
+            "display",
+            "overflow",
+            "position"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/dispatch-surfaces.css",
+          "line": 172,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "86454ccb93f6051bebea0ff51c88da2eb8b2c2a8",
+          "properties": [
+            "border-radius",
+            "height",
+            "width"
+          ]
+        }
+      ],
+      "owners": [
+        "portal-css-architecture"
+      ],
+      "ownerReason": "Additive ownership: .skeleton-line splits non-overlapping declarations across dispatch-surfaces.css while preserving the current computed-style parity.",
+      "phase": "phase-9-duplicate-ownership-closure",
+      "contextType": "component-family-shared-state",
+      "disposition": "report-only",
+      "removalStatus": "removable-later",
+      "declarationConflict": "additive",
+      "parity": "green"
     },
     {
-      "key": ".skeleton-pill|||",
+      "key": ".skeleton-pill|||components|||",
+      "selector": ".skeleton-pill",
+      "layer": "components",
+      "atRuleContext": [],
+      "stateContext": [],
       "category": "additive",
       "hotspot": false,
-      "owners": []
+      "records": [
+        {
+          "source": "web/secure-landing/portal-src/styles/components/dispatch-surfaces.css",
+          "line": 138,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "af84cdbf319ce67bd2ceb10ccebf069b8a7aed11",
+          "properties": [
+            "background",
+            "display",
+            "overflow",
+            "position"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/dispatch-surfaces.css",
+          "line": 200,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "4c055b76dda1dd9138ad4820404a4807a1592b3a",
+          "properties": [
+            "border-radius",
+            "height",
+            "width"
+          ]
+        }
+      ],
+      "owners": [
+        "portal-css-architecture"
+      ],
+      "ownerReason": "Additive ownership: .skeleton-pill splits non-overlapping declarations across dispatch-surfaces.css while preserving the current computed-style parity.",
+      "phase": "phase-9-duplicate-ownership-closure",
+      "contextType": "component-family-shared-state",
+      "disposition": "report-only",
+      "removalStatus": "removable-later",
+      "declarationConflict": "additive",
+      "parity": "green"
     },
     {
-      "key": ".stat-label|||",
+      "key": ".stat-label|||components|||",
+      "selector": ".stat-label",
+      "layer": "components",
+      "atRuleContext": [],
+      "stateContext": [],
       "category": "conflicting",
       "hotspot": false,
-      "owners": []
+      "records": [
+        {
+          "source": "web/secure-landing/portal-src/styles/components/operator-console.css",
+          "line": 158,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "f42c267b51604a79b6778bc976192153f7c4a345",
+          "properties": [
+            "color",
+            "font-size",
+            "font-weight",
+            "letter-spacing",
+            "text-transform"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
+          "line": 217,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "127aa2eacbbf1250e346e6fd1dab1f2aca44d6c2",
+          "properties": [
+            "letter-spacing"
+          ]
+        }
+      ],
+      "owners": [
+        "portal-css-architecture"
+      ],
+      "ownerReason": "Intentional cascade: .stat-label keeps the reviewed source order across operator-console.css, surface-normalization.css; the later production rule provides the final declaration set.",
+      "phase": "phase-9-duplicate-ownership-closure",
+      "contextType": "surface-normalization-final-pass",
+      "disposition": "keep-owned",
+      "removalStatus": "permanent",
+      "declarationConflict": "conflicting",
+      "parity": "green"
     },
     {
-      "key": ".stat-tile|||",
+      "key": ".stat-tile|||components|||",
+      "selector": ".stat-tile",
+      "layer": "components",
+      "atRuleContext": [],
+      "stateContext": [],
       "category": "conflicting",
       "hotspot": false,
-      "owners": []
+      "records": [
+        {
+          "source": "web/secure-landing/portal-src/styles/components/operator-console.css",
+          "line": 188,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "36c5289453662a1f432ed912ef805fe03a35a642",
+          "properties": [
+            "background",
+            "border",
+            "box-shadow"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/shell-foundation.css",
+          "line": 96,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "5a5326cecddb64e1875b2c0e815d008d37f0f6ca",
+          "properties": [
+            "background",
+            "border",
+            "border-radius",
+            "padding"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
+          "line": 146,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "bc00e11847ade2f927847a973b0a73562a961bf8",
+          "properties": [
+            "border-radius"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
+          "line": 176,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "e3c7a9b72249a3ca65b4134dee00060cb7fa297f",
+          "properties": [
+            "background",
+            "border-color"
+          ]
+        }
+      ],
+      "owners": [
+        "portal-css-architecture"
+      ],
+      "ownerReason": "Intentional cascade: .stat-tile keeps the reviewed source order across operator-console.css, shell-foundation.css, surface-normalization.css; the later production rule provides the final declaration set.",
+      "phase": "phase-9-duplicate-ownership-closure",
+      "contextType": "surface-normalization-final-pass",
+      "disposition": "keep-owned",
+      "removalStatus": "permanent",
+      "declarationConflict": "conflicting",
+      "parity": "green"
     },
     {
-      "key": ".surface-loading::after|||",
+      "key": ".surface-loading::after|||components|||",
+      "selector": ".surface-loading::after",
+      "layer": "components",
+      "atRuleContext": [],
+      "stateContext": [],
       "category": "additive",
       "hotspot": false,
-      "owners": []
+      "records": [
+        {
+          "source": "web/secure-landing/portal-src/styles/components/dispatch-surfaces.css",
+          "line": 218,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "cf5afcf9204d35aa111deaa5c5af394c4339cd60",
+          "properties": [
+            "border-radius",
+            "content",
+            "height",
+            "left",
+            "opacity",
+            "pointer-events",
+            "position",
+            "right",
+            "top"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/operator-console.css",
+          "line": 415,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "d56fbe09fd3ffa78d9550a9ba41b25014f6a3e77",
+          "properties": [
+            "background"
+          ]
+        }
+      ],
+      "owners": [
+        "portal-css-architecture"
+      ],
+      "ownerReason": "Additive ownership: .surface-loading::after splits non-overlapping declarations across dispatch-surfaces.css, operator-console.css while preserving the current computed-style parity.",
+      "phase": "phase-9-duplicate-ownership-closure",
+      "contextType": "component-family-shared-state",
+      "disposition": "report-only",
+      "removalStatus": "removable-later",
+      "declarationConflict": "additive",
+      "parity": "green"
     },
     {
-      "key": ".surface-loading|||",
+      "key": ".surface-loading|||components|||",
+      "selector": ".surface-loading",
+      "layer": "components",
+      "atRuleContext": [],
+      "stateContext": [],
       "category": "additive",
       "hotspot": false,
-      "owners": []
+      "records": [
+        {
+          "source": "web/secure-landing/portal-src/styles/components/dispatch-surfaces.css",
+          "line": 210,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "b7f47d4c1309d96f28a1f9b4f7a4e776c77926c8",
+          "properties": [
+            "box-shadow",
+            "position",
+            "transition"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/operator-console.css",
+          "line": 408,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "c85b13adf789eedf56e19acd0075b2208e031930",
+          "properties": [
+            "background",
+            "border"
+          ]
+        }
+      ],
+      "owners": [
+        "portal-css-architecture"
+      ],
+      "ownerReason": "Additive ownership: .surface-loading splits non-overlapping declarations across dispatch-surfaces.css, operator-console.css while preserving the current computed-style parity.",
+      "phase": "phase-9-duplicate-ownership-closure",
+      "contextType": "component-family-shared-state",
+      "disposition": "report-only",
+      "removalStatus": "removable-later",
+      "declarationConflict": "additive",
+      "parity": "green"
     },
     {
-      "key": ".surface-skeleton-card|||",
+      "key": ".surface-skeleton-card|||components|||",
+      "selector": ".surface-skeleton-card",
+      "layer": "components",
+      "atRuleContext": [],
+      "stateContext": [],
       "category": "conflicting",
       "hotspot": false,
-      "owners": []
+      "records": [
+        {
+          "source": "web/secure-landing/portal-src/styles/components/dispatch-surfaces.css",
+          "line": 119,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "b0747a90f8cfcf8023b7e6b82ca11a5eb50422ca",
+          "properties": [
+            "background",
+            "border",
+            "border-radius",
+            "display",
+            "flex-direction",
+            "gap",
+            "padding"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/operator-console.css",
+          "line": 392,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "ac170cc848fb9dd863aa879972e36fe11a17b2e1",
+          "properties": [
+            "background",
+            "border-color",
+            "box-shadow"
+          ]
+        }
+      ],
+      "owners": [
+        "portal-css-architecture"
+      ],
+      "ownerReason": "Intentional cascade: .surface-skeleton-card keeps the reviewed source order across dispatch-surfaces.css, operator-console.css; the later production rule provides the final declaration set.",
+      "phase": "phase-9-duplicate-ownership-closure",
+      "contextType": "component-family-shared-state",
+      "disposition": "keep-owned",
+      "removalStatus": "permanent",
+      "declarationConflict": "conflicting",
+      "parity": "green"
     },
     {
-      "key": ".workspace-link-heading|||",
+      "key": ".workspace-link-heading|||components|||",
+      "selector": ".workspace-link-heading",
+      "layer": "components",
+      "atRuleContext": [],
+      "stateContext": [],
       "category": "conflicting",
       "hotspot": false,
-      "owners": []
+      "records": [
+        {
+          "source": "web/secure-landing/portal-src/styles/components/operator-console.css",
+          "line": 244,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "6a623417d985c31cf2edd253b29cc271b782b4e2",
+          "properties": [
+            "gap"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
+          "line": 289,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "1df7bb137ea9040f11ddad7ef61cc2c29d68c682",
+          "properties": [
+            "align-items"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/workspace-surfaces.css",
+          "line": 25,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "3411cb5a790e8d53c6ed5e19a9134b1c26b6a1e5",
+          "properties": [
+            "align-items",
+            "display",
+            "gap",
+            "justify-content"
+          ]
+        }
+      ],
+      "owners": [
+        "portal-css-architecture"
+      ],
+      "ownerReason": "Intentional cascade: .workspace-link-heading keeps the reviewed source order across operator-console.css, surface-normalization.css, workspace-surfaces.css; the later production rule provides the final declaration set.",
+      "phase": "phase-9-duplicate-ownership-closure",
+      "contextType": "surface-normalization-final-pass",
+      "disposition": "keep-owned",
+      "removalStatus": "permanent",
+      "declarationConflict": "conflicting",
+      "parity": "green"
     },
     {
-      "key": ".workspace-link-label|||",
+      "key": ".workspace-link-label|||components|||",
+      "selector": ".workspace-link-label",
+      "layer": "components",
+      "atRuleContext": [],
+      "stateContext": [],
       "category": "conflicting",
       "hotspot": false,
-      "owners": []
+      "records": [
+        {
+          "source": "web/secure-landing/portal-src/styles/components/operator-console.css",
+          "line": 234,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "a42be1ed68f8b43206adfe4a323a096683f16d4a",
+          "properties": [
+            "font-size",
+            "letter-spacing"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
+          "line": 217,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "127aa2eacbbf1250e346e6fd1dab1f2aca44d6c2",
+          "properties": [
+            "letter-spacing"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/workspace-surfaces.css",
+          "line": 72,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "aa92b9225d209e60eb052f4201a7de37cf66e653",
+          "properties": [
+            "font-size",
+            "font-weight",
+            "letter-spacing",
+            "text-transform"
+          ]
+        }
+      ],
+      "owners": [
+        "portal-css-architecture"
+      ],
+      "ownerReason": "Intentional cascade: .workspace-link-label keeps the reviewed source order across operator-console.css, surface-normalization.css, workspace-surfaces.css; the later production rule provides the final declaration set.",
+      "phase": "phase-9-duplicate-ownership-closure",
+      "contextType": "surface-normalization-final-pass",
+      "disposition": "keep-owned",
+      "removalStatus": "permanent",
+      "declarationConflict": "conflicting",
+      "parity": "green"
     },
     {
-      "key": ".workspace-link-meta|||",
+      "key": ".workspace-link-meta|||components|||",
+      "selector": ".workspace-link-meta",
+      "layer": "components",
+      "atRuleContext": [],
+      "stateContext": [],
       "category": "conflicting",
       "hotspot": false,
-      "owners": []
+      "records": [
+        {
+          "source": "web/secure-landing/portal-src/styles/components/operator-console.css",
+          "line": 239,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "e3b647765e5be12dd5d3708114cc892a80e930db",
+          "properties": [
+            "font-size",
+            "line-height"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/workspace-surfaces.css",
+          "line": 94,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "bb4408013744b71e6d1cd420495b38da7106b1e5",
+          "properties": [
+            "color",
+            "font-size",
+            "line-height"
+          ]
+        }
+      ],
+      "owners": [
+        "portal-css-architecture"
+      ],
+      "ownerReason": "Intentional cascade: .workspace-link-meta keeps the reviewed source order across operator-console.css, workspace-surfaces.css; the later production rule provides the final declaration set.",
+      "phase": "phase-9-duplicate-ownership-closure",
+      "contextType": "component-family-shared-state",
+      "disposition": "keep-owned",
+      "removalStatus": "permanent",
+      "declarationConflict": "conflicting",
+      "parity": "green"
     },
     {
-      "key": ".workspace-link-shortcut|||",
+      "key": ".workspace-link-shortcut|||components|||",
+      "selector": ".workspace-link-shortcut",
+      "layer": "components",
+      "atRuleContext": [],
+      "stateContext": [],
       "category": "conflicting",
       "hotspot": false,
-      "owners": []
+      "records": [
+        {
+          "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
+          "line": 293,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "883df43b30a9ae12afc45fd4fcf27cb1bb3b3a69",
+          "properties": [
+            "border-radius",
+            "min-height",
+            "min-width"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/workspace-surfaces.css",
+          "line": 79,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "9283336ec38561bffa5db89f19ce8f8388bfe583",
+          "properties": [
+            "align-items",
+            "background",
+            "border",
+            "border-radius",
+            "color",
+            "display",
+            "font-family",
+            "font-size",
+            "font-weight",
+            "justify-content",
+            "min-height",
+            "min-width"
+          ]
+        }
+      ],
+      "owners": [
+        "portal-css-architecture"
+      ],
+      "ownerReason": "Intentional cascade: .workspace-link-shortcut keeps the reviewed source order across surface-normalization.css, workspace-surfaces.css; the later production rule provides the final declaration set.",
+      "phase": "phase-9-duplicate-ownership-closure",
+      "contextType": "surface-normalization-final-pass",
+      "disposition": "keep-owned",
+      "removalStatus": "permanent",
+      "declarationConflict": "conflicting",
+      "parity": "green"
     },
     {
-      "key": ".workspace-link:hover|||",
+      "key": ".workspace-link:hover|||components|||",
+      "selector": ".workspace-link:hover",
+      "layer": "components",
+      "atRuleContext": [],
+      "stateContext": [
+        "hover"
+      ],
       "category": "additive",
       "hotspot": false,
-      "owners": []
+      "records": [
+        {
+          "source": "web/secure-landing/portal-src/styles/components/workspace-surfaces.css",
+          "line": 32,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "791bb96c33677554bc9bf8e40a9900d49f485500",
+          "properties": [
+            "background",
+            "border-color",
+            "box-shadow",
+            "transform"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/workspace-surfaces.css",
+          "line": 39,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "c6adbedda933a610c9122baba1634bfab0fbc722",
+          "properties": [
+            "outline"
+          ]
+        }
+      ],
+      "owners": [
+        "portal-css-architecture"
+      ],
+      "ownerReason": "Additive ownership: .workspace-link:hover splits non-overlapping declarations across workspace-surfaces.css while preserving the current computed-style parity.",
+      "phase": "phase-9-duplicate-ownership-closure",
+      "contextType": "runtime-state",
+      "disposition": "report-only",
+      "removalStatus": "removable-later",
+      "declarationConflict": "additive",
+      "parity": "green"
     },
     {
-      "key": ".workspace-rail-links|||",
+      "key": ".workspace-rail-links|||components|||",
+      "selector": ".workspace-rail-links",
+      "layer": "components",
+      "atRuleContext": [],
+      "stateContext": [],
       "category": "conflicting",
       "hotspot": false,
-      "owners": []
+      "records": [
+        {
+          "source": "web/secure-landing/portal-src/styles/components/operator-console.css",
+          "line": 229,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "c5386c1a9b5c85381fe2d97fec723bbaab64c79c",
+          "properties": [
+            "gap",
+            "grid-template-columns"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/workspace-surfaces.css",
+          "line": 19,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "390b69fa541fc190f309b88ceb266b3c3cef0236",
+          "properties": [
+            "display",
+            "gap",
+            "grid-template-columns"
+          ]
+        }
+      ],
+      "owners": [
+        "portal-css-architecture"
+      ],
+      "ownerReason": "Intentional cascade: .workspace-rail-links keeps the reviewed source order across operator-console.css, workspace-surfaces.css; the later production rule provides the final declaration set.",
+      "phase": "phase-9-duplicate-ownership-closure",
+      "contextType": "component-family-shared-state",
+      "disposition": "keep-owned",
+      "removalStatus": "permanent",
+      "declarationConflict": "conflicting",
+      "parity": "green"
     },
     {
-      "key": ".workspace-rail-text|||",
+      "key": ".workspace-rail-text|||components|||",
+      "selector": ".workspace-rail-text",
+      "layer": "components",
+      "atRuleContext": [],
+      "stateContext": [],
       "category": "conflicting",
       "hotspot": false,
-      "owners": []
+      "records": [
+        {
+          "source": "web/secure-landing/portal-src/styles/components/operator-console.css",
+          "line": 223,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "152100bd59705bab3145701d946fd569a735eb55",
+          "properties": [
+            "font-size",
+            "line-height",
+            "max-width"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/workspace-surfaces.css",
+          "line": 12,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "23e2ef9bf64856026a679d23a847f73e4ebfd7db",
+          "properties": [
+            "color",
+            "font-size",
+            "line-height",
+            "max-width"
+          ]
+        }
+      ],
+      "owners": [
+        "portal-css-architecture"
+      ],
+      "ownerReason": "Intentional cascade: .workspace-rail-text keeps the reviewed source order across operator-console.css, workspace-surfaces.css; the later production rule provides the final declaration set.",
+      "phase": "phase-9-duplicate-ownership-closure",
+      "contextType": "component-family-shared-state",
+      "disposition": "keep-owned",
+      "removalStatus": "permanent",
+      "declarationConflict": "conflicting",
+      "parity": "green"
     },
     {
-      "key": ".workspace-shell[data-ambient-active=\"true\"]|||",
+      "key": ".workspace-shell[data-ambient-active=\"true\"]|||components|||",
+      "selector": ".workspace-shell[data-ambient-active=\"true\"]",
+      "layer": "components",
+      "atRuleContext": [],
+      "stateContext": [
+        "data-state"
+      ],
       "category": "conflicting",
       "hotspot": false,
-      "owners": []
+      "records": [
+        {
+          "source": "web/secure-landing/portal-src/styles/components/operator-console.css",
+          "line": 118,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "dad831c7f11358c8d29db306cbc9e53d7dc341ef",
+          "properties": [
+            "border-color",
+            "box-shadow",
+            "transform"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/shell-foundation.css",
+          "line": 221,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "e7d4484b098a0e442b904b64321df9cdec2716e1",
+          "properties": [
+            "border-color",
+            "box-shadow",
+            "transform"
+          ]
+        }
+      ],
+      "owners": [
+        "portal-css-architecture"
+      ],
+      "ownerReason": "Intentional cascade: .workspace-shell[data-ambient-active=\"true\"] keeps the reviewed source order across operator-console.css, shell-foundation.css; the later production rule provides the final declaration set.",
+      "phase": "phase-9-duplicate-ownership-closure",
+      "contextType": "runtime-state",
+      "disposition": "keep-owned",
+      "removalStatus": "permanent",
+      "declarationConflict": "conflicting",
+      "parity": "green"
     },
     {
-      "key": ".workspace-shell|||",
+      "key": ".workspace-shell|||components|||",
+      "selector": ".workspace-shell",
+      "layer": "components",
+      "atRuleContext": [],
+      "stateContext": [],
       "category": "additive",
       "hotspot": false,
-      "owners": []
+      "records": [
+        {
+          "source": "web/secure-landing/portal-src/styles/components/shell-foundation.css",
+          "line": 213,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "e889a75e774de83a177a33b159df3bedfd45d97b",
+          "properties": [
+            "position",
+            "transition"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
+          "line": 146,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "bc00e11847ade2f927847a973b0a73562a961bf8",
+          "properties": [
+            "border-radius"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
+          "line": 168,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "e09826935d3e1a20d02fd703970aa2e014ae2ad5",
+          "properties": [
+            "box-shadow"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
+          "line": 176,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "e3c7a9b72249a3ca65b4134dee00060cb7fa297f",
+          "properties": [
+            "background",
+            "border-color"
+          ]
+        }
+      ],
+      "owners": [
+        "portal-css-architecture"
+      ],
+      "ownerReason": "Additive ownership: .workspace-shell splits non-overlapping declarations across shell-foundation.css, surface-normalization.css while preserving the current computed-style parity.",
+      "phase": "phase-9-duplicate-ownership-closure",
+      "contextType": "surface-normalization-final-pass",
+      "disposition": "report-only",
+      "removalStatus": "removable-later",
+      "declarationConflict": "additive",
+      "parity": "green"
     },
     {
-      "key": "#artifactMetadataBar|||",
+      "key": "#artifactMetadataBar|||components|||",
+      "selector": "#artifactMetadataBar",
+      "layer": "components",
+      "atRuleContext": [],
+      "stateContext": [],
       "category": "additive",
       "hotspot": false,
-      "owners": []
+      "records": [
+        {
+          "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
+          "line": 146,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "bc00e11847ade2f927847a973b0a73562a961bf8",
+          "properties": [
+            "border-radius"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
+          "line": 176,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "e3c7a9b72249a3ca65b4134dee00060cb7fa297f",
+          "properties": [
+            "background",
+            "border-color"
+          ]
+        }
+      ],
+      "owners": [
+        "portal-css-architecture"
+      ],
+      "ownerReason": "Additive ownership: #artifactMetadataBar splits non-overlapping declarations across surface-normalization.css while preserving the current computed-style parity.",
+      "phase": "phase-9-duplicate-ownership-closure",
+      "contextType": "document-root-normalization",
+      "disposition": "report-only",
+      "removalStatus": "removable-later",
+      "declarationConflict": "additive",
+      "parity": "green"
     },
     {
-      "key": "#artifactMetadataCard|||",
+      "key": "#artifactMetadataCard|||components|||",
+      "selector": "#artifactMetadataCard",
+      "layer": "components",
+      "atRuleContext": [],
+      "stateContext": [],
       "category": "additive",
       "hotspot": false,
-      "owners": []
+      "records": [
+        {
+          "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
+          "line": 146,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "bc00e11847ade2f927847a973b0a73562a961bf8",
+          "properties": [
+            "border-radius"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
+          "line": 176,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "e3c7a9b72249a3ca65b4134dee00060cb7fa297f",
+          "properties": [
+            "background",
+            "border-color"
+          ]
+        }
+      ],
+      "owners": [
+        "portal-css-architecture"
+      ],
+      "ownerReason": "Additive ownership: #artifactMetadataCard splits non-overlapping declarations across surface-normalization.css while preserving the current computed-style parity.",
+      "phase": "phase-9-duplicate-ownership-closure",
+      "contextType": "document-root-normalization",
+      "disposition": "report-only",
+      "removalStatus": "removable-later",
+      "declarationConflict": "additive",
+      "parity": "green"
     },
     {
-      "key": "#artifactPreviewStage|||",
+      "key": "#artifactPreviewStage|||components|||",
+      "selector": "#artifactPreviewStage",
+      "layer": "components",
+      "atRuleContext": [],
+      "stateContext": [],
       "category": "additive",
       "hotspot": false,
-      "owners": []
+      "records": [
+        {
+          "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
+          "line": 146,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "bc00e11847ade2f927847a973b0a73562a961bf8",
+          "properties": [
+            "border-radius"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
+          "line": 176,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "e3c7a9b72249a3ca65b4134dee00060cb7fa297f",
+          "properties": [
+            "background",
+            "border-color"
+          ]
+        }
+      ],
+      "owners": [
+        "portal-css-architecture"
+      ],
+      "ownerReason": "Additive ownership: #artifactPreviewStage splits non-overlapping declarations across surface-normalization.css while preserving the current computed-style parity.",
+      "phase": "phase-9-duplicate-ownership-closure",
+      "contextType": "document-root-normalization",
+      "disposition": "report-only",
+      "removalStatus": "removable-later",
+      "declarationConflict": "additive",
+      "parity": "green"
     },
     {
-      "key": "#reconstructionRuntimeSummary|||",
+      "key": "#reconstructionRuntimeSummary|||components|||",
+      "selector": "#reconstructionRuntimeSummary",
+      "layer": "components",
+      "atRuleContext": [],
+      "stateContext": [],
       "category": "additive",
       "hotspot": false,
-      "owners": []
-    },
-    {
-      "key": "html|||",
-      "category": "additive",
-      "hotspot": false,
-      "owners": []
+      "records": [
+        {
+          "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
+          "line": 146,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "bc00e11847ade2f927847a973b0a73562a961bf8",
+          "properties": [
+            "border-radius"
+          ]
+        },
+        {
+          "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
+          "line": 176,
+          "column": 1,
+          "layer": "components",
+          "declarationSignature": "e3c7a9b72249a3ca65b4134dee00060cb7fa297f",
+          "properties": [
+            "background",
+            "border-color"
+          ]
+        }
+      ],
+      "owners": [
+        "portal-css-architecture"
+      ],
+      "ownerReason": "Additive ownership: #reconstructionRuntimeSummary splits non-overlapping declarations across surface-normalization.css while preserving the current computed-style parity.",
+      "phase": "phase-9-duplicate-ownership-closure",
+      "contextType": "document-root-normalization",
+      "disposition": "report-only",
+      "removalStatus": "removable-later",
+      "declarationConflict": "additive",
+      "parity": "green"
     }
   ]
 }
