@@ -200,6 +200,26 @@ function runPhase10AdditiveFixtureFailure(fixture) {
   assert.fail("Phase 10 additive fixture unexpectedly passed");
 }
 
+function expectedHistoricalPhase10State(overrides = {}) {
+  return {
+    phase: "phase-10-css-additive-duplicate-consolidation",
+    additiveDuplicateContextCountBefore: 30,
+    additiveDuplicateContextCountAfter: 29,
+    safeCandidateCountBefore: 1,
+    safeCandidateCountAfter: 0,
+    consolidatedCandidateCount: 1,
+    deferredCandidateCount: 29,
+    conflictingDuplicateContextCount: 56,
+    unownedDuplicateContextCount: 0,
+    hotspotDuplicateContextCount: 0,
+    generatedPortalCssHashAfter: "fce12e29f1800375b5c34e1f0e1ebc9d3981ab1a6f731bea6a3e0e0d2212151e",
+    renderedPortalCssFingerprintAfter: "d72696ab972c",
+    sentinelStatePreserved: true,
+    parityBaselineChanged: false,
+    ...overrides
+  };
+}
+
 function runPhase11SurfaceFixture(fixture) {
   const tempDir = mkdtempSync(path.join(tmpdir(), "portal-phase11-surface-"));
   const fixturePath = path.join(tempDir, "phase11.json");
@@ -777,6 +797,20 @@ test("portal CSS Phase 10 additive fixtures classify safe and deferred candidate
     }),
     /phase10AdditiveConsolidationState is stale/
   );
+
+  for (const [field, value] of [
+    ["deferredCandidateCount", 28],
+    ["generatedPortalCssHashAfter", "stale-hash"],
+    ["renderedPortalCssFingerprintAfter", "stale-fingerprint"]
+  ]) {
+    assert.match(
+      runPhase10AdditiveFixtureFailure({
+        duplicates: [safeDuplicate],
+        historicalPhase10State: expectedHistoricalPhase10State({ [field]: value })
+      }),
+      new RegExp(`phase10AdditiveConsolidationState ${field} must remain historical`)
+    );
+  }
 });
 
 test("portal CSS Phase 11 surface fixtures constrain selector-list consolidation", () => {
@@ -1918,12 +1952,15 @@ test("portal CSS parity census forces feature states and canonical theme hooks",
   assert.match(validator, /portalState\.auth\.features\.reviewSurfaceDeferred = true/);
   assert.match(validator, /REVIEW_STATUS_TONES = \("ready", "warning", "error", "info"\)/);
   assert.match(validator, /document\.getElementById\('reviewStatusBanner'\)/);
+  assert.match(validator, /createPortalParityProbeGuard/);
   assert.match(validator, /rootClassSnapshot/);
-  assert.match(validator, /storageSnapshot/);
-  assert.match(validator, /bannerSnapshot/);
+  assert.match(validator, /storageSnapshots/);
+  assert.match(validator, /captureStorage\('tp_theme', 'tp_theme_version'\)/);
+  assert.match(validator, /captureNodeAndAncestors\(banner\)/);
+  assert.doesNotMatch(validator, /bannerSnapshot/);
   assert.match(validator, /current\.classList\.remove\('hidden'\)/);
   assert.match(validator, /banner\.dataset\.tone = tone/);
-  assert.match(validator, /finally \{\{\n    restore\(\);/);
+  assert.match(validator, /finally \{\{\n    guard\.restore\(\);/);
   assert.match(validator, /_validate_review_status_tone_states\(connection\)/);
   assert.match(validator, /_validate_overview_mobile_states\(connection\)/);
   assert.match(validator, /_validate_interaction_outline_states\(connection\)/);

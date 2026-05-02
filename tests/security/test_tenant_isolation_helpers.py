@@ -47,6 +47,26 @@ def test_tenant_manager_creates_tenant_directories_and_copies_default_policy(tmp
     assert default_policy.allowed_node_types == {"render"}
 
 
+def test_tenant_manager_default_policy_copies_are_isolated_between_tenants(tmp_path: Path) -> None:
+    default_policy = TenantPolicy(allowed_node_types={"render"})
+    manager = TenantManager(tmp_path / "workspaces", tmp_path / "cas", default_policy=default_policy)
+
+    manager.create_tenant("tenant_a")
+    manager.create_tenant("tenant_b")
+
+    policy_a = manager.get_policy("tenant_a")
+    policy_b = manager.get_policy("tenant_b")
+    assert policy_a is not None
+    assert policy_b is not None
+    assert policy_a is not policy_b
+
+    policy_a.allowed_node_types.add("composite")
+
+    assert policy_a.allowed_node_types == {"render", "composite"}
+    assert policy_b.allowed_node_types == {"render"}
+    assert default_policy.allowed_node_types == {"render"}
+
+
 def test_tenant_manager_rejects_duplicate_tenants(tmp_path: Path) -> None:
     manager = TenantManager(tmp_path / "workspaces", tmp_path / "cas")
     manager.create_tenant("tenant_a")

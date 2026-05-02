@@ -251,6 +251,29 @@ class TestFluxEnhancementNode:
 
         assert FluxEnhancementNode.CATEGORY == "Transformation Portal/Enhancement"
 
+    def test_execute_rejects_unknown_variant_before_image_conversion(self, monkeypatch):
+        """Unknown variant must fail before image/pipeline setup."""
+        from transformation_portal.comfyui.custom_nodes import FluxEnhancementNode
+
+        node = FluxEnhancementNode()
+
+        def _conversion_must_not_run(_image):
+            raise RuntimeError("image conversion should not run before variant validation")
+
+        monkeypatch.setattr(node, "_to_numpy", _conversion_must_not_run)
+
+        with pytest.raises(ValueError, match="Unknown variant") as exc_info:
+            node.execute(
+                image=np.zeros((2, 2, 3), dtype=np.float32),
+                strength=0.45,
+                num_steps=4,
+                guidance_scale=3.5,
+                variant="not_a_real_variant",
+            )
+
+        assert "dev" in str(exc_info.value)
+        assert "schnell" in str(exc_info.value)
+
 
 class TestSkyGANNode:
     """Tests for SkyGANNode."""

@@ -87,6 +87,20 @@ def _normalize_quaternions(quats):
     return (quats / norms).astype(np.float32)
 
 
+def _deterministic_gaussian_fields(num_gaussians=10, *, opacities=None):
+    """Return fixed valid Gaussian fields for boundary-condition tests."""
+    axis = np.linspace(0.0, 1.0, num_gaussians, dtype=np.float32)
+    if opacities is None:
+        opacities = np.full((num_gaussians, 1), 0.5, dtype=np.float32)
+    return {
+        "positions": np.column_stack((axis, axis + 1.0, axis + 2.0)).astype(np.float32),
+        "colors": np.tile(np.array([[0.25, 0.5, 0.75]], dtype=np.float32), (num_gaussians, 1)),
+        "scales": np.full((num_gaussians, 3), 0.05, dtype=np.float32),
+        "rotations": np.tile(np.array([[1.0, 0.0, 0.0, 0.0]], dtype=np.float32), (num_gaussians, 1)),
+        "opacities": opacities,
+    }
+
+
 class TestCameraParams:
     """Test CameraParams contract validation."""
 
@@ -340,19 +354,15 @@ class TestGaussianSplat:
                 opacities=np.random.rand(N, 1).astype(np.float32),
             )
 
-    def test_invalid_opacities_range_raises(self):
+    @pytest.mark.parametrize("bad_opacity", [-0.01, 1.01])
+    def test_invalid_opacities_range_raises(self, bad_opacity):
         """Test that out-of-range opacities are rejected."""
         N = 10
-        bad_opacities = np.full((N, 1), 1.5, dtype=np.float32)
+        bad_opacities = np.full((N, 1), bad_opacity, dtype=np.float32)
 
-        with pytest.raises(ValueError, match="\\[0, 1\\]"):
-            GaussianSplat(
-                positions=np.random.rand(N, 3).astype(np.float32),
-                colors=np.random.rand(N, 3).astype(np.float32),
-                scales=np.random.rand(N, 3).astype(np.float32) * 0.1 + 0.01,
-                rotations=_normalize_quaternions(np.random.rand(N, 4).astype(np.float32)),
-                opacities=bad_opacities,
-            )
+        for _ in range(5):
+            with pytest.raises(ValueError, match="\\[0, 1\\]"):
+                GaussianSplat(**_deterministic_gaussian_fields(N, opacities=bad_opacities))
 
 
 class TestReconstructionInput:

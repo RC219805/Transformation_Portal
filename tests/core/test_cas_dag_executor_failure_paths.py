@@ -387,6 +387,7 @@ def test_get_lock_sanitizes_cas_id_into_filename(tmp_path):
     # Sanitization must keep the file inside locks_dir.
     resolved = lock.lock_path.resolve()
     assert resolved.is_relative_to(executor.locks_dir.resolve())
+    assert resolved.parent == executor.locks_dir.resolve()
     # And the cas_id-derived suffix must not introduce a separator.
     name = lock.lock_path.name
     assert "/" not in name

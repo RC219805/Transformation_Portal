@@ -126,6 +126,23 @@ def test_dry_run_output_is_stable_and_sorted(tmp_path: Path) -> None:
     assert sources == sorted(sources)
 
 
+def test_claude_root_guidance_matches_root_file_policy(tmp_path: Path) -> None:
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+    _init_repo(repo_root)
+    _copy_repo_script(repo_root)
+
+    _write(repo_root / "README.md")
+    _write(repo_root / "CLAUDE.md")
+    _write(repo_root / "docs" / "README.md")
+    _track(repo_root, "README.md", "CLAUDE.md", "docs/README.md", "scripts/organize_docs.sh")
+
+    result = _run_organizer(repo_root)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "CLAUDE.md" not in result.stdout
+
+
 def test_classifier_uses_tokens_not_substrings_and_preserves_positive_routes(tmp_path: Path) -> None:
     repo_root = tmp_path / "repo"
     repo_root.mkdir()

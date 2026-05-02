@@ -13,6 +13,7 @@ Node Categories:
 
 import json
 import logging
+import math
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -92,6 +93,7 @@ class FluxEnhancementNode(BaseNode):
     """FLUX diffusion enhancement node."""
 
     CATEGORY = "Transformation Portal/Enhancement"
+    _VALID_VARIANTS = ("dev", "schnell")
 
     @classmethod
     def INPUT_TYPES(cls):
@@ -115,6 +117,28 @@ class FluxEnhancementNode(BaseNode):
     def RETURN_TYPES(cls):
         return ("IMAGE",)
 
+    @classmethod
+    def _validate_inputs(cls, strength: float, num_steps: int, guidance_scale: float, variant: str) -> None:
+        if variant not in cls._VALID_VARIANTS:
+            raise ValueError(f"Unknown variant {variant!r}; expected one of {list(cls._VALID_VARIANTS)}")
+        numeric_checks = (
+            ("strength", strength, 0.0, 1.0),
+            ("guidance_scale", guidance_scale, 1.0, 20.0),
+        )
+        for name, value, minimum, maximum in numeric_checks:
+            try:
+                numeric_value = float(value)
+            except (TypeError, ValueError) as exc:
+                raise ValueError(f"{name} must be numeric") from exc
+            if not math.isfinite(numeric_value) or numeric_value < minimum or numeric_value > maximum:
+                raise ValueError(f"{name} must be between {minimum} and {maximum}")
+        try:
+            step_count = int(num_steps)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("num_steps must be an integer") from exc
+        if step_count < 1 or step_count > 50:
+            raise ValueError("num_steps must be between 1 and 50")
+
     def execute(
         self,
         image: Any,
@@ -127,6 +151,8 @@ class FluxEnhancementNode(BaseNode):
         seed: int = -1,
         use_controlnet: bool = False,
     ) -> Tuple[Any]:
+        self._validate_inputs(strength=strength, num_steps=num_steps, guidance_scale=guidance_scale, variant=variant)
+
         from transformation_portal.diffusion import FLUXPipeline
 
         logger.info(f"Executing FLUX enhancement (variant={variant}, strength={strength})")
