@@ -161,6 +161,19 @@ class SkyGANNode(BaseNode):
 
     CATEGORY = "Transformation Portal/Atmospheric"
 
+    # Approximate hour-of-day for each named slot. Used to resolve the
+    # ComfyUI dropdown selection into the float hour expected by
+    # LocationPresets.get_sky_parameters(). Users can still override the
+    # derived sun_azimuth/sun_elevation via the optional inputs below.
+    _TIME_OF_DAY_HOURS: Dict[str, float] = {
+        "sunrise": 6.5,
+        "morning": 9.0,
+        "midday": 12.0,
+        "golden_hour": 17.0,
+        "sunset": 18.5,
+        "twilight": 19.5,
+    }
+
     @classmethod
     def INPUT_TYPES(cls):
         return {
@@ -208,11 +221,11 @@ class SkyGANNode(BaseNode):
         # Data Layer: Get presets
         presets = LocationPresets()
         location_preset = presets.get_atmospheric_parameters(location, season)
+        hour_of_day = self._TIME_OF_DAY_HOURS.get(time_of_day, 12.0)
         time_params = presets.get_sky_parameters(
             location=location,
             season=season,
-            time_of_day=17.5,  # approximate fallback
-            # Note: In real impl, map 'time_of_day' string to float hour
+            time_of_day=hour_of_day,
         )
 
         # Apply Overrides

@@ -288,6 +288,27 @@ class TestSkyGANNode:
 
         assert SkyGANNode.CATEGORY == "Transformation Portal/Atmospheric"
 
+    def test_time_of_day_mapping_covers_dropdown_choices(self):
+        """Each time_of_day dropdown choice resolves to a daylight hour."""
+        from transformation_portal.comfyui.custom_nodes import SkyGANNode
+
+        choices = SkyGANNode.INPUT_TYPES()["required"]["time_of_day"][0]
+        mapping = SkyGANNode._TIME_OF_DAY_HOURS
+
+        assert set(choices) == set(mapping.keys())
+        for label, hour in mapping.items():
+            assert 0.0 <= hour < 24.0, f"{label} -> {hour} out of range"
+
+        # Sanity: ordering matches a normal day progression
+        assert (
+            mapping["sunrise"]
+            < mapping["morning"]
+            < mapping["midday"]
+            < mapping["golden_hour"]
+            < mapping["sunset"]
+            < mapping["twilight"]
+        )
+
 
 class TestSceneAnalysisNode:
     """Tests for SceneAnalysisNode."""
