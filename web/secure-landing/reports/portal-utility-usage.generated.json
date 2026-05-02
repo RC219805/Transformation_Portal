@@ -1,7 +1,7 @@
 {
   "version": 1,
   "summary": {
-    "utilityCount": 418,
+    "utilityCount": 417,
     "compatHoldCount": 0,
     "deprecatedImported": false
   },
@@ -3684,18 +3684,6 @@
     },
     {
       "className": "pr-1",
-      "owner": "static",
-      "sources": [
-        "portal.html"
-      ],
-      "cssFile": "utilities.required.css",
-      "cssOwners": [
-        "web/secure-landing/portal-src/styles/utilities.required.css"
-      ],
-      "status": "covered"
-    },
-    {
-      "className": "pr-2",
       "owner": "static",
       "sources": [
         "portal.html"

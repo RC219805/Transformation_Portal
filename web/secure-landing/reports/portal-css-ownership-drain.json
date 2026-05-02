@@ -6,8 +6,8 @@
     "utilityLayerImportsBefore": 6,
     "utilityLayerImportsAfter": 3,
     "compatHoldCount": 0,
-    "overridesCompatRuleCount": 7,
-    "overridesCompatBytes": 3102,
+    "overridesCompatRuleCount": 6,
+    "overridesCompatBytes": 3027,
     "drainedSelectorCount": 344
   },
   "moves": [
@@ -3232,16 +3232,6 @@
       "parity": "green"
     },
     {
-      "selector": ".portal-shell-card--queue .custom-scrollbar",
-      "from": "overrides.compat.css (Phase 5 selector)",
-      "fromLayer": "overrides",
-      "to": "overrides.compat.css",
-      "toLayer": "overrides",
-      "classification": "compatibility-final-order",
-      "reason": "Phase 6 semantic ownership: replaces ID-specific selector with additive semantic class hook (markup unchanged); rule remains in overrides layer because moving to components would let utilities-layer cascade win; removable in phase-7-utility-markup-migration",
-      "parity": "green"
-    },
-    {
       "selector": ".portal-action-control",
       "from": "overrides.compat.css (Phase 5 selector)",
       "fromLayer": "overrides",
@@ -3349,6 +3339,16 @@
       "toLayer": "overrides",
       "classification": "compatibility-final-order",
       "reason": "Phase 6 semantic ownership: replaces ID-specific selector with additive semantic class hook (markup unchanged); rule remains in overrides layer because moving to components would let utilities-layer cascade win; removable in phase-7-utility-markup-migration",
+      "parity": "green"
+    },
+    {
+      "selector": ".portal-shell-card--queue .custom-scrollbar",
+      "from": "overrides.compat.css",
+      "fromLayer": "overrides",
+      "to": "components/operator-console.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "Phase 7.C: dropped pr-2 utility from the queue's .custom-scrollbar markup; replaced the Phase-6 mobile override (padding-right: 0) with a single component-layer rule scoped to @media (min-width: 768px) that restores 0.5rem padding-right at desktop. Mobile gets browser-default 0.",
       "parity": "green"
     }
   ]

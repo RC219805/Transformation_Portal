@@ -2543,14 +2543,6 @@
       "cssFile": "utilities.required.css",
       "reason": "observed in portal static markup or generated template output"
     },
-    "pr-2": {
-      "owner": "static",
-      "sources": [
-        "portal.html"
-      ],
-      "cssFile": "utilities.required.css",
-      "reason": "observed in portal static markup or generated template output"
-    },
     "pt-4": {
       "owner": "static",
       "sources": [

@@ -32,10 +32,6 @@
   .artifact-review-meta {
     padding: 0.95rem;
   }
-
-  .portal-shell-card--queue .custom-scrollbar {
-    padding-right: 0;
-  }
 }
 
 /* portal-override-owner: compatibility-final-order
