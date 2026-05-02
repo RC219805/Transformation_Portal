@@ -3375,21 +3375,203 @@
   "phase9DuplicateState": {
     "phase": "phase-9-duplicate-ownership-closure",
     "baselinePath": "web/secure-landing/portal-src/styles/architecture-baseline.json",
-    "baselineSha256": "2aef42662fb9cf8dbe1d78497bc6632ac9003af7b00d58ec1623bee96c580305",
+    "baselineSha256": "53f253a772aa2d9faed5ad1e666bd758d0b787371342a7b7e5727e41eda90a43",
     "duplicateContextCountBefore": 87,
-    "duplicateContextCountAfter": 86,
-    "duplicateContextCount": 86,
-    "ownedDuplicateContextCount": 86,
+    "duplicateContextCountAfter": 85,
+    "duplicateContextCount": 85,
+    "ownedDuplicateContextCount": 85,
     "unownedDuplicateContextCount": 0,
     "hotspotDuplicateContextCount": 0,
     "consolidatedDuplicateContextCount": 0,
-    "reclassifiedDuplicateContextCount": 1,
+    "reclassifiedDuplicateContextCount": 2,
     "conflictingDuplicateContextCount": 56,
-    "additiveDuplicateContextCount": 30,
+    "additiveDuplicateContextCount": 29,
     "identicalDuplicateContextCount": 0,
     "contextualDuplicateContextCount": 0,
     "removedRawBytes": 0,
     "removedGzipBytes": 0,
+    "sentinelStatePreserved": true,
+    "parityBaselineChanged": false
+  },
+  "phase10AdditiveConsolidationState": {
+    "phase": "phase-10-css-additive-duplicate-consolidation",
+    "baselinePath": "web/secure-landing/portal-src/styles/architecture-baseline.json",
+    "baselineSha256": "53f253a772aa2d9faed5ad1e666bd758d0b787371342a7b7e5727e41eda90a43",
+    "additiveDuplicateContextCountBefore": 30,
+    "additiveDuplicateContextCountAfter": 29,
+    "safeCandidateCountBefore": 1,
+    "safeCandidateCountAfter": 0,
+    "consolidatedCandidateCount": 1,
+    "deferredCandidateCount": 29,
+    "deferredReasonCounts": {
+      "coverage-ambiguous": 3,
+      "custom-property-order-sensitive": 2,
+      "selector-list-ambiguous": 8,
+      "source-order-sensitive": 16
+    },
+    "deferredCandidates": [
+      {
+        "key": ".ambient-orb|||components|||",
+        "selector": ".ambient-orb",
+        "unsafeReason": "source-order-sensitive"
+      },
+      {
+        "key": ".ambient-ring|||components|||",
+        "selector": ".ambient-ring",
+        "unsafeReason": "source-order-sensitive"
+      },
+      {
+        "key": ".build-step-tab:hover|||components|||",
+        "selector": ".build-step-tab:hover",
+        "unsafeReason": "source-order-sensitive"
+      },
+      {
+        "key": ".dark .review-status-banner|||components|||",
+        "selector": ".dark .review-status-banner",
+        "unsafeReason": "source-order-sensitive"
+      },
+      {
+        "key": ".dark .surface-loading|||components|||",
+        "selector": ".dark .surface-loading",
+        "unsafeReason": "source-order-sensitive"
+      },
+      {
+        "key": ".dispatch-tool-btn:hover|||components|||",
+        "selector": ".dispatch-tool-btn:hover",
+        "unsafeReason": "source-order-sensitive"
+      },
+      {
+        "key": ".focus\\:ring-indigo-500:focus|||utilities|||",
+        "selector": ".focus\\:ring-indigo-500:focus",
+        "unsafeReason": "custom-property-order-sensitive"
+      },
+      {
+        "key": ".overview-actions|||components|||@media (max-width: 767px)",
+        "selector": ".overview-actions",
+        "unsafeReason": "source-order-sensitive"
+      },
+      {
+        "key": ".peer:focus-visible ~ .peer-focus-visible\\:ring-indigo-500|||utilities|||",
+        "selector": ".peer:focus-visible ~ .peer-focus-visible\\:ring-indigo-500",
+        "unsafeReason": "custom-property-order-sensitive"
+      },
+      {
+        "key": ".review-compare-summary|||components|||",
+        "selector": ".review-compare-summary",
+        "unsafeReason": "selector-list-ambiguous"
+      },
+      {
+        "key": ".review-provenance-item|||components|||",
+        "selector": ".review-provenance-item",
+        "unsafeReason": "coverage-ambiguous"
+      },
+      {
+        "key": ".review-provenance-label|||components|||",
+        "selector": ".review-provenance-label",
+        "unsafeReason": "source-order-sensitive"
+      },
+      {
+        "key": ".review-status-banner[data-tone=\"error\"]|||components|||",
+        "selector": ".review-status-banner[data-tone=\"error\"]",
+        "unsafeReason": "selector-list-ambiguous"
+      },
+      {
+        "key": ".review-status-banner[data-tone=\"info\"]|||components|||",
+        "selector": ".review-status-banner[data-tone=\"info\"]",
+        "unsafeReason": "source-order-sensitive"
+      },
+      {
+        "key": ".review-status-banner[data-tone=\"ready\"]|||components|||",
+        "selector": ".review-status-banner[data-tone=\"ready\"]",
+        "unsafeReason": "selector-list-ambiguous"
+      },
+      {
+        "key": ".review-status-banner[data-tone=\"warning\"]|||components|||",
+        "selector": ".review-status-banner[data-tone=\"warning\"]",
+        "unsafeReason": "selector-list-ambiguous"
+      },
+      {
+        "key": ".review-status-banner|||components|||",
+        "selector": ".review-status-banner",
+        "unsafeReason": "coverage-ambiguous"
+      },
+      {
+        "key": ".shell-noise|||components|||",
+        "selector": ".shell-noise",
+        "unsafeReason": "source-order-sensitive"
+      },
+      {
+        "key": ".skeleton-block|||components|||",
+        "selector": ".skeleton-block",
+        "unsafeReason": "source-order-sensitive"
+      },
+      {
+        "key": ".skeleton-line|||components|||",
+        "selector": ".skeleton-line",
+        "unsafeReason": "source-order-sensitive"
+      },
+      {
+        "key": ".skeleton-pill|||components|||",
+        "selector": ".skeleton-pill",
+        "unsafeReason": "source-order-sensitive"
+      },
+      {
+        "key": ".surface-loading::after|||components|||",
+        "selector": ".surface-loading::after",
+        "unsafeReason": "source-order-sensitive"
+      },
+      {
+        "key": ".surface-loading|||components|||",
+        "selector": ".surface-loading",
+        "unsafeReason": "source-order-sensitive"
+      },
+      {
+        "key": ".workspace-link:hover|||components|||",
+        "selector": ".workspace-link:hover",
+        "unsafeReason": "source-order-sensitive"
+      },
+      {
+        "key": ".workspace-shell|||components|||",
+        "selector": ".workspace-shell",
+        "unsafeReason": "coverage-ambiguous"
+      },
+      {
+        "key": "#artifactMetadataBar|||components|||",
+        "selector": "#artifactMetadataBar",
+        "unsafeReason": "selector-list-ambiguous"
+      },
+      {
+        "key": "#artifactMetadataCard|||components|||",
+        "selector": "#artifactMetadataCard",
+        "unsafeReason": "selector-list-ambiguous"
+      },
+      {
+        "key": "#artifactPreviewStage|||components|||",
+        "selector": "#artifactPreviewStage",
+        "unsafeReason": "selector-list-ambiguous"
+      },
+      {
+        "key": "#reconstructionRuntimeSummary|||components|||",
+        "selector": "#reconstructionRuntimeSummary",
+        "unsafeReason": "selector-list-ambiguous"
+      }
+    ],
+    "conflictingDuplicateContextCount": 56,
+    "ownedDuplicateContextCount": 85,
+    "unownedDuplicateContextCount": 0,
+    "hotspotDuplicateContextCount": 0,
+    "removedRawBytes": 0,
+    "removedGzipBytes": 0,
+    "generatedRawBytesBefore": 80547,
+    "generatedRawBytesAfter": 80599,
+    "generatedRawByteDelta": 52,
+    "generatedGzipBytesBefore": 15720,
+    "generatedGzipBytesAfter": 15721,
+    "generatedGzipByteDelta": 1,
+    "generatedPortalCssHashBefore": "c4288e656c797f547ca6d89c1096e79fa34435782f0aaaf3be80eb1bb0561471",
+    "generatedPortalCssHashAfter": "fce12e29f1800375b5c34e1f0e1ebc9d3981ab1a6f731bea6a3e0e0d2212151e",
+    "renderedPortalCssFingerprintBefore": "847cbddecbf7",
+    "renderedPortalCssFingerprintAfter": "d72696ab972c",
     "sentinelStatePreserved": true,
     "parityBaselineChanged": false
   }
