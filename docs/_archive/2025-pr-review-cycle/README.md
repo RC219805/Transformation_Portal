@@ -6,7 +6,7 @@ This directory holds historical PR-review artifacts from a one-time consolidatio
 
 | File | Original date | Scope |
 |---|---|---|
-| `BUG_REPORT_CODE_REVIEW.md` | 2025-01-XX | Full-diff review (~12,263 lines) covering reformatting + behavioral changes + new features across 14 source files and 4 test files. |
+| `BUG_REPORT_CODE_REVIEW.md` | January 2025 (day unknown) | Full-diff review (~12,263 lines) covering reformatting + behavioral changes + new features across 14 source files and 4 test files. |
 | `PR_ACTIONABLE_FIXES.md` | 2025-10-31 | Per-PR actionable issue list compiled by Copilot Coding Agent. |
 | `PR_CONSOLIDATION_ANALYSIS.md` | 2025-10-31 | Analysis of 5 open/draft PRs for consolidation. |
 | `PR_REVIEW_SUMMARY.md` | 2025-10-31 | Summary report for the consolidation cycle (status: ✅ COMPLETE at time of writing). |

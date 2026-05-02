@@ -769,15 +769,17 @@ raise NotImplementedError(f"Backend {self.backend} not implemented")
 
 ---
 
-### 4.2 PR #98 Action Items
+### 4.2 PR #98 Action Items — ✅ ARCHIVED 2026-03-14
 
-**Status:** ✅ OBSOLETE (PR MERGED)
+**Status:** ✅ OBSOLETE (PR MERGED) and ✅ ARCHIVED
 **Priority:** N/A
-**Action:** Archive tracking documents
+**Action:** Archive tracking documents — done
 
-**Location:** `docs/pr_reports/PR98_ACTION_ITEMS.md` and `docs/development/pr/PR98_ACTION_ITEMS.md`
+**Original locations** *(both paths archived; canonical copies are at the archive location below)*:
+- ~~`docs/pr_reports/PR98_ACTION_ITEMS.md`~~ → `docs/_archive/2026-03-legacy-prs/`
+- ~~`docs/development/pr/PR98_ACTION_ITEMS.md`~~ → `docs/_archive/2026-03-legacy-prs/` (redirect stub also deleted 2026-05-01)
 
-Multiple TODO items:
+Multiple TODO items (resolved with PR archival):
 - Line 52: Mark PR as Ready for Review
 - Line 65: Request Review
 - Line 82: Unblock CI
@@ -785,9 +787,7 @@ Multiple TODO items:
 
 **Context:**
 - PR #98 merged and deployed
-- Tracking documents no longer relevant
-
-**Recommendation:** Move to `archive/pr_reports/` or delete
+- Tracking documents no longer relevant; both copies archived
 
 ---
 
@@ -1252,9 +1252,9 @@ pytestmark = pytest.mark.skipif(not TORCH_AVAILABLE, reason="torch required for 
 
 **Items for Archive/Removal:**
 
-1. **PR #98 Action Items**
-   - `docs/pr_reports/PR98_ACTION_ITEMS.md`
-   - `docs/development/pr/PR98_ACTION_ITEMS.md`
+1. **PR #98 Action Items** — ✅ RESOLVED 2026-03-14
+   - ~~`docs/pr_reports/PR98_ACTION_ITEMS.md`~~ → archived to `docs/_archive/2026-03-legacy-prs/`
+   - ~~`docs/development/pr/PR98_ACTION_ITEMS.md`~~ → archived to `docs/_archive/2026-03-legacy-prs/`; redirect stub additionally deleted 2026-05-01
    - Reason: PR merged and deployed
 
 2. **Binary Cleanup TODOs**
@@ -1421,9 +1421,9 @@ pytestmark = pytest.mark.skipif(not TORCH_AVAILABLE, reason="torch required for 
    - ✅ No active imports in src/ (verified)
    - Update CHANGELOG.md with archival note
 
-2. **Archive Obsolete PR Tracking Docs** (30min)
-   - Move `docs/pr_reports/PR98_ACTION_ITEMS.md` → `archive/`
-   - Move `docs/development/pr/PR98_ACTION_ITEMS.md` → `archive/`
+2. ~~**Archive Obsolete PR Tracking Docs** (30min)~~ ✅ DONE 2026-03-14
+   - ✅ Moved `docs/pr_reports/PR98_ACTION_ITEMS.md` → `docs/_archive/2026-03-legacy-prs/`
+   - ✅ Moved `docs/development/pr/PR98_ACTION_ITEMS.md` → `docs/_archive/2026-03-legacy-prs/`; redirect stub additionally deleted 2026-05-01
 
 3. **Update Binary Cleanup Docs** (30min)
    - Remove TODOs from `docs/fixes/BINARY_FILE_BEST_PRACTICES.md`
