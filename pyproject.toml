@@ -215,14 +215,6 @@ omit = [
     "*/venv/*",
     "*/venv_py311/*",
     "*/.venv/*",
-    # Zero-coverage packages excluded from the global floor until they grow a
-    # smoke suite. Tracked in docs/testing/test_coverage_improvement_plan.md.
-    # Re-include a package by deleting its line here and adding a tests/<pkg>/ suite.
-    "*/transformation_portal/depth_intelligence/*",
-    "*/transformation_portal/diffusion/*",
-    "*/transformation_portal/dwm/*",
-    "*/transformation_portal/interfaces/*",
-    "*/transformation_portal/pfm/*",
 ]
 branch = true
 parallel = true

@@ -394,18 +394,49 @@ def test_get_lock_sanitizes_cas_id_into_filename(tmp_path):
 
 
 def test_get_lock_with_separator_in_stage_name_stays_under_locks_dir(tmp_path):
-    """Regression / behavior contract: even when stage_name happens to contain
-    a slash, the resolved lock path must remain under ``locks_dir``. This is
-    what protects the executor from arbitrary write locations regardless of
-    the upstream stage-name source."""
+    """Regression: a slash-bearing stage_name must not carve a sub-directory
+    out of ``locks_dir``. The sanitizer replaces ``/`` with ``_`` so the lock
+    file lands as a regular file directly inside ``locks_dir``."""
     store = ArtifactStore(tmp_path / "cas")
     executor = CASDAGExecutor(store, tmp_path / "cache", CASDAGConfig())
 
     lock = executor._get_lock("stage_with/slash", "sha256:" + "a" * 64)
     resolved = lock.lock_path.resolve()
-    # The full resolved path must stay inside locks_dir, even if the
-    # stage_name carved out a sub-directory under it.
+    # The full resolved path must stay inside locks_dir, AND must be a direct
+    # child of it (no carved-out sub-directory).
     assert resolved.is_relative_to(executor.locks_dir.resolve())
+    assert resolved.parent == executor.locks_dir.resolve()
+
+
+def test_get_lock_rejects_dotdot_traversal_in_stage_name(tmp_path):
+    """Regression: ``stage_name=".."`` (or any ``..``-prefixed value) must not
+    let the lock path escape ``locks_dir``. Before the sanitizer was added,
+    ``_get_lock("../escape", ...)`` resolved to a sibling of ``locks_dir``."""
+    store = ArtifactStore(tmp_path / "cas")
+    executor = CASDAGExecutor(store, tmp_path / "cache", CASDAGConfig())
+
+    lock = executor._get_lock("../escape", "sha256:" + "a" * 64)
+    resolved = lock.lock_path.resolve()
+    assert resolved.is_relative_to(
+        executor.locks_dir.resolve()
+    ), f"lock escaped locks_dir: {resolved} not under {executor.locks_dir.resolve()}"
+    assert resolved.parent == executor.locks_dir.resolve()
+
+
+def test_sanitize_stage_name_handles_traversal_aliases():
+    """Lock the sanitizer's contract: every traversal-style alias produces a
+    name that cannot navigate the directory tree."""
+    sanitize = CASDAGExecutor._sanitize_stage_name_for_filename
+    # Pure traversal aliases are turned into names that start with ``_``,
+    # which Path will treat as an ordinary segment.
+    for raw in ("", ".", "..", "../escape", "../../etc/passwd"):
+        assert not sanitize(raw).startswith("..")
+        assert "/" not in sanitize(raw)
+        assert "\\" not in sanitize(raw)
+    # Normal identifier-shaped names pass through unchanged.
+    assert sanitize("stage1") == "stage1"
+    assert sanitize("depth.estimate") == "depth.estimate"
+    assert sanitize("upscale-x4") == "upscale-x4"
 
 
 def test_cache_path_is_partitioned_by_id_prefix(tmp_path):

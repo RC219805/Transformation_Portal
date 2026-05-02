@@ -124,19 +124,19 @@ coverage report --fail-under=25
 - [x] `tests/security/test_torch_security_helpers.py`
 - [x] CI lint banning `assert True` in `tests/` (`scripts/ci/check_no_tautological_tests.py`)
 
-### Coverage Source Pruning
+### Zero-Coverage Production Packages (ratchet targets)
 
-The following packages are excluded via `[tool.coverage.run].omit` (the
-`source` setting still resolves to all of `src/`). They have no direct tests
-today and were dragging the global floor down with no tested behavior.
-Re-include a package by removing its `omit` entry from `pyproject.toml` and
-adding a `tests/<pkg>/` suite:
+The following packages currently have no direct tests and contribute 0% to
+the global coverage floor. They are NOT excluded from coverage measurement —
+keeping them in the source set means the metric stays honest, and any new
+file added to one of these packages will lower the global percentage until
+it is tested. Each is a candidate for a smoke suite under `tests/<pkg>/`:
 
-- `depth_intelligence/`
-- `diffusion/`
-- `dwm/`
-- `interfaces/`
-- `pfm/`
+- `depth_intelligence/` (1 src file, ~370 LOC)
+- `diffusion/` (3 src files, ~1,410 LOC)
+- `dwm/` (3 src files, ~110 LOC)
+- `interfaces/` (5 src files, ~792 LOC)
+- `pfm/` (4 src files, ~1,193 LOC)
 
 ### Phase 2 — Business-Critical Orchestration Coverage
 

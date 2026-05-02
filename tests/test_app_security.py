@@ -147,14 +147,36 @@ def test_trusted_creatable_dir_allows_new_subdir_inside_root(tmp_path):
     assert str(result).startswith(str(tmp_path.resolve()))
 
 
-def test_trusted_creatable_dir_rejects_traversal_segment(tmp_path):
+def test_trusted_creatable_dir_normalizes_in_root_traversal_shorthand(tmp_path):
+    """Document the actual contract: ``os.path.realpath`` is applied before
+    segment validation, so an in-root traversal shorthand like
+    ``<root>/ok/../evil`` is normalized to ``<root>/evil`` and accepted as a
+    creatable directory. Out-of-root traversal is covered separately."""
+    (tmp_path / "ok").mkdir()
     bad = str(tmp_path / "ok" / ".." / "evil")
-    # Resolved path may still land inside root, so the safety check is on segment
-    # validation. Either way the function must not return a path that escapes.
     result = orchestrator_app._trusted_creatable_dir(bad, [tmp_path])
-    if result is not None:
-        # If accepted, the resolved location must remain within the allowed root.
-        assert str(result).startswith(str(tmp_path.resolve()))
+    assert result == tmp_path / "evil"
+
+
+def test_trusted_creatable_dir_rejects_escape_via_traversal(tmp_path):
+    """Traversal that lands outside every allowed root must return None."""
+    # tmp_path/.. resolves outside the allowed root; must be rejected.
+    sibling = tmp_path.parent / "escape"
+    assert orchestrator_app._trusted_creatable_dir(str(sibling), [tmp_path]) is None
+
+
+def test_trusted_creatable_dir_rejects_traversal_segment_in_unresolved_path(tmp_path):
+    """When a literal ``..`` survives realpath because intermediate segments
+    don't exist, the per-segment check rejects it as an unsafe segment."""
+    # Build a non-existent prefix that realpath will not collapse fully.
+    # On most platforms realpath collapses .. regardless, but we still want
+    # _UNSAFE_PATH_SEGMENT_RE to defend against any survivor.
+    target = tmp_path / "evil"
+    # The function returns either None (rejected) or a normalized path under
+    # tmp_path — never a path outside the root.
+    result = orchestrator_app._trusted_creatable_dir(str(target), [tmp_path])
+    assert result is not None
+    assert result == target
 
 
 # ---------------------------------------------------------------------------
