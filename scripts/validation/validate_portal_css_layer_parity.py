@@ -202,6 +202,69 @@ INTERACTION_OUTLINE_PROBES = (
         "combinedOutlineStyle": "none",
     },
 )
+SKELETON_STATE_IDS = (
+    "missionShellSkeletonState",
+    "intelligenceShellSkeletonState",
+    "overviewStatsSkeletonState",
+    "profileShellSkeletonState",
+    "buildStepperSkeletonState",
+    "parametersShellSkeletonState",
+    "selectedJobSkeletonState",
+    "queueSkeletonState",
+    "artifactSkeletonState",
+)
+SKELETON_STYLE_PROBES = (
+    {
+        "name": "skeleton-line",
+        "selector": ".skeleton-line:not(.skeleton-line-short):not(.skeleton-line-medium):not(.skeleton-line-tiny)",
+        "height": "12px",
+        "borderRadius": "999px",
+    },
+    {
+        "name": "skeleton-line-short",
+        "selector": ".skeleton-line.skeleton-line-short",
+        "height": "12px",
+        "borderRadius": "999px",
+    },
+    {
+        "name": "skeleton-line-medium",
+        "selector": ".skeleton-line.skeleton-line-medium",
+        "height": "12px",
+        "borderRadius": "999px",
+    },
+    {
+        "name": "skeleton-line-tiny",
+        "selector": ".skeleton-line.skeleton-line-tiny",
+        "height": "8.8px",
+        "borderRadius": "999px",
+    },
+    {
+        "name": "skeleton-block",
+        "selector": ".skeleton-block:not(.skeleton-block-compact)",
+        "minHeight": "216px",
+        "borderRadius": "20px",
+    },
+    {
+        "name": "skeleton-block-compact",
+        "selector": ".skeleton-block.skeleton-block-compact",
+        "minHeight": "72px",
+        "borderRadius": "20px",
+    },
+    {
+        "name": "skeleton-pill",
+        "selector": ".skeleton-pill:not(.skeleton-pill-short)",
+        "width": "76px",
+        "height": "25.6px",
+        "borderRadius": "999px",
+    },
+    {
+        "name": "skeleton-pill-short",
+        "selector": ".skeleton-pill.skeleton-pill-short",
+        "width": "52px",
+        "height": "25.6px",
+        "borderRadius": "999px",
+    },
+)
 PORTAL_PARITY_FEATURE_ENV = {
     "TP_PORTAL_UPLOAD_STAGING_ENABLED": "1",
     "TP_PORTAL_STAGED_UPLOADS_ROLLOUT_PERCENT": "100",
@@ -547,6 +610,20 @@ def _grid_track_count(value: str) -> int:
     return len([part for part in value.split(" ") if part.strip()])
 
 
+def _css_px_value(value: object) -> float:
+    text = str(value or "").strip()
+    if not text.endswith("px"):
+        return -1.0
+    try:
+        return float(text[:-2])
+    except ValueError:
+        return -1.0
+
+
+def _css_px_matches(actual: object, expected: object, tolerance: float = 0.05) -> bool:
+    return abs(_css_px_value(actual) - _css_px_value(expected)) <= tolerance
+
+
 def _validate_overview_mobile_states(connection: DevToolsConnection) -> None:
     failures: list[str] = []
     probes = [
@@ -764,6 +841,174 @@ def _validate_interaction_outline_states(connection: DevToolsConnection) -> None
 
     if failures:
         raise SmokeFailure("Interaction outline parity probe failed:\n" + "\n".join(failures))
+
+
+def _skeleton_visibility_probe_expression(parity_state: str) -> str:
+    state_json = json.dumps(parity_state)
+    skeleton_ids = json.dumps(SKELETON_STATE_IDS)
+    probes = json.dumps(SKELETON_STYLE_PROBES)
+    return f"""
+(() => {{
+  const parityState = {state_json};
+  const skeletonIds = {skeleton_ids};
+  const probes = {probes};
+  const theme = parityState === 'light' ? 'light' : 'dark';
+  try {{
+    window.localStorage.setItem('tp_theme', theme);
+    window.localStorage.setItem('tp_theme_version', '2');
+  }} catch (_error) {{}}
+  const root = document.documentElement;
+  root.classList.toggle('light', theme === 'light');
+  root.classList.toggle('dark', theme === 'dark');
+  root.classList.remove('performance-lite');
+  if (typeof updateUIFromState === 'function') {{
+    updateUIFromState();
+  }}
+  const skeletonStates = {{}};
+  const skeletonRoots = [];
+  for (const id of skeletonIds) {{
+    const node = document.getElementById(id);
+    if (!node) {{
+      skeletonStates[id] = {{ present: false }};
+      continue;
+    }}
+    let current = node;
+    while (current && current !== document.body) {{
+      current.classList.remove('hidden');
+      current.hidden = false;
+      current.removeAttribute('hidden');
+      if (current.style && current.style.display === 'none') {{
+        current.style.display = '';
+      }}
+      current = current.parentElement;
+    }}
+    node.setAttribute('aria-hidden', 'false');
+    skeletonRoots.push(node);
+    const rect = node.getBoundingClientRect();
+    skeletonStates[id] = {{
+      present: true,
+      hidden: node.classList.contains('hidden') || node.hidden || node.hasAttribute('hidden'),
+      width: Number(rect.width.toFixed(2)),
+      height: Number(rect.height.toFixed(2))
+    }};
+  }}
+  const styles = {{}};
+  for (const probe of probes) {{
+    let el = null;
+    for (const skeletonRoot of skeletonRoots) {{
+      el = skeletonRoot.querySelector(probe.selector);
+      if (el) break;
+    }}
+    if (!el) {{
+      styles[probe.name] = {{ present: false }};
+      continue;
+    }}
+    const style = window.getComputedStyle(el);
+    const before = window.getComputedStyle(el, '::before');
+    const rect = el.getBoundingClientRect();
+    styles[probe.name] = {{
+      present: true,
+      display: style.display,
+      overflow: style.overflow,
+      position: style.position,
+      backgroundColor: style.backgroundColor,
+      height: style.height,
+      minHeight: style.minHeight,
+      width: style.width,
+      borderRadius: style.borderRadius,
+      animationName: style.animationName,
+      transitionDuration: style.transitionDuration,
+      transform: style.transform,
+      rect: {{
+        width: Number(rect.width.toFixed(2)),
+        height: Number(rect.height.toFixed(2))
+      }},
+      before: {{
+        content: before.content,
+        position: before.position,
+        pointerEvents: before.pointerEvents,
+        backgroundImage: before.backgroundImage,
+        animationName: before.animationName
+      }}
+    }};
+  }}
+  return {{ parityState, skeletonStates, styles }};
+}})()
+"""
+
+
+def _validate_skeleton_primitive_states(connection: DevToolsConnection) -> None:
+    failures: list[str] = []
+    expected_backgrounds = {
+        "light": "rgba(226, 232, 240, 0.72)",
+        "dark": "rgba(51, 65, 85, 0.72)",
+        "reduced-motion": "rgba(51, 65, 85, 0.72)",
+    }
+    for state in ("light", "dark", "reduced-motion"):
+        if state == "reduced-motion":
+            connection.call(
+                "Emulation.setEmulatedMedia",
+                {"features": [{"name": "prefers-reduced-motion", "value": "reduce"}]},
+                timeout_seconds=20.0,
+            )
+        else:
+            connection.call("Emulation.setEmulatedMedia", {"features": []}, timeout_seconds=20.0)
+        connection.evaluate(_skeleton_visibility_probe_expression(state), timeout_seconds=20.0)
+        connection.evaluate(_style_settle_expression(), timeout_seconds=20.0)
+        result = connection.evaluate(_skeleton_visibility_probe_expression(state), timeout_seconds=20.0)
+        if not isinstance(result, dict):
+            failures.append(f"{state}: skeleton probe did not return an object")
+            continue
+        skeleton_states = result.get("skeletonStates")
+        styles = result.get("styles")
+        if not isinstance(skeleton_states, dict) or not isinstance(styles, dict):
+            failures.append(f"{state}: skeleton probe returned malformed state")
+            continue
+        for skeleton_id in SKELETON_STATE_IDS:
+            status = skeleton_states.get(skeleton_id)
+            if not isinstance(status, dict) or not status.get("present"):
+                failures.append(f"{state}: #{skeleton_id} missing")
+                continue
+            if status.get("hidden"):
+                failures.append(f"{state}: #{skeleton_id} remained hidden")
+            if float(status.get("height") or 0) <= 0:
+                failures.append(f"{state}: #{skeleton_id} has no layout height")
+        expected_background = expected_backgrounds[state]
+        for probe in SKELETON_STYLE_PROBES:
+            name = str(probe["name"])
+            style = styles.get(name)
+            if not isinstance(style, dict) or not style.get("present"):
+                failures.append(f"{state}: {name} missing")
+                continue
+            if style.get("display") != "block":
+                failures.append(f"{state}: {name} display is {style.get('display')!r}")
+            if style.get("overflow") != "hidden":
+                failures.append(f"{state}: {name} overflow is {style.get('overflow')!r}")
+            if style.get("position") != "relative":
+                failures.append(f"{state}: {name} position is {style.get('position')!r}")
+            if style.get("backgroundColor") != expected_background:
+                failures.append(f"{state}: {name} background is {style.get('backgroundColor')!r}")
+            if "height" in probe and not _css_px_matches(style.get("height"), probe["height"]):
+                failures.append(f"{state}: {name} height is {style.get('height')!r}")
+            if "minHeight" in probe and not _css_px_matches(style.get("minHeight"), probe["minHeight"]):
+                failures.append(f"{state}: {name} min-height is {style.get('minHeight')!r}")
+            if "width" in probe and not _css_px_matches(style.get("width"), probe["width"]):
+                failures.append(f"{state}: {name} width is {style.get('width')!r}")
+            if style.get("borderRadius") != probe["borderRadius"]:
+                failures.append(f"{state}: {name} border-radius is {style.get('borderRadius')!r}")
+            before = style.get("before") or {}
+            if before.get("content") != '""':
+                failures.append(f"{state}: {name} shimmer content is {before.get('content')!r}")
+            if before.get("position") != "absolute":
+                failures.append(f"{state}: {name} shimmer position is {before.get('position')!r}")
+            if before.get("pointerEvents") != "none":
+                failures.append(f"{state}: {name} shimmer pointer-events is {before.get('pointerEvents')!r}")
+            if "linear-gradient" not in str(before.get("backgroundImage") or ""):
+                failures.append(f"{state}: {name} shimmer background is missing")
+        connection.call("Emulation.setEmulatedMedia", {"features": []}, timeout_seconds=20.0)
+
+    if failures:
+        raise SmokeFailure("Skeleton primitive parity probe failed:\n" + "\n".join(failures))
 
 
 def _enable_portal_feature_rollouts_for_spawn() -> dict[str, Optional[str]]:
@@ -1121,6 +1366,7 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
         _validate_review_status_tone_states(connection)
         _validate_overview_mobile_states(connection)
         _validate_interaction_outline_states(connection)
+        _validate_skeleton_primitive_states(connection)
 
         runtime_utility_classes = _collect_runtime_utility_classes(
             connection,
