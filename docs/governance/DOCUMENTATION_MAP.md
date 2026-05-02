@@ -109,6 +109,7 @@ operator guidance unless they are linked here as canonical documents.
 ```bash
 make check-docs
 make check-stale-docs
+make check-doc-heading-links
 python3 scripts/governance/check_docs_structure.py --all
 ```
 

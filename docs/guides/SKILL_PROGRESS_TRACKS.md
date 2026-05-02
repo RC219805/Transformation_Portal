@@ -9,6 +9,151 @@ Use the tracks after an automation run ranks one of these skills. Keep drills
 small, preserve existing route shapes and CLI contracts, and validate with the
 focused acceptance tests listed here before widening scope.
 
+## 2026-05-02 Review-Thread Refresh
+
+The `2026-04-30T21:19:09Z` automation window surfaced the following current
+practice tracks. Treat these as additive drills on top of the original tracks;
+where the reviewed defect is already fixed, add contract coverage that prevents
+regression instead of rewriting the landed implementation.
+
+### Portal CSS Governance And Parity Isolation
+
+Review evidence:
+
+- PR #1608: `scripts/validation/validate_portal_css_layer_parity.py` needed
+  parity probes to restore DOM, localStorage, theme, and review-banner state
+  after forcing visual states.
+- PR #1610: `web/secure-landing/scripts/check-portal-css-architecture.mjs`
+  needed stale historical ownership-report evidence to fail rather than
+  self-heal silently.
+
+Drill 1 - isolate parity probe mutations:
+
+- Target files: portal CSS parity validation probes and focused smoke-script
+  contract tests.
+- Expected behavior: every probe that changes DOM classes/attributes,
+  localStorage keys, or global portal state snapshots those fields and restores
+  them before the next probe.
+- Acceptance tests: assert review-banner, interaction-outline, skeleton,
+  snapshot, and runtime class-census probes all use the shared restore guard.
+
+Drill 2 - reject stale ownership evidence:
+
+- Target files: CSS architecture report validation and portal CSS architecture
+  tests.
+- Expected behavior: historical hash, rendered fingerprint, and deferred-count
+  fields are immutable evidence, not auto-repaired baseline data.
+- Acceptance tests: mutate each historical field in a fixture and assert the
+  validator exits non-zero with a stale-evidence message.
+
+### Deterministic Test And Lint Contracts
+
+Review evidence:
+
+- PR #1609: `scripts/ci/check_no_tautological_tests.py` needed table-driven
+  AST coverage for literal containers, real comment-only escapes, tag
+  word-boundaries, and dynamic-expression false positives.
+- PR #1605: Gaussian opacity validation needed deterministic boundary inputs
+  rather than random values that could accidentally avoid the intended edge.
+
+Drill 1 - table-drive lint AST cases:
+
+- Target files: tautological-assert lint tests and the lint helper when needed.
+- Expected behavior: constant-only truthy assertions are rejected, while dynamic
+  containers, fixture strings, falsey sentinels, and non-comment escape text are
+  not misclassified.
+- Acceptance tests: one parametrized positive table and one parametrized
+  negative table cover the AST shapes and escape hatch boundaries.
+
+Drill 2 - remove RNG from negative boundary checks:
+
+- Target files: one Gaussian/opacity validation test using random inputs for a
+  negative case.
+- Expected behavior: use fixed valid Gaussian fields plus explicit invalid
+  opacity boundaries below 0 and above 1.
+- Acceptance tests: repeat the invalid-boundary construction several times and
+  assert every run fails for the same validation reason.
+
+### Fail-Fast Input Validation And Path Containment
+
+Review evidence:
+
+- PR #1607: `SkyGANNode.time_of_day` needed to reject unknown values before
+  preset construction in `src/transformation_portal/comfyui/custom_nodes.py`.
+- PR #1609: CAS DAG lock naming needed traversal containment tests for
+  `_get_lock("../escape", ...)`.
+
+Drill 1 - validate user inputs before setup:
+
+- Target files: one ComfyUI or pipeline node with user-controlled inputs.
+- Expected behavior: reject invalid user options before importing heavy runtime
+  dependencies, converting images, or constructing preset/pipeline objects.
+- Acceptance tests: monkeypatch the expensive setup path to raise and prove the
+  validation error is raised first.
+
+Drill 2 - lock path containment exactly:
+
+- Target files: CAS DAG lock tests.
+- Expected behavior: sanitized lock files resolve directly under the configured
+  locks root.
+- Acceptance tests: assert both `resolved.is_relative_to(locks_root)` and
+  `resolved.parent == locks_root` for traversal and separator inputs.
+
+### Documentation Source-Of-Truth Governance
+
+Review evidence:
+
+- PR #1612: closure references across
+  `docs/fixes/BINARY_FILE_BEST_PRACTICES.md`,
+  `docs/deliverables/QUICK_WINS.md`, and
+  `docs/analysis/TODO_INVENTORY.md` needed valid section anchors.
+- PR #1611: `CLAUDE.md` placement/navigation guidance needed to stay aligned
+  with the root-file policy and live agent-doc navigation.
+
+Drill 1 - audit closure heading links:
+
+- Target files: docs validation scripts, TODO/quick-win closure docs, and their
+  tests.
+- Expected behavior: links or section references added during TODO/quick-win
+  closure resolve to headings in the referenced markdown file.
+- Acceptance tests: fixture docs with a valid heading pass; stale heading names
+  fail with the source path, target path, and missing heading.
+
+Drill 2 - update guidance and navigation together:
+
+- Target files: operator docs, documentation map/readme surfaces, and Makefile
+  help.
+- Expected behavior: introducing operator guidance or a new docs validation
+  target updates the live navigation and placement policy in the same patch.
+- Acceptance tests: docs checks include the new target and current navigation
+  still points at live guidance, not archived notes.
+
+### Security And Coverage Evidence Honesty
+
+Review evidence:
+
+- PR #1604: `tests/security/test_tenant_isolation_helpers.py` needed mutation
+  isolation coverage for nested default tenant policy fields.
+- PR #1609: `pyproject.toml` coverage configuration needed to avoid omitting
+  production packages as a way to improve metrics.
+
+Drill 1 - prove tenant policy mutation isolation:
+
+- Target files: tenant isolation helpers and tests.
+- Expected behavior: mutating one tenant's copied default policy cannot mutate
+  the manager default or another tenant's policy.
+- Acceptance tests: create two tenants from a default policy with mutable
+  fields, mutate one, and assert the other/default values are unchanged.
+
+Drill 2 - make zero coverage visible:
+
+- Target files: coverage configuration and coverage roadmap/docs tests.
+- Expected behavior: production packages remain in coverage measurement, and
+  zero-coverage packages are listed as explicit ratchet targets.
+- Acceptance tests: parse `pyproject.toml` and docs to prove production package
+  paths are not in `coverage.run.omit` and current zero-coverage packages are
+  named as ratchet targets.
+
 ## API Contract Parity
 
 Review evidence:

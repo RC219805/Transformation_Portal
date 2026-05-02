@@ -35,84 +35,40 @@ def _write(tmp_path, name, body):
 # ---------------------------------------------------------------------------
 
 
-def test_detects_assert_true(tmp_path):
-    path = _write(tmp_path, "test_offender.py", "def test_x():\n    assert True\n")
+@pytest.mark.parametrize(
+    "assertion",
+    [
+        "assert True",
+        "assert 1",
+        "assert 'hi'",
+        "assert not False",
+        "assert not 0",
+        "assert [1]",
+        "assert (1,)",
+        "assert {'k': 'v'}",
+        "assert {1}",
+    ],
+)
+def test_detects_constant_only_truthy_assertions(assertion: str, tmp_path: Path) -> None:
+    path = _write(tmp_path, "test_offender.py", f"def test_x():\n    {assertion}\n")
+
     offenders = find_tautological_asserts(path)
+
     assert [line for line, _ in offenders] == [2]
 
 
-def test_detects_assert_truthy_int(tmp_path):
-    path = _write(tmp_path, "test_offender.py", "def test_x():\n    assert 1\n")
-    offenders = find_tautological_asserts(path)
-    assert len(offenders) == 1
-
-
-def test_detects_assert_nonempty_string(tmp_path):
-    path = _write(tmp_path, "test_offender.py", "def test_x():\n    assert 'hi'\n")
-    offenders = find_tautological_asserts(path)
-    assert len(offenders) == 1
-
-
-def test_detects_assert_not_false(tmp_path):
-    path = _write(tmp_path, "test_offender.py", "def test_x():\n    assert not False\n")
-    offenders = find_tautological_asserts(path)
-    assert len(offenders) == 1
-
-
-def test_detects_assert_not_zero(tmp_path):
-    path = _write(tmp_path, "test_offender.py", "def test_x():\n    assert not 0\n")
-    offenders = find_tautological_asserts(path)
-    assert len(offenders) == 1
-
-
-def test_detects_assert_nonempty_list(tmp_path):
-    path = _write(tmp_path, "test_offender.py", "def test_x():\n    assert [1]\n")
-    offenders = find_tautological_asserts(path)
-    assert len(offenders) == 1
-
-
-def test_detects_assert_nonempty_tuple(tmp_path):
-    path = _write(tmp_path, "test_offender.py", "def test_x():\n    assert (1,)\n")
-    offenders = find_tautological_asserts(path)
-    assert len(offenders) == 1
-
-
-def test_detects_assert_nonempty_dict(tmp_path):
-    path = _write(tmp_path, "test_offender.py", "def test_x():\n    assert {'k': 'v'}\n")
-    offenders = find_tautological_asserts(path)
-    assert len(offenders) == 1
-
-
-def test_detects_assert_nonempty_set(tmp_path):
-    path = _write(tmp_path, "test_offender.py", "def test_x():\n    assert {1}\n")
-    offenders = find_tautological_asserts(path)
-    assert len(offenders) == 1
-
-
-def test_ignores_container_with_call_element(tmp_path):
-    """``assert [compute()]`` evaluates ``compute()`` for its side effect, so
-    it could legitimately raise — the assertion is not a tautology even
-    though the resulting non-empty list is always truthy."""
-    body = "def test_x():\n    def compute():\n        return 1\n    assert [compute()]\n"
+@pytest.mark.parametrize(
+    "body",
+    [
+        "def test_x():\n    def compute():\n        return 1\n    assert [compute()]\n",
+        "def test_x():\n    value = 1\n    assert [value]\n",
+        "def test_x():\n    value = 1\n    assert {'k': value}\n",
+        "def test_x():\n    key = 'k'\n    assert {key: 1}\n",
+    ],
+)
+def test_ignores_dynamic_container_assertions(body: str, tmp_path: Path) -> None:
     path = _write(tmp_path, "test_real.py", body)
-    assert find_tautological_asserts(path) == []
 
-
-def test_ignores_container_with_name_element(tmp_path):
-    body = "def test_x():\n    value = 1\n    assert [value]\n"
-    path = _write(tmp_path, "test_real.py", body)
-    assert find_tautological_asserts(path) == []
-
-
-def test_ignores_dict_with_dynamic_value(tmp_path):
-    body = "def test_x():\n    value = 1\n    assert {'k': value}\n"
-    path = _write(tmp_path, "test_real.py", body)
-    assert find_tautological_asserts(path) == []
-
-
-def test_ignores_dict_with_dynamic_key(tmp_path):
-    body = "def test_x():\n    key = 'k'\n    assert {key: 1}\n"
-    path = _write(tmp_path, "test_real.py", body)
     assert find_tautological_asserts(path) == []
 
 

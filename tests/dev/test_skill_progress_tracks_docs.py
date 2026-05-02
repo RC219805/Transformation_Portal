@@ -23,6 +23,14 @@ EXPECTED_TRACKS = {
     "APEX Evidence Semantics": ("PR #1564", "PR #1556"),
 }
 
+EXPECTED_2026_05_02_TRACKS = {
+    "Portal CSS Governance And Parity Isolation": ("PR #1608", "PR #1610"),
+    "Deterministic Test And Lint Contracts": ("PR #1609", "PR #1605"),
+    "Fail-Fast Input Validation And Path Containment": ("PR #1607", "PR #1609"),
+    "Documentation Source-Of-Truth Governance": ("PR #1612", "PR #1611"),
+    "Security And Coverage Evidence Honesty": ("PR #1604", "PR #1609"),
+}
+
 
 def _read(path: Path) -> str:
     assert path.exists(), f"Missing expected documentation file: {path}"
@@ -38,6 +46,16 @@ def _section(text: str, heading: str) -> str:
     return text[start:next_heading]
 
 
+def _subsection(text: str, heading: str) -> str:
+    marker = f"### {heading}\n"
+    start = text.index(marker) + len(marker)
+    next_heading = text.find("\n### ", start)
+    if next_heading == -1:
+        next_h2 = text.find("\n## ", start)
+        return text[start:] if next_h2 == -1 else text[start:next_h2]
+    return text[start:next_heading]
+
+
 def test_skill_progress_tracks_document_exists_and_links_from_current_guides() -> None:
     tracks_text = _read(TRACKS_PATH)
     automation_text = _read(AUTOMATION_GUIDE_PATH)
@@ -50,6 +68,7 @@ def test_skill_progress_tracks_document_exists_and_links_from_current_guides() -
     assert "SKILL_PROGRESS_TRACKS.md" in guides_readme
     assert "SKILL_PROGRESS_TRACKS.md" in docs_readme
     assert "SKILL_PROGRESS_TRACKS.md" in documentation_map
+    assert "## 2026-05-02 Review-Thread Refresh" in tracks_text
 
 
 @pytest.mark.parametrize("heading, evidence", EXPECTED_TRACKS.items())
@@ -73,6 +92,30 @@ def test_skill_progress_tracks_lock_reviewed_skill_names() -> None:
 
     for heading in EXPECTED_TRACKS:
         assert f"## {heading}" in text
+
+
+@pytest.mark.parametrize("heading, evidence", EXPECTED_2026_05_02_TRACKS.items())
+def test_2026_05_02_skill_progress_refresh_tracks_have_evidence_drills_and_acceptance(
+    heading: str,
+    evidence: tuple[str, str],
+) -> None:
+    refresh = _section(_read(TRACKS_PATH), "2026-05-02 Review-Thread Refresh")
+    section = _subsection(refresh, heading)
+
+    for pr_anchor in evidence:
+        assert pr_anchor in section
+
+    assert section.count("Drill 1 -") == 1
+    assert section.count("Drill 2 -") == 1
+    assert section.count("Acceptance tests:") == 2
+    assert "Expected behavior:" in section
+
+
+def test_2026_05_02_refresh_locks_reviewed_skill_names() -> None:
+    refresh = _section(_read(TRACKS_PATH), "2026-05-02 Review-Thread Refresh")
+
+    for heading in EXPECTED_2026_05_02_TRACKS:
+        assert f"### {heading}" in refresh
 
 
 def test_apex_track_uses_canonical_apex_codes_import_path() -> None:

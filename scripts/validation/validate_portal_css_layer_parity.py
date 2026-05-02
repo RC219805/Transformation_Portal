@@ -412,90 +412,134 @@ def _style_settle_expression() -> str:
     return "new Promise((resolve) => window.setTimeout(() => resolve(true), 450))"
 
 
+def _portal_parity_probe_guard_source() -> str:
+    return r"""
+const createPortalParityProbeGuard = () => {
+  const root = document.documentElement;
+  const rootClassSnapshot = {
+    present: root.hasAttribute('class'),
+    value: root.getAttribute('class')
+  };
+  const storageSnapshots = new Map();
+  const nodeSnapshots = new Map();
+  const propertySnapshots = [];
+
+  const captureStorage = (...keys) => {
+    for (const key of keys) {
+      if (storageSnapshots.has(key)) continue;
+      try {
+        storageSnapshots.set(key, {
+          present: window.localStorage.getItem(key) !== null,
+          value: window.localStorage.getItem(key)
+        });
+      } catch (_error) {}
+    }
+  };
+
+  const captureNode = (node) => {
+    if (!node || nodeSnapshots.has(node)) return;
+    const attributes = {};
+    for (const attribute of Array.from(node.attributes || [])) {
+      attributes[attribute.name] = attribute.value;
+    }
+    nodeSnapshots.set(node, {
+      attributes,
+      hidden: Boolean(node.hidden),
+      styleCssText: node.style ? node.style.cssText : ''
+    });
+  };
+
+  const captureNodeAndAncestors = (node) => {
+    let current = node;
+    while (current && current !== document.body) {
+      captureNode(current);
+      current = current.parentElement;
+    }
+  };
+
+  const captureProperty = (owner, property) => {
+    if (!owner || typeof owner !== 'object') return;
+    propertySnapshots.push({
+      owner,
+      property,
+      present: Object.prototype.hasOwnProperty.call(owner, property),
+      value: owner[property]
+    });
+  };
+
+  const restore = () => {
+    for (const snapshot of propertySnapshots.slice().reverse()) {
+      if (snapshot.present) {
+        snapshot.owner[snapshot.property] = snapshot.value;
+      } else {
+        delete snapshot.owner[snapshot.property];
+      }
+    }
+    for (const [node, snapshot] of Array.from(nodeSnapshots.entries()).reverse()) {
+      for (const attribute of Array.from(node.attributes || [])) {
+        if (!Object.prototype.hasOwnProperty.call(snapshot.attributes, attribute.name)) {
+          node.removeAttribute(attribute.name);
+        }
+      }
+      for (const [name, value] of Object.entries(snapshot.attributes)) {
+        node.setAttribute(name, value);
+      }
+      node.hidden = snapshot.hidden;
+      if (node.style) {
+        node.style.cssText = snapshot.styleCssText;
+      }
+    }
+    for (const [key, snapshot] of storageSnapshots.entries()) {
+      try {
+        if (snapshot.present) {
+          window.localStorage.setItem(key, snapshot.value || '');
+        } else {
+          window.localStorage.removeItem(key);
+        }
+      } catch (_error) {}
+    }
+    if (rootClassSnapshot.present) {
+      root.setAttribute('class', rootClassSnapshot.value || '');
+    } else {
+      root.removeAttribute('class');
+    }
+  };
+
+  return { captureStorage, captureNode, captureNodeAndAncestors, captureProperty, restore };
+};
+"""
+
+
+def _portal_parity_probe_restore_expression() -> str:
+    return r"""
+(() => {
+  const guard = window.__portalParityProbeGuard;
+  window.__portalParityProbeGuard = null;
+  if (guard && typeof guard.restore === 'function') {
+    guard.restore();
+  }
+  return true;
+})()
+"""
+
+
 def _review_status_tone_probe_expression() -> str:
     tones = json.dumps(REVIEW_STATUS_TONES)
     themes = json.dumps(REVIEW_STATUS_THEMES)
+    probe_guard = _portal_parity_probe_guard_source()
     return f"""
 (async () => {{
+  {probe_guard}
   const tones = {tones};
   const themes = {themes};
   const results = [];
   const root = document.documentElement;
-  const rootClassSnapshot = {{
-    present: root.hasAttribute('class'),
-    value: root.getAttribute('class')
-  }};
-  const storageSnapshot = {{}};
-  for (const key of ['tp_theme', 'tp_theme_version']) {{
-    try {{
-      storageSnapshot[key] = {{
-        present: window.localStorage.getItem(key) !== null,
-        value: window.localStorage.getItem(key)
-      }};
-    }} catch (_error) {{}}
-  }}
   const banner = document.getElementById('reviewStatusBanner');
-  const mutatedNodes = [];
-  const bannerSnapshot = banner ? {{
-    innerHTML: banner.innerHTML,
-    attributes: ['data-tone', 'data-ui', 'aria-hidden'].map((name) => ({{
-      name,
-      present: banner.hasAttribute(name),
-      value: banner.getAttribute(name)
-    }}))
-  }} : null;
+  const guard = createPortalParityProbeGuard();
+  guard.captureStorage('tp_theme', 'tp_theme_version');
   if (banner) {{
-    let current = banner;
-    while (current && current !== document.body) {{
-      mutatedNodes.push({{
-        node: current,
-        className: current.className,
-        hidden: current.hidden,
-        hiddenAttributePresent: current.hasAttribute('hidden'),
-        hiddenAttributeValue: current.getAttribute('hidden'),
-        styleDisplay: current.style.display,
-        styleVisibility: current.style.visibility
-      }});
-      current = current.parentElement;
-    }}
+    guard.captureNodeAndAncestors(banner);
   }}
-  const restore = () => {{
-    if (rootClassSnapshot.present) {{
-      root.setAttribute('class', rootClassSnapshot.value || '');
-    }} else {{
-      root.removeAttribute('class');
-    }}
-    for (const [key, snapshot] of Object.entries(storageSnapshot)) {{
-      try {{
-        if (snapshot.present) {{
-          window.localStorage.setItem(key, snapshot.value || '');
-        }} else {{
-          window.localStorage.removeItem(key);
-        }}
-      }} catch (_error) {{}}
-    }}
-    for (const snapshot of mutatedNodes.reverse()) {{
-      snapshot.node.className = snapshot.className;
-      snapshot.node.hidden = snapshot.hidden;
-      if (snapshot.hiddenAttributePresent) {{
-        snapshot.node.setAttribute('hidden', snapshot.hiddenAttributeValue || '');
-      }} else {{
-        snapshot.node.removeAttribute('hidden');
-      }}
-      snapshot.node.style.display = snapshot.styleDisplay;
-      snapshot.node.style.visibility = snapshot.styleVisibility;
-    }}
-    if (banner && bannerSnapshot) {{
-      banner.innerHTML = bannerSnapshot.innerHTML;
-      for (const attribute of bannerSnapshot.attributes) {{
-        if (attribute.present) {{
-          banner.setAttribute(attribute.name, attribute.value || '');
-        }} else {{
-          banner.removeAttribute(attribute.name);
-        }}
-      }}
-    }}
-  }};
   try {{
     for (const theme of themes) {{
       try {{
@@ -543,7 +587,7 @@ def _review_status_tone_probe_expression() -> str:
     }}
     }}
   }} finally {{
-    restore();
+    guard.restore();
   }}
   return results;
 }})()
@@ -677,8 +721,19 @@ def _validate_overview_mobile_states(connection: DevToolsConnection) -> None:
 
 
 def _interaction_outline_setup_expression() -> str:
-    return r"""
+    probe_guard = _portal_parity_probe_guard_source()
+    return (
+        r"""
 (() => {
+  """
+        + probe_guard
+        + r"""
+  if (window.__portalParityProbeGuard && typeof window.__portalParityProbeGuard.restore === 'function') {
+    window.__portalParityProbeGuard.restore();
+  }
+  const guard = createPortalParityProbeGuard();
+  window.__portalParityProbeGuard = guard;
+  guard.captureStorage('tp_theme', 'tp_theme_version');
   try {
     window.localStorage.setItem('tp_theme', 'dark');
     window.localStorage.setItem('tp_theme_version', '2');
@@ -687,8 +742,12 @@ def _interaction_outline_setup_expression() -> str:
   document.documentElement.classList.add('dark');
   document.documentElement.classList.remove('performance-lite');
   if (typeof state === 'object' && state?.portalUi) {
+    guard.captureProperty(state.portalUi, 'buildStep');
+    guard.captureProperty(state.portalUi, 'disclosurePrefs');
     state.portalUi.buildStep = 4;
-    state.portalUi.disclosurePrefs = state.portalUi.disclosurePrefs || {};
+    const disclosurePrefs = state.portalUi.disclosurePrefs || {};
+    guard.captureProperty(disclosurePrefs, 'dispatchTools');
+    state.portalUi.disclosurePrefs = disclosurePrefs;
     state.portalUi.disclosurePrefs.dispatchTools = true;
   }
   if (typeof updateUIFromState === 'function') {
@@ -699,11 +758,13 @@ def _interaction_outline_setup_expression() -> str:
   }
   const dispatchTools = document.getElementById('dispatchToolsDetails');
   if (dispatchTools) {
+    guard.captureNode(dispatchTools);
     dispatchTools.open = true;
     dispatchTools.classList.remove('hidden');
     dispatchTools.removeAttribute('hidden');
   }
   const dispatchTool = document.querySelector('.dispatch-tool-btn:not(.dispatch-tool-btn-primary):not([disabled])');
+  guard.captureNodeAndAncestors(dispatchTool);
   let current = dispatchTool;
   while (current && current !== document.body) {
     current.classList.remove('hidden');
@@ -720,6 +781,7 @@ def _interaction_outline_setup_expression() -> str:
   };
 })()
 """
+    )
 
 
 def _node_id_for_selector(connection: DevToolsConnection, selector: str) -> int:
@@ -760,6 +822,13 @@ def _interaction_outline_read_expression(selector: str) -> str:
 
 
 def _validate_interaction_outline_states(connection: DevToolsConnection) -> None:
+    try:
+        _validate_interaction_outline_states_with_guard(connection)
+    finally:
+        connection.evaluate(_portal_parity_probe_restore_expression(), timeout_seconds=20.0)
+
+
+def _validate_interaction_outline_states_with_guard(connection: DevToolsConnection) -> None:
     setup = connection.evaluate(_interaction_outline_setup_expression(), timeout_seconds=20.0)
     if not isinstance(setup, dict):
         raise SmokeFailure("Interaction outline probe setup did not return a status object")
@@ -847,12 +916,17 @@ def _skeleton_visibility_probe_expression(parity_state: str) -> str:
     state_json = json.dumps(parity_state)
     skeleton_ids = json.dumps(SKELETON_STATE_IDS)
     probes = json.dumps(SKELETON_STYLE_PROBES)
+    probe_guard = _portal_parity_probe_guard_source()
     return f"""
 (() => {{
+  {probe_guard}
   const parityState = {state_json};
   const skeletonIds = {skeleton_ids};
   const probes = {probes};
   const theme = parityState === 'light' ? 'light' : 'dark';
+  const guard = createPortalParityProbeGuard();
+  guard.captureStorage('tp_theme', 'tp_theme_version');
+  try {{
   try {{
     window.localStorage.setItem('tp_theme', theme);
     window.localStorage.setItem('tp_theme_version', '2');
@@ -872,6 +946,7 @@ def _skeleton_visibility_probe_expression(parity_state: str) -> str:
       skeletonStates[id] = {{ present: false }};
       continue;
     }}
+    guard.captureNodeAndAncestors(node);
     let current = node;
     while (current && current !== document.body) {{
       current.classList.remove('hidden');
@@ -932,7 +1007,11 @@ def _skeleton_visibility_probe_expression(parity_state: str) -> str:
       }}
     }};
   }}
-  return {{ parityState, skeletonStates, styles }};
+  const result = {{ parityState, skeletonStates, styles }};
+  return result;
+  }} finally {{
+    guard.restore();
+  }}
 }})()
 """
 
@@ -1034,8 +1113,19 @@ def _restore_env(previous: dict[str, Optional[str]]) -> None:
 
 
 def _force_snapshot_state_expression() -> str:
-    return r"""
+    probe_guard = _portal_parity_probe_guard_source()
+    return (
+        r"""
 (() => {
+  """
+        + probe_guard
+        + r"""
+  if (window.__portalParityProbeGuard && typeof window.__portalParityProbeGuard.restore === 'function') {
+    window.__portalParityProbeGuard.restore();
+  }
+  const guard = createPortalParityProbeGuard();
+  window.__portalParityProbeGuard = guard;
+  guard.captureStorage('tp_theme', 'tp_theme_version');
   try {
     window.localStorage.setItem('tp_theme', 'dark');
     window.localStorage.setItem('tp_theme_version', '2');
@@ -1045,6 +1135,9 @@ def _force_snapshot_state_expression() -> str:
   document.documentElement.classList.remove('performance-lite');
   const portalState = typeof state === 'object' && state ? state : null;
   if (portalState?.auth?.features) {
+    guard.captureProperty(portalState.auth.features, 'artifactViewerModal');
+    guard.captureProperty(portalState.auth.features, 'reviewSurfaceDeferred');
+    guard.captureProperty(portalState.auth.features, 'stagedUploads');
     portalState.auth.features.artifactViewerModal = false;
     portalState.auth.features.reviewSurfaceDeferred = false;
     portalState.auth.features.stagedUploads = false;
@@ -1054,6 +1147,7 @@ def _force_snapshot_state_expression() -> str:
   }
   const artifactViewerModal = document.getElementById('artifactViewerModal');
   if (artifactViewerModal) {
+    guard.captureNode(artifactViewerModal);
     artifactViewerModal.classList.add('hidden');
     artifactViewerModal.classList.remove('flex');
     artifactViewerModal.setAttribute('aria-hidden', 'true');
@@ -1062,12 +1156,21 @@ def _force_snapshot_state_expression() -> str:
   return true;
 })()
 """
+    )
 
 
 def _force_census_state_expression(state: str) -> str:
     state_json = json.dumps(state)
+    probe_guard = _portal_parity_probe_guard_source()
     return f"""
 (async () => {{
+  {probe_guard}
+  if (window.__portalParityProbeGuard && typeof window.__portalParityProbeGuard.restore === 'function') {{
+    window.__portalParityProbeGuard.restore();
+  }}
+  const guard = createPortalParityProbeGuard();
+  window.__portalParityProbeGuard = guard;
+  guard.captureStorage('tp_theme', 'tp_theme_version');
   const parityState = {state_json};
   const theme = parityState === 'light' ? 'light' : 'dark';
   try {{
@@ -1081,6 +1184,10 @@ def _force_census_state_expression(state: str) -> str:
 
   const portalState = typeof state === 'object' && state ? state : null;
   if (portalState?.auth?.features) {{
+    guard.captureProperty(portalState.auth.features, 'stagedUploads');
+    guard.captureProperty(portalState.auth.features, 'artifactViewerModal');
+    guard.captureProperty(portalState.auth.features, 'reviewSurfaceDeferred');
+    guard.captureProperty(portalState, 'pipeline');
     if (parityState === 'staged-uploads') {{
       portalState.auth.features.stagedUploads = true;
       portalState.pipeline = 'lux-depth-v3';
@@ -1098,6 +1205,7 @@ def _force_census_state_expression(state: str) -> str:
   if (parityState === 'artifact-viewer-modal') {{
     const modal = document.getElementById('artifactViewerModal');
     if (modal) {{
+      guard.captureNode(modal);
       modal.classList.remove('hidden');
       modal.classList.add('flex');
       modal.setAttribute('aria-hidden', 'false');
@@ -1143,24 +1251,28 @@ def _collect_runtime_utility_classes(
             description=f"portal document ready for {view} view",
         )
         for state in states:
-            if state == "reduced-motion":
-                connection.call(
-                    "Emulation.setEmulatedMedia",
-                    {"features": [{"name": "prefers-reduced-motion", "value": "reduce"}]},
-                    timeout_seconds=20.0,
+            try:
+                if state == "reduced-motion":
+                    connection.call(
+                        "Emulation.setEmulatedMedia",
+                        {"features": [{"name": "prefers-reduced-motion", "value": "reduce"}]},
+                        timeout_seconds=20.0,
+                    )
+                else:
+                    connection.call("Emulation.setEmulatedMedia", {"features": []}, timeout_seconds=20.0)
+                connection.evaluate(_force_census_state_expression(state), timeout_seconds=20.0)
+                connection.evaluate(_style_settle_expression(), timeout_seconds=20.0)
+                runtime_classes = connection.evaluate(_class_census_expression(), timeout_seconds=20.0)
+                if not isinstance(runtime_classes, list):
+                    raise SmokeFailure("Runtime class census did not return a class list")
+                runtime_utility_classes.update(
+                    str(class_name)
+                    for class_name in runtime_classes
+                    if _is_utility_like_class_token(str(class_name))
                 )
-            else:
+            finally:
+                connection.evaluate(_portal_parity_probe_restore_expression(), timeout_seconds=20.0)
                 connection.call("Emulation.setEmulatedMedia", {"features": []}, timeout_seconds=20.0)
-            connection.evaluate(_force_census_state_expression(state), timeout_seconds=20.0)
-            connection.evaluate(_style_settle_expression(), timeout_seconds=20.0)
-            runtime_classes = connection.evaluate(_class_census_expression(), timeout_seconds=20.0)
-            if not isinstance(runtime_classes, list):
-                raise SmokeFailure("Runtime class census did not return a class list")
-            runtime_utility_classes.update(
-                str(class_name)
-                for class_name in runtime_classes
-                if _is_utility_like_class_token(str(class_name))
-            )
 
     return runtime_utility_classes
 
@@ -1335,9 +1447,12 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
             timeout_seconds=float(args.timeout_seconds),
             description="portal document ready",
         )
-        connection.evaluate(_force_snapshot_state_expression(), timeout_seconds=20.0)
-        connection.evaluate(_style_settle_expression(), timeout_seconds=20.0)
-        current = connection.evaluate(_style_snapshot_expression(), timeout_seconds=20.0)
+        try:
+            connection.evaluate(_force_snapshot_state_expression(), timeout_seconds=20.0)
+            connection.evaluate(_style_settle_expression(), timeout_seconds=20.0)
+            current = connection.evaluate(_style_snapshot_expression(), timeout_seconds=20.0)
+        finally:
+            connection.evaluate(_portal_parity_probe_restore_expression(), timeout_seconds=20.0)
 
         baseline_path = Path(str(args.baseline_path))
         if args.write_baseline:
