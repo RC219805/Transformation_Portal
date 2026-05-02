@@ -1,53 +1,54 @@
-"""
-Phase 3: Depth and Spatial Intelligence
+"""Depth-intelligence package public API.
 
-This module provides depth-aware ML pipelines and spatial intelligence processing
-for architectural enhancement. Implements depth estimation, atmospheric modeling,
-and depth-guided enhancement operations.
+Currently exposes the Depth Anything V2 estimator surface
+(``DepthEstimator``, ``DepthConfig``, ``DepthMap``). The broader
+spatial-intelligence/atmospheric/depth-guided-filter components
+described in earlier docs are not yet shipped — when those modules
+land they should be added to ``_LAZY_EXPORTS`` and ``__all__``.
 
-Key Components:
-- Depth Estimator: Depth Anything V2 integration
-- Spatial Processor: Spatial intelligence and scene understanding
-- Atmospheric Modeler: Montecito coastal atmospheric conditions
-- Depth-Aware Pipeline: Enhancement with depth guidance
-- Depth-Guided Filters: Depth-aware image processing
+Symbols are exported lazily via PEP 562 (mirroring
+``transformation_portal.depth.__init__``) so importing this package
+does not eagerly pull in ``torch``/``numpy``/``PIL`` and minimal /
+wheel-smoke environments can still ``import
+transformation_portal.depth_intelligence`` without the full ML stack.
 
 Usage:
-    from transformation_portal.depth_intelligence import DepthPipeline
-
-    # Initialize with substrate and baseline
-    pipeline = DepthPipeline(substrate, baseline)
-
-    # Estimate depth
-    depth_map = pipeline.estimate_depth(image)
-
-    # Apply depth-aware enhancement
-    enhanced = pipeline.enhance_with_depth(image, depth_map)
-
-    # Model atmospheric effects (Montecito coastal)
-    atmospheric = pipeline.apply_atmospheric_model(image, depth_map)
+    from transformation_portal.depth_intelligence import DepthEstimator
+    estimator = DepthEstimator(...)
+    result = estimator.estimate(image)
 """
 
-from .atmospheric_modeler import AtmosphericConfig, AtmosphericModeler, MontecitoCoastalModel
-from .depth_estimator import DepthConfig, DepthEstimator, DepthMap
-from .depth_filters import DepthAwareBlur, DepthAwareSharpen, DepthGuidedFilter
-from .depth_pipeline import DepthPipeline, DepthPipelineConfig
-from .spatial_processor import SpatialFeatures, SpatialProcessor
+from __future__ import annotations
+
+import importlib
+from typing import Any, Dict, Tuple
+
+__version__ = "1.0.0"
 
 __all__ = [
     "DepthEstimator",
     "DepthConfig",
     "DepthMap",
-    "SpatialProcessor",
-    "SpatialFeatures",
-    "AtmosphericModeler",
-    "AtmosphericConfig",
-    "MontecitoCoastalModel",
-    "DepthPipeline",
-    "DepthPipelineConfig",
-    "DepthGuidedFilter",
-    "DepthAwareBlur",
-    "DepthAwareSharpen",
 ]
 
-__version__ = "1.0.0"
+_LAZY_EXPORTS: Dict[str, Tuple[str, str]] = {
+    "DepthEstimator": (".depth_estimator", "DepthEstimator"),
+    "DepthConfig": (".depth_estimator", "DepthConfig"),
+    "DepthMap": (".depth_estimator", "DepthMap"),
+}
+
+
+def __getattr__(name: str) -> Any:
+    target = _LAZY_EXPORTS.get(name)
+    if target is None:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+    module_path, attr_name = target
+    module = importlib.import_module(module_path, __name__)
+    value = getattr(module, attr_name)
+    globals()[name] = value
+    return value
+
+
+def __dir__() -> list[str]:
+    return sorted(set(globals().keys()) | set(__all__))

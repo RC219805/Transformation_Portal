@@ -460,11 +460,18 @@ jobs:
           coverage report --fail-under=25
 
       - name: Check diff coverage
+        # NOTE: this workflow is push-only (`pull_request:` is intentionally
+        # disabled in favor of build.yml's CI Gate). The `pull_request`
+        # guard below means the step never fires today; the threshold value
+        # therefore documents the intended gate but does not enforce it.
+        # Tracked follow-up: wire diff-cover into build.yml's test job so
+        # the 85% gate becomes live for PRs (see
+        # docs/testing/test_coverage_improvement_plan.md).
         if: github.event_name == 'pull_request'
         run: |
-          # Diff coverage: new/changed lines must be covered at 80%
-          # This is the key ratcheting mechanism - fail if not met
-          diff-cover coverage.xml --compare-branch=origin/main --fail-under=80
+          # Diff coverage target: 85% (matches `make coverage-diff` and the
+          # Phase 0 plan in docs/testing/test_coverage_improvement_plan.md).
+          diff-cover coverage.xml --compare-branch=origin/main --fail-under=85
 
   build:
     name: Build & Package Check
