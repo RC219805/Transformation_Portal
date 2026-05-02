@@ -3371,5 +3371,26 @@
       "reason": "Phase 7.G: dropped rounded-full/rounded-lg/border-slate-{200,300}/dark:border-slate-700/bg-white/dark:bg-slate-900 from the four .portal-action-control buttons in markup; .stepper-nav-btn, .dispatch-tool-btn, .hero-action-secondary, .operator-action-btn-secondary already had no conflicting utilities. The three rules now live in dispatch-surfaces.css, declarations identical.",
       "parity": "green"
     }
-  ]
+  ],
+  "phase9DuplicateState": {
+    "phase": "phase-9-duplicate-ownership-closure",
+    "baselinePath": "web/secure-landing/portal-src/styles/architecture-baseline.json",
+    "baselineSha256": "2aef42662fb9cf8dbe1d78497bc6632ac9003af7b00d58ec1623bee96c580305",
+    "duplicateContextCountBefore": 87,
+    "duplicateContextCountAfter": 86,
+    "duplicateContextCount": 86,
+    "ownedDuplicateContextCount": 86,
+    "unownedDuplicateContextCount": 0,
+    "hotspotDuplicateContextCount": 0,
+    "consolidatedDuplicateContextCount": 0,
+    "reclassifiedDuplicateContextCount": 1,
+    "conflictingDuplicateContextCount": 56,
+    "additiveDuplicateContextCount": 30,
+    "identicalDuplicateContextCount": 0,
+    "contextualDuplicateContextCount": 0,
+    "removedRawBytes": 0,
+    "removedGzipBytes": 0,
+    "sentinelStatePreserved": true,
+    "parityBaselineChanged": false
+  }
 }
