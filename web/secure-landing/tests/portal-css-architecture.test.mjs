@@ -6,6 +6,8 @@ import path from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
+import postcss from "postcss";
+
 const __filename = fileURLToPath(import.meta.url);
 const FRONTDOOR_ROOT = path.resolve(path.dirname(__filename), "..");
 const MAKEFILE_PATH = path.resolve(FRONTDOOR_ROOT, "..", "..", "Makefile");
@@ -197,6 +199,26 @@ function runPhase10AdditiveFixtureFailure(fixture) {
   assert.fail("Phase 10 additive fixture unexpectedly passed");
 }
 
+function runPhase11SurfaceFixture(fixture) {
+  const tempDir = mkdtempSync(path.join(tmpdir(), "portal-phase11-surface-"));
+  const fixturePath = path.join(tempDir, "phase11.json");
+  writeFileSync(fixturePath, `${JSON.stringify(fixture, null, 2)}\n`, "utf8");
+  try {
+    return runNodeScript("scripts/check-portal-css-architecture.mjs", "--check-phase11-surface-fixture", fixturePath);
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
+}
+
+function runPhase11SurfaceFixtureFailure(fixture) {
+  try {
+    runPhase11SurfaceFixture(fixture);
+  } catch (error) {
+    return `${error.stdout || ""}${error.stderr || ""}`;
+  }
+  assert.fail("Phase 11 surface fixture unexpectedly passed");
+}
+
 function phase10AdditiveDuplicate(overrides = {}) {
   const selector = overrides.selector || ".owned";
   return {
@@ -232,6 +254,66 @@ function phase10AdditiveDuplicate(overrides = {}) {
     ],
     ...overrides
   };
+}
+
+function phase11SurfaceDuplicate(overrides = {}) {
+  const selector = overrides.selector || ".review-compare-summary";
+  return {
+    key: overrides.key || `${selector}|||components|||`,
+    selector,
+    layer: "components",
+    context: [],
+    stateContext: [],
+    category: "additive",
+    hotspot: false,
+    removalStatus: "removable-later",
+    records: [
+      {
+        source: "web/secure-landing/portal-src/styles/components/surface-normalization.css",
+        line: 146,
+        column: 1,
+        layer: "components",
+        selectorList: [selector],
+        declarations: [["border-radius", "var(--ux-radius-lg)", false]],
+        declarationSignature: "radius",
+        properties: ["border-radius"]
+      },
+      {
+        source: "web/secure-landing/portal-src/styles/components/surface-normalization.css",
+        line: 176,
+        column: 1,
+        layer: "components",
+        selectorList: [".other-surface", selector],
+        declarations: [["border-color", "var(--ux-border-subtle)", false]],
+        declarationSignature: "chrome",
+        properties: ["border-color"]
+      }
+    ],
+    ...overrides
+  };
+}
+
+function normalizedSelectorList(selectorText) {
+  return selectorText.split(",").map((selector) => selector.trim().replace(/\s+/g, " ")).sort();
+}
+
+function declarationsForRule(rule) {
+  const declarations = new Map();
+  rule.walkDecls((decl) => {
+    declarations.set(decl.prop, decl.value);
+  });
+  return declarations;
+}
+
+function findRuleBySelectors(root, selectors) {
+  const expected = [...selectors].sort();
+  let match = null;
+  root.walkRules((rule) => {
+    if (JSON.stringify(normalizedSelectorList(rule.selector)) === JSON.stringify(expected)) {
+      match = rule;
+    }
+  });
+  return match;
 }
 
 test("portal CSS lint script checks generated artifact freshness and architecture gates", () => {
@@ -501,6 +583,184 @@ test("portal CSS Phase 10 additive fixtures classify safe and deferred candidate
   );
 });
 
+test("portal CSS Phase 11 surface fixtures constrain selector-list consolidation", () => {
+  const surfaceChrome = phase11SurfaceDuplicate();
+  const reviewTone = phase11SurfaceDuplicate({
+    key: ".review-status-banner[data-tone=\"ready\"]|||components|||",
+    selector: ".review-status-banner[data-tone=\"ready\"]",
+    records: [
+      {
+        source: "web/secure-landing/portal-src/styles/components/surface-normalization.css",
+        line: 262,
+        column: 1,
+        layer: "components",
+        selectorList: [
+          ".console-action-rail[data-tone=\"ready\"]",
+          ".review-status-banner[data-tone=\"ready\"]"
+        ],
+        declarations: [["background", "var(--ux-surface-overlay)", false]],
+        declarationSignature: "tone-bg",
+        properties: ["background"]
+      },
+      {
+        source: "web/secure-landing/portal-src/styles/components/surface-normalization.css",
+        line: 270,
+        column: 1,
+        layer: "components",
+        selectorList: [
+          ".console-action-rail[data-tone=\"ready\"]",
+          ".review-status-banner[data-tone=\"ready\"]"
+        ],
+        declarations: [["border-color", "rgba(15, 118, 110, 0.24)", false]],
+        declarationSignature: "tone-border",
+        properties: ["border-color"]
+      }
+    ]
+  });
+  const outOfScope = phase11SurfaceDuplicate({
+    key: ".workspace-shell|||components|||",
+    selector: ".workspace-shell"
+  });
+  const backgroundOverlap = phase11SurfaceDuplicate({
+    selector: "#artifactMetadataBar",
+    key: "#artifactMetadataBar|||components|||",
+    records: [
+      {
+        source: "web/secure-landing/portal-src/styles/components/surface-normalization.css",
+        line: 146,
+        column: 1,
+        layer: "components",
+        selectorList: ["#artifactMetadataBar"],
+        declarations: [["background-color", "var(--ux-surface-elevated)", false]],
+        declarationSignature: "background-color",
+        properties: ["background-color"]
+      },
+      {
+        source: "web/secure-landing/portal-src/styles/components/surface-normalization.css",
+        line: 176,
+        column: 1,
+        layer: "components",
+        selectorList: [".other-surface", "#artifactMetadataBar"],
+        declarations: [["background", "var(--ux-surface-elevated)", false]],
+        declarationSignature: "background",
+        properties: ["background"]
+      }
+    ]
+  });
+  const interveningBackground = phase11SurfaceDuplicate({
+    selector: "#artifactPreviewStage",
+    key: "#artifactPreviewStage|||components|||",
+    records: [
+      {
+        source: "web/secure-landing/portal-src/styles/components/surface-normalization.css",
+        line: 146,
+        column: 1,
+        layer: "components",
+        selectorList: ["#artifactPreviewStage"],
+        declarations: [["border-radius", "var(--ux-radius-lg)", false]],
+        declarationSignature: "radius",
+        properties: ["border-radius"],
+        interveningBackgroundWrite: true
+      },
+      {
+        source: "web/secure-landing/portal-src/styles/components/surface-normalization.css",
+        line: 176,
+        column: 1,
+        layer: "components",
+        selectorList: [".other-surface", "#artifactPreviewStage"],
+        declarations: [["background", "var(--ux-surface-elevated)", false]],
+        declarationSignature: "background",
+        properties: ["background"]
+      }
+    ]
+  });
+  const missingDarkPair = phase11SurfaceDuplicate({
+    selector: "#artifactMetadataCard",
+    key: "#artifactMetadataCard|||components|||",
+    missingDarkPair: true
+  });
+  const specificityChanging = phase11SurfaceDuplicate({
+    selector: "#reconstructionRuntimeSummary",
+    key: "#reconstructionRuntimeSummary|||components|||",
+    records: [
+      {
+        source: "web/secure-landing/portal-src/styles/components/surface-normalization.css",
+        line: 146,
+        column: 1,
+        layer: "components",
+        ruleSelector: ":where(#reconstructionRuntimeSummary)",
+        selectorList: ["#reconstructionRuntimeSummary"],
+        declarations: [["border-radius", "var(--ux-radius-lg)", false]],
+        declarationSignature: "radius",
+        properties: ["border-radius"]
+      },
+      {
+        source: "web/secure-landing/portal-src/styles/components/surface-normalization.css",
+        line: 176,
+        column: 1,
+        layer: "components",
+        selectorList: [".other-surface", "#reconstructionRuntimeSummary"],
+        declarations: [["border-color", "var(--ux-border-subtle)", false]],
+        declarationSignature: "chrome",
+        properties: ["border-color"]
+      }
+    ]
+  });
+  const conflictingPermanent = phase11SurfaceDuplicate({
+    key: ".review-status-banner[data-tone=\"error\"]|||components|||",
+    selector: ".review-status-banner[data-tone=\"error\"]",
+    category: "conflicting",
+    removalStatus: "permanent"
+  });
+
+  assert.match(
+    runPhase11SurfaceFixture({
+      duplicates: [
+        surfaceChrome,
+        reviewTone,
+        outOfScope,
+        backgroundOverlap,
+        interveningBackground,
+        missingDarkPair,
+        specificityChanging,
+        conflictingPermanent
+      ],
+      expectedCandidates: [
+        { key: surfaceChrome.key, candidateStatus: "safe" },
+        { key: reviewTone.key, candidateStatus: "safe" },
+        { key: outOfScope.key, candidateStatus: "deferred", unsafeReason: "selector-not-phase11-target" },
+        {
+          key: backgroundOverlap.key,
+          candidateStatus: "deferred",
+          unsafeReason: "background-shorthand-order-sensitive"
+        },
+        {
+          key: interveningBackground.key,
+          candidateStatus: "deferred",
+          unsafeReason: "background-shorthand-order-sensitive"
+        },
+        { key: missingDarkPair.key, candidateStatus: "deferred", unsafeReason: "dark-pair-missing" },
+        {
+          key: specificityChanging.key,
+          candidateStatus: "deferred",
+          unsafeReason: "specificity-changing-grouping"
+        },
+        { key: conflictingPermanent.key, candidateStatus: "deferred", unsafeReason: "conflicting-permanent" }
+      ]
+    }),
+    /portal css phase11 surface fixture: OK/
+  );
+
+  assert.match(
+    runPhase11SurfaceFixtureFailure({
+      duplicates: [surfaceChrome],
+      expectedState: { phase: "phase-11-css-surface-list-consolidation" },
+      phase11SurfaceListConsolidationState: { phase: "stale" }
+    }),
+    /phase11SurfaceListConsolidationState is stale/
+  );
+});
+
 test("portal CSS layer parity make target checks generated artifact freshness", () => {
   const makefile = readFileSync(MAKEFILE_PATH, "utf8");
   const start = makefile.indexOf("validate-portal-css-layer-parity:");
@@ -526,6 +786,43 @@ test("portal CSS architecture baseline keeps hotspot selectors consolidated", ()
     const entry = duplicateKeys.find((candidate) => candidate.selector === selector);
     assert.equal(entry, undefined, `unexpected duplicate baseline entry for ${selector}`);
   }
+});
+
+test("portal CSS Phase 11 consolidation preserves explicit surface boundaries", () => {
+  const surfaceNormalization = readFileSync(
+    path.join(FRONTDOOR_ROOT, "portal-src", "styles", "components", "surface-normalization.css"),
+    "utf8"
+  );
+  const root = postcss.parse(surfaceNormalization);
+
+  const topbarRule = findRuleBySelectors(root, [".portal-topbar", ".portal-context-shell"]);
+  assert.ok(topbarRule, "portal topbar/context shell radius rule must exist");
+  const topbarDeclarations = declarationsForRule(topbarRule);
+  assert.equal(topbarDeclarations.get("border-radius"), "var(--ux-radius-lg)");
+  assert.equal(topbarDeclarations.has("background"), false);
+  assert.equal(topbarDeclarations.has("border-color"), false);
+  assert.doesNotMatch(surfaceNormalization, /:(?:is|where)\(/);
+
+  for (const [tone, borderColor] of [
+    ["ready", "rgba(15, 118, 110, 0.24)"],
+    ["warning", "rgba(180, 83, 9, 0.26)"],
+    ["error", "rgba(185, 28, 28, 0.26)"],
+    ["info", "rgba(8, 145, 178, 0.24)"]
+  ]) {
+    const toneRule = findRuleBySelectors(root, [`.review-status-banner[data-tone="${tone}"]`]);
+    assert.ok(toneRule, `review status ${tone} singleton rule must exist`);
+    const toneDeclarations = declarationsForRule(toneRule);
+    assert.equal(toneDeclarations.get("background"), "var(--ux-surface-overlay)");
+    assert.equal(toneDeclarations.get("border-color"), borderColor);
+  }
+
+  const consoleToneRule = findRuleBySelectors(root, [
+    ".console-action-rail[data-tone=\"ready\"]",
+    ".console-action-rail[data-tone=\"warning\"]",
+    ".console-action-rail[data-tone=\"blocked\"]"
+  ]);
+  assert.ok(consoleToneRule, "console action rail shared tone background rule must exist");
+  assert.equal(declarationsForRule(consoleToneRule).get("background"), "var(--ux-surface-overlay)");
 });
 
 test("portal CSS ownership drain keeps utilities layer honest", () => {
@@ -572,15 +869,12 @@ test("portal CSS ownership drain keeps utilities layer honest", () => {
   assert.equal(ownershipDrain.phase9DuplicateState.phase, "phase-9-duplicate-ownership-closure");
   assert.equal(ownershipDrain.phase9DuplicateState.baselinePath, "web/secure-landing/portal-src/styles/architecture-baseline.json");
   assert.equal(ownershipDrain.phase9DuplicateState.duplicateContextCountBefore, 87);
-  assert.equal(ownershipDrain.phase9DuplicateState.duplicateContextCountAfter, duplicateBaseline.duplicateKeys.length);
-  assert.equal(ownershipDrain.phase9DuplicateState.ownedDuplicateContextCount, duplicateBaseline.duplicateKeys.length);
+  assert.equal(ownershipDrain.phase9DuplicateState.duplicateContextCountAfter, 85);
+  assert.equal(ownershipDrain.phase9DuplicateState.ownedDuplicateContextCount, 85);
   assert.equal(ownershipDrain.phase9DuplicateState.unownedDuplicateContextCount, 0);
   assert.equal(ownershipDrain.phase9DuplicateState.hotspotDuplicateContextCount, 0);
   assert.equal(ownershipDrain.phase9DuplicateState.consolidatedDuplicateContextCount, 0);
-  assert.equal(
-    ownershipDrain.phase9DuplicateState.reclassifiedDuplicateContextCount,
-    ownershipDrain.phase9DuplicateState.duplicateContextCountBefore - duplicateBaseline.duplicateKeys.length
-  );
+  assert.equal(ownershipDrain.phase9DuplicateState.reclassifiedDuplicateContextCount, 2);
   assert.equal(ownershipDrain.phase9DuplicateState.removedRawBytes, 0);
   assert.equal(ownershipDrain.phase9DuplicateState.removedGzipBytes, 0);
   assert.equal(ownershipDrain.phase9DuplicateState.sentinelStatePreserved, true);
@@ -596,6 +890,21 @@ test("portal CSS ownership drain keeps utilities layer honest", () => {
   assert.equal(ownershipDrain.phase10AdditiveConsolidationState.hotspotDuplicateContextCount, 0);
   assert.equal(ownershipDrain.phase10AdditiveConsolidationState.sentinelStatePreserved, true);
   assert.equal(ownershipDrain.phase10AdditiveConsolidationState.parityBaselineChanged, false);
+  assert.equal(ownershipDrain.phase11SurfaceListConsolidationState.phase, "phase-11-css-surface-list-consolidation");
+  assert.equal(ownershipDrain.phase11SurfaceListConsolidationState.targetFile, "web/secure-landing/portal-src/styles/components/surface-normalization.css");
+  assert.equal(ownershipDrain.phase11SurfaceListConsolidationState.duplicateContextCountBefore, 85);
+  assert.equal(ownershipDrain.phase11SurfaceListConsolidationState.duplicateContextCountAfter, 76);
+  assert.equal(ownershipDrain.phase11SurfaceListConsolidationState.additiveDuplicateContextCountBefore, 29);
+  assert.equal(ownershipDrain.phase11SurfaceListConsolidationState.additiveDuplicateContextCountAfter, 20);
+  assert.equal(ownershipDrain.phase11SurfaceListConsolidationState.conflictingPermanentContextCountBefore, 56);
+  assert.equal(ownershipDrain.phase11SurfaceListConsolidationState.conflictingPermanentContextCountAfter, 56);
+  assert.equal(ownershipDrain.phase11SurfaceListConsolidationState.unownedDuplicateContextCountAfter, 0);
+  assert.equal(ownershipDrain.phase11SurfaceListConsolidationState.hotspotDuplicateContextCountAfter, 0);
+  assert.equal(ownershipDrain.phase11SurfaceListConsolidationState.consolidatedContextCount, 9);
+  assert.deepEqual(ownershipDrain.phase11SurfaceListConsolidationState.remainingTargetContexts, []);
+  assert.equal(ownershipDrain.phase11SurfaceListConsolidationState.sentinelStatePreserved, true);
+  assert.equal(ownershipDrain.phase11SurfaceListConsolidationState.parityBaselineChanged, false);
+  assert.equal(duplicateBaseline.duplicateKeys.length, 76);
   assert.ok(
     duplicateBaseline.duplicateKeys.every((entry) => entry.phase === "phase-9-duplicate-ownership-closure"),
     "all duplicate baseline entries must be Phase 9-owned"
@@ -637,6 +946,15 @@ test("portal CSS parity census forces feature states and canonical theme hooks",
   assert.match(validator, /portalState\.auth\.features\.stagedUploads = true/);
   assert.match(validator, /portalState\.auth\.features\.artifactViewerModal = true/);
   assert.match(validator, /portalState\.auth\.features\.reviewSurfaceDeferred = true/);
+  assert.match(validator, /REVIEW_STATUS_TONES = \("ready", "warning", "error", "info"\)/);
+  assert.match(validator, /document\.getElementById\('reviewStatusBanner'\)/);
+  assert.match(validator, /rootClassSnapshot/);
+  assert.match(validator, /storageSnapshot/);
+  assert.match(validator, /bannerSnapshot/);
+  assert.match(validator, /current\.classList\.remove\('hidden'\)/);
+  assert.match(validator, /banner\.dataset\.tone = tone/);
+  assert.match(validator, /finally \{\{\n    restore\(\);/);
+  assert.match(validator, /_validate_review_status_tone_states\(connection\)/);
 });
 
 test("portal CSS layer dry-run compatibility writes the validated CSS artifact", () => {

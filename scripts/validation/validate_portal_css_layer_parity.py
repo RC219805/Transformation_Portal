@@ -180,6 +180,8 @@ UTILITY_PREFIXES = (
     "space-x",
     "space-y",
 )
+REVIEW_STATUS_TONES = ("ready", "warning", "error", "info")
+REVIEW_STATUS_THEMES = ("light", "dark")
 PORTAL_PARITY_FEATURE_ENV = {
     "TP_PORTAL_UPLOAD_STAGING_ENABLED": "1",
     "TP_PORTAL_STAGED_UPLOADS_ROLLOUT_PERCENT": "100",
@@ -325,6 +327,174 @@ def _class_census_expression() -> str:
 
 def _style_settle_expression() -> str:
     return "new Promise((resolve) => window.setTimeout(() => resolve(true), 450))"
+
+
+def _review_status_tone_probe_expression() -> str:
+    tones = json.dumps(REVIEW_STATUS_TONES)
+    themes = json.dumps(REVIEW_STATUS_THEMES)
+    return f"""
+(async () => {{
+  const tones = {tones};
+  const themes = {themes};
+  const results = [];
+  const root = document.documentElement;
+  const rootClassSnapshot = {{
+    present: root.hasAttribute('class'),
+    value: root.getAttribute('class')
+  }};
+  const storageSnapshot = {{}};
+  for (const key of ['tp_theme', 'tp_theme_version']) {{
+    try {{
+      storageSnapshot[key] = {{
+        present: window.localStorage.getItem(key) !== null,
+        value: window.localStorage.getItem(key)
+      }};
+    }} catch (_error) {{}}
+  }}
+  const banner = document.getElementById('reviewStatusBanner');
+  const mutatedNodes = [];
+  const bannerSnapshot = banner ? {{
+    innerHTML: banner.innerHTML,
+    attributes: ['data-tone', 'data-ui', 'aria-hidden'].map((name) => ({{
+      name,
+      present: banner.hasAttribute(name),
+      value: banner.getAttribute(name)
+    }}))
+  }} : null;
+  if (banner) {{
+    let current = banner;
+    while (current && current !== document.body) {{
+      mutatedNodes.push({{
+        node: current,
+        className: current.className,
+        hidden: current.hidden,
+        hiddenAttributePresent: current.hasAttribute('hidden'),
+        hiddenAttributeValue: current.getAttribute('hidden'),
+        styleDisplay: current.style.display,
+        styleVisibility: current.style.visibility
+      }});
+      current = current.parentElement;
+    }}
+  }}
+  const restore = () => {{
+    if (rootClassSnapshot.present) {{
+      root.setAttribute('class', rootClassSnapshot.value || '');
+    }} else {{
+      root.removeAttribute('class');
+    }}
+    for (const [key, snapshot] of Object.entries(storageSnapshot)) {{
+      try {{
+        if (snapshot.present) {{
+          window.localStorage.setItem(key, snapshot.value || '');
+        }} else {{
+          window.localStorage.removeItem(key);
+        }}
+      }} catch (_error) {{}}
+    }}
+    for (const snapshot of mutatedNodes.reverse()) {{
+      snapshot.node.className = snapshot.className;
+      snapshot.node.hidden = snapshot.hidden;
+      if (snapshot.hiddenAttributePresent) {{
+        snapshot.node.setAttribute('hidden', snapshot.hiddenAttributeValue || '');
+      }} else {{
+        snapshot.node.removeAttribute('hidden');
+      }}
+      snapshot.node.style.display = snapshot.styleDisplay;
+      snapshot.node.style.visibility = snapshot.styleVisibility;
+    }}
+    if (banner && bannerSnapshot) {{
+      banner.innerHTML = bannerSnapshot.innerHTML;
+      for (const attribute of bannerSnapshot.attributes) {{
+        if (attribute.present) {{
+          banner.setAttribute(attribute.name, attribute.value || '');
+        }} else {{
+          banner.removeAttribute(attribute.name);
+        }}
+      }}
+    }}
+  }};
+  try {{
+    for (const theme of themes) {{
+      try {{
+        window.localStorage.setItem('tp_theme', theme);
+        window.localStorage.setItem('tp_theme_version', '2');
+      }} catch (_error) {{}}
+      root.classList.toggle('light', theme === 'light');
+      root.classList.toggle('dark', theme === 'dark');
+      root.classList.remove('performance-lite');
+      if (typeof updateUIFromState === 'function') {{
+        updateUIFromState();
+      }}
+      for (const tone of tones) {{
+        if (!banner) {{
+          results.push({{ theme, tone, present: false }});
+          continue;
+        }}
+      let current = banner;
+      while (current && current !== document.body) {{
+        current.classList.remove('hidden');
+        current.hidden = false;
+        current.removeAttribute('hidden');
+        if (window.getComputedStyle(current).display === 'none') {{
+          current.style.display = 'block';
+        }}
+        if (window.getComputedStyle(current).visibility === 'hidden') {{
+          current.style.visibility = 'visible';
+        }}
+        current = current.parentElement;
+      }}
+      banner.dataset.tone = tone;
+      banner.dataset.ui = 'review-status-banner';
+      banner.setAttribute('aria-hidden', 'false');
+      await new Promise((resolve) => window.requestAnimationFrame(() => resolve(true)));
+      const style = window.getComputedStyle(banner);
+      const rect = banner.getBoundingClientRect();
+      results.push({{
+        theme,
+        tone,
+        present: true,
+        visible: style.display !== 'none' && style.visibility !== 'hidden' && rect.width > 0 && rect.height > 0,
+        backgroundColor: style.backgroundColor,
+        borderColor: style.borderColor
+      }});
+    }}
+    }}
+  }} finally {{
+    restore();
+  }}
+  return results;
+}})()
+"""
+
+
+def _validate_review_status_tone_states(connection: DevToolsConnection) -> None:
+    results = connection.evaluate(_review_status_tone_probe_expression(), timeout_seconds=20.0)
+    if not isinstance(results, list):
+        raise SmokeFailure("Review status tone parity probe did not return results")
+    expected = {(theme, tone) for theme in REVIEW_STATUS_THEMES for tone in REVIEW_STATUS_TONES}
+    seen: set[tuple[str, str]] = set()
+    failures: list[str] = []
+    for result in results:
+        if not isinstance(result, dict):
+            failures.append(f"invalid probe result {result!r}")
+            continue
+        theme = str(result.get("theme") or "")
+        tone = str(result.get("tone") or "")
+        seen.add((theme, tone))
+        if not result.get("present"):
+            failures.append(f"{theme}/{tone}: #reviewStatusBanner missing")
+            continue
+        if not result.get("visible"):
+            failures.append(f"{theme}/{tone}: #reviewStatusBanner not visible")
+        for property_name in ("backgroundColor", "borderColor"):
+            value = str(result.get(property_name) or "").strip()
+            if value in {"", "transparent", "rgba(0, 0, 0, 0)"}:
+                failures.append(f"{theme}/{tone}: #reviewStatusBanner {property_name} unresolved")
+    missing = expected - seen
+    for theme, tone in sorted(missing):
+        failures.append(f"{theme}/{tone}: review status tone state was not probed")
+    if failures:
+        raise SmokeFailure("Review status tone parity probe failed:\n" + "\n".join(failures))
 
 
 def _enable_portal_feature_rollouts_for_spawn() -> dict[str, Optional[str]]:
@@ -678,6 +848,8 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
                 else "Layered CSS computed-style parity failed against baseline"
             )
             raise SmokeFailure(f"{mode_label}:\n{detail}{suffix}")
+
+        _validate_review_status_tone_states(connection)
 
         runtime_utility_classes = _collect_runtime_utility_classes(
             connection,
