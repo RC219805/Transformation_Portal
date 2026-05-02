@@ -170,7 +170,7 @@ function runDuplicateBaselineFixture(baseline, duplicates) {
 
 function runDuplicateBaselineFixtureFailure(baseline, duplicates) {
   try {
-    return runDuplicateBaselineFixture(baseline, duplicates);
+    runDuplicateBaselineFixture(baseline, duplicates);
   } catch (error) {
     return `${error.stdout || ""}${error.stderr || ""}`;
   }
