@@ -1,40 +1,50 @@
 """Public-surface smoke tests for ``transformation_portal.depth_intelligence``.
 
 The package's ``__init__.py`` historically imported five submodules, four
-of which never existed — making the package unimportable. The current
-``__init__.py`` re-exports only the symbols backed by ``depth_estimator``
-which is itself eager-torch. Smoke tests are gated on torch availability
-and pin the importable surface so any future regression (or accidental
-restoration of the broken imports) is caught.
+of which never existed — making the package unimportable. It now exposes
+its public symbols via PEP 562 lazy exports (mirroring
+``transformation_portal.depth``) so the package itself is importable in
+core/offline environments. Resolving any symbol still pulls in
+``torch``/``numpy``/``PIL`` via ``depth_estimator``; those checks are
+gated on ``pytest.importorskip("torch")``.
 """
 
 from __future__ import annotations
 
 import pytest
 
-pytestmark = [pytest.mark.ml]
 
-
-@pytest.fixture(scope="module")
-def depth_intel_pkg():
-    pytest.importorskip("torch")
+@pytest.mark.unit
+def test_package_imports_without_ml_stack():
+    # The package itself must load lazily — no torch needed at import.
     import transformation_portal.depth_intelligence as pkg
 
-    return pkg
+    assert pkg.__version__
+    assert "DepthEstimator" in pkg.__all__
 
 
-def test_package_importable(depth_intel_pkg):
-    assert depth_intel_pkg.__version__
+@pytest.mark.unit
+def test_unknown_attribute_raises_attribute_error():
+    import transformation_portal.depth_intelligence as pkg
+
+    with pytest.raises(AttributeError):
+        pkg.NotARealSymbol  # noqa: B018 — exercising __getattr__
 
 
-def test_declared_all_matches_existing_modules(depth_intel_pkg):
-    # If __all__ ever grows new names, the corresponding module must exist
-    # and the symbol must be importable.
-    for name in depth_intel_pkg.__all__:
-        assert hasattr(depth_intel_pkg, name), f"declared in __all__ but missing: {name}"
+@pytest.mark.unit
+def test_dir_advertises_declared_all():
+    import transformation_portal.depth_intelligence as pkg
+
+    listed = set(dir(pkg))
+    for name in pkg.__all__:
+        assert name in listed, f"declared in __all__ but missing from dir(): {name}"
 
 
-def test_currently_exposes_depth_estimator_surface(depth_intel_pkg):
+@pytest.mark.ml
+def test_lazy_resolution_returns_expected_classes():
+    pytest.importorskip("torch")
+    import dataclasses
+
     from transformation_portal.depth_intelligence import (
         DepthConfig,
         DepthEstimator,
@@ -42,8 +52,14 @@ def test_currently_exposes_depth_estimator_surface(depth_intel_pkg):
     )
 
     assert isinstance(DepthEstimator, type)
-    # DepthConfig and DepthMap are dataclasses providing the contract surface.
-    import dataclasses
-
     assert dataclasses.is_dataclass(DepthConfig)
     assert dataclasses.is_dataclass(DepthMap)
+
+
+@pytest.mark.ml
+def test_declared_all_resolves_under_full_stack():
+    pytest.importorskip("torch")
+    import transformation_portal.depth_intelligence as pkg
+
+    for name in pkg.__all__:
+        assert getattr(pkg, name) is not None, f"declared in __all__ but resolution failed: {name}"

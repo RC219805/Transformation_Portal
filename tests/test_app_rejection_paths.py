@@ -86,13 +86,22 @@ class TestApiKeyRejection:
         assert error.get("code") == "UNAUTHORIZED"
 
     def test_valid_bearer_token_passes_auth_layer(self, anon_client):
-        # /v1/jobs requires auth but should be reachable with a valid bearer.
+        # /v1/jobs requires auth; with a valid bearer it must reach the route
+        # handler and return the documented envelope. A weaker `!= 401`
+        # assertion would silently accept a 5xx regression in routing.
         response = anon_client.get(
             "/v1/jobs",
             headers={"authorization": "Bearer rejection-secret"},
         )
-        # Auth layer accepts; downstream may return 200 or other non-401 status.
-        assert response.status_code != 401
+        assert response.status_code == 200
+        body = response.json()
+        assert body.get("schema") == "tp.orchestrator.jobs.v1"
+        assert body.get("success") is True
+        assert body.get("error") is None
+        data = body.get("data", {})
+        assert "jobs" in data
+        assert "total" in data
+        assert "returned" in data
 
     def test_protected_endpoint_with_no_secret_configured_returns_503(self, anon_client):
         orchestrator_app.API_KEY_SECRET = ""
