@@ -3062,10 +3062,15 @@ test("portal CSS parity census forces feature states and canonical theme hooks",
   assert.match(validator, /_validate_review_provenance_states\(connection\)/);
   assert.match(validator, /_validate_surface_final_pass_states\(connection\)/);
   assert.match(validator, /review-provenance-label-probe/);
+  assert.match(validator, /review-provenance-label-font-reference/);
+  assert.match(validator, /font-size:var\(--ux-label-size\)/);
+  assert.match(validator, /expectedFontSize/);
   assert.match(validator, /workspace\.dataset\.ambientActive = String\(ambientActive\)/);
   assert.match(validator, /document\.querySelector\('\.shell-noise'\)/);
   assert.match(validator, /_validate_overview_mobile_states\(connection\)/);
   assert.match(validator, /_validate_interaction_outline_states\(connection\)/);
+  assert.match(validator, /interaction-outline-transition-probe/);
+  assert.match(validator, /transition: none !important/);
   assert.match(validator, /CSS\.forcePseudoState/);
   assert.match(validator, /':hover'/);
   assert.match(validator, /':focus-visible'/);

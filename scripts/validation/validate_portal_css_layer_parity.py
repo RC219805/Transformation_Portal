@@ -513,6 +513,11 @@ const createPortalParityProbeGuard = () => {
 def _portal_parity_probe_restore_expression() -> str:
     return r"""
 (() => {
+  const transitionProbeStyle = window.__portalInteractionOutlineProbeStyle;
+  window.__portalInteractionOutlineProbeStyle = null;
+  if (transitionProbeStyle && transitionProbeStyle.parentNode) {
+    transitionProbeStyle.parentNode.removeChild(transitionProbeStyle);
+  }
   const guard = window.__portalParityProbeGuard;
   window.__portalParityProbeGuard = null;
   if (guard && typeof guard.restore === 'function') {
@@ -717,6 +722,10 @@ def _surface_final_pass_probe_expression() -> str:
   labelProbe.dataset.ui = 'review-provenance-label-probe';
   labelProbe.textContent = 'Phase 17 provenance label probe';
   document.body.appendChild(labelProbe);
+  const labelFontReference = document.createElement('span');
+  labelFontReference.dataset.ui = 'review-provenance-label-font-reference';
+  labelFontReference.style.cssText = 'position:absolute;left:-9999px;top:auto;font-size:var(--ux-label-size);';
+  document.body.appendChild(labelFontReference);
   const guard = createPortalParityProbeGuard();
   guard.captureStorage('tp_theme', 'tp_theme_version');
   if (workspace) {{
@@ -739,6 +748,9 @@ def _surface_final_pass_probe_expression() -> str:
       }}
       if (!labelProbe.isConnected) {{
         document.body.appendChild(labelProbe);
+      }}
+      if (!labelFontReference.isConnected) {{
+        document.body.appendChild(labelFontReference);
       }}
       for (const ambientActive of [false, true]) {{
         if (!workspace) {{
@@ -785,11 +797,13 @@ def _surface_final_pass_probe_expression() -> str:
         }});
       }}
       const labelStyle = window.getComputedStyle(labelProbe);
+      const labelFontReferenceStyle = window.getComputedStyle(labelFontReference);
       results.push({{
         type: 'review-provenance-label',
         theme,
         present: true,
         fontSize: labelStyle.fontSize,
+        expectedFontSize: labelFontReferenceStyle.fontSize,
         lineHeight: labelStyle.lineHeight,
         letterSpacing: labelStyle.letterSpacing
       }});
@@ -797,6 +811,9 @@ def _surface_final_pass_probe_expression() -> str:
   }} finally {{
     if (labelProbe.parentNode) {{
       labelProbe.parentNode.removeChild(labelProbe);
+    }}
+    if (labelFontReference.parentNode) {{
+      labelFontReference.parentNode.removeChild(labelFontReference);
     }}
     guard.restore();
   }}
@@ -860,11 +877,15 @@ def _validate_surface_final_pass_states(connection: DevToolsConnection) -> None:
         elif result_type == "review-provenance-label":
             label_seen.add(theme)
             font_size = str(result.get("fontSize") or "")
+            expected_font_size = str(result.get("expectedFontSize") or "")
             line_height = str(result.get("lineHeight") or "")
             letter_spacing = str(result.get("letterSpacing") or "")
-            if font_size != "12px":
+            if not expected_font_size:
+                failures.append(f"{theme}: .review-provenance-label expected font-size unresolved")
+            elif font_size != expected_font_size:
                 failures.append(
-                    f"{theme}: .review-provenance-label font-size drifted ({font_size!r})"
+                    f"{theme}: .review-provenance-label font-size drifted "
+                    f"({font_size!r} != {expected_font_size!r})"
                 )
             if line_height in {"", "normal"}:
                 failures.append(
@@ -993,8 +1014,24 @@ def _interaction_outline_setup_expression() -> str:
   if (window.__portalParityProbeGuard && typeof window.__portalParityProbeGuard.restore === 'function') {
     window.__portalParityProbeGuard.restore();
   }
+  const previousTransitionProbeStyle = window.__portalInteractionOutlineProbeStyle;
+  window.__portalInteractionOutlineProbeStyle = null;
+  if (previousTransitionProbeStyle && previousTransitionProbeStyle.parentNode) {
+    previousTransitionProbeStyle.parentNode.removeChild(previousTransitionProbeStyle);
+  }
   const guard = createPortalParityProbeGuard();
   window.__portalParityProbeGuard = guard;
+  const transitionProbeStyle = document.createElement('style');
+  transitionProbeStyle.dataset.ui = 'interaction-outline-transition-probe';
+  transitionProbeStyle.textContent = `
+    .build-step-tab,
+    .dispatch-tool-btn,
+    .workspace-link {
+      transition: none !important;
+    }
+  `;
+  document.head.appendChild(transitionProbeStyle);
+  window.__portalInteractionOutlineProbeStyle = transitionProbeStyle;
   guard.captureStorage('tp_theme', 'tp_theme_version');
   try {
     window.localStorage.setItem('tp_theme', 'dark');
@@ -1166,9 +1203,15 @@ def _validate_interaction_outline_states_with_guard(connection: DevToolsConnecti
             focus_value = str(focus_visible.get(property_name) or "")
             combined_value = str(combined.get(property_name) or "")
             if focus_value != hover_value:
-                failures.append(f"{name}: focus-visible {property_name} drifted from hover value")
+                failures.append(
+                    f"{name}: focus-visible {property_name} drifted from hover value "
+                    f"({focus_value!r} != {hover_value!r})"
+                )
             if combined_value != hover_value:
-                failures.append(f"{name}: combined {property_name} drifted from hover value")
+                failures.append(
+                    f"{name}: combined {property_name} drifted from hover value "
+                    f"({combined_value!r} != {hover_value!r})"
+                )
 
     if failures:
         raise SmokeFailure("Interaction outline parity probe failed:\n" + "\n".join(failures))
