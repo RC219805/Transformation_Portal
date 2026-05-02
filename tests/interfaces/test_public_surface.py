@@ -2,9 +2,11 @@
 
 The interfaces package provides the abstract base classes and Protocols
 referenced by ADR-001 ("module interface contracts"). These smoke tests
-confirm the package imports cleanly offline and that every name in
-``__all__`` resolves to an importable symbol — guarding against silent
-removal or rename of contract surfaces.
+confirm the package imports cleanly offline, every name in ``__all__``
+resolves, and the abstractness contract on each ABC is enforced
+(``__abstractmethods__`` non-empty), so an accidental drop of
+``@abstractmethod`` is caught as a real failure rather than a silent
+contract drift.
 """
 
 from __future__ import annotations
@@ -29,21 +31,28 @@ def test_declared_all_resolves():
         assert hasattr(pkg, name), f"declared in __all__ but missing: {name}"
 
 
+def _assert_is_abc_with_abstract_methods(cls: type) -> None:
+    """Pin the ABC contract: must be ABCMeta-flavored and have at least one
+    declared abstract method. We avoid instantiating the class (which would
+    work-by-side-effect with ``pytest.raises(TypeError)`` but also trip the
+    pylint ``abstract-class-instantiated`` error)."""
+    assert isinstance(cls, abc.ABCMeta), f"{cls.__name__} must use ABCMeta (or subclass)"
+    abstracts = getattr(cls, "__abstractmethods__", frozenset())
+    assert abstracts, f"{cls.__name__} declares no abstract methods — abstractness contract is gone"
+
+
 def test_processor_interfaces_are_abstract():
     from transformation_portal.interfaces import ImageProcessor, VideoProcessor
 
     for cls in (ImageProcessor, VideoProcessor):
-        assert isinstance(cls, type)
-        # ABCs raise TypeError if instantiated directly.
-        with pytest.raises(TypeError):
-            cls()  # type: ignore[abstract]
+        _assert_is_abc_with_abstract_methods(cls)
 
 
 def test_pipeline_interfaces_are_abstract():
     from transformation_portal.interfaces import BatchPipeline, Pipeline, PipelineStage
 
     for cls in (Pipeline, PipelineStage, BatchPipeline):
-        assert isinstance(cls, type)
+        _assert_is_abc_with_abstract_methods(cls)
 
 
 def test_error_classes_subclass_exception():
@@ -79,6 +88,4 @@ def test_material_type_is_enum_like():
 def test_abstract_methods_are_marked():
     from transformation_portal.interfaces import ImageProcessor
 
-    abstracts = getattr(ImageProcessor, "__abstractmethods__", frozenset())
-    assert abstracts, "ImageProcessor must declare at least one abstract method"
-    assert isinstance(ImageProcessor, abc.ABCMeta)
+    _assert_is_abc_with_abstract_methods(ImageProcessor)

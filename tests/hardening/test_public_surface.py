@@ -37,13 +37,24 @@ def test_universal_hardened_wrapper_is_class():
 
 
 def test_pipeline_is_runtime_checkable_protocol():
-    from typing import Protocol
-
     from transformation_portal.hardening import Pipeline
 
-    # Pipeline is documented as a contract; must be a Protocol so duck-typed
-    # implementations work.
-    assert issubclass(Pipeline, Protocol) or hasattr(Pipeline, "__protocol_attrs__")
+    # ``issubclass(Pipeline, Protocol)`` would raise TypeError because
+    # ``typing.Protocol`` itself is not runtime-checkable. Use the typing
+    # module's private flags that are stable across 3.11/3.12 instead:
+    # ``_is_protocol`` is set by ``Protocol`` and ``_is_runtime_protocol``
+    # is set by ``@runtime_checkable``. Both must be true for duck-typed
+    # implementations to pass ``isinstance`` checks against ``Pipeline``.
+    assert getattr(Pipeline, "_is_protocol", False) is True, "Pipeline must be a typing.Protocol"
+    assert getattr(Pipeline, "_is_runtime_protocol", False) is True, "Pipeline must be @runtime_checkable"
+
+    # Positive isinstance check: a duck-typed object exposing the
+    # documented `process(...)` method satisfies the protocol.
+    class _DuckPipeline:
+        def process(self, input_path, **kwargs):  # noqa: ARG002 - signature pin
+            return None
+
+    assert isinstance(_DuckPipeline(), Pipeline)
 
 
 def test_wrap_function_is_callable():
