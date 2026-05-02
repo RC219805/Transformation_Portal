@@ -55,7 +55,7 @@ def test_add_bytes_raises_cas_error_on_hash_mismatch(tmp_path):
     # No object should have been published, and no temp files should leak.
     assert not (tmp_path / "cas" / "objects" / expected_sha[:2] / expected_sha).exists()
     leftover = list((tmp_path / "cas" / "objects").rglob("*.tmp"))
-    assert leftover == []
+    assert not leftover
 
 
 def test_add_file_hash_mismatch_message_contains_both_hashes(tmp_path):

@@ -120,7 +120,7 @@ def test_enforced_torch_load_blocks_explicit_weights_only_false():
 
     with pytest.raises(ts.SecurityError, match="weights_only=False"):
         ts._enforced_torch_load("any.pt", weights_only=False)
-    assert calls == []
+    assert not calls
 
 
 def test_enforced_torch_load_passes_through_with_weights_only_true():
@@ -255,7 +255,9 @@ def test_uninstall_restores_original_loader(monkeypatch):
     ts._original_torch_load = original_load
 
     assert ts.uninstall_global_enforcement() is True
-    assert fake_torch.load is original_load
+    # `fake_torch.load` is set above as a dynamic ModuleType attribute, which
+    # pylint's static analysis can't see. The attribute is real at runtime.
+    assert fake_torch.load is original_load  # pylint: disable=no-member
     assert ts._enforcement_installed is False
     assert ts._original_torch_load is None
 

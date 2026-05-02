@@ -14,13 +14,16 @@ the under-covered paths that decide what happens when things go wrong:
 - _cache_path / _get_lock filename safety
 """
 
+# pytest fixtures are passed by parameter name, so pylint flags every test
+# function that takes the fixture as a parameter. Suppress at module scope.
+# pylint: disable=redefined-outer-name
+
 from __future__ import annotations
 
 import datetime as _dt
 import hashlib
 import json
-from pathlib import Path
-from typing import Any, Dict, List
+from typing import List
 from unittest.mock import patch
 
 import pytest

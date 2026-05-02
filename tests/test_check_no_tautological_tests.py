@@ -92,9 +92,9 @@ def test_ignores_assert_inside_string_literal(tmp_path):
 
     This is the realistic case in tests/test_retrofit_test_markers.py.
     """
-    body = "def test_x():\n" "    fixture = 'def test_inner():\\n    assert True\\n'\n" "    assert len(fixture) > 0\n"
+    body = "def test_x():\n" + "    fixture = 'def test_inner():\\n    assert True\\n'\n" + "    assert len(fixture) > 0\n"
     path = _write(tmp_path, "test_fixture_string.py", body)
-    assert find_tautological_asserts(path) == []
+    assert not find_tautological_asserts(path)
 
 
 def test_respects_escape_hatch_comment(tmp_path):
