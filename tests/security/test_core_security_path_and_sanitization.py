@@ -64,9 +64,7 @@ def test_safe_resolve_path_blocks_traversal_outside_allowed_root(tmp_path: Path)
         safe_resolve_path(outside_file, allowed_root=allowed_root)
 
 
-def test_is_safe_path_uses_current_working_directory_at_call_time(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
+def test_is_safe_path_uses_current_working_directory_at_call_time(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     workspace = tmp_path / "workspace"
     workspace.mkdir()
     repo_local_file = workspace / "inside.txt"
