@@ -62,6 +62,15 @@ function runNodeScript(scriptPath, ...args) {
   });
 }
 
+function runNodeScriptWithEnv(env, scriptPath, ...args) {
+  return execFileSync(process.execPath, [scriptPath, ...args], {
+    cwd: FRONTDOOR_ROOT,
+    env: { ...process.env, ...env },
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"]
+  });
+}
+
 function runNpmScript(...args) {
   return execFileSync("npm", args, {
     cwd: FRONTDOOR_ROOT,
@@ -84,6 +93,14 @@ test("portal CSS lint script checks generated artifact freshness and architectur
   assert.match(String(packageJson.scripts["check:css-layer-dry-run"] || ""), /check:css-layer-parity --/);
 
   assert.match(runNodeScript("scripts/build-portal-bundle.mjs", "--check-css"), /generated artifact is fresh/);
+  assert.match(
+    runNodeScriptWithEnv(
+      { PORTAL_CSS_DISABLE_COMPAT_OVERRIDES: "1" },
+      "scripts/build-portal-bundle.mjs",
+      "--check-css"
+    ),
+    /generated artifact is fresh/
+  );
   assert.match(runNodeScript("scripts/check-portal-css-contract.mjs"), /portal css contract: OK/);
   assert.match(runNodeScript("scripts/check-portal-css-architecture.mjs"), /portal css architecture: OK/);
   assert.match(runNodeScript("scripts/check-portal-utility-ownership.mjs"), /portal utility ownership: OK/);
@@ -128,7 +145,7 @@ test("portal CSS ownership drain keeps utilities layer honest", () => {
   assert.doesNotMatch(portalCssIndex, /operator-console-reset/);
   assert.equal(ownershipDrain.summary.utilityLayerImportsAfter, 3);
   assert.equal(ownershipDrain.summary.compatHoldCount, 0);
-  assert.ok(ownershipDrain.summary.overridesCompatRuleCount > 0);
+  assert.equal(ownershipDrain.summary.overridesCompatRuleCount, 0);
   assert.ok(
     ownershipDrain.moves.every((move) => move.parity === "green"),
     "all ownership drain moves must be parity green"

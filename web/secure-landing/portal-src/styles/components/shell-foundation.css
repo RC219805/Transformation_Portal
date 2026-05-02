@@ -639,3 +639,47 @@
     line-height: 1.55;
     color: var(--shell-muted);
 }
+
+/* Phase 7.D: portal-main padding. Replaces the previous `px-6 py-8` utilities
+   on #main-content plus the Phase 6 mobile override that tightened the inset
+   at <=960px. Component layer is the sole source of these declarations. */
+.portal-main {
+    padding: 2rem 1.5rem;
+}
+@media (max-width: 960px) {
+    .portal-main {
+        padding-left: 1rem;
+        padding-right: 1rem;
+        padding-top: 1rem;
+    }
+}
+
+/* Phase 7.E: portal-shell-card desktop padding/radius. Replaces the previous
+   per-shell `p-6 rounded-2xl` (queue/inspector/artifacts), `px-6 py-5 rounded-2xl`
+   (context), and `rounded-2xl` (logs) utility classes plus the Phase 6 mobile
+   override that tightened all six shells (including build-shell which had no
+   utility-layer padding/radius). All declarations are now component-owned. */
+.portal-shell-card--queue,
+.portal-shell-card--inspector,
+.portal-shell-card--artifacts {
+    padding: 1.5rem;
+    border-radius: 1rem;
+}
+.portal-shell-card--context {
+    padding: 1.25rem 1.5rem;
+    border-radius: 1rem;
+}
+.portal-shell-card--logs {
+    border-radius: 1rem;
+}
+@media (max-width: 767px) {
+    .portal-shell-card--build,
+    .portal-shell-card--queue,
+    .portal-shell-card--inspector,
+    .portal-shell-card--artifacts,
+    .portal-shell-card--logs,
+    .portal-shell-card--context {
+        padding: 1rem;
+        border-radius: 1.35rem;
+    }
+}

@@ -1998,14 +1998,6 @@
       "cssFile": "utilities.required.css",
       "reason": "observed in portal static markup or generated template output"
     },
-    "max-h-[350px]": {
-      "owner": "static",
-      "sources": [
-        "portal.html"
-      ],
-      "cssFile": "utilities.required.css",
-      "reason": "observed in portal static markup or generated template output"
-    },
     "max-h-[92vh]": {
       "owner": "static",
       "sources": [
@@ -2551,14 +2543,6 @@
       "cssFile": "utilities.required.css",
       "reason": "observed in portal static markup or generated template output"
     },
-    "pr-2": {
-      "owner": "static",
-      "sources": [
-        "portal.html"
-      ],
-      "cssFile": "utilities.required.css",
-      "reason": "observed in portal static markup or generated template output"
-    },
     "pt-4": {
       "owner": "static",
       "sources": [
@@ -2707,14 +2691,6 @@
       "reason": "observed in portal static markup or generated template output"
     },
     "py-4": {
-      "owner": "static",
-      "sources": [
-        "portal.html"
-      ],
-      "cssFile": "utilities.required.css",
-      "reason": "observed in portal static markup or generated template output"
-    },
-    "py-5": {
       "owner": "static",
       "sources": [
         "portal.html"

@@ -503,11 +503,6 @@
   border-radius: 1.75rem;
 }
 
-.py-5 {
-  padding-top: 1.25rem;
-  padding-bottom: 1.25rem;
-}
-
 .max-w-3xl {
   max-width: 48rem;
 }
@@ -1180,10 +1175,6 @@
 
 .break-words {
   overflow-wrap: break-word;
-}
-
-.max-h-\[350px\] {
-  max-height: 350px;
 }
 
 .pr-2 {

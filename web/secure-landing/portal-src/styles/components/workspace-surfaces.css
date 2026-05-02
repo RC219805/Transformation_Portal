@@ -252,3 +252,18 @@
         linear-gradient(180deg, rgba(15, 23, 42, 0.96), rgba(11, 16, 32, 0.98)),
         #0b1020;
 }
+
+/* Phase 7.F: artifact-review surface padding. Replaces the previous `p-4`
+   utility on #artifactPreviewStage and #artifactMetadataBar plus the Phase 6
+   override that tightened them on mobile. Padding is now component-owned at
+   both viewport bands. */
+.artifact-review-stage,
+.artifact-review-meta {
+    padding: 1rem;
+}
+@media (max-width: 767px) {
+    .artifact-review-stage,
+    .artifact-review-meta {
+        padding: 0.95rem;
+    }
+}

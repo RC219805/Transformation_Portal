@@ -2302,10 +2302,11 @@ test("shared UI tokens stay synced to the canonical source", () => {
   assert.match(portalCssIndex, /@import "\.\/utilities\.required\.css" layer\(utilities\);/);
   assert.match(portalCssIndex, /@import "\.\/utilities\.dynamic\.css" layer\(utilities\);/);
   assert.match(portalCssIndex, /@import "\.\/utilities\.compat-hold\.css" layer\(utilities\);/);
-  assert.match(portalCssIndex, /@import "\.\/overrides\.compat\.css" layer\(overrides\);/);
+  assert.doesNotMatch(portalCssIndex, /@import "\.\/overrides\.compat\.css" layer\(overrides\);/);
   assert.doesNotMatch(portalCssIndex, /overrides\.operator-console-reset\.css/);
   assert.doesNotMatch(portalCssIndex, /workspace-performance\.css" layer\(utilities\)/);
   assert.doesNotMatch(portalCssIndex, /utilities\.deprecated\.css/);
+  assert.match(portalCssIndex, /@import "\.\/overrides\.performance\.css" layer\(overrides\);/);
   assert.match(portalCssIndex, /@import "\.\/overrides\.accessibility\.css" layer\(overrides\);/);
   const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const cssClassLiteral = (value) => value.replace(/[^A-Za-z0-9_-]/g, (character) => `\\${character}`);

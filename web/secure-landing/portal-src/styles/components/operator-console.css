@@ -623,3 +623,12 @@ textarea {
         grid-template-columns: 1fr;
     }
 }
+
+/* Phase 7.C: queue scrollbar gutter (was a `pr-2` utility on the markup
+   plus a Phase 6 override that zeroed it at <=767px). Now a single
+   component-layer rule so padding-right is owned at all viewports. */
+@media (min-width: 768px) {
+    .portal-shell-card--queue .custom-scrollbar {
+        padding-right: 0.5rem;
+    }
+}

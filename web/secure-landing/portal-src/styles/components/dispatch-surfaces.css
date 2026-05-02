@@ -250,3 +250,28 @@
         transform: translateX(100%);
     }
 }
+
+/* Phase 7.G: action-control button chrome. Replaces the previous Phase 6
+   compatibility-final-order overrides for .portal-action-control plus its
+   shared chrome with .hero-action-secondary / .operator-action-btn-secondary.
+   The conflicting utilities (rounded-full / rounded-lg / border-slate-200 /
+   border-slate-300 / dark:border-slate-700 / bg-white / dark:bg-slate-900)
+   were dropped from the four .portal-action-control button class lists in
+   portal.html, so the components layer now owns these declarations directly. */
+.portal-action-control {
+    min-height: var(--ux-target-min-size);
+    border-radius: var(--ux-radius-md);
+}
+.hero-action-secondary,
+.operator-action-btn-secondary,
+.portal-action-control {
+    border-color: var(--ux-border-subtle);
+    background: var(--ux-surface-elevated);
+}
+.dark .hero-action-secondary,
+.dark .operator-action-btn-secondary,
+.dark .stepper-nav-btn,
+.dark .dispatch-tool-btn,
+.dark .portal-action-control {
+    background: var(--ux-surface-muted);
+}
