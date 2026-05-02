@@ -307,9 +307,9 @@ export function createDeferredReviewSurfaceApi(host) {
 
   function _isVlmCaptionSidecarArtifact(artifact) {
     if (!artifact) return false;
-    const role = String(artifactDisplayHint(artifact)?.role || "").toLowerCase();
     const relPath = String(artifact.relative_path || artifact.path || "").toLowerCase();
-    return role === "vlm_caption" || relPath.endsWith(".vlm_captioning.sidecar.json");
+    const type = String(artifact.artifact_type || "").toLowerCase();
+    return type === "vlm_caption_sidecar" || relPath.endsWith(".vlm_captioning.sidecar.json");
   }
 
   function _captionStemFromArtifact(artifact) {

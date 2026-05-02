@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
@@ -8,6 +9,8 @@ import pytest
 from transformation_portal.vlm_captioning.fastvlm_runtime import (
     FastVLMRuntimeConfig,
     build_fastvlm_sidecar,
+    config_from_env,
+    resolve_fastvlm_model_path,
     run_fastvlm_caption,
 )
 from transformation_portal.vlm_captioning.image_proxy import build_vlm_image_proxy
@@ -56,6 +59,44 @@ def test_runtime_success_output(tmp_path: Path) -> None:
     assert result.caption_parse.caption["scene"] == "Pool"
     assert result.raw_stdout
     assert result.raw_stderr == ""
+
+
+def test_default_runtime_paths_resolve_from_repo_root_when_cwd_changes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("TP_FASTVLM_PYTHON", raising=False)
+    monkeypatch.delenv("TP_FASTVLM_MLX_VLM_DIR", raising=False)
+    monkeypatch.delenv("TP_FASTVLM_MODEL", raising=False)
+    repo_root = Path(__file__).resolve().parents[2]
+
+    model_path = resolve_fastvlm_model_path("default")
+    config = config_from_env()
+
+    assert model_path == repo_root / ".runtime/fastvlm/checkpoints/FastVLM-1.5B-int8"
+    assert config.python_path == repo_root / ".runtime/fastvlm/.venv-fastvlm/bin/python"
+    assert config.mlx_vlm_dir == repo_root / ".runtime/fastvlm/mlx-vlm"
+    assert config.model_path == repo_root / ".runtime/fastvlm/checkpoints/FastVLM-1.5B-int8"
+
+
+def test_runtime_accepts_bare_python_executable_from_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    runtime_dir = tmp_path / "runtime"
+    _write_fake_mlx_module(
+        runtime_dir,
+        "print('SCENE=Pool; MATERIALS=stone; FEATURES=steps; NATURAL=sky; LIGHTING=daylight; ISSUES=none; UNCERTAIN=none.')\n",
+    )
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    fake_python = fake_bin / "python3"
+    fake_python.symlink_to(Path(sys.executable))
+    monkeypatch.setenv("PATH", f"{fake_bin}{os.pathsep}{os.environ.get('PATH', '')}")
+    config, image = _config(tmp_path, runtime_dir)
+    config = FastVLMRuntimeConfig(**{**config.__dict__, "python_path": Path("python3")})
+
+    result = run_fastvlm_caption(config, image)
+
+    assert result.success is True
+    assert Path(result.command[0]).resolve() == Path(sys.executable).resolve()
 
 
 def test_runtime_timeout(tmp_path: Path) -> None:

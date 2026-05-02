@@ -11,8 +11,11 @@ from .fastvlm_runtime import (
     FastVLMRuntimeConfig,
     FastVLMRuntimeResult,
     build_fastvlm_sidecar,
+    default_fastvlm_runtime_root,
     resolve_fastvlm_model_id,
     resolve_fastvlm_model_path,
+    resolve_fastvlm_python_executable,
+    resolve_fastvlm_runtime_path,
     run_fastvlm_caption,
 )
 from .image_proxy import VLMImageProxy, build_vlm_image_proxy
@@ -27,8 +30,11 @@ __all__ = [
     "VLMImageProxy",
     "build_fastvlm_sidecar",
     "build_vlm_image_proxy",
+    "default_fastvlm_runtime_root",
     "parse_fastvlm_caption",
     "resolve_fastvlm_model_id",
     "resolve_fastvlm_model_path",
+    "resolve_fastvlm_python_executable",
+    "resolve_fastvlm_runtime_path",
     "run_fastvlm_caption",
 ]

@@ -61,8 +61,10 @@ from ..vlm_captioning import (
     FastVLMRuntimeConfig,
     build_fastvlm_sidecar,
     build_vlm_image_proxy,
+    default_fastvlm_runtime_root,
     resolve_fastvlm_model_id,
     resolve_fastvlm_model_path,
+    resolve_fastvlm_runtime_path,
     run_fastvlm_caption,
 )
 from ..vlm_captioning.fastvlm_runtime import dumps_sidecar
@@ -4195,7 +4197,7 @@ class EnhanceOrchestrator:
             env_path = os.getenv("TP_FASTVLM_MODEL") if role == "default" else None
         else:
             env_path = None
-        model_path = Path(env_path) if env_path else resolve_fastvlm_model_path(normalized)
+        model_path = resolve_fastvlm_runtime_path(env_path) if env_path else resolve_fastvlm_model_path(normalized)
         model_role = role if role in FASTVLM_MODEL_ROLES else None
         return model_path, model_role, resolve_fastvlm_model_id(model_path, model_role)
 
@@ -4267,14 +4269,11 @@ class EnhanceOrchestrator:
                 "raw_path": str(raw_path),
             }
 
-        python_path = Path(
-            getattr(self.config, "fastvlm_python_executable", None)
-            or os.getenv("TP_FASTVLM_PYTHON", ".runtime/fastvlm/.venv-fastvlm/bin/python")
-        )
-        mlx_vlm_dir = Path(
-            getattr(self.config, "fastvlm_mlx_vlm_dir", None)
-            or os.getenv("TP_FASTVLM_MLX_VLM_DIR", ".runtime/fastvlm/mlx-vlm")
-        )
+        runtime_root = default_fastvlm_runtime_root()
+        python_config = getattr(self.config, "fastvlm_python_executable", None) or os.getenv("TP_FASTVLM_PYTHON")
+        mlx_vlm_config = getattr(self.config, "fastvlm_mlx_vlm_dir", None) or os.getenv("TP_FASTVLM_MLX_VLM_DIR")
+        python_path = Path(str(python_config).strip()) if python_config else runtime_root / ".venv-fastvlm/bin/python"
+        mlx_vlm_dir = resolve_fastvlm_runtime_path(str(mlx_vlm_config)) if mlx_vlm_config else runtime_root / "mlx-vlm"
         max_tokens = int(os.getenv("TP_FASTVLM_MAX_TOKENS", "120"))
         temperature = float(os.getenv("TP_FASTVLM_TEMPERATURE", "0.0"))
         timeout_seconds = int(getattr(self.config, "fastvlm_timeout_seconds", 180) or 180)

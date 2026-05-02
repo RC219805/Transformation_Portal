@@ -204,6 +204,27 @@ def test_run_card_schema_rejects_invalid_merkle_root():
         _validate_run_card_payload(payload, _run_card_schema_path())
 
 
+def test_run_card_schema_rejects_result_summary_captioning_quality_gate_use() -> None:
+    pytest.importorskip("jsonschema")
+    for version in ("v1", "v2"):
+        payload = json.loads(json.dumps(_valid_run_card_payload()))
+        payload["run_card_version"] = version
+        payload["result_summary"] = [
+            {
+                "image": "image.tif",
+                "status": "ok",
+                "captioning_status": {
+                    "enabled": True,
+                    "role": "advisory",
+                    "used_for_quality_gate": True,
+                },
+            }
+        ]
+
+        with pytest.raises(RuntimeError, match=r"result_summary\.0\.captioning_status\.used_for_quality_gate"):
+            _validate_run_card_payload(payload, _run_card_schema_path(version))
+
+
 def test_run_card_backend_semantics_rejects_mismatch_without_wrapper():
     payload = _valid_run_card_payload()
     payload["backend_selection"]["resolved"] = "depth_pro"

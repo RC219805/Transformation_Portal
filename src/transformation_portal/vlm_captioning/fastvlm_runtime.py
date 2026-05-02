@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import shutil
 import subprocess
 import time
 from dataclasses import dataclass
@@ -30,6 +31,51 @@ DEFAULT_FASTVLM_PROMPT = (
     "LIGHTING=<short>; ISSUES=<items>; UNCERTAIN=<items>."
 )
 ADVISORY_WARNING = "FastVLM output is advisory and may hallucinate objects or under-report quality issues."
+
+
+def _find_repo_root(start: Path | None = None) -> Path:
+    """Resolve the checkout root for repo-local optional runtimes."""
+    current = (start or Path(__file__).resolve()).resolve()
+    search_root = current if current.is_dir() else current.parent
+    for parent in [search_root, *search_root.parents]:
+        if (parent / "pyproject.toml").exists() and (parent / "src").exists():
+            return parent
+    return Path(__file__).resolve().parents[3]
+
+
+def default_fastvlm_runtime_root() -> Path:
+    """Return the repo-local FastVLM runtime root."""
+    return _find_repo_root() / ".runtime" / "fastvlm"
+
+
+def _has_path_separator(candidate: str) -> bool:
+    return os.sep in candidate or (os.altsep is not None and os.altsep in candidate)
+
+
+def resolve_fastvlm_runtime_path(candidate: Path | str) -> Path:
+    """Resolve runtime-local paths against the checkout root, not cwd."""
+    path = Path(os.fspath(candidate).strip()).expanduser()
+    if path.is_absolute():
+        return path
+    return _find_repo_root() / path
+
+
+def resolve_fastvlm_python_executable(candidate: Path | str) -> str:
+    """Resolve a FastVLM Python executable path or PATH command."""
+    value = os.fspath(candidate).strip()
+    if not value:
+        raise FileNotFoundError("FastVLM Python executable must be a non-empty path or command.")
+
+    if value.startswith(".") or _has_path_separator(value):
+        path = resolve_fastvlm_runtime_path(value)
+        if not path.exists():
+            raise FileNotFoundError(f"FastVLM Python executable not found: {path}")
+        return os.path.abspath(os.fspath(path))
+
+    resolved = shutil.which(value)
+    if resolved is None:
+        raise FileNotFoundError(f"FastVLM Python executable not found on PATH: {value}")
+    return resolved
 
 
 @dataclass(frozen=True)
@@ -89,24 +135,41 @@ def resolve_fastvlm_model_path(selector: str, *, runtime_root: Path | None = Non
     normalized = str(selector or "default").strip()
     role = normalized.lower()
     if role in FASTVLM_CHECKPOINT_DIRS:
-        root = runtime_root or Path(".runtime/fastvlm")
+        root = runtime_root or default_fastvlm_runtime_root()
         return root / "checkpoints" / FASTVLM_CHECKPOINT_DIRS[role]
-    return Path(normalized)
+    model_path = Path(normalized).expanduser()
+    if model_path.is_absolute():
+        return model_path
+    if normalized.startswith(".") or _has_path_separator(normalized):
+        return resolve_fastvlm_runtime_path(model_path)
+    return model_path
 
 
 def config_from_env(*, model_role: str = "default") -> FastVLMRuntimeConfig:
     """Build FastVLM runtime config from TP_FASTVLM_* environment variables."""
     enabled_value = os.getenv("TP_FASTVLM_ENABLED", "0").strip().lower()
     model_env = "TP_FASTVLM_REVIEW_MODEL" if model_role == "review" else "TP_FASTVLM_MODEL"
-    model_default = Path(".runtime/fastvlm/checkpoints") / FASTVLM_CHECKPOINT_DIRS.get(
-        model_role,
-        FASTVLM_CHECKPOINT_DIRS["default"],
+    runtime_root = default_fastvlm_runtime_root()
+    model_default = (
+        runtime_root
+        / "checkpoints"
+        / FASTVLM_CHECKPOINT_DIRS.get(
+            model_role,
+            FASTVLM_CHECKPOINT_DIRS["default"],
+        )
     )
+    python_env = os.getenv("TP_FASTVLM_PYTHON")
+    mlx_vlm_env = os.getenv("TP_FASTVLM_MLX_VLM_DIR")
+    model_value = os.getenv(model_env)
     return FastVLMRuntimeConfig(
         enabled=enabled_value in {"1", "true", "yes", "on"},
-        python_path=Path(os.getenv("TP_FASTVLM_PYTHON", ".runtime/fastvlm/.venv-fastvlm/bin/python")),
-        mlx_vlm_dir=Path(os.getenv("TP_FASTVLM_MLX_VLM_DIR", ".runtime/fastvlm/mlx-vlm")),
-        model_path=Path(os.getenv(model_env, str(model_default))),
+        python_path=(
+            Path(python_env.strip()) if python_env and python_env.strip() else runtime_root / ".venv-fastvlm/bin/python"
+        ),
+        mlx_vlm_dir=(
+            resolve_fastvlm_runtime_path(mlx_vlm_env) if mlx_vlm_env and mlx_vlm_env.strip() else runtime_root / "mlx-vlm"
+        ),
+        model_path=resolve_fastvlm_runtime_path(model_value) if model_value and model_value.strip() else model_default,
         max_tokens=int(os.getenv("TP_FASTVLM_MAX_TOKENS", "120")),
         temperature=float(os.getenv("TP_FASTVLM_TEMPERATURE", "0.0")),
         timeout_seconds=int(os.getenv("TP_FASTVLM_TIMEOUT_SECONDS", "180")),
@@ -172,8 +235,10 @@ def run_fastvlm_caption(
 
     if not config.enabled:
         return fail("disabled", "FastVLM captioning is disabled.")
-    if not config.python_path.exists():
-        return fail("missing_runtime", f"FastVLM Python executable not found: {config.python_path}")
+    try:
+        command[0] = resolve_fastvlm_python_executable(config.python_path)
+    except FileNotFoundError as exc:
+        return fail("missing_runtime", str(exc))
     if not config.mlx_vlm_dir.exists() or not config.mlx_vlm_dir.is_dir():
         return fail("missing_runtime", f"FastVLM mlx-vlm directory not found: {config.mlx_vlm_dir}")
     if not config.model_path.exists():

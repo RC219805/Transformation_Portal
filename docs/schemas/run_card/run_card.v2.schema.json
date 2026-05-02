@@ -1047,6 +1047,9 @@
               }
             },
             "additionalProperties": true
+          },
+          "captioning_status": {
+            "$ref": "#/properties/captioning_status"
           }
         },
         "additionalProperties": true
