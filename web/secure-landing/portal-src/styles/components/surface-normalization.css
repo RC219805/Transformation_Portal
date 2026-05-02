@@ -144,7 +144,10 @@ html {
 }
 
 .portal-topbar,
-.portal-context-shell,
+.portal-context-shell {
+    border-radius: var(--ux-radius-lg);
+}
+
 .workspace-shell,
 .shell-panel,
 .shell-panel-strong,
@@ -163,6 +166,8 @@ html {
 #reconstructionRuntimeSummary,
 .build-step-tab {
     border-radius: var(--ux-radius-lg);
+    border-color: var(--ux-border-subtle);
+    background: var(--ux-surface-elevated);
 }
 
 .portal-topbar,
@@ -171,27 +176,6 @@ html {
 .shell-panel,
 .shell-panel-strong {
     box-shadow: var(--ux-shadow-surface);
-}
-
-.workspace-shell,
-.shell-panel,
-.shell-panel-strong,
-.panel-subtle,
-.stat-tile,
-.console-context-card,
-.console-action-rail,
-.build-pulse-card,
-.runtime-briefing-card,
-.review-status-banner,
-.review-provenance-item,
-.review-compare-summary,
-#artifactPreviewStage,
-#artifactMetadataBar,
-#artifactMetadataCard,
-#reconstructionRuntimeSummary,
-.build-step-tab {
-    border-color: var(--ux-border-subtle);
-    background: var(--ux-surface-elevated);
 }
 
 .dark .workspace-shell,
@@ -255,30 +239,39 @@ html {
 
 .console-action-rail[data-tone="ready"],
 .console-action-rail[data-tone="warning"],
-.console-action-rail[data-tone="blocked"],
-.review-status-banner[data-tone="ready"],
-.review-status-banner[data-tone="warning"],
-.review-status-banner[data-tone="error"],
-.review-status-banner[data-tone="info"] {
+.console-action-rail[data-tone="blocked"] {
     background: var(--ux-surface-overlay);
 }
 
-.console-action-rail[data-tone="ready"],
-.review-status-banner[data-tone="ready"] {
+.console-action-rail[data-tone="ready"] {
     border-color: rgba(15, 118, 110, 0.24);
 }
 
-.console-action-rail[data-tone="warning"],
-.review-status-banner[data-tone="warning"] {
+.console-action-rail[data-tone="warning"] {
     border-color: rgba(180, 83, 9, 0.26);
 }
 
-.console-action-rail[data-tone="blocked"],
+.console-action-rail[data-tone="blocked"] {
+    border-color: rgba(185, 28, 28, 0.26);
+}
+
+.review-status-banner[data-tone="ready"] {
+    background: var(--ux-surface-overlay);
+    border-color: rgba(15, 118, 110, 0.24);
+}
+
+.review-status-banner[data-tone="warning"] {
+    background: var(--ux-surface-overlay);
+    border-color: rgba(180, 83, 9, 0.26);
+}
+
 .review-status-banner[data-tone="error"] {
+    background: var(--ux-surface-overlay);
     border-color: rgba(185, 28, 28, 0.26);
 }
 
 .review-status-banner[data-tone="info"] {
+    background: var(--ux-surface-overlay);
     border-color: rgba(8, 145, 178, 0.24);
 }
 

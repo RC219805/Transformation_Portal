@@ -3574,5 +3574,52 @@
     "renderedPortalCssFingerprintAfter": "d72696ab972c",
     "sentinelStatePreserved": true,
     "parityBaselineChanged": false
+  },
+  "phase11SurfaceListConsolidationState": {
+    "phase": "phase-11-css-surface-list-consolidation",
+    "targetFile": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
+    "baselinePath": "web/secure-landing/portal-src/styles/architecture-baseline.json",
+    "baselineSha256": "ab9f4a92eb699d811a85d737ef3f5cb2b285e6c809afcf34bbf179e1e229d17a",
+    "duplicateContextCountBefore": 85,
+    "duplicateContextCountAfter": 76,
+    "additiveDuplicateContextCountBefore": 29,
+    "additiveDuplicateContextCountAfter": 20,
+    "conflictingPermanentContextCountBefore": 56,
+    "conflictingPermanentContextCountAfter": 56,
+    "unownedDuplicateContextCountAfter": 0,
+    "hotspotDuplicateContextCountAfter": 0,
+    "consolidatedContextCount": 9,
+    "expectedConsolidatedContextCount": 9,
+    "consolidatedContexts": [
+      "#artifactMetadataBar|||components|||",
+      "#artifactMetadataCard|||components|||",
+      "#artifactPreviewStage|||components|||",
+      "#reconstructionRuntimeSummary|||components|||",
+      ".review-compare-summary|||components|||",
+      ".review-status-banner[data-tone=\"error\"]|||components|||",
+      ".review-status-banner[data-tone=\"info\"]|||components|||",
+      ".review-status-banner[data-tone=\"ready\"]|||components|||",
+      ".review-status-banner[data-tone=\"warning\"]|||components|||"
+    ],
+    "remainingTargetContexts": [],
+    "unexpectedResolvedContextCount": 0,
+    "deferredOutOfScopeCandidateCount": 20,
+    "deferredReasonCounts": {
+      "selector-not-phase11-target": 20
+    },
+    "removedRawBytes": 246,
+    "removedGzipBytes": 9,
+    "generatedRawBytesBefore": 80599,
+    "generatedRawBytesAfter": 80353,
+    "generatedRawByteDelta": -246,
+    "generatedGzipBytesBefore": 15721,
+    "generatedGzipBytesAfter": 15712,
+    "generatedGzipByteDelta": -9,
+    "generatedPortalCssHashBefore": "fce12e29f1800375b5c34e1f0e1ebc9d3981ab1a6f731bea6a3e0e0d2212151e",
+    "generatedPortalCssHashAfter": "67a600aafdfc066a8adf373e1323b287939977ebc306d4e1c0635069fddbbd87",
+    "renderedPortalCssFingerprintBefore": "d72696ab972c",
+    "renderedPortalCssFingerprintAfter": "8f492bf35cbe",
+    "sentinelStatePreserved": true,
+    "parityBaselineChanged": false
   }
 }

@@ -305,28 +305,19 @@
         },
         {
           "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 146,
+          "line": 151,
           "column": 1,
           "layer": "components",
-          "declarationSignature": "bc00e11847ade2f927847a973b0a73562a961bf8",
+          "declarationSignature": "1e80b0a0dff5e1747d9e486447d2ccd3ee43fcaa",
           "properties": [
+            "background",
+            "border-color",
             "border-radius"
           ]
         },
         {
           "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 176,
-          "column": 1,
-          "layer": "components",
-          "declarationSignature": "e3c7a9b72249a3ca65b4134dee00060cb7fa297f",
-          "properties": [
-            "background",
-            "border-color"
-          ]
-        },
-        {
-          "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 239,
+          "line": 223,
           "column": 1,
           "layer": "components",
           "declarationSignature": "e09826935d3e1a20d02fd703970aa2e014ae2ad5",
@@ -371,7 +362,7 @@
         },
         {
           "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 217,
+          "line": 201,
           "column": 1,
           "layer": "components",
           "declarationSignature": "127aa2eacbbf1250e346e6fd1dab1f2aca44d6c2",
@@ -467,23 +458,14 @@
         },
         {
           "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 146,
+          "line": 151,
           "column": 1,
           "layer": "components",
-          "declarationSignature": "bc00e11847ade2f927847a973b0a73562a961bf8",
-          "properties": [
-            "border-radius"
-          ]
-        },
-        {
-          "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 176,
-          "column": 1,
-          "layer": "components",
-          "declarationSignature": "e3c7a9b72249a3ca65b4134dee00060cb7fa297f",
+          "declarationSignature": "1e80b0a0dff5e1747d9e486447d2ccd3ee43fcaa",
           "properties": [
             "background",
-            "border-color"
+            "border-color",
+            "border-radius"
           ]
         }
       ],
@@ -524,7 +506,7 @@
         },
         {
           "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 217,
+          "line": 201,
           "column": 1,
           "layer": "components",
           "declarationSignature": "127aa2eacbbf1250e346e6fd1dab1f2aca44d6c2",
@@ -567,7 +549,7 @@
         },
         {
           "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 256,
+          "line": 240,
           "column": 1,
           "layer": "components",
           "declarationSignature": "4e0c7329b18cc1dcdd13971e1a780f15c5c2b673",
@@ -577,7 +559,7 @@
         },
         {
           "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 276,
+          "line": 254,
           "column": 1,
           "layer": "components",
           "declarationSignature": "39df4966b0357116475c5b724a5cfc5b87a62b66",
@@ -620,7 +602,7 @@
         },
         {
           "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 256,
+          "line": 240,
           "column": 1,
           "layer": "components",
           "declarationSignature": "4e0c7329b18cc1dcdd13971e1a780f15c5c2b673",
@@ -630,7 +612,7 @@
         },
         {
           "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 266,
+          "line": 246,
           "column": 1,
           "layer": "components",
           "declarationSignature": "4ff838967569aecb53d6a515ec012c08430c764d",
@@ -673,7 +655,7 @@
         },
         {
           "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 256,
+          "line": 240,
           "column": 1,
           "layer": "components",
           "declarationSignature": "4e0c7329b18cc1dcdd13971e1a780f15c5c2b673",
@@ -683,7 +665,7 @@
         },
         {
           "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 271,
+          "line": 250,
           "column": 1,
           "layer": "components",
           "declarationSignature": "4d6a576f4b984528794f3cb347ad3771ae2b7640",
@@ -730,28 +712,19 @@
         },
         {
           "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 146,
+          "line": 151,
           "column": 1,
           "layer": "components",
-          "declarationSignature": "bc00e11847ade2f927847a973b0a73562a961bf8",
+          "declarationSignature": "1e80b0a0dff5e1747d9e486447d2ccd3ee43fcaa",
           "properties": [
+            "background",
+            "border-color",
             "border-radius"
           ]
         },
         {
           "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 176,
-          "column": 1,
-          "layer": "components",
-          "declarationSignature": "e3c7a9b72249a3ca65b4134dee00060cb7fa297f",
-          "properties": [
-            "background",
-            "border-color"
-          ]
-        },
-        {
-          "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 246,
+          "line": 230,
           "column": 1,
           "layer": "components",
           "declarationSignature": "c5395be76a8d9c8363cde82a115b6c18f81aa2cd",
@@ -811,28 +784,19 @@
         },
         {
           "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 146,
+          "line": 151,
           "column": 1,
           "layer": "components",
-          "declarationSignature": "bc00e11847ade2f927847a973b0a73562a961bf8",
+          "declarationSignature": "1e80b0a0dff5e1747d9e486447d2ccd3ee43fcaa",
           "properties": [
+            "background",
+            "border-color",
             "border-radius"
           ]
         },
         {
           "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 176,
-          "column": 1,
-          "layer": "components",
-          "declarationSignature": "e3c7a9b72249a3ca65b4134dee00060cb7fa297f",
-          "properties": [
-            "background",
-            "border-color"
-          ]
-        },
-        {
-          "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 239,
+          "line": 223,
           "column": 1,
           "layer": "components",
           "declarationSignature": "e09826935d3e1a20d02fd703970aa2e014ae2ad5",
@@ -887,7 +851,7 @@
         },
         {
           "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 217,
+          "line": 201,
           "column": 1,
           "layer": "components",
           "declarationSignature": "127aa2eacbbf1250e346e6fd1dab1f2aca44d6c2",
@@ -1022,7 +986,7 @@
         },
         {
           "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 197,
+          "line": 181,
           "column": 1,
           "layer": "components",
           "declarationSignature": "fc2586449f338803de12e357dc8f462d2c3b6bb0",
@@ -1065,7 +1029,7 @@
         },
         {
           "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 197,
+          "line": 181,
           "column": 1,
           "layer": "components",
           "declarationSignature": "fc2586449f338803de12e357dc8f462d2c3b6bb0",
@@ -1109,7 +1073,7 @@
         },
         {
           "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 197,
+          "line": 181,
           "column": 1,
           "layer": "components",
           "declarationSignature": "fc2586449f338803de12e357dc8f462d2c3b6bb0",
@@ -1119,7 +1083,7 @@
         },
         {
           "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 252,
+          "line": 236,
           "column": 1,
           "layer": "components",
           "declarationSignature": "4e0c7329b18cc1dcdd13971e1a780f15c5c2b673",
@@ -1174,7 +1138,7 @@
         },
         {
           "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 197,
+          "line": 181,
           "column": 1,
           "layer": "components",
           "declarationSignature": "fc2586449f338803de12e357dc8f462d2c3b6bb0",
@@ -1325,7 +1289,7 @@
         },
         {
           "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 197,
+          "line": 181,
           "column": 1,
           "layer": "components",
           "declarationSignature": "fc2586449f338803de12e357dc8f462d2c3b6bb0",
@@ -1368,7 +1332,7 @@
         },
         {
           "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 197,
+          "line": 181,
           "column": 1,
           "layer": "components",
           "declarationSignature": "fc2586449f338803de12e357dc8f462d2c3b6bb0",
@@ -1412,7 +1376,7 @@
         },
         {
           "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 197,
+          "line": 181,
           "column": 1,
           "layer": "components",
           "declarationSignature": "fc2586449f338803de12e357dc8f462d2c3b6bb0",
@@ -1520,7 +1484,7 @@
         },
         {
           "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 197,
+          "line": 181,
           "column": 1,
           "layer": "components",
           "declarationSignature": "fc2586449f338803de12e357dc8f462d2c3b6bb0",
@@ -1697,7 +1661,7 @@
         },
         {
           "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 285,
+          "line": 278,
           "column": 1,
           "layer": "components",
           "declarationSignature": "fc2586449f338803de12e357dc8f462d2c3b6bb0",
@@ -1943,7 +1907,7 @@
         },
         {
           "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 299,
+          "line": 292,
           "column": 1,
           "layer": "components",
           "declarationSignature": "694e44d7a8a88bc375ad20dce876a6cb30275fc1",
@@ -2118,7 +2082,7 @@
         },
         {
           "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 217,
+          "line": 201,
           "column": 1,
           "layer": "components",
           "declarationSignature": "127aa2eacbbf1250e346e6fd1dab1f2aca44d6c2",
@@ -2176,7 +2140,7 @@
         },
         {
           "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 299,
+          "line": 292,
           "column": 1,
           "layer": "components",
           "declarationSignature": "694e44d7a8a88bc375ad20dce876a6cb30275fc1",
@@ -2319,23 +2283,14 @@
         },
         {
           "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 146,
+          "line": 151,
           "column": 1,
           "layer": "components",
-          "declarationSignature": "bc00e11847ade2f927847a973b0a73562a961bf8",
-          "properties": [
-            "border-radius"
-          ]
-        },
-        {
-          "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 176,
-          "column": 1,
-          "layer": "components",
-          "declarationSignature": "e3c7a9b72249a3ca65b4134dee00060cb7fa297f",
+          "declarationSignature": "1e80b0a0dff5e1747d9e486447d2ccd3ee43fcaa",
           "properties": [
             "background",
-            "border-color"
+            "border-color",
+            "border-radius"
           ]
         }
       ],
@@ -2478,7 +2433,7 @@
         },
         {
           "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 168,
+          "line": 173,
           "column": 1,
           "layer": "components",
           "declarationSignature": "e09826935d3e1a20d02fd703970aa2e014ae2ad5",
@@ -2488,7 +2443,7 @@
         },
         {
           "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 229,
+          "line": 213,
           "column": 1,
           "layer": "components",
           "declarationSignature": "e7b8e54380a88ae3ef0197e8d172d7a60c5dc472",
@@ -2544,7 +2499,7 @@
         },
         {
           "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 168,
+          "line": 173,
           "column": 1,
           "layer": "components",
           "declarationSignature": "e09826935d3e1a20d02fd703970aa2e014ae2ad5",
@@ -2565,48 +2520,6 @@
       "parity": "green"
     },
     {
-      "key": ".review-compare-summary|||components|||",
-      "selector": ".review-compare-summary",
-      "layer": "components",
-      "atRuleContext": [],
-      "stateContext": [],
-      "category": "additive",
-      "hotspot": false,
-      "records": [
-        {
-          "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 146,
-          "column": 1,
-          "layer": "components",
-          "declarationSignature": "bc00e11847ade2f927847a973b0a73562a961bf8",
-          "properties": [
-            "border-radius"
-          ]
-        },
-        {
-          "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 176,
-          "column": 1,
-          "layer": "components",
-          "declarationSignature": "e3c7a9b72249a3ca65b4134dee00060cb7fa297f",
-          "properties": [
-            "background",
-            "border-color"
-          ]
-        }
-      ],
-      "owners": [
-        "portal-css-architecture"
-      ],
-      "ownerReason": "Additive ownership: .review-compare-summary splits non-overlapping declarations across surface-normalization.css while preserving the current computed-style parity.",
-      "phase": "phase-9-duplicate-ownership-closure",
-      "contextType": "surface-normalization-final-pass",
-      "disposition": "report-only",
-      "removalStatus": "removable-later",
-      "declarationConflict": "additive",
-      "parity": "green"
-    },
-    {
       "key": ".review-provenance-item|||components|||",
       "selector": ".review-provenance-item",
       "layer": "components",
@@ -2617,28 +2530,19 @@
       "records": [
         {
           "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 146,
+          "line": 151,
           "column": 1,
           "layer": "components",
-          "declarationSignature": "bc00e11847ade2f927847a973b0a73562a961bf8",
+          "declarationSignature": "1e80b0a0dff5e1747d9e486447d2ccd3ee43fcaa",
           "properties": [
+            "background",
+            "border-color",
             "border-radius"
           ]
         },
         {
           "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 176,
-          "column": 1,
-          "layer": "components",
-          "declarationSignature": "e3c7a9b72249a3ca65b4134dee00060cb7fa297f",
-          "properties": [
-            "background",
-            "border-color"
-          ]
-        },
-        {
-          "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 239,
+          "line": 223,
           "column": 1,
           "layer": "components",
           "declarationSignature": "e09826935d3e1a20d02fd703970aa2e014ae2ad5",
@@ -2680,7 +2584,7 @@
         },
         {
           "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 217,
+          "line": 201,
           "column": 1,
           "layer": "components",
           "declarationSignature": "127aa2eacbbf1250e346e6fd1dab1f2aca44d6c2",
@@ -2695,178 +2599,6 @@
       "ownerReason": "Additive ownership: .review-provenance-label splits non-overlapping declarations across operator-console.css, surface-normalization.css while preserving the current computed-style parity.",
       "phase": "phase-9-duplicate-ownership-closure",
       "contextType": "surface-normalization-final-pass",
-      "disposition": "report-only",
-      "removalStatus": "removable-later",
-      "declarationConflict": "additive",
-      "parity": "green"
-    },
-    {
-      "key": ".review-status-banner[data-tone=\"error\"]|||components|||",
-      "selector": ".review-status-banner[data-tone=\"error\"]",
-      "layer": "components",
-      "atRuleContext": [],
-      "stateContext": [
-        "data-state"
-      ],
-      "category": "additive",
-      "hotspot": false,
-      "records": [
-        {
-          "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 256,
-          "column": 1,
-          "layer": "components",
-          "declarationSignature": "4e0c7329b18cc1dcdd13971e1a780f15c5c2b673",
-          "properties": [
-            "background"
-          ]
-        },
-        {
-          "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 276,
-          "column": 1,
-          "layer": "components",
-          "declarationSignature": "39df4966b0357116475c5b724a5cfc5b87a62b66",
-          "properties": [
-            "border-color"
-          ]
-        }
-      ],
-      "owners": [
-        "portal-css-architecture"
-      ],
-      "ownerReason": "Additive ownership: .review-status-banner[data-tone=\"error\"] splits non-overlapping declarations across surface-normalization.css while preserving the current computed-style parity.",
-      "phase": "phase-9-duplicate-ownership-closure",
-      "contextType": "runtime-state",
-      "disposition": "report-only",
-      "removalStatus": "removable-later",
-      "declarationConflict": "additive",
-      "parity": "green"
-    },
-    {
-      "key": ".review-status-banner[data-tone=\"info\"]|||components|||",
-      "selector": ".review-status-banner[data-tone=\"info\"]",
-      "layer": "components",
-      "atRuleContext": [],
-      "stateContext": [
-        "data-state"
-      ],
-      "category": "additive",
-      "hotspot": false,
-      "records": [
-        {
-          "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 256,
-          "column": 1,
-          "layer": "components",
-          "declarationSignature": "4e0c7329b18cc1dcdd13971e1a780f15c5c2b673",
-          "properties": [
-            "background"
-          ]
-        },
-        {
-          "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 281,
-          "column": 1,
-          "layer": "components",
-          "declarationSignature": "481464e3a7dd64591440b739e1d43a054f6a522b",
-          "properties": [
-            "border-color"
-          ]
-        }
-      ],
-      "owners": [
-        "portal-css-architecture"
-      ],
-      "ownerReason": "Additive ownership: .review-status-banner[data-tone=\"info\"] splits non-overlapping declarations across surface-normalization.css while preserving the current computed-style parity.",
-      "phase": "phase-9-duplicate-ownership-closure",
-      "contextType": "runtime-state",
-      "disposition": "report-only",
-      "removalStatus": "removable-later",
-      "declarationConflict": "additive",
-      "parity": "green"
-    },
-    {
-      "key": ".review-status-banner[data-tone=\"ready\"]|||components|||",
-      "selector": ".review-status-banner[data-tone=\"ready\"]",
-      "layer": "components",
-      "atRuleContext": [],
-      "stateContext": [
-        "data-state"
-      ],
-      "category": "additive",
-      "hotspot": false,
-      "records": [
-        {
-          "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 256,
-          "column": 1,
-          "layer": "components",
-          "declarationSignature": "4e0c7329b18cc1dcdd13971e1a780f15c5c2b673",
-          "properties": [
-            "background"
-          ]
-        },
-        {
-          "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 266,
-          "column": 1,
-          "layer": "components",
-          "declarationSignature": "4ff838967569aecb53d6a515ec012c08430c764d",
-          "properties": [
-            "border-color"
-          ]
-        }
-      ],
-      "owners": [
-        "portal-css-architecture"
-      ],
-      "ownerReason": "Additive ownership: .review-status-banner[data-tone=\"ready\"] splits non-overlapping declarations across surface-normalization.css while preserving the current computed-style parity.",
-      "phase": "phase-9-duplicate-ownership-closure",
-      "contextType": "runtime-state",
-      "disposition": "report-only",
-      "removalStatus": "removable-later",
-      "declarationConflict": "additive",
-      "parity": "green"
-    },
-    {
-      "key": ".review-status-banner[data-tone=\"warning\"]|||components|||",
-      "selector": ".review-status-banner[data-tone=\"warning\"]",
-      "layer": "components",
-      "atRuleContext": [],
-      "stateContext": [
-        "data-state"
-      ],
-      "category": "additive",
-      "hotspot": false,
-      "records": [
-        {
-          "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 256,
-          "column": 1,
-          "layer": "components",
-          "declarationSignature": "4e0c7329b18cc1dcdd13971e1a780f15c5c2b673",
-          "properties": [
-            "background"
-          ]
-        },
-        {
-          "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 271,
-          "column": 1,
-          "layer": "components",
-          "declarationSignature": "4d6a576f4b984528794f3cb347ad3771ae2b7640",
-          "properties": [
-            "border-color"
-          ]
-        }
-      ],
-      "owners": [
-        "portal-css-architecture"
-      ],
-      "ownerReason": "Additive ownership: .review-status-banner[data-tone=\"warning\"] splits non-overlapping declarations across surface-normalization.css while preserving the current computed-style parity.",
-      "phase": "phase-9-duplicate-ownership-closure",
-      "contextType": "runtime-state",
       "disposition": "report-only",
       "removalStatus": "removable-later",
       "declarationConflict": "additive",
@@ -2893,23 +2625,14 @@
         },
         {
           "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 146,
+          "line": 151,
           "column": 1,
           "layer": "components",
-          "declarationSignature": "bc00e11847ade2f927847a973b0a73562a961bf8",
-          "properties": [
-            "border-radius"
-          ]
-        },
-        {
-          "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 176,
-          "column": 1,
-          "layer": "components",
-          "declarationSignature": "e3c7a9b72249a3ca65b4134dee00060cb7fa297f",
+          "declarationSignature": "1e80b0a0dff5e1747d9e486447d2ccd3ee43fcaa",
           "properties": [
             "background",
-            "border-color"
+            "border-color",
+            "border-radius"
           ]
         }
       ],
@@ -2951,28 +2674,19 @@
         },
         {
           "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 146,
+          "line": 151,
           "column": 1,
           "layer": "components",
-          "declarationSignature": "bc00e11847ade2f927847a973b0a73562a961bf8",
+          "declarationSignature": "1e80b0a0dff5e1747d9e486447d2ccd3ee43fcaa",
           "properties": [
+            "background",
+            "border-color",
             "border-radius"
           ]
         },
         {
           "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 176,
-          "column": 1,
-          "layer": "components",
-          "declarationSignature": "e3c7a9b72249a3ca65b4134dee00060cb7fa297f",
-          "properties": [
-            "background",
-            "border-color"
-          ]
-        },
-        {
-          "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 239,
+          "line": 223,
           "column": 1,
           "layer": "components",
           "declarationSignature": "e09826935d3e1a20d02fd703970aa2e014ae2ad5",
@@ -3028,7 +2742,7 @@
         },
         {
           "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 217,
+          "line": 201,
           "column": 1,
           "layer": "components",
           "declarationSignature": "127aa2eacbbf1250e346e6fd1dab1f2aca44d6c2",
@@ -3119,33 +2833,24 @@
         },
         {
           "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 146,
+          "line": 151,
           "column": 1,
           "layer": "components",
-          "declarationSignature": "bc00e11847ade2f927847a973b0a73562a961bf8",
+          "declarationSignature": "1e80b0a0dff5e1747d9e486447d2ccd3ee43fcaa",
           "properties": [
+            "background",
+            "border-color",
             "border-radius"
           ]
         },
         {
           "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 168,
+          "line": 173,
           "column": 1,
           "layer": "components",
           "declarationSignature": "e09826935d3e1a20d02fd703970aa2e014ae2ad5",
           "properties": [
             "box-shadow"
-          ]
-        },
-        {
-          "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 176,
-          "column": 1,
-          "layer": "components",
-          "declarationSignature": "e3c7a9b72249a3ca65b4134dee00060cb7fa297f",
-          "properties": [
-            "background",
-            "border-color"
           ]
         }
       ],
@@ -3183,33 +2888,24 @@
         },
         {
           "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 146,
+          "line": 151,
           "column": 1,
           "layer": "components",
-          "declarationSignature": "bc00e11847ade2f927847a973b0a73562a961bf8",
+          "declarationSignature": "1e80b0a0dff5e1747d9e486447d2ccd3ee43fcaa",
           "properties": [
+            "background",
+            "border-color",
             "border-radius"
           ]
         },
         {
           "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 168,
+          "line": 173,
           "column": 1,
           "layer": "components",
           "declarationSignature": "e09826935d3e1a20d02fd703970aa2e014ae2ad5",
           "properties": [
             "box-shadow"
-          ]
-        },
-        {
-          "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 176,
-          "column": 1,
-          "layer": "components",
-          "declarationSignature": "e3c7a9b72249a3ca65b4134dee00060cb7fa297f",
-          "properties": [
-            "background",
-            "border-color"
           ]
         }
       ],
@@ -3437,7 +3133,7 @@
         },
         {
           "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 217,
+          "line": 201,
           "column": 1,
           "layer": "components",
           "declarationSignature": "127aa2eacbbf1250e346e6fd1dab1f2aca44d6c2",
@@ -3493,23 +3189,14 @@
         },
         {
           "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 146,
+          "line": 151,
           "column": 1,
           "layer": "components",
-          "declarationSignature": "bc00e11847ade2f927847a973b0a73562a961bf8",
-          "properties": [
-            "border-radius"
-          ]
-        },
-        {
-          "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 176,
-          "column": 1,
-          "layer": "components",
-          "declarationSignature": "e3c7a9b72249a3ca65b4134dee00060cb7fa297f",
+          "declarationSignature": "1e80b0a0dff5e1747d9e486447d2ccd3ee43fcaa",
           "properties": [
             "background",
-            "border-color"
+            "border-color",
+            "border-radius"
           ]
         }
       ],
@@ -3687,7 +3374,7 @@
         },
         {
           "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 289,
+          "line": 282,
           "column": 1,
           "layer": "components",
           "declarationSignature": "1df7bb137ea9040f11ddad7ef61cc2c29d68c682",
@@ -3742,7 +3429,7 @@
         },
         {
           "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 217,
+          "line": 201,
           "column": 1,
           "layer": "components",
           "declarationSignature": "127aa2eacbbf1250e346e6fd1dab1f2aca44d6c2",
@@ -3830,7 +3517,7 @@
       "records": [
         {
           "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 293,
+          "line": 286,
           "column": 1,
           "layer": "components",
           "declarationSignature": "883df43b30a9ae12afc45fd4fcf27cb1bb3b3a69",
@@ -4078,33 +3765,24 @@
         },
         {
           "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 146,
+          "line": 151,
           "column": 1,
           "layer": "components",
-          "declarationSignature": "bc00e11847ade2f927847a973b0a73562a961bf8",
+          "declarationSignature": "1e80b0a0dff5e1747d9e486447d2ccd3ee43fcaa",
           "properties": [
+            "background",
+            "border-color",
             "border-radius"
           ]
         },
         {
           "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 168,
+          "line": 173,
           "column": 1,
           "layer": "components",
           "declarationSignature": "e09826935d3e1a20d02fd703970aa2e014ae2ad5",
           "properties": [
             "box-shadow"
-          ]
-        },
-        {
-          "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 176,
-          "column": 1,
-          "layer": "components",
-          "declarationSignature": "e3c7a9b72249a3ca65b4134dee00060cb7fa297f",
-          "properties": [
-            "background",
-            "border-color"
           ]
         }
       ],
@@ -4114,174 +3792,6 @@
       "ownerReason": "Additive ownership: .workspace-shell splits non-overlapping declarations across shell-foundation.css, surface-normalization.css while preserving the current computed-style parity.",
       "phase": "phase-9-duplicate-ownership-closure",
       "contextType": "surface-normalization-final-pass",
-      "disposition": "report-only",
-      "removalStatus": "removable-later",
-      "declarationConflict": "additive",
-      "parity": "green"
-    },
-    {
-      "key": "#artifactMetadataBar|||components|||",
-      "selector": "#artifactMetadataBar",
-      "layer": "components",
-      "atRuleContext": [],
-      "stateContext": [],
-      "category": "additive",
-      "hotspot": false,
-      "records": [
-        {
-          "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 146,
-          "column": 1,
-          "layer": "components",
-          "declarationSignature": "bc00e11847ade2f927847a973b0a73562a961bf8",
-          "properties": [
-            "border-radius"
-          ]
-        },
-        {
-          "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 176,
-          "column": 1,
-          "layer": "components",
-          "declarationSignature": "e3c7a9b72249a3ca65b4134dee00060cb7fa297f",
-          "properties": [
-            "background",
-            "border-color"
-          ]
-        }
-      ],
-      "owners": [
-        "portal-css-architecture"
-      ],
-      "ownerReason": "Additive ownership: #artifactMetadataBar splits non-overlapping declarations across surface-normalization.css while preserving the current computed-style parity.",
-      "phase": "phase-9-duplicate-ownership-closure",
-      "contextType": "document-root-normalization",
-      "disposition": "report-only",
-      "removalStatus": "removable-later",
-      "declarationConflict": "additive",
-      "parity": "green"
-    },
-    {
-      "key": "#artifactMetadataCard|||components|||",
-      "selector": "#artifactMetadataCard",
-      "layer": "components",
-      "atRuleContext": [],
-      "stateContext": [],
-      "category": "additive",
-      "hotspot": false,
-      "records": [
-        {
-          "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 146,
-          "column": 1,
-          "layer": "components",
-          "declarationSignature": "bc00e11847ade2f927847a973b0a73562a961bf8",
-          "properties": [
-            "border-radius"
-          ]
-        },
-        {
-          "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 176,
-          "column": 1,
-          "layer": "components",
-          "declarationSignature": "e3c7a9b72249a3ca65b4134dee00060cb7fa297f",
-          "properties": [
-            "background",
-            "border-color"
-          ]
-        }
-      ],
-      "owners": [
-        "portal-css-architecture"
-      ],
-      "ownerReason": "Additive ownership: #artifactMetadataCard splits non-overlapping declarations across surface-normalization.css while preserving the current computed-style parity.",
-      "phase": "phase-9-duplicate-ownership-closure",
-      "contextType": "document-root-normalization",
-      "disposition": "report-only",
-      "removalStatus": "removable-later",
-      "declarationConflict": "additive",
-      "parity": "green"
-    },
-    {
-      "key": "#artifactPreviewStage|||components|||",
-      "selector": "#artifactPreviewStage",
-      "layer": "components",
-      "atRuleContext": [],
-      "stateContext": [],
-      "category": "additive",
-      "hotspot": false,
-      "records": [
-        {
-          "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 146,
-          "column": 1,
-          "layer": "components",
-          "declarationSignature": "bc00e11847ade2f927847a973b0a73562a961bf8",
-          "properties": [
-            "border-radius"
-          ]
-        },
-        {
-          "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 176,
-          "column": 1,
-          "layer": "components",
-          "declarationSignature": "e3c7a9b72249a3ca65b4134dee00060cb7fa297f",
-          "properties": [
-            "background",
-            "border-color"
-          ]
-        }
-      ],
-      "owners": [
-        "portal-css-architecture"
-      ],
-      "ownerReason": "Additive ownership: #artifactPreviewStage splits non-overlapping declarations across surface-normalization.css while preserving the current computed-style parity.",
-      "phase": "phase-9-duplicate-ownership-closure",
-      "contextType": "document-root-normalization",
-      "disposition": "report-only",
-      "removalStatus": "removable-later",
-      "declarationConflict": "additive",
-      "parity": "green"
-    },
-    {
-      "key": "#reconstructionRuntimeSummary|||components|||",
-      "selector": "#reconstructionRuntimeSummary",
-      "layer": "components",
-      "atRuleContext": [],
-      "stateContext": [],
-      "category": "additive",
-      "hotspot": false,
-      "records": [
-        {
-          "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 146,
-          "column": 1,
-          "layer": "components",
-          "declarationSignature": "bc00e11847ade2f927847a973b0a73562a961bf8",
-          "properties": [
-            "border-radius"
-          ]
-        },
-        {
-          "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 176,
-          "column": 1,
-          "layer": "components",
-          "declarationSignature": "e3c7a9b72249a3ca65b4134dee00060cb7fa297f",
-          "properties": [
-            "background",
-            "border-color"
-          ]
-        }
-      ],
-      "owners": [
-        "portal-css-architecture"
-      ],
-      "ownerReason": "Additive ownership: #reconstructionRuntimeSummary splits non-overlapping declarations across surface-normalization.css while preserving the current computed-style parity.",
-      "phase": "phase-9-duplicate-ownership-closure",
-      "contextType": "document-root-normalization",
       "disposition": "report-only",
       "removalStatus": "removable-later",
       "declarationConflict": "additive",
