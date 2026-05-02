@@ -134,7 +134,6 @@ adding a `tests/<pkg>/` suite:
 - `depth_intelligence/`
 - `diffusion/`
 - `dwm/`
-- `enhancers/`
 - `interfaces/`
 - `pfm/`
 

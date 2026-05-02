@@ -96,12 +96,15 @@ def make_executor(tmp_path):
 @pytest.fixture(autouse=True)
 def _stable_identity():
     """Pin code-hash and env-fingerprint so cache identities are deterministic."""
-    with patch(
-        "transformation_portal.core.execution_identity.compute_code_hash",
-        return_value="sha256:fixed_code",
-    ), patch(
-        "transformation_portal.core.execution_identity.get_env_fingerprint",
-        return_value="sha256:fixed_env",
+    with (
+        patch(
+            "transformation_portal.core.execution_identity.compute_code_hash",
+            return_value="sha256:fixed_code",
+        ),
+        patch(
+            "transformation_portal.core.execution_identity.get_env_fingerprint",
+            return_value="sha256:fixed_env",
+        ),
     ):
         yield
 

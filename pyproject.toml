@@ -221,7 +221,6 @@ omit = [
     "*/transformation_portal/depth_intelligence/*",
     "*/transformation_portal/diffusion/*",
     "*/transformation_portal/dwm/*",
-    "*/transformation_portal/enhancers/*",
     "*/transformation_portal/interfaces/*",
     "*/transformation_portal/pfm/*",
 ]

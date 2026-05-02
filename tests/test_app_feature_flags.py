@@ -172,9 +172,7 @@ def test_portal_rollout_disabled_when_percent_zero(monkeypatch):
 def test_portal_rollout_enabled_at_100_percent_includes_everyone(monkeypatch):
     monkeypatch.setenv("TP_PORTAL_TEST_ROLLOUT", "100")
     for username in ("alice", "bob", "carol", "x"):
-        assert orchestrator_app._portal_rollout_enabled(
-            "TP_PORTAL_TEST_ROLLOUT", actor={"username": username}
-        ) is True
+        assert orchestrator_app._portal_rollout_enabled("TP_PORTAL_TEST_ROLLOUT", actor={"username": username}) is True
 
 
 def test_portal_rollout_disabled_for_unset_percent(monkeypatch):
