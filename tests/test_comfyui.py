@@ -313,20 +313,27 @@ class TestSkyGANNode:
             < mapping["twilight"]
         )
 
-    def test_execute_rejects_unknown_time_of_day(self):
+    def test_execute_rejects_unknown_time_of_day(self, monkeypatch):
         """Unknown time_of_day must fail fast before any preset work."""
         from transformation_portal.comfyui.custom_nodes import SkyGANNode
+
+        # Booby-trap LocationPresets at the import site so that any preset
+        # construction trips a RuntimeError. This enforces the ordering
+        # guarantee — LocationPresets falls back silently to "montecito" for
+        # unknown locations, so we cannot rely on a bad location to surface
+        # a preset-side error if validation regressed.
+        def _no_presets(*args, **kwargs):
+            raise RuntimeError("LocationPresets must not be constructed before time_of_day validation")
+
+        monkeypatch.setattr("transformation_portal.comfyui.custom_nodes.LocationPresets", _no_presets)
 
         node = SkyGANNode()
         dummy_image = np.zeros((4, 4, 3), dtype=np.float32)
 
-        # Use a deliberately invalid location too — the input validation must
-        # trip first, so we should never reach LocationPresets and surface a
-        # location-related error instead.
         with pytest.raises(ValueError, match="Unknown time_of_day") as exc_info:
             node.execute(
                 image=dummy_image,
-                location="not_a_real_location",
+                location="montecito",
                 season="summer",
                 time_of_day="not_a_real_slot",
                 cloud_coverage=0.3,
