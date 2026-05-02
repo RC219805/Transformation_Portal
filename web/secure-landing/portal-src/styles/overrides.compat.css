@@ -1,8 +1,10 @@
 /* portal-override-owner: compatibility-final-order
-   reason: ID-specific portal shell spacing must preserve Phase 3 parity after utility-layer drain.
-   removal-phase: phase-6-semantic-migration */
+   reason: .portal-main padding overrides utilities-layer px-6/py-8 at <=960px; moving to the
+   components layer would let those utility classes win the cascade. Selector migrated from
+   #main-content to the Phase 6 semantic hook so no ID-specific rule remains in the cascade.
+   removal-phase: phase-7-utility-markup-migration */
 @media (max-width: 960px) {
-  #main-content {
+  .portal-main {
     padding-left: 1rem;
     padding-right: 1rem;
     padding-top: 1rem;
@@ -10,74 +12,79 @@
 }
 
 /* portal-override-owner: compatibility-final-order
-   reason: ID-specific console shell sizing must preserve Phase 3 parity after utility-layer drain.
-   removal-phase: phase-6-semantic-migration */
-#queue-shell {
+   reason: .portal-shell-card--queue cancels the utilities-layer max-h-[350px] class on the
+   queue shell; moving to the components layer would let the utility win the cascade. Selector
+   migrated from #queue-shell to the Phase 6 semantic hook.
+   removal-phase: phase-7-utility-markup-migration */
+.portal-shell-card--queue {
   max-height: none;
 }
 
 /* portal-override-owner: compatibility-final-order
-   reason: ID-specific mobile shell spacing must preserve Phase 3 parity after utility-layer drain.
-   removal-phase: phase-6-semantic-migration */
+   reason: .portal-shell-card mobile padding/radius and .artifact-review-* surface padding
+   override utilities-layer p-6/rounded-2xl/p-4/grid-cols-2 classes at <=767px; moving to the
+   components layer would let the utilities win the cascade. Selectors migrated from the six
+   shell IDs and the three artifact-review IDs to the Phase 6 semantic hooks.
+   removal-phase: phase-7-utility-markup-migration */
 @media (max-width: 767px) {
-  #build-shell,
-  #queue-shell,
-  #selected-job-shell,
-  #artifacts-shell,
-  #logs-shell,
-  #console-context-shell {
+  .portal-shell-card--build,
+  .portal-shell-card--queue,
+  .portal-shell-card--inspector,
+  .portal-shell-card--artifacts,
+  .portal-shell-card--logs,
+  .portal-shell-card--context {
     padding: 1rem;
     border-radius: 1.35rem;
   }
 
-  #artifactPreviewStage,
-  #artifactMetadataBar {
+  .artifact-review-stage,
+  .artifact-review-meta {
     padding: 0.95rem;
   }
 
-  #artifactThumbnailRail {
+  .artifact-thumbnail-rail {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  #queue-shell .custom-scrollbar {
+  .portal-shell-card--queue .custom-scrollbar {
     padding-right: 0;
   }
 }
 
 /* portal-override-owner: compatibility-final-order
-   reason: ID-specific action button chrome must preserve Phase 3 parity after utility-layer drain.
-   removal-phase: phase-6-semantic-migration */
-#openRunDetailsBtn,
-#artifactCompareBtn,
-#themeBtn,
-#shortcutsBtn {
+   reason: .portal-action-control min-height/border-radius override utilities-layer
+   rounded-full/rounded-lg classes on the four action buttons; moving to the components layer
+   would let those utilities win the cascade. Selector migrated from
+   #openRunDetailsBtn,#artifactCompareBtn,#themeBtn,#shortcutsBtn to the shared Phase 6
+   semantic hook.
+   removal-phase: phase-7-utility-markup-migration */
+.portal-action-control {
   min-height: var(--ux-target-min-size);
   border-radius: var(--ux-radius-md);
 }
 
 /* portal-override-owner: compatibility-final-order
-   reason: ID-specific action button border/background must preserve Phase 3 parity after utility-layer drain.
-   removal-phase: phase-6-semantic-migration */
+   reason: .portal-action-control border/background override utilities-layer
+   border-slate-200/bg-white classes on the four action buttons; moving to the components
+   layer would let those utilities win the cascade. .hero-action-secondary and
+   .operator-action-btn-secondary already share the same semantic chrome and stay grouped.
+   removal-phase: phase-7-utility-markup-migration */
 .hero-action-secondary,
 .operator-action-btn-secondary,
-#openRunDetailsBtn,
-#artifactCompareBtn,
-#themeBtn,
-#shortcutsBtn {
+.portal-action-control {
   border-color: var(--ux-border-subtle);
   background: var(--ux-surface-elevated);
 }
 
 /* portal-override-owner: compatibility-final-order
-   reason: dark action button background must preserve Phase 3 parity after utility-layer drain.
-   removal-phase: phase-6-semantic-migration */
+   reason: dark-mode .portal-action-control background overrides utilities-layer
+   dark:bg-slate-900 / dark:border-slate-700 classes on the four action buttons; moving to the
+   components layer would let those utilities win the cascade.
+   removal-phase: phase-7-utility-markup-migration */
 .dark .hero-action-secondary,
 .dark .operator-action-btn-secondary,
 .dark .stepper-nav-btn,
 .dark .dispatch-tool-btn,
-.dark #openRunDetailsBtn,
-.dark #artifactCompareBtn,
-.dark #themeBtn,
-.dark #shortcutsBtn {
+.dark .portal-action-control {
   background: var(--ux-surface-muted);
 }

@@ -720,6 +720,90 @@ function ruleCountForFile(filePath) {
   return count;
 }
 
+function selectorContainsIdToken(selector) {
+  // Strip attribute selector contents (`[href^="#"]`) and quoted string
+  // bodies. PostCSS already strips comments before surfacing rule.selector,
+  // so once those two sources of `#` are removed every remaining `#` in
+  // the selector starts an ID token (CSS selector grammar allows ID tokens
+  // adjacent to type/class selectors with no separator, e.g. `a#anchor`).
+  let stripped = selector;
+  let previous;
+  do {
+    previous = stripped;
+    stripped = stripped.replace(/\[[^\[\]]*\]/g, "");
+  } while (stripped !== previous);
+  stripped = stripped.replace(/"[^"]*"/g, "").replace(/'[^']*'/g, "");
+  return /#(?:\\.|[A-Za-z_-])/.test(stripped);
+}
+
+function checkOverridesCompatNoNewIds(failures) {
+  const compatPath = path.resolve(PORTAL_CSS_SOURCE_DIR, "overrides.compat.css");
+  if (!existsSync(compatPath)) {
+    return;
+  }
+  const source = relativePath(compatPath);
+  const root = parseCss(compatPath);
+  root.walkRules((rule) => {
+    for (const selector of splitSelectorList(rule.selector)) {
+      if (selectorContainsIdToken(selector)) {
+        failures.push(
+          `${source}:${rule.source?.start?.line || 0} ID-specific selector ${selector} is forbidden in overrides.compat.css after Phase 6 semantic-ownership migration`
+        );
+      }
+    }
+  });
+}
+
+function checkOverridesCompatNoImportant(failures) {
+  const compatPath = path.resolve(PORTAL_CSS_SOURCE_DIR, "overrides.compat.css");
+  if (!existsSync(compatPath)) {
+    return;
+  }
+  const source = relativePath(compatPath);
+  const root = parseCss(compatPath);
+  root.walkDecls((decl) => {
+    if (decl.important) {
+      failures.push(
+        `${source}:${decl.source?.start?.line || 0} !important on ${decl.prop} is forbidden in overrides.compat.css; raise the issue in the Phase 7 markup migration instead`
+      );
+    }
+  });
+}
+
+function checkPhase6SemanticHooksPresent(failures) {
+  if (!existsSync(PORTAL_HTML_PATH)) {
+    failures.push(`portal.html missing at ${relativePath(PORTAL_HTML_PATH)}; cannot validate Phase 6 semantic hooks`);
+    return;
+  }
+  const compatPath = path.resolve(PORTAL_CSS_SOURCE_DIR, "overrides.compat.css");
+  if (!existsSync(compatPath)) {
+    return;
+  }
+  const compatRoot = parseCss(compatPath);
+  const semanticTokens = new Set();
+  compatRoot.walkRules((rule) => {
+    for (const selector of splitSelectorList(rule.selector)) {
+      for (const token of classTokensFromSelector(selector)) {
+        if (token.startsWith("portal-") || token.startsWith("artifact-")) {
+          semanticTokens.add(token);
+        }
+      }
+    }
+  });
+  if (semanticTokens.size === 0) {
+    return;
+  }
+  const html = readText(PORTAL_HTML_PATH);
+  for (const token of semanticTokens) {
+    const wordBoundary = new RegExp(`(^|[\\s"'])${escapeRegExp(token)}([\\s"']|$)`, "m");
+    if (!wordBoundary.test(html)) {
+      failures.push(
+        `Phase 6 semantic hook .${token} used in overrides.compat.css does not match any class on portal.html; fix the typo or restore the markup hook`
+      );
+    }
+  }
+}
+
 function checkOwnershipDrainReport(failures) {
   if (!existsSync(OWNERSHIP_DRAIN_REPORT_PATH)) {
     failures.push(`${relativePath(OWNERSHIP_DRAIN_REPORT_PATH)} is missing`);
@@ -783,6 +867,9 @@ checkDuplicateBaseline(duplicates, failures);
 checkUtilityCoverage(failures);
 checkLayerContract(failures);
 checkOwnershipDrainReport(failures);
+checkOverridesCompatNoNewIds(failures);
+checkOverridesCompatNoImportant(failures);
+checkPhase6SemanticHooksPresent(failures);
 
 if (REPORT) {
   const hotspotCount = duplicates.filter((duplicate) => duplicate.hotspot).length;
