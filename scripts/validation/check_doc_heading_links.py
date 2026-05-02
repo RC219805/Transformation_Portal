@@ -12,7 +12,9 @@ from typing import Iterable
 
 
 MARKDOWN_LINK_RE = re.compile(r"\[[^\]]+\]\(([^)\s]+)\)")
-HEADING_RE = re.compile(r"^(#{1,6})\s+(.+?)\s*$")
+HEADING_RE = re.compile(r"^ {0,3}(#{1,6})\s+(.+?)\s*$")
+FENCE_RE = re.compile(r"^ {0,3}([`~]{3,})")
+INDENTED_CODE_RE = re.compile(r"^(?: {4,}|\t)")
 
 
 @dataclass(frozen=True)
@@ -54,7 +56,21 @@ def _default_heading_references() -> tuple[HeadingReference, ...]:
 
 def _heading_texts(path: Path) -> list[str]:
     headings: list[str] = []
+    fence: tuple[str, int] | None = None
     for raw_line in path.read_text(encoding="utf-8").splitlines():
+        fence_match = FENCE_RE.match(raw_line)
+        if fence is not None:
+            if fence_match:
+                marker = fence_match.group(1)
+                if marker[0] == fence[0] and len(marker) >= fence[1]:
+                    fence = None
+            continue
+        if fence_match:
+            marker = fence_match.group(1)
+            fence = (marker[0], len(marker))
+            continue
+        if INDENTED_CODE_RE.match(raw_line):
+            continue
         match = HEADING_RE.match(raw_line)
         if match:
             headings.append(match.group(2).strip())

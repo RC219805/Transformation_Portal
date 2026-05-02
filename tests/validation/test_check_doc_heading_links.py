@@ -41,5 +41,40 @@ def test_heading_link_validator_rejects_missing_anchor(tmp_path: Path) -> None:
     assert "#missing-heading" in failures[0]
 
 
+def test_heading_link_validator_ignores_code_block_comment_lines(tmp_path: Path) -> None:
+    target = tmp_path / "target.md"
+    source = tmp_path / "source.md"
+    target.write_text(
+        "\n".join(
+            [
+                "# Target",
+                "",
+                "```bash",
+                "# fake fenced heading",
+                "```",
+                "",
+                "    # fake indented heading",
+                "",
+                "## Real Heading",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    source.write_text(
+        "[fenced](target.md#fake-fenced-heading)\n"
+        "[indented](target.md#fake-indented-heading)\n"
+        "[real](target.md#real-heading)\n",
+        encoding="utf-8",
+    )
+
+    failures = _module.check([source])
+
+    assert len(failures) == 2
+    assert any("#fake-fenced-heading" in failure for failure in failures)
+    assert any("#fake-indented-heading" in failure for failure in failures)
+    assert all("#real-heading" not in failure for failure in failures)
+
+
 def test_default_todo_quick_win_binary_cleanup_heading_references_are_current() -> None:
     assert _module.check([]) == []
