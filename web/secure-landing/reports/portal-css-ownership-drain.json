@@ -7,8 +7,28 @@
     "utilityLayerImportsAfter": 3,
     "compatHoldCount": 0,
     "overridesCompatRuleCount": 0,
-    "overridesCompatBytes": 540,
+    "overridesCompatBytes": 0,
     "drainedSelectorCount": 344
+  },
+  "phase8SentinelState": {
+    "utilitiesCompatHold": {
+      "path": "web/secure-landing/portal-src/styles/utilities.compat-hold.css",
+      "imported": true,
+      "layer": "utilities",
+      "sourceRuleCount": 0,
+      "shippedRuleCount": 0,
+      "shippedByteDebt": 0,
+      "sentinelOnly": true
+    },
+    "overridesCompat": {
+      "path": "web/secure-landing/portal-src/styles/overrides.compat.css",
+      "imported": false,
+      "layer": null,
+      "sourceRuleCount": 0,
+      "shippedRuleCount": 0,
+      "shippedByteDebt": 0,
+      "sentinelOnly": true
+    }
   },
   "moves": [
     {

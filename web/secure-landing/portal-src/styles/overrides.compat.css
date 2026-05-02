@@ -1,8 +1,3 @@
-/* portal-override-owner: phase-7-sentinel
-   reason: intentionally empty after Phase 7. The Phase 6.6 architecture-check
-   gates (checkOverridesCompatNoNewIds, checkOverridesCompatNoImportant,
-   checkPhase6SemanticHooksPresent) keep this file frozen as a sentinel so any
-   future final-order compatibility rule has to be deliberately re-introduced.
-   The file is no longer imported by index.css; any new rule here is dead code
-   until the import is restored, which itself is a governance signal.
-   removal-phase: never (sentinel) */
+/* portal-override-owner: phase-8-governance-sentinel
+   reason: empty guard rail for drained final-order compatibility debt; rules must not be added here.
+   import-state: intentionally unimported from the production CSS graph. */

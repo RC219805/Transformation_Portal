@@ -19,10 +19,17 @@ const PORTAL_ASSET_JS_PATH = path.resolve(REPO_ROOT, "public", "portal-assets", 
 const PORTAL_REVIEW_JS_PATH = path.resolve(REPO_ROOT, "public", "portal-assets", "portal-review.js");
 const BASELINE_PATH = path.resolve(PORTAL_CSS_SOURCE_DIR, "architecture-baseline.json");
 const OWNERSHIP_DRAIN_REPORT_PATH = path.resolve(FRONTDOOR_ROOT, "reports", "portal-css-ownership-drain.json");
+const COMPAT_HOLD_UTILITIES_SOURCE = "./utilities.compat-hold.css";
+const COMPAT_HOLD_UTILITIES_PATH = path.resolve(PORTAL_CSS_SOURCE_DIR, "utilities.compat-hold.css");
+const OVERRIDES_COMPAT_SOURCE = "./overrides.compat.css";
+const OVERRIDES_COMPAT_PATH = path.resolve(PORTAL_CSS_SOURCE_DIR, "overrides.compat.css");
 
 const args = new Set(process.argv.slice(2));
 const WRITE_BASELINE = args.has("--write-baseline");
 const REPORT = args.has("--report") || WRITE_BASELINE;
+const SENTINEL_FIXTURE_ARG = "--check-sentinel-fixture";
+const sentinelFixtureIndex = process.argv.indexOf(SENTINEL_FIXTURE_ARG);
+const SENTINEL_FIXTURE_PATH = sentinelFixtureIndex >= 0 ? process.argv[sentinelFixtureIndex + 1] : "";
 
 const EXPECTED_LAYER_ORDER = ["tokens", "base", "components", "utilities", "overrides"];
 const EXPECTED_LAYER_IMPORTS = [
@@ -39,7 +46,7 @@ const EXPECTED_LAYER_IMPORTS = [
   ["./components/surface-normalization.css", "components"],
   ["./utilities.required.css", "utilities"],
   ["./utilities.dynamic.css", "utilities"],
-  ["./utilities.compat-hold.css", "utilities"],
+  [COMPAT_HOLD_UTILITIES_SOURCE, "utilities"],
   ["./overrides.performance.css", "overrides"],
   ["./overrides.accessibility.css", "overrides"]
 ];
@@ -470,6 +477,46 @@ function parseLayeredImport(params) {
   return [source, layerMatch ? layerMatch[1].trim() : ""];
 }
 
+function resolveImportPath(fromPath, source) {
+  if (!source.startsWith(".")) {
+    return null;
+  }
+  return path.resolve(path.dirname(fromPath), source);
+}
+
+function collectCssImportGraph(entryPath, failures, seen = new Set(), records = []) {
+  const resolvedEntry = path.resolve(entryPath);
+  if (seen.has(resolvedEntry)) {
+    return records;
+  }
+  seen.add(resolvedEntry);
+
+  const root = parseCss(resolvedEntry);
+  root.walkAtRules("import", (atRule) => {
+    const [source, layerName] = parseLayeredImport(atRule.params);
+    const resolvedPath = resolveImportPath(resolvedEntry, source);
+    const record = {
+      fromPath: resolvedEntry,
+      source,
+      layerName,
+      line: atRule.source?.start?.line || 0,
+      resolvedPath
+    };
+    records.push(record);
+
+    if (!resolvedPath) {
+      return;
+    }
+    if (!existsSync(resolvedPath)) {
+      failures.push(`${relativePath(resolvedEntry)}:${record.line} imports missing CSS source ${source}`);
+      return;
+    }
+    collectCssImportGraph(resolvedPath, failures, seen, records);
+  });
+
+  return records;
+}
+
 function checkProductionLayerImports(failures) {
   const root = parseCss(PORTAL_CSS_INDEX_PATH);
   const imports = [];
@@ -516,6 +563,80 @@ function checkProductionLayerImports(failures) {
       failures.push(`${relativePath(PORTAL_CSS_INDEX_PATH)} still imports transitional operator console reset source`);
     }
   }
+}
+
+function describeCssNode(node) {
+  if (node.type === "rule") {
+    return `rule "${node.selector}"`;
+  }
+  if (node.type === "atrule") {
+    const params = node.params ? ` ${node.params}` : "";
+    return `at-rule @${node.name}${params}`;
+  }
+  if (node.type === "decl") {
+    return `declaration "${node.prop}"`;
+  }
+  return `${node.type} node`;
+}
+
+function sentinelGuidance(filePath) {
+  const basename = path.basename(filePath);
+  if (basename === "utilities.compat-hold.css") {
+    return "Move real utility rules to utilities.required.css or utilities.dynamic.css; do not add rules to the sentinel.";
+  }
+  if (basename === "overrides.compat.css") {
+    return "Move real override rules to overrides.performance.css, overrides.accessibility.css, or an owned component stylesheet; do not add rules to the sentinel.";
+  }
+  return "Move real CSS to the appropriate owned source file; do not add rules to the sentinel.";
+}
+
+function sentinelCssViolations(filePath) {
+  const root = parseCss(filePath);
+  return (root.nodes || [])
+    .filter((node) => node.type !== "comment")
+    .map((node) => ({
+      description: describeCssNode(node),
+      line: node.source?.start?.line || 0
+    }));
+}
+
+function checkSentinelOnlyFile(filePath, failures, label = relativePath(filePath)) {
+  if (!existsSync(filePath)) {
+    failures.push(`${label} sentinel file is missing`);
+    return;
+  }
+  for (const violation of sentinelCssViolations(filePath)) {
+    failures.push(
+      `${label} must remain sentinel-only. Found ${violation.description} at line ${violation.line}. ${sentinelGuidance(filePath)}`
+    );
+  }
+}
+
+function checkPhase8SentinelImportGraph(failures) {
+  const imports = collectCssImportGraph(PORTAL_CSS_INDEX_PATH, failures);
+  const compatHoldImports = imports.filter((record) => record.resolvedPath === COMPAT_HOLD_UTILITIES_PATH);
+  if (compatHoldImports.length !== 1) {
+    failures.push(
+      `${relativePath(PORTAL_CSS_INDEX_PATH)} import graph must import ${COMPAT_HOLD_UTILITIES_SOURCE} exactly once in layer(utilities); found ${compatHoldImports.length}`
+    );
+  } else if (compatHoldImports[0].layerName !== "utilities") {
+    failures.push(
+      `${relativePath(compatHoldImports[0].fromPath)}:${compatHoldImports[0].line} imports ${COMPAT_HOLD_UTILITIES_SOURCE} into layer(${compatHoldImports[0].layerName || "none"})`
+    );
+  }
+
+  const overridesCompatImports = imports.filter((record) => record.resolvedPath === OVERRIDES_COMPAT_PATH);
+  for (const record of overridesCompatImports) {
+    failures.push(
+      `${relativePath(record.fromPath)}:${record.line} must not import ${OVERRIDES_COMPAT_SOURCE}; overrides.compat.css is a Phase 8 unshipped sentinel`
+    );
+  }
+}
+
+function checkPhase8Sentinels(failures) {
+  checkSentinelOnlyFile(COMPAT_HOLD_UTILITIES_PATH, failures);
+  checkSentinelOnlyFile(OVERRIDES_COMPAT_PATH, failures);
+  checkPhase8SentinelImportGraph(failures);
 }
 
 function layerDeclarationNames(params) {
@@ -846,10 +967,58 @@ function checkOwnershipDrainReport(failures) {
   if (summary.overridesCompatRuleCount !== ruleCountForFile(compatPath)) {
     failures.push(`${relativePath(OWNERSHIP_DRAIN_REPORT_PATH)} overrides.compat.css rule count is stale`);
   }
-  const compatBytes = Buffer.byteLength(readText(compatPath), "utf8");
-  if (summary.overridesCompatBytes !== compatBytes) {
-    failures.push(`${relativePath(OWNERSHIP_DRAIN_REPORT_PATH)} overrides.compat.css byte count is stale`);
+  if (summary.overridesCompatBytes !== 0) {
+    failures.push(`${relativePath(OWNERSHIP_DRAIN_REPORT_PATH)} overrides.compat.css shipped byte debt must be 0`);
   }
+
+  const expectedPhase8State = buildPhase8SentinelState(collectCssImportGraph(PORTAL_CSS_INDEX_PATH, []));
+  if (JSON.stringify(report.phase8SentinelState || null) !== JSON.stringify(expectedPhase8State)) {
+    failures.push(`${relativePath(OWNERSHIP_DRAIN_REPORT_PATH)} phase8SentinelState is stale`);
+  }
+}
+
+function sentinelSourceRuleCount(filePath) {
+  return existsSync(filePath) ? ruleCountForFile(filePath) : 0;
+}
+
+function sentinelStateFor(filePath, imports) {
+  const importRecords = imports.filter((record) => record.resolvedPath === filePath);
+  const sourceRuleCount = sentinelSourceRuleCount(filePath);
+  const imported = importRecords.length > 0;
+  const shippedRuleCount = imported ? sourceRuleCount : 0;
+  return {
+    path: relativePath(filePath),
+    imported,
+    layer: imported ? importRecords[0].layerName : null,
+    sourceRuleCount,
+    shippedRuleCount,
+    shippedByteDebt: shippedRuleCount > 0 ? Buffer.byteLength(readText(filePath), "utf8") : 0,
+    sentinelOnly: existsSync(filePath) && sentinelCssViolations(filePath).length === 0
+  };
+}
+
+function buildPhase8SentinelState(imports) {
+  return {
+    utilitiesCompatHold: sentinelStateFor(COMPAT_HOLD_UTILITIES_PATH, imports),
+    overridesCompat: sentinelStateFor(OVERRIDES_COMPAT_PATH, imports)
+  };
+}
+
+if (sentinelFixtureIndex >= 0) {
+  if (!SENTINEL_FIXTURE_PATH) {
+    console.error(`ERROR: ${SENTINEL_FIXTURE_ARG} requires a CSS fixture path`);
+    process.exit(1);
+  }
+  const fixtureFailures = [];
+  checkSentinelOnlyFile(path.resolve(FRONTDOOR_ROOT, SENTINEL_FIXTURE_PATH), fixtureFailures, SENTINEL_FIXTURE_PATH);
+  if (fixtureFailures.length > 0) {
+    for (const failure of fixtureFailures) {
+      console.error(`ERROR: ${failure}`);
+    }
+    process.exit(1);
+  }
+  console.log("portal css sentinel fixture: OK");
+  process.exit(0);
 }
 
 const failures = [];
@@ -858,6 +1027,7 @@ const records = collectRuleRecords(cssFiles);
 const duplicates = collectDuplicateReport(records);
 
 checkProductionLayerImports(failures);
+checkPhase8Sentinels(failures);
 checkSourceCssGovernance(cssFiles, failures);
 checkImportantGovernance(cssFiles, failures);
 checkOverrideOwners(cssFiles, failures);

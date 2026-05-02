@@ -412,7 +412,7 @@ function buildSplitCss() {
   };
   targets.required.append({ text: "portal-utility-owner: static\n   reason: required utility classes observed in portal markup or generated templates." });
   targets.dynamic.append({ text: "portal-utility-owner: dynamic-state\n   reason: utility classes observed in JS, peer/state controls, or deferred review surfaces." });
-  targets["compat-hold"].append({ text: "portal-utility-owner: compat-hold\n   reason: intentionally empty after Phase 4 initial pruning; new entries require owner, reason, and removal phase." });
+  targets["compat-hold"].append({ text: "portal-utility-owner: phase-8-governance-sentinel\n   reason: empty guard rail for drained utility compatibility debt; rules must not be added here." });
   const counters = { required: 0, dynamic: 0, "compat-hold": 0, drop: 0 };
 
   for (const sourcePath of splitSourcePaths) {
