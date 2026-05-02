@@ -1998,14 +1998,6 @@
       "cssFile": "utilities.required.css",
       "reason": "observed in portal static markup or generated template output"
     },
-    "max-h-[350px]": {
-      "owner": "static",
-      "sources": [
-        "portal.html"
-      ],
-      "cssFile": "utilities.required.css",
-      "reason": "observed in portal static markup or generated template output"
-    },
     "max-h-[92vh]": {
       "owner": "static",
       "sources": [

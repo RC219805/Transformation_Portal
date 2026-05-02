@@ -6,8 +6,8 @@
     "utilityLayerImportsBefore": 6,
     "utilityLayerImportsAfter": 3,
     "compatHoldCount": 0,
-    "overridesCompatRuleCount": 8,
-    "overridesCompatBytes": 3506,
+    "overridesCompatRuleCount": 7,
+    "overridesCompatBytes": 3102,
     "drainedSelectorCount": 344
   },
   "moves": [
@@ -3162,16 +3162,6 @@
       "parity": "green"
     },
     {
-      "selector": ".portal-shell-card--queue",
-      "from": "overrides.compat.css (Phase 5 selector)",
-      "fromLayer": "overrides",
-      "to": "overrides.compat.css",
-      "toLayer": "overrides",
-      "classification": "compatibility-final-order",
-      "reason": "Phase 6 semantic ownership: replaces ID-specific selector with additive semantic class hook (markup unchanged); rule remains in overrides layer because moving to components would let utilities-layer cascade win; removable in phase-7-utility-markup-migration",
-      "parity": "green"
-    },
-    {
       "selector": ".portal-shell-card--build",
       "from": "overrides.compat.css (Phase 5 selector)",
       "fromLayer": "overrides",
@@ -3339,6 +3329,26 @@
       "toLayer": "utilities",
       "classification": "redundant-override-drop",
       "reason": "Phase 7.A: the .artifact-thumbnail-rail mobile grid-template-columns override duplicated the grid-cols-2 utility already on the element (utilities-layer rule produces the same declaration). Override was dead code; dropped without markup or component-CSS change.",
+      "parity": "green"
+    },
+    {
+      "selector": ".portal-shell-card--queue",
+      "from": "overrides.compat.css",
+      "fromLayer": "overrides",
+      "to": "(removed; max-h-[350px] dropped from #queue-shell markup)",
+      "toLayer": "n/a",
+      "classification": "utility-class-drop",
+      "reason": "Phase 7.B: dropped max-h-[350px] from #queue-shell class attribute and removed the .portal-shell-card--queue { max-height: none } override. Both layers contributed nothing now; computed max-height defaults to none (browser default).",
+      "parity": "green"
+    },
+    {
+      "selector": ".portal-shell-card--queue",
+      "from": "overrides.compat.css (Phase 5 selector)",
+      "fromLayer": "overrides",
+      "to": "overrides.compat.css",
+      "toLayer": "overrides",
+      "classification": "compatibility-final-order",
+      "reason": "Phase 6 semantic ownership: replaces ID-specific selector with additive semantic class hook (markup unchanged); rule remains in overrides layer because moving to components would let utilities-layer cascade win; removable in phase-7-utility-markup-migration",
       "parity": "green"
     }
   ]

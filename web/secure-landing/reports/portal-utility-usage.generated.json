@@ -1,7 +1,7 @@
 {
   "version": 1,
   "summary": {
-    "utilityCount": 419,
+    "utilityCount": 418,
     "compatHoldCount": 0,
     "deprecatedImported": false
   },
@@ -2882,18 +2882,6 @@
     },
     {
       "className": "max-h-[320px]",
-      "owner": "static",
-      "sources": [
-        "portal.html"
-      ],
-      "cssFile": "utilities.required.css",
-      "cssOwners": [
-        "web/secure-landing/portal-src/styles/utilities.required.css"
-      ],
-      "status": "covered"
-    },
-    {
-      "className": "max-h-[350px]",
       "owner": "static",
       "sources": [
         "portal.html"
