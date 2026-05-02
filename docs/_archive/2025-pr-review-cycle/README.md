@@ -27,6 +27,6 @@ Following the convention established in `docs/_archive/2026-Q1-consolidation/` a
 
 ## See also
 
-- `docs/operations/CODEBASE_OPTIMIZATION_2025.md` — the broader 2025 optimization record (also a historical doc).
+- [`CODEBASE_OPTIMIZATION_2025.md`](./CODEBASE_OPTIMIZATION_2025.md) — the broader 2025 optimization record (sibling file in this archive directory).
 - `docs/_archive/2026-03-legacy-prs/` — the earlier legacy-PR archive (PR98 / PR100 / PR162).
 - `docs/analysis/TODO_INVENTORY.md` — current TODO inventory; the cleanup that produced this archive is logged in the 2026-05-01 changelog entry.
