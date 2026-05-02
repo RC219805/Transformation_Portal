@@ -462,9 +462,11 @@ jobs:
       - name: Check diff coverage
         if: github.event_name == 'pull_request'
         run: |
-          # Diff coverage: new/changed lines must be covered at 80%
-          # This is the key ratcheting mechanism - fail if not met
-          diff-cover coverage.xml --compare-branch=origin/main --fail-under=80
+          # Diff coverage: new/changed lines must be covered at 85%
+          # Aligns with docs/testing/test_coverage_improvement_plan.md and
+          # the `make coverage-diff` Make target. This is the key ratcheting
+          # mechanism - fail if not met.
+          diff-cover coverage.xml --compare-branch=origin/main --fail-under=85
 
   build:
     name: Build & Package Check

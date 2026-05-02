@@ -28,26 +28,12 @@ Usage:
     atmospheric = pipeline.apply_atmospheric_model(image, depth_map)
 """
 
-from .atmospheric_modeler import AtmosphericConfig, AtmosphericModeler, MontecitoCoastalModel
 from .depth_estimator import DepthConfig, DepthEstimator, DepthMap
-from .depth_filters import DepthAwareBlur, DepthAwareSharpen, DepthGuidedFilter
-from .depth_pipeline import DepthPipeline, DepthPipelineConfig
-from .spatial_processor import SpatialFeatures, SpatialProcessor
 
 __all__ = [
     "DepthEstimator",
     "DepthConfig",
     "DepthMap",
-    "SpatialProcessor",
-    "SpatialFeatures",
-    "AtmosphericModeler",
-    "AtmosphericConfig",
-    "MontecitoCoastalModel",
-    "DepthPipeline",
-    "DepthPipelineConfig",
-    "DepthGuidedFilter",
-    "DepthAwareBlur",
-    "DepthAwareSharpen",
 ]
 
 __version__ = "1.0.0"
