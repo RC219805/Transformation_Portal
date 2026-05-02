@@ -343,7 +343,7 @@ class TestGaussianSplat:
     def test_invalid_opacities_range_raises(self):
         """Test that out-of-range opacities are rejected."""
         N = 10
-        bad_opacities = np.random.rand(N, 1).astype(np.float32) + 0.5  # > 1.0
+        bad_opacities = np.full((N, 1), 1.5, dtype=np.float32)
 
         with pytest.raises(ValueError, match="\\[0, 1\\]"):
             GaussianSplat(
