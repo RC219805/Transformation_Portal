@@ -1217,7 +1217,7 @@
         },
         {
           "source": "web/secure-landing/portal-src/styles/components/dispatch-surfaces.css",
-          "line": 271,
+          "line": 272,
           "column": 1,
           "layer": "components",
           "declarationSignature": "fc2586449f338803de12e357dc8f462d2c3b6bb0",
@@ -1250,7 +1250,7 @@
       "records": [
         {
           "source": "web/secure-landing/portal-src/styles/components/dispatch-surfaces.css",
-          "line": 271,
+          "line": 272,
           "column": 1,
           "layer": "components",
           "declarationSignature": "fc2586449f338803de12e357dc8f462d2c3b6bb0",
@@ -1553,7 +1553,7 @@
       "records": [
         {
           "source": "web/secure-landing/portal-src/styles/components/dispatch-surfaces.css",
-          "line": 271,
+          "line": 272,
           "column": 1,
           "layer": "components",
           "declarationSignature": "fc2586449f338803de12e357dc8f462d2c3b6bb0",
@@ -1976,7 +1976,7 @@
       "records": [
         {
           "source": "web/secure-landing/portal-src/styles/components/dispatch-surfaces.css",
-          "line": 265,
+          "line": 267,
           "column": 1,
           "layer": "components",
           "declarationSignature": "e3c7a9b72249a3ca65b4134dee00060cb7fa297f",
@@ -2220,7 +2220,7 @@
         },
         {
           "source": "web/secure-landing/portal-src/styles/components/dispatch-surfaces.css",
-          "line": 265,
+          "line": 267,
           "column": 1,
           "layer": "components",
           "declarationSignature": "e3c7a9b72249a3ca65b4134dee00060cb7fa297f",
@@ -2442,49 +2442,6 @@
       "disposition": "keep-owned",
       "removalStatus": "permanent",
       "declarationConflict": "conflicting",
-      "parity": "green"
-    },
-    {
-      "key": ".portal-action-control|||components|||",
-      "selector": ".portal-action-control",
-      "layer": "components",
-      "atRuleContext": [],
-      "stateContext": [],
-      "category": "additive",
-      "hotspot": false,
-      "records": [
-        {
-          "source": "web/secure-landing/portal-src/styles/components/dispatch-surfaces.css",
-          "line": 261,
-          "column": 1,
-          "layer": "components",
-          "declarationSignature": "c092cdf68ff9d7e361c25afc7483824ba7a93003",
-          "properties": [
-            "border-radius",
-            "min-height"
-          ]
-        },
-        {
-          "source": "web/secure-landing/portal-src/styles/components/dispatch-surfaces.css",
-          "line": 265,
-          "column": 1,
-          "layer": "components",
-          "declarationSignature": "e3c7a9b72249a3ca65b4134dee00060cb7fa297f",
-          "properties": [
-            "background",
-            "border-color"
-          ]
-        }
-      ],
-      "owners": [
-        "portal-css-architecture"
-      ],
-      "ownerReason": "Additive ownership: .portal-action-control splits non-overlapping declarations across dispatch-surfaces.css while preserving the current computed-style parity.",
-      "phase": "phase-9-duplicate-ownership-closure",
-      "contextType": "component-family-shared-state",
-      "disposition": "report-only",
-      "removalStatus": "removable-later",
-      "declarationConflict": "additive",
       "parity": "green"
     },
     {

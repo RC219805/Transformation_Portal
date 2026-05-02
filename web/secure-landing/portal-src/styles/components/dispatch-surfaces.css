@@ -261,10 +261,11 @@
 .portal-action-control {
     min-height: var(--ux-target-min-size);
     border-radius: var(--ux-radius-md);
+    border-color: var(--ux-border-subtle);
+    background: var(--ux-surface-elevated);
 }
 .hero-action-secondary,
-.operator-action-btn-secondary,
-.portal-action-control {
+.operator-action-btn-secondary {
     border-color: var(--ux-border-subtle);
     background: var(--ux-surface-elevated);
 }
