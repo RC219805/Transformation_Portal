@@ -240,6 +240,26 @@ function runPhase12ComponentFixtureFailure(fixture) {
   assert.fail("Phase 12 component fixture unexpectedly passed");
 }
 
+function runPhase13InteractionFixture(fixture) {
+  const tempDir = mkdtempSync(path.join(tmpdir(), "portal-phase13-interaction-"));
+  const fixturePath = path.join(tempDir, "phase13.json");
+  writeFileSync(fixturePath, `${JSON.stringify(fixture, null, 2)}\n`, "utf8");
+  try {
+    return runNodeScript("scripts/check-portal-css-architecture.mjs", "--check-phase13-interaction-fixture", fixturePath);
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
+}
+
+function runPhase13InteractionFixtureFailure(fixture) {
+  try {
+    runPhase13InteractionFixture(fixture);
+  } catch (error) {
+    return `${error.stdout || ""}${error.stderr || ""}`;
+  }
+  assert.fail("Phase 13 interaction fixture unexpectedly passed");
+}
+
 function phase10AdditiveDuplicate(overrides = {}) {
   const selector = overrides.selector || ".owned";
   return {
@@ -345,6 +365,44 @@ function phase12ComponentDuplicate(overrides = {}) {
         declarations: [["border-radius", "999px", false], ["filter", "blur(34px)", false]],
         declarationSignature: "ambient-singleton",
         properties: ["border-radius", "filter"]
+      }
+    ],
+    ...overrides
+  };
+}
+
+function phase13InteractionDuplicate(overrides = {}) {
+  const selector = overrides.selector || ".build-step-tab:hover";
+  const focusSelector = selector.replace(/:hover$/, ":focus-visible");
+  return {
+    key: overrides.key || `${selector}|||components|||`,
+    selector,
+    layer: "components",
+    context: [],
+    stateContext: [],
+    category: "additive",
+    hotspot: false,
+    removalStatus: "removable-later",
+    records: overrides.records || [
+      {
+        source: overrides.source || "web/secure-landing/portal-src/styles/components/operator-console.css",
+        line: 308,
+        column: 1,
+        layer: "components",
+        selectorList: [selector, focusSelector],
+        declarations: [["transform", "translateY(-1px)", false], ["border-color", "rgba(8, 145, 178, 0.28)", false]],
+        declarationSignature: "interaction-shared",
+        properties: ["border-color", "transform"]
+      },
+      {
+        source: overrides.source || "web/secure-landing/portal-src/styles/components/operator-console.css",
+        line: 313,
+        column: 1,
+        layer: "components",
+        selectorList: [selector],
+        declarations: [["outline", "none", false]],
+        declarationSignature: "hover-outline",
+        properties: ["outline"]
       }
     ],
     ...overrides
@@ -956,6 +1014,217 @@ test("portal CSS Phase 12 component fixtures constrain singleton consolidation",
   );
 });
 
+test("portal CSS Phase 13 interaction fixtures constrain hover outline consolidation", () => {
+  const buildStepTab = phase13InteractionDuplicate();
+  const dispatchToolButton = phase13InteractionDuplicate({
+    key: ".dispatch-tool-btn:hover|||components|||",
+    selector: ".dispatch-tool-btn:hover",
+    source: "web/secure-landing/portal-src/styles/components/dispatch-surfaces.css",
+    records: [
+      {
+        source: "web/secure-landing/portal-src/styles/components/dispatch-surfaces.css",
+        line: 64,
+        column: 1,
+        layer: "components",
+        selectorList: [".dispatch-tool-btn:hover", ".dispatch-tool-btn:focus-visible"],
+        declarations: [["border-color", "rgba(8, 145, 178, 0.32)", false], ["background", "rgba(255, 255, 255, 0.92)", false], ["color", "var(--shell-ink)", false], ["transform", "translateY(-1px)", false]],
+        declarationSignature: "dispatch-hover-shared",
+        properties: ["background", "border-color", "color", "transform"]
+      },
+      {
+        source: "web/secure-landing/portal-src/styles/components/dispatch-surfaces.css",
+        line: 71,
+        column: 1,
+        layer: "components",
+        selectorList: [".dispatch-tool-btn:hover"],
+        declarations: [["outline", "none", false]],
+        declarationSignature: "hover-outline",
+        properties: ["outline"]
+      }
+    ]
+  });
+  const workspaceLink = phase13InteractionDuplicate({
+    key: ".workspace-link:hover|||components|||",
+    selector: ".workspace-link:hover",
+    source: "web/secure-landing/portal-src/styles/components/workspace-surfaces.css",
+    records: [
+      {
+        source: "web/secure-landing/portal-src/styles/components/workspace-surfaces.css",
+        line: 32,
+        column: 1,
+        layer: "components",
+        selectorList: [".workspace-link:hover", ".workspace-link:focus-visible"],
+        declarations: [["transform", "translateY(-1px)", false], ["border-color", "rgba(8, 145, 178, 0.28)", false], ["background", "rgba(255, 255, 255, 0.84)", false], ["box-shadow", "0 14px 28px rgba(14, 116, 144, 0.08)", false]],
+        declarationSignature: "workspace-hover-shared",
+        properties: ["background", "border-color", "box-shadow", "transform"]
+      },
+      {
+        source: "web/secure-landing/portal-src/styles/components/workspace-surfaces.css",
+        line: 39,
+        column: 1,
+        layer: "components",
+        selectorList: [".workspace-link:hover"],
+        declarations: [["outline", "none", false]],
+        declarationSignature: "hover-outline",
+        properties: ["outline"]
+      }
+    ]
+  });
+  const outOfScope = phase13InteractionDuplicate({
+    key: ".review-status-banner|||components|||",
+    selector: ".review-status-banner"
+  });
+  const missingFocusVisible = phase13InteractionDuplicate({
+    records: [
+      {
+        source: "web/secure-landing/portal-src/styles/components/operator-console.css",
+        line: 308,
+        column: 1,
+        layer: "components",
+        selectorList: [".build-step-tab:hover"],
+        declarations: [["transform", "translateY(-1px)", false]],
+        declarationSignature: "hover-only",
+        properties: ["transform"]
+      },
+      {
+        source: "web/secure-landing/portal-src/styles/components/operator-console.css",
+        line: 313,
+        column: 1,
+        layer: "components",
+        selectorList: [".build-step-tab:hover"],
+        declarations: [["outline", "none", false]],
+        declarationSignature: "hover-outline",
+        properties: ["outline"]
+      }
+    ]
+  });
+  const missingOutline = phase13InteractionDuplicate({
+    records: [
+      {
+        source: "web/secure-landing/portal-src/styles/components/operator-console.css",
+        line: 308,
+        column: 1,
+        layer: "components",
+        selectorList: [".build-step-tab:hover", ".build-step-tab:focus-visible"],
+        declarations: [["transform", "translateY(-1px)", false]],
+        declarationSignature: "shared",
+        properties: ["transform"]
+      },
+      {
+        source: "web/secure-landing/portal-src/styles/components/operator-console.css",
+        line: 313,
+        column: 1,
+        layer: "components",
+        selectorList: [".build-step-tab:hover"],
+        declarations: [["color", "red", false]],
+        declarationSignature: "not-outline",
+        properties: ["color"]
+      }
+    ]
+  });
+  const specificityChanging = phase13InteractionDuplicate({
+    records: [
+      {
+        source: "web/secure-landing/portal-src/styles/components/operator-console.css",
+        line: 308,
+        column: 1,
+        layer: "components",
+        ruleSelector: ":where(.build-step-tab:hover, .build-step-tab:focus-visible)",
+        selectorList: [".build-step-tab:hover", ".build-step-tab:focus-visible"],
+        declarations: [["transform", "translateY(-1px)", false]],
+        declarationSignature: "shared",
+        properties: ["transform"]
+      },
+      {
+        source: "web/secure-landing/portal-src/styles/components/operator-console.css",
+        line: 313,
+        column: 1,
+        layer: "components",
+        selectorList: [".build-step-tab:hover"],
+        declarations: [["outline", "none", false]],
+        declarationSignature: "hover-outline",
+        properties: ["outline"]
+      }
+    ]
+  });
+  const conflictingPermanent = phase13InteractionDuplicate({
+    key: ".build-step-tab:hover|||components|||",
+    category: "conflicting",
+    removalStatus: "permanent"
+  });
+  const hotspot = phase13InteractionDuplicate({
+    key: ".shell-bg:hover|||components|||",
+    selector: ".shell-bg:hover",
+    hotspot: true
+  });
+
+  assert.match(
+    runPhase13InteractionFixture({
+      duplicates: [
+        buildStepTab,
+        dispatchToolButton,
+        workspaceLink,
+        outOfScope,
+        hotspot
+      ],
+      baselineEntries: [baselineEntryFor(outOfScope)],
+      expectedCandidates: [
+        { key: buildStepTab.key, candidateStatus: "safe" },
+        { key: dispatchToolButton.key, candidateStatus: "safe" },
+        { key: workspaceLink.key, candidateStatus: "safe" },
+        { key: outOfScope.key, candidateStatus: "deferred", unsafeReason: "selector-not-phase13-target" },
+        { key: hotspot.key, candidateStatus: "deferred", unsafeReason: "hotspot" }
+      ]
+    }),
+    /portal css phase13 interaction fixture: OK/
+  );
+
+  for (const [duplicate, unsafeReason] of [
+    [missingFocusVisible, "focus-visible-coverage-missing"],
+    [missingOutline, "missing-hover-outline"],
+    [specificityChanging, "specificity-changing-grouping"],
+    [conflictingPermanent, "conflicting-permanent"]
+  ]) {
+    assert.match(
+      runPhase13InteractionFixture({
+        duplicates: [duplicate],
+        expectedCandidates: [{ key: duplicate.key, candidateStatus: "deferred", unsafeReason }]
+      }),
+      /portal css phase13 interaction fixture: OK/
+    );
+  }
+
+  assert.match(
+    runPhase13InteractionFixtureFailure({
+      duplicates: [buildStepTab],
+      expectedState: { phase: "phase-13-interaction-outline-consolidation" },
+      phase13InteractionOutlineConsolidationState: { phase: "stale" }
+    }),
+    /phase13InteractionOutlineConsolidationState is stale/
+  );
+
+  assert.match(
+    runPhase13InteractionFixtureFailure({
+      duplicates: [buildStepTab],
+      expectedPhase12State: { phase: "phase-12-component-singleton-consolidation" },
+      phase12ComponentSingletonConsolidationState: { phase: "stale" }
+    }),
+    /phase12ComponentSingletonConsolidationState immutable historical evidence drifted/
+  );
+
+  assert.match(
+    runPhase13InteractionFixtureFailure({
+      duplicates: [outOfScope],
+      baselineEntries: [
+        baselineEntryFor(outOfScope, {
+          ownerReason: "selector-not-phase13-target"
+        })
+      ]
+    }),
+    /selector-not-phase13-target must not overwrite live baseline ownerReason/
+  );
+});
+
 test("portal CSS layer parity make target checks generated artifact freshness", () => {
   const makefile = readFileSync(MAKEFILE_PATH, "utf8");
   const start = makefile.indexOf("validate-portal-css-layer-parity:");
@@ -1081,6 +1350,60 @@ test("portal CSS Phase 12 consolidation preserves ambient and mobile boundaries"
   assert.equal(overviewDeclarations.get("justify-content"), "stretch");
   assert.equal(overviewDeclarations.get("grid-template-columns"), "1fr");
   assert.equal(overviewDeclarations.get("width"), "100%");
+});
+
+test("portal CSS Phase 13 consolidation preserves interaction outline boundaries", () => {
+  for (const [fileName, selector, sharedDeclarations] of [
+    [
+      "operator-console.css",
+      ".build-step-tab",
+      {
+        transform: "translateY(-1px)",
+        "border-color": "rgba(8, 145, 178, 0.28)"
+      }
+    ],
+    [
+      "dispatch-surfaces.css",
+      ".dispatch-tool-btn",
+      {
+        "border-color": "rgba(8, 145, 178, 0.32)",
+        background: "rgba(255, 255, 255, 0.92)",
+        color: "var(--shell-ink)",
+        transform: "translateY(-1px)"
+      }
+    ],
+    [
+      "workspace-surfaces.css",
+      ".workspace-link",
+      {
+        transform: "translateY(-1px)",
+        "border-color": "rgba(8, 145, 178, 0.28)",
+        background: "rgba(255, 255, 255, 0.84)",
+        "box-shadow": "0 14px 28px rgba(14, 116, 144, 0.08)"
+      }
+    ]
+  ]) {
+    const source = readFileSync(
+      path.join(FRONTDOOR_ROOT, "portal-src", "styles", "components", fileName),
+      "utf8"
+    );
+    const root = postcss.parse(source);
+    const hoverRule = findRuleBySelectors(root, [`${selector}:hover`]);
+    const focusVisibleRule = findRuleBySelectors(root, [`${selector}:focus-visible`]);
+    assert.ok(hoverRule, `${selector}:hover singleton rule must exist`);
+    assert.ok(focusVisibleRule, `${selector}:focus-visible singleton rule must exist`);
+    assert.equal(findRuleBySelectors(root, [`${selector}:hover`, `${selector}:focus-visible`]), null);
+    assert.doesNotMatch(source, /:(?:is|where)\(/);
+
+    const hoverDeclarations = declarationsForRule(hoverRule);
+    const focusVisibleDeclarations = declarationsForRule(focusVisibleRule);
+    for (const [property, value] of Object.entries(sharedDeclarations)) {
+      assert.equal(hoverDeclarations.get(property), value);
+      assert.equal(focusVisibleDeclarations.get(property), value);
+    }
+    assert.equal(hoverDeclarations.get("outline"), "none");
+    assert.equal(focusVisibleDeclarations.has("outline"), false);
+  }
 });
 
 test("portal CSS ownership drain keeps utilities layer honest", () => {
@@ -1225,7 +1548,57 @@ test("portal CSS ownership drain keeps utilities layer honest", () => {
   );
   assert.equal(ownershipDrain.phase12ComponentSingletonConsolidationState.sentinelStatePreserved, true);
   assert.equal(ownershipDrain.phase12ComponentSingletonConsolidationState.parityBaselineChanged, false);
-  assert.equal(duplicateBaseline.duplicateKeys.length, 73);
+  assert.equal(ownershipDrain.phase13InteractionOutlineConsolidationState.phase, "phase-13-interaction-outline-consolidation");
+  assert.deepEqual(ownershipDrain.phase13InteractionOutlineConsolidationState.targetSelectors, [
+    ".build-step-tab:hover",
+    ".dispatch-tool-btn:hover",
+    ".workspace-link:hover"
+  ]);
+  assert.equal(ownershipDrain.phase13InteractionOutlineConsolidationState.duplicateContextCountBefore, 73);
+  assert.equal(ownershipDrain.phase13InteractionOutlineConsolidationState.duplicateContextCountAfter, 70);
+  assert.equal(ownershipDrain.phase13InteractionOutlineConsolidationState.additiveDuplicateContextCountBefore, 17);
+  assert.equal(ownershipDrain.phase13InteractionOutlineConsolidationState.additiveDuplicateContextCountAfter, 14);
+  assert.equal(ownershipDrain.phase13InteractionOutlineConsolidationState.conflictingPermanentContextCountBefore, 56);
+  assert.equal(ownershipDrain.phase13InteractionOutlineConsolidationState.conflictingPermanentContextCountAfter, 56);
+  assert.equal(ownershipDrain.phase13InteractionOutlineConsolidationState.unownedDuplicateContextCountAfter, 0);
+  assert.equal(ownershipDrain.phase13InteractionOutlineConsolidationState.hotspotDuplicateContextCountAfter, 0);
+  assert.equal(ownershipDrain.phase13InteractionOutlineConsolidationState.consolidatedContextCount, 3);
+  assert.equal(ownershipDrain.phase13InteractionOutlineConsolidationState.expectedConsolidatedContextCount, 3);
+  assert.deepEqual(ownershipDrain.phase13InteractionOutlineConsolidationState.consolidatedContexts, [
+    ".build-step-tab:hover|||components|||",
+    ".dispatch-tool-btn:hover|||components|||",
+    ".workspace-link:hover|||components|||"
+  ]);
+  assert.deepEqual(ownershipDrain.phase13InteractionOutlineConsolidationState.remainingTargetContexts, []);
+  assert.equal(ownershipDrain.phase13InteractionOutlineConsolidationState.unexpectedResolvedContextCount, 0);
+  assert.equal(
+    ownershipDrain.phase13InteractionOutlineConsolidationState.nonTargetAdditiveCandidatesDeferredReason,
+    "selector-not-phase13-target"
+  );
+  assert.equal(ownershipDrain.phase13InteractionOutlineConsolidationState.deferredOutOfScopeCandidateCount, 14);
+  assert.deepEqual(ownershipDrain.phase13InteractionOutlineConsolidationState.deferredReasonCounts, {
+    "selector-not-phase13-target": 14
+  });
+  assert.equal(ownershipDrain.phase13InteractionOutlineConsolidationState.phase12HistoricalEvidencePreserved, true);
+  assert.equal(ownershipDrain.phase13InteractionOutlineConsolidationState.generatedRawBytesBefore, 80390);
+  assert.equal(ownershipDrain.phase13InteractionOutlineConsolidationState.generatedRawBytesAfter, 80569);
+  assert.equal(ownershipDrain.phase13InteractionOutlineConsolidationState.generatedRawByteDelta, 179);
+  assert.equal(ownershipDrain.phase13InteractionOutlineConsolidationState.generatedGzipBytesBefore, 15713);
+  assert.equal(ownershipDrain.phase13InteractionOutlineConsolidationState.generatedGzipBytesAfter, 15743);
+  assert.equal(ownershipDrain.phase13InteractionOutlineConsolidationState.generatedGzipByteDelta, 30);
+  assert.equal(
+    ownershipDrain.phase13InteractionOutlineConsolidationState.generatedPortalCssHashBefore,
+    "5c82d054b928ac320c932cd9eb133fb2f39cfdc9e865c648cc9987de68c0e37b"
+  );
+  assert.equal(
+    ownershipDrain.phase13InteractionOutlineConsolidationState.generatedPortalCssHashAfter,
+    "3e6719511b1536ebe2e4c067b693930aa77ab242115368ae4ba3aa8e2aa6f3b3"
+  );
+  assert.equal(ownershipDrain.phase13InteractionOutlineConsolidationState.renderedPortalCssFingerprintBefore, "61c134a0012d");
+  assert.equal(ownershipDrain.phase13InteractionOutlineConsolidationState.renderedPortalCssFingerprintAfter, "c06fbcdf1f37");
+  assert.equal(ownershipDrain.phase13InteractionOutlineConsolidationState.sentinelStatePreserved, true);
+  assert.equal(ownershipDrain.phase13InteractionOutlineConsolidationState.parityBaselineChanged, false);
+  assert.equal(duplicateBaseline.duplicateKeys.length, 70);
   assert.ok(
     duplicateBaseline.duplicateKeys.every((entry) => entry.phase === "phase-9-duplicate-ownership-closure"),
     "all duplicate baseline entries must be Phase 9-owned"
@@ -1277,6 +1650,11 @@ test("portal CSS parity census forces feature states and canonical theme hooks",
   assert.match(validator, /finally \{\{\n    restore\(\);/);
   assert.match(validator, /_validate_review_status_tone_states\(connection\)/);
   assert.match(validator, /_validate_overview_mobile_states\(connection\)/);
+  assert.match(validator, /_validate_interaction_outline_states\(connection\)/);
+  assert.match(validator, /CSS\.forcePseudoState/);
+  assert.match(validator, /':hover'/);
+  assert.match(validator, /':focus-visible'/);
+  assert.match(validator, /dispatchTools\.open = true/);
   assert.match(validator, /"width": 767/);
   assert.match(validator, /"width": 375/);
 });

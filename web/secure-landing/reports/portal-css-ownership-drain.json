@@ -3667,5 +3667,52 @@
     "renderedPortalCssFingerprintAfter": "61c134a0012d",
     "sentinelStatePreserved": true,
     "parityBaselineChanged": false
+  },
+  "phase13InteractionOutlineConsolidationState": {
+    "phase": "phase-13-interaction-outline-consolidation",
+    "targetSelectors": [
+      ".build-step-tab:hover",
+      ".dispatch-tool-btn:hover",
+      ".workspace-link:hover"
+    ],
+    "baselinePath": "web/secure-landing/portal-src/styles/architecture-baseline.json",
+    "baselineSha256": "0cd2906f93cdc44817461fe60c7d0cda970ac8b5aa36715fce27dadf058c2ed9",
+    "duplicateContextCountBefore": 73,
+    "duplicateContextCountAfter": 70,
+    "additiveDuplicateContextCountBefore": 17,
+    "additiveDuplicateContextCountAfter": 14,
+    "conflictingPermanentContextCountBefore": 56,
+    "conflictingPermanentContextCountAfter": 56,
+    "unownedDuplicateContextCountAfter": 0,
+    "hotspotDuplicateContextCountAfter": 0,
+    "consolidatedContextCount": 3,
+    "expectedConsolidatedContextCount": 3,
+    "consolidatedContexts": [
+      ".build-step-tab:hover|||components|||",
+      ".dispatch-tool-btn:hover|||components|||",
+      ".workspace-link:hover|||components|||"
+    ],
+    "remainingTargetContexts": [],
+    "unexpectedResolvedContextCount": 0,
+    "nonTargetAdditiveCandidatesDeferredReason": "selector-not-phase13-target",
+    "deferredOutOfScopeCandidateCount": 14,
+    "deferredReasonCounts": {
+      "selector-not-phase13-target": 14
+    },
+    "phase12HistoricalEvidencePreserved": true,
+    "removedRawBytes": 0,
+    "removedGzipBytes": 0,
+    "generatedRawBytesBefore": 80390,
+    "generatedRawBytesAfter": 80569,
+    "generatedRawByteDelta": 179,
+    "generatedGzipBytesBefore": 15713,
+    "generatedGzipBytesAfter": 15743,
+    "generatedGzipByteDelta": 30,
+    "generatedPortalCssHashBefore": "5c82d054b928ac320c932cd9eb133fb2f39cfdc9e865c648cc9987de68c0e37b",
+    "generatedPortalCssHashAfter": "3e6719511b1536ebe2e4c067b693930aa77ab242115368ae4ba3aa8e2aa6f3b3",
+    "renderedPortalCssFingerprintBefore": "61c134a0012d",
+    "renderedPortalCssFingerprintAfter": "c06fbcdf1f37",
+    "sentinelStatePreserved": true,
+    "parityBaselineChanged": false
   }
 }
