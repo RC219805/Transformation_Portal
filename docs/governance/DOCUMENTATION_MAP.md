@@ -90,7 +90,7 @@ operator guidance unless they are linked here as canonical documents.
 | `docs/750_picacho/`, `docs/analysis/`, `docs/projects/`, `docs/quality_analysis/`, `docs/visual_review/` | Historical or mixed project records | Dated project evidence and investigations; not current operator guidance unless linked above |
 | `docs/depth_model/`, `docs/depth_pipeline/`, `docs/pipeline/`, `docs/pipeline_docs/` | Superseded or historical pipeline/depth material | Use current Lux Depth V3 docs and ADRs instead |
 | `docs/deliverables/`, `docs/project-status/`, `docs/reports/`, `docs/status/`, `docs/summaries/`, `docs/session_summaries/`, `docs/sessions/`, `docs/historical/`, `docs/verification/` | Point-in-time reports | Audit context only |
-| `docs/pr_archive/`, `docs/pr_reports/`, `docs/pr_summaries/` | PR-specific records | Review and merge history only |
+| `docs/pr_archive/`, `docs/pr_summaries/` | PR-specific records | Review and merge history only |
 | `docs/_archive/` | Archive-only | Retired or consolidated material |
 
 ## Maintenance Protocol

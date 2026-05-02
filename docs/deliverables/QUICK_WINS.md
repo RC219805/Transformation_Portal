@@ -81,29 +81,22 @@ class BaseNode(ABC):  # Add ABC inheritance
 
 ---
 
-### QW-2: Archive Obsolete PR Tracking Documents
+### QW-2: Archive Obsolete PR Tracking Documents — ✅ COMPLETED (2026-03-14)
 
 **Effort:** 30 minutes
 **Impact:** Cleaner docs directory
 **Risk:** None (moving, not deleting)
 
-**Task:**
-Move completed PR tracking documents to archive to reduce documentation clutter.
+**Outcome:** Both copies of `PR98_ACTION_ITEMS.md` were moved to `docs/_archive/2026-03-legacy-prs/` on 2026-03-14, preserving git history. The `docs/development/pr/` redirect stub was additionally deleted on 2026-05-01 (PR #1599) when the parent directory was emptied. See `TODO_INVENTORY.md` §4.2.
 
-**Files to Archive:**
-- `docs/pr_reports/PR98_ACTION_ITEMS.md` → `archive/docs/pr_reports/`
-- `docs/development/pr/PR98_ACTION_ITEMS.md` → `archive/docs/development/pr/`
-
-**Steps:**
-1. Create `archive/docs/pr_reports/` if not exists
-2. Move files with `git mv` (preserve history)
-3. Update any cross-references in active docs
-4. Update `docs/README.md` or index if exists
+**Files Archived (historical record):**
+- ~~`docs/pr_reports/PR98_ACTION_ITEMS.md`~~ → `docs/_archive/2026-03-legacy-prs/`
+- ~~`docs/development/pr/PR98_ACTION_ITEMS.md`~~ → `docs/_archive/2026-03-legacy-prs/` (redirect stub deleted 2026-05-01)
 
 **Acceptance:**
-- Obsolete docs moved to archive
-- No broken links in active documentation
-- Git history preserved
+- [x] Obsolete docs moved to archive
+- [x] No broken links in active documentation
+- [x] Git history preserved
 
 ---
 
@@ -413,7 +406,7 @@ Audit `src/transformation_portal/depth_canonical/` module to determine if it's s
 
 ### Week 1: Documentation & Cleanup (6 hours)
 
-1. **QW-2:** Archive obsolete PR docs (30min)
+1. **QW-2:** Archive obsolete PR docs (30min) — ✅ completed 2026-03-14
 2. **QW-3:** Update binary cleanup docs (15min)
 3. **QW-6:** Rollback procedures (2h)
 4. **QW-7:** Branch protection guide (1h)
@@ -449,7 +442,7 @@ Audit `src/transformation_portal/depth_canonical/` module to determine if it's s
 ### Low Impact (Polish)
 
 - **QW-1:** @abstractmethod decorators (IDE support)
-- **QW-2:** Archive obsolete docs (cleanliness)
+- **QW-2:** Archive obsolete docs (cleanliness) — ✅ completed 2026-03-14
 - **QW-3:** Update binary docs (accuracy)
 - **QW-8:** Security badges (visibility)
 

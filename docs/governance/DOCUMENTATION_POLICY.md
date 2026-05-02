@@ -60,7 +60,6 @@ Approved top-level directories:
 - `docs/pipeline/`
 - `docs/pipeline_docs/`
 - `docs/pr_archive/`
-- `docs/pr_reports/`
 - `docs/pr_summaries/`
 - `docs/processing/`
 - `docs/project-status/`

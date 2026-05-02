@@ -46,29 +46,31 @@ docs/
 
 #### Files Reorganized
 
-**Moved to `docs/development/`**:
-- CODEBASE_REVIEW_REPORT.md
-- CUSTOM_AGENT_SUMMARY.md
-- IMPLEMENTATION_SUMMARY.md
-- MERGE_READINESS_CHECKLIST.md
-- VERIFICATION_COMPLETE.md
-- VFX_EXTENSION_FIX_SUMMARY.md
-- Validation_of_PR162_Integration.md
+> **Editor's note (2026-05-01):** This section records the November 2025 reorganization. Some of those destinations have since been further reorganized — `docs/development/`, `docs/development/pr/`, and `docs/development/testing/` no longer exist (the directories were emptied when their redirect stubs were deleted; canonical copies live in `docs/summaries/` and `docs/verification/`). Per-file annotations below indicate current locations. The `docs/operations/` destination is unchanged.
 
-**Moved to `docs/development/pr/`**:
-- PR100_FIX_SUMMARY.md
-- PR162_VERIFICATION_SUMMARY.md
-- PR98_ACTION_ITEMS.md
-- PR98_VERIFICATION_REPORT.md
-- PR_ACTIONABLE_FIXES.md
-- PR_CONSOLIDATION_ANALYSIS.md
-- PR_REVIEW_SUMMARY.md
+**Originally moved to `docs/development/`** *(directory no longer exists; redirect stubs deleted 2026-05-01; canonical copies in `docs/summaries/` and `docs/verification/`)*:
+- CODEBASE_REVIEW_REPORT.md *(canonical: `docs/summaries/`)*
+- CUSTOM_AGENT_SUMMARY.md *(canonical: `docs/summaries/`)*
+- IMPLEMENTATION_SUMMARY.md *(canonical: `docs/summaries/`)*
+- MERGE_READINESS_CHECKLIST.md *(canonical: `docs/verification/`)*
+- VERIFICATION_COMPLETE.md *(canonical: `docs/verification/`)*
+- VFX_EXTENSION_FIX_SUMMARY.md *(canonical: `docs/summaries/`)*
+- Validation_of_PR162_Integration.md *(canonical: `docs/verification/`)*
 
-**Moved to `docs/development/testing/`**:
-- CI_FIXES_SUMMARY.md
-- HYPOTHESIS_DEPENDENCY_FIX.md
+**Originally moved to `docs/development/pr/`** *(directory no longer exists; redirect stubs deleted 2026-05-01; canonical files archived as noted)*:
+- PR100_FIX_SUMMARY.md *(archived 2026-03 → `docs/_archive/2026-03-legacy-prs/`)*
+- PR162_VERIFICATION_SUMMARY.md *(archived 2026-03 → `docs/_archive/2026-03-legacy-prs/`)*
+- PR98_ACTION_ITEMS.md *(archived 2026-03 → `docs/_archive/2026-03-legacy-prs/`)*
+- PR98_VERIFICATION_REPORT.md *(archived 2026-03 → `docs/_archive/2026-03-legacy-prs/`)*
+- PR_ACTIONABLE_FIXES.md *(archived 2026-05 → `docs/_archive/2025-pr-review-cycle/`)*
+- PR_CONSOLIDATION_ANALYSIS.md *(archived 2026-05 → `docs/_archive/2025-pr-review-cycle/`)*
+- PR_REVIEW_SUMMARY.md *(archived 2026-05 → `docs/_archive/2025-pr-review-cycle/`)*
 
-**Moved to `docs/operations/`**:
+**Originally moved to `docs/development/testing/`** *(directory no longer exists; redirect stubs deleted 2026-05-01; canonical copies in `docs/summaries/`)*:
+- CI_FIXES_SUMMARY.md *(canonical: `docs/summaries/`)*
+- HYPOTHESIS_DEPENDENCY_FIX.md *(canonical: `docs/summaries/`)*
+
+**Moved to `docs/operations/`** *(unchanged; files still at this location)*:
 - EXAMPLE_PATH_VERIFICATION.md
 - FILE_FORMAT_QUICK_REFERENCE.md
 - PERFORMANCE_OPTIMIZATIONS.md

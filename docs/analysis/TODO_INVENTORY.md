@@ -1,9 +1,9 @@
 # TODO Inventory - Transformation Portal
 
-**Document Version:** 2.4.3
+**Document Version:** 2.4.4
 **Date:** May 1, 2026
-**Last Updated:** 2026-05-01 (ADR-023 audit closed; obsolete guide deleted)
-**Previous Version:** 2.4.2 (2026-05-01)
+**Last Updated:** 2026-05-01 (orphaned 2025 PR-review reports archived)
+**Previous Version:** 2.4.3 (2026-05-01)
 
 ---
 
@@ -16,6 +16,16 @@ This document provides a **complete, categorized inventory** of all TODOs, NotIm
 - Audit trail for architectural decisions
 - Integration with issue tracking systems
 - Binding inventory enforced by Architect governance
+
+## Version 2.4.4 Changes (2026-05-01)
+
+**Major Updates — 2025 reorganization residue swept:**
+- ✅ **Orphaned 2025 PR-review reports archived.** Four canonical files at `docs/pr_reports/` (`BUG_REPORT_CODE_REVIEW.md`, `PR_ACTIONABLE_FIXES.md`, `PR_CONSOLIDATION_ANALYSIS.md`, `PR_REVIEW_SUMMARY.md`, dated October 2025 / January 2025) moved to `docs/_archive/2025-pr-review-cycle/` with a provenance README.
+- ✅ **`CODEBASE_OPTIMIZATION_2025.md` archived.** Nov-2025 historical record at `docs/operations/` was orphaned (no incoming references) and described an already-complete reorganization. Moved to `docs/_archive/2025-pr-review-cycle/` alongside the related PR-review reports.
+- ✅ **`PR216_REVIEW_SUMMARY.md` archived.** Nov-2025 PR review summary at `docs/analysis/` (status "READY TO MERGE", zero incoming references) — same shape as `CODEBASE_OPTIMIZATION_2025.md`. Moved to `docs/_archive/2025-pr-review-cycle/` for consistency. Contains a dated `docs/` tree diagram that's now annotated as historical via the archive README.
+- ✅ **All 12 redirect stubs from the 2025 reorg deleted.** Three at `docs/development/pr/` (pointed to the now-archived `pr_reports/` files), seven at `docs/development/` (pointed to canonical files in `docs/summaries/` / `docs/verification/`), and two at `docs/development/testing/` (pointed to `docs/summaries/`). Pre-deletion check: of the **stub files themselves**, only one had a live incoming reference (a `TODO_INVENTORY.md` cleanup-tracking line that flagged it for removal); all others were dangling. (Older docs — e.g., the QW-2 task spec in `QUICK_WINS.md` and a `docs/` tree diagram in `PR216_REVIEW_SUMMARY.md` — still mention the original canonical paths from the 2025 → 2026 reorg journey; those are historical/dated guidance and are now annotated with their resolution status. The dated `documentation-inventory-2026-04-29.csv` remains an immutable point-in-time snapshot.) Canonical copies in `docs/summaries/` and `docs/verification/` are untouched.
+- ✅ **`DOCUMENTATION_POLICY.md` and `DOCUMENTATION_MAP.md` taxonomies updated.** Dropped `docs/pr_reports/` from both listings (the directory is now empty post-archive). Sibling `docs/pr_archive/` (19 files) and `docs/pr_summaries/` (1 file) remain in the taxonomy.
+- ✅ **§6 "Old Verification Reports" cleanup closed.** The flagged `docs/development/VERIFICATION_COMPLETE.md` redirect stub is among the 12 deleted; canonical `docs/verification/VERIFICATION_COMPLETE.md` retained.
 
 ## Version 2.4.3 Changes (2026-05-01)
 
@@ -760,15 +770,17 @@ raise NotImplementedError(f"Backend {self.backend} not implemented")
 
 ---
 
-### 4.2 PR #98 Action Items
+### 4.2 PR #98 Action Items — ✅ ARCHIVED 2026-03-14
 
-**Status:** ✅ OBSOLETE (PR MERGED)
+**Status:** ✅ OBSOLETE (PR MERGED) and ✅ ARCHIVED
 **Priority:** N/A
-**Action:** Archive tracking documents
+**Action:** Archive tracking documents — done
 
-**Location:** `docs/pr_reports/PR98_ACTION_ITEMS.md` and `docs/development/pr/PR98_ACTION_ITEMS.md`
+**Original locations** *(both paths archived; canonical copies are at the archive location below)*:
+- ~~`docs/pr_reports/PR98_ACTION_ITEMS.md`~~ → `docs/_archive/2026-03-legacy-prs/`
+- ~~`docs/development/pr/PR98_ACTION_ITEMS.md`~~ → `docs/_archive/2026-03-legacy-prs/` (redirect stub also deleted 2026-05-01)
 
-Multiple TODO items:
+Multiple TODO items (resolved with PR archival):
 - Line 52: Mark PR as Ready for Review
 - Line 65: Request Review
 - Line 82: Unblock CI
@@ -776,9 +788,7 @@ Multiple TODO items:
 
 **Context:**
 - PR #98 merged and deployed
-- Tracking documents no longer relevant
-
-**Recommendation:** Move to `archive/pr_reports/` or delete
+- Tracking documents no longer relevant; both copies archived
 
 ---
 
@@ -1243,17 +1253,17 @@ pytestmark = pytest.mark.skipif(not TORCH_AVAILABLE, reason="torch required for 
 
 **Items for Archive/Removal:**
 
-1. **PR #98 Action Items**
-   - `docs/pr_reports/PR98_ACTION_ITEMS.md`
-   - `docs/development/pr/PR98_ACTION_ITEMS.md`
+1. **PR #98 Action Items** — ✅ RESOLVED 2026-03-14
+   - ~~`docs/pr_reports/PR98_ACTION_ITEMS.md`~~ → archived to `docs/_archive/2026-03-legacy-prs/`
+   - ~~`docs/development/pr/PR98_ACTION_ITEMS.md`~~ → archived to `docs/_archive/2026-03-legacy-prs/`; redirect stub additionally deleted 2026-05-01
    - Reason: PR merged and deployed
 
 2. **Binary Cleanup TODOs**
    - `docs/fixes/BINARY_FILE_BEST_PRACTICES.md` (lines 133, 140)
    - Reason: Cleanup completed per PRE_PUSH_AUDIT_REPORT.md
 
-3. **Old Verification Reports**
-   - `docs/development/VERIFICATION_COMPLETE.md` (multiple PENDING markers)
+3. **Old Verification Reports** — ✅ RESOLVED 2026-05-01
+   - ~~`docs/development/VERIFICATION_COMPLETE.md` (multiple PENDING markers)~~ — redirect stub deleted; canonical `docs/verification/VERIFICATION_COMPLETE.md` retained
    - Reason: Verification completed, report outdated
 
 **Recommendation:**
@@ -1412,9 +1422,9 @@ pytestmark = pytest.mark.skipif(not TORCH_AVAILABLE, reason="torch required for 
    - ✅ No active imports in src/ (verified)
    - Update CHANGELOG.md with archival note
 
-2. **Archive Obsolete PR Tracking Docs** (30min)
-   - Move `docs/pr_reports/PR98_ACTION_ITEMS.md` → `archive/`
-   - Move `docs/development/pr/PR98_ACTION_ITEMS.md` → `archive/`
+2. ~~**Archive Obsolete PR Tracking Docs** (30min)~~ ✅ DONE 2026-03-14
+   - ✅ Moved `docs/pr_reports/PR98_ACTION_ITEMS.md` → `docs/_archive/2026-03-legacy-prs/`
+   - ✅ Moved `docs/development/pr/PR98_ACTION_ITEMS.md` → `docs/_archive/2026-03-legacy-prs/`; redirect stub additionally deleted 2026-05-01
 
 3. **Update Binary Cleanup Docs** (30min)
    - Remove TODOs from `docs/fixes/BINARY_FILE_BEST_PRACTICES.md`
