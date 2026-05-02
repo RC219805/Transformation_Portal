@@ -120,6 +120,34 @@ const PHASE13_TARGET_FILES_BY_KEY = new Map([
   [".dispatch-tool-btn:hover|||components|||", PHASE13_DISPATCH_SURFACES_FILE],
   [".workspace-link:hover|||components|||", PHASE13_WORKSPACE_SURFACES_FILE]
 ]);
+const PHASE13_BASELINE_SHA256 =
+  "0cd2906f93cdc44817461fe60c7d0cda970ac8b5aa36715fce27dadf058c2ed9";
+const PHASE14_SKELETON_PHASE = "phase-14-skeleton-primitive-consolidation";
+const PHASE14_DUPLICATE_CONTEXT_COUNT_BEFORE = 70;
+const PHASE14_DUPLICATE_CONTEXT_COUNT_AFTER = 67;
+const PHASE14_ADDITIVE_CONTEXT_COUNT_BEFORE = 14;
+const PHASE14_ADDITIVE_CONTEXT_COUNT_AFTER = 11;
+const PHASE14_CONFLICTING_PERMANENT_CONTEXT_COUNT = 56;
+const PHASE14_EXPECTED_CONSOLIDATED_CONTEXT_COUNT = 3;
+const PHASE14_GENERATED_PORTAL_CSS_HASH_BEFORE =
+  "3e6719511b1536ebe2e4c067b693930aa77ab242115368ae4ba3aa8e2aa6f3b3";
+const PHASE14_RENDERED_PORTAL_CSS_FINGERPRINT_BEFORE = "c06fbcdf1f37";
+const PHASE14_GENERATED_PORTAL_CSS_BYTES_BEFORE = 80569;
+const PHASE14_GENERATED_PORTAL_CSS_GZIP_BYTES_BEFORE = 15743;
+const PHASE14_TARGET_FILE = PHASE13_DISPATCH_SURFACES_FILE;
+const PHASE14_TARGET_SELECTORS = [".skeleton-line", ".skeleton-block", ".skeleton-pill"];
+const PHASE14_TARGET_DUPLICATE_KEYS = new Set(PHASE14_TARGET_SELECTORS.map((selector) => `${selector}|||components|||`));
+const PHASE14_SHARED_PROPERTIES = ["background", "display", "overflow", "position"];
+const PHASE14_SINGLETON_PROPERTIES_BY_SELECTOR = new Map([
+  [".skeleton-line", ["border-radius", "height", "width"]],
+  [".skeleton-block", ["border-radius", "min-height"]],
+  [".skeleton-pill", ["border-radius", "height", "width"]]
+]);
+const PHASE14_VARIANTS_BY_SELECTOR = new Map([
+  [".skeleton-line", [".skeleton-line-short", ".skeleton-line-medium", ".skeleton-line-tiny"]],
+  [".skeleton-block", [".skeleton-block-compact"]],
+  [".skeleton-pill", [".skeleton-pill-short"]]
+]);
 const VALID_PHASE9_CONTEXT_TYPES = new Set([
   "responsive-context",
   "theme-context",
@@ -185,6 +213,18 @@ const PHASE13_UNSAFE_REASONS = new Set([
   "source-order-sensitive",
   "specificity-changing-grouping"
 ]);
+const PHASE14_UNSAFE_REASONS = new Set([
+  "selector-not-phase14-target",
+  "conflicting-permanent",
+  "hotspot",
+  "cross-layer",
+  "cross-context",
+  "selector-list-coverage-ambiguous",
+  "shared-selector-list-drift",
+  "singleton-declaration-missing",
+  "variant-order-sensitive",
+  "specificity-changing-grouping"
+]);
 const PORTAL_CSS_RENDER_TOKENS = {
   "__PORTAL_FONT_SANS_URL__": "fonts/portal-sans.woff2",
   "__PORTAL_FONT_MONO_URL__": "fonts/portal-mono.woff2"
@@ -219,6 +259,10 @@ const PHASE13_INTERACTION_FIXTURE_ARG = "--check-phase13-interaction-fixture";
 const phase13InteractionFixtureIndex = process.argv.indexOf(PHASE13_INTERACTION_FIXTURE_ARG);
 const PHASE13_INTERACTION_FIXTURE_PATH =
   phase13InteractionFixtureIndex >= 0 ? process.argv[phase13InteractionFixtureIndex + 1] : "";
+const PHASE14_SKELETON_FIXTURE_ARG = "--check-phase14-skeleton-fixture";
+const phase14SkeletonFixtureIndex = process.argv.indexOf(PHASE14_SKELETON_FIXTURE_ARG);
+const PHASE14_SKELETON_FIXTURE_PATH =
+  phase14SkeletonFixtureIndex >= 0 ? process.argv[phase14SkeletonFixtureIndex + 1] : "";
 
 const EXPECTED_LAYER_ORDER = ["tokens", "base", "components", "utilities", "overrides"];
 const EXPECTED_LAYER_IMPORTS = [
@@ -1941,6 +1985,262 @@ function analyzePhase13InteractionCandidates(duplicates, baseline = loadBaseline
     .sort((left, right) => left.key.localeCompare(right.key));
 }
 
+function recordDeclMap(record) {
+  return new Map(declarationRecords(record).map(([property, value, important]) => [property.toLowerCase(), { value, important }]));
+}
+
+function selectorListEquals(left, right) {
+  return JSON.stringify([...left].sort()) === JSON.stringify([...right].sort());
+}
+
+function phase14HasExpectedSingletonDeclarations(record, selector) {
+  const expected = PHASE14_SINGLETON_PROPERTIES_BY_SELECTOR.get(selector) || [];
+  return JSON.stringify(recordProperties(record)) === JSON.stringify(expected);
+}
+
+function analyzePhase14SkeletonCandidate(duplicate, baselineEntry = {}) {
+  const entry = baselineEntry || {};
+  const records = duplicate.records || [];
+  const candidate = {
+    key: duplicate.key,
+    selector: duplicate.selector,
+    layer: duplicate.layer,
+    atRuleContext: duplicate.context || [],
+    declarationConflict: duplicate.category,
+    removalStatus: entry.removalStatus || duplicate.removalStatus || null,
+    sourceLocations: phase11SourceLocations(duplicate),
+    candidateStatus: "deferred"
+  };
+
+  if (duplicate.hotspot || entry.hotspot) {
+    return { ...candidate, unsafeReason: "hotspot" };
+  }
+  if (duplicate.category !== "additive" || (entry.removalStatus || duplicate.removalStatus) !== "removable-later") {
+    return { ...candidate, unsafeReason: "conflicting-permanent" };
+  }
+  if (!PHASE14_TARGET_DUPLICATE_KEYS.has(duplicate.key)) {
+    return { ...candidate, unsafeReason: "selector-not-phase14-target" };
+  }
+  if (duplicate.layer !== "components" || records.some((record) => (record.layer || duplicate.layer) !== "components")) {
+    return { ...candidate, unsafeReason: "cross-layer" };
+  }
+  if (records.some(hasSpecificityChangingGrouping)) {
+    return { ...candidate, unsafeReason: "specificity-changing-grouping" };
+  }
+  if (new Set(records.map((record) => JSON.stringify(record.context || duplicate.context || []))).size > 1) {
+    return { ...candidate, unsafeReason: "cross-context" };
+  }
+  if (JSON.stringify(duplicate.context || []) !== JSON.stringify([])) {
+    return { ...candidate, unsafeReason: "cross-context" };
+  }
+  if (records.length !== 2) {
+    return { ...candidate, unsafeReason: "selector-list-coverage-ambiguous" };
+  }
+  if (!records.every((record) => record.source === PHASE14_TARGET_FILE)) {
+    return { ...candidate, unsafeReason: "selector-list-coverage-ambiguous" };
+  }
+
+  const shared = records.find((record) => selectorListEquals(selectorListForRecord(record), PHASE14_TARGET_SELECTORS));
+  const singleton = records.find((record) => {
+    const selectorList = selectorListForRecord(record);
+    return selectorList.length === 1 && selectorList[0] === duplicate.selector;
+  });
+  if (!shared) {
+    return { ...candidate, unsafeReason: "shared-selector-list-drift" };
+  }
+  if (JSON.stringify(recordProperties(shared)) !== JSON.stringify(PHASE14_SHARED_PROPERTIES)) {
+    return { ...candidate, unsafeReason: "selector-list-coverage-ambiguous" };
+  }
+  if (!singleton || !phase14HasExpectedSingletonDeclarations(singleton, duplicate.selector)) {
+    return { ...candidate, unsafeReason: "singleton-declaration-missing" };
+  }
+  if ((shared.line || 0) >= (singleton.line || 0)) {
+    return { ...candidate, unsafeReason: "variant-order-sensitive" };
+  }
+
+  return {
+    ...candidate,
+    candidateStatus: "safe",
+    approvedPhase14Target: true,
+    targetLocation: {
+      file: singleton.source,
+      line: singleton.line,
+      column: singleton.column
+    },
+    sourceLocation: {
+      file: shared.source,
+      line: shared.line,
+      column: shared.column
+    },
+    safetyChecks: {
+      sameFile: true,
+      sameLayer: true,
+      emptyAtRuleContext: true,
+      exactSharedSelectorList: true,
+      singletonDeclarationsPreserved: true,
+      darkBackgroundOverridePreserved: true,
+      reducedMotionCoveragePreserved: true,
+      noSpecificityChangingGrouping: true
+    }
+  };
+}
+
+function analyzePhase14SkeletonCandidates(duplicates, baseline = loadBaseline()) {
+  const baselineEntries = new Map(((baseline && baseline.duplicateKeys) || []).map((entry) => [entry.key, entry]));
+  return duplicates
+    .map((duplicate) =>
+      analyzePhase14SkeletonCandidate(duplicate, baselineEntries.get(duplicate.key) || duplicate.baselineEntry || duplicate)
+    )
+    .sort((left, right) => left.key.localeCompare(right.key));
+}
+
+function phase14FindRule(root, selectors) {
+  let match = null;
+  root.walkRules((rule) => {
+    if (selectorListEquals(splitSelectorList(rule.selector), selectors)) {
+      match = rule;
+    }
+  });
+  return match;
+}
+
+function declarationsByProperty(rule) {
+  const declarations = new Map();
+  if (!rule) {
+    return declarations;
+  }
+  rule.walkDecls((decl) => {
+    declarations.set(decl.prop.toLowerCase(), {
+      value: String(decl.value || "").trim(),
+      important: Boolean(decl.important)
+    });
+  });
+  return declarations;
+}
+
+function checkRuleDeclarations(rule, expected, failures, label) {
+  if (!rule) {
+    failures.push(`${label} rule is missing`);
+    return;
+  }
+  const declarations = declarationsByProperty(rule);
+  for (const [property, expectedValue] of Object.entries(expected)) {
+    const actual = declarations.get(property);
+    if (!actual || actual.value !== expectedValue) {
+      failures.push(`${label} must preserve ${property}: ${expectedValue}`);
+    }
+  }
+}
+
+function checkPhase14SkeletonSourceShape(failures) {
+  const dispatchRoot = parseCss(path.resolve(REPO_ROOT, PHASE14_TARGET_FILE));
+  const sharedPrimitiveRule = phase14FindRule(dispatchRoot, PHASE14_TARGET_SELECTORS);
+  if (sharedPrimitiveRule) {
+    failures.push(`${PHASE14_TARGET_FILE} shared skeleton primitive selector list must be deleted after Phase 14`);
+  }
+
+  const expectedSingletons = new Map([
+    [
+      ".skeleton-line",
+      {
+        display: "block",
+        overflow: "hidden",
+        position: "relative",
+        background: "rgba(226, 232, 240, 0.72)",
+        height: "0.75rem",
+        width: "100%",
+        "border-radius": "999px"
+      }
+    ],
+    [
+      ".skeleton-block",
+      {
+        display: "block",
+        overflow: "hidden",
+        position: "relative",
+        background: "rgba(226, 232, 240, 0.72)",
+        "min-height": "13.5rem",
+        "border-radius": "1.25rem"
+      }
+    ],
+    [
+      ".skeleton-pill",
+      {
+        display: "block",
+        overflow: "hidden",
+        position: "relative",
+        background: "rgba(226, 232, 240, 0.72)",
+        width: "4.75rem",
+        height: "1.6rem",
+        "border-radius": "999px"
+      }
+    ]
+  ]);
+
+  for (const [selector, declarations] of expectedSingletons.entries()) {
+    const singleton = phase14FindRule(dispatchRoot, [selector]);
+    checkRuleDeclarations(singleton, declarations, failures, `${PHASE14_TARGET_FILE} ${selector}`);
+    const singletonLine = singleton?.source?.start?.line || 0;
+    for (const variantSelector of PHASE14_VARIANTS_BY_SELECTOR.get(selector) || []) {
+      const variant = phase14FindRule(dispatchRoot, [variantSelector]);
+      if (!variant) {
+        failures.push(`${PHASE14_TARGET_FILE} ${variantSelector} variant rule is missing`);
+        continue;
+      }
+      const variantLine = variant.source?.start?.line || 0;
+      if (singletonLine <= 0 || variantLine <= singletonLine) {
+        failures.push(`${PHASE14_TARGET_FILE} ${selector} base rule must stay before ${variantSelector}`);
+      }
+    }
+  }
+
+  checkRuleDeclarations(
+    phase14FindRule(dispatchRoot, PHASE14_TARGET_SELECTORS.map((selector) => `${selector}::before`)),
+    {
+      content: "\"\"",
+      position: "absolute",
+      inset: "0",
+      background: "linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.85) 50%, transparent 100%)",
+      transform: "translateX(-100%)",
+      animation: "skeletonShimmer 1.4s ease-in-out infinite",
+      "will-change": "transform",
+      "pointer-events": "none"
+    },
+    failures,
+    `${PHASE14_TARGET_FILE} skeleton shimmer`
+  );
+  checkRuleDeclarations(
+    phase14FindRule(dispatchRoot, PHASE14_TARGET_SELECTORS.map((selector) => `.dark ${selector}`)),
+    { background: "rgba(51, 65, 85, 0.72)" },
+    failures,
+    `${PHASE14_TARGET_FILE} dark skeleton background`
+  );
+
+  const accessibilityRoot = parseCss(path.resolve(PORTAL_CSS_SOURCE_DIR, "overrides.accessibility.css"));
+  let reducedMotionRule = null;
+  accessibilityRoot.walkRules((rule) => {
+    const selectors = splitSelectorList(rule.selector);
+    const context = atRuleContext(rule).join(" ");
+    if (
+      PHASE14_TARGET_SELECTORS.every((selector) => selectors.includes(selector)) &&
+      /prefers-reduced-motion:\s*reduce/.test(context)
+    ) {
+      reducedMotionRule = rule;
+    }
+  });
+  if (!reducedMotionRule) {
+    failures.push("overrides.accessibility.css reduced-motion skeleton coverage is missing");
+  } else {
+    const declarations = declarationsByProperty(reducedMotionRule);
+    for (const property of ["animation", "transition", "transform"]) {
+      const declaration = declarations.get(property);
+      if (!declaration || declaration.value !== "none" || !declaration.important) {
+        failures.push(`overrides.accessibility.css reduced-motion skeleton ${property} must remain none !important`);
+      }
+    }
+  }
+}
+
 function deferredReasonCounts(candidates) {
   const counts = {};
   for (const candidate of candidates) {
@@ -2271,6 +2571,114 @@ function buildPhase13InteractionOutlineConsolidationState(duplicates, baseline, 
   };
 }
 
+function expectedHistoricalPhase13InteractionOutlineConsolidationState() {
+  return {
+    phase: PHASE13_INTERACTION_PHASE,
+    targetSelectors: PHASE13_TARGET_SELECTORS,
+    baselinePath: relativePath(BASELINE_PATH),
+    baselineSha256: PHASE13_BASELINE_SHA256,
+    duplicateContextCountBefore: PHASE13_DUPLICATE_CONTEXT_COUNT_BEFORE,
+    duplicateContextCountAfter: PHASE13_DUPLICATE_CONTEXT_COUNT_AFTER,
+    additiveDuplicateContextCountBefore: PHASE13_ADDITIVE_CONTEXT_COUNT_BEFORE,
+    additiveDuplicateContextCountAfter: PHASE13_ADDITIVE_CONTEXT_COUNT_AFTER,
+    conflictingPermanentContextCountBefore: PHASE13_CONFLICTING_PERMANENT_CONTEXT_COUNT,
+    conflictingPermanentContextCountAfter: PHASE13_CONFLICTING_PERMANENT_CONTEXT_COUNT,
+    unownedDuplicateContextCountAfter: 0,
+    hotspotDuplicateContextCountAfter: 0,
+    consolidatedContextCount: PHASE13_EXPECTED_CONSOLIDATED_CONTEXT_COUNT,
+    expectedConsolidatedContextCount: PHASE13_EXPECTED_CONSOLIDATED_CONTEXT_COUNT,
+    consolidatedContexts: Array.from(PHASE13_TARGET_DUPLICATE_KEYS).sort(),
+    remainingTargetContexts: [],
+    unexpectedResolvedContextCount: 0,
+    nonTargetAdditiveCandidatesDeferredReason: "selector-not-phase13-target",
+    deferredOutOfScopeCandidateCount: PHASE13_ADDITIVE_CONTEXT_COUNT_AFTER,
+    deferredReasonCounts: {
+      "selector-not-phase13-target": PHASE13_ADDITIVE_CONTEXT_COUNT_AFTER
+    },
+    phase12HistoricalEvidencePreserved: true,
+    removedRawBytes: 0,
+    removedGzipBytes: 0,
+    generatedRawBytesBefore: PHASE13_GENERATED_PORTAL_CSS_BYTES_BEFORE,
+    generatedRawBytesAfter: PHASE14_GENERATED_PORTAL_CSS_BYTES_BEFORE,
+    generatedRawByteDelta: PHASE14_GENERATED_PORTAL_CSS_BYTES_BEFORE - PHASE13_GENERATED_PORTAL_CSS_BYTES_BEFORE,
+    generatedGzipBytesBefore: PHASE13_GENERATED_PORTAL_CSS_GZIP_BYTES_BEFORE,
+    generatedGzipBytesAfter: PHASE14_GENERATED_PORTAL_CSS_GZIP_BYTES_BEFORE,
+    generatedGzipByteDelta: PHASE14_GENERATED_PORTAL_CSS_GZIP_BYTES_BEFORE - PHASE13_GENERATED_PORTAL_CSS_GZIP_BYTES_BEFORE,
+    generatedPortalCssHashBefore: PHASE13_GENERATED_PORTAL_CSS_HASH_BEFORE,
+    generatedPortalCssHashAfter: PHASE14_GENERATED_PORTAL_CSS_HASH_BEFORE,
+    renderedPortalCssFingerprintBefore: PHASE13_RENDERED_PORTAL_CSS_FINGERPRINT_BEFORE,
+    renderedPortalCssFingerprintAfter: PHASE14_RENDERED_PORTAL_CSS_FINGERPRINT_BEFORE,
+    sentinelStatePreserved: true,
+    parityBaselineChanged: false
+  };
+}
+
+function buildPhase14SkeletonPrimitiveConsolidationState(duplicates, baseline, phase8State) {
+  const baselineEntries = new Map(((baseline && baseline.duplicateKeys) || []).map((entry) => [entry.key, entry]));
+  const ownedDuplicateContextCount = duplicates.filter((duplicate) =>
+    phase9EntryIsOwned(baselineEntries.get(duplicate.key), duplicate)
+  ).length;
+  const duplicateKeys = new Set(duplicates.map((duplicate) => duplicate.key));
+  const consolidatedContexts = Array.from(PHASE14_TARGET_DUPLICATE_KEYS)
+    .filter((key) => !duplicateKeys.has(key))
+    .sort();
+  const remainingTargetContexts = Array.from(PHASE14_TARGET_DUPLICATE_KEYS)
+    .filter((key) => duplicateKeys.has(key))
+    .sort();
+  const cssText = readText(PORTAL_CSS_ASSET_PATH);
+  const generatedRawBytesAfter = Buffer.byteLength(cssText, "utf8");
+  const generatedGzipBytesAfter = gzipByteLength(cssText);
+  const generatedRawByteDelta = generatedRawBytesAfter - PHASE14_GENERATED_PORTAL_CSS_BYTES_BEFORE;
+  const generatedGzipByteDelta = generatedGzipBytesAfter - PHASE14_GENERATED_PORTAL_CSS_GZIP_BYTES_BEFORE;
+  const candidates = analyzePhase14SkeletonCandidates(duplicates, baseline).filter(
+    (candidate) => candidate.declarationConflict === "additive" && candidate.removalStatus === "removable-later"
+  );
+
+  return {
+    phase: PHASE14_SKELETON_PHASE,
+    targetSelectors: PHASE14_TARGET_SELECTORS,
+    targetFile: PHASE14_TARGET_FILE,
+    baselinePath: relativePath(BASELINE_PATH),
+    baselineSha256: existsSync(BASELINE_PATH) ? sha256File(BASELINE_PATH) : null,
+    duplicateContextCountBefore: PHASE14_DUPLICATE_CONTEXT_COUNT_BEFORE,
+    duplicateContextCountAfter: duplicates.length,
+    additiveDuplicateContextCountBefore: PHASE14_ADDITIVE_CONTEXT_COUNT_BEFORE,
+    additiveDuplicateContextCountAfter: countDuplicatesByCategory(duplicates, "additive"),
+    conflictingPermanentContextCountBefore: PHASE14_CONFLICTING_PERMANENT_CONTEXT_COUNT,
+    conflictingPermanentContextCountAfter: countDuplicatesByCategory(duplicates, "conflicting"),
+    unownedDuplicateContextCountAfter: duplicates.length - ownedDuplicateContextCount,
+    hotspotDuplicateContextCountAfter: duplicates.filter((duplicate) => duplicate.hotspot).length,
+    consolidatedContextCount: consolidatedContexts.length,
+    expectedConsolidatedContextCount: PHASE14_EXPECTED_CONSOLIDATED_CONTEXT_COUNT,
+    consolidatedContexts,
+    remainingTargetContexts,
+    unexpectedResolvedContextCount: Math.max(
+      0,
+      PHASE14_DUPLICATE_CONTEXT_COUNT_BEFORE - duplicates.length - consolidatedContexts.length
+    ),
+    nonTargetAdditiveCandidatesDeferredReason: "selector-not-phase14-target",
+    deferredOutOfScopeCandidateCount: candidates.filter(
+      (candidate) => candidate.unsafeReason === "selector-not-phase14-target"
+    ).length,
+    deferredReasonCounts: deferredReasonCounts(candidates),
+    phase13HistoricalEvidencePreserved: true,
+    removedRawBytes: Math.max(0, -generatedRawByteDelta),
+    removedGzipBytes: Math.max(0, -generatedGzipByteDelta),
+    generatedRawBytesBefore: PHASE14_GENERATED_PORTAL_CSS_BYTES_BEFORE,
+    generatedRawBytesAfter,
+    generatedRawByteDelta,
+    generatedGzipBytesBefore: PHASE14_GENERATED_PORTAL_CSS_GZIP_BYTES_BEFORE,
+    generatedGzipBytesAfter,
+    generatedGzipByteDelta,
+    generatedPortalCssHashBefore: PHASE14_GENERATED_PORTAL_CSS_HASH_BEFORE,
+    generatedPortalCssHashAfter: sha256File(PORTAL_CSS_ASSET_PATH),
+    renderedPortalCssFingerprintBefore: PHASE14_RENDERED_PORTAL_CSS_FINGERPRINT_BEFORE,
+    renderedPortalCssFingerprintAfter: renderedPortalCssFingerprint(),
+    sentinelStatePreserved: sentinelStateIsPreserved(phase8State),
+    parityBaselineChanged: false
+  };
+}
+
 function checkHistoricalPhase9State(report, failures) {
   const state = report.phase9DuplicateState || {};
   const expected = {
@@ -2332,38 +2740,45 @@ function checkHistoricalPhase12State(report, failures) {
   }
 }
 
-function checkPhase13InteractionOutlineConsolidationState(state, failures) {
+function checkHistoricalPhase13State(report, failures) {
+  const expected = expectedHistoricalPhase13InteractionOutlineConsolidationState();
+  if (JSON.stringify(report.phase13InteractionOutlineConsolidationState || null) !== JSON.stringify(expected)) {
+    failures.push(`${relativePath(OWNERSHIP_DRAIN_REPORT_PATH)} phase13InteractionOutlineConsolidationState immutable historical evidence drifted`);
+  }
+}
+
+function checkPhase14SkeletonPrimitiveConsolidationState(state, failures) {
   const expectedFields = {
-    phase: PHASE13_INTERACTION_PHASE,
-    duplicateContextCountBefore: PHASE13_DUPLICATE_CONTEXT_COUNT_BEFORE,
-    duplicateContextCountAfter: PHASE13_DUPLICATE_CONTEXT_COUNT_AFTER,
-    additiveDuplicateContextCountBefore: PHASE13_ADDITIVE_CONTEXT_COUNT_BEFORE,
-    additiveDuplicateContextCountAfter: PHASE13_ADDITIVE_CONTEXT_COUNT_AFTER,
-    conflictingPermanentContextCountBefore: PHASE13_CONFLICTING_PERMANENT_CONTEXT_COUNT,
-    conflictingPermanentContextCountAfter: PHASE13_CONFLICTING_PERMANENT_CONTEXT_COUNT,
+    phase: PHASE14_SKELETON_PHASE,
+    duplicateContextCountBefore: PHASE14_DUPLICATE_CONTEXT_COUNT_BEFORE,
+    duplicateContextCountAfter: PHASE14_DUPLICATE_CONTEXT_COUNT_AFTER,
+    additiveDuplicateContextCountBefore: PHASE14_ADDITIVE_CONTEXT_COUNT_BEFORE,
+    additiveDuplicateContextCountAfter: PHASE14_ADDITIVE_CONTEXT_COUNT_AFTER,
+    conflictingPermanentContextCountBefore: PHASE14_CONFLICTING_PERMANENT_CONTEXT_COUNT,
+    conflictingPermanentContextCountAfter: PHASE14_CONFLICTING_PERMANENT_CONTEXT_COUNT,
     unownedDuplicateContextCountAfter: 0,
     hotspotDuplicateContextCountAfter: 0,
-    consolidatedContextCount: PHASE13_EXPECTED_CONSOLIDATED_CONTEXT_COUNT,
-    expectedConsolidatedContextCount: PHASE13_EXPECTED_CONSOLIDATED_CONTEXT_COUNT,
+    consolidatedContextCount: PHASE14_EXPECTED_CONSOLIDATED_CONTEXT_COUNT,
+    expectedConsolidatedContextCount: PHASE14_EXPECTED_CONSOLIDATED_CONTEXT_COUNT,
     unexpectedResolvedContextCount: 0,
-    nonTargetAdditiveCandidatesDeferredReason: "selector-not-phase13-target",
-    phase12HistoricalEvidencePreserved: true,
+    nonTargetAdditiveCandidatesDeferredReason: "selector-not-phase14-target",
+    phase13HistoricalEvidencePreserved: true,
     sentinelStatePreserved: true,
     parityBaselineChanged: false
   };
   for (const [field, value] of Object.entries(expectedFields)) {
     if (state[field] !== value) {
-      failures.push(`${relativePath(OWNERSHIP_DRAIN_REPORT_PATH)} phase13InteractionOutlineConsolidationState ${field} must be ${value}`);
+      failures.push(`${relativePath(OWNERSHIP_DRAIN_REPORT_PATH)} phase14SkeletonPrimitiveConsolidationState ${field} must be ${value}`);
     }
   }
-  if (JSON.stringify(state.targetSelectors || []) !== JSON.stringify(PHASE13_TARGET_SELECTORS)) {
-    failures.push(`${relativePath(OWNERSHIP_DRAIN_REPORT_PATH)} phase13InteractionOutlineConsolidationState targetSelectors drifted`);
+  if (JSON.stringify(state.targetSelectors || []) !== JSON.stringify(PHASE14_TARGET_SELECTORS)) {
+    failures.push(`${relativePath(OWNERSHIP_DRAIN_REPORT_PATH)} phase14SkeletonPrimitiveConsolidationState targetSelectors drifted`);
   }
   if (JSON.stringify(state.remainingTargetContexts || []) !== JSON.stringify([])) {
-    failures.push(`${relativePath(OWNERSHIP_DRAIN_REPORT_PATH)} phase13InteractionOutlineConsolidationState still has unresolved target contexts`);
+    failures.push(`${relativePath(OWNERSHIP_DRAIN_REPORT_PATH)} phase14SkeletonPrimitiveConsolidationState still has unresolved target contexts`);
   }
-  if (JSON.stringify(state.consolidatedContexts || []) !== JSON.stringify(Array.from(PHASE13_TARGET_DUPLICATE_KEYS).sort())) {
-    failures.push(`${relativePath(OWNERSHIP_DRAIN_REPORT_PATH)} phase13InteractionOutlineConsolidationState consolidated context allowlist drifted`);
+  if (JSON.stringify(state.consolidatedContexts || []) !== JSON.stringify(Array.from(PHASE14_TARGET_DUPLICATE_KEYS).sort())) {
+    failures.push(`${relativePath(OWNERSHIP_DRAIN_REPORT_PATH)} phase14SkeletonPrimitiveConsolidationState consolidated context allowlist drifted`);
   }
 }
 
@@ -2417,13 +2832,15 @@ function checkOwnershipDrainReport(failures, duplicates) {
   const expectedPhase8State = buildPhase8SentinelState(collectCssImportGraph(PORTAL_CSS_INDEX_PATH, []));
   const expectedPhase11State = expectedHistoricalPhase11SurfaceListConsolidationState();
   const expectedPhase12State = expectedHistoricalPhase12ComponentSingletonConsolidationState();
-  const expectedPhase13State = buildPhase13InteractionOutlineConsolidationState(duplicates, loadBaseline(), expectedPhase8State);
+  const expectedPhase13State = expectedHistoricalPhase13InteractionOutlineConsolidationState();
+  const expectedPhase14State = buildPhase14SkeletonPrimitiveConsolidationState(duplicates, loadBaseline(), expectedPhase8State);
 
   if (WRITE_OWNERSHIP_REPORT) {
     report.phase8SentinelState = expectedPhase8State;
     report.phase11SurfaceListConsolidationState = expectedPhase11State;
     report.phase12ComponentSingletonConsolidationState = expectedPhase12State;
     report.phase13InteractionOutlineConsolidationState = expectedPhase13State;
+    report.phase14SkeletonPrimitiveConsolidationState = expectedPhase14State;
     writeFileSync(OWNERSHIP_DRAIN_REPORT_PATH, `${JSON.stringify(report, null, 2)}\n`, "utf-8");
   }
 
@@ -2435,13 +2852,14 @@ function checkOwnershipDrainReport(failures, duplicates) {
   checkHistoricalPhase10State(report, failures);
   checkHistoricalPhase11State(report, failures);
   checkHistoricalPhase12State(report, failures);
+  checkHistoricalPhase13State(report, failures);
 
-  checkPhase13InteractionOutlineConsolidationState(expectedPhase13State, failures);
+  checkPhase14SkeletonPrimitiveConsolidationState(expectedPhase14State, failures);
   if (
     !WRITE_OWNERSHIP_REPORT &&
-    JSON.stringify(report.phase13InteractionOutlineConsolidationState || null) !== JSON.stringify(expectedPhase13State)
+    JSON.stringify(report.phase14SkeletonPrimitiveConsolidationState || null) !== JSON.stringify(expectedPhase14State)
   ) {
-    failures.push(`${relativePath(OWNERSHIP_DRAIN_REPORT_PATH)} phase13InteractionOutlineConsolidationState is stale`);
+    failures.push(`${relativePath(OWNERSHIP_DRAIN_REPORT_PATH)} phase14SkeletonPrimitiveConsolidationState is stale`);
   }
 }
 
@@ -2717,6 +3135,67 @@ if (phase13InteractionFixtureIndex >= 0) {
   process.exit(0);
 }
 
+if (phase14SkeletonFixtureIndex >= 0) {
+  if (!PHASE14_SKELETON_FIXTURE_PATH) {
+    console.error(`ERROR: ${PHASE14_SKELETON_FIXTURE_ARG} requires a duplicate candidate JSON fixture path`);
+    process.exit(1);
+  }
+  const fixtureFailures = [];
+  const fixture = JSON.parse(readText(resolveFixturePath(PHASE14_SKELETON_FIXTURE_PATH)));
+  const fixtureDuplicates = Array.isArray(fixture) ? fixture : fixture.duplicates || [];
+  const candidates = analyzePhase14SkeletonCandidates(fixtureDuplicates, { duplicateKeys: fixture.baselineEntries || [] });
+  const candidateByKey = new Map(candidates.map((candidate) => [candidate.key, candidate]));
+  for (const expected of fixture.expectedCandidates || []) {
+    const candidate = candidateByKey.get(expected.key);
+    if (!candidate) {
+      fixtureFailures.push(`missing Phase 14 candidate ${expected.key}`);
+      continue;
+    }
+    if (expected.candidateStatus && candidate.candidateStatus !== expected.candidateStatus) {
+      fixtureFailures.push(
+        `Phase 14 candidate ${expected.key} expected ${expected.candidateStatus} but found ${candidate.candidateStatus}`
+      );
+    }
+    if (expected.unsafeReason && candidate.unsafeReason !== expected.unsafeReason) {
+      fixtureFailures.push(
+        `Phase 14 candidate ${expected.key} expected unsafeReason ${expected.unsafeReason} but found ${candidate.unsafeReason || "none"}`
+      );
+    }
+    if (expected.unsafeReason && !PHASE14_UNSAFE_REASONS.has(expected.unsafeReason)) {
+      fixtureFailures.push(`Phase 14 fixture expected unsupported unsafeReason ${expected.unsafeReason}`);
+    }
+  }
+  if (
+    fixture.expectedState &&
+    JSON.stringify(fixture.phase14SkeletonPrimitiveConsolidationState || null) !== JSON.stringify(fixture.expectedState)
+  ) {
+    fixtureFailures.push("phase14SkeletonPrimitiveConsolidationState is stale");
+  }
+  if (
+    fixture.expectedPhase13State &&
+    JSON.stringify(fixture.phase13InteractionOutlineConsolidationState || null) !== JSON.stringify(fixture.expectedPhase13State)
+  ) {
+    fixtureFailures.push("phase13InteractionOutlineConsolidationState immutable historical evidence drifted");
+  }
+  if (fixture.baselineEntries) {
+    for (const entry of fixture.baselineEntries) {
+      if (/selector-not-phase14-target/.test(String(entry.ownerReason || ""))) {
+        fixtureFailures.push("selector-not-phase14-target must not overwrite live baseline ownerReason");
+      }
+    }
+  }
+  if (fixtureFailures.length > 0) {
+    for (const failure of fixtureFailures) {
+      console.error(`ERROR: ${failure}`);
+    }
+    process.exit(1);
+  }
+  console.log(
+    `portal css phase14 skeleton fixture: OK (${candidates.filter((candidate) => candidate.candidateStatus === "safe").length} safe, ${candidates.filter((candidate) => candidate.candidateStatus === "deferred").length} deferred)`
+  );
+  process.exit(0);
+}
+
 const failures = [];
 const cssFiles = listFiles(PORTAL_CSS_SOURCE_DIR, (entryPath) => entryPath.endsWith(".css"));
 const records = collectRuleRecords(cssFiles, productionLayerBySourcePath());
@@ -2731,6 +3210,7 @@ checkSelectorFileBoundaries(cssFiles, failures);
 checkDuplicateBaseline(duplicates, failures);
 checkUtilityCoverage(failures);
 checkLayerContract(failures);
+checkPhase14SkeletonSourceShape(failures);
 checkOwnershipDrainReport(failures, duplicates);
 checkOverridesCompatNoNewIds(failures);
 checkOverridesCompatNoImportant(failures);

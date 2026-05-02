@@ -260,6 +260,26 @@ function runPhase13InteractionFixtureFailure(fixture) {
   assert.fail("Phase 13 interaction fixture unexpectedly passed");
 }
 
+function runPhase14SkeletonFixture(fixture) {
+  const tempDir = mkdtempSync(path.join(tmpdir(), "portal-phase14-skeleton-"));
+  const fixturePath = path.join(tempDir, "phase14.json");
+  writeFileSync(fixturePath, `${JSON.stringify(fixture, null, 2)}\n`, "utf8");
+  try {
+    return runNodeScript("scripts/check-portal-css-architecture.mjs", "--check-phase14-skeleton-fixture", fixturePath);
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
+}
+
+function runPhase14SkeletonFixtureFailure(fixture) {
+  try {
+    runPhase14SkeletonFixture(fixture);
+  } catch (error) {
+    return `${error.stdout || ""}${error.stderr || ""}`;
+  }
+  assert.fail("Phase 14 skeleton fixture unexpectedly passed");
+}
+
 function phase10AdditiveDuplicate(overrides = {}) {
   const selector = overrides.selector || ".owned";
   return {
@@ -403,6 +423,66 @@ function phase13InteractionDuplicate(overrides = {}) {
         declarations: [["outline", "none", false]],
         declarationSignature: "hover-outline",
         properties: ["outline"]
+      }
+    ],
+    ...overrides
+  };
+}
+
+function phase14SkeletonDuplicate(overrides = {}) {
+  const selector = overrides.selector || ".skeleton-line";
+  const singletonProperties = {
+    ".skeleton-line": {
+      declarations: [["height", "0.75rem", false], ["width", "100%", false], ["border-radius", "999px", false]],
+      properties: ["border-radius", "height", "width"],
+      line: 176
+    },
+    ".skeleton-block": {
+      declarations: [["min-height", "13.5rem", false], ["border-radius", "1.25rem", false]],
+      properties: ["border-radius", "min-height"],
+      line: 195
+    },
+    ".skeleton-pill": {
+      declarations: [["width", "4.75rem", false], ["height", "1.6rem", false], ["border-radius", "999px", false]],
+      properties: ["border-radius", "height", "width"],
+      line: 204
+    }
+  };
+  const singleton = singletonProperties[selector] || singletonProperties[".skeleton-line"];
+  return {
+    key: overrides.key || `${selector}|||components|||`,
+    selector,
+    layer: "components",
+    context: [],
+    stateContext: [],
+    category: "additive",
+    hotspot: false,
+    removalStatus: "removable-later",
+    records: overrides.records || [
+      {
+        source: "web/secure-landing/portal-src/styles/components/dispatch-surfaces.css",
+        line: 142,
+        column: 1,
+        layer: "components",
+        selectorList: [".skeleton-line", ".skeleton-block", ".skeleton-pill"],
+        declarations: [
+          ["display", "block", false],
+          ["overflow", "hidden", false],
+          ["position", "relative", false],
+          ["background", "rgba(226, 232, 240, 0.72)", false]
+        ],
+        declarationSignature: "skeleton-base",
+        properties: ["background", "display", "overflow", "position"]
+      },
+      {
+        source: "web/secure-landing/portal-src/styles/components/dispatch-surfaces.css",
+        line: singleton.line,
+        column: 1,
+        layer: "components",
+        selectorList: [selector],
+        declarations: singleton.declarations,
+        declarationSignature: "skeleton-singleton",
+        properties: singleton.properties
       }
     ],
     ...overrides
@@ -1225,6 +1305,140 @@ test("portal CSS Phase 13 interaction fixtures constrain hover outline consolida
   );
 });
 
+test("portal CSS Phase 14 skeleton fixtures constrain primitive consolidation", () => {
+  const skeletonLine = phase14SkeletonDuplicate();
+  const skeletonBlock = phase14SkeletonDuplicate({
+    key: ".skeleton-block|||components|||",
+    selector: ".skeleton-block"
+  });
+  const skeletonPill = phase14SkeletonDuplicate({
+    key: ".skeleton-pill|||components|||",
+    selector: ".skeleton-pill"
+  });
+  const outOfScope = phase14SkeletonDuplicate({
+    key: ".surface-loading|||components|||",
+    selector: ".surface-loading"
+  });
+  const sharedListDrift = phase14SkeletonDuplicate({
+    records: [
+      {
+        source: "web/secure-landing/portal-src/styles/components/dispatch-surfaces.css",
+        line: 142,
+        column: 1,
+        layer: "components",
+        selectorList: [".skeleton-line", ".skeleton-block"],
+        declarations: [["display", "block", false], ["overflow", "hidden", false]],
+        declarationSignature: "partial-skeleton-base",
+        properties: ["display", "overflow"]
+      },
+      {
+        source: "web/secure-landing/portal-src/styles/components/dispatch-surfaces.css",
+        line: 176,
+        column: 1,
+        layer: "components",
+        selectorList: [".skeleton-line"],
+        declarations: [["height", "0.75rem", false], ["width", "100%", false], ["border-radius", "999px", false]],
+        declarationSignature: "skeleton-singleton",
+        properties: ["border-radius", "height", "width"]
+      }
+    ]
+  });
+  const missingSingletonDeclaration = phase14SkeletonDuplicate({
+    records: [
+      phase14SkeletonDuplicate().records[0],
+      {
+        source: "web/secure-landing/portal-src/styles/components/dispatch-surfaces.css",
+        line: 176,
+        column: 1,
+        layer: "components",
+        selectorList: [".skeleton-line"],
+        declarations: [["height", "0.75rem", false], ["border-radius", "999px", false]],
+        declarationSignature: "skeleton-singleton-missing-width",
+        properties: ["border-radius", "height"]
+      }
+    ]
+  });
+  const specificityChanging = phase14SkeletonDuplicate({
+    records: [
+      {
+        ...phase14SkeletonDuplicate().records[0],
+        ruleSelector: ":where(.skeleton-line, .skeleton-block, .skeleton-pill)"
+      },
+      phase14SkeletonDuplicate().records[1]
+    ]
+  });
+  const conflictingPermanent = phase14SkeletonDuplicate({
+    key: ".skeleton-line|||components|||",
+    category: "conflicting",
+    removalStatus: "permanent"
+  });
+  const hotspot = phase14SkeletonDuplicate({
+    key: ".shell-bg|||components|||",
+    selector: ".shell-bg",
+    hotspot: true
+  });
+
+  assert.match(
+    runPhase14SkeletonFixture({
+      duplicates: [skeletonLine, skeletonBlock, skeletonPill, outOfScope, hotspot],
+      baselineEntries: [baselineEntryFor(outOfScope)],
+      expectedCandidates: [
+        { key: skeletonLine.key, candidateStatus: "safe" },
+        { key: skeletonBlock.key, candidateStatus: "safe" },
+        { key: skeletonPill.key, candidateStatus: "safe" },
+        { key: outOfScope.key, candidateStatus: "deferred", unsafeReason: "selector-not-phase14-target" },
+        { key: hotspot.key, candidateStatus: "deferred", unsafeReason: "hotspot" }
+      ]
+    }),
+    /portal css phase14 skeleton fixture: OK/
+  );
+
+  for (const [duplicate, unsafeReason] of [
+    [sharedListDrift, "shared-selector-list-drift"],
+    [missingSingletonDeclaration, "singleton-declaration-missing"],
+    [specificityChanging, "specificity-changing-grouping"],
+    [conflictingPermanent, "conflicting-permanent"]
+  ]) {
+    assert.match(
+      runPhase14SkeletonFixture({
+        duplicates: [duplicate],
+        expectedCandidates: [{ key: duplicate.key, candidateStatus: "deferred", unsafeReason }]
+      }),
+      /portal css phase14 skeleton fixture: OK/
+    );
+  }
+
+  assert.match(
+    runPhase14SkeletonFixtureFailure({
+      duplicates: [skeletonLine],
+      expectedState: { phase: "phase-14-skeleton-primitive-consolidation" },
+      phase14SkeletonPrimitiveConsolidationState: { phase: "stale" }
+    }),
+    /phase14SkeletonPrimitiveConsolidationState is stale/
+  );
+
+  assert.match(
+    runPhase14SkeletonFixtureFailure({
+      duplicates: [skeletonLine],
+      expectedPhase13State: { phase: "phase-13-interaction-outline-consolidation" },
+      phase13InteractionOutlineConsolidationState: { phase: "stale" }
+    }),
+    /phase13InteractionOutlineConsolidationState immutable historical evidence drifted/
+  );
+
+  assert.match(
+    runPhase14SkeletonFixtureFailure({
+      duplicates: [outOfScope],
+      baselineEntries: [
+        baselineEntryFor(outOfScope, {
+          ownerReason: "selector-not-phase14-target"
+        })
+      ]
+    }),
+    /selector-not-phase14-target must not overwrite live baseline ownerReason/
+  );
+});
+
 test("portal CSS layer parity make target checks generated artifact freshness", () => {
   const makefile = readFileSync(MAKEFILE_PATH, "utf8");
   const start = makefile.indexOf("validate-portal-css-layer-parity:");
@@ -1598,7 +1812,65 @@ test("portal CSS ownership drain keeps utilities layer honest", () => {
   assert.equal(ownershipDrain.phase13InteractionOutlineConsolidationState.renderedPortalCssFingerprintAfter, "c06fbcdf1f37");
   assert.equal(ownershipDrain.phase13InteractionOutlineConsolidationState.sentinelStatePreserved, true);
   assert.equal(ownershipDrain.phase13InteractionOutlineConsolidationState.parityBaselineChanged, false);
-  assert.equal(duplicateBaseline.duplicateKeys.length, 70);
+  assert.equal(ownershipDrain.phase14SkeletonPrimitiveConsolidationState.phase, "phase-14-skeleton-primitive-consolidation");
+  assert.deepEqual(ownershipDrain.phase14SkeletonPrimitiveConsolidationState.targetSelectors, [
+    ".skeleton-line",
+    ".skeleton-block",
+    ".skeleton-pill"
+  ]);
+  assert.equal(
+    ownershipDrain.phase14SkeletonPrimitiveConsolidationState.targetFile,
+    "web/secure-landing/portal-src/styles/components/dispatch-surfaces.css"
+  );
+  assert.equal(ownershipDrain.phase14SkeletonPrimitiveConsolidationState.duplicateContextCountBefore, 70);
+  assert.equal(ownershipDrain.phase14SkeletonPrimitiveConsolidationState.duplicateContextCountAfter, 67);
+  assert.equal(ownershipDrain.phase14SkeletonPrimitiveConsolidationState.additiveDuplicateContextCountBefore, 14);
+  assert.equal(ownershipDrain.phase14SkeletonPrimitiveConsolidationState.additiveDuplicateContextCountAfter, 11);
+  assert.equal(ownershipDrain.phase14SkeletonPrimitiveConsolidationState.conflictingPermanentContextCountBefore, 56);
+  assert.equal(ownershipDrain.phase14SkeletonPrimitiveConsolidationState.conflictingPermanentContextCountAfter, 56);
+  assert.equal(ownershipDrain.phase14SkeletonPrimitiveConsolidationState.unownedDuplicateContextCountAfter, 0);
+  assert.equal(ownershipDrain.phase14SkeletonPrimitiveConsolidationState.hotspotDuplicateContextCountAfter, 0);
+  assert.equal(ownershipDrain.phase14SkeletonPrimitiveConsolidationState.consolidatedContextCount, 3);
+  assert.equal(ownershipDrain.phase14SkeletonPrimitiveConsolidationState.expectedConsolidatedContextCount, 3);
+  assert.deepEqual(ownershipDrain.phase14SkeletonPrimitiveConsolidationState.consolidatedContexts, [
+    ".skeleton-block|||components|||",
+    ".skeleton-line|||components|||",
+    ".skeleton-pill|||components|||"
+  ]);
+  assert.deepEqual(ownershipDrain.phase14SkeletonPrimitiveConsolidationState.remainingTargetContexts, []);
+  assert.equal(ownershipDrain.phase14SkeletonPrimitiveConsolidationState.unexpectedResolvedContextCount, 0);
+  assert.equal(
+    ownershipDrain.phase14SkeletonPrimitiveConsolidationState.nonTargetAdditiveCandidatesDeferredReason,
+    "selector-not-phase14-target"
+  );
+  assert.equal(ownershipDrain.phase14SkeletonPrimitiveConsolidationState.deferredOutOfScopeCandidateCount, 11);
+  assert.deepEqual(ownershipDrain.phase14SkeletonPrimitiveConsolidationState.deferredReasonCounts, {
+    "selector-not-phase14-target": 11
+  });
+  assert.equal(ownershipDrain.phase14SkeletonPrimitiveConsolidationState.phase13HistoricalEvidencePreserved, true);
+  assert.equal(ownershipDrain.phase14SkeletonPrimitiveConsolidationState.generatedRawBytesBefore, 80569);
+  assert.equal(ownershipDrain.phase14SkeletonPrimitiveConsolidationState.generatedRawBytesAfter, 80661);
+  assert.equal(ownershipDrain.phase14SkeletonPrimitiveConsolidationState.generatedRawByteDelta, 92);
+  assert.equal(ownershipDrain.phase14SkeletonPrimitiveConsolidationState.generatedGzipBytesBefore, 15743);
+  assert.equal(ownershipDrain.phase14SkeletonPrimitiveConsolidationState.generatedGzipBytesAfter, 15738);
+  assert.equal(ownershipDrain.phase14SkeletonPrimitiveConsolidationState.generatedGzipByteDelta, -5);
+  assert.equal(
+    ownershipDrain.phase14SkeletonPrimitiveConsolidationState.generatedPortalCssHashBefore,
+    "3e6719511b1536ebe2e4c067b693930aa77ab242115368ae4ba3aa8e2aa6f3b3"
+  );
+  assert.equal(
+    ownershipDrain.phase14SkeletonPrimitiveConsolidationState.generatedPortalCssHashAfter,
+    "4598d98fd19ccaf0728403838d7dfdc395cc1904b1cb147af559ecda6bce726a"
+  );
+  assert.equal(ownershipDrain.phase14SkeletonPrimitiveConsolidationState.renderedPortalCssFingerprintBefore, "c06fbcdf1f37");
+  assert.equal(ownershipDrain.phase14SkeletonPrimitiveConsolidationState.renderedPortalCssFingerprintAfter, "c798785d38cf");
+  assert.equal(ownershipDrain.phase14SkeletonPrimitiveConsolidationState.sentinelStatePreserved, true);
+  assert.equal(ownershipDrain.phase14SkeletonPrimitiveConsolidationState.parityBaselineChanged, false);
+  assert.match(
+    readFileSync(ARCHITECTURE_SCRIPT_PATH, "utf8"),
+    /report\.phase14SkeletonPrimitiveConsolidationState = expectedPhase14State;/
+  );
+  assert.equal(duplicateBaseline.duplicateKeys.length, 67);
   assert.ok(
     duplicateBaseline.duplicateKeys.every((entry) => entry.phase === "phase-9-duplicate-ownership-closure"),
     "all duplicate baseline entries must be Phase 9-owned"
@@ -1617,6 +1889,10 @@ test("portal CSS layer parity validates the production layered graph", () => {
   assert.deepEqual(baseline.representativeStyleProperties, contract.representativeStyleProperties);
   assert.ok(contract.representativeStyleProperties.includes("content-visibility"));
   assert.ok(contract.representativeStyleSelectors.includes("[data-ui=\"staged-upload-shell\"]"));
+  const parityValidator = readFileSync(PYTHON_LAYER_PARITY_VALIDATOR_PATH, "utf8");
+  assert.match(parityValidator, /SKELETON_STATE_IDS/);
+  assert.match(parityValidator, /missionShellSkeletonState/);
+  assert.match(parityValidator, /_validate_skeleton_primitive_states\(connection\)/);
 });
 
 test("portal CSS layer parity checks nested generated keyframes", () => {
