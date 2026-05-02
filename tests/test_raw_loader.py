@@ -345,8 +345,9 @@ class TestRawLoaderIntegration:
     def test_rawpy_available(self):
         """Check if rawpy is available for integration tests."""
         try:
-            import rawpy  # noqa: F401
-
-            assert True
+            import rawpy
         except ImportError:
             pytest.skip("rawpy not installed - integration tests skipped")
+        # Verify the imported module is actually rawpy (defends against a
+        # stub/shim being injected ahead of the real package).
+        assert hasattr(rawpy, "imread"), "rawpy is importable but missing imread()"

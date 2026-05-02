@@ -325,9 +325,18 @@ class TestDefensiveProgramming:
         # Should complete without exceptions
         try:
             masks, iou, stability = backend._extract_sam2_predictions(mock_output)
-            assert True  # Success
         except Exception as e:
             pytest.fail(f"Unexpected exception: {e}")
+        # Contract: masks come back with the expected shape; missing iou /
+        # stability attributes fall back to per-mask `np.ones(count)` arrays
+        # (sam2_backend.py:766-776), so callers always get a usable score
+        # vector rather than None.
+        assert masks is not None
+        assert masks.shape == (3, 64, 64)
+        assert iou.shape == (3,)
+        assert stability.shape == (3,)
+        assert np.all(iou == 1.0)
+        assert np.all(stability == 1.0)
 
     def test_no_exceptions_on_none_attributes(self):
         """Test that None attributes never raise exceptions."""
@@ -342,9 +351,17 @@ class TestDefensiveProgramming:
         # Should complete without exceptions
         try:
             masks, iou, stability = backend._extract_sam2_predictions(mock_output)
-            assert True  # Success
         except Exception as e:
             pytest.fail(f"Unexpected exception: {e}")
+        assert masks is not None
+        assert masks.shape == (3, 64, 64)
+        # When iou_predictions / stability_scores are None, the helper falls
+        # back to `np.ones(count, dtype=np.float32)` rather than propagating
+        # None — see _extract_scores in sam2_backend.py.
+        assert iou.shape == (3,)
+        assert stability.shape == (3,)
+        assert np.all(iou == 1.0)
+        assert np.all(stability == 1.0)
 
 
 @pytest.mark.benchmark

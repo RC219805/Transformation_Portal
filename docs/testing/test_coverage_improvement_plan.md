@@ -100,7 +100,7 @@ coverage report --fail-under=25
 ### Phase 1 — Highest-Gap, Highest-Yield Coverage
 
 **Duration**: ~1 week
-**Status**: Pending
+**Status**: In progress
 
 #### Priority Targets
 
@@ -110,13 +110,33 @@ coverage report --fail-under=25
 - `storage/merkle_dag.py`
 - `storage/cas_store.py`
 - `app.py` feature-flag helpers, auth enforcement, typed error envelopes
+- `core/cas_dag_executor.py` (new — 739 LOC executor with no direct tests)
+- `core/security/torch_security.py` (new — 512 LOC with no direct tests)
 
 #### Deliverables
 
 - [ ] New `tests/events/` suite
-- [ ] Expanded `tests/storage/`
-- [ ] `tests/test_app_feature_flags.py`
-- [ ] `tests/test_app_security.py`
+- [x] `tests/events/test_store_malformed.py` — malformed/corrupt event-file paths
+- [x] Expanded `tests/storage/` — `test_cas_store_hash_mismatch.py`
+- [x] `tests/test_app_feature_flags.py`
+- [x] `tests/test_app_security.py`
+- [x] `tests/core/test_cas_dag_executor_failure_paths.py`
+- [x] `tests/security/test_torch_security_helpers.py`
+- [x] CI lint banning `assert True` in `tests/` (`scripts/ci/check_no_tautological_tests.py`)
+
+### Zero-Coverage Production Packages (ratchet targets)
+
+The following packages currently have no direct tests and contribute 0% to
+the global coverage floor. They are NOT excluded from coverage measurement —
+keeping them in the source set means the metric stays honest, and any new
+file added to one of these packages will lower the global percentage until
+it is tested. Each is a candidate for a smoke suite under `tests/<pkg>/`:
+
+- `depth_intelligence/` (1 src file, ~370 LOC)
+- `diffusion/` (3 src files, ~1,410 LOC)
+- `dwm/` (3 src files, ~110 LOC)
+- `interfaces/` (5 src files, ~792 LOC)
+- `pfm/` (4 src files, ~1,193 LOC)
 
 ### Phase 2 — Business-Critical Orchestration Coverage
 

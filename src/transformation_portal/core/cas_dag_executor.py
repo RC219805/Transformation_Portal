@@ -39,6 +39,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import re
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -282,10 +283,28 @@ class CASDAGExecutor:
             lockfile_path=self._lockfile_path,
         )
 
+    @staticmethod
+    def _sanitize_stage_name_for_filename(stage_name: str) -> str:
+        """Strip path-separator and traversal characters from a stage name.
+
+        ``stage_name`` is interpolated into a lock-file path. Internal callers
+        only ever pass simple identifiers, but a defensive scrub keeps an
+        accidental ``..`` or ``/`` from ever escaping ``locks_dir``.
+        Replaces every disallowed character with ``_`` rather than raising,
+        because the lock is best-effort coordination — corrupting the name is
+        preferable to failing the run.
+        """
+        cleaned = re.sub(r"[^A-Za-z0-9_.-]", "_", stage_name)
+        # Defuse traversal even if ``.`` and ``-`` survived the regex above.
+        if cleaned in {"", ".", ".."} or cleaned.startswith(".."):
+            cleaned = "_" + cleaned
+        return cleaned
+
     def _get_lock(self, stage_name: str, cas_id: str) -> FileLock:
         """Get file lock for a stage execution."""
         safe_id = _sanitize_cas_id_for_filename(cas_id)
-        lock_file = self.locks_dir / f"{stage_name}_{safe_id[:16]}.lock"
+        safe_stage = self._sanitize_stage_name_for_filename(stage_name)
+        lock_file = self.locks_dir / f"{safe_stage}_{safe_id[:16]}.lock"
         return FileLock(lock_file, timeout=self.config.lock_timeout)
 
     def _add_provenance_node(
