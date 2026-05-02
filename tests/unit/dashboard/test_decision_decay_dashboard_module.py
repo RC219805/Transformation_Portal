@@ -5,6 +5,7 @@ import builtins
 import json
 from datetime import date, timedelta
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -51,7 +52,7 @@ def test_collect_philosophy_violations_caps_examples(tmp_path: Path) -> None:
     good.write_text("def good():\n    pass\n", encoding="utf-8")
 
     class DummyAuditor:
-        def audit_module(self, module_path: Path):  # noqa: ANN001
+        def audit_module(self, module_path: Path) -> list[Violation]:
             return [
                 Violation(code="P1", principle="p1", message="a", line=1),
                 Violation(code="P1", principle="p1", message="b", line=2),
@@ -71,7 +72,7 @@ def test_collect_philosophy_violations_propagates_auditor_failures(tmp_path: Pat
     module.write_text("def bad():\n    pass\n", encoding="utf-8")
 
     class DummyAuditor:
-        def audit_module(self, module_path: Path):  # noqa: ANN001
+        def audit_module(self, module_path: Path) -> list[Violation]:
             raise SyntaxError(f"cannot parse {module_path.name}")
 
     with pytest.raises(SyntaxError, match="cannot parse bad.py"):
@@ -144,7 +145,7 @@ def test_render_dashboard_falls_back_when_rich_unavailable(
 ) -> None:
     real_import = builtins.__import__
 
-    def _fake_import(name, *args, **kwargs):  # noqa: ANN002, ANN003
+    def _fake_import(name: str, *args: Any, **kwargs: Any) -> Any:
         if name.startswith("rich"):
             raise ModuleNotFoundError("rich unavailable")
         return real_import(name, *args, **kwargs)

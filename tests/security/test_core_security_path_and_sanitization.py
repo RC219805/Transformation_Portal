@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import builtins
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -29,7 +30,7 @@ def test_path_validator_handles_resolution_errors(monkeypatch: pytest.MonkeyPatc
     validator = PathValidator([tmp_path])
     original_resolve = Path.resolve
 
-    def _raise_resolve(self: Path, *args, **kwargs):  # noqa: ANN001, ANN003
+    def _raise_resolve(self: Path, *args: Any, **kwargs: Any) -> Path:
         if self == Path("bad-path"):
             raise OSError("boom")
         return original_resolve(self, *args, **kwargs)
@@ -132,7 +133,7 @@ def test_validate_input_file_wraps_io_errors(monkeypatch: pytest.MonkeyPatch, tm
     image.write_bytes(b"\xff\xd8\xff")
     original_open = builtins.open
 
-    def _broken_open(*args, **kwargs):  # noqa: ANN002, ANN003
+    def _broken_open(*args: Any, **kwargs: Any) -> Any:
         target = args[0] if args else kwargs.get("file")
         if target == image:
             raise OSError("read denied")

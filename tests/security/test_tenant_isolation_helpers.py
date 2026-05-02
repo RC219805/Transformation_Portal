@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -117,7 +118,7 @@ def test_create_tenant_sandbox_uses_tenant_scoped_roots(monkeypatch: pytest.Monk
     captured: dict[str, object] = {}
 
     class FakeSandbox:
-        def __init__(self, *, node_id, config, fs, cas):  # noqa: ANN001
+        def __init__(self, *, node_id: str, config: Any, fs: Any, cas: Any) -> None:
             captured["node_id"] = node_id
             captured["config"] = config
             captured["fs"] = fs
