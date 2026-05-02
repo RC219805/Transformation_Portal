@@ -639,3 +639,17 @@
     line-height: 1.55;
     color: var(--shell-muted);
 }
+
+/* Phase 7.D: portal-main padding. Replaces the previous `px-6 py-8` utilities
+   on #main-content plus the Phase 6 mobile override that tightened the inset
+   at <=960px. Component layer is the sole source of these declarations. */
+.portal-main {
+    padding: 2rem 1.5rem;
+}
+@media (max-width: 960px) {
+    .portal-main {
+        padding-left: 1rem;
+        padding-right: 1rem;
+        padding-top: 1rem;
+    }
+}

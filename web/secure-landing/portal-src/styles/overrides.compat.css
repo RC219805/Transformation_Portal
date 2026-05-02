@@ -1,17 +1,4 @@
 /* portal-override-owner: compatibility-final-order
-   reason: .portal-main padding overrides utilities-layer px-6/py-8 at <=960px; moving to the
-   components layer would let those utility classes win the cascade. Selector migrated from
-   #main-content to the Phase 6 semantic hook so no ID-specific rule remains in the cascade.
-   removal-phase: phase-7-utility-markup-migration */
-@media (max-width: 960px) {
-  .portal-main {
-    padding-left: 1rem;
-    padding-right: 1rem;
-    padding-top: 1rem;
-  }
-}
-
-/* portal-override-owner: compatibility-final-order
    reason: .portal-shell-card mobile padding/radius and .artifact-review-* surface padding
    override utilities-layer p-6/rounded-2xl/p-4/grid-cols-2 classes at <=767px; moving to the
    components layer would let the utilities win the cascade. Selectors migrated from the six
