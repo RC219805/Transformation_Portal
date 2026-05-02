@@ -3714,5 +3714,53 @@
     "renderedPortalCssFingerprintAfter": "c06fbcdf1f37",
     "sentinelStatePreserved": true,
     "parityBaselineChanged": false
+  },
+  "phase14SkeletonPrimitiveConsolidationState": {
+    "phase": "phase-14-skeleton-primitive-consolidation",
+    "targetSelectors": [
+      ".skeleton-line",
+      ".skeleton-block",
+      ".skeleton-pill"
+    ],
+    "targetFile": "web/secure-landing/portal-src/styles/components/dispatch-surfaces.css",
+    "baselinePath": "web/secure-landing/portal-src/styles/architecture-baseline.json",
+    "baselineSha256": "f3c0c14b22eb72a8834edd5936458c9fef651804397fbbaf969bdf141bc7dea2",
+    "duplicateContextCountBefore": 70,
+    "duplicateContextCountAfter": 67,
+    "additiveDuplicateContextCountBefore": 14,
+    "additiveDuplicateContextCountAfter": 11,
+    "conflictingPermanentContextCountBefore": 56,
+    "conflictingPermanentContextCountAfter": 56,
+    "unownedDuplicateContextCountAfter": 0,
+    "hotspotDuplicateContextCountAfter": 0,
+    "consolidatedContextCount": 3,
+    "expectedConsolidatedContextCount": 3,
+    "consolidatedContexts": [
+      ".skeleton-block|||components|||",
+      ".skeleton-line|||components|||",
+      ".skeleton-pill|||components|||"
+    ],
+    "remainingTargetContexts": [],
+    "unexpectedResolvedContextCount": 0,
+    "nonTargetAdditiveCandidatesDeferredReason": "selector-not-phase14-target",
+    "deferredOutOfScopeCandidateCount": 11,
+    "deferredReasonCounts": {
+      "selector-not-phase14-target": 11
+    },
+    "phase13HistoricalEvidencePreserved": true,
+    "removedRawBytes": 0,
+    "removedGzipBytes": 5,
+    "generatedRawBytesBefore": 80569,
+    "generatedRawBytesAfter": 80661,
+    "generatedRawByteDelta": 92,
+    "generatedGzipBytesBefore": 15743,
+    "generatedGzipBytesAfter": 15738,
+    "generatedGzipByteDelta": -5,
+    "generatedPortalCssHashBefore": "3e6719511b1536ebe2e4c067b693930aa77ab242115368ae4ba3aa8e2aa6f3b3",
+    "generatedPortalCssHashAfter": "4598d98fd19ccaf0728403838d7dfdc395cc1904b1cb147af559ecda6bce726a",
+    "renderedPortalCssFingerprintBefore": "c06fbcdf1f37",
+    "renderedPortalCssFingerprintAfter": "c798785d38cf",
+    "sentinelStatePreserved": true,
+    "parityBaselineChanged": false
   }
 }

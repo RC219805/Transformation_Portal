@@ -1048,7 +1048,7 @@
         },
         {
           "source": "web/secure-landing/portal-src/styles/components/dispatch-surfaces.css",
-          "line": 276,
+          "line": 279,
           "column": 1,
           "layer": "components",
           "declarationSignature": "fc2586449f338803de12e357dc8f462d2c3b6bb0",
@@ -1081,7 +1081,7 @@
       "records": [
         {
           "source": "web/secure-landing/portal-src/styles/components/dispatch-surfaces.css",
-          "line": 276,
+          "line": 279,
           "column": 1,
           "layer": "components",
           "declarationSignature": "fc2586449f338803de12e357dc8f462d2c3b6bb0",
@@ -1384,7 +1384,7 @@
       "records": [
         {
           "source": "web/secure-landing/portal-src/styles/components/dispatch-surfaces.css",
-          "line": 276,
+          "line": 279,
           "column": 1,
           "layer": "components",
           "declarationSignature": "fc2586449f338803de12e357dc8f462d2c3b6bb0",
@@ -1427,7 +1427,7 @@
       "records": [
         {
           "source": "web/secure-landing/portal-src/styles/components/dispatch-surfaces.css",
-          "line": 234,
+          "line": 237,
           "column": 1,
           "layer": "components",
           "declarationSignature": "48ec29ca8e38fd2dc39714443c3ae8f371de97c5",
@@ -1761,7 +1761,7 @@
       "records": [
         {
           "source": "web/secure-landing/portal-src/styles/components/dispatch-surfaces.css",
-          "line": 271,
+          "line": 274,
           "column": 1,
           "layer": "components",
           "declarationSignature": "e3c7a9b72249a3ca65b4134dee00060cb7fa297f",
@@ -2005,7 +2005,7 @@
         },
         {
           "source": "web/secure-landing/portal-src/styles/components/dispatch-surfaces.css",
-          "line": 271,
+          "line": 274,
           "column": 1,
           "layer": "components",
           "declarationSignature": "e3c7a9b72249a3ca65b4134dee00060cb7fa297f",
@@ -2749,143 +2749,6 @@
       "parity": "green"
     },
     {
-      "key": ".skeleton-block|||components|||",
-      "selector": ".skeleton-block",
-      "layer": "components",
-      "atRuleContext": [],
-      "stateContext": [],
-      "category": "additive",
-      "hotspot": false,
-      "records": [
-        {
-          "source": "web/secure-landing/portal-src/styles/components/dispatch-surfaces.css",
-          "line": 142,
-          "column": 1,
-          "layer": "components",
-          "declarationSignature": "af84cdbf319ce67bd2ceb10ccebf069b8a7aed11",
-          "properties": [
-            "background",
-            "display",
-            "overflow",
-            "position"
-          ]
-        },
-        {
-          "source": "web/secure-landing/portal-src/styles/components/dispatch-surfaces.css",
-          "line": 195,
-          "column": 1,
-          "layer": "components",
-          "declarationSignature": "a0c0e28291cbaf673ed65bd5e073d6627b33dd72",
-          "properties": [
-            "border-radius",
-            "min-height"
-          ]
-        }
-      ],
-      "owners": [
-        "portal-css-architecture"
-      ],
-      "ownerReason": "Additive ownership: .skeleton-block splits non-overlapping declarations across dispatch-surfaces.css while preserving the current computed-style parity.",
-      "phase": "phase-9-duplicate-ownership-closure",
-      "contextType": "component-family-shared-state",
-      "disposition": "report-only",
-      "removalStatus": "removable-later",
-      "declarationConflict": "additive",
-      "parity": "green"
-    },
-    {
-      "key": ".skeleton-line|||components|||",
-      "selector": ".skeleton-line",
-      "layer": "components",
-      "atRuleContext": [],
-      "stateContext": [],
-      "category": "additive",
-      "hotspot": false,
-      "records": [
-        {
-          "source": "web/secure-landing/portal-src/styles/components/dispatch-surfaces.css",
-          "line": 142,
-          "column": 1,
-          "layer": "components",
-          "declarationSignature": "af84cdbf319ce67bd2ceb10ccebf069b8a7aed11",
-          "properties": [
-            "background",
-            "display",
-            "overflow",
-            "position"
-          ]
-        },
-        {
-          "source": "web/secure-landing/portal-src/styles/components/dispatch-surfaces.css",
-          "line": 176,
-          "column": 1,
-          "layer": "components",
-          "declarationSignature": "86454ccb93f6051bebea0ff51c88da2eb8b2c2a8",
-          "properties": [
-            "border-radius",
-            "height",
-            "width"
-          ]
-        }
-      ],
-      "owners": [
-        "portal-css-architecture"
-      ],
-      "ownerReason": "Additive ownership: .skeleton-line splits non-overlapping declarations across dispatch-surfaces.css while preserving the current computed-style parity.",
-      "phase": "phase-9-duplicate-ownership-closure",
-      "contextType": "component-family-shared-state",
-      "disposition": "report-only",
-      "removalStatus": "removable-later",
-      "declarationConflict": "additive",
-      "parity": "green"
-    },
-    {
-      "key": ".skeleton-pill|||components|||",
-      "selector": ".skeleton-pill",
-      "layer": "components",
-      "atRuleContext": [],
-      "stateContext": [],
-      "category": "additive",
-      "hotspot": false,
-      "records": [
-        {
-          "source": "web/secure-landing/portal-src/styles/components/dispatch-surfaces.css",
-          "line": 142,
-          "column": 1,
-          "layer": "components",
-          "declarationSignature": "af84cdbf319ce67bd2ceb10ccebf069b8a7aed11",
-          "properties": [
-            "background",
-            "display",
-            "overflow",
-            "position"
-          ]
-        },
-        {
-          "source": "web/secure-landing/portal-src/styles/components/dispatch-surfaces.css",
-          "line": 204,
-          "column": 1,
-          "layer": "components",
-          "declarationSignature": "4c055b76dda1dd9138ad4820404a4807a1592b3a",
-          "properties": [
-            "border-radius",
-            "height",
-            "width"
-          ]
-        }
-      ],
-      "owners": [
-        "portal-css-architecture"
-      ],
-      "ownerReason": "Additive ownership: .skeleton-pill splits non-overlapping declarations across dispatch-surfaces.css while preserving the current computed-style parity.",
-      "phase": "phase-9-duplicate-ownership-closure",
-      "contextType": "component-family-shared-state",
-      "disposition": "report-only",
-      "removalStatus": "removable-later",
-      "declarationConflict": "additive",
-      "parity": "green"
-    },
-    {
       "key": ".stat-label|||components|||",
       "selector": ".stat-label",
       "layer": "components",
@@ -2999,7 +2862,7 @@
       "records": [
         {
           "source": "web/secure-landing/portal-src/styles/components/dispatch-surfaces.css",
-          "line": 222,
+          "line": 225,
           "column": 1,
           "layer": "components",
           "declarationSignature": "cf5afcf9204d35aa111deaa5c5af394c4339cd60",
@@ -3048,7 +2911,7 @@
       "records": [
         {
           "source": "web/secure-landing/portal-src/styles/components/dispatch-surfaces.css",
-          "line": 214,
+          "line": 217,
           "column": 1,
           "layer": "components",
           "declarationSignature": "b7f47d4c1309d96f28a1f9b4f7a4e776c77926c8",
