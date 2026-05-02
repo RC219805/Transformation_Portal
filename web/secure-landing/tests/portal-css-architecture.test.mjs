@@ -19,7 +19,10 @@ const ARCHITECTURE_BASELINE_PATH = path.join(
 const REPO_ROOT = path.resolve(FRONTDOOR_ROOT, "..", "..");
 const PORTAL_CSS_INDEX_PATH = path.join(FRONTDOOR_ROOT, "portal-src", "styles", "index.css");
 const PORTAL_CSS_ASSET_PATH = path.join(REPO_ROOT, "public", "portal-assets", "portal.css");
+const COMPAT_HOLD_CSS_PATH = path.join(FRONTDOOR_ROOT, "portal-src", "styles", "utilities.compat-hold.css");
+const OVERRIDES_COMPAT_CSS_PATH = path.join(FRONTDOOR_ROOT, "portal-src", "styles", "overrides.compat.css");
 const OWNERSHIP_DRAIN_REPORT_PATH = path.join(FRONTDOOR_ROOT, "reports", "portal-css-ownership-drain.json");
+const SENTINEL_FIXTURE_DIR = path.join(FRONTDOOR_ROOT, "tests", "fixtures", "sentinel");
 const LAYER_PARITY_SCRIPT_PATH = path.join(FRONTDOOR_ROOT, "scripts", "check-portal-css-layer-parity.mjs");
 const PYTHON_LAYER_PARITY_VALIDATOR_PATH = path.join(
   REPO_ROOT,
@@ -71,10 +74,27 @@ function runNodeScriptWithEnv(env, scriptPath, ...args) {
   });
 }
 
+function runNodeScriptFailure(scriptPath, ...args) {
+  try {
+    execFileSync(process.execPath, [scriptPath, ...args], {
+      cwd: FRONTDOOR_ROOT,
+      env: process.env,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"]
+    });
+  } catch (error) {
+    return `${error.stdout || ""}${error.stderr || ""}`;
+  }
+  assert.fail(`${scriptPath} ${args.join(" ")} unexpectedly passed`);
+}
+
 function runNpmScript(...args) {
   return execFileSync("npm", args, {
     cwd: FRONTDOOR_ROOT,
-    env: process.env,
+    env: {
+      ...process.env,
+      PATH: `${path.dirname(process.execPath)}:${process.env.PATH || ""}`
+    },
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"]
   });
@@ -104,6 +124,34 @@ test("portal CSS lint script checks generated artifact freshness and architectur
   assert.match(runNodeScript("scripts/check-portal-css-contract.mjs"), /portal css contract: OK/);
   assert.match(runNodeScript("scripts/check-portal-css-architecture.mjs"), /portal css architecture: OK/);
   assert.match(runNodeScript("scripts/check-portal-utility-ownership.mjs"), /portal utility ownership: OK/);
+});
+
+test("portal CSS sentinel fixtures enforce comments-only architecture", () => {
+  for (const fixtureName of ["sentinel-comments-only.css", "sentinel-empty.css"]) {
+    const fixturePath = path.relative(FRONTDOOR_ROOT, path.join(SENTINEL_FIXTURE_DIR, fixtureName));
+    assert.match(
+      runNodeScript("scripts/check-portal-css-architecture.mjs", "--check-sentinel-fixture", fixturePath),
+      /portal css sentinel fixture: OK/
+    );
+  }
+
+  for (const [fixtureName, expectedNode] of [
+    ["sentinel-with-rule.css", /Found rule "\.foo"/],
+    ["sentinel-with-empty-rule.css", /Found rule "\.foo"/],
+    ["sentinel-with-import.css", /Found atrule "@import/],
+    ["sentinel-with-media.css", /Found atrule "@media/],
+    ["sentinel-with-keyframes.css", /Found atrule "@keyframes/],
+    ["sentinel-with-root-token.css", /Found rule ":root"/]
+  ]) {
+    const fixturePath = path.relative(FRONTDOOR_ROOT, path.join(SENTINEL_FIXTURE_DIR, fixtureName));
+    const output = runNodeScriptFailure(
+      "scripts/check-portal-css-architecture.mjs",
+      "--check-sentinel-fixture",
+      fixturePath
+    );
+    assert.match(output, /must remain sentinel-only/);
+    assert.match(output, expectedNode);
+  }
 });
 
 test("portal CSS layer parity make target checks generated artifact freshness", () => {
@@ -140,12 +188,34 @@ test("portal CSS ownership drain keeps utilities layer honest", () => {
   assert.match(portalCssIndex, /@import "\.\/utilities\.required\.css" layer\(utilities\);/);
   assert.match(portalCssIndex, /@import "\.\/utilities\.dynamic\.css" layer\(utilities\);/);
   assert.match(portalCssIndex, /@import "\.\/utilities\.compat-hold\.css" layer\(utilities\);/);
+  assert.doesNotMatch(portalCssIndex, /@import "\.\/overrides\.compat\.css" layer\(overrides\);/);
   assert.doesNotMatch(portalCssIndex, /@import "\.\/overrides\.[^"]+" layer\(utilities\);/);
   assert.doesNotMatch(portalCssIndex, /@import "\.\/components\/[^"]+" layer\(utilities\);/);
   assert.doesNotMatch(portalCssIndex, /operator-console-reset/);
   assert.equal(ownershipDrain.summary.utilityLayerImportsAfter, 3);
   assert.equal(ownershipDrain.summary.compatHoldCount, 0);
   assert.equal(ownershipDrain.summary.overridesCompatRuleCount, 0);
+  assert.equal(ownershipDrain.summary.overridesCompatBytes, 0);
+  assert.match(readFileSync(COMPAT_HOLD_CSS_PATH, "utf8"), /phase-8-governance-sentinel/);
+  assert.match(readFileSync(OVERRIDES_COMPAT_CSS_PATH, "utf8"), /phase-8-governance-sentinel/);
+  assert.deepEqual(ownershipDrain.phase8SentinelState.utilitiesCompatHold, {
+    path: "web/secure-landing/portal-src/styles/utilities.compat-hold.css",
+    imported: true,
+    layer: "utilities",
+    sourceRuleCount: 0,
+    shippedRuleCount: 0,
+    shippedByteDebt: 0,
+    sentinelOnly: true
+  });
+  assert.deepEqual(ownershipDrain.phase8SentinelState.overridesCompat, {
+    path: "web/secure-landing/portal-src/styles/overrides.compat.css",
+    imported: false,
+    layer: null,
+    sourceRuleCount: 0,
+    shippedRuleCount: 0,
+    shippedByteDebt: 0,
+    sentinelOnly: true
+  });
   assert.ok(
     ownershipDrain.moves.every((move) => move.parity === "green"),
     "all ownership drain moves must be parity green"

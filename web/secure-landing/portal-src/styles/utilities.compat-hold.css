@@ -1,2 +1,2 @@
-/* portal-utility-owner: compat-hold
-   reason: intentionally empty after Phase 4 initial pruning; new entries require owner, reason, and removal phase. */
+/* portal-utility-owner: phase-8-governance-sentinel
+   reason: empty guard rail for drained utility compatibility debt; rules must not be added here. */
