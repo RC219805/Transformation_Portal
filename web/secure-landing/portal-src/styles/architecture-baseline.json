@@ -24,7 +24,7 @@
         },
         {
           "source": "web/secure-landing/portal-src/styles/components/shell-foundation.css",
-          "line": 402,
+          "line": 400,
           "column": 1,
           "layer": "components",
           "declarationSignature": "1d3213fc376fe612c9e1eb1ddb2621c3fd96aecb",
@@ -71,7 +71,7 @@
         },
         {
           "source": "web/secure-landing/portal-src/styles/components/shell-foundation.css",
-          "line": 370,
+          "line": 368,
           "column": 1,
           "layer": "components",
           "declarationSignature": "abd9cfa74cca0ef8554966b171589c19a8e20516",
@@ -97,95 +97,6 @@
       "parity": "green"
     },
     {
-      "key": ".ambient-orb|||components|||",
-      "selector": ".ambient-orb",
-      "layer": "components",
-      "atRuleContext": [],
-      "stateContext": [],
-      "category": "additive",
-      "hotspot": false,
-      "records": [
-        {
-          "source": "web/secure-landing/portal-src/styles/components/shell-foundation.css",
-          "line": 322,
-          "column": 1,
-          "layer": "components",
-          "declarationSignature": "2b1318640b33b563aff4b2ee1d6a3f59dbba2a51",
-          "properties": [
-            "inset",
-            "position"
-          ]
-        },
-        {
-          "source": "web/secure-landing/portal-src/styles/components/shell-foundation.css",
-          "line": 417,
-          "column": 1,
-          "layer": "components",
-          "declarationSignature": "c60c855ccb64a74d69966c90fe570e7acbbec833",
-          "properties": [
-            "border-radius",
-            "filter",
-            "opacity"
-          ]
-        }
-      ],
-      "owners": [
-        "portal-css-architecture"
-      ],
-      "ownerReason": "Additive ownership: .ambient-orb splits non-overlapping declarations across shell-foundation.css while preserving the current computed-style parity.",
-      "phase": "phase-9-duplicate-ownership-closure",
-      "contextType": "component-family-shared-state",
-      "disposition": "report-only",
-      "removalStatus": "removable-later",
-      "declarationConflict": "additive",
-      "parity": "green"
-    },
-    {
-      "key": ".ambient-ring|||components|||",
-      "selector": ".ambient-ring",
-      "layer": "components",
-      "atRuleContext": [],
-      "stateContext": [],
-      "category": "additive",
-      "hotspot": false,
-      "records": [
-        {
-          "source": "web/secure-landing/portal-src/styles/components/shell-foundation.css",
-          "line": 322,
-          "column": 1,
-          "layer": "components",
-          "declarationSignature": "2b1318640b33b563aff4b2ee1d6a3f59dbba2a51",
-          "properties": [
-            "inset",
-            "position"
-          ]
-        },
-        {
-          "source": "web/secure-landing/portal-src/styles/components/shell-foundation.css",
-          "line": 460,
-          "column": 1,
-          "layer": "components",
-          "declarationSignature": "a0cb325233e57030802eb47bb16b45e3990ad59a",
-          "properties": [
-            "border",
-            "border-radius",
-            "filter",
-            "opacity"
-          ]
-        }
-      ],
-      "owners": [
-        "portal-css-architecture"
-      ],
-      "ownerReason": "Additive ownership: .ambient-ring splits non-overlapping declarations across shell-foundation.css while preserving the current computed-style parity.",
-      "phase": "phase-9-duplicate-ownership-closure",
-      "contextType": "component-family-shared-state",
-      "disposition": "report-only",
-      "removalStatus": "removable-later",
-      "declarationConflict": "additive",
-      "parity": "green"
-    },
-    {
       "key": ".ambient-sweep|||components|||",
       "selector": ".ambient-sweep",
       "layer": "components",
@@ -207,7 +118,7 @@
         },
         {
           "source": "web/secure-landing/portal-src/styles/components/shell-foundation.css",
-          "line": 387,
+          "line": 385,
           "column": 1,
           "layer": "components",
           "declarationSignature": "2b6fdeafc163d78a117c435b193623d9cb6a1318",
@@ -254,7 +165,7 @@
         },
         {
           "source": "web/secure-landing/portal-src/styles/components/shell-foundation.css",
-          "line": 352,
+          "line": 350,
           "column": 1,
           "layer": "components",
           "declarationSignature": "22ef00b7ef625ba50e51767f978afe83387874b0",
@@ -2203,50 +2114,6 @@
       "disposition": "keep-owned",
       "removalStatus": "permanent",
       "declarationConflict": "conflicting",
-      "parity": "green"
-    },
-    {
-      "key": ".overview-actions|||components|||@media (max-width: 767px)",
-      "selector": ".overview-actions",
-      "layer": "components",
-      "atRuleContext": [
-        "@media (max-width: 767px)"
-      ],
-      "stateContext": [],
-      "category": "additive",
-      "hotspot": false,
-      "records": [
-        {
-          "source": "web/secure-landing/portal-src/styles/components/operator-console.css",
-          "line": 523,
-          "column": 5,
-          "layer": "components",
-          "declarationSignature": "411982acf5b8cd7b2ba48626acbc57fb7eb1ef5c",
-          "properties": [
-            "justify-content"
-          ]
-        },
-        {
-          "source": "web/secure-landing/portal-src/styles/components/operator-console.css",
-          "line": 528,
-          "column": 5,
-          "layer": "components",
-          "declarationSignature": "c5e582930538f512ad5bd4ba53816aab8f7085ac",
-          "properties": [
-            "grid-template-columns",
-            "width"
-          ]
-        }
-      ],
-      "owners": [
-        "portal-css-architecture"
-      ],
-      "ownerReason": "Additive ownership: .overview-actions splits non-overlapping declarations across operator-console.css while preserving the current computed-style parity.",
-      "phase": "phase-9-duplicate-ownership-closure",
-      "contextType": "responsive-context",
-      "disposition": "report-only",
-      "removalStatus": "removable-later",
-      "declarationConflict": "additive",
       "parity": "green"
     },
     {

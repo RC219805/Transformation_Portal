@@ -322,9 +322,7 @@
 .ambient-veil,
 .ambient-grid,
 .ambient-sweep,
-.ambient-focus,
-.ambient-orb,
-.ambient-ring {
+.ambient-focus {
     position: absolute;
     inset: auto;
 }
@@ -415,6 +413,8 @@
 }
 
 .ambient-orb {
+    position: absolute;
+    inset: auto;
     border-radius: 999px;
     filter: blur(34px);
     opacity: 0.65;
@@ -458,6 +458,8 @@
 }
 
 .ambient-ring {
+    position: absolute;
+    inset: auto;
     border-radius: 999px;
     border: 1px solid rgba(255, 255, 255, 0.22);
     opacity: 0.35;
