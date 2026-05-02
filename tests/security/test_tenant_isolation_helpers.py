@@ -5,6 +5,7 @@ from typing import Any
 
 import pytest
 
+from transformation_portal.core.security.fs_guard import FSGuard
 from transformation_portal.core.security.tenant import (
     TenantAwareFSGuard,
     TenantContext,
@@ -91,18 +92,13 @@ def test_tenant_aware_fs_guard_enforces_current_tenant(monkeypatch: pytest.Monke
 
     calls: list[tuple[str, Path]] = []
 
+    monkeypatch.setattr(FSGuard, "read_text", lambda self, path, encoding="utf-8": calls.append(("read", path)) or "payload")
     monkeypatch.setattr(
-        "transformation_portal.core.security.fs_guard.FSGuard.read_text",
-        lambda self, path, encoding="utf-8": calls.append(("read", path)) or "payload",
-    )
-    monkeypatch.setattr(
-        "transformation_portal.core.security.fs_guard.FSGuard.write_text",
+        FSGuard,
+        "write_text",
         lambda self, path, data, encoding="utf-8", atomic=True: calls.append(("write", path)),
     )
-    monkeypatch.setattr(
-        "transformation_portal.core.security.fs_guard.FSGuard.delete",
-        lambda self, path, missing_ok=True: calls.append(("delete", path)) or True,
-    )
+    monkeypatch.setattr(FSGuard, "delete", lambda self, path, missing_ok=True: calls.append(("delete", path)) or True)
 
     assert guard.read_text(inside) == "payload"
     guard.write_text(inside, "data")
