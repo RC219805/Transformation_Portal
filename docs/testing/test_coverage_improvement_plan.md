@@ -120,15 +120,16 @@ coverage report --fail-under=25
 - [x] Expanded `tests/storage/` — `test_cas_store_hash_mismatch.py`
 - [x] `tests/test_app_feature_flags.py`
 - [x] `tests/test_app_security.py`
-- [x] `tests/core/test_cas_dag_executor.py`
-- [x] `tests/core/test_torch_security.py`
+- [x] `tests/core/test_cas_dag_executor_failure_paths.py`
+- [x] `tests/security/test_torch_security_helpers.py`
 - [x] CI lint banning `assert True` in `tests/` (`scripts/ci/check_no_tautological_tests.py`)
 
 ### Coverage Source Pruning
 
-The following packages are excluded from `[tool.coverage.run].source` until they
-grow a smoke suite. They were dragging the global floor down with no tested
-behavior. Re-include a package by removing its entry from `pyproject.toml` and
+The following packages are excluded via `[tool.coverage.run].omit` (the
+`source` setting still resolves to all of `src/`). They have no direct tests
+today and were dragging the global floor down with no tested behavior.
+Re-include a package by removing its `omit` entry from `pyproject.toml` and
 adding a `tests/<pkg>/` suite:
 
 - `depth_intelligence/`

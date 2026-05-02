@@ -368,18 +368,44 @@ def test_lock_dir_is_created_on_init(tmp_path):
     assert executor.locks_dir == tmp_path / "cache" / ".locks"
 
 
-def test_get_lock_returns_filelock_with_safe_filename(tmp_path):
+def test_get_lock_sanitizes_cas_id_into_filename(tmp_path):
+    """The cas_id portion of the lock filename is sanitized.
+
+    Documents what is actually safe today: ``cas_id`` is run through
+    ``_sanitize_cas_id_for_filename`` before being interpolated, so its
+    value cannot introduce path separators into the lock filename. The
+    ``stage_name`` portion is NOT sanitized (callers pass internal stage
+    names that we control), which is reflected in
+    ``test_get_lock_with_separator_in_stage_name_stays_under_locks_dir``.
+    """
     store = ArtifactStore(tmp_path / "cas")
     executor = CASDAGExecutor(store, tmp_path / "cache", CASDAGConfig())
 
-    # Pass a CAS id with characters that are unsafe as filename components; the
-    # sanitizer must produce a path that's still inside locks_dir.
-    lock = executor._get_lock("stage_with/slash", "sha256:" + "a" * 64)
+    # cas_id with characters that are unsafe as filename components.
+    lock = executor._get_lock("stage", "sha256:" + "a" * 64 + "/../etc")
     assert isinstance(lock, FileLock)
-    assert str(lock.lock_path).startswith(str(executor.locks_dir))
-    # Lock filename must not contain path separators from the cas_id input.
-    assert "/" not in lock.lock_path.name
-    assert "\\" not in lock.lock_path.name
+    # Sanitization must keep the file inside locks_dir.
+    resolved = lock.lock_path.resolve()
+    assert resolved.is_relative_to(executor.locks_dir.resolve())
+    # And the cas_id-derived suffix must not introduce a separator.
+    name = lock.lock_path.name
+    assert "/" not in name
+    assert "\\" not in name
+
+
+def test_get_lock_with_separator_in_stage_name_stays_under_locks_dir(tmp_path):
+    """Regression / behavior contract: even when stage_name happens to contain
+    a slash, the resolved lock path must remain under ``locks_dir``. This is
+    what protects the executor from arbitrary write locations regardless of
+    the upstream stage-name source."""
+    store = ArtifactStore(tmp_path / "cas")
+    executor = CASDAGExecutor(store, tmp_path / "cache", CASDAGConfig())
+
+    lock = executor._get_lock("stage_with/slash", "sha256:" + "a" * 64)
+    resolved = lock.lock_path.resolve()
+    # The full resolved path must stay inside locks_dir, even if the
+    # stage_name carved out a sub-directory under it.
+    assert resolved.is_relative_to(executor.locks_dir.resolve())
 
 
 def test_cache_path_is_partitioned_by_id_prefix(tmp_path):

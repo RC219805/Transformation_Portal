@@ -65,9 +65,44 @@ def test_detects_assert_not_zero(tmp_path):
     assert len(offenders) == 1
 
 
+def test_detects_assert_nonempty_list(tmp_path):
+    path = _write(tmp_path, "test_offender.py", "def test_x():\n    assert [1]\n")
+    offenders = find_tautological_asserts(path)
+    assert len(offenders) == 1
+
+
+def test_detects_assert_nonempty_tuple(tmp_path):
+    path = _write(tmp_path, "test_offender.py", "def test_x():\n    assert (1,)\n")
+    offenders = find_tautological_asserts(path)
+    assert len(offenders) == 1
+
+
+def test_detects_assert_nonempty_dict(tmp_path):
+    path = _write(tmp_path, "test_offender.py", "def test_x():\n    assert {'k': 'v'}\n")
+    offenders = find_tautological_asserts(path)
+    assert len(offenders) == 1
+
+
+def test_detects_assert_nonempty_set(tmp_path):
+    path = _write(tmp_path, "test_offender.py", "def test_x():\n    assert {1}\n")
+    offenders = find_tautological_asserts(path)
+    assert len(offenders) == 1
+
+
 # ---------------------------------------------------------------------------
 # Detection: negative cases (must NOT trigger)
 # ---------------------------------------------------------------------------
+
+
+def test_ignores_empty_list(tmp_path):
+    """`assert []` is always falsy, not a tautology."""
+    path = _write(tmp_path, "test_real.py", "def test_x():\n    assert []\n")
+    assert find_tautological_asserts(path) == []
+
+
+def test_ignores_empty_dict(tmp_path):
+    path = _write(tmp_path, "test_real.py", "def test_x():\n    assert {}\n")
+    assert find_tautological_asserts(path) == []
 
 
 def test_ignores_real_assert(tmp_path):
@@ -101,6 +136,23 @@ def test_respects_escape_hatch_comment(tmp_path):
     body = "def test_x():\n    assert True  # tautology-ok: smoke check\n"
     path = _write(tmp_path, "test_smoke.py", body)
     assert find_tautological_asserts(path) == []
+
+
+def test_escape_hatch_in_string_literal_does_not_bypass(tmp_path):
+    """The tag must be in an actual ``#`` comment. A same-line string that
+    happens to contain the substring must NOT silence the lint."""
+    body = 'def test_x():\n    assert True, "tautology-ok"\n'
+    path = _write(tmp_path, "test_dirty.py", body)
+    offenders = find_tautological_asserts(path)
+    assert len(offenders) == 1
+
+
+def test_escape_hatch_on_different_line_does_not_bypass(tmp_path):
+    """The tag must be on the SAME line as the offender."""
+    body = "def test_x():\n    # tautology-ok\n    assert True\n"
+    path = _write(tmp_path, "test_dirty.py", body)
+    offenders = find_tautological_asserts(path)
+    assert len(offenders) == 1
 
 
 # ---------------------------------------------------------------------------

@@ -24,21 +24,52 @@ from __future__ import annotations
 
 import ast
 import sys
+import tokenize
+from io import StringIO
 from pathlib import Path
-from typing import Iterable, List, Tuple
+from typing import Iterable, List, Set, Tuple
 
 ESCAPE_HATCH = "tautology-ok"
 
 
 def _is_truthy_literal(node: ast.expr) -> bool:
-    """Return True if `node` is a literal that is always truthy."""
+    """Return True if `node` is a literal that is always truthy.
+
+    Covers:
+    - ``True``, non-zero numbers, non-empty strings/bytes (``ast.Constant``)
+    - non-empty container literals: ``[1]``, ``(1,)``, ``{'k': 'v'}``, ``{1}``
+    - ``not <falsy-constant>`` (e.g. ``assert not False``)
+    """
     if isinstance(node, ast.Constant):
         return bool(node.value) and node.value is not None
+    if isinstance(node, (ast.List, ast.Tuple, ast.Set)):
+        # A non-empty list/tuple/set literal is always truthy. An empty one is
+        # falsy and therefore not a tautology, so we leave it alone.
+        return len(node.elts) > 0
+    if isinstance(node, ast.Dict):
+        return len(node.keys) > 0
     # `assert not False` / `assert not 0` are tautologies too.
     if isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.Not):
         if isinstance(node.operand, ast.Constant):
             return not node.operand.value
     return False
+
+
+def _comment_lines_with_escape_hatch(source: str) -> Set[int]:
+    """Return line numbers whose source contains a real ``# tautology-ok`` comment.
+
+    Uses tokenize so the tag is only recognized inside an actual comment —
+    a string like ``assert True, "tautology-ok"`` does NOT bypass the lint.
+    """
+    lines: Set[int] = set()
+    try:
+        tokens = list(tokenize.generate_tokens(StringIO(source).readline))
+    except tokenize.TokenizeError:
+        return lines
+    for tok in tokens:
+        if tok.type == tokenize.COMMENT and ESCAPE_HATCH in tok.string:
+            lines.add(tok.start[0])
+    return lines
 
 
 def find_tautological_asserts(path: Path) -> List[Tuple[int, str]]:
@@ -55,6 +86,7 @@ def find_tautological_asserts(path: Path) -> List[Tuple[int, str]]:
         return []
 
     source_lines = source.splitlines()
+    escape_lines = _comment_lines_with_escape_hatch(source)
     offenders: List[Tuple[int, str]] = []
     for node in ast.walk(tree):
         if not isinstance(node, ast.Assert):
@@ -62,9 +94,9 @@ def find_tautological_asserts(path: Path) -> List[Tuple[int, str]]:
         if not _is_truthy_literal(node.test):
             continue
         line = node.lineno
-        snippet = source_lines[line - 1] if 0 < line <= len(source_lines) else ""
-        if ESCAPE_HATCH in snippet:
+        if line in escape_lines:
             continue
+        snippet = source_lines[line - 1] if 0 < line <= len(source_lines) else ""
         offenders.append((line, snippet.strip()))
     return offenders
 
