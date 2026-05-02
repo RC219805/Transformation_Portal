@@ -288,6 +288,64 @@ class TestSkyGANNode:
 
         assert SkyGANNode.CATEGORY == "Transformation Portal/Atmospheric"
 
+    def test_time_of_day_mapping_covers_dropdown_choices(self):
+        """Dropdown choices and mapping stay aligned in order, length, and uniqueness."""
+        from transformation_portal.comfyui.custom_nodes import SkyGANNode
+
+        choices = SkyGANNode.INPUT_TYPES()["required"]["time_of_day"][0]
+        mapping = SkyGANNode._TIME_OF_DAY_HOURS
+
+        # Exact sequence equality also catches reordering and duplicate entries
+        # in the dropdown that a set comparison would silently mask.
+        assert list(choices) == list(mapping.keys())
+        assert len(choices) == len(set(choices))
+
+        for label, hour in mapping.items():
+            assert 0.0 <= hour < 24.0, f"{label} -> {hour} out of range"
+
+        # Sanity: ordering matches a normal day progression
+        assert (
+            mapping["sunrise"]
+            < mapping["morning"]
+            < mapping["midday"]
+            < mapping["golden_hour"]
+            < mapping["sunset"]
+            < mapping["twilight"]
+        )
+
+    def test_execute_rejects_unknown_time_of_day(self, monkeypatch):
+        """Unknown time_of_day must fail fast before any preset work."""
+        from transformation_portal.comfyui.custom_nodes import SkyGANNode
+
+        # Booby-trap LocationPresets at the import site so that any preset
+        # construction trips a RuntimeError. This enforces the ordering
+        # guarantee — LocationPresets falls back silently to "montecito" for
+        # unknown locations, so we cannot rely on a bad location to surface
+        # a preset-side error if validation regressed.
+        def _no_presets(*args, **kwargs):
+            raise RuntimeError("LocationPresets must not be constructed before time_of_day validation")
+
+        monkeypatch.setattr("transformation_portal.comfyui.custom_nodes.LocationPresets", _no_presets)
+
+        node = SkyGANNode()
+        dummy_image = np.zeros((4, 4, 3), dtype=np.float32)
+
+        with pytest.raises(ValueError, match="Unknown time_of_day") as exc_info:
+            node.execute(
+                image=dummy_image,
+                location="montecito",
+                season="summer",
+                time_of_day="not_a_real_slot",
+                cloud_coverage=0.3,
+                auto_correct=True,
+                strict_physics=False,
+            )
+
+        # Error message preserves dropdown order (insertion order), not
+        # alphabetical order, so it matches the UI for easier debugging.
+        expected_choices = list(SkyGANNode._TIME_OF_DAY_HOURS)
+        assert str(expected_choices) in str(exc_info.value)
+
 
 class TestSceneAnalysisNode:
     """Tests for SceneAnalysisNode."""
