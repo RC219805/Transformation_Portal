@@ -305,13 +305,15 @@
     background: var(--shell-veil);
 }
 
-.build-step-tab:hover,
+.build-step-tab:hover {
+    transform: translateY(-1px);
+    border-color: rgba(8, 145, 178, 0.28);
+    outline: none;
+}
+
 .build-step-tab:focus-visible {
     transform: translateY(-1px);
     border-color: rgba(8, 145, 178, 0.28);
-}
-.build-step-tab:hover {
-    outline: none;
 }
 
 .build-step-tab.is-active {

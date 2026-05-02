@@ -61,15 +61,19 @@
     color: #fca5a5;
 }
 
-.dispatch-tool-btn:hover,
+.dispatch-tool-btn:hover {
+    border-color: rgba(8, 145, 178, 0.32);
+    background: rgba(255, 255, 255, 0.92);
+    color: var(--shell-ink);
+    transform: translateY(-1px);
+    outline: none;
+}
+
 .dispatch-tool-btn:focus-visible {
     border-color: rgba(8, 145, 178, 0.32);
     background: rgba(255, 255, 255, 0.92);
     color: var(--shell-ink);
     transform: translateY(-1px);
-}
-.dispatch-tool-btn:hover {
-    outline: none;
 }
 
 .dispatch-tool-btn-primary {
