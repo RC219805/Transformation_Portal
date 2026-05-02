@@ -300,6 +300,14 @@
       "owners": []
     },
     {
+      "key": ".portal-action-control|||",
+      "category": "additive",
+      "hotspot": false,
+      "owners": [
+        "compatibility-final-order"
+      ]
+    },
+    {
       "key": ".portal-context-shell|||",
       "category": "conflicting",
       "hotspot": false,
@@ -498,14 +506,6 @@
       "owners": []
     },
     {
-      "key": "#artifactCompareBtn|||",
-      "category": "additive",
-      "hotspot": false,
-      "owners": [
-        "compatibility-final-order"
-      ]
-    },
-    {
       "key": "#artifactMetadataBar|||",
       "category": "additive",
       "hotspot": false,
@@ -524,34 +524,10 @@
       "owners": []
     },
     {
-      "key": "#openRunDetailsBtn|||",
-      "category": "additive",
-      "hotspot": false,
-      "owners": [
-        "compatibility-final-order"
-      ]
-    },
-    {
       "key": "#reconstructionRuntimeSummary|||",
       "category": "additive",
       "hotspot": false,
       "owners": []
-    },
-    {
-      "key": "#shortcutsBtn|||",
-      "category": "additive",
-      "hotspot": false,
-      "owners": [
-        "compatibility-final-order"
-      ]
-    },
-    {
-      "key": "#themeBtn|||",
-      "category": "additive",
-      "hotspot": false,
-      "owners": [
-        "compatibility-final-order"
-      ]
     },
     {
       "key": "html|||",
