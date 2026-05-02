@@ -23,6 +23,7 @@ ALLOWED_ROOT_FILES=(
     "SECURITY.md"
     "CHANGELOG.md"
     "AGENTS.md"
+    "CLAUDE.md"
     "Makefile"
     "pyproject.toml"
     "setup.py"
