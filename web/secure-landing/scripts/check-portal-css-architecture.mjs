@@ -720,6 +720,22 @@ function ruleCountForFile(filePath) {
   return count;
 }
 
+function selectorContainsIdToken(selector) {
+  // Strip attribute selector contents (`[href^="#"]`) and quoted string
+  // bodies. PostCSS already strips comments before surfacing rule.selector,
+  // so once those two sources of `#` are removed every remaining `#` in
+  // the selector starts an ID token (CSS selector grammar allows ID tokens
+  // adjacent to type/class selectors with no separator, e.g. `a#anchor`).
+  let stripped = selector;
+  let previous;
+  do {
+    previous = stripped;
+    stripped = stripped.replace(/\[[^\[\]]*\]/g, "");
+  } while (stripped !== previous);
+  stripped = stripped.replace(/"[^"]*"/g, "").replace(/'[^']*'/g, "");
+  return /#(?:\\.|[A-Za-z_-])/.test(stripped);
+}
+
 function checkOverridesCompatNoNewIds(failures) {
   const compatPath = path.resolve(PORTAL_CSS_SOURCE_DIR, "overrides.compat.css");
   if (!existsSync(compatPath)) {
@@ -729,7 +745,7 @@ function checkOverridesCompatNoNewIds(failures) {
   const root = parseCss(compatPath);
   root.walkRules((rule) => {
     for (const selector of splitSelectorList(rule.selector)) {
-      if (selector.includes("#")) {
+      if (selectorContainsIdToken(selector)) {
         failures.push(
           `${source}:${rule.source?.start?.line || 0} ID-specific selector ${selector} is forbidden in overrides.compat.css after Phase 6 semantic-ownership migration`
         );

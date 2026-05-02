@@ -220,11 +220,18 @@ def _portal_bundle_script_path() -> Path:
 
 
 def _build_portal_css_with_compat_disabled() -> None:
+    """Rebuild portal.css with overrides.compat.css emitted as empty.
+
+    Uses ``--css-only`` so the bundler does not also rewrite portal.js,
+    portal-review.js, or shared-token assets. The probe path's ``finally``
+    block only restores portal.css, so widening the rebuild beyond CSS
+    would leave unrelated generated files mutated on the filesystem.
+    """
     script = _portal_bundle_script_path()
     env = {**os.environ, "PORTAL_CSS_DISABLE_COMPAT_OVERRIDES": "1"}
     try:
         subprocess.run(
-            ["node", str(script)],
+            ["node", str(script), "--css-only"],
             check=True,
             env=env,
             cwd=str(_repo_root()),

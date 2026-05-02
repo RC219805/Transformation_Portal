@@ -159,11 +159,16 @@ async function bundleText(entryPoint, options = {}) {
 
 await ensureSupportedRuntime();
 
+const cssOnly = process.argv.includes("--css-only");
+
 if (process.argv.includes("--check-css")) {
   if (compatOverridesDisabled()) {
     throw new Error(
       `${PORTAL_COMPAT_OVERRIDE_DISABLE_FLAG}=1 is a parity-probe build flag and must not be combined with --check-css.`
     );
+  }
+  if (cssOnly) {
+    throw new Error("--css-only cannot be combined with --check-css; --check-css already runs only the CSS render path.");
   }
   const expectedCss = await renderPortalCssAsset();
   const currentCss = existsSync(PORTAL_CSS_ASSET_PATH) ? readFileSync(PORTAL_CSS_ASSET_PATH, "utf-8") : "";
@@ -173,6 +178,15 @@ if (process.argv.includes("--check-css")) {
     );
   }
   console.log(`portal css generated artifact is fresh: ${path.relative(REPO_ROOT, PORTAL_CSS_ASSET_PATH)}`);
+  process.exit(0);
+}
+
+if (cssOnly) {
+  const portalCssChanged = await buildPortalCssAsset();
+  const portalCssStats = statSync(PORTAL_CSS_ASSET_PATH);
+  console.log(
+    `portal css ${portalCssChanged ? "updated" : "unchanged"} (--css-only): ${path.relative(REPO_ROOT, PORTAL_CSS_ASSET_PATH)} (${portalCssStats.size} bytes)`
+  );
   process.exit(0);
 }
 
