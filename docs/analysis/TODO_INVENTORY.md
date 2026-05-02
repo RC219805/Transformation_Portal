@@ -1,9 +1,9 @@
 # TODO Inventory - Transformation Portal
 
-**Document Version:** 2.4.4
-**Date:** May 1, 2026
-**Last Updated:** 2026-05-01 (orphaned 2025 PR-review reports archived)
-**Previous Version:** 2.4.3 (2026-05-01)
+**Document Version:** 2.4.5
+**Date:** May 2, 2026
+**Last Updated:** 2026-05-02 (QW-3 binary-cleanup documentation closure recorded)
+**Previous Version:** 2.4.4 (2026-05-01)
 
 ---
 
@@ -16,6 +16,19 @@ This document provides a **complete, categorized inventory** of all TODOs, NotIm
 - Audit trail for architectural decisions
 - Integration with issue tracking systems
 - Binding inventory enforced by Architect governance
+
+## Version 2.4.5 Changes (2026-05-02)
+
+**Minor cleanup:**
+- ✅ **§4.1 Binary File Cleanup recommendation closed.** The TODO markers in
+  the directory-structure diagram of `docs/fixes/BINARY_FILE_BEST_PRACTICES.md`
+  had already been replaced with ✅ status rows in an earlier sweep; this
+  release adds a status banner to the top of that document so the residual
+  "⚠️ Currently tracked" warnings further down are no longer mistaken for
+  current state, and marks QW-3 (`docs/deliverables/QUICK_WINS.md`) as
+  completed (2026-05-02). Verified via
+  `git ls-files input_images/ processed_images/` (no PNG/JPG/TIFF binaries
+  tracked under either directory). No code changes.
 
 ## Version 2.4.4 Changes (2026-05-01)
 
@@ -748,14 +761,15 @@ raise NotImplementedError(f"Backend {self.backend} not implemented")
 
 ## 4. Documentation TODOs
 
-### 4.1 Binary File Cleanup
+### 4.1 Binary File Cleanup — ✅ CLOSED 2026-05-02
 
-**Status:** ✅ OBSOLETE (COMPLETED)
+**Status:** ✅ OBSOLETE (COMPLETED) — recommendation now executed
 **Priority:** N/A
-**Action:** Archive tracking document
+**Action:** None remaining
 
-**Location:** `docs/fixes/BINARY_FILE_BEST_PRACTICES.md:133,140`
+**Location:** `docs/fixes/BINARY_FILE_BEST_PRACTICES.md` (previously lines 133, 140)
 
+**Original residue:**
 ```markdown
 │   ├── *.png                 # ⚠️ TODO: Exclude PNG previews
 │   └── *.jpg                 # TODO: Move to docs/examples/
@@ -765,8 +779,19 @@ raise NotImplementedError(f"Backend {self.backend} not implemented")
 - `docs/fixes/PRE_PUSH_AUDIT_REPORT.md:256` states "Minimal TODO comments (only in documentation)"
 - Binary cleanup action plan executed
 - Pre-push audits passing
+- `git ls-files input_images/ processed_images/` (2026-05-02) shows no
+  PNG/JPG/TIFF binaries tracked under either directory
+- TODO markers in the directory-structure diagram replaced with ✅ status
+  rows in an earlier sweep
 
-**Recommendation:** Remove TODO from BINARY_FILE_BEST_PRACTICES.md or mark as complete
+**Closure (2026-05-02):**
+- ✅ Status banner added to top of `docs/fixes/BINARY_FILE_BEST_PRACTICES.md`
+  noting that the §1 "Executive Decision: Current Push" remediation and the
+  §2.1–§2.3 immediate-action items are complete, so the historical
+  "⚠️ Currently tracked" warnings further down describe the 2025-11-06
+  snapshot rather than the current state.
+- ✅ QW-3 in `docs/deliverables/QUICK_WINS.md` marked completed (2026-05-02)
+  with verification command captured.
 
 ---
 

@@ -4,6 +4,18 @@
 **Context**: RAG system integration push with 356MB of PNG preview files in `input_images/`
 **Status**: ✅ TIFF files already excluded via .gitignore (as of commit c47bbc9)
 
+> **2026-05-02 Status Update (QW-3 closure).** The remediation described in
+> §1 ("Executive Decision: Current Push") and the immediate-action items in
+> §2.1–§2.3 have been completed. As of 2026-05-02 no PNG/JPG/TIFF binaries
+> are tracked under `input_images/` or `processed_images/`
+> (`git ls-files input_images/ processed_images/` returns only `.gitkeep`,
+> two text notes, and a JSON provenance file). The "⚠️ Currently tracked"
+> warnings further down therefore describe the 2025-11-06 snapshot, not the
+> current repository state. The forward-looking guidelines in §3–§9 remain
+> active guidance for new contributions. Tracked in
+> `docs/deliverables/QUICK_WINS.md` (QW-3) and
+> `docs/analysis/TODO_INVENTORY.md` §4.1.
+
 ---
 
 ## 🎯 Executive Decision: Current Push
