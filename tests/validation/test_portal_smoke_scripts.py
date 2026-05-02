@@ -19,6 +19,7 @@ PORTAL_LUX_MATERIALS_SCRIPT_PATH = PROJECT_ROOT / "scripts/validation/validate_p
 FRONTDOOR_BROWSER_SCRIPT_PATH = PROJECT_ROOT / "scripts" / "validation" / "validate_frontdoor_browser_smoke.py"
 ORCHESTRATOR_HTTP_SCRIPT_PATH = PROJECT_ROOT / "scripts/validation/validate_orchestrator_http_smoke.py"
 AUDIT_PIPELINE_READINESS_SCRIPT_PATH = PROJECT_ROOT / "scripts/validation/audit_pipeline_readiness.py"
+PORTAL_CSS_LAYER_PARITY_SCRIPT_PATH = PROJECT_ROOT / "scripts/validation/validate_portal_css_layer_parity.py"
 
 
 def _load_module(module_path: Path, module_name: str):
@@ -28,6 +29,15 @@ def _load_module(module_path: Path, module_name: str):
     sys.modules[module_name] = module
     spec.loader.exec_module(module)
     return module
+
+
+def _load_portal_css_layer_parity_module(module_name: str):
+    script_dir = str(PORTAL_CSS_LAYER_PARITY_SCRIPT_PATH.parent)
+    sys.path.insert(0, script_dir)
+    try:
+        return _load_module(PORTAL_CSS_LAYER_PARITY_SCRIPT_PATH, module_name)
+    finally:
+        sys.path.remove(script_dir)
 
 
 def test_portal_browser_parse_args_does_not_probe_chrome_for_explicit_override(monkeypatch: pytest.MonkeyPatch):
@@ -172,6 +182,41 @@ def test_portal_browser_state_probe_tracks_contextual_action_controls():
     assert "strictSegmentationChecked" in expression
     assert "queueEmptyStateVisible" in expression
     assert "artifactEmptyStateVisible" in expression
+
+
+def test_portal_css_layer_parity_probe_guard_captures_mutated_state() -> None:
+    module = _load_portal_css_layer_parity_module("tests_validate_portal_css_layer_parity_guard")
+
+    guard_source = module._portal_parity_probe_guard_source()
+
+    assert "createPortalParityProbeGuard" in guard_source
+    assert "captureStorage" in guard_source
+    assert "captureNodeAndAncestors" in guard_source
+    assert "captureProperty" in guard_source
+    assert "rootClassSnapshot" in guard_source
+    assert "window.__portalParityProbeGuard" in module._portal_parity_probe_restore_expression()
+
+
+def test_portal_css_layer_parity_mutating_probes_use_probe_guard() -> None:
+    module = _load_portal_css_layer_parity_module("tests_validate_portal_css_layer_parity_probes")
+
+    expressions = {
+        "review status": module._review_status_tone_probe_expression(),
+        "interaction outline": module._interaction_outline_setup_expression(),
+        "skeleton": module._skeleton_visibility_probe_expression("dark"),
+        "snapshot": module._force_snapshot_state_expression(),
+        "class census": module._force_census_state_expression("dark"),
+    }
+
+    for label, expression in expressions.items():
+        assert "createPortalParityProbeGuard" in expression, label
+        assert "captureStorage('tp_theme', 'tp_theme_version')" in expression, label
+
+    assert "guard.restore();" in expressions["review status"]
+    assert "guard.restore();" in expressions["skeleton"]
+    assert "window.__portalParityProbeGuard = guard" in expressions["interaction outline"]
+    assert "window.__portalParityProbeGuard = guard" in expressions["snapshot"]
+    assert "window.__portalParityProbeGuard = guard" in expressions["class census"]
 
 
 def test_portal_browser_accessibility_probe_tracks_target_size_and_disclosure_contracts():

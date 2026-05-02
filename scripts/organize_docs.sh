@@ -59,7 +59,7 @@ is_git_tracked() {
 is_allowed_root_doc() {
     local file="$1"
     case "$file" in
-        README.md|CONTRIBUTING.md|SECURITY.md|CHANGELOG.md|AGENTS.md|LICENSE)
+        README.md|CONTRIBUTING.md|SECURITY.md|CHANGELOG.md|AGENTS.md|CLAUDE.md|LICENSE)
             return 0
             ;;
         requirements*.txt)

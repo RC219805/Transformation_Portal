@@ -2962,6 +2962,9 @@ if (phase10AdditiveFixtureIndex >= 0) {
   if (fixture.expectedState && JSON.stringify(fixture.phase10AdditiveConsolidationState || null) !== JSON.stringify(fixture.expectedState)) {
     fixtureFailures.push("phase10AdditiveConsolidationState is stale");
   }
+  if (fixture.historicalPhase10State) {
+    checkHistoricalPhase10State({ phase10AdditiveConsolidationState: fixture.historicalPhase10State }, fixtureFailures);
+  }
   if (fixtureFailures.length > 0) {
     for (const failure of fixtureFailures) {
       console.error(`ERROR: ${failure}`);

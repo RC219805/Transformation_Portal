@@ -90,6 +90,7 @@ Quick reference for common workflows and commands in this repo.
 - `make organize-docs` move markdown files into `docs/` (repo hygiene).
 - `make check-docs` dry-run docs organization.
 - `make check-stale-docs` detect changed-file references to deleted or moved docs root paths.
+- `make check-doc-heading-links` validate markdown links that target related TODO/quick-win/binary-cleanup document headings.
 - `python3 scripts/governance/check_docs_structure.py --all` run the canonical documentation structure validator across all docs.
 - `make lock` regenerate all requirements lockfiles.
 - `make lock-prod` regenerate `requirements.lock.txt`.
