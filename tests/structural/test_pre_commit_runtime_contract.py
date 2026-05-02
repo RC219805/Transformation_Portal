@@ -14,7 +14,7 @@ pytestmark = pytest.mark.unit
 REPO_ROOT = Path(__file__).resolve().parents[2]
 PRE_COMMIT_CONFIG = REPO_ROOT / ".pre-commit-config.yaml"
 REPO_PYTHON_RUNNER = "scripts/setup/run_repo_python.sh"
-PYTHON_HOOK_IDS = {"auto-format-staged", "check-test-markers"}
+PYTHON_HOOK_IDS = {"auto-format-staged", "check-test-markers", "ban-tautological-tests"}
 
 
 def _load_pre_commit_config() -> dict:

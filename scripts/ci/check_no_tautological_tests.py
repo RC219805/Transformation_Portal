@@ -23,6 +23,7 @@ Usage:
 from __future__ import annotations
 
 import ast
+import re
 import sys
 import tokenize
 from io import StringIO
@@ -30,24 +31,38 @@ from pathlib import Path
 from typing import Iterable, List, Set, Tuple
 
 ESCAPE_HATCH = "tautology-ok"
+# Match the tag only when it stands as its own token. Using lookarounds that
+# treat alphanumerics, underscores and hyphens as "tag characters" so neither
+# ``not-tautology-ok`` nor ``tautology-okay`` can bypass the lint.
+ESCAPE_HATCH_RE = re.compile(r"(?<![A-Za-z0-9_-])" + re.escape(ESCAPE_HATCH) + r"(?![A-Za-z0-9_-])")
 
 
 def _is_truthy_literal(node: ast.expr) -> bool:
-    """Return True if `node` is a literal that is always truthy.
+    """Return True if `node` is a literal whose truth value is determined
+    entirely at parse time.
 
     Covers:
     - ``True``, non-zero numbers, non-empty strings/bytes (``ast.Constant``)
-    - non-empty container literals: ``[1]``, ``(1,)``, ``{'k': 'v'}``, ``{1}``
+    - non-empty container literals whose elements are themselves all
+      constants: ``[1]``, ``(1,)``, ``{'k': 'v'}``, ``{1}``
     - ``not <falsy-constant>`` (e.g. ``assert not False``)
+
+    Containers with any non-literal element are NOT flagged. ``assert
+    [compute()]`` evaluates ``compute()`` for its side effect, so it could
+    legitimately raise; banning it would produce false positives.
     """
     if isinstance(node, ast.Constant):
         return bool(node.value) and node.value is not None
     if isinstance(node, (ast.List, ast.Tuple, ast.Set)):
-        # A non-empty list/tuple/set literal is always truthy. An empty one is
-        # falsy and therefore not a tautology, so we leave it alone.
-        return len(node.elts) > 0
+        if not node.elts:
+            return False
+        # Only flag when every element is itself a constant — otherwise the
+        # caller may be relying on element evaluation as the actual check.
+        return all(isinstance(elt, ast.Constant) for elt in node.elts)
     if isinstance(node, ast.Dict):
-        return len(node.keys) > 0
+        if not node.keys:
+            return False
+        return all(isinstance(k, ast.Constant) for k in node.keys) and all(isinstance(v, ast.Constant) for v in node.values)
     # `assert not False` / `assert not 0` are tautologies too.
     if isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.Not):
         if isinstance(node.operand, ast.Constant):
@@ -67,7 +82,7 @@ def _comment_lines_with_escape_hatch(source: str) -> Set[int]:
     except tokenize.TokenizeError:
         return lines
     for tok in tokens:
-        if tok.type == tokenize.COMMENT and ESCAPE_HATCH in tok.string:
+        if tok.type == tokenize.COMMENT and ESCAPE_HATCH_RE.search(tok.string):
             lines.add(tok.start[0])
     return lines
 
