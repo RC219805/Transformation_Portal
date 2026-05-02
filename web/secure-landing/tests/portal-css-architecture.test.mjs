@@ -25,6 +25,7 @@ const COMPAT_HOLD_CSS_PATH = path.join(FRONTDOOR_ROOT, "portal-src", "styles", "
 const OVERRIDES_COMPAT_CSS_PATH = path.join(FRONTDOOR_ROOT, "portal-src", "styles", "overrides.compat.css");
 const OWNERSHIP_DRAIN_REPORT_PATH = path.join(FRONTDOOR_ROOT, "reports", "portal-css-ownership-drain.json");
 const SENTINEL_FIXTURE_DIR = path.join(FRONTDOOR_ROOT, "tests", "fixtures", "sentinel");
+const ARCHITECTURE_SCRIPT_PATH = path.join(FRONTDOOR_ROOT, "scripts", "check-portal-css-architecture.mjs");
 const LAYER_PARITY_SCRIPT_PATH = path.join(FRONTDOOR_ROOT, "scripts", "check-portal-css-layer-parity.mjs");
 const PYTHON_LAYER_PARITY_VALIDATOR_PATH = path.join(
   REPO_ROOT,
@@ -219,6 +220,26 @@ function runPhase11SurfaceFixtureFailure(fixture) {
   assert.fail("Phase 11 surface fixture unexpectedly passed");
 }
 
+function runPhase12ComponentFixture(fixture) {
+  const tempDir = mkdtempSync(path.join(tmpdir(), "portal-phase12-component-"));
+  const fixturePath = path.join(tempDir, "phase12.json");
+  writeFileSync(fixturePath, `${JSON.stringify(fixture, null, 2)}\n`, "utf8");
+  try {
+    return runNodeScript("scripts/check-portal-css-architecture.mjs", "--check-phase12-component-fixture", fixturePath);
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
+}
+
+function runPhase12ComponentFixtureFailure(fixture) {
+  try {
+    runPhase12ComponentFixture(fixture);
+  } catch (error) {
+    return `${error.stdout || ""}${error.stderr || ""}`;
+  }
+  assert.fail("Phase 12 component fixture unexpectedly passed");
+}
+
 function phase10AdditiveDuplicate(overrides = {}) {
   const selector = overrides.selector || ".owned";
   return {
@@ -287,6 +308,43 @@ function phase11SurfaceDuplicate(overrides = {}) {
         declarations: [["border-color", "var(--ux-border-subtle)", false]],
         declarationSignature: "chrome",
         properties: ["border-color"]
+      }
+    ],
+    ...overrides
+  };
+}
+
+function phase12ComponentDuplicate(overrides = {}) {
+  const selector = overrides.selector || ".ambient-orb";
+  return {
+    key: overrides.key || `${selector}|||components|||`,
+    selector,
+    layer: "components",
+    context: overrides.context || [],
+    stateContext: [],
+    category: "additive",
+    hotspot: false,
+    removalStatus: "removable-later",
+    records: overrides.records || [
+      {
+        source: "web/secure-landing/portal-src/styles/components/shell-foundation.css",
+        line: 322,
+        column: 1,
+        layer: "components",
+        selectorList: [".ambient-veil", selector],
+        declarations: [["position", "absolute", false], ["inset", "auto", false]],
+        declarationSignature: "ambient-base",
+        properties: ["inset", "position"]
+      },
+      {
+        source: "web/secure-landing/portal-src/styles/components/shell-foundation.css",
+        line: 417,
+        column: 1,
+        layer: "components",
+        selectorList: [selector],
+        declarations: [["border-radius", "999px", false], ["filter", "blur(34px)", false]],
+        declarationSignature: "ambient-singleton",
+        properties: ["border-radius", "filter"]
       }
     ],
     ...overrides
@@ -761,6 +819,143 @@ test("portal CSS Phase 11 surface fixtures constrain selector-list consolidation
   );
 });
 
+test("portal CSS Phase 12 component fixtures constrain singleton consolidation", () => {
+  const ambientOrb = phase12ComponentDuplicate();
+  const ambientRing = phase12ComponentDuplicate({
+    key: ".ambient-ring|||components|||",
+    selector: ".ambient-ring",
+    records: [
+      {
+        source: "web/secure-landing/portal-src/styles/components/shell-foundation.css",
+        line: 322,
+        column: 1,
+        layer: "components",
+        selectorList: [".ambient-veil", ".ambient-ring"],
+        declarations: [["position", "absolute", false], ["inset", "auto", false]],
+        declarationSignature: "ambient-base",
+        properties: ["inset", "position"]
+      },
+      {
+        source: "web/secure-landing/portal-src/styles/components/shell-foundation.css",
+        line: 460,
+        column: 1,
+        layer: "components",
+        selectorList: [".ambient-ring"],
+        declarations: [["border", "1px solid rgba(255, 255, 255, 0.22)", false]],
+        declarationSignature: "ambient-ring-singleton",
+        properties: ["border"]
+      }
+    ]
+  });
+  const overviewActions = phase12ComponentDuplicate({
+    key: ".overview-actions|||components|||@media (max-width: 767px)",
+    selector: ".overview-actions",
+    context: ["@media (max-width: 767px)"],
+    records: [
+      {
+        source: "web/secure-landing/portal-src/styles/components/operator-console.css",
+        line: 523,
+        column: 5,
+        layer: "components",
+        selectorList: [".overview-actions", ".build-stepper-actions-inline"],
+        declarations: [["justify-content", "stretch", false]],
+        declarationSignature: "mobile-justify",
+        properties: ["justify-content"]
+      },
+      {
+        source: "web/secure-landing/portal-src/styles/components/operator-console.css",
+        line: 528,
+        column: 5,
+        layer: "components",
+        selectorList: [".overview-actions"],
+        declarations: [["grid-template-columns", "1fr", false], ["width", "100%", false]],
+        declarationSignature: "mobile-overview-grid",
+        properties: ["grid-template-columns", "width"]
+      }
+    ]
+  });
+  const outOfScope = phase12ComponentDuplicate({
+    key: ".review-status-banner|||components|||",
+    selector: ".review-status-banner"
+  });
+  const conflictingPermanent = phase12ComponentDuplicate({
+    key: ".ambient-sweep|||components|||",
+    selector: ".ambient-sweep",
+    category: "conflicting",
+    removalStatus: "permanent"
+  });
+  const hotspot = phase12ComponentDuplicate({
+    key: ".hero-action|||components|||",
+    selector: ".hero-action",
+    hotspot: true
+  });
+  const specificityChanging = phase12ComponentDuplicate({
+    key: ".ambient-orb|||components|||",
+    selector: ".ambient-orb",
+    records: [
+      {
+        source: "web/secure-landing/portal-src/styles/components/shell-foundation.css",
+        line: 322,
+        column: 1,
+        layer: "components",
+        ruleSelector: ":where(.ambient-orb)",
+        selectorList: [".ambient-orb"],
+        declarations: [["position", "absolute", false]],
+        declarationSignature: "ambient-base",
+        properties: ["position"]
+      },
+      {
+        source: "web/secure-landing/portal-src/styles/components/shell-foundation.css",
+        line: 417,
+        column: 1,
+        layer: "components",
+        selectorList: [".ambient-orb"],
+        declarations: [["filter", "blur(34px)", false]],
+        declarationSignature: "ambient-singleton",
+        properties: ["filter"]
+      }
+    ]
+  });
+
+  assert.match(
+    runPhase12ComponentFixture({
+      duplicates: [ambientOrb, ambientRing, overviewActions, outOfScope, conflictingPermanent, hotspot],
+      expectedCandidates: [
+        { key: ambientOrb.key, candidateStatus: "safe" },
+        { key: ambientRing.key, candidateStatus: "safe" },
+        { key: overviewActions.key, candidateStatus: "safe" },
+        { key: outOfScope.key, candidateStatus: "deferred", unsafeReason: "selector-not-phase12-target" },
+        { key: conflictingPermanent.key, candidateStatus: "deferred", unsafeReason: "conflicting-permanent" },
+        { key: hotspot.key, candidateStatus: "deferred", unsafeReason: "hotspot" }
+      ]
+    }),
+    /portal css phase12 component fixture: OK/
+  );
+
+  assert.match(
+    runPhase12ComponentFixture({
+      duplicates: [specificityChanging],
+      expectedCandidates: [
+        {
+          key: specificityChanging.key,
+          candidateStatus: "deferred",
+          unsafeReason: "specificity-changing-grouping"
+        }
+      ]
+    }),
+    /portal css phase12 component fixture: OK/
+  );
+
+  assert.match(
+    runPhase12ComponentFixtureFailure({
+      duplicates: [ambientOrb],
+      expectedState: { phase: "phase-12-component-singleton-consolidation" },
+      phase12ComponentSingletonConsolidationState: { phase: "stale" }
+    }),
+    /phase12ComponentSingletonConsolidationState is stale/
+  );
+});
+
 test("portal CSS layer parity make target checks generated artifact freshness", () => {
   const makefile = readFileSync(MAKEFILE_PATH, "utf8");
   const start = makefile.indexOf("validate-portal-css-layer-parity:");
@@ -823,6 +1018,69 @@ test("portal CSS Phase 11 consolidation preserves explicit surface boundaries", 
   ]);
   assert.ok(consoleToneRule, "console action rail shared tone background rule must exist");
   assert.equal(declarationsForRule(consoleToneRule).get("background"), "var(--ux-surface-overlay)");
+});
+
+test("portal CSS Phase 12 consolidation preserves ambient and mobile boundaries", () => {
+  const shellFoundation = readFileSync(
+    path.join(FRONTDOOR_ROOT, "portal-src", "styles", "components", "shell-foundation.css"),
+    "utf8"
+  );
+  const shellRoot = postcss.parse(shellFoundation);
+  const ambientBaseRule = findRuleBySelectors(shellRoot, [
+    ".ambient-veil",
+    ".ambient-grid",
+    ".ambient-sweep",
+    ".ambient-focus"
+  ]);
+  assert.ok(ambientBaseRule, "shared ambient positioning rule must remain for non-singleton ambient layers");
+  assert.equal(declarationsForRule(ambientBaseRule).get("position"), "absolute");
+  assert.equal(declarationsForRule(ambientBaseRule).get("inset"), "auto");
+  assert.equal(findRuleBySelectors(shellRoot, [".ambient-veil", ".ambient-grid", ".ambient-sweep", ".ambient-focus", ".ambient-orb", ".ambient-ring"]), null);
+
+  const orbRule = findRuleBySelectors(shellRoot, [".ambient-orb"]);
+  const ringRule = findRuleBySelectors(shellRoot, [".ambient-ring"]);
+  assert.ok(orbRule, "ambient orb singleton rule must exist");
+  assert.ok(ringRule, "ambient ring singleton rule must exist");
+  for (const rule of [orbRule, ringRule]) {
+    const declarations = declarationsForRule(rule);
+    assert.equal(declarations.get("position"), "absolute");
+    assert.equal(declarations.get("inset"), "auto");
+  }
+  const willChangeRule = findRuleBySelectors(shellRoot, [
+    ".is-animating-ambient .ambient-veil",
+    ".is-animating-ambient .ambient-grid",
+    ".is-animating-ambient .ambient-sweep",
+    ".is-animating-ambient .ambient-focus",
+    ".is-animating-ambient .ambient-orb",
+    ".is-animating-ambient .ambient-ring"
+  ]);
+  assert.ok(willChangeRule, "ambient animation hint rule must keep orb and ring coverage");
+  assert.equal(declarationsForRule(willChangeRule).get("will-change"), "transform, opacity");
+  assert.ok((orbRule.source?.start?.line || 0) < (findRuleBySelectors(shellRoot, [".ambient-orb--a"])?.source?.start?.line || 0));
+  assert.ok((ringRule.source?.start?.line || 0) < (findRuleBySelectors(shellRoot, [".ambient-ring--a"])?.source?.start?.line || 0));
+
+  const operatorConsole = readFileSync(
+    path.join(FRONTDOOR_ROOT, "portal-src", "styles", "components", "operator-console.css"),
+    "utf8"
+  );
+  const operatorRoot = postcss.parse(operatorConsole);
+  let mobileRoot = null;
+  operatorRoot.walkAtRules("media", (atRule) => {
+    if (atRule.params === "(max-width: 767px)") {
+      mobileRoot = atRule;
+    }
+  });
+  assert.ok(mobileRoot, "mobile operator-console media rule must exist");
+  const buildStepperRule = findRuleBySelectors(mobileRoot, [".build-stepper-actions-inline"]);
+  const overviewRule = findRuleBySelectors(mobileRoot, [".overview-actions"]);
+  assert.ok(buildStepperRule, "build-stepper mobile rule must stay isolated");
+  assert.ok(overviewRule, "overview mobile singleton rule must exist");
+  assert.equal(findRuleBySelectors(mobileRoot, [".overview-actions", ".build-stepper-actions-inline"]), null);
+  assert.equal(declarationsForRule(buildStepperRule).get("justify-content"), "stretch");
+  const overviewDeclarations = declarationsForRule(overviewRule);
+  assert.equal(overviewDeclarations.get("justify-content"), "stretch");
+  assert.equal(overviewDeclarations.get("grid-template-columns"), "1fr");
+  assert.equal(overviewDeclarations.get("width"), "100%");
 });
 
 test("portal CSS ownership drain keeps utilities layer honest", () => {
@@ -892,6 +1150,7 @@ test("portal CSS ownership drain keeps utilities layer honest", () => {
   assert.equal(ownershipDrain.phase10AdditiveConsolidationState.parityBaselineChanged, false);
   assert.equal(ownershipDrain.phase11SurfaceListConsolidationState.phase, "phase-11-css-surface-list-consolidation");
   assert.equal(ownershipDrain.phase11SurfaceListConsolidationState.targetFile, "web/secure-landing/portal-src/styles/components/surface-normalization.css");
+  assert.equal(ownershipDrain.phase11SurfaceListConsolidationState.baselineSha256, "ab9f4a92eb699d811a85d737ef3f5cb2b285e6c809afcf34bbf179e1e229d17a");
   assert.equal(ownershipDrain.phase11SurfaceListConsolidationState.duplicateContextCountBefore, 85);
   assert.equal(ownershipDrain.phase11SurfaceListConsolidationState.duplicateContextCountAfter, 76);
   assert.equal(ownershipDrain.phase11SurfaceListConsolidationState.additiveDuplicateContextCountBefore, 29);
@@ -901,10 +1160,72 @@ test("portal CSS ownership drain keeps utilities layer honest", () => {
   assert.equal(ownershipDrain.phase11SurfaceListConsolidationState.unownedDuplicateContextCountAfter, 0);
   assert.equal(ownershipDrain.phase11SurfaceListConsolidationState.hotspotDuplicateContextCountAfter, 0);
   assert.equal(ownershipDrain.phase11SurfaceListConsolidationState.consolidatedContextCount, 9);
+  assert.equal(ownershipDrain.phase11SurfaceListConsolidationState.expectedConsolidatedContextCount, 9);
+  assert.deepEqual(ownershipDrain.phase11SurfaceListConsolidationState.consolidatedContexts, [
+    "#artifactMetadataBar|||components|||",
+    "#artifactMetadataCard|||components|||",
+    "#artifactPreviewStage|||components|||",
+    "#reconstructionRuntimeSummary|||components|||",
+    ".review-compare-summary|||components|||",
+    ".review-status-banner[data-tone=\"error\"]|||components|||",
+    ".review-status-banner[data-tone=\"info\"]|||components|||",
+    ".review-status-banner[data-tone=\"ready\"]|||components|||",
+    ".review-status-banner[data-tone=\"warning\"]|||components|||"
+  ]);
   assert.deepEqual(ownershipDrain.phase11SurfaceListConsolidationState.remainingTargetContexts, []);
+  assert.equal(ownershipDrain.phase11SurfaceListConsolidationState.unexpectedResolvedContextCount, 0);
+  assert.equal(ownershipDrain.phase11SurfaceListConsolidationState.deferredOutOfScopeCandidateCount, 20);
+  assert.deepEqual(ownershipDrain.phase11SurfaceListConsolidationState.deferredReasonCounts, {
+    "selector-not-phase11-target": 20
+  });
+  assert.equal(ownershipDrain.phase11SurfaceListConsolidationState.removedRawBytes, 246);
+  assert.equal(ownershipDrain.phase11SurfaceListConsolidationState.removedGzipBytes, 9);
+  assert.equal(ownershipDrain.phase11SurfaceListConsolidationState.generatedRawBytesBefore, 80599);
+  assert.equal(ownershipDrain.phase11SurfaceListConsolidationState.generatedRawBytesAfter, 80353);
+  assert.equal(ownershipDrain.phase11SurfaceListConsolidationState.generatedRawByteDelta, -246);
+  assert.equal(ownershipDrain.phase11SurfaceListConsolidationState.generatedGzipBytesBefore, 15721);
+  assert.equal(ownershipDrain.phase11SurfaceListConsolidationState.generatedGzipBytesAfter, 15712);
+  assert.equal(ownershipDrain.phase11SurfaceListConsolidationState.generatedGzipByteDelta, -9);
+  assert.equal(
+    ownershipDrain.phase11SurfaceListConsolidationState.generatedPortalCssHashBefore,
+    "fce12e29f1800375b5c34e1f0e1ebc9d3981ab1a6f731bea6a3e0e0d2212151e"
+  );
+  assert.equal(
+    ownershipDrain.phase11SurfaceListConsolidationState.generatedPortalCssHashAfter,
+    "67a600aafdfc066a8adf373e1323b287939977ebc306d4e1c0635069fddbbd87"
+  );
+  assert.equal(ownershipDrain.phase11SurfaceListConsolidationState.renderedPortalCssFingerprintBefore, "d72696ab972c");
+  assert.equal(ownershipDrain.phase11SurfaceListConsolidationState.renderedPortalCssFingerprintAfter, "8f492bf35cbe");
   assert.equal(ownershipDrain.phase11SurfaceListConsolidationState.sentinelStatePreserved, true);
   assert.equal(ownershipDrain.phase11SurfaceListConsolidationState.parityBaselineChanged, false);
-  assert.equal(duplicateBaseline.duplicateKeys.length, 76);
+  assert.match(
+    readFileSync(ARCHITECTURE_SCRIPT_PATH, "utf8"),
+    /report\.phase11SurfaceListConsolidationState = expectedPhase11State;/
+  );
+  assert.equal(ownershipDrain.phase12ComponentSingletonConsolidationState.phase, "phase-12-component-singleton-consolidation");
+  assert.deepEqual(ownershipDrain.phase12ComponentSingletonConsolidationState.targetSelectors, [
+    ".ambient-orb",
+    ".ambient-ring",
+    ".overview-actions @media (max-width: 767px)"
+  ]);
+  assert.equal(ownershipDrain.phase12ComponentSingletonConsolidationState.duplicateContextCountBefore, 76);
+  assert.equal(ownershipDrain.phase12ComponentSingletonConsolidationState.duplicateContextCountAfter, 73);
+  assert.equal(ownershipDrain.phase12ComponentSingletonConsolidationState.additiveDuplicateContextCountBefore, 20);
+  assert.equal(ownershipDrain.phase12ComponentSingletonConsolidationState.additiveDuplicateContextCountAfter, 17);
+  assert.equal(ownershipDrain.phase12ComponentSingletonConsolidationState.conflictingPermanentContextCountBefore, 56);
+  assert.equal(ownershipDrain.phase12ComponentSingletonConsolidationState.conflictingPermanentContextCountAfter, 56);
+  assert.equal(ownershipDrain.phase12ComponentSingletonConsolidationState.unownedDuplicateContextCountAfter, 0);
+  assert.equal(ownershipDrain.phase12ComponentSingletonConsolidationState.hotspotDuplicateContextCountAfter, 0);
+  assert.equal(ownershipDrain.phase12ComponentSingletonConsolidationState.consolidatedContextCount, 3);
+  assert.equal(ownershipDrain.phase12ComponentSingletonConsolidationState.expectedConsolidatedContextCount, 3);
+  assert.deepEqual(ownershipDrain.phase12ComponentSingletonConsolidationState.remainingTargetContexts, []);
+  assert.equal(
+    ownershipDrain.phase12ComponentSingletonConsolidationState.nonTargetAdditiveCandidatesDeferredReason,
+    "selector-not-phase12-target"
+  );
+  assert.equal(ownershipDrain.phase12ComponentSingletonConsolidationState.sentinelStatePreserved, true);
+  assert.equal(ownershipDrain.phase12ComponentSingletonConsolidationState.parityBaselineChanged, false);
+  assert.equal(duplicateBaseline.duplicateKeys.length, 73);
   assert.ok(
     duplicateBaseline.duplicateKeys.every((entry) => entry.phase === "phase-9-duplicate-ownership-closure"),
     "all duplicate baseline entries must be Phase 9-owned"
@@ -955,6 +1276,9 @@ test("portal CSS parity census forces feature states and canonical theme hooks",
   assert.match(validator, /banner\.dataset\.tone = tone/);
   assert.match(validator, /finally \{\{\n    restore\(\);/);
   assert.match(validator, /_validate_review_status_tone_states\(connection\)/);
+  assert.match(validator, /_validate_overview_mobile_states\(connection\)/);
+  assert.match(validator, /"width": 767/);
+  assert.match(validator, /"width": 375/);
 });
 
 test("portal CSS layer dry-run compatibility writes the validated CSS artifact", () => {

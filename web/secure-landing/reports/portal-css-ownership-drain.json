@@ -3621,5 +3621,51 @@
     "renderedPortalCssFingerprintAfter": "8f492bf35cbe",
     "sentinelStatePreserved": true,
     "parityBaselineChanged": false
+  },
+  "phase12ComponentSingletonConsolidationState": {
+    "phase": "phase-12-component-singleton-consolidation",
+    "targetSelectors": [
+      ".ambient-orb",
+      ".ambient-ring",
+      ".overview-actions @media (max-width: 767px)"
+    ],
+    "baselinePath": "web/secure-landing/portal-src/styles/architecture-baseline.json",
+    "baselineSha256": "a76052f0ecddc719c0182610d58f85b8f8ebe4b87463f1d8632401f36e3635bf",
+    "duplicateContextCountBefore": 76,
+    "duplicateContextCountAfter": 73,
+    "additiveDuplicateContextCountBefore": 20,
+    "additiveDuplicateContextCountAfter": 17,
+    "conflictingPermanentContextCountBefore": 56,
+    "conflictingPermanentContextCountAfter": 56,
+    "unownedDuplicateContextCountAfter": 0,
+    "hotspotDuplicateContextCountAfter": 0,
+    "consolidatedContextCount": 3,
+    "expectedConsolidatedContextCount": 3,
+    "consolidatedContexts": [
+      ".ambient-orb|||components|||",
+      ".ambient-ring|||components|||",
+      ".overview-actions|||components|||@media (max-width: 767px)"
+    ],
+    "remainingTargetContexts": [],
+    "unexpectedResolvedContextCount": 0,
+    "nonTargetAdditiveCandidatesDeferredReason": "selector-not-phase12-target",
+    "deferredOutOfScopeCandidateCount": 17,
+    "deferredReasonCounts": {
+      "selector-not-phase12-target": 17
+    },
+    "removedRawBytes": 0,
+    "removedGzipBytes": 0,
+    "generatedRawBytesBefore": 80353,
+    "generatedRawBytesAfter": 80390,
+    "generatedRawByteDelta": 37,
+    "generatedGzipBytesBefore": 15712,
+    "generatedGzipBytesAfter": 15713,
+    "generatedGzipByteDelta": 1,
+    "generatedPortalCssHashBefore": "67a600aafdfc066a8adf373e1323b287939977ebc306d4e1c0635069fddbbd87",
+    "generatedPortalCssHashAfter": "5c82d054b928ac320c932cd9eb133fb2f39cfdc9e865c648cc9987de68c0e37b",
+    "renderedPortalCssFingerprintBefore": "8f492bf35cbe",
+    "renderedPortalCssFingerprintAfter": "61c134a0012d",
+    "sentinelStatePreserved": true,
+    "parityBaselineChanged": false
   }
 }
