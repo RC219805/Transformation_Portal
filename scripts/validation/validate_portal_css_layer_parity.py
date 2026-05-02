@@ -1090,6 +1090,159 @@ def _validate_skeleton_primitive_states(connection: DevToolsConnection) -> None:
         raise SmokeFailure("Skeleton primitive parity probe failed:\n" + "\n".join(failures))
 
 
+def _surface_loading_probe_expression(parity_state: str) -> str:
+    state_json = json.dumps(parity_state)
+    probe_guard = _portal_parity_probe_guard_source()
+    return f"""
+(() => {{
+  {probe_guard}
+  const parityState = {state_json};
+  const theme = parityState === 'light' ? 'light' : 'dark';
+  const guard = createPortalParityProbeGuard();
+  let probe = null;
+  guard.captureStorage('tp_theme', 'tp_theme_version');
+  try {{
+  try {{
+    window.localStorage.setItem('tp_theme', theme);
+    window.localStorage.setItem('tp_theme_version', '2');
+  }} catch (_error) {{}}
+  const root = document.documentElement;
+  root.classList.toggle('light', theme === 'light');
+  root.classList.toggle('dark', theme === 'dark');
+  root.classList.remove('performance-lite');
+  if (typeof updateUIFromState === 'function') {{
+    updateUIFromState();
+  }}
+  probe = document.createElement('section');
+  probe.className = 'surface-loading';
+  probe.setAttribute('data-ui', 'surface-loading-phase15-probe');
+  probe.setAttribute('aria-busy', 'true');
+  probe.style.width = '320px';
+  probe.style.height = '96px';
+  probe.style.margin = '0';
+  probe.style.padding = '0';
+  document.body.appendChild(probe);
+  const style = window.getComputedStyle(probe);
+  const after = window.getComputedStyle(probe, '::after');
+  const rect = probe.getBoundingClientRect();
+  return {{
+    parityState,
+    surface: {{
+      present: true,
+      rect: {{
+        width: Number(rect.width.toFixed(2)),
+        height: Number(rect.height.toFixed(2))
+      }},
+      style: {{
+        position: style.position,
+        borderTopWidth: style.borderTopWidth,
+        borderTopStyle: style.borderTopStyle,
+        borderTopColor: style.borderTopColor,
+        backgroundImage: style.backgroundImage,
+        backgroundColor: style.backgroundColor,
+        boxShadow: style.boxShadow,
+        transitionProperty: style.transitionProperty,
+        transitionDuration: style.transitionDuration,
+        transform: style.transform
+      }},
+      after: {{
+        content: after.content,
+        position: after.position,
+        top: after.top,
+        height: after.height,
+        borderRadius: after.borderRadius,
+        pointerEvents: after.pointerEvents,
+        opacity: after.opacity,
+        backgroundImage: after.backgroundImage,
+        transitionDuration: after.transitionDuration,
+        transform: after.transform
+      }}
+    }}
+  }};
+  }} finally {{
+    if (probe && probe.parentNode) {{
+      probe.parentNode.removeChild(probe);
+    }}
+    guard.restore();
+  }}
+}})()
+"""
+
+
+def _validate_surface_loading_states(connection: DevToolsConnection) -> None:
+    failures: list[str] = []
+    expected_border_colors = {
+        "light": "rgba(148, 163, 184, 0.16)",
+        "dark": "rgba(71, 85, 105, 0.48)",
+        "reduced-motion": "rgba(71, 85, 105, 0.48)",
+    }
+    for state in ("light", "dark", "reduced-motion"):
+        if state == "reduced-motion":
+            connection.call(
+                "Emulation.setEmulatedMedia",
+                {"features": [{"name": "prefers-reduced-motion", "value": "reduce"}]},
+                timeout_seconds=20.0,
+            )
+        else:
+            connection.call("Emulation.setEmulatedMedia", {"features": []}, timeout_seconds=20.0)
+        connection.evaluate(_surface_loading_probe_expression(state), timeout_seconds=20.0)
+        connection.evaluate(_style_settle_expression(), timeout_seconds=20.0)
+        result = connection.evaluate(_surface_loading_probe_expression(state), timeout_seconds=20.0)
+        if not isinstance(result, dict):
+            failures.append(f"{state}: surface-loading probe did not return an object")
+            continue
+        surface = result.get("surface")
+        if not isinstance(surface, dict):
+            failures.append(f"{state}: surface-loading probe returned malformed state")
+            continue
+        rect = surface.get("rect") or {}
+        if float(rect.get("height") or 0) <= 0:
+            failures.append(f"{state}: surface-loading probe has no layout height")
+        style = surface.get("style") or {}
+        if style.get("position") != "relative":
+            failures.append(f"{state}: surface-loading position is {style.get('position')!r}")
+        if style.get("borderTopWidth") != "1px" or style.get("borderTopStyle") != "solid":
+            failures.append(
+                f"{state}: surface-loading border is {style.get('borderTopWidth')!r} {style.get('borderTopStyle')!r}"
+            )
+        if style.get("borderTopColor") != expected_border_colors[state]:
+            failures.append(f"{state}: surface-loading border color is {style.get('borderTopColor')!r}")
+        if "linear-gradient" not in str(style.get("backgroundImage") or ""):
+            failures.append(f"{state}: surface-loading background gradient is missing")
+        if style.get("boxShadow") in {"", "none"}:
+            failures.append(f"{state}: surface-loading box-shadow is missing")
+        after = surface.get("after") or {}
+        if after.get("content") != '""':
+            failures.append(f"{state}: surface-loading ::after content is {after.get('content')!r}")
+        if after.get("position") != "absolute":
+            failures.append(f"{state}: surface-loading ::after position is {after.get('position')!r}")
+        if after.get("top") != "12px":
+            failures.append(f"{state}: surface-loading ::after top is {after.get('top')!r}")
+        if after.get("height") != "2px":
+            failures.append(f"{state}: surface-loading ::after height is {after.get('height')!r}")
+        if after.get("borderRadius") != "999px":
+            failures.append(f"{state}: surface-loading ::after border-radius is {after.get('borderRadius')!r}")
+        if after.get("pointerEvents") != "none":
+            failures.append(f"{state}: surface-loading ::after pointer-events is {after.get('pointerEvents')!r}")
+        if after.get("opacity") != "0.82":
+            failures.append(f"{state}: surface-loading ::after opacity is {after.get('opacity')!r}")
+        if "linear-gradient" not in str(after.get("backgroundImage") or ""):
+            failures.append(f"{state}: surface-loading ::after background gradient is missing")
+        if state == "reduced-motion":
+            if style.get("transitionDuration") not in {"0s", "1e-05s"}:
+                failures.append(f"{state}: surface-loading transition duration is {style.get('transitionDuration')!r}")
+            if style.get("transform") != "none":
+                failures.append(f"{state}: surface-loading transform is {style.get('transform')!r}")
+            if after.get("transitionDuration") not in {"0s", "1e-05s"}:
+                failures.append(f"{state}: surface-loading ::after transition duration is {after.get('transitionDuration')!r}")
+            if after.get("transform") != "none":
+                failures.append(f"{state}: surface-loading ::after transform is {after.get('transform')!r}")
+        connection.call("Emulation.setEmulatedMedia", {"features": []}, timeout_seconds=20.0)
+
+    if failures:
+        raise SmokeFailure("Surface loading parity probe failed:\n" + "\n".join(failures))
+
+
 def _enable_portal_feature_rollouts_for_spawn() -> dict[str, Optional[str]]:
     previous: dict[str, Optional[str]] = {}
     if not {
@@ -1482,6 +1635,7 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
         _validate_overview_mobile_states(connection)
         _validate_interaction_outline_states(connection)
         _validate_skeleton_primitive_states(connection)
+        _validate_surface_loading_states(connection)
 
         runtime_utility_classes = _collect_runtime_utility_classes(
             connection,
