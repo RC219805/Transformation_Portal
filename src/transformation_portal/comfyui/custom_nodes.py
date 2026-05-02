@@ -225,8 +225,7 @@ class SkyGANNode(BaseNode):
             hour_of_day = self._TIME_OF_DAY_HOURS[time_of_day]
         except KeyError:
             raise ValueError(
-                f"Unknown time_of_day {time_of_day!r}; expected one of "
-                f"{sorted(self._TIME_OF_DAY_HOURS)}"
+                f"Unknown time_of_day {time_of_day!r}; expected one of {sorted(self._TIME_OF_DAY_HOURS)}"
             ) from None
         time_params = presets.get_sky_parameters(
             location=location,

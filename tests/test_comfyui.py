@@ -315,9 +315,6 @@ class TestSkyGANNode:
 
     def test_execute_rejects_unknown_time_of_day(self):
         """Unknown time_of_day must fail fast rather than silently defaulting."""
-        import numpy as np
-        import pytest
-
         from transformation_portal.comfyui.custom_nodes import SkyGANNode
 
         node = SkyGANNode()
