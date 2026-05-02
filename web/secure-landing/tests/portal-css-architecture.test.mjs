@@ -177,6 +177,63 @@ function runDuplicateBaselineFixtureFailure(baseline, duplicates) {
   assert.fail("duplicate baseline fixture unexpectedly passed");
 }
 
+function runPhase10AdditiveFixture(fixture) {
+  const tempDir = mkdtempSync(path.join(tmpdir(), "portal-phase10-additive-"));
+  const fixturePath = path.join(tempDir, "phase10.json");
+  writeFileSync(fixturePath, `${JSON.stringify(fixture, null, 2)}\n`, "utf8");
+  try {
+    return runNodeScript("scripts/check-portal-css-architecture.mjs", "--check-phase10-additive-fixture", fixturePath);
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
+}
+
+function runPhase10AdditiveFixtureFailure(fixture) {
+  try {
+    runPhase10AdditiveFixture(fixture);
+  } catch (error) {
+    return `${error.stdout || ""}${error.stderr || ""}`;
+  }
+  assert.fail("Phase 10 additive fixture unexpectedly passed");
+}
+
+function phase10AdditiveDuplicate(overrides = {}) {
+  const selector = overrides.selector || ".owned";
+  return {
+    key: `${selector}|||components|||`,
+    selector,
+    layer: "components",
+    context: [],
+    stateContext: [],
+    category: "additive",
+    hotspot: false,
+    removalStatus: "removable-later",
+    records: [
+      {
+        source: "web/secure-landing/portal-src/styles/components/example.css",
+        line: 1,
+        column: 1,
+        layer: "components",
+        selectorList: [selector],
+        declarations: [["min-height", "2rem", false]],
+        declarationSignature: "singleton",
+        properties: ["min-height"]
+      },
+      {
+        source: "web/secure-landing/portal-src/styles/components/example.css",
+        line: 4,
+        column: 1,
+        layer: "components",
+        selectorList: [".secondary", selector],
+        declarations: [["background", "var(--surface)", false]],
+        declarationSignature: "list",
+        properties: ["background"]
+      }
+    ],
+    ...overrides
+  };
+}
+
 test("portal CSS lint script checks generated artifact freshness and architecture gates", () => {
   const packageJson = JSON.parse(readFileSync(PACKAGE_JSON_PATH, "utf8"));
   const lintCss = String(packageJson.scripts["lint:css"] || "");
@@ -300,6 +357,150 @@ test("portal CSS duplicate baseline fixtures enforce Phase 9 ownership", () => {
   );
 });
 
+test("portal CSS Phase 10 additive fixtures classify safe and deferred candidates", () => {
+  const safeDuplicate = phase10AdditiveDuplicate();
+  const shorthandDuplicate = phase10AdditiveDuplicate({
+    key: ".shorthand|||components|||",
+    selector: ".shorthand",
+    records: [
+      {
+        source: "web/secure-landing/portal-src/styles/components/example.css",
+        line: 1,
+        column: 1,
+        layer: "components",
+        selectorList: [".shorthand"],
+        declarations: [["background-color", "white", false]],
+        declarationSignature: "singleton",
+        properties: ["background-color"]
+      },
+      {
+        source: "web/secure-landing/portal-src/styles/components/example.css",
+        line: 4,
+        column: 1,
+        layer: "components",
+        selectorList: [".secondary", ".shorthand"],
+        declarations: [["background", "black", false]],
+        declarationSignature: "list",
+        properties: ["background"]
+      }
+    ]
+  });
+  const customPropertyDuplicate = phase10AdditiveDuplicate({
+    key: ".custom-prop|||components|||",
+    selector: ".custom-prop",
+    records: [
+      {
+        source: "web/secure-landing/portal-src/styles/components/example.css",
+        line: 1,
+        column: 1,
+        layer: "components",
+        selectorList: [".custom-prop"],
+        declarations: [["--portal-offset", "1rem", false]],
+        declarationSignature: "singleton",
+        properties: ["--portal-offset"]
+      },
+      {
+        source: "web/secure-landing/portal-src/styles/components/example.css",
+        line: 4,
+        column: 1,
+        layer: "components",
+        selectorList: [".secondary", ".custom-prop"],
+        declarations: [["transform", "translateX(var(--portal-offset))", false]],
+        declarationSignature: "list",
+        properties: ["transform"]
+      }
+    ]
+  });
+  const sourceOrderDuplicate = phase10AdditiveDuplicate({
+    key: ".source-order|||components|||",
+    selector: ".source-order",
+    records: [
+      {
+        source: "web/secure-landing/portal-src/styles/components/example.css",
+        line: 10,
+        column: 1,
+        layer: "components",
+        selectorList: [".source-order"],
+        declarations: [["outline", "none", false]],
+        declarationSignature: "singleton",
+        properties: ["outline"]
+      },
+      {
+        source: "web/secure-landing/portal-src/styles/components/example.css",
+        line: 4,
+        column: 1,
+        layer: "components",
+        selectorList: [".source-order", ".source-order:focus-visible"],
+        declarations: [["color", "red", false]],
+        declarationSignature: "list",
+        properties: ["color"]
+      }
+    ]
+  });
+  const selectorListDuplicate = phase10AdditiveDuplicate({
+    key: ".ambiguous|||components|||",
+    selector: ".ambiguous",
+    records: [
+      {
+        source: "web/secure-landing/portal-src/styles/components/example.css",
+        line: 1,
+        column: 1,
+        layer: "components",
+        selectorList: [".ambiguous"],
+        declarations: [["outline", "none", false]],
+        declarationSignature: "left",
+        properties: ["outline"]
+      },
+      {
+        source: "web/secure-landing/portal-src/styles/components/example.css",
+        line: 4,
+        column: 1,
+        layer: "components",
+        selectorList: [".ambiguous"],
+        declarations: [["color", "red", false]],
+        declarationSignature: "right",
+        properties: ["color"]
+      }
+    ]
+  });
+  const hotspotDuplicate = phase10AdditiveDuplicate({
+    key: ".shell-bg|||components|||",
+    selector: ".shell-bg",
+    hotspot: true
+  });
+
+  assert.match(
+    runPhase10AdditiveFixture({
+      duplicates: [
+        safeDuplicate,
+        shorthandDuplicate,
+        customPropertyDuplicate,
+        sourceOrderDuplicate,
+        selectorListDuplicate,
+        hotspotDuplicate
+      ],
+      expectedCandidates: [
+        { key: safeDuplicate.key, candidateStatus: "safe" },
+        { key: shorthandDuplicate.key, candidateStatus: "deferred", unsafeReason: "shorthand-longhand-overlap" },
+        { key: customPropertyDuplicate.key, candidateStatus: "deferred", unsafeReason: "custom-property-order-sensitive" },
+        { key: sourceOrderDuplicate.key, candidateStatus: "deferred", unsafeReason: "source-order-sensitive" },
+        { key: selectorListDuplicate.key, candidateStatus: "deferred", unsafeReason: "selector-list-ambiguous" },
+        { key: hotspotDuplicate.key, candidateStatus: "deferred", unsafeReason: "hotspot" }
+      ]
+    }),
+    /portal css phase10 additive fixture: OK/
+  );
+
+  assert.match(
+    runPhase10AdditiveFixtureFailure({
+      duplicates: [safeDuplicate],
+      expectedState: { phase: "phase-10-css-additive-duplicate-consolidation" },
+      phase10AdditiveConsolidationState: { phase: "stale" }
+    }),
+    /phase10AdditiveConsolidationState is stale/
+  );
+});
+
 test("portal CSS layer parity make target checks generated artifact freshness", () => {
   const makefile = readFileSync(MAKEFILE_PATH, "utf8");
   const start = makefile.indexOf("validate-portal-css-layer-parity:");
@@ -376,11 +577,25 @@ test("portal CSS ownership drain keeps utilities layer honest", () => {
   assert.equal(ownershipDrain.phase9DuplicateState.unownedDuplicateContextCount, 0);
   assert.equal(ownershipDrain.phase9DuplicateState.hotspotDuplicateContextCount, 0);
   assert.equal(ownershipDrain.phase9DuplicateState.consolidatedDuplicateContextCount, 0);
-  assert.equal(ownershipDrain.phase9DuplicateState.reclassifiedDuplicateContextCount, 1);
+  assert.equal(
+    ownershipDrain.phase9DuplicateState.reclassifiedDuplicateContextCount,
+    ownershipDrain.phase9DuplicateState.duplicateContextCountBefore - duplicateBaseline.duplicateKeys.length
+  );
   assert.equal(ownershipDrain.phase9DuplicateState.removedRawBytes, 0);
   assert.equal(ownershipDrain.phase9DuplicateState.removedGzipBytes, 0);
   assert.equal(ownershipDrain.phase9DuplicateState.sentinelStatePreserved, true);
   assert.equal(ownershipDrain.phase9DuplicateState.parityBaselineChanged, false);
+  assert.equal(ownershipDrain.phase10AdditiveConsolidationState.phase, "phase-10-css-additive-duplicate-consolidation");
+  assert.equal(ownershipDrain.phase10AdditiveConsolidationState.additiveDuplicateContextCountBefore, 30);
+  assert.equal(ownershipDrain.phase10AdditiveConsolidationState.additiveDuplicateContextCountAfter, 29);
+  assert.equal(ownershipDrain.phase10AdditiveConsolidationState.safeCandidateCountBefore, 1);
+  assert.equal(ownershipDrain.phase10AdditiveConsolidationState.safeCandidateCountAfter, 0);
+  assert.equal(ownershipDrain.phase10AdditiveConsolidationState.consolidatedCandidateCount, 1);
+  assert.equal(ownershipDrain.phase10AdditiveConsolidationState.deferredCandidateCount, 29);
+  assert.equal(ownershipDrain.phase10AdditiveConsolidationState.unownedDuplicateContextCount, 0);
+  assert.equal(ownershipDrain.phase10AdditiveConsolidationState.hotspotDuplicateContextCount, 0);
+  assert.equal(ownershipDrain.phase10AdditiveConsolidationState.sentinelStatePreserved, true);
+  assert.equal(ownershipDrain.phase10AdditiveConsolidationState.parityBaselineChanged, false);
   assert.ok(
     duplicateBaseline.duplicateKeys.every((entry) => entry.phase === "phase-9-duplicate-ownership-closure"),
     "all duplicate baseline entries must be Phase 9-owned"
