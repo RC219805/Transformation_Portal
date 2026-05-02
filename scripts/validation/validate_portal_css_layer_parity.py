@@ -582,7 +582,8 @@ def _review_status_tone_probe_expression() -> str:
         present: true,
         visible: style.display !== 'none' && style.visibility !== 'hidden' && rect.width > 0 && rect.height > 0,
         backgroundColor: style.backgroundColor,
-        borderColor: style.borderColor
+        borderColor: style.borderColor,
+        boxShadow: style.boxShadow
       }});
     }}
     }}
@@ -613,15 +614,91 @@ def _validate_review_status_tone_states(connection: DevToolsConnection) -> None:
             continue
         if not result.get("visible"):
             failures.append(f"{theme}/{tone}: #reviewStatusBanner not visible")
-        for property_name in ("backgroundColor", "borderColor"):
+        for property_name in ("backgroundColor", "borderColor", "boxShadow"):
             value = str(result.get(property_name) or "").strip()
-            if value in {"", "transparent", "rgba(0, 0, 0, 0)"}:
+            if value in {"", "none", "transparent", "rgba(0, 0, 0, 0)"}:
                 failures.append(f"{theme}/{tone}: #reviewStatusBanner {property_name} unresolved")
     missing = expected - seen
     for theme, tone in sorted(missing):
         failures.append(f"{theme}/{tone}: review status tone state was not probed")
     if failures:
         raise SmokeFailure("Review status tone parity probe failed:\n" + "\n".join(failures))
+
+
+def _review_provenance_probe_expression() -> str:
+    themes = json.dumps(REVIEW_STATUS_THEMES)
+    probe_guard = _portal_parity_probe_guard_source()
+    return f"""
+(async () => {{
+  {probe_guard}
+  const themes = {themes};
+  const results = [];
+  const root = document.documentElement;
+  const guard = createPortalParityProbeGuard();
+  guard.captureStorage('tp_theme', 'tp_theme_version');
+  const probe = document.createElement('div');
+  probe.className = 'review-provenance-item';
+  probe.dataset.ui = 'review-provenance-item-probe';
+  probe.textContent = 'Phase 16 provenance probe';
+  document.body.appendChild(probe);
+  try {{
+    for (const theme of themes) {{
+      try {{
+        window.localStorage.setItem('tp_theme', theme);
+        window.localStorage.setItem('tp_theme_version', '2');
+      }} catch (_error) {{}}
+      root.classList.toggle('light', theme === 'light');
+      root.classList.toggle('dark', theme === 'dark');
+      root.classList.remove('performance-lite');
+      if (typeof updateUIFromState === 'function') {{
+        updateUIFromState();
+      }}
+      await new Promise((resolve) => window.requestAnimationFrame(() => resolve(true)));
+      const style = window.getComputedStyle(probe);
+      const rect = probe.getBoundingClientRect();
+      results.push({{
+        theme,
+        visible: style.display !== 'none' && style.visibility !== 'hidden' && rect.width > 0 && rect.height > 0,
+        backgroundColor: style.backgroundColor,
+        borderColor: style.borderColor,
+        borderRadius: style.borderRadius,
+        boxShadow: style.boxShadow
+      }});
+    }}
+  }} finally {{
+    if (probe.parentNode) {{
+      probe.parentNode.removeChild(probe);
+    }}
+    guard.restore();
+  }}
+  return results;
+}})()
+"""
+
+
+def _validate_review_provenance_states(connection: DevToolsConnection) -> None:
+    results = connection.evaluate(_review_provenance_probe_expression(), timeout_seconds=20.0)
+    if not isinstance(results, list):
+        raise SmokeFailure("Review provenance parity probe did not return results")
+    seen: set[str] = set()
+    failures: list[str] = []
+    for result in results:
+        if not isinstance(result, dict):
+            failures.append(f"invalid probe result {result!r}")
+            continue
+        theme = str(result.get("theme") or "")
+        seen.add(theme)
+        if not result.get("visible"):
+            failures.append(f"{theme}: .review-provenance-item probe not visible")
+        for property_name in ("backgroundColor", "borderColor", "borderRadius", "boxShadow"):
+            value = str(result.get(property_name) or "").strip()
+            if value in {"", "0px", "none", "transparent", "rgba(0, 0, 0, 0)"}:
+                failures.append(f"{theme}: .review-provenance-item {property_name} unresolved")
+    missing = set(REVIEW_STATUS_THEMES) - seen
+    for theme in sorted(missing):
+        failures.append(f"{theme}: review provenance state was not probed")
+    if failures:
+        raise SmokeFailure("Review provenance parity probe failed:\n" + "\n".join(failures))
 
 
 def _overview_mobile_probe_expression() -> str:
@@ -1632,6 +1709,7 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
             raise SmokeFailure(f"{mode_label}:\n{detail}{suffix}")
 
         _validate_review_status_tone_states(connection)
+        _validate_review_provenance_states(connection)
         _validate_overview_mobile_states(connection)
         _validate_interaction_outline_states(connection)
         _validate_skeleton_primitive_states(connection)

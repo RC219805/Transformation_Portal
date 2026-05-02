@@ -157,8 +157,6 @@ html {
 .console-action-rail,
 .build-pulse-card,
 .runtime-briefing-card,
-.review-status-banner,
-.review-provenance-item,
 .review-compare-summary,
 #artifactPreviewStage,
 #artifactMetadataBar,
@@ -168,6 +166,20 @@ html {
     border-radius: var(--ux-radius-lg);
     border-color: var(--ux-border-subtle);
     background: var(--ux-surface-elevated);
+}
+
+.review-status-banner {
+    border-radius: var(--ux-radius-lg);
+    border-color: var(--ux-border-subtle);
+    background: var(--ux-surface-elevated);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+.review-provenance-item {
+    border-radius: var(--ux-radius-lg);
+    border-color: var(--ux-border-subtle);
+    background: var(--ux-surface-elevated);
+    box-shadow: var(--ux-shadow-surface);
 }
 
 .portal-topbar,
@@ -187,7 +199,6 @@ html {
 .dark .console-action-rail,
 .dark .build-pulse-card,
 .dark .runtime-briefing-card,
-.dark .review-status-banner,
 .dark .review-provenance-item,
 .dark .review-compare-summary,
 .dark #artifactPreviewStage,
@@ -196,6 +207,11 @@ html {
 .dark #reconstructionRuntimeSummary,
 .dark .build-step-tab {
     background: var(--ux-surface-muted);
+}
+
+.dark .review-status-banner {
+    background: var(--ux-surface-muted);
+    box-shadow: inset 0 1px 0 var(--shell-tint-faint);
 }
 
 .section-kicker,
@@ -222,8 +238,7 @@ html {
 
 .console-context-card,
 .build-pulse-card,
-.runtime-briefing-card,
-.review-provenance-item {
+.runtime-briefing-card {
     box-shadow: var(--ux-shadow-surface);
 }
 

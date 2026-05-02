@@ -3811,5 +3811,54 @@
     "renderedPortalCssFingerprintAfter": "ba13115d7572",
     "sentinelStatePreserved": true,
     "parityBaselineChanged": false
+  },
+  "phase16ReviewSurfaceConsolidationState": {
+    "phase": "phase-16-review-surface-consolidation",
+    "targetSelectors": [
+      ".review-status-banner",
+      ".dark .review-status-banner",
+      ".review-provenance-item"
+    ],
+    "targetFile": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
+    "sourceFile": "web/secure-landing/portal-src/styles/components/operator-console.css",
+    "baselinePath": "web/secure-landing/portal-src/styles/architecture-baseline.json",
+    "baselineSha256": "088ad53a6d1878853a1926067e5510a2e3592caf910f408253d0aa1f085b735e",
+    "duplicateContextCountBefore": 64,
+    "duplicateContextCountAfter": 61,
+    "additiveDuplicateContextCountBefore": 8,
+    "additiveDuplicateContextCountAfter": 5,
+    "conflictingPermanentContextCountBefore": 56,
+    "conflictingPermanentContextCountAfter": 56,
+    "unownedDuplicateContextCountAfter": 0,
+    "hotspotDuplicateContextCountAfter": 0,
+    "consolidatedContextCount": 3,
+    "expectedConsolidatedContextCount": 3,
+    "consolidatedContexts": [
+      ".dark .review-status-banner|||components|||",
+      ".review-provenance-item|||components|||",
+      ".review-status-banner|||components|||"
+    ],
+    "remainingTargetContexts": [],
+    "unexpectedResolvedContextCount": 0,
+    "nonTargetAdditiveCandidatesDeferredReason": "selector-not-phase16-target",
+    "deferredOutOfScopeCandidateCount": 5,
+    "deferredReasonCounts": {
+      "selector-not-phase16-target": 5
+    },
+    "phase15HistoricalEvidencePreserved": true,
+    "removedRawBytes": 0,
+    "removedGzipBytes": 0,
+    "generatedRawBytesBefore": 80598,
+    "generatedRawBytesAfter": 80813,
+    "generatedRawByteDelta": 215,
+    "generatedGzipBytesBefore": 15725,
+    "generatedGzipBytesAfter": 15731,
+    "generatedGzipByteDelta": 6,
+    "generatedPortalCssHashBefore": "eb245c4f90079fb63803aa1ccbfc40e771a6bf53f85a6b48994fabdea8c62281",
+    "generatedPortalCssHashAfter": "ad357cc9c93fe976e349ddcbcac33a62e8014eaa7003a36d561b5c3c7672b429",
+    "renderedPortalCssFingerprintBefore": "ba13115d7572",
+    "renderedPortalCssFingerprintAfter": "ea5def42614e",
+    "sentinelStatePreserved": true,
+    "parityBaselineChanged": false
   }
 }

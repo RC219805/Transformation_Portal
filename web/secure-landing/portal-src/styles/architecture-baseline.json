@@ -228,7 +228,7 @@
         },
         {
           "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 223,
+          "line": 239,
           "column": 1,
           "layer": "components",
           "declarationSignature": "e09826935d3e1a20d02fd703970aa2e014ae2ad5",
@@ -273,7 +273,7 @@
         },
         {
           "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 201,
+          "line": 217,
           "column": 1,
           "layer": "components",
           "declarationSignature": "127aa2eacbbf1250e346e6fd1dab1f2aca44d6c2",
@@ -373,7 +373,7 @@
         },
         {
           "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 201,
+          "line": 217,
           "column": 1,
           "layer": "components",
           "declarationSignature": "127aa2eacbbf1250e346e6fd1dab1f2aca44d6c2",
@@ -416,7 +416,7 @@
         },
         {
           "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 240,
+          "line": 255,
           "column": 1,
           "layer": "components",
           "declarationSignature": "4e0c7329b18cc1dcdd13971e1a780f15c5c2b673",
@@ -426,7 +426,7 @@
         },
         {
           "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 254,
+          "line": 269,
           "column": 1,
           "layer": "components",
           "declarationSignature": "39df4966b0357116475c5b724a5cfc5b87a62b66",
@@ -469,7 +469,7 @@
         },
         {
           "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 240,
+          "line": 255,
           "column": 1,
           "layer": "components",
           "declarationSignature": "4e0c7329b18cc1dcdd13971e1a780f15c5c2b673",
@@ -479,7 +479,7 @@
         },
         {
           "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 246,
+          "line": 261,
           "column": 1,
           "layer": "components",
           "declarationSignature": "4ff838967569aecb53d6a515ec012c08430c764d",
@@ -522,7 +522,7 @@
         },
         {
           "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 240,
+          "line": 255,
           "column": 1,
           "layer": "components",
           "declarationSignature": "4e0c7329b18cc1dcdd13971e1a780f15c5c2b673",
@@ -532,7 +532,7 @@
         },
         {
           "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 250,
+          "line": 265,
           "column": 1,
           "layer": "components",
           "declarationSignature": "4d6a576f4b984528794f3cb347ad3771ae2b7640",
@@ -591,7 +591,7 @@
         },
         {
           "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 230,
+          "line": 245,
           "column": 1,
           "layer": "components",
           "declarationSignature": "c5395be76a8d9c8363cde82a115b6c18f81aa2cd",
@@ -663,7 +663,7 @@
         },
         {
           "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 223,
+          "line": 239,
           "column": 1,
           "layer": "components",
           "declarationSignature": "e09826935d3e1a20d02fd703970aa2e014ae2ad5",
@@ -718,7 +718,7 @@
         },
         {
           "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 201,
+          "line": 217,
           "column": 1,
           "layer": "components",
           "declarationSignature": "127aa2eacbbf1250e346e6fd1dab1f2aca44d6c2",
@@ -853,7 +853,7 @@
         },
         {
           "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 181,
+          "line": 193,
           "column": 1,
           "layer": "components",
           "declarationSignature": "fc2586449f338803de12e357dc8f462d2c3b6bb0",
@@ -896,7 +896,7 @@
         },
         {
           "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 181,
+          "line": 193,
           "column": 1,
           "layer": "components",
           "declarationSignature": "fc2586449f338803de12e357dc8f462d2c3b6bb0",
@@ -940,7 +940,7 @@
         },
         {
           "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 181,
+          "line": 193,
           "column": 1,
           "layer": "components",
           "declarationSignature": "fc2586449f338803de12e357dc8f462d2c3b6bb0",
@@ -950,7 +950,7 @@
         },
         {
           "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 236,
+          "line": 251,
           "column": 1,
           "layer": "components",
           "declarationSignature": "4e0c7329b18cc1dcdd13971e1a780f15c5c2b673",
@@ -1005,7 +1005,7 @@
         },
         {
           "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 181,
+          "line": 193,
           "column": 1,
           "layer": "components",
           "declarationSignature": "fc2586449f338803de12e357dc8f462d2c3b6bb0",
@@ -1156,7 +1156,7 @@
         },
         {
           "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 181,
+          "line": 193,
           "column": 1,
           "layer": "components",
           "declarationSignature": "fc2586449f338803de12e357dc8f462d2c3b6bb0",
@@ -1174,49 +1174,6 @@
       "disposition": "keep-owned",
       "removalStatus": "permanent",
       "declarationConflict": "conflicting",
-      "parity": "green"
-    },
-    {
-      "key": ".dark .review-status-banner|||components|||",
-      "selector": ".dark .review-status-banner",
-      "layer": "components",
-      "atRuleContext": [],
-      "stateContext": [
-        "dark"
-      ],
-      "category": "additive",
-      "hotspot": false,
-      "records": [
-        {
-          "source": "web/secure-landing/portal-src/styles/components/operator-console.css",
-          "line": 414,
-          "column": 1,
-          "layer": "components",
-          "declarationSignature": "f5e9149a95f8092a470381d473a4e129791920f9",
-          "properties": [
-            "box-shadow"
-          ]
-        },
-        {
-          "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 181,
-          "column": 1,
-          "layer": "components",
-          "declarationSignature": "fc2586449f338803de12e357dc8f462d2c3b6bb0",
-          "properties": [
-            "background"
-          ]
-        }
-      ],
-      "owners": [
-        "portal-css-architecture"
-      ],
-      "ownerReason": "Additive ownership: .dark .review-status-banner splits non-overlapping declarations across operator-console.css, surface-normalization.css while preserving the current computed-style parity.",
-      "phase": "phase-9-duplicate-ownership-closure",
-      "contextType": "theme-context",
-      "disposition": "report-only",
-      "removalStatus": "removable-later",
-      "declarationConflict": "additive",
       "parity": "green"
     },
     {
@@ -1243,7 +1200,7 @@
         },
         {
           "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 181,
+          "line": 193,
           "column": 1,
           "layer": "components",
           "declarationSignature": "fc2586449f338803de12e357dc8f462d2c3b6bb0",
@@ -1351,7 +1308,7 @@
         },
         {
           "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 181,
+          "line": 193,
           "column": 1,
           "layer": "components",
           "declarationSignature": "fc2586449f338803de12e357dc8f462d2c3b6bb0",
@@ -1484,7 +1441,7 @@
         },
         {
           "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 278,
+          "line": 293,
           "column": 1,
           "layer": "components",
           "declarationSignature": "fc2586449f338803de12e357dc8f462d2c3b6bb0",
@@ -1684,7 +1641,7 @@
         },
         {
           "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 292,
+          "line": 307,
           "column": 1,
           "layer": "components",
           "declarationSignature": "694e44d7a8a88bc375ad20dce876a6cb30275fc1",
@@ -1773,7 +1730,7 @@
       "records": [
         {
           "source": "web/secure-landing/portal-src/styles/components/operator-console.css",
-          "line": 418,
+          "line": 410,
           "column": 1,
           "layer": "components",
           "declarationSignature": "a55fdc0105f06323fd7e7ebcef83a69db75e6d47",
@@ -1784,7 +1741,7 @@
         },
         {
           "source": "web/secure-landing/portal-src/styles/components/operator-console.css",
-          "line": 473,
+          "line": 465,
           "column": 1,
           "layer": "components",
           "declarationSignature": "f3a55a040bffb350f8e55c7de9db8ec9d61779b7",
@@ -1837,7 +1794,7 @@
       "records": [
         {
           "source": "web/secure-landing/portal-src/styles/components/operator-console.css",
-          "line": 418,
+          "line": 410,
           "column": 1,
           "layer": "components",
           "declarationSignature": "a55fdc0105f06323fd7e7ebcef83a69db75e6d47",
@@ -1848,7 +1805,7 @@
         },
         {
           "source": "web/secure-landing/portal-src/styles/components/operator-console.css",
-          "line": 473,
+          "line": 465,
           "column": 1,
           "layer": "components",
           "declarationSignature": "f3a55a040bffb350f8e55c7de9db8ec9d61779b7",
@@ -1859,7 +1816,7 @@
         },
         {
           "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 201,
+          "line": 217,
           "column": 1,
           "layer": "components",
           "declarationSignature": "127aa2eacbbf1250e346e6fd1dab1f2aca44d6c2",
@@ -1917,7 +1874,7 @@
         },
         {
           "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 292,
+          "line": 307,
           "column": 1,
           "layer": "components",
           "declarationSignature": "694e44d7a8a88bc375ad20dce876a6cb30275fc1",
@@ -2166,7 +2123,7 @@
         },
         {
           "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 173,
+          "line": 185,
           "column": 1,
           "layer": "components",
           "declarationSignature": "e09826935d3e1a20d02fd703970aa2e014ae2ad5",
@@ -2176,7 +2133,7 @@
         },
         {
           "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 213,
+          "line": 229,
           "column": 1,
           "layer": "components",
           "declarationSignature": "e7b8e54380a88ae3ef0197e8d172d7a60c5dc472",
@@ -2232,7 +2189,7 @@
         },
         {
           "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 173,
+          "line": 185,
           "column": 1,
           "layer": "components",
           "declarationSignature": "e09826935d3e1a20d02fd703970aa2e014ae2ad5",
@@ -2253,49 +2210,6 @@
       "parity": "green"
     },
     {
-      "key": ".review-provenance-item|||components|||",
-      "selector": ".review-provenance-item",
-      "layer": "components",
-      "atRuleContext": [],
-      "stateContext": [],
-      "category": "additive",
-      "hotspot": false,
-      "records": [
-        {
-          "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 151,
-          "column": 1,
-          "layer": "components",
-          "declarationSignature": "1e80b0a0dff5e1747d9e486447d2ccd3ee43fcaa",
-          "properties": [
-            "background",
-            "border-color",
-            "border-radius"
-          ]
-        },
-        {
-          "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 223,
-          "column": 1,
-          "layer": "components",
-          "declarationSignature": "e09826935d3e1a20d02fd703970aa2e014ae2ad5",
-          "properties": [
-            "box-shadow"
-          ]
-        }
-      ],
-      "owners": [
-        "portal-css-architecture"
-      ],
-      "ownerReason": "Additive ownership: .review-provenance-item splits non-overlapping declarations across surface-normalization.css while preserving the current computed-style parity.",
-      "phase": "phase-9-duplicate-ownership-closure",
-      "contextType": "surface-normalization-final-pass",
-      "disposition": "report-only",
-      "removalStatus": "removable-later",
-      "declarationConflict": "additive",
-      "parity": "green"
-    },
-    {
       "key": ".review-provenance-label|||components|||",
       "selector": ".review-provenance-label",
       "layer": "components",
@@ -2306,7 +2220,7 @@
       "records": [
         {
           "source": "web/secure-landing/portal-src/styles/components/operator-console.css",
-          "line": 473,
+          "line": 465,
           "column": 1,
           "layer": "components",
           "declarationSignature": "f3a55a040bffb350f8e55c7de9db8ec9d61779b7",
@@ -2317,7 +2231,7 @@
         },
         {
           "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 201,
+          "line": 217,
           "column": 1,
           "layer": "components",
           "declarationSignature": "127aa2eacbbf1250e346e6fd1dab1f2aca44d6c2",
@@ -2330,49 +2244,6 @@
         "portal-css-architecture"
       ],
       "ownerReason": "Additive ownership: .review-provenance-label splits non-overlapping declarations across operator-console.css, surface-normalization.css while preserving the current computed-style parity.",
-      "phase": "phase-9-duplicate-ownership-closure",
-      "contextType": "surface-normalization-final-pass",
-      "disposition": "report-only",
-      "removalStatus": "removable-later",
-      "declarationConflict": "additive",
-      "parity": "green"
-    },
-    {
-      "key": ".review-status-banner|||components|||",
-      "selector": ".review-status-banner",
-      "layer": "components",
-      "atRuleContext": [],
-      "stateContext": [],
-      "category": "additive",
-      "hotspot": false,
-      "records": [
-        {
-          "source": "web/secure-landing/portal-src/styles/components/operator-console.css",
-          "line": 410,
-          "column": 1,
-          "layer": "components",
-          "declarationSignature": "1af88a14584f9a27d2a0ca9f820e576f9fb22fc9",
-          "properties": [
-            "box-shadow"
-          ]
-        },
-        {
-          "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 151,
-          "column": 1,
-          "layer": "components",
-          "declarationSignature": "1e80b0a0dff5e1747d9e486447d2ccd3ee43fcaa",
-          "properties": [
-            "background",
-            "border-color",
-            "border-radius"
-          ]
-        }
-      ],
-      "owners": [
-        "portal-css-architecture"
-      ],
-      "ownerReason": "Additive ownership: .review-status-banner splits non-overlapping declarations across operator-console.css, surface-normalization.css while preserving the current computed-style parity.",
       "phase": "phase-9-duplicate-ownership-closure",
       "contextType": "surface-normalization-final-pass",
       "disposition": "report-only",
@@ -2419,7 +2290,7 @@
         },
         {
           "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 223,
+          "line": 239,
           "column": 1,
           "layer": "components",
           "declarationSignature": "e09826935d3e1a20d02fd703970aa2e014ae2ad5",
@@ -2475,7 +2346,7 @@
         },
         {
           "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 201,
+          "line": 217,
           "column": 1,
           "layer": "components",
           "declarationSignature": "127aa2eacbbf1250e346e6fd1dab1f2aca44d6c2",
@@ -2578,7 +2449,7 @@
         },
         {
           "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 173,
+          "line": 185,
           "column": 1,
           "layer": "components",
           "declarationSignature": "e09826935d3e1a20d02fd703970aa2e014ae2ad5",
@@ -2633,7 +2504,7 @@
         },
         {
           "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 173,
+          "line": 185,
           "column": 1,
           "layer": "components",
           "declarationSignature": "e09826935d3e1a20d02fd703970aa2e014ae2ad5",
@@ -2664,7 +2535,7 @@
       "records": [
         {
           "source": "web/secure-landing/portal-src/styles/components/operator-console.css",
-          "line": 473,
+          "line": 465,
           "column": 1,
           "layer": "components",
           "declarationSignature": "f3a55a040bffb350f8e55c7de9db8ec9d61779b7",
@@ -2729,7 +2600,7 @@
         },
         {
           "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 201,
+          "line": 217,
           "column": 1,
           "layer": "components",
           "declarationSignature": "127aa2eacbbf1250e346e6fd1dab1f2aca44d6c2",
@@ -2877,7 +2748,7 @@
         },
         {
           "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 282,
+          "line": 297,
           "column": 1,
           "layer": "components",
           "declarationSignature": "1df7bb137ea9040f11ddad7ef61cc2c29d68c682",
@@ -2932,7 +2803,7 @@
         },
         {
           "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 201,
+          "line": 217,
           "column": 1,
           "layer": "components",
           "declarationSignature": "127aa2eacbbf1250e346e6fd1dab1f2aca44d6c2",
@@ -3020,7 +2891,7 @@
       "records": [
         {
           "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 286,
+          "line": 301,
           "column": 1,
           "layer": "components",
           "declarationSignature": "883df43b30a9ae12afc45fd4fcf27cb1bb3b3a69",
@@ -3234,7 +3105,7 @@
         },
         {
           "source": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
-          "line": 173,
+          "line": 185,
           "column": 1,
           "layer": "components",
           "declarationSignature": "e09826935d3e1a20d02fd703970aa2e014ae2ad5",
