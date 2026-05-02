@@ -701,6 +701,191 @@ def _validate_review_provenance_states(connection: DevToolsConnection) -> None:
         raise SmokeFailure("Review provenance parity probe failed:\n" + "\n".join(failures))
 
 
+def _surface_final_pass_probe_expression() -> str:
+    themes = json.dumps(REVIEW_STATUS_THEMES)
+    probe_guard = _portal_parity_probe_guard_source()
+    return f"""
+(async () => {{
+  {probe_guard}
+  const themes = {themes};
+  const results = [];
+  const root = document.documentElement;
+  const workspace = document.querySelector('#mission-shell.workspace-shell') || document.querySelector('.workspace-shell');
+  const shellNoise = document.querySelector('.shell-noise');
+  const labelProbe = document.createElement('p');
+  labelProbe.className = 'review-provenance-label';
+  labelProbe.dataset.ui = 'review-provenance-label-probe';
+  labelProbe.textContent = 'Phase 17 provenance label probe';
+  document.body.appendChild(labelProbe);
+  const guard = createPortalParityProbeGuard();
+  guard.captureStorage('tp_theme', 'tp_theme_version');
+  if (workspace) {{
+    guard.captureNodeAndAncestors(workspace);
+  }}
+  if (shellNoise) {{
+    guard.captureNode(shellNoise);
+  }}
+  try {{
+    for (const theme of themes) {{
+      try {{
+        window.localStorage.setItem('tp_theme', theme);
+        window.localStorage.setItem('tp_theme_version', '2');
+      }} catch (_error) {{}}
+      root.classList.toggle('light', theme === 'light');
+      root.classList.toggle('dark', theme === 'dark');
+      root.classList.remove('performance-lite');
+      if (typeof updateUIFromState === 'function') {{
+        updateUIFromState();
+      }}
+      if (!labelProbe.isConnected) {{
+        document.body.appendChild(labelProbe);
+      }}
+      for (const ambientActive of [false, true]) {{
+        if (!workspace) {{
+          results.push({{ type: 'workspace', theme, ambientActive, present: false }});
+          continue;
+        }}
+        workspace.dataset.ambientActive = String(ambientActive);
+        await new Promise((resolve) => window.requestAnimationFrame(() => resolve(true)));
+        const style = window.getComputedStyle(workspace);
+        const rect = workspace.getBoundingClientRect();
+        results.push({{
+          type: 'workspace',
+          theme,
+          ambientActive,
+          present: true,
+          visible: style.display !== 'none' && style.visibility !== 'hidden' && rect.width > 0 && rect.height > 0,
+          position: style.position,
+          transitionProperty: style.transitionProperty,
+          transitionDuration: style.transitionDuration,
+          borderRadius: style.borderRadius,
+          borderColor: style.borderColor,
+          backgroundColor: style.backgroundColor,
+          boxShadow: style.boxShadow
+        }});
+      }}
+      if (!shellNoise) {{
+        results.push({{ type: 'shell-noise', theme, present: false }});
+      }} else {{
+        const style = window.getComputedStyle(shellNoise);
+        results.push({{
+          type: 'shell-noise',
+          theme,
+          present: true,
+          display: style.display,
+          position: style.position,
+          top: style.top,
+          right: style.right,
+          bottom: style.bottom,
+          left: style.left,
+          opacity: style.opacity,
+          pointerEvents: style.pointerEvents,
+          zIndex: style.zIndex,
+          backgroundImage: style.backgroundImage
+        }});
+      }}
+      const labelStyle = window.getComputedStyle(labelProbe);
+      results.push({{
+        type: 'review-provenance-label',
+        theme,
+        present: true,
+        fontSize: labelStyle.fontSize,
+        lineHeight: labelStyle.lineHeight,
+        letterSpacing: labelStyle.letterSpacing
+      }});
+    }}
+  }} finally {{
+    if (labelProbe.parentNode) {{
+      labelProbe.parentNode.removeChild(labelProbe);
+    }}
+    guard.restore();
+  }}
+  return results;
+}})()
+"""
+
+
+def _validate_surface_final_pass_states(connection: DevToolsConnection) -> None:
+    results = connection.evaluate(_surface_final_pass_probe_expression(), timeout_seconds=20.0)
+    if not isinstance(results, list):
+        raise SmokeFailure("Surface final-pass parity probe did not return results")
+    workspace_seen: set[tuple[str, bool]] = set()
+    shell_noise_seen: set[str] = set()
+    label_seen: set[str] = set()
+    failures: list[str] = []
+    for result in results:
+        if not isinstance(result, dict):
+            failures.append(f"invalid probe result {result!r}")
+            continue
+        result_type = str(result.get("type") or "")
+        theme = str(result.get("theme") or "")
+        if result_type == "workspace":
+            ambient_active = bool(result.get("ambientActive"))
+            workspace_seen.add((theme, ambient_active))
+            if not result.get("present"):
+                failures.append(f"{theme}/ambient={ambient_active}: .workspace-shell missing")
+                continue
+            if not result.get("visible"):
+                failures.append(f"{theme}/ambient={ambient_active}: .workspace-shell not visible")
+            if result.get("position") != "relative":
+                failures.append(f"{theme}/ambient={ambient_active}: .workspace-shell position drifted")
+            for property_name in ("borderRadius", "borderColor", "backgroundColor", "boxShadow"):
+                value = str(result.get(property_name) or "").strip()
+                if value in {"", "0px", "none", "transparent", "rgba(0, 0, 0, 0)"}:
+                    failures.append(f"{theme}/ambient={ambient_active}: .workspace-shell {property_name} unresolved")
+            transition_property = str(result.get("transitionProperty") or "")
+            transition_duration = str(result.get("transitionDuration") or "")
+            if "transform" not in transition_property or transition_duration in {"", "0s"}:
+                failures.append(f"{theme}/ambient={ambient_active}: .workspace-shell transition drifted")
+        elif result_type == "shell-noise":
+            shell_noise_seen.add(theme)
+            if not result.get("present"):
+                failures.append(f"{theme}: .shell-noise missing")
+                continue
+            if result.get("display") != "none":
+                failures.append(f"{theme}: .shell-noise display must remain none")
+            if result.get("position") != "fixed":
+                failures.append(f"{theme}: .shell-noise position drifted")
+            for edge in ("top", "right", "bottom", "left"):
+                if str(result.get(edge) or "") != "0px":
+                    failures.append(f"{theme}: .shell-noise {edge} must remain 0px")
+            if result.get("pointerEvents") != "none":
+                failures.append(f"{theme}: .shell-noise pointer-events drifted")
+            if str(result.get("zIndex") or "") != "-20":
+                failures.append(f"{theme}: .shell-noise z-index drifted")
+            if str(result.get("backgroundImage") or "") in {"", "none"}:
+                failures.append(f"{theme}: .shell-noise background-image unresolved")
+            if str(result.get("opacity") or "") in {"", "0"}:
+                failures.append(f"{theme}: .shell-noise opacity unresolved")
+        elif result_type == "review-provenance-label":
+            label_seen.add(theme)
+            font_size = str(result.get("fontSize") or "")
+            line_height = str(result.get("lineHeight") or "")
+            letter_spacing = str(result.get("letterSpacing") or "")
+            if font_size != "12px":
+                failures.append(
+                    f"{theme}: .review-provenance-label font-size drifted ({font_size!r})"
+                )
+            if line_height in {"", "normal"}:
+                failures.append(
+                    f"{theme}: .review-provenance-label line-height unresolved ({line_height!r})"
+                )
+            if letter_spacing in {"", "normal"}:
+                failures.append(
+                    f"{theme}: .review-provenance-label letter-spacing unresolved ({letter_spacing!r})"
+                )
+    for theme in REVIEW_STATUS_THEMES:
+        for ambient_active in (False, True):
+            if (theme, ambient_active) not in workspace_seen:
+                failures.append(f"{theme}/ambient={ambient_active}: .workspace-shell state was not probed")
+        if theme not in shell_noise_seen:
+            failures.append(f"{theme}: .shell-noise state was not probed")
+        if theme not in label_seen:
+            failures.append(f"{theme}: .review-provenance-label state was not probed")
+    if failures:
+        raise SmokeFailure("Surface final-pass parity probe failed:\n" + "\n".join(failures))
+
+
 def _overview_mobile_probe_expression() -> str:
     return r"""
 (() => {
@@ -1710,6 +1895,7 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
 
         _validate_review_status_tone_states(connection)
         _validate_review_provenance_states(connection)
+        _validate_surface_final_pass_states(connection)
         _validate_overview_mobile_states(connection)
         _validate_interaction_outline_states(connection)
         _validate_skeleton_primitive_states(connection)

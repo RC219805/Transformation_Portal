@@ -6,6 +6,7 @@
 }
 
 .shell-noise {
+    display: none;
     position: fixed;
     inset: 0;
     z-index: -20;
@@ -468,6 +469,7 @@ textarea {
 .job-chip {
     font-size: 13px;
     line-height: 1.45;
+    letter-spacing: var(--ux-meta-tracking);
 }
 
 @media (max-width: 960px) {
