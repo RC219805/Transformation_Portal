@@ -100,35 +100,33 @@ class BaseNode(ABC):  # Add ABC inheritance
 
 ---
 
-### QW-3: Update Binary Cleanup Documentation
+### QW-3: Update Binary Cleanup Documentation — ✅ COMPLETED (2026-05-02)
 
 **Effort:** 15 minutes
 **Impact:** Accurate documentation
 **Risk:** None (doc-only change)
 
-**Task:**
-Update binary file cleanup documentation to reflect completed status.
+**Outcome:** The two TODO markers previously embedded in the directory-structure
+diagram in `docs/fixes/BINARY_FILE_BEST_PRACTICES.md` (the `*.png` / `*.jpg`
+rows under `input_images/` and `processed_images/`) were already replaced with
+✅ status markers in an earlier sweep. This QW closes the remaining residue:
+a status banner was added to the top of the document making clear that the
+"currently tracked" warnings under `📋 Binary File Guidelines → 2. What MUST Be
+Excluded` refer to the 2025-11-06 snapshot and have since been resolved, while
+the completed remediation is described in `🎯 Executive Decision: Current Push`
+and the four steps under `🔧 Immediate Actions Required`. `TODO_INVENTORY.md`
+§4.1 was updated to record that the recommended cleanup has been executed.
 
-**Location:** `docs/fixes/BINARY_FILE_BEST_PRACTICES.md`
-
-**Changes:**
-```markdown
-# Before:
-│   ├── *.png                 # ⚠️ TODO: Exclude PNG previews
-│   └── *.jpg                 # TODO: Move to docs/examples/
-
-# After:
-│   ├── *.png                 # ✅ Excluded via .gitignore
-│   └── *.jpg                 # ✅ Moved to appropriate locations
+**Verification (2026-05-02):**
+```bash
+git ls-files input_images/ processed_images/
+# → only input_images/.gitkeep, input_images/*.txt, and a JSON provenance file;
+#   no PNG/JPG/TIFF binaries tracked under either directory.
 ```
 
-**Verification:**
-- Check `.gitignore` for PNG/JPG patterns
-- Verify no large binary files in repo (`git ls-files | grep -E '\.(png|jpg)$' | xargs ls -lh`)
-
 **Acceptance:**
-- Documentation matches current state
-- No misleading TODO markers
+- [x] Documentation matches current state
+- [x] No misleading TODO markers in `BINARY_FILE_BEST_PRACTICES.md`
 
 ---
 
@@ -407,7 +405,7 @@ Audit `src/transformation_portal/depth_canonical/` module to determine if it's s
 ### Week 1: Documentation & Cleanup (6 hours)
 
 1. **QW-2:** Archive obsolete PR docs (30min) — ✅ completed 2026-03-14
-2. **QW-3:** Update binary cleanup docs (15min)
+2. **QW-3:** Update binary cleanup docs (15min) — ✅ completed 2026-05-02
 3. **QW-6:** Rollback procedures (2h)
 4. **QW-7:** Branch protection guide (1h)
 5. **QW-4:** ADR-023 audit (2h) — ✅ completed 2026-05-01
@@ -443,7 +441,7 @@ Audit `src/transformation_portal/depth_canonical/` module to determine if it's s
 
 - **QW-1:** @abstractmethod decorators (IDE support)
 - **QW-2:** Archive obsolete docs (cleanliness) — ✅ completed 2026-03-14
-- **QW-3:** Update binary docs (accuracy)
+- **QW-3:** Update binary docs (accuracy) — ✅ completed 2026-05-02
 - **QW-8:** Security badges (visibility)
 
 ---
