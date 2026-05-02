@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Transformation Portal is a **governed** image/video processing platform for luxury real estate rendering and architectural visualization. It is **not** a generic CRUD/government/health-IT portal — do not import assumptions from those domains.
 
-Authoritative behavioral rules live in `.github/copilot-instructions.md` and `AGENTS.md`. Read those before making non-trivial changes; the sections below summarize the parts that most often trip up automated edits.
+Authoritative behavioral rules live in `.github/copilot-instructions.md`, `AGENTS.md`, the live agent profiles under `.github/agents/` (`transformation-portal-architect.md`, `portal-app-steward.md`, `transformation-portal-specialist.md`), and `docs/architecture/agent_governance.md`. Read those before making non-trivial changes; the sections below summarize the parts that most often trip up automated edits.
 
 ## Common Commands
 
@@ -16,10 +16,10 @@ Always prefer Make targets — they encode the correct env, marker selection, an
 ```bash
 make venv                  # create/validate .venv (Python 3.11+, fail-closed)
 make install-core          # pinned core runtime + dev tooling, editable install --no-deps, pip check
-make install-ml-core       # add target-owned ML baseline (Apple Silicon CPU/MPS or Linux CPU)
+make install-ml-core       # add target-owned ML baseline (Apple Silicon arm64 only; Linux/Intel macOS lanes are retired and fail closed)
 make check-environment     # pre-flight (Python/Node/Chrome/ports/dep-health)
 ```
-The umbrella `make install-ml` is **disabled** until a trusted umbrella ML lockfile exists. Use the layered targets (`install-ml-core`, `install-ml-sam2`, `install-ml-coreml`) or `./scripts/bootstrap/install_ml_stack.sh --profile <core-cpu|core-mps|...>`.
+The umbrella `make install-ml` is **disabled** until a trusted umbrella ML lockfile exists. Use the layered targets (`install-ml-core`, `install-ml-sam2`, `install-ml-coreml`) or `./scripts/bootstrap/install_ml_stack.sh --profile <core-cpu|core-mps|...>`. All current core profiles (`core-cpu`, `core-mps`) are Apple Silicon (`darwin-arm64`) only; `core-cuda` and the Linux/Intel macOS lanes are retired and fail closed.
 
 ### Tests
 ```bash
