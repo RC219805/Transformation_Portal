@@ -2641,9 +2641,11 @@ function checkPhase15SurfaceLoadingSourceShape(failures) {
   }
 }
 
-function checkPhase16ReviewSurfaceSourceShape(failures) {
-  const surfaceRoot = parseCss(path.resolve(REPO_ROOT, PHASE16_SURFACE_NORMALIZATION_FILE));
-  const operatorRoot = parseCss(path.resolve(REPO_ROOT, PHASE16_OPERATOR_CONSOLE_FILE));
+function checkPhase16ReviewSurfaceSourceShape(failures, options = {}) {
+  const surfaceLabel = options.surfaceLabel || PHASE16_SURFACE_NORMALIZATION_FILE;
+  const operatorLabel = options.operatorLabel || PHASE16_OPERATOR_CONSOLE_FILE;
+  const surfaceRoot = options.surfaceRoot || parseCss(path.resolve(REPO_ROOT, PHASE16_SURFACE_NORMALIZATION_FILE));
+  const operatorRoot = options.operatorRoot || parseCss(path.resolve(REPO_ROOT, PHASE16_OPERATOR_CONSOLE_FILE));
 
   const sharedSurfaceRule = phase14FindRule(surfaceRoot, [
     ".workspace-shell",
@@ -2663,13 +2665,13 @@ function checkPhase16ReviewSurfaceSourceShape(failures) {
     ".build-step-tab"
   ]);
   if (!sharedSurfaceRule) {
-    failures.push(`${PHASE16_SURFACE_NORMALIZATION_FILE} shared surface chrome selector list drifted`);
+    failures.push(`${surfaceLabel} shared surface chrome selector list drifted`);
   }
-  if (phase14FindRule(operatorRoot, [".review-status-banner"])) {
-    failures.push(`${PHASE16_OPERATOR_CONSOLE_FILE} .review-status-banner duplicate rule must be removed after Phase 16`);
+  if (findRuleContainingSelector(operatorRoot, ".review-status-banner")) {
+    failures.push(`${operatorLabel} .review-status-banner duplicate rule must be removed after Phase 16`);
   }
-  if (phase14FindRule(operatorRoot, [".dark .review-status-banner"])) {
-    failures.push(`${PHASE16_OPERATOR_CONSOLE_FILE} .dark .review-status-banner duplicate rule must be removed after Phase 16`);
+  if (findRuleContainingSelector(operatorRoot, ".dark .review-status-banner")) {
+    failures.push(`${operatorLabel} .dark .review-status-banner duplicate rule must be removed after Phase 16`);
   }
 
   const reviewStatusRule = phase14FindRule(surfaceRoot, [".review-status-banner"]);
@@ -2684,7 +2686,7 @@ function checkPhase16ReviewSurfaceSourceShape(failures) {
       "box-shadow": "inset 0 1px 0 rgba(255, 255, 255, 0.2)"
     },
     failures,
-    `${PHASE16_SURFACE_NORMALIZATION_FILE} .review-status-banner`
+    `${surfaceLabel} .review-status-banner`
   );
   checkRuleDeclarations(
     darkReviewStatusRule,
@@ -2693,7 +2695,7 @@ function checkPhase16ReviewSurfaceSourceShape(failures) {
       "box-shadow": "inset 0 1px 0 var(--shell-tint-faint)"
     },
     failures,
-    `${PHASE16_SURFACE_NORMALIZATION_FILE} .dark .review-status-banner`
+    `${surfaceLabel} .dark .review-status-banner`
   );
   checkRuleDeclarations(
     reviewProvenanceRule,
@@ -2704,7 +2706,7 @@ function checkPhase16ReviewSurfaceSourceShape(failures) {
       "box-shadow": "var(--ux-shadow-surface)"
     },
     failures,
-    `${PHASE16_SURFACE_NORMALIZATION_FILE} .review-provenance-item`
+    `${surfaceLabel} .review-provenance-item`
   );
 
   const readyToneRule = phase14FindRule(surfaceRoot, [".review-status-banner[data-tone=\"ready\"]"]);
@@ -2713,31 +2715,31 @@ function checkPhase16ReviewSurfaceSourceShape(failures) {
     readyToneRule?.source?.start?.line &&
     darkReviewStatusRule.source.start.line >= readyToneRule.source.start.line
   ) {
-    failures.push(`${PHASE16_SURFACE_NORMALIZATION_FILE} .dark .review-status-banner must stay before tone rules`);
+    failures.push(`${surfaceLabel} .dark .review-status-banner must stay before tone rules`);
   }
 
   const darkProvenanceRule = findRuleContainingSelector(surfaceRoot, ".dark .review-provenance-item");
   if (!darkProvenanceRule) {
-    failures.push(`${PHASE16_SURFACE_NORMALIZATION_FILE} .dark .review-provenance-item rule is missing`);
+    failures.push(`${surfaceLabel} .dark .review-provenance-item rule is missing`);
   } else {
     checkRuleDeclarations(
       darkProvenanceRule,
       { background: "var(--ux-surface-muted)" },
       failures,
-      `${PHASE16_SURFACE_NORMALIZATION_FILE} .dark .review-provenance-item`
+      `${surfaceLabel} .dark .review-provenance-item`
     );
     if (
       reviewProvenanceRule?.source?.start?.line &&
       darkProvenanceRule.source?.start?.line &&
       darkProvenanceRule.source.start.line <= reviewProvenanceRule.source.start.line
     ) {
-      failures.push(`${PHASE16_SURFACE_NORMALIZATION_FILE} .dark .review-provenance-item must stay after light singleton`);
+      failures.push(`${surfaceLabel} .dark .review-provenance-item must stay after light singleton`);
     }
   }
 
   const shadowRule = phase14FindRule(surfaceRoot, [".console-context-card", ".build-pulse-card", ".runtime-briefing-card"]);
   if (!shadowRule) {
-    failures.push(`${PHASE16_SURFACE_NORMALIZATION_FILE} shared shadow selector list drifted`);
+    failures.push(`${surfaceLabel} shared shadow selector list drifted`);
   }
 }
 
@@ -3967,6 +3969,26 @@ if (phase16ReviewSurfaceFixtureIndex >= 0) {
     for (const entry of fixture.baselineEntries) {
       if (/selector-not-phase16-target/.test(String(entry.ownerReason || ""))) {
         fixtureFailures.push("selector-not-phase16-target must not overwrite live baseline ownerReason");
+      }
+    }
+  }
+  if (fixture.sourceShape) {
+    const sourceShapeFailures = [];
+    checkPhase16ReviewSurfaceSourceShape(sourceShapeFailures, {
+      surfaceRoot: parseCss("phase16-review-surface.fixture.surface.css", fixture.sourceShape.surfaceCss || ""),
+      operatorRoot: parseCss("phase16-review-surface.fixture.operator.css", fixture.sourceShape.operatorCss || ""),
+      surfaceLabel: "phase16-review-surface fixture surface",
+      operatorLabel: "phase16-review-surface fixture operator"
+    });
+    const expectedSourceShapeFailures = fixture.expectedSourceShapeFailures || [];
+    for (const expected of expectedSourceShapeFailures) {
+      if (!sourceShapeFailures.some((failure) => failure.includes(expected))) {
+        fixtureFailures.push(`missing Phase 16 source-shape failure ${expected}`);
+      }
+    }
+    for (const failure of sourceShapeFailures) {
+      if (!expectedSourceShapeFailures.some((expected) => failure.includes(expected))) {
+        fixtureFailures.push(`unexpected Phase 16 source-shape failure ${failure}`);
       }
     }
   }

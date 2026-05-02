@@ -740,6 +740,69 @@ function phase16ReviewSurfaceDuplicate(overrides = {}) {
   };
 }
 
+function phase16ReviewSurfaceSourceShapeFixture(overrides = {}) {
+  const surfaceCss =
+    overrides.surfaceCss ||
+    `
+.workspace-shell,
+.shell-panel,
+.shell-panel-strong,
+.panel-subtle,
+.stat-tile,
+.console-context-card,
+.console-action-rail,
+.build-pulse-card,
+.runtime-briefing-card,
+.review-compare-summary,
+#artifactPreviewStage,
+#artifactMetadataBar,
+#artifactMetadataCard,
+#reconstructionRuntimeSummary,
+.build-step-tab {
+  border-radius: var(--ux-radius-lg);
+  border-color: var(--ux-border-subtle);
+  background: var(--ux-surface-elevated);
+}
+
+.review-status-banner {
+  border-radius: var(--ux-radius-lg);
+  border-color: var(--ux-border-subtle);
+  background: var(--ux-surface-elevated);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+.review-provenance-item {
+  border-radius: var(--ux-radius-lg);
+  border-color: var(--ux-border-subtle);
+  background: var(--ux-surface-elevated);
+  box-shadow: var(--ux-shadow-surface);
+}
+
+.dark .review-provenance-item {
+  background: var(--ux-surface-muted);
+}
+
+.dark .review-status-banner {
+  background: var(--ux-surface-muted);
+  box-shadow: inset 0 1px 0 var(--shell-tint-faint);
+}
+
+.review-status-banner[data-tone="ready"] {
+  background: var(--review-ready-bg);
+}
+
+.console-context-card,
+.build-pulse-card,
+.runtime-briefing-card {
+  box-shadow: var(--ux-shadow-surface);
+}
+`;
+  return {
+    surfaceCss,
+    operatorCss: overrides.operatorCss || ""
+  };
+}
+
 function normalizedSelectorList(selectorText) {
   return selectorText.split(",").map((selector) => selector.trim().replace(/\s+/g, " ")).sort();
 }
@@ -1900,6 +1963,30 @@ test("portal CSS Phase 16 review-surface fixtures constrain review chrome consol
         { key: reviewProvenance.key, candidateStatus: "safe" },
         { key: outOfScope.key, candidateStatus: "deferred", unsafeReason: "selector-not-phase16-target" },
         { key: hotspot.key, candidateStatus: "deferred", unsafeReason: "hotspot" }
+      ]
+    }),
+    /portal css phase16 review-surface fixture: OK/
+  );
+
+  assert.match(
+    runPhase16ReviewSurfaceFixture({
+      duplicates: [],
+      sourceShape: phase16ReviewSurfaceSourceShapeFixture({
+        operatorCss: `
+.operator-summary,
+.review-status-banner {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+.dark .operator-summary,
+.dark .review-status-banner {
+  box-shadow: inset 0 1px 0 var(--shell-tint-faint);
+}
+`
+      }),
+      expectedSourceShapeFailures: [
+        "phase16-review-surface fixture operator .review-status-banner duplicate rule must be removed after Phase 16",
+        "phase16-review-surface fixture operator .dark .review-status-banner duplicate rule must be removed after Phase 16"
       ]
     }),
     /portal css phase16 review-surface fixture: OK/
