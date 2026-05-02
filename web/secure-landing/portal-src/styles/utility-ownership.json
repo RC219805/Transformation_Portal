@@ -2698,14 +2698,6 @@
       "cssFile": "utilities.required.css",
       "reason": "observed in portal static markup or generated template output"
     },
-    "py-5": {
-      "owner": "static",
-      "sources": [
-        "portal.html"
-      ],
-      "cssFile": "utilities.required.css",
-      "reason": "observed in portal static markup or generated template output"
-    },
     "py-8": {
       "owner": "static",
       "sources": [

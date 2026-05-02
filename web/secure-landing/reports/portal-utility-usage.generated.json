@@ -1,7 +1,7 @@
 {
   "version": 1,
   "summary": {
-    "utilityCount": 417,
+    "utilityCount": 416,
     "compatHoldCount": 0,
     "deprecatedImported": false
   },
@@ -3907,18 +3907,6 @@
     },
     {
       "className": "py-4",
-      "owner": "static",
-      "sources": [
-        "portal.html"
-      ],
-      "cssFile": "utilities.required.css",
-      "cssOwners": [
-        "web/secure-landing/portal-src/styles/utilities.required.css"
-      ],
-      "status": "covered"
-    },
-    {
-      "className": "py-5",
       "owner": "static",
       "sources": [
         "portal.html"

@@ -1,20 +1,9 @@
 /* portal-override-owner: compatibility-final-order
-   reason: .portal-shell-card mobile padding/radius and .artifact-review-* surface padding
-   override utilities-layer p-6/rounded-2xl/p-4/grid-cols-2 classes at <=767px; moving to the
-   components layer would let the utilities win the cascade. Selectors migrated from the six
-   shell IDs and the three artifact-review IDs to the Phase 6 semantic hooks.
+   reason: .artifact-review-* surface padding override utilities-layer p-4 class at <=767px;
+   moving to the components layer would let the utility win the cascade. Selectors migrated
+   from #artifactPreviewStage and #artifactMetadataBar to the Phase 6 semantic hooks.
    removal-phase: phase-7-utility-markup-migration */
 @media (max-width: 767px) {
-  .portal-shell-card--build,
-  .portal-shell-card--queue,
-  .portal-shell-card--inspector,
-  .portal-shell-card--artifacts,
-  .portal-shell-card--logs,
-  .portal-shell-card--context {
-    padding: 1rem;
-    border-radius: 1.35rem;
-  }
-
   .artifact-review-stage,
   .artifact-review-meta {
     padding: 0.95rem;

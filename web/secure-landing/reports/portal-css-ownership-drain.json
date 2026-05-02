@@ -6,8 +6,8 @@
     "utilityLayerImportsBefore": 6,
     "utilityLayerImportsAfter": 3,
     "compatHoldCount": 0,
-    "overridesCompatRuleCount": 5,
-    "overridesCompatBytes": 2518,
+    "overridesCompatRuleCount": 4,
+    "overridesCompatBytes": 2197,
     "drainedSelectorCount": 344
   },
   "moves": [
@@ -3152,56 +3152,6 @@
       "parity": "green"
     },
     {
-      "selector": ".portal-shell-card--build",
-      "from": "overrides.compat.css (Phase 5 selector)",
-      "fromLayer": "overrides",
-      "to": "overrides.compat.css",
-      "toLayer": "overrides",
-      "classification": "compatibility-final-order",
-      "reason": "Phase 6 semantic ownership: replaces ID-specific selector with additive semantic class hook (markup unchanged); rule remains in overrides layer because moving to components would let utilities-layer cascade win; removable in phase-7-utility-markup-migration",
-      "parity": "green"
-    },
-    {
-      "selector": ".portal-shell-card--inspector",
-      "from": "overrides.compat.css (Phase 5 selector)",
-      "fromLayer": "overrides",
-      "to": "overrides.compat.css",
-      "toLayer": "overrides",
-      "classification": "compatibility-final-order",
-      "reason": "Phase 6 semantic ownership: replaces ID-specific selector with additive semantic class hook (markup unchanged); rule remains in overrides layer because moving to components would let utilities-layer cascade win; removable in phase-7-utility-markup-migration",
-      "parity": "green"
-    },
-    {
-      "selector": ".portal-shell-card--artifacts",
-      "from": "overrides.compat.css (Phase 5 selector)",
-      "fromLayer": "overrides",
-      "to": "overrides.compat.css",
-      "toLayer": "overrides",
-      "classification": "compatibility-final-order",
-      "reason": "Phase 6 semantic ownership: replaces ID-specific selector with additive semantic class hook (markup unchanged); rule remains in overrides layer because moving to components would let utilities-layer cascade win; removable in phase-7-utility-markup-migration",
-      "parity": "green"
-    },
-    {
-      "selector": ".portal-shell-card--logs",
-      "from": "overrides.compat.css (Phase 5 selector)",
-      "fromLayer": "overrides",
-      "to": "overrides.compat.css",
-      "toLayer": "overrides",
-      "classification": "compatibility-final-order",
-      "reason": "Phase 6 semantic ownership: replaces ID-specific selector with additive semantic class hook (markup unchanged); rule remains in overrides layer because moving to components would let utilities-layer cascade win; removable in phase-7-utility-markup-migration",
-      "parity": "green"
-    },
-    {
-      "selector": ".portal-shell-card--context",
-      "from": "overrides.compat.css (Phase 5 selector)",
-      "fromLayer": "overrides",
-      "to": "overrides.compat.css",
-      "toLayer": "overrides",
-      "classification": "compatibility-final-order",
-      "reason": "Phase 6 semantic ownership: replaces ID-specific selector with additive semantic class hook (markup unchanged); rule remains in overrides layer because moving to components would let utilities-layer cascade win; removable in phase-7-utility-markup-migration",
-      "parity": "green"
-    },
-    {
       "selector": ".artifact-review-stage",
       "from": "overrides.compat.css (Phase 5 selector)",
       "fromLayer": "overrides",
@@ -3322,16 +3272,6 @@
       "parity": "green"
     },
     {
-      "selector": ".portal-shell-card--queue",
-      "from": "overrides.compat.css (Phase 5 selector)",
-      "fromLayer": "overrides",
-      "to": "overrides.compat.css",
-      "toLayer": "overrides",
-      "classification": "compatibility-final-order",
-      "reason": "Phase 6 semantic ownership: replaces ID-specific selector with additive semantic class hook (markup unchanged); rule remains in overrides layer because moving to components would let utilities-layer cascade win; removable in phase-7-utility-markup-migration",
-      "parity": "green"
-    },
-    {
       "selector": ".portal-shell-card--queue .custom-scrollbar",
       "from": "overrides.compat.css",
       "fromLayer": "overrides",
@@ -3349,6 +3289,66 @@
       "toLayer": "components",
       "classification": "component-owned",
       "reason": "Phase 7.D: dropped px-6 py-8 utilities from #main-content markup; .portal-main padding is now declared verbatim in shell-foundation.css with the same @media (max-width: 960px) tightening previously in overrides. Computed style preserved at both viewport bands.",
+      "parity": "green"
+    },
+    {
+      "selector": ".portal-shell-card--artifacts",
+      "from": "overrides.compat.css",
+      "fromLayer": "overrides",
+      "to": "components/shell-foundation.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "Phase 7.E: dropped p-6/rounded-2xl (or px-6 py-5 / rounded-2xl on context) utilities from the panel shells in markup; per-modifier desktop padding/radius and the shared mobile-tightening rule now live in shell-foundation.css. Build-shell had no utilities to drop and inherits the mobile rule unchanged.",
+      "parity": "green"
+    },
+    {
+      "selector": ".portal-shell-card--build",
+      "from": "overrides.compat.css",
+      "fromLayer": "overrides",
+      "to": "components/shell-foundation.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "Phase 7.E: dropped p-6/rounded-2xl (or px-6 py-5 / rounded-2xl on context) utilities from the panel shells in markup; per-modifier desktop padding/radius and the shared mobile-tightening rule now live in shell-foundation.css. Build-shell had no utilities to drop and inherits the mobile rule unchanged.",
+      "parity": "green"
+    },
+    {
+      "selector": ".portal-shell-card--context",
+      "from": "overrides.compat.css",
+      "fromLayer": "overrides",
+      "to": "components/shell-foundation.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "Phase 7.E: dropped p-6/rounded-2xl (or px-6 py-5 / rounded-2xl on context) utilities from the panel shells in markup; per-modifier desktop padding/radius and the shared mobile-tightening rule now live in shell-foundation.css. Build-shell had no utilities to drop and inherits the mobile rule unchanged.",
+      "parity": "green"
+    },
+    {
+      "selector": ".portal-shell-card--inspector",
+      "from": "overrides.compat.css",
+      "fromLayer": "overrides",
+      "to": "components/shell-foundation.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "Phase 7.E: dropped p-6/rounded-2xl (or px-6 py-5 / rounded-2xl on context) utilities from the panel shells in markup; per-modifier desktop padding/radius and the shared mobile-tightening rule now live in shell-foundation.css. Build-shell had no utilities to drop and inherits the mobile rule unchanged.",
+      "parity": "green"
+    },
+    {
+      "selector": ".portal-shell-card--logs",
+      "from": "overrides.compat.css",
+      "fromLayer": "overrides",
+      "to": "components/shell-foundation.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "Phase 7.E: dropped p-6/rounded-2xl (or px-6 py-5 / rounded-2xl on context) utilities from the panel shells in markup; per-modifier desktop padding/radius and the shared mobile-tightening rule now live in shell-foundation.css. Build-shell had no utilities to drop and inherits the mobile rule unchanged.",
+      "parity": "green"
+    },
+    {
+      "selector": ".portal-shell-card--queue",
+      "from": "overrides.compat.css",
+      "fromLayer": "overrides",
+      "to": "components/shell-foundation.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "Phase 7.E: dropped p-6/rounded-2xl (or px-6 py-5 / rounded-2xl on context) utilities from the panel shells in markup; per-modifier desktop padding/radius and the shared mobile-tightening rule now live in shell-foundation.css. Build-shell had no utilities to drop and inherits the mobile rule unchanged.",
       "parity": "green"
     }
   ]
