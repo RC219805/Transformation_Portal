@@ -206,6 +206,45 @@ const PHASE16_SECONDARY_PROPERTIES_BY_SELECTOR = new Map([
   [".dark .review-status-banner", ["box-shadow"]],
   [".review-provenance-item", ["box-shadow"]]
 ]);
+const PHASE17_SURFACE_FINAL_PASS_PHASE = "phase-17-surface-final-pass-consolidation";
+const PHASE17_DUPLICATE_CONTEXT_COUNT_BEFORE = 61;
+const PHASE17_DUPLICATE_CONTEXT_COUNT_AFTER = 58;
+const PHASE17_ADDITIVE_CONTEXT_COUNT_BEFORE = 5;
+const PHASE17_ADDITIVE_CONTEXT_COUNT_AFTER = 2;
+const PHASE17_CONFLICTING_PERMANENT_CONTEXT_COUNT = 56;
+const PHASE17_EXPECTED_CONSOLIDATED_CONTEXT_COUNT = 3;
+const PHASE17_GENERATED_PORTAL_CSS_HASH_BEFORE =
+  "ad357cc9c93fe976e349ddcbcac33a62e8014eaa7003a36d561b5c3c7672b429";
+const PHASE17_RENDERED_PORTAL_CSS_FINGERPRINT_BEFORE = "ea5def42614e";
+const PHASE17_GENERATED_PORTAL_CSS_BYTES_BEFORE = 80813;
+const PHASE17_GENERATED_PORTAL_CSS_GZIP_BYTES_BEFORE = 15731;
+const PHASE17_SURFACE_NORMALIZATION_FILE = PHASE16_SURFACE_NORMALIZATION_FILE;
+const PHASE17_OPERATOR_CONSOLE_FILE = PHASE13_OPERATOR_CONSOLE_FILE;
+const PHASE17_SHELL_FOUNDATION_FILE = PHASE12_SHELL_FOUNDATION_FILE;
+const PHASE17_TARGET_SELECTORS = [".workspace-shell", ".shell-noise", ".review-provenance-label"];
+const PHASE17_TARGET_DUPLICATE_KEYS = new Set(PHASE17_TARGET_SELECTORS.map((selector) => `${selector}|||components|||`));
+const PHASE17_FINAL_PROPERTIES_BY_SELECTOR = new Map([
+  [".workspace-shell", ["background", "border-color", "border-radius", "box-shadow", "position", "transition"]],
+  [
+    ".shell-noise",
+    ["background-image", "background-position", "background-size", "display", "inset", "opacity", "pointer-events", "position", "z-index"]
+  ],
+  [".review-provenance-label", ["font-size", "letter-spacing", "line-height"]]
+]);
+const PHASE17_PRIMARY_PROPERTIES_BY_SELECTOR = new Map([
+  [".workspace-shell", ["background", "border-color", "border-radius"]],
+  [
+    ".shell-noise",
+    ["background-image", "background-position", "background-size", "inset", "opacity", "pointer-events", "position", "z-index"]
+  ],
+  [".review-provenance-label", ["font-size", "line-height"]]
+]);
+const PHASE17_SOURCE_PROPERTIES_BY_SELECTOR = new Map([
+  [".workspace-shell", ["position", "transition"]],
+  [".shell-noise", ["display"]],
+  [".review-provenance-label", ["letter-spacing"]]
+]);
+const PHASE17_WORKSPACE_SHADOW_PROPERTIES = ["box-shadow"];
 const VALID_PHASE9_CONTEXT_TYPES = new Set([
   "responsive-context",
   "theme-context",
@@ -311,6 +350,21 @@ const PHASE16_UNSAFE_REASONS = new Set([
   "dark-provenance-override-missing",
   "specificity-changing-grouping"
 ]);
+const PHASE17_UNSAFE_REASONS = new Set([
+  "selector-not-phase17-target",
+  "conflicting-permanent",
+  "hotspot",
+  "cross-layer",
+  "cross-context",
+  "selector-list-coverage-ambiguous",
+  "source-file-drift",
+  "primary-declaration-missing",
+  "source-declaration-drift",
+  "source-order-sensitive",
+  "ambient-override-missing",
+  "dark-override-missing",
+  "specificity-changing-grouping"
+]);
 const PORTAL_CSS_RENDER_TOKENS = {
   "__PORTAL_FONT_SANS_URL__": "fonts/portal-sans.woff2",
   "__PORTAL_FONT_MONO_URL__": "fonts/portal-mono.woff2"
@@ -357,6 +411,10 @@ const PHASE16_REVIEW_SURFACE_FIXTURE_ARG = "--check-phase16-review-surface-fixtu
 const phase16ReviewSurfaceFixtureIndex = process.argv.indexOf(PHASE16_REVIEW_SURFACE_FIXTURE_ARG);
 const PHASE16_REVIEW_SURFACE_FIXTURE_PATH =
   phase16ReviewSurfaceFixtureIndex >= 0 ? process.argv[phase16ReviewSurfaceFixtureIndex + 1] : "";
+const PHASE17_SURFACE_FINAL_PASS_FIXTURE_ARG = "--check-phase17-surface-final-pass-fixture";
+const phase17SurfaceFinalPassFixtureIndex = process.argv.indexOf(PHASE17_SURFACE_FINAL_PASS_FIXTURE_ARG);
+const PHASE17_SURFACE_FINAL_PASS_FIXTURE_PATH =
+  phase17SurfaceFinalPassFixtureIndex >= 0 ? process.argv[phase17SurfaceFinalPassFixtureIndex + 1] : "";
 
 const EXPECTED_LAYER_ORDER = ["tokens", "base", "components", "utilities", "overrides"];
 const EXPECTED_LAYER_IMPORTS = [
@@ -2386,6 +2444,133 @@ function analyzePhase16ReviewSurfaceCandidates(duplicates, baseline = loadBaseli
     .sort((left, right) => left.key.localeCompare(right.key));
 }
 
+function phase17ExpectedPrimarySource(selector) {
+  if (selector === ".workspace-shell") {
+    return PHASE17_SURFACE_NORMALIZATION_FILE;
+  }
+  if (selector === ".shell-noise" || selector === ".review-provenance-label") {
+    return PHASE17_OPERATOR_CONSOLE_FILE;
+  }
+  return null;
+}
+
+function phase17ExpectedSourceFile(selector) {
+  if (selector === ".workspace-shell") {
+    return PHASE17_SHELL_FOUNDATION_FILE;
+  }
+  if (selector === ".shell-noise" || selector === ".review-provenance-label") {
+    return PHASE17_SURFACE_NORMALIZATION_FILE;
+  }
+  return null;
+}
+
+function analyzePhase17SurfaceFinalPassCandidate(duplicate, baselineEntry = {}) {
+  const entry = baselineEntry || {};
+  const records = duplicate.records || [];
+  const candidate = {
+    key: duplicate.key,
+    selector: duplicate.selector,
+    layer: duplicate.layer,
+    atRuleContext: duplicate.context || [],
+    declarationConflict: duplicate.category,
+    removalStatus: entry.removalStatus || duplicate.removalStatus || null,
+    sourceLocations: phase11SourceLocations(duplicate),
+    candidateStatus: "deferred"
+  };
+
+  if (duplicate.hotspot || entry.hotspot) {
+    return { ...candidate, unsafeReason: "hotspot" };
+  }
+  if (duplicate.category !== "additive" || (entry.removalStatus || duplicate.removalStatus) !== "removable-later") {
+    return { ...candidate, unsafeReason: "conflicting-permanent" };
+  }
+  if (!PHASE17_TARGET_DUPLICATE_KEYS.has(duplicate.key)) {
+    return { ...candidate, unsafeReason: "selector-not-phase17-target" };
+  }
+  if (duplicate.layer !== "components" || records.some((record) => (record.layer || duplicate.layer) !== "components")) {
+    return { ...candidate, unsafeReason: "cross-layer" };
+  }
+  if (records.some(hasSpecificityChangingGrouping)) {
+    return { ...candidate, unsafeReason: "specificity-changing-grouping" };
+  }
+  if (new Set(records.map((record) => JSON.stringify(record.context || duplicate.context || []))).size > 1) {
+    return { ...candidate, unsafeReason: "cross-context" };
+  }
+  if (JSON.stringify(duplicate.context || []) !== JSON.stringify([])) {
+    return { ...candidate, unsafeReason: "cross-context" };
+  }
+
+  const expectedPrimarySource = phase17ExpectedPrimarySource(duplicate.selector);
+  const expectedSourceFile = phase17ExpectedSourceFile(duplicate.selector);
+  const primary = records.find(
+    (record) =>
+      record.source === expectedPrimarySource &&
+      phase15HasExpectedProperties(record, PHASE17_PRIMARY_PROPERTIES_BY_SELECTOR.get(duplicate.selector))
+  );
+  const source = records.find(
+    (record) =>
+      record.source === expectedSourceFile &&
+      phase15HasExpectedProperties(record, PHASE17_SOURCE_PROPERTIES_BY_SELECTOR.get(duplicate.selector))
+  );
+
+  if (!primary) {
+    return { ...candidate, unsafeReason: "primary-declaration-missing" };
+  }
+  if (!source) {
+    return { ...candidate, unsafeReason: "source-declaration-drift" };
+  }
+
+  let sourceLocations = [source];
+  if (duplicate.selector === ".workspace-shell") {
+    const shadow = records.find(
+      (record) =>
+        record.source === PHASE17_SURFACE_NORMALIZATION_FILE &&
+        phase15HasExpectedProperties(record, PHASE17_WORKSPACE_SHADOW_PROPERTIES)
+    );
+    if (!shadow) {
+      return { ...candidate, unsafeReason: "primary-declaration-missing" };
+    }
+    sourceLocations = [source, shadow];
+    if ((primary.line || 0) >= (shadow.line || 0)) {
+      return { ...candidate, unsafeReason: "source-order-sensitive" };
+    }
+  }
+
+  return {
+    ...candidate,
+    candidateStatus: "safe",
+    approvedPhase17Target: true,
+    targetLocation: {
+      file: primary.source,
+      line: primary.line,
+      column: primary.column
+    },
+    sourceLocations: sourceLocations.map((record) => ({
+      file: record.source,
+      line: record.line,
+      column: record.column
+    })),
+    safetyChecks: {
+      sameLayer: true,
+      emptyAtRuleContext: true,
+      selectorListCoveragePreserved: true,
+      exactDeclarationMovement: true,
+      darkOverridePreserved: true,
+      ambientOverridePreserved: true,
+      noSpecificityChangingGrouping: true
+    }
+  };
+}
+
+function analyzePhase17SurfaceFinalPassCandidates(duplicates, baseline = loadBaseline()) {
+  const baselineEntries = new Map(((baseline && baseline.duplicateKeys) || []).map((entry) => [entry.key, entry]));
+  return duplicates
+    .map((duplicate) =>
+      analyzePhase17SurfaceFinalPassCandidate(duplicate, baselineEntries.get(duplicate.key) || duplicate.baselineEntry || duplicate)
+    )
+    .sort((left, right) => left.key.localeCompare(right.key));
+}
+
 function phase14FindRule(root, selectors) {
   let match = null;
   root.walkRules((rule) => {
@@ -2439,6 +2624,18 @@ function checkRuleDeclarations(rule, expected, failures, label) {
     if (!actual || normalizedDeclarationValue(actual.value) !== normalizedDeclarationValue(expectedValue)) {
       failures.push(`${label} must preserve ${property}: ${expectedValue}`);
     }
+  }
+}
+
+function checkRuleExactDeclarations(rule, expected, failures, label) {
+  checkRuleDeclarations(rule, expected, failures, label);
+  if (!rule) {
+    return;
+  }
+  const actualProperties = Array.from(declarationsByProperty(rule).keys()).sort();
+  const expectedProperties = Object.keys(expected).sort();
+  if (JSON.stringify(actualProperties) !== JSON.stringify(expectedProperties)) {
+    failures.push(`${label} declaration set drifted: expected ${expectedProperties.join(", ")}`);
   }
 }
 
@@ -2647,7 +2844,7 @@ function checkPhase16ReviewSurfaceSourceShape(failures, options = {}) {
   const surfaceRoot = options.surfaceRoot || parseCss(path.resolve(REPO_ROOT, PHASE16_SURFACE_NORMALIZATION_FILE));
   const operatorRoot = options.operatorRoot || parseCss(path.resolve(REPO_ROOT, PHASE16_OPERATOR_CONSOLE_FILE));
 
-  const sharedSurfaceRule = phase14FindRule(surfaceRoot, [
+  const phase16SharedSurfaceSelectors = [
     ".workspace-shell",
     ".shell-panel",
     ".shell-panel-strong",
@@ -2663,7 +2860,10 @@ function checkPhase16ReviewSurfaceSourceShape(failures, options = {}) {
     "#artifactMetadataCard",
     "#reconstructionRuntimeSummary",
     ".build-step-tab"
-  ]);
+  ];
+  const sharedSurfaceRule =
+    phase14FindRule(surfaceRoot, phase16SharedSurfaceSelectors) ||
+    phase14FindRule(surfaceRoot, phase16SharedSurfaceSelectors.filter((selector) => selector !== ".workspace-shell"));
   if (!sharedSurfaceRule) {
     failures.push(`${surfaceLabel} shared surface chrome selector list drifted`);
   }
@@ -2740,6 +2940,124 @@ function checkPhase16ReviewSurfaceSourceShape(failures, options = {}) {
   const shadowRule = phase14FindRule(surfaceRoot, [".console-context-card", ".build-pulse-card", ".runtime-briefing-card"]);
   if (!shadowRule) {
     failures.push(`${surfaceLabel} shared shadow selector list drifted`);
+  }
+}
+
+function checkPhase17SurfaceFinalPassSourceShape(failures, options = {}) {
+  const surfaceLabel = options.surfaceLabel || PHASE17_SURFACE_NORMALIZATION_FILE;
+  const operatorLabel = options.operatorLabel || PHASE17_OPERATOR_CONSOLE_FILE;
+  const shellLabel = options.shellLabel || PHASE17_SHELL_FOUNDATION_FILE;
+  const surfaceRoot = options.surfaceRoot || parseCss(path.resolve(REPO_ROOT, PHASE17_SURFACE_NORMALIZATION_FILE));
+  const operatorRoot = options.operatorRoot || parseCss(path.resolve(REPO_ROOT, PHASE17_OPERATOR_CONSOLE_FILE));
+  const shellRoot = options.shellRoot || parseCss(path.resolve(REPO_ROOT, PHASE17_SHELL_FOUNDATION_FILE));
+
+  const workspaceRule = phase14FindRule(surfaceRoot, [".workspace-shell"]);
+  checkRuleExactDeclarations(
+    workspaceRule,
+    {
+      position: "relative",
+      "border-radius": "var(--ux-radius-lg)",
+      "border-color": "var(--ux-border-subtle)",
+      background: "var(--ux-surface-elevated)",
+      transition:
+        "transform 0.35s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.35s ease, box-shadow 0.35s ease, background-color 0.35s ease",
+      "box-shadow": "var(--ux-shadow-surface)"
+    },
+    failures,
+    `${surfaceLabel} .workspace-shell`
+  );
+  if (phase14FindRule(shellRoot, [".workspace-shell"])) {
+    failures.push(`${shellLabel} .workspace-shell duplicate rule must be removed after Phase 17`);
+  }
+  const workspaceAmbientRule = phase14FindRule(shellRoot, [".workspace-shell[data-ambient-active=\"true\"]"]);
+  const darkWorkspaceAmbientRule = phase14FindRule(shellRoot, [".dark .workspace-shell[data-ambient-active=\"true\"]"]);
+  if (!workspaceAmbientRule || !darkWorkspaceAmbientRule) {
+    failures.push(`${shellLabel} workspace ambient-active overrides must remain after Phase 17`);
+  }
+  const darkWorkspaceRule = findRuleContainingSelector(surfaceRoot, ".dark .workspace-shell");
+  if (!darkWorkspaceRule) {
+    failures.push(`${surfaceLabel} .dark .workspace-shell override is missing`);
+  } else {
+    checkRuleDeclarations(
+      darkWorkspaceRule,
+      { background: "var(--ux-surface-muted)" },
+      failures,
+      `${surfaceLabel} .dark .workspace-shell`
+    );
+    if (workspaceRule?.source?.start?.line && darkWorkspaceRule.source?.start?.line <= workspaceRule.source.start.line) {
+      failures.push(`${surfaceLabel} .dark .workspace-shell must stay after light singleton`);
+    }
+  }
+
+  const shellNoiseRule = phase14FindRule(operatorRoot, [".shell-noise"]);
+  checkRuleExactDeclarations(
+    shellNoiseRule,
+    {
+      display: "none",
+      position: "fixed",
+      inset: "0",
+      "z-index": "-20",
+      "pointer-events": "none",
+      opacity: "0.2",
+      "background-image":
+        "radial-gradient(rgba(15, 23, 42, 0.08) 0.45px, transparent 0.45px), radial-gradient(rgba(8, 145, 178, 0.06) 0.45px, transparent 0.45px)",
+      "background-position": "0 0, 16px 16px",
+      "background-size": "22px 22px, 28px 28px"
+    },
+    failures,
+    `${operatorLabel} .shell-noise`
+  );
+  if (phase14FindRule(surfaceRoot, [".shell-noise"])) {
+    failures.push(`${surfaceLabel} .shell-noise duplicate rule must be removed after Phase 17`);
+  }
+  checkRuleDeclarations(
+    phase14FindRule(operatorRoot, [".dark .shell-noise"]),
+    {
+      opacity: "0.18",
+      "background-image":
+        "radial-gradient(rgba(255, 255, 255, 0.08) 0.45px, transparent 0.45px), radial-gradient(rgba(34, 211, 238, 0.08) 0.45px, transparent 0.45px)"
+    },
+    failures,
+    `${operatorLabel} .dark .shell-noise`
+  );
+
+  const provenanceLabelRule = findRuleContainingSelector(operatorRoot, ".review-provenance-label");
+  checkRuleExactDeclarations(
+    provenanceLabelRule,
+    {
+      "font-size": "13px",
+      "line-height": "1.45",
+      "letter-spacing": "var(--ux-meta-tracking)"
+    },
+    failures,
+    `${operatorLabel} .review-provenance-label`
+  );
+  if (findRuleContainingSelector(surfaceRoot, ".review-provenance-label")) {
+    failures.push(`${surfaceLabel} .review-provenance-label duplicate rule must be removed after Phase 17`);
+  }
+
+  const sharedSurfaceRule = phase14FindRule(surfaceRoot, [
+    ".shell-panel",
+    ".shell-panel-strong",
+    ".panel-subtle",
+    ".stat-tile",
+    ".console-context-card",
+    ".console-action-rail",
+    ".build-pulse-card",
+    ".runtime-briefing-card",
+    ".review-compare-summary",
+    "#artifactPreviewStage",
+    "#artifactMetadataBar",
+    "#artifactMetadataCard",
+    "#reconstructionRuntimeSummary",
+    ".build-step-tab"
+  ]);
+  if (!sharedSurfaceRule) {
+    failures.push(`${surfaceLabel} shared surface chrome selector list drifted after Phase 17`);
+  }
+  const sharedShadowRule = phase14FindRule(surfaceRoot, [".portal-topbar", ".portal-context-shell", ".shell-panel", ".shell-panel-strong"]);
+  if (!sharedShadowRule) {
+    failures.push(`${surfaceLabel} shared shadow selector list drifted after Phase 17`);
   }
 }
 
@@ -3292,6 +3610,73 @@ function buildPhase16ReviewSurfaceConsolidationState(duplicates, baseline, phase
   };
 }
 
+function buildPhase17SurfaceFinalPassConsolidationState(duplicates, baseline, phase8State) {
+  const baselineEntries = new Map(((baseline && baseline.duplicateKeys) || []).map((entry) => [entry.key, entry]));
+  const ownedDuplicateContextCount = duplicates.filter((duplicate) =>
+    phase9EntryIsOwned(baselineEntries.get(duplicate.key), duplicate)
+  ).length;
+  const duplicateKeys = new Set(duplicates.map((duplicate) => duplicate.key));
+  const consolidatedContexts = Array.from(PHASE17_TARGET_DUPLICATE_KEYS)
+    .filter((key) => !duplicateKeys.has(key))
+    .sort();
+  const remainingTargetContexts = Array.from(PHASE17_TARGET_DUPLICATE_KEYS)
+    .filter((key) => duplicateKeys.has(key))
+    .sort();
+  const cssText = readText(PORTAL_CSS_ASSET_PATH);
+  const generatedRawBytesAfter = Buffer.byteLength(cssText, "utf8");
+  const generatedGzipBytesAfter = gzipByteLength(cssText);
+  const generatedRawByteDelta = generatedRawBytesAfter - PHASE17_GENERATED_PORTAL_CSS_BYTES_BEFORE;
+  const generatedGzipByteDelta = generatedGzipBytesAfter - PHASE17_GENERATED_PORTAL_CSS_GZIP_BYTES_BEFORE;
+  const candidates = analyzePhase17SurfaceFinalPassCandidates(duplicates, baseline).filter(
+    (candidate) => candidate.declarationConflict === "additive" && candidate.removalStatus === "removable-later"
+  );
+
+  return {
+    phase: PHASE17_SURFACE_FINAL_PASS_PHASE,
+    targetSelectors: PHASE17_TARGET_SELECTORS,
+    targetFile: PHASE17_SURFACE_NORMALIZATION_FILE,
+    sourceFiles: [PHASE17_OPERATOR_CONSOLE_FILE, PHASE17_SHELL_FOUNDATION_FILE],
+    baselinePath: relativePath(BASELINE_PATH),
+    baselineSha256: existsSync(BASELINE_PATH) ? sha256File(BASELINE_PATH) : null,
+    duplicateContextCountBefore: PHASE17_DUPLICATE_CONTEXT_COUNT_BEFORE,
+    duplicateContextCountAfter: duplicates.length,
+    additiveDuplicateContextCountBefore: PHASE17_ADDITIVE_CONTEXT_COUNT_BEFORE,
+    additiveDuplicateContextCountAfter: countDuplicatesByCategory(duplicates, "additive"),
+    conflictingPermanentContextCountBefore: PHASE17_CONFLICTING_PERMANENT_CONTEXT_COUNT,
+    conflictingPermanentContextCountAfter: countDuplicatesByCategory(duplicates, "conflicting"),
+    unownedDuplicateContextCountAfter: duplicates.length - ownedDuplicateContextCount,
+    hotspotDuplicateContextCountAfter: duplicates.filter((duplicate) => duplicate.hotspot).length,
+    consolidatedContextCount: consolidatedContexts.length,
+    expectedConsolidatedContextCount: PHASE17_EXPECTED_CONSOLIDATED_CONTEXT_COUNT,
+    consolidatedContexts,
+    remainingTargetContexts,
+    unexpectedResolvedContextCount: Math.max(
+      0,
+      PHASE17_DUPLICATE_CONTEXT_COUNT_BEFORE - duplicates.length - consolidatedContexts.length
+    ),
+    nonTargetAdditiveCandidatesDeferredReason: "selector-not-phase17-target",
+    deferredOutOfScopeCandidateCount: candidates.filter(
+      (candidate) => candidate.unsafeReason === "selector-not-phase17-target"
+    ).length,
+    deferredReasonCounts: deferredReasonCounts(candidates),
+    phase16HistoricalEvidencePreserved: true,
+    removedRawBytes: Math.max(0, -generatedRawByteDelta),
+    removedGzipBytes: Math.max(0, -generatedGzipByteDelta),
+    generatedRawBytesBefore: PHASE17_GENERATED_PORTAL_CSS_BYTES_BEFORE,
+    generatedRawBytesAfter,
+    generatedRawByteDelta,
+    generatedGzipBytesBefore: PHASE17_GENERATED_PORTAL_CSS_GZIP_BYTES_BEFORE,
+    generatedGzipBytesAfter,
+    generatedGzipByteDelta,
+    generatedPortalCssHashBefore: PHASE17_GENERATED_PORTAL_CSS_HASH_BEFORE,
+    generatedPortalCssHashAfter: sha256File(PORTAL_CSS_ASSET_PATH),
+    renderedPortalCssFingerprintBefore: PHASE17_RENDERED_PORTAL_CSS_FINGERPRINT_BEFORE,
+    renderedPortalCssFingerprintAfter: renderedPortalCssFingerprint(),
+    sentinelStatePreserved: sentinelStateIsPreserved(phase8State),
+    parityBaselineChanged: false
+  };
+}
+
 function checkHistoricalPhase9State(report, failures) {
   const state = report.phase9DuplicateState || {};
   const expected = {
@@ -3371,6 +3756,10 @@ function checkHistoricalPhase15State(report, failures) {
   checkPhase15SurfaceLoadingConsolidationState(report.phase15SurfaceLoadingConsolidationState || {}, failures);
 }
 
+function checkHistoricalPhase16State(report, failures) {
+  checkPhase16ReviewSurfaceConsolidationState(report.phase16ReviewSurfaceConsolidationState || {}, failures);
+}
+
 function checkPhase15SurfaceLoadingConsolidationState(state, failures) {
   const expectedFields = {
     phase: PHASE15_SURFACE_LOADING_PHASE,
@@ -3441,6 +3830,41 @@ function checkPhase16ReviewSurfaceConsolidationState(state, failures) {
   }
 }
 
+function checkPhase17SurfaceFinalPassConsolidationState(state, failures) {
+  const expectedFields = {
+    phase: PHASE17_SURFACE_FINAL_PASS_PHASE,
+    duplicateContextCountBefore: PHASE17_DUPLICATE_CONTEXT_COUNT_BEFORE,
+    duplicateContextCountAfter: PHASE17_DUPLICATE_CONTEXT_COUNT_AFTER,
+    additiveDuplicateContextCountBefore: PHASE17_ADDITIVE_CONTEXT_COUNT_BEFORE,
+    additiveDuplicateContextCountAfter: PHASE17_ADDITIVE_CONTEXT_COUNT_AFTER,
+    conflictingPermanentContextCountBefore: PHASE17_CONFLICTING_PERMANENT_CONTEXT_COUNT,
+    conflictingPermanentContextCountAfter: PHASE17_CONFLICTING_PERMANENT_CONTEXT_COUNT,
+    unownedDuplicateContextCountAfter: 0,
+    hotspotDuplicateContextCountAfter: 0,
+    consolidatedContextCount: PHASE17_EXPECTED_CONSOLIDATED_CONTEXT_COUNT,
+    expectedConsolidatedContextCount: PHASE17_EXPECTED_CONSOLIDATED_CONTEXT_COUNT,
+    unexpectedResolvedContextCount: 0,
+    nonTargetAdditiveCandidatesDeferredReason: "selector-not-phase17-target",
+    phase16HistoricalEvidencePreserved: true,
+    sentinelStatePreserved: true,
+    parityBaselineChanged: false
+  };
+  for (const [field, value] of Object.entries(expectedFields)) {
+    if (state[field] !== value) {
+      failures.push(`${relativePath(OWNERSHIP_DRAIN_REPORT_PATH)} phase17SurfaceFinalPassConsolidationState ${field} must be ${value}`);
+    }
+  }
+  if (JSON.stringify(state.targetSelectors || []) !== JSON.stringify(PHASE17_TARGET_SELECTORS)) {
+    failures.push(`${relativePath(OWNERSHIP_DRAIN_REPORT_PATH)} phase17SurfaceFinalPassConsolidationState targetSelectors drifted`);
+  }
+  if (JSON.stringify(state.remainingTargetContexts || []) !== JSON.stringify([])) {
+    failures.push(`${relativePath(OWNERSHIP_DRAIN_REPORT_PATH)} phase17SurfaceFinalPassConsolidationState still has unresolved target contexts`);
+  }
+  if (JSON.stringify(state.consolidatedContexts || []) !== JSON.stringify(Array.from(PHASE17_TARGET_DUPLICATE_KEYS).sort())) {
+    failures.push(`${relativePath(OWNERSHIP_DRAIN_REPORT_PATH)} phase17SurfaceFinalPassConsolidationState consolidated context allowlist drifted`);
+  }
+}
+
 function checkOwnershipDrainReport(failures, duplicates) {
   if (!existsSync(OWNERSHIP_DRAIN_REPORT_PATH)) {
     failures.push(`${relativePath(OWNERSHIP_DRAIN_REPORT_PATH)} is missing`);
@@ -3493,7 +3917,7 @@ function checkOwnershipDrainReport(failures, duplicates) {
   const expectedPhase12State = expectedHistoricalPhase12ComponentSingletonConsolidationState();
   const expectedPhase13State = expectedHistoricalPhase13InteractionOutlineConsolidationState();
   const expectedPhase14State = expectedHistoricalPhase14SkeletonPrimitiveConsolidationState();
-  const expectedPhase16State = buildPhase16ReviewSurfaceConsolidationState(duplicates, loadBaseline(), expectedPhase8State);
+  const expectedPhase17State = buildPhase17SurfaceFinalPassConsolidationState(duplicates, loadBaseline(), expectedPhase8State);
 
   if (WRITE_OWNERSHIP_REPORT) {
     report.phase8SentinelState = expectedPhase8State;
@@ -3501,7 +3925,7 @@ function checkOwnershipDrainReport(failures, duplicates) {
     report.phase12ComponentSingletonConsolidationState = expectedPhase12State;
     report.phase13InteractionOutlineConsolidationState = expectedPhase13State;
     report.phase14SkeletonPrimitiveConsolidationState = expectedPhase14State;
-    report.phase16ReviewSurfaceConsolidationState = expectedPhase16State;
+    report.phase17SurfaceFinalPassConsolidationState = expectedPhase17State;
     writeFileSync(OWNERSHIP_DRAIN_REPORT_PATH, `${JSON.stringify(report, null, 2)}\n`, "utf-8");
   }
 
@@ -3516,13 +3940,14 @@ function checkOwnershipDrainReport(failures, duplicates) {
   checkHistoricalPhase13State(report, failures);
   checkHistoricalPhase14State(report, failures);
   checkHistoricalPhase15State(report, failures);
+  checkHistoricalPhase16State(report, failures);
 
-  checkPhase16ReviewSurfaceConsolidationState(expectedPhase16State, failures);
+  checkPhase17SurfaceFinalPassConsolidationState(expectedPhase17State, failures);
   if (
     !WRITE_OWNERSHIP_REPORT &&
-    JSON.stringify(report.phase16ReviewSurfaceConsolidationState || null) !== JSON.stringify(expectedPhase16State)
+    JSON.stringify(report.phase17SurfaceFinalPassConsolidationState || null) !== JSON.stringify(expectedPhase17State)
   ) {
-    failures.push(`${relativePath(OWNERSHIP_DRAIN_REPORT_PATH)} phase16ReviewSurfaceConsolidationState is stale`);
+    failures.push(`${relativePath(OWNERSHIP_DRAIN_REPORT_PATH)} phase17SurfaceFinalPassConsolidationState is stale`);
   }
 }
 
@@ -4004,6 +4429,89 @@ if (phase16ReviewSurfaceFixtureIndex >= 0) {
   process.exit(0);
 }
 
+if (phase17SurfaceFinalPassFixtureIndex >= 0) {
+  if (!PHASE17_SURFACE_FINAL_PASS_FIXTURE_PATH) {
+    console.error(`ERROR: ${PHASE17_SURFACE_FINAL_PASS_FIXTURE_ARG} requires a duplicate candidate JSON fixture path`);
+    process.exit(1);
+  }
+  const fixtureFailures = [];
+  const fixture = JSON.parse(readText(resolveFixturePath(PHASE17_SURFACE_FINAL_PASS_FIXTURE_PATH)));
+  const fixtureDuplicates = Array.isArray(fixture) ? fixture : fixture.duplicates || [];
+  const candidates = analyzePhase17SurfaceFinalPassCandidates(fixtureDuplicates, { duplicateKeys: fixture.baselineEntries || [] });
+  const candidateByKey = new Map(candidates.map((candidate) => [candidate.key, candidate]));
+  for (const expected of fixture.expectedCandidates || []) {
+    const candidate = candidateByKey.get(expected.key);
+    if (!candidate) {
+      fixtureFailures.push(`missing Phase 17 candidate ${expected.key}`);
+      continue;
+    }
+    if (expected.candidateStatus && candidate.candidateStatus !== expected.candidateStatus) {
+      fixtureFailures.push(
+        `Phase 17 candidate ${expected.key} expected ${expected.candidateStatus} but found ${candidate.candidateStatus}`
+      );
+    }
+    if (expected.unsafeReason && candidate.unsafeReason !== expected.unsafeReason) {
+      fixtureFailures.push(
+        `Phase 17 candidate ${expected.key} expected unsafeReason ${expected.unsafeReason} but found ${candidate.unsafeReason || "none"}`
+      );
+    }
+    if (expected.unsafeReason && !PHASE17_UNSAFE_REASONS.has(expected.unsafeReason)) {
+      fixtureFailures.push(`Phase 17 fixture expected unsupported unsafeReason ${expected.unsafeReason}`);
+    }
+  }
+  if (
+    fixture.expectedState &&
+    JSON.stringify(fixture.phase17SurfaceFinalPassConsolidationState || null) !== JSON.stringify(fixture.expectedState)
+  ) {
+    fixtureFailures.push("phase17SurfaceFinalPassConsolidationState is stale");
+  }
+  if (
+    fixture.expectedPhase16State &&
+    JSON.stringify(fixture.phase16ReviewSurfaceConsolidationState || null) !== JSON.stringify(fixture.expectedPhase16State)
+  ) {
+    fixtureFailures.push("phase16ReviewSurfaceConsolidationState immutable historical evidence drifted");
+  }
+  if (fixture.baselineEntries) {
+    for (const entry of fixture.baselineEntries) {
+      if (/selector-not-phase17-target/.test(String(entry.ownerReason || ""))) {
+        fixtureFailures.push("selector-not-phase17-target must not overwrite live baseline ownerReason");
+      }
+    }
+  }
+  if (fixture.sourceShape) {
+    const sourceShapeFailures = [];
+    checkPhase17SurfaceFinalPassSourceShape(sourceShapeFailures, {
+      surfaceRoot: parseCss("phase17-surface-final-pass.fixture.surface.css", fixture.sourceShape.surfaceCss || ""),
+      operatorRoot: parseCss("phase17-surface-final-pass.fixture.operator.css", fixture.sourceShape.operatorCss || ""),
+      shellRoot: parseCss("phase17-surface-final-pass.fixture.shell.css", fixture.sourceShape.shellCss || ""),
+      surfaceLabel: "phase17-surface-final-pass fixture surface",
+      operatorLabel: "phase17-surface-final-pass fixture operator",
+      shellLabel: "phase17-surface-final-pass fixture shell"
+    });
+    const expectedSourceShapeFailures = fixture.expectedSourceShapeFailures || [];
+    for (const expected of expectedSourceShapeFailures) {
+      if (!sourceShapeFailures.some((failure) => failure.includes(expected))) {
+        fixtureFailures.push(`missing Phase 17 source-shape failure ${expected}`);
+      }
+    }
+    for (const failure of sourceShapeFailures) {
+      if (!expectedSourceShapeFailures.some((expected) => failure.includes(expected))) {
+        fixtureFailures.push(`unexpected Phase 17 source-shape failure ${failure}`);
+      }
+    }
+  }
+  if (fixtureFailures.length > 0) {
+    for (const failure of fixtureFailures) {
+      console.error(`ERROR: ${failure}`);
+    }
+    process.exit(1);
+  }
+  console.log(
+    `portal css phase17 surface-final-pass fixture: OK (${candidates.filter((candidate) => candidate.candidateStatus === "safe").length} safe, ${candidates.filter((candidate) => candidate.candidateStatus === "deferred").length} deferred)`
+  );
+  process.exit(0);
+}
+
 const failures = [];
 const cssFiles = listFiles(PORTAL_CSS_SOURCE_DIR, (entryPath) => entryPath.endsWith(".css"));
 const records = collectRuleRecords(cssFiles, productionLayerBySourcePath());
@@ -4021,6 +4529,7 @@ checkLayerContract(failures);
 checkPhase14SkeletonSourceShape(failures);
 checkPhase15SurfaceLoadingSourceShape(failures);
 checkPhase16ReviewSurfaceSourceShape(failures);
+checkPhase17SurfaceFinalPassSourceShape(failures);
 checkOwnershipDrainReport(failures, duplicates);
 checkOverridesCompatNoNewIds(failures);
 checkOverridesCompatNoImportant(failures);

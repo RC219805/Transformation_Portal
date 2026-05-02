@@ -210,14 +210,6 @@
     background: rgba(15, 23, 42, 0.45);
 }
 
-.workspace-shell {
-    position: relative;
-    transition:
-        transform 0.35s cubic-bezier(0.16, 1, 0.3, 1),
-        border-color 0.35s ease,
-        box-shadow 0.35s ease,
-        background-color 0.35s ease;
-}
 .workspace-shell[data-ambient-active="true"] {
     border-color: rgba(34, 211, 238, 0.42);
     box-shadow:
