@@ -143,17 +143,13 @@
       "key": ".dark .dispatch-tool-btn|||",
       "category": "conflicting",
       "hotspot": false,
-      "owners": [
-        "compatibility-final-order"
-      ]
+      "owners": []
     },
     {
       "key": ".dark .hero-action-secondary|||",
       "category": "conflicting",
       "hotspot": false,
-      "owners": [
-        "compatibility-final-order"
-      ]
+      "owners": []
     },
     {
       "key": ".dark .panel-subtle|||",
@@ -189,9 +185,7 @@
       "key": ".dark .stepper-nav-btn|||",
       "category": "conflicting",
       "hotspot": false,
-      "owners": [
-        "compatibility-final-order"
-      ]
+      "owners": []
     },
     {
       "key": ".dark .surface-loading|||",
@@ -245,9 +239,7 @@
       "key": ".hero-action-secondary|||",
       "category": "conflicting",
       "hotspot": false,
-      "owners": [
-        "compatibility-final-order"
-      ]
+      "owners": []
     },
     {
       "key": ".job-chip|||",
@@ -271,9 +263,7 @@
       "key": ".operator-action-btn-secondary|||",
       "category": "conflicting",
       "hotspot": false,
-      "owners": [
-        "compatibility-final-order"
-      ]
+      "owners": []
     },
     {
       "key": ".overview-actions|||@media (max-width: 767px)",
@@ -303,9 +293,7 @@
       "key": ".portal-action-control|||",
       "category": "additive",
       "hotspot": false,
-      "owners": [
-        "compatibility-final-order"
-      ]
+      "owners": []
     },
     {
       "key": ".portal-context-shell|||",

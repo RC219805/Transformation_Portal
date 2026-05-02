@@ -1,37 +1,8 @@
-/* portal-override-owner: compatibility-final-order
-   reason: .portal-action-control min-height/border-radius override utilities-layer
-   rounded-full/rounded-lg classes on the four action buttons; moving to the components layer
-   would let those utilities win the cascade. Selector migrated from
-   #openRunDetailsBtn,#artifactCompareBtn,#themeBtn,#shortcutsBtn to the shared Phase 6
-   semantic hook.
-   removal-phase: phase-7-utility-markup-migration */
-.portal-action-control {
-  min-height: var(--ux-target-min-size);
-  border-radius: var(--ux-radius-md);
-}
-
-/* portal-override-owner: compatibility-final-order
-   reason: .portal-action-control border/background override utilities-layer
-   border-slate-200/bg-white classes on the four action buttons; moving to the components
-   layer would let those utilities win the cascade. .hero-action-secondary and
-   .operator-action-btn-secondary already share the same semantic chrome and stay grouped.
-   removal-phase: phase-7-utility-markup-migration */
-.hero-action-secondary,
-.operator-action-btn-secondary,
-.portal-action-control {
-  border-color: var(--ux-border-subtle);
-  background: var(--ux-surface-elevated);
-}
-
-/* portal-override-owner: compatibility-final-order
-   reason: dark-mode .portal-action-control background overrides utilities-layer
-   dark:bg-slate-900 / dark:border-slate-700 classes on the four action buttons; moving to the
-   components layer would let those utilities win the cascade.
-   removal-phase: phase-7-utility-markup-migration */
-.dark .hero-action-secondary,
-.dark .operator-action-btn-secondary,
-.dark .stepper-nav-btn,
-.dark .dispatch-tool-btn,
-.dark .portal-action-control {
-  background: var(--ux-surface-muted);
-}
+/* portal-override-owner: phase-7-sentinel
+   reason: intentionally empty after Phase 7. The Phase 6.6 architecture-check
+   gates (checkOverridesCompatNoNewIds, checkOverridesCompatNoImportant,
+   checkPhase6SemanticHooksPresent) keep this file frozen as a sentinel so any
+   future final-order compatibility rule has to be deliberately re-introduced.
+   The file is no longer imported by index.css; any new rule here is dead code
+   until the import is restored, which itself is a governance signal.
+   removal-phase: never (sentinel) */

@@ -1,13 +1,13 @@
 {
   "version": 1,
-  "phase": "phase-6-portal-css-semantic-ownership",
+  "phase": "phase-7-portal-css-utility-markup-migration",
   "parityBaseline": "tests/fixtures/portal-css/layer-parity-baseline.json",
   "summary": {
     "utilityLayerImportsBefore": 6,
     "utilityLayerImportsAfter": 3,
     "compatHoldCount": 0,
-    "overridesCompatRuleCount": 3,
-    "overridesCompatBytes": 1711,
+    "overridesCompatRuleCount": 0,
+    "overridesCompatBytes": 540,
     "drainedSelectorCount": 344
   },
   "moves": [
@@ -3152,86 +3152,6 @@
       "parity": "green"
     },
     {
-      "selector": ".portal-action-control",
-      "from": "overrides.compat.css (Phase 5 selector)",
-      "fromLayer": "overrides",
-      "to": "overrides.compat.css",
-      "toLayer": "overrides",
-      "classification": "compatibility-final-order",
-      "reason": "Phase 6 semantic ownership: replaces ID-specific selector with additive semantic class hook (markup unchanged); rule remains in overrides layer because moving to components would let utilities-layer cascade win; removable in phase-7-utility-markup-migration",
-      "parity": "green"
-    },
-    {
-      "selector": ".hero-action-secondary",
-      "from": "overrides.compat.css (Phase 5 selector)",
-      "fromLayer": "overrides",
-      "to": "overrides.compat.css",
-      "toLayer": "overrides",
-      "classification": "compatibility-final-order",
-      "reason": "Phase 6 semantic ownership: pre-existing class-based compatibility selector grouped with the .portal-action-control variants; rule remains in overrides layer because moving to components would let utilities-layer cascade win; removable in phase-7-utility-markup-migration",
-      "parity": "green"
-    },
-    {
-      "selector": ".operator-action-btn-secondary",
-      "from": "overrides.compat.css (Phase 5 selector)",
-      "fromLayer": "overrides",
-      "to": "overrides.compat.css",
-      "toLayer": "overrides",
-      "classification": "compatibility-final-order",
-      "reason": "Phase 6 semantic ownership: pre-existing class-based compatibility selector grouped with the .portal-action-control variants; rule remains in overrides layer because moving to components would let utilities-layer cascade win; removable in phase-7-utility-markup-migration",
-      "parity": "green"
-    },
-    {
-      "selector": ".dark .portal-action-control",
-      "from": "overrides.compat.css (Phase 5 selector)",
-      "fromLayer": "overrides",
-      "to": "overrides.compat.css",
-      "toLayer": "overrides",
-      "classification": "compatibility-final-order",
-      "reason": "Phase 6 semantic ownership: replaces ID-specific selector with additive semantic class hook (markup unchanged); rule remains in overrides layer because moving to components would let utilities-layer cascade win; removable in phase-7-utility-markup-migration",
-      "parity": "green"
-    },
-    {
-      "selector": ".dark .hero-action-secondary",
-      "from": "overrides.compat.css (Phase 5 selector)",
-      "fromLayer": "overrides",
-      "to": "overrides.compat.css",
-      "toLayer": "overrides",
-      "classification": "compatibility-final-order",
-      "reason": "Phase 6 semantic ownership: pre-existing class-based compatibility selector grouped with the .portal-action-control variants; rule remains in overrides layer because moving to components would let utilities-layer cascade win; removable in phase-7-utility-markup-migration",
-      "parity": "green"
-    },
-    {
-      "selector": ".dark .operator-action-btn-secondary",
-      "from": "overrides.compat.css (Phase 5 selector)",
-      "fromLayer": "overrides",
-      "to": "overrides.compat.css",
-      "toLayer": "overrides",
-      "classification": "compatibility-final-order",
-      "reason": "Phase 6 semantic ownership: pre-existing class-based compatibility selector grouped with the .portal-action-control variants; rule remains in overrides layer because moving to components would let utilities-layer cascade win; removable in phase-7-utility-markup-migration",
-      "parity": "green"
-    },
-    {
-      "selector": ".dark .stepper-nav-btn",
-      "from": "overrides.compat.css (Phase 5 selector)",
-      "fromLayer": "overrides",
-      "to": "overrides.compat.css",
-      "toLayer": "overrides",
-      "classification": "compatibility-final-order",
-      "reason": "Phase 6 semantic ownership: pre-existing class-based compatibility selector grouped with the .portal-action-control variants; rule remains in overrides layer because moving to components would let utilities-layer cascade win; removable in phase-7-utility-markup-migration",
-      "parity": "green"
-    },
-    {
-      "selector": ".dark .dispatch-tool-btn",
-      "from": "overrides.compat.css (Phase 5 selector)",
-      "fromLayer": "overrides",
-      "to": "overrides.compat.css",
-      "toLayer": "overrides",
-      "classification": "compatibility-final-order",
-      "reason": "Phase 6 semantic ownership: pre-existing class-based compatibility selector grouped with the .portal-action-control variants; rule remains in overrides layer because moving to components would let utilities-layer cascade win; removable in phase-7-utility-markup-migration",
-      "parity": "green"
-    },
-    {
       "selector": ".artifact-thumbnail-rail",
       "from": "overrides.compat.css",
       "fromLayer": "overrides",
@@ -3349,6 +3269,86 @@
       "toLayer": "components",
       "classification": "component-owned",
       "reason": "Phase 7.F: dropped p-4 utility from #artifactPreviewStage and #artifactMetadataBar markup; padding (1rem desktop, 0.95rem mobile) is now component-owned in workspace-surfaces.css.",
+      "parity": "green"
+    },
+    {
+      "selector": ".dark .dispatch-tool-btn",
+      "from": "overrides.compat.css",
+      "fromLayer": "overrides",
+      "to": "components/dispatch-surfaces.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "Phase 7.G: dropped rounded-full/rounded-lg/border-slate-{200,300}/dark:border-slate-700/bg-white/dark:bg-slate-900 from the four .portal-action-control buttons in markup; .stepper-nav-btn, .dispatch-tool-btn, .hero-action-secondary, .operator-action-btn-secondary already had no conflicting utilities. The three rules now live in dispatch-surfaces.css, declarations identical.",
+      "parity": "green"
+    },
+    {
+      "selector": ".dark .hero-action-secondary",
+      "from": "overrides.compat.css",
+      "fromLayer": "overrides",
+      "to": "components/dispatch-surfaces.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "Phase 7.G: dropped rounded-full/rounded-lg/border-slate-{200,300}/dark:border-slate-700/bg-white/dark:bg-slate-900 from the four .portal-action-control buttons in markup; .stepper-nav-btn, .dispatch-tool-btn, .hero-action-secondary, .operator-action-btn-secondary already had no conflicting utilities. The three rules now live in dispatch-surfaces.css, declarations identical.",
+      "parity": "green"
+    },
+    {
+      "selector": ".dark .operator-action-btn-secondary",
+      "from": "overrides.compat.css",
+      "fromLayer": "overrides",
+      "to": "components/dispatch-surfaces.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "Phase 7.G: dropped rounded-full/rounded-lg/border-slate-{200,300}/dark:border-slate-700/bg-white/dark:bg-slate-900 from the four .portal-action-control buttons in markup; .stepper-nav-btn, .dispatch-tool-btn, .hero-action-secondary, .operator-action-btn-secondary already had no conflicting utilities. The three rules now live in dispatch-surfaces.css, declarations identical.",
+      "parity": "green"
+    },
+    {
+      "selector": ".dark .portal-action-control",
+      "from": "overrides.compat.css",
+      "fromLayer": "overrides",
+      "to": "components/dispatch-surfaces.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "Phase 7.G: dropped rounded-full/rounded-lg/border-slate-{200,300}/dark:border-slate-700/bg-white/dark:bg-slate-900 from the four .portal-action-control buttons in markup; .stepper-nav-btn, .dispatch-tool-btn, .hero-action-secondary, .operator-action-btn-secondary already had no conflicting utilities. The three rules now live in dispatch-surfaces.css, declarations identical.",
+      "parity": "green"
+    },
+    {
+      "selector": ".dark .stepper-nav-btn",
+      "from": "overrides.compat.css",
+      "fromLayer": "overrides",
+      "to": "components/dispatch-surfaces.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "Phase 7.G: dropped rounded-full/rounded-lg/border-slate-{200,300}/dark:border-slate-700/bg-white/dark:bg-slate-900 from the four .portal-action-control buttons in markup; .stepper-nav-btn, .dispatch-tool-btn, .hero-action-secondary, .operator-action-btn-secondary already had no conflicting utilities. The three rules now live in dispatch-surfaces.css, declarations identical.",
+      "parity": "green"
+    },
+    {
+      "selector": ".hero-action-secondary",
+      "from": "overrides.compat.css",
+      "fromLayer": "overrides",
+      "to": "components/dispatch-surfaces.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "Phase 7.G: dropped rounded-full/rounded-lg/border-slate-{200,300}/dark:border-slate-700/bg-white/dark:bg-slate-900 from the four .portal-action-control buttons in markup; .stepper-nav-btn, .dispatch-tool-btn, .hero-action-secondary, .operator-action-btn-secondary already had no conflicting utilities. The three rules now live in dispatch-surfaces.css, declarations identical.",
+      "parity": "green"
+    },
+    {
+      "selector": ".operator-action-btn-secondary",
+      "from": "overrides.compat.css",
+      "fromLayer": "overrides",
+      "to": "components/dispatch-surfaces.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "Phase 7.G: dropped rounded-full/rounded-lg/border-slate-{200,300}/dark:border-slate-700/bg-white/dark:bg-slate-900 from the four .portal-action-control buttons in markup; .stepper-nav-btn, .dispatch-tool-btn, .hero-action-secondary, .operator-action-btn-secondary already had no conflicting utilities. The three rules now live in dispatch-surfaces.css, declarations identical.",
+      "parity": "green"
+    },
+    {
+      "selector": ".portal-action-control",
+      "from": "overrides.compat.css",
+      "fromLayer": "overrides",
+      "to": "components/dispatch-surfaces.css",
+      "toLayer": "components",
+      "classification": "component-owned",
+      "reason": "Phase 7.G: dropped rounded-full/rounded-lg/border-slate-{200,300}/dark:border-slate-700/bg-white/dark:bg-slate-900 from the four .portal-action-control buttons in markup; .stepper-nav-btn, .dispatch-tool-btn, .hero-action-secondary, .operator-action-btn-secondary already had no conflicting utilities. The three rules now live in dispatch-surfaces.css, declarations identical.",
       "parity": "green"
     }
   ]

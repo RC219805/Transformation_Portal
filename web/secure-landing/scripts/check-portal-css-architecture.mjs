@@ -40,7 +40,6 @@ const EXPECTED_LAYER_IMPORTS = [
   ["./utilities.required.css", "utilities"],
   ["./utilities.dynamic.css", "utilities"],
   ["./utilities.compat-hold.css", "utilities"],
-  ["./overrides.compat.css", "overrides"],
   ["./overrides.performance.css", "overrides"],
   ["./overrides.accessibility.css", "overrides"]
 ];

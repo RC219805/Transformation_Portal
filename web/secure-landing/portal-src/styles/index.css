@@ -14,6 +14,5 @@
 @import "./utilities.required.css" layer(utilities);
 @import "./utilities.dynamic.css" layer(utilities);
 @import "./utilities.compat-hold.css" layer(utilities);
-@import "./overrides.compat.css" layer(overrides);
 @import "./overrides.performance.css" layer(overrides);
 @import "./overrides.accessibility.css" layer(overrides);

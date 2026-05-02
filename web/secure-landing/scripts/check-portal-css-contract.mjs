@@ -44,7 +44,6 @@ const INDEX_REQUIRED_PATTERNS = [
   ["required utilities import", /@import\s+"\.\/utilities\.required\.css"\s+layer\(utilities\)\s*;/],
   ["dynamic utilities import", /@import\s+"\.\/utilities\.dynamic\.css"\s+layer\(utilities\)\s*;/],
   ["compat-hold utilities import", /@import\s+"\.\/utilities\.compat-hold\.css"\s+layer\(utilities\)\s*;/],
-  ["compatibility override import", /@import\s+"\.\/overrides\.compat\.css"\s+layer\(overrides\)\s*;/],
   ["performance overrides import", /@import\s+"\.\/overrides\.performance\.css"\s+layer\(overrides\)\s*;/],
   ["accessibility overrides import", /@import\s+"\.\/overrides\.accessibility\.css"\s+layer\(overrides\)\s*;/]
 ];
