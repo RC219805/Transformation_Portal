@@ -294,50 +294,6 @@
       "parity": "green"
     },
     {
-      "key": ".build-step-tab:hover|||components|||",
-      "selector": ".build-step-tab:hover",
-      "layer": "components",
-      "atRuleContext": [],
-      "stateContext": [
-        "hover"
-      ],
-      "category": "additive",
-      "hotspot": false,
-      "records": [
-        {
-          "source": "web/secure-landing/portal-src/styles/components/operator-console.css",
-          "line": 308,
-          "column": 1,
-          "layer": "components",
-          "declarationSignature": "dc9aed5f2e44941cf69bdbebe1a3989344d26001",
-          "properties": [
-            "border-color",
-            "transform"
-          ]
-        },
-        {
-          "source": "web/secure-landing/portal-src/styles/components/operator-console.css",
-          "line": 313,
-          "column": 1,
-          "layer": "components",
-          "declarationSignature": "c6adbedda933a610c9122baba1634bfab0fbc722",
-          "properties": [
-            "outline"
-          ]
-        }
-      ],
-      "owners": [
-        "portal-css-architecture"
-      ],
-      "ownerReason": "Additive ownership: .build-step-tab:hover splits non-overlapping declarations across operator-console.css while preserving the current computed-style parity.",
-      "phase": "phase-9-duplicate-ownership-closure",
-      "contextType": "runtime-state",
-      "disposition": "report-only",
-      "removalStatus": "removable-later",
-      "declarationConflict": "additive",
-      "parity": "green"
-    },
-    {
       "key": ".build-step-tab|||components|||",
       "selector": ".build-step-tab",
       "layer": "components",
@@ -1082,7 +1038,7 @@
       "records": [
         {
           "source": "web/secure-landing/portal-src/styles/components/dispatch-surfaces.css",
-          "line": 83,
+          "line": 87,
           "column": 1,
           "layer": "components",
           "declarationSignature": "8f2aa228f2aef8b70e3ce46d18dea0bb1630a553",
@@ -1092,7 +1048,7 @@
         },
         {
           "source": "web/secure-landing/portal-src/styles/components/dispatch-surfaces.css",
-          "line": 272,
+          "line": 276,
           "column": 1,
           "layer": "components",
           "declarationSignature": "fc2586449f338803de12e357dc8f462d2c3b6bb0",
@@ -1125,7 +1081,7 @@
       "records": [
         {
           "source": "web/secure-landing/portal-src/styles/components/dispatch-surfaces.css",
-          "line": 272,
+          "line": 276,
           "column": 1,
           "layer": "components",
           "declarationSignature": "fc2586449f338803de12e357dc8f462d2c3b6bb0",
@@ -1233,7 +1189,7 @@
       "records": [
         {
           "source": "web/secure-landing/portal-src/styles/components/operator-console.css",
-          "line": 430,
+          "line": 432,
           "column": 1,
           "layer": "components",
           "declarationSignature": "f5e9149a95f8092a470381d473a4e129791920f9",
@@ -1428,7 +1384,7 @@
       "records": [
         {
           "source": "web/secure-landing/portal-src/styles/components/dispatch-surfaces.css",
-          "line": 272,
+          "line": 276,
           "column": 1,
           "layer": "components",
           "declarationSignature": "fc2586449f338803de12e357dc8f462d2c3b6bb0",
@@ -1438,7 +1394,7 @@
         },
         {
           "source": "web/secure-landing/portal-src/styles/components/operator-console.css",
-          "line": 375,
+          "line": 377,
           "column": 1,
           "layer": "components",
           "declarationSignature": "7b9bf02de06123c983c8991ac7ec744929f7d6f5",
@@ -1471,7 +1427,7 @@
       "records": [
         {
           "source": "web/secure-landing/portal-src/styles/components/dispatch-surfaces.css",
-          "line": 230,
+          "line": 234,
           "column": 1,
           "layer": "components",
           "declarationSignature": "48ec29ca8e38fd2dc39714443c3ae8f371de97c5",
@@ -1481,7 +1437,7 @@
         },
         {
           "source": "web/secure-landing/portal-src/styles/components/operator-console.css",
-          "line": 419,
+          "line": 421,
           "column": 1,
           "layer": "components",
           "declarationSignature": "1895d78656600d09c0211323b37df3f89568aa11",
@@ -1515,7 +1471,7 @@
       "records": [
         {
           "source": "web/secure-landing/portal-src/styles/components/dispatch-surfaces.css",
-          "line": 133,
+          "line": 137,
           "column": 1,
           "layer": "components",
           "declarationSignature": "2e07182972052b0ad5631212c1a15e23b9121467",
@@ -1526,7 +1482,7 @@
         },
         {
           "source": "web/secure-landing/portal-src/styles/components/operator-console.css",
-          "line": 400,
+          "line": 402,
           "column": 1,
           "layer": "components",
           "declarationSignature": "39e4cb0f2c53489f862eed472eae613182bebda1",
@@ -1582,7 +1538,7 @@
         },
         {
           "source": "web/secure-landing/portal-src/styles/components/workspace-surfaces.css",
-          "line": 53,
+          "line": 57,
           "column": 1,
           "layer": "components",
           "declarationSignature": "b81be4dc21c8265949840b883dab3a109da5aa11",
@@ -1690,52 +1646,6 @@
       "disposition": "keep-owned",
       "removalStatus": "permanent",
       "declarationConflict": "conflicting",
-      "parity": "green"
-    },
-    {
-      "key": ".dispatch-tool-btn:hover|||components|||",
-      "selector": ".dispatch-tool-btn:hover",
-      "layer": "components",
-      "atRuleContext": [],
-      "stateContext": [
-        "hover"
-      ],
-      "category": "additive",
-      "hotspot": false,
-      "records": [
-        {
-          "source": "web/secure-landing/portal-src/styles/components/dispatch-surfaces.css",
-          "line": 64,
-          "column": 1,
-          "layer": "components",
-          "declarationSignature": "88260cb5759109ed6d311c893ae0e32492f8a215",
-          "properties": [
-            "background",
-            "border-color",
-            "color",
-            "transform"
-          ]
-        },
-        {
-          "source": "web/secure-landing/portal-src/styles/components/dispatch-surfaces.css",
-          "line": 71,
-          "column": 1,
-          "layer": "components",
-          "declarationSignature": "c6adbedda933a610c9122baba1634bfab0fbc722",
-          "properties": [
-            "outline"
-          ]
-        }
-      ],
-      "owners": [
-        "portal-css-architecture"
-      ],
-      "ownerReason": "Additive ownership: .dispatch-tool-btn:hover splits non-overlapping declarations across dispatch-surfaces.css while preserving the current computed-style parity.",
-      "phase": "phase-9-duplicate-ownership-closure",
-      "contextType": "runtime-state",
-      "disposition": "report-only",
-      "removalStatus": "removable-later",
-      "declarationConflict": "additive",
       "parity": "green"
     },
     {
@@ -1851,7 +1761,7 @@
       "records": [
         {
           "source": "web/secure-landing/portal-src/styles/components/dispatch-surfaces.css",
-          "line": 267,
+          "line": 271,
           "column": 1,
           "layer": "components",
           "declarationSignature": "e3c7a9b72249a3ca65b4134dee00060cb7fa297f",
@@ -1907,7 +1817,7 @@
       "records": [
         {
           "source": "web/secure-landing/portal-src/styles/components/operator-console.css",
-          "line": 434,
+          "line": 436,
           "column": 1,
           "layer": "components",
           "declarationSignature": "a55fdc0105f06323fd7e7ebcef83a69db75e6d47",
@@ -1918,7 +1828,7 @@
         },
         {
           "source": "web/secure-landing/portal-src/styles/components/operator-console.css",
-          "line": 489,
+          "line": 491,
           "column": 1,
           "layer": "components",
           "declarationSignature": "f3a55a040bffb350f8e55c7de9db8ec9d61779b7",
@@ -1929,7 +1839,7 @@
         },
         {
           "source": "web/secure-landing/portal-src/styles/components/workspace-surfaces.css",
-          "line": 216,
+          "line": 220,
           "column": 1,
           "layer": "components",
           "declarationSignature": "34be47bb55a82216dc070a4e28e1ff44c4662257",
@@ -1971,7 +1881,7 @@
       "records": [
         {
           "source": "web/secure-landing/portal-src/styles/components/operator-console.css",
-          "line": 434,
+          "line": 436,
           "column": 1,
           "layer": "components",
           "declarationSignature": "a55fdc0105f06323fd7e7ebcef83a69db75e6d47",
@@ -1982,7 +1892,7 @@
         },
         {
           "source": "web/secure-landing/portal-src/styles/components/operator-console.css",
-          "line": 489,
+          "line": 491,
           "column": 1,
           "layer": "components",
           "declarationSignature": "f3a55a040bffb350f8e55c7de9db8ec9d61779b7",
@@ -2003,7 +1913,7 @@
         },
         {
           "source": "web/secure-landing/portal-src/styles/components/workspace-surfaces.css",
-          "line": 121,
+          "line": 125,
           "column": 1,
           "layer": "components",
           "declarationSignature": "f329b3df32c96368a795cc2c0e383bea0f3a7c5b",
@@ -2095,7 +2005,7 @@
         },
         {
           "source": "web/secure-landing/portal-src/styles/components/dispatch-surfaces.css",
-          "line": 267,
+          "line": 271,
           "column": 1,
           "layer": "components",
           "declarationSignature": "e3c7a9b72249a3ca65b4134dee00060cb7fa297f",
@@ -2440,7 +2350,7 @@
       "records": [
         {
           "source": "web/secure-landing/portal-src/styles/components/operator-console.css",
-          "line": 489,
+          "line": 491,
           "column": 1,
           "layer": "components",
           "declarationSignature": "f3a55a040bffb350f8e55c7de9db8ec9d61779b7",
@@ -2482,7 +2392,7 @@
       "records": [
         {
           "source": "web/secure-landing/portal-src/styles/components/operator-console.css",
-          "line": 426,
+          "line": 428,
           "column": 1,
           "layer": "components",
           "declarationSignature": "1af88a14584f9a27d2a0ca9f820e576f9fb22fc9",
@@ -2798,7 +2708,7 @@
       "records": [
         {
           "source": "web/secure-landing/portal-src/styles/components/operator-console.css",
-          "line": 489,
+          "line": 491,
           "column": 1,
           "layer": "components",
           "declarationSignature": "f3a55a040bffb350f8e55c7de9db8ec9d61779b7",
@@ -2849,7 +2759,7 @@
       "records": [
         {
           "source": "web/secure-landing/portal-src/styles/components/dispatch-surfaces.css",
-          "line": 138,
+          "line": 142,
           "column": 1,
           "layer": "components",
           "declarationSignature": "af84cdbf319ce67bd2ceb10ccebf069b8a7aed11",
@@ -2862,7 +2772,7 @@
         },
         {
           "source": "web/secure-landing/portal-src/styles/components/dispatch-surfaces.css",
-          "line": 191,
+          "line": 195,
           "column": 1,
           "layer": "components",
           "declarationSignature": "a0c0e28291cbaf673ed65bd5e073d6627b33dd72",
@@ -2894,7 +2804,7 @@
       "records": [
         {
           "source": "web/secure-landing/portal-src/styles/components/dispatch-surfaces.css",
-          "line": 138,
+          "line": 142,
           "column": 1,
           "layer": "components",
           "declarationSignature": "af84cdbf319ce67bd2ceb10ccebf069b8a7aed11",
@@ -2907,7 +2817,7 @@
         },
         {
           "source": "web/secure-landing/portal-src/styles/components/dispatch-surfaces.css",
-          "line": 172,
+          "line": 176,
           "column": 1,
           "layer": "components",
           "declarationSignature": "86454ccb93f6051bebea0ff51c88da2eb8b2c2a8",
@@ -2940,7 +2850,7 @@
       "records": [
         {
           "source": "web/secure-landing/portal-src/styles/components/dispatch-surfaces.css",
-          "line": 138,
+          "line": 142,
           "column": 1,
           "layer": "components",
           "declarationSignature": "af84cdbf319ce67bd2ceb10ccebf069b8a7aed11",
@@ -2953,7 +2863,7 @@
         },
         {
           "source": "web/secure-landing/portal-src/styles/components/dispatch-surfaces.css",
-          "line": 200,
+          "line": 204,
           "column": 1,
           "layer": "components",
           "declarationSignature": "4c055b76dda1dd9138ad4820404a4807a1592b3a",
@@ -3089,7 +2999,7 @@
       "records": [
         {
           "source": "web/secure-landing/portal-src/styles/components/dispatch-surfaces.css",
-          "line": 218,
+          "line": 222,
           "column": 1,
           "layer": "components",
           "declarationSignature": "cf5afcf9204d35aa111deaa5c5af394c4339cd60",
@@ -3107,7 +3017,7 @@
         },
         {
           "source": "web/secure-landing/portal-src/styles/components/operator-console.css",
-          "line": 415,
+          "line": 417,
           "column": 1,
           "layer": "components",
           "declarationSignature": "d56fbe09fd3ffa78d9550a9ba41b25014f6a3e77",
@@ -3138,7 +3048,7 @@
       "records": [
         {
           "source": "web/secure-landing/portal-src/styles/components/dispatch-surfaces.css",
-          "line": 210,
+          "line": 214,
           "column": 1,
           "layer": "components",
           "declarationSignature": "b7f47d4c1309d96f28a1f9b4f7a4e776c77926c8",
@@ -3150,7 +3060,7 @@
         },
         {
           "source": "web/secure-landing/portal-src/styles/components/operator-console.css",
-          "line": 408,
+          "line": 410,
           "column": 1,
           "layer": "components",
           "declarationSignature": "c85b13adf789eedf56e19acd0075b2208e031930",
@@ -3182,7 +3092,7 @@
       "records": [
         {
           "source": "web/secure-landing/portal-src/styles/components/dispatch-surfaces.css",
-          "line": 119,
+          "line": 123,
           "column": 1,
           "layer": "components",
           "declarationSignature": "b0747a90f8cfcf8023b7e6b82ca11a5eb50422ca",
@@ -3198,7 +3108,7 @@
         },
         {
           "source": "web/secure-landing/portal-src/styles/components/operator-console.css",
-          "line": 392,
+          "line": 394,
           "column": 1,
           "layer": "components",
           "declarationSignature": "ac170cc848fb9dd863aa879972e36fe11a17b2e1",
@@ -3306,7 +3216,7 @@
         },
         {
           "source": "web/secure-landing/portal-src/styles/components/workspace-surfaces.css",
-          "line": 72,
+          "line": 76,
           "column": 1,
           "layer": "components",
           "declarationSignature": "aa92b9225d209e60eb052f4201a7de37cf66e653",
@@ -3351,7 +3261,7 @@
         },
         {
           "source": "web/secure-landing/portal-src/styles/components/workspace-surfaces.css",
-          "line": 94,
+          "line": 98,
           "column": 1,
           "layer": "components",
           "declarationSignature": "bb4408013744b71e6d1cd420495b38da7106b1e5",
@@ -3396,7 +3306,7 @@
         },
         {
           "source": "web/secure-landing/portal-src/styles/components/workspace-surfaces.css",
-          "line": 79,
+          "line": 83,
           "column": 1,
           "layer": "components",
           "declarationSignature": "9283336ec38561bffa5db89f19ce8f8388bfe583",
@@ -3425,52 +3335,6 @@
       "disposition": "keep-owned",
       "removalStatus": "permanent",
       "declarationConflict": "conflicting",
-      "parity": "green"
-    },
-    {
-      "key": ".workspace-link:hover|||components|||",
-      "selector": ".workspace-link:hover",
-      "layer": "components",
-      "atRuleContext": [],
-      "stateContext": [
-        "hover"
-      ],
-      "category": "additive",
-      "hotspot": false,
-      "records": [
-        {
-          "source": "web/secure-landing/portal-src/styles/components/workspace-surfaces.css",
-          "line": 32,
-          "column": 1,
-          "layer": "components",
-          "declarationSignature": "791bb96c33677554bc9bf8e40a9900d49f485500",
-          "properties": [
-            "background",
-            "border-color",
-            "box-shadow",
-            "transform"
-          ]
-        },
-        {
-          "source": "web/secure-landing/portal-src/styles/components/workspace-surfaces.css",
-          "line": 39,
-          "column": 1,
-          "layer": "components",
-          "declarationSignature": "c6adbedda933a610c9122baba1634bfab0fbc722",
-          "properties": [
-            "outline"
-          ]
-        }
-      ],
-      "owners": [
-        "portal-css-architecture"
-      ],
-      "ownerReason": "Additive ownership: .workspace-link:hover splits non-overlapping declarations across workspace-surfaces.css while preserving the current computed-style parity.",
-      "phase": "phase-9-duplicate-ownership-closure",
-      "contextType": "runtime-state",
-      "disposition": "report-only",
-      "removalStatus": "removable-later",
-      "declarationConflict": "additive",
       "parity": "green"
     },
     {

@@ -182,6 +182,26 @@ UTILITY_PREFIXES = (
 )
 REVIEW_STATUS_TONES = ("ready", "warning", "error", "info")
 REVIEW_STATUS_THEMES = ("light", "dark")
+INTERACTION_OUTLINE_PROBES = (
+    {
+        "name": "build-step-tab",
+        "selector": ".build-step-tab:not(.is-disabled)",
+        "sharedProperties": ("transform", "borderColor"),
+        "combinedOutlineStyle": "solid",
+    },
+    {
+        "name": "dispatch-tool-btn",
+        "selector": ".dispatch-tool-btn:not(.dispatch-tool-btn-primary):not([disabled])",
+        "sharedProperties": ("transform", "borderColor", "backgroundColor", "color"),
+        "combinedOutlineStyle": "none",
+    },
+    {
+        "name": "workspace-link",
+        "selector": ".workspace-link:not(.is-active)",
+        "sharedProperties": ("transform", "borderColor", "backgroundColor", "boxShadow"),
+        "combinedOutlineStyle": "none",
+    },
+)
 PORTAL_PARITY_FEATURE_ENV = {
     "TP_PORTAL_UPLOAD_STAGING_ENABLED": "1",
     "TP_PORTAL_STAGED_UPLOADS_ROLLOUT_PERCENT": "100",
@@ -579,6 +599,173 @@ def _validate_overview_mobile_states(connection: DevToolsConnection) -> None:
         raise SmokeFailure("Overview mobile parity probe failed:\n" + "\n".join(failures))
 
 
+def _interaction_outline_setup_expression() -> str:
+    return r"""
+(() => {
+  try {
+    window.localStorage.setItem('tp_theme', 'dark');
+    window.localStorage.setItem('tp_theme_version', '2');
+  } catch (_error) {}
+  document.documentElement.classList.remove('light');
+  document.documentElement.classList.add('dark');
+  document.documentElement.classList.remove('performance-lite');
+  if (typeof state === 'object' && state?.portalUi) {
+    state.portalUi.buildStep = 4;
+    state.portalUi.disclosurePrefs = state.portalUi.disclosurePrefs || {};
+    state.portalUi.disclosurePrefs.dispatchTools = true;
+  }
+  if (typeof updateUIFromState === 'function') {
+    updateUIFromState();
+  }
+  if (typeof setBuildStep === 'function') {
+    setBuildStep(4, { silent: true });
+  }
+  const dispatchTools = document.getElementById('dispatchToolsDetails');
+  if (dispatchTools) {
+    dispatchTools.open = true;
+    dispatchTools.classList.remove('hidden');
+    dispatchTools.removeAttribute('hidden');
+  }
+  const dispatchTool = document.querySelector('.dispatch-tool-btn:not(.dispatch-tool-btn-primary):not([disabled])');
+  let current = dispatchTool;
+  while (current && current !== document.body) {
+    current.classList.remove('hidden');
+    current.hidden = false;
+    current.removeAttribute('hidden');
+    current = current.parentElement;
+  }
+  return {
+    buildStepTab: Boolean(document.querySelector('.build-step-tab:not(.is-disabled)')),
+    dispatchToolButton: Boolean(dispatchTool),
+    workspaceLink: Boolean(document.querySelector('.workspace-link:not(.is-active)')),
+    activeWorkspaceLink: Boolean(document.querySelector('.workspace-link.is-active')),
+    dispatchToolsOpen: Boolean(dispatchTools?.open)
+  };
+})()
+"""
+
+
+def _node_id_for_selector(connection: DevToolsConnection, selector: str) -> int:
+    document = connection.call("DOM.getDocument", {"depth": -1, "pierce": True}, timeout_seconds=20.0)
+    root = document.get("root") or {}
+    root_node_id = int(root.get("nodeId") or 0)
+    if root_node_id <= 0:
+        raise SmokeFailure("DevTools DOM root node is unavailable")
+    result = connection.call("DOM.querySelector", {"nodeId": root_node_id, "selector": selector}, timeout_seconds=20.0)
+    node_id = int(result.get("nodeId") or 0)
+    if node_id <= 0:
+        raise SmokeFailure(f"Interaction outline probe target missing: {selector}")
+    return node_id
+
+
+def _interaction_outline_read_expression(selector: str) -> str:
+    selector_json = json.dumps(selector)
+    return f"""
+(() => {{
+  const el = document.querySelector({selector_json});
+  if (!el) return {{ present: false }};
+  const style = window.getComputedStyle(el);
+  return {{
+    present: true,
+    hover: el.matches(':hover'),
+    focusVisible: el.matches(':focus-visible'),
+    outlineStyle: style.outlineStyle,
+    outlineWidth: style.outlineWidth,
+    outlineColor: style.outlineColor,
+    transform: style.transform,
+    borderColor: style.borderColor,
+    backgroundColor: style.backgroundColor,
+    color: style.color,
+    boxShadow: style.boxShadow
+  }};
+}})()
+"""
+
+
+def _validate_interaction_outline_states(connection: DevToolsConnection) -> None:
+    setup = connection.evaluate(_interaction_outline_setup_expression(), timeout_seconds=20.0)
+    if not isinstance(setup, dict):
+        raise SmokeFailure("Interaction outline probe setup did not return a status object")
+    setup_expectations = {
+        "buildStepTab": ".build-step-tab:not(.is-disabled)",
+        "dispatchToolButton": ".dispatch-tool-btn:not(.dispatch-tool-btn-primary):not([disabled])",
+        "workspaceLink": ".workspace-link:not(.is-active)",
+        "activeWorkspaceLink": ".workspace-link.is-active",
+        "dispatchToolsOpen": "#dispatchToolsDetails[open]",
+    }
+    failures: list[str] = []
+    for key, label in setup_expectations.items():
+        if not setup.get(key):
+            failures.append(f"setup: expected {label} to be available")
+    if failures:
+        raise SmokeFailure("Interaction outline parity probe failed:\n" + "\n".join(failures))
+
+    connection.call("DOM.enable", {}, timeout_seconds=20.0)
+    connection.call("CSS.enable", {}, timeout_seconds=20.0)
+    for probe in INTERACTION_OUTLINE_PROBES:
+        name = str(probe["name"])
+        selector = str(probe["selector"])
+        shared_properties = tuple(str(property_name) for property_name in probe["sharedProperties"])
+        combined_outline_style = str(probe.get("combinedOutlineStyle") or "none")
+        node_id = _node_id_for_selector(connection, selector)
+
+        def force_and_read(pseudo_classes: list[str]) -> dict[str, Any]:
+            connection.call(
+                "CSS.forcePseudoState",
+                {"nodeId": node_id, "forcedPseudoClasses": pseudo_classes},
+                timeout_seconds=20.0,
+            )
+            connection.evaluate(_style_settle_expression(), timeout_seconds=20.0)
+            result = connection.evaluate(_interaction_outline_read_expression(selector), timeout_seconds=20.0)
+            if not isinstance(result, dict) or not result.get("present"):
+                raise SmokeFailure(f"Interaction outline probe target disappeared: {selector}")
+            return result
+
+        try:
+            force_and_read([])
+            hover = force_and_read(["hover"])
+            focus_visible = force_and_read(["focus-visible"])
+            combined = force_and_read(["hover", "focus-visible"])
+        finally:
+            connection.call(
+                "CSS.forcePseudoState",
+                {"nodeId": node_id, "forcedPseudoClasses": []},
+                timeout_seconds=20.0,
+            )
+
+        if hover.get("hover") is not True:
+            failures.append(f"{name}: hover pseudo-state was not applied")
+        if hover.get("focusVisible"):
+            failures.append(f"{name}: hover-only probe unexpectedly matched :focus-visible")
+        if focus_visible.get("focusVisible") is not True:
+            failures.append(f"{name}: focus-visible pseudo-state was not applied")
+        if focus_visible.get("hover"):
+            failures.append(f"{name}: focus-visible-only probe unexpectedly matched :hover")
+        if combined.get("hover") is not True or combined.get("focusVisible") is not True:
+            failures.append(f"{name}: combined hover + focus-visible state was not applied")
+
+        if hover.get("outlineStyle") != "none":
+            failures.append(f"{name}: hover outlineStyle is {hover.get('outlineStyle')!r}, expected 'none'")
+        if focus_visible.get("outlineStyle") == "none":
+            failures.append(f"{name}: focus-visible-only outline was suppressed")
+        if combined.get("outlineStyle") != combined_outline_style:
+            failures.append(
+                f"{name}: combined hover + focus-visible outlineStyle is {combined.get('outlineStyle')!r}, expected {combined_outline_style!r}"
+            )
+
+        for property_name in shared_properties:
+            hover_value = str(hover.get(property_name) or "")
+            focus_value = str(focus_visible.get(property_name) or "")
+            combined_value = str(combined.get(property_name) or "")
+            if focus_value != hover_value:
+                failures.append(f"{name}: focus-visible {property_name} drifted from hover value")
+            if combined_value != hover_value:
+                failures.append(f"{name}: combined {property_name} drifted from hover value")
+
+    if failures:
+        raise SmokeFailure("Interaction outline parity probe failed:\n" + "\n".join(failures))
+
+
 def _enable_portal_feature_rollouts_for_spawn() -> dict[str, Optional[str]]:
     previous: dict[str, Optional[str]] = {}
     if not {
@@ -933,6 +1120,7 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
 
         _validate_review_status_tone_states(connection)
         _validate_overview_mobile_states(connection)
+        _validate_interaction_outline_states(connection)
 
         runtime_utility_classes = _collect_runtime_utility_classes(
             connection,
