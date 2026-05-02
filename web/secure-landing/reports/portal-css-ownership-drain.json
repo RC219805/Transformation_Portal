@@ -3762,5 +3762,54 @@
     "renderedPortalCssFingerprintAfter": "c798785d38cf",
     "sentinelStatePreserved": true,
     "parityBaselineChanged": false
+  },
+  "phase15SurfaceLoadingConsolidationState": {
+    "phase": "phase-15-surface-loading-consolidation",
+    "targetSelectors": [
+      ".surface-loading",
+      ".surface-loading::after",
+      ".dark .surface-loading"
+    ],
+    "targetFile": "web/secure-landing/portal-src/styles/components/dispatch-surfaces.css",
+    "sourceFile": "web/secure-landing/portal-src/styles/components/operator-console.css",
+    "baselinePath": "web/secure-landing/portal-src/styles/architecture-baseline.json",
+    "baselineSha256": "884b9047026141de53ee94786de40d6aa4054a4d9e1bd987e4356126e9146fe2",
+    "duplicateContextCountBefore": 67,
+    "duplicateContextCountAfter": 64,
+    "additiveDuplicateContextCountBefore": 11,
+    "additiveDuplicateContextCountAfter": 8,
+    "conflictingPermanentContextCountBefore": 56,
+    "conflictingPermanentContextCountAfter": 56,
+    "unownedDuplicateContextCountAfter": 0,
+    "hotspotDuplicateContextCountAfter": 0,
+    "consolidatedContextCount": 3,
+    "expectedConsolidatedContextCount": 3,
+    "consolidatedContexts": [
+      ".dark .surface-loading|||components|||",
+      ".surface-loading::after|||components|||",
+      ".surface-loading|||components|||"
+    ],
+    "remainingTargetContexts": [],
+    "unexpectedResolvedContextCount": 0,
+    "nonTargetAdditiveCandidatesDeferredReason": "selector-not-phase15-target",
+    "deferredOutOfScopeCandidateCount": 8,
+    "deferredReasonCounts": {
+      "selector-not-phase15-target": 8
+    },
+    "phase14HistoricalEvidencePreserved": true,
+    "removedRawBytes": 63,
+    "removedGzipBytes": 13,
+    "generatedRawBytesBefore": 80661,
+    "generatedRawBytesAfter": 80598,
+    "generatedRawByteDelta": -63,
+    "generatedGzipBytesBefore": 15738,
+    "generatedGzipBytesAfter": 15725,
+    "generatedGzipByteDelta": -13,
+    "generatedPortalCssHashBefore": "4598d98fd19ccaf0728403838d7dfdc395cc1904b1cb147af559ecda6bce726a",
+    "generatedPortalCssHashAfter": "eb245c4f90079fb63803aa1ccbfc40e771a6bf53f85a6b48994fabdea8c62281",
+    "renderedPortalCssFingerprintBefore": "c798785d38cf",
+    "renderedPortalCssFingerprintAfter": "ba13115d7572",
+    "sentinelStatePreserved": true,
+    "parityBaselineChanged": false
   }
 }

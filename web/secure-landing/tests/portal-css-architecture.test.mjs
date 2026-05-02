@@ -300,6 +300,26 @@ function runPhase14SkeletonFixtureFailure(fixture) {
   assert.fail("Phase 14 skeleton fixture unexpectedly passed");
 }
 
+function runPhase15SurfaceLoadingFixture(fixture) {
+  const tempDir = mkdtempSync(path.join(tmpdir(), "portal-phase15-surface-loading-"));
+  const fixturePath = path.join(tempDir, "phase15.json");
+  writeFileSync(fixturePath, `${JSON.stringify(fixture, null, 2)}\n`, "utf8");
+  try {
+    return runNodeScript("scripts/check-portal-css-architecture.mjs", "--check-phase15-surface-loading-fixture", fixturePath);
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
+}
+
+function runPhase15SurfaceLoadingFixtureFailure(fixture) {
+  try {
+    runPhase15SurfaceLoadingFixture(fixture);
+  } catch (error) {
+    return `${error.stdout || ""}${error.stderr || ""}`;
+  }
+  assert.fail("Phase 15 surface-loading fixture unexpectedly passed");
+}
+
 function phase10AdditiveDuplicate(overrides = {}) {
   const selector = overrides.selector || ".owned";
   return {
@@ -503,6 +523,110 @@ function phase14SkeletonDuplicate(overrides = {}) {
         declarations: singleton.declarations,
         declarationSignature: "skeleton-singleton",
         properties: singleton.properties
+      }
+    ],
+    ...overrides
+  };
+}
+
+function phase15SurfaceLoadingDuplicate(overrides = {}) {
+  const selector = overrides.selector || ".surface-loading";
+  const dispatchProperties = {
+    ".surface-loading": {
+      declarations: [
+        ["position", "relative", false],
+        [
+          "box-shadow",
+          "inset 0 0 0 1px rgba(15, 118, 110, 0.12), 0 18px 40px rgba(15, 23, 42, 0.08)",
+          false
+        ],
+        ["transition", "box-shadow 0.2s ease, border-color 0.2s ease", false]
+      ],
+      properties: ["box-shadow", "position", "transition"]
+    },
+    ".surface-loading::after": {
+      declarations: [
+        ["content", "\"\"", false],
+        ["position", "absolute", false],
+        ["left", "1rem", false],
+        ["right", "1rem", false],
+        ["top", "0.75rem", false],
+        ["height", "2px", false],
+        ["border-radius", "999px", false],
+        ["pointer-events", "none", false],
+        ["opacity", "0.82", false]
+      ],
+      properties: ["border-radius", "content", "height", "left", "opacity", "pointer-events", "position", "right", "top"]
+    },
+    ".dark .surface-loading": {
+      declarations: [
+        [
+          "box-shadow",
+          "inset 0 0 0 1px rgba(45, 212, 191, 0.18), 0 22px 48px rgba(2, 6, 23, 0.3)",
+          false
+        ]
+      ],
+      properties: ["box-shadow"]
+    }
+  };
+  const operatorProperties = {
+    ".surface-loading": {
+      declarations: [
+        ["border", "1px solid rgba(148, 163, 184, 0.16)", false],
+        [
+          "background",
+          "linear-gradient(180deg, rgba(255, 255, 255, 0.84), rgba(248, 250, 252, 0.76)), rgba(255, 255, 255, 0.8)",
+          false
+        ]
+      ],
+      properties: ["background", "border"]
+    },
+    ".surface-loading::after": {
+      declarations: [["background", "linear-gradient(90deg, transparent, rgba(34, 211, 238, 0.18), transparent)", false]],
+      properties: ["background"]
+    },
+    ".dark .surface-loading": {
+      declarations: [
+        ["border-color", "rgba(71, 85, 105, 0.48)", false],
+        [
+          "background",
+          "linear-gradient(180deg, rgba(15, 23, 42, 0.84), var(--shell-veil-strong)), rgba(15, 23, 42, 0.78)",
+          false
+        ]
+      ],
+      properties: ["background", "border-color"]
+    }
+  };
+  const propertySelector = dispatchProperties[selector] ? selector : ".surface-loading";
+  return {
+    key: overrides.key || `${selector}|||components|||`,
+    selector,
+    layer: "components",
+    context: [],
+    stateContext: [],
+    category: "additive",
+    hotspot: false,
+    removalStatus: "removable-later",
+    records: overrides.records || [
+      {
+        source: "web/secure-landing/portal-src/styles/components/dispatch-surfaces.css",
+        line: 217,
+        column: 1,
+        layer: "components",
+        selectorList: [selector],
+        declarations: dispatchProperties[propertySelector].declarations,
+        declarationSignature: "surface-loading-dispatch",
+        properties: dispatchProperties[propertySelector].properties
+      },
+      {
+        source: "web/secure-landing/portal-src/styles/components/operator-console.css",
+        line: 410,
+        column: 1,
+        layer: "components",
+        selectorList: [selector],
+        declarations: operatorProperties[propertySelector].declarations,
+        declarationSignature: "surface-loading-operator",
+        properties: operatorProperties[propertySelector].properties
       }
     ],
     ...overrides
@@ -1473,6 +1597,130 @@ test("portal CSS Phase 14 skeleton fixtures constrain primitive consolidation", 
   );
 });
 
+test("portal CSS Phase 15 surface-loading fixtures constrain loading consolidation", () => {
+  const surfaceLoading = phase15SurfaceLoadingDuplicate();
+  const surfaceLoadingAfter = phase15SurfaceLoadingDuplicate({
+    key: ".surface-loading::after|||components|||",
+    selector: ".surface-loading::after"
+  });
+  const darkSurfaceLoading = phase15SurfaceLoadingDuplicate({
+    key: ".dark .surface-loading|||components|||",
+    selector: ".dark .surface-loading"
+  });
+  const outOfScope = phase15SurfaceLoadingDuplicate({
+    key: ".review-status-banner|||components|||",
+    selector: ".review-status-banner"
+  });
+  const operatorDeclarationDrift = phase15SurfaceLoadingDuplicate({
+    records: [
+      phase15SurfaceLoadingDuplicate().records[0],
+      {
+        ...phase15SurfaceLoadingDuplicate().records[1],
+        declarations: [["border", "1px solid rgba(148, 163, 184, 0.16)", false]],
+        properties: ["border"]
+      }
+    ]
+  });
+  const dispatchDeclarationMissing = phase15SurfaceLoadingDuplicate({
+    records: [
+      {
+        ...phase15SurfaceLoadingDuplicate().records[0],
+        declarations: [["position", "relative", false]],
+        properties: ["position"]
+      },
+      phase15SurfaceLoadingDuplicate().records[1]
+    ]
+  });
+  const sourceFileDrift = phase15SurfaceLoadingDuplicate({
+    records: [
+      {
+        ...phase15SurfaceLoadingDuplicate().records[0],
+        source: "web/secure-landing/portal-src/styles/components/surface-normalization.css"
+      },
+      phase15SurfaceLoadingDuplicate().records[1]
+    ]
+  });
+  const specificityChanging = phase15SurfaceLoadingDuplicate({
+    records: [
+      {
+        ...phase15SurfaceLoadingDuplicate().records[0],
+        ruleSelector: ":where(.surface-loading)"
+      },
+      phase15SurfaceLoadingDuplicate().records[1]
+    ]
+  });
+  const conflictingPermanent = phase15SurfaceLoadingDuplicate({
+    category: "conflicting",
+    removalStatus: "permanent"
+  });
+  const hotspot = phase15SurfaceLoadingDuplicate({
+    key: ".shell-bg|||components|||",
+    selector: ".shell-bg",
+    hotspot: true
+  });
+
+  assert.match(
+    runPhase15SurfaceLoadingFixture({
+      duplicates: [surfaceLoading, surfaceLoadingAfter, darkSurfaceLoading, outOfScope, hotspot],
+      baselineEntries: [baselineEntryFor(outOfScope)],
+      expectedCandidates: [
+        { key: surfaceLoading.key, candidateStatus: "safe" },
+        { key: surfaceLoadingAfter.key, candidateStatus: "safe" },
+        { key: darkSurfaceLoading.key, candidateStatus: "safe" },
+        { key: outOfScope.key, candidateStatus: "deferred", unsafeReason: "selector-not-phase15-target" },
+        { key: hotspot.key, candidateStatus: "deferred", unsafeReason: "hotspot" }
+      ]
+    }),
+    /portal css phase15 surface-loading fixture: OK/
+  );
+
+  for (const [duplicate, unsafeReason] of [
+    [operatorDeclarationDrift, "operator-declaration-drift"],
+    [dispatchDeclarationMissing, "dispatch-declaration-missing"],
+    [sourceFileDrift, "source-file-drift"],
+    [specificityChanging, "specificity-changing-grouping"],
+    [conflictingPermanent, "conflicting-permanent"]
+  ]) {
+    assert.match(
+      runPhase15SurfaceLoadingFixture({
+        duplicates: [duplicate],
+        expectedCandidates: [{ key: duplicate.key, candidateStatus: "deferred", unsafeReason }]
+      }),
+      /portal css phase15 surface-loading fixture: OK/
+    );
+  }
+
+  assert.match(
+    runPhase15SurfaceLoadingFixtureFailure({
+      duplicates: [surfaceLoading],
+      expectedState: { phase: "phase-15-surface-loading-consolidation" },
+      phase15SurfaceLoadingConsolidationState: { phase: "stale" }
+    }),
+    /phase15SurfaceLoadingConsolidationState is stale/
+  );
+
+  assert.match(
+    runPhase15SurfaceLoadingFixtureFailure({
+      duplicates: [surfaceLoading],
+      expectedPhase14State: { phase: "phase-14-skeleton-primitive-consolidation" },
+      phase14SkeletonPrimitiveConsolidationState: { phase: "stale" }
+    }),
+    /phase14SkeletonPrimitiveConsolidationState immutable historical evidence drifted/
+  );
+
+  assert.match(
+    runPhase15SurfaceLoadingFixtureFailure({
+      duplicates: [outOfScope],
+      baselineEntries: [
+        baselineEntryFor(outOfScope, {
+          ownerReason: "selector-not-phase15-target"
+        })
+      ]
+    }),
+    /selector-not-phase15-target must not overwrite live baseline ownerReason/
+  );
+});
+
 test("portal CSS layer parity make target checks generated artifact freshness", () => {
   const makefile = readFileSync(MAKEFILE_PATH, "utf8");
   const start = makefile.indexOf("validate-portal-css-layer-parity:");
@@ -1900,11 +2148,69 @@ test("portal CSS ownership drain keeps utilities layer honest", () => {
   assert.equal(ownershipDrain.phase14SkeletonPrimitiveConsolidationState.renderedPortalCssFingerprintAfter, "c798785d38cf");
   assert.equal(ownershipDrain.phase14SkeletonPrimitiveConsolidationState.sentinelStatePreserved, true);
   assert.equal(ownershipDrain.phase14SkeletonPrimitiveConsolidationState.parityBaselineChanged, false);
+  assert.equal(ownershipDrain.phase15SurfaceLoadingConsolidationState.phase, "phase-15-surface-loading-consolidation");
+  assert.deepEqual(ownershipDrain.phase15SurfaceLoadingConsolidationState.targetSelectors, [
+    ".surface-loading",
+    ".surface-loading::after",
+    ".dark .surface-loading"
+  ]);
+  assert.equal(
+    ownershipDrain.phase15SurfaceLoadingConsolidationState.targetFile,
+    "web/secure-landing/portal-src/styles/components/dispatch-surfaces.css"
+  );
+  assert.equal(
+    ownershipDrain.phase15SurfaceLoadingConsolidationState.sourceFile,
+    "web/secure-landing/portal-src/styles/components/operator-console.css"
+  );
+  assert.equal(ownershipDrain.phase15SurfaceLoadingConsolidationState.duplicateContextCountBefore, 67);
+  assert.equal(ownershipDrain.phase15SurfaceLoadingConsolidationState.duplicateContextCountAfter, 64);
+  assert.equal(ownershipDrain.phase15SurfaceLoadingConsolidationState.additiveDuplicateContextCountBefore, 11);
+  assert.equal(ownershipDrain.phase15SurfaceLoadingConsolidationState.additiveDuplicateContextCountAfter, 8);
+  assert.equal(ownershipDrain.phase15SurfaceLoadingConsolidationState.conflictingPermanentContextCountBefore, 56);
+  assert.equal(ownershipDrain.phase15SurfaceLoadingConsolidationState.conflictingPermanentContextCountAfter, 56);
+  assert.equal(ownershipDrain.phase15SurfaceLoadingConsolidationState.unownedDuplicateContextCountAfter, 0);
+  assert.equal(ownershipDrain.phase15SurfaceLoadingConsolidationState.hotspotDuplicateContextCountAfter, 0);
+  assert.equal(ownershipDrain.phase15SurfaceLoadingConsolidationState.consolidatedContextCount, 3);
+  assert.equal(ownershipDrain.phase15SurfaceLoadingConsolidationState.expectedConsolidatedContextCount, 3);
+  assert.deepEqual(ownershipDrain.phase15SurfaceLoadingConsolidationState.consolidatedContexts, [
+    ".dark .surface-loading|||components|||",
+    ".surface-loading::after|||components|||",
+    ".surface-loading|||components|||"
+  ]);
+  assert.deepEqual(ownershipDrain.phase15SurfaceLoadingConsolidationState.remainingTargetContexts, []);
+  assert.equal(ownershipDrain.phase15SurfaceLoadingConsolidationState.unexpectedResolvedContextCount, 0);
+  assert.equal(
+    ownershipDrain.phase15SurfaceLoadingConsolidationState.nonTargetAdditiveCandidatesDeferredReason,
+    "selector-not-phase15-target"
+  );
+  assert.equal(ownershipDrain.phase15SurfaceLoadingConsolidationState.deferredOutOfScopeCandidateCount, 8);
+  assert.deepEqual(ownershipDrain.phase15SurfaceLoadingConsolidationState.deferredReasonCounts, {
+    "selector-not-phase15-target": 8
+  });
+  assert.equal(ownershipDrain.phase15SurfaceLoadingConsolidationState.phase14HistoricalEvidencePreserved, true);
+  assert.equal(ownershipDrain.phase15SurfaceLoadingConsolidationState.generatedRawBytesBefore, 80661);
+  assert.equal(ownershipDrain.phase15SurfaceLoadingConsolidationState.generatedRawBytesAfter, 80598);
+  assert.equal(ownershipDrain.phase15SurfaceLoadingConsolidationState.generatedRawByteDelta, -63);
+  assert.equal(ownershipDrain.phase15SurfaceLoadingConsolidationState.generatedGzipBytesBefore, 15738);
+  assert.equal(ownershipDrain.phase15SurfaceLoadingConsolidationState.generatedGzipBytesAfter, 15725);
+  assert.equal(ownershipDrain.phase15SurfaceLoadingConsolidationState.generatedGzipByteDelta, -13);
+  assert.equal(
+    ownershipDrain.phase15SurfaceLoadingConsolidationState.generatedPortalCssHashBefore,
+    "4598d98fd19ccaf0728403838d7dfdc395cc1904b1cb147af559ecda6bce726a"
+  );
+  assert.equal(
+    ownershipDrain.phase15SurfaceLoadingConsolidationState.generatedPortalCssHashAfter,
+    "eb245c4f90079fb63803aa1ccbfc40e771a6bf53f85a6b48994fabdea8c62281"
+  );
+  assert.equal(ownershipDrain.phase15SurfaceLoadingConsolidationState.renderedPortalCssFingerprintBefore, "c798785d38cf");
+  assert.equal(ownershipDrain.phase15SurfaceLoadingConsolidationState.renderedPortalCssFingerprintAfter, "ba13115d7572");
+  assert.equal(ownershipDrain.phase15SurfaceLoadingConsolidationState.sentinelStatePreserved, true);
+  assert.equal(ownershipDrain.phase15SurfaceLoadingConsolidationState.parityBaselineChanged, false);
   assert.match(
     readFileSync(ARCHITECTURE_SCRIPT_PATH, "utf8"),
-    /report\.phase14SkeletonPrimitiveConsolidationState = expectedPhase14State;/
+    /report\.phase15SurfaceLoadingConsolidationState = expectedPhase15State;/
   );
-  assert.equal(duplicateBaseline.duplicateKeys.length, 67);
+  assert.equal(duplicateBaseline.duplicateKeys.length, 64);
   assert.ok(
     duplicateBaseline.duplicateKeys.every((entry) => entry.phase === "phase-9-duplicate-ownership-closure"),
     "all duplicate baseline entries must be Phase 9-owned"
