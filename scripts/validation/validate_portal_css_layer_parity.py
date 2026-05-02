@@ -337,24 +337,99 @@ def _review_status_tone_probe_expression() -> str:
   const tones = {tones};
   const themes = {themes};
   const results = [];
-  for (const theme of themes) {{
+  const root = document.documentElement;
+  const rootClassSnapshot = {{
+    present: root.hasAttribute('class'),
+    value: root.getAttribute('class')
+  }};
+  const storageSnapshot = {{}};
+  for (const key of ['tp_theme', 'tp_theme_version']) {{
     try {{
-      window.localStorage.setItem('tp_theme', theme);
-      window.localStorage.setItem('tp_theme_version', '2');
+      storageSnapshot[key] = {{
+        present: window.localStorage.getItem(key) !== null,
+        value: window.localStorage.getItem(key)
+      }};
     }} catch (_error) {{}}
-    const root = document.documentElement;
-    root.classList.toggle('light', theme === 'light');
-    root.classList.toggle('dark', theme === 'dark');
-    root.classList.remove('performance-lite');
-    if (typeof updateUIFromState === 'function') {{
-      updateUIFromState();
+  }}
+  const banner = document.getElementById('reviewStatusBanner');
+  const mutatedNodes = [];
+  const bannerSnapshot = banner ? {{
+    innerHTML: banner.innerHTML,
+    attributes: ['data-tone', 'data-ui', 'aria-hidden'].map((name) => ({{
+      name,
+      present: banner.hasAttribute(name),
+      value: banner.getAttribute(name)
+    }}))
+  }} : null;
+  if (banner) {{
+    let current = banner;
+    while (current && current !== document.body) {{
+      mutatedNodes.push({{
+        node: current,
+        className: current.className,
+        hidden: current.hidden,
+        hiddenAttributePresent: current.hasAttribute('hidden'),
+        hiddenAttributeValue: current.getAttribute('hidden'),
+        styleDisplay: current.style.display,
+        styleVisibility: current.style.visibility
+      }});
+      current = current.parentElement;
     }}
-    for (const tone of tones) {{
-      const banner = document.getElementById('reviewStatusBanner');
-      if (!banner) {{
-        results.push({{ theme, tone, present: false }});
-        continue;
+  }}
+  const restore = () => {{
+    if (rootClassSnapshot.present) {{
+      root.setAttribute('class', rootClassSnapshot.value || '');
+    }} else {{
+      root.removeAttribute('class');
+    }}
+    for (const [key, snapshot] of Object.entries(storageSnapshot)) {{
+      try {{
+        if (snapshot.present) {{
+          window.localStorage.setItem(key, snapshot.value || '');
+        }} else {{
+          window.localStorage.removeItem(key);
+        }}
+      }} catch (_error) {{}}
+    }}
+    for (const snapshot of mutatedNodes.reverse()) {{
+      snapshot.node.className = snapshot.className;
+      snapshot.node.hidden = snapshot.hidden;
+      if (snapshot.hiddenAttributePresent) {{
+        snapshot.node.setAttribute('hidden', snapshot.hiddenAttributeValue || '');
+      }} else {{
+        snapshot.node.removeAttribute('hidden');
       }}
+      snapshot.node.style.display = snapshot.styleDisplay;
+      snapshot.node.style.visibility = snapshot.styleVisibility;
+    }}
+    if (banner && bannerSnapshot) {{
+      banner.innerHTML = bannerSnapshot.innerHTML;
+      for (const attribute of bannerSnapshot.attributes) {{
+        if (attribute.present) {{
+          banner.setAttribute(attribute.name, attribute.value || '');
+        }} else {{
+          banner.removeAttribute(attribute.name);
+        }}
+      }}
+    }}
+  }};
+  try {{
+    for (const theme of themes) {{
+      try {{
+        window.localStorage.setItem('tp_theme', theme);
+        window.localStorage.setItem('tp_theme_version', '2');
+      }} catch (_error) {{}}
+      root.classList.toggle('light', theme === 'light');
+      root.classList.toggle('dark', theme === 'dark');
+      root.classList.remove('performance-lite');
+      if (typeof updateUIFromState === 'function') {{
+        updateUIFromState();
+      }}
+      for (const tone of tones) {{
+        if (!banner) {{
+          results.push({{ theme, tone, present: false }});
+          continue;
+        }}
       let current = banner;
       while (current && current !== document.body) {{
         current.classList.remove('hidden');
@@ -370,7 +445,6 @@ def _review_status_tone_probe_expression() -> str:
       }}
       banner.dataset.tone = tone;
       banner.dataset.ui = 'review-status-banner';
-      banner.textContent = `Review status ${{tone}} parity probe`;
       banner.setAttribute('aria-hidden', 'false');
       await new Promise((resolve) => window.requestAnimationFrame(() => resolve(true)));
       const style = window.getComputedStyle(banner);
@@ -384,6 +458,9 @@ def _review_status_tone_probe_expression() -> str:
         borderColor: style.borderColor
       }});
     }}
+    }}
+  }} finally {{
+    restore();
   }}
   return results;
 }})()

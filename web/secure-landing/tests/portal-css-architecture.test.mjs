@@ -6,6 +6,8 @@ import path from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
+import postcss from "postcss";
+
 const __filename = fileURLToPath(import.meta.url);
 const FRONTDOOR_ROOT = path.resolve(path.dirname(__filename), "..");
 const MAKEFILE_PATH = path.resolve(FRONTDOOR_ROOT, "..", "..", "Makefile");
@@ -289,6 +291,29 @@ function phase11SurfaceDuplicate(overrides = {}) {
     ],
     ...overrides
   };
+}
+
+function normalizedSelectorList(selectorText) {
+  return selectorText.split(",").map((selector) => selector.trim().replace(/\s+/g, " ")).sort();
+}
+
+function declarationsForRule(rule) {
+  const declarations = new Map();
+  rule.walkDecls((decl) => {
+    declarations.set(decl.prop, decl.value);
+  });
+  return declarations;
+}
+
+function findRuleBySelectors(root, selectors) {
+  const expected = [...selectors].sort();
+  let match = null;
+  root.walkRules((rule) => {
+    if (JSON.stringify(normalizedSelectorList(rule.selector)) === JSON.stringify(expected)) {
+      match = rule;
+    }
+  });
+  return match;
 }
 
 test("portal CSS lint script checks generated artifact freshness and architecture gates", () => {
@@ -768,20 +793,36 @@ test("portal CSS Phase 11 consolidation preserves explicit surface boundaries", 
     path.join(FRONTDOOR_ROOT, "portal-src", "styles", "components", "surface-normalization.css"),
     "utf8"
   );
+  const root = postcss.parse(surfaceNormalization);
 
-  const topbarRadiusBlock = surfaceNormalization.match(/\.portal-topbar,\n\.portal-context-shell \{[\s\S]*?\n\}/)?.[0] || "";
-  assert.match(topbarRadiusBlock, /border-radius: var\(--ux-radius-lg\);/);
-  assert.doesNotMatch(topbarRadiusBlock, /background:/);
-  assert.doesNotMatch(topbarRadiusBlock, /border-color:/);
+  const topbarRule = findRuleBySelectors(root, [".portal-topbar", ".portal-context-shell"]);
+  assert.ok(topbarRule, "portal topbar/context shell radius rule must exist");
+  const topbarDeclarations = declarationsForRule(topbarRule);
+  assert.equal(topbarDeclarations.get("border-radius"), "var(--ux-radius-lg)");
+  assert.equal(topbarDeclarations.has("background"), false);
+  assert.equal(topbarDeclarations.has("border-color"), false);
   assert.doesNotMatch(surfaceNormalization, /:(?:is|where)\(/);
-  assert.match(surfaceNormalization, /\.review-status-banner\[data-tone="ready"\] \{\n    background: var\(--ux-surface-overlay\);/);
-  assert.match(surfaceNormalization, /\.review-status-banner\[data-tone="warning"\] \{\n    background: var\(--ux-surface-overlay\);/);
-  assert.match(surfaceNormalization, /\.review-status-banner\[data-tone="error"\] \{\n    background: var\(--ux-surface-overlay\);/);
-  assert.match(surfaceNormalization, /\.review-status-banner\[data-tone="info"\] \{\n    background: var\(--ux-surface-overlay\);/);
-  assert.match(
-    surfaceNormalization,
-    /\.console-action-rail\[data-tone="ready"\],\n\.console-action-rail\[data-tone="warning"\],\n\.console-action-rail\[data-tone="blocked"\] \{/
-  );
+
+  for (const [tone, borderColor] of [
+    ["ready", "rgba(15, 118, 110, 0.24)"],
+    ["warning", "rgba(180, 83, 9, 0.26)"],
+    ["error", "rgba(185, 28, 28, 0.26)"],
+    ["info", "rgba(8, 145, 178, 0.24)"]
+  ]) {
+    const toneRule = findRuleBySelectors(root, [`.review-status-banner[data-tone="${tone}"]`]);
+    assert.ok(toneRule, `review status ${tone} singleton rule must exist`);
+    const toneDeclarations = declarationsForRule(toneRule);
+    assert.equal(toneDeclarations.get("background"), "var(--ux-surface-overlay)");
+    assert.equal(toneDeclarations.get("border-color"), borderColor);
+  }
+
+  const consoleToneRule = findRuleBySelectors(root, [
+    ".console-action-rail[data-tone=\"ready\"]",
+    ".console-action-rail[data-tone=\"warning\"]",
+    ".console-action-rail[data-tone=\"blocked\"]"
+  ]);
+  assert.ok(consoleToneRule, "console action rail shared tone background rule must exist");
+  assert.equal(declarationsForRule(consoleToneRule).get("background"), "var(--ux-surface-overlay)");
 });
 
 test("portal CSS ownership drain keeps utilities layer honest", () => {
@@ -907,8 +948,12 @@ test("portal CSS parity census forces feature states and canonical theme hooks",
   assert.match(validator, /portalState\.auth\.features\.reviewSurfaceDeferred = true/);
   assert.match(validator, /REVIEW_STATUS_TONES = \("ready", "warning", "error", "info"\)/);
   assert.match(validator, /document\.getElementById\('reviewStatusBanner'\)/);
+  assert.match(validator, /rootClassSnapshot/);
+  assert.match(validator, /storageSnapshot/);
+  assert.match(validator, /bannerSnapshot/);
   assert.match(validator, /current\.classList\.remove\('hidden'\)/);
   assert.match(validator, /banner\.dataset\.tone = tone/);
+  assert.match(validator, /finally \{\{\n    restore\(\);/);
   assert.match(validator, /_validate_review_status_tone_states\(connection\)/);
 });
 
