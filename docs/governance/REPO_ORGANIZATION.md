@@ -157,7 +157,7 @@ Only these files should remain in the repository root:
 - **Linting configuration**: `.pylintrc`, `.flake8`, `mypy.ini`
 - **Docker**: `Dockerfile`, `docker-compose.yml`
 - **Git**: `.gitignore`, `.gitattributes`, `.git-blame-ignore-revs`, `.pre-commit-config.yaml`
-- **Governance metadata**: `.architect_directive_status.yml`, `AGENTS.md`
+- **Governance metadata**: `.architect_directive_status.yml`, `AGENTS.md`, `CLAUDE.md`
 - **Runtime entrypoints**: `app.py`, `portal.html`
 - **Organization system**: `.auto-organize.sh`
 
