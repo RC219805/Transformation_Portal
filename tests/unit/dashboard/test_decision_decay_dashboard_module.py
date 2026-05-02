@@ -9,6 +9,7 @@ from typing import Any
 
 import pytest
 
+from transformation_portal.analyzers.codebase_philosophy_auditor import Violation
 from transformation_portal.analyzers.decision_decay_dashboard import (
     ColorTokenReport,
     ColorTokenUsage,
@@ -24,14 +25,15 @@ from transformation_portal.analyzers.decision_decay_dashboard import (
     render_dashboard,
     render_github_annotations,
 )
-from transformation_portal.analyzers.codebase_philosophy_auditor import Violation
 
 pytestmark = [pytest.mark.unit]
 
 
 def test_valid_until_from_decorator_extracts_deadline_and_reason(tmp_path: Path) -> None:
     path = tmp_path / "sample.py"
-    decorator = ast.parse('@valid_until("2030-01-02", reason="cleanup")\ndef test_case():\n    pass\n').body[0].decorator_list[0]
+    decorator = (
+        ast.parse('@valid_until("2030-01-02", reason="cleanup")\ndef test_case():\n    pass\n').body[0].decorator_list[0]
+    )
 
     deadline, reason = _valid_until_from_decorator(decorator, path)
 
@@ -256,8 +258,12 @@ def test_parse_args_and_main_wire_collectors_and_renderers(monkeypatch: pytest.M
     def _render(records, principle_summaries, color_report):
         calls["render"] = (records, principle_summaries, color_report)
 
-    monkeypatch.setattr("transformation_portal.analyzers.decision_decay_dashboard.collect_valid_until_records", _collect_valid_until)
-    monkeypatch.setattr("transformation_portal.analyzers.decision_decay_dashboard.collect_philosophy_violations", _collect_philosophy)
+    monkeypatch.setattr(
+        "transformation_portal.analyzers.decision_decay_dashboard.collect_valid_until_records", _collect_valid_until
+    )
+    monkeypatch.setattr(
+        "transformation_portal.analyzers.decision_decay_dashboard.collect_philosophy_violations", _collect_philosophy
+    )
     monkeypatch.setattr("transformation_portal.analyzers.decision_decay_dashboard.collect_color_token_report", _collect_colors)
     monkeypatch.setattr("transformation_portal.analyzers.decision_decay_dashboard.export_json", _export)
     monkeypatch.setattr("transformation_portal.analyzers.decision_decay_dashboard.render_github_annotations", _annotate)
