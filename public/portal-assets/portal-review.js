@@ -267,6 +267,119 @@ function createDeferredReviewSurfaceApi(host) {
     els.runCardActions.classList.remove("hidden");
     els.runCardActions.classList.add("flex");
   }
+  function _isVlmCaptionSidecarArtifact(artifact) {
+    if (!artifact) return false;
+    const role = String(artifactDisplayHint(artifact)?.role || "").toLowerCase();
+    const relPath = String(artifact.relative_path || artifact.path || "").toLowerCase();
+    return role === "vlm_caption" || relPath.endsWith(".vlm_captioning.sidecar.json");
+  }
+  function _captionStemFromArtifact(artifact) {
+    const relPath = String(artifact?.relative_path || artifact?.path || "");
+    const fileName = relPath.split("/").pop() || "";
+    return fileName.replace(/\.vlm_captioning\.sidecar\.json$/i, "").replace(/\.vlm_captioning\.raw\.txt$/i, "").replace(/_proxy\.(png|jpe?g)$/i, "");
+  }
+  function _findVlmCaptionSidecar(job, artifact) {
+    if (!artifact) return null;
+    if (_isVlmCaptionSidecarArtifact(artifact)) return artifact;
+    const artifacts = Array.isArray(job?.artifacts) ? job.artifacts : [];
+    const selectedStem = _captionStemFromArtifact(artifact);
+    return artifacts.find((candidate) => {
+      if (!_isVlmCaptionSidecarArtifact(candidate)) return false;
+      if (!selectedStem) return true;
+      return _captionStemFromArtifact(candidate) === selectedStem;
+    }) || null;
+  }
+  function _captionListText(value) {
+    if (Array.isArray(value)) return value.filter(Boolean).join(", ");
+    return String(value || "").trim();
+  }
+  function _appendCaptionRow(container, label, value) {
+    const text = _captionListText(value);
+    if (!text) return;
+    const row = document.createElement("div");
+    row.className = "grid grid-cols-[88px_minmax(0,1fr)] gap-3 text-[12px] leading-5";
+    const labelNode = document.createElement("dt");
+    labelNode.className = "font-semibold text-slate-700 dark:text-slate-200";
+    labelNode.textContent = label;
+    const valueNode = document.createElement("dd");
+    valueNode.className = "min-w-0 text-slate-600 dark:text-slate-300";
+    valueNode.textContent = text;
+    row.append(labelNode, valueNode);
+    container.appendChild(row);
+  }
+  function _renderAdvisoryCaptionPayload(panel, payload, sidecarArtifact) {
+    panel.innerHTML = "";
+    const root = payload?.vlm_captioning || {};
+    const caption = root.caption || {};
+    const title = document.createElement("p");
+    title.className = "text-[12px] font-semibold text-slate-800 dark:text-slate-100";
+    title.textContent = "Advisory VLM caption. Not used for quality gates.";
+    panel.appendChild(title);
+    const fields = document.createElement("dl");
+    fields.className = "mt-3 space-y-1";
+    _appendCaptionRow(fields, "Scene", caption.scene);
+    _appendCaptionRow(fields, "Materials", caption.materials);
+    _appendCaptionRow(fields, "Features", caption.features);
+    _appendCaptionRow(fields, "Natural", caption.natural);
+    _appendCaptionRow(fields, "Lighting", caption.lighting);
+    _appendCaptionRow(fields, "Warnings", root.warnings);
+    _appendCaptionRow(fields, "Model", root.model);
+    panel.appendChild(fields);
+    const proxyPath = String(root.image_proxy?.proxy_path || "").trim();
+    if (proxyPath) {
+      const proxy = document.createElement("p");
+      proxy.className = "mt-3 break-all text-[11px] text-slate-500 dark:text-slate-400";
+      proxy.textContent = `Proxy: ${proxyPath}`;
+      panel.appendChild(proxy);
+    }
+    const rawText = String(root.raw_model_text || "").trim();
+    if (rawText) {
+      const details = document.createElement("details");
+      details.className = "mt-3 text-[12px] text-slate-600 dark:text-slate-300";
+      const summary = document.createElement("summary");
+      summary.className = "cursor-pointer font-semibold text-slate-700 dark:text-slate-200";
+      summary.textContent = "Raw output";
+      const pre = document.createElement("pre");
+      pre.className = "mt-2 max-h-[220px] overflow-y-auto whitespace-pre-wrap break-words rounded border border-slate-200 bg-slate-50 p-3 text-[11px] leading-5 dark:border-slate-700 dark:bg-slate-900";
+      pre.textContent = rawText;
+      details.append(summary, pre);
+      panel.appendChild(details);
+    }
+    const path = artifactLabel(sidecarArtifact);
+    if (path) {
+      const sidecarPath = document.createElement("p");
+      sidecarPath.className = "mt-3 break-all text-[11px] text-slate-500 dark:text-slate-400";
+      sidecarPath.textContent = path;
+      panel.appendChild(sidecarPath);
+    }
+  }
+  function _renderAdvisoryCaptionPanel(job, artifact) {
+    const sidecar = _findVlmCaptionSidecar(job, artifact);
+    if (!sidecar || !els.artifactMetadataCard) return;
+    const panel = document.createElement("section");
+    panel.className = "mt-4 border-t border-slate-200 pt-4 dark:border-slate-700";
+    panel.dataset.ui = "advisory-caption-panel";
+    panel.textContent = "Loading advisory caption.";
+    els.artifactMetadataCard.appendChild(panel);
+    const url = sanitizeManagedAssetUrl(buildArtifactUrl(job, sidecar));
+    if (!url) {
+      panel.textContent = "Advisory VLM caption. Not used for quality gates.";
+      return;
+    }
+    fetch(url, {
+      headers: _buildAuthHeaders(),
+      credentials: "same-origin"
+    }).then((response) => {
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      return response.json();
+    }).then((payload) => {
+      if (!panel.isConnected) return;
+      _renderAdvisoryCaptionPayload(panel, payload, sidecar);
+    }).catch(() => {
+      if (!panel.isConnected) return;
+      panel.textContent = "Advisory VLM caption. Not used for quality gates.";
+    });
+  }
   function _renderArtifactMetadataCard(job, artifact) {
     if (!els.artifactMetadataCard) return;
     els.artifactMetadataCard.innerHTML = "";
@@ -284,6 +397,7 @@ function createDeferredReviewSurfaceApi(host) {
       detail.textContent = `${artifactDisplayLabel(artifact)} \u2022 ${artifactContentType(artifact) || "binary"} \u2022 ${formatBytes(artifact.size_bytes)}.`;
     }
     els.artifactMetadataCard.appendChild(detail);
+    _renderAdvisoryCaptionPanel(job, artifact);
   }
   const REVIEW_STATUS_BUILDERS = Object.freeze({
     awaiting_job: () => ({

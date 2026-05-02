@@ -60,6 +60,8 @@ requirements/.hash-pilot/
 .venv-da3/
 .venv-raw/
 .venv-lint/
+# Covers optional local runtimes such as FastVLM checkpoints, proxies,
+# benchmark reports, and patched vendor checkouts under .runtime/fastvlm/.
 .runtime/
 env/
 venv/

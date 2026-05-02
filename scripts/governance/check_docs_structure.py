@@ -58,6 +58,7 @@ ALLOWED_DOCS_TOP_LEVEL_DIRS = {
     "quick_references",
     "reference",
     "reports",
+    "runtimes",
     "schemas",
     "session_summaries",
     "sessions",

@@ -141,6 +141,15 @@ def infer_artifact_type(relative_path: str) -> str:
             return "reconstruction_diagnostics_json"
         return "reconstruction_aux"
 
+    if rel.startswith("captioning/"):
+        if name.endswith(".vlm_captioning.sidecar.json"):
+            return "vlm_caption_sidecar"
+        if name.endswith(".vlm_captioning.raw.txt"):
+            return "vlm_caption_raw"
+        if name.endswith("_proxy.png") or name.endswith("_proxy.jpg") or name.endswith("_proxy.jpeg"):
+            return "vlm_caption_proxy"
+        return "vlm_caption_aux"
+
     return "artifact"
 
 

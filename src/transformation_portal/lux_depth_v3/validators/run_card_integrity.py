@@ -113,6 +113,23 @@ def _verify_backend_semantics(
         errors.append(error)
 
 
+def _verify_captioning_status(run_card_payload: dict[str, Any], errors: list[str]) -> None:
+    """Fail closed if advisory captions are marked as quality-gate evidence."""
+    top_level_status = run_card_payload.get("captioning_status")
+    if isinstance(top_level_status, dict) and top_level_status.get("used_for_quality_gate") is True:
+        errors.append("captioning_status.used_for_quality_gate must be false")
+
+    result_summary = run_card_payload.get("result_summary")
+    if not isinstance(result_summary, list):
+        return
+    for index, row in enumerate(result_summary):
+        if not isinstance(row, dict):
+            continue
+        status = row.get("captioning_status")
+        if isinstance(status, dict) and status.get("used_for_quality_gate") is True:
+            errors.append(f"result_summary[{index}].captioning_status.used_for_quality_gate must be false")
+
+
 def _first_combined_manifest_fallback_reason(
     run_card_payload: dict[str, Any],
     *,
@@ -560,6 +577,7 @@ def verify_run_card_integrity(
         run_card_root=run_card_path.parent,
         errors=errors,
     )
+    _verify_captioning_status(run_card_payload, errors)
     _verify_config_fingerprint(run_card_payload, errors)
     _verify_run_card_self_integrity(
         raw_run_card_payload,

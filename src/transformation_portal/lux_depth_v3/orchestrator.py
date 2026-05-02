@@ -56,6 +56,16 @@ from ..reporting.contracts import (
 from ..spatial_ai.reconstruction.contracts import (  # noqa: E501
     LicenseRestrictionError as ReconstructionLicenseRestrictionError,
 )
+from ..vlm_captioning import (
+    FASTVLM_MODEL_ROLES,
+    FastVLMRuntimeConfig,
+    build_fastvlm_sidecar,
+    build_vlm_image_proxy,
+    resolve_fastvlm_model_id,
+    resolve_fastvlm_model_path,
+    run_fastvlm_caption,
+)
+from ..vlm_captioning.fastvlm_runtime import dumps_sidecar
 from ._backend_contract import normalize_backend_id, normalize_backend_provenance
 from .apex_codes import APEX_MATERIALS_SEGMENTATION_DOMINATES_NO_PIXEL_OPS
 
@@ -1174,6 +1184,12 @@ class EnhanceOrchestrator:
             materials_v3_enabled and material_segmentation_enabled and getattr(self.config, "strict_backend", False)
         )
         payload["pbr_enabled"] = bool(getattr(self.config, "generate_pbr", False))
+        payload["vlm_captioning_enabled"] = bool(getattr(self.config, "vlm_captioning_enabled", False))
+        payload["vlm_captioning_backend"] = getattr(self.config, "vlm_captioning_backend", "fastvlm")
+        payload["vlm_captioning_model"] = getattr(self.config, "vlm_captioning_model", "default")
+        payload["vlm_captioning_proxy_format"] = getattr(self.config, "vlm_captioning_proxy_format", "png")
+        payload["vlm_captioning_max_side_px"] = int(getattr(self.config, "vlm_captioning_max_side_px", 1600) or 1600)
+        payload["fastvlm_timeout_seconds"] = int(getattr(self.config, "fastvlm_timeout_seconds", 180) or 180)
         if run_card_version is not None:
             payload["run_card_version"] = run_card_version
         if include_proofs is not None:
@@ -4056,6 +4072,11 @@ class EnhanceOrchestrator:
             if isinstance(report_path_value, str) and report_path_value:
                 v2_report_path = Path(report_path_value)
 
+        vlm_captioning_result = self._run_vlm_captioning(
+            image_input=image_input,
+            output_key=output_key,
+        )
+
         # Capture end time for accurate timestamps
         pipeline_end_time = time.time()
 
@@ -4147,10 +4168,152 @@ class EnhanceOrchestrator:
             "v2_report_path": (str(v2_report_path) if v2_report_path else None),
             "v2_output_path": v2_output_path,
             "segmentation_mask_path": segmentation_mask_path,
+            "vlm_captioning_status": (
+                vlm_captioning_result.get("captioning_status") if isinstance(vlm_captioning_result, dict) else None
+            ),
+            "vlm_caption_proxy_path": (
+                vlm_captioning_result.get("proxy_path") if isinstance(vlm_captioning_result, dict) else None
+            ),
+            "vlm_caption_sidecar_path": (
+                vlm_captioning_result.get("sidecar_path") if isinstance(vlm_captioning_result, dict) else None
+            ),
+            "vlm_caption_raw_path": (
+                vlm_captioning_result.get("raw_path") if isinstance(vlm_captioning_result, dict) else None
+            ),
             "runtime_s": (pipeline_end_time - pipeline_start_time),
             "quality_gate": build_quality_gate_report(
                 getattr(depth_metadata, "stats", {}).get("apex_depth_validity") if depth_metadata is not None else None
             ),
+        }
+
+    def _resolve_vlm_captioning_model_path(self, selector: str) -> tuple[Path, Optional[str], str]:
+        normalized = str(selector or "default").strip()
+        role = normalized.lower()
+        if role == "review":
+            env_path = os.getenv("TP_FASTVLM_REVIEW_MODEL")
+        elif role in {"default", "smoke"}:
+            env_path = os.getenv("TP_FASTVLM_MODEL") if role == "default" else None
+        else:
+            env_path = None
+        model_path = Path(env_path) if env_path else resolve_fastvlm_model_path(normalized)
+        model_role = role if role in FASTVLM_MODEL_ROLES else None
+        return model_path, model_role, resolve_fastvlm_model_id(model_path, model_role)
+
+    def _run_vlm_captioning(
+        self,
+        *,
+        image_input: ImageInput,
+        output_key: Path,
+    ) -> Optional[Dict[str, Any]]:
+        """Generate optional advisory FastVLM caption sidecar artifacts."""
+        if not bool(getattr(self.config, "vlm_captioning_enabled", False)):
+            return None
+
+        backend = str(getattr(self.config, "vlm_captioning_backend", "fastvlm") or "fastvlm").strip().lower()
+        if backend != "fastvlm":
+            logger.warning("Skipping VLM captioning because backend=%r is unsupported.", backend)
+            return {
+                "captioning_status": {
+                    "enabled": True,
+                    "backend": backend,
+                    "role": "advisory",
+                    "status": "unsupported_backend",
+                    "sidecar_count": 0,
+                    "failed_count": 1,
+                    "used_for_quality_gate": False,
+                }
+            }
+
+        proxy_format = str(getattr(self.config, "vlm_captioning_proxy_format", "png") or "png").strip().lower()
+        proxy_suffix = "jpg" if proxy_format == "jpeg" else "png"
+        caption_dir = self.output_root / "captioning" / output_key.parent
+        caption_dir.mkdir(parents=True, exist_ok=True)
+        raw_path = caption_dir / f"{output_key.name}.vlm_captioning.raw.txt"
+        sidecar_path = caption_dir / f"{output_key.name}.vlm_captioning.sidecar.json"
+        proxy_path: Optional[Path] = None
+        selector = str(getattr(self.config, "vlm_captioning_model", "default") or "default").strip()
+        model_path, model_role, model_id = self._resolve_vlm_captioning_model_path(selector)
+
+        base_status: Dict[str, Any] = {
+            "enabled": True,
+            "backend": "fastvlm",
+            "model_role": model_role or "custom",
+            "model_id": model_id,
+            "role": "advisory",
+            "sidecar_count": 0,
+            "failed_count": 1,
+            "used_for_quality_gate": False,
+        }
+
+        try:
+            proxy = build_vlm_image_proxy(
+                image_input.path,
+                caption_dir,
+                max_side_px=int(getattr(self.config, "vlm_captioning_max_side_px", 1600) or 1600),
+                format=cast(Any, proxy_format),
+                output_name=f"{output_key.name}_proxy.{proxy_suffix}",
+            )
+            proxy_path = proxy.proxy_path
+        except Exception as exc:
+            logger.warning("VLM captioning proxy generation failed for %s: %s", image_input.path, exc)
+            raw_path.write_text(f"VLM captioning proxy generation failed: {exc}\n", encoding="utf-8")
+            status = {
+                **base_status,
+                "status": "proxy_error",
+                "error": str(exc),
+            }
+            return {
+                "captioning_status": status,
+                "raw_path": str(raw_path),
+            }
+
+        python_path = Path(
+            getattr(self.config, "fastvlm_python_executable", None)
+            or os.getenv("TP_FASTVLM_PYTHON", ".runtime/fastvlm/.venv-fastvlm/bin/python")
+        )
+        mlx_vlm_dir = Path(
+            getattr(self.config, "fastvlm_mlx_vlm_dir", None)
+            or os.getenv("TP_FASTVLM_MLX_VLM_DIR", ".runtime/fastvlm/mlx-vlm")
+        )
+        max_tokens = int(os.getenv("TP_FASTVLM_MAX_TOKENS", "120"))
+        temperature = float(os.getenv("TP_FASTVLM_TEMPERATURE", "0.0"))
+        timeout_seconds = int(getattr(self.config, "fastvlm_timeout_seconds", 180) or 180)
+        runtime_config = FastVLMRuntimeConfig(
+            enabled=True,
+            python_path=python_path,
+            mlx_vlm_dir=mlx_vlm_dir,
+            model_path=model_path,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            timeout_seconds=timeout_seconds,
+        )
+        runtime_result = run_fastvlm_caption(runtime_config, proxy.proxy_path)
+        raw_text = runtime_result.raw_stdout or runtime_result.raw_stderr or runtime_result.error or ""
+        raw_path.write_text(raw_text, encoding="utf-8")
+        sidecar_payload = build_fastvlm_sidecar(
+            enabled=True,
+            model_path=model_path,
+            image_proxy=proxy,
+            runtime_result=runtime_result,
+            model_role=model_role,
+            model_id=model_id,
+        )
+        sidecar_path.write_text(dumps_sidecar(sidecar_payload), encoding="utf-8")
+        failed = not runtime_result.success
+        status = {
+            **base_status,
+            "status": runtime_result.status,
+            "sidecar_count": 1,
+            "failed_count": 1 if failed else 0,
+            "validated": bool(runtime_result.caption_parse.validated),
+        }
+        if runtime_result.error:
+            status["error"] = runtime_result.error
+        return {
+            "captioning_status": status,
+            "proxy_path": str(proxy_path),
+            "sidecar_path": str(sidecar_path),
+            "raw_path": str(raw_path),
         }
 
     def _verify_pbr_outputs(
@@ -5814,6 +5977,9 @@ class EnhanceOrchestrator:
                 "reconstruction_manifest_path",
                 "reconstruction_report_path",
                 "reconstruction_diagnostics_path",
+                "vlm_caption_proxy_path",
+                "vlm_caption_sidecar_path",
+                "vlm_caption_raw_path",
             ):
                 direct_path_value = result.get(direct_path_key)
                 if isinstance(direct_path_value, str) and direct_path_value:
@@ -6112,6 +6278,11 @@ class EnhanceOrchestrator:
             "enable_materials_v3": bool(getattr(self.config, "enable_materials_v3", False)),
             "generate_pbr": bool(getattr(self.config, "generate_pbr", False)),
             "emit_run_card": bool(getattr(self.config, "emit_run_card", False)),
+            "vlm_captioning_enabled": bool(getattr(self.config, "vlm_captioning_enabled", False)),
+            "vlm_captioning_backend": getattr(self.config, "vlm_captioning_backend", "fastvlm"),
+            "vlm_captioning_model": getattr(self.config, "vlm_captioning_model", "default"),
+            "vlm_captioning_proxy_format": getattr(self.config, "vlm_captioning_proxy_format", "png"),
+            "vlm_captioning_max_side_px": int(getattr(self.config, "vlm_captioning_max_side_px", 1600) or 1600),
             "run_card_version": config_fingerprint.get("run_card_version"),
             "run_card_include_proofs": bool(config_fingerprint.get("run_card_include_proofs", False)),
             "config_fingerprint_sha256": config_fingerprint.get("sha256"),
@@ -6143,6 +6314,9 @@ class EnhanceOrchestrator:
             "reconstruction_preflight_path",
             "reconstruction_diagnostics_path",
             "segmentation_mask_path",
+            "vlm_caption_proxy_path",
+            "vlm_caption_sidecar_path",
+            "vlm_caption_raw_path",
         }
         for result in results:
             row = copy.deepcopy(result)
@@ -6415,6 +6589,12 @@ class EnhanceOrchestrator:
         fingerprint["run_card_version"] = run_card_version
         fingerprint["run_card_include_proofs"] = bool(include_proofs)
         fingerprint["emit_run_card"] = bool(getattr(self.config, "emit_run_card", False))
+        fingerprint["vlm_captioning_enabled"] = bool(getattr(self.config, "vlm_captioning_enabled", False))
+        fingerprint["vlm_captioning_backend"] = getattr(self.config, "vlm_captioning_backend", "fastvlm")
+        fingerprint["vlm_captioning_model"] = getattr(self.config, "vlm_captioning_model", "default")
+        fingerprint["vlm_captioning_proxy_format"] = getattr(self.config, "vlm_captioning_proxy_format", "png")
+        fingerprint["vlm_captioning_max_side_px"] = int(getattr(self.config, "vlm_captioning_max_side_px", 1600) or 1600)
+        fingerprint["fastvlm_timeout_seconds"] = int(getattr(self.config, "fastvlm_timeout_seconds", 180) or 180)
         fingerprint["enable_reconstruction"] = bool(getattr(self.config, "enable_reconstruction", False))
         fingerprint["grouping_mode"] = str(getattr(self.config, "grouping_mode", "single"))
         return fingerprint
@@ -6796,8 +6976,37 @@ class EnhanceOrchestrator:
             )
             if segmentation_status is not None:
                 row["segmentation_status"] = segmentation_status
+            captioning_status = result.get("vlm_captioning_status")
+            if isinstance(captioning_status, Mapping):
+                row["captioning_status"] = copy.deepcopy(dict(captioning_status))
             summary_rows.append(row)
         return summary_rows
+
+    def _build_run_card_captioning_status(self, results: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+        """Build aggregate advisory captioning status for the run card."""
+        if not bool(getattr(self.config, "vlm_captioning_enabled", False)):
+            return None
+        selector = str(getattr(self.config, "vlm_captioning_model", "default") or "default").strip()
+        model_path, model_role, model_id = self._resolve_vlm_captioning_model_path(selector)
+        sidecar_count = sum(1 for result in results if result.get("vlm_caption_sidecar_path"))
+        failed_count = 0
+        for result in results:
+            status = result.get("vlm_captioning_status")
+            if not isinstance(status, Mapping):
+                failed_count += 1
+                continue
+            failed_count += int(status.get("failed_count") or 0)
+        return {
+            "enabled": True,
+            "backend": str(getattr(self.config, "vlm_captioning_backend", "fastvlm") or "fastvlm").strip().lower(),
+            "model_role": model_role or "custom",
+            "model_id": model_id,
+            "model_path": str(model_path),
+            "role": "advisory",
+            "sidecar_count": sidecar_count,
+            "failed_count": failed_count,
+            "used_for_quality_gate": False,
+        }
 
     def _emit_run_card(
         self,
@@ -6862,6 +7071,7 @@ class EnhanceOrchestrator:
             results,
             backend_summary,
         )
+        captioning_status = self._build_run_card_captioning_status(results)
 
         artifact_summary_payload: dict[str, Any] = (
             {"artifact_tree": artifact_tree} if run_card_version == "v2" else {"artifact_merkle_root": artifact_merkle_root}
@@ -6899,6 +7109,8 @@ class EnhanceOrchestrator:
             "artifact_index": artifact_index,
             **artifact_summary_payload,
         }
+        if captioning_status is not None:
+            run_card["captioning_status"] = captioning_status
         model_contract = self._build_run_card_model_contract(
             results=results,
             backend_selection=backend_selection,

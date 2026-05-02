@@ -217,6 +217,40 @@
         "emit_run_card": {
           "type": "boolean"
         },
+        "vlm_captioning_enabled": {
+          "type": "boolean"
+        },
+        "vlm_captioning_backend": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "vlm_captioning_model": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "vlm_captioning_proxy_format": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "png",
+            "jpeg",
+            null
+          ]
+        },
+        "vlm_captioning_max_side_px": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "fastvlm_timeout_seconds": {
+          "type": "integer",
+          "minimum": 1
+        },
         "hash_algorithm": {
           "type": "string",
           "const": "sha256"
@@ -1017,6 +1051,60 @@
         },
         "additionalProperties": true
       }
+    },
+    "captioning_status": {
+      "type": "object",
+      "required": [
+        "enabled",
+        "role",
+        "used_for_quality_gate"
+      ],
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "backend": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "model_role": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "model_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "model_path": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "role": {
+          "type": "string",
+          "const": "advisory"
+        },
+        "sidecar_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "failed_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "used_for_quality_gate": {
+          "type": "boolean",
+          "const": false
+        }
+      },
+      "additionalProperties": true
     },
     "run_card_integrity": {
       "type": "object",

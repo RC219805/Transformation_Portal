@@ -533,6 +533,49 @@ def main(
         "--run-card-include-proofs",
         help="Include per-artifact inclusion proofs in v2 run cards: on/off",
     ),
+    # Advisory VLM Captioning
+    vlm_captioning: str = typer.Option(
+        "off",
+        "--vlm-captioning",
+        help="Enable optional advisory VLM captioning sidecars: off|on",
+    ),
+    vlm_captioning_backend: str = typer.Option(
+        "fastvlm",
+        "--vlm-captioning-backend",
+        help="Advisory captioning backend: fastvlm",
+    ),
+    vlm_captioning_model: str = typer.Option(
+        "default",
+        "--vlm-captioning-model",
+        help="Captioning model selector: default, review, smoke, or an explicit local model path.",
+    ),
+    vlm_captioning_proxy_format: str = typer.Option(
+        "png",
+        "--vlm-captioning-proxy-format",
+        help="Captioning proxy image format: png or jpeg",
+    ),
+    vlm_captioning_max_side_px: int = typer.Option(
+        1600,
+        "--vlm-captioning-max-side-px",
+        min=1,
+        help="Longest side for advisory VLM proxy images.",
+    ),
+    fastvlm_python: Optional[str] = typer.Option(
+        None,
+        "--fastvlm-python",
+        help="Python executable for the isolated FastVLM runtime.",
+    ),
+    fastvlm_mlx_vlm_dir: Optional[str] = typer.Option(
+        None,
+        "--fastvlm-mlx-vlm-dir",
+        help="Path to the isolated mlx-vlm checkout used by FastVLM.",
+    ),
+    fastvlm_timeout_seconds: int = typer.Option(
+        180,
+        "--fastvlm-timeout-seconds",
+        min=1,
+        help="FastVLM subprocess timeout in seconds.",
+    ),
     # License and Research Acknowledgements
     non_commercial_ok: str = typer.Option(
         "false",
@@ -707,6 +750,7 @@ def main(
     enable_emit_report = _parse_bool_flag(emit_report)
     enable_emit_run_card = _parse_bool_flag(emit_run_card)
     enable_run_card_include_proofs = _parse_bool_flag(run_card_include_proofs)
+    enable_vlm_captioning = _parse_bool_flag(vlm_captioning)
     normalized_run_card_version = str(run_card_version or "v1").strip().lower()
     if normalized_run_card_version not in {"v1", "v2"}:
         error_msg = f"Invalid --run-card-version '{run_card_version}'. " "Must be one of: v1, v2"
@@ -824,6 +868,27 @@ def main(
     normalized_segmentation_cache = str(segmentation_cache or "read_write").strip().lower()
     if normalized_segmentation_cache not in {"off", "read_write"}:
         error_msg = "Invalid --segmentation-cache. Must be one of: off, read_write"
+        logger.error(error_msg)
+        print(error_msg, file=sys.stdout)
+        raise typer.Exit(code=1)
+
+    normalized_captioning_backend = str(vlm_captioning_backend or "fastvlm").strip().lower()
+    if normalized_captioning_backend != "fastvlm":
+        error_msg = "Invalid --vlm-captioning-backend. Must be: fastvlm"
+        logger.error(error_msg)
+        print(error_msg, file=sys.stdout)
+        raise typer.Exit(code=1)
+
+    normalized_captioning_proxy_format = str(vlm_captioning_proxy_format or "png").strip().lower()
+    if normalized_captioning_proxy_format not in {"png", "jpeg"}:
+        error_msg = "Invalid --vlm-captioning-proxy-format. Must be one of: png, jpeg"
+        logger.error(error_msg)
+        print(error_msg, file=sys.stdout)
+        raise typer.Exit(code=1)
+
+    normalized_captioning_model = str(vlm_captioning_model or "default").strip()
+    if not normalized_captioning_model:
+        error_msg = "Invalid --vlm-captioning-model. Value must be non-empty."
         logger.error(error_msg)
         print(error_msg, file=sys.stdout)
         raise typer.Exit(code=1)
@@ -980,6 +1045,14 @@ def main(
         emit_run_card=enable_emit_run_card,
         run_card_version=normalized_run_card_version,
         run_card_include_proofs=enable_run_card_include_proofs,
+        vlm_captioning_enabled=enable_vlm_captioning,
+        vlm_captioning_backend=normalized_captioning_backend,
+        vlm_captioning_model=normalized_captioning_model,
+        vlm_captioning_proxy_format=normalized_captioning_proxy_format,
+        vlm_captioning_max_side_px=vlm_captioning_max_side_px,
+        fastvlm_python_executable=fastvlm_python,
+        fastvlm_mlx_vlm_dir=fastvlm_mlx_vlm_dir,
+        fastvlm_timeout_seconds=fastvlm_timeout_seconds,
         enable_reconstruction=enable_reconstruction_bool,
         grouping_mode=grouping_mode_normalized,
         cameras_sidecar_path=(str(cameras_sidecar_path) if cameras_sidecar_path else None),
