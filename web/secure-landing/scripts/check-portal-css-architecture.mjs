@@ -1985,10 +1985,6 @@ function analyzePhase13InteractionCandidates(duplicates, baseline = loadBaseline
     .sort((left, right) => left.key.localeCompare(right.key));
 }
 
-function recordDeclMap(record) {
-  return new Map(declarationRecords(record).map(([property, value, important]) => [property.toLowerCase(), { value, important }]));
-}
-
 function selectorListEquals(left, right) {
   return JSON.stringify([...left].sort()) === JSON.stringify([...right].sort());
 }
