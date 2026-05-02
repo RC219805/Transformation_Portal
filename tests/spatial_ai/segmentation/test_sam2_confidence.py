@@ -325,9 +325,12 @@ class TestDefensiveProgramming:
         # Should complete without exceptions
         try:
             masks, iou, stability = backend._extract_sam2_predictions(mock_output)
-            assert True  # Success
         except Exception as e:
             pytest.fail(f"Unexpected exception: {e}")
+        # Masks must be returned with the expected shape; iou/stability may be
+        # None when the mock doesn't carry those attributes.
+        assert masks is not None
+        assert masks.shape == (3, 64, 64)
 
     def test_no_exceptions_on_none_attributes(self):
         """Test that None attributes never raise exceptions."""
@@ -342,9 +345,14 @@ class TestDefensiveProgramming:
         # Should complete without exceptions
         try:
             masks, iou, stability = backend._extract_sam2_predictions(mock_output)
-            assert True  # Success
         except Exception as e:
             pytest.fail(f"Unexpected exception: {e}")
+        assert masks is not None
+        assert masks.shape == (3, 64, 64)
+        # When source attributes are None, the helper must propagate None
+        # rather than fabricate values.
+        assert iou is None
+        assert stability is None
 
 
 @pytest.mark.benchmark
