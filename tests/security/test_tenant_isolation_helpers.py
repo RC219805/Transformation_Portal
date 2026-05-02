@@ -42,6 +42,9 @@ def test_tenant_manager_creates_tenant_directories_and_copies_default_policy(tmp
     assert tenant.tenant_cas.is_dir()
     assert policy == default_policy
     assert policy is not default_policy
+    policy.allowed_node_types.add("composite")
+    assert policy.allowed_node_types == {"render", "composite"}
+    assert default_policy.allowed_node_types == {"render"}
 
 
 def test_tenant_manager_rejects_duplicate_tenants(tmp_path: Path) -> None:

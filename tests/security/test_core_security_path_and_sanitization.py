@@ -64,10 +64,16 @@ def test_safe_resolve_path_blocks_traversal_outside_allowed_root(tmp_path: Path)
         safe_resolve_path(outside_file, allowed_root=allowed_root)
 
 
-def test_is_safe_path_uses_import_time_default_root(tmp_path: Path) -> None:
-    repo_local_file = Path(__file__).resolve()
+def test_is_safe_path_uses_current_working_directory_at_call_time(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    repo_local_file = workspace / "inside.txt"
+    repo_local_file.write_text("inside", encoding="utf-8")
     outside_file = tmp_path / "outside.txt"
     outside_file.write_text("outside", encoding="utf-8")
+    monkeypatch.chdir(workspace)
 
     assert is_safe_path(repo_local_file)
     assert not is_safe_path(outside_file)

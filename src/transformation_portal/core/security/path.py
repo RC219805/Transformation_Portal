@@ -8,7 +8,7 @@ strict directory confinement.
 import logging
 import os
 from pathlib import Path
-from typing import List, Union
+from typing import List, Optional, Union
 
 from .validation import ValidationError
 
@@ -46,13 +46,13 @@ class PathValidator:
             return False
 
 
-def safe_resolve_path(path: Union[str, Path], allowed_root: Union[str, Path] = os.getcwd()) -> Path:
+def safe_resolve_path(path: Union[str, Path], allowed_root: Optional[Union[str, Path]] = None) -> Path:
     """
     Resolve a path and ensure it sits within the allowed root.
 
     Args:
         path: Path to resolve (can be relative or absolute)
-        allowed_root: Root directory that path must be within (default: cwd)
+        allowed_root: Root directory that path must be within (default: current cwd at call time)
 
     Returns:
         Resolved absolute path
@@ -60,7 +60,7 @@ def safe_resolve_path(path: Union[str, Path], allowed_root: Union[str, Path] = o
     Raises:
         ValidationError: If path attempts traversal out of root.
     """
-    root = Path(allowed_root).resolve()
+    root = Path(allowed_root if allowed_root is not None else os.getcwd()).resolve()
     target = Path(path).resolve()
 
     # Check traversal
@@ -75,7 +75,7 @@ def safe_resolve_path(path: Union[str, Path], allowed_root: Union[str, Path] = o
 
 
 def is_safe_path(path: Union[str, Path]) -> bool:
-    """Quick check if path is safe (relative to CWD)."""
+    """Quick check if path is safe (relative to the current working directory)."""
     try:
         safe_resolve_path(path)
         return True
