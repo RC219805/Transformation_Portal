@@ -571,7 +571,7 @@ function describeCssNode(node) {
   }
   if (node.type === "atrule") {
     const params = node.params ? ` ${node.params}` : "";
-    return `atrule "@${node.name}${params}"`;
+    return `at-rule @${node.name}${params}`;
   }
   if (node.type === "decl") {
     return `declaration "${node.prop}"`;

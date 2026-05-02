@@ -93,7 +93,7 @@ function runNpmScript(...args) {
     cwd: FRONTDOOR_ROOT,
     env: {
       ...process.env,
-      PATH: `${path.dirname(process.execPath)}:${process.env.PATH || ""}`
+      PATH: [path.dirname(process.execPath), process.env.PATH].filter(Boolean).join(path.delimiter)
     },
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"]
@@ -138,9 +138,9 @@ test("portal CSS sentinel fixtures enforce comments-only architecture", () => {
   for (const [fixtureName, expectedNode] of [
     ["sentinel-with-rule.css", /Found rule "\.foo"/],
     ["sentinel-with-empty-rule.css", /Found rule "\.foo"/],
-    ["sentinel-with-import.css", /Found atrule "@import/],
-    ["sentinel-with-media.css", /Found atrule "@media/],
-    ["sentinel-with-keyframes.css", /Found atrule "@keyframes/],
+    ["sentinel-with-import.css", /Found at-rule @import "\.\/owned\.css"/],
+    ["sentinel-with-media.css", /Found at-rule @media/],
+    ["sentinel-with-keyframes.css", /Found at-rule @keyframes/],
     ["sentinel-with-root-token.css", /Found rule ":root"/]
   ]) {
     const fixturePath = path.relative(FRONTDOOR_ROOT, path.join(SENTINEL_FIXTURE_DIR, fixtureName));
