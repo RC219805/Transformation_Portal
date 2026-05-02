@@ -6,8 +6,8 @@
     "utilityLayerImportsBefore": 6,
     "utilityLayerImportsAfter": 3,
     "compatHoldCount": 0,
-    "overridesCompatRuleCount": 9,
-    "overridesCompatBytes": 3594,
+    "overridesCompatRuleCount": 8,
+    "overridesCompatBytes": 3506,
     "drainedSelectorCount": 344
   },
   "moves": [
@@ -3242,16 +3242,6 @@
       "parity": "green"
     },
     {
-      "selector": ".artifact-thumbnail-rail",
-      "from": "overrides.compat.css (Phase 5 selector)",
-      "fromLayer": "overrides",
-      "to": "overrides.compat.css",
-      "toLayer": "overrides",
-      "classification": "compatibility-final-order",
-      "reason": "Phase 6 semantic ownership: replaces ID-specific selector with additive semantic class hook (markup unchanged); rule remains in overrides layer because moving to components would let utilities-layer cascade win; removable in phase-7-utility-markup-migration",
-      "parity": "green"
-    },
-    {
       "selector": ".portal-shell-card--queue .custom-scrollbar",
       "from": "overrides.compat.css (Phase 5 selector)",
       "fromLayer": "overrides",
@@ -3339,6 +3329,16 @@
       "toLayer": "overrides",
       "classification": "compatibility-final-order",
       "reason": "Phase 6 semantic ownership: pre-existing class-based compatibility selector grouped with the .portal-action-control variants; rule remains in overrides layer because moving to components would let utilities-layer cascade win; removable in phase-7-utility-markup-migration",
+      "parity": "green"
+    },
+    {
+      "selector": ".artifact-thumbnail-rail",
+      "from": "overrides.compat.css",
+      "fromLayer": "overrides",
+      "to": "utilities (grid-cols-2 utility class on the markup; override was redundant)",
+      "toLayer": "utilities",
+      "classification": "redundant-override-drop",
+      "reason": "Phase 7.A: the .artifact-thumbnail-rail mobile grid-template-columns override duplicated the grid-cols-2 utility already on the element (utilities-layer rule produces the same declaration). Override was dead code; dropped without markup or component-CSS change.",
       "parity": "green"
     }
   ]

@@ -42,10 +42,6 @@
     padding: 0.95rem;
   }
 
-  .artifact-thumbnail-rail {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
   .portal-shell-card--queue .custom-scrollbar {
     padding-right: 0;
   }
