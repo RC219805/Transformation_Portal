@@ -31,6 +31,12 @@ function compatOverridesDisabled() {
   return process.env[PORTAL_COMPAT_OVERRIDE_DISABLE_FLAG] === "1";
 }
 
+function sourceImportsCompatOverrides() {
+  return readFileSync(PORTAL_CSS_INDEX_PATH, "utf-8").includes(
+    '@import "./overrides.compat.css" layer(overrides);'
+  );
+}
+
 function emptyCompatOverridePlugin() {
   return {
     name: "portal-compat-overrides-empty",
@@ -162,7 +168,7 @@ await ensureSupportedRuntime();
 const cssOnly = process.argv.includes("--css-only");
 
 if (process.argv.includes("--check-css")) {
-  if (compatOverridesDisabled()) {
+  if (compatOverridesDisabled() && sourceImportsCompatOverrides()) {
     throw new Error(
       `${PORTAL_COMPAT_OVERRIDE_DISABLE_FLAG}=1 is a parity-probe build flag and must not be combined with --check-css.`
     );
