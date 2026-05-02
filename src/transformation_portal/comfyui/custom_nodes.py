@@ -215,18 +215,21 @@ class SkyGANNode(BaseNode):
 
         logger.info(f"Executing SkyGAN Smart Render (Auto-Correct: {auto_correct})")
 
+        # Validate user-controlled inputs before doing any preset work, so that
+        # malformed values fail fast instead of being masked by unrelated
+        # preset/atmosphere errors. Use the mapping's insertion order in the
+        # error message so it matches the ComfyUI dropdown order.
+        try:
+            hour_of_day = self._TIME_OF_DAY_HOURS[time_of_day]
+        except KeyError:
+            raise ValueError(f"Unknown time_of_day {time_of_day!r}; expected one of {list(self._TIME_OF_DAY_HOURS)}") from None
+
         # 1. Prepare Data
         img_np = self._to_numpy(image)
 
         # Data Layer: Get presets
         presets = LocationPresets()
         location_preset = presets.get_atmospheric_parameters(location, season)
-        try:
-            hour_of_day = self._TIME_OF_DAY_HOURS[time_of_day]
-        except KeyError:
-            raise ValueError(
-                f"Unknown time_of_day {time_of_day!r}; expected one of {sorted(self._TIME_OF_DAY_HOURS)}"
-            ) from None
         time_params = presets.get_sky_parameters(
             location=location,
             season=season,

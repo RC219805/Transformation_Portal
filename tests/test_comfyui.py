@@ -314,22 +314,30 @@ class TestSkyGANNode:
         )
 
     def test_execute_rejects_unknown_time_of_day(self):
-        """Unknown time_of_day must fail fast rather than silently defaulting."""
+        """Unknown time_of_day must fail fast before any preset work."""
         from transformation_portal.comfyui.custom_nodes import SkyGANNode
 
         node = SkyGANNode()
         dummy_image = np.zeros((4, 4, 3), dtype=np.float32)
 
-        with pytest.raises(ValueError, match="Unknown time_of_day"):
+        # Use a deliberately invalid location too — the input validation must
+        # trip first, so we should never reach LocationPresets and surface a
+        # location-related error instead.
+        with pytest.raises(ValueError, match="Unknown time_of_day") as exc_info:
             node.execute(
                 image=dummy_image,
-                location="montecito",
+                location="not_a_real_location",
                 season="summer",
                 time_of_day="not_a_real_slot",
                 cloud_coverage=0.3,
                 auto_correct=True,
                 strict_physics=False,
             )
+
+        # Error message preserves dropdown order (insertion order), not
+        # alphabetical order, so it matches the UI for easier debugging.
+        expected_choices = list(SkyGANNode._TIME_OF_DAY_HOURS)
+        assert str(expected_choices) in str(exc_info.value)
 
 
 class TestSceneAnalysisNode:
