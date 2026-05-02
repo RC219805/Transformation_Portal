@@ -786,10 +786,11 @@ raise NotImplementedError(f"Backend {self.backend} not implemented")
 
 **Closure (2026-05-02):**
 - ✅ Status banner added to top of `docs/fixes/BINARY_FILE_BEST_PRACTICES.md`
-  noting that the §1 "Executive Decision: Current Push" remediation and the
-  §2.1–§2.3 immediate-action items are complete, so the historical
-  "⚠️ Currently tracked" warnings further down describe the 2025-11-06
-  snapshot rather than the current state.
+  noting that the "🎯 Executive Decision: Current Push" remediation and the
+  four steps under "🔧 Immediate Actions Required" are complete, so the
+  historical "⚠️ Currently tracked" warnings under
+  "📋 Binary File Guidelines → 2. What MUST Be Excluded" describe the
+  2025-11-06 snapshot rather than the current state.
 - ✅ QW-3 in `docs/deliverables/QUICK_WINS.md` marked completed (2026-05-02)
   with verification command captured.
 

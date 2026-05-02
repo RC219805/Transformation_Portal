@@ -111,9 +111,11 @@ diagram in `docs/fixes/BINARY_FILE_BEST_PRACTICES.md` (the `*.png` / `*.jpg`
 rows under `input_images/` and `processed_images/`) were already replaced with
 ✅ status markers in an earlier sweep. This QW closes the remaining residue:
 a status banner was added to the top of the document making clear that the
-"currently tracked" warnings further down (Sections 1, 2.1, 2.3) refer to the
-2025-11-06 snapshot and have since been resolved, and `TODO_INVENTORY.md` §4.1
-was updated to record that the recommended cleanup has been executed.
+"currently tracked" warnings under `📋 Binary File Guidelines → 2. What MUST Be
+Excluded` refer to the 2025-11-06 snapshot and have since been resolved, while
+the completed remediation is described in `🎯 Executive Decision: Current Push`
+and the four steps under `🔧 Immediate Actions Required`. `TODO_INVENTORY.md`
+§4.1 was updated to record that the recommended cleanup has been executed.
 
 **Verification (2026-05-02):**
 ```bash
