@@ -21,6 +21,7 @@ Example:
 
 from __future__ import annotations
 
+import copy
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -185,7 +186,7 @@ class TenantManager:
         tenant.tenant_cas.mkdir(parents=True, exist_ok=True)
 
         self._tenants[tenant_id] = tenant
-        self._policies[tenant_id] = policy or TenantPolicy(**self.default_policy.__dict__)
+        self._policies[tenant_id] = policy or copy.deepcopy(self.default_policy)
 
         logger.info("Created tenant: %s", tenant_id)
         return tenant
