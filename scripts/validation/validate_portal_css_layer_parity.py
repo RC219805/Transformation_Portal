@@ -497,6 +497,88 @@ def _validate_review_status_tone_states(connection: DevToolsConnection) -> None:
         raise SmokeFailure("Review status tone parity probe failed:\n" + "\n".join(failures))
 
 
+def _overview_mobile_probe_expression() -> str:
+    return r"""
+(() => {
+  const read = (selector) => {
+    const el = document.querySelector(selector);
+    if (!el) return { present: false };
+    const style = window.getComputedStyle(el);
+    const rect = el.getBoundingClientRect();
+    return {
+      present: true,
+      display: style.display,
+      justifyContent: style.justifyContent,
+      gridTemplateColumns: style.gridTemplateColumns,
+      width: Number(rect.width.toFixed(2)),
+      parentWidth: el.parentElement ? Number(el.parentElement.getBoundingClientRect().width.toFixed(2)) : 0
+    };
+  };
+  return {
+    overviewActions: read('[data-ui="overview-actions-cluster"]'),
+    buildStepperActions: read('.build-stepper-actions-inline'),
+    heroAction: read('[data-ui="overview-new-run"]')
+  };
+})()
+"""
+
+
+def _grid_track_count(value: str) -> int:
+    return len([part for part in value.split(" ") if part.strip()])
+
+
+def _validate_overview_mobile_states(connection: DevToolsConnection) -> None:
+    failures: list[str] = []
+    probes = [
+        {"width": 767, "height": 900, "mobile": False},
+        {"width": 375, "height": 900, "mobile": True},
+    ]
+    for probe in probes:
+        width = int(probe["width"])
+        connection.call(
+            "Emulation.setDeviceMetricsOverride",
+            {
+                "width": width,
+                "height": int(probe["height"]),
+                "deviceScaleFactor": 1,
+                "mobile": bool(probe["mobile"]),
+            },
+            timeout_seconds=20.0,
+        )
+        connection.evaluate(_style_settle_expression(), timeout_seconds=20.0)
+        result = connection.evaluate(_overview_mobile_probe_expression(), timeout_seconds=20.0)
+        if not isinstance(result, dict):
+            failures.append(f"{width}px: overview mobile probe did not return an object")
+            continue
+        overview = result.get("overviewActions")
+        build_stepper = result.get("buildStepperActions")
+        hero = result.get("heroAction")
+        if not isinstance(overview, dict) or not overview.get("present"):
+            failures.append(f"{width}px: overview actions cluster missing")
+        else:
+            if overview.get("display") != "grid":
+                failures.append(f"{width}px: overview actions display is {overview.get('display')!r}")
+            if overview.get("justifyContent") != "stretch":
+                failures.append(f"{width}px: overview actions justify-content is {overview.get('justifyContent')!r}")
+            if _grid_track_count(str(overview.get("gridTemplateColumns") or "")) != 1:
+                failures.append(f"{width}px: overview actions must resolve to one grid track")
+        if not isinstance(build_stepper, dict) or not build_stepper.get("present"):
+            failures.append(f"{width}px: build stepper actions missing")
+        elif build_stepper.get("justifyContent") != "stretch":
+            failures.append(f"{width}px: build stepper actions justify-content is {build_stepper.get('justifyContent')!r}")
+        if width <= 479:
+            if not isinstance(hero, dict) or not hero.get("present"):
+                failures.append(f"{width}px: overview hero action missing")
+            else:
+                if hero.get("justifyContent") != "center":
+                    failures.append(f"{width}px: hero action justify-content is {hero.get('justifyContent')!r}")
+                if abs(float(hero.get("width") or 0) - float(hero.get("parentWidth") or 0)) > 2:
+                    failures.append(f"{width}px: hero action is not full width")
+    connection.call("Emulation.clearDeviceMetricsOverride", {}, timeout_seconds=20.0)
+    if failures:
+        raise SmokeFailure("Overview mobile parity probe failed:\n" + "\n".join(failures))
+
+
 def _enable_portal_feature_rollouts_for_spawn() -> dict[str, Optional[str]]:
     previous: dict[str, Optional[str]] = {}
     if not {
@@ -850,6 +932,7 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
             raise SmokeFailure(f"{mode_label}:\n{detail}{suffix}")
 
         _validate_review_status_tone_states(connection)
+        _validate_overview_mobile_states(connection)
 
         runtime_utility_classes = _collect_runtime_utility_classes(
             connection,

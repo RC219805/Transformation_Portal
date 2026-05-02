@@ -520,12 +520,12 @@ textarea {
 }
 
 @media (max-width: 767px) {
-    .overview-actions,
     .build-stepper-actions-inline {
         justify-content: stretch;
     }
 
     .overview-actions {
+        justify-content: stretch;
         grid-template-columns: 1fr;
         width: 100%;
     }
