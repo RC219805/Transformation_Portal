@@ -25,6 +25,7 @@ const COMPAT_HOLD_CSS_PATH = path.join(FRONTDOOR_ROOT, "portal-src", "styles", "
 const OVERRIDES_COMPAT_CSS_PATH = path.join(FRONTDOOR_ROOT, "portal-src", "styles", "overrides.compat.css");
 const OWNERSHIP_DRAIN_REPORT_PATH = path.join(FRONTDOOR_ROOT, "reports", "portal-css-ownership-drain.json");
 const SENTINEL_FIXTURE_DIR = path.join(FRONTDOOR_ROOT, "tests", "fixtures", "sentinel");
+const ARCHITECTURE_SCRIPT_PATH = path.join(FRONTDOOR_ROOT, "scripts", "check-portal-css-architecture.mjs");
 const LAYER_PARITY_SCRIPT_PATH = path.join(FRONTDOOR_ROOT, "scripts", "check-portal-css-layer-parity.mjs");
 const PYTHON_LAYER_PARITY_VALIDATOR_PATH = path.join(
   REPO_ROOT,
@@ -1149,6 +1150,7 @@ test("portal CSS ownership drain keeps utilities layer honest", () => {
   assert.equal(ownershipDrain.phase10AdditiveConsolidationState.parityBaselineChanged, false);
   assert.equal(ownershipDrain.phase11SurfaceListConsolidationState.phase, "phase-11-css-surface-list-consolidation");
   assert.equal(ownershipDrain.phase11SurfaceListConsolidationState.targetFile, "web/secure-landing/portal-src/styles/components/surface-normalization.css");
+  assert.equal(ownershipDrain.phase11SurfaceListConsolidationState.baselineSha256, "ab9f4a92eb699d811a85d737ef3f5cb2b285e6c809afcf34bbf179e1e229d17a");
   assert.equal(ownershipDrain.phase11SurfaceListConsolidationState.duplicateContextCountBefore, 85);
   assert.equal(ownershipDrain.phase11SurfaceListConsolidationState.duplicateContextCountAfter, 76);
   assert.equal(ownershipDrain.phase11SurfaceListConsolidationState.additiveDuplicateContextCountBefore, 29);
@@ -1158,9 +1160,48 @@ test("portal CSS ownership drain keeps utilities layer honest", () => {
   assert.equal(ownershipDrain.phase11SurfaceListConsolidationState.unownedDuplicateContextCountAfter, 0);
   assert.equal(ownershipDrain.phase11SurfaceListConsolidationState.hotspotDuplicateContextCountAfter, 0);
   assert.equal(ownershipDrain.phase11SurfaceListConsolidationState.consolidatedContextCount, 9);
+  assert.equal(ownershipDrain.phase11SurfaceListConsolidationState.expectedConsolidatedContextCount, 9);
+  assert.deepEqual(ownershipDrain.phase11SurfaceListConsolidationState.consolidatedContexts, [
+    "#artifactMetadataBar|||components|||",
+    "#artifactMetadataCard|||components|||",
+    "#artifactPreviewStage|||components|||",
+    "#reconstructionRuntimeSummary|||components|||",
+    ".review-compare-summary|||components|||",
+    ".review-status-banner[data-tone=\"error\"]|||components|||",
+    ".review-status-banner[data-tone=\"info\"]|||components|||",
+    ".review-status-banner[data-tone=\"ready\"]|||components|||",
+    ".review-status-banner[data-tone=\"warning\"]|||components|||"
+  ]);
   assert.deepEqual(ownershipDrain.phase11SurfaceListConsolidationState.remainingTargetContexts, []);
+  assert.equal(ownershipDrain.phase11SurfaceListConsolidationState.unexpectedResolvedContextCount, 0);
+  assert.equal(ownershipDrain.phase11SurfaceListConsolidationState.deferredOutOfScopeCandidateCount, 20);
+  assert.deepEqual(ownershipDrain.phase11SurfaceListConsolidationState.deferredReasonCounts, {
+    "selector-not-phase11-target": 20
+  });
+  assert.equal(ownershipDrain.phase11SurfaceListConsolidationState.removedRawBytes, 246);
+  assert.equal(ownershipDrain.phase11SurfaceListConsolidationState.removedGzipBytes, 9);
+  assert.equal(ownershipDrain.phase11SurfaceListConsolidationState.generatedRawBytesBefore, 80599);
+  assert.equal(ownershipDrain.phase11SurfaceListConsolidationState.generatedRawBytesAfter, 80353);
+  assert.equal(ownershipDrain.phase11SurfaceListConsolidationState.generatedRawByteDelta, -246);
+  assert.equal(ownershipDrain.phase11SurfaceListConsolidationState.generatedGzipBytesBefore, 15721);
+  assert.equal(ownershipDrain.phase11SurfaceListConsolidationState.generatedGzipBytesAfter, 15712);
+  assert.equal(ownershipDrain.phase11SurfaceListConsolidationState.generatedGzipByteDelta, -9);
+  assert.equal(
+    ownershipDrain.phase11SurfaceListConsolidationState.generatedPortalCssHashBefore,
+    "fce12e29f1800375b5c34e1f0e1ebc9d3981ab1a6f731bea6a3e0e0d2212151e"
+  );
+  assert.equal(
+    ownershipDrain.phase11SurfaceListConsolidationState.generatedPortalCssHashAfter,
+    "67a600aafdfc066a8adf373e1323b287939977ebc306d4e1c0635069fddbbd87"
+  );
+  assert.equal(ownershipDrain.phase11SurfaceListConsolidationState.renderedPortalCssFingerprintBefore, "d72696ab972c");
+  assert.equal(ownershipDrain.phase11SurfaceListConsolidationState.renderedPortalCssFingerprintAfter, "8f492bf35cbe");
   assert.equal(ownershipDrain.phase11SurfaceListConsolidationState.sentinelStatePreserved, true);
   assert.equal(ownershipDrain.phase11SurfaceListConsolidationState.parityBaselineChanged, false);
+  assert.match(
+    readFileSync(ARCHITECTURE_SCRIPT_PATH, "utf8"),
+    /report\.phase11SurfaceListConsolidationState = expectedPhase11State;/
+  );
   assert.equal(ownershipDrain.phase12ComponentSingletonConsolidationState.phase, "phase-12-component-singleton-consolidation");
   assert.deepEqual(ownershipDrain.phase12ComponentSingletonConsolidationState.targetSelectors, [
     ".ambient-orb",
