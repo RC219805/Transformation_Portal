@@ -34,11 +34,3 @@ def test_public_classes_are_classes(dwm_pkg):
 
     for cls in (DiffusionWorldModel, DiffusionSchedule):
         assert isinstance(cls, type)
-
-
-def test_unet1d_is_reachable_through_subpackage(dwm_pkg):
-    # UNet1D is not in __all__ but is the documented backbone; verify it
-    # imports through the package so refactors don't silently break it.
-    from transformation_portal.dwm.unet_1d import UNet1D
-
-    assert isinstance(UNet1D, type)

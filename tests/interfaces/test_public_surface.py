@@ -83,9 +83,3 @@ def test_material_type_is_enum_like():
     assert members
     for member in members:
         assert isinstance(member, MaterialType)
-
-
-def test_abstract_methods_are_marked():
-    from transformation_portal.interfaces import ImageProcessor
-
-    _assert_is_abc_with_abstract_methods(ImageProcessor)

@@ -542,8 +542,9 @@ pytest -v --tb=long tests/
 pytest --cov=src/transformation_portal --cov-report=html
 # Open htmlcov/index.html in browser
 
-# Check diff coverage locally (CI enforces ≥85%)
-diff-cover coverage.xml --compare-branch=main --fail-under=85
+# Check diff coverage locally (matches `make coverage-diff`; 85% is the
+# Phase 0 target in docs/testing/test_coverage_improvement_plan.md)
+diff-cover coverage.xml --compare-branch=origin/main --fail-under=85
 ```
 
 ### Build Failures
