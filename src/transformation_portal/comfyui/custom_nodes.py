@@ -221,7 +221,13 @@ class SkyGANNode(BaseNode):
         # Data Layer: Get presets
         presets = LocationPresets()
         location_preset = presets.get_atmospheric_parameters(location, season)
-        hour_of_day = self._TIME_OF_DAY_HOURS.get(time_of_day, 12.0)
+        try:
+            hour_of_day = self._TIME_OF_DAY_HOURS[time_of_day]
+        except KeyError:
+            raise ValueError(
+                f"Unknown time_of_day {time_of_day!r}; expected one of "
+                f"{sorted(self._TIME_OF_DAY_HOURS)}"
+            ) from None
         time_params = presets.get_sky_parameters(
             location=location,
             season=season,

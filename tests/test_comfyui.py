@@ -289,13 +289,17 @@ class TestSkyGANNode:
         assert SkyGANNode.CATEGORY == "Transformation Portal/Atmospheric"
 
     def test_time_of_day_mapping_covers_dropdown_choices(self):
-        """Each time_of_day dropdown choice resolves to a daylight hour."""
+        """Dropdown choices and mapping stay aligned in order, length, and uniqueness."""
         from transformation_portal.comfyui.custom_nodes import SkyGANNode
 
         choices = SkyGANNode.INPUT_TYPES()["required"]["time_of_day"][0]
         mapping = SkyGANNode._TIME_OF_DAY_HOURS
 
-        assert set(choices) == set(mapping.keys())
+        # Exact sequence equality also catches reordering and duplicate entries
+        # in the dropdown that a set comparison would silently mask.
+        assert list(choices) == list(mapping.keys())
+        assert len(choices) == len(set(choices))
+
         for label, hour in mapping.items():
             assert 0.0 <= hour < 24.0, f"{label} -> {hour} out of range"
 
@@ -308,6 +312,27 @@ class TestSkyGANNode:
             < mapping["sunset"]
             < mapping["twilight"]
         )
+
+    def test_execute_rejects_unknown_time_of_day(self):
+        """Unknown time_of_day must fail fast rather than silently defaulting."""
+        import numpy as np
+        import pytest
+
+        from transformation_portal.comfyui.custom_nodes import SkyGANNode
+
+        node = SkyGANNode()
+        dummy_image = np.zeros((4, 4, 3), dtype=np.float32)
+
+        with pytest.raises(ValueError, match="Unknown time_of_day"):
+            node.execute(
+                image=dummy_image,
+                location="montecito",
+                season="summer",
+                time_of_day="not_a_real_slot",
+                cloud_coverage=0.3,
+                auto_correct=True,
+                strict_physics=False,
+            )
 
 
 class TestSceneAnalysisNode:
