@@ -116,11 +116,16 @@ class TestBaseNode:
         """BaseNode should require INPUT_TYPES, RETURN_TYPES, execute."""
         from transformation_portal.comfyui.custom_nodes import BaseNode
 
-        # Cannot instantiate abstract class
-        # Just verify the abstract methods exist
         assert hasattr(BaseNode, "INPUT_TYPES")
         assert hasattr(BaseNode, "RETURN_TYPES")
         assert hasattr(BaseNode, "execute")
+
+        assert getattr(BaseNode.INPUT_TYPES, "__isabstractmethod__", False)
+        assert getattr(BaseNode.RETURN_TYPES, "__isabstractmethod__", False)
+        assert getattr(BaseNode.execute, "__isabstractmethod__", False)
+
+        with pytest.raises(TypeError, match="abstract"):
+            BaseNode()  # type: ignore[abstract]
 
     def test_concrete_node_implements_interface(self):
         """Concrete nodes should implement required methods."""
