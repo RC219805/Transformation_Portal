@@ -79,6 +79,27 @@ All sidecars use `role: advisory` and `used_for_quality_gate: false`. Run-card
 validation fails closed if a captioning status claims
 `used_for_quality_gate: true`.
 
+## Portal Feature Gate
+
+Portal controls for FastVLM advisory captioning are hidden by default. Enable
+them only through the backend bootstrap feature flag:
+
+```bash
+export TP_PORTAL_FASTVLM_CAPTIONING_ENABLED=1
+export TP_PORTAL_FASTVLM_CAPTIONING_ROLLOUT_PERCENT=100
+```
+
+`/portal/bootstrap` exposes the cohort decision as
+`features.fastVlmCaptioning`. Disabled cohorts cannot dispatch
+`vlm_captioning_enabled=true`; config preview returns the
+`captioning_feature_disabled` field error instead.
+
+When enabled, the portal maps the captioning controls to the existing Lux Depth
+V3 flags and shows the resulting command preview, effective config, readiness
+warnings, and review-side advisory caption panel. Missing FastVLM runtime paths
+remain non-blocking preview warnings because captions are metadata only and do
+not satisfy quality gates.
+
 ## Local Setup
 
 Create the isolated runtime outside the main virtualenv:

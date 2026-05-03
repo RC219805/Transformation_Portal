@@ -109,6 +109,63 @@ def test_resolve_allowed_request_path_rejects_null_byte(tmp_path):
     assert exc_info.value.reason == "invalid_path_value"
 
 
+def test_fastvlm_runtime_path_normalization_rejects_symlink_escape(tmp_path):
+    allowed_root = tmp_path / "allowed"
+    outside_root = tmp_path / "outside"
+    allowed_root.mkdir()
+    outside_root.mkdir()
+    outside_python = outside_root / "python"
+    outside_python.write_text("#!/usr/bin/env python\n")
+    symlink_path = allowed_root / "fastvlm-python"
+    symlink_path.symlink_to(outside_python)
+    errors = []
+
+    normalized = orchestrator_app._normalize_fastvlm_runtime_path_arg(
+        str(symlink_path),
+        "fastvlm_python_executable",
+        [allowed_root],
+        errors,
+    )
+
+    assert normalized == ""
+    assert errors[0]["code"] == "path_outside_allowed_roots"
+
+
+def test_fastvlm_runtime_path_status_rejects_symlink_escape(tmp_path):
+    allowed_root = tmp_path / "allowed"
+    outside_root = tmp_path / "outside"
+    allowed_root.mkdir()
+    outside_root.mkdir()
+    outside_runtime = outside_root / "mlx-vlm"
+    outside_runtime.mkdir()
+    symlink_path = allowed_root / "mlx-vlm"
+    symlink_path.symlink_to(outside_runtime, target_is_directory=True)
+
+    status = orchestrator_app._portal_fastvlm_runtime_path_status(
+        str(symlink_path),
+        [allowed_root],
+        expected_type="dir",
+    )
+
+    assert status["status"] == "invalid_path"
+    assert status["exists"] is False
+
+
+def test_fastvlm_runtime_path_status_keeps_missing_runtime_non_blocking(tmp_path):
+    allowed_root = tmp_path / "allowed"
+    allowed_root.mkdir()
+    missing_runtime = allowed_root / "fastvlm" / ".venv-fastvlm" / "bin" / "python"
+
+    status = orchestrator_app._portal_fastvlm_runtime_path_status(
+        str(missing_runtime),
+        [allowed_root],
+        expected_type="file",
+    )
+
+    assert status["status"] == "missing"
+    assert status["exists"] is False
+
+
 def test_validate_path_against_roots_returns_string_inside_root(tmp_path):
     target = tmp_path / "asset.png"
     target.write_bytes(b"x")

@@ -374,6 +374,19 @@ const els = {
         demosaicHint: _domId('rawDemosaicHint'),
         ingestModeStatus: _domId('rawIngestModeStatus')
     },
+    captioning: {
+        details: _domId('captioningDetails'),
+        fields: _domId('captioningConfigFields'),
+        enabledFields: _domId('fastVlmCaptioningFields'),
+        enableFastVlm: _domId('enableFastVlmCaptioning'),
+        model: _domId('fastVlmCaptioningModel'),
+        proxyFormat: _domId('fastVlmProxyFormat'),
+        maxSidePx: _domId('fastVlmMaxSidePx'),
+        timeoutSeconds: _domId('fastVlmTimeoutSeconds'),
+        pythonExecutable: _domId('fastVlmPythonExecutable'),
+        mlxVlmDir: _domId('fastVlmMlxVlmDir'),
+        status: _domId('captioningStatus')
+    },
     runtime: {
         maxWorkersMode: _domId('maxWorkersMode'),
         maxWorkers: _domId('maxWorkers'),
@@ -390,6 +403,9 @@ const els = {
     fieldsLuxDepth: _domId('fieldsLuxDepth'),
     fieldsArchiveGate: _domId('fieldsArchiveGate'),
     advancedFlagsDetails: _domId('advancedFlagsDetails'),
+    captioningDetails: _domId('captioningDetails'),
+    captioningDetailsHint: _domId('captioningDetailsHint'),
+    captioningDetailsSummary: _domId('captioningDetailsSummary'),
     governanceDetails: _domId('governanceDetails'),
     reconstructionDetails: _domId('reconstructionDetails'),
 
@@ -3356,6 +3372,13 @@ function _setContextVisibility(el, visible) {
     el.classList.toggle('hidden', !visible);
 }
 
+function _fastVlmCaptioningFeatureEnabled() {
+    return Boolean(
+        _isBootstrapReady()
+        && state.auth?.features?.fastVlmCaptioning
+    );
+}
+
 function _presetRequiresResearchAcknowledgments(preset, args = {}) {
     return _derivePresetResearchFlag(preset, args.preset);
 }
@@ -3449,6 +3472,9 @@ function renderCapabilityChips(payload) {
     if (parseBoolLike(args.emit_run_card, false) && parseBoolLike(args.run_card_include_proofs, false)) {
         chips.push('Run card proofs');
     }
+    if (parseBoolLike(args.vlm_captioning_enabled, false)) {
+        chips.push('FastVLM advisory captions');
+    }
 
     els.capabilityChips.innerHTML = '';
     chips.forEach((chip) => {
@@ -3469,6 +3495,8 @@ function syncBuildSurfaceApplicability(payload = null) {
     const sam2TilingEnabled = parseBoolLike(args.sam2_tiling_enabled, false);
     const enableV2 = parseBoolLike(args.enable_v2, false);
     const reconstructionEnabled = parseBoolLike(args.enable_reconstruction, false);
+    const captioningFeatureVisible = isLuxPipeline && _fastVlmCaptioningFeatureEnabled();
+    const captioningEnabled = captioningFeatureVisible && parseBoolLike(args.vlm_captioning_enabled, false);
     const researchPreset = _presetRequiresResearchAcknowledgments(preset, args);
     const depthBackend = String(args.depth_backend || '').trim().toLowerCase();
     const nonCommercialChecked = parseBoolLike(args.non_commercial_ok, false);
@@ -3542,6 +3570,45 @@ function syncBuildSurfaceApplicability(payload = null) {
 
     _setContextVisibility(els.reconstructionConfigFields, reconstructionEnabled);
     _setContextVisibility(els.runtimeTuningFields, isLuxPipeline);
+    _setContextVisibility(els.captioningDetails, captioningFeatureVisible);
+    _setContextVisibility(els.captioning.enabledFields, captioningEnabled);
+    const captioningControls = [
+        els.captioning.enableFastVlm,
+        els.captioning.model,
+        els.captioning.proxyFormat,
+        els.captioning.maxSidePx,
+        els.captioning.timeoutSeconds,
+        els.captioning.pythonExecutable,
+        els.captioning.mlxVlmDir,
+    ].filter(Boolean);
+    captioningControls.forEach((control) => {
+        control.disabled = !captioningFeatureVisible || (control !== els.captioning.enableFastVlm && !captioningEnabled);
+    });
+    if (!captioningFeatureVisible && els.captioning.enableFastVlm) {
+        els.captioning.enableFastVlm.checked = false;
+        els.captioning.enableFastVlm.setAttribute('aria-checked', 'false');
+        state.config.captioning = state.config.captioning || {};
+        state.config.captioning.enableFastVlm = false;
+    }
+    if (els.captioningDetailsHint) {
+        els.captioningDetailsHint.textContent = !captioningFeatureVisible
+            ? 'FastVLM captioning is disabled for this portal cohort.'
+            : captioningEnabled
+                ? 'FastVLM captions will emit advisory review sidecars only.'
+                : 'Open to enable optional FastVLM caption sidecars for review context.';
+    }
+    if (els.captioning.status) {
+        const preview = _currentPreviewForPayload(payload) || _effectivePreviewSnapshot(payload);
+        const summary = preview.captioning_summary || {};
+        const runtimeStatus = String(summary.runtime_status || '').trim();
+        els.captioning.status.textContent = !captioningFeatureVisible
+            ? 'FastVLM caption controls are feature gated for this cohort.'
+            : captioningEnabled && runtimeStatus === 'missing_runtime'
+                ? 'FastVLM runtime paths are not fully present; captioning remains advisory and may be skipped.'
+                : captioningEnabled
+                    ? 'FastVLM captions are advisory sidecar metadata and never satisfy quality gates.'
+                    : 'FastVLM captions are off and no captioning args will be emitted.';
+    }
     if (els.reconstructionDetailsHint) {
         els.reconstructionDetailsHint.textContent = reconstructionEnabled
             ? 'Contextual reconstruction controls are active. Grouping, sidecar, tier, and debug settings are now available.'
@@ -3604,6 +3671,16 @@ function syncDisclosurePanels(payload = null) {
             'max_gpu_workers',
             'log_level',
         ],
+        captioning: [
+            'vlm_captioning_enabled',
+            'vlm_captioning_backend',
+            'vlm_captioning_model',
+            'vlm_captioning_proxy_format',
+            'vlm_captioning_max_side_px',
+            'fastvlm_python_executable',
+            'fastvlm_mlx_vlm_dir',
+            'fastvlm_timeout_seconds',
+        ],
     };
     const advancedActive = parseBoolLike(args.save_float_depth, false)
         || parseBoolLike(args.force_depth, false)
@@ -3629,6 +3706,7 @@ function syncDisclosurePanels(payload = null) {
         || String(args.max_workers || '').trim() !== ''
         || String(args.max_gpu_workers || '').trim() !== ''
         || String(args.log_level || '').trim() !== '';
+    const captioningActive = _fastVlmCaptioningFeatureEnabled() && parseBoolLike(args.vlm_captioning_enabled, false);
     const hasPreviewIssueForGroup = (groupName) => previewFieldGroups[groupName].some((fieldName) => Boolean(_previewIssueForField(fieldName, currentPayload)));
     const currentPreview = _currentPreviewForPayload(currentPayload);
     const advancedNeedsAttention = hasPreviewIssueForGroup('advanced');
@@ -3638,11 +3716,13 @@ function syncDisclosurePanels(payload = null) {
         || (researchToolsRequired && !researchToolsChecked);
     const reconstructionNeedsAttention = hasPreviewIssueForGroup('reconstruction')
         || (_effectiveDebugBundleEnabled(currentPreview, currentPayload) && !state.portalUi.debugBundleAcknowledged);
+    const captioningNeedsAttention = hasPreviewIssueForGroup('captioning');
     const disclosurePrefs = state.portalUi.disclosurePrefs || {};
     const autoOpenState = {
         advanced: advancedActive || advancedSections.includes('advanced') || hasPreviewIssueForGroup('advanced'),
         governance: governanceActive || advancedSections.includes('governance') || hasPreviewIssueForGroup('governance'),
         reconstruction: reconstructionActive || advancedSections.includes('reconstruction') || hasPreviewIssueForGroup('reconstruction'),
+        captioning: captioningActive || hasPreviewIssueForGroup('captioning'),
         dispatchTools: false,
     };
     const syncPanel = (name, element) => {
@@ -3659,6 +3739,7 @@ function syncDisclosurePanels(payload = null) {
     syncPanel('advanced', els.advancedFlagsDetails);
     syncPanel('governance', els.governanceDetails);
     syncPanel('reconstruction', els.reconstructionDetails);
+    syncPanel('captioning', els.captioningDetails);
     syncPanel('dispatchTools', els.dispatchToolsDetails);
 
     _setDisclosureSummaryBadge(
@@ -3675,6 +3756,11 @@ function syncDisclosurePanels(payload = null) {
         els.reconstructionDetailsSummary,
         reconstructionNeedsAttention ? 'Needs attention' : reconstructionActive ? 'Contextual' : 'Contextual',
         reconstructionNeedsAttention ? 'attention' : 'contextual'
+    );
+    _setDisclosureSummaryBadge(
+        els.captioningDetailsSummary,
+        captioningNeedsAttention ? 'Needs attention' : captioningActive ? 'Advisory on' : 'Advisory off',
+        captioningNeedsAttention ? 'attention' : captioningActive ? 'ready' : 'contextual'
     );
     _setDisclosureSummaryBadge(
         els.dispatchToolsSummary,
@@ -3736,6 +3822,7 @@ function _dispatchChecklistItems(payload) {
     const appleChecked = parseBoolLike(args.accept_apple_depth_pro_research_license, false);
     const researchToolsChecked = parseBoolLike(args.accept_research_tools_license, false);
     const debugBundleEnabled = parseBoolLike(args.emit_scene_debug_bundle, false);
+    const captioningEnabled = parseBoolLike(args.vlm_captioning_enabled, false);
     const materialsApexGuardrail = parseBoolLike(args.materials_v3, false) && String(args.quality_tier || '').toLowerCase() === 'apex';
     const segmentationReady = parseBoolLike(args.enable_segmentation, false)
         && String(args.segmentation_backend || '').toLowerCase() !== 'stub'
@@ -3856,6 +3943,14 @@ function _dispatchChecklistItems(payload) {
                 detail: debugBundleEnabled
                     ? 'Debug bundle capture is enabled and acknowledged.'
                     : 'No additional debug-bundle acknowledgment is required.'
+            });
+        }
+
+        if (captioningEnabled) {
+            items.push({
+                tone: 'warn',
+                label: 'FastVLM captioning',
+                detail: 'FastVLM caption sidecars are advisory review metadata and are not used for quality gates.'
             });
         }
     } else {
@@ -4419,7 +4514,8 @@ function _defaultPortalBootstrap() {
             artifactViewerModal: false,
             reviewSurfaceDeferred: false,
             stagedUploads: false,
-            rumTelemetry: false
+            rumTelemetry: false,
+            fastVlmCaptioning: false
         }
     };
 }
@@ -4867,6 +4963,7 @@ function _syncBootstrapUi() {
         els.apiKeyInput.disabled = !showApiKeyInput;
     }
     _syncBootstrapGuardedControls();
+    syncBuildSurfaceApplicability();
     _syncOverviewBuildLoadingState();
     renderOperatorActionRail();
     const selectedJob = _findJobById(state.selectedJobId);
@@ -4897,7 +4994,8 @@ function _applyPortalBootstrap(rawBootstrap, options = {}) {
             artifactViewerModal: Boolean(bootstrap.features?.artifactViewerModal),
             reviewSurfaceDeferred: Boolean(bootstrap.features?.reviewSurfaceDeferred),
             stagedUploads: Boolean(bootstrap.features?.stagedUploads),
-            rumTelemetry: Boolean(bootstrap.features?.rumTelemetry)
+            rumTelemetry: Boolean(bootstrap.features?.rumTelemetry),
+            fastVlmCaptioning: Boolean(bootstrap.features?.fastVlmCaptioning)
         }
     };
     const bootstrapTraceparent = portalInternals.normalizePortalRumTraceparent(
@@ -6425,6 +6523,7 @@ const LUX_DA3_MODEL_KEYS = new Set(['da3-metric', 'da3-research']);
 const LUX_SEGMENTATION_BACKENDS = new Set(['stub', 'efficientsam', 'sam2']);
 const SAM2_MODEL_SIZES = new Set(['base', 'large']);
 const LUX_GROUPING_MODES = new Set(['single', 'parent_dir']);
+const VLM_CAPTIONING_PROXY_FORMATS = new Set(['png', 'jpeg']);
 
 function parseBoolLike(value, defaultValue = false) {
     if (value === null || value === undefined) return defaultValue;
@@ -6485,6 +6584,12 @@ function _resolveGroupingMode(value) {
     const normalized = String(value || '').trim().toLowerCase();
     if (LUX_GROUPING_MODES.has(normalized)) return normalized;
     return 'single';
+}
+
+function _resolveVlmCaptioningProxyFormat(value) {
+    const normalized = String(value || '').trim().toLowerCase();
+    if (VLM_CAPTIONING_PROXY_FORMATS.has(normalized)) return normalized;
+    return 'png';
 }
 
 function _resolveRunCardVersion(value) {
@@ -6675,6 +6780,10 @@ function _buildLocalEstimateSummary(args = {}) {
         runtimeScore += 1;
         reasons.push('debug_bundle_emission');
     }
+    if (parseBoolLike(normalizedArgs.vlm_captioning_enabled, false)) {
+        runtimeScore += 1;
+        reasons.push('fastvlm_captioning');
+    }
 
     const maxWorkers = Number.parseInt(String(normalizedArgs.max_workers || ''), 10);
     if (Number.isFinite(maxWorkers) && maxWorkers > 4) {
@@ -6717,6 +6826,25 @@ function _buildLocalDebugBundleSummary(args = {}) {
     };
 }
 
+function _buildLocalCaptioningSummary(args = {}) {
+    const enabled = parseBoolLike(args.vlm_captioning_enabled, false);
+    return {
+        feature_enabled: _fastVlmCaptioningFeatureEnabled(),
+        enabled,
+        backend: String(args.vlm_captioning_backend || 'fastvlm'),
+        model: String(args.vlm_captioning_model || 'default'),
+        proxy_format: String(args.vlm_captioning_proxy_format || 'png'),
+        max_side_px: Number.parseInt(String(args.vlm_captioning_max_side_px || '1600'), 10) || 1600,
+        fastvlm_python_executable: String(args.fastvlm_python_executable || ''),
+        fastvlm_mlx_vlm_dir: String(args.fastvlm_mlx_vlm_dir || ''),
+        timeout_seconds: Number.parseInt(String(args.fastvlm_timeout_seconds || '180'), 10) || 180,
+        runtime_path_status: {},
+        runtime_status: enabled ? 'unknown' : 'off',
+        role: 'advisory',
+        used_for_quality_gate: false
+    };
+}
+
 function _emptyPreviewState(status = 'idle', pipeline = '') {
     return {
         pipeline,
@@ -6731,6 +6859,7 @@ function _emptyPreviewState(status = 'idle', pipeline = '') {
         readiness: null,
         estimate_summary: null,
         debug_bundle_summary: null,
+        captioning_summary: null,
         next_best_action: null,
         argv_preview: '',
         error: '',
@@ -7078,6 +7207,7 @@ function _effectivePreviewSnapshot(payload = null) {
         readiness: null,
         estimate_summary: _buildLocalEstimateSummary(currentPayload.args || {}),
         debug_bundle_summary: _buildLocalDebugBundleSummary(currentPayload.args || {}),
+        captioning_summary: _buildLocalCaptioningSummary(currentPayload.args || {}),
         next_best_action: _buildLocalNextBestAction(currentPayload, preview),
         argv_preview: '',
         error: ''
@@ -7463,6 +7593,7 @@ async function fetchConfigPreview(payload) {
             readiness: data.readiness && typeof data.readiness === 'object' ? data.readiness : null,
             estimate_summary: data.estimate_summary && typeof data.estimate_summary === 'object' ? data.estimate_summary : null,
             debug_bundle_summary: data.debug_bundle_summary && typeof data.debug_bundle_summary === 'object' ? data.debug_bundle_summary : null,
+            captioning_summary: data.captioning_summary && typeof data.captioning_summary === 'object' ? data.captioning_summary : null,
             next_best_action: _normalizeNextBestAction(data.next_best_action),
             argv_preview: String(data.argv_preview || ''),
             error: '',
@@ -7735,9 +7866,13 @@ function renderEffectiveConfigDrawer(payload = null, preview = null) {
     }
     if (els.effectiveConfigMeta) {
         const inactiveCount = Array.isArray(effectivePreview.inactive_fields) ? effectivePreview.inactive_fields.length : 0;
+        const captioningSummary = effectivePreview.captioning_summary || _buildLocalCaptioningSummary(currentPayload.args || {});
+        const captioningNote = parseBoolLike(captioningSummary.enabled, false)
+            ? ' FastVLM advisory captioning is enabled and remains outside quality gates.'
+            : '';
         els.effectiveConfigMeta.textContent = effectivePreview.status === 'ready'
-            ? `Preview-backed normalization is live. ${inactiveCount} inactive preserved field${inactiveCount === 1 ? '' : 's'} are tracked for the next run.`
-            : 'Preview-backed normalization is unavailable, so this drawer is showing the local requested configuration and fallback posture.';
+            ? `Preview-backed normalization is live. ${inactiveCount} inactive preserved field${inactiveCount === 1 ? '' : 's'} are tracked for the next run.${captioningNote}`
+            : `Preview-backed normalization is unavailable, so this drawer is showing the local requested configuration and fallback posture.${captioningNote}`;
     }
 }
 
@@ -7993,6 +8128,37 @@ function buildCanonicalLuxDepthArgs(config) {
         els.runtime.logLevel ? els.runtime.logLevel.value : config.runtime?.logLevel,
         config.runtime?.logLevel || ''
     );
+    const captioningFeatureEnabled = _fastVlmCaptioningFeatureEnabled();
+    const captioningConfig = config.captioning || {};
+    const enableFastVlmCaptioning = captioningFeatureEnabled && (
+        els.captioning.enableFastVlm
+            ? Boolean(els.captioning.enableFastVlm.checked)
+            : parseBoolLike(captioningConfig.enableFastVlm, false)
+    );
+    const fastVlmCaptioningModel = _textOrFallback(
+        els.captioning.model ? els.captioning.model.value : captioningConfig.model,
+        captioningConfig.model || 'default'
+    ) || 'default';
+    const fastVlmProxyFormat = _resolveVlmCaptioningProxyFormat(
+        _textOrFallback(
+            els.captioning.proxyFormat ? els.captioning.proxyFormat.value : captioningConfig.proxyFormat,
+            captioningConfig.proxyFormat || 'png'
+        )
+    );
+    const fastVlmMaxSidePx = _parsePositiveIntOrNull(
+        els.captioning.maxSidePx ? els.captioning.maxSidePx.value : captioningConfig.maxSidePx
+    ) || 1600;
+    const fastVlmTimeoutSeconds = _parsePositiveIntOrNull(
+        els.captioning.timeoutSeconds ? els.captioning.timeoutSeconds.value : captioningConfig.timeoutSeconds
+    ) || 180;
+    const fastVlmPythonExecutable = _textOrFallback(
+        els.captioning.pythonExecutable ? els.captioning.pythonExecutable.value : captioningConfig.pythonExecutable,
+        captioningConfig.pythonExecutable || ''
+    );
+    const fastVlmMlxVlmDir = _textOrFallback(
+        els.captioning.mlxVlmDir ? els.captioning.mlxVlmDir.value : captioningConfig.mlxVlmDir,
+        captioningConfig.mlxVlmDir || ''
+    );
 
     const args = {
         preset,
@@ -8054,6 +8220,18 @@ function buildCanonicalLuxDepthArgs(config) {
     if (maxWorkers !== null) args.max_workers = maxWorkers;
     if (maxGpuWorkers !== null) args.max_gpu_workers = maxGpuWorkers;
     if (logLevel) args.log_level = logLevel;
+    if (captioningFeatureEnabled) {
+        args.vlm_captioning_enabled = enableFastVlmCaptioning;
+        if (enableFastVlmCaptioning) {
+            args.vlm_captioning_backend = 'fastvlm';
+            args.vlm_captioning_model = fastVlmCaptioningModel;
+            args.vlm_captioning_proxy_format = fastVlmProxyFormat;
+            args.vlm_captioning_max_side_px = fastVlmMaxSidePx;
+            args.fastvlm_timeout_seconds = fastVlmTimeoutSeconds;
+            if (fastVlmPythonExecutable) args.fastvlm_python_executable = fastVlmPythonExecutable;
+            if (fastVlmMlxVlmDir) args.fastvlm_mlx_vlm_dir = fastVlmMlxVlmDir;
+        }
+    }
     return args;
 }
 
@@ -8187,6 +8365,29 @@ function applyPresetRecommendedArgs(presetName) {
     }
     if (Object.prototype.hasOwnProperty.call(recommended, 'log_level')) {
         c.runtime.logLevel = _textOrFallback(recommended.log_level, c.runtime.logLevel || '');
+    }
+
+    c.captioning = c.captioning || {};
+    if (Object.prototype.hasOwnProperty.call(recommended, 'vlm_captioning_enabled')) {
+        c.captioning.enableFastVlm = parseBoolLike(recommended.vlm_captioning_enabled, c.captioning.enableFastVlm);
+    }
+    if (Object.prototype.hasOwnProperty.call(recommended, 'vlm_captioning_model')) {
+        c.captioning.model = _textOrFallback(recommended.vlm_captioning_model, c.captioning.model || 'default');
+    }
+    if (Object.prototype.hasOwnProperty.call(recommended, 'vlm_captioning_proxy_format')) {
+        c.captioning.proxyFormat = _resolveVlmCaptioningProxyFormat(recommended.vlm_captioning_proxy_format);
+    }
+    if (Object.prototype.hasOwnProperty.call(recommended, 'vlm_captioning_max_side_px')) {
+        c.captioning.maxSidePx = _parsePositiveIntOrNull(recommended.vlm_captioning_max_side_px) || c.captioning.maxSidePx || 1600;
+    }
+    if (Object.prototype.hasOwnProperty.call(recommended, 'fastvlm_timeout_seconds')) {
+        c.captioning.timeoutSeconds = _parsePositiveIntOrNull(recommended.fastvlm_timeout_seconds) || c.captioning.timeoutSeconds || 180;
+    }
+    if (Object.prototype.hasOwnProperty.call(recommended, 'fastvlm_python_executable')) {
+        c.captioning.pythonExecutable = _textOrFallback(recommended.fastvlm_python_executable, c.captioning.pythonExecutable || '');
+    }
+    if (Object.prototype.hasOwnProperty.call(recommended, 'fastvlm_mlx_vlm_dir')) {
+        c.captioning.mlxVlmDir = _textOrFallback(recommended.fastvlm_mlx_vlm_dir, c.captioning.mlxVlmDir || '');
     }
 }
 
@@ -8392,6 +8593,14 @@ function updateUIFromState() {
     c.runtime.maxGpuWorkersMode = _normalizeWorkerMode(c.runtime.maxGpuWorkersMode || (c.runtime.maxGpuWorkers ? 'fixed' : 'auto'));
     c.runtime.maxGpuWorkers = _parsePositiveIntOrNull(c.runtime.maxGpuWorkers) || '';
     c.runtime.logLevel = _textOrFallback(c.runtime.logLevel, '');
+    c.captioning = c.captioning || {};
+    c.captioning.enableFastVlm = parseBoolLike(c.captioning.enableFastVlm, false);
+    c.captioning.model = _textOrFallback(c.captioning.model, 'default');
+    c.captioning.proxyFormat = _resolveVlmCaptioningProxyFormat(c.captioning.proxyFormat);
+    c.captioning.maxSidePx = _parsePositiveIntOrNull(c.captioning.maxSidePx) || 1600;
+    c.captioning.timeoutSeconds = _parsePositiveIntOrNull(c.captioning.timeoutSeconds) || 180;
+    c.captioning.pythonExecutable = _textOrFallback(c.captioning.pythonExecutable, '');
+    c.captioning.mlxVlmDir = _textOrFallback(c.captioning.mlxVlmDir, '');
     applyLuxMetadataToControls();
     applyPipelinePresetOptions(state.pipeline);
     if (els.presetSelect) els.presetSelect.value = c.preset;
@@ -8439,6 +8648,12 @@ function updateUIFromState() {
         els.runtime.maxGpuWorkers.value = c.runtime.maxGpuWorkers === '' ? '' : String(c.runtime.maxGpuWorkers);
     }
     if (els.runtime.logLevel) els.runtime.logLevel.value = c.runtime.logLevel;
+    if (els.captioning.model) els.captioning.model.value = c.captioning.model;
+    if (els.captioning.proxyFormat) els.captioning.proxyFormat.value = c.captioning.proxyFormat;
+    if (els.captioning.maxSidePx) els.captioning.maxSidePx.value = String(c.captioning.maxSidePx);
+    if (els.captioning.timeoutSeconds) els.captioning.timeoutSeconds.value = String(c.captioning.timeoutSeconds);
+    if (els.captioning.pythonExecutable) els.captioning.pythonExecutable.value = c.captioning.pythonExecutable;
+    if (els.captioning.mlxVlmDir) els.captioning.mlxVlmDir.value = c.captioning.mlxVlmDir;
 
     const safeSyncCheck = (el, val) => {
         if (el) {
@@ -8478,6 +8693,7 @@ function updateUIFromState() {
     safeSyncCheck(els.licenses.acceptResearchTools, c.licenses.acceptResearchTools);
     safeSyncCheck(els.reconstruction.enable, c.reconstruction.enable);
     safeSyncCheck(els.reconstruction.emitSceneDebugBundle, c.reconstruction.emitSceneDebugBundle);
+    safeSyncCheck(els.captioning.enableFastVlm, c.captioning.enableFastVlm);
     state.portalUi.debugBundleAcknowledged = c.reconstruction.emitSceneDebugBundle
         ? Boolean(state.portalUi.debugBundleAcknowledged)
         : false;
@@ -8610,6 +8826,7 @@ function renderPreRunDiagnostics(payload) {
         const rawIngestMode = String(args.raw_ingest_mode || '').trim().toLowerCase();
         const strictInputs = parseBoolLike(args.strict_inputs, false);
         const segmentationEnabled = parseBoolLike(args.enable_segmentation, false);
+        const captioningEnabled = parseBoolLike(args.vlm_captioning_enabled, false);
 
         expectedOutputs.push('Depth maps');
         if (parseBoolLike(args.pbr, false)) expectedOutputs.push('PBR maps');
@@ -8618,6 +8835,7 @@ function renderPreRunDiagnostics(payload) {
         if (reconstructionEnabled) expectedOutputs.push('Reconstruction report bundle');
         if (parseBoolLike(args.emit_run_card, false)) expectedOutputs.push('Run card JSON');
         if (parseBoolLike(args.emit_scene_debug_bundle, false)) expectedOutputs.push('Reconstruction debug bundle');
+        if (captioningEnabled) expectedOutputs.push('Advisory FastVLM caption sidecars');
 
         if (preview && preview.status === 'ready') {
             const previewErrors = Array.isArray(preview.field_errors) ? preview.field_errors : [];
@@ -8678,6 +8896,13 @@ function renderPreRunDiagnostics(payload) {
                 if (healthState === 'good') {
                     healthState = 'warn';
                     healthLabel = 'config mismatch';
+                }
+            }
+            if (captioningEnabled) {
+                warnings.push('WARNING: FastVLM captions are advisory sidecar metadata and do not satisfy quality gates.');
+                if (healthState === 'good') {
+                    healthState = 'warn';
+                    healthLabel = 'advisory captioning';
                 }
             }
         } else if (strictInputs) {
@@ -8910,6 +9135,20 @@ function renderCLI() {
         if (parseBoolLike(payload.args.verbose, false)) cliLines.push(`  --verbose`);
         if (parseBoolLike(payload.args.quiet, false)) cliLines.push(`  --quiet`);
         if (payload.args.log_level) cliLines.push(`  --log-level ${q(payload.args.log_level)}`);
+        if (parseBoolLike(payload.args.vlm_captioning_enabled, false)) {
+            cliLines.push(`  --vlm-captioning "on"`);
+            cliLines.push(`  --vlm-captioning-backend ${q(payload.args.vlm_captioning_backend || 'fastvlm')}`);
+            cliLines.push(`  --vlm-captioning-model ${q(payload.args.vlm_captioning_model || 'default')}`);
+            cliLines.push(`  --vlm-captioning-proxy-format ${q(payload.args.vlm_captioning_proxy_format || 'png')}`);
+            cliLines.push(`  --vlm-captioning-max-side-px ${q(payload.args.vlm_captioning_max_side_px || 1600)}`);
+            if (payload.args.fastvlm_python_executable) {
+                cliLines.push(`  --fastvlm-python ${q(payload.args.fastvlm_python_executable)}`);
+            }
+            if (payload.args.fastvlm_mlx_vlm_dir) {
+                cliLines.push(`  --fastvlm-mlx-vlm-dir ${q(payload.args.fastvlm_mlx_vlm_dir)}`);
+            }
+            cliLines.push(`  --fastvlm-timeout-seconds ${q(payload.args.fastvlm_timeout_seconds || 180)}`);
+        }
         if (parseBoolLike(payload.args.overwrite, false)) cliLines.push(`  --overwrite`);
     } else {
         if (payload.args.archive_command) {
@@ -8978,6 +9217,13 @@ function bindInputs() {
             'reconstruction:tier': 'reconstruction_tier',
             'reconstruction:emitSceneDebugBundle': 'emit_scene_debug_bundle',
             'raw:ingestMode': 'raw_ingest_mode',
+            'captioning:enableFastVlm': 'vlm_captioning_enabled',
+            'captioning:model': 'vlm_captioning_model',
+            'captioning:proxyFormat': 'vlm_captioning_proxy_format',
+            'captioning:maxSidePx': 'vlm_captioning_max_side_px',
+            'captioning:timeoutSeconds': 'fastvlm_timeout_seconds',
+            'captioning:pythonExecutable': 'fastvlm_python_executable',
+            'captioning:mlxVlmDir': 'fastvlm_mlx_vlm_dir',
             'runtime:maxWorkersMode': 'max_workers_mode',
             'runtime:maxWorkers': 'max_workers',
             'runtime:maxGpuWorkersMode': 'max_gpu_workers_mode',
@@ -8988,7 +9234,7 @@ function bindInputs() {
     };
 
     const telemetrySurfaceFor = (category) => {
-        if (category === 'reconstruction' || category === 'raw' || category === 'runtime') {
+        if (category === 'reconstruction' || category === 'raw' || category === 'runtime' || category === 'captioning') {
             return 'reconstruction_runtime';
         }
         return 'dispatch';
@@ -8999,6 +9245,9 @@ function bindInputs() {
         }
         if (category === 'emits' && key === 'runCard') {
             syncRunCardControlState(state.config);
+        }
+        if (category === 'captioning' && key === 'enableFastVlm') {
+            syncBuildSurfaceApplicability();
         }
     };
 
@@ -9136,6 +9385,12 @@ function bindInputs() {
     safeBindText(els.raw.ingestMode, 'raw', 'ingestMode');
     safeBindText(els.raw.wbMode, 'raw', 'wbMode');
     safeBindText(els.raw.demosaic, 'raw', 'demosaic');
+    safeBindText(els.captioning.proxyFormat, 'captioning', 'proxyFormat');
+    safeBindInput(els.captioning.model, 'captioning', 'model');
+    safeBindInput(els.captioning.maxSidePx, 'captioning', 'maxSidePx');
+    safeBindInput(els.captioning.timeoutSeconds, 'captioning', 'timeoutSeconds');
+    safeBindInput(els.captioning.pythonExecutable, 'captioning', 'pythonExecutable');
+    safeBindInput(els.captioning.mlxVlmDir, 'captioning', 'mlxVlmDir');
     safeBindInput(els.runtime.maxWorkers, 'runtime', 'maxWorkers');
     safeBindInput(els.runtime.maxGpuWorkers, 'runtime', 'maxGpuWorkers');
     safeBindText(els.runtime.logLevel, 'runtime', 'logLevel');
@@ -9157,6 +9412,7 @@ function bindInputs() {
     safeBindCheck(els.segmentation.strict, 'segmentation', 'strict');
     safeBindCheck(els.reconstruction.enable, 'reconstruction', 'enable');
     safeBindCheck(els.reconstruction.emitSceneDebugBundle, 'reconstruction', 'emitSceneDebugBundle');
+    safeBindCheck(els.captioning.enableFastVlm, 'captioning', 'enableFastVlm');
 
     safeBindCheck(els.emits.master16, 'emits', 'master16');
     safeBindCheck(els.emits.upscaled16, 'emits', 'upscaled16');
@@ -10340,6 +10596,7 @@ if (els.exportBtn) els.exportBtn.addEventListener('click', () => {
         execution_args: effectivePreview.execution_args || payload.args,
         inactive_fields: effectivePreview.inactive_fields || [],
         estimate_summary: effectivePreview.estimate_summary || _buildLocalEstimateSummary(payload.args || {}),
+        captioning_summary: effectivePreview.captioning_summary || _buildLocalCaptioningSummary(payload.args || {}),
         argv_preview: String(effectivePreview.argv_preview || els.cliPreview?.textContent || '')
     };
     const blob = new Blob([JSON.stringify(exportPayload, null, 2)], { type: "application/json" });
@@ -10555,6 +10812,28 @@ if (els.fileInput) els.fileInput.addEventListener('change', async (e) => {
             c.raw.ingestMode = _textOrFallback(data.args.raw_ingest_mode, c.raw.ingestMode);
             c.raw.wbMode = _textOrFallback(data.args.raw_wb_mode, c.raw.wbMode);
             c.raw.demosaic = _textOrFallback(data.args.raw_demosaic, c.raw.demosaic);
+
+            c.captioning = c.captioning || {};
+            c.captioning.enableFastVlm = parseBoolLike(
+                data.args.vlm_captioning_enabled,
+                c.captioning.enableFastVlm
+            );
+            c.captioning.model = _textOrFallback(data.args.vlm_captioning_model, c.captioning.model);
+            c.captioning.proxyFormat = _resolveVlmCaptioningProxyFormat(
+                data.args.vlm_captioning_proxy_format || c.captioning.proxyFormat
+            );
+            c.captioning.maxSidePx =
+                _parsePositiveIntOrNull(data.args.vlm_captioning_max_side_px) || c.captioning.maxSidePx;
+            c.captioning.timeoutSeconds =
+                _parsePositiveIntOrNull(data.args.fastvlm_timeout_seconds) || c.captioning.timeoutSeconds;
+            c.captioning.pythonExecutable = _textOrFallback(
+                data.args.fastvlm_python_executable,
+                c.captioning.pythonExecutable
+            );
+            c.captioning.mlxVlmDir = _textOrFallback(
+                data.args.fastvlm_mlx_vlm_dir,
+                c.captioning.mlxVlmDir
+            );
 
             c.runtime = c.runtime || {};
             c.runtime.maxWorkers = _parsePositiveIntOrNull(data.args.max_workers) || '';
@@ -11177,8 +11456,12 @@ function setupDisclosurePanels() {
                 advanced: null,
                 governance: null,
                 reconstruction: null,
+                captioning: null,
                 dispatchTools: false,
             };
+        }
+        if (!Object.prototype.hasOwnProperty.call(state.portalUi.disclosurePrefs, 'captioning')) {
+            state.portalUi.disclosurePrefs.captioning = null;
         }
         return state.portalUi.disclosurePrefs;
     };
@@ -11212,6 +11495,7 @@ function setupDisclosurePanels() {
     registerDisclosurePanel('advanced', els.advancedFlagsDetails);
     registerDisclosurePanel('governance', els.governanceDetails);
     registerDisclosurePanel('reconstruction', els.reconstructionDetails);
+    registerDisclosurePanel('captioning', els.captioningDetails);
     registerDisclosurePanel('dispatchTools', els.dispatchToolsDetails);
 }
 

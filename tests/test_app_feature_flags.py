@@ -225,6 +225,38 @@ def test_portal_staged_uploads_requires_both_master_switch_and_rollout(monkeypat
     assert orchestrator_app._portal_staged_uploads_enabled(actor) is True
 
 
+def test_portal_fastvlm_captioning_defaults_off(monkeypatch):
+    monkeypatch.delenv("TP_PORTAL_FASTVLM_CAPTIONING_ENABLED", raising=False)
+    monkeypatch.delenv("TP_PORTAL_FASTVLM_CAPTIONING_ROLLOUT_PERCENT", raising=False)
+
+    assert orchestrator_app._portal_fastvlm_captioning_enabled({"username": "alice"}) is False
+
+
+def test_portal_fastvlm_captioning_requires_master_switch_and_rollout(monkeypatch):
+    actor = {"username": "alice"}
+
+    monkeypatch.setenv("TP_PORTAL_FASTVLM_CAPTIONING_ENABLED", "false")
+    monkeypatch.setenv("TP_PORTAL_FASTVLM_CAPTIONING_ROLLOUT_PERCENT", "100")
+    assert orchestrator_app._portal_fastvlm_captioning_enabled(actor) is False
+
+    monkeypatch.setenv("TP_PORTAL_FASTVLM_CAPTIONING_ENABLED", "true")
+    monkeypatch.setenv("TP_PORTAL_FASTVLM_CAPTIONING_ROLLOUT_PERCENT", "0")
+    assert orchestrator_app._portal_fastvlm_captioning_enabled(actor) is False
+
+    monkeypatch.setenv("TP_PORTAL_FASTVLM_CAPTIONING_ENABLED", "true")
+    monkeypatch.setenv("TP_PORTAL_FASTVLM_CAPTIONING_ROLLOUT_PERCENT", "100")
+    assert orchestrator_app._portal_fastvlm_captioning_enabled(actor) is True
+
+
+def test_portal_fastvlm_captioning_uses_actor_cohort(monkeypatch):
+    monkeypatch.setenv("TP_PORTAL_FASTVLM_CAPTIONING_ENABLED", "true")
+    monkeypatch.setenv("TP_PORTAL_FASTVLM_CAPTIONING_ROLLOUT_PERCENT", "50")
+
+    for username in ("alice", "bob", "carol", "dave"):
+        expected = orchestrator_app._stable_rollout_bucket(username) < 50
+        assert orchestrator_app._portal_fastvlm_captioning_enabled({"username": username}) is expected
+
+
 def test_portal_artifact_viewer_modal_flag_passes_through_rollout(monkeypatch):
     monkeypatch.setenv("TP_PORTAL_ARTIFACT_VIEWER_MODAL_ROLLOUT_PERCENT", "100")
     assert orchestrator_app._portal_artifact_viewer_modal_enabled({"username": "alice"}) is True

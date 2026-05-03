@@ -67,6 +67,11 @@ from transformation_portal.ingest.upload_staging import (
 )
 from transformation_portal.lux_depth_v3.model_registry import resolve_model_spec, resolve_registry_key, visible_cli_model_specs
 from transformation_portal.lux_depth_v3.run_card_contract import infer_run_card_version
+from transformation_portal.vlm_captioning.fastvlm_runtime import (
+    FASTVLM_CHECKPOINT_DIRS,
+    default_fastvlm_runtime_root,
+    resolve_fastvlm_model_path,
+)
 
 # ----------------------------
 # In-memory job store (MVP)
@@ -248,6 +253,12 @@ def _portal_staged_uploads_enabled(actor: Optional[Mapping[str, Any]] = None) ->
     if not _env_bool("TP_PORTAL_UPLOAD_STAGING_ENABLED", False):
         return False
     return _portal_rollout_enabled("TP_PORTAL_STAGED_UPLOADS_ROLLOUT_PERCENT", actor)
+
+
+def _portal_fastvlm_captioning_enabled(actor: Optional[Mapping[str, Any]] = None) -> bool:
+    if not _env_bool("TP_PORTAL_FASTVLM_CAPTIONING_ENABLED", False):
+        return False
+    return _portal_rollout_enabled("TP_PORTAL_FASTVLM_CAPTIONING_ROLLOUT_PERCENT", actor)
 
 
 REPO_ROOT = Path(__file__).resolve().parent
@@ -890,6 +901,14 @@ ALLOWED_OUTPUT_ROOTS = _env_path_roots(
     DEFAULT_ALLOWED_PATH_ROOTS,
 )
 ALLOWED_PATH_ROOTS = list(dict.fromkeys([*ALLOWED_INPUT_ROOTS, *ALLOWED_OUTPUT_ROOTS]))
+FASTVLM_RUNTIME_ALLOWED_ROOTS = list(
+    dict.fromkeys(
+        [
+            *ALLOWED_INPUT_ROOTS,
+            Path(os.path.realpath(default_fastvlm_runtime_root())),
+        ]
+    )
+)
 MANAGED_SAM2_TRUSTED_ROOTS = [
     Path(os.path.realpath(REPO_ROOT / "models" / "sam2")),
     Path(os.path.realpath(REPO_ROOT / "checkpoints")),
@@ -1304,6 +1323,9 @@ ALLOWED_RAW_INGEST_MODES = {"auto", "force_rawpy", "force_preview"}
 ALLOWED_RAW_WB_MODES = {"camera"}
 ALLOWED_RAW_DEMOSAIC = {"AHD"}
 ALLOWED_LOG_LEVELS = {"DEBUG", "INFO", "WARNING", "ERROR"}
+ALLOWED_VLM_CAPTIONING_BACKENDS = {"fastvlm"}
+ALLOWED_VLM_CAPTIONING_PROXY_FORMATS = {"png", "jpeg"}
+ALLOWED_VLM_CAPTIONING_MODEL_ROLES = frozenset(FASTVLM_CHECKPOINT_DIRS.keys())
 PORTAL_DEFAULT_DA3_MODEL_KEY = "da3-metric"
 PORTAL_DA3_MODEL_KEY_BY_REGISTRY_KEY = {
     "da3_metric": "da3-metric",
@@ -1331,6 +1353,11 @@ VALIDATION_REASON_CODES = {
     "Invalid raw_wb_mode": "invalid_raw_wb_mode",
     "Invalid raw_demosaic": "invalid_raw_demosaic",
     "Invalid log_level": "invalid_log_level",
+    "Invalid vlm_captioning_backend": "invalid_vlm_captioning_backend",
+    "Invalid vlm_captioning_model": "invalid_vlm_captioning_model",
+    "Invalid vlm_captioning_proxy_format": "invalid_vlm_captioning_proxy_format",
+    "Invalid vlm_captioning_max_side_px": "invalid_vlm_captioning_max_side_px",
+    "Invalid fastvlm_timeout_seconds": "invalid_fastvlm_timeout_seconds",
     "verbose and quiet are mutually exclusive": "conflicting_log_verbosity_flags",
     "Archive governance runner unavailable": "archive_runner_unavailable",
     "Invalid archive_command": "invalid_archive_command",
@@ -1367,6 +1394,12 @@ PORTAL_SAFE_ERROR_MESSAGES = {
     "invalid_sam2_model_size": "The selected SAM2 model size is not supported.",
     "invalid_segmentation_backend": "The selected segmentation backend is not supported.",
     "invalid_surface": "The telemetry surface is not supported.",
+    "invalid_vlm_captioning_backend": "The selected captioning backend is not supported.",
+    "invalid_vlm_captioning_model": "The selected captioning model is not supported.",
+    "invalid_vlm_captioning_proxy_format": "The selected captioning proxy format is not supported.",
+    "invalid_vlm_captioning_max_side_px": "The selected captioning proxy size is invalid.",
+    "invalid_fastvlm_timeout_seconds": "The selected FastVLM timeout is invalid.",
+    "captioning_feature_disabled": "FastVLM captioning is not enabled for this portal cohort.",
     "manifest_jsonl_required": "A manifest JSONL artifact is required before dispatch.",
     "missing_required_paths": "Input and output paths are required.",
     "path_outside_allowed_roots": "Configured paths must stay within the allowed workspace roots.",
@@ -1446,6 +1479,14 @@ PORTAL_ALLOWED_EVENT_FIELDS = {
     "segmentation_backend",
     "segmentation_cache",
     "strict_segmentation",
+    "vlm_captioning_enabled",
+    "vlm_captioning_backend",
+    "vlm_captioning_model",
+    "vlm_captioning_proxy_format",
+    "vlm_captioning_max_side_px",
+    "fastvlm_python_executable",
+    "fastvlm_mlx_vlm_dir",
+    "fastvlm_timeout_seconds",
 }
 PORTAL_ALLOWED_RUM_EVENT_TYPES = {
     "portal_shell_rendered",
@@ -1476,6 +1517,8 @@ PATH_FIELD_SPECS: Tuple[Tuple[str, Tuple[str, ...], str], ...] = (
     ("output_dir", ("output_dir", "outputDir"), PATH_SCOPE_OUTPUT),
     ("sam2_checkpoint_path", ("sam2_checkpoint_path", "sam2CheckpointPath"), PATH_SCOPE_INPUT),
     ("cameras_sidecar_path", ("cameras_sidecar_path", "camerasSidecarPath"), PATH_SCOPE_INPUT),
+    ("fastvlm_python_executable", ("fastvlm_python_executable", "fastvlmPythonExecutable"), PATH_SCOPE_INPUT),
+    ("fastvlm_mlx_vlm_dir", ("fastvlm_mlx_vlm_dir", "fastvlmMlxVlmDir"), PATH_SCOPE_INPUT),
     ("archive_index", ("archive_index", "archiveIndex"), PATH_SCOPE_ANY),
     ("manifest_jsonl", ("manifest_jsonl", "manifestJsonl"), PATH_SCOPE_OUTPUT),
     ("archive_root", ("archive_root", "archiveRoot"), PATH_SCOPE_INPUT),
@@ -1543,6 +1586,14 @@ LUX_PORTAL_DEFAULT_ARGS: Dict[str, Any] = {
     "raw_ingest_mode": "auto",
     "raw_wb_mode": "camera",
     "raw_demosaic": "AHD",
+    "vlm_captioning_enabled": False,
+    "vlm_captioning_backend": "fastvlm",
+    "vlm_captioning_model": "default",
+    "vlm_captioning_proxy_format": "png",
+    "vlm_captioning_max_side_px": 1600,
+    "fastvlm_python_executable": "",
+    "fastvlm_mlx_vlm_dir": "",
+    "fastvlm_timeout_seconds": 180,
     "verbose": False,
     "quiet": False,
     "overwrite": False,
@@ -4150,6 +4201,41 @@ def _lux_config_metadata() -> Dict[str, Any]:
                     {"value": "ERROR", "label": "ERROR"},
                 ],
             },
+            "vlm_captioning_model": {
+                "label": "FastVLM Model",
+                "kind": "enum_or_path",
+                "default": "default",
+                "options": [
+                    {"value": "default", "label": "Default"},
+                    {"value": "review", "label": "Review"},
+                    {"value": "smoke", "label": "Smoke"},
+                ],
+                "helper_text": "Advisory caption model role or repo-safe checkpoint path.",
+            },
+            "vlm_captioning_proxy_format": {
+                "label": "FastVLM Proxy Format",
+                "kind": "enum",
+                "default": "png",
+                "options": [
+                    {"value": "png", "label": "PNG"},
+                    {"value": "jpeg", "label": "JPEG"},
+                ],
+                "helper_text": "Image proxy format for the isolated FastVLM subprocess.",
+            },
+            "vlm_captioning_max_side_px": {
+                "label": "FastVLM Proxy Max Side",
+                "kind": "integer",
+                "default": 1600,
+                "min": 1,
+                "helper_text": "Largest proxy side length in pixels.",
+            },
+            "fastvlm_timeout_seconds": {
+                "label": "FastVLM Timeout",
+                "kind": "integer",
+                "default": 180,
+                "min": 1,
+                "helper_text": "Subprocess timeout for advisory captioning.",
+            },
         },
     }
 
@@ -4208,6 +4294,9 @@ def _lux_estimate_summary(normalized_args: Dict[str, Any]) -> Dict[str, Any]:
     if _as_bool(normalized_args.get("emit_scene_debug_bundle"), False):
         runtime_score += 1
         reasons.append("debug_bundle_emission")
+    if _as_bool(normalized_args.get("vlm_captioning_enabled"), False):
+        runtime_score += 1
+        reasons.append("fastvlm_captioning")
 
     max_gpu_workers = normalized_args.get("max_gpu_workers")
     if isinstance(max_gpu_workers, int) and max_gpu_workers >= 2:
@@ -4259,10 +4348,211 @@ def _lux_debug_bundle_summary(normalized_args: Dict[str, Any]) -> Dict[str, Any]
     }
 
 
+def _resolve_fastvlm_model_selector_path(selector: str) -> Path:
+    normalized = str(selector or "default").strip()
+    role = normalized.lower()
+    if role == "review":
+        env_path = os.getenv("TP_FASTVLM_REVIEW_MODEL", "").strip()
+    elif role == "default":
+        env_path = os.getenv("TP_FASTVLM_MODEL", "").strip()
+    else:
+        env_path = ""
+    if env_path:
+        return resolve_fastvlm_model_path(env_path, allowed_roots=tuple(FASTVLM_RUNTIME_ALLOWED_ROOTS))
+    return resolve_fastvlm_model_path(normalized, allowed_roots=tuple(FASTVLM_RUNTIME_ALLOWED_ROOTS))
+
+
+def _portal_existing_path_status(path_text: str, allowed_roots: List[Path], *, expected_type: str) -> Dict[str, Any]:
+    text = str(path_text or "").strip()
+    status = {
+        "path": text,
+        "configured": bool(text),
+        "exists": False,
+        "expected_type": expected_type,
+        "status": "missing",
+    }
+    if not text:
+        return status
+    try:
+        resolved_path = _resolve_allowed_request_path(text, allowed_roots)
+    except (OSError, RuntimeError, ValueError, _PortalValidationReasonError):
+        status["status"] = "invalid_path"
+        return status
+    trusted_entry = _trusted_allowed_entry(resolved_path, allowed_roots)
+    if trusted_entry is None:
+        return status
+    try:
+        if expected_type == "file":
+            exists = trusted_entry.is_file()
+        elif expected_type == "dir":
+            exists = trusted_entry.is_dir()
+        else:
+            exists = trusted_entry.exists()
+    except OSError:
+        exists = False
+    status["exists"] = bool(exists)
+    status["path"] = _normalize_repo_relative_display_path(text, trusted_entry)
+    status["status"] = "ready" if exists else "missing"
+    return status
+
+
+def _normalize_fastvlm_runtime_path_arg(
+    value: Any,
+    field: str,
+    allowed_roots: List[Path],
+    errors: List[Dict[str, Any]],
+) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    try:
+        resolved_path = _resolve_allowed_request_path(text, allowed_roots)
+    except ValueError as exc:
+        reason = _portal_reason_from_exception(exc, default="invalid_path_value")
+        errors.append(
+            _portal_issue(
+                field,
+                reason,
+                f"{field} must stay within the allowed workspace roots.",
+                suggestion=f"Choose a {field} path under the configured repository or temp roots.",
+            )
+        )
+        return ""
+    return _normalize_repo_relative_display_path(text, resolved_path)
+
+
+def _portal_fastvlm_runtime_path_status(path_text: str, allowed_roots: List[Path], *, expected_type: str) -> Dict[str, Any]:
+    text = str(path_text or "").strip()
+    status = {
+        "path": text,
+        "configured": bool(text),
+        "exists": False,
+        "expected_type": expected_type,
+        "status": "missing",
+    }
+    if not text:
+        return status
+    try:
+        resolved_path = _resolve_allowed_request_path(text, allowed_roots)
+    except (OSError, RuntimeError, ValueError, _PortalValidationReasonError):
+        status["status"] = "invalid_path"
+        return status
+    trusted_entry = _trusted_allowed_entry(resolved_path, allowed_roots)
+    if trusted_entry is None:
+        status["path"] = _normalize_repo_relative_display_path(text, resolved_path)
+        return status
+    try:
+        if expected_type == "file":
+            exists = trusted_entry.is_file()
+        elif expected_type == "dir":
+            exists = trusted_entry.is_dir()
+        else:
+            exists = trusted_entry.exists()
+    except OSError:
+        exists = False
+    status["exists"] = bool(exists)
+    status["path"] = _normalize_repo_relative_display_path(text, trusted_entry)
+    status["status"] = "ready" if exists else "missing"
+    return status
+
+
+def _normalize_vlm_captioning_model(
+    raw_model: Any,
+    errors: List[Dict[str, Any]],
+) -> str:
+    model = str(raw_model or "default").strip() or "default"
+    role = model.lower()
+    if role in ALLOWED_VLM_CAPTIONING_MODEL_ROLES:
+        return role
+
+    path_like = model.startswith(".") or "/" in model or "\\" in model or Path(model).is_absolute()
+    if not path_like:
+        errors.append(
+            _portal_issue(
+                "vlm_captioning_model",
+                "invalid_vlm_captioning_model",
+                "FastVLM model must be one of default, review, smoke, or a repo-safe model path.",
+                suggestion="Choose a model role or a checkpoint path under the configured workspace roots.",
+            )
+        )
+        return "default"
+
+    normalized_model = _normalize_portal_path_arg(
+        model,
+        "vlm_captioning_model",
+        FASTVLM_RUNTIME_ALLOWED_ROOTS,
+        errors,
+        required=False,
+        must_exist=False,
+    )
+    return normalized_model or "default"
+
+
+def _captioning_summary(
+    normalized_args: Dict[str, Any],
+    *,
+    feature_enabled: bool,
+) -> Dict[str, Any]:
+    enabled = _as_bool(normalized_args.get("vlm_captioning_enabled"), False)
+    default_python_path = default_fastvlm_runtime_root() / ".venv-fastvlm" / "bin" / "python"
+    default_mlx_vlm_dir = default_fastvlm_runtime_root() / "mlx-vlm"
+    python_status = _portal_fastvlm_runtime_path_status(
+        str(normalized_args.get("fastvlm_python_executable") or default_python_path),
+        FASTVLM_RUNTIME_ALLOWED_ROOTS,
+        expected_type="file",
+    )
+    mlx_status = _portal_fastvlm_runtime_path_status(
+        str(normalized_args.get("fastvlm_mlx_vlm_dir") or default_mlx_vlm_dir),
+        FASTVLM_RUNTIME_ALLOWED_ROOTS,
+        expected_type="dir",
+    )
+    try:
+        model_path = _resolve_fastvlm_model_selector_path(str(normalized_args.get("vlm_captioning_model") or "default"))
+    except ValueError:
+        model_status = {
+            "path": str(normalized_args.get("vlm_captioning_model") or "default"),
+            "configured": True,
+            "exists": False,
+            "expected_type": "dir",
+            "status": "invalid_path",
+        }
+    else:
+        model_status = _portal_existing_path_status(
+            str(model_path),
+            FASTVLM_RUNTIME_ALLOWED_ROOTS,
+            expected_type="dir",
+        )
+    runtime_ready = (
+        python_status.get("exists") is True
+        and mlx_status.get("exists") is True
+        and model_status.get("exists") is True
+    )
+    return {
+        "feature_enabled": bool(feature_enabled),
+        "enabled": enabled,
+        "backend": str(normalized_args.get("vlm_captioning_backend") or "fastvlm"),
+        "model": str(normalized_args.get("vlm_captioning_model") or "default"),
+        "proxy_format": str(normalized_args.get("vlm_captioning_proxy_format") or "png"),
+        "max_side_px": int(normalized_args.get("vlm_captioning_max_side_px") or 1600),
+        "fastvlm_python_executable": str(normalized_args.get("fastvlm_python_executable") or ""),
+        "fastvlm_mlx_vlm_dir": str(normalized_args.get("fastvlm_mlx_vlm_dir") or ""),
+        "timeout_seconds": int(normalized_args.get("fastvlm_timeout_seconds") or 180),
+        "runtime_path_status": {
+            "python_executable": python_status,
+            "mlx_vlm_dir": mlx_status,
+            "model_path": model_status,
+        },
+        "runtime_status": "ready" if enabled and runtime_ready else "missing_runtime" if enabled else "off",
+        "role": "advisory",
+        "used_for_quality_gate": False,
+    }
+
+
 def _build_lux_config_preview(
     args: Dict[str, Any],
     *,
     readiness_snapshot: Optional[Dict[str, Any]] = None,
+    portal_actor: Optional[Mapping[str, Any]] = None,
 ) -> Dict[str, Any]:
     args, path_warnings, path_errors = _normalize_operator_payload_paths("lux-depth-v3", args)
     defaults = _lux_portal_defaults(args)
@@ -4696,6 +4986,162 @@ def _build_lux_config_preview(
         raw_demosaic = str(defaults["raw_demosaic"])
     normalized_args["raw_demosaic"] = raw_demosaic
 
+    captioning_feature_enabled = _portal_fastvlm_captioning_enabled(portal_actor)
+    vlm_captioning_requested = _as_bool(
+        _pick(
+            args,
+            "vlm_captioning_enabled",
+            "vlmCaptioningEnabled",
+            default=defaults["vlm_captioning_enabled"],
+        ),
+        default=bool(defaults["vlm_captioning_enabled"]),
+    )
+    if vlm_captioning_requested and not captioning_feature_enabled:
+        errors.append(
+            _portal_issue(
+                "vlm_captioning_enabled",
+                "captioning_feature_disabled",
+                "FastVLM captioning is not enabled for this portal cohort.",
+                suggestion="Disable FastVLM captioning or enable the portal captioning feature flag for this cohort.",
+            )
+        )
+        vlm_captioning_requested = False
+    normalized_args["vlm_captioning_enabled"] = bool(vlm_captioning_requested)
+
+    vlm_captioning_backend = (
+        str(
+            _pick(
+                args,
+                "vlm_captioning_backend",
+                "vlmCaptioningBackend",
+                default=defaults["vlm_captioning_backend"],
+            )
+            or defaults["vlm_captioning_backend"]
+        )
+        .strip()
+        .lower()
+    )
+    if vlm_captioning_backend not in ALLOWED_VLM_CAPTIONING_BACKENDS:
+        errors.append(
+            _portal_issue(
+                "vlm_captioning_backend",
+                "invalid_vlm_captioning_backend",
+                "FastVLM is the only supported advisory captioning backend.",
+                suggestion="Choose fastvlm.",
+            )
+        )
+        vlm_captioning_backend = str(defaults["vlm_captioning_backend"])
+    normalized_args["vlm_captioning_backend"] = vlm_captioning_backend
+
+    normalized_args["vlm_captioning_model"] = _normalize_vlm_captioning_model(
+        _pick(
+            args,
+            "vlm_captioning_model",
+            "vlmCaptioningModel",
+            default=defaults["vlm_captioning_model"],
+        ),
+        errors,
+    )
+
+    vlm_captioning_proxy_format = (
+        str(
+            _pick(
+                args,
+                "vlm_captioning_proxy_format",
+                "vlmCaptioningProxyFormat",
+                default=defaults["vlm_captioning_proxy_format"],
+            )
+            or defaults["vlm_captioning_proxy_format"]
+        )
+        .strip()
+        .lower()
+    )
+    if vlm_captioning_proxy_format not in ALLOWED_VLM_CAPTIONING_PROXY_FORMATS:
+        errors.append(
+            _portal_issue(
+                "vlm_captioning_proxy_format",
+                "invalid_vlm_captioning_proxy_format",
+                "FastVLM proxy format must be png or jpeg.",
+                suggestion="Choose png or jpeg.",
+            )
+        )
+        vlm_captioning_proxy_format = str(defaults["vlm_captioning_proxy_format"])
+    normalized_args["vlm_captioning_proxy_format"] = vlm_captioning_proxy_format
+
+    max_side_px = _normalize_optional_positive_int(
+        _pick(
+            args,
+            "vlm_captioning_max_side_px",
+            "vlmCaptioningMaxSidePx",
+            default=defaults["vlm_captioning_max_side_px"],
+        ),
+        "vlm_captioning_max_side_px",
+        errors,
+    )
+    normalized_args["vlm_captioning_max_side_px"] = (
+        int(defaults["vlm_captioning_max_side_px"]) if max_side_px is None else max_side_px
+    )
+
+    def _captioning_path_value(field: str, aliases: Tuple[str, ...]) -> str:
+        existing_errors = path_errors_by_field.get(field) or []
+        if existing_errors:
+            errors.extend(existing_errors)
+            return ""
+        raw_value = _pick(args, *aliases, default="")
+        field_supplied = raw_value is not None and bool(str(raw_value).strip())
+        if not field_supplied:
+            return ""
+        return _normalize_fastvlm_runtime_path_arg(
+            raw_value,
+            field,
+            FASTVLM_RUNTIME_ALLOWED_ROOTS,
+            errors,
+        )
+
+    normalized_args["fastvlm_python_executable"] = _captioning_path_value(
+        "fastvlm_python_executable",
+        ("fastvlm_python_executable", "fastvlmPythonExecutable"),
+    )
+    normalized_args["fastvlm_mlx_vlm_dir"] = _captioning_path_value(
+        "fastvlm_mlx_vlm_dir",
+        ("fastvlm_mlx_vlm_dir", "fastvlmMlxVlmDir"),
+    )
+    fastvlm_timeout_seconds = _normalize_optional_positive_int(
+        _pick(
+            args,
+            "fastvlm_timeout_seconds",
+            "fastvlmTimeoutSeconds",
+            default=defaults["fastvlm_timeout_seconds"],
+        ),
+        "fastvlm_timeout_seconds",
+        errors,
+    )
+    normalized_args["fastvlm_timeout_seconds"] = (
+        int(defaults["fastvlm_timeout_seconds"]) if fastvlm_timeout_seconds is None else fastvlm_timeout_seconds
+    )
+    captioning_summary = _captioning_summary(
+        normalized_args,
+        feature_enabled=captioning_feature_enabled,
+    )
+    if normalized_args["vlm_captioning_enabled"]:
+        warnings.append(
+            _portal_issue(
+                "vlm_captioning_enabled",
+                "vlm_captioning_advisory_only",
+                "FastVLM captions are advisory sidecar metadata and are not used for quality gates.",
+                suggestion="Review captions as operator context only.",
+            )
+        )
+        if captioning_summary.get("runtime_status") == "missing_runtime":
+            warnings.append(
+                _portal_issue(
+                    "fastvlm_python_executable",
+                    "fastvlm_runtime_missing",
+                    "FastVLM runtime paths are not fully present; caption sidecars may be skipped at run time.",
+                    suggestion="Install the optional FastVLM runtime under ./.runtime/fastvlm when captions are needed.",
+                )
+            )
+
     max_workers = _normalize_optional_positive_int(_pick(args, "max_workers", "maxWorkers"), "max_workers", errors)
     max_gpu_workers = _normalize_optional_positive_int(
         _pick(args, "max_gpu_workers", "maxGpuWorkers"), "max_gpu_workers", errors
@@ -4938,6 +5384,7 @@ def _build_lux_config_preview(
         "readiness": readiness_snapshot,
         "estimate_summary": _lux_estimate_summary(normalized_args),
         "debug_bundle_summary": _lux_debug_bundle_summary(normalized_args),
+        "captioning_summary": captioning_summary,
         "next_best_action": _preview_next_best_action(
             pipeline="lux-depth-v3",
             errors=errors,
@@ -5204,13 +5651,18 @@ def _build_config_preview(
     *,
     readiness_snapshot: Optional[Dict[str, Any]] = None,
     archive_index_scan_mode: str = "preview",
+    portal_actor: Optional[Mapping[str, Any]] = None,
 ) -> Dict[str, Any]:
     pipeline = str(payload.get("pipeline") or "").strip()
     args = payload.get("args")
     if not isinstance(args, dict):
         args = {}
     if pipeline == "lux-depth-v3":
-        return _build_lux_config_preview(args, readiness_snapshot=readiness_snapshot)
+        return _build_lux_config_preview(
+            args,
+            readiness_snapshot=readiness_snapshot,
+            portal_actor=portal_actor,
+        )
     if pipeline in ARCHIVE_GATE_PIPELINES:
         return _build_archive_config_preview(
             pipeline,
@@ -7708,6 +8160,113 @@ def _argv_from_request(
         ):
             argv.extend(["--accept-research-tools-license", "true"])
 
+        vlm_captioning_enabled = _as_bool(
+            _pick(args, "vlm_captioning_enabled", "vlmCaptioningEnabled", default=False),
+            default=False,
+        )
+        if vlm_captioning_enabled:
+            vlm_captioning_backend = (
+                str(
+                    _pick(
+                        args,
+                        "vlm_captioning_backend",
+                        "vlmCaptioningBackend",
+                        default="fastvlm",
+                    )
+                    or "fastvlm"
+                )
+                .strip()
+                .lower()
+            )
+            if vlm_captioning_backend not in ALLOWED_VLM_CAPTIONING_BACKENDS:
+                raise _PortalValidationReasonError(
+                    "Invalid vlm_captioning_backend",
+                    reason="invalid_vlm_captioning_backend",
+                )
+            vlm_captioning_model = str(
+                _pick(
+                    args,
+                    "vlm_captioning_model",
+                    "vlmCaptioningModel",
+                    default="default",
+                )
+                or "default"
+            ).strip() or "default"
+            vlm_captioning_proxy_format = (
+                str(
+                    _pick(
+                        args,
+                        "vlm_captioning_proxy_format",
+                        "vlmCaptioningProxyFormat",
+                        default="png",
+                    )
+                    or "png"
+                )
+                .strip()
+                .lower()
+            )
+            if vlm_captioning_proxy_format not in ALLOWED_VLM_CAPTIONING_PROXY_FORMATS:
+                raise _PortalValidationReasonError(
+                    "Invalid vlm_captioning_proxy_format",
+                    reason="invalid_vlm_captioning_proxy_format",
+                )
+            vlm_captioning_max_side_px = _parse_optional_positive_int(
+                _pick(
+                    args,
+                    "vlm_captioning_max_side_px",
+                    "vlmCaptioningMaxSidePx",
+                    default=1600,
+                ),
+                "vlm_captioning_max_side_px",
+            ) or 1600
+            fastvlm_timeout_seconds = _parse_optional_positive_int(
+                _pick(
+                    args,
+                    "fastvlm_timeout_seconds",
+                    "fastvlmTimeoutSeconds",
+                    default=180,
+                ),
+                "fastvlm_timeout_seconds",
+            ) or 180
+            argv.extend(
+                [
+                    "--vlm-captioning",
+                    "on",
+                    "--vlm-captioning-backend",
+                    vlm_captioning_backend,
+                    "--vlm-captioning-model",
+                    vlm_captioning_model,
+                    "--vlm-captioning-proxy-format",
+                    vlm_captioning_proxy_format,
+                    "--vlm-captioning-max-side-px",
+                    str(vlm_captioning_max_side_px),
+                    "--fastvlm-timeout-seconds",
+                    str(fastvlm_timeout_seconds),
+                ]
+            )
+            fastvlm_python = str(
+                _pick(
+                    args,
+                    "fastvlm_python_executable",
+                    "fastvlmPythonExecutable",
+                    default="",
+                )
+                or ""
+            ).strip()
+            if fastvlm_python:
+                argv.extend(["--fastvlm-python", fastvlm_python])
+            fastvlm_mlx_vlm_dir = str(
+                _pick(
+                    args,
+                    "fastvlm_mlx_vlm_dir",
+                    "fastvlmMlxVlmDir",
+                    default="",
+                )
+                or ""
+            ).strip()
+            if fastvlm_mlx_vlm_dir:
+                argv.extend(["--fastvlm-mlx-vlm-dir", fastvlm_mlx_vlm_dir])
+
         argv.extend(
             [
                 "--enable-reconstruction",
@@ -8081,8 +8640,9 @@ async def redirect_legacy_portal_video() -> Response:
 
 
 @app.get("/portal/bootstrap")
-async def portal_bootstrap() -> JSONResponse:
+async def portal_bootstrap(request: Request) -> JSONResponse:
     """Expose standalone portal auth mode for direct backend debugging."""
+    actor = _portal_actor_from_request(request)
     return JSONResponse(
         {
             "authMode": _auth_mode(),
@@ -8095,6 +8655,7 @@ async def portal_bootstrap() -> JSONResponse:
                 "reviewSurfaceDeferred": _portal_review_surface_deferred_enabled(None),
                 "stagedUploads": _portal_staged_uploads_enabled(None),
                 "rumTelemetry": _portal_rum_enabled(None),
+                "fastVlmCaptioning": _portal_fastvlm_captioning_enabled(actor),
             },
         },
         headers={"Cache-Control": "no-store"},
@@ -8243,9 +8804,12 @@ async def config_metadata(pipeline: str) -> JSONResponse:
 
 
 @app.post("/v1/config-preview", response_model=ConfigPreviewEnvelope)
-async def config_preview(payload: Dict[str, Any]) -> JSONResponse:
+async def config_preview(request: Request, payload: Dict[str, Any]) -> JSONResponse:
     try:
-        preview = _build_config_preview(payload)
+        preview = _build_config_preview(
+            payload,
+            portal_actor=_portal_actor_from_request(request),
+        )
     except ValueError:
         return _error_response(
             400,
@@ -8388,22 +8952,51 @@ async def stage_portal_uploads(request: Request) -> JSONResponse:
     )
 
 
+async def create_job(
+    payload: Dict[str, Any],
+    *,
+    portal_actor: Optional[Mapping[str, Any]] = None,
+) -> JSONResponse:
+    return await _create_job(
+        payload,
+        api_version="v1",
+        portal_actor=portal_actor,
+    )
+
+
+async def create_job_v2(
+    payload: Dict[str, Any],
+    *,
+    portal_actor: Optional[Mapping[str, Any]] = None,
+) -> JSONResponse:
+    return await _create_job(
+        payload,
+        api_version="v2",
+        portal_actor=portal_actor,
+    )
+
+
 @app.post("/v1/jobs", response_model=JobEnvelope)
-async def create_job(payload: Dict[str, Any]) -> JSONResponse:
-    return await _create_job(payload, api_version="v1")
+async def create_job_http(request: Request, payload: Dict[str, Any]) -> JSONResponse:
+    return await create_job(payload, portal_actor=_portal_actor_from_request(request))
 
 
 @app.post("/v2/jobs", response_model=JobEnvelope)
-async def create_job_v2(payload: Dict[str, Any]) -> JSONResponse:
-    return await _create_job(payload, api_version="v2")
+async def create_job_v2_http(request: Request, payload: Dict[str, Any]) -> JSONResponse:
+    return await create_job_v2(payload, portal_actor=_portal_actor_from_request(request))
 
 
-async def _create_job(payload: Dict[str, Any], *, api_version: str = "v1") -> JSONResponse:
+async def _create_job(
+    payload: Dict[str, Any],
+    *,
+    api_version: str = "v1",
+    portal_actor: Optional[Mapping[str, Any]] = None,
+) -> JSONResponse:
     try:
-        preview = _build_config_preview(
-            payload,
-            archive_index_scan_mode="full",
-        )
+        preview_kwargs: Dict[str, Any] = {"archive_index_scan_mode": "full"}
+        if portal_actor is not None:
+            preview_kwargs["portal_actor"] = portal_actor
+        preview = _build_config_preview(payload, **preview_kwargs)
     except ValueError:
         return _error_response(
             400,

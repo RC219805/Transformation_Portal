@@ -899,6 +899,12 @@ def test_portal_browser_smoke_tracks_reconstruction_runtime_summary_and_guardrai
     assert "debugBundleGuardrailVisible" in content
     assert "effectiveConfigDrawerVisible" in content
     assert "emit_scene_debug_bundle" in content
+    assert "captioningDetailsVisible" in content
+    assert "captioningCliHasFlag" in content
+    assert "captioningExpectedOutput" in content
+    assert "enableFastVlmCaptioning" in content
+    assert "advisoryCaptionPanelVisible" in content
+    assert "review-primary.png.vlm_captioning.sidecar.json" in content
     assert "dispatch surface to report a blocked preview/governance state" in content
     assert "#openEffectiveConfigBtn" in content
     assert "#closeEffectiveConfigBtn" in content

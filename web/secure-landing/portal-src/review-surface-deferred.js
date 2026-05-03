@@ -805,6 +805,7 @@ export function createDeferredReviewSurfaceApi(host) {
     if (els.emptyArtifactState) els.emptyArtifactState.style.display = "none";
     const selectedArtifact = _selectedArtifactForJob(selected);
     const compareCandidate = findCompareArtifact(selectedArtifact, artifacts);
+    const captionSidecar = _findVlmCaptionSidecar(selected, selectedArtifact);
     const compareEnabled = Boolean(compareCandidate) && Boolean(state.artifactUi.compareByJob[String(selected.id || "")]);
 
     if (els.artifactCompareBtn) {
@@ -862,7 +863,7 @@ export function createDeferredReviewSurfaceApi(host) {
       els.artifactPreviewSoloImage.classList.toggle("hidden", compareEnabled || !artifactIsPreviewable(selectedArtifact));
     }
     if (els.artifactMetadataCard) {
-      els.artifactMetadataCard.classList.toggle("hidden", artifactIsPreviewable(selectedArtifact));
+      els.artifactMetadataCard.classList.toggle("hidden", artifactIsPreviewable(selectedArtifact) && !captionSidecar);
     }
     if (compareEnabled && selectedArtifact && compareCandidate) {
       if (els.artifactPreviewImage) {
@@ -875,6 +876,7 @@ export function createDeferredReviewSurfaceApi(host) {
         els.artifactCompareImage.classList.remove("hidden");
       }
       if (els.artifactCompareCaption) els.artifactCompareCaption.textContent = artifactLabel(compareCandidate);
+      if (captionSidecar) _renderArtifactMetadataCard(selected, selectedArtifact);
     } else if (artifactIsPreviewable(selectedArtifact)) {
       if (els.artifactPreviewSoloImage) {
         els.artifactPreviewSoloImage.src = buildArtifactUrl(selected, selectedArtifact);
@@ -888,6 +890,7 @@ export function createDeferredReviewSurfaceApi(host) {
         els.artifactCompareImage.classList.add("hidden");
         els.artifactCompareImage.removeAttribute("src");
       }
+      if (captionSidecar) _renderArtifactMetadataCard(selected, selectedArtifact);
     } else {
       if (els.artifactPreviewSoloImage) {
         els.artifactPreviewSoloImage.classList.add("hidden");

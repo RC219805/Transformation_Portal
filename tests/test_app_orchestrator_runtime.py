@@ -964,6 +964,7 @@ def test_portal_bootstrap_loader_uses_abortable_timeout_and_state_contract() -> 
     assert "reviewSurfaceDeferred: false" in default_body
     assert "stagedUploads: false" in default_body
     assert "rumTelemetry: false" in default_body
+    assert "fastVlmCaptioning: false" in default_body
     assert "const BOOTSTRAP_TIMEOUT_MS = 3500;" in content
     assert "const BOOTSTRAP_RETRY_BASE_DELAY_MS = 1000;" in content
     assert "const BOOTSTRAP_RETRY_MAX_DELAY_MS = 12000;" in content
@@ -1000,6 +1001,7 @@ def test_portal_bootstrap_loader_uses_abortable_timeout_and_state_contract() -> 
     assert "artifactViewerModal: Boolean(bootstrap.features?.artifactViewerModal)" in content
     assert "stagedUploads: Boolean(bootstrap.features?.stagedUploads)" in content
     assert "rumTelemetry: Boolean(bootstrap.features?.rumTelemetry)" in content
+    assert "fastVlmCaptioning: Boolean(bootstrap.features?.fastVlmCaptioning)" in content
     assert "res.headers.get('traceparent')" in body
     assert "previousHealthEndpointPath !== nextHealthEndpointPath" in body
     assert "_queueBootstrapOnlineFollowup();" in body
@@ -1091,6 +1093,44 @@ def test_portal_managed_mode_clears_api_keys_and_hides_secret_ui() -> None:
     assert "els.bootstrapRecoveryHint.textContent = summary.detail;" in sync_body
     assert "els.apiKeyInput.disabled = !showApiKeyInput;" in sync_body
     assert "rememberApiKey" not in content
+
+
+def test_portal_fastvlm_captioning_controls_are_feature_gated_and_advisory_only() -> None:
+    content = _portal_bundle_content()
+    canonical_body = _extract_js_function_body(content, "buildCanonicalLuxDepthArgs")
+    applicability_body = _extract_js_function_body(content, "syncBuildSurfaceApplicability")
+    cli_body = _extract_js_function_body(content, "renderCLI")
+    diagnostics_body = _extract_js_function_body(content, "renderPreRunDiagnostics")
+    effective_drawer_body = _extract_js_function_body(content, "renderEffectiveConfigDrawer")
+    bind_body = _extract_js_function_body(content, "bindInputs")
+
+    assert 'id="captioningDetails"' in content
+    assert 'data-ui="captioning-controls"' in content
+    assert 'id="enableFastVlmCaptioning"' in content
+    assert 'id="fastVlmCaptioningModel"' in content
+    assert 'id="fastVlmProxyFormat"' in content
+    assert 'id="fastVlmMaxSidePx"' in content
+    assert 'id="fastVlmTimeoutSeconds"' in content
+    assert 'id="fastVlmPythonExecutable"' in content
+    assert 'id="fastVlmMlxVlmDir"' in content
+    assert "FastVLM captions are advisory and never satisfy quality gates." in content
+    assert "function _fastVlmCaptioningFeatureEnabled()" in content
+    assert "state.auth?.features?.fastVlmCaptioning" in content
+    assert "const captioningFeatureVisible = isLuxPipeline && _fastVlmCaptioningFeatureEnabled();" in applicability_body
+    assert "_setContextVisibility(els.captioningDetails, captioningFeatureVisible);" in applicability_body
+    assert "state.config.captioning.enableFastVlm = false;" in applicability_body
+    assert "if (captioningFeatureEnabled) {" in canonical_body
+    assert "args.vlm_captioning_enabled = enableFastVlmCaptioning;" in canonical_body
+    assert "args.vlm_captioning_backend = 'fastvlm';" in canonical_body
+    assert "parseBoolLike(payload.args.vlm_captioning_enabled, false)" in cli_body
+    assert "--vlm-captioning" in cli_body
+    assert "--fastvlm-python" in cli_body
+    assert "--fastvlm-mlx-vlm-dir" in cli_body
+    assert "Advisory FastVLM caption sidecars" in diagnostics_body
+    assert "FastVLM captions are advisory sidecar metadata and do not satisfy quality gates." in diagnostics_body
+    assert "FastVLM advisory captioning is enabled and remains outside quality gates." in effective_drawer_body
+    assert "'captioning:enableFastVlm': 'vlm_captioning_enabled'" in bind_body
+    assert "safeBindCheck(els.captioning.enableFastVlm, 'captioning', 'enableFastVlm');" in bind_body
 
 
 def test_portal_direct_debug_api_key_storage_is_session_only() -> None:
@@ -1496,6 +1536,12 @@ def test_portal_review_surface_supports_compare_summary_and_keyboard_selection()
     )
     assert "button.tabIndex = active ? 0 : -1;" in render_body
     assert "_renderReviewCompareSummary(selectedArtifact, compareCandidate, compareEnabled);" in render_body
+    assert re.search(
+        r"if \(compareEnabled && selectedArtifact && compareCandidate\) \{[\s\S]*?"
+        r"if \(captionSidecar\) _renderArtifactMetadataCard\(selected, selectedArtifact\);[\s\S]*?"
+        r"\} else if \(artifactIsPreviewable\(selectedArtifact\)\)",
+        render_body,
+    )
     assert re.search(
         r"els\.artifactCompareBtn\.setAttribute\([\"']aria-pressed[\"'],\s*compareEnabled \? [\"']true[\"'] : [\"']false[\"']\);",
         render_body,
@@ -2427,6 +2473,14 @@ def test_lux_cli_parity_links_portal_canonical_args_and_backend_argv() -> None:
         "verbose": "--verbose",
         "quiet": "--quiet",
         "log_level": "--log-level",
+        "vlm_captioning_enabled": "--vlm-captioning",
+        "vlm_captioning_backend": "--vlm-captioning-backend",
+        "vlm_captioning_model": "--vlm-captioning-model",
+        "vlm_captioning_proxy_format": "--vlm-captioning-proxy-format",
+        "vlm_captioning_max_side_px": "--vlm-captioning-max-side-px",
+        "fastvlm_python_executable": "--fastvlm-python",
+        "fastvlm_mlx_vlm_dir": "--fastvlm-mlx-vlm-dir",
+        "fastvlm_timeout_seconds": "--fastvlm-timeout-seconds",
     }
 
     for key, flag in arg_to_flag.items():
@@ -2491,6 +2545,14 @@ def test_lux_cli_parity_links_portal_canonical_args_and_backend_argv() -> None:
             "verbose": True,
             "quiet": False,
             "log_level": "DEBUG",
+            "vlm_captioning_enabled": True,
+            "vlm_captioning_backend": "fastvlm",
+            "vlm_captioning_model": "review",
+            "vlm_captioning_proxy_format": "jpeg",
+            "vlm_captioning_max_side_px": 1200,
+            "fastvlm_python_executable": "/tmp/fastvlm-python",
+            "fastvlm_mlx_vlm_dir": "/tmp/mlx-vlm",
+            "fastvlm_timeout_seconds": 60,
         },
     }
     argv = orchestrator_app._argv_from_request(payload)
@@ -2551,6 +2613,14 @@ def test_lux_cli_parity_links_portal_canonical_args_and_backend_argv() -> None:
     assert "--verbose" in argv
     assert "--quiet" not in argv
     assert _flag_value(argv, "--log-level") == "DEBUG"
+    assert _flag_value(argv, "--vlm-captioning") == "on"
+    assert _flag_value(argv, "--vlm-captioning-backend") == "fastvlm"
+    assert _flag_value(argv, "--vlm-captioning-model") == "review"
+    assert _flag_value(argv, "--vlm-captioning-proxy-format") == "jpeg"
+    assert _flag_value(argv, "--vlm-captioning-max-side-px") == "1200"
+    assert _flag_value(argv, "--fastvlm-python") == "/tmp/fastvlm-python"
+    assert _flag_value(argv, "--fastvlm-mlx-vlm-dir") == "/tmp/mlx-vlm"
+    assert _flag_value(argv, "--fastvlm-timeout-seconds") == "60"
 
 
 def test_argv_rejects_verbose_and_quiet_combination() -> None:
