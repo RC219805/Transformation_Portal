@@ -1,0 +1,16 @@
+{
+  "name": "transformationportal-worker",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "dry-run": "wrangler deploy --dry-run"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "4.20260503.1",
+    "typescript": "5.8.3",
+    "wrangler": "4.87.0"
+  }
+}
