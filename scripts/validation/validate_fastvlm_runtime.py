@@ -15,6 +15,7 @@ from fastvlm_runtime_manifest import (
     load_manifest,
     runtime_root,
     selected_model_roles,
+    verify_python_imports,
     verify_runtime,
 )
 
@@ -25,7 +26,7 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--verify-only",
         action="store_true",
-        help="Verify manifest, runtime sources, Python executable, and model files without subprocess inference.",
+        help="Verify manifest, runtime sources, Python executable, and model files without import smoke checks.",
     )
     parser.add_argument(
         "--skip-source-check",
@@ -77,6 +78,8 @@ def main(argv: list[str] | None = None) -> int:
             include_sources=not bool(args.skip_source_check),
             include_python=not bool(args.skip_python_check),
         )
+        if not errors and not bool(args.verify_only) and not bool(args.skip_python_check):
+            errors.extend(verify_python_imports(manifest, root=root))
     except ManifestError as exc:
         evidence = _evidence(
             manifest_path=manifest_path,

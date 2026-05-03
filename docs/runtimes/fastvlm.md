@@ -130,6 +130,11 @@ apple/ml-fastvlm@592b4add3c1c8a518e77d95dc6248e76c1dd591f
 Blaizzy/mlx-vlm@1884b551bc741f26b2d54d68fa89d4e934b9a3de
 ```
 
+The isolated Python dependency set is pinned in
+`config/fastvlm_runtime_requirements.txt`; the installer installs that file
+first and then installs the pinned `mlx-vlm` checkout with `--no-deps` so the
+manifest and requirements file remain the source of truth.
+
 Model downloads are limited to the allowlisted FastVLM roles, pinned Hugging
 Face revisions, and SHA-256-checked required files. Partial downloads, unsafe
 paths, symlink escapes, unpinned revisions, checksumless artifacts, and checksum

@@ -4,30 +4,42 @@
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
+import os
 import shutil
 import sys
+import tempfile
 import time
 from pathlib import Path
 from typing import Any
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 VALIDATION_DIR = SCRIPT_DIR.parent / "validation"
-sys.path.insert(0, str(VALIDATION_DIR))
 
-from fastvlm_runtime_manifest import (  # noqa: E402
-    ManifestError,
-    RuntimeVerificationError,
-    add_common_manifest_args,
-    allow_patterns_for_role,
-    load_manifest,
-    model_target_dir,
-    require_valid_manifest,
-    runtime_root,
-    selected_model_roles,
-    verify_model_files,
-    verify_model_role,
-)
+
+def _load_manifest_helpers():
+    helper_path = VALIDATION_DIR / "fastvlm_runtime_manifest.py"
+    spec = importlib.util.spec_from_file_location("fastvlm_runtime_manifest", helper_path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"Could not load FastVLM manifest helpers from {helper_path}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+_manifest_helpers = _load_manifest_helpers()
+ManifestError = _manifest_helpers.ManifestError
+RuntimeVerificationError = _manifest_helpers.RuntimeVerificationError
+add_common_manifest_args = _manifest_helpers.add_common_manifest_args
+allow_patterns_for_role = _manifest_helpers.allow_patterns_for_role
+load_manifest = _manifest_helpers.load_manifest
+model_target_dir = _manifest_helpers.model_target_dir
+require_valid_manifest = _manifest_helpers.require_valid_manifest
+runtime_root = _manifest_helpers.runtime_root
+selected_model_roles = _manifest_helpers.selected_model_roles
+verify_model_files = _manifest_helpers.verify_model_files
+verify_model_role = _manifest_helpers.verify_model_role
 
 
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -59,6 +71,10 @@ def _remove_path(path: Path) -> None:
         path.unlink(missing_ok=True)
 
 
+def _unique_sibling_path(parent: Path, prefix: str) -> Path:
+    return parent / f"{prefix}{os.getpid()}-{time.monotonic_ns()}"
+
+
 def _download_role(
     *,
     manifest: dict[str, Any],
@@ -88,9 +104,7 @@ def _download_role(
 
     snapshot_download = _import_snapshot_download()
     root.mkdir(parents=True, exist_ok=True)
-    tmp_dir = root / f".{target.name}.download-{int(time.time())}"
-    if tmp_dir.exists():
-        _remove_path(tmp_dir)
+    tmp_dir = Path(tempfile.mkdtemp(prefix=f".{target.name}.download-", dir=root))
 
     try:
         snapshot_download(
@@ -110,7 +124,7 @@ def _download_role(
     target_parent = target.parent
     target_parent.mkdir(parents=True, exist_ok=True)
     if target.exists():
-        invalid_target = target_parent / f".{target.name}.replaced-{int(time.time())}"
+        invalid_target = _unique_sibling_path(target_parent, f".{target.name}.replaced-")
         target.rename(invalid_target)
         try:
             tmp_target.rename(target)

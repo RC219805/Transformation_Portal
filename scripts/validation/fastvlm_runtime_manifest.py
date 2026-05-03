@@ -20,6 +20,7 @@ TRUSTED_RUNTIME_SOURCES = {
     "ml_fastvlm": "https://github.com/apple/ml-fastvlm.git",
     "mlx_vlm": "https://github.com/Blaizzy/mlx-vlm.git",
 }
+FASTVLM_RUNTIME_IMPORTS = ("huggingface_hub", "mlx_vlm")
 HEX_DIGITS = set("0123456789abcdef")
 
 
@@ -128,6 +129,9 @@ def validate_manifest(manifest: Mapping[str, Any]) -> list[str]:
     if not isinstance(sources, dict):
         errors.append("runtime_sources must be an object")
     else:
+        extra_sources = sorted(set(sources) - set(TRUSTED_RUNTIME_SOURCES))
+        if extra_sources:
+            errors.append(f"runtime_sources contains unknown key(s): {', '.join(extra_sources)}")
         for name, expected_url in TRUSTED_RUNTIME_SOURCES.items():
             source = sources.get(name)
             if not isinstance(source, dict):
@@ -261,29 +265,71 @@ def _git_head(path: Path) -> str | None:
 def verify_runtime_sources(manifest: Mapping[str, Any], *, root: Path | None = None) -> list[str]:
     runtime = root or runtime_root(manifest)
     errors: list[str] = []
-    for name, source in manifest["runtime_sources"].items():
+    sources = manifest.get("runtime_sources")
+    if not isinstance(sources, dict):
+        return ["FastVLM manifest runtime_sources must be an object"]
+    for name in TRUSTED_RUNTIME_SOURCES:
+        source = sources.get(name)
+        if not isinstance(source, dict):
+            errors.append(f"FastVLM runtime source {name} is missing or malformed")
+            continue
         target = safe_child(runtime, source["target_dir"])
         if not target.is_dir():
             errors.append(f"FastVLM runtime source {name} missing directory: {target}")
             continue
         head = _git_head(target)
-        if head is not None and head != source["revision"]:
+        if head is None:
+            errors.append(f"FastVLM runtime source {name} is not a verifiable git checkout: {target}")
+        elif head != source["revision"]:
             errors.append(f"FastVLM runtime source {name} revision mismatch: {head} != {source['revision']}")
     return errors
 
 
-def verify_python_runtime(manifest: Mapping[str, Any], *, root: Path | None = None) -> list[str]:
+def python_runtime_path(manifest: Mapping[str, Any], *, root: Path | None = None) -> Path:
     runtime = root or runtime_root(manifest)
     python_config = manifest.get("python") or {}
     if not isinstance(python_config, dict):
-        return ["FastVLM manifest python section must be an object"]
+        raise ManifestError("FastVLM manifest python section must be an object")
     venv_dir = safe_child(runtime, python_config.get("venv_dir") or ".venv-fastvlm")
-    python_path = venv_dir / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+    return venv_dir / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+
+
+def verify_python_runtime(manifest: Mapping[str, Any], *, root: Path | None = None) -> list[str]:
+    try:
+        python_path = python_runtime_path(manifest, root=root)
+    except ManifestError as exc:
+        return [str(exc)]
     if not python_path.is_file():
         return [f"FastVLM Python executable missing: {python_path}"]
     if os.name != "nt" and not os.access(python_path, os.X_OK):
         return [f"FastVLM Python executable is not executable: {python_path}"]
     return []
+
+
+def verify_python_imports(manifest: Mapping[str, Any], *, root: Path | None = None) -> list[str]:
+    try:
+        python_path = python_runtime_path(manifest, root=root)
+    except ManifestError as exc:
+        return [str(exc)]
+    import_lines = (
+        "import importlib.util, sys; "
+        f"missing = [name for name in {FASTVLM_RUNTIME_IMPORTS!r} if importlib.util.find_spec(name) is None]; "
+        "print(','.join(missing), file=sys.stderr); "
+        "sys.exit(1 if missing else 0)"
+    )
+    completed = subprocess.run(
+        [str(python_path), "-c", import_lines],
+        check=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    if completed.returncode == 0:
+        return []
+    return [
+        "FastVLM Python import smoke failed: "
+        + (completed.stderr.strip() or completed.stdout.strip() or f"exit code {completed.returncode}")
+    ]
 
 
 def verify_runtime(

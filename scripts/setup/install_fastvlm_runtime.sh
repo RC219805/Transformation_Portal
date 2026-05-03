@@ -3,6 +3,7 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 MANIFEST_PATH="$REPO_ROOT/config/fastvlm_runtime_manifest.json"
+RUNTIME_REQUIREMENTS_FILE="$REPO_ROOT/config/fastvlm_runtime_requirements.txt"
 RUNTIME_ROOT="$REPO_ROOT/.runtime/fastvlm"
 MODELS="smoke,default"
 ALL_MODELS=0
@@ -74,15 +75,23 @@ else
   MODEL_ARGS=(--models "$MODELS")
 fi
 
-FASTVLM_REF="592b4add3c1c8a518e77d95dc6248e76c1dd591f"
-MLX_VLM_REF="1884b551bc741f26b2d54d68fa89d4e934b9a3de"
-FASTVLM_REPO="https://github.com/apple/ml-fastvlm.git"
-MLX_VLM_REPO="https://github.com/Blaizzy/mlx-vlm.git"
+REPO_PY="$("$REPO_ROOT/scripts/setup/resolve_python_311.sh")"
+
+manifest_source_value() {
+  "$REPO_PY" -c 'import json, sys
+from pathlib import Path
+manifest = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+print(manifest["runtime_sources"][sys.argv[2]][sys.argv[3]])' "$MANIFEST_PATH" "$1" "$2"
+}
+
+FASTVLM_REF="$(manifest_source_value ml_fastvlm revision)"
+MLX_VLM_REF="$(manifest_source_value mlx_vlm revision)"
+FASTVLM_REPO="$(manifest_source_value ml_fastvlm repo_url)"
+MLX_VLM_REPO="$(manifest_source_value mlx_vlm repo_url)"
 FASTVLM_DIR="$RUNTIME_ROOT/ml-fastvlm"
 MLX_VLM_DIR="$RUNTIME_ROOT/mlx-vlm"
 VENV_DIR="$RUNTIME_ROOT/.venv-fastvlm"
 VENV_PY="$VENV_DIR/bin/python"
-REPO_PY="$("$REPO_ROOT/scripts/setup/resolve_python_311.sh")"
 
 run() {
   if [ "$DRY_RUN" -eq 1 ]; then
@@ -145,9 +154,8 @@ ensure_clone "$MLX_VLM_REPO" "$MLX_VLM_REF" "$MLX_VLM_DIR"
 if [ ! -x "$VENV_PY" ]; then
   run "$REPO_PY" -m venv "$VENV_DIR"
 fi
-run "$VENV_PY" -m pip install --upgrade pip
-run "$VENV_PY" -m pip install --upgrade huggingface_hub
-run "$VENV_PY" -m pip install -e "$MLX_VLM_DIR"
+run "$VENV_PY" -m pip install --requirement "$RUNTIME_REQUIREMENTS_FILE"
+run "$VENV_PY" -m pip install --no-deps -e "$MLX_VLM_DIR"
 if [ "$DRY_RUN" -eq 1 ]; then
   echo "[dry-run] skip pip freeze capture"
 else

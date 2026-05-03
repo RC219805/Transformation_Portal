@@ -670,6 +670,31 @@ def test_portal_fastvlm_captioning_output_validation_requires_advisory_artifacts
     assert result["captioning_status"]["used_for_quality_gate"] is False
 
 
+def test_portal_fastvlm_captioning_runtime_check_is_local_backend_scoped():
+    module = _load_portal_fastvlm_captioning_module("tests_validate_portal_fastvlm_captioning_runtime_scope")
+
+    assert module._should_validate_local_runtime(
+        spawn_local_backend=True,
+        skip_local_runtime_check=False,
+        require_local_runtime_check=False,
+    )
+    assert not module._should_validate_local_runtime(
+        spawn_local_backend=False,
+        skip_local_runtime_check=False,
+        require_local_runtime_check=False,
+    )
+    assert module._should_validate_local_runtime(
+        spawn_local_backend=False,
+        skip_local_runtime_check=False,
+        require_local_runtime_check=True,
+    )
+    assert not module._should_validate_local_runtime(
+        spawn_local_backend=True,
+        skip_local_runtime_check=True,
+        require_local_runtime_check=True,
+    )
+
+
 def test_portal_lux_materials_sam2_prerequisite_reports_missing_checkpoint(tmp_path: Path):
     module = _load_module(PORTAL_LUX_MATERIALS_SCRIPT_PATH, "tests_validate_portal_lux_materials_sam2_prereq")
 

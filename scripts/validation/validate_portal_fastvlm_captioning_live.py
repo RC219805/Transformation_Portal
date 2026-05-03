@@ -340,6 +340,16 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Use --base-url instead of launching an isolated local backend",
     )
     parser.add_argument(
+        "--skip-local-runtime-check",
+        action="store_true",
+        help="Skip local manifest/runtime checks. Intended for validating an externally managed backend.",
+    )
+    parser.add_argument(
+        "--require-local-runtime-check",
+        action="store_true",
+        help="Run local manifest/runtime checks even when --no-spawn-local-backend is used.",
+    )
+    parser.add_argument(
         "--backend-startup-timeout-seconds",
         type=float,
         default=45.0,
@@ -391,6 +401,17 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
+def _should_validate_local_runtime(
+    *,
+    spawn_local_backend: bool,
+    skip_local_runtime_check: bool,
+    require_local_runtime_check: bool,
+) -> bool:
+    if skip_local_runtime_check:
+        return False
+    return bool(spawn_local_backend or require_local_runtime_check)
+
+
 def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
     backend_runtime: Optional[LocalRuntimeHandle] = None
@@ -403,7 +424,12 @@ def main(argv: list[str] | None = None) -> int:
     os.environ.setdefault("TP_PORTAL_FASTVLM_CAPTIONING_ROLLOUT_PERCENT", "100")
 
     try:
-        _validate_runtime_ready(str(args.model_role))
+        if _should_validate_local_runtime(
+            spawn_local_backend=bool(args.spawn_local_backend),
+            skip_local_runtime_check=bool(args.skip_local_runtime_check),
+            require_local_runtime_check=bool(args.require_local_runtime_check),
+        ):
+            _validate_runtime_ready(str(args.model_role))
         fixture_image = Path(args.fixture_image).resolve()
         input_dir, input_dir_is_temp = _prepare_input_dir(str(args.input_dir), fixture_image)
         output_dir, output_dir_is_temp = _resolve_output_dir(str(args.output_dir))

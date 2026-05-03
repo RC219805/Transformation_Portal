@@ -4,6 +4,7 @@ import hashlib
 import importlib.util
 import json
 import os
+import sys
 from pathlib import Path
 from types import ModuleType
 
@@ -99,11 +100,38 @@ def test_runtime_verifier_accepts_fixture_runtime_and_rejects_missing_python(tmp
     manifest = _manifest(tmp_path)
     _write_fixture_runtime(root)
 
-    assert module.verify_runtime(manifest, roles=["smoke"], root=root) == []
+    assert module.verify_runtime(manifest, roles=["smoke"], root=root, include_sources=False) == []
 
     os.remove(root / ".venv-fastvlm" / "bin" / "python")
-    errors = module.verify_runtime(manifest, roles=["smoke"], root=root)
+    errors = module.verify_runtime(manifest, roles=["smoke"], root=root, include_sources=False)
     assert any("Python executable missing" in error for error in errors)
+
+
+def test_runtime_verifier_rejects_unverifiable_source_checkout(tmp_path: Path) -> None:
+    module = _load_script_module("fastvlm_runtime_manifest_source_test", "scripts/validation/fastvlm_runtime_manifest.py")
+    root = tmp_path / "fastvlm"
+    manifest = _manifest(tmp_path)
+    _write_fixture_runtime(root)
+
+    errors = module.verify_runtime_sources(manifest, root=root)
+
+    assert any("not a verifiable git checkout" in error for error in errors)
+
+
+def test_manifest_validator_rejects_unknown_runtime_sources(tmp_path: Path) -> None:
+    module = _load_script_module(
+        "fastvlm_runtime_manifest_extra_source_test", "scripts/validation/fastvlm_runtime_manifest.py"
+    )
+    manifest = _manifest(tmp_path)
+    manifest["runtime_sources"]["unexpected"] = {
+        "repo_url": "https://github.com/example/untrusted.git",
+        "revision": "0" * 40,
+        "target_dir": "unexpected",
+    }
+
+    errors = module.validate_manifest(manifest)
+
+    assert any("runtime_sources contains unknown key(s): unexpected" in error for error in errors)
 
 
 def test_downloader_dry_run_uses_manifest_without_network(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
@@ -121,6 +149,57 @@ def test_downloader_dry_run_uses_manifest_without_network(tmp_path: Path, capsys
     assert not (tmp_path / "fastvlm" / "checkpoints").exists()
 
 
+def test_downloader_import_does_not_mutate_sys_path() -> None:
+    before = list(sys.path)
+
+    _load_script_module("download_fastvlm_models_import_path_test", "scripts/setup/download_fastvlm_models.py")
+
+    assert sys.path == before
+
+
+def test_validate_fastvlm_runtime_verify_only_skips_import_smoke(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    validation_dir = str(repo_root / "scripts" / "validation")
+    sys.path.insert(0, validation_dir)
+    try:
+        module = _load_script_module(
+            "validate_fastvlm_runtime_verify_only_test", "scripts/validation/validate_fastvlm_runtime.py"
+        )
+    finally:
+        sys.path.remove(validation_dir)
+    manifest_path = tmp_path / "manifest.json"
+    _write_manifest(manifest_path, _manifest(tmp_path))
+    import_smoke_calls: list[bool] = []
+
+    monkeypatch.setattr(module, "verify_runtime", lambda *_args, **_kwargs: [])
+    monkeypatch.setattr(module, "verify_python_imports", lambda *_args, **_kwargs: import_smoke_calls.append(True) or [])
+
+    assert (
+        module.main(["--manifest", str(manifest_path), "--runtime-root", str(tmp_path / "fastvlm"), "--models", "smoke"]) == 0
+    )
+    assert import_smoke_calls == [True]
+
+    import_smoke_calls.clear()
+    assert (
+        module.main(
+            [
+                "--manifest",
+                str(manifest_path),
+                "--runtime-root",
+                str(tmp_path / "fastvlm"),
+                "--models",
+                "smoke",
+                "--verify-only",
+            ]
+        )
+        == 0
+    )
+    assert not import_smoke_calls
+
+
 def test_downloader_rejects_bad_hash_without_promoting_partial_model(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -131,7 +210,7 @@ def test_downloader_rejects_bad_hash_without_promoting_partial_model(
 
     def fake_snapshot_download(**kwargs):  # noqa: ANN001
         local_dir = Path(kwargs["local_dir"])
-        local_dir.mkdir(parents=True)
+        local_dir.mkdir(parents=True, exist_ok=True)
         (local_dir / "config.json").write_bytes(b"tampered")
         return str(local_dir)
 
