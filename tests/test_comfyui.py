@@ -113,14 +113,19 @@ class TestBaseNode:
         assert BaseNode.CATEGORY == "Transformation Portal"
 
     def test_base_node_abstract_methods(self):
-        """BaseNode should require INPUT_TYPES, RETURN_TYPES, execute."""
+        """BaseNode should declare INPUT_TYPES, RETURN_TYPES, execute as abstract."""
         from transformation_portal.comfyui.custom_nodes import BaseNode
 
-        # Cannot instantiate abstract class
-        # Just verify the abstract methods exist
-        assert hasattr(BaseNode, "INPUT_TYPES")
-        assert hasattr(BaseNode, "RETURN_TYPES")
-        assert hasattr(BaseNode, "execute")
+        # ABCMeta.__abstractmethods__ is the canonical, descriptor-agnostic
+        # invariant: it's the frozenset ABCMeta consults to block instantiation,
+        # and it's stable across Python versions and across classmethod /
+        # staticmethod / property descriptors (whereas BaseNode.INPUT_TYPES
+        # goes through the descriptor protocol and may not expose
+        # __isabstractmethod__ reliably).
+        expected = {"INPUT_TYPES", "RETURN_TYPES", "execute"}
+        assert expected <= BaseNode.__abstractmethods__, (
+            f"Expected {expected} ⊆ BaseNode.__abstractmethods__, " f"got {set(BaseNode.__abstractmethods__)}"
+        )
 
     def test_concrete_node_implements_interface(self):
         """Concrete nodes should implement required methods."""
