@@ -51,6 +51,29 @@ best captions but used roughly 4.95 GB peak memory and about 99-102 generated
 tokens/sec. The benchmark report was written to
 `.runtime/fastvlm/reports/fastvlm_caption_benchmark_20260502_142926.txt`.
 
+## Prompt Policy
+
+FastVLM prompts are governed in
+`src/transformation_portal/vlm_captioning/fastvlm_runtime.py`. The default
+prompt is conservative and requires one flat parser-compatible line:
+
+```text
+SCENE=...; MATERIALS=...; FEATURES=...; NATURAL=...; LIGHTING=...; ISSUES=...; UNCERTAIN=...
+```
+
+The `review` role uses a stricter prompt automatically, whether selected by
+role or by the `FastVLM-7B-int4` checkpoint directory. It forbids unsupported
+inference about dusk, sunset, weather, season, traffic, construction activity,
+maintenance, purpose, ownership, market value, architectural intent, quality
+status, building condition, or property condition unless those details are
+directly visible.
+
+Do not add per-run prompt overrides through the Portal or Lux Depth CLI unless
+the governance contract is intentionally expanded. The active prompt is recorded
+in each sidecar under `vlm_captioning.runtime_diagnostics.command` as the
+`--prompt` argument. The raw text file captures `mlx-vlm` stdout, which may
+include runtime logs, the rendered chat prompt, and the model response.
+
 ## Input Image Policy
 
 Canonical TIFF/RAW assets remain authoritative. FastVLM consumes deterministic
@@ -209,7 +232,7 @@ python -m transformation_portal.lux_depth_v3 \
   --quality-tier apex \
   --vlm-captioning on \
   --vlm-captioning-backend fastvlm \
-  --vlm-captioning-model default \
+  --vlm-captioning-model review \
   --vlm-captioning-proxy-format png \
   --fastvlm-python /Users/richardcheetham/Desktop/Transformation_Portal/.runtime/fastvlm/.venv-fastvlm/bin/python \
   --fastvlm-mlx-vlm-dir /Users/richardcheetham/Desktop/Transformation_Portal/.runtime/fastvlm/mlx-vlm

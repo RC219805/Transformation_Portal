@@ -7,9 +7,13 @@ from pathlib import Path
 import pytest
 
 from transformation_portal.vlm_captioning.fastvlm_runtime import (
+    DEFAULT_FASTVLM_PROMPT,
+    REVIEW_FASTVLM_PROMPT,
     FastVLMRuntimeConfig,
     build_fastvlm_sidecar,
     config_from_env,
+    infer_fastvlm_model_role,
+    prompt_for_fastvlm_model,
     resolve_fastvlm_model_path,
     run_fastvlm_caption,
 )
@@ -41,6 +45,76 @@ def _config(tmp_path: Path, runtime_dir: Path) -> tuple[FastVLMRuntimeConfig, Pa
         ),
         image,
     )
+
+
+def _command_prompt(command: list[str]) -> str:
+    index = command.index("--prompt")
+    return command[index + 1]
+
+
+def test_governed_prompts_follow_model_role_and_checkpoint_path(tmp_path: Path) -> None:
+    review_model = tmp_path / "FastVLM-7B-int4"
+    default_model = tmp_path / "FastVLM-1.5B-int8"
+    smoke_model = tmp_path / "FastVLM-0.5B-fp16"
+    custom_model = tmp_path / "custom-model"
+
+    assert infer_fastvlm_model_role(custom_model, "review") == "review"
+    assert infer_fastvlm_model_role(review_model) == "review"
+    assert infer_fastvlm_model_role(default_model) == "default"
+    assert infer_fastvlm_model_role(smoke_model) == "smoke"
+    assert infer_fastvlm_model_role(custom_model) == "default"
+    assert prompt_for_fastvlm_model(review_model) == REVIEW_FASTVLM_PROMPT
+    assert prompt_for_fastvlm_model(custom_model, "review") == REVIEW_FASTVLM_PROMPT
+    assert prompt_for_fastvlm_model(default_model) == DEFAULT_FASTVLM_PROMPT
+    assert prompt_for_fastvlm_model(smoke_model) == DEFAULT_FASTVLM_PROMPT
+    assert prompt_for_fastvlm_model(custom_model) == DEFAULT_FASTVLM_PROMPT
+    assert "Do not infer dusk" in REVIEW_FASTVLM_PROMPT
+    assert "unless directly visible" in DEFAULT_FASTVLM_PROMPT
+
+
+def test_runtime_selects_review_prompt_from_model_role(tmp_path: Path) -> None:
+    runtime_dir = tmp_path / "runtime"
+    _write_fake_mlx_module(
+        runtime_dir,
+        "print('SCENE=Pool; MATERIALS=stone; FEATURES=steps; NATURAL=sky; LIGHTING=daylight; ISSUES=none; UNCERTAIN=none.')\n",
+    )
+    config, image = _config(tmp_path, runtime_dir)
+
+    result = run_fastvlm_caption(config, image, model_role="review")
+
+    assert result.success is True
+    assert _command_prompt(result.command) == REVIEW_FASTVLM_PROMPT
+
+
+def test_runtime_selects_review_prompt_from_checkpoint_path(tmp_path: Path) -> None:
+    runtime_dir = tmp_path / "runtime"
+    _write_fake_mlx_module(
+        runtime_dir,
+        "print('SCENE=Pool; MATERIALS=stone; FEATURES=steps; NATURAL=sky; LIGHTING=daylight; ISSUES=none; UNCERTAIN=none.')\n",
+    )
+    config, image = _config(tmp_path, runtime_dir)
+    review_model = tmp_path / "FastVLM-7B-int4"
+    review_model.mkdir()
+    config = FastVLMRuntimeConfig(**{**config.__dict__, "model_path": review_model})
+
+    result = run_fastvlm_caption(config, image)
+
+    assert result.success is True
+    assert _command_prompt(result.command) == REVIEW_FASTVLM_PROMPT
+
+
+def test_runtime_explicit_prompt_overrides_governed_prompt(tmp_path: Path) -> None:
+    runtime_dir = tmp_path / "runtime"
+    _write_fake_mlx_module(
+        runtime_dir,
+        "print('SCENE=Pool; MATERIALS=stone; FEATURES=steps; NATURAL=sky; LIGHTING=daylight; ISSUES=none; UNCERTAIN=none.')\n",
+    )
+    config, image = _config(tmp_path, runtime_dir)
+
+    result = run_fastvlm_caption(config, image, prompt="CUSTOM_PROMPT", model_role="review")
+
+    assert result.success is True
+    assert _command_prompt(result.command) == "CUSTOM_PROMPT"
 
 
 def test_runtime_success_output(tmp_path: Path) -> None:

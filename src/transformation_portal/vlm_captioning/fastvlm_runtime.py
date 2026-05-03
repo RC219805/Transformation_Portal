@@ -26,10 +26,36 @@ FASTVLM_CHECKPOINT_DIRS = {
     "smoke": "FastVLM-0.5B-fp16",
 }
 DEFAULT_FASTVLM_PROMPT = (
-    "Describe this image in one line using exactly this format: "
-    "SCENE=<short>; MATERIALS=<items>; FEATURES=<items>; NATURAL=<items>; "
-    "LIGHTING=<short>; ISSUES=<items>; UNCERTAIN=<items>."
+    "Return exactly one conservative visual-description line using this exact format "
+    "and equals signs: SCENE=<short>; MATERIALS=<clearly visible materials>; "
+    "FEATURES=<clearly visible architectural or site features>; "
+    "NATURAL=<clearly visible natural elements>; LIGHTING=<visibly supported lighting>; "
+    "ISSUES=<directly visible image-quality or scene issues, or none>; "
+    "UNCERTAIN=<items that may be present but are not visually clear>. "
+    "Use the uppercase keys exactly as shown. Use equals signs, not colons. "
+    "Do not infer use-case, time of day, weather, traffic, construction activity, people, funding, "
+    "maintenance, purpose, ownership, market value, quality status, building condition, "
+    "or property condition unless directly visible. Do not use JSON. Do not repeat items. "
+    "Do not add extra commentary before or after the line."
 )
+REVIEW_FASTVLM_PROMPT = (
+    "Return exactly one conservative visual audit line using this exact format "
+    "and equals signs: SCENE=<short>; MATERIALS=<only clearly visible materials>; "
+    "FEATURES=<only clearly visible architectural or site features>; "
+    "NATURAL=<only clearly visible natural elements>; LIGHTING=<only visibly supported lighting>; "
+    "ISSUES=<only directly visible image-quality or scene issues, or none>; "
+    "UNCERTAIN=<visually ambiguous items only>. Use the uppercase keys exactly as shown. "
+    "Use equals signs, not colons. Do not infer dusk, sunset, golden hour, weather, season, "
+    "traffic, construction activity, people, funding, maintenance, purpose, ownership, market value, "
+    "architectural intent, quality status, building condition, or property condition unless directly visible. "
+    "If an issue is not directly visible, write ISSUES=none. Do not use JSON. Do not repeat items. "
+    "Do not add extra commentary before or after the line."
+)
+FASTVLM_PROMPTS = {
+    "default": DEFAULT_FASTVLM_PROMPT,
+    "review": REVIEW_FASTVLM_PROMPT,
+    "smoke": DEFAULT_FASTVLM_PROMPT,
+}
 ADVISORY_WARNING = "FastVLM output is advisory and may hallucinate objects or under-report quality issues."
 
 
@@ -143,6 +169,24 @@ def resolve_fastvlm_model_id(model_path: Path | str, role: str | None = None) ->
     return name or str(model_path)
 
 
+def infer_fastvlm_model_role(model_path: Path | str, role: str | None = None) -> str:
+    """Infer a governed FastVLM model role from an explicit role or checkpoint directory."""
+    normalized_role = str(role or "").strip().lower()
+    if normalized_role in FASTVLM_MODEL_ROLES:
+        return normalized_role
+    name = Path(model_path).name
+    for known_role, directory_name in FASTVLM_CHECKPOINT_DIRS.items():
+        if name == directory_name:
+            return known_role
+    return "default"
+
+
+def prompt_for_fastvlm_model(model_path: Path | str, role: str | None = None) -> str:
+    """Return the governed prompt for a FastVLM model role or checkpoint path."""
+    model_role = infer_fastvlm_model_role(model_path, role)
+    return FASTVLM_PROMPTS.get(model_role, DEFAULT_FASTVLM_PROMPT)
+
+
 def resolve_fastvlm_model_path(
     selector: str,
     *,
@@ -228,7 +272,8 @@ def run_fastvlm_caption(
     config: FastVLMRuntimeConfig,
     image_path: Path,
     *,
-    prompt: str = DEFAULT_FASTVLM_PROMPT,
+    prompt: str | None = None,
+    model_role: str | None = None,
 ) -> FastVLMRuntimeResult:
     """Run FastVLM through ``python -m mlx_vlm.generate``.
 
@@ -236,6 +281,7 @@ def run_fastvlm_caption(
     ``config.strict`` is true.
     """
     image = Path(image_path)
+    active_prompt = prompt or prompt_for_fastvlm_model(config.model_path, model_role)
     command = [
         str(config.python_path),
         "-m",
@@ -245,7 +291,7 @@ def run_fastvlm_caption(
         "--image",
         str(image),
         "--prompt",
-        prompt,
+        active_prompt,
         "--max-tokens",
         str(config.max_tokens),
         "--temperature",

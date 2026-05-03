@@ -4286,7 +4286,7 @@ class EnhanceOrchestrator:
             temperature=temperature,
             timeout_seconds=timeout_seconds,
         )
-        runtime_result = run_fastvlm_caption(runtime_config, proxy.proxy_path)
+        runtime_result = run_fastvlm_caption(runtime_config, proxy.proxy_path, model_role=model_role)
         raw_text = runtime_result.raw_stdout or runtime_result.raw_stderr or runtime_result.error or ""
         raw_path.write_text(raw_text, encoding="utf-8")
         sidecar_payload = build_fastvlm_sidecar(
