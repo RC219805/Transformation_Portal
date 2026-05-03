@@ -1113,6 +1113,59 @@ Contract notes:
                         </div>
                     </details>
 
+                    <details id="captioningDetails" class="hidden disclosure-panel disclosure-panel-secondary mt-6" data-ui="captioning-controls">
+                        <summary class="disclosure-summary">
+                            <div>
+                                <p class="text-[11px] font-bold uppercase tracking-widest text-cyan-700 dark:text-cyan-300">Advisory Captioning</p>
+                                <p id="captioningDetailsHint" class="mt-1 text-[12px] text-slate-500 dark:text-slate-400">Optional FastVLM caption sidecars for review context only.</p>
+                            </div>
+                            <div class="disclosure-summary-meta">
+                                <span id="captioningDetailsSummary" class="disclosure-summary-badge">Feature gated</span>
+                                <span class="disclosure-chevron text-slate-400">▾</span>
+                            </div>
+                        </summary>
+                        <div id="captioningConfigFields" class="mt-4 space-y-4">
+                            <label class="flex items-center justify-between rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3.5 cursor-pointer group transition-colors">
+                                <span class="text-[12px] font-medium select-none text-slate-700 dark:text-slate-300">Enable FastVLM Captioning</span>
+                                <div class="relative inline-flex items-center">
+                                    <input type="checkbox" id="enableFastVlmCaptioning" role="switch" class="sr-only peer" />
+                                    <div class="w-9 h-5 rounded-full transition-colors duration-200 ease-in-out peer-focus-visible:ring-2 peer-focus-visible:ring-offset-2 peer-focus-visible:ring-indigo-500 bg-slate-300 dark:bg-slate-600 peer-checked:bg-indigo-600"></div>
+                                    <div class="absolute left-[2px] top-[2px] bg-white w-4 h-4 rounded-full transition-transform duration-200 ease-in-out peer-checked:translate-x-4 shadow-sm"></div>
+                                </div>
+                            </label>
+                            <div id="fastVlmCaptioningFields" class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                                <div>
+                                    <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="fastVlmCaptioningModel">Model</label>
+                                    <input type="text" id="fastVlmCaptioningModel" value="default" placeholder="default, review, smoke, or ./path" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-2.5 text-[13px] font-mono transition-colors" autocomplete="off" spellcheck="false" />
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="fastVlmProxyFormat">Proxy Format</label>
+                                    <select id="fastVlmProxyFormat" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2.5 text-[13px] font-mono transition-colors cursor-pointer">
+                                        <option value="png" selected>png</option>
+                                        <option value="jpeg">jpeg</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="fastVlmMaxSidePx">Max Side (px)</label>
+                                    <input type="number" id="fastVlmMaxSidePx" min="1" step="1" value="1600" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-2.5 text-[13px] font-mono transition-colors" />
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="fastVlmTimeoutSeconds">Timeout (seconds)</label>
+                                    <input type="number" id="fastVlmTimeoutSeconds" min="1" step="1" value="180" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-2.5 text-[13px] font-mono transition-colors" />
+                                </div>
+                                <div class="sm:col-span-2">
+                                    <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="fastVlmPythonExecutable">Python Executable</label>
+                                    <input type="text" id="fastVlmPythonExecutable" placeholder="./.runtime/fastvlm/.venv-fastvlm/bin/python" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-2.5 text-[13px] font-mono transition-colors" autocomplete="off" spellcheck="false" />
+                                </div>
+                                <div class="sm:col-span-2">
+                                    <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="fastVlmMlxVlmDir">mlx-vlm Directory</label>
+                                    <input type="text" id="fastVlmMlxVlmDir" placeholder="./.runtime/fastvlm/mlx-vlm" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-2.5 text-[13px] font-mono transition-colors" autocomplete="off" spellcheck="false" />
+                                </div>
+                            </div>
+                            <p id="captioningStatus" class="text-[12px] leading-6 text-slate-500 dark:text-slate-400">FastVLM captions are advisory and never satisfy quality gates.</p>
+                        </div>
+                    </details>
+
                     <!-- Licenses -->
                     <details id="governanceDetails" class="hidden disclosure-panel disclosure-panel-secondary mt-6">
                         <summary class="disclosure-summary">

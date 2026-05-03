@@ -103,6 +103,23 @@ Notes:
 - Roll back either pilot by setting the corresponding percentage back to `0` and redeploying the managed front door and/or backend origin that serves `/portal/bootstrap`.
 - Cohort expansion should move in bounded steps and record the operator owner, rollout date, rollback owner, and target percentage in the deployment notes for the change.
 
+## Optional FastVLM Captioning Pilot Knobs
+
+FastVLM advisory captioning controls stay additive and default-off. The portal
+feature appears only when the backend enable flag is on and the rollout cohort
+matches.
+
+```bash
+export TP_PORTAL_FASTVLM_CAPTIONING_ENABLED=0
+export TP_PORTAL_FASTVLM_CAPTIONING_ROLLOUT_PERCENT=0
+```
+
+Notes:
+- `TP_PORTAL_FASTVLM_CAPTIONING_ENABLED=0` keeps `features.fastVlmCaptioning=false` on `/portal/bootstrap` and keeps captioning controls hidden.
+- `TP_PORTAL_FASTVLM_CAPTIONING_ROLLOUT_PERCENT=0` keeps the UI hidden even when the hard flag is on.
+- Enabled cohorts can request FastVLM advisory sidecars through config preview and job creation; disabled cohorts receive the `captioning_feature_disabled` field error.
+- FastVLM remains subprocess-only metadata. Missing runtime paths are preview warnings, not quality-gate failures, and captions never satisfy Materials V3 or run-card validation gates.
+
 ## Optional Staged Upload Pilot Knobs
 
 Staged uploads stay additive and default-off. The browser feature appears only

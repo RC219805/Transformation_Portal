@@ -79,6 +79,54 @@ def test_default_runtime_paths_resolve_from_repo_root_when_cwd_changes(
     assert config.model_path == repo_root / ".runtime/fastvlm/checkpoints/FastVLM-1.5B-int8"
 
 
+def test_model_path_allows_explicit_paths_under_safe_runtime_root(tmp_path: Path) -> None:
+    runtime_root = tmp_path / "fastvlm"
+    model_path = runtime_root / "checkpoints" / "custom-model"
+
+    resolved = resolve_fastvlm_model_path(
+        str(model_path),
+        runtime_root=runtime_root,
+        allowed_roots=(runtime_root,),
+    )
+
+    assert resolved == Path(os.path.realpath(model_path))
+
+
+def test_model_path_rejects_absolute_paths_outside_safe_runtime_root(tmp_path: Path) -> None:
+    runtime_root = tmp_path / "fastvlm"
+    outside_model = tmp_path / "outside" / "model"
+
+    with pytest.raises(ValueError, match="safe model path"):
+        resolve_fastvlm_model_path(
+            str(outside_model),
+            runtime_root=runtime_root,
+            allowed_roots=(runtime_root,),
+        )
+
+
+def test_model_path_rejects_symlink_escape_from_safe_runtime_root(tmp_path: Path) -> None:
+    runtime_root = tmp_path / "fastvlm"
+    outside_root = tmp_path / "outside"
+    runtime_root.mkdir()
+    outside_root.mkdir()
+    outside_model = outside_root / "model"
+    outside_model.mkdir()
+    symlink_model = runtime_root / "model-link"
+    symlink_model.symlink_to(outside_model, target_is_directory=True)
+
+    with pytest.raises(ValueError, match="safe model path"):
+        resolve_fastvlm_model_path(
+            str(symlink_model),
+            runtime_root=runtime_root,
+            allowed_roots=(runtime_root,),
+        )
+
+
+def test_model_path_rejects_unknown_bare_selector(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="known role or safe model path"):
+        resolve_fastvlm_model_path("not-a-role", runtime_root=tmp_path)
+
+
 def test_runtime_accepts_bare_python_executable_from_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     runtime_dir = tmp_path / "runtime"
     _write_fake_mlx_module(

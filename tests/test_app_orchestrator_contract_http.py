@@ -61,6 +61,16 @@ def _collect_sse_events(response) -> List[Tuple[str, Dict[str, Any]]]:
     return events
 
 
+def _flag_value(argv: list[str], flag: str) -> str:
+    try:
+        index = argv.index(flag)
+    except ValueError as exc:
+        raise AssertionError(f"missing flag {flag}") from exc
+    if index + 1 >= len(argv):
+        raise AssertionError(f"flag {flag} missing value")
+    return argv[index + 1]
+
+
 @pytest.fixture(autouse=True)
 def _reset_orchestrator_globals() -> None:
     previous_api_key = orchestrator_app.API_KEY_SECRET
@@ -156,6 +166,7 @@ def test_portal_bootstrap_reports_direct_debug_mode(client: TestClient) -> None:
     assert body["features"]["reviewSurfaceDeferred"] is False
     assert body["features"]["stagedUploads"] is False
     assert body["features"]["rumTelemetry"] is False
+    assert body["features"]["fastVlmCaptioning"] is False
 
 
 def test_portal_bootstrap_exposes_artifact_viewer_rollout_flag_when_enabled(
@@ -210,6 +221,20 @@ def test_portal_bootstrap_exposes_rum_rollout_flag_when_enabled(
 
     assert response.status_code == 200
     assert response.json()["features"]["rumTelemetry"] is True
+
+
+def test_portal_bootstrap_exposes_fastvlm_captioning_rollout_flag_when_enabled(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("TP_PORTAL_FASTVLM_CAPTIONING_ENABLED", "1")
+    monkeypatch.setenv("TP_PORTAL_FASTVLM_CAPTIONING_ROLLOUT_PERCENT", "100")
+    monkeypatch.setenv("TP_PORTAL_DIRECT_DEBUG_COHORT_KEY", "contract-smoke")
+
+    response = client.get("/portal/bootstrap")
+
+    assert response.status_code == 200
+    assert response.json()["features"]["fastVlmCaptioning"] is True
 
 
 def test_portal_bootstrap_and_v1_echo_traceparent_header(client: TestClient) -> None:
@@ -700,6 +725,128 @@ def test_lux_config_preview_returns_execution_args_and_repair_warning_for_repo_l
     assert preview["normalized_args"]["output_dir"] == "./tests/fixtures/portal_contract_output/lux_depth_preview_contract"
     assert preview["execution_args"]["input_dir"] == "./tests/fixtures/archive_small/archive_root"
     assert preview["execution_args"]["output_dir"] == "./tests/fixtures/portal_contract_output/lux_depth_preview_contract"
+    assert preview["captioning_summary"]["feature_enabled"] is False
+    assert preview["captioning_summary"]["enabled"] is False
+    assert preview["captioning_summary"]["used_for_quality_gate"] is False
+
+
+def test_lux_config_preview_rejects_fastvlm_captioning_when_feature_disabled(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("TP_PORTAL_FASTVLM_CAPTIONING_ENABLED", raising=False)
+    monkeypatch.delenv("TP_PORTAL_FASTVLM_CAPTIONING_ROLLOUT_PERCENT", raising=False)
+
+    response = client.post(
+        "/v1/config-preview",
+        json={
+            "pipeline": "lux-depth-v3",
+            "args": {
+                "input_dir": "./tests/fixtures/archive_small/archive_root",
+                "output_dir": "./tests/fixtures/portal_contract_output/lux_depth_captioning_disabled",
+                "vlm_captioning_enabled": True,
+            },
+        },
+    )
+    body = response.json()
+
+    assert response.status_code == 200
+    preview = body["data"]
+    errors = {item["field"]: item for item in preview["field_errors"]}
+    assert errors["vlm_captioning_enabled"]["code"] == "captioning_feature_disabled"
+    assert preview["normalized_args"]["vlm_captioning_enabled"] is False
+    assert preview["captioning_summary"]["feature_enabled"] is False
+    assert preview["captioning_summary"]["enabled"] is False
+    assert preview["argv_preview"] == ""
+
+
+def test_lux_config_preview_accepts_fastvlm_captioning_aliases_when_enabled(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("TP_PORTAL_FASTVLM_CAPTIONING_ENABLED", "1")
+    monkeypatch.setenv("TP_PORTAL_FASTVLM_CAPTIONING_ROLLOUT_PERCENT", "100")
+    monkeypatch.setenv("TP_PORTAL_DIRECT_DEBUG_COHORT_KEY", "captioning-contract")
+
+    response = client.post(
+        "/v1/config-preview",
+        json={
+            "pipeline": "lux-depth-v3",
+            "args": {
+                "input_dir": "./tests/fixtures/archive_small/archive_root",
+                "output_dir": "./tests/fixtures/portal_contract_output/lux_depth_captioning_enabled",
+                "vlmCaptioningEnabled": True,
+                "vlmCaptioningBackend": "fastvlm",
+                "vlmCaptioningModel": "review",
+                "vlmCaptioningProxyFormat": "jpeg",
+                "vlmCaptioningMaxSidePx": 1200,
+                "fastvlmPythonExecutable": "./.runtime/fastvlm/pytest-python-shim",
+                "fastvlmMlxVlmDir": "./.runtime/fastvlm/pytest-mlx-vlm",
+                "fastvlmTimeoutSeconds": 60,
+            },
+        },
+    )
+    body = response.json()
+
+    assert response.status_code == 200
+    preview = body["data"]
+    warning_codes = {item["code"] for item in preview["field_warnings"]}
+    normalized = preview["normalized_args"]
+    assert preview["field_errors"] == []
+    assert "vlm_captioning_advisory_only" in warning_codes
+    assert normalized["vlm_captioning_enabled"] is True
+    assert normalized["vlm_captioning_backend"] == "fastvlm"
+    assert normalized["vlm_captioning_model"] == "review"
+    assert normalized["vlm_captioning_proxy_format"] == "jpeg"
+    assert normalized["vlm_captioning_max_side_px"] == 1200
+    assert normalized["fastvlm_timeout_seconds"] == 60
+    assert preview["execution_args"]["vlm_captioning_enabled"] is True
+    assert preview["captioning_summary"]["feature_enabled"] is True
+    assert preview["captioning_summary"]["enabled"] is True
+    assert preview["captioning_summary"]["role"] == "advisory"
+    assert preview["captioning_summary"]["used_for_quality_gate"] is False
+    assert "--vlm-captioning on" in preview["argv_preview"]
+    assert "--vlm-captioning-model review" in preview["argv_preview"]
+    assert "--vlm-captioning-proxy-format jpeg" in preview["argv_preview"]
+    assert "--fastvlm-timeout-seconds 60" in preview["argv_preview"]
+
+
+def test_lux_config_preview_validates_fastvlm_captioning_fields(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("TP_PORTAL_FASTVLM_CAPTIONING_ENABLED", "1")
+    monkeypatch.setenv("TP_PORTAL_FASTVLM_CAPTIONING_ROLLOUT_PERCENT", "100")
+    monkeypatch.setenv("TP_PORTAL_DIRECT_DEBUG_COHORT_KEY", "captioning-contract")
+
+    response = client.post(
+        "/v1/config-preview",
+        json={
+            "pipeline": "lux-depth-v3",
+            "args": {
+                "input_dir": "./tests/fixtures/archive_small/archive_root",
+                "output_dir": "./tests/fixtures/portal_contract_output/lux_depth_captioning_invalid",
+                "vlm_captioning_enabled": True,
+                "vlm_captioning_backend": "other",
+                "vlm_captioning_model": "not-a-role",
+                "vlm_captioning_proxy_format": "gif",
+                "vlm_captioning_max_side_px": 0,
+                "fastvlm_python_executable": "/etc/passwd",
+                "fastvlm_timeout_seconds": 0,
+            },
+        },
+    )
+    body = response.json()
+
+    assert response.status_code == 200
+    errors = {(item["field"], item["code"]) for item in body["data"]["field_errors"]}
+    assert ("vlm_captioning_backend", "invalid_vlm_captioning_backend") in errors
+    assert ("vlm_captioning_model", "invalid_vlm_captioning_model") in errors
+    assert ("vlm_captioning_proxy_format", "invalid_vlm_captioning_proxy_format") in errors
+    assert ("vlm_captioning_max_side_px", "invalid_vlm_captioning_max_side_px") in errors
+    assert ("fastvlm_timeout_seconds", "invalid_fastvlm_timeout_seconds") in errors
+    assert any(field == "fastvlm_python_executable" for field, _code in errors)
+    assert body["data"]["argv_preview"] == ""
 
 
 def test_config_preview_contract_rejects_repo_local_shorthand_traversal(
@@ -2648,6 +2795,96 @@ def test_create_job_preserves_raw_request_and_internal_execution_args(
         job.effective_request["args"]["output_dir"]
         == "./tests/fixtures/portal_contract_output/http_effective_request_contract"
     )
+
+
+def test_create_job_rejects_fastvlm_captioning_when_feature_disabled(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+    mark_da3_runtime_available: None,
+) -> None:
+    monkeypatch.delenv("TP_PORTAL_FASTVLM_CAPTIONING_ENABLED", raising=False)
+    monkeypatch.delenv("TP_PORTAL_FASTVLM_CAPTIONING_ROLLOUT_PERCENT", raising=False)
+
+    response = client.post(
+        "/v1/jobs",
+        json={
+            "pipeline": "lux-depth-v3",
+            "args": {
+                "input_dir": "./tests/fixtures/archive_small/archive_root",
+                "output_dir": "./tests/fixtures/portal_contract_output/http_captioning_disabled",
+                "vlm_captioning_enabled": True,
+            },
+        },
+    )
+    body = response.json()
+
+    assert response.status_code == 400
+    assert body["schema"] == "tp.orchestrator.error.v1"
+    assert body["error"]["details"] == {
+        "field": "vlm_captioning_enabled",
+        "reason": "captioning_feature_disabled",
+    }
+
+
+def test_create_job_normalizes_fastvlm_captioning_and_emits_backend_argv(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+    mark_da3_runtime_available: None,
+) -> None:
+    captured_argv: list[str] = []
+    original_argv_from_request = orchestrator_app._argv_from_request
+
+    async def fake_run_job(job, argv):  # noqa: ANN001
+        job.state = "succeeded"
+        job.exit_code = 0
+        now = orchestrator_app._now()
+        job.done_published_at = now
+        job.finished_at = now
+
+    def capture_argv(payload, *, execution_args=None):  # noqa: ANN001
+        argv = original_argv_from_request(payload, execution_args=execution_args)
+        captured_argv[:] = list(argv)
+        return argv
+
+    monkeypatch.setenv("TP_PORTAL_FASTVLM_CAPTIONING_ENABLED", "1")
+    monkeypatch.setenv("TP_PORTAL_FASTVLM_CAPTIONING_ROLLOUT_PERCENT", "100")
+    monkeypatch.setenv("TP_PORTAL_DIRECT_DEBUG_COHORT_KEY", "captioning-contract")
+    monkeypatch.setattr(orchestrator_app, "_run_job", fake_run_job)
+    monkeypatch.setattr(orchestrator_app, "_argv_from_request", capture_argv)
+
+    response = client.post(
+        "/v1/jobs",
+        json={
+            "pipeline": "lux-depth-v3",
+            "args": {
+                "input_dir": "/tests/fixtures/archive_small/archive_root",
+                "output_dir": "/tests/fixtures/portal_contract_output/http_captioning_enabled",
+                "vlmCaptioningEnabled": True,
+                "vlmCaptioningModel": "smoke",
+                "vlmCaptioningProxyFormat": "png",
+                "vlmCaptioningMaxSidePx": 960,
+                "fastvlmTimeoutSeconds": 45,
+            },
+        },
+    )
+    body = response.json()
+
+    assert response.status_code == 200
+    job = orchestrator_app.JOBS[body["data"]["id"]]
+    assert job.request["args"]["vlmCaptioningEnabled"] is True
+    assert "vlmCaptioningEnabled" not in job.effective_request["args"]
+    assert job.effective_request["args"]["vlm_captioning_enabled"] is True
+    assert job.effective_request["args"]["vlm_captioning_model"] == "smoke"
+    assert job.effective_request["args"]["vlm_captioning_proxy_format"] == "png"
+    assert job.effective_request["args"]["vlm_captioning_max_side_px"] == 960
+    assert job.effective_request["args"]["fastvlm_timeout_seconds"] == 45
+    assert "--vlm-captioning" in captured_argv
+    assert _flag_value(captured_argv, "--vlm-captioning") == "on"
+    assert _flag_value(captured_argv, "--vlm-captioning-backend") == "fastvlm"
+    assert _flag_value(captured_argv, "--vlm-captioning-model") == "smoke"
+    assert _flag_value(captured_argv, "--vlm-captioning-proxy-format") == "png"
+    assert _flag_value(captured_argv, "--vlm-captioning-max-side-px") == "960"
+    assert _flag_value(captured_argv, "--fastvlm-timeout-seconds") == "45"
 
 
 def test_archive_gate_b_submission_fails_closed_without_rights_manifest(client: TestClient) -> None:

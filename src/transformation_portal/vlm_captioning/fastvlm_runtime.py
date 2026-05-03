@@ -60,6 +60,19 @@ def resolve_fastvlm_runtime_path(candidate: Path | str) -> Path:
     return _find_repo_root() / path
 
 
+def _resolve_fastvlm_allowed_path(candidate: Path, allowed_roots: tuple[Path, ...]) -> Path:
+    """Resolve ``candidate`` and require it to stay under one allowed root."""
+    resolved = Path(os.path.realpath(candidate))
+    for root in allowed_roots:
+        root_real = Path(os.path.realpath(root))
+        try:
+            resolved.relative_to(root_real)
+        except ValueError:
+            continue
+        return resolved
+    raise ValueError("FastVLM model selector must be a safe model path under an allowed runtime root.")
+
+
 def resolve_fastvlm_python_executable(candidate: Path | str) -> str:
     """Resolve a FastVLM Python executable path or PATH command."""
     value = os.fspath(candidate).strip()
@@ -130,19 +143,27 @@ def resolve_fastvlm_model_id(model_path: Path | str, role: str | None = None) ->
     return name or str(model_path)
 
 
-def resolve_fastvlm_model_path(selector: str, *, runtime_root: Path | None = None) -> Path:
+def resolve_fastvlm_model_path(
+    selector: str,
+    *,
+    runtime_root: Path | None = None,
+    allowed_roots: tuple[Path, ...] | None = None,
+) -> Path:
     """Resolve ``default|review|smoke`` or an explicit model path."""
     normalized = str(selector or "default").strip()
+    if not normalized or normalized.startswith("~") or "\x00" in normalized:
+        raise ValueError("FastVLM model selector must be a role or safe model path.")
+    root = runtime_root or default_fastvlm_runtime_root()
+    safe_roots = allowed_roots or (root, _find_repo_root())
     role = normalized.lower()
     if role in FASTVLM_CHECKPOINT_DIRS:
-        root = runtime_root or default_fastvlm_runtime_root()
-        return root / "checkpoints" / FASTVLM_CHECKPOINT_DIRS[role]
-    model_path = Path(normalized).expanduser()
+        return _resolve_fastvlm_allowed_path(root / "checkpoints" / FASTVLM_CHECKPOINT_DIRS[role], (root,))
+    model_path = Path(normalized)
     if model_path.is_absolute():
-        return model_path
+        return _resolve_fastvlm_allowed_path(model_path, safe_roots)
     if normalized.startswith(".") or _has_path_separator(normalized):
-        return resolve_fastvlm_runtime_path(model_path)
-    return model_path
+        return _resolve_fastvlm_allowed_path(_find_repo_root() / model_path, safe_roots)
+    raise ValueError("FastVLM model selector must be a known role or safe model path.")
 
 
 def config_from_env(*, model_role: str = "default") -> FastVLMRuntimeConfig:
@@ -169,7 +190,11 @@ def config_from_env(*, model_role: str = "default") -> FastVLMRuntimeConfig:
         mlx_vlm_dir=(
             resolve_fastvlm_runtime_path(mlx_vlm_env) if mlx_vlm_env and mlx_vlm_env.strip() else runtime_root / "mlx-vlm"
         ),
-        model_path=resolve_fastvlm_runtime_path(model_value) if model_value and model_value.strip() else model_default,
+        model_path=(
+            resolve_fastvlm_model_path(model_value, runtime_root=runtime_root)
+            if model_value and model_value.strip()
+            else model_default
+        ),
         max_tokens=int(os.getenv("TP_FASTVLM_MAX_TOKENS", "120")),
         temperature=float(os.getenv("TP_FASTVLM_TEMPERATURE", "0.0")),
         timeout_seconds=int(os.getenv("TP_FASTVLM_TIMEOUT_SECONDS", "180")),

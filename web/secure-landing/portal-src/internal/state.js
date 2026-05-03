@@ -63,6 +63,15 @@ export function createPortalConfigState() {
       wbMode: "camera",
       demosaic: "AHD"
     },
+    captioning: {
+      enableFastVlm: false,
+      model: "default",
+      proxyFormat: "png",
+      maxSidePx: 1600,
+      timeoutSeconds: 180,
+      pythonExecutable: "",
+      mlxVlmDir: ""
+    },
     runtime: {
       maxWorkersMode: "auto",
       maxWorkers: "",
@@ -99,6 +108,7 @@ export function createPortalPreviewState() {
     readiness: null,
     estimate_summary: null,
     debug_bundle_summary: null,
+    captioning_summary: null,
     next_best_action: null,
     argv_preview: "",
     error: "",
@@ -136,6 +146,7 @@ export function createPortalUiState() {
       advanced: null,
       governance: null,
       reconstruction: null,
+      captioning: null,
       dispatchTools: false
     }
   };
@@ -159,7 +170,8 @@ export function createPortalAuthState() {
       artifactViewerModal: false,
       reviewSurfaceDeferred: false,
       stagedUploads: false,
-      rumTelemetry: false
+      rumTelemetry: false,
+      fastVlmCaptioning: false
     }
   };
 }

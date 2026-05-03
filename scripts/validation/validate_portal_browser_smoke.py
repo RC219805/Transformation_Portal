@@ -995,6 +995,30 @@ def _state_probe_expression() -> str:
       const el = document.getElementById('debugBundleGuardrail');
       return !!(el && !el.classList.contains('hidden'));
     })(),
+    captioningDetailsVisible: (() => {
+      const el = document.getElementById('captioningDetails');
+      return !!(el && !el.classList.contains('hidden'));
+    })(),
+    captioningDetailsOpen: (() => {
+      const el = document.getElementById('captioningDetails');
+      return !!(el && el.open);
+    })(),
+    captioningEnabledChecked: (() => {
+      const el = document.getElementById('enableFastVlmCaptioning');
+      return !!(el && el.checked);
+    })(),
+    captioningFieldsVisible: (() => {
+      const el = document.getElementById('fastVlmCaptioningFields');
+      return !!(el && !el.classList.contains('hidden'));
+    })(),
+    captioningStatusText: text('captioningStatus'),
+    captioningCliHasFlag: text('cliPreview').includes('--vlm-captioning'),
+    captioningExpectedOutput: Array.from(document.querySelectorAll('#expectedOutputsList li')).some((item) =>
+      String(item.textContent || '').toLowerCase().includes('fastvlm')
+    ),
+    captioningAdvisoryWarningVisible: Array.from(document.querySelectorAll('#preRunWarnings li')).some((item) =>
+      String(item.textContent || '').toLowerCase().includes('caption')
+    ),
     dispatchToolsOpen: (() => {
       const el = document.getElementById('dispatchToolsDetails');
       return !!(el && el.open);
@@ -1010,6 +1034,14 @@ def _state_probe_expression() -> str:
     reviewSurfaceVisible: (() => {
       const el = document.querySelector('[data-ui="review-surface"]');
       return !!(el && !el.classList.contains('hidden'));
+    })(),
+    advisoryCaptionPanelVisible: (() => {
+      const el = document.querySelector('[data-ui="advisory-caption-panel"]');
+      return !!(el && !el.classList.contains('hidden'));
+    })(),
+    advisoryCaptionPanelText: (() => {
+      const el = document.querySelector('[data-ui="advisory-caption-panel"]');
+      return el ? String(el.textContent || '').trim() : '';
     })(),
     v2PresetVisible: (() => {
       const el = document.getElementById('v2PresetField');
@@ -1324,6 +1356,7 @@ def _set_lux_optional_controls_expression(
     enable_reconstruction: bool,
     enable_v2: bool,
     emit_scene_debug_bundle: bool = False,
+    enable_captioning: bool = False,
 ) -> str:
     payload = json.dumps(
         {
@@ -1333,6 +1366,7 @@ def _set_lux_optional_controls_expression(
             "enable_reconstruction": enable_reconstruction,
             "enable_v2": enable_v2,
             "emit_scene_debug_bundle": emit_scene_debug_bundle,
+            "enable_captioning": enable_captioning,
         }
     )
     return f"""
@@ -1358,6 +1392,15 @@ def _set_lux_optional_controls_expression(
   setChecked('enableReconstruction', cfg.enable_reconstruction);
   setChecked('flagEnableV2', cfg.enable_v2);
   setChecked('emitSceneDebugBundle', cfg.emit_scene_debug_bundle);
+  const captioningDetails = document.getElementById('captioningDetails');
+  if (cfg.enable_captioning && captioningDetails && !captioningDetails.classList.contains('hidden')) {{
+    captioningDetails.open = true;
+    setChecked('enableFastVlmCaptioning', true);
+    setValue('fastVlmCaptioningModel', 'smoke');
+    setValue('fastVlmProxyFormat', 'png');
+    setValue('fastVlmMaxSidePx', '960');
+    setValue('fastVlmTimeoutSeconds', '45');
+  }}
   return ({_state_probe_expression()});
 }})()
 """
@@ -1446,6 +1489,20 @@ def _inject_compare_ready_review_expression(job_id: str) -> str:
       label: 'Synthetic Compare',
       priority: 990,
       compare_group: 'portal-smoke-compare'
+    }}
+  }});
+  upsertArtifact(job, {{
+    path: 'synthetic/review-primary.png.vlm_captioning.sidecar.json',
+    relative_path: 'synthetic/review-primary.png.vlm_captioning.sidecar.json',
+    artifact_type: 'vlm_caption_sidecar',
+    media_kind: 'json',
+    previewable: false,
+    content_type: 'application/json',
+    size_bytes: 512,
+    sha256: '4444444444444444444444444444444444444444444444444444444444444444',
+    display_hint: {{
+      label: 'Advisory Caption',
+      role: 'vlm_caption'
     }}
   }});
   state.artifactUi.selectedByJob[String(cfg.job_id)] = 'synthetic/review-primary.png';
@@ -1967,6 +2024,7 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
                 enable_reconstruction=True,
                 enable_v2=True,
                 emit_scene_debug_bundle=True,
+                enable_captioning=True,
             ),
             predicate=lambda value: (
                 isinstance(value, dict)
@@ -2018,6 +2076,32 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
             bool(lux_context_state.get("advancedFlagsOpen")),
             f"Advanced disclosure should auto-open once advanced controls need operator attention: {lux_context_state}",
         )
+        if bool(lux_context_state.get("captioningDetailsVisible")):
+            _expect(
+                bool(lux_context_state.get("captioningEnabledChecked")),
+                f"FastVLM captioning should toggle on when the enabled feature gate exposes controls: {lux_context_state}",
+            )
+            _expect(
+                bool(lux_context_state.get("captioningFieldsVisible")),
+                f"FastVLM captioning fields should be visible after the advisory toggle is enabled: {lux_context_state}",
+            )
+            _expect(
+                bool(lux_context_state.get("captioningCliHasFlag")),
+                f"FastVLM captioning should be represented in the CLI preview when enabled: {lux_context_state}",
+            )
+            _expect(
+                bool(lux_context_state.get("captioningExpectedOutput")),
+                f"Expected outputs should include advisory FastVLM caption sidecars: {lux_context_state}",
+            )
+            _expect(
+                bool(lux_context_state.get("captioningAdvisoryWarningVisible")),
+                f"FastVLM captioning should surface advisory-only warning copy: {lux_context_state}",
+            )
+        else:
+            _expect(
+                not bool(lux_context_state.get("captioningCliHasFlag")),
+                f"FastVLM captioning args must stay out of the CLI preview when the feature gate hides controls: {lux_context_state}",
+            )
 
         debug_bundle_reason_state = _poll(
             connection,
@@ -2420,6 +2504,7 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
                 and str(value.get("currentView", "")) == "review"
                 and str(value.get("selectedJobId", "")).strip() == submitted_job_id
                 and str(value.get("reviewProvenancePath", "")).strip() == "synthetic/review-primary.png"
+                and bool(value.get("advisoryCaptionPanelVisible"))
                 and (
                     str(value.get("actionSecondary2Key", "")).strip() == "toggle_compare"
                     or str(value.get("actionSecondary1Key", "")).strip() == "toggle_compare"
@@ -2433,6 +2518,10 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
         _expect(
             selected_artifact_path == "synthetic/review-primary.png",
             f"Compare-ready review state should promote the injected primary artifact: {compare_ready_state}",
+        )
+        _expect(
+            "Advisory" in str(compare_ready_state.get("advisoryCaptionPanelText", "")),
+            f"Review metadata should show the advisory FastVLM caption panel when a sidecar is indexed: {compare_ready_state}",
         )
 
         compare_toggle_selector = ""
@@ -2464,6 +2553,11 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
         _expect(
             str(compare_state.get("contextRibbonCompare", "")).strip().lower() == "compare on",
             f"Action-rail compare toggles should preserve the compare route contract: {compare_state}",
+        )
+        _expect(
+            bool(compare_state.get("advisoryCaptionPanelVisible"))
+            and "Advisory" in str(compare_state.get("advisoryCaptionPanelText", "")),
+            f"Compare mode should keep a freshly rendered advisory FastVLM caption panel: {compare_state}",
         )
 
         print("portal-browser-smoke: opening the artifact viewer from review", flush=True)
