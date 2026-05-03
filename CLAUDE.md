@@ -14,12 +14,14 @@ Always prefer Make targets — they encode the correct env, marker selection, an
 
 ### Setup
 ```bash
-make venv                  # create/validate .venv (Python 3.11+, fail-closed)
-make install-core          # pinned core runtime + dev tooling, editable install --no-deps, pip check
-make install-ml-core       # add target-owned ML baseline (Apple Silicon arm64 only; Linux/Intel macOS lanes are retired and fail closed)
-make check-environment     # pre-flight (Python/Node/Chrome/ports/dep-health)
+make venv                       # create/validate .venv (Python 3.11+, fail-closed)
+make install-core               # pinned core runtime + dev tooling, editable install --no-deps, pip check
+make install-ml-core            # add target-owned ML baseline (Apple Silicon arm64 only; Linux/Intel macOS lanes are retired and fail closed)
+make install-fastvlm-runtime    # optional FastVLM advisory captioning subprocess runtime (.runtime/fastvlm/)
+make check-fastvlm-runtime      # verify FastVLM runtime + selected model roles (TP_FASTVLM_VALIDATE_MODELS=smoke,default by default)
+make check-environment          # pre-flight (Python/Node/Chrome/ports/dep-health)
 ```
-The umbrella `make install-ml` is **disabled** until a trusted umbrella ML lockfile exists. Use the layered targets (`install-ml-core`, `install-ml-sam2`, `install-ml-coreml`) or `./scripts/bootstrap/install_ml_stack.sh --profile <core-cpu|core-mps|...>`. All current core profiles (`core-cpu`, `core-mps`) are Apple Silicon (`darwin-arm64`) only; `core-cuda` and the Linux/Intel macOS lanes are retired and fail closed.
+The umbrella `make install-ml` is **disabled** until a trusted umbrella ML lockfile exists. `install-ml-raw` is also fail-closed pending a trusted target-correct lockfile. Use the layered targets (`install-ml-core`, `install-ml-sam2`, `install-ml-coreml`) or `./scripts/bootstrap/install_ml_stack.sh --profile <core-cpu|core-mps|...>`. All current core profiles (`core-cpu`, `core-mps`) are Apple Silicon (`darwin-arm64`) only; `core-cuda` and the Linux/Intel macOS lanes are retired and fail closed.
 
 ### Tests
 ```bash
@@ -55,6 +57,8 @@ make validate-orchestrator-http       # against a running FastAPI origin
 make validate-portal-browser          # spawns isolated backend, runs portal browser smoke
 make validate-frontdoor-browser       # spawns backend + managed frontdoor, browser smoke
 make validate-portal-lux-materials-live   # live Lux Materials V3 segmentation (EfficientSAM, optional SAM2)
+make validate-portal-fastvlm-captioning-live   # live FastVLM advisory sidecar smoke (asserts used_for_quality_gate: false)
+make validate-portal-css-layer-parity # production portal CSS layer contract vs post-#1592 baseline
 make audit-pipeline-readiness         # safe local 4-pipeline readiness audit
 make seed-frontdoor-user              # seeds /tmp/tp-frontdoor-users.json (smoke-admin / correct horse battery staple)
 make run-frontdoor-local              # canonical local frontdoor on :3000 (refuses :3001 fallback)
@@ -69,14 +73,15 @@ cd requirements && make compile-ml-darwin-arm64 LOCK_PYTHON_VERSION=3.11   # nat
 python3 scripts/validation/check_requirements_lock_contract.py             # validate contract
 ```
 
-### Subprocess runtimes (DA3 / Depth Pro / RAW)
-These run in **isolated venvs** that Lux Depth V3 auto-discovers:
+### Subprocess runtimes (DA3 / Depth Pro / RAW / FastVLM)
+These run in **isolated venvs** that the orchestrator auto-discovers:
 ```bash
 ./scripts/setup/install_da3_runtime.sh         # ./.runtime/Depth-Anything-3/.venv-da3/bin/python
 ./scripts/setup/install_depth_pro_runtime.sh   # ./.venv-depth-pro/bin/python
 ./scripts/setup/install_raw_runtime.sh         # ./.venv-raw/bin/python
+./scripts/setup/install_fastvlm_runtime.sh     # ./.runtime/fastvlm/.venv-fastvlm/bin/python (default models: smoke,default; --all-models also installs review)
 ```
-Use `--da3-python`, `--depth-pro-python`, `--raw-python` flags only to override the auto-discovered runtime. Explicit `--depth-backend da3` is **strict**: failure to initialize is an actionable error, not a silent DA2 downgrade.
+Use `--da3-python`, `--depth-pro-python`, `--raw-python` flags only to override the auto-discovered runtime. Explicit `--depth-backend da3` is **strict**: failure to initialize is an actionable error, not a silent DA2 downgrade. FastVLM is enabled with `--vlm-captioning on` and is **advisory-only** — its output is never quality-gate evidence (sidecars must carry `used_for_quality_gate: false`).
 
 ## Architecture
 
