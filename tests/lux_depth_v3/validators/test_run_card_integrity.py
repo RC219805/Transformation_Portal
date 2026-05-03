@@ -21,9 +21,8 @@ pytest.importorskip("jsonschema")
 
 pytestmark = [pytest.mark.unit, pytest.mark.security]
 
-from transformation_portal.ingest.canonical_json import canonicalize_json
-from transformation_portal.lux_depth_v3.run_card_contract import RunCardPathValidationError
-from transformation_portal.lux_depth_v3.validators import run_card_integrity as rci
+from transformation_portal.ingest.canonical_json import canonicalize_json  # noqa: E402
+from transformation_portal.lux_depth_v3.validators import run_card_integrity as rci  # noqa: E402
 
 
 class TestPublicModuleSurface:
@@ -363,9 +362,7 @@ class TestSelfIntegrityPayloadHashing:
         payload_with_hash = {**payload, "run_card_integrity": integrity_with_hash}
         without_hash_again = {
             **payload_with_hash,
-            "run_card_integrity": {
-                k: v for k, v in integrity_with_hash.items() if k != "canonical_payload_sha256"
-            },
+            "run_card_integrity": {k: v for k, v in integrity_with_hash.items() if k != "canonical_payload_sha256"},
         }
         recomputed = hashlib.sha256(canonicalize_json(without_hash_again)).hexdigest()
         assert recomputed == expected

@@ -25,7 +25,7 @@ import pytest
 
 pytestmark = [pytest.mark.unit]
 
-from transformation_portal.depth.backends.depth_pro import DepthProBackend
+from transformation_portal.depth.backends.depth_pro import DepthProBackend  # noqa: E402
 
 
 class TestDepthProBackendConstants:
@@ -55,10 +55,7 @@ class TestDepthProBackendConstants:
     def test_worker_module_name_matches_runtime_dispatch(self):
         # The orchestrator launches the worker with ``-m WORKER_MODULE``;
         # this string is part of the cross-process protocol.
-        assert (
-            DepthProBackend.WORKER_MODULE
-            == "transformation_portal.depth.backends.depth_pro_worker"
-        )
+        assert DepthProBackend.WORKER_MODULE == "transformation_portal.depth.backends.depth_pro_worker"
 
     def test_license_metadata(self):
         # Depth Pro is research-only; the registry uses these fields to
@@ -132,9 +129,7 @@ class TestPythonExecutableResolution:
         monkeypatch.chdir(tmp_path)
 
         with pytest.raises(FileNotFoundError, match="Depth Pro Python executable not found"):
-            backend._resolve_python_executable(
-                SimpleNamespace(depth_pro_python_executable="./.venv-depth-pro/bin/python")
-            )
+            backend._resolve_python_executable(SimpleNamespace(depth_pro_python_executable="./.venv-depth-pro/bin/python"))
 
     def test_relative_path_is_absolutized(self, monkeypatch, tmp_path: Path):
         backend = self._backend(repo_root=tmp_path)
@@ -192,9 +187,7 @@ class TestDepthProWorkerArgvContract:
 
     def test_check_only_invocation_parses(self, tmp_path: Path):
         parser = self._parser()
-        args = parser.parse_args(
-            ["--check", "--checkpoint", str(tmp_path / "checkpoint.pt")]
-        )
+        args = parser.parse_args(["--check", "--checkpoint", str(tmp_path / "checkpoint.pt")])
         assert args.check is True
         assert args.checkpoint == tmp_path / "checkpoint.pt"
         assert args.device == "cpu"

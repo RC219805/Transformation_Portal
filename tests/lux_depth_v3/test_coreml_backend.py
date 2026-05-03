@@ -11,7 +11,6 @@ end-to-end inference belongs to the Apple-Silicon ML lane.
 
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -19,7 +18,7 @@ import pytest
 
 pytestmark = [pytest.mark.unit]
 
-from transformation_portal.lux_depth_v3 import coreml_backend
+from transformation_portal.lux_depth_v3 import coreml_backend  # noqa: E402
 
 
 class TestSupportedModelGuard:

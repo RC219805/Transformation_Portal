@@ -138,8 +138,7 @@ class TestRouteInventory:
         stale = sorted(registered - discovered_routes)
         assert not stale, (
             "The following ROUTE_REGISTRY entries no longer match a live "
-            "route:\n  " + "\n  ".join(f"{m} {p}" for m, p in stale)
-            + "\n\nRemove or update the entry."
+            "route:\n  " + "\n  ".join(f"{m} {p}" for m, p in stale) + "\n\nRemove or update the entry."
         )
 
     def test_every_route_has_an_allowed_family(self):
@@ -173,7 +172,7 @@ class TestRouteInventory:
         # supports GET+POST then /v2/jobs must too (and only those).
         def _method_map(prefix: str) -> dict[str, set[str]]:
             result: dict[str, set[str]] = {}
-            for (method, path) in discovered_routes:
+            for method, path in discovered_routes:
                 if not path.startswith(prefix):
                     continue
                 relative = path.removeprefix(prefix)
@@ -186,10 +185,5 @@ class TestRouteInventory:
         for relative, v1_methods in v1.items():
             v2_methods = v2.get(relative, set())
             if v1_methods != v2_methods:
-                mismatches.append(
-                    f"  /jobs{relative}: v1={sorted(v1_methods)} v2={sorted(v2_methods)}"
-                )
-        assert not mismatches, (
-            "Jobs API v1 and v2 expose different method sets:\n"
-            + "\n".join(mismatches)
-        )
+                mismatches.append(f"  /jobs{relative}: v1={sorted(v1_methods)} v2={sorted(v2_methods)}")
+        assert not mismatches, "Jobs API v1 and v2 expose different method sets:\n" + "\n".join(mismatches)

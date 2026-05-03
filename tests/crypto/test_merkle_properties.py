@@ -150,13 +150,16 @@ class TestCTMerkleRoot:
         leaf_index = data.draw(st.integers(min_value=0, max_value=len(leaves) - 1))
         root = ct_merkle_root(leaves)
         proof = ct_inclusion_proof(leaves, leaf_index)
-        assert verify_ct_inclusion_proof(
-            leaf_hash=leaves[leaf_index],
-            leaf_index=leaf_index,
-            tree_size=len(leaves),
-            proof=proof,
-            expected_root=root,
-        ) is True
+        assert (
+            verify_ct_inclusion_proof(
+                leaf_hash=leaves[leaf_index],
+                leaf_index=leaf_index,
+                tree_size=len(leaves),
+                proof=proof,
+                expected_root=root,
+            )
+            is True
+        )
 
     @given(_LEAF_LIST, st.data())
     @_SETTINGS
@@ -167,13 +170,16 @@ class TestCTMerkleRoot:
         root = bytearray(ct_merkle_root(leaves))
         root[0] ^= 0x01
         proof = ct_inclusion_proof(leaves, leaf_index)
-        assert verify_ct_inclusion_proof(
-            leaf_hash=leaves[leaf_index],
-            leaf_index=leaf_index,
-            tree_size=len(leaves),
-            proof=proof,
-            expected_root=bytes(root),
-        ) is False
+        assert (
+            verify_ct_inclusion_proof(
+                leaf_hash=leaves[leaf_index],
+                leaf_index=leaf_index,
+                tree_size=len(leaves),
+                proof=proof,
+                expected_root=bytes(root),
+            )
+            is False
+        )
 
     @given(_LEAF_LIST, st.data())
     @_SETTINGS
@@ -182,18 +188,19 @@ class TestCTMerkleRoot:
         # built for must not verify.
         assume(len(leaves) >= 2)
         true_index = data.draw(st.integers(min_value=0, max_value=len(leaves) - 1))
-        wrong_index = data.draw(
-            st.integers(min_value=0, max_value=len(leaves) - 1).filter(lambda i: i != true_index)
-        )
+        wrong_index = data.draw(st.integers(min_value=0, max_value=len(leaves) - 1).filter(lambda i: i != true_index))
         root = ct_merkle_root(leaves)
         proof = ct_inclusion_proof(leaves, true_index)
-        assert verify_ct_inclusion_proof(
-            leaf_hash=leaves[true_index],
-            leaf_index=wrong_index,
-            tree_size=len(leaves),
-            proof=proof,
-            expected_root=root,
-        ) is False
+        assert (
+            verify_ct_inclusion_proof(
+                leaf_hash=leaves[true_index],
+                leaf_index=wrong_index,
+                tree_size=len(leaves),
+                proof=proof,
+                expected_root=root,
+            )
+            is False
+        )
 
 
 class TestCTLeafAndNodeHashing:

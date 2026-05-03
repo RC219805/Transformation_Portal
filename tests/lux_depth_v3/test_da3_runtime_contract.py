@@ -24,7 +24,7 @@ import pytest
 
 pytestmark = [pytest.mark.unit]
 
-from transformation_portal.core import da3_runtime
+from transformation_portal.core import da3_runtime  # noqa: E402
 
 
 class TestRepoLocalDA3PythonConstant:
