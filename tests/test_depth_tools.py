@@ -9,6 +9,7 @@ Tests for depth_tools.py batch processing and error handling
 
 from pathlib import Path
 
+import numpy as np
 import pytest
 from PIL import Image
 
@@ -320,6 +321,41 @@ class TestMultiprocessing:
         # Check all output files were created
         output_files = list(Path(temp_dirs["output"]).glob("*_depthhaze.*"))
         assert len(output_files) == 4, "Expected 4 output files"
+
+
+class TestDepthEffectShape:
+    """Pin output shape so accidental [..., None] broadcasts can't return."""
+
+    @pytest.fixture
+    def hwc_inputs(self, deterministic_rng):
+        H, W = 32, 48
+        img = deterministic_rng.random((H, W, 3)).astype("float32")
+        depth = deterministic_rng.random((H, W)).astype("float32")
+        return H, W, img, depth
+
+    def test_apply_depth_clarity_returns_hwc(self, hwc_inputs):
+        from src.transformation_portal.pipelines.depth_tools import apply_depth_clarity
+
+        H, W, img, depth = hwc_inputs
+        out = apply_depth_clarity(img, depth)
+        assert out.shape == (H, W, 3)
+
+        sky = np.zeros((H, W), dtype="float32")
+        building = np.ones((H, W), dtype="float32")
+        out = apply_depth_clarity(img, depth, sky_mask=sky, building_mask=building)
+        assert out.shape == (H, W, 3)
+
+    def test_apply_depth_dof_returns_hwc(self, hwc_inputs):
+        from src.transformation_portal.pipelines.depth_tools import apply_depth_dof
+
+        H, W, img, depth = hwc_inputs
+        out = apply_depth_dof(img, depth, edge_preserving=False)
+        assert out.shape == (H, W, 3)
+
+        sky = np.zeros((H, W), dtype="float32")
+        building = np.ones((H, W), dtype="float32")
+        out = apply_depth_dof(img, depth, edge_preserving=False, sky_mask=sky, building_mask=building)
+        assert out.shape == (H, W, 3)
 
 
 if __name__ == "__main__":
