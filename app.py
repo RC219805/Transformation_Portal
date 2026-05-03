@@ -4456,6 +4456,37 @@ def _portal_fastvlm_runtime_path_status(path_text: str, allowed_roots: List[Path
     return status
 
 
+def _portal_default_fastvlm_python_status(default_python_path: Path) -> Dict[str, Any]:
+    """Return readiness for the managed default FastVLM venv Python path.
+
+    Python venv executables are commonly symlinks to the system interpreter.
+    Keep explicit user-provided paths on the strict realpath-contained path,
+    but let the managed default venv path report ready when the symlink itself
+    is present under `.runtime/fastvlm`.
+    """
+    status = {
+        "path": str(default_python_path),
+        "configured": True,
+        "exists": False,
+        "expected_type": "file",
+        "status": "missing",
+    }
+    runtime_root = Path(os.path.realpath(default_fastvlm_runtime_root()))
+    lexical_path = default_python_path.expanduser()
+    if not lexical_path.is_absolute():
+        lexical_path = REPO_ROOT / lexical_path
+    try:
+        lexical_path.relative_to(runtime_root)
+    except ValueError:
+        status["status"] = "invalid_path"
+        return status
+    exists = lexical_path.is_file()
+    status["exists"] = bool(exists)
+    status["path"] = _normalize_repo_relative_display_path(str(default_python_path), lexical_path)
+    status["status"] = "ready" if exists else "missing"
+    return status
+
+
 def _normalize_vlm_captioning_model(
     raw_model: Any,
     errors: List[Dict[str, Any]],
@@ -4496,11 +4527,14 @@ def _captioning_summary(
     enabled = _as_bool(normalized_args.get("vlm_captioning_enabled"), False)
     default_python_path = default_fastvlm_runtime_root() / ".venv-fastvlm" / "bin" / "python"
     default_mlx_vlm_dir = default_fastvlm_runtime_root() / "mlx-vlm"
+    explicit_python_path = str(normalized_args.get("fastvlm_python_executable") or "")
     python_status = _portal_fastvlm_runtime_path_status(
-        str(normalized_args.get("fastvlm_python_executable") or default_python_path),
+        str(explicit_python_path or default_python_path),
         FASTVLM_RUNTIME_ALLOWED_ROOTS,
         expected_type="file",
     )
+    if not explicit_python_path and python_status.get("status") == "invalid_path":
+        python_status = _portal_default_fastvlm_python_status(default_python_path)
     mlx_status = _portal_fastvlm_runtime_path_status(
         str(normalized_args.get("fastvlm_mlx_vlm_dir") or default_mlx_vlm_dir),
         FASTVLM_RUNTIME_ALLOWED_ROOTS,

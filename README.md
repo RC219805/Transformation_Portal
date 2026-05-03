@@ -169,7 +169,9 @@ environment.
 caption sidecars with `--vlm-captioning on`. This runtime stays isolated under
 `.runtime/fastvlm/.venv-fastvlm`, is called by subprocess only, and is advisory:
 it is not used for APEX pass/fail, Materials V3 segmentation, or any quality
-gate. See [FastVLM Advisory Captioning Runtime](docs/runtimes/fastvlm.md).
+gate. Install or verify the manifest-pinned local runtime with
+`make install-fastvlm-runtime` and `make check-fastvlm-runtime`. See
+[FastVLM Advisory Captioning Runtime](docs/runtimes/fastvlm.md).
 
 **Recommended (DA3 via isolated Depth Anything 3 environment):**
 ```bash

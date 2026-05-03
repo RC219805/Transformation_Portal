@@ -102,18 +102,49 @@ not satisfy quality gates.
 
 ## Local Setup
 
-Create the isolated runtime outside the main virtualenv:
+Use the governed runtime installer from the repository root:
 
 ```bash
-python3 -m venv .runtime/fastvlm/.venv-fastvlm
-.runtime/fastvlm/.venv-fastvlm/bin/python -m pip install --upgrade pip
-git clone https://github.com/apple/ml-fastvlm .runtime/fastvlm/ml-fastvlm
-git clone https://github.com/Blaizzy/mlx-vlm .runtime/fastvlm/mlx-vlm
+./scripts/setup/install_fastvlm_runtime.sh
 ```
 
-Install and patch the FastVLM dependencies in `.runtime/fastvlm/.venv-fastvlm`
-according to the local Apple/MLX runtime notes. Keep model weights under
+The default install prepares the source clones, isolated virtual environment,
+and `smoke,default` model roles. Add the review model explicitly when needed:
+
+```bash
+./scripts/setup/install_fastvlm_runtime.sh --models smoke,default,review
+```
+
+The installer is manifest-backed and fail-closed:
+
+```bash
+./scripts/setup/install_fastvlm_runtime.sh --dry-run --models smoke,default
+./scripts/setup/install_fastvlm_runtime.sh --verify-only --models smoke
+./scripts/validation/validate_fastvlm_runtime.py --verify-only --models smoke
+```
+
+The manifest lives at `config/fastvlm_runtime_manifest.json` and pins:
+
+```text
+apple/ml-fastvlm@592b4add3c1c8a518e77d95dc6248e76c1dd591f
+Blaizzy/mlx-vlm@1884b551bc741f26b2d54d68fa89d4e934b9a3de
+```
+
+Model downloads are limited to the allowlisted FastVLM roles, pinned Hugging
+Face revisions, and SHA-256-checked required files. Partial downloads, unsafe
+paths, symlink escapes, unpinned revisions, checksumless artifacts, and checksum
+mismatches are rejected before a checkpoint is promoted into
 `.runtime/fastvlm/checkpoints/`.
+
+Make targets are available for operator workflows:
+
+```bash
+make install-fastvlm-runtime
+make check-fastvlm-runtime
+TP_PORTAL_FASTVLM_CAPTIONING_ENABLED=1 \
+TP_PORTAL_FASTVLM_CAPTIONING_ROLLOUT_PERCENT=100 \
+make validate-portal-fastvlm-captioning-live
+```
 
 ## Standalone Smoke Test
 

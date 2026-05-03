@@ -16,6 +16,7 @@ pytestmark = pytest.mark.unit
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 PORTAL_BROWSER_SCRIPT_PATH = PROJECT_ROOT / "scripts/validation/validate_portal_browser_smoke.py"
 PORTAL_LUX_MATERIALS_SCRIPT_PATH = PROJECT_ROOT / "scripts/validation/validate_portal_lux_materials_live.py"
+PORTAL_FASTVLM_CAPTIONING_SCRIPT_PATH = PROJECT_ROOT / "scripts/validation/validate_portal_fastvlm_captioning_live.py"
 FRONTDOOR_BROWSER_SCRIPT_PATH = PROJECT_ROOT / "scripts" / "validation" / "validate_frontdoor_browser_smoke.py"
 ORCHESTRATOR_HTTP_SCRIPT_PATH = PROJECT_ROOT / "scripts/validation/validate_orchestrator_http_smoke.py"
 AUDIT_PIPELINE_READINESS_SCRIPT_PATH = PROJECT_ROOT / "scripts/validation/audit_pipeline_readiness.py"
@@ -36,6 +37,15 @@ def _load_portal_css_layer_parity_module(module_name: str):
     sys.path.insert(0, script_dir)
     try:
         return _load_module(PORTAL_CSS_LAYER_PARITY_SCRIPT_PATH, module_name)
+    finally:
+        sys.path.remove(script_dir)
+
+
+def _load_portal_fastvlm_captioning_module(module_name: str):
+    script_dir = str(PORTAL_FASTVLM_CAPTIONING_SCRIPT_PATH.parent)
+    sys.path.insert(0, script_dir)
+    try:
+        return _load_module(PORTAL_FASTVLM_CAPTIONING_SCRIPT_PATH, module_name)
     finally:
         sys.path.remove(script_dir)
 
@@ -538,6 +548,126 @@ def test_portal_lux_materials_output_validation_checks_masks_manifest_and_run_ca
     assert result["manifest_relative_path"] == manifest_relative_path
     assert result["run_card_path"] == str(run_card_path)
     assert result["mask_stats"]["non_empty_mask_count"] == 1
+
+
+def test_portal_fastvlm_captioning_payload_enables_advisory_smoke_role(tmp_path: Path):
+    module = _load_portal_fastvlm_captioning_module("tests_validate_portal_fastvlm_captioning_payload")
+
+    payload = module._build_captioning_payload(
+        input_dir=tmp_path / "input",
+        output_dir=tmp_path / "output",
+        model_role="smoke",
+        timeout_seconds=45,
+    )
+
+    args = payload["args"]
+    assert payload["pipeline"] == "lux-depth-v3"
+    assert args["vlm_captioning_enabled"] is True
+    assert args["vlm_captioning_backend"] == "fastvlm"
+    assert args["vlm_captioning_model"] == "smoke"
+    assert args["vlm_captioning_proxy_format"] == "png"
+    assert args["fastvlm_timeout_seconds"] == 45
+    assert args["materials_v3"] is False
+    assert args["enable_segmentation"] is False
+    assert args["emit_run_card"] is True
+    assert args["run_card_version"] == "v2"
+
+
+def test_portal_fastvlm_captioning_preview_requires_ready_advisory_summary(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    module = _load_portal_fastvlm_captioning_module("tests_validate_portal_fastvlm_captioning_preview")
+    payload = module._build_captioning_payload(
+        input_dir=tmp_path / "input",
+        output_dir=tmp_path / "output",
+        model_role="smoke",
+        timeout_seconds=45,
+    )
+    preview = {
+        "field_errors": [],
+        "normalized_args": dict(payload["args"]),
+        "execution_args": dict(payload["args"]),
+        "captioning_summary": {
+            "feature_enabled": True,
+            "enabled": True,
+            "backend": "fastvlm",
+            "model": "smoke",
+            "role": "advisory",
+            "used_for_quality_gate": False,
+            "runtime_status": "ready",
+        },
+        "argv_preview": (
+            "python -m transformation_portal.lux_depth_v3 --vlm-captioning on "
+            "--vlm-captioning-backend fastvlm --vlm-captioning-model smoke "
+            "--vlm-captioning-proxy-format png"
+        ),
+    }
+
+    def fake_request_json(*_args, **_kwargs):  # noqa: ANN001
+        return 200, {"success": True, "data": preview}
+
+    monkeypatch.setattr(module, "_request_json", fake_request_json)
+
+    result = module._preview_captioning_job("http://127.0.0.1:8000", api_key="secret", payload=payload, model_role="smoke")
+
+    assert result is preview
+
+
+def test_portal_fastvlm_captioning_output_validation_requires_advisory_artifacts(tmp_path: Path):
+    module = _load_portal_fastvlm_captioning_module("tests_validate_portal_fastvlm_captioning_outputs")
+    output_dir = tmp_path / "output"
+    caption_dir = output_dir / "captioning"
+    caption_dir.mkdir(parents=True)
+    sidecar_relative_path = "captioning/image.vlm_captioning.sidecar.json"
+    raw_relative_path = "captioning/image.vlm_captioning.raw.txt"
+    proxy_relative_path = "captioning/image_proxy.png"
+    (output_dir / sidecar_relative_path).write_text(
+        json.dumps(
+            {
+                "vlm_captioning": {
+                    "provider": "fastvlm",
+                    "role": "advisory",
+                    "used_for_quality_gate": False,
+                    "runtime_diagnostics": {"success": True},
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    (output_dir / raw_relative_path).write_text("SCENE=Pool\n", encoding="utf-8")
+    (output_dir / proxy_relative_path).write_bytes(b"png")
+    run_card_path = output_dir / "run_card_fixture.json"
+    run_card_path.write_text(
+        json.dumps(
+            {
+                "captioning_status": {
+                    "role": "advisory",
+                    "used_for_quality_gate": False,
+                    "sidecar_count": 1,
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = module._validate_captioning_outputs(
+        {
+            "artifacts": {
+                "output_dir": str(output_dir),
+                "items": [
+                    {"relative_path": sidecar_relative_path, "artifact_type": "vlm_caption_sidecar"},
+                    {"relative_path": raw_relative_path, "artifact_type": "vlm_caption_raw_text"},
+                    {"relative_path": proxy_relative_path, "artifact_type": "image"},
+                ],
+            }
+        }
+    )
+
+    assert result["sidecar_relative_path"] == sidecar_relative_path
+    assert result["raw_relative_path"] == raw_relative_path
+    assert result["proxy_relative_path"] == proxy_relative_path
+    assert result["captioning_status"]["used_for_quality_gate"] is False
 
 
 def test_portal_lux_materials_sam2_prerequisite_reports_missing_checkpoint(tmp_path: Path):

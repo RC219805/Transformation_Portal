@@ -50,6 +50,7 @@ Quick reference for common workflows and commands in this repo.
 - `make run-frontdoor-local` start the canonical local managed frontdoor on `http://localhost:3000` after verifying backend readiness, auth env, and no silent fallback to `:3001`; it auto-seeds the canonical local user fixture when no explicit frontdoor user source is configured.
 - `make validate-orchestrator-http` run the live orchestrator HTTP smoke against a running backend.
 - `make validate-portal-lux-materials-live` launch an isolated local backend, submit a live `lux-depth-v3` Materials V3 segmentation job through `/v1/config-preview` and `/v1/jobs` with the governed DA3 non-commercial acknowledgment, require EfficientSAM evidence, and optionally run SAM2 when `TP_PORTAL_LUX_RUN_SAM2=1` (hard gate with `TP_PORTAL_LUX_REQUIRE_SAM2=1`).
+- `make validate-portal-fastvlm-captioning-live` launch an isolated local backend with FastVLM portal captioning enabled, submit a live smoke-role captioning job, and require advisory sidecar/raw/proxy artifacts plus `used_for_quality_gate: false`.
 - `make validate-portal-css-layer-parity` run the production portal CSS layer contract check and compare computed styles against the committed post-#1592 parity baseline.
 - `make validate-portal-browser` launch an isolated local backend, then run the live portal browser smoke; it seeds `TP_API_KEY=contract-secret` unless you override it.
 - `make validate-frontdoor-browser` launch isolated local backend and managed frontdoor runtimes, then run the live browser smoke; it auto-seeds the canonical local smoke credentials when it creates the managed frontdoor runtime itself.
@@ -87,6 +88,8 @@ Quick reference for common workflows and commands in this repo.
 - `make check-ci-sync` verify CI dependency files are in sync (no drift between `requirements-ci.txt` and `requirements/ci.in`).
 - `make check-todo-governance` scan repository for TODO patterns and fail if ungoverned TODOs (missing tracking references) are found.
 - `make check-portal-asset-budgets` validate raw and gzipped portal asset size budgets against the checked-in budget contract.
+- `make install-fastvlm-runtime` install the manifest-pinned optional FastVLM advisory captioning runtime under `.runtime/fastvlm/`.
+- `make check-fastvlm-runtime` verify the manifest-pinned optional FastVLM advisory captioning runtime and selected model roles.
 - `make organize-docs` move markdown files into `docs/` (repo hygiene).
 - `make check-docs` dry-run docs organization.
 - `make check-stale-docs` detect changed-file references to deleted or moved docs root paths.
@@ -170,6 +173,7 @@ Quick reference for common workflows and commands in this repo.
 - `./scripts/pipelines/run_sealed_eval_72h.sh --archive-index <path> --archive-root <path>` run sealed pre/post fixity verification around an optional eval command and emit an audit package.
 - `./scripts/pipelines/hdr_production_pipeline.sh` interactive HDR video mastering workflow that pairs source footage with a 3D LUT and writes web deliverables.
 - `./scripts/setup/install_da3_runtime.sh` install the repo-local DA3 subprocess runtime (validated `.runtime/Depth-Anything-3` ref + auto-discovered `./.runtime/Depth-Anything-3/.venv-da3/bin/python` contract + `.runtime/da3-pip-freeze.txt` snapshot).
+- `./scripts/setup/install_fastvlm_runtime.sh` install the manifest-pinned optional FastVLM advisory captioning runtime; default model roles are `smoke,default`, with `review` available through `--models smoke,default,review` or `--all-models`.
 - FastVLM advisory captioning is optional and subprocess-only. Keep the runtime under `.runtime/fastvlm/.venv-fastvlm`, keep model checkpoints/vendor clones under `.runtime/fastvlm/`, and use `--vlm-captioning on` only when local advisory sidecars are desired. FastVLM output is never quality-gate evidence.
 - `./scripts/setup/install_depth_pro_runtime.sh` install the repo-local Depth Pro subprocess runtime (pinned `torch==2.7.1` / `torchvision==0.22.1` / `numpy==1.26.4` + pinned Apple `ml-depth-pro` ref + auto-discovered `./.venv-depth-pro/bin/python` contract + `.runtime/depth-pro-pip-freeze.txt` snapshot).
 - `./scripts/setup/install_raw_runtime.sh` install the repo-local RAW subprocess runtime (auto-discovered `./.venv-raw/bin/python` contract + `.runtime/raw-pip-freeze.txt` snapshot).
