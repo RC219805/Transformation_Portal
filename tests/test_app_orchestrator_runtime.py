@@ -1113,12 +1113,21 @@ def test_portal_fastvlm_captioning_controls_are_feature_gated_and_advisory_only(
     assert 'id="fastVlmTimeoutSeconds"' in content
     assert 'id="fastVlmPythonExecutable"' in content
     assert 'id="fastVlmMlxVlmDir"' in content
+    assert 'id="captioningReadinessScope"' in content
+    assert 'id="captioningReadinessList"' in content
+    assert 'data-ui="captioning-readiness"' in content
     assert "FastVLM captions are advisory and never satisfy quality gates." in content
+    assert "FastVLM readiness: Off" in content
     assert "function _fastVlmCaptioningFeatureEnabled()" in content
+    assert "function _captioningRuntimeReadiness(summary = {})" in content
+    assert "function _renderCaptioningReadiness(summary = {}, options = {})" in content
     assert "state.auth?.features?.fastVlmCaptioning" in content
     assert "const captioningFeatureVisible = isLuxPipeline && _fastVlmCaptioningFeatureEnabled();" in applicability_body
     assert "_setContextVisibility(els.captioningDetails, captioningFeatureVisible);" in applicability_body
     assert "state.config.captioning.enableFastVlm = false;" in applicability_body
+    assert "runtimeStatus === 'missing_runtime'" in applicability_body
+    assert "runtimeStatus === 'invalid_config'" in applicability_body
+    assert "_renderCaptioningReadiness(summary, {" in applicability_body
     assert "if (captioningFeatureEnabled) {" in canonical_body
     assert "args.vlm_captioning_enabled = enableFastVlmCaptioning;" in canonical_body
     assert "args.vlm_captioning_backend = 'fastvlm';" in canonical_body
@@ -1129,6 +1138,8 @@ def test_portal_fastvlm_captioning_controls_are_feature_gated_and_advisory_only(
     assert "Advisory FastVLM caption sidecars" in diagnostics_body
     assert "FastVLM captions are advisory sidecar metadata and do not satisfy quality gates." in diagnostics_body
     assert "FastVLM advisory captioning is enabled and remains outside quality gates." in effective_drawer_body
+    assert "FastVLM readiness is" in effective_drawer_body
+    assert "captioningReadiness.verification_scope" in effective_drawer_body
     assert "'captioning:enableFastVlm': 'vlm_captioning_enabled'" in bind_body
     assert "safeBindCheck(els.captioning.enableFastVlm, 'captioning', 'enableFastVlm');" in bind_body
 

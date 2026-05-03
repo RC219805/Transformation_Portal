@@ -730,6 +730,8 @@ def test_lux_config_preview_returns_execution_args_and_repair_warning_for_repo_l
     assert preview["captioning_summary"]["feature_enabled"] is False
     assert preview["captioning_summary"]["enabled"] is False
     assert preview["captioning_summary"]["used_for_quality_gate"] is False
+    assert preview["captioning_summary"]["runtime_readiness"]["status"] == "off"
+    assert preview["captioning_summary"]["runtime_readiness"]["verification_scope"] == "path-existence"
 
 
 def test_lux_config_preview_rejects_fastvlm_captioning_when_feature_disabled(
@@ -759,6 +761,7 @@ def test_lux_config_preview_rejects_fastvlm_captioning_when_feature_disabled(
     assert preview["normalized_args"]["vlm_captioning_enabled"] is False
     assert preview["captioning_summary"]["feature_enabled"] is False
     assert preview["captioning_summary"]["enabled"] is False
+    assert preview["captioning_summary"]["runtime_readiness"]["status"] == "off"
     assert preview["argv_preview"] == ""
 
 
@@ -796,6 +799,9 @@ def test_lux_config_preview_accepts_fastvlm_captioning_aliases_when_enabled(
     normalized = preview["normalized_args"]
     assert preview["field_errors"] == []
     assert "vlm_captioning_advisory_only" in warning_codes
+    assert "fastvlm_runtime_missing" in warning_codes
+    assert "fastvlm_runtime_python_executable_missing" in warning_codes
+    assert "fastvlm_runtime_mlx_vlm_dir_missing" in warning_codes
     assert normalized["vlm_captioning_enabled"] is True
     assert normalized["vlm_captioning_backend"] == "fastvlm"
     assert normalized["vlm_captioning_model"] == "review"
@@ -807,6 +813,7 @@ def test_lux_config_preview_accepts_fastvlm_captioning_aliases_when_enabled(
     assert preview["captioning_summary"]["enabled"] is True
     assert preview["captioning_summary"]["role"] == "advisory"
     assert preview["captioning_summary"]["used_for_quality_gate"] is False
+    assert preview["captioning_summary"]["runtime_readiness"]["status"] == "missing_runtime"
     assert "--vlm-captioning on" in preview["argv_preview"]
     assert "--vlm-captioning-model review" in preview["argv_preview"]
     assert "--vlm-captioning-proxy-format jpeg" in preview["argv_preview"]
@@ -856,9 +863,18 @@ def test_lux_config_preview_reports_fastvlm_runtime_ready_for_manifest_backed_pa
     assert preview["field_errors"] == []
     assert preview["captioning_summary"]["runtime_status"] == "ready"
     runtime_status = preview["captioning_summary"]["runtime_path_status"]
+    readiness = preview["captioning_summary"]["runtime_readiness"]
+    assert readiness["status"] == "ready"
+    assert readiness["verification_scope"] == "path-existence"
     assert runtime_status["python_executable"]["status"] == "ready"
     assert runtime_status["mlx_vlm_dir"]["status"] == "ready"
     assert runtime_status["model_path"]["status"] == "ready"
+    assert readiness["checks"]["python_executable"]["status"] == "ready"
+    assert readiness["checks"]["mlx_vlm_dir"]["status"] == "ready"
+    assert readiness["checks"]["model_path"]["status"] == "ready"
+    assert readiness["checks"]["python_executable"]["required"] is True
+    assert readiness["checks"]["mlx_vlm_dir"]["required"] is True
+    assert readiness["checks"]["model_path"]["required"] is True
 
 
 def test_lux_config_preview_treats_default_fastvlm_venv_python_symlink_as_ready(
@@ -900,6 +916,7 @@ def test_lux_config_preview_treats_default_fastvlm_venv_python_symlink_as_ready(
     assert response.status_code == 200
     summary = response.json()["data"]["captioning_summary"]
     assert summary["runtime_status"] == "ready"
+    assert summary["runtime_readiness"]["status"] == "ready"
     assert summary["runtime_path_status"]["python_executable"]["status"] == "ready"
 
 
@@ -938,6 +955,11 @@ def test_lux_config_preview_validates_fastvlm_captioning_fields(
     assert ("vlm_captioning_max_side_px", "invalid_vlm_captioning_max_side_px") in errors
     assert ("fastvlm_timeout_seconds", "invalid_fastvlm_timeout_seconds") in errors
     assert any(field == "fastvlm_python_executable" for field, _code in errors)
+    summary = body["data"]["captioning_summary"]
+    assert summary["runtime_readiness"]["status"] == "invalid_config"
+    assert summary["runtime_readiness"]["checks"]["python_executable"]["status"] == "invalid_path"
+    assert summary["runtime_readiness"]["checks"]["model_path"]["status"] == "invalid_path"
+    assert summary["used_for_quality_gate"] is False
     assert body["data"]["argv_preview"] == ""
 
 

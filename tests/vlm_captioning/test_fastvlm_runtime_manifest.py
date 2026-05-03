@@ -172,13 +172,25 @@ def test_validate_fastvlm_runtime_verify_only_skips_import_smoke(
         sys.path.remove(validation_dir)
     manifest_path = tmp_path / "manifest.json"
     _write_manifest(manifest_path, _manifest(tmp_path))
+    runtime_root = tmp_path / "fastvlm"
+    _write_fixture_runtime(runtime_root)
     import_smoke_calls: list[bool] = []
 
-    monkeypatch.setattr(module, "verify_runtime", lambda *_args, **_kwargs: [])
     monkeypatch.setattr(module, "verify_python_imports", lambda *_args, **_kwargs: import_smoke_calls.append(True) or [])
 
     assert (
-        module.main(["--manifest", str(manifest_path), "--runtime-root", str(tmp_path / "fastvlm"), "--models", "smoke"]) == 0
+        module.main(
+            [
+                "--manifest",
+                str(manifest_path),
+                "--runtime-root",
+                str(runtime_root),
+                "--models",
+                "smoke",
+                "--skip-source-check",
+            ]
+        )
+        == 0
     )
     assert import_smoke_calls == [True]
 
@@ -189,15 +201,58 @@ def test_validate_fastvlm_runtime_verify_only_skips_import_smoke(
                 "--manifest",
                 str(manifest_path),
                 "--runtime-root",
-                str(tmp_path / "fastvlm"),
+                str(runtime_root),
                 "--models",
                 "smoke",
+                "--skip-source-check",
                 "--verify-only",
             ]
         )
         == 0
     )
     assert not import_smoke_calls
+
+
+def test_validate_fastvlm_runtime_json_reports_static_and_import_checks(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    validation_dir = str(repo_root / "scripts" / "validation")
+    sys.path.insert(0, validation_dir)
+    try:
+        module = _load_script_module("validate_fastvlm_runtime_json_test", "scripts/validation/validate_fastvlm_runtime.py")
+    finally:
+        sys.path.remove(validation_dir)
+    manifest_path = tmp_path / "manifest.json"
+    runtime_root = tmp_path / "fastvlm"
+    _write_manifest(manifest_path, _manifest(tmp_path))
+    _write_fixture_runtime(runtime_root)
+
+    rc = module.main(
+        [
+            "--manifest",
+            str(manifest_path),
+            "--runtime-root",
+            str(runtime_root),
+            "--models",
+            "smoke",
+            "--skip-source-check",
+            "--verify-only",
+            "--json",
+        ]
+    )
+
+    payload = json.loads(capsys.readouterr().out)
+    assert rc == 0
+    assert payload["runtime_status"] == "ready"
+    assert payload["advisory_role"] == "advisory"
+    assert payload["used_for_quality_gate"] is False
+    assert payload["checks"]["manifest"]["status"] == "ready"
+    assert payload["checks"]["runtime_sources"]["status"] == "skipped"
+    assert payload["checks"]["python_executable"]["status"] == "ready"
+    assert payload["checks"]["models"]["smoke"]["status"] == "ready"
+    assert payload["checks"]["python_imports"]["status"] == "skipped"
 
 
 def test_downloader_rejects_bad_hash_without_promoting_partial_model(

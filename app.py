@@ -4487,6 +4487,85 @@ def _portal_default_fastvlm_python_status(default_python_path: Path) -> Dict[str
     return status
 
 
+def _fastvlm_runtime_remediation(check_name: str, status: str) -> str:
+    if status == "ready":
+        return "Ready for advisory FastVLM captioning."
+    if status == "invalid_path":
+        return "Choose a repo-safe path under the configured FastVLM runtime roots."
+    if check_name == "python_executable":
+        return "Run make install-fastvlm-runtime or provide the isolated FastVLM Python path."
+    if check_name == "mlx_vlm_dir":
+        return "Run make install-fastvlm-runtime or provide the pinned mlx-vlm checkout path."
+    if check_name == "model_path":
+        return "Install the selected FastVLM model role or choose an installed checkpoint path."
+    return "Install or configure the optional FastVLM runtime."
+
+
+def _fastvlm_readiness_check(
+    check_name: str,
+    path_status: Mapping[str, Any],
+    *,
+    required: bool,
+    invalid_path: str = "",
+) -> Dict[str, Any]:
+    raw_status = str(path_status.get("status") or "missing").strip().lower()
+    status = raw_status if raw_status in {"ready", "missing", "invalid_path"} else "missing"
+    path = str(path_status.get("path") or "")
+    if invalid_path:
+        status = "invalid_path"
+        path = invalid_path
+    return {
+        "status": status,
+        "path": path,
+        "expected_type": str(path_status.get("expected_type") or ""),
+        "required": bool(required),
+        "remediation": _fastvlm_runtime_remediation(check_name, status),
+    }
+
+
+def _fastvlm_runtime_readiness(
+    *,
+    enabled: bool,
+    python_status: Mapping[str, Any],
+    mlx_status: Mapping[str, Any],
+    model_status: Mapping[str, Any],
+    invalid_paths: Mapping[str, str],
+) -> Dict[str, Any]:
+    checks = {
+        "python_executable": _fastvlm_readiness_check(
+            "python_executable",
+            python_status,
+            required=enabled,
+            invalid_path=str(invalid_paths.get("fastvlm_python_executable") or ""),
+        ),
+        "mlx_vlm_dir": _fastvlm_readiness_check(
+            "mlx_vlm_dir",
+            mlx_status,
+            required=enabled,
+            invalid_path=str(invalid_paths.get("fastvlm_mlx_vlm_dir") or ""),
+        ),
+        "model_path": _fastvlm_readiness_check(
+            "model_path",
+            model_status,
+            required=enabled,
+            invalid_path=str(invalid_paths.get("vlm_captioning_model") or ""),
+        ),
+    }
+    if not enabled:
+        status = "off"
+    elif any(check["status"] == "invalid_path" for check in checks.values()):
+        status = "invalid_config"
+    elif all(check["status"] == "ready" for check in checks.values()):
+        status = "ready"
+    else:
+        status = "missing_runtime"
+    return {
+        "status": status,
+        "checks": checks,
+        "verification_scope": "path-existence",
+    }
+
+
 def _normalize_vlm_captioning_model(
     raw_model: Any,
     errors: List[Dict[str, Any]],
@@ -4523,8 +4602,10 @@ def _captioning_summary(
     normalized_args: Dict[str, Any],
     *,
     feature_enabled: bool,
+    invalid_paths: Optional[Mapping[str, str]] = None,
 ) -> Dict[str, Any]:
     enabled = _as_bool(normalized_args.get("vlm_captioning_enabled"), False)
+    invalid_path_values = invalid_paths or {}
     default_python_path = default_fastvlm_runtime_root() / ".venv-fastvlm" / "bin" / "python"
     default_mlx_vlm_dir = default_fastvlm_runtime_root() / "mlx-vlm"
     explicit_python_path = str(normalized_args.get("fastvlm_python_executable") or "")
@@ -4556,11 +4637,19 @@ def _captioning_summary(
             FASTVLM_RUNTIME_ALLOWED_ROOTS,
             expected_type="dir",
         )
-    runtime_ready = (
-        python_status.get("exists") is True
-        and mlx_status.get("exists") is True
-        and model_status.get("exists") is True
+    runtime_readiness = _fastvlm_runtime_readiness(
+        enabled=enabled,
+        python_status=python_status,
+        mlx_status=mlx_status,
+        model_status=model_status,
+        invalid_paths=invalid_path_values,
     )
+    if not enabled:
+        runtime_status = "off"
+    elif runtime_readiness["status"] == "ready":
+        runtime_status = "ready"
+    else:
+        runtime_status = "missing_runtime"
     return {
         "feature_enabled": bool(feature_enabled),
         "enabled": enabled,
@@ -4576,7 +4665,8 @@ def _captioning_summary(
             "mlx_vlm_dir": mlx_status,
             "model_path": model_status,
         },
-        "runtime_status": "ready" if enabled and runtime_ready else "missing_runtime" if enabled else "off",
+        "runtime_readiness": runtime_readiness,
+        "runtime_status": runtime_status,
         "role": "advisory",
         "used_for_quality_gate": False,
     }
@@ -5067,14 +5157,27 @@ def _build_lux_config_preview(
         vlm_captioning_backend = str(defaults["vlm_captioning_backend"])
     normalized_args["vlm_captioning_backend"] = vlm_captioning_backend
 
-    normalized_args["vlm_captioning_model"] = _normalize_vlm_captioning_model(
-        _pick(
-            args,
-            "vlm_captioning_model",
-            "vlmCaptioningModel",
-            default=defaults["vlm_captioning_model"],
-        ),
-        errors,
+    captioning_invalid_paths: Dict[str, str] = {}
+
+    def _captioning_invalid_display_value(value: Any) -> str:
+        return str(value or "").replace("\x00", "").strip()
+
+    def _record_captioning_error_path(field: str, raw_value: Any, new_errors: List[Dict[str, Any]]) -> None:
+        if any(str(issue.get("field") or "") == field for issue in new_errors):
+            captioning_invalid_paths[field] = _captioning_invalid_display_value(raw_value)
+
+    raw_captioning_model = _pick(
+        args,
+        "vlm_captioning_model",
+        "vlmCaptioningModel",
+        default=defaults["vlm_captioning_model"],
+    )
+    before_captioning_model_errors = len(errors)
+    normalized_args["vlm_captioning_model"] = _normalize_vlm_captioning_model(raw_captioning_model, errors)
+    _record_captioning_error_path(
+        "vlm_captioning_model",
+        raw_captioning_model,
+        errors[before_captioning_model_errors:],
     )
 
     vlm_captioning_proxy_format = (
@@ -5118,19 +5221,23 @@ def _build_lux_config_preview(
 
     def _captioning_path_value(field: str, aliases: Tuple[str, ...]) -> str:
         existing_errors = path_errors_by_field.get(field) or []
+        raw_value = _pick(args, *aliases, default="")
         if existing_errors:
             errors.extend(existing_errors)
+            captioning_invalid_paths[field] = _captioning_invalid_display_value(raw_value)
             return ""
-        raw_value = _pick(args, *aliases, default="")
         field_supplied = raw_value is not None and bool(str(raw_value).strip())
         if not field_supplied:
             return ""
-        return _normalize_fastvlm_runtime_path_arg(
+        before_path_errors = len(errors)
+        normalized_path = _normalize_fastvlm_runtime_path_arg(
             raw_value,
             field,
             FASTVLM_RUNTIME_ALLOWED_ROOTS,
             errors,
         )
+        _record_captioning_error_path(field, raw_value, errors[before_path_errors:])
+        return normalized_path
 
     normalized_args["fastvlm_python_executable"] = _captioning_path_value(
         "fastvlm_python_executable",
@@ -5156,6 +5263,7 @@ def _build_lux_config_preview(
     captioning_summary = _captioning_summary(
         normalized_args,
         feature_enabled=captioning_feature_enabled,
+        invalid_paths=captioning_invalid_paths,
     )
     if normalized_args["vlm_captioning_enabled"]:
         warnings.append(
@@ -5166,6 +5274,7 @@ def _build_lux_config_preview(
                 suggestion="Review captions as operator context only.",
             )
         )
+        runtime_readiness = captioning_summary.get("runtime_readiness") or {}
         if captioning_summary.get("runtime_status") == "missing_runtime":
             warnings.append(
                 _portal_issue(
@@ -5175,6 +5284,25 @@ def _build_lux_config_preview(
                     suggestion="Install the optional FastVLM runtime under ./.runtime/fastvlm when captions are needed.",
                 )
             )
+        if isinstance(runtime_readiness, dict):
+            readiness_checks = runtime_readiness.get("checks") or {}
+            if isinstance(readiness_checks, dict):
+                check_fields = {
+                    "python_executable": "fastvlm_python_executable",
+                    "mlx_vlm_dir": "fastvlm_mlx_vlm_dir",
+                    "model_path": "vlm_captioning_model",
+                }
+                for check_name, check in readiness_checks.items():
+                    if not isinstance(check, dict) or check.get("status") != "missing":
+                        continue
+                    warnings.append(
+                        _portal_issue(
+                            check_fields.get(str(check_name), "vlm_captioning_model"),
+                            f"fastvlm_runtime_{check_name}_missing",
+                            f"FastVLM {check_name.replace('_', ' ')} is not ready for advisory captioning.",
+                            suggestion=str(check.get("remediation") or "Install or configure the optional FastVLM runtime."),
+                        )
+                    )
 
     max_workers = _normalize_optional_positive_int(_pick(args, "max_workers", "maxWorkers"), "max_workers", errors)
     max_gpu_workers = _normalize_optional_positive_int(
