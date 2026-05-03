@@ -30,7 +30,7 @@ PHASE6_SMOKE_TESTS := \
 .PHONY: help test-fast test-novideo test-full test-integration test-structure test-utils test-orchestrator-contract test-orchestrator-http-contract test-portal-contract test-frontdoor-contract test-archive-gate-contract seed-frontdoor-user run-frontdoor-local validate-orchestrator-http validate-portal-lux-materials-live validate-portal-fastvlm-captioning-live validate-portal-css-layer-parity validate-portal-browser validate-frontdoor-browser validate-frontdoor-deployment-gate audit-pipeline-readiness coverage-fast-scope coverage-report coverage-diff coverage-package venv repair-core-venv setup clean \
         lint lint-parity ci ci-full pre-commit install-hooks quality-check fix-quality validate-ci organize-docs check-json-serialization check-piptools-cache \
         check-python-headers check-yaml-governance check-stale-docs check-doc-heading-links lock lock-prod lock-ci lock-dev install-core install-ml install-ml-core install-ml-raw install-ml-sam2 install-ml-coreml install-fastvlm-runtime check-fastvlm-runtime docs docs-clean \
-        check check-test-markers check-ci-sync check-todo-governance check-environment check-portal-asset-budgets validate-full validate-quick clean-frontdoor clean-all check-worktree \
+        check check-test-markers check-ci-sync check-todo-governance check-environment check-portal-asset-budgets check-dependency-pinning validate-full validate-quick clean-frontdoor clean-all check-worktree \
         compile-ml-darwin-arm64 update-ml-darwin-arm64 check-ml-darwin-arm64 \
         compile-ml-linux-x86_64 update-ml-linux-x86_64 check-ml-linux-x86_64 \
         compile-ml-darwin-x86_64 update-ml-darwin-x86_64 check-ml-darwin-x86_64
@@ -94,6 +94,7 @@ help:
 	@echo "  check-python-headers  Fail on invalid encoding-cookie-like text in Python header lines 1-2"
 	@echo "  check-yaml-governance  Fail on raw yaml.safe_load outside approved preset/exempt boundaries"
 	@echo "  check-piptools-cache  Fail if requirements/.pip-tools-cache is tracked in git"
+	@echo "  check-dependency-pinning  Fail if requirements/*.txt lockfiles use unpinned operators (TODO §5.7)"
 	@echo "  compile-ml-darwin-arm64  Compile target-owned Darwin arm64 ML lock via requirements/"
 	@echo "  update-ml-darwin-arm64   Update target-owned Darwin arm64 ML lock via requirements/"
 	@echo "  check-ml-darwin-arm64    Verify target-owned Darwin arm64 ML lock via requirements/"
@@ -464,7 +465,7 @@ lint-parity:
 	@echo "Running CI-aligned lint parity..."
 	@./scripts/setup/run_lint_tool.sh parity
 
-ci: lint check-json-serialization check-python-headers check-yaml-governance check-piptools-cache check-requirements-lock-contract check-ci-sync check-portal-asset-budgets test-fast test-orchestrator-contract test-frontdoor-contract
+ci: lint check-json-serialization check-python-headers check-yaml-governance check-piptools-cache check-requirements-lock-contract check-dependency-pinning check-ci-sync check-portal-asset-budgets test-fast test-orchestrator-contract test-frontdoor-contract
 	@echo "✅ Local CI checks completed successfully."
 
 # Comprehensive CI simulation
@@ -544,6 +545,10 @@ check-piptools-cache:
 check-requirements-lock-contract:
 	@echo "Checking requirements lock contract..."
 	@"$(PY)" scripts/validation/check_requirements_lock_contract.py
+
+check-dependency-pinning:
+	@echo "Checking that requirements lockfiles use exact (==) version pins..."
+	@"$(PY)" scripts/validation/check_dependency_pinning.py
 
 check:
 	@echo "Checking generic layered requirements in requirements/..."

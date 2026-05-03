@@ -1113,33 +1113,45 @@ GitHub UI → Settings → Branches → Branch protection rules → main
 
 ### 5.7 NEW: Dependency Pinning Validation
 
-**Status:** ❌ **NOT IMPLEMENTED**
+**Status:** 🟡 **PARTIALLY IMPLEMENTED** (script + Make target landed 2026-05-03; CI workflow still TBD)
 **Priority:** P2 (Medium)
-**Effort:** 4 hours
+**Effort:** 4 hours (script: ~1h done; remaining: dedicated workflow)
 **Impact:** Supply chain security, reproducibility
 
 **Current State:**
 - `dependency-submission.yml` submits dependencies to GitHub
-- No validation that versions are pinned (e.g., `package==1.2.3` not `package>=1.2.3`)
-- No enforcement of constraints.txt vs requirements.txt consistency
+- ✅ `scripts/validation/check_dependency_pinning.py` enforces that every
+  requirement line in `requirements/*.txt` uses an exact `==` pin
+  (`constraints.txt` is exempt — it intentionally uses `>=` for banned packages)
+- ✅ Wired into `make ci` and exposed as `make check-dependency-pinning`
+- ✅ Tests in `tests/validation/test_check_dependency_pinning.py`
+- ❌ Standalone GitHub Actions workflow not yet created (covered transitively
+  by `make ci` jobs that already invoke the lock contract suite)
 
 **Proposed Implementation:**
-- [ ] Create `.github/workflows/dependency-pinning-check.yml`
-- [ ] Validate all `requirements*.txt` use `==` pinning (not `>=`, `~=`)
+- [x] Validate all `requirements/*.txt` use `==` pinning (not `>=`, `~=`)
+  via `scripts/validation/check_dependency_pinning.py`
+- [x] Wire into `make ci` so PR lanes catch drift
+- [ ] Create `.github/workflows/dependency-pinning-check.yml` for an isolated
+  signal independent of the broader CI matrix
 - [ ] Validate constraints.txt matches installed versions
-- [ ] Check for floating transitive dependencies
+- [ ] Check for floating transitive dependencies (separate analysis)
 
-**Example Check:**
+**Example Check (now codified in script):**
 ```python
-# Fail if any line has >= or ~= instead of ==
-grep -E "(>=|~=)" requirements.txt && exit 1
+# scripts/validation/check_dependency_pinning.py flags any line in
+# requirements/*.txt that uses >=, <=, ~=, !=, >, < or has no version pin.
 ```
 
 **Files Affected:**
-- `.github/workflows/dependency-pinning-check.yml` (new)
-- `requirements*.txt` (audit for compliance)
+- `scripts/validation/check_dependency_pinning.py` (new)
+- `tests/validation/test_check_dependency_pinning.py` (new)
+- `Makefile` (`check-dependency-pinning` target + wired into `ci`)
+- `.github/workflows/dependency-pinning-check.yml` (still pending)
 
-**Architect Recommendation:** Implement in v2.3.0 (P2, good governance practice)
+**Architect Recommendation:** Local enforcement landed for v2.2.x; isolated
+workflow can ride into v2.3.0 once we choose between extending an existing
+governance workflow vs. a dedicated one.
 
 ---
 
