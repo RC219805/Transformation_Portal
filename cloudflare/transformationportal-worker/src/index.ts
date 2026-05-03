@@ -14,6 +14,12 @@ const HOP_BY_HOP_HEADERS = [
   "transfer-encoding"
 ];
 
+const SPOOFABLE_FORWARDING_HEADERS = [
+  "forwarded",
+  "x-forwarded-for",
+  "x-real-ip"
+];
+
 function requireFrontdoorOrigin(env: Env, requestUrl: URL): URL {
   if (!env.FRONTDOOR_ORIGIN) {
     throw new Error("FRONTDOOR_ORIGIN is not configured");
@@ -25,6 +31,16 @@ function requireFrontdoorOrigin(env: Env, requestUrl: URL): URL {
     throw new Error("FRONTDOOR_ORIGIN must be https");
   }
 
+  if (
+    origin.username ||
+    origin.password ||
+    origin.pathname !== "/" ||
+    origin.search ||
+    origin.hash
+  ) {
+    throw new Error("FRONTDOOR_ORIGIN must be an origin without credentials, path, query, or fragment");
+  }
+
   if (origin.hostname === requestUrl.hostname) {
     throw new Error("FRONTDOOR_ORIGIN must not point at the public Worker hostname");
   }
@@ -34,9 +50,28 @@ function requireFrontdoorOrigin(env: Env, requestUrl: URL): URL {
 
 function buildUpstreamHeaders(request: Request, incomingUrl: URL): Headers {
   const headers = new Headers(request.headers);
+  const connectionHeader = request.headers.get("connection");
+
+  if (connectionHeader) {
+    for (const token of connectionHeader.split(",")) {
+      const header = token.trim();
+      if (header) {
+        headers.delete(header);
+      }
+    }
+  }
 
   for (const header of HOP_BY_HOP_HEADERS) {
     headers.delete(header);
+  }
+
+  for (const header of SPOOFABLE_FORWARDING_HEADERS) {
+    headers.delete(header);
+  }
+
+  const cfConnectingIp = request.headers.get("cf-connecting-ip");
+  if (cfConnectingIp) {
+    headers.set("x-forwarded-for", cfConnectingIp);
   }
 
   headers.delete("host");

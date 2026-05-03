@@ -117,6 +117,20 @@ def test_runtime_explicit_prompt_overrides_governed_prompt(tmp_path: Path) -> No
     assert _command_prompt(result.command) == "CUSTOM_PROMPT"
 
 
+def test_runtime_empty_prompt_is_still_explicit_override(tmp_path: Path) -> None:
+    runtime_dir = tmp_path / "runtime"
+    _write_fake_mlx_module(
+        runtime_dir,
+        "print('SCENE=Pool; MATERIALS=stone; FEATURES=steps; NATURAL=sky; LIGHTING=daylight; ISSUES=none; UNCERTAIN=none.')\n",
+    )
+    config, image = _config(tmp_path, runtime_dir)
+
+    result = run_fastvlm_caption(config, image, prompt="", model_role="review")
+
+    assert result.success is True
+    assert _command_prompt(result.command) == ""
+
+
 def test_runtime_success_output(tmp_path: Path) -> None:
     runtime_dir = tmp_path / "runtime"
     _write_fake_mlx_module(

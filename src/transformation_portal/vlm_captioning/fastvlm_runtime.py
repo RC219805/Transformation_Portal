@@ -281,7 +281,7 @@ def run_fastvlm_caption(
     ``config.strict`` is true.
     """
     image = Path(image_path)
-    active_prompt = prompt or prompt_for_fastvlm_model(config.model_path, model_role)
+    active_prompt = prompt if prompt is not None else prompt_for_fastvlm_model(config.model_path, model_role)
     command = [
         str(config.python_path),
         "-m",

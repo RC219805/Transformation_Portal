@@ -1525,6 +1525,7 @@ test("managed bootstrap enables FastVLM captioning for enabled rollout cohorts",
     TP_PORTAL_FASTVLM_CAPTIONING_ENABLED: "1",
     TP_PORTAL_FASTVLM_CAPTIONING_ROLLOUT_PERCENT: "100"
   });
+  const restoreFetch = withMockedAccessCerts();
 
   try {
     const sessions = await importFresh("../lib/sessions.js");
@@ -1552,6 +1553,7 @@ test("managed bootstrap enables FastVLM captioning for enabled rollout cohorts",
     assert.equal(response.status, 200);
     assert.equal(body.features.fastVlmCaptioning, true);
   } finally {
+    restoreFetch();
     env.cleanup();
   }
 });
@@ -1561,6 +1563,7 @@ test("managed bootstrap keeps FastVLM captioning disabled when the master switch
     TP_PORTAL_FASTVLM_CAPTIONING_ENABLED: "0",
     TP_PORTAL_FASTVLM_CAPTIONING_ROLLOUT_PERCENT: "100"
   });
+  const restoreFetch = withMockedAccessCerts();
 
   try {
     const sessions = await importFresh("../lib/sessions.js");
@@ -1588,6 +1591,7 @@ test("managed bootstrap keeps FastVLM captioning disabled when the master switch
     assert.equal(response.status, 200);
     assert.equal(body.features.fastVlmCaptioning, false);
   } finally {
+    restoreFetch();
     env.cleanup();
   }
 });
@@ -1597,6 +1601,7 @@ test("managed bootstrap keeps FastVLM captioning disabled when rollout is zero",
     TP_PORTAL_FASTVLM_CAPTIONING_ENABLED: "1",
     TP_PORTAL_FASTVLM_CAPTIONING_ROLLOUT_PERCENT: "0"
   });
+  const restoreFetch = withMockedAccessCerts();
 
   try {
     const sessions = await importFresh("../lib/sessions.js");
@@ -1624,6 +1629,7 @@ test("managed bootstrap keeps FastVLM captioning disabled when rollout is zero",
     assert.equal(response.status, 200);
     assert.equal(body.features.fastVlmCaptioning, false);
   } finally {
+    restoreFetch();
     env.cleanup();
   }
 });
