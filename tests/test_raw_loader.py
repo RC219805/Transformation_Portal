@@ -20,8 +20,8 @@ pytestmark = [
 
 from transformation_portal.lux_depth_v3.raw_loader import (
     RAW_EXTENSIONS,
-    SUPPORTED_DEMOSAIC_ALGORITHMS,
     is_raw_file,
+    is_valid_demosaic_name,
     load_raw_as_pil,
     load_raw_as_rgb,
     resolve_demosaic_algorithm,
@@ -44,17 +44,23 @@ class TestRawExtensions:
         """Canon CR3 (modern Canon bodies) should be included."""
         assert ".cr3" in RAW_EXTENSIONS
 
-    def test_raw_extensions_match_ingest_sidecar(self):
-        """RAW_EXTENSIONS must be identical between raw_loader and raw_sidecar.
+    def test_raw_extensions_match_canonical_source(self):
+        """RAW_EXTENSIONS must be identical across every module that classifies
+        RAW inputs. The canonical definition lives in
+        ``transformation_portal.core.raw_formats``; rendering, sidecar, and
+        input-manager paths must all re-export the same set.
 
-        Regression guard: prior to convergence the two whitelists drifted
-        (only one of them included CR3), so the same file could be accepted
-        by sidecar generation and rejected by depth ingest. Both modules
-        now share a single source of truth.
+        Regression guard: prior to convergence three different whitelists
+        drifted (only one of them included CR3), so the same file could be
+        accepted by sidecar generation and rejected by depth ingest.
         """
+        from transformation_portal.core.raw_formats import RAW_EXTENSIONS as CANONICAL
         from transformation_portal.ingest.raw_sidecar import RAW_EXTENSIONS as SIDECAR_EXTS
+        from transformation_portal.lux_depth_v3.input_manager import _RAW_EXTENSIONS as INPUT_MGR_EXTS
 
-        assert RAW_EXTENSIONS == SIDECAR_EXTS
+        assert RAW_EXTENSIONS == CANONICAL
+        assert SIDECAR_EXTS == CANONICAL
+        assert INPUT_MGR_EXTS == CANONICAL
 
     def test_raw_extensions_are_lowercase(self):
         """All extensions should be lowercase for consistency."""
@@ -171,23 +177,61 @@ class TestRawpyNotInstalled:
 class TestDemosaicAlgorithm:
     """Test demosaic algorithm parameterization."""
 
-    def test_supported_demosaic_includes_common_algorithms(self):
-        """The advertised supported set must include AHD plus common alternatives."""
-        for name in ("AHD", "AMAZE", "DCB", "LMMSE", "VNG", "PPG"):
-            assert name in SUPPORTED_DEMOSAIC_ALGORITHMS
+    def test_is_valid_demosaic_name_accepts_known_members(self):
+        """The syntactic gate accepts every name documented as a rawpy member,
+        including builds-specific ones like AFD/VCD/VCD_MODIFIED_AHD that
+        used to be artificially blocked by the curated allowlist."""
+        for name in (
+            "AHD",
+            "AAHD",
+            "AMAZE",
+            "DCB",
+            "DHT",
+            "LINEAR",
+            "LMMSE",
+            "MODIFIED_AHD",
+            "PPG",
+            "VNG",
+            "AFD",
+            "VCD",
+            "VCD_MODIFIED_AHD",
+        ):
+            assert is_valid_demosaic_name(name), name
+
+    def test_is_valid_demosaic_name_normalizes_case_and_whitespace(self):
+        assert is_valid_demosaic_name("  amaze  ")
+        assert is_valid_demosaic_name("Dcb")
+
+    def test_is_valid_demosaic_name_rejects_garbage(self):
+        for bad in ("", "  ", "amaze!", "amaze;rm -rf /", "amaze bar", "_AMAZE", "1AHD", None, 42):
+            assert not is_valid_demosaic_name(bad), bad
 
     def test_resolve_demosaic_algorithm_unknown_raises(self):
-        """Unknown demosaic names must fail closed with a clear ValueError."""
+        """Unknown demosaic names must fail closed with a clear ValueError that
+        lists the actual installed members (not raw dir() noise)."""
         import sys
         import types
 
-        fake_rawpy = types.SimpleNamespace(DemosaicAlgorithm=types.SimpleNamespace())
-        # Inject so resolve_demosaic_algorithm's `import rawpy` returns this.
+        # Use a real Enum so __members__ works as it would in production.
+        from enum import IntEnum
+
+        class _FakeDemosaic(IntEnum):
+            AHD = 1
+            AMAZE = 2
+
+        fake_rawpy = types.SimpleNamespace(DemosaicAlgorithm=_FakeDemosaic)
         original = sys.modules.get("rawpy")
         sys.modules["rawpy"] = fake_rawpy
         try:
-            with pytest.raises(ValueError, match="Unknown demosaic algorithm"):
+            with pytest.raises(ValueError, match="Unknown demosaic algorithm") as exc_info:
                 resolve_demosaic_algorithm("DEFINITELY_NOT_REAL")
+            msg = str(exc_info.value)
+            # Real member names appear; the noise that bare dir() would
+            # surface (dunder attrs, IntEnum protocol methods like 'value',
+            # 'name', 'mro') must not.
+            assert "'AHD'" in msg and "'AMAZE'" in msg
+            for noise in ("__class__", "__module__", "mro", "'value'", "'name'"):
+                assert noise not in msg, f"unexpected noise {noise!r} in error: {msg}"
         finally:
             if original is None:
                 sys.modules.pop("rawpy", None)

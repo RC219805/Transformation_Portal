@@ -1321,14 +1321,25 @@ ALLOWED_RECONSTRUCTION_TIERS = {
 }
 ALLOWED_RAW_INGEST_MODES = {"auto", "force_rawpy", "force_preview"}
 ALLOWED_RAW_WB_MODES = {"camera"}
-try:  # Single source of truth for accepted rawpy demosaic names.
+# Demosaic name validation: orchestrator-side syntactic gate only. The
+# subprocess RAW worker holds the authoritative semantic gate
+# (resolve_demosaic_algorithm), which reflects the installed LibRaw build's
+# actual rawpy.DemosaicAlgorithm members and fails closed on unknown names.
+# Curating a hard-coded allowlist here would artificially block valid members
+# in newer/older LibRaw builds (e.g. AFD, VCD, VCD_MODIFIED_AHD).
+try:
     from transformation_portal.core.raw_runtime import (
-        SUPPORTED_DEMOSAIC_ALGORITHMS as _SUPPORTED_DEMOSAIC_ALGORITHMS,
+        is_valid_demosaic_name as _is_valid_demosaic_name,
     )
+except ImportError:  # pragma: no cover - defensive fallback if core import fails
+    import re as _re
 
-    ALLOWED_RAW_DEMOSAIC = set(_SUPPORTED_DEMOSAIC_ALGORITHMS)
-except Exception:  # pragma: no cover - defensive fallback if core unavailable
-    ALLOWED_RAW_DEMOSAIC = {"AHD"}
+    _DEMOSAIC_NAME_RE = _re.compile(r"^[A-Z][A-Z0-9_]{0,31}$")
+
+    def _is_valid_demosaic_name(name: object) -> bool:
+        return isinstance(name, str) and bool(_DEMOSAIC_NAME_RE.fullmatch(name.strip().upper()))
+
+
 ALLOWED_LOG_LEVELS = {"DEBUG", "INFO", "WARNING", "ERROR"}
 ALLOWED_VLM_CAPTIONING_BACKENDS = {"fastvlm"}
 ALLOWED_VLM_CAPTIONING_PROXY_FORMATS = {"png", "jpeg"}
@@ -5105,16 +5116,16 @@ def _build_lux_config_preview(
         .strip()
         .upper()
     )
-    if raw_demosaic not in ALLOWED_RAW_DEMOSAIC:
+    if not _is_valid_demosaic_name(raw_demosaic):
         errors.append(
             _portal_issue(
                 "raw_demosaic",
                 "invalid_raw_demosaic",
                 "RAW demosaic mode is not supported.",
                 suggestion=(
-                    "Supported names: "
-                    + ", ".join(sorted(ALLOWED_RAW_DEMOSAIC))
-                    + ". Availability also depends on the installed LibRaw build."
+                    "Provide a rawpy.DemosaicAlgorithm member name (uppercase letters, digits, "
+                    "underscores; must start with a letter). The decode step verifies the name "
+                    "against the installed LibRaw build and fails closed for unknown values."
                 ),
             )
         )
@@ -8045,7 +8056,7 @@ def _argv_from_request(
         raw_demosaic_value = ""
         if raw_demosaic is not None and str(raw_demosaic).strip():
             raw_demosaic_value = str(raw_demosaic).strip().upper()
-            if raw_demosaic_value not in ALLOWED_RAW_DEMOSAIC:
+            if not _is_valid_demosaic_name(raw_demosaic_value):
                 raise _PortalValidationReasonError("Invalid raw_demosaic", reason="invalid_raw_demosaic")
 
         log_level_value = ""
@@ -8356,15 +8367,18 @@ def _argv_from_request(
                     "Invalid vlm_captioning_backend",
                     reason="invalid_vlm_captioning_backend",
                 )
-            vlm_captioning_model = str(
-                _pick(
-                    args,
-                    "vlm_captioning_model",
-                    "vlmCaptioningModel",
-                    default="default",
-                )
+            vlm_captioning_model = (
+                str(
+                    _pick(
+                        args,
+                        "vlm_captioning_model",
+                        "vlmCaptioningModel",
+                        default="default",
+                    )
+                    or "default"
+                ).strip()
                 or "default"
-            ).strip() or "default"
+            )
             vlm_captioning_proxy_format = (
                 str(
                     _pick(
@@ -8383,24 +8397,30 @@ def _argv_from_request(
                     "Invalid vlm_captioning_proxy_format",
                     reason="invalid_vlm_captioning_proxy_format",
                 )
-            vlm_captioning_max_side_px = _parse_optional_positive_int(
-                _pick(
-                    args,
+            vlm_captioning_max_side_px = (
+                _parse_optional_positive_int(
+                    _pick(
+                        args,
+                        "vlm_captioning_max_side_px",
+                        "vlmCaptioningMaxSidePx",
+                        default=1600,
+                    ),
                     "vlm_captioning_max_side_px",
-                    "vlmCaptioningMaxSidePx",
-                    default=1600,
-                ),
-                "vlm_captioning_max_side_px",
-            ) or 1600
-            fastvlm_timeout_seconds = _parse_optional_positive_int(
-                _pick(
-                    args,
+                )
+                or 1600
+            )
+            fastvlm_timeout_seconds = (
+                _parse_optional_positive_int(
+                    _pick(
+                        args,
+                        "fastvlm_timeout_seconds",
+                        "fastvlmTimeoutSeconds",
+                        default=180,
+                    ),
                     "fastvlm_timeout_seconds",
-                    "fastvlmTimeoutSeconds",
-                    default=180,
-                ),
-                "fastvlm_timeout_seconds",
-            ) or 180
+                )
+                or 180
+            )
             argv.extend(
                 [
                     "--vlm-captioning",

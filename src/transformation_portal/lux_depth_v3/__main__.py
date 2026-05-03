@@ -943,15 +943,14 @@ def main(
         raise typer.Exit(code=1)
 
     raw_demosaic_normalized = raw_demosaic.strip().upper()
-    from transformation_portal.core.raw_runtime import (
-        SUPPORTED_DEMOSAIC_ALGORITHMS,
-    )
+    from transformation_portal.core.raw_runtime import is_valid_demosaic_name
 
-    if raw_demosaic_normalized not in SUPPORTED_DEMOSAIC_ALGORITHMS:
+    if not is_valid_demosaic_name(raw_demosaic):
         error_msg = (
-            f"Invalid --raw-demosaic '{raw_demosaic}'. "
-            f"Supported names: {sorted(SUPPORTED_DEMOSAIC_ALGORITHMS)}. "
-            "Availability also depends on the installed LibRaw build."
+            f"Invalid --raw-demosaic {raw_demosaic!r}. "
+            "Expected a rawpy.DemosaicAlgorithm member name (uppercase letters, digits, "
+            "and underscores; must start with a letter). The decode step verifies the "
+            "name against the installed LibRaw build and fails closed for unknown values."
         )
         logger.error(error_msg)
         print(error_msg, file=sys.stdout)

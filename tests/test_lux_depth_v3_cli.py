@@ -195,7 +195,10 @@ class TestCLIValidation:
         assert "legacy_linear_srgb" in result.stdout.lower()
 
     def test_invalid_raw_demosaic_rejected(self, tmp_path):
-        """CLI should reject demosaic names not in the supported set."""
+        """CLI should reject demosaic values that are not syntactically a
+        rawpy.DemosaicAlgorithm member name. (Names that happen to be valid
+        identifiers but unknown to LibRaw are accepted by the CLI gate and
+        fail closed at decode time — see resolve_demosaic_algorithm.)"""
         input_dir = tmp_path / "input"
         input_dir.mkdir()
 
@@ -207,12 +210,12 @@ class TestCLIValidation:
                 "--output-dir",
                 str(tmp_path / "output"),
                 "--raw-demosaic",
-                "DEFINITELY_NOT_REAL",
+                "amaze!@#",  # syntactically invalid (special chars)
             ],
         )
         assert result.exit_code == 1
         assert "raw-demosaic" in result.stdout.lower()
-        assert "supported names" in result.stdout.lower()
+        assert "rawpy.demosaicalgorithm" in result.stdout.lower()
 
     def test_invalid_raw_ingest_mode_rejected(self, tmp_path):
         """RAW ingest mode should fail fast with clear supported values."""

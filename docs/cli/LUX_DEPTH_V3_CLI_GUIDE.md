@@ -237,9 +237,13 @@ lux-depth-v3 \
 - `--raw-ingest-mode TEXT`: Decode mode (`auto`, `force_rawpy`, `force_preview`).
 - `--raw-wb-mode TEXT`: White-balance mode (`camera`).
 - `--raw-demosaic TEXT`: rawpy demosaic algorithm name (default `AHD`).
-  Any `rawpy.DemosaicAlgorithm` value is accepted (e.g. `AHD`, `AMAZE`,
-  `DCB`, `LMMSE`, `VNG`, `PPG`); availability depends on the installed
-  LibRaw build and unknown values fail closed at decode time. Different
+  The CLI/orchestrator perform a syntactic check (must be a valid
+  `rawpy.DemosaicAlgorithm` member name — uppercase letters, digits, and
+  underscores; must start with a letter). The actual semantic check happens
+  in the RAW decode subprocess, which fails closed with the list of members
+  exposed by the installed LibRaw build (typical members: `AHD`, `AAHD`,
+  `AMAZE`, `DCB`, `DHT`, `LINEAR`, `LMMSE`, `MODIFIED_AHD`, `PPG`, `VNG`;
+  some builds also expose `AFD`, `VCD`, `VCD_MODIFIED_AHD`). Different
   algorithms produce different pixels — the choice is captured in the
   Phase II ingest fingerprint for reproducibility.
 

@@ -30,51 +30,23 @@ from typing import Optional, Tuple
 import numpy as np
 from PIL import Image
 
+from transformation_portal.core.raw_formats import RAW_EXTENSIONS as RAW_EXTENSIONS  # noqa: F401  (re-export)
 from transformation_portal.core.raw_runtime import (  # noqa: F401  (re-exports)
-    SUPPORTED_DEMOSAIC_ALGORITHMS,
+    is_valid_demosaic_name,
     resolve_demosaic_algorithm,
     run_raw_worker,
 )
 
 logger = logging.getLogger(__name__)
 
-# RAW file extensions (case-insensitive). Single source of truth — re-exported
-# by transformation_portal.ingest.raw_sidecar to prevent whitelist drift.
-RAW_EXTENSIONS = {
-    # Canon
-    ".cr2",
-    ".cr3",
-    ".crw",
-    # Nikon
-    ".nef",
-    ".nrw",
-    # Sony
-    ".arw",
-    ".srf",
-    ".sr2",
-    ".srw",
-    # Adobe
-    ".dng",
-    # Olympus
-    ".orf",
-    # Fujifilm
-    ".raf",
-    # Pentax
-    ".pef",
-    # Panasonic
-    ".rw2",
-    # Phase One
-    ".iiq",
-    # Hasselblad
-    ".3fr",
-    # Note: DNG is TIFF-based RAW format (included above).
-    # Standard TIFF (.tif/.tiff) is NOT RAW and handled via PIL.
-}
-
-# SUPPORTED_DEMOSAIC_ALGORITHMS and resolve_demosaic_algorithm are re-exported
-# from transformation_portal.core.raw_runtime above so the rendering and
-# research/training paths share a single source of truth without violating
-# ADR-023's import isolation between those surfaces.
+# RAW_EXTENSIONS is re-exported from transformation_portal.core.raw_formats
+# (a stdlib-only module so format-classifiers like input_manager — which
+# must not pull PIL/rawpy at import time — can share this constant).
+#
+# is_valid_demosaic_name and resolve_demosaic_algorithm are re-exported from
+# transformation_portal.core.raw_runtime so the rendering and research/training
+# paths share a single source of truth without violating ADR-023's import
+# isolation between those surfaces.
 
 
 def is_raw_file(path: Path) -> bool:

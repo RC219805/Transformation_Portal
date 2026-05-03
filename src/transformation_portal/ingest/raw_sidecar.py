@@ -11,10 +11,11 @@ from pathlib import Path
 from types import ModuleType
 from typing import Any, Dict, Optional
 
-# Re-export the lux_depth_v3 RAW extension whitelist as the single source of
-# truth so the sidecar generator and the depth pipeline never disagree on
-# which files count as RAW.
-from ..lux_depth_v3.raw_loader import RAW_EXTENSIONS as RAW_EXTENSIONS
+# Re-export the canonical RAW extension whitelist (defined in
+# transformation_portal.core.raw_formats — a stdlib-only module that's the
+# single source of truth, shared by the rendering loader, format
+# classifiers, and this sidecar generator).
+from ..core.raw_formats import RAW_EXTENSIONS as RAW_EXTENSIONS
 from .canonical_json import dumps_json
 
 RAW_SIDECAR_SCHEMA = "raw-image-sidecar/v2"

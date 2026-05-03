@@ -3181,12 +3181,14 @@ def test_argv_rejects_invalid_raw_wb_mode() -> None:
 
 
 def test_argv_rejects_invalid_raw_demosaic() -> None:
+    """Orchestrator rejects values that are syntactically invalid as a
+    rawpy.DemosaicAlgorithm member (special chars, embedded shell metas)."""
     payload: Dict[str, object] = {
         "pipeline": "lux-depth-v3",
         "args": {
             "input_dir": "./input_images",
             "output_dir": "./output",
-            "raw_demosaic": "DEFINITELY_NOT_REAL",
+            "raw_demosaic": "amaze; rm -rf /",
         },
     }
 
@@ -3194,9 +3196,22 @@ def test_argv_rejects_invalid_raw_demosaic() -> None:
         orchestrator_app._argv_from_request(payload)
 
 
-def test_argv_accepts_supported_raw_demosaic_alternatives() -> None:
-    """Recognized rawpy demosaic names beyond AHD should pass orchestrator validation."""
-    for demosaic in ("AMAZE", "DCB", "LMMSE", "VNG", "PPG"):
+def test_argv_accepts_any_syntactic_raw_demosaic_name() -> None:
+    """Orchestrator accepts any rawpy.DemosaicAlgorithm member name, including
+    build-specific ones (AFD, VCD, VCD_MODIFIED_AHD) that were previously
+    rejected by the curated allowlist. The decode subprocess is the
+    authoritative gate that fails closed for names this LibRaw build does
+    not expose."""
+    for demosaic in (
+        "AMAZE",
+        "DCB",
+        "LMMSE",
+        "VNG",
+        "PPG",
+        "AFD",
+        "VCD",
+        "VCD_MODIFIED_AHD",
+    ):
         payload: Dict[str, object] = {
             "pipeline": "lux-depth-v3",
             "args": {
