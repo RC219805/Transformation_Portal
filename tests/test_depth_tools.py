@@ -323,6 +323,16 @@ class TestMultiprocessing:
         assert len(output_files) == 4, "Expected 4 output files"
 
 
+# Both depth-tools modules ship the same effect functions and were both
+# affected by the broadcasting fix (mask_strength / protector were being
+# promoted to 4D by a stray [..., None]). Parametrise the shape regression
+# over both so neither module can drift back to a 4D output.
+_DEPTH_TOOLS_MODULES = [
+    "src.transformation_portal.pipelines.depth_tools",
+    "src.transformation_portal.depth.tools",
+]
+
+
 class TestDepthEffectShape:
     """Pin output shape so accidental [..., None] broadcasts can't return."""
 
@@ -333,24 +343,28 @@ class TestDepthEffectShape:
         depth = deterministic_rng.random((H, W)).astype("float32")
         return H, W, img, depth
 
-    def test_apply_depth_clarity_returns_hwc(self, hwc_inputs):
-        from src.transformation_portal.pipelines.depth_tools import apply_depth_clarity
+    @pytest.mark.parametrize("module_path", _DEPTH_TOOLS_MODULES)
+    def test_apply_depth_clarity_returns_hwc(self, module_path, hwc_inputs):
+        import importlib
+
+        apply_depth_clarity = importlib.import_module(module_path).apply_depth_clarity
 
         H, W, img, depth = hwc_inputs
-        out = apply_depth_clarity(img, depth)
-        assert out.shape == (H, W, 3)
+        assert apply_depth_clarity(img, depth).shape == (H, W, 3)
 
         sky = np.zeros((H, W), dtype="float32")
         building = np.ones((H, W), dtype="float32")
         out = apply_depth_clarity(img, depth, sky_mask=sky, building_mask=building)
         assert out.shape == (H, W, 3)
 
-    def test_apply_depth_dof_returns_hwc(self, hwc_inputs):
-        from src.transformation_portal.pipelines.depth_tools import apply_depth_dof
+    @pytest.mark.parametrize("module_path", _DEPTH_TOOLS_MODULES)
+    def test_apply_depth_dof_returns_hwc(self, module_path, hwc_inputs):
+        import importlib
+
+        apply_depth_dof = importlib.import_module(module_path).apply_depth_dof
 
         H, W, img, depth = hwc_inputs
-        out = apply_depth_dof(img, depth, edge_preserving=False)
-        assert out.shape == (H, W, 3)
+        assert apply_depth_dof(img, depth, edge_preserving=False).shape == (H, W, 3)
 
         sky = np.zeros((H, W), dtype="float32")
         building = np.ones((H, W), dtype="float32")
