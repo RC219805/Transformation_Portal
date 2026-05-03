@@ -121,37 +121,10 @@ def _client_fixture() -> TestClient:
         yield test_client
 
 
-def test_ready_keeps_non_enveloped_shape(client: TestClient) -> None:
-    response = client.get("/ready")
-    body = response.json()
-    assert response.status_code == 200
-    assert body["ok"] is True
-    assert "success" not in body
-    assert "schema" not in body
-
-
-def test_healthz_returns_minimal_health_response(client: TestClient) -> None:
-    """Validate /healthz endpoint matches portal.html expectations for managed auth mode."""
-    response = client.get("/healthz")
-    body = response.json()
-    assert response.status_code == 200
-    assert body["ok"] is True
-    assert "time" in body
-    # The /healthz endpoint must be minimal - no verbose cli/jobs/security fields
-    assert "cli" not in body
-    assert "jobs" not in body
-    assert "security" not in body
-    assert "version" not in body
-    # Health checks must not be cached to ensure outages are detected immediately
-    assert response.headers["Cache-Control"] == "no-store"
-    assert response.headers["Pragma"] == "no-cache"
-
-
-def test_healthz_rejects_untrusted_host_header(client: TestClient) -> None:
-    response = client.get("/healthz", headers={"host": "evil.example.com"})
-
-    assert response.status_code == 400
-    assert "Invalid host header" in response.text
+# Healthcheck contract tests for /healthz and /ready were extracted to
+# tests/test_app_healthcheck_contract.py — see that file's module
+# docstring for the rationale (first family-scoped slice of this
+# historically-monolithic file).
 
 
 def test_portal_bootstrap_reports_direct_debug_mode(client: TestClient) -> None:
