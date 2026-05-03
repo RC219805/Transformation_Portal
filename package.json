@@ -1,0 +1,12 @@
+{
+  "name": "transformation-portal-worker-build",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "worker:dry-run": "wrangler deploy --dry-run",
+    "worker:deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "wrangler": "4.87.0"
+  }
+}

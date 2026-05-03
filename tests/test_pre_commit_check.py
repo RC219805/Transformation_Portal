@@ -60,3 +60,30 @@ def test_missing_root_allowlist_behaves_like_zero_legacy_entries(tmp_path: Path)
     assert result.returncode == 1, result.stdout + result.stderr
     assert "legacy.md" in result.stdout
     assert "grandfathered" not in result.stdout
+
+
+def test_cloudflare_workers_build_root_shim_files_are_allowed(tmp_path: Path) -> None:
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+    _init_repo(repo_root)
+    _copy_repo_script(repo_root)
+
+    _write(repo_root / "package.json", '{"private": true}\n')
+    _write(repo_root / "package-lock.json", '{"lockfileVersion": 3}\n')
+    _write(repo_root / "wrangler.jsonc", '{"name": "transformationportal"}\n')
+    add_result = _run(
+        [
+            "git",
+            "add",
+            "package.json",
+            "package-lock.json",
+            "wrangler.jsonc",
+            "scripts/setup/pre-commit-check.sh",
+        ],
+        repo_root,
+    )
+    assert add_result.returncode == 0, add_result.stdout + add_result.stderr
+
+    result = _run(["bash", "scripts/setup/pre-commit-check.sh", "--staged"], repo_root)
+
+    assert result.returncode == 0, result.stdout + result.stderr

@@ -151,7 +151,7 @@ The `.auto-organize.sh` script is the canonical entry point for repository organ
 Only these files should remain in the repository root:
 
 - **Core documentation**: `README.md`, `LICENSE`, `CONTRIBUTING.md`, `SECURITY.md`, `CHANGELOG.md`
-- **Build configuration**: `Makefile`, `pyproject.toml`, `setup.py`
+- **Build configuration**: `Makefile`, `pyproject.toml`, `setup.py`, root Cloudflare Workers Builds shim files (`package.json`, `package-lock.json`, `wrangler.jsonc`)
 - **Dependency management**: `requirements*.txt`, `requirements-lint.txt`, `Pipfile`, `poetry.lock`
 - **Testing configuration**: `pytest.ini`, `tox.ini`, `.coveragerc`
 - **Linting configuration**: `.pylintrc`, `.flake8`, `mypy.ini`

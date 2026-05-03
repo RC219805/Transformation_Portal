@@ -1,0 +1,10 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "transformationportal",
+  "main": "cloudflare/transformationportal-worker/src/index.ts",
+  "compatibility_date": "2026-05-03",
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 0.1
+  }
+}
