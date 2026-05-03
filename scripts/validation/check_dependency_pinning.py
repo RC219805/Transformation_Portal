@@ -3,9 +3,13 @@
 
 Policy:
 - Every requirement line in ``requirements/*.txt`` must specify an exact
-  version pin (``package==version``) so installations are reproducible.
-- ``requirements/constraints.txt`` is exempt because it intentionally uses
-  ``>=`` to upper-bound (and effectively block) banned packages.
+  ``==`` version pin (``package==version``) so installations are reproducible.
+  PEP 440 arbitrary-equality (``===``) and any range/inequality operator
+  (``>=``, ``<=``, ``~=``, ``!=``, ``>``, ``<``) are rejected.
+- ``constraints.txt`` is always exempt — both when scanning the default
+  ``requirements/`` directory and when callers pass it explicitly via the
+  CLI (e.g. ``check_dependency_pinning.py requirements/*.txt``). The file
+  intentionally uses ``>=9999.0.0`` to hard-block banned packages.
 - Hashes, comments, blank lines, options (``-r``, ``-c``, ``--hash``, etc.),
   and pip-compile continuation lines are ignored.
 
@@ -29,19 +33,32 @@ REQUIREMENTS_DIR = PROJECT_ROOT / "requirements"
 
 EXEMPT_FILES = frozenset({"constraints.txt"})
 
-PINNED_LINE_PATTERN = re.compile(r"^([A-Za-z0-9_.\-]+)(?:\[[A-Za-z0-9_.,\-\s]+\])?==[^\s;#]+")
-UNPINNED_OPERATORS = (">=", "<=", "~=", "!=", ">", "<")
+# ``==`` only — explicitly reject ``===`` (PEP 440 arbitrary equality) and any
+# range/inequality operator. The ``(?!=)`` lookahead is the trip-wire that
+# stops ``pkg===1.2.3`` from masquerading as a ``==`` pin.
+PINNED_LINE_PATTERN = re.compile(r"^([A-Za-z0-9_.\-]+)(?:\[[A-Za-z0-9_.,\-\s]+\])?==(?!=)[^\s;#]+")
+# Order matters: longer operators must precede shorter ones so substring
+# detection reports ``===`` rather than the empty-string match it contains.
+UNPINNED_OPERATORS = ("===", ">=", "<=", "~=", "!=", ">", "<")
 
 
 def iter_lockfiles(requirements_dir: Path = REQUIREMENTS_DIR) -> list[Path]:
     """Return compiled lockfiles to validate, in deterministic order."""
     if not requirements_dir.is_dir():
         return []
-    return sorted(
-        path
-        for path in requirements_dir.glob("*.txt")
-        if path.name not in EXEMPT_FILES
-    )
+    return sorted(path for path in requirements_dir.glob("*.txt") if path.name not in EXEMPT_FILES)
+
+
+def _partition_exempt(paths: Iterable[Path]) -> tuple[list[Path], list[Path]]:
+    """Split ``paths`` into (lockfiles_to_scan, exempt_files_to_skip)."""
+    keep: list[Path] = []
+    exempt: list[Path] = []
+    for path in paths:
+        if path.name in EXEMPT_FILES:
+            exempt.append(path)
+        else:
+            keep.append(path)
+    return keep, exempt
 
 
 def _is_skippable(line: str) -> bool:
@@ -94,9 +111,7 @@ def find_violations(paths: Iterable[Path]) -> list[str]:
             if offending_op is None:
                 # Bare package name with no version (e.g. ``somepkg``) is also
                 # unpinned and should be flagged.
-                violations.append(
-                    f"{path}:{line_number}: requirement {head!r} has no exact (==) pin"
-                )
+                violations.append(f"{path}:{line_number}: requirement {head!r} has no exact (==) pin")
                 continue
 
             violations.append(
@@ -120,9 +135,17 @@ def main() -> int:
     args = parser.parse_args()
 
     if args.paths:
-        paths = sorted({path.resolve() for path in args.paths})
+        raw_paths = sorted({path.resolve() for path in args.paths})
     else:
-        paths = iter_lockfiles()
+        raw_paths = iter_lockfiles()
+
+    paths, exempt = _partition_exempt(raw_paths)
+    for skipped in exempt:
+        # ``constraints.txt`` intentionally uses ``>=9999.0.0`` to ban
+        # packages, so it can never satisfy the ``==`` policy. Make the
+        # exemption visible rather than silent so callers passing globs
+        # like ``requirements/*.txt`` understand why it isn't scanned.
+        print(f"NOTE: skipping exempt file {skipped}", file=sys.stderr)
 
     if not paths:
         print(

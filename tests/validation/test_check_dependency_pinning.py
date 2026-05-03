@@ -70,7 +70,7 @@ def test_pip_option_lines_are_ignored(tmp_path: Path) -> None:
 
 @pytest.mark.parametrize(
     "operator",
-    [">=", "<=", "~=", "!=", ">", "<"],
+    ["===", ">=", "<=", "~=", "!=", ">", "<"],
 )
 def test_unpinned_operator_is_rejected(tmp_path: Path, operator: str) -> None:
     module = _load_module()
@@ -82,6 +82,19 @@ def test_unpinned_operator_is_rejected(tmp_path: Path, operator: str) -> None:
     assert len(violations) == 1
     assert operator in violations[0]
     assert "somepkg" in violations[0]
+
+
+def test_arbitrary_equality_is_not_treated_as_exact_pin(tmp_path: Path) -> None:
+    """PEP 440 ``===`` is arbitrary-equality, not the ``==`` pin policy demands."""
+    module = _load_module()
+    lockfile = tmp_path / "arbitrary.txt"
+    lockfile.write_text("somepkg===1.2.3+local\n", encoding="utf-8")
+
+    violations = module.find_violations([lockfile])
+
+    assert len(violations) == 1
+    assert "===" in violations[0]
+    assert "==" in violations[0]  # error message still references the policy operator
 
 
 def test_bare_package_without_version_is_rejected(tmp_path: Path) -> None:
@@ -103,6 +116,45 @@ def test_iter_lockfiles_excludes_constraints(tmp_path: Path) -> None:
     paths = module.iter_lockfiles(tmp_path)
 
     assert [path.name for path in paths] == ["base.txt"]
+
+
+def test_partition_exempt_filters_constraints(tmp_path: Path) -> None:
+    """Explicitly-supplied paths must still honour the constraints.txt exemption."""
+    module = _load_module()
+    base = tmp_path / "base.txt"
+    constraints = tmp_path / "constraints.txt"
+    base.write_text("aiofiles==25.1.0\n", encoding="utf-8")
+    constraints.write_text("realesrgan>=9999.0.0\n", encoding="utf-8")
+
+    keep, exempt = module._partition_exempt([base, constraints])
+
+    assert keep == [base]
+    assert exempt == [constraints]
+
+
+def test_cli_skips_constraints_when_passed_explicitly(tmp_path: Path, capsys) -> None:
+    """`python check_dependency_pinning.py requirements/*.txt` must not flag constraints.txt."""
+    module = _load_module()
+    base = tmp_path / "base.txt"
+    constraints = tmp_path / "constraints.txt"
+    base.write_text("aiofiles==25.1.0\n", encoding="utf-8")
+    constraints.write_text("realesrgan>=9999.0.0\n", encoding="utf-8")
+
+    # Simulate the CLI invocation by calling main() with sys.argv patched.
+    import sys
+
+    saved_argv = sys.argv
+    try:
+        sys.argv = ["check_dependency_pinning.py", str(base), str(constraints)]
+        exit_code = module.main()
+    finally:
+        sys.argv = saved_argv
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert "skipping exempt file" in captured.err
+    assert "constraints.txt" in captured.err
+    assert "base.txt" in captured.out
 
 
 def test_real_repository_lockfiles_are_pinned() -> None:
