@@ -186,6 +186,7 @@ class LinearDecoder:
         strict_ingest: bool = False,
         telemetry: IngestTelemetry | None = None,
         raw_python_executable: str | None = None,
+        demosaic: str = "AHD",
     ):
         """Initialize linear decoder.
 
@@ -197,6 +198,8 @@ class LinearDecoder:
                 set strict_ingest=True to enforce >=16-bit inputs only.
             telemetry: Optional telemetry implementation for ingest boundary instrumentation.
                 Defaults to NullTelemetry (zero overhead).
+            demosaic: rawpy.DemosaicAlgorithm name applied during RAW postprocess.
+                Default "AHD" preserves prior behavior. Unknown names fail closed.
 
         Raises:
             ValueError: If gamma != 1.0 (linear ingest contract).
@@ -212,6 +215,7 @@ class LinearDecoder:
         self.strict_ingest = strict_ingest
         self._telemetry: IngestTelemetry = telemetry or NullTelemetry()
         self._raw_python_executable = raw_python_executable
+        self.demosaic = str(demosaic)
 
     def _emit_telemetry(self, event: str, **fields: object) -> None:
         """Best-effort telemetry emission that never interrupts ingest flow."""
@@ -337,6 +341,7 @@ class LinearDecoder:
                 "gamma": self.gamma,
                 "bit_depth": self.bit_depth,
                 "strict_ingest": self.strict_ingest,
+                "demosaic": self.demosaic,
             },
             start=Path(__file__),
         )
@@ -570,6 +575,10 @@ class LinearDecoder:
                 # - use_camera_wb=True: Use camera white balance (default)
                 # - demosaic_algorithm: Half-size for speed, can upgrade to AHD for quality
 
+                from ...core.raw_runtime import resolve_demosaic_algorithm
+
+                demosaic_enum = resolve_demosaic_algorithm(self.demosaic)
+
                 rgb = raw.postprocess(
                     gamma=(1, 1),  # Linear gamma (no correction)
                     no_auto_bright=True,  # No auto exposure
@@ -578,7 +587,7 @@ class LinearDecoder:
                     use_camera_wb=True,  # Use camera white balance from EXIF
                     half_size=False,  # Full resolution
                     four_color_rgb=False,  # Standard 3-color RGB
-                    demosaic_algorithm=rawpy.DemosaicAlgorithm.AHD,  # High quality demosaic
+                    demosaic_algorithm=demosaic_enum,
                     median_filter_passes=0,  # No median filtering (preserve detail)
                     use_auto_wb=False,  # Don't override camera WB
                     highlight_mode=rawpy.HighlightMode.Clip,  # Clip highlights (no reconstruction)
@@ -1041,6 +1050,7 @@ def decode(
     emit_exr: bool = False,
     emit_provenance: bool = False,
     raw_python_executable: str | None = None,
+    demosaic: str = "AHD",
 ) -> LinearIngestResult:
     """Decode image to float32 linear light (convenience function).
 
@@ -1066,6 +1076,7 @@ def decode(
         bit_depth=bit_depth,
         strict_ingest=strict_ingest,
         raw_python_executable=raw_python_executable,
+        demosaic=demosaic,
     )
     return decoder.decode(
         input_path=input_path,

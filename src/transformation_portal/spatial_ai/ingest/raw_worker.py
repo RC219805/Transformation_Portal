@@ -81,6 +81,7 @@ def _run_load_rgb(input_path: Path, payload: Dict[str, Any]) -> tuple[np.ndarray
         output_bps=int(payload.get("output_bps", 8)),
         output_linear=bool(payload.get("output_linear", False)),
         python_executable=None,
+        demosaic=str(payload.get("demosaic", "AHD")),
     )
     return array, {
         "dtype": str(array.dtype),
@@ -96,6 +97,7 @@ def _run_linear_decode(input_path: Path, payload: Dict[str, Any]) -> tuple[np.nd
         bit_depth=int(payload.get("bit_depth", 32)),
         strict_ingest=bool(payload.get("strict_ingest", False)),
         raw_python_executable=None,
+        demosaic=str(payload.get("demosaic", "AHD")),
     )
     result = decoder.decode(input_path)
     return result.linear_rgb, {

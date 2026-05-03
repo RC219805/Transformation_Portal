@@ -68,14 +68,13 @@ def decode_contract(input_path: Path | str, opts: IngestOptions) -> np.ndarray:
     if opts.contract == "legacy_linear_srgb":
         if opts.wb_mode != "camera":
             raise ValueError("legacy_linear_srgb currently supports wb_mode='camera' only.")
-        if opts.demosaic.strip().upper() != "AHD":
-            raise ValueError("legacy_linear_srgb currently supports demosaic='AHD' only.")
         from .linear_decoder import LinearDecoder
 
         result = LinearDecoder(
             gamma=1.0,
             strict_ingest=True,
             raw_python_executable=opts.raw_python_executable,
+            demosaic=opts.demosaic,
         ).decode(input_path)
         return result.linear_rgb
 

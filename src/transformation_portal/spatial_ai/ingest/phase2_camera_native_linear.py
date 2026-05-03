@@ -64,13 +64,10 @@ def _apply_3x3_f32_hwc(vec3: np.ndarray, mat3x3: np.ndarray) -> np.ndarray:
 
 
 def _rawpy_demosaic(name: str):
-    import rawpy  # type: ignore
+    """Backwards-compatible re-export of the canonical demosaic resolver."""
+    from transformation_portal.core.raw_runtime import resolve_demosaic_algorithm
 
-    n = name.strip().upper()
-    try:
-        return getattr(rawpy.DemosaicAlgorithm, n)
-    except AttributeError as e:
-        raise ValueError(f"Unknown demosaic algorithm: {name}") from e
+    return resolve_demosaic_algorithm(name)
 
 
 def ingest_phase2_xyz_d50_linear_fp32(

@@ -668,7 +668,12 @@ def main(
     raw_demosaic: str = typer.Option(
         "AHD",
         "--raw-demosaic",
-        help=("RAW demosaic algorithm for legacy_linear_srgb ingest " + "contract (currently only 'AHD' is supported)."),
+        help=(
+            "RAW demosaic algorithm for the rawpy postprocess step. "
+            "Any rawpy.DemosaicAlgorithm name is accepted (e.g. AHD, AMAZE, "
+            "DCB, LMMSE, VNG, PPG); availability depends on the installed "
+            "LibRaw build and unknown values fail closed at decode time."
+        ),
     ),
     # Performance Tuning (Forward-Compatible)
     max_workers: Optional[int] = typer.Option(
@@ -938,8 +943,15 @@ def main(
         raise typer.Exit(code=1)
 
     raw_demosaic_normalized = raw_demosaic.strip().upper()
-    if raw_demosaic_normalized != "AHD":
-        error_msg = f"Invalid --raw-demosaic" f" '{raw_demosaic}'." " legacy_linear_srgb currently" " supports only: AHD"
+    from transformation_portal.core.raw_runtime import is_valid_demosaic_name
+
+    if not is_valid_demosaic_name(raw_demosaic):
+        error_msg = (
+            f"Invalid --raw-demosaic {raw_demosaic!r}. "
+            "Expected a rawpy.DemosaicAlgorithm member name (uppercase letters, digits, "
+            "and underscores; must start with a letter). The decode step verifies the "
+            "name against the installed LibRaw build and fails closed for unknown values."
+        )
         logger.error(error_msg)
         print(error_msg, file=sys.stdout)
         raise typer.Exit(code=1)

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import tempfile
@@ -26,6 +27,77 @@ RAW_RUNTIME_ENV_VAR = "TRANSFORMATION_PORTAL_RAW_PYTHON"
 RAW_WORKER_MODULE = "transformation_portal.spatial_ai.ingest.raw_worker"
 RAW_RUNTIME_CHECK_TIMEOUT_SECONDS = 30
 RAW_WORKER_TIMEOUT_SECONDS = 300
+
+# Demosaic name validation has two layers:
+#
+#   * Upstream (CLI / orchestrator): a *syntactic* check via
+#     ``is_valid_demosaic_name`` — the orchestrator may not have rawpy
+#     installed locally (it dispatches RAW decode to the .venv-raw
+#     subprocess), so it cannot enumerate enum members. The syntactic gate
+#     just guards against typos / shell-quoting bugs and rejects values that
+#     could not possibly be a ``rawpy.DemosaicAlgorithm`` member.
+#
+#   * Decode-time: ``resolve_demosaic_algorithm`` reflects the actual
+#     installed ``rawpy.DemosaicAlgorithm`` enum and fails closed if the
+#     name is not present in this LibRaw build. This is the authoritative
+#     gate. The set of valid members varies by rawpy/LibRaw version (e.g.
+#     ``AFD``, ``VCD``, ``VCD_MODIFIED_AHD`` are present in some builds and
+#     not others) — that variability is the reason a curated upstream
+#     allowlist is the wrong abstraction.
+_DEMOSAIC_NAME_RE = re.compile(r"^[A-Z][A-Z0-9_]{0,31}$")
+
+
+def is_valid_demosaic_name(name: object) -> bool:
+    """Return True if ``name`` is syntactically plausible as a rawpy enum member.
+
+    This is a *format* check only — it does not verify that the name exists
+    in the installed rawpy/LibRaw build. Use ``resolve_demosaic_algorithm``
+    for the semantic check, which fails closed at decode time and surfaces
+    the actual available enum members.
+
+    Strips and uppercases the input first, matching the normalization used
+    by the CLI/orchestrator before they emit ``--raw-demosaic`` into argv.
+    """
+    if not isinstance(name, str):
+        return False
+    return bool(_DEMOSAIC_NAME_RE.fullmatch(name.strip().upper()))
+
+
+def _available_demosaic_names(demosaic_algorithm: object) -> list[str]:
+    """Return the public member names of ``rawpy.DemosaicAlgorithm``.
+
+    ``rawpy.DemosaicAlgorithm`` is normally a ``Flag``/``IntEnum`` subclass,
+    so prefer ``__members__`` which lists exactly the algorithm members
+    (and excludes the magic methods/inherited attributes that ``dir()``
+    would otherwise mix in). Fall back to filtered ``dir()`` for builds
+    where the enum protocol differs.
+    """
+    members = getattr(demosaic_algorithm, "__members__", None)
+    if members is not None:
+        try:
+            return sorted(members.keys())
+        except Exception:  # pragma: no cover - defensive: unusual mapping
+            pass
+    return sorted(a for a in dir(demosaic_algorithm) if a.isupper() and not a.startswith("_"))
+
+
+def resolve_demosaic_algorithm(name: str):
+    """Resolve a demosaic algorithm name to a rawpy.DemosaicAlgorithm enum value.
+
+    Raises ValueError with a clear message if the name is unknown to the
+    installed rawpy/LibRaw build. Imports rawpy lazily so callers without the
+    raw extra installed don't pay the import cost.
+    """
+    import rawpy  # type: ignore
+
+    n = name.strip().upper()
+    try:
+        return getattr(rawpy.DemosaicAlgorithm, n)
+    except AttributeError as e:
+        raise ValueError(
+            f"Unknown demosaic algorithm: {name!r}. "
+            f"Available in this rawpy build: {_available_demosaic_names(rawpy.DemosaicAlgorithm)}"
+        ) from e
 
 
 def repo_local_raw_python_path(start: Path) -> Optional[Path]:

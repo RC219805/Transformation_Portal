@@ -11,22 +11,13 @@ from pathlib import Path
 from types import ModuleType
 from typing import Any, Dict, Optional
 
+# Re-export the canonical RAW extension whitelist (defined in
+# transformation_portal.core.raw_formats — a stdlib-only module that's the
+# single source of truth, shared by the rendering loader, format
+# classifiers, and this sidecar generator).
+from ..core.raw_formats import RAW_EXTENSIONS as RAW_EXTENSIONS
 from .canonical_json import dumps_json
 
-RAW_EXTENSIONS = {
-    ".cr2",
-    ".cr3",
-    ".nef",
-    ".nrw",
-    ".arw",
-    ".srf",
-    ".dng",
-    ".raf",
-    ".orf",
-    ".rw2",
-    ".pef",
-    ".srw",
-}
 RAW_SIDECAR_SCHEMA = "raw-image-sidecar/v2"
 EXIFTOOL_VERSION_TIMEOUT_SECONDS = 5
 EXIFTOOL_METADATA_TIMEOUT_SECONDS = 30

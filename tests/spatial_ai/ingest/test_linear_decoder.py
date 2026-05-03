@@ -248,6 +248,7 @@ class TestLinearDecoder:
             "gamma": 1.0,
             "bit_depth": 32,
             "strict_ingest": True,
+            "demosaic": "AHD",
         }
 
     def test_content_hash_reproducible(self, tmp_path: Path):

@@ -18,7 +18,14 @@ pytestmark = [
     pytest.mark.unit,
 ]
 
-from transformation_portal.lux_depth_v3.raw_loader import RAW_EXTENSIONS, is_raw_file, load_raw_as_pil, load_raw_as_rgb
+from transformation_portal.lux_depth_v3.raw_loader import (
+    RAW_EXTENSIONS,
+    is_raw_file,
+    is_valid_demosaic_name,
+    load_raw_as_pil,
+    load_raw_as_rgb,
+    resolve_demosaic_algorithm,
+)
 
 
 class TestRawExtensions:
@@ -32,6 +39,28 @@ class TestRawExtensions:
     def test_raw_extensions_include_dng(self):
         """DNG (TIFF-based RAW) should be included."""
         assert ".dng" in RAW_EXTENSIONS
+
+    def test_raw_extensions_include_cr3(self):
+        """Canon CR3 (modern Canon bodies) should be included."""
+        assert ".cr3" in RAW_EXTENSIONS
+
+    def test_raw_extensions_match_canonical_source(self):
+        """RAW_EXTENSIONS must be identical across every module that classifies
+        RAW inputs. The canonical definition lives in
+        ``transformation_portal.core.raw_formats``; rendering, sidecar, and
+        input-manager paths must all re-export the same set.
+
+        Regression guard: prior to convergence three different whitelists
+        drifted (only one of them included CR3), so the same file could be
+        accepted by sidecar generation and rejected by depth ingest.
+        """
+        from transformation_portal.core.raw_formats import RAW_EXTENSIONS as CANONICAL
+        from transformation_portal.ingest.raw_sidecar import RAW_EXTENSIONS as SIDECAR_EXTS
+        from transformation_portal.lux_depth_v3.input_manager import _RAW_EXTENSIONS as INPUT_MGR_EXTS
+
+        assert RAW_EXTENSIONS == CANONICAL
+        assert SIDECAR_EXTS == CANONICAL
+        assert INPUT_MGR_EXTS == CANONICAL
 
     def test_raw_extensions_are_lowercase(self):
         """All extensions should be lowercase for consistency."""
@@ -129,6 +158,7 @@ class TestRawpyNotInstalled:
             output_bps=16,
             output_linear=True,
             python_executable="./.venv-raw/bin/python",
+            demosaic="DCB",
         )
 
         assert np.array_equal(rgb, fake_rgb)
@@ -140,7 +170,107 @@ class TestRawpyNotInstalled:
             "half_size": True,
             "output_bps": 16,
             "output_linear": True,
+            "demosaic": "DCB",
         }
+
+
+class TestDemosaicAlgorithm:
+    """Test demosaic algorithm parameterization."""
+
+    def test_is_valid_demosaic_name_accepts_known_members(self):
+        """The syntactic gate accepts every name documented as a rawpy member,
+        including builds-specific ones like AFD/VCD/VCD_MODIFIED_AHD that
+        used to be artificially blocked by the curated allowlist."""
+        for name in (
+            "AHD",
+            "AAHD",
+            "AMAZE",
+            "DCB",
+            "DHT",
+            "LINEAR",
+            "LMMSE",
+            "MODIFIED_AHD",
+            "PPG",
+            "VNG",
+            "AFD",
+            "VCD",
+            "VCD_MODIFIED_AHD",
+        ):
+            assert is_valid_demosaic_name(name), name
+
+    def test_is_valid_demosaic_name_normalizes_case_and_whitespace(self):
+        assert is_valid_demosaic_name("  amaze  ")
+        assert is_valid_demosaic_name("Dcb")
+
+    def test_is_valid_demosaic_name_rejects_garbage(self):
+        for bad in ("", "  ", "amaze!", "amaze;rm -rf /", "amaze bar", "_AMAZE", "1AHD", None, 42):
+            assert not is_valid_demosaic_name(bad), bad
+
+    def test_resolve_demosaic_algorithm_unknown_raises(self):
+        """Unknown demosaic names must fail closed with a clear ValueError that
+        lists the actual installed members (not raw dir() noise)."""
+        import sys
+        import types
+
+        # Use a real Enum so __members__ works as it would in production.
+        from enum import IntEnum
+
+        class _FakeDemosaic(IntEnum):
+            AHD = 1
+            AMAZE = 2
+
+        fake_rawpy = types.SimpleNamespace(DemosaicAlgorithm=_FakeDemosaic)
+        original = sys.modules.get("rawpy")
+        sys.modules["rawpy"] = fake_rawpy
+        try:
+            with pytest.raises(ValueError, match="Unknown demosaic algorithm") as exc_info:
+                resolve_demosaic_algorithm("DEFINITELY_NOT_REAL")
+            msg = str(exc_info.value)
+            # Real member names appear; the noise that bare dir() would
+            # surface (dunder attrs, IntEnum protocol methods like 'value',
+            # 'name', 'mro') must not.
+            assert "'AHD'" in msg and "'AMAZE'" in msg
+            for noise in ("__class__", "__module__", "mro", "'value'", "'name'"):
+                assert noise not in msg, f"unexpected noise {noise!r} in error: {msg}"
+        finally:
+            if original is None:
+                sys.modules.pop("rawpy", None)
+            else:
+                sys.modules["rawpy"] = original
+
+    def test_load_raw_as_rgb_passes_demosaic_to_postprocess(self, tmp_path):
+        """load_raw_as_rgb must forward the demosaic name into rawpy.postprocess."""
+        try:
+            import rawpy  # noqa: F401
+        except ImportError:
+            pytest.skip("rawpy not installed")
+
+        raw_file = tmp_path / "test.cr2"
+        raw_file.write_bytes(b"fake raw data")
+
+        fake_rgb = np.zeros((4, 4, 3), dtype=np.uint8)
+        sentinel = object()
+
+        mock_raw_context = MagicMock()
+        mock_raw_obj = MagicMock()
+        mock_raw_obj.raw_image.shape = (4, 4)
+        mock_raw_obj.camera_iso_speed = 100
+        mock_raw_obj.postprocess.return_value = fake_rgb
+        mock_raw_context.__enter__.return_value = mock_raw_obj
+        mock_raw_context.__exit__.return_value = None
+
+        with (
+            patch("rawpy.imread", return_value=mock_raw_context),
+            patch(
+                "transformation_portal.lux_depth_v3.raw_loader.resolve_demosaic_algorithm",
+                return_value=sentinel,
+            ) as resolve_mock,
+        ):
+            load_raw_as_rgb(raw_file, demosaic="DCB")
+
+        resolve_mock.assert_called_once_with("DCB")
+        call_kwargs = mock_raw_obj.postprocess.call_args[1]
+        assert call_kwargs["demosaic_algorithm"] is sentinel
 
     def test_load_raw_as_pil_missing_rawpy(self, tmp_path):
         """load_raw_as_pil should also fail gracefully when rawpy missing."""

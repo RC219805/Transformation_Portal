@@ -208,7 +208,8 @@ tests/spatial_ai/ingest/
 ┌─────────────────────────────────────────┐
 │ 2. Decode to Linear RGB                 │
 │    • RAW: rawpy + LibRaw                │
-│      - Linear demosaic (AHD)            │
+│      - Linear demosaic (AHD default;    │
+│        configurable via demosaic param) │
 │      - Camera white balance             │
 │      - No tone curve, gamma=1.0         │
 │    • TIFF/PNG: PIL/tifffile             │
@@ -275,9 +276,16 @@ rawpy.postprocess(
     output_color=rawpy.ColorSpace.sRGB,  # Linear sRGB (Phase I)
     output_bps=16,               # Max precision before float32
     use_camera_wb=True,          # Camera white balance from EXIF
-    demosaic_algorithm=rawpy.DemosaicAlgorithm.AHD,  # High quality
+    demosaic_algorithm=resolve_demosaic_algorithm(self.demosaic),  # AHD default
 )
 ```
+
+The demosaic algorithm is configurable via the `demosaic` parameter on
+`LinearDecoder` and the `decode_contract` `IngestOptions.demosaic` field.
+Any name exposed by the installed `rawpy.DemosaicAlgorithm` enum is
+accepted (e.g. `AHD`, `AMAZE`, `DCB`, `LMMSE`, `VNG`, `PPG`); unknown
+names fail closed with `ValueError`. The `legacy_linear_srgb` contract no
+longer hard-restricts to `AHD`.
 
 ### Processed Formats
 

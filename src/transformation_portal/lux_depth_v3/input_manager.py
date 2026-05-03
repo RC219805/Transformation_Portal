@@ -28,6 +28,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, ClassVar, Dict, Optional, Tuple, Union
 
+from transformation_portal.core.raw_formats import RAW_EXTENSIONS as _RAW_EXTENSIONS
 from transformation_portal.ingest.canonical_json import dumps_json
 from transformation_portal.lux_depth_v3.path_aliasing import normalize_lexical_path
 
@@ -61,26 +62,8 @@ _STANDARD_EXTENSIONS = frozenset(
     }
 )
 
-# RAW camera formats (subset matching raw_loader.RAW_EXTENSIONS)
-_RAW_EXTENSIONS = frozenset(
-    {
-        ".cr2",
-        ".crw",
-        ".nef",
-        ".nrw",
-        ".arw",
-        ".srf",
-        ".sr2",
-        ".dng",
-        ".orf",
-        ".raf",
-        ".pef",
-        ".rw2",
-        ".iiq",
-        ".3fr",
-    }
-)
-
+# _RAW_EXTENSIONS is imported from raw_loader (single source of truth);
+# see the import block at the top of this module.
 SUPPORTED_EXTENSIONS = _STANDARD_EXTENSIONS | _RAW_EXTENSIONS
 
 
