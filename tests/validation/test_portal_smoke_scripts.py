@@ -1057,6 +1057,9 @@ def test_portal_browser_smoke_tracks_reconstruction_runtime_summary_and_guardrai
     assert "captioningDetailsVisible" in content
     assert "captioningCliHasFlag" in content
     assert "captioningExpectedOutput" in content
+    assert "captioningReadinessText" in content
+    assert "captioningReadinessStatus" in content
+    assert "path-existence readiness scope" in content
     assert "enableFastVlmCaptioning" in content
     assert "advisoryCaptionPanelVisible" in content
     assert "review-primary.png.vlm_captioning.sidecar.json" in content

@@ -385,7 +385,9 @@ const els = {
         timeoutSeconds: _domId('fastVlmTimeoutSeconds'),
         pythonExecutable: _domId('fastVlmPythonExecutable'),
         mlxVlmDir: _domId('fastVlmMlxVlmDir'),
-        status: _domId('captioningStatus')
+        status: _domId('captioningStatus'),
+        readinessList: _domId('captioningReadinessList'),
+        readinessScope: _domId('captioningReadinessScope')
     },
     runtime: {
         maxWorkersMode: _domId('maxWorkersMode'),
@@ -3600,14 +3602,25 @@ function syncBuildSurfaceApplicability(payload = null) {
     if (els.captioning.status) {
         const preview = _currentPreviewForPayload(payload) || _effectivePreviewSnapshot(payload);
         const summary = preview.captioning_summary || {};
-        const runtimeStatus = String(summary.runtime_status || '').trim();
-        els.captioning.status.textContent = !captioningFeatureVisible
-            ? 'FastVLM caption controls are feature gated for this cohort.'
-            : captioningEnabled && runtimeStatus === 'missing_runtime'
-                ? 'FastVLM runtime paths are not fully present; captioning remains advisory and may be skipped.'
-                : captioningEnabled
-                    ? 'FastVLM captions are advisory sidecar metadata and never satisfy quality gates.'
-                    : 'FastVLM captions are off and no captioning args will be emitted.';
+        const readiness = _captioningRuntimeReadiness(summary);
+        const runtimeStatus = String(readiness.status || '').trim();
+        let captioningStatusText = 'FastVLM captions are off and no captioning args will be emitted.';
+        if (!captioningFeatureVisible) {
+            captioningStatusText = 'FastVLM caption controls are feature gated for this cohort.';
+        } else if (captioningEnabled && runtimeStatus === 'invalid_config') {
+            captioningStatusText = 'FastVLM captioning config has invalid runtime paths; preview validation must be repaired before dispatch.';
+        } else if (captioningEnabled && runtimeStatus === 'missing_runtime') {
+            captioningStatusText = 'FastVLM runtime paths are not fully present; captioning remains advisory and may be skipped.';
+        } else if (captioningEnabled && runtimeStatus === 'ready') {
+            captioningStatusText = 'FastVLM runtime paths are present for advisory captioning.';
+        } else if (captioningEnabled) {
+            captioningStatusText = 'FastVLM captions are advisory sidecar metadata and never satisfy quality gates.';
+        }
+        els.captioning.status.textContent = captioningStatusText;
+        _renderCaptioningReadiness(summary, {
+            visible: captioningFeatureVisible,
+            enabled: captioningEnabled
+        });
     }
     if (els.reconstructionDetailsHint) {
         els.reconstructionDetailsHint.textContent = reconstructionEnabled
@@ -6828,6 +6841,7 @@ function _buildLocalDebugBundleSummary(args = {}) {
 
 function _buildLocalCaptioningSummary(args = {}) {
     const enabled = parseBoolLike(args.vlm_captioning_enabled, false);
+    const runtimeStatus = enabled ? 'unknown' : 'off';
     return {
         feature_enabled: _fastVlmCaptioningFeatureEnabled(),
         enabled,
@@ -6839,10 +6853,79 @@ function _buildLocalCaptioningSummary(args = {}) {
         fastvlm_mlx_vlm_dir: String(args.fastvlm_mlx_vlm_dir || ''),
         timeout_seconds: Number.parseInt(String(args.fastvlm_timeout_seconds || '180'), 10) || 180,
         runtime_path_status: {},
-        runtime_status: enabled ? 'unknown' : 'off',
+        runtime_readiness: {
+            status: runtimeStatus,
+            checks: {},
+            verification_scope: 'path-existence'
+        },
+        runtime_status: runtimeStatus,
         role: 'advisory',
         used_for_quality_gate: false
     };
+}
+
+function _captioningRuntimeReadiness(summary = {}) {
+    const readiness = summary && typeof summary.runtime_readiness === 'object' && summary.runtime_readiness
+        ? summary.runtime_readiness
+        : {};
+    const fallbackStatus = String(summary?.runtime_status || (parseBoolLike(summary?.enabled, false) ? 'unknown' : 'off')).trim();
+    return {
+        status: String(readiness.status || fallbackStatus || 'off').trim(),
+        checks: readiness.checks && typeof readiness.checks === 'object' ? readiness.checks : {},
+        verification_scope: String(readiness.verification_scope || 'path-existence').trim()
+    };
+}
+
+function _captioningRuntimeLabel(status) {
+    const normalized = String(status || '').trim();
+    if (normalized === 'ready') return 'Ready';
+    if (normalized === 'missing_runtime') return 'Missing runtime';
+    if (normalized === 'invalid_config') return 'Invalid config';
+    if (normalized === 'off') return 'Off';
+    if (normalized === 'unknown') return 'Preview pending';
+    return normalized || 'Off';
+}
+
+function _captioningCheckLabel(name) {
+    const normalized = String(name || '').trim();
+    if (normalized === 'python_executable') return 'Python';
+    if (normalized === 'mlx_vlm_dir') return 'mlx-vlm';
+    if (normalized === 'model_path') return 'Model';
+    return normalized.replace(/_/g, ' ');
+}
+
+function _renderCaptioningReadiness(summary = {}, options = {}) {
+    const visible = Boolean(options.visible);
+    const enabled = Boolean(options.enabled);
+    const readiness = _captioningRuntimeReadiness(summary);
+    if (els.captioning.readinessScope) {
+        els.captioning.readinessScope.textContent = visible
+            ? `FastVLM readiness: ${_captioningRuntimeLabel(readiness.status)} · ${readiness.verification_scope}`
+            : 'FastVLM readiness is hidden for this portal cohort.';
+    }
+    if (!els.captioning.readinessList) return;
+    els.captioning.readinessList.dataset.status = String(readiness.status || 'off');
+    els.captioning.readinessList.replaceChildren();
+    if (!visible || !enabled) {
+        return;
+    }
+    const entries = Object.entries(readiness.checks || {});
+    if (entries.length === 0) {
+        const item = document.createElement('li');
+        item.textContent = 'Preview-backed readiness details are pending.';
+        els.captioning.readinessList.appendChild(item);
+        return;
+    }
+    entries.forEach(([name, check]) => {
+        const item = document.createElement('li');
+        item.dataset.status = String(check?.status || 'unknown');
+        const label = _captioningCheckLabel(name);
+        const status = _captioningRuntimeLabel(check?.status || 'unknown');
+        const path = String(check?.path || '').trim();
+        const remediation = String(check?.remediation || '').trim();
+        item.textContent = `${label}: ${status}${path ? ` · ${path}` : ''}${remediation ? ` · ${remediation}` : ''}`;
+        els.captioning.readinessList.appendChild(item);
+    });
 }
 
 function _emptyPreviewState(status = 'idle', pipeline = '') {
@@ -7867,8 +7950,10 @@ function renderEffectiveConfigDrawer(payload = null, preview = null) {
     if (els.effectiveConfigMeta) {
         const inactiveCount = Array.isArray(effectivePreview.inactive_fields) ? effectivePreview.inactive_fields.length : 0;
         const captioningSummary = effectivePreview.captioning_summary || _buildLocalCaptioningSummary(currentPayload.args || {});
+        const captioningReadiness = _captioningRuntimeReadiness(captioningSummary);
+        const captioningReadinessLabel = _captioningRuntimeLabel(captioningReadiness.status).toLowerCase();
         const captioningNote = parseBoolLike(captioningSummary.enabled, false)
-            ? ' FastVLM advisory captioning is enabled and remains outside quality gates.'
+            ? ` FastVLM advisory captioning is enabled and remains outside quality gates. FastVLM readiness is ${captioningReadinessLabel} (${captioningReadiness.verification_scope}).`
             : '';
         els.effectiveConfigMeta.textContent = effectivePreview.status === 'ready'
             ? `Preview-backed normalization is live. ${inactiveCount} inactive preserved field${inactiveCount === 1 ? '' : 's'} are tracked for the next run.${captioningNote}`

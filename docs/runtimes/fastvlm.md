@@ -100,6 +100,28 @@ warnings, and review-side advisory caption panel. Missing FastVLM runtime paths
 remain non-blocking preview warnings because captions are metadata only and do
 not satisfy quality gates.
 
+### Portal Readiness States
+
+`/v1/config-preview` exposes `captioning_summary.runtime_readiness` as a
+lightweight operator preview. It checks only configured path existence and does
+not import `mlx_vlm`, initialize MLX/Metal, spawn FastVLM, download models, or
+validate model file checksums.
+
+The stable statuses are:
+
+```text
+off              captioning is disabled for the current draft
+ready            configured Python, mlx-vlm, and model paths exist
+missing_runtime  one or more runtime paths are absent
+invalid_config   one or more runtime path values failed portal path validation
+```
+
+Each readiness check reports the component path, expected type, whether it is
+required for the current draft, and a short remediation. The
+`verification_scope` is always `path-existence` in config preview. Use
+`make check-fastvlm-runtime` or `scripts/validation/validate_fastvlm_runtime.py`
+for manifest, checksum, source revision, and import-smoke validation.
+
 ## Local Setup
 
 Use the governed runtime installer from the repository root:
@@ -121,6 +143,7 @@ The installer is manifest-backed and fail-closed:
 ./scripts/setup/install_fastvlm_runtime.sh --dry-run --models smoke,default
 ./scripts/setup/install_fastvlm_runtime.sh --verify-only --models smoke
 ./scripts/validation/validate_fastvlm_runtime.py --verify-only --models smoke
+./scripts/validation/validate_fastvlm_runtime.py --json --models smoke
 ```
 
 The manifest lives at `config/fastvlm_runtime_manifest.json` and pins:

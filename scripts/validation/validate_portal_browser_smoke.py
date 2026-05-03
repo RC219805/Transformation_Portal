@@ -1012,6 +1012,18 @@ def _state_probe_expression() -> str:
       return !!(el && !el.classList.contains('hidden'));
     })(),
     captioningStatusText: text('captioningStatus'),
+    captioningReadinessText: (() => {
+      const scope = text('captioningReadinessScope');
+      const checks = Array.from(document.querySelectorAll('#captioningReadinessList li'))
+        .map((item) => String(item.textContent || '').trim())
+        .filter(Boolean)
+        .join(' ');
+      return `${scope} ${checks}`.trim();
+    })(),
+    captioningReadinessStatus: (() => {
+      const el = document.getElementById('captioningReadinessList');
+      return el ? String(el.dataset.status || '') : '';
+    })(),
     captioningCliHasFlag: text('cliPreview').includes('--vlm-captioning'),
     captioningExpectedOutput: Array.from(document.querySelectorAll('#expectedOutputsList li')).some((item) =>
       String(item.textContent || '').toLowerCase().includes('fastvlm')
@@ -2096,6 +2108,14 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
             _expect(
                 bool(lux_context_state.get("captioningAdvisoryWarningVisible")),
                 f"FastVLM captioning should surface advisory-only warning copy: {lux_context_state}",
+            )
+            _expect(
+                "path-existence" in str(lux_context_state.get("captioningReadinessText") or ""),
+                f"FastVLM captioning should expose path-existence readiness scope: {lux_context_state}",
+            )
+            _expect(
+                bool(str(lux_context_state.get("captioningReadinessStatus") or "").strip()),
+                f"FastVLM captioning should expose a stable readiness status: {lux_context_state}",
             )
         else:
             _expect(
