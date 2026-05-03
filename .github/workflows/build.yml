@@ -663,13 +663,14 @@ jobs:
           echo "Running tests with marker expression: ${{ matrix.markexpr }}"
 
           # ML tier: skip coverage (saves tracing + report I/O overhead on PR feedback path)
-          # Core tier: enforce 20% minimum coverage
+          # Core tier: enforce minimum global coverage (per-package floors checked separately
+          # by scripts/ci/check_per_package_coverage.py after the pytest run).
           if [ "${{ matrix.test-type }}" = "ml" ]; then
             COV_FLAGS="--no-cov"
             echo "ML tier: coverage disabled for faster PR feedback"
           else
-            COV_FLAGS="--cov=src/transformation_portal --cov=lux_depth_v3 --cov-report=term-missing --cov-report=xml --cov-report=html --cov-fail-under=20"
-            echo "Core tier: enforcing 20% minimum coverage"
+            COV_FLAGS="--cov=src/transformation_portal --cov=src/tp --cov=lux_depth_v3 --cov-report=term-missing --cov-report=xml --cov-report=html --cov-fail-under=35"
+            echo "Core tier: enforcing 35% minimum global coverage"
           fi
 
           # ML tier: add duration profiling for triage of slow tests
@@ -699,6 +700,12 @@ jobs:
           if [ -f coverage.xml ]; then
             echo "Coverage report generated successfully"
             ls -lh coverage.xml htmlcov/ || true
+          fi
+
+          # Enforce per-package coverage floors (core tier only, only when tests passed
+          # and a coverage.xml was actually produced — failed runs already exited via rc above).
+          if [ "${{ matrix.test-type }}" != "ml" ] && [ "$rc" -eq 0 ] && [ -f coverage.xml ]; then
+            python scripts/ci/check_per_package_coverage.py coverage.xml || rc=$?
           fi
 
           # Cleanup regardless of outcome
