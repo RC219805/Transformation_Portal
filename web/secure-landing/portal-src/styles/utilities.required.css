@@ -20,9 +20,6 @@
   --portal-ring-offset-color: #ffffff;
 }
 
-.focus\:ring-indigo-500:focus,
-.peer:focus-visible ~ .peer-focus-visible\:ring-indigo-500 { --portal-ring-color: rgba(99, 102, 241, 0.45); }
-
 .peer:focus-visible ~ .peer-focus-visible\:ring-red-500 { --portal-ring-color: rgba(239, 68, 68, 0.45); }
 
 .peer:checked ~ .peer-checked\:bg-indigo-600 { background-color: rgb(79 70 229); }

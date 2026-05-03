@@ -360,6 +360,26 @@ function runPhase17SurfaceFinalPassFixtureFailure(fixture) {
   assert.fail("Phase 17 surface-final-pass fixture unexpectedly passed");
 }
 
+function runPhase18UtilityFocusRingFixture(fixture) {
+  const tempDir = mkdtempSync(path.join(tmpdir(), "portal-phase18-utility-focus-ring-"));
+  const fixturePath = path.join(tempDir, "phase18.json");
+  writeFileSync(fixturePath, `${JSON.stringify(fixture, null, 2)}\n`, "utf8");
+  try {
+    return runNodeScript("scripts/check-portal-css-architecture.mjs", "--check-phase18-utility-focus-ring-fixture", fixturePath);
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
+}
+
+function runPhase18UtilityFocusRingFixtureFailure(fixture) {
+  try {
+    runPhase18UtilityFocusRingFixture(fixture);
+  } catch (error) {
+    return `${error.stdout || ""}${error.stderr || ""}`;
+  }
+  assert.fail("Phase 18 utility-focus-ring fixture unexpectedly passed");
+}
+
 function phase10AdditiveDuplicate(overrides = {}) {
   const selector = overrides.selector || ".owned";
   return {
@@ -1043,6 +1063,91 @@ function phase17SurfaceFinalPassSourceShapeFixture(overrides = {}) {
 }
 `;
   return { surfaceCss, operatorCss, shellCss };
+}
+
+function phase18UtilityFocusRingDuplicate(overrides = {}) {
+  const selector = overrides.selector || ".focus\\:ring-indigo-500:focus";
+  return {
+    key: overrides.key || `${selector}|||utilities|||`,
+    selector,
+    layer: "utilities",
+    context: [],
+    stateContext: selector.includes("focus-visible") ? ["focus", "focus-visible"] : ["focus"],
+    category: "additive",
+    hotspot: false,
+    removalStatus: "removable-later",
+    records: overrides.records || [
+      {
+        source: "web/secure-landing/portal-src/styles/utilities.required.css",
+        line: 4,
+        column: 1,
+        layer: "utilities",
+        selectorList: [
+          ".focus\\:ring-2:focus",
+          ".focus\\:ring-indigo-500:focus",
+          ".focus\\:ring-cyan-500:focus",
+          ".focus\\:ring-amber-500:focus",
+          ".peer:focus-visible ~ .peer-focus-visible\\:ring-2",
+          ".peer:focus-visible ~ .peer-focus-visible\\:ring-indigo-500",
+          ".peer:focus-visible ~ .peer-focus-visible\\:ring-red-500"
+        ],
+        declarations: [
+          ["--portal-ring-offset", "0px", false],
+          ["--portal-ring-offset-color", "transparent", false],
+          ["--portal-ring-color", "rgba(99, 102, 241, 0.45)", false],
+          [
+            "box-shadow",
+            "0 0 0 var(--portal-ring-offset) var(--portal-ring-offset-color), 0 0 0 calc(2px + var(--portal-ring-offset)) var(--portal-ring-color)",
+            false
+          ]
+        ],
+        declarationSignature: "utility-focus-ring-shared",
+        properties: ["--portal-ring-color", "--portal-ring-offset", "--portal-ring-offset-color", "box-shadow"]
+      },
+      {
+        source: "web/secure-landing/portal-src/styles/utilities.required.css",
+        line: 23,
+        column: 1,
+        layer: "utilities",
+        selectorList: [
+          ".focus\\:ring-indigo-500:focus",
+          ".peer:focus-visible ~ .peer-focus-visible\\:ring-indigo-500"
+        ],
+        declarations: [["--portal-ring-color", "rgba(99, 102, 241, 0.45)", false]],
+        declarationSignature: "utility-focus-ring-indigo-redundant",
+        properties: ["--portal-ring-color"]
+      }
+    ],
+    ...overrides
+  };
+}
+
+function phase18UtilityFocusRingSourceShapeFixture(overrides = {}) {
+  const utilityCss =
+    overrides.utilityCss ||
+    `
+.focus\\:ring-2:focus,
+.focus\\:ring-indigo-500:focus,
+.focus\\:ring-cyan-500:focus,
+.focus\\:ring-amber-500:focus,
+.peer:focus-visible ~ .peer-focus-visible\\:ring-2,
+.peer:focus-visible ~ .peer-focus-visible\\:ring-indigo-500,
+.peer:focus-visible ~ .peer-focus-visible\\:ring-red-500 {
+  --portal-ring-offset: 0px;
+  --portal-ring-offset-color: transparent;
+  --portal-ring-color: rgba(99, 102, 241, 0.45);
+  box-shadow: 0 0 0 var(--portal-ring-offset) var(--portal-ring-offset-color), 0 0 0 calc(2px + var(--portal-ring-offset)) var(--portal-ring-color);
+}
+
+.focus\\:ring-offset-2:focus,
+.peer:focus-visible ~ .peer-focus-visible\\:ring-offset-2 {
+  --portal-ring-offset: 2px;
+  --portal-ring-offset-color: #ffffff;
+}
+
+.peer:focus-visible ~ .peer-focus-visible\\:ring-red-500 { --portal-ring-color: rgba(239, 68, 68, 0.45); }
+`;
+  return { utilityCss };
 }
 
 function normalizedSelectorList(selectorText) {
@@ -2407,6 +2512,150 @@ test("portal CSS Phase 17 surface final-pass fixtures constrain component consol
   );
 });
 
+test("portal CSS Phase 18 utility focus-ring fixtures constrain final additive closure", () => {
+  const focusIndigo = phase18UtilityFocusRingDuplicate();
+  const peerIndigo = phase18UtilityFocusRingDuplicate({
+    key: ".peer:focus-visible ~ .peer-focus-visible\\:ring-indigo-500|||utilities|||",
+    selector: ".peer:focus-visible ~ .peer-focus-visible\\:ring-indigo-500"
+  });
+  const outOfScopeRed = phase18UtilityFocusRingDuplicate({
+    key: ".peer:focus-visible ~ .peer-focus-visible\\:ring-red-500|||utilities|||",
+    selector: ".peer:focus-visible ~ .peer-focus-visible\\:ring-red-500",
+    category: "conflicting",
+    removalStatus: "permanent"
+  });
+  const outOfScopeUtility = phase18UtilityFocusRingDuplicate({
+    key: ".focus\\:ring-cyan-500:focus|||utilities|||",
+    selector: ".focus\\:ring-cyan-500:focus"
+  });
+  const sharedDeclarationMissing = phase18UtilityFocusRingDuplicate({
+    records: [
+      {
+        ...phase18UtilityFocusRingDuplicate().records[0],
+        declarations: [["--portal-ring-color", "rgba(99, 102, 241, 0.45)", false]],
+        properties: ["--portal-ring-color"]
+      },
+      phase18UtilityFocusRingDuplicate().records[1]
+    ]
+  });
+  const redundantDeclarationDrift = phase18UtilityFocusRingDuplicate({
+    records: [
+      phase18UtilityFocusRingDuplicate().records[0],
+      {
+        ...phase18UtilityFocusRingDuplicate().records[1],
+        declarations: [["--portal-ring-color", "rgba(79, 70, 229, 0.45)", false]]
+      }
+    ]
+  });
+  const sourceDrift = phase18UtilityFocusRingDuplicate({
+    records: [
+      phase18UtilityFocusRingDuplicate().records[0],
+      {
+        ...phase18UtilityFocusRingDuplicate().records[1],
+        source: "web/secure-landing/portal-src/styles/utilities.dynamic.css"
+      }
+    ]
+  });
+  const specificityChanging = phase18UtilityFocusRingDuplicate({
+    records: [
+      {
+        ...phase18UtilityFocusRingDuplicate().records[0],
+        ruleSelector: ":where(.focus\\:ring-indigo-500:focus)"
+      },
+      phase18UtilityFocusRingDuplicate().records[1]
+    ]
+  });
+
+  assert.match(
+    runPhase18UtilityFocusRingFixture({
+      duplicates: [focusIndigo, peerIndigo, outOfScopeRed, outOfScopeUtility],
+      baselineEntries: [baselineEntryFor(outOfScopeUtility)],
+      expectedCandidates: [
+        { key: focusIndigo.key, candidateStatus: "safe" },
+        { key: peerIndigo.key, candidateStatus: "safe" },
+        { key: outOfScopeRed.key, candidateStatus: "deferred", unsafeReason: "conflicting-permanent" },
+        { key: outOfScopeUtility.key, candidateStatus: "deferred", unsafeReason: "selector-not-phase18-target" }
+      ],
+      sourceShape: phase18UtilityFocusRingSourceShapeFixture()
+    }),
+    /portal css phase18 utility-focus-ring fixture: OK/
+  );
+
+  assert.match(
+    runPhase18UtilityFocusRingFixture({
+      duplicates: [],
+      sourceShape: phase18UtilityFocusRingSourceShapeFixture({
+        utilityCss: `${phase18UtilityFocusRingSourceShapeFixture().utilityCss}\n.focus\\:ring-indigo-500:focus,\n.peer:focus-visible ~ .peer-focus-visible\\:ring-indigo-500 { --portal-ring-color: rgba(99, 102, 241, 0.45); }\n`
+      }),
+      expectedSourceShapeFailures: [
+        "phase18-utility-focus-ring fixture utility redundant indigo focus-ring rule must be removed after Phase 18"
+      ]
+    }),
+    /portal css phase18 utility-focus-ring fixture: OK/
+  );
+
+  assert.match(
+    runPhase18UtilityFocusRingFixture({
+      duplicates: [],
+      sourceShape: phase18UtilityFocusRingSourceShapeFixture({
+        utilityCss: phase18UtilityFocusRingSourceShapeFixture().utilityCss.replace(
+          ".peer:focus-visible ~ .peer-focus-visible\\:ring-red-500 { --portal-ring-color: rgba(239, 68, 68, 0.45); }",
+          ""
+        )
+      }),
+      expectedSourceShapeFailures: [
+        "phase18-utility-focus-ring fixture utility red peer focus ring rule is missing"
+      ]
+    }),
+    /portal css phase18 utility-focus-ring fixture: OK/
+  );
+
+  for (const [duplicate, unsafeReason] of [
+    [sharedDeclarationMissing, "shared-declaration-missing"],
+    [redundantDeclarationDrift, "redundant-declaration-drift"],
+    [sourceDrift, "source-file-drift"],
+    [specificityChanging, "specificity-changing-grouping"]
+  ]) {
+    assert.match(
+      runPhase18UtilityFocusRingFixture({
+        duplicates: [duplicate],
+        expectedCandidates: [{ key: duplicate.key, candidateStatus: "deferred", unsafeReason }]
+      }),
+      /portal css phase18 utility-focus-ring fixture: OK/
+    );
+  }
+
+  assert.match(
+    runPhase18UtilityFocusRingFixtureFailure({
+      duplicates: [focusIndigo],
+      expectedState: { phase: "phase-18-utility-focus-ring-consolidation" },
+      phase18UtilityFocusRingConsolidationState: { phase: "stale" }
+    }),
+    /phase18UtilityFocusRingConsolidationState is stale/
+  );
+
+  assert.match(
+    runPhase18UtilityFocusRingFixtureFailure({
+      duplicates: [focusIndigo],
+      expectedPhase17State: { phase: "phase-17-surface-final-pass-consolidation" },
+      phase17SurfaceFinalPassConsolidationState: { phase: "stale" }
+    }),
+    /phase17SurfaceFinalPassConsolidationState immutable historical evidence drifted/
+  );
+
+  assert.match(
+    runPhase18UtilityFocusRingFixtureFailure({
+      duplicates: [outOfScopeUtility],
+      baselineEntries: [
+        baselineEntryFor(outOfScopeUtility, {
+          ownerReason: "selector-not-phase18-target"
+        })
+      ]
+    }),
+    /selector-not-phase18-target must not overwrite live baseline ownerReason/
+  );
+});
+
 test("portal CSS layer parity make target checks generated artifact freshness", () => {
   const makefile = readFileSync(MAKEFILE_PATH, "utf8");
   const start = makefile.indexOf("validate-portal-css-layer-parity:");
@@ -2996,11 +3245,63 @@ test("portal CSS ownership drain keeps utilities layer honest", () => {
   assert.equal(ownershipDrain.phase17SurfaceFinalPassConsolidationState.renderedPortalCssFingerprintAfter, "08a5cefdcc6a");
   assert.equal(ownershipDrain.phase17SurfaceFinalPassConsolidationState.sentinelStatePreserved, true);
   assert.equal(ownershipDrain.phase17SurfaceFinalPassConsolidationState.parityBaselineChanged, false);
+  assert.equal(ownershipDrain.phase18UtilityFocusRingConsolidationState.phase, "phase-18-utility-focus-ring-consolidation");
+  assert.deepEqual(ownershipDrain.phase18UtilityFocusRingConsolidationState.targetSelectors, [
+    ".focus\\:ring-indigo-500:focus",
+    ".peer:focus-visible ~ .peer-focus-visible\\:ring-indigo-500"
+  ]);
+  assert.equal(
+    ownershipDrain.phase18UtilityFocusRingConsolidationState.targetFile,
+    "web/secure-landing/portal-src/styles/utilities.required.css"
+  );
+  assert.equal(ownershipDrain.phase18UtilityFocusRingConsolidationState.duplicateContextCountBefore, 58);
+  assert.equal(ownershipDrain.phase18UtilityFocusRingConsolidationState.duplicateContextCountAfter, 56);
+  assert.equal(ownershipDrain.phase18UtilityFocusRingConsolidationState.additiveDuplicateContextCountBefore, 2);
+  assert.equal(ownershipDrain.phase18UtilityFocusRingConsolidationState.additiveDuplicateContextCountAfter, 0);
+  assert.equal(ownershipDrain.phase18UtilityFocusRingConsolidationState.conflictingPermanentContextCountBefore, 56);
+  assert.equal(ownershipDrain.phase18UtilityFocusRingConsolidationState.conflictingPermanentContextCountAfter, 56);
+  assert.equal(ownershipDrain.phase18UtilityFocusRingConsolidationState.unownedDuplicateContextCountAfter, 0);
+  assert.equal(ownershipDrain.phase18UtilityFocusRingConsolidationState.hotspotDuplicateContextCountAfter, 0);
+  assert.equal(ownershipDrain.phase18UtilityFocusRingConsolidationState.consolidatedContextCount, 2);
+  assert.equal(ownershipDrain.phase18UtilityFocusRingConsolidationState.expectedConsolidatedContextCount, 2);
+  assert.deepEqual(ownershipDrain.phase18UtilityFocusRingConsolidationState.consolidatedContexts, [
+    ".focus\\:ring-indigo-500:focus|||utilities|||",
+    ".peer:focus-visible ~ .peer-focus-visible\\:ring-indigo-500|||utilities|||"
+  ]);
+  assert.deepEqual(ownershipDrain.phase18UtilityFocusRingConsolidationState.remainingTargetContexts, []);
+  assert.equal(ownershipDrain.phase18UtilityFocusRingConsolidationState.unexpectedResolvedContextCount, 0);
+  assert.equal(
+    ownershipDrain.phase18UtilityFocusRingConsolidationState.nonTargetAdditiveCandidatesDeferredReason,
+    "selector-not-phase18-target"
+  );
+  assert.equal(ownershipDrain.phase18UtilityFocusRingConsolidationState.deferredOutOfScopeCandidateCount, 0);
+  assert.deepEqual(ownershipDrain.phase18UtilityFocusRingConsolidationState.deferredReasonCounts, {});
+  assert.equal(ownershipDrain.phase18UtilityFocusRingConsolidationState.phase17HistoricalEvidencePreserved, true);
+  assert.equal(ownershipDrain.phase18UtilityFocusRingConsolidationState.removedRawBytes, 132);
+  assert.equal(ownershipDrain.phase18UtilityFocusRingConsolidationState.removedGzipBytes, 10);
+  assert.equal(ownershipDrain.phase18UtilityFocusRingConsolidationState.generatedRawBytesBefore, 80925);
+  assert.equal(ownershipDrain.phase18UtilityFocusRingConsolidationState.generatedRawBytesAfter, 80793);
+  assert.equal(ownershipDrain.phase18UtilityFocusRingConsolidationState.generatedRawByteDelta, -132);
+  assert.equal(ownershipDrain.phase18UtilityFocusRingConsolidationState.generatedGzipBytesBefore, 15752);
+  assert.equal(ownershipDrain.phase18UtilityFocusRingConsolidationState.generatedGzipBytesAfter, 15742);
+  assert.equal(ownershipDrain.phase18UtilityFocusRingConsolidationState.generatedGzipByteDelta, -10);
+  assert.equal(
+    ownershipDrain.phase18UtilityFocusRingConsolidationState.generatedPortalCssHashBefore,
+    "a86edcd4ad993bae7c081300877681c6ebcfa0faf31dbc3358c3e6119d49627f"
+  );
+  assert.equal(
+    ownershipDrain.phase18UtilityFocusRingConsolidationState.generatedPortalCssHashAfter,
+    "e9a380c36b8d7508a031fa34936ada3f370dbea62f25c6de88283ddb00fa7e8d"
+  );
+  assert.equal(ownershipDrain.phase18UtilityFocusRingConsolidationState.renderedPortalCssFingerprintBefore, "08a5cefdcc6a");
+  assert.equal(ownershipDrain.phase18UtilityFocusRingConsolidationState.renderedPortalCssFingerprintAfter, "759cd148f7d2");
+  assert.equal(ownershipDrain.phase18UtilityFocusRingConsolidationState.sentinelStatePreserved, true);
+  assert.equal(ownershipDrain.phase18UtilityFocusRingConsolidationState.parityBaselineChanged, false);
   assert.match(
     readFileSync(ARCHITECTURE_SCRIPT_PATH, "utf8"),
-    /report\.phase17SurfaceFinalPassConsolidationState = expectedPhase17State;/
+    /report\.phase18UtilityFocusRingConsolidationState = expectedPhase18State;/
   );
-  assert.equal(duplicateBaseline.duplicateKeys.length, 58);
+  assert.equal(duplicateBaseline.duplicateKeys.length, 56);
   assert.ok(
     duplicateBaseline.duplicateKeys.every((entry) => entry.phase === "phase-9-duplicate-ownership-closure"),
     "all duplicate baseline entries must be Phase 9-owned"
@@ -3024,6 +3325,7 @@ test("portal CSS layer parity validates the production layered graph", () => {
   assert.match(parityValidator, /missionShellSkeletonState/);
   assert.match(parityValidator, /_validate_skeleton_primitive_states\(connection\)/);
   assert.match(parityValidator, /_validate_surface_final_pass_states\(connection\)/);
+  assert.match(parityValidator, /_validate_utility_focus_ring_states\(connection\)/);
 });
 
 test("portal CSS layer parity checks nested generated keyframes", () => {

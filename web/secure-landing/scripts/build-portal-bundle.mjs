@@ -207,7 +207,9 @@ const internalBundle = await bundleText(PORTAL_INTERNAL_ENTRY, {
   minify: true
 });
 const deferredReviewSurfaceBundle = await bundleText(PORTAL_REVIEW_SURFACE_ENTRY, {
-  format: "esm"
+  format: "esm",
+  minifySyntax: true,
+  minifyWhitespace: true
 });
 
 const nextPortalBundle = stripStandaloneLineComments(

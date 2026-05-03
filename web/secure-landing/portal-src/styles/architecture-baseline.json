@@ -1562,52 +1562,6 @@
       "parity": "green"
     },
     {
-      "key": ".focus\\:ring-indigo-500:focus|||utilities|||",
-      "selector": ".focus\\:ring-indigo-500:focus",
-      "layer": "utilities",
-      "atRuleContext": [],
-      "stateContext": [
-        "focus"
-      ],
-      "category": "additive",
-      "hotspot": false,
-      "records": [
-        {
-          "source": "web/secure-landing/portal-src/styles/utilities.required.css",
-          "line": 4,
-          "column": 1,
-          "layer": "utilities",
-          "declarationSignature": "68577264f416206890cdab0488d0c6ab3bd604d1",
-          "properties": [
-            "--portal-ring-color",
-            "--portal-ring-offset",
-            "--portal-ring-offset-color",
-            "box-shadow"
-          ]
-        },
-        {
-          "source": "web/secure-landing/portal-src/styles/utilities.required.css",
-          "line": 23,
-          "column": 1,
-          "layer": "utilities",
-          "declarationSignature": "667c4b2566478b112b1ab1ca44967514ede67bf8",
-          "properties": [
-            "--portal-ring-color"
-          ]
-        }
-      ],
-      "owners": [
-        "portal-css-architecture"
-      ],
-      "ownerReason": "Additive ownership: .focus\\:ring-indigo-500:focus splits non-overlapping declarations across utilities.required.css while preserving the current computed-style parity.",
-      "phase": "phase-9-duplicate-ownership-closure",
-      "contextType": "runtime-state",
-      "disposition": "report-only",
-      "removalStatus": "removable-later",
-      "declarationConflict": "additive",
-      "parity": "green"
-    },
-    {
       "key": ".hero-action-primary|||components|||",
       "selector": ".hero-action-primary",
       "layer": "components",
@@ -1998,53 +1952,6 @@
       "parity": "green"
     },
     {
-      "key": ".peer:focus-visible ~ .peer-focus-visible\\:ring-indigo-500|||utilities|||",
-      "selector": ".peer:focus-visible ~ .peer-focus-visible\\:ring-indigo-500",
-      "layer": "utilities",
-      "atRuleContext": [],
-      "stateContext": [
-        "focus",
-        "focus-visible"
-      ],
-      "category": "additive",
-      "hotspot": false,
-      "records": [
-        {
-          "source": "web/secure-landing/portal-src/styles/utilities.required.css",
-          "line": 4,
-          "column": 1,
-          "layer": "utilities",
-          "declarationSignature": "68577264f416206890cdab0488d0c6ab3bd604d1",
-          "properties": [
-            "--portal-ring-color",
-            "--portal-ring-offset",
-            "--portal-ring-offset-color",
-            "box-shadow"
-          ]
-        },
-        {
-          "source": "web/secure-landing/portal-src/styles/utilities.required.css",
-          "line": 23,
-          "column": 1,
-          "layer": "utilities",
-          "declarationSignature": "667c4b2566478b112b1ab1ca44967514ede67bf8",
-          "properties": [
-            "--portal-ring-color"
-          ]
-        }
-      ],
-      "owners": [
-        "portal-css-architecture"
-      ],
-      "ownerReason": "Additive ownership: .peer:focus-visible ~ .peer-focus-visible\\:ring-indigo-500 splits non-overlapping declarations across utilities.required.css while preserving the current computed-style parity.",
-      "phase": "phase-9-duplicate-ownership-closure",
-      "contextType": "runtime-state",
-      "disposition": "report-only",
-      "removalStatus": "removable-later",
-      "declarationConflict": "additive",
-      "parity": "green"
-    },
-    {
       "key": ".peer:focus-visible ~ .peer-focus-visible\\:ring-red-500|||utilities|||",
       "selector": ".peer:focus-visible ~ .peer-focus-visible\\:ring-red-500",
       "layer": "utilities",
@@ -2071,7 +1978,7 @@
         },
         {
           "source": "web/secure-landing/portal-src/styles/utilities.required.css",
-          "line": 26,
+          "line": 23,
           "column": 1,
           "layer": "utilities",
           "declarationSignature": "2ea7c61f33e02aec3dc105fbd66bdfd9bcb80db1",

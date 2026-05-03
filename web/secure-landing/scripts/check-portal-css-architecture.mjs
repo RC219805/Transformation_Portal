@@ -245,6 +245,34 @@ const PHASE17_SOURCE_PROPERTIES_BY_SELECTOR = new Map([
   [".review-provenance-label", ["letter-spacing"]]
 ]);
 const PHASE17_WORKSPACE_SHADOW_PROPERTIES = ["box-shadow"];
+const PHASE18_UTILITY_FOCUS_RING_PHASE = "phase-18-utility-focus-ring-consolidation";
+const PHASE18_DUPLICATE_CONTEXT_COUNT_BEFORE = 58;
+const PHASE18_DUPLICATE_CONTEXT_COUNT_AFTER = 56;
+const PHASE18_ADDITIVE_CONTEXT_COUNT_BEFORE = 2;
+const PHASE18_ADDITIVE_CONTEXT_COUNT_AFTER = 0;
+const PHASE18_CONFLICTING_PERMANENT_CONTEXT_COUNT = 56;
+const PHASE18_EXPECTED_CONSOLIDATED_CONTEXT_COUNT = 2;
+const PHASE18_GENERATED_PORTAL_CSS_HASH_BEFORE =
+  "a86edcd4ad993bae7c081300877681c6ebcfa0faf31dbc3358c3e6119d49627f";
+const PHASE18_RENDERED_PORTAL_CSS_FINGERPRINT_BEFORE = "08a5cefdcc6a";
+const PHASE18_GENERATED_PORTAL_CSS_BYTES_BEFORE = 80925;
+const PHASE18_GENERATED_PORTAL_CSS_GZIP_BYTES_BEFORE = 15752;
+const PHASE18_TARGET_FILE = "web/secure-landing/portal-src/styles/utilities.required.css";
+const PHASE18_TARGET_SELECTORS = [
+  ".focus\\:ring-indigo-500:focus",
+  ".peer:focus-visible ~ .peer-focus-visible\\:ring-indigo-500"
+];
+const PHASE18_TARGET_DUPLICATE_KEYS = new Set(PHASE18_TARGET_SELECTORS.map((selector) => `${selector}|||utilities|||`));
+const PHASE18_SHARED_RING_SELECTORS = [
+  ".focus\\:ring-2:focus",
+  ".focus\\:ring-indigo-500:focus",
+  ".focus\\:ring-cyan-500:focus",
+  ".focus\\:ring-amber-500:focus",
+  ".peer:focus-visible ~ .peer-focus-visible\\:ring-2",
+  ".peer:focus-visible ~ .peer-focus-visible\\:ring-indigo-500",
+  ".peer:focus-visible ~ .peer-focus-visible\\:ring-red-500"
+];
+const PHASE18_RED_RING_SELECTOR = ".peer:focus-visible ~ .peer-focus-visible\\:ring-red-500";
 const VALID_PHASE9_CONTEXT_TYPES = new Set([
   "responsive-context",
   "theme-context",
@@ -365,6 +393,20 @@ const PHASE17_UNSAFE_REASONS = new Set([
   "dark-override-missing",
   "specificity-changing-grouping"
 ]);
+const PHASE18_UNSAFE_REASONS = new Set([
+  "selector-not-phase18-target",
+  "conflicting-permanent",
+  "hotspot",
+  "cross-layer",
+  "cross-context",
+  "selector-list-coverage-ambiguous",
+  "source-file-drift",
+  "shared-declaration-missing",
+  "redundant-declaration-drift",
+  "red-override-missing",
+  "source-order-sensitive",
+  "specificity-changing-grouping"
+]);
 const PORTAL_CSS_RENDER_TOKENS = {
   "__PORTAL_FONT_SANS_URL__": "fonts/portal-sans.woff2",
   "__PORTAL_FONT_MONO_URL__": "fonts/portal-mono.woff2"
@@ -415,6 +457,10 @@ const PHASE17_SURFACE_FINAL_PASS_FIXTURE_ARG = "--check-phase17-surface-final-pa
 const phase17SurfaceFinalPassFixtureIndex = process.argv.indexOf(PHASE17_SURFACE_FINAL_PASS_FIXTURE_ARG);
 const PHASE17_SURFACE_FINAL_PASS_FIXTURE_PATH =
   phase17SurfaceFinalPassFixtureIndex >= 0 ? process.argv[phase17SurfaceFinalPassFixtureIndex + 1] : "";
+const PHASE18_UTILITY_FOCUS_RING_FIXTURE_ARG = "--check-phase18-utility-focus-ring-fixture";
+const phase18UtilityFocusRingFixtureIndex = process.argv.indexOf(PHASE18_UTILITY_FOCUS_RING_FIXTURE_ARG);
+const PHASE18_UTILITY_FOCUS_RING_FIXTURE_PATH =
+  phase18UtilityFocusRingFixtureIndex >= 0 ? process.argv[phase18UtilityFocusRingFixtureIndex + 1] : "";
 
 const EXPECTED_LAYER_ORDER = ["tokens", "base", "components", "utilities", "overrides"];
 const EXPECTED_LAYER_IMPORTS = [
@@ -2571,6 +2617,116 @@ function analyzePhase17SurfaceFinalPassCandidates(duplicates, baseline = loadBas
     .sort((left, right) => left.key.localeCompare(right.key));
 }
 
+function phase18RecordHasSharedRingDeclarations(record) {
+  return phase15HasExpectedProperties(record, [
+    "--portal-ring-color",
+    "--portal-ring-offset",
+    "--portal-ring-offset-color",
+    "box-shadow"
+  ]);
+}
+
+function phase18RecordHasRedundantIndigoDeclaration(record) {
+  return (
+    phase15HasExpectedProperties(record, ["--portal-ring-color"]) &&
+    declarationRecords(record).some(
+      ([property, value]) =>
+        property === "--portal-ring-color" &&
+        normalizedDeclarationValue(value) === "rgba(99, 102, 241, 0.45)"
+    )
+  );
+}
+
+function analyzePhase18UtilityFocusRingCandidate(duplicate, baselineEntry = {}) {
+  const entry = baselineEntry || {};
+  const records = duplicate.records || [];
+  const candidate = {
+    key: duplicate.key,
+    selector: duplicate.selector,
+    layer: duplicate.layer,
+    atRuleContext: duplicate.context || [],
+    declarationConflict: duplicate.category,
+    removalStatus: entry.removalStatus || duplicate.removalStatus || null,
+    sourceLocations: phase11SourceLocations(duplicate),
+    candidateStatus: "deferred"
+  };
+
+  if (duplicate.hotspot || entry.hotspot) {
+    return { ...candidate, unsafeReason: "hotspot" };
+  }
+  if (duplicate.category !== "additive" || (entry.removalStatus || duplicate.removalStatus) !== "removable-later") {
+    return { ...candidate, unsafeReason: "conflicting-permanent" };
+  }
+  if (!PHASE18_TARGET_DUPLICATE_KEYS.has(duplicate.key)) {
+    return { ...candidate, unsafeReason: "selector-not-phase18-target" };
+  }
+  if (duplicate.layer !== "utilities" || records.some((record) => (record.layer || duplicate.layer) !== "utilities")) {
+    return { ...candidate, unsafeReason: "cross-layer" };
+  }
+  if (records.some(hasSpecificityChangingGrouping)) {
+    return { ...candidate, unsafeReason: "specificity-changing-grouping" };
+  }
+  if (new Set(records.map((record) => JSON.stringify(record.context || duplicate.context || []))).size > 1) {
+    return { ...candidate, unsafeReason: "cross-context" };
+  }
+  if (JSON.stringify(duplicate.context || []) !== JSON.stringify([])) {
+    return { ...candidate, unsafeReason: "cross-context" };
+  }
+  if (records.length !== 2 || !records.every((record) => record.source === PHASE18_TARGET_FILE)) {
+    return { ...candidate, unsafeReason: "source-file-drift" };
+  }
+
+  const shared = records.find((record) => selectorListEquals(selectorListForRecord(record), PHASE18_SHARED_RING_SELECTORS));
+  const redundant = records.find((record) => selectorListEquals(selectorListForRecord(record), PHASE18_TARGET_SELECTORS));
+  if (!shared) {
+    return { ...candidate, unsafeReason: "selector-list-coverage-ambiguous" };
+  }
+  if (!phase18RecordHasSharedRingDeclarations(shared)) {
+    return { ...candidate, unsafeReason: "shared-declaration-missing" };
+  }
+  if (!redundant || !phase18RecordHasRedundantIndigoDeclaration(redundant)) {
+    return { ...candidate, unsafeReason: "redundant-declaration-drift" };
+  }
+  if ((shared.line || 0) >= (redundant.line || 0)) {
+    return { ...candidate, unsafeReason: "source-order-sensitive" };
+  }
+
+  return {
+    ...candidate,
+    candidateStatus: "safe",
+    approvedPhase18Target: true,
+    targetLocation: {
+      file: shared.source,
+      line: shared.line,
+      column: shared.column
+    },
+    sourceLocation: {
+      file: redundant.source,
+      line: redundant.line,
+      column: redundant.column
+    },
+    safetyChecks: {
+      sameFile: true,
+      utilityLayer: true,
+      emptyAtRuleContext: true,
+      selectorListCoveragePreserved: true,
+      sharedRingDeclarationsPreserved: true,
+      redundantIndigoRuleRemoved: true,
+      redOverridePreserved: true,
+      noSpecificityChangingGrouping: true
+    }
+  };
+}
+
+function analyzePhase18UtilityFocusRingCandidates(duplicates, baseline = loadBaseline()) {
+  const baselineEntries = new Map(((baseline && baseline.duplicateKeys) || []).map((entry) => [entry.key, entry]));
+  return duplicates
+    .map((duplicate) =>
+      analyzePhase18UtilityFocusRingCandidate(duplicate, baselineEntries.get(duplicate.key) || duplicate.baselineEntry || duplicate)
+    )
+    .sort((left, right) => left.key.localeCompare(right.key));
+}
+
 function phase14FindRule(root, selectors) {
   let match = null;
   root.walkRules((rule) => {
@@ -3058,6 +3214,58 @@ function checkPhase17SurfaceFinalPassSourceShape(failures, options = {}) {
   const sharedShadowRule = phase14FindRule(surfaceRoot, [".portal-topbar", ".portal-context-shell", ".shell-panel", ".shell-panel-strong"]);
   if (!sharedShadowRule) {
     failures.push(`${surfaceLabel} shared shadow selector list drifted after Phase 17`);
+  }
+}
+
+function checkPhase18UtilityFocusRingSourceShape(failures, options = {}) {
+  const utilityLabel = options.utilityLabel || PHASE18_TARGET_FILE;
+  const utilityRoot = options.utilityRoot || parseCss(path.resolve(REPO_ROOT, PHASE18_TARGET_FILE));
+
+  const sharedRingRule = phase14FindRule(utilityRoot, PHASE18_SHARED_RING_SELECTORS);
+  checkRuleExactDeclarations(
+    sharedRingRule,
+    {
+      "--portal-ring-offset": "0px",
+      "--portal-ring-offset-color": "transparent",
+      "--portal-ring-color": "rgba(99, 102, 241, 0.45)",
+      "box-shadow":
+        "0 0 0 var(--portal-ring-offset) var(--portal-ring-offset-color), 0 0 0 calc(2px + var(--portal-ring-offset)) var(--portal-ring-color)"
+    },
+    failures,
+    `${utilityLabel} shared focus ring`
+  );
+
+  if (phase14FindRule(utilityRoot, PHASE18_TARGET_SELECTORS)) {
+    failures.push(`${utilityLabel} redundant indigo focus-ring rule must be removed after Phase 18`);
+  }
+
+  const offsetRule = phase14FindRule(utilityRoot, [
+    ".focus\\:ring-offset-2:focus",
+    ".peer:focus-visible ~ .peer-focus-visible\\:ring-offset-2"
+  ]);
+  checkRuleExactDeclarations(
+    offsetRule,
+    {
+      "--portal-ring-offset": "2px",
+      "--portal-ring-offset-color": "#ffffff"
+    },
+    failures,
+    `${utilityLabel} focus ring offset`
+  );
+
+  const redRingRule = phase14FindRule(utilityRoot, [PHASE18_RED_RING_SELECTOR]);
+  checkRuleExactDeclarations(
+    redRingRule,
+    { "--portal-ring-color": "rgba(239, 68, 68, 0.45)" },
+    failures,
+    `${utilityLabel} red peer focus ring`
+  );
+  if (
+    sharedRingRule?.source?.start?.line &&
+    redRingRule?.source?.start?.line &&
+    redRingRule.source.start.line <= sharedRingRule.source.start.line
+  ) {
+    failures.push(`${utilityLabel} red peer focus ring override must stay after shared focus ring`);
   }
 }
 
@@ -3677,6 +3885,72 @@ function buildPhase17SurfaceFinalPassConsolidationState(duplicates, baseline, ph
   };
 }
 
+function buildPhase18UtilityFocusRingConsolidationState(duplicates, baseline, phase8State) {
+  const baselineEntries = new Map(((baseline && baseline.duplicateKeys) || []).map((entry) => [entry.key, entry]));
+  const ownedDuplicateContextCount = duplicates.filter((duplicate) =>
+    phase9EntryIsOwned(baselineEntries.get(duplicate.key), duplicate)
+  ).length;
+  const duplicateKeys = new Set(duplicates.map((duplicate) => duplicate.key));
+  const consolidatedContexts = Array.from(PHASE18_TARGET_DUPLICATE_KEYS)
+    .filter((key) => !duplicateKeys.has(key))
+    .sort();
+  const remainingTargetContexts = Array.from(PHASE18_TARGET_DUPLICATE_KEYS)
+    .filter((key) => duplicateKeys.has(key))
+    .sort();
+  const cssText = readText(PORTAL_CSS_ASSET_PATH);
+  const generatedRawBytesAfter = Buffer.byteLength(cssText, "utf8");
+  const generatedGzipBytesAfter = gzipByteLength(cssText);
+  const generatedRawByteDelta = generatedRawBytesAfter - PHASE18_GENERATED_PORTAL_CSS_BYTES_BEFORE;
+  const generatedGzipByteDelta = generatedGzipBytesAfter - PHASE18_GENERATED_PORTAL_CSS_GZIP_BYTES_BEFORE;
+  const candidates = analyzePhase18UtilityFocusRingCandidates(duplicates, baseline).filter(
+    (candidate) => candidate.declarationConflict === "additive" && candidate.removalStatus === "removable-later"
+  );
+
+  return {
+    phase: PHASE18_UTILITY_FOCUS_RING_PHASE,
+    targetSelectors: PHASE18_TARGET_SELECTORS,
+    targetFile: PHASE18_TARGET_FILE,
+    baselinePath: relativePath(BASELINE_PATH),
+    baselineSha256: existsSync(BASELINE_PATH) ? sha256File(BASELINE_PATH) : null,
+    duplicateContextCountBefore: PHASE18_DUPLICATE_CONTEXT_COUNT_BEFORE,
+    duplicateContextCountAfter: duplicates.length,
+    additiveDuplicateContextCountBefore: PHASE18_ADDITIVE_CONTEXT_COUNT_BEFORE,
+    additiveDuplicateContextCountAfter: countDuplicatesByCategory(duplicates, "additive"),
+    conflictingPermanentContextCountBefore: PHASE18_CONFLICTING_PERMANENT_CONTEXT_COUNT,
+    conflictingPermanentContextCountAfter: countDuplicatesByCategory(duplicates, "conflicting"),
+    unownedDuplicateContextCountAfter: duplicates.length - ownedDuplicateContextCount,
+    hotspotDuplicateContextCountAfter: duplicates.filter((duplicate) => duplicate.hotspot).length,
+    consolidatedContextCount: consolidatedContexts.length,
+    expectedConsolidatedContextCount: PHASE18_EXPECTED_CONSOLIDATED_CONTEXT_COUNT,
+    consolidatedContexts,
+    remainingTargetContexts,
+    unexpectedResolvedContextCount: Math.max(
+      0,
+      PHASE18_DUPLICATE_CONTEXT_COUNT_BEFORE - duplicates.length - consolidatedContexts.length
+    ),
+    nonTargetAdditiveCandidatesDeferredReason: "selector-not-phase18-target",
+    deferredOutOfScopeCandidateCount: candidates.filter(
+      (candidate) => candidate.unsafeReason === "selector-not-phase18-target"
+    ).length,
+    deferredReasonCounts: deferredReasonCounts(candidates),
+    phase17HistoricalEvidencePreserved: true,
+    removedRawBytes: Math.max(0, -generatedRawByteDelta),
+    removedGzipBytes: Math.max(0, -generatedGzipByteDelta),
+    generatedRawBytesBefore: PHASE18_GENERATED_PORTAL_CSS_BYTES_BEFORE,
+    generatedRawBytesAfter,
+    generatedRawByteDelta,
+    generatedGzipBytesBefore: PHASE18_GENERATED_PORTAL_CSS_GZIP_BYTES_BEFORE,
+    generatedGzipBytesAfter,
+    generatedGzipByteDelta,
+    generatedPortalCssHashBefore: PHASE18_GENERATED_PORTAL_CSS_HASH_BEFORE,
+    generatedPortalCssHashAfter: sha256File(PORTAL_CSS_ASSET_PATH),
+    renderedPortalCssFingerprintBefore: PHASE18_RENDERED_PORTAL_CSS_FINGERPRINT_BEFORE,
+    renderedPortalCssFingerprintAfter: renderedPortalCssFingerprint(),
+    sentinelStatePreserved: sentinelStateIsPreserved(phase8State),
+    parityBaselineChanged: false
+  };
+}
+
 function checkHistoricalPhase9State(report, failures) {
   const state = report.phase9DuplicateState || {};
   const expected = {
@@ -3758,6 +4032,10 @@ function checkHistoricalPhase15State(report, failures) {
 
 function checkHistoricalPhase16State(report, failures) {
   checkPhase16ReviewSurfaceConsolidationState(report.phase16ReviewSurfaceConsolidationState || {}, failures);
+}
+
+function checkHistoricalPhase17State(report, failures) {
+  checkPhase17SurfaceFinalPassConsolidationState(report.phase17SurfaceFinalPassConsolidationState || {}, failures);
 }
 
 function checkPhase15SurfaceLoadingConsolidationState(state, failures) {
@@ -3865,6 +4143,42 @@ function checkPhase17SurfaceFinalPassConsolidationState(state, failures) {
   }
 }
 
+function checkPhase18UtilityFocusRingConsolidationState(state, failures) {
+  const expectedFields = {
+    phase: PHASE18_UTILITY_FOCUS_RING_PHASE,
+    duplicateContextCountBefore: PHASE18_DUPLICATE_CONTEXT_COUNT_BEFORE,
+    duplicateContextCountAfter: PHASE18_DUPLICATE_CONTEXT_COUNT_AFTER,
+    additiveDuplicateContextCountBefore: PHASE18_ADDITIVE_CONTEXT_COUNT_BEFORE,
+    additiveDuplicateContextCountAfter: PHASE18_ADDITIVE_CONTEXT_COUNT_AFTER,
+    conflictingPermanentContextCountBefore: PHASE18_CONFLICTING_PERMANENT_CONTEXT_COUNT,
+    conflictingPermanentContextCountAfter: PHASE18_CONFLICTING_PERMANENT_CONTEXT_COUNT,
+    unownedDuplicateContextCountAfter: 0,
+    hotspotDuplicateContextCountAfter: 0,
+    consolidatedContextCount: PHASE18_EXPECTED_CONSOLIDATED_CONTEXT_COUNT,
+    expectedConsolidatedContextCount: PHASE18_EXPECTED_CONSOLIDATED_CONTEXT_COUNT,
+    unexpectedResolvedContextCount: 0,
+    nonTargetAdditiveCandidatesDeferredReason: "selector-not-phase18-target",
+    deferredOutOfScopeCandidateCount: 0,
+    phase17HistoricalEvidencePreserved: true,
+    sentinelStatePreserved: true,
+    parityBaselineChanged: false
+  };
+  for (const [field, value] of Object.entries(expectedFields)) {
+    if (state[field] !== value) {
+      failures.push(`${relativePath(OWNERSHIP_DRAIN_REPORT_PATH)} phase18UtilityFocusRingConsolidationState ${field} must be ${value}`);
+    }
+  }
+  if (JSON.stringify(state.targetSelectors || []) !== JSON.stringify(PHASE18_TARGET_SELECTORS)) {
+    failures.push(`${relativePath(OWNERSHIP_DRAIN_REPORT_PATH)} phase18UtilityFocusRingConsolidationState targetSelectors drifted`);
+  }
+  if (JSON.stringify(state.remainingTargetContexts || []) !== JSON.stringify([])) {
+    failures.push(`${relativePath(OWNERSHIP_DRAIN_REPORT_PATH)} phase18UtilityFocusRingConsolidationState still has unresolved target contexts`);
+  }
+  if (JSON.stringify(state.consolidatedContexts || []) !== JSON.stringify(Array.from(PHASE18_TARGET_DUPLICATE_KEYS).sort())) {
+    failures.push(`${relativePath(OWNERSHIP_DRAIN_REPORT_PATH)} phase18UtilityFocusRingConsolidationState consolidated context allowlist drifted`);
+  }
+}
+
 function checkOwnershipDrainReport(failures, duplicates) {
   if (!existsSync(OWNERSHIP_DRAIN_REPORT_PATH)) {
     failures.push(`${relativePath(OWNERSHIP_DRAIN_REPORT_PATH)} is missing`);
@@ -3917,7 +4231,7 @@ function checkOwnershipDrainReport(failures, duplicates) {
   const expectedPhase12State = expectedHistoricalPhase12ComponentSingletonConsolidationState();
   const expectedPhase13State = expectedHistoricalPhase13InteractionOutlineConsolidationState();
   const expectedPhase14State = expectedHistoricalPhase14SkeletonPrimitiveConsolidationState();
-  const expectedPhase17State = buildPhase17SurfaceFinalPassConsolidationState(duplicates, loadBaseline(), expectedPhase8State);
+  const expectedPhase18State = buildPhase18UtilityFocusRingConsolidationState(duplicates, loadBaseline(), expectedPhase8State);
 
   if (WRITE_OWNERSHIP_REPORT) {
     report.phase8SentinelState = expectedPhase8State;
@@ -3925,7 +4239,7 @@ function checkOwnershipDrainReport(failures, duplicates) {
     report.phase12ComponentSingletonConsolidationState = expectedPhase12State;
     report.phase13InteractionOutlineConsolidationState = expectedPhase13State;
     report.phase14SkeletonPrimitiveConsolidationState = expectedPhase14State;
-    report.phase17SurfaceFinalPassConsolidationState = expectedPhase17State;
+    report.phase18UtilityFocusRingConsolidationState = expectedPhase18State;
     writeFileSync(OWNERSHIP_DRAIN_REPORT_PATH, `${JSON.stringify(report, null, 2)}\n`, "utf-8");
   }
 
@@ -3941,13 +4255,14 @@ function checkOwnershipDrainReport(failures, duplicates) {
   checkHistoricalPhase14State(report, failures);
   checkHistoricalPhase15State(report, failures);
   checkHistoricalPhase16State(report, failures);
+  checkHistoricalPhase17State(report, failures);
 
-  checkPhase17SurfaceFinalPassConsolidationState(expectedPhase17State, failures);
+  checkPhase18UtilityFocusRingConsolidationState(expectedPhase18State, failures);
   if (
     !WRITE_OWNERSHIP_REPORT &&
-    JSON.stringify(report.phase17SurfaceFinalPassConsolidationState || null) !== JSON.stringify(expectedPhase17State)
+    JSON.stringify(report.phase18UtilityFocusRingConsolidationState || null) !== JSON.stringify(expectedPhase18State)
   ) {
-    failures.push(`${relativePath(OWNERSHIP_DRAIN_REPORT_PATH)} phase17SurfaceFinalPassConsolidationState is stale`);
+    failures.push(`${relativePath(OWNERSHIP_DRAIN_REPORT_PATH)} phase18UtilityFocusRingConsolidationState is stale`);
   }
 }
 
@@ -4512,6 +4827,85 @@ if (phase17SurfaceFinalPassFixtureIndex >= 0) {
   process.exit(0);
 }
 
+if (phase18UtilityFocusRingFixtureIndex >= 0) {
+  if (!PHASE18_UTILITY_FOCUS_RING_FIXTURE_PATH) {
+    console.error(`ERROR: ${PHASE18_UTILITY_FOCUS_RING_FIXTURE_ARG} requires a duplicate candidate JSON fixture path`);
+    process.exit(1);
+  }
+  const fixtureFailures = [];
+  const fixture = JSON.parse(readText(resolveFixturePath(PHASE18_UTILITY_FOCUS_RING_FIXTURE_PATH)));
+  const fixtureDuplicates = Array.isArray(fixture) ? fixture : fixture.duplicates || [];
+  const candidates = analyzePhase18UtilityFocusRingCandidates(fixtureDuplicates, { duplicateKeys: fixture.baselineEntries || [] });
+  const candidateByKey = new Map(candidates.map((candidate) => [candidate.key, candidate]));
+  for (const expected of fixture.expectedCandidates || []) {
+    const candidate = candidateByKey.get(expected.key);
+    if (!candidate) {
+      fixtureFailures.push(`missing Phase 18 candidate ${expected.key}`);
+      continue;
+    }
+    if (expected.candidateStatus && candidate.candidateStatus !== expected.candidateStatus) {
+      fixtureFailures.push(
+        `Phase 18 candidate ${expected.key} expected ${expected.candidateStatus} but found ${candidate.candidateStatus}`
+      );
+    }
+    if (expected.unsafeReason && candidate.unsafeReason !== expected.unsafeReason) {
+      fixtureFailures.push(
+        `Phase 18 candidate ${expected.key} expected unsafeReason ${expected.unsafeReason} but found ${candidate.unsafeReason || "none"}`
+      );
+    }
+    if (expected.unsafeReason && !PHASE18_UNSAFE_REASONS.has(expected.unsafeReason)) {
+      fixtureFailures.push(`Phase 18 fixture expected unsupported unsafeReason ${expected.unsafeReason}`);
+    }
+  }
+  if (
+    fixture.expectedState &&
+    JSON.stringify(fixture.phase18UtilityFocusRingConsolidationState || null) !== JSON.stringify(fixture.expectedState)
+  ) {
+    fixtureFailures.push("phase18UtilityFocusRingConsolidationState is stale");
+  }
+  if (
+    fixture.expectedPhase17State &&
+    JSON.stringify(fixture.phase17SurfaceFinalPassConsolidationState || null) !== JSON.stringify(fixture.expectedPhase17State)
+  ) {
+    fixtureFailures.push("phase17SurfaceFinalPassConsolidationState immutable historical evidence drifted");
+  }
+  if (fixture.baselineEntries) {
+    for (const entry of fixture.baselineEntries) {
+      if (/selector-not-phase18-target/.test(String(entry.ownerReason || ""))) {
+        fixtureFailures.push("selector-not-phase18-target must not overwrite live baseline ownerReason");
+      }
+    }
+  }
+  if (fixture.sourceShape) {
+    const sourceShapeFailures = [];
+    checkPhase18UtilityFocusRingSourceShape(sourceShapeFailures, {
+      utilityRoot: parseCss("phase18-utility-focus-ring.fixture.utilities.css", fixture.sourceShape.utilityCss || ""),
+      utilityLabel: "phase18-utility-focus-ring fixture utility"
+    });
+    const expectedSourceShapeFailures = fixture.expectedSourceShapeFailures || [];
+    for (const expected of expectedSourceShapeFailures) {
+      if (!sourceShapeFailures.some((failure) => failure.includes(expected))) {
+        fixtureFailures.push(`missing Phase 18 source-shape failure ${expected}`);
+      }
+    }
+    for (const failure of sourceShapeFailures) {
+      if (!expectedSourceShapeFailures.some((expected) => failure.includes(expected))) {
+        fixtureFailures.push(`unexpected Phase 18 source-shape failure ${failure}`);
+      }
+    }
+  }
+  if (fixtureFailures.length > 0) {
+    for (const failure of fixtureFailures) {
+      console.error(`ERROR: ${failure}`);
+    }
+    process.exit(1);
+  }
+  console.log(
+    `portal css phase18 utility-focus-ring fixture: OK (${candidates.filter((candidate) => candidate.candidateStatus === "safe").length} safe, ${candidates.filter((candidate) => candidate.candidateStatus === "deferred").length} deferred)`
+  );
+  process.exit(0);
+}
+
 const failures = [];
 const cssFiles = listFiles(PORTAL_CSS_SOURCE_DIR, (entryPath) => entryPath.endsWith(".css"));
 const records = collectRuleRecords(cssFiles, productionLayerBySourcePath());
@@ -4530,6 +4924,7 @@ checkPhase14SkeletonSourceShape(failures);
 checkPhase15SurfaceLoadingSourceShape(failures);
 checkPhase16ReviewSurfaceSourceShape(failures);
 checkPhase17SurfaceFinalPassSourceShape(failures);
+checkPhase18UtilityFocusRingSourceShape(failures);
 checkOwnershipDrainReport(failures, duplicates);
 checkOverridesCompatNoNewIds(failures);
 checkOverridesCompatNoImportant(failures);
