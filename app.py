@@ -5831,6 +5831,7 @@ def _artifact_display_label(role: str) -> str:
         "run_card": "Run Card",
         "report": "Report",
         "manifest": "Manifest",
+        "vlm_caption": "Advisory Caption",
         "archive": "Archive",
         "log": "Log",
         "metadata": "Metadata",
@@ -5873,6 +5874,15 @@ def _artifact_display_hint(relative_path: str, path: Path) -> Dict[str, Any]:
         else:
             role = "review_preview"
             priority = 850
+    elif lower_name.endswith(".vlm_captioning.sidecar.json"):
+        role = "vlm_caption"
+        priority = 300
+    elif lower_name.endswith(".vlm_captioning.raw.txt"):
+        role = "log"
+        priority = 160
+    elif "/captioning/" in f"/{lower_name}":
+        role = "metadata"
+        priority = 120
     elif "run_card" in lower_name:
         role = "run_card"
         priority = 320

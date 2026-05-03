@@ -339,8 +339,10 @@
       "owner": "static",
       "sources": [
         "portal.html",
+        "public/portal-assets/portal-review.js",
         "public/portal-assets/portal.js",
-        "web/secure-landing/portal-src/portal.template.js"
+        "web/secure-landing/portal-src/portal.template.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
       ],
       "cssFile": "utilities.required.css",
       "cssOwners": [
@@ -712,7 +714,9 @@
       "className": "border-t",
       "owner": "static",
       "sources": [
-        "portal.html"
+        "portal.html",
+        "public/portal-assets/portal-review.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
       ],
       "cssFile": "utilities.required.css",
       "cssOwners": [
@@ -737,8 +741,10 @@
       "owner": "static",
       "sources": [
         "portal.html",
+        "public/portal-assets/portal-review.js",
         "public/portal-assets/portal.js",
-        "web/secure-landing/portal-src/portal.template.js"
+        "web/secure-landing/portal-src/portal.template.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
       ],
       "cssFile": "utilities.required.css",
       "cssOwners": [
@@ -750,7 +756,9 @@
       "className": "break-words",
       "owner": "static",
       "sources": [
-        "portal.html"
+        "portal.html",
+        "public/portal-assets/portal-review.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
       ],
       "cssFile": "utilities.required.css",
       "cssOwners": [
@@ -778,7 +786,9 @@
       "owner": "static",
       "sources": [
         "portal.html",
-        "public/portal-assets/portal.js"
+        "public/portal-assets/portal-review.js",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
       ],
       "cssFile": "utilities.required.css",
       "cssOwners": [
@@ -1127,8 +1137,10 @@
       "owner": "static",
       "sources": [
         "portal.html",
+        "public/portal-assets/portal-review.js",
         "public/portal-assets/portal.js",
-        "web/secure-landing/portal-src/portal.template.js"
+        "web/secure-landing/portal-src/portal.template.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
       ],
       "cssFile": "utilities.required.css",
       "cssOwners": [
@@ -1788,8 +1800,10 @@
       "owner": "static",
       "sources": [
         "portal.html",
+        "public/portal-assets/portal-review.js",
         "public/portal-assets/portal.js",
-        "web/secure-landing/portal-src/portal.template.js"
+        "web/secure-landing/portal-src/portal.template.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
       ],
       "cssFile": "utilities.required.css",
       "cssOwners": [
@@ -2126,8 +2140,10 @@
       "owner": "static",
       "sources": [
         "portal.html",
+        "public/portal-assets/portal-review.js",
         "public/portal-assets/portal.js",
-        "web/secure-landing/portal-src/portal.template.js"
+        "web/secure-landing/portal-src/portal.template.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
       ],
       "cssFile": "utilities.required.css",
       "cssOwners": [
@@ -2188,8 +2204,10 @@
       "owner": "static",
       "sources": [
         "portal.html",
+        "public/portal-assets/portal-review.js",
         "public/portal-assets/portal.js",
-        "web/secure-landing/portal-src/portal.template.js"
+        "web/secure-landing/portal-src/portal.template.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
       ],
       "cssFile": "utilities.required.css",
       "cssOwners": [
@@ -2637,8 +2655,10 @@
       "owner": "static",
       "sources": [
         "portal.html",
+        "public/portal-assets/portal-review.js",
         "public/portal-assets/portal.js",
-        "web/secure-landing/portal-src/portal.template.js"
+        "web/secure-landing/portal-src/portal.template.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
       ],
       "cssFile": "utilities.required.css",
       "cssOwners": [
@@ -2872,7 +2892,9 @@
       "className": "max-h-[220px]",
       "owner": "static",
       "sources": [
-        "portal.html"
+        "portal.html",
+        "public/portal-assets/portal-review.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
       ],
       "cssFile": "utilities.required.css",
       "cssOwners": [
@@ -3212,7 +3234,9 @@
       "className": "min-w-0",
       "owner": "static",
       "sources": [
-        "portal.html"
+        "portal.html",
+        "public/portal-assets/portal-review.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
       ],
       "cssFile": "utilities.required.css",
       "cssOwners": [
@@ -3310,8 +3334,10 @@
       "owner": "static",
       "sources": [
         "portal.html",
+        "public/portal-assets/portal-review.js",
         "public/portal-assets/portal.js",
-        "web/secure-landing/portal-src/portal.template.js"
+        "web/secure-landing/portal-src/portal.template.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
       ],
       "cssFile": "utilities.required.css",
       "cssOwners": [
@@ -3475,7 +3501,9 @@
       "className": "overflow-y-auto",
       "owner": "static",
       "sources": [
-        "portal.html"
+        "portal.html",
+        "public/portal-assets/portal-review.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
       ],
       "cssFile": "utilities.required.css",
       "cssOwners": [
@@ -3698,7 +3726,9 @@
       "className": "pt-4",
       "owner": "static",
       "sources": [
-        "portal.html"
+        "portal.html",
+        "public/portal-assets/portal-review.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
       ],
       "cssFile": "utilities.required.css",
       "cssOwners": [
@@ -4334,7 +4364,9 @@
       "className": "space-y-1",
       "owner": "static",
       "sources": [
-        "portal.html"
+        "portal.html",
+        "public/portal-assets/portal-review.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
       ],
       "cssFile": "utilities.required.css",
       "cssOwners": [
@@ -4840,8 +4872,10 @@
       "owner": "static",
       "sources": [
         "portal.html",
+        "public/portal-assets/portal-review.js",
         "public/portal-assets/portal.js",
-        "web/secure-landing/portal-src/portal.template.js"
+        "web/secure-landing/portal-src/portal.template.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
       ],
       "cssFile": "utilities.required.css",
       "cssOwners": [
@@ -5301,7 +5335,9 @@
       "className": "whitespace-pre-wrap",
       "owner": "static",
       "sources": [
-        "portal.html"
+        "portal.html",
+        "public/portal-assets/portal-review.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
       ],
       "cssFile": "utilities.required.css",
       "cssOwners": [

@@ -5008,6 +5008,31 @@ def test_index_job_artifacts_does_not_misclassify_catalog_metadata_as_log(tmp_pa
     assert log_item["display_hint"]["label"] == "Log"
 
 
+def test_index_job_artifacts_classifies_captioning_sidecar_only_as_advisory_caption(tmp_path: Path) -> None:
+    output_dir = tmp_path / "out"
+    caption_dir = output_dir / "captioning"
+    caption_dir.mkdir(parents=True, exist_ok=True)
+    (caption_dir / "image.vlm_captioning.sidecar.json").write_text("{}", encoding="utf-8")
+    (caption_dir / "image.vlm_captioning.raw.txt").write_text("SCENE=Pool", encoding="utf-8")
+    (caption_dir / "image_proxy.png").write_bytes(b"png")
+
+    job = orchestrator_app.Job(
+        id="job_artifacts_captioning",
+        created_at=orchestrator_app._now(),
+        request={"pipeline": "lux-depth-v3", "args": {"output_dir": str(output_dir)}},
+    )
+
+    indexed = orchestrator_app._index_job_artifacts(job)
+
+    sidecar_item = next(item for item in indexed if item["path"] == "captioning/image.vlm_captioning.sidecar.json")
+    raw_item = next(item for item in indexed if item["path"] == "captioning/image.vlm_captioning.raw.txt")
+    proxy_item = next(item for item in indexed if item["path"] == "captioning/image_proxy.png")
+    assert sidecar_item["display_hint"]["role"] == "vlm_caption"
+    assert sidecar_item["display_hint"]["label"] == "Advisory Caption"
+    assert raw_item["display_hint"]["role"] == "log"
+    assert proxy_item["display_hint"]["role"] == "review_preview"
+
+
 def test_index_job_artifacts_skips_entries_resolving_outside_output_dir(tmp_path: Path) -> None:
     output_dir = tmp_path / "out"
     output_dir.mkdir(parents=True, exist_ok=True)

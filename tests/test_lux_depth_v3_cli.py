@@ -841,6 +841,85 @@ class TestCLIConfiguration:
         assert captured_config is not None
         assert captured_config.run_card_include_proofs is True
 
+    def test_vlm_captioning_flags_set_config(self, tmp_path):
+        """VLM captioning flags should remain explicit and default-off."""
+        from unittest.mock import MagicMock, patch
+
+        input_dir = tmp_path / "input"
+        input_dir.mkdir()
+        (input_dir / "test.jpg").touch()
+
+        captured_config = None
+
+        def mock_orch_init(config, output_root):
+            nonlocal captured_config
+            captured_config = config
+            mock_orch = MagicMock()
+            mock_orch.enhance_batch.return_value = [{"status": "ok"}]
+            return mock_orch
+
+        with patch(
+            "transformation_portal.lux_depth_v3.__main__.EnhanceOrchestrator",
+            side_effect=mock_orch_init,
+        ):
+            result = runner.invoke(
+                app,
+                [
+                    "--input-dir",
+                    str(input_dir),
+                    "--output-dir",
+                    str(tmp_path / "output"),
+                    "--vlm-captioning",
+                    "on",
+                    "--vlm-captioning-backend",
+                    "fastvlm",
+                    "--vlm-captioning-model",
+                    "review",
+                    "--vlm-captioning-proxy-format",
+                    "jpeg",
+                    "--vlm-captioning-max-side-px",
+                    "1200",
+                    "--fastvlm-python",
+                    "/tmp/fastvlm-python",
+                    "--fastvlm-mlx-vlm-dir",
+                    "/tmp/mlx-vlm",
+                    "--fastvlm-timeout-seconds",
+                    "60",
+                    *DEFAULT_APACHE_MODEL_ARGS,
+                ],
+            )
+
+        assert result.exit_code == 0
+        assert captured_config is not None
+        assert captured_config.vlm_captioning_enabled is True
+        assert captured_config.vlm_captioning_backend == "fastvlm"
+        assert captured_config.vlm_captioning_model == "review"
+        assert captured_config.vlm_captioning_proxy_format == "jpeg"
+        assert captured_config.vlm_captioning_max_side_px == 1200
+        assert captured_config.fastvlm_python_executable == "/tmp/fastvlm-python"
+        assert captured_config.fastvlm_mlx_vlm_dir == "/tmp/mlx-vlm"
+        assert captured_config.fastvlm_timeout_seconds == 60
+
+    def test_invalid_vlm_captioning_backend_rejected(self, tmp_path):
+        """Only the governed subprocess FastVLM backend is supported."""
+        input_dir = tmp_path / "input"
+        input_dir.mkdir()
+
+        result = runner.invoke(
+            app,
+            [
+                "--input-dir",
+                str(input_dir),
+                "--output-dir",
+                str(tmp_path / "output"),
+                "--vlm-captioning-backend",
+                "inline",
+            ],
+        )
+
+        assert result.exit_code == 1
+        assert "vlm-captioning-backend" in result.stdout.lower()
+
     def test_depth_pro_python_flag_sets_config(self, tmp_path):
         """--depth-pro-python should be forwarded into EnhanceConfig."""
         from unittest.mock import MagicMock, patch

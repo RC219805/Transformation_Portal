@@ -165,6 +165,12 @@ If `./.runtime/Depth-Anything-3/.venv-da3/bin/python` exists, Lux Depth V3
 auto-discovers that repo-local DA3 runtime before falling back to the main repo
 environment.
 
+**Optional FastVLM advisory captions:** Lux Depth V3 can emit governed FastVLM
+caption sidecars with `--vlm-captioning on`. This runtime stays isolated under
+`.runtime/fastvlm/.venv-fastvlm`, is called by subprocess only, and is advisory:
+it is not used for APEX pass/fail, Materials V3 segmentation, or any quality
+gate. See [FastVLM Advisory Captioning Runtime](docs/runtimes/fastvlm.md).
+
 **Recommended (DA3 via isolated Depth Anything 3 environment):**
 ```bash
 ./scripts/setup/install_da3_runtime.sh

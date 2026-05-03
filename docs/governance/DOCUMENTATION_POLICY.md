@@ -68,6 +68,7 @@ Approved top-level directories:
 - `docs/quick_references/`
 - `docs/reference/`
 - `docs/reports/`
+- `docs/runtimes/`
 - `docs/schemas/`
 - `docs/session_summaries/`
 - `docs/sessions/`
@@ -88,6 +89,7 @@ Approved top-level directories:
 | ADR | `docs/architecture/adr/` | Permanent |
 | CLI reference | `docs/cli/` | Permanent |
 | Deployment guide | `docs/deployment/` | Maintained |
+| Optional local runtime guide | `docs/runtimes/` | Maintained |
 | Documentation maps and repo organization specs | `docs/governance/` | Maintained |
 | PR-specific | `docs/pr_archive/` | Historical |
 | Execution logs | `docs/historical/` | Historical |

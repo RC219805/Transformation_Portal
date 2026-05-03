@@ -20,6 +20,7 @@ as canonical documents.
 | Portal and orchestrator contracts | [Portal + Orchestrator Quickstart](guides/PORTAL_ORCHESTRATOR_QUICKSTART.md) |
 | Managed front door | [Portal Secure Front Door Quickstart](guides/PORTAL_SECURE_FRONTDOOR_QUICKSTART.md) |
 | Lux Depth V3 CLI | [Lux Depth V3 CLI Guide](cli/LUX_DEPTH_V3_CLI_GUIDE.md) |
+| FastVLM advisory captioning runtime | [FastVLM Runtime](runtimes/fastvlm.md) |
 | CI workflow inventory | [Workflow Matrix](ci/WORKFLOW_MATRIX.md) |
 
 ## Current Maintained Surfaces
@@ -34,6 +35,7 @@ as canonical documents.
 | Skill progression | [Skill Progress Tracks](guides/SKILL_PROGRESS_TRACKS.md) | Maps recurring PR review themes to evidence-linked drills, acceptance tests, and review checklists. |
 | Archive gates | [Archive Machine Contract](api/ARCHIVE_MACHINE_MODE_CONTRACT.md), [2026-04-27 Archive Gates Audit](governance/audit/archive-gates-2026-04-27.md) | Gates A/B/C are documented with the April 27 readiness audit and normalized JSON evidence. |
 | APEX / Materials | [APEX Governance Status](apex/GOVERNANCE_STATUS.md), [APEX Workflow Design](architecture/APEX_WORKFLOW_DESIGN.md), [APEX Model Family Characterization](validation/APEX_MODEL_FAMILY_CHARACTERIZATION_PROTOCOL.md) | Recent merges added offline model-family characterization, failure-code surfacing, confidence-only pixel-op passthrough, V2 fallback, and SAM2 tile-merge regression coverage. |
+| Advisory captioning | [FastVLM Runtime](runtimes/fastvlm.md) | Optional subprocess-isolated sidecars only; captions are advisory and never satisfy APEX or Materials V3 gates. |
 | Dependency policy | [ADR-032](architecture/ADR-032-dependency-pinning-strategy.md), [Retired ML Lock Lanes](governance/RETIRED_ML_LOCK_LANES_2026-04-30.md), [AGENTS.md](../AGENTS.md) | Layered lockfiles and the Apple Silicon target-owned ML lane are the current dependency governance model. |
 
 ## Historical And Archive Material

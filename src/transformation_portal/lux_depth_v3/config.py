@@ -445,6 +445,17 @@ class EnhanceConfig:
     run_card_version: str = "v1"  # v1 legacy commitment or v2 transparency tree
     run_card_include_proofs: bool = False  # Opt-in per-artifact inclusion proofs for v2 run cards
 
+    # Optional advisory VLM captioning sidecar. This is default-off and MUST NOT
+    # participate in quality gates.
+    vlm_captioning_enabled: bool = False
+    vlm_captioning_backend: str = "fastvlm"
+    vlm_captioning_model: str = "default"
+    vlm_captioning_proxy_format: str = "png"
+    vlm_captioning_max_side_px: int = 1600
+    fastvlm_python_executable: Optional[str] = None
+    fastvlm_mlx_vlm_dir: Optional[str] = None
+    fastvlm_timeout_seconds: int = 180
+
     # Phase B1: optional scene-level reconstruction (off by default)
     enable_reconstruction: bool = False
     grouping_mode: str = "single"  # Options: single, parent_dir
