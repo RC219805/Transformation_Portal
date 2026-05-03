@@ -183,8 +183,12 @@ class TestProvenanceErrors:
         capture = ProvenanceCapture()
         prov = capture.capture(img_path, tensor, gamma=1.0, bit_depth=32)
 
-        # Try to write to invalid path
-        invalid_path = Path("/nonexistent/directory/provenance.json")
+        # A regular file blocks the parent mkdir, so the write fails regardless
+        # of the runner's uid (root would otherwise silently create system paths
+        # via mkdir(parents=True)).
+        blocking_file = tmp_path / "blocking_file"
+        blocking_file.write_text("not a directory")
+        invalid_path = blocking_file / "subdir" / "provenance.json"
 
         with pytest.raises(ProvenanceError, match="sidecar write"):
             capture.write_sidecar(prov, invalid_path)
