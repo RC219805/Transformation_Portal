@@ -17,7 +17,9 @@ This complements ``check_requirements_lock_contract.py`` (which validates
 header metadata and security baselines) by enforcing the broader supply-chain
 invariant that no transitive dependency drifts onto a floating range.
 
-Closes TODO_INVENTORY.md §5.7 (Dependency Pinning Validation).
+Implements the core local-enforcement piece of TODO_INVENTORY.md §5.7
+(Dependency Pinning Validation). The standalone GitHub Actions workflow
+and the constraints-vs-installed audit listed there remain follow-ups.
 """
 
 from __future__ import annotations
@@ -26,7 +28,7 @@ import argparse
 import re
 import sys
 from pathlib import Path
-from typing import Iterable
+from typing import Iterable, Iterator
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 REQUIREMENTS_DIR = PROJECT_ROOT / "requirements"
@@ -79,6 +81,55 @@ def _is_hash_continuation(line: str) -> bool:
     return line.lstrip().startswith("--hash=")
 
 
+def _iter_logical_lines(text: str) -> Iterator[tuple[int, str]]:
+    """Yield ``(start_line_number, joined_line)`` for each logical requirement.
+
+    Handles two physical-line wrapping conventions that show up in
+    requirements files:
+
+    1. Trailing backslash continuation (``pkg \\`` on one line, ``--hash=...``
+       on the next). These are normalised to a single logical line so the
+       continuation doesn't get treated as a stand-alone requirement.
+    2. Bracket-balanced extras wraps (``pkg[extra1,`` on one line,
+       ``    extra2]==1.0.0`` on the next). pip-compile usually keeps these
+       on a single line, but hand-edited inputs often split them; without
+       rejoining, the trailing fragment looks like an unpinned requirement.
+
+    Comment-only and ``--hash`` continuations remain ignored downstream and
+    are not eagerly joined into the previous logical line.
+    """
+
+    physical_lines = text.splitlines()
+    index = 0
+    total = len(physical_lines)
+    while index < total:
+        start_line = index + 1
+        accumulated = physical_lines[index]
+        index += 1
+
+        # Backslash continuation: drop the trailing slash and pull the next
+        # physical line in, separated by a single space so tokens don't merge.
+        while accumulated.rstrip().endswith("\\") and index < total:
+            accumulated = accumulated.rstrip()[:-1].rstrip()
+            accumulated = f"{accumulated} {physical_lines[index].strip()}"
+            index += 1
+
+        # Bracket continuation: only join when the open bracket precedes the
+        # first comment/marker character on the line, so we don't misread a
+        # bracket inside a ``# via foo[bar]`` comment as an open extras list.
+        while _has_unbalanced_extras(accumulated) and index < total:
+            accumulated = f"{accumulated.rstrip()} {physical_lines[index].strip()}"
+            index += 1
+
+        yield start_line, accumulated
+
+
+def _has_unbalanced_extras(line: str) -> bool:
+    """Return True if ``line`` opens an extras list that doesn't close on it."""
+    head = re.split(r"[;#]", line, maxsplit=1)[0]
+    return head.count("[") > head.count("]")
+
+
 def find_violations(paths: Iterable[Path]) -> list[str]:
     """Return human-readable violations for any non-pinned requirement line."""
     violations: list[str] = []
@@ -89,8 +140,8 @@ def find_violations(paths: Iterable[Path]) -> list[str]:
             violations.append(f"{path}: could not read file ({exc})")
             continue
 
-        for line_number, raw_line in enumerate(text.splitlines(), start=1):
-            line = raw_line.rstrip("\\").rstrip()
+        for line_number, logical_line in _iter_logical_lines(text):
+            line = logical_line
             if _is_skippable(line) or _is_hash_continuation(line):
                 continue
 
@@ -99,15 +150,21 @@ def find_violations(paths: Iterable[Path]) -> list[str]:
             head = re.split(r"[;#]", line, maxsplit=1)[0].strip()
             if not head:
                 continue
-            # Continuation lines without a leading package name (e.g. wrapped
-            # extras in pip-compile output) do not carry a version operator.
+            # Stray fragments without a leading package name (the bracket
+            # joiner above should normally absorb these) carry no version
+            # operator and are not actionable.
             if not re.match(r"^[A-Za-z0-9_.\-]", head):
                 continue
 
-            if PINNED_LINE_PATTERN.match(head):
+            # Collapse internal whitespace so ``pkg[a, b]==1.0.0`` (joined
+            # from a wrapped extras list) is matched the same way pip would
+            # canonicalise it.
+            collapsed = re.sub(r"\s+", "", head)
+
+            if PINNED_LINE_PATTERN.match(collapsed):
                 continue
 
-            offending_op = next((op for op in UNPINNED_OPERATORS if op in head), None)
+            offending_op = next((op for op in UNPINNED_OPERATORS if op in collapsed), None)
             if offending_op is None:
                 # Bare package name with no version (e.g. ``somepkg``) is also
                 # unpinned and should be flagged.
@@ -134,7 +191,8 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    if args.paths:
+    explicit = bool(args.paths)
+    if explicit:
         raw_paths = sorted({path.resolve() for path in args.paths})
     else:
         raw_paths = iter_lockfiles()
@@ -148,10 +206,24 @@ def main() -> int:
         print(f"NOTE: skipping exempt file {skipped}", file=sys.stderr)
 
     if not paths:
-        print(
-            f"WARNING: no lockfiles found under {REQUIREMENTS_DIR}",
-            file=sys.stderr,
-        )
+        # Distinguish "default scan turned up nothing" from "every explicit
+        # path was exempt" so the message describes the actual input mode.
+        if explicit:
+            if exempt:
+                print(
+                    "WARNING: every supplied path was exempt; nothing to scan.",
+                    file=sys.stderr,
+                )
+            else:
+                print(
+                    "WARNING: no lockfiles supplied to scan.",
+                    file=sys.stderr,
+                )
+        else:
+            print(
+                f"WARNING: no lockfiles found under {REQUIREMENTS_DIR}",
+                file=sys.stderr,
+            )
         return 0
 
     violations = find_violations(paths)

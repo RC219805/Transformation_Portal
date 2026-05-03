@@ -157,6 +157,80 @@ def test_cli_skips_constraints_when_passed_explicitly(tmp_path: Path, capsys) ->
     assert "base.txt" in captured.out
 
 
+def test_cli_warns_about_all_exempt_inputs(tmp_path: Path, capsys) -> None:
+    """When every explicit path is exempt the message must reflect that, not the default dir."""
+    module = _load_module()
+    constraints = tmp_path / "constraints.txt"
+    constraints.write_text("realesrgan>=9999.0.0\n", encoding="utf-8")
+
+    import sys
+
+    saved_argv = sys.argv
+    try:
+        sys.argv = ["check_dependency_pinning.py", str(constraints)]
+        exit_code = module.main()
+    finally:
+        sys.argv = saved_argv
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert "every supplied path was exempt" in captured.err
+    # The default-scan wording must not surface for explicit-args input.
+    assert "no lockfiles found under" not in captured.err
+
+
+def test_wrapped_extras_pinned_with_equals_is_accepted(tmp_path: Path) -> None:
+    """Bracket-balanced extras split across physical lines must be rejoined before validation."""
+    module = _load_module()
+    lockfile = tmp_path / "wrapped.txt"
+    lockfile.write_text(
+        "pkg[extra1,\n    extra2]==1.0.0\n",
+        encoding="utf-8",
+    )
+
+    assert module.find_violations([lockfile]) == []
+
+
+def test_wrapped_extras_with_unpinned_operator_is_rejected_at_start_line(tmp_path: Path) -> None:
+    """An unpinned wrapped requirement must be flagged once, against the start line."""
+    module = _load_module()
+    lockfile = tmp_path / "wrapped_bad.txt"
+    lockfile.write_text(
+        "pkg[extra1,\n    extra2]>=1.0.0\n",
+        encoding="utf-8",
+    )
+
+    violations = module.find_violations([lockfile])
+
+    assert len(violations) == 1
+    assert ":1:" in violations[0]  # start line, not the trailing fragment line
+    assert ">=" in violations[0]
+
+
+def test_backslash_continuation_is_joined(tmp_path: Path) -> None:
+    """A trailing-backslash continuation must be joined into one logical requirement."""
+    module = _load_module()
+    lockfile = tmp_path / "slash.txt"
+    lockfile.write_text(
+        "pkg \\\n    ==1.0.0\n",
+        encoding="utf-8",
+    )
+
+    assert module.find_violations([lockfile]) == []
+
+
+def test_iter_logical_lines_handles_mixed_wrapping(tmp_path: Path) -> None:
+    module = _load_module()
+    text = "pkg-a==1.0.0\n" "pkg-b[a,\n    b]==2.0.0\n" "pkg-c \\\n    --hash=sha256:abcdef\n" "# trailing comment\n"
+
+    logical = list(module._iter_logical_lines(text))
+
+    # Four logical lines: pkg-a, the joined pkg-b, the joined pkg-c, comment.
+    assert [start for start, _ in logical] == [1, 2, 4, 6]
+    assert "pkg-b[a, b]==2.0.0" in logical[1][1]
+    assert "--hash=sha256:abcdef" in logical[2][1]
+
+
 def test_real_repository_lockfiles_are_pinned() -> None:
     """The shipped lockfiles must satisfy the contract."""
     module = _load_module()
