@@ -202,6 +202,35 @@ INTERACTION_OUTLINE_PROBES = (
         "combinedOutlineStyle": "none",
     },
 )
+UTILITY_FOCUS_RING_PROBES = (
+    {
+        "name": "focus-ring-indigo",
+        "carrierSelector": "[data-phase18-ring-carrier='focus-indigo']",
+        "targetSelector": "[data-phase18-ring-target='focus-indigo']",
+        "forcedPseudoClasses": ("focus",),
+        "pseudoMatch": "focus",
+        "expectedRingColor": "rgba(99, 102, 241, 0.45)",
+        "boxShadowColorToken": "99, 102, 241",
+    },
+    {
+        "name": "peer-focus-ring-indigo",
+        "carrierSelector": "[data-phase18-ring-carrier='peer-indigo']",
+        "targetSelector": "[data-phase18-ring-target='peer-indigo']",
+        "forcedPseudoClasses": ("focus-visible",),
+        "pseudoMatch": "focusVisible",
+        "expectedRingColor": "rgba(99, 102, 241, 0.45)",
+        "boxShadowColorToken": "99, 102, 241",
+    },
+    {
+        "name": "peer-focus-ring-red",
+        "carrierSelector": "[data-phase18-ring-carrier='peer-red']",
+        "targetSelector": "[data-phase18-ring-target='peer-red']",
+        "forcedPseudoClasses": ("focus-visible",),
+        "pseudoMatch": "focusVisible",
+        "expectedRingColor": "rgba(239, 68, 68, 0.45)",
+        "boxShadowColorToken": "239, 68, 68",
+    },
+)
 SKELETON_STATE_IDS = (
     "missionShellSkeletonState",
     "intelligenceShellSkeletonState",
@@ -1217,6 +1246,147 @@ def _validate_interaction_outline_states_with_guard(connection: DevToolsConnecti
         raise SmokeFailure("Interaction outline parity probe failed:\n" + "\n".join(failures))
 
 
+def _utility_focus_ring_setup_expression() -> str:
+    return """
+(() => {
+  document.getElementById('phase18UtilityFocusRingProbe')?.remove();
+  const container = document.createElement('div');
+  container.id = 'phase18UtilityFocusRingProbe';
+  container.style.cssText = 'position:fixed;left:8px;top:8px;z-index:2147483647;display:grid;gap:8px;padding:8px;background:transparent;';
+
+  const focusButton = document.createElement('button');
+  focusButton.type = 'button';
+  focusButton.className = 'focus:ring-2 focus:ring-indigo-500';
+  focusButton.dataset.phase18RingCarrier = 'focus-indigo';
+  focusButton.dataset.phase18RingTarget = 'focus-indigo';
+  focusButton.textContent = 'focus';
+  container.appendChild(focusButton);
+
+  for (const [name, ringClass] of [
+    ['peer-indigo', 'peer-focus-visible:ring-2 peer-focus-visible:ring-indigo-500'],
+    ['peer-red', 'peer-focus-visible:ring-2 peer-focus-visible:ring-red-500']
+  ]) {
+    const row = document.createElement('label');
+    row.style.cssText = 'display:flex;align-items:center;gap:8px;';
+    const peer = document.createElement('input');
+    peer.type = 'checkbox';
+    peer.className = 'peer';
+    peer.dataset.phase18RingCarrier = name;
+    const ringTarget = document.createElement('span');
+    ringTarget.className = ringClass;
+    ringTarget.dataset.phase18RingTarget = name;
+    ringTarget.style.cssText = 'display:inline-block;width:36px;height:20px;border-radius:999px;';
+    row.append(peer, ringTarget);
+    container.appendChild(row);
+  }
+
+  document.body.appendChild(container);
+  return {
+    focusIndigo: Boolean(document.querySelector('[data-phase18-ring-target="focus-indigo"]')),
+    peerIndigo: Boolean(document.querySelector('[data-phase18-ring-target="peer-indigo"]')),
+    peerRed: Boolean(document.querySelector('[data-phase18-ring-target="peer-red"]'))
+  };
+})()
+"""
+
+
+def _utility_focus_ring_read_expression(carrier_selector: str, target_selector: str) -> str:
+    carrier_json = json.dumps(carrier_selector)
+    target_json = json.dumps(target_selector)
+    return f"""
+(() => {{
+  const carrier = document.querySelector({carrier_json});
+  const target = document.querySelector({target_json});
+  if (!carrier || !target) return {{ present: false }};
+  const style = window.getComputedStyle(target);
+  return {{
+    present: true,
+    carrierFocus: carrier.matches(':focus'),
+    carrierFocusVisible: carrier.matches(':focus-visible'),
+    ringColor: style.getPropertyValue('--portal-ring-color').trim(),
+    ringOffset: style.getPropertyValue('--portal-ring-offset').trim(),
+    ringOffsetColor: style.getPropertyValue('--portal-ring-offset-color').trim(),
+    boxShadow: style.boxShadow
+  }};
+}})()
+"""
+
+
+def _normalize_css_alpha(value: object) -> str:
+    return str(value or "").replace(", .", ", 0.")
+
+
+def _validate_utility_focus_ring_states(connection: DevToolsConnection) -> None:
+    setup = connection.evaluate(_utility_focus_ring_setup_expression(), timeout_seconds=20.0)
+    if not isinstance(setup, dict):
+        raise SmokeFailure("Utility focus ring probe setup did not return a status object")
+    failures: list[str] = []
+    for key, label in {
+        "focusIndigo": ".focus:ring-indigo-500",
+        "peerIndigo": ".peer-focus-visible:ring-indigo-500",
+        "peerRed": ".peer-focus-visible:ring-red-500",
+    }.items():
+        if not setup.get(key):
+            failures.append(f"setup: expected {label} probe to be available")
+    if failures:
+        connection.evaluate("document.getElementById('phase18UtilityFocusRingProbe')?.remove()", timeout_seconds=20.0)
+        raise SmokeFailure("Utility focus ring parity probe failed:\n" + "\n".join(failures))
+
+    connection.call("DOM.enable", {}, timeout_seconds=20.0)
+    connection.call("CSS.enable", {}, timeout_seconds=20.0)
+    try:
+        for probe in UTILITY_FOCUS_RING_PROBES:
+            name = str(probe["name"])
+            carrier_selector = str(probe["carrierSelector"])
+            target_selector = str(probe["targetSelector"])
+            node_id = _node_id_for_selector(connection, carrier_selector)
+            forced_pseudo_classes = [str(value) for value in probe["forcedPseudoClasses"]]
+            connection.call(
+                "CSS.forcePseudoState",
+                {"nodeId": node_id, "forcedPseudoClasses": forced_pseudo_classes},
+                timeout_seconds=20.0,
+            )
+            connection.evaluate(_style_settle_expression(), timeout_seconds=20.0)
+            result = connection.evaluate(
+                _utility_focus_ring_read_expression(carrier_selector, target_selector),
+                timeout_seconds=20.0,
+            )
+            if not isinstance(result, dict) or not result.get("present"):
+                failures.append(f"{name}: probe target disappeared")
+                continue
+
+            pseudo_match = str(probe["pseudoMatch"])
+            if pseudo_match == "focus" and result.get("carrierFocus") is not True:
+                failures.append(f"{name}: focus pseudo-state was not applied")
+            if pseudo_match == "focusVisible" and result.get("carrierFocusVisible") is not True:
+                failures.append(f"{name}: focus-visible pseudo-state was not applied")
+            actual_ring_color = _normalize_css_alpha(result.get("ringColor"))
+            expected_ring_color = _normalize_css_alpha(probe["expectedRingColor"])
+            if actual_ring_color != expected_ring_color:
+                failures.append(
+                    f"{name}: --portal-ring-color is {result.get('ringColor')!r}, expected {probe['expectedRingColor']!r}"
+                )
+            if result.get("ringOffset") != "0px":
+                failures.append(f"{name}: --portal-ring-offset is {result.get('ringOffset')!r}, expected '0px'")
+            if result.get("ringOffsetColor") != "transparent":
+                failures.append(
+                    f"{name}: --portal-ring-offset-color is {result.get('ringOffsetColor')!r}, expected 'transparent'"
+                )
+            box_shadow = str(result.get("boxShadow") or "")
+            if box_shadow == "none" or str(probe["boxShadowColorToken"]) not in box_shadow:
+                failures.append(f"{name}: box-shadow did not preserve expected ring color: {box_shadow!r}")
+            connection.call(
+                "CSS.forcePseudoState",
+                {"nodeId": node_id, "forcedPseudoClasses": []},
+                timeout_seconds=20.0,
+            )
+    finally:
+        connection.evaluate("document.getElementById('phase18UtilityFocusRingProbe')?.remove()", timeout_seconds=20.0)
+
+    if failures:
+        raise SmokeFailure("Utility focus ring parity probe failed:\n" + "\n".join(failures))
+
+
 def _skeleton_visibility_probe_expression(parity_state: str) -> str:
     state_json = json.dumps(parity_state)
     skeleton_ids = json.dumps(SKELETON_STATE_IDS)
@@ -1941,6 +2111,7 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
         _validate_surface_final_pass_states(connection)
         _validate_overview_mobile_states(connection)
         _validate_interaction_outline_states(connection)
+        _validate_utility_focus_ring_states(connection)
         _validate_skeleton_primitive_states(connection)
         _validate_surface_loading_states(connection)
 
