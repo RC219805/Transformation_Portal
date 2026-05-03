@@ -31,7 +31,7 @@ def test_pinned_lockfile_is_accepted(tmp_path: Path) -> None:
         "aiofiles==25.1.0\n"
         "pydantic==2.10.0\n"
         "    # via fastapi\n"
-        "uvicorn==0.46.0 ; python_version >= \"3.11\"\n",
+        'uvicorn==0.46.0 ; python_version >= "3.11"\n',
         encoding="utf-8",
     )
 
@@ -50,9 +50,7 @@ def test_hash_continuation_lines_are_ignored(tmp_path: Path) -> None:
     module = _load_module()
     lockfile = tmp_path / "hashed.txt"
     lockfile.write_text(
-        "aiofiles==25.1.0 \\\n"
-        "    --hash=sha256:abc123 \\\n"
-        "    --hash=sha256:def456\n",
+        "aiofiles==25.1.0 \\\n    --hash=sha256:abc123 \\\n    --hash=sha256:def456\n",
         encoding="utf-8",
     )
 
@@ -63,10 +61,7 @@ def test_pip_option_lines_are_ignored(tmp_path: Path) -> None:
     module = _load_module()
     lockfile = tmp_path / "options.txt"
     lockfile.write_text(
-        "-c constraints.txt\n"
-        "-r base.in\n"
-        "--index-url https://example.invalid/simple\n"
-        "aiofiles==25.1.0\n",
+        "-c constraints.txt\n-r base.in\n--index-url https://example.invalid/simple\naiofiles==25.1.0\n",
         encoding="utf-8",
     )
 
