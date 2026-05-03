@@ -215,10 +215,13 @@ class TestDemosaicAlgorithm:
         mock_raw_context.__enter__.return_value = mock_raw_obj
         mock_raw_context.__exit__.return_value = None
 
-        with patch("rawpy.imread", return_value=mock_raw_context), patch(
-            "transformation_portal.lux_depth_v3.raw_loader.resolve_demosaic_algorithm",
-            return_value=sentinel,
-        ) as resolve_mock:
+        with (
+            patch("rawpy.imread", return_value=mock_raw_context),
+            patch(
+                "transformation_portal.lux_depth_v3.raw_loader.resolve_demosaic_algorithm",
+                return_value=sentinel,
+            ) as resolve_mock,
+        ):
             load_raw_as_rgb(raw_file, demosaic="DCB")
 
         resolve_mock.assert_called_once_with("DCB")

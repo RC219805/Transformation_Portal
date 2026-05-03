@@ -11,12 +11,12 @@ from pathlib import Path
 from types import ModuleType
 from typing import Any, Dict, Optional
 
-from .canonical_json import dumps_json
-
 # Re-export the lux_depth_v3 RAW extension whitelist as the single source of
 # truth so the sidecar generator and the depth pipeline never disagree on
 # which files count as RAW.
 from ..lux_depth_v3.raw_loader import RAW_EXTENSIONS as RAW_EXTENSIONS
+from .canonical_json import dumps_json
+
 RAW_SIDECAR_SCHEMA = "raw-image-sidecar/v2"
 EXIFTOOL_VERSION_TIMEOUT_SECONDS = 5
 EXIFTOOL_METADATA_TIMEOUT_SECONDS = 30
