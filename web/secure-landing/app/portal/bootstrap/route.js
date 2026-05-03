@@ -70,6 +70,13 @@ function resolveStagedUploads(session, env = process.env) {
   return resolvePortalRollout(session, "TP_PORTAL_STAGED_UPLOADS_ROLLOUT_PERCENT", env);
 }
 
+function resolveFastVlmCaptioning(session, env = process.env) {
+  if (String(env.TP_PORTAL_FASTVLM_CAPTIONING_ENABLED || "").trim().toLowerCase() !== "1") {
+    return false;
+  }
+  return resolvePortalRollout(session, "TP_PORTAL_FASTVLM_CAPTIONING_ROLLOUT_PERCENT", env);
+}
+
 function withTraceparent(response, traceparent) {
   response.headers.set("traceparent", traceparent);
   return response;
@@ -136,7 +143,8 @@ export async function GET(request) {
           artifactViewerModal: resolveArtifactViewerModal(session),
           reviewSurfaceDeferred: resolveReviewSurfaceDeferred(session),
           stagedUploads: resolveStagedUploads(session),
-          rumTelemetry: resolveRumTelemetry(session)
+          rumTelemetry: resolveRumTelemetry(session),
+          fastVlmCaptioning: resolveFastVlmCaptioning(session)
         }
       },
       {
