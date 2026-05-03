@@ -3860,5 +3860,57 @@
     "renderedPortalCssFingerprintAfter": "ea5def42614e",
     "sentinelStatePreserved": true,
     "parityBaselineChanged": false
+  },
+  "phase17SurfaceFinalPassConsolidationState": {
+    "phase": "phase-17-surface-final-pass-consolidation",
+    "targetSelectors": [
+      ".workspace-shell",
+      ".shell-noise",
+      ".review-provenance-label"
+    ],
+    "targetFile": "web/secure-landing/portal-src/styles/components/surface-normalization.css",
+    "sourceFiles": [
+      "web/secure-landing/portal-src/styles/components/operator-console.css",
+      "web/secure-landing/portal-src/styles/components/shell-foundation.css"
+    ],
+    "baselinePath": "web/secure-landing/portal-src/styles/architecture-baseline.json",
+    "baselineSha256": "014a288e84b83aa4666b210d792af8bbf6721b13f1dd065b3c1a520143576981",
+    "duplicateContextCountBefore": 61,
+    "duplicateContextCountAfter": 58,
+    "additiveDuplicateContextCountBefore": 5,
+    "additiveDuplicateContextCountAfter": 2,
+    "conflictingPermanentContextCountBefore": 56,
+    "conflictingPermanentContextCountAfter": 56,
+    "unownedDuplicateContextCountAfter": 0,
+    "hotspotDuplicateContextCountAfter": 0,
+    "consolidatedContextCount": 3,
+    "expectedConsolidatedContextCount": 3,
+    "consolidatedContexts": [
+      ".review-provenance-label|||components|||",
+      ".shell-noise|||components|||",
+      ".workspace-shell|||components|||"
+    ],
+    "remainingTargetContexts": [],
+    "unexpectedResolvedContextCount": 0,
+    "nonTargetAdditiveCandidatesDeferredReason": "selector-not-phase17-target",
+    "deferredOutOfScopeCandidateCount": 2,
+    "deferredReasonCounts": {
+      "selector-not-phase17-target": 2
+    },
+    "phase16HistoricalEvidencePreserved": true,
+    "removedRawBytes": 0,
+    "removedGzipBytes": 0,
+    "generatedRawBytesBefore": 80813,
+    "generatedRawBytesAfter": 80925,
+    "generatedRawByteDelta": 112,
+    "generatedGzipBytesBefore": 15731,
+    "generatedGzipBytesAfter": 15752,
+    "generatedGzipByteDelta": 21,
+    "generatedPortalCssHashBefore": "ad357cc9c93fe976e349ddcbcac33a62e8014eaa7003a36d561b5c3c7672b429",
+    "generatedPortalCssHashAfter": "a86edcd4ad993bae7c081300877681c6ebcfa0faf31dbc3358c3e6119d49627f",
+    "renderedPortalCssFingerprintBefore": "ea5def42614e",
+    "renderedPortalCssFingerprintAfter": "08a5cefdcc6a",
+    "sentinelStatePreserved": true,
+    "parityBaselineChanged": false
   }
 }

@@ -340,6 +340,26 @@ function runPhase16ReviewSurfaceFixtureFailure(fixture) {
   assert.fail("Phase 16 review-surface fixture unexpectedly passed");
 }
 
+function runPhase17SurfaceFinalPassFixture(fixture) {
+  const tempDir = mkdtempSync(path.join(tmpdir(), "portal-phase17-surface-final-pass-"));
+  const fixturePath = path.join(tempDir, "phase17.json");
+  writeFileSync(fixturePath, `${JSON.stringify(fixture, null, 2)}\n`, "utf8");
+  try {
+    return runNodeScript("scripts/check-portal-css-architecture.mjs", "--check-phase17-surface-final-pass-fixture", fixturePath);
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
+}
+
+function runPhase17SurfaceFinalPassFixtureFailure(fixture) {
+  try {
+    runPhase17SurfaceFinalPassFixture(fixture);
+  } catch (error) {
+    return `${error.stdout || ""}${error.stderr || ""}`;
+  }
+  assert.fail("Phase 17 surface-final-pass fixture unexpectedly passed");
+}
+
 function phase10AdditiveDuplicate(overrides = {}) {
   const selector = overrides.selector || ".owned";
   return {
@@ -801,6 +821,228 @@ function phase16ReviewSurfaceSourceShapeFixture(overrides = {}) {
     surfaceCss,
     operatorCss: overrides.operatorCss || ""
   };
+}
+
+function phase17SurfaceFinalPassDuplicate(overrides = {}) {
+  const selector = overrides.selector || ".workspace-shell";
+  const recordsBySelector = {
+    ".workspace-shell": [
+      {
+        source: "web/secure-landing/portal-src/styles/components/shell-foundation.css",
+        line: 213,
+        column: 1,
+        layer: "components",
+        selectorList: [".workspace-shell"],
+        declarations: [
+          ["position", "relative", false],
+          [
+            "transition",
+            "transform 0.35s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.35s ease, box-shadow 0.35s ease, background-color 0.35s ease",
+            false
+          ]
+        ],
+        declarationSignature: "workspace-shell-foundation",
+        properties: ["position", "transition"]
+      },
+      {
+        source: "web/secure-landing/portal-src/styles/components/surface-normalization.css",
+        line: 151,
+        column: 1,
+        layer: "components",
+        selectorList: [".workspace-shell", ".shell-panel", ".shell-panel-strong"],
+        declarations: [
+          ["border-radius", "var(--ux-radius-lg)", false],
+          ["border-color", "var(--ux-border-subtle)", false],
+          ["background", "var(--ux-surface-elevated)", false]
+        ],
+        declarationSignature: "workspace-shell-surface",
+        properties: ["background", "border-color", "border-radius"]
+      },
+      {
+        source: "web/secure-landing/portal-src/styles/components/surface-normalization.css",
+        line: 187,
+        column: 1,
+        layer: "components",
+        selectorList: [".portal-topbar", ".portal-context-shell", ".workspace-shell"],
+        declarations: [["box-shadow", "var(--ux-shadow-surface)", false]],
+        declarationSignature: "workspace-shell-shadow",
+        properties: ["box-shadow"]
+      }
+    ],
+    ".shell-noise": [
+      {
+        source: "web/secure-landing/portal-src/styles/components/operator-console.css",
+        line: 8,
+        column: 1,
+        layer: "components",
+        selectorList: [".shell-noise"],
+        declarations: [
+          ["position", "fixed", false],
+          ["inset", "0", false],
+          ["z-index", "-20", false],
+          ["pointer-events", "none", false],
+          ["opacity", "0.2", false],
+          [
+            "background-image",
+            "radial-gradient(rgba(15, 23, 42, 0.08) 0.45px, transparent 0.45px), radial-gradient(rgba(8, 145, 178, 0.06) 0.45px, transparent 0.45px)",
+            false
+          ],
+          ["background-position", "0 0, 16px 16px", false],
+          ["background-size", "22px 22px, 28px 28px", false]
+        ],
+        declarationSignature: "shell-noise-operator",
+        properties: [
+          "background-image",
+          "background-position",
+          "background-size",
+          "inset",
+          "opacity",
+          "pointer-events",
+          "position",
+          "z-index"
+        ]
+      },
+      {
+        source: "web/secure-landing/portal-src/styles/components/surface-normalization.css",
+        line: 142,
+        column: 1,
+        layer: "components",
+        selectorList: [".shell-noise"],
+        declarations: [["display", "none", false]],
+        declarationSignature: "shell-noise-surface",
+        properties: ["display"]
+      }
+    ],
+    ".review-provenance-label": [
+      {
+        source: "web/secure-landing/portal-src/styles/components/operator-console.css",
+        line: 466,
+        column: 1,
+        layer: "components",
+        selectorList: [".signal-badge", ".review-provenance-label", ".micro-status", ".job-chip"],
+        declarations: [
+          ["font-size", "13px", false],
+          ["line-height", "1.45", false]
+        ],
+        declarationSignature: "review-label-operator",
+        properties: ["font-size", "line-height"]
+      },
+      {
+        source: "web/secure-landing/portal-src/styles/components/surface-normalization.css",
+        line: 223,
+        column: 1,
+        layer: "components",
+        selectorList: [".review-provenance-label", ".micro-status", ".workspace-link-label"],
+        declarations: [["letter-spacing", "var(--ux-meta-tracking)", false]],
+        declarationSignature: "review-label-surface",
+        properties: ["letter-spacing"]
+      }
+    ]
+  };
+  return {
+    key: overrides.key || `${selector}|||components|||`,
+    selector,
+    layer: "components",
+    context: [],
+    stateContext: [],
+    category: "additive",
+    hotspot: false,
+    removalStatus: "removable-later",
+    records: overrides.records || recordsBySelector[selector] || recordsBySelector[".workspace-shell"],
+    ...overrides
+  };
+}
+
+function phase17SurfaceFinalPassSourceShapeFixture(overrides = {}) {
+  const surfaceCss =
+    overrides.surfaceCss ||
+    `
+.portal-topbar,
+.portal-context-shell {
+  border-radius: var(--ux-radius-lg);
+}
+
+.shell-panel,
+.shell-panel-strong,
+.panel-subtle,
+.stat-tile,
+.console-context-card,
+.console-action-rail,
+.build-pulse-card,
+.runtime-briefing-card,
+.review-compare-summary,
+#artifactPreviewStage,
+#artifactMetadataBar,
+#artifactMetadataCard,
+#reconstructionRuntimeSummary,
+.build-step-tab {
+  border-radius: var(--ux-radius-lg);
+  border-color: var(--ux-border-subtle);
+  background: var(--ux-surface-elevated);
+}
+
+.workspace-shell {
+  position: relative;
+  border-radius: var(--ux-radius-lg);
+  border-color: var(--ux-border-subtle);
+  background: var(--ux-surface-elevated);
+  transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.35s ease, box-shadow 0.35s ease, background-color 0.35s ease;
+  box-shadow: var(--ux-shadow-surface);
+}
+
+.portal-topbar,
+.portal-context-shell,
+.shell-panel,
+.shell-panel-strong {
+  box-shadow: var(--ux-shadow-surface);
+}
+
+.dark .workspace-shell,
+.dark .shell-panel {
+  background: var(--ux-surface-muted);
+}
+`;
+  const operatorCss =
+    overrides.operatorCss ||
+    `
+.shell-noise {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: -20;
+  pointer-events: none;
+  opacity: 0.2;
+  background-image: radial-gradient(rgba(15, 23, 42, 0.08) 0.45px, transparent 0.45px), radial-gradient(rgba(8, 145, 178, 0.06) 0.45px, transparent 0.45px);
+  background-position: 0 0, 16px 16px;
+  background-size: 22px 22px, 28px 28px;
+}
+
+.dark .shell-noise {
+  opacity: 0.18;
+  background-image: radial-gradient(rgba(255, 255, 255, 0.08) 0.45px, transparent 0.45px), radial-gradient(rgba(34, 211, 238, 0.08) 0.45px, transparent 0.45px);
+}
+
+.signal-badge,
+.review-provenance-label,
+.micro-status,
+.job-chip {
+  font-size: 13px;
+  line-height: 1.45;
+  letter-spacing: var(--ux-meta-tracking);
+}
+`;
+  const shellCss =
+    overrides.shellCss ||
+    `
+.workspace-shell[data-ambient-active="true"] {
+  border-color: rgba(34, 211, 238, 0.42);
+}
+
+.dark .workspace-shell[data-ambient-active="true"] {
+  border-color: rgba(45, 212, 191, 0.36);
+}
+`;
+  return { surfaceCss, operatorCss, shellCss };
 }
 
 function normalizedSelectorList(selectorText) {
@@ -2039,6 +2281,132 @@ test("portal CSS Phase 16 review-surface fixtures constrain review chrome consol
   );
 });
 
+test("portal CSS Phase 17 surface final-pass fixtures constrain component consolidation", () => {
+  const workspaceShell = phase17SurfaceFinalPassDuplicate();
+  const shellNoise = phase17SurfaceFinalPassDuplicate({
+    key: ".shell-noise|||components|||",
+    selector: ".shell-noise"
+  });
+  const reviewLabel = phase17SurfaceFinalPassDuplicate({
+    key: ".review-provenance-label|||components|||",
+    selector: ".review-provenance-label"
+  });
+  const outOfScopeUtility = phase17SurfaceFinalPassDuplicate({
+    key: ".focus\\:ring-indigo-500:focus|||utilities|||",
+    selector: ".focus\\:ring-indigo-500:focus",
+    layer: "utilities"
+  });
+  const sourceDrift = phase17SurfaceFinalPassDuplicate({
+    records: [
+      {
+        ...phase17SurfaceFinalPassDuplicate().records[0],
+        source: "web/secure-landing/portal-src/styles/components/operator-console.css"
+      },
+      phase17SurfaceFinalPassDuplicate().records[1],
+      phase17SurfaceFinalPassDuplicate().records[2]
+    ]
+  });
+  const declarationMissing = phase17SurfaceFinalPassDuplicate({
+    records: [
+      phase17SurfaceFinalPassDuplicate().records[0],
+      {
+        ...phase17SurfaceFinalPassDuplicate().records[1],
+        declarations: [["background", "var(--ux-surface-elevated)", false]],
+        properties: ["background"]
+      },
+      phase17SurfaceFinalPassDuplicate().records[2]
+    ]
+  });
+  const conflictingPermanent = phase17SurfaceFinalPassDuplicate({
+    category: "conflicting",
+    removalStatus: "permanent"
+  });
+  const specificityChanging = phase17SurfaceFinalPassDuplicate({
+    records: [
+      phase17SurfaceFinalPassDuplicate().records[0],
+      {
+        ...phase17SurfaceFinalPassDuplicate().records[1],
+        ruleSelector: ":where(.workspace-shell)"
+      },
+      phase17SurfaceFinalPassDuplicate().records[2]
+    ]
+  });
+
+  assert.match(
+    runPhase17SurfaceFinalPassFixture({
+      duplicates: [workspaceShell, shellNoise, reviewLabel, outOfScopeUtility],
+      baselineEntries: [baselineEntryFor(outOfScopeUtility)],
+      expectedCandidates: [
+        { key: workspaceShell.key, candidateStatus: "safe" },
+        { key: shellNoise.key, candidateStatus: "safe" },
+        { key: reviewLabel.key, candidateStatus: "safe" },
+        { key: outOfScopeUtility.key, candidateStatus: "deferred", unsafeReason: "selector-not-phase17-target" }
+      ]
+    }),
+    /portal css phase17 surface-final-pass fixture: OK/
+  );
+
+  assert.match(
+    runPhase17SurfaceFinalPassFixture({
+      duplicates: [],
+      sourceShape: phase17SurfaceFinalPassSourceShapeFixture({
+        surfaceCss: `${phase17SurfaceFinalPassSourceShapeFixture().surfaceCss}\n.shell-noise { display: none; }\n`,
+        shellCss: `${phase17SurfaceFinalPassSourceShapeFixture().shellCss}\n.workspace-shell { position: relative; }\n`
+      }),
+      expectedSourceShapeFailures: [
+        "phase17-surface-final-pass fixture surface .shell-noise duplicate rule must be removed after Phase 17",
+        "phase17-surface-final-pass fixture shell .workspace-shell duplicate rule must be removed after Phase 17"
+      ]
+    }),
+    /portal css phase17 surface-final-pass fixture: OK/
+  );
+
+  for (const [duplicate, unsafeReason] of [
+    [sourceDrift, "source-declaration-drift"],
+    [declarationMissing, "primary-declaration-missing"],
+    [conflictingPermanent, "conflicting-permanent"],
+    [specificityChanging, "specificity-changing-grouping"]
+  ]) {
+    assert.match(
+      runPhase17SurfaceFinalPassFixture({
+        duplicates: [duplicate],
+        expectedCandidates: [{ key: duplicate.key, candidateStatus: "deferred", unsafeReason }]
+      }),
+      /portal css phase17 surface-final-pass fixture: OK/
+    );
+  }
+
+  assert.match(
+    runPhase17SurfaceFinalPassFixtureFailure({
+      duplicates: [workspaceShell],
+      expectedState: { phase: "phase-17-surface-final-pass-consolidation" },
+      phase17SurfaceFinalPassConsolidationState: { phase: "stale" }
+    }),
+    /phase17SurfaceFinalPassConsolidationState is stale/
+  );
+
+  assert.match(
+    runPhase17SurfaceFinalPassFixtureFailure({
+      duplicates: [workspaceShell],
+      expectedPhase16State: { phase: "phase-16-review-surface-consolidation" },
+      phase16ReviewSurfaceConsolidationState: { phase: "stale" }
+    }),
+    /phase16ReviewSurfaceConsolidationState immutable historical evidence drifted/
+  );
+
+  assert.match(
+    runPhase17SurfaceFinalPassFixtureFailure({
+      duplicates: [outOfScopeUtility],
+      baselineEntries: [
+        baselineEntryFor(outOfScopeUtility, {
+          ownerReason: "selector-not-phase17-target"
+        })
+      ]
+    }),
+    /selector-not-phase17-target must not overwrite live baseline ownerReason/
+  );
+});
+
 test("portal CSS layer parity make target checks generated artifact freshness", () => {
   const makefile = readFileSync(MAKEFILE_PATH, "utf8");
   const start = makefile.indexOf("validate-portal-css-layer-parity:");
@@ -2574,11 +2942,65 @@ test("portal CSS ownership drain keeps utilities layer honest", () => {
   assert.equal(ownershipDrain.phase16ReviewSurfaceConsolidationState.renderedPortalCssFingerprintAfter, "ea5def42614e");
   assert.equal(ownershipDrain.phase16ReviewSurfaceConsolidationState.sentinelStatePreserved, true);
   assert.equal(ownershipDrain.phase16ReviewSurfaceConsolidationState.parityBaselineChanged, false);
+  assert.equal(ownershipDrain.phase17SurfaceFinalPassConsolidationState.phase, "phase-17-surface-final-pass-consolidation");
+  assert.deepEqual(ownershipDrain.phase17SurfaceFinalPassConsolidationState.targetSelectors, [
+    ".workspace-shell",
+    ".shell-noise",
+    ".review-provenance-label"
+  ]);
+  assert.deepEqual(ownershipDrain.phase17SurfaceFinalPassConsolidationState.sourceFiles, [
+    "web/secure-landing/portal-src/styles/components/operator-console.css",
+    "web/secure-landing/portal-src/styles/components/shell-foundation.css"
+  ]);
+  assert.equal(ownershipDrain.phase17SurfaceFinalPassConsolidationState.duplicateContextCountBefore, 61);
+  assert.equal(ownershipDrain.phase17SurfaceFinalPassConsolidationState.duplicateContextCountAfter, 58);
+  assert.equal(ownershipDrain.phase17SurfaceFinalPassConsolidationState.additiveDuplicateContextCountBefore, 5);
+  assert.equal(ownershipDrain.phase17SurfaceFinalPassConsolidationState.additiveDuplicateContextCountAfter, 2);
+  assert.equal(ownershipDrain.phase17SurfaceFinalPassConsolidationState.conflictingPermanentContextCountBefore, 56);
+  assert.equal(ownershipDrain.phase17SurfaceFinalPassConsolidationState.conflictingPermanentContextCountAfter, 56);
+  assert.equal(ownershipDrain.phase17SurfaceFinalPassConsolidationState.unownedDuplicateContextCountAfter, 0);
+  assert.equal(ownershipDrain.phase17SurfaceFinalPassConsolidationState.hotspotDuplicateContextCountAfter, 0);
+  assert.equal(ownershipDrain.phase17SurfaceFinalPassConsolidationState.consolidatedContextCount, 3);
+  assert.equal(ownershipDrain.phase17SurfaceFinalPassConsolidationState.expectedConsolidatedContextCount, 3);
+  assert.deepEqual(ownershipDrain.phase17SurfaceFinalPassConsolidationState.consolidatedContexts, [
+    ".review-provenance-label|||components|||",
+    ".shell-noise|||components|||",
+    ".workspace-shell|||components|||"
+  ]);
+  assert.deepEqual(ownershipDrain.phase17SurfaceFinalPassConsolidationState.remainingTargetContexts, []);
+  assert.equal(ownershipDrain.phase17SurfaceFinalPassConsolidationState.unexpectedResolvedContextCount, 0);
+  assert.equal(
+    ownershipDrain.phase17SurfaceFinalPassConsolidationState.nonTargetAdditiveCandidatesDeferredReason,
+    "selector-not-phase17-target"
+  );
+  assert.equal(ownershipDrain.phase17SurfaceFinalPassConsolidationState.deferredOutOfScopeCandidateCount, 2);
+  assert.deepEqual(ownershipDrain.phase17SurfaceFinalPassConsolidationState.deferredReasonCounts, {
+    "selector-not-phase17-target": 2
+  });
+  assert.equal(ownershipDrain.phase17SurfaceFinalPassConsolidationState.phase16HistoricalEvidencePreserved, true);
+  assert.equal(ownershipDrain.phase17SurfaceFinalPassConsolidationState.generatedRawBytesBefore, 80813);
+  assert.equal(ownershipDrain.phase17SurfaceFinalPassConsolidationState.generatedRawBytesAfter, 80925);
+  assert.equal(ownershipDrain.phase17SurfaceFinalPassConsolidationState.generatedRawByteDelta, 112);
+  assert.equal(ownershipDrain.phase17SurfaceFinalPassConsolidationState.generatedGzipBytesBefore, 15731);
+  assert.equal(ownershipDrain.phase17SurfaceFinalPassConsolidationState.generatedGzipBytesAfter, 15752);
+  assert.equal(ownershipDrain.phase17SurfaceFinalPassConsolidationState.generatedGzipByteDelta, 21);
+  assert.equal(
+    ownershipDrain.phase17SurfaceFinalPassConsolidationState.generatedPortalCssHashBefore,
+    "ad357cc9c93fe976e349ddcbcac33a62e8014eaa7003a36d561b5c3c7672b429"
+  );
+  assert.equal(
+    ownershipDrain.phase17SurfaceFinalPassConsolidationState.generatedPortalCssHashAfter,
+    "a86edcd4ad993bae7c081300877681c6ebcfa0faf31dbc3358c3e6119d49627f"
+  );
+  assert.equal(ownershipDrain.phase17SurfaceFinalPassConsolidationState.renderedPortalCssFingerprintBefore, "ea5def42614e");
+  assert.equal(ownershipDrain.phase17SurfaceFinalPassConsolidationState.renderedPortalCssFingerprintAfter, "08a5cefdcc6a");
+  assert.equal(ownershipDrain.phase17SurfaceFinalPassConsolidationState.sentinelStatePreserved, true);
+  assert.equal(ownershipDrain.phase17SurfaceFinalPassConsolidationState.parityBaselineChanged, false);
   assert.match(
     readFileSync(ARCHITECTURE_SCRIPT_PATH, "utf8"),
-    /report\.phase16ReviewSurfaceConsolidationState = expectedPhase16State;/
+    /report\.phase17SurfaceFinalPassConsolidationState = expectedPhase17State;/
   );
-  assert.equal(duplicateBaseline.duplicateKeys.length, 61);
+  assert.equal(duplicateBaseline.duplicateKeys.length, 58);
   assert.ok(
     duplicateBaseline.duplicateKeys.every((entry) => entry.phase === "phase-9-duplicate-ownership-closure"),
     "all duplicate baseline entries must be Phase 9-owned"
@@ -2601,6 +3023,7 @@ test("portal CSS layer parity validates the production layered graph", () => {
   assert.match(parityValidator, /SKELETON_STATE_IDS/);
   assert.match(parityValidator, /missionShellSkeletonState/);
   assert.match(parityValidator, /_validate_skeleton_primitive_states\(connection\)/);
+  assert.match(parityValidator, /_validate_surface_final_pass_states\(connection\)/);
 });
 
 test("portal CSS layer parity checks nested generated keyframes", () => {
@@ -2637,8 +3060,17 @@ test("portal CSS parity census forces feature states and canonical theme hooks",
   assert.match(validator, /finally \{\{\n    guard\.restore\(\);/);
   assert.match(validator, /_validate_review_status_tone_states\(connection\)/);
   assert.match(validator, /_validate_review_provenance_states\(connection\)/);
+  assert.match(validator, /_validate_surface_final_pass_states\(connection\)/);
+  assert.match(validator, /review-provenance-label-probe/);
+  assert.match(validator, /review-provenance-label-font-reference/);
+  assert.match(validator, /font-size:var\(--ux-label-size\)/);
+  assert.match(validator, /expectedFontSize/);
+  assert.match(validator, /workspace\.dataset\.ambientActive = String\(ambientActive\)/);
+  assert.match(validator, /document\.querySelector\('\.shell-noise'\)/);
   assert.match(validator, /_validate_overview_mobile_states\(connection\)/);
   assert.match(validator, /_validate_interaction_outline_states\(connection\)/);
+  assert.match(validator, /interaction-outline-transition-probe/);
+  assert.match(validator, /transition: none !important/);
   assert.match(validator, /CSS\.forcePseudoState/);
   assert.match(validator, /':hover'/);
   assert.match(validator, /':focus-visible'/);

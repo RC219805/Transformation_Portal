@@ -139,16 +139,11 @@ html {
         linear-gradient(180deg, rgba(2, 6, 23, 0.98) 0%, rgba(15, 23, 42, 0.96) 52%, rgba(2, 6, 23, 1) 100%);
 }
 
-.shell-noise {
-    display: none;
-}
-
 .portal-topbar,
 .portal-context-shell {
     border-radius: var(--ux-radius-lg);
 }
 
-.workspace-shell,
 .shell-panel,
 .shell-panel-strong,
 .panel-subtle,
@@ -168,6 +163,19 @@ html {
     background: var(--ux-surface-elevated);
 }
 
+.workspace-shell {
+    position: relative;
+    border-radius: var(--ux-radius-lg);
+    border-color: var(--ux-border-subtle);
+    background: var(--ux-surface-elevated);
+    transition:
+        transform 0.35s cubic-bezier(0.16, 1, 0.3, 1),
+        border-color 0.35s ease,
+        box-shadow 0.35s ease,
+        background-color 0.35s ease;
+    box-shadow: var(--ux-shadow-surface);
+}
+
 .review-status-banner {
     border-radius: var(--ux-radius-lg);
     border-color: var(--ux-border-subtle);
@@ -184,7 +192,6 @@ html {
 
 .portal-topbar,
 .portal-context-shell,
-.workspace-shell,
 .shell-panel,
 .shell-panel-strong {
     box-shadow: var(--ux-shadow-surface);
@@ -220,7 +227,6 @@ html {
 .console-action-rail-kicker,
 .build-pulse-label,
 .review-status-kicker,
-.review-provenance-label,
 .micro-status,
 .workspace-link-label {
     letter-spacing: var(--ux-meta-tracking);
