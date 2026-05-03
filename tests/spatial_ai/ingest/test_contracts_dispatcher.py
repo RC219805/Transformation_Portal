@@ -81,10 +81,11 @@ def test_decode_contract_legacy_linear_srgb_returns_linear_rgb(monkeypatch):
     expected = np.full((4, 4, 3), 0.25, dtype=np.float32)
 
     class _FakeDecoder:
-        def __init__(self, gamma, strict_ingest, raw_python_executable):  # noqa: ANN001
+        def __init__(self, gamma, strict_ingest, raw_python_executable, demosaic):  # noqa: ANN001
             assert gamma == 1.0
             assert strict_ingest is True
             assert raw_python_executable == "./.venv-raw/bin/python"
+            assert demosaic == "AHD"
 
         def decode(self, input_path):  # noqa: ANN001
             assert input_path == "legacy_input.tiff"
@@ -100,6 +101,23 @@ def test_decode_contract_legacy_linear_srgb_returns_linear_rgb(monkeypatch):
     assert out.dtype == np.float32
     assert out.shape == (4, 4, 3)
     assert np.allclose(out, expected)
+
+
+def test_decode_contract_legacy_linear_srgb_forwards_demosaic(monkeypatch):
+    """Non-AHD demosaic on the legacy contract must reach LinearDecoder."""
+    captured = {}
+
+    class _FakeDecoder:
+        def __init__(self, gamma, strict_ingest, raw_python_executable, demosaic):  # noqa: ANN001
+            captured["demosaic"] = demosaic
+
+        def decode(self, input_path):  # noqa: ANN001
+            return types.SimpleNamespace(linear_rgb=np.zeros((1, 1, 3), dtype=np.float32))
+
+    monkeypatch.setattr("transformation_portal.spatial_ai.ingest.linear_decoder.LinearDecoder", _FakeDecoder)
+    opts = IngestOptions(contract="legacy_linear_srgb", demosaic="DCB")
+    decode_contract("legacy_input.tiff", opts)
+    assert captured["demosaic"] == "DCB"
 
 
 def test_decode_contract_raises_on_unknown_contract():

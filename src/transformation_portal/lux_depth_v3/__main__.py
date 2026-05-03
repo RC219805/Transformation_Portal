@@ -668,7 +668,12 @@ def main(
     raw_demosaic: str = typer.Option(
         "AHD",
         "--raw-demosaic",
-        help=("RAW demosaic algorithm for legacy_linear_srgb ingest " + "contract (currently only 'AHD' is supported)."),
+        help=(
+            "RAW demosaic algorithm for the rawpy postprocess step. "
+            "Any rawpy.DemosaicAlgorithm name is accepted (e.g. AHD, AMAZE, "
+            "DCB, LMMSE, VNG, PPG); availability depends on the installed "
+            "LibRaw build and unknown values fail closed at decode time."
+        ),
     ),
     # Performance Tuning (Forward-Compatible)
     max_workers: Optional[int] = typer.Option(
@@ -938,8 +943,16 @@ def main(
         raise typer.Exit(code=1)
 
     raw_demosaic_normalized = raw_demosaic.strip().upper()
-    if raw_demosaic_normalized != "AHD":
-        error_msg = f"Invalid --raw-demosaic" f" '{raw_demosaic}'." " legacy_linear_srgb currently" " supports only: AHD"
+    from transformation_portal.core.raw_runtime import (
+        SUPPORTED_DEMOSAIC_ALGORITHMS,
+    )
+
+    if raw_demosaic_normalized not in SUPPORTED_DEMOSAIC_ALGORITHMS:
+        error_msg = (
+            f"Invalid --raw-demosaic '{raw_demosaic}'. "
+            f"Supported names: {sorted(SUPPORTED_DEMOSAIC_ALGORITHMS)}. "
+            "Availability also depends on the installed LibRaw build."
+        )
         logger.error(error_msg)
         print(error_msg, file=sys.stdout)
         raise typer.Exit(code=1)

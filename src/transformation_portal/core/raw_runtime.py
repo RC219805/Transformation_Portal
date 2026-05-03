@@ -27,6 +27,48 @@ RAW_WORKER_MODULE = "transformation_portal.spatial_ai.ingest.raw_worker"
 RAW_RUNTIME_CHECK_TIMEOUT_SECONDS = 30
 RAW_WORKER_TIMEOUT_SECONDS = 300
 
+# Demosaic algorithm names accepted by the orchestrator and CLI surfaces.
+# Membership here is necessary but not sufficient — `resolve_demosaic_algorithm()`
+# still verifies the name is exposed by the installed rawpy/LibRaw build at
+# runtime. Defined here (rather than in lux_depth_v3) so both the rendering
+# path (lux_depth_v3.raw_loader) and the research/training path
+# (spatial_ai.ingest.linear_decoder) can share a single source of truth
+# without violating ADR-023's isolation between those surfaces.
+SUPPORTED_DEMOSAIC_ALGORITHMS = frozenset(
+    {
+        "AHD",
+        "AAHD",
+        "AMAZE",
+        "DCB",
+        "DHT",
+        "LINEAR",
+        "LMMSE",
+        "MODIFIED_AHD",
+        "PPG",
+        "VNG",
+    }
+)
+
+
+def resolve_demosaic_algorithm(name: str):
+    """Resolve a demosaic algorithm name to a rawpy.DemosaicAlgorithm enum value.
+
+    Raises ValueError with a clear message if the name is unknown to the
+    installed rawpy/LibRaw build. Imports rawpy lazily so callers without the
+    raw extra installed don't pay the import cost.
+    """
+    import rawpy  # type: ignore
+
+    n = name.strip().upper()
+    try:
+        return getattr(rawpy.DemosaicAlgorithm, n)
+    except AttributeError as e:
+        raise ValueError(
+            f"Unknown demosaic algorithm: {name!r}. "
+            f"Available in this rawpy build: "
+            f"{sorted(a for a in dir(rawpy.DemosaicAlgorithm) if not a.startswith('_'))}"
+        ) from e
+
 
 def repo_local_raw_python_path(start: Path) -> Optional[Path]:
     """Return the canonical repo-local RAW interpreter path when in a checkout."""

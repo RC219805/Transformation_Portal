@@ -232,6 +232,17 @@ lux-depth-v3 \
 - `--overwrite`: Force reprocessing even if outputs exist
 - `--force-depth`: Force depth recomputation (ignore cache)
 
+### RAW Ingest
+
+- `--raw-ingest-mode TEXT`: Decode mode (`auto`, `force_rawpy`, `force_preview`).
+- `--raw-wb-mode TEXT`: White-balance mode (`camera`).
+- `--raw-demosaic TEXT`: rawpy demosaic algorithm name (default `AHD`).
+  Any `rawpy.DemosaicAlgorithm` value is accepted (e.g. `AHD`, `AMAZE`,
+  `DCB`, `LMMSE`, `VNG`, `PPG`); availability depends on the installed
+  LibRaw build and unknown values fail closed at decode time. Different
+  algorithms produce different pixels — the choice is captured in the
+  Phase II ingest fingerprint for reproducibility.
+
 ### Logging
 
 - `--verbose` / `-v`: Enable verbose logging

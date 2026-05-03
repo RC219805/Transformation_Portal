@@ -3,13 +3,16 @@
 Provides high-quality RAW → RGB conversion using rawpy (LibRaw wrapper).
 
 Supported formats:
-- Canon: .CR2, .CRW
+- Canon: .CR2, .CR3, .CRW
 - Nikon: .NEF, .NRW
-- Sony: .ARW, .SRF, .SR2
+- Sony: .ARW, .SRF, .SR2, .SRW
 - Adobe: .DNG (TIFF-based RAW format)
 - Olympus: .ORF
 - Fujifilm: .RAF
 - Pentax: .PEF
+- Panasonic: .RW2
+- Phase One: .IIQ
+- Hasselblad: .3FR
 
 Design principles:
 - Optional dependency: graceful ImportError if rawpy not installed
@@ -27,14 +30,20 @@ from typing import Optional, Tuple
 import numpy as np
 from PIL import Image
 
-from transformation_portal.core.raw_runtime import run_raw_worker
+from transformation_portal.core.raw_runtime import (  # noqa: F401  (re-exports)
+    SUPPORTED_DEMOSAIC_ALGORITHMS,
+    resolve_demosaic_algorithm,
+    run_raw_worker,
+)
 
 logger = logging.getLogger(__name__)
 
-# RAW file extensions (case-insensitive)
+# RAW file extensions (case-insensitive). Single source of truth — re-exported
+# by transformation_portal.ingest.raw_sidecar to prevent whitelist drift.
 RAW_EXTENSIONS = {
     # Canon
     ".cr2",
+    ".cr3",
     ".crw",
     # Nikon
     ".nef",
@@ -43,6 +52,7 @@ RAW_EXTENSIONS = {
     ".arw",
     ".srf",
     ".sr2",
+    ".srw",
     # Adobe
     ".dng",
     # Olympus
@@ -60,6 +70,11 @@ RAW_EXTENSIONS = {
     # Note: DNG is TIFF-based RAW format (included above).
     # Standard TIFF (.tif/.tiff) is NOT RAW and handled via PIL.
 }
+
+# SUPPORTED_DEMOSAIC_ALGORITHMS and resolve_demosaic_algorithm are re-exported
+# from transformation_portal.core.raw_runtime above so the rendering and
+# research/training paths share a single source of truth without violating
+# ADR-023's import isolation between those surfaces.
 
 
 def is_raw_file(path: Path) -> bool:
@@ -81,6 +96,7 @@ def load_raw_as_rgb(
     output_bps: int = 8,
     output_linear: bool = False,
     python_executable: Optional[str] = None,
+    demosaic: str = "AHD",
 ) -> np.ndarray:
     """Load RAW camera file and convert to RGB numpy array.
 
@@ -98,6 +114,9 @@ def load_raw_as_rgb(
         python_executable: Optional interpreter for an isolated RAW runtime.
             When provided, the decode runs in a subprocess backed by that
             interpreter instead of importing rawpy in-process.
+        demosaic: rawpy.DemosaicAlgorithm name (e.g. "AHD", "AMAZE", "DCB",
+            "LMMSE", "VNG", "PPG"). Default "AHD" preserves prior behavior.
+            Unknown names fail closed via resolve_demosaic_algorithm().
 
     Returns:
         RGB numpy array (uint8 or uint16 depending on output_bps)
@@ -109,7 +128,7 @@ def load_raw_as_rgb(
     Raises:
         ImportError: If rawpy not installed
         FileNotFoundError: If RAW file doesn't exist
-        ValueError: If RAW file cannot be parsed
+        ValueError: If RAW file cannot be parsed or demosaic name is unknown
 
     Example:
         >>> # Legacy usage (8-bit gamma-encoded)
@@ -136,6 +155,7 @@ def load_raw_as_rgb(
                 "half_size": bool(half_size),
                 "output_bps": int(output_bps),
                 "output_linear": bool(output_linear),
+                "demosaic": str(demosaic),
             },
             start=Path(__file__),
         )
@@ -151,10 +171,13 @@ def load_raw_as_rgb(
     if not raw_path.exists():
         raise FileNotFoundError(f"RAW file not found: {raw_path}")
 
+    demosaic_enum = resolve_demosaic_algorithm(demosaic)
+
     logger.debug(
         f"Loading RAW file: {raw_path.name} "
         f"(use_camera_wb={use_camera_wb}, half_size={half_size}, "
-        f"output_linear={output_linear}, output_bps={output_bps})"
+        f"output_linear={output_linear}, output_bps={output_bps}, "
+        f"demosaic={demosaic})"
     )
 
     try:
@@ -177,7 +200,7 @@ def load_raw_as_rgb(
                 no_auto_bright=False,  # Apply auto-brightness (normalize exposure)
                 output_color=output_color,  # Linear or sRGB color space
                 output_bps=output_bps,  # 8-bit or 16-bit output
-                demosaic_algorithm=rawpy.DemosaicAlgorithm.AHD,  # High-quality AHD algorithm
+                demosaic_algorithm=demosaic_enum,
                 use_auto_wb=not use_camera_wb,  # Auto WB if not using camera WB
                 gamma=gamma,  # Gamma curve (linear or sRGB)
                 no_auto_scale=False,  # Auto-scale to full range
@@ -204,6 +227,7 @@ def load_raw_as_pil(
     half_size: bool = False,
     output_linear: bool = False,
     python_executable: Optional[str] = None,
+    demosaic: str = "AHD",
 ) -> Image.Image:
     """Load RAW camera file and convert to PIL Image.
 
@@ -221,6 +245,8 @@ def load_raw_as_pil(
                       Default False for legacy compatibility
                       MUST be True for APEX pipeline
         python_executable: Optional interpreter for an isolated RAW runtime.
+        demosaic: rawpy.DemosaicAlgorithm name (default "AHD"). See
+            load_raw_as_rgb for details.
 
     Returns:
         PIL Image in RGB mode (uint8)
@@ -228,7 +254,7 @@ def load_raw_as_pil(
     Raises:
         ImportError: If rawpy not installed
         FileNotFoundError: If RAW file doesn't exist
-        ValueError: If RAW file cannot be parsed
+        ValueError: If RAW file cannot be parsed or demosaic name is unknown
     """
     # Use 16-bit for linear (preserve precision), 8-bit for gamma (legacy)
     output_bps = 16 if output_linear else 8
@@ -240,6 +266,7 @@ def load_raw_as_pil(
         output_bps=output_bps,
         output_linear=output_linear,
         python_executable=python_executable,
+        demosaic=demosaic,
     )
 
     # Convert to PIL Image with appropriate mode

@@ -1321,7 +1321,14 @@ ALLOWED_RECONSTRUCTION_TIERS = {
 }
 ALLOWED_RAW_INGEST_MODES = {"auto", "force_rawpy", "force_preview"}
 ALLOWED_RAW_WB_MODES = {"camera"}
-ALLOWED_RAW_DEMOSAIC = {"AHD"}
+try:  # Single source of truth for accepted rawpy demosaic names.
+    from transformation_portal.core.raw_runtime import (
+        SUPPORTED_DEMOSAIC_ALGORITHMS as _SUPPORTED_DEMOSAIC_ALGORITHMS,
+    )
+
+    ALLOWED_RAW_DEMOSAIC = set(_SUPPORTED_DEMOSAIC_ALGORITHMS)
+except Exception:  # pragma: no cover - defensive fallback if core unavailable
+    ALLOWED_RAW_DEMOSAIC = {"AHD"}
 ALLOWED_LOG_LEVELS = {"DEBUG", "INFO", "WARNING", "ERROR"}
 ALLOWED_VLM_CAPTIONING_BACKENDS = {"fastvlm"}
 ALLOWED_VLM_CAPTIONING_PROXY_FORMATS = {"png", "jpeg"}
@@ -5104,7 +5111,11 @@ def _build_lux_config_preview(
                 "raw_demosaic",
                 "invalid_raw_demosaic",
                 "RAW demosaic mode is not supported.",
-                suggestion="The current backend supports only AHD.",
+                suggestion=(
+                    "Supported names: "
+                    + ", ".join(sorted(ALLOWED_RAW_DEMOSAIC))
+                    + ". Availability also depends on the installed LibRaw build."
+                ),
             )
         )
         raw_demosaic = str(defaults["raw_demosaic"])

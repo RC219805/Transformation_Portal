@@ -3186,12 +3186,29 @@ def test_argv_rejects_invalid_raw_demosaic() -> None:
         "args": {
             "input_dir": "./input_images",
             "output_dir": "./output",
-            "raw_demosaic": "VNG",
+            "raw_demosaic": "DEFINITELY_NOT_REAL",
         },
     }
 
     with pytest.raises(ValueError, match="Invalid raw_demosaic"):
         orchestrator_app._argv_from_request(payload)
+
+
+def test_argv_accepts_supported_raw_demosaic_alternatives() -> None:
+    """Recognized rawpy demosaic names beyond AHD should pass orchestrator validation."""
+    for demosaic in ("AMAZE", "DCB", "LMMSE", "VNG", "PPG"):
+        payload: Dict[str, object] = {
+            "pipeline": "lux-depth-v3",
+            "args": {
+                "input_dir": "./input_images",
+                "output_dir": "./output",
+                "raw_demosaic": demosaic,
+            },
+        }
+        argv = orchestrator_app._argv_from_request(payload)
+        assert "--raw-demosaic" in argv
+        idx = argv.index("--raw-demosaic")
+        assert argv[idx + 1] == demosaic, f"expected {demosaic} preserved in argv, got {argv[idx + 1]}"
 
 
 def test_argv_rejects_invalid_reconstruction_tier() -> None:

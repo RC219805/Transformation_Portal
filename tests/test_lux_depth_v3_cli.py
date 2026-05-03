@@ -194,8 +194,8 @@ class TestCLIValidation:
         assert "raw-wb-mode" in result.stdout.lower()
         assert "legacy_linear_srgb" in result.stdout.lower()
 
-    def test_invalid_raw_demosaic_rejected_for_legacy_contract(self, tmp_path):
-        """Legacy ingest contract should reject unsupported RAW demosaic algorithms."""
+    def test_invalid_raw_demosaic_rejected(self, tmp_path):
+        """CLI should reject demosaic names not in the supported set."""
         input_dir = tmp_path / "input"
         input_dir.mkdir()
 
@@ -207,12 +207,12 @@ class TestCLIValidation:
                 "--output-dir",
                 str(tmp_path / "output"),
                 "--raw-demosaic",
-                "VNG",
+                "DEFINITELY_NOT_REAL",
             ],
         )
         assert result.exit_code == 1
         assert "raw-demosaic" in result.stdout.lower()
-        assert "legacy_linear_srgb" in result.stdout.lower()
+        assert "supported names" in result.stdout.lower()
 
     def test_invalid_raw_ingest_mode_rejected(self, tmp_path):
         """RAW ingest mode should fail fast with clear supported values."""

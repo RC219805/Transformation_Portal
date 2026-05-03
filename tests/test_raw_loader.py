@@ -18,7 +18,14 @@ pytestmark = [
     pytest.mark.unit,
 ]
 
-from transformation_portal.lux_depth_v3.raw_loader import RAW_EXTENSIONS, is_raw_file, load_raw_as_pil, load_raw_as_rgb
+from transformation_portal.lux_depth_v3.raw_loader import (
+    RAW_EXTENSIONS,
+    SUPPORTED_DEMOSAIC_ALGORITHMS,
+    is_raw_file,
+    load_raw_as_pil,
+    load_raw_as_rgb,
+    resolve_demosaic_algorithm,
+)
 
 
 class TestRawExtensions:
@@ -32,6 +39,22 @@ class TestRawExtensions:
     def test_raw_extensions_include_dng(self):
         """DNG (TIFF-based RAW) should be included."""
         assert ".dng" in RAW_EXTENSIONS
+
+    def test_raw_extensions_include_cr3(self):
+        """Canon CR3 (modern Canon bodies) should be included."""
+        assert ".cr3" in RAW_EXTENSIONS
+
+    def test_raw_extensions_match_ingest_sidecar(self):
+        """RAW_EXTENSIONS must be identical between raw_loader and raw_sidecar.
+
+        Regression guard: prior to convergence the two whitelists drifted
+        (only one of them included CR3), so the same file could be accepted
+        by sidecar generation and rejected by depth ingest. Both modules
+        now share a single source of truth.
+        """
+        from transformation_portal.ingest.raw_sidecar import RAW_EXTENSIONS as SIDECAR_EXTS
+
+        assert RAW_EXTENSIONS == SIDECAR_EXTS
 
     def test_raw_extensions_are_lowercase(self):
         """All extensions should be lowercase for consistency."""
@@ -129,6 +152,7 @@ class TestRawpyNotInstalled:
             output_bps=16,
             output_linear=True,
             python_executable="./.venv-raw/bin/python",
+            demosaic="DCB",
         )
 
         assert np.array_equal(rgb, fake_rgb)
@@ -140,7 +164,66 @@ class TestRawpyNotInstalled:
             "half_size": True,
             "output_bps": 16,
             "output_linear": True,
+            "demosaic": "DCB",
         }
+
+
+class TestDemosaicAlgorithm:
+    """Test demosaic algorithm parameterization."""
+
+    def test_supported_demosaic_includes_common_algorithms(self):
+        """The advertised supported set must include AHD plus common alternatives."""
+        for name in ("AHD", "AMAZE", "DCB", "LMMSE", "VNG", "PPG"):
+            assert name in SUPPORTED_DEMOSAIC_ALGORITHMS
+
+    def test_resolve_demosaic_algorithm_unknown_raises(self):
+        """Unknown demosaic names must fail closed with a clear ValueError."""
+        import sys
+        import types
+
+        fake_rawpy = types.SimpleNamespace(DemosaicAlgorithm=types.SimpleNamespace())
+        # Inject so resolve_demosaic_algorithm's `import rawpy` returns this.
+        original = sys.modules.get("rawpy")
+        sys.modules["rawpy"] = fake_rawpy
+        try:
+            with pytest.raises(ValueError, match="Unknown demosaic algorithm"):
+                resolve_demosaic_algorithm("DEFINITELY_NOT_REAL")
+        finally:
+            if original is None:
+                sys.modules.pop("rawpy", None)
+            else:
+                sys.modules["rawpy"] = original
+
+    def test_load_raw_as_rgb_passes_demosaic_to_postprocess(self, tmp_path):
+        """load_raw_as_rgb must forward the demosaic name into rawpy.postprocess."""
+        try:
+            import rawpy  # noqa: F401
+        except ImportError:
+            pytest.skip("rawpy not installed")
+
+        raw_file = tmp_path / "test.cr2"
+        raw_file.write_bytes(b"fake raw data")
+
+        fake_rgb = np.zeros((4, 4, 3), dtype=np.uint8)
+        sentinel = object()
+
+        mock_raw_context = MagicMock()
+        mock_raw_obj = MagicMock()
+        mock_raw_obj.raw_image.shape = (4, 4)
+        mock_raw_obj.camera_iso_speed = 100
+        mock_raw_obj.postprocess.return_value = fake_rgb
+        mock_raw_context.__enter__.return_value = mock_raw_obj
+        mock_raw_context.__exit__.return_value = None
+
+        with patch("rawpy.imread", return_value=mock_raw_context), patch(
+            "transformation_portal.lux_depth_v3.raw_loader.resolve_demosaic_algorithm",
+            return_value=sentinel,
+        ) as resolve_mock:
+            load_raw_as_rgb(raw_file, demosaic="DCB")
+
+        resolve_mock.assert_called_once_with("DCB")
+        call_kwargs = mock_raw_obj.postprocess.call_args[1]
+        assert call_kwargs["demosaic_algorithm"] is sentinel
 
     def test_load_raw_as_pil_missing_rawpy(self, tmp_path):
         """load_raw_as_pil should also fail gracefully when rawpy missing."""
