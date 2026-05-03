@@ -1,0 +1,252 @@
+{
+  "schema_version": "fastvlm-runtime.v1",
+  "runtime_root": ".runtime/fastvlm",
+  "python": {
+    "venv_dir": ".venv-fastvlm"
+  },
+  "runtime_sources": {
+    "ml_fastvlm": {
+      "repo_url": "https://github.com/apple/ml-fastvlm.git",
+      "revision": "592b4add3c1c8a518e77d95dc6248e76c1dd591f",
+      "target_dir": "ml-fastvlm"
+    },
+    "mlx_vlm": {
+      "repo_url": "https://github.com/Blaizzy/mlx-vlm.git",
+      "revision": "1884b551bc741f26b2d54d68fa89d4e934b9a3de",
+      "target_dir": "mlx-vlm"
+    }
+  },
+  "models": {
+    "default": {
+      "repo_id": "apple/FastVLM-1.5B-int8",
+      "revision": "924716f32f1dbb29e8d2b62aac9010039ebc1ad7",
+      "target_dir": "checkpoints/FastVLM-1.5B-int8",
+      "required_files": [
+        {
+          "path": "added_tokens.json",
+          "sha256": "f86f2a952b4888d195b8d77e3d56ad96864ecc696cca2155d0d4ac933fcfd55f",
+          "size_bytes": 101
+        },
+        {
+          "path": "config.json",
+          "sha256": "c3c7d8312466a31eeabcd2c0a79665523f98e70c036dcccd7f545b77bf9962e9",
+          "size_bytes": 1453
+        },
+        {
+          "path": "fastvithd.mlpackage/Data/com.apple.CoreML/model.mlmodel",
+          "sha256": "ef95cee6af9141959f98a97b980e33f447ff4de8c843668b6f59df02234f0f79",
+          "size_bytes": 323561
+        },
+        {
+          "path": "fastvithd.mlpackage/Data/com.apple.CoreML/weights/weight.bin",
+          "sha256": "6aa3dd574e552555a9e3e61f7785b23ebaadc63ce0e5efd7d6713dc21a9cddd9",
+          "size_bytes": 490786624
+        },
+        {
+          "path": "fastvithd.mlpackage/Manifest.json",
+          "sha256": "8c551fd6c47ee877a725986acb3ddae8e7310519d9b2660bf80ff2a7c8d05fb9",
+          "size_bytes": 617
+        },
+        {
+          "path": "merges.txt",
+          "sha256": "455e0caaa06abffc663e9282dfe71dde07fd1991eaf24146bf08793c4dba4497",
+          "size_bytes": 1670344
+        },
+        {
+          "path": "model.safetensors",
+          "sha256": "4a1148813c768209026d9f1482a5abf4cc4d7028fc4bc2e0507fc8b9930af94f",
+          "size_bytes": 1895912278
+        },
+        {
+          "path": "model.safetensors.index.json",
+          "sha256": "a0e2138bc9939c070fd61ee8bf26b0856549a6b6947bd91b884a51289d309baf",
+          "size_bytes": 63292
+        },
+        {
+          "path": "preprocessor_config.json",
+          "sha256": "ac5585cfa58949aa7ce8350f63a69f304791632eed73a09dcb2e34f6263ef415",
+          "size_bytes": 467
+        },
+        {
+          "path": "processor_config.json",
+          "sha256": "08414d4eb54fd1669d6ef0dc105d811058278565d2d1925c14a60691fc244aa1",
+          "size_bytes": 168
+        },
+        {
+          "path": "special_tokens_map.json",
+          "sha256": "f4f79e08d97f4d1c87f8d89264f525c8789da3b73b3bb55d1e12f692f41a7b1b",
+          "size_bytes": 367
+        },
+        {
+          "path": "tokenizer.json",
+          "sha256": "8bb55926dbf36523cd143a5805102a9a516df89f7010313d182e1e710d94fb15",
+          "size_bytes": 11413284
+        },
+        {
+          "path": "tokenizer_config.json",
+          "sha256": "f6671cbd8dd2d5badaf744da60a159b986b16323710d84a199bfb70b13a94332",
+          "size_bytes": 1588
+        },
+        {
+          "path": "vocab.json",
+          "sha256": "ca10d7e9fb3ed18575dd1e277a2579c16d108e32f27439684afa0e10b1440910",
+          "size_bytes": 2776833
+        }
+      ]
+    },
+    "review": {
+      "repo_id": "apple/FastVLM-7B-int4",
+      "revision": "1aeadbaaba011276f3dcda9582e5e64e2a90873a",
+      "target_dir": "checkpoints/FastVLM-7B-int4",
+      "required_files": [
+        {
+          "path": "added_tokens.json",
+          "sha256": "8aa5e452eb0aaf1c070d04c4f00979d133bd1b28a7577cc2626feb6955b71e6a",
+          "size_bytes": 626
+        },
+        {
+          "path": "config.json",
+          "sha256": "4743382f73471c2509813a787270ab015b6db82e00312047ac4dac3c486833ad",
+          "size_bytes": 1455
+        },
+        {
+          "path": "fastvithd.mlpackage/Data/com.apple.CoreML/model.mlmodel",
+          "sha256": "ef95cee6af9141959f98a97b980e33f447ff4de8c843668b6f59df02234f0f79",
+          "size_bytes": 323561
+        },
+        {
+          "path": "fastvithd.mlpackage/Data/com.apple.CoreML/weights/weight.bin",
+          "sha256": "a2e2e3c3740f411d3090b6bb9e8c71cf17e5a239a7c9ade4ff060dca80b3add7",
+          "size_bytes": 490786624
+        },
+        {
+          "path": "fastvithd.mlpackage/Manifest.json",
+          "sha256": "d00dbea28f33ab38273ade2a5118be51b56159e33d350125afea78ed188a8aa7",
+          "size_bytes": 617
+        },
+        {
+          "path": "merges.txt",
+          "sha256": "455e0caaa06abffc663e9282dfe71dde07fd1991eaf24146bf08793c4dba4497",
+          "size_bytes": 1670344
+        },
+        {
+          "path": "model.safetensors",
+          "sha256": "a4d20f84628e28465947de96411bdcc0bbaf0319211e4d061f053513babd7a21",
+          "size_bytes": 4297790862
+        },
+        {
+          "path": "model.safetensors.index.json",
+          "sha256": "5dc3d67270bfad1a54828b5bb32846bca236042711bf081ad7f625f29b0dbda2",
+          "size_bytes": 63292
+        },
+        {
+          "path": "preprocessor_config.json",
+          "sha256": "ac5585cfa58949aa7ce8350f63a69f304791632eed73a09dcb2e34f6263ef415",
+          "size_bytes": 467
+        },
+        {
+          "path": "processor_config.json",
+          "sha256": "08414d4eb54fd1669d6ef0dc105d811058278565d2d1925c14a60691fc244aa1",
+          "size_bytes": 168
+        },
+        {
+          "path": "special_tokens_map.json",
+          "sha256": "76862e765266b85aa9459767e33cbaf13970f327a0e88d1c65846c2ddd3a1ecd",
+          "size_bytes": 613
+        },
+        {
+          "path": "tokenizer.json",
+          "sha256": "80bf0b2985eb0adea043055e425b9230bd3e3b246069ee66db3f98847aba1c00",
+          "size_bytes": 11416914
+        },
+        {
+          "path": "tokenizer_config.json",
+          "sha256": "49256d6ba31beda1b6378a6925c9dfb4356befec78cf9c934ca9bfbbc979dae8",
+          "size_bytes": 7594
+        },
+        {
+          "path": "vocab.json",
+          "sha256": "ca10d7e9fb3ed18575dd1e277a2579c16d108e32f27439684afa0e10b1440910",
+          "size_bytes": 2776833
+        }
+      ]
+    },
+    "smoke": {
+      "repo_id": "apple/FastVLM-0.5B-fp16",
+      "revision": "d241b8ae8acc23e319d79b1022fcba6a967046a3",
+      "target_dir": "checkpoints/FastVLM-0.5B-fp16",
+      "required_files": [
+        {
+          "path": "added_tokens.json",
+          "sha256": "f86f2a952b4888d195b8d77e3d56ad96864ecc696cca2155d0d4ac933fcfd55f",
+          "size_bytes": 101
+        },
+        {
+          "path": "config.json",
+          "sha256": "e581431016b132cd9dffd4d5d32633b28b7553b63fc9e3550c7147bcf5732efc",
+          "size_bytes": 1354
+        },
+        {
+          "path": "fastvithd.mlpackage/Data/com.apple.CoreML/model.mlmodel",
+          "sha256": "ef95cee6af9141959f98a97b980e33f447ff4de8c843668b6f59df02234f0f79",
+          "size_bytes": 323561
+        },
+        {
+          "path": "fastvithd.mlpackage/Data/com.apple.CoreML/weights/weight.bin",
+          "sha256": "d0e6965421581f48f5500f46d9675b9b9c8e2dbb2870db790692c1a16b643e25",
+          "size_bytes": 490786624
+        },
+        {
+          "path": "fastvithd.mlpackage/Manifest.json",
+          "sha256": "dabd4bfbd635eb78fb186255350af61ddcfe2b83b5ec7aa2405c3ba3d1ea6f32",
+          "size_bytes": 617
+        },
+        {
+          "path": "merges.txt",
+          "sha256": "455e0caaa06abffc663e9282dfe71dde07fd1991eaf24146bf08793c4dba4497",
+          "size_bytes": 1670344
+        },
+        {
+          "path": "model.safetensors",
+          "sha256": "29487bc0a004bb7611eb1368822b648699ff378e4d986521319e23929fbd7854",
+          "size_bytes": 1267485970
+        },
+        {
+          "path": "model.safetensors.index.json",
+          "sha256": "93465dffe77b447683ce3d973d714e539199c036db25fb57f47c420f882b5076",
+          "size_bytes": 25258
+        },
+        {
+          "path": "preprocessor_config.json",
+          "sha256": "ac5585cfa58949aa7ce8350f63a69f304791632eed73a09dcb2e34f6263ef415",
+          "size_bytes": 467
+        },
+        {
+          "path": "processor_config.json",
+          "sha256": "08414d4eb54fd1669d6ef0dc105d811058278565d2d1925c14a60691fc244aa1",
+          "size_bytes": 168
+        },
+        {
+          "path": "special_tokens_map.json",
+          "sha256": "f4f79e08d97f4d1c87f8d89264f525c8789da3b73b3bb55d1e12f692f41a7b1b",
+          "size_bytes": 367
+        },
+        {
+          "path": "tokenizer.json",
+          "sha256": "8bb55926dbf36523cd143a5805102a9a516df89f7010313d182e1e710d94fb15",
+          "size_bytes": 11413284
+        },
+        {
+          "path": "tokenizer_config.json",
+          "sha256": "f6671cbd8dd2d5badaf744da60a159b986b16323710d84a199bfb70b13a94332",
+          "size_bytes": 1588
+        },
+        {
+          "path": "vocab.json",
+          "sha256": "ca10d7e9fb3ed18575dd1e277a2579c16d108e32f27439684afa0e10b1440910",
+          "size_bytes": 2776833
+        }
+      ]
+    }
+  }
+}

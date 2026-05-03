@@ -10,7 +10,9 @@ import gzip
 import importlib
 import json
 import logging
+import os
 import re
+import sys
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
@@ -809,6 +811,96 @@ def test_lux_config_preview_accepts_fastvlm_captioning_aliases_when_enabled(
     assert "--vlm-captioning-model review" in preview["argv_preview"]
     assert "--vlm-captioning-proxy-format jpeg" in preview["argv_preview"]
     assert "--fastvlm-timeout-seconds 60" in preview["argv_preview"]
+
+
+def test_lux_config_preview_reports_fastvlm_runtime_ready_for_manifest_backed_paths(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    runtime_root = tmp_path / "fastvlm"
+    python_path = runtime_root / ".venv-fastvlm" / "bin" / "python"
+    python_path.parent.mkdir(parents=True)
+    python_path.write_text("#!/usr/bin/env python\n", encoding="utf-8")
+    python_path.chmod(0o755)
+    mlx_dir = runtime_root / "mlx-vlm"
+    model_dir = runtime_root / "checkpoints" / "FastVLM-0.5B-fp16"
+    mlx_dir.mkdir(parents=True)
+    model_dir.mkdir(parents=True)
+    monkeypatch.setattr(
+        orchestrator_app,
+        "FASTVLM_RUNTIME_ALLOWED_ROOTS",
+        [*orchestrator_app.FASTVLM_RUNTIME_ALLOWED_ROOTS, Path(os.path.realpath(tmp_path))],
+    )
+    monkeypatch.setenv("TP_PORTAL_FASTVLM_CAPTIONING_ENABLED", "1")
+    monkeypatch.setenv("TP_PORTAL_FASTVLM_CAPTIONING_ROLLOUT_PERCENT", "100")
+    monkeypatch.setenv("TP_PORTAL_DIRECT_DEBUG_COHORT_KEY", "captioning-contract")
+
+    response = client.post(
+        "/v1/config-preview",
+        json={
+            "pipeline": "lux-depth-v3",
+            "args": {
+                "input_dir": "./tests/fixtures/archive_small/archive_root",
+                "output_dir": "./tests/fixtures/portal_contract_output/lux_depth_captioning_ready",
+                "vlm_captioning_enabled": True,
+                "vlm_captioning_model": str(model_dir),
+                "fastvlm_python_executable": str(python_path),
+                "fastvlm_mlx_vlm_dir": str(mlx_dir),
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    preview = response.json()["data"]
+    assert preview["field_errors"] == []
+    assert preview["captioning_summary"]["runtime_status"] == "ready"
+    runtime_status = preview["captioning_summary"]["runtime_path_status"]
+    assert runtime_status["python_executable"]["status"] == "ready"
+    assert runtime_status["mlx_vlm_dir"]["status"] == "ready"
+    assert runtime_status["model_path"]["status"] == "ready"
+
+
+def test_lux_config_preview_treats_default_fastvlm_venv_python_symlink_as_ready(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    runtime_root = tmp_path / "fastvlm"
+    python_path = runtime_root / ".venv-fastvlm" / "bin" / "python"
+    python_path.parent.mkdir(parents=True)
+    python_path.symlink_to(Path(sys.executable))
+    mlx_dir = runtime_root / "mlx-vlm"
+    model_dir = runtime_root / "checkpoints" / "FastVLM-0.5B-fp16"
+    mlx_dir.mkdir(parents=True)
+    model_dir.mkdir(parents=True)
+    monkeypatch.setattr(orchestrator_app, "default_fastvlm_runtime_root", lambda: runtime_root)
+    monkeypatch.setattr(
+        orchestrator_app,
+        "FASTVLM_RUNTIME_ALLOWED_ROOTS",
+        [*orchestrator_app.FASTVLM_RUNTIME_ALLOWED_ROOTS, Path(os.path.realpath(runtime_root))],
+    )
+    monkeypatch.setenv("TP_PORTAL_FASTVLM_CAPTIONING_ENABLED", "1")
+    monkeypatch.setenv("TP_PORTAL_FASTVLM_CAPTIONING_ROLLOUT_PERCENT", "100")
+    monkeypatch.setenv("TP_PORTAL_DIRECT_DEBUG_COHORT_KEY", "captioning-contract")
+
+    response = client.post(
+        "/v1/config-preview",
+        json={
+            "pipeline": "lux-depth-v3",
+            "args": {
+                "input_dir": "./tests/fixtures/archive_small/archive_root",
+                "output_dir": "./tests/fixtures/portal_contract_output/lux_depth_captioning_default_python",
+                "vlm_captioning_enabled": True,
+                "vlm_captioning_model": str(model_dir),
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    summary = response.json()["data"]["captioning_summary"]
+    assert summary["runtime_status"] == "ready"
+    assert summary["runtime_path_status"]["python_executable"]["status"] == "ready"
 
 
 def test_lux_config_preview_validates_fastvlm_captioning_fields(

@@ -27,9 +27,9 @@ PHASE6_SMOKE_TESTS := \
 	tests/test_lux_render_pipeline_smoke.py \
 	tests/lux_depth_v3/test_orchestrator_smoke.py
 
-.PHONY: help test-fast test-novideo test-full test-integration test-structure test-utils test-orchestrator-contract test-orchestrator-http-contract test-portal-contract test-frontdoor-contract test-archive-gate-contract seed-frontdoor-user run-frontdoor-local validate-orchestrator-http validate-portal-lux-materials-live validate-portal-css-layer-parity validate-portal-browser validate-frontdoor-browser validate-frontdoor-deployment-gate audit-pipeline-readiness coverage-fast-scope coverage-report coverage-diff coverage-package venv repair-core-venv setup clean \
+.PHONY: help test-fast test-novideo test-full test-integration test-structure test-utils test-orchestrator-contract test-orchestrator-http-contract test-portal-contract test-frontdoor-contract test-archive-gate-contract seed-frontdoor-user run-frontdoor-local validate-orchestrator-http validate-portal-lux-materials-live validate-portal-fastvlm-captioning-live validate-portal-css-layer-parity validate-portal-browser validate-frontdoor-browser validate-frontdoor-deployment-gate audit-pipeline-readiness coverage-fast-scope coverage-report coverage-diff coverage-package venv repair-core-venv setup clean \
         lint lint-parity ci ci-full pre-commit install-hooks quality-check fix-quality validate-ci organize-docs check-json-serialization check-piptools-cache \
-        check-python-headers check-yaml-governance check-stale-docs check-doc-heading-links lock lock-prod lock-ci lock-dev install-core install-ml install-ml-core install-ml-raw install-ml-sam2 install-ml-coreml docs docs-clean \
+        check-python-headers check-yaml-governance check-stale-docs check-doc-heading-links lock lock-prod lock-ci lock-dev install-core install-ml install-ml-core install-ml-raw install-ml-sam2 install-ml-coreml install-fastvlm-runtime check-fastvlm-runtime docs docs-clean \
         check check-test-markers check-ci-sync check-todo-governance check-environment check-portal-asset-budgets validate-full validate-quick clean-frontdoor clean-all check-worktree \
         compile-ml-darwin-arm64 update-ml-darwin-arm64 check-ml-darwin-arm64 \
         compile-ml-linux-x86_64 update-ml-linux-x86_64 check-ml-linux-x86_64 \
@@ -45,6 +45,8 @@ help:
 	@echo "  install-ml-raw     Disabled: no trusted checked-in RAW lockfile contract"
 	@echo "  install-ml-sam2    Install ML SAM2 layer (optional segmentation)"
 	@echo "  install-ml-coreml  Disabled unless a trusted CoreML lockfile is present"
+	@echo "  install-fastvlm-runtime  Install governed optional FastVLM advisory captioning runtime"
+	@echo "  check-fastvlm-runtime  Verify governed optional FastVLM advisory captioning runtime"
 	@echo "  test-fast          Run fast subset plus Phase 6 smoke coverage"
 	@echo "  test-novideo       Run all tests excluding video suite via -k filter"
 	@echo "  test-full          Run entire test suite (parallel if xdist present)"
@@ -64,6 +66,7 @@ help:
 	@echo "  coverage-package   Generate package-level coverage baseline report for ratcheting"
 	@echo "  validate-orchestrator-http  Run the live orchestrator HTTP smoke audit"
 	@echo "  validate-portal-lux-materials-live  Run live Lux Materials V3 segmentation backend smoke"
+	@echo "  validate-portal-fastvlm-captioning-live  Run live FastVLM advisory captioning backend smoke"
 	@echo "  validate-portal-css-layer-parity  Validate production portal CSS layer contracts and computed-style parity"
 	@echo "  validate-portal-browser  Run the live browser smoke audit with an isolated local backend"
 	@echo "  validate-frontdoor-browser  Run the live browser smoke audit with isolated local backend/frontdoor runtimes"
@@ -234,6 +237,14 @@ install-ml-coreml: venv
 		exit 1; \
 	fi
 
+install-fastvlm-runtime:
+	@echo "Installing governed FastVLM advisory captioning runtime..."
+	@./scripts/setup/install_fastvlm_runtime.sh
+
+check-fastvlm-runtime:
+	@echo "Verifying governed FastVLM advisory captioning runtime..."
+	@"$(PY)" scripts/validation/validate_fastvlm_runtime.py --verify-only --models "$${TP_FASTVLM_VALIDATE_MODELS:-smoke,default}"
+
 test-fast:
 	@"$(PY)" -m pytest -q $(FAST_TESTS) $(PHASE6_SMOKE_TESTS)
 
@@ -306,6 +317,10 @@ validate-orchestrator-http:
 validate-portal-lux-materials-live:
 	@echo "Running live Lux Materials V3 segmentation backend smoke validation..."
 	@TP_API_KEY="$${TP_API_KEY:-contract-secret}" "$(PY)" scripts/validation/validate_portal_lux_materials_live.py --api-key "$${TP_API_KEY:-contract-secret}"
+
+validate-portal-fastvlm-captioning-live:
+	@echo "Running live FastVLM advisory captioning backend smoke validation..."
+	@TP_API_KEY="$${TP_API_KEY:-contract-secret}" TP_PORTAL_FASTVLM_CAPTIONING_ENABLED=1 TP_PORTAL_FASTVLM_CAPTIONING_ROLLOUT_PERCENT=100 "$(PY)" scripts/validation/validate_portal_fastvlm_captioning_live.py --api-key "$${TP_API_KEY:-contract-secret}"
 
 validate-portal-css-layer-parity:
 	@echo "Validating production portal CSS layer parity..."
