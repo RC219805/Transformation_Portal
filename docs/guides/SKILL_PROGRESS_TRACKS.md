@@ -9,6 +9,157 @@ Use the tracks after an automation run ranks one of these skills. Keep drills
 small, preserve existing route shapes and CLI contracts, and validate with the
 focused acceptance tests listed here before widening scope.
 
+## 2026-05-03 Review-Thread Refresh
+
+The `2026-05-03T16:55:21.582Z` automation window surfaced the following
+current practice tracks from connector-backed GitHub review-thread evidence.
+Treat these as additive drills on top of the earlier tracks; where the reviewed
+defect is already fixed, add focused regression coverage that preserves the
+landed contract.
+
+### Coverage Governance
+
+Review evidence:
+
+- PR #1631: `scripts/ci/check_per_package_coverage.py` needed validator
+  files to stop double-counting into the parent `lux_depth_v3` package floor.
+- PR #1631: absolute Cobertura filenames needed to normalize before package
+  prefix matching, alongside relative, `./`, and platform-separator forms.
+
+Drill 1 - exclude child prefixes from parent floors:
+
+- Target files: per-package coverage checker fixtures and focused coverage
+  governance tests.
+- Expected behavior: a parent package floor counts only files owned by that
+  package, while explicitly configured child package prefixes are measured by
+  their own floor.
+- Acceptance tests: build nested synthetic package fixtures and assert child
+  prefixes cannot inflate or deflate the parent package rollup.
+
+Drill 2 - normalize Cobertura filenames before matching:
+
+- Target files: Cobertura parsing helpers and package-prefix matching tests.
+- Expected behavior: absolute paths, repo-relative paths, `./` prefixes, and
+  backslash separators all resolve to the same canonical repo-relative file
+  key before coverage ownership is evaluated.
+- Acceptance tests: feed synthetic Cobertura XML for each filename form and
+  assert every variant maps to the expected package owner.
+
+### Dependency Parser Contracts
+
+Review evidence:
+
+- PR #1629: explicit `constraints.txt` paths needed to honor the documented
+  exemption in `scripts/validation/check_dependency_pinning.py`.
+- PR #1629: arbitrary-equality pins such as `pkg===1.2.3` needed to fail the
+  exact-pinning contract instead of being accepted as `==` pins.
+
+Drill 1 - table-drive requirement-line parsing:
+
+- Target files: dependency pinning parser tests and the validation helper when
+  needed.
+- Expected behavior: only standard `==` exact pins pass, while `===`,
+  unpinned requirements, malformed wrapped lines, comments, hash continuations,
+  and options are classified according to the documented contract.
+- Acceptance tests: use one parametrized table covering `==`, `===`, extras,
+  backslash continuations, comments, hashes, and option lines.
+
+Drill 2 - lock CLI scan modes:
+
+- Target files: dependency pinning CLI tests.
+- Expected behavior: default scans, explicit file arguments, all-exempt input
+  sets, empty input sets, and explicit `constraints.txt` paths produce stable
+  exit codes and messages.
+- Acceptance tests: run the CLI against temporary fixture trees for each mode
+  and assert exempt inputs are skipped without hiding real violations.
+
+### Public Surface Regression Testing
+
+Review evidence:
+
+- PR #1630: `tests/test_comfyui.py` needed to assert
+  `BaseNode.__abstractmethods__` instead of relying on descriptor-sensitive
+  `__isabstractmethod__` checks.
+- PR #1630: depth tool shape coverage needed to cover both
+  `src/transformation_portal/depth/tools.py` and
+  `src/transformation_portal/pipelines/depth_tools.py`.
+
+Drill 1 - assert canonical runtime invariants:
+
+- Target files: public surface tests for abstract base classes and exported
+  node contracts.
+- Expected behavior: tests use the metaclass or library's canonical runtime
+  invariant rather than inspecting descriptors whose behavior can change across
+  Python versions or wrappers.
+- Acceptance tests: assert `BaseNode.__abstractmethods__` contains the expected
+  abstract hooks and that concrete implementations satisfy the runtime
+  contract.
+
+Drill 2 - duplicate-surface regression matrix:
+
+- Target files: tests for paired public implementations and compatibility
+  wrappers.
+- Expected behavior: every supported implementation path that exposes the same
+  public behavior is imported and checked against the same shape invariant.
+- Acceptance tests: parametrize both depth tool modules and assert matching
+  result shapes, error behavior, and exported symbols.
+
+### CI Signal Efficiency
+
+Review evidence:
+
+- PR #1631: `.github/workflows/build.yml` duplicated frontdoor work by running
+  both `npm test` and `npm run test:coverage`.
+- PR #1630: PR metadata needed to disclose the depth-tools CI blocker alongside
+  the ComfyUI test change so reviewers could see the true scope.
+
+Drill 1 - collapse duplicate CI invocations:
+
+- Target files: workflow tests and the CI workflow under review.
+- Expected behavior: each frontend or coverage check has one authoritative CI
+  step, with duplicate build/test invocations removed unless they exercise
+  distinct contracts.
+- Acceptance tests: inspect the workflow and assert the frontdoor test/build
+  command set has no duplicate semantic coverage.
+
+Drill 2 - disclose discovered CI blockers:
+
+- Target files: PR template/checklist docs or release-review guidance.
+- Expected behavior: when implementation fixes an additional CI-blocking defect,
+  the PR title/body names the primary intent, the discovered blocker, and the
+  validation commands that prove both.
+- Acceptance tests: add a docs contract test or checklist fixture that rejects
+  missing discovered-blocker and validation-command fields.
+
+### Docs And Status Truthfulness
+
+Review evidence:
+
+- PR #1629: a script docstring claimed TODO section 5.7 was closed while
+  `docs/analysis/TODO_INVENTORY.md` still marked that work partial.
+- PR #1628: `CLAUDE.md` needed current FastVLM runtime targets, fail-closed
+  `install-ml-raw` behavior, and portal CSS parity guidance.
+
+Drill 1 - validate TODO closure language:
+
+- Target files: docs/status consistency checks and TODO inventory fixtures.
+- Expected behavior: "closes TODO" or equivalent completion language is only
+  allowed when the referenced TODO inventory entry is actually closed.
+- Acceptance tests: fixture one closed TODO and one partial TODO, then assert
+  closure language passes only for the closed entry and fails with the stale
+  status path for the partial entry.
+
+Drill 2 - pair runtime docs with command contracts:
+
+- Target files: operator docs, Makefile target references, and docs navigation
+  tests.
+- Expected behavior: every Make target or runtime-state change updates one
+  operator-doc anchor and one navigation or command-reference contract in the
+  same patch.
+- Acceptance tests: assert the FastVLM, `install-ml-raw`, and portal CSS parity
+  operator anchors remain linked from current docs and match the documented
+  target behavior.
+
 ## 2026-05-02 Review-Thread Refresh
 
 The `2026-04-30T21:19:09Z` automation window surfaced the following current
