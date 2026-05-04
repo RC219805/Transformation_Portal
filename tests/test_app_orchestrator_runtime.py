@@ -1127,6 +1127,9 @@ def test_portal_fastvlm_captioning_controls_are_feature_gated_and_advisory_only(
     cli_body = _extract_js_function_body(content, "renderCLI")
     diagnostics_body = _extract_js_function_body(content, "renderPreRunDiagnostics")
     effective_drawer_body = _extract_js_function_body(content, "renderEffectiveConfigDrawer")
+    captioning_status_body = _extract_js_function_body(content, "normalizeCaptioningRunStatus")
+    run_summary_body = _extract_js_function_body(content, "normalizeRunSummary")
+    queue_body = _extract_js_function_body(content, "renderJobQueue")
     bind_body = _extract_js_function_body(content, "bindInputs")
 
     assert 'id="captioningDetails"' in content
@@ -1140,10 +1143,17 @@ def test_portal_fastvlm_captioning_controls_are_feature_gated_and_advisory_only(
     assert 'id="fastVlmMlxVlmDir"' in content
     assert 'id="captioningReadinessScope"' in content
     assert 'id="captioningReadinessList"' in content
+    assert 'id="reviewProvenanceCaptioning"' in content
     assert 'data-ui="captioning-readiness"' in content
+    assert 'data-ui="captioning-run-status"' in content
     assert "FastVLM captions are advisory and never satisfy quality gates." in content
     assert "FastVLM readiness: Off" in content
     assert "function _fastVlmCaptioningFeatureEnabled()" in content
+    assert "const CAPTIONING_RUN_STATUS_VALUES = new Set([" in content
+    assert "function toNonNegativeCaptioningRunStatusInt(value)" in content
+    assert "function normalizeCaptioningRunStatus(rawStatus)" in content
+    assert "function captioningRunStatusSummary(status)" in content
+    assert "function createCaptioningRunStatusChip(status)" in content
     assert "function _captioningRuntimeReadiness(summary = {})" in content
     assert "function _renderCaptioningReadiness(summary = {}, options = {})" in content
     assert "state.auth?.features?.fastVlmCaptioning" in content
@@ -1161,10 +1171,13 @@ def test_portal_fastvlm_captioning_controls_are_feature_gated_and_advisory_only(
     assert "--fastvlm-python" in cli_body
     assert "--fastvlm-mlx-vlm-dir" in cli_body
     assert "Advisory FastVLM caption sidecars" in diagnostics_body
+    assert "new Set([" not in captioning_status_body
     assert "FastVLM captions are advisory sidecar metadata and do not satisfy quality gates." in diagnostics_body
     assert "FastVLM advisory captioning is enabled and remains outside quality gates." in effective_drawer_body
     assert "FastVLM readiness is" in effective_drawer_body
     assert "captioningReadiness.verification_scope" in effective_drawer_body
+    assert "captioning_status: normalizeCaptioningRunStatus(rawSummary.captioning_status)" in run_summary_body
+    assert "createCaptioningRunStatusChip(captioningRunStatus)" in queue_body
     assert "'captioning:enableFastVlm': 'vlm_captioning_enabled'" in bind_body
     assert "safeBindCheck(els.captioning.enableFastVlm, 'captioning', 'enableFastVlm');" in bind_body
 
@@ -1418,8 +1431,10 @@ def test_portal_review_surface_exposes_warning_banner_and_provenance_contract() 
     assert 'id="reviewProvenanceFreshness"' in content
     assert 'id="reviewProvenanceSource"' in content
     assert 'id="reviewProvenanceBatch"' in content
+    assert 'id="reviewProvenanceCaptioning"' in content
     assert 'data-ui="review-status-banner"' in content
     assert 'data-ui="review-provenance-grid"' in content
+    assert 'data-ui="captioning-run-status"' in content
     assert "function _reviewStatusState(job, reviewableOutputs, visibleWarning) {" in review_content
     assert "_renderReviewStatusBanner(selected, selectedArtifact);" in render_body
     assert "_renderArtifactProvenance(selected, selectedArtifact);" in render_body
@@ -1455,6 +1470,8 @@ def test_portal_review_surface_exposes_warning_banner_and_provenance_contract() 
     assert "artifactLabel(artifact)" in provenance_body
     assert "_artifactFingerprintLabel(artifact)" in provenance_body
     assert 'titleCaseToken(job.state, "Unknown")' in provenance_body
+    assert "captioningRunStatusSummary(captioningStatus)" in provenance_body
+    assert "els.reviewProvenanceCaptioning.dataset.status" in provenance_body
     assert "summary?.batch_id" in provenance_body
     assert "summary?.source" in provenance_body
 

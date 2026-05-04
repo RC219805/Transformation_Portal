@@ -29,7 +29,7 @@ from email.policy import default as email_policy
 from functools import lru_cache
 from importlib.util import find_spec
 from pathlib import Path, PurePosixPath
-from typing import Any, AsyncGenerator, Callable, Deque, Dict, List, Mapping, NamedTuple, Optional, Tuple
+from typing import Any, AsyncGenerator, Callable, Deque, Dict, Iterable, List, Mapping, NamedTuple, Optional, Tuple
 from urllib.parse import quote
 
 from fastapi import FastAPI, HTTPException, Request
@@ -1369,6 +1369,35 @@ except ImportError:  # pragma: no cover - defensive fallback if core import fail
 
 ALLOWED_LOG_LEVELS = {"DEBUG", "INFO", "WARNING", "ERROR"}
 ALLOWED_VLM_CAPTIONING_BACKENDS = {"fastvlm"}
+FASTVLM_RUN_STATUS_VALUES = {
+    "off",
+    "requested",
+    "succeeded",
+    "failed",
+    "skipped",
+    "missing_runtime",
+    "invalid_config",
+    "unsupported_backend",
+}
+FASTVLM_RUNTIME_STATUS_ALIASES = {
+    "ok": "succeeded",
+    "success": "succeeded",
+    "successful": "succeeded",
+    "succeeded": "succeeded",
+    "error": "failed",
+    "failed": "failed",
+    "failure": "failed",
+    "proxy_error": "failed",
+    "timeout": "failed",
+    "missing_model": "missing_runtime",
+    "missing_runtime": "missing_runtime",
+    "invalid_config": "invalid_config",
+    "unsupported_backend": "unsupported_backend",
+    "skipped": "skipped",
+    "disabled": "off",
+    "off": "off",
+    "requested": "requested",
+}
 ALLOWED_VLM_CAPTIONING_PROXY_FORMATS = {"png", "jpeg"}
 ALLOWED_VLM_CAPTIONING_MODEL_ROLES = frozenset(FASTVLM_CHECKPOINT_DIRS.keys())
 PORTAL_DEFAULT_DA3_MODEL_KEY = "da3-metric"
@@ -6673,6 +6702,149 @@ def _coerce_nonnegative_int(value: Any) -> Optional[int]:
     return parsed
 
 
+def _captioning_artifact_counts_from_paths(paths: Iterable[str]) -> Dict[str, int]:
+    counts = {"sidecar_count": 0, "raw_count": 0, "proxy_count": 0}
+    for raw_path in paths:
+        lower_path = str(raw_path or "").replace("\\", "/").strip().lower()
+        if not lower_path:
+            continue
+        if lower_path.endswith(".vlm_captioning.sidecar.json"):
+            counts["sidecar_count"] += 1
+        elif lower_path.endswith(".vlm_captioning.raw.txt"):
+            counts["raw_count"] += 1
+        elif "/captioning/" in f"/{lower_path}" and re.search(r"_proxy\.(?:png|jpe?g)$", lower_path):
+            counts["proxy_count"] += 1
+    return counts
+
+
+def _captioning_artifact_counts_from_run_card(payload: Mapping[str, Any]) -> Dict[str, int]:
+    artifact_index = payload.get("artifact_index")
+    if not isinstance(artifact_index, list):
+        return {"sidecar_count": 0, "raw_count": 0, "proxy_count": 0}
+    return _captioning_artifact_counts_from_paths(
+        str(artifact.get("relative_path") or artifact.get("path") or "")
+        for artifact in artifact_index
+        if isinstance(artifact, Mapping)
+    )
+
+
+def _captioning_artifact_counts_from_job_artifacts(artifacts: Mapping[str, Any]) -> Dict[str, int]:
+    items = artifacts.get("items") if isinstance(artifacts, Mapping) else None
+    if not isinstance(items, list):
+        return {"sidecar_count": 0, "raw_count": 0, "proxy_count": 0}
+    return _captioning_artifact_counts_from_paths(
+        str(item.get("relative_path") or item.get("path") or "") for item in items if isinstance(item, Mapping)
+    )
+
+
+def _fastvlm_model_role_from_value(value: Any) -> str:
+    normalized = str(value or "").strip().lower()
+    return normalized if normalized in ALLOWED_VLM_CAPTIONING_MODEL_ROLES else "custom"
+
+
+def _normalize_fastvlm_run_status(
+    raw_status: Any,
+    *,
+    artifact_counts: Optional[Mapping[str, int]] = None,
+    requested: bool = False,
+) -> Optional[Dict[str, Any]]:
+    counts = {
+        "sidecar_count": _coerce_nonnegative_int((artifact_counts or {}).get("sidecar_count")) or 0,
+        "raw_count": _coerce_nonnegative_int((artifact_counts or {}).get("raw_count")) or 0,
+        "proxy_count": _coerce_nonnegative_int((artifact_counts or {}).get("proxy_count")) or 0,
+    }
+    if not isinstance(raw_status, Mapping):
+        if not requested and not any(counts.values()):
+            return None
+        raw_status = {"enabled": True, "status": "requested" if requested else "succeeded"}
+
+    enabled = _as_bool(raw_status.get("enabled"), requested or any(counts.values()))
+    backend = str(raw_status.get("backend") or "fastvlm").strip().lower() or "fastvlm"
+    status_text = str(raw_status.get("status") or "").strip().lower()
+    normalized_status = FASTVLM_RUNTIME_STATUS_ALIASES.get(status_text, "")
+    policy_violation = raw_status.get("used_for_quality_gate") is True
+
+    sidecar_count = max(counts["sidecar_count"], _coerce_nonnegative_int(raw_status.get("sidecar_count")) or 0)
+    raw_count = max(counts["raw_count"], _coerce_nonnegative_int(raw_status.get("raw_count")) or 0)
+    proxy_count = max(counts["proxy_count"], _coerce_nonnegative_int(raw_status.get("proxy_count")) or 0)
+    failed_count = _coerce_nonnegative_int(raw_status.get("failed_count")) or 0
+
+    if policy_violation:
+        normalized_status = "failed"
+        failed_count = max(failed_count, 1)
+    elif backend != "fastvlm":
+        normalized_status = "unsupported_backend"
+    elif normalized_status not in FASTVLM_RUN_STATUS_VALUES:
+        if not enabled:
+            normalized_status = "off"
+        elif failed_count > 0:
+            normalized_status = "failed"
+        elif sidecar_count > 0:
+            normalized_status = "succeeded"
+        elif requested:
+            normalized_status = "requested"
+        else:
+            normalized_status = "skipped"
+
+    if normalized_status == "off":
+        enabled = False
+    if normalized_status == "succeeded" and sidecar_count == 0 and not requested:
+        normalized_status = "skipped"
+
+    normalized: Dict[str, Any] = {
+        "status": normalized_status,
+        "enabled": bool(enabled),
+        "backend": backend,
+        "model_role": str(
+            raw_status.get("model_role") or _fastvlm_model_role_from_value(raw_status.get("model") or "")
+        ).strip()
+        or "custom",
+        "model_id": raw_status.get("model_id") if raw_status.get("model_id") is not None else None,
+        "model_path": str(raw_status.get("model_path") or "").strip() or None,
+        "role": "advisory",
+        "sidecar_count": sidecar_count,
+        "raw_count": raw_count,
+        "proxy_count": proxy_count,
+        "failed_count": failed_count,
+        "used_for_quality_gate": False,
+    }
+    if policy_violation:
+        normalized["policy_violation"] = True
+        normalized["quality_gate_claimed"] = True
+        normalized["error"] = "captioning_status.used_for_quality_gate must be false"
+    elif raw_status.get("error"):
+        normalized["error"] = str(raw_status.get("error"))
+    return normalized
+
+
+def _requested_fastvlm_captioning_status(job: Job) -> Optional[Dict[str, Any]]:
+    args: Mapping[str, Any] = {}
+    for request in (job.effective_request, job.request):
+        candidate = request.get("args") if isinstance(request, Mapping) else None
+        if isinstance(candidate, Mapping) and candidate:
+            args = candidate
+            break
+    if not args:
+        return None
+    enabled = _as_bool(_pick(args, "vlm_captioning_enabled", "vlmCaptioningEnabled", default=False), False)
+    if not enabled:
+        return None
+    model = str(_pick(args, "vlm_captioning_model", "vlmCaptioningModel", default="default") or "default").strip()
+    backend = str(_pick(args, "vlm_captioning_backend", "vlmCaptioningBackend", default="fastvlm") or "fastvlm").strip()
+    return _normalize_fastvlm_run_status(
+        {
+            "enabled": True,
+            "status": "requested",
+            "backend": backend,
+            "model_role": _fastvlm_model_role_from_value(model),
+            "model_id": None,
+            "model_path": model if "/" in model or "\\" in model or model.startswith(".") else None,
+            "used_for_quality_gate": False,
+        },
+        requested=True,
+    )
+
+
 def _load_bounded_json_object(path: Path, *, max_bytes: int = JOB_RUN_SUMMARY_MAX_BYTES) -> Optional[Dict[str, Any]]:
     try:
         size_bytes = path.stat().st_size
@@ -6753,6 +6925,12 @@ def _summarize_run_card_payload(payload: Mapping[str, Any]) -> Dict[str, Any]:
     partial = reviewable_outputs and bool((error_count or 0) > 0)
     summary["reviewable_outputs"] = reviewable_outputs
     summary["partial"] = partial
+    captioning_status = _normalize_fastvlm_run_status(
+        payload.get("captioning_status"),
+        artifact_counts=_captioning_artifact_counts_from_run_card(payload),
+    )
+    if captioning_status is not None:
+        summary["captioning_status"] = captioning_status
 
     return summary
 
@@ -7009,6 +7187,36 @@ def _refresh_job_run_summary(job: Job) -> Dict[str, Any]:
     if not summary and existing_summary:
         summary = existing_summary
 
+    if summary:
+        artifact_counts = _captioning_artifact_counts_from_job_artifacts(job.artifacts)
+        existing_captioning_counts = summary.get("captioning_status")
+        if isinstance(existing_captioning_counts, Mapping):
+            artifact_counts = {
+                "sidecar_count": max(
+                    artifact_counts["sidecar_count"],
+                    _coerce_nonnegative_int(existing_captioning_counts.get("sidecar_count")) or 0,
+                ),
+                "raw_count": max(
+                    artifact_counts["raw_count"],
+                    _coerce_nonnegative_int(existing_captioning_counts.get("raw_count")) or 0,
+                ),
+                "proxy_count": max(
+                    artifact_counts["proxy_count"],
+                    _coerce_nonnegative_int(existing_captioning_counts.get("proxy_count")) or 0,
+                ),
+            }
+        raw_captioning_status = None
+        if metadata is not None and metadata.run_card_payload is not None:
+            raw_captioning_status = metadata.run_card_payload.get("captioning_status")
+        if raw_captioning_status is None:
+            raw_captioning_status = existing_summary.get("captioning_status")
+        captioning_status = _normalize_fastvlm_run_status(
+            raw_captioning_status,
+            artifact_counts=artifact_counts,
+        )
+        if captioning_status is not None:
+            summary["captioning_status"] = captioning_status
+
     job.run_summary = summary
 
     if job.state != "canceled" and summary.get("partial"):
@@ -7040,6 +7248,17 @@ def _refresh_job_run_summary(job: Job) -> Dict[str, Any]:
             )
 
     return summary
+
+
+def _serialized_job_run_summary(job: Job) -> Optional[Dict[str, Any]]:
+    if job.state not in ACTIVE_JOB_STATES and job.state != "canceled":
+        _refresh_job_run_summary(job)
+    summary = dict(job.run_summary) if isinstance(job.run_summary, dict) and job.run_summary else {}
+    if job.state in ACTIVE_JOB_STATES:
+        requested_status = _requested_fastvlm_captioning_status(job)
+        if requested_status is not None:
+            summary["captioning_status"] = requested_status
+    return summary or None
 
 
 class ArtifactPathValidationError(ValueError):
@@ -7231,8 +7450,7 @@ def _job_events_url(job_id: str, *, api_version: str = "v1") -> str:
 
 
 def _serialize_job(job: Job, *, include_logs: bool = True, api_version: str = "v1") -> Dict[str, Any]:
-    if job.state not in ACTIVE_JOB_STATES and job.state != "canceled":
-        _refresh_job_run_summary(job)
+    run_summary = _serialized_job_run_summary(job)
     data = {
         "id": job.id,
         "pipeline": str(job.request.get("pipeline") or ""),
@@ -7245,7 +7463,7 @@ def _serialize_job(job: Job, *, include_logs: bool = True, api_version: str = "v
         "events_url": _job_events_url(job.id, api_version=api_version),
         "artifacts": job.artifacts,
         "error": job.error,
-        "run_summary": job.run_summary or None,
+        "run_summary": run_summary,
         "last_event_at": job.last_event_at,
     }
     if include_logs:

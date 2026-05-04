@@ -4,6 +4,7 @@ export function createDeferredReviewSurfaceApi(host) {
     els,
     clamp,
     normalizeRunSummary,
+    captioningRunStatusSummary,
     titleCaseToken,
     formatRelativeTime,
     getReadableError,
@@ -692,6 +693,10 @@ export function createDeferredReviewSurfaceApi(host) {
       if (els.reviewProvenanceFreshness) els.reviewProvenanceFreshness.textContent = "No live telemetry";
       if (els.reviewProvenanceSource) els.reviewProvenanceSource.textContent = "Not reported";
       if (els.reviewProvenanceBatch) els.reviewProvenanceBatch.textContent = "Not reported";
+      if (els.reviewProvenanceCaptioning) {
+        els.reviewProvenanceCaptioning.textContent = "FastVLM: Not requested";
+        els.reviewProvenanceCaptioning.dataset.status = "off";
+      }
       return;
     }
 
@@ -704,6 +709,8 @@ export function createDeferredReviewSurfaceApi(host) {
     const runStateLabel = `${titleCaseToken(job.state, "Unknown")} • ${titleCaseToken(job.pipeline, "Unknown")}`;
     const sourceLabel = summary?.source || titleCaseToken(job.pipeline, "Not reported");
     const batchLabel = summary?.batch_id || "Not reported";
+    const captioningStatus = summary?.captioning_status || null;
+    const captioningLabel = captioningRunStatusSummary(captioningStatus);
 
     if (els.reviewProvenanceArtifactRole) els.reviewProvenanceArtifactRole.textContent = artifactDescriptor;
     if (els.reviewProvenanceRunState) els.reviewProvenanceRunState.textContent = runStateLabel;
@@ -715,6 +722,10 @@ export function createDeferredReviewSurfaceApi(host) {
     if (els.reviewProvenanceFreshness) els.reviewProvenanceFreshness.textContent = freshnessLabel;
     if (els.reviewProvenanceSource) els.reviewProvenanceSource.textContent = sourceLabel;
     if (els.reviewProvenanceBatch) els.reviewProvenanceBatch.textContent = batchLabel;
+    if (els.reviewProvenanceCaptioning) {
+      els.reviewProvenanceCaptioning.textContent = captioningLabel;
+      els.reviewProvenanceCaptioning.dataset.status = String(captioningStatus?.status || "off");
+    }
     els.reviewProvenanceGrid.classList.remove("hidden");
   }
 

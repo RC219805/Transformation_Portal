@@ -2222,6 +2222,182 @@ def test_partial_run_card_promotes_reviewable_failed_job_state(tmp_path: Path) -
     assert job.error["code"] == "RUNNER_PARTIAL_FAILURE"
 
 
+def _write_phase22_run_card(
+    output_dir: Path,
+    *,
+    captioning_status: dict[str, Any] | None,
+    artifact_index: list[dict[str, Any]] | None = None,
+) -> None:
+    payload: dict[str, Any] = {
+        "run_card_version": "v1",
+        "batch_id": "2026-05-04_120000",
+        "total_images": 1,
+        "success_count": 1,
+        "error_count": 0,
+    }
+    if artifact_index is not None:
+        payload["artifact_index"] = artifact_index
+    if captioning_status is not None:
+        payload["captioning_status"] = captioning_status
+    (output_dir / "run_card_2026-05-04_120000.json").write_text(json.dumps(payload), encoding="utf-8")
+
+
+def _phase22_job(output_dir: Path, *, state: str = "succeeded") -> Any:
+    return orchestrator_app.Job(
+        id=f"job_phase22_{state}",
+        created_at=orchestrator_app._now(),
+        state=state,
+        exit_code=0 if state == "succeeded" else None,
+        request={"pipeline": "lux-depth-v3", "args": {"output_dir": str(output_dir)}},
+    )
+
+
+def test_run_summary_maps_fastvlm_sidecar_evidence_to_succeeded(tmp_path: Path) -> None:
+    output_dir = tmp_path / "out"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    _write_phase22_run_card(
+        output_dir,
+        captioning_status={
+            "enabled": True,
+            "backend": "fastvlm",
+            "status": "ok",
+            "model_role": "smoke",
+            "model_id": "apple/FastVLM-0.5B-fp16",
+            "role": "advisory",
+            "sidecar_count": 0,
+            "failed_count": 0,
+            "used_for_quality_gate": False,
+        },
+        artifact_index=[
+            {"relative_path": "captioning/image.vlm_captioning.sidecar.json"},
+            {"relative_path": "captioning/image.vlm_captioning.raw.txt"},
+        ],
+    )
+
+    job = _phase22_job(output_dir)
+    job.artifacts = {
+        "items": [
+            {"relative_path": r"captioning\image_proxy.png"},
+        ],
+    }
+    summary = orchestrator_app._refresh_job_run_summary(job)
+
+    status = summary["captioning_status"]
+    assert status["status"] == "succeeded"
+    assert status["role"] == "advisory"
+    assert status["sidecar_count"] == 1
+    assert status["raw_count"] == 1
+    assert status["proxy_count"] == 1
+    assert status["used_for_quality_gate"] is False
+
+
+@pytest.mark.parametrize(
+    ("raw_status", "expected"),
+    [
+        (
+            {"enabled": True, "backend": "fastvlm", "status": "missing_runtime", "used_for_quality_gate": False},
+            "missing_runtime",
+        ),
+        (
+            {"enabled": True, "backend": "fastvlm", "status": "invalid_config", "used_for_quality_gate": False},
+            "invalid_config",
+        ),
+        ({"enabled": True, "backend": "other", "status": "ok", "used_for_quality_gate": False}, "unsupported_backend"),
+        (
+            {"enabled": True, "backend": "fastvlm", "status": "skipped", "sidecar_count": 0, "used_for_quality_gate": False},
+            "skipped",
+        ),
+        (
+            {"enabled": True, "backend": "fastvlm", "status": "error", "failed_count": 1, "used_for_quality_gate": False},
+            "failed",
+        ),
+    ],
+)
+def test_run_summary_normalizes_fastvlm_terminal_statuses(
+    tmp_path: Path,
+    raw_status: dict[str, Any],
+    expected: str,
+) -> None:
+    output_dir = tmp_path / "out"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    _write_phase22_run_card(output_dir, captioning_status=raw_status)
+
+    summary = orchestrator_app._refresh_job_run_summary(_phase22_job(output_dir))
+
+    assert summary["captioning_status"]["status"] == expected
+    assert summary["captioning_status"]["used_for_quality_gate"] is False
+
+
+def test_run_summary_reports_fastvlm_quality_gate_policy_violation(tmp_path: Path) -> None:
+    output_dir = tmp_path / "out"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    _write_phase22_run_card(
+        output_dir,
+        captioning_status={
+            "enabled": True,
+            "backend": "other",
+            "status": "ok",
+            "role": "advisory",
+            "sidecar_count": 1,
+            "failed_count": 0,
+            "used_for_quality_gate": True,
+        },
+    )
+
+    summary = orchestrator_app._refresh_job_run_summary(_phase22_job(output_dir))
+
+    status = summary["captioning_status"]
+    assert status["status"] == "failed"
+    assert status["policy_violation"] is True
+    assert status["quality_gate_claimed"] is True
+    assert status["failed_count"] == 1
+    assert status["used_for_quality_gate"] is False
+    assert "used_for_quality_gate" in status["error"]
+
+
+def test_fastvlm_model_role_normalization_uses_allowed_roles() -> None:
+    for role in orchestrator_app.ALLOWED_VLM_CAPTIONING_MODEL_ROLES:
+        assert orchestrator_app._fastvlm_model_role_from_value(role) == role
+        assert orchestrator_app._fastvlm_model_role_from_value(role.upper()) == role
+
+    assert orchestrator_app._fastvlm_model_role_from_value("unexpected") == "custom"
+
+
+def test_active_fastvlm_job_serializes_requested_captioning_status(client: TestClient) -> None:
+    job = orchestrator_app.Job(
+        id="job_phase22_requested",
+        created_at=orchestrator_app._now(),
+        state="queued",
+        request={"pipeline": "lux-depth-v3", "args": {}},
+        effective_request={
+            "pipeline": "lux-depth-v3",
+            "args": {
+                "vlm_captioning_enabled": True,
+                "vlm_captioning_backend": "fastvlm",
+                "vlm_captioning_model": "smoke",
+            },
+        },
+    )
+    orchestrator_app.JOBS[job.id] = job
+
+    list_body = client.get("/v1/jobs").json()
+    detail_body = client.get(f"/v1/jobs/{job.id}").json()
+    v2_list_body = client.get("/v2/jobs").json()
+    v2_detail_body = client.get(f"/v2/jobs/{job.id}").json()
+
+    for serialized in (
+        list_body["data"]["jobs"][0],
+        detail_body["data"],
+        v2_list_body["data"]["jobs"][0],
+        v2_detail_body["data"],
+    ):
+        status = serialized["run_summary"]["captioning_status"]
+        assert status["status"] == "requested"
+        assert status["enabled"] is True
+        assert status["model_role"] == "smoke"
+        assert status["used_for_quality_gate"] is False
+
+
 def test_partial_run_summary_prefers_newest_run_card_when_output_dir_reused(tmp_path: Path) -> None:
     output_dir = tmp_path / "out"
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -3662,6 +3838,46 @@ def test_job_events_stream_emits_state_log_progress_artifact_done(
     artifact_payload = next(payload for name, payload in events if name == "artifact")
     assert artifact_payload["artifact_type"] == "metadata"
     assert artifact_payload["relative_path"] == "report.json"
+
+
+def test_late_job_events_done_payload_includes_fastvlm_captioning_status(client: TestClient) -> None:
+    now = orchestrator_app._now()
+    job = orchestrator_app.Job(
+        id="job_phase22_late_sse",
+        created_at=now,
+        state="succeeded",
+        progress=100,
+        exit_code=0,
+        done_published_at=now,
+        finished_at=now,
+        request={"pipeline": "lux-depth-v3"},
+        run_summary={
+            "source": "run_card",
+            "batch_id": "2026-05-04_120000",
+            "success_count": 1,
+            "error_count": 0,
+            "captioning_status": {
+                "enabled": True,
+                "backend": "fastvlm",
+                "status": "succeeded",
+                "role": "advisory",
+                "sidecar_count": 1,
+                "failed_count": 0,
+                "used_for_quality_gate": False,
+            },
+        },
+    )
+    orchestrator_app.JOBS[job.id] = job
+
+    with client.stream("GET", f"/v1/jobs/{job.id}/events") as stream_response:
+        assert stream_response.status_code == 200
+        events = _collect_sse_events(stream_response)
+
+    done_payload = next(payload for name, payload in events if name == "done")
+    status = done_payload["run_summary"]["captioning_status"]
+    assert status["status"] == "succeeded"
+    assert status["sidecar_count"] == 1
+    assert status["used_for_quality_gate"] is False
 
 
 def test_artifact_indexing_truncation_visible_via_job_status(client: TestClient, tmp_path) -> None:
