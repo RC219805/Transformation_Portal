@@ -34,50 +34,31 @@ This document identifies **high-value, low-effort tasks** that can be completed 
 
 ## Quick Win Inventory
 
-### QW-1: Add @abstractmethod Decorators to ComfyUI Base Class
+### QW-1: Add @abstractmethod Decorators to ComfyUI Base Class — ✅ COMPLETED (2026-05-04)
 
 **Effort:** 15 minutes
 **Impact:** Code clarity, IDE support
 **Risk:** None (documentation only)
 
-**Task:**
-Add `@abstractmethod` decorators to `BaseNode` abstract methods for better IDE support and explicit interface contract.
+**Outcome:** Verified that `src/transformation_portal/comfyui/custom_nodes.py` already imports `from abc import ABC, abstractmethod` (line 17), declares `class BaseNode(ABC)` (line 50), and decorates all three required interface methods — `INPUT_TYPES` (line 59), `RETURN_TYPES` (line 65), and `execute` (line 70) — with `@abstractmethod`. AST inspection confirms decorators are present and the class is registered with `ABCMeta` so instantiation without overrides is blocked. Coverage is locked in by `tests/test_comfyui.py::TestBaseNode::test_base_node_abstract_methods`, which asserts `{"INPUT_TYPES", "RETURN_TYPES", "execute"} ⊆ BaseNode.__abstractmethods__` via the descriptor-agnostic `ABCMeta.__abstractmethods__` invariant. No code change required to close this quick win; the open status was a documentation residue from before the abstract-method test landed.
 
-**Location:** `src/transformation_portal/comfyui/custom_nodes.py`
+**Location:** `src/transformation_portal/comfyui/custom_nodes.py:17,50,58–73`
 
-**Changes:**
-```python
-from abc import ABC, abstractmethod
-
-class BaseNode(ABC):  # Add ABC inheritance
-    """Base class for custom nodes."""
-
-    CATEGORY = "Transformation Portal"
-
-    @classmethod
-    @abstractmethod  # Add decorator
-    def INPUT_TYPES(cls) -> Dict[str, Any]:
-        raise NotImplementedError
-
-    @classmethod
-    @abstractmethod  # Add decorator
-    def RETURN_TYPES(cls) -> Tuple[str, ...]:
-        raise NotImplementedError
-
-    @abstractmethod  # Add decorator
-    def execute(self, **kwargs) -> Tuple[Any, ...]:
-        raise NotImplementedError
+**Verification (2026-05-04):**
+```bash
+python3 -c "import ast; tree=ast.parse(open('src/transformation_portal/comfyui/custom_nodes.py').read()); \
+  [print(n.name, [ast.unparse(d) for d in m.decorator_list]) \
+   for n in ast.walk(tree) if isinstance(n, ast.ClassDef) and n.name=='BaseNode' \
+   for m in n.body if isinstance(m, ast.FunctionDef)]"
+# → INPUT_TYPES ['classmethod', 'abstractmethod']
+# → RETURN_TYPES ['classmethod', 'abstractmethod']
+# → execute ['abstractmethod']
 ```
 
-**Testing:**
-- Run `pytest tests/test_comfyui.py` (if exists)
-- Verify imports still work
-- Check mypy/type checker warnings
-
 **Acceptance:**
-- All abstract methods decorated
-- No breaking changes to subclasses
-- Type checkers recognize abstract class
+- [x] All abstract methods decorated — `INPUT_TYPES`, `RETURN_TYPES`, `execute`
+- [x] No breaking changes to subclasses — `FluxEnhancementNode`, `SkyGANNode`, `SceneAnalysisNode` all override the three methods and continue to register cleanly
+- [x] Type checkers recognize abstract class — `BaseNode(ABC)` plus `__abstractmethods__` populated
 
 ---
 
@@ -412,7 +393,7 @@ Audit `src/transformation_portal/depth_canonical/` module to determine if it's s
 
 ### Week 2: Code & Integration (5 hours)
 
-6. **QW-1:** Add @abstractmethod decorators (15min)
+6. **QW-1:** Add @abstractmethod decorators (15min) — ✅ completed 2026-05-04
 7. **QW-5:** ComfyUI documentation (1h)
 8. **QW-9:** Context-aware rendering decision (2h)
 9. **QW-10:** Depth canonical audit (2h)
@@ -439,7 +420,7 @@ Audit `src/transformation_portal/depth_canonical/` module to determine if it's s
 
 ### Low Impact (Polish)
 
-- **QW-1:** @abstractmethod decorators (IDE support)
+- **QW-1:** @abstractmethod decorators (IDE support) — ✅ completed 2026-05-04
 - **QW-2:** Archive obsolete docs (cleanliness) — ✅ completed 2026-03-14
 - **QW-3:** Update binary docs (accuracy) — ✅ completed 2026-05-02
 - **QW-8:** Security badges (visibility)
