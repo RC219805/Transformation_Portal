@@ -18,6 +18,13 @@ Each package floor is independent: the report lists ALL prefixes (covered
 lines / total lines / percentage / floor / pass-fail) so contributors can
 see at a glance where they stand, not just the first failure.
 
+A floor may declare ``exclude_prefixes`` so a parent rollup does NOT
+double-count files that already have their own stricter nested floor.
+For example, ``lux_depth_v3/`` excludes ``lux_depth_v3/validators/``
+because the validators directory has its own 80% floor and including it
+in the parent 50% rollup would let high validator coverage mask
+regressions in the rest of ``lux_depth_v3/``.
+
 Floors here MUST only ratchet upward over time. If a refactor genuinely
 moves coverage down, raise the matter in review and adjust intentionally
 — do not silently lower a floor to make CI green.
@@ -28,24 +35,37 @@ from __future__ import annotations
 import argparse
 import sys
 import xml.etree.ElementTree as ET
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Iterable, List
 
 
+@dataclass(frozen=True)
+class PackageFloor:
+    """A coverage gate over a path prefix, optionally excluding nested prefixes."""
+
+    prefix: str
+    floor: float
+    exclude_prefixes: tuple[str, ...] = field(default_factory=tuple)
+
+
 # Per-package floors. Keep the list small and focused on governed surfaces.
 # Floors are line-coverage percentages (0-100). They are *floors*, not targets.
-PACKAGE_FLOORS: tuple[tuple[str, float], ...] = (
+PACKAGE_FLOORS: tuple[PackageFloor, ...] = (
     # tp.crypto / tp.merkle / tp.phase4 — contract & evidence chain
-    ("src/tp/", 60.0),
+    PackageFloor("src/tp/", 60.0),
     # Run-card validators are the binding contract surface for governed deliverables.
-    ("src/transformation_portal/lux_depth_v3/validators/", 80.0),
+    PackageFloor("src/transformation_portal/lux_depth_v3/validators/", 80.0),
     # Lux Depth V3 core orchestrator seams (config_resolver, pipeline_coordinator,
     # execution_engine, artifact_manager, manifest, provenance, run_card_contract,
-    # io_atomic, reconstruction_manifest). Backends and the very large
-    # segmentation_backend live alongside but are excluded by the deeper
-    # validators/ floor above and treated under the global floor.
-    ("src/transformation_portal/lux_depth_v3/", 50.0),
+    # io_atomic, reconstruction_manifest). Validators have their own stricter
+    # floor above; explicitly exclude them so a high validator percentage
+    # cannot mask a regression in the rest of lux_depth_v3.
+    PackageFloor(
+        "src/transformation_portal/lux_depth_v3/",
+        50.0,
+        exclude_prefixes=("src/transformation_portal/lux_depth_v3/validators/",),
+    ),
 )
 
 
@@ -72,8 +92,42 @@ class PackageResult:
 
 
 def _normalize_filename(raw: str) -> str:
-    """Cobertura filenames may be relative or absolute; normalize to forward slashes."""
-    return raw.replace("\\", "/").lstrip("./")
+    """Normalize a Cobertura ``filename`` to a repo-relative ``src/...`` form.
+
+    Cobertura emits filenames in whichever form the coverage configuration
+    produces — relative (``src/tp/x.py``), bare-style (``./src/tp/x.py``),
+    or absolute (``/home/runner/work/repo/src/tp/x.py``). All three must
+    normalize to the same string so prefix matching is reliable.
+
+    Strategy:
+    1. Backslashes → forward slashes (Windows-style runners).
+    2. Strip a single leading ``./`` if present.
+    3. If the result is still absolute, find the *last* occurrence of
+       ``/src/`` and slice from there, dropping the absolute prefix.
+       Falling back to the last occurrence (rather than the first) is
+       the safe move when the repo path itself contains ``/src`` —
+       e.g. ``/work/my-src-repo/src/tp/x.py``.
+    """
+    norm = raw.replace("\\", "/")
+    if norm.startswith("./"):
+        norm = norm[2:]
+    if norm.startswith("/"):
+        marker = "/src/"
+        idx = norm.rfind(marker)
+        if idx != -1:
+            # Skip the leading slash so the result starts with "src/".
+            norm = norm[idx + 1 :]
+    return norm
+
+
+def _matches_prefix(filename: str, prefix: str) -> bool:
+    """Return True if filename is matched by prefix (with src/-stripped fallback)."""
+    if filename.startswith(prefix):
+        return True
+    # Some coverage configurations strip the leading "src/" — try
+    # matching against the package path with that segment removed.
+    stripped = prefix.removeprefix("src/")
+    return bool(stripped) and filename.startswith(stripped)
 
 
 def _iter_class_elements(root: ET.Element) -> Iterable[ET.Element]:
@@ -82,24 +136,23 @@ def _iter_class_elements(root: ET.Element) -> Iterable[ET.Element]:
         yield cls
 
 
-def aggregate(coverage_xml: Path, floors: Iterable[tuple[str, float]]) -> List[PackageResult]:
+def aggregate(coverage_xml: Path, floors: Iterable[PackageFloor]) -> List[PackageResult]:
     tree = ET.parse(coverage_xml)
     root = tree.getroot()
 
     classes = list(_iter_class_elements(root))
     results: list[PackageResult] = []
-    for prefix, floor in floors:
+    for floor_spec in floors:
         covered = 0
         valid = 0
-        normalized_prefix = prefix.replace("\\", "/")
+        normalized_prefix = floor_spec.prefix.replace("\\", "/")
+        normalized_excludes = tuple(p.replace("\\", "/") for p in floor_spec.exclude_prefixes)
         for cls in classes:
             filename = _normalize_filename(cls.attrib.get("filename", ""))
-            if not filename.startswith(normalized_prefix):
-                # Some coverage configurations strip the leading "src/" — try
-                # matching against the package path with that segment removed.
-                stripped = normalized_prefix.removeprefix("src/")
-                if not stripped or not filename.startswith(stripped):
-                    continue
+            if not _matches_prefix(filename, normalized_prefix):
+                continue
+            if any(_matches_prefix(filename, excl) for excl in normalized_excludes):
+                continue
             lines = cls.find("lines")
             if lines is None:
                 continue
@@ -108,7 +161,7 @@ def aggregate(coverage_xml: Path, floors: Iterable[tuple[str, float]]) -> List[P
                 hits = int(line.attrib.get("hits", "0"))
                 if hits > 0:
                     covered += 1
-        results.append(PackageResult(prefix=prefix, floor=floor, covered=covered, valid=valid))
+        results.append(PackageResult(prefix=floor_spec.prefix, floor=floor_spec.floor, covered=covered, valid=valid))
     return results
 
 
@@ -153,19 +206,16 @@ def main(argv: list[str] | None = None) -> int:
         for r in failures:
             if r.valid == 0:
                 print(
-                    f"  - {r.prefix} matched 0 covered source files. "
-                    "Did the package move? Update PACKAGE_FLOORS.",
+                    f"  - {r.prefix} matched 0 covered source files. " "Did the package move? Update PACKAGE_FLOORS.",
                     file=sys.stderr,
                 )
             else:
                 print(
-                    f"  - {r.prefix}: {r.percentage:.2f}% < floor {r.floor:.1f}% "
-                    f"({r.covered}/{r.valid} lines)",
+                    f"  - {r.prefix}: {r.percentage:.2f}% < floor {r.floor:.1f}% " f"({r.covered}/{r.valid} lines)",
                     file=sys.stderr,
                 )
         print(
-            "\nAdd tests for the failing package or, if intentional, "
-            "raise the matter in review before lowering the floor.",
+            "\nAdd tests for the failing package or, if intentional, " "raise the matter in review before lowering the floor.",
             file=sys.stderr,
         )
         return 1

@@ -373,19 +373,15 @@ jobs:
           cd web/secure-landing
           npm ci
 
-      - name: Run frontdoor Node tests
-        run: |
-          set -euo pipefail
-          cd web/secure-landing
-          npm test
-
-      - name: Frontdoor test coverage (line + function floor)
+      - name: Run frontdoor Node tests with coverage floor
         # Uses Node 22's built-in --experimental-test-coverage. The
         # --test-coverage-lines / --test-coverage-functions flags inside
         # the script make the Node test runner exit non-zero if either
         # threshold drops below the floor. Floors are intentionally
         # conservative starters (50% line, 50% function); ratchet upward
         # in package.json as coverage improves — never silently lower.
+        # Replaces the previous separate `npm test` + `npm run test:coverage`
+        # pair to avoid running build:portal and the test suite twice.
         run: |
           set -euo pipefail
           cd web/secure-landing

@@ -51,6 +51,7 @@ class TestFindRepoRoot:
     """``find_repo_root`` walks up to the directory containing pyproject + src."""
 
     def _make_repo(self, root: Path) -> Path:
+        root.mkdir(parents=True, exist_ok=True)
         (root / "pyproject.toml").write_text("[project]\nname = 'fake'\n", encoding="utf-8")
         (root / "src").mkdir()
         return root

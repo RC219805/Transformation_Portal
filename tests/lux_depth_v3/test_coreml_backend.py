@@ -32,9 +32,12 @@ class TestSupportedModelGuard:
             "apple/coreml-depth-anything-v2-small",
         }
 
-    def test_unsupported_model_id_is_rejected_when_coremltools_missing(self, monkeypatch):
-        # Even with coremltools unavailable, the allowlist gate must fire
-        # before any conversion attempt.
+    def test_unsupported_model_id_is_rejected_before_load_or_convert(self, monkeypatch):
+        # The allowlist is the second gate (the coremltools availability
+        # check is the first). With coremltools "available", an unsupported
+        # model_id must still be rejected by ValueError before any
+        # _load_or_convert work begins. Asserts the gate ordering: model_id
+        # validation precedes any cache/convert side effects.
         monkeypatch.setattr(coreml_backend, "COREML_AVAILABLE", True)
 
         with pytest.raises(ValueError, match="published CoreML artifacts"):

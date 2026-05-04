@@ -185,10 +185,16 @@ class TestCTMerkleRoot:
     @_SETTINGS
     def test_wrong_leaf_index_fails_verification(self, leaves, data):
         # Claiming a different leaf index than the one the proof was
-        # built for must not verify.
+        # built for must not verify. Filter the degenerate case where
+        # leaves[true] == leaves[wrong]: the audit path is determined by
+        # the leaf *value*, so identical leaves at distinct indices share
+        # an identical proof and verification rightly succeeds. That is
+        # not a bug in verify_ct_inclusion_proof — it's the position-
+        # independence of equal leaves under MTH.
         assume(len(leaves) >= 2)
         true_index = data.draw(st.integers(min_value=0, max_value=len(leaves) - 1))
         wrong_index = data.draw(st.integers(min_value=0, max_value=len(leaves) - 1).filter(lambda i: i != true_index))
+        assume(leaves[true_index] != leaves[wrong_index])
         root = ct_merkle_root(leaves)
         proof = ct_inclusion_proof(leaves, true_index)
         assert (
