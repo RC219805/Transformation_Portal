@@ -373,11 +373,21 @@ jobs:
           cd web/secure-landing
           npm ci
 
-      - name: Run frontdoor Node tests
+      - name: Run frontdoor Node tests with coverage floor
+        # Uses Node 22's built-in --experimental-test-coverage. The
+        # --test-coverage-lines / --test-coverage-functions flags inside
+        # the script make the Node test runner exit non-zero if either
+        # threshold drops below the floor. Floors are set just below the
+        # current measured baseline (line=48.88%, function=50.09% as of
+        # 2026-05-04 — pinned at 45/45 in package.json) so any regression
+        # fails CI; ratchet upward in package.json as coverage improves —
+        # never silently lower. Replaces the previous separate `npm test`
+        # + `npm run test:coverage` pair to avoid running build:portal
+        # and the test suite twice.
         run: |
           set -euo pipefail
           cd web/secure-landing
-          npm test
+          npm run test:coverage
 
       - name: Build frontdoor production bundle
         run: |
@@ -663,13 +673,14 @@ jobs:
           echo "Running tests with marker expression: ${{ matrix.markexpr }}"
 
           # ML tier: skip coverage (saves tracing + report I/O overhead on PR feedback path)
-          # Core tier: enforce 20% minimum coverage
+          # Core tier: enforce minimum global coverage (per-package floors checked separately
+          # by scripts/ci/check_per_package_coverage.py after the pytest run).
           if [ "${{ matrix.test-type }}" = "ml" ]; then
             COV_FLAGS="--no-cov"
             echo "ML tier: coverage disabled for faster PR feedback"
           else
-            COV_FLAGS="--cov=src/transformation_portal --cov=lux_depth_v3 --cov-report=term-missing --cov-report=xml --cov-report=html --cov-fail-under=20"
-            echo "Core tier: enforcing 20% minimum coverage"
+            COV_FLAGS="--cov=src/transformation_portal --cov=src/tp --cov=lux_depth_v3 --cov-report=term-missing --cov-report=xml --cov-report=html --cov-fail-under=25"
+            echo "Core tier: enforcing 25% minimum global coverage"
           fi
 
           # ML tier: add duration profiling for triage of slow tests
@@ -699,6 +710,12 @@ jobs:
           if [ -f coverage.xml ]; then
             echo "Coverage report generated successfully"
             ls -lh coverage.xml htmlcov/ || true
+          fi
+
+          # Enforce per-package coverage floors (core tier only, only when tests passed
+          # and a coverage.xml was actually produced — failed runs already exited via rc above).
+          if [ "${{ matrix.test-type }}" != "ml" ] && [ "$rc" -eq 0 ] && [ -f coverage.xml ]; then
+            python scripts/ci/check_per_package_coverage.py coverage.xml || rc=$?
           fi
 
           # Cleanup regardless of outcome
