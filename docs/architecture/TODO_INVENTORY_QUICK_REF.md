@@ -226,5 +226,6 @@ A: None identified. Repository health is excellent.
 - [Full Inventory](../../analysis/TODO_INVENTORY.md) (1,798 lines, comprehensive)
 - [Executive Summary](TODO_INVENTORY_EXECUTIVE_SUMMARY.md) (2 pages, key findings)
 - [Agent Governance](agent_governance.md) (escalation protocol)
+- [Monolith Decomposition Targets](MONOLITH_DECOMPOSITION_TARGETS.md) — ranked seam list (companion to [ADR-045](ADR-045-monolith-decomposition-residuals.md))
 - [CHANGELOG.md](../../CHANGELOG.md) (what's been completed)
 - [CONTRIBUTING.md](../../CONTRIBUTING.md) (process updates pending)
