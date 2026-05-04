@@ -657,12 +657,19 @@ def test_advisory_caption_panel_uses_bounded_payload_cache() -> None:
     panel_body = _extract_js_function_body(content, "_renderAdvisoryCaptionPanel")
 
     assert "const advisoryCaptionPayloadCache = new Map();" in content
+    assert 'let advisoryCaptionCacheScope = "";' in content
     assert "advisoryCaptionPayloadCache" in served_review_js
     assert "const ADVISORY_CAPTION_CACHE_MAX_ENTRIES = 24;" in content
+    assert "function _resetAdvisoryCaptionCacheForAuth(" in content
+    assert "_advisoryCaptionCredentialSignature" in content
+    assert "const requestHeaders = _buildAuthHeaders();" in loader_body
+    assert "_resetAdvisoryCaptionCacheForAuth(requestHeaders);" in loader_body
+    assert "const cacheKey = fetchUrl;" in loader_body
     assert "advisoryCaptionPayloadCache.delete(cacheKey);" in loader_body
     assert '_rememberAdvisoryCaptionCacheEntry(cacheKey, { status: "pending", promise });' in loader_body
     assert '_rememberAdvisoryCaptionCacheEntry(cacheKey, { status: "fulfilled", payload });' in loader_body
-    assert "fetch(cacheKey, {" in loader_body
+    assert "fetch(fetchUrl, {" in loader_body
+    assert "headers: requestHeaders" in loader_body
     assert "fetch(" not in panel_body
     assert "_loadAdvisoryCaptionPayload(url)" in panel_body
     assert "requestId !== advisoryCaptionRenderRequestId" in panel_body
