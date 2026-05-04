@@ -481,6 +481,33 @@ def _portal_asset_cache_control(current_fingerprint: str, requested_fingerprint:
     return PORTAL_ASSET_CACHE_CONTROL
 
 
+def _portal_asset_etag(fingerprint: str) -> str:
+    return f'"{fingerprint}"'
+
+
+def _portal_asset_request_etag_matches(request: Request, current_etag: str) -> bool:
+    raw_if_none_match = str(request.headers.get("if-none-match") or "").strip()
+    if not raw_if_none_match:
+        return False
+    for candidate in raw_if_none_match.split(","):
+        normalized = candidate.strip()
+        if normalized == "*":
+            return True
+        if normalized and hmac.compare_digest(normalized, current_etag):
+            return True
+    return False
+
+
+def _portal_asset_not_modified_response(*, etag: str, cache_control: str) -> Response:
+    return Response(
+        status_code=304,
+        headers={
+            "Cache-Control": cache_control,
+            "ETag": etag,
+        },
+    )
+
+
 ARCHIVE_GOVERNANCE_SCRIPT = REPO_ROOT / "tools" / "archive_governance.py"
 LUX_DEPTH_MODULE = "transformation_portal.lux_depth_v3"
 APP_VERSION = "0.3.0"
@@ -5857,6 +5884,22 @@ def _build_config_preview(
     raise ValueError("Unsupported pipeline")
 
 
+async def _build_config_preview_threaded(
+    payload: Dict[str, Any],
+    *,
+    readiness_snapshot: Optional[Dict[str, Any]] = None,
+    archive_index_scan_mode: str = "preview",
+    portal_actor: Optional[Mapping[str, Any]] = None,
+) -> Dict[str, Any]:
+    return await asyncio.to_thread(
+        _build_config_preview,
+        payload,
+        readiness_snapshot=readiness_snapshot,
+        archive_index_scan_mode=archive_index_scan_mode,
+        portal_actor=portal_actor,
+    )
+
+
 def _portal_sanitize_metadata(metadata: Any) -> Dict[str, Any]:
     if not isinstance(metadata, dict):
         return {}
@@ -8786,23 +8829,29 @@ async def serve_portal_asset(asset_path: str, request: Request) -> Response:
     if asset_path == "portal.css":
         css_asset = _get_portal_css_asset()
         cache_control = _portal_asset_cache_control(css_asset.fingerprint, requested_fingerprint)
+        etag = _portal_asset_etag(css_asset.fingerprint)
+        if _portal_asset_request_etag_matches(request, etag):
+            return _portal_asset_not_modified_response(etag=etag, cache_control=cache_control)
         return Response(
             content=css_asset.content_bytes,
             headers={
                 "Cache-Control": cache_control,
                 "Content-Type": resolved_asset.media_type,
-                "ETag": f'"{css_asset.fingerprint}"',
+                "ETag": etag,
             },
         )
 
     direct_fingerprint = _get_portal_direct_asset_fingerprint(asset_path)
     cache_control = _portal_asset_cache_control(direct_fingerprint, requested_fingerprint)
+    etag = _portal_asset_etag(direct_fingerprint)
+    if _portal_asset_request_etag_matches(request, etag):
+        return _portal_asset_not_modified_response(etag=etag, cache_control=cache_control)
     return FileResponse(
         str(resolved_asset.path),
         media_type=resolved_asset.media_type,
         headers={
             "Cache-Control": cache_control,
-            "ETag": f'"{direct_fingerprint}"',
+            "ETag": etag,
         },
     )
 
@@ -8999,7 +9048,7 @@ async def config_metadata(pipeline: str) -> JSONResponse:
 @app.post("/v1/config-preview", response_model=ConfigPreviewEnvelope)
 async def config_preview(request: Request, payload: Dict[str, Any]) -> JSONResponse:
     try:
-        preview = _build_config_preview(
+        preview = await _build_config_preview_threaded(
             payload,
             portal_actor=_portal_actor_from_request(request),
         )
@@ -9189,7 +9238,7 @@ async def _create_job(
         preview_kwargs: Dict[str, Any] = {"archive_index_scan_mode": "full"}
         if portal_actor is not None:
             preview_kwargs["portal_actor"] = portal_actor
-        preview = _build_config_preview(payload, **preview_kwargs)
+        preview = await _build_config_preview_threaded(payload, **preview_kwargs)
     except ValueError:
         return _error_response(
             400,

@@ -14,7 +14,7 @@ import os
 import re
 import sys
 from pathlib import Path
-from typing import Any, Dict, List, Tuple
+from typing import Any, Callable, Dict, List, Tuple
 
 import pytest
 from fastapi.testclient import TestClient
@@ -528,6 +528,34 @@ def test_portal_asset_endpoint_keeps_unversioned_and_stale_requests_backward_com
     assert stale_response.status_code == 200
     assert stale_response.headers["Cache-Control"] == orchestrator_app.PORTAL_ASSET_CACHE_CONTROL
     assert response.text == stale_response.text
+
+
+def test_portal_css_asset_endpoint_returns_304_for_matching_etag(client: TestClient) -> None:
+    css_asset = orchestrator_app._get_portal_css_asset()
+    response = client.get(
+        "/portal/assets/portal.css",
+        params={"v": css_asset.fingerprint},
+        headers={"If-None-Match": f'"{css_asset.fingerprint}"'},
+    )
+
+    assert response.status_code == 304
+    assert response.headers["Cache-Control"] == orchestrator_app.PORTAL_IMMUTABLE_ASSET_CACHE_CONTROL
+    assert response.headers["ETag"] == f'"{css_asset.fingerprint}"'
+    assert response.content == b""
+
+
+def test_portal_direct_asset_endpoint_returns_304_for_matching_etag(client: TestClient) -> None:
+    current_fingerprint = orchestrator_app._get_portal_direct_asset_fingerprint("portal.js")
+    response = client.get(
+        "/portal/assets/portal.js",
+        params={"v": current_fingerprint},
+        headers={"If-None-Match": f'"{current_fingerprint}"'},
+    )
+
+    assert response.status_code == 304
+    assert response.headers["Cache-Control"] == orchestrator_app.PORTAL_IMMUTABLE_ASSET_CACHE_CONTROL
+    assert response.headers["ETag"] == f'"{current_fingerprint}"'
+    assert response.content == b""
 
 
 def test_portal_css_endpoint_does_not_depend_on_html_bundle_inputs(
@@ -1345,6 +1373,52 @@ def test_config_preview_rejects_untrusted_sam2_checkpoint_path(client: TestClien
     errors = {item["field"]: item for item in body["data"]["field_errors"]}
     assert errors["sam2_checkpoint_path"]["code"] == "untrusted_checkpoint_path"
     assert "sam2_checkpoint_path" not in body["data"]["normalized_args"]
+
+
+def test_config_preview_contract_offloads_preview_build_to_thread(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls = []
+
+    def fake_build_config_preview(payload: Dict[str, Any], **kwargs: Any) -> Dict[str, Any]:
+        return {
+            "pipeline": payload["pipeline"],
+            "normalized_args": {},
+            "execution_args": {},
+            "argv_preview": "",
+            "field_errors": [],
+            "field_warnings": [],
+            "inactive_fields": [],
+            "readiness": {"status": "ready"},
+            "estimate_summary": {},
+            "debug_bundle_summary": {},
+            "next_best_action": {},
+            "kwargs": kwargs,
+        }
+
+    async def fake_to_thread(func: Callable[..., Dict[str, Any]], *args: Any, **kwargs: Any) -> Dict[str, Any]:
+        calls.append((func, args, kwargs))
+        return func(*args, **kwargs)
+
+    monkeypatch.setattr(orchestrator_app, "_build_config_preview", fake_build_config_preview)
+    monkeypatch.setattr(orchestrator_app.asyncio, "to_thread", fake_to_thread)
+
+    response = client.post(
+        "/v1/config-preview",
+        json={"pipeline": "lux-depth-v3", "args": {"input_dir": "./input_images", "output_dir": "./output"}},
+    )
+    body = response.json()
+
+    assert response.status_code == 200
+    assert body["schema"] == "tp.orchestrator.config_preview.v1"
+    assert body["success"] is True
+    assert len(calls) == 1
+    func, args, kwargs = calls[0]
+    assert func is fake_build_config_preview
+    assert args == ({"pipeline": "lux-depth-v3", "args": {"input_dir": "./input_images", "output_dir": "./output"}},)
+    assert kwargs["archive_index_scan_mode"] == "preview"
+    assert kwargs["portal_actor"] == {}
 
 
 def test_config_preview_accepts_repo_controlled_missing_sam2_checkpoint_path(
