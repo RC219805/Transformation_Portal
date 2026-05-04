@@ -169,22 +169,25 @@ def verify_checksum(file_path: Path, expected_sha256: Optional[str]) -> bool:
     return True
 
 
-def _generate_synthetic_image(kind: str, output_path: Path, **kwargs) -> bool:
-    """Generate a deterministic synthetic image fixture.
+def _render_synthetic_image_bytes(kind: str, **kwargs) -> Optional[bytes]:
+    """Render a synthetic fixture to JPEG bytes in memory (no I/O).
 
     Recognized kinds:
         - "rgb_gradient": colorful gradient + low-amplitude noise (RGB JPEG)
         - "depth_gradient": grayscale radial gradient (single-channel JPEG)
 
-    All output is fully deterministic given the same kwargs (uses a seeded RNG)
-    so committed fixtures stay reproducible without third-party hosting.
+    Output is fully deterministic given the same kwargs (seeded RNG) so
+    committed fixtures stay reproducible without third-party hosting.
+    Returns None on dependency or input error.
     """
     try:
+        import io
+
         import numpy as np
         from PIL import Image
     except ImportError as exc:
         print(f"❌ Synthetic generation requires Pillow + numpy: {exc}")
-        return False
+        return None
 
     width = int(kwargs.get("width", 100))
     height = int(kwargs.get("height", 100))
@@ -210,11 +213,51 @@ def _generate_synthetic_image(kind: str, output_path: Path, **kwargs) -> bool:
         image = Image.fromarray(np.clip(depth, 0, 255).astype(np.uint8), mode="L")
     else:
         print(f"❌ Unknown synthetic kind: {kind!r}")
-        return False
+        return None
 
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    image.save(output_path, format="JPEG", quality=90)
-    return True
+    buf = io.BytesIO()
+    image.save(buf, format="JPEG", quality=90)
+    return buf.getvalue()
+
+
+def _generate_synthetic_image(kind: str, output_path: Path, **kwargs) -> str:
+    """Materialize a synthetic fixture at output_path.
+
+    Returns one of:
+        - "up_to_date": existing file already matches deterministic output
+        - "generated":  bytes were (re)written (migration from stale placeholder
+                        fixtures or first-time write)
+        - "failed":     dependency, render, or filesystem error
+    """
+    expected = _render_synthetic_image_bytes(kind, **kwargs)
+    if expected is None:
+        return "failed"
+
+    # Migration path: stale fixtures left behind by older versions of this
+    # script (placeholder downloads from a third party) get overwritten when
+    # their bytes don't match the current deterministic render. Matching
+    # bytes are left untouched to preserve idempotency and mtime.
+    if output_path.exists():
+        try:
+            if output_path.read_bytes() == expected:
+                return "up_to_date"
+        except OSError as exc:
+            print(f"❌ Could not read existing {output_path}: {exc}")
+            return "failed"
+
+    tmp_path = output_path.with_suffix(output_path.suffix + ".tmp")
+    try:
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        tmp_path.write_bytes(expected)
+        tmp_path.replace(output_path)
+        return "generated"
+    except OSError as exc:
+        print(f"❌ Failed to write {output_path}: {exc}")
+        try:
+            tmp_path.unlink(missing_ok=True)
+        except OSError:
+            pass
+        return "failed"
 
 
 def download_file(url: str, output_path: Path, description: str, sha256: Optional[str] = None) -> bool:
@@ -285,21 +328,27 @@ def download_samples(categories: List[str], output_dir: Optional[Path] = None, f
     for sample in samples_to_download:
         output_path = output_dir / sample["path"]
 
-        # Skip if file exists and not forcing re-download
-        if output_path.exists() and not force:
-            print(f"⏭️  Skipped {sample['name']} (already exists)")
-            skipped += 1
-            continue
-
-        # Locally synthesized fixtures take precedence over remote URLs.
+        # Locally synthesized fixtures bypass the skip-if-exists short-circuit
+        # because regenerating costs ~1ms and we need to migrate stale
+        # placeholder fixtures from older script versions. The helper itself
+        # returns "up_to_date" when bytes already match, preserving idempotency.
         synthetic_kind = sample.get("synthetic")
         if synthetic_kind:
-            success = _generate_synthetic_image(synthetic_kind, output_path, **sample.get("synthetic_kwargs", {}))
-            if success:
+            status = _generate_synthetic_image(synthetic_kind, output_path, **sample.get("synthetic_kwargs", {}))
+            if status == "up_to_date":
+                print(f"⏭️  Skipped {sample['name']} (synthetic, up to date)")
+                skipped += 1
+            elif status == "generated":
                 print(f"✅ Generated {sample['name']} ({sample['size']}, synthetic)")
                 downloaded += 1
             else:
                 failed += 1
+            continue
+
+        # Skip if file exists and not forcing re-download (downloads only)
+        if output_path.exists() and not force:
+            print(f"⏭️  Skipped {sample['name']} (already exists)")
+            skipped += 1
             continue
 
         # Check if URL is available
