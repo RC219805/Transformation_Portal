@@ -5737,13 +5737,32 @@ function captioningRunStatusSummary(status) {
     return `FastVLM: ${label}${suffix}`;
 }
 
+function captioningRunStatusDetail(status) {
+    if (!status) return 'FastVLM: Not requested';
+    const parts = [
+        captioningRunStatusSummary(status),
+        `${Number(status.raw_count) || 0} raw`,
+        `${Number(status.proxy_count) || 0} proxy`,
+    ];
+    if (Number(status.failed_count) > 0) parts.push(`${Number(status.failed_count)} failed`);
+    if (status.model_role) parts.push(`role ${status.model_role}`);
+    if (status.model_id) parts.push(String(status.model_id));
+    return parts.join(' • ');
+}
+
 function createCaptioningRunStatusChip(status) {
     if (!status) return null;
     const chip = document.createElement('span');
     chip.className = 'job-chip';
     chip.dataset.ui = 'captioning-run-status';
     chip.dataset.status = String(status.status || 'off');
+    chip.dataset.sidecarCount = String(Number(status.sidecar_count) || 0);
+    chip.dataset.rawCount = String(Number(status.raw_count) || 0);
+    chip.dataset.proxyCount = String(Number(status.proxy_count) || 0);
+    chip.dataset.failedCount = String(Number(status.failed_count) || 0);
     chip.textContent = captioningRunStatusSummary(status);
+    chip.title = captioningRunStatusDetail(status);
+    chip.setAttribute('aria-label', captioningRunStatusDetail(status));
     return chip;
 }
 

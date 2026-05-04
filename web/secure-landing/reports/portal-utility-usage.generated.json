@@ -470,7 +470,9 @@
       "className": "bg-white/70",
       "owner": "static",
       "sources": [
-        "portal.html"
+        "portal.html",
+        "public/portal-assets/portal-review.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
       ],
       "cssFile": "utilities.required.css",
       "cssOwners": [
@@ -1475,7 +1477,9 @@
       "className": "dark:hover:bg-slate-800",
       "owner": "static",
       "sources": [
-        "portal.html"
+        "portal.html",
+        "public/portal-assets/portal-review.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
       ],
       "cssFile": "utilities.required.css",
       "cssOwners": [
@@ -1977,7 +1981,9 @@
       "className": "flex-wrap",
       "owner": "static",
       "sources": [
-        "portal.html"
+        "portal.html",
+        "public/portal-assets/portal-review.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
       ],
       "cssFile": "utilities.required.css",
       "cssOwners": [
@@ -2126,8 +2132,10 @@
       "owner": "static",
       "sources": [
         "portal.html",
+        "public/portal-assets/portal-review.js",
         "public/portal-assets/portal.js",
-        "web/secure-landing/portal-src/portal.template.js"
+        "web/secure-landing/portal-src/portal.template.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
       ],
       "cssFile": "utilities.required.css",
       "cssOwners": [
@@ -2372,7 +2380,9 @@
       "className": "hover:bg-slate-50",
       "owner": "static",
       "sources": [
-        "portal.html"
+        "portal.html",
+        "public/portal-assets/portal-review.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
       ],
       "cssFile": "utilities.required.css",
       "cssOwners": [
@@ -2545,8 +2555,10 @@
       "owner": "static",
       "sources": [
         "portal.html",
+        "public/portal-assets/portal-review.js",
         "public/portal-assets/portal.js",
-        "web/secure-landing/portal-src/portal.template.js"
+        "web/secure-landing/portal-src/portal.template.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
       ],
       "cssFile": "utilities.required.css",
       "cssOwners": [
@@ -3765,8 +3777,10 @@
       "owner": "static",
       "sources": [
         "portal.html",
+        "public/portal-assets/portal-review.js",
         "public/portal-assets/portal.js",
-        "web/secure-landing/portal-src/portal.template.js"
+        "web/secure-landing/portal-src/portal.template.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
       ],
       "cssFile": "utilities.required.css",
       "cssOwners": [
@@ -3858,8 +3872,10 @@
       "owner": "static",
       "sources": [
         "portal.html",
+        "public/portal-assets/portal-review.js",
         "public/portal-assets/portal.js",
-        "web/secure-landing/portal-src/portal.template.js"
+        "web/secure-landing/portal-src/portal.template.js",
+        "web/secure-landing/portal-src/review-surface-deferred.js"
       ],
       "cssFile": "utilities.required.css",
       "cssOwners": [
