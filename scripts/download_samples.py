@@ -294,9 +294,7 @@ def download_samples(categories: List[str], output_dir: Optional[Path] = None, f
         # Locally synthesized fixtures take precedence over remote URLs.
         synthetic_kind = sample.get("synthetic")
         if synthetic_kind:
-            success = _generate_synthetic_image(
-                synthetic_kind, output_path, **sample.get("synthetic_kwargs", {})
-            )
+            success = _generate_synthetic_image(synthetic_kind, output_path, **sample.get("synthetic_kwargs", {}))
             if success:
                 print(f"✅ Generated {sample['name']} ({sample['size']}, synthetic)")
                 downloaded += 1
