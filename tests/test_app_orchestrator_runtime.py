@@ -1164,8 +1164,19 @@ def test_portal_fastvlm_captioning_controls_are_feature_gated_and_advisory_only(
     assert "function _captioningRuntimeReadiness(summary = {})" in content
     assert "function _renderCaptioningReadiness(summary = {}, options = {})" in content
     assert "function _captioningEvidenceArtifacts(job, artifact)" in review_content
+    assert "function _captioningStatusFromEvidence(status, artifacts)" in review_content
     assert "function _renderCaptioningEvidenceStrip(job, artifact)" in review_content
     assert "function _renderAdvisoryCaptionUnavailable(panel)" in review_content
+    assert (
+        'return type === "vlm_caption_proxy" || /(^|\\/)captioning\\/.*_proxy\\.(png|jpe?g)$/i.test(relPath);'
+        in review_content
+    )
+    assert "const stemMatchedArtifacts = selectedStem" in review_content
+    assert (
+        "const candidates = selectedStem && stemMatchedArtifacts.length === 0 ? captionArtifacts : stemMatchedArtifacts;"
+        in review_content
+    )
+    assert 'status: "succeeded",' in review_content
     assert "state.auth?.features?.fastVlmCaptioning" in content
     assert "const captioningFeatureVisible = isLuxPipeline && _fastVlmCaptioningFeatureEnabled();" in applicability_body
     assert "_setContextVisibility(els.captioningDetails, captioningFeatureVisible);" in applicability_body
@@ -1456,8 +1467,14 @@ def test_portal_review_surface_exposes_warning_banner_and_provenance_contract() 
     assert '"captioning-proxy-link"' in review_content
     assert "function _reviewStatusState(job, reviewableOutputs, visibleWarning) {" in review_content
     assert "function _captioningEvidenceArtifacts(job, artifact)" in review_content
+    assert "function _captioningStatusFromEvidence(status, artifacts)" in review_content
     assert "function _renderCaptioningEvidenceStrip(job, artifact)" in review_content
     assert "function _renderAdvisoryCaptionUnavailable(panel)" in review_content
+    assert (
+        "const candidates = selectedStem && stemMatchedArtifacts.length === 0 ? captionArtifacts : stemMatchedArtifacts;"
+        in review_content
+    )
+    assert "const status = _captioningStatusFromEvidence(summary?.captioning_status || null, artifacts);" in review_content
     assert "_renderReviewStatusBanner(selected, selectedArtifact);" in render_body
     assert "_renderArtifactProvenance(selected, selectedArtifact);" in render_body
     assert "_renderReviewStatusBanner(selected, null);" in render_body

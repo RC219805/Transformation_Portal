@@ -328,7 +328,7 @@ export function createDeferredReviewSurfaceApi(host) {
     if (!artifact) return false;
     const relPath = String(artifact.relative_path || artifact.path || "").toLowerCase();
     const type = String(artifact.artifact_type || "").toLowerCase();
-    return type === "vlm_caption_proxy" || (relPath.includes("/captioning/") && /_proxy\.(png|jpe?g)$/i.test(relPath));
+    return type === "vlm_caption_proxy" || /(^|\/)captioning\/.*_proxy\.(png|jpe?g)$/i.test(relPath);
   }
 
   function _captionArtifactKind(artifact) {
@@ -352,9 +352,10 @@ export function createDeferredReviewSurfaceApi(host) {
     const selectedStem = _captionStemFromArtifact(artifact);
     const group = { sidecar: null, raw: null, proxy: null };
     const captionArtifacts = artifacts.filter((candidate) => Boolean(_captionArtifactKind(candidate)));
-    const candidates = selectedStem
+    const stemMatchedArtifacts = selectedStem
       ? captionArtifacts.filter((candidate) => _captionStemFromArtifact(candidate) === selectedStem)
       : captionArtifacts;
+    const candidates = selectedStem && stemMatchedArtifacts.length === 0 ? captionArtifacts : stemMatchedArtifacts;
     candidates.forEach((candidate) => {
       const kind = _captionArtifactKind(candidate);
       if (kind && !group[kind]) group[kind] = candidate;
@@ -372,6 +373,28 @@ export function createDeferredReviewSurfaceApi(host) {
     const summary = normalizeRunSummary(job?.run_summary);
     const artifacts = _captioningEvidenceArtifacts(job, artifact);
     return Boolean(summary?.captioning_status || artifacts.sidecar || artifacts.raw || artifacts.proxy);
+  }
+
+  function _captioningStatusFromEvidence(status, artifacts) {
+    if (status) return status;
+    const sidecarCount = artifacts?.sidecar ? 1 : 0;
+    const rawCount = artifacts?.raw ? 1 : 0;
+    const proxyCount = artifacts?.proxy ? 1 : 0;
+    if (sidecarCount + rawCount + proxyCount === 0) return null;
+    return {
+      status: "succeeded",
+      enabled: true,
+      backend: "fastvlm",
+      model_role: "",
+      model_id: null,
+      model_path: null,
+      role: "advisory",
+      sidecar_count: sidecarCount,
+      raw_count: rawCount,
+      proxy_count: proxyCount,
+      failed_count: 0,
+      used_for_quality_gate: false,
+    };
   }
 
   function _rememberAdvisoryCaptionCacheEntry(cacheKey, entry) {
@@ -497,8 +520,8 @@ export function createDeferredReviewSurfaceApi(host) {
   function _renderCaptioningEvidenceStrip(job, artifact) {
     if (!job || !els.artifactMetadataCard || !_hasCaptioningEvidence(job, artifact)) return;
     const summary = normalizeRunSummary(job.run_summary);
-    const status = summary?.captioning_status || null;
     const artifacts = _captioningEvidenceArtifacts(job, artifact);
+    const status = _captioningStatusFromEvidence(summary?.captioning_status || null, artifacts);
     const sidecarCount = Math.max(Number(status?.sidecar_count) || 0, artifacts.sidecar ? 1 : 0);
     const rawCount = Math.max(Number(status?.raw_count) || 0, artifacts.raw ? 1 : 0);
     const proxyCount = Math.max(Number(status?.proxy_count) || 0, artifacts.proxy ? 1 : 0);
