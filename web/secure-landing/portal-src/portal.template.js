@@ -514,6 +514,7 @@ const els = {
     reviewProvenanceFreshness: _domId('reviewProvenanceFreshness'),
     reviewProvenanceSource: _domId('reviewProvenanceSource'),
     reviewProvenanceBatch: _domId('reviewProvenanceBatch'),
+    reviewProvenanceCaptioning: _domId('reviewProvenanceCaptioning'),
     reviewCompareSummary: _domId('reviewCompareSummary'),
     reviewCompareTitle: _domId('reviewCompareTitle'),
     reviewCompareDetail: _domId('reviewCompareDetail'),
@@ -5663,6 +5664,89 @@ function getReadableError(errorObj) {
     return message || code || '';
 }
 
+const CAPTIONING_RUN_STATUS_VALUES = new Set([
+    'off',
+    'requested',
+    'succeeded',
+    'failed',
+    'skipped',
+    'missing_runtime',
+    'invalid_config',
+    'unsupported_backend'
+]);
+
+function toNonNegativeCaptioningRunStatusInt(value) {
+    if (typeof value === 'boolean') return 0;
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed) || parsed < 0) return 0;
+    return Math.round(parsed);
+}
+
+function normalizeCaptioningRunStatus(rawStatus) {
+    if (!rawStatus || typeof rawStatus !== 'object') return null;
+    let status = String(rawStatus.status || '').trim().toLowerCase();
+    const sidecarCount = toNonNegativeCaptioningRunStatusInt(rawStatus.sidecar_count);
+    const failedCount = toNonNegativeCaptioningRunStatusInt(rawStatus.failed_count);
+    const enabled = parseBoolLike(rawStatus.enabled, status !== 'off');
+    if (!CAPTIONING_RUN_STATUS_VALUES.has(status)) {
+        if (!enabled) {
+            status = 'off';
+        } else if (failedCount > 0) {
+            status = 'failed';
+        } else if (sidecarCount > 0) {
+            status = 'succeeded';
+        } else {
+            status = 'skipped';
+        }
+    }
+    return {
+        status,
+        enabled: status === 'off' ? false : enabled,
+        backend: String(rawStatus.backend || 'fastvlm').trim().toLowerCase() || 'fastvlm',
+        model_role: String(rawStatus.model_role || '').trim(),
+        model_id: rawStatus.model_id === null || rawStatus.model_id === undefined ? null : String(rawStatus.model_id),
+        model_path: rawStatus.model_path === null || rawStatus.model_path === undefined ? null : String(rawStatus.model_path),
+        role: 'advisory',
+        sidecar_count: sidecarCount,
+        raw_count: toNonNegativeCaptioningRunStatusInt(rawStatus.raw_count),
+        proxy_count: toNonNegativeCaptioningRunStatusInt(rawStatus.proxy_count),
+        failed_count: failedCount,
+        used_for_quality_gate: false,
+        policy_violation: Boolean(rawStatus.policy_violation)
+    };
+}
+
+function captioningRunStatusLabel(status) {
+    const normalized = String(status?.status || '').trim();
+    if (normalized === 'off') return 'Off';
+    if (normalized === 'requested') return 'Requested';
+    if (normalized === 'succeeded') return 'Succeeded';
+    if (normalized === 'failed') return 'Failed';
+    if (normalized === 'skipped') return 'Skipped';
+    if (normalized === 'missing_runtime') return 'Missing runtime';
+    if (normalized === 'invalid_config') return 'Invalid config';
+    if (normalized === 'unsupported_backend') return 'Unsupported backend';
+    return 'Not requested';
+}
+
+function captioningRunStatusSummary(status) {
+    if (!status) return 'FastVLM: Not requested';
+    const label = captioningRunStatusLabel(status);
+    const sidecars = Number(status.sidecar_count) || 0;
+    const suffix = sidecars > 0 ? ` (${sidecars} sidecar${sidecars === 1 ? '' : 's'})` : '';
+    return `FastVLM: ${label}${suffix}`;
+}
+
+function createCaptioningRunStatusChip(status) {
+    if (!status) return null;
+    const chip = document.createElement('span');
+    chip.className = 'job-chip';
+    chip.dataset.ui = 'captioning-run-status';
+    chip.dataset.status = String(status.status || 'off');
+    chip.textContent = captioningRunStatusSummary(status);
+    return chip;
+}
+
 function normalizeRunSummary(rawSummary) {
     if (!rawSummary || typeof rawSummary !== 'object') return null;
 
@@ -5681,7 +5765,8 @@ function normalizeRunSummary(rawSummary) {
         error_count: toNonNegativeInt(rawSummary.error_count),
         artifact_index_count: toNonNegativeInt(rawSummary.artifact_index_count),
         reviewable_outputs: Boolean(rawSummary.reviewable_outputs),
-        partial: Boolean(rawSummary.partial)
+        partial: Boolean(rawSummary.partial),
+        captioning_status: normalizeCaptioningRunStatus(rawSummary.captioning_status)
     };
 
     if (
@@ -5698,7 +5783,8 @@ function normalizeRunSummary(rawSummary) {
         || normalized.error_count !== null
         || normalized.artifact_index_count !== null
         || normalized.reviewable_outputs
-        || normalized.partial;
+        || normalized.partial
+        || normalized.captioning_status;
 
     return hasMeaningfulContent ? normalized : null;
 }
@@ -5722,6 +5808,9 @@ function describeRunSummary(summary) {
 
     if (summary.partial) {
         segments.push('outputs remain reviewable');
+    }
+    if (summary.captioning_status) {
+        segments.push(captioningRunStatusSummary(summary.captioning_status));
     }
 
     return segments.join(' • ');
@@ -5852,6 +5941,7 @@ function _createDeferredReviewSurfaceHost() {
         els,
         clamp,
         normalizeRunSummary,
+        captioningRunStatusSummary,
         titleCaseToken,
         formatRelativeTime,
         getReadableError,
@@ -9683,6 +9773,7 @@ function renderJobQueue(includeReviewSurfaces = true) {
         const artifactCount = Array.isArray(job.artifacts) ? job.artifacts.length : 0;
         const errorLine = getReadableError(job.error);
         const outcomeSummary = jobOutcomeSummary(job);
+        const captioningRunStatus = normalizeRunSummary(job.run_summary)?.captioning_status || null;
         const transportLabel = formatTransportLabel(job);
         const freshnessLabel = formatRelativeTime(Number(job.lastEventAt || job.updatedAt || job.createdAt || 0));
 
@@ -9730,6 +9821,11 @@ function renderJobQueue(includeReviewSurfaces = true) {
         stateBadge.className = `px-2 py-0.5 rounded-full border ${badgeColor}`;
         stateBadge.textContent = displayState;
         metaRight.appendChild(stateBadge);
+
+        const captioningChip = createCaptioningRunStatusChip(captioningRunStatus);
+        if (captioningChip) {
+            metaRight.appendChild(captioningChip);
+        }
 
         meta.appendChild(metaRight);
         li.appendChild(meta);

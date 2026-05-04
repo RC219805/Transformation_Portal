@@ -240,3 +240,28 @@ python -m transformation_portal.lux_depth_v3 \
 
 The run card records `captioning_status.role = advisory` and
 `captioning_status.used_for_quality_gate = false`.
+
+## Post-Dispatch Diagnostics
+
+Preview readiness is intentionally lightweight: the portal checks configured
+FastVLM paths for existence only. It does not import MLX, spawn FastVLM,
+download models, or validate checksums during preview.
+
+After dispatch, job list/detail payloads expose additive
+`run_summary.captioning_status` diagnostics derived from the run card and
+indexed captioning artifacts. The status values are:
+
+- `off`
+- `requested`
+- `succeeded`
+- `failed`
+- `skipped`
+- `missing_runtime`
+- `invalid_config`
+- `unsupported_backend`
+
+The diagnostic object also reports `backend`, `model_role`, `model_id`,
+`model_path`, `sidecar_count`, `raw_count`, `proxy_count`, `failed_count`,
+`role: advisory`, and `used_for_quality_gate: false`. If a run card claims
+FastVLM output was used for a quality gate, the portal reports a failed
+policy diagnostic and keeps the serialized status advisory-only.
