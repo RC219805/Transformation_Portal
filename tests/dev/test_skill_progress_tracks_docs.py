@@ -31,6 +31,14 @@ EXPECTED_2026_05_02_TRACKS = {
     "Security And Coverage Evidence Honesty": ("PR #1604", "PR #1609"),
 }
 
+EXPECTED_2026_05_03_TRACKS = {
+    "Coverage Governance": ("PR #1631", "check_per_package_coverage.py"),
+    "Dependency Parser Contracts": ("PR #1629", "check_dependency_pinning.py"),
+    "Public Surface Regression Testing": ("PR #1630", "depth_tools.py"),
+    "CI Signal Efficiency": ("PR #1631", ".github/workflows/build.yml"),
+    "Docs And Status Truthfulness": ("PR #1629", "PR #1628"),
+}
+
 
 def _read(path: Path) -> str:
     assert path.exists(), f"Missing expected documentation file: {path}"
@@ -69,6 +77,7 @@ def test_skill_progress_tracks_document_exists_and_links_from_current_guides() -
     assert "SKILL_PROGRESS_TRACKS.md" in docs_readme
     assert "SKILL_PROGRESS_TRACKS.md" in documentation_map
     assert "## 2026-05-02 Review-Thread Refresh" in tracks_text
+    assert "## 2026-05-03 Review-Thread Refresh" in tracks_text
 
 
 @pytest.mark.parametrize("heading, evidence", EXPECTED_TRACKS.items())
@@ -115,6 +124,30 @@ def test_2026_05_02_refresh_locks_reviewed_skill_names() -> None:
     refresh = _section(_read(TRACKS_PATH), "2026-05-02 Review-Thread Refresh")
 
     for heading in EXPECTED_2026_05_02_TRACKS:
+        assert f"### {heading}" in refresh
+
+
+@pytest.mark.parametrize("heading, evidence", EXPECTED_2026_05_03_TRACKS.items())
+def test_2026_05_03_skill_progress_refresh_tracks_have_evidence_drills_and_acceptance(
+    heading: str,
+    evidence: tuple[str, str],
+) -> None:
+    refresh = _section(_read(TRACKS_PATH), "2026-05-03 Review-Thread Refresh")
+    section = _subsection(refresh, heading)
+
+    for pr_anchor in evidence:
+        assert pr_anchor in section
+
+    assert section.count("Drill 1 -") == 1
+    assert section.count("Drill 2 -") == 1
+    assert section.count("Acceptance tests:") == 2
+    assert "Expected behavior:" in section
+
+
+def test_2026_05_03_refresh_locks_reviewed_skill_names() -> None:
+    refresh = _section(_read(TRACKS_PATH), "2026-05-03 Review-Thread Refresh")
+
+    for heading in EXPECTED_2026_05_03_TRACKS:
         assert f"### {heading}" in refresh
 
 
