@@ -19,7 +19,7 @@ import sys
 from functools import lru_cache
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Dict
+from typing import Any, Callable, Dict
 from urllib.parse import parse_qs, urlparse
 
 import pytest
@@ -648,6 +648,24 @@ def test_portal_runtime_helpers_read_served_js_assets_from_rendered_html() -> No
     assert "DEFERRED_REVIEW_SURFACE_RETRY_WINDOW_MS" in runtime_content
     assert "createDeferredReviewSurfaceApi" in served_review_js
     assert "Inline preview unavailable" in served_review_js
+
+
+def test_advisory_caption_panel_uses_bounded_payload_cache() -> None:
+    content = _portal_review_source_content()
+    served_review_js = _portal_review_bundle_content()
+    loader_body = _extract_js_function_body(content, "_loadAdvisoryCaptionPayload")
+    panel_body = _extract_js_function_body(content, "_renderAdvisoryCaptionPanel")
+
+    assert "const advisoryCaptionPayloadCache = new Map();" in content
+    assert "advisoryCaptionPayloadCache" in served_review_js
+    assert "const ADVISORY_CAPTION_CACHE_MAX_ENTRIES = 24;" in content
+    assert "advisoryCaptionPayloadCache.delete(cacheKey);" in loader_body
+    assert '_rememberAdvisoryCaptionCacheEntry(cacheKey, { status: "pending", promise });' in loader_body
+    assert '_rememberAdvisoryCaptionCacheEntry(cacheKey, { status: "fulfilled", payload });' in loader_body
+    assert "fetch(cacheKey, {" in loader_body
+    assert "fetch(" not in panel_body
+    assert "_loadAdvisoryCaptionPayload(url)" in panel_body
+    assert "requestId !== advisoryCaptionRenderRequestId" in panel_body
 
 
 def test_portal_rum_rollout_reuses_shared_rollout_helper(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -5784,9 +5802,16 @@ def test_create_job_preflight_sanitizes_exception_derived_messages(
 def test_create_job_uses_preview_errors_before_readiness_preflight(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    def fake_preview(_payload, *, readiness_snapshot=None, archive_index_scan_mode="preview"):  # noqa: ANN001
+    def fake_preview(  # noqa: ANN001
+        _payload,
+        *,
+        readiness_snapshot=None,
+        archive_index_scan_mode="preview",
+        portal_actor=None,
+    ):
         del readiness_snapshot
         del archive_index_scan_mode
+        del portal_actor
         return {
             "pipeline": "lux-depth-v3",
             "execution_args": {
@@ -5831,6 +5856,73 @@ def test_create_job_uses_preview_errors_before_readiness_preflight(
         "field": "accept_research_tools_license",
         "reason": "reconstruction_license_required",
     }
+    assert orchestrator_app.JOBS == {}
+
+
+def test_create_job_config_preview_is_threaded_before_admission(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls = []
+
+    def fake_preview(_payload: Dict[str, Any], **_kwargs: Any) -> Dict[str, Any]:
+        return {
+            "pipeline": "lux-depth-v3",
+            "execution_args": {
+                "input_dir": "./input_images",
+                "output_dir": "./output",
+            },
+            "readiness": {
+                "status": "ready",
+                "canonical_command": "lux-depth-v3",
+                "missing_prerequisites": [],
+                "runner_details": {},
+                "notes": [],
+            },
+            "field_errors": [
+                {
+                    "field": "accept_research_tools_license",
+                    "code": "reconstruction_license_required",
+                    "message": "Scene reconstruction requires the research-tools license acknowledgment.",
+                }
+            ],
+        }
+
+    async def fake_to_thread(func: Callable[..., Dict[str, Any]], *args: Any, **kwargs: Any) -> Dict[str, Any]:
+        calls.append((func, args, kwargs))
+        return func(*args, **kwargs)
+
+    monkeypatch.setattr(orchestrator_app, "_build_config_preview", fake_preview)
+    monkeypatch.setattr(orchestrator_app.asyncio, "to_thread", fake_to_thread)
+
+    response = asyncio.run(
+        orchestrator_app.create_job(
+            {
+                "pipeline": "lux-depth-v3",
+                "args": {
+                    "input_dir": "./input_images",
+                    "output_dir": "./output",
+                    "enable_reconstruction": True,
+                },
+            }
+        )
+    )
+
+    assert response.status_code == 400
+    assert len(calls) == 1
+    func, args, kwargs = calls[0]
+    assert func is fake_preview
+    assert args == (
+        {
+            "pipeline": "lux-depth-v3",
+            "args": {
+                "input_dir": "./input_images",
+                "output_dir": "./output",
+                "enable_reconstruction": True,
+            },
+        },
+    )
+    assert kwargs["archive_index_scan_mode"] == "full"
+    assert kwargs["portal_actor"] is None
     assert orchestrator_app.JOBS == {}
 
 

@@ -53,6 +53,9 @@ export function createDeferredReviewSurfaceApi(host) {
   let artifactViewerAbortController = null;
   let artifactViewerKeydownHandler = null;
   const ARTIFACT_VIEWER_FETCH_TIMEOUT_MS = 15000;
+  const ADVISORY_CAPTION_CACHE_MAX_ENTRIES = 24;
+  const advisoryCaptionPayloadCache = new Map();
+  let advisoryCaptionRenderRequestId = 0;
 
   function _artifactViewerEventMetadata(job, artifact, extra = {}) {
     const metadata = {
@@ -333,6 +336,47 @@ export function createDeferredReviewSurfaceApi(host) {
     }) || null;
   }
 
+  function _rememberAdvisoryCaptionCacheEntry(cacheKey, entry) {
+    if (!cacheKey) return;
+    if (advisoryCaptionPayloadCache.has(cacheKey)) {
+      advisoryCaptionPayloadCache.delete(cacheKey);
+    }
+    advisoryCaptionPayloadCache.set(cacheKey, entry);
+    while (advisoryCaptionPayloadCache.size > ADVISORY_CAPTION_CACHE_MAX_ENTRIES) {
+      const oldestKey = advisoryCaptionPayloadCache.keys().next().value;
+      if (!oldestKey) break;
+      advisoryCaptionPayloadCache.delete(oldestKey);
+    }
+  }
+
+  function _loadAdvisoryCaptionPayload(url) {
+    const cacheKey = String(url || "").trim();
+    if (!cacheKey) return Promise.reject(new Error("missing advisory caption URL"));
+    const cached = advisoryCaptionPayloadCache.get(cacheKey);
+    if (cached?.status === "fulfilled") return Promise.resolve(cached.payload);
+    if (cached?.status === "pending") return cached.promise;
+
+    const promise = fetch(cacheKey, {
+      headers: _buildAuthHeaders(),
+      credentials: "same-origin",
+    })
+      .then((response) => {
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        return response.json();
+      })
+      .then((payload) => {
+        _rememberAdvisoryCaptionCacheEntry(cacheKey, { status: "fulfilled", payload });
+        return payload;
+      })
+      .catch((error) => {
+        advisoryCaptionPayloadCache.delete(cacheKey);
+        throw error;
+      });
+
+    _rememberAdvisoryCaptionCacheEntry(cacheKey, { status: "pending", promise });
+    return promise;
+  }
+
   function _captionListText(value) {
     if (Array.isArray(value)) return value.filter(Boolean).join(", ");
     return String(value || "").trim();
@@ -407,6 +451,7 @@ export function createDeferredReviewSurfaceApi(host) {
   function _renderAdvisoryCaptionPanel(job, artifact) {
     const sidecar = _findVlmCaptionSidecar(job, artifact);
     if (!sidecar || !els.artifactMetadataCard) return;
+    const requestId = ++advisoryCaptionRenderRequestId;
     const panel = document.createElement("section");
     panel.className = "mt-4 border-t border-slate-200 pt-4 dark:border-slate-700";
     panel.dataset.ui = "advisory-caption-panel";
@@ -418,20 +463,13 @@ export function createDeferredReviewSurfaceApi(host) {
       panel.textContent = "Advisory VLM caption. Not used for quality gates.";
       return;
     }
-    fetch(url, {
-      headers: _buildAuthHeaders(),
-      credentials: "same-origin",
-    })
-      .then((response) => {
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        return response.json();
-      })
+    _loadAdvisoryCaptionPayload(url)
       .then((payload) => {
-        if (!panel.isConnected) return;
+        if (requestId !== advisoryCaptionRenderRequestId || !panel.isConnected) return;
         _renderAdvisoryCaptionPayload(panel, payload, sidecar);
       })
       .catch(() => {
-        if (!panel.isConnected) return;
+        if (requestId !== advisoryCaptionRenderRequestId || !panel.isConnected) return;
         panel.textContent = "Advisory VLM caption. Not used for quality gates.";
       });
   }
