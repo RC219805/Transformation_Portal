@@ -55,18 +55,23 @@ except ImportError:
 SAMPLE_REGISTRY: Dict[str, Dict] = {
     # ========================================================================
     # MINIMAL: Test fixtures for unit tests (synthetic images)
+    # Generated locally — no network or third-party hosting dependency.
     # ========================================================================
     "test_image_small": {
         "category": "minimal",
-        "url": "https://via.placeholder.com/100x100.jpg",  # Placeholder until release
+        "url": None,
+        "synthetic": "rgb_gradient",
+        "synthetic_kwargs": {"width": 100, "height": 100, "seed": 0},
         "size": "1KB",
         "path": "tests/fixtures/test_image_small.jpg",
-        "sha256": None,  # Add after upload
+        "sha256": None,
         "description": "Tiny test image for unit tests (100x100px)",
     },
     "test_depth_map": {
         "category": "minimal",
-        "url": "https://via.placeholder.com/256x256.jpg",  # Placeholder until release
+        "url": None,
+        "synthetic": "depth_gradient",
+        "synthetic_kwargs": {"width": 256, "height": 256, "seed": 1},
         "size": "5KB",
         "path": "tests/fixtures/test_depth.jpg",
         "sha256": None,
@@ -164,6 +169,54 @@ def verify_checksum(file_path: Path, expected_sha256: Optional[str]) -> bool:
     return True
 
 
+def _generate_synthetic_image(kind: str, output_path: Path, **kwargs) -> bool:
+    """Generate a deterministic synthetic image fixture.
+
+    Recognized kinds:
+        - "rgb_gradient": colorful gradient + low-amplitude noise (RGB JPEG)
+        - "depth_gradient": grayscale radial gradient (single-channel JPEG)
+
+    All output is fully deterministic given the same kwargs (uses a seeded RNG)
+    so committed fixtures stay reproducible without third-party hosting.
+    """
+    try:
+        import numpy as np
+        from PIL import Image
+    except ImportError as exc:
+        print(f"❌ Synthetic generation requires Pillow + numpy: {exc}")
+        return False
+
+    width = int(kwargs.get("width", 100))
+    height = int(kwargs.get("height", 100))
+    seed = int(kwargs.get("seed", 0))
+    rng = np.random.default_rng(seed)
+
+    if kind == "rgb_gradient":
+        ys = np.linspace(0, 255, height, dtype=np.float32)[:, None]
+        xs = np.linspace(0, 255, width, dtype=np.float32)[None, :]
+        red = np.broadcast_to(xs, (height, width))
+        green = np.broadcast_to(ys, (height, width))
+        blue = (xs + ys) * 0.5
+        rgb = np.stack([red, green, blue], axis=-1)
+        rgb = rgb + rng.uniform(-8.0, 8.0, size=rgb.shape).astype(np.float32)
+        image = Image.fromarray(np.clip(rgb, 0, 255).astype(np.uint8), mode="RGB")
+    elif kind == "depth_gradient":
+        cy, cx = (height - 1) / 2.0, (width - 1) / 2.0
+        yy, xx = np.indices((height, width), dtype=np.float32)
+        radius = np.hypot(yy - cy, xx - cx)
+        radius /= max(radius.max(), 1.0)
+        depth = (1.0 - radius) * 255.0
+        depth = depth + rng.uniform(-2.0, 2.0, size=depth.shape).astype(np.float32)
+        image = Image.fromarray(np.clip(depth, 0, 255).astype(np.uint8), mode="L")
+    else:
+        print(f"❌ Unknown synthetic kind: {kind!r}")
+        return False
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    image.save(output_path, format="JPEG", quality=90)
+    return True
+
+
 def download_file(url: str, output_path: Path, description: str, sha256: Optional[str] = None) -> bool:
     """Download a file with progress bar and checksum verification."""
     try:
@@ -236,6 +289,19 @@ def download_samples(categories: List[str], output_dir: Optional[Path] = None, f
         if output_path.exists() and not force:
             print(f"⏭️  Skipped {sample['name']} (already exists)")
             skipped += 1
+            continue
+
+        # Locally synthesized fixtures take precedence over remote URLs.
+        synthetic_kind = sample.get("synthetic")
+        if synthetic_kind:
+            success = _generate_synthetic_image(
+                synthetic_kind, output_path, **sample.get("synthetic_kwargs", {})
+            )
+            if success:
+                print(f"✅ Generated {sample['name']} ({sample['size']}, synthetic)")
+                downloaded += 1
+            else:
+                failed += 1
             continue
 
         # Check if URL is available
@@ -312,7 +378,12 @@ Categories:
             samples = get_samples_by_category(category)
             print(f"\n{category.upper()}:")
             for sample in samples:
-                status = "✅ Ready" if sample["url"] else "⏳ Pending v2.4.0"
+                if sample.get("synthetic"):
+                    status = "🛠  Synthetic (local)"
+                elif sample["url"]:
+                    status = "✅ Ready"
+                else:
+                    status = "⏳ Pending v2.4.0"
                 print(f"  - {sample['name']:30} ({sample['size']:>6}) {status}")
                 print(f"    {sample['description']}")
         print()
