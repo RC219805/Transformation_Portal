@@ -1,9 +1,9 @@
 # TODO Inventory - Transformation Portal
 
-**Document Version:** 2.4.5
-**Date:** May 2, 2026
-**Last Updated:** 2026-05-02 (QW-3 binary-cleanup documentation closure recorded)
-**Previous Version:** 2.4.4 (2026-05-01)
+**Document Version:** 2.4.6
+**Date:** May 4, 2026
+**Last Updated:** 2026-05-04 (QW-1 ComfyUI @abstractmethod closure recorded)
+**Previous Version:** 2.4.5 (2026-05-02)
 
 ---
 
@@ -16,6 +16,18 @@ This document provides a **complete, categorized inventory** of all TODOs, NotIm
 - Audit trail for architectural decisions
 - Integration with issue tracking systems
 - Binding inventory enforced by Architect governance
+
+## Version 2.4.6 Changes (2026-05-04)
+
+**Minor cleanup:**
+- ✅ **§2.2 ComfyUI `@abstractmethod` checkbox closed.** Verification of
+  `src/transformation_portal/comfyui/custom_nodes.py` confirms `BaseNode`
+  inherits from `ABC` and decorates `INPUT_TYPES`, `RETURN_TYPES`, and
+  `execute` with `@abstractmethod`; `tests/test_comfyui.py::TestBaseNode::test_base_node_abstract_methods`
+  asserts the canonical `__abstractmethods__` invariant. The previously open
+  `[ ]` checkbox under §2.2 was a documentation residue from before that test
+  landed. QW-1 in `docs/deliverables/QUICK_WINS.md` marked completed
+  (2026-05-04) with AST-based verification command captured. No code changes.
 
 ## Version 2.4.5 Changes (2026-05-02)
 
@@ -503,7 +515,7 @@ def execute(self, **kwargs) -> Tuple[Any, ...]:
 **Status:** Correct usage
 
 **Decision:**
-- [ ] Add `@abstractmethod` decorators for clarity
+- [x] Add `@abstractmethod` decorators for clarity — completed (verified 2026-05-04, see QW-1 in `docs/deliverables/QUICK_WINS.md`); `BaseNode(ABC)` plus `@abstractmethod` on `INPUT_TYPES`, `RETURN_TYPES`, and `execute` are locked in by `tests/test_comfyui.py::TestBaseNode::test_base_node_abstract_methods`
 - [ ] Document ComfyUI integration as experimental
 - [ ] Create example subclass in `examples/comfyui/`
 - [ ] Defer full integration to plugin system (v2.2.0)
