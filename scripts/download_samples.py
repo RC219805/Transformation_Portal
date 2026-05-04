@@ -55,18 +55,23 @@ except ImportError:
 SAMPLE_REGISTRY: Dict[str, Dict] = {
     # ========================================================================
     # MINIMAL: Test fixtures for unit tests (synthetic images)
+    # Generated locally — no network or third-party hosting dependency.
     # ========================================================================
     "test_image_small": {
         "category": "minimal",
-        "url": "https://via.placeholder.com/100x100.jpg",  # Placeholder until release
+        "url": None,
+        "synthetic": "rgb_gradient",
+        "synthetic_kwargs": {"width": 100, "height": 100, "seed": 0},
         "size": "1KB",
         "path": "tests/fixtures/test_image_small.jpg",
-        "sha256": None,  # Add after upload
+        "sha256": None,
         "description": "Tiny test image for unit tests (100x100px)",
     },
     "test_depth_map": {
         "category": "minimal",
-        "url": "https://via.placeholder.com/256x256.jpg",  # Placeholder until release
+        "url": None,
+        "synthetic": "depth_gradient",
+        "synthetic_kwargs": {"width": 256, "height": 256, "seed": 1},
         "size": "5KB",
         "path": "tests/fixtures/test_depth.jpg",
         "sha256": None,
@@ -164,6 +169,97 @@ def verify_checksum(file_path: Path, expected_sha256: Optional[str]) -> bool:
     return True
 
 
+def _render_synthetic_image_bytes(kind: str, **kwargs) -> Optional[bytes]:
+    """Render a synthetic fixture to JPEG bytes in memory (no I/O).
+
+    Recognized kinds:
+        - "rgb_gradient": colorful gradient + low-amplitude noise (RGB JPEG)
+        - "depth_gradient": grayscale radial gradient (single-channel JPEG)
+
+    Output is fully deterministic given the same kwargs (seeded RNG) so
+    committed fixtures stay reproducible without third-party hosting.
+    Returns None on dependency or input error.
+    """
+    try:
+        import io
+
+        import numpy as np
+        from PIL import Image
+    except ImportError as exc:
+        print(f"❌ Synthetic generation requires Pillow + numpy: {exc}")
+        return None
+
+    width = int(kwargs.get("width", 100))
+    height = int(kwargs.get("height", 100))
+    seed = int(kwargs.get("seed", 0))
+    rng = np.random.default_rng(seed)
+
+    if kind == "rgb_gradient":
+        ys = np.linspace(0, 255, height, dtype=np.float32)[:, None]
+        xs = np.linspace(0, 255, width, dtype=np.float32)[None, :]
+        red = np.broadcast_to(xs, (height, width))
+        green = np.broadcast_to(ys, (height, width))
+        blue = (xs + ys) * 0.5
+        rgb = np.stack([red, green, blue], axis=-1)
+        rgb = rgb + rng.uniform(-8.0, 8.0, size=rgb.shape).astype(np.float32)
+        image = Image.fromarray(np.clip(rgb, 0, 255).astype(np.uint8), mode="RGB")
+    elif kind == "depth_gradient":
+        cy, cx = (height - 1) / 2.0, (width - 1) / 2.0
+        yy, xx = np.indices((height, width), dtype=np.float32)
+        radius = np.hypot(yy - cy, xx - cx)
+        radius /= max(radius.max(), 1.0)
+        depth = (1.0 - radius) * 255.0
+        depth = depth + rng.uniform(-2.0, 2.0, size=depth.shape).astype(np.float32)
+        image = Image.fromarray(np.clip(depth, 0, 255).astype(np.uint8), mode="L")
+    else:
+        print(f"❌ Unknown synthetic kind: {kind!r}")
+        return None
+
+    buf = io.BytesIO()
+    image.save(buf, format="JPEG", quality=90)
+    return buf.getvalue()
+
+
+def _generate_synthetic_image(kind: str, output_path: Path, **kwargs) -> str:
+    """Materialize a synthetic fixture at output_path.
+
+    Returns one of:
+        - "up_to_date": existing file already matches deterministic output
+        - "generated":  bytes were (re)written (migration from stale placeholder
+                        fixtures or first-time write)
+        - "failed":     dependency, render, or filesystem error
+    """
+    expected = _render_synthetic_image_bytes(kind, **kwargs)
+    if expected is None:
+        return "failed"
+
+    # Migration path: stale fixtures left behind by older versions of this
+    # script (placeholder downloads from a third party) get overwritten when
+    # their bytes don't match the current deterministic render. Matching
+    # bytes are left untouched to preserve idempotency and mtime.
+    if output_path.exists():
+        try:
+            if output_path.read_bytes() == expected:
+                return "up_to_date"
+        except OSError as exc:
+            print(f"❌ Could not read existing {output_path}: {exc}")
+            return "failed"
+
+    tmp_path = output_path.with_suffix(output_path.suffix + ".tmp")
+    try:
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        tmp_path.write_bytes(expected)
+        tmp_path.replace(output_path)
+        return "generated"
+    except OSError as exc:
+        print(f"❌ Failed to write {output_path}: {exc}")
+        try:
+            tmp_path.unlink(missing_ok=True)
+        except OSError:
+            pass
+        return "failed"
+
+
 def download_file(url: str, output_path: Path, description: str, sha256: Optional[str] = None) -> bool:
     """Download a file with progress bar and checksum verification."""
     try:
@@ -232,7 +328,24 @@ def download_samples(categories: List[str], output_dir: Optional[Path] = None, f
     for sample in samples_to_download:
         output_path = output_dir / sample["path"]
 
-        # Skip if file exists and not forcing re-download
+        # Locally synthesized fixtures bypass the skip-if-exists short-circuit
+        # because regenerating costs ~1ms and we need to migrate stale
+        # placeholder fixtures from older script versions. The helper itself
+        # returns "up_to_date" when bytes already match, preserving idempotency.
+        synthetic_kind = sample.get("synthetic")
+        if synthetic_kind:
+            status = _generate_synthetic_image(synthetic_kind, output_path, **sample.get("synthetic_kwargs", {}))
+            if status == "up_to_date":
+                print(f"⏭️  Skipped {sample['name']} (synthetic, up to date)")
+                skipped += 1
+            elif status == "generated":
+                print(f"✅ Generated {sample['name']} ({sample['size']}, synthetic)")
+                downloaded += 1
+            else:
+                failed += 1
+            continue
+
+        # Skip if file exists and not forcing re-download (downloads only)
         if output_path.exists() and not force:
             print(f"⏭️  Skipped {sample['name']} (already exists)")
             skipped += 1
@@ -312,7 +425,12 @@ Categories:
             samples = get_samples_by_category(category)
             print(f"\n{category.upper()}:")
             for sample in samples:
-                status = "✅ Ready" if sample["url"] else "⏳ Pending v2.4.0"
+                if sample.get("synthetic"):
+                    status = "🛠  Synthetic (local)"
+                elif sample["url"]:
+                    status = "✅ Ready"
+                else:
+                    status = "⏳ Pending v2.4.0"
                 print(f"  - {sample['name']:30} ({sample['size']:>6}) {status}")
                 print(f"    {sample['description']}")
         print()
