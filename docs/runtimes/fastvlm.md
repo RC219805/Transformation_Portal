@@ -265,3 +265,15 @@ The diagnostic object also reports `backend`, `model_role`, `model_id`,
 `role: advisory`, and `used_for_quality_gate: false`. If a run card claims
 FastVLM output was used for a quality gate, the portal reports a failed
 policy diagnostic and keeps the serialized status advisory-only.
+
+## Portal Evidence UX
+
+The portal evidence UI surfaces only post-dispatch evidence that already exists
+in job payloads and indexed artifacts. Queue and review surfaces may link the
+advisory sidecar, raw FastVLM output, and deterministic proxy artifact, plus
+the normalized model/status counts from `run_summary.captioning_status`.
+
+These links do not trigger FastVLM, verify model checksums, import MLX, or
+change quality gates. Missing or unreadable advisory sidecars render as
+caption-unavailable evidence only; the underlying job outcome remains governed
+by the runner state and existing run-card validation.

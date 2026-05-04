@@ -1122,6 +1122,7 @@ def test_portal_managed_mode_clears_api_keys_and_hides_secret_ui() -> None:
 
 def test_portal_fastvlm_captioning_controls_are_feature_gated_and_advisory_only() -> None:
     content = _portal_bundle_content()
+    review_content = _portal_review_source_content()
     canonical_body = _extract_js_function_body(content, "buildCanonicalLuxDepthArgs")
     applicability_body = _extract_js_function_body(content, "syncBuildSurfaceApplicability")
     cli_body = _extract_js_function_body(content, "renderCLI")
@@ -1146,6 +1147,11 @@ def test_portal_fastvlm_captioning_controls_are_feature_gated_and_advisory_only(
     assert 'id="reviewProvenanceCaptioning"' in content
     assert 'data-ui="captioning-readiness"' in content
     assert 'data-ui="captioning-run-status"' in content
+    assert '"captioning-evidence-strip"' in review_content
+    assert '"captioning-evidence-link"' in review_content
+    assert '"captioning-sidecar-link"' in review_content
+    assert '"captioning-raw-link"' in review_content
+    assert '"captioning-proxy-link"' in review_content
     assert "FastVLM captions are advisory and never satisfy quality gates." in content
     assert "FastVLM readiness: Off" in content
     assert "function _fastVlmCaptioningFeatureEnabled()" in content
@@ -1153,9 +1159,13 @@ def test_portal_fastvlm_captioning_controls_are_feature_gated_and_advisory_only(
     assert "function toNonNegativeCaptioningRunStatusInt(value)" in content
     assert "function normalizeCaptioningRunStatus(rawStatus)" in content
     assert "function captioningRunStatusSummary(status)" in content
+    assert "function captioningRunStatusDetail(status)" in content
     assert "function createCaptioningRunStatusChip(status)" in content
     assert "function _captioningRuntimeReadiness(summary = {})" in content
     assert "function _renderCaptioningReadiness(summary = {}, options = {})" in content
+    assert "function _captioningEvidenceArtifacts(job, artifact)" in review_content
+    assert "function _renderCaptioningEvidenceStrip(job, artifact)" in review_content
+    assert "function _renderAdvisoryCaptionUnavailable(panel)" in review_content
     assert "state.auth?.features?.fastVlmCaptioning" in content
     assert "const captioningFeatureVisible = isLuxPipeline && _fastVlmCaptioningFeatureEnabled();" in applicability_body
     assert "_setContextVisibility(els.captioningDetails, captioningFeatureVisible);" in applicability_body
@@ -1178,6 +1188,10 @@ def test_portal_fastvlm_captioning_controls_are_feature_gated_and_advisory_only(
     assert "captioningReadiness.verification_scope" in effective_drawer_body
     assert "captioning_status: normalizeCaptioningRunStatus(rawSummary.captioning_status)" in run_summary_body
     assert "createCaptioningRunStatusChip(captioningRunStatus)" in queue_body
+    assert "chip.dataset.sidecarCount" in content
+    assert "chip.dataset.rawCount" in content
+    assert "chip.dataset.proxyCount" in content
+    assert "chip.setAttribute('aria-label', captioningRunStatusDetail(status));" in content
     assert "'captioning:enableFastVlm': 'vlm_captioning_enabled'" in bind_body
     assert "safeBindCheck(els.captioning.enableFastVlm, 'captioning', 'enableFastVlm');" in bind_body
 
@@ -1435,7 +1449,15 @@ def test_portal_review_surface_exposes_warning_banner_and_provenance_contract() 
     assert 'data-ui="review-status-banner"' in content
     assert 'data-ui="review-provenance-grid"' in content
     assert 'data-ui="captioning-run-status"' in content
+    assert '"captioning-evidence-strip"' in review_content
+    assert '"captioning-evidence-link"' in review_content
+    assert '"captioning-sidecar-link"' in review_content
+    assert '"captioning-raw-link"' in review_content
+    assert '"captioning-proxy-link"' in review_content
     assert "function _reviewStatusState(job, reviewableOutputs, visibleWarning) {" in review_content
+    assert "function _captioningEvidenceArtifacts(job, artifact)" in review_content
+    assert "function _renderCaptioningEvidenceStrip(job, artifact)" in review_content
+    assert "function _renderAdvisoryCaptionUnavailable(panel)" in review_content
     assert "_renderReviewStatusBanner(selected, selectedArtifact);" in render_body
     assert "_renderArtifactProvenance(selected, selectedArtifact);" in render_body
     assert "_renderReviewStatusBanner(selected, null);" in render_body
@@ -1474,6 +1496,11 @@ def test_portal_review_surface_exposes_warning_banner_and_provenance_contract() 
     assert "els.reviewProvenanceCaptioning.dataset.status" in provenance_body
     assert "summary?.batch_id" in provenance_body
     assert "summary?.source" in provenance_body
+    assert '_appendCaptionRow(fields, "Issues", caption.issues);' in review_content
+    assert '_appendCaptionRow(fields, "Uncertain", caption.uncertain);' in review_content
+    assert '_appendCaptionRow(fields, "Validated", _captionBooleanLabel(root.validated));' in review_content
+    assert '_appendCaptionRow(fields, "Model role", root.model_role);' in review_content
+    assert '_appendCaptionRow(fields, "Runtime status", root.runtime_diagnostics?.status);' in review_content
 
 
 def test_portal_artifact_viewer_modal_is_feature_flagged_and_keyboard_complete() -> None:
@@ -1591,7 +1618,7 @@ def test_portal_review_surface_supports_compare_summary_and_keyboard_selection()
     assert "_renderReviewCompareSummary(selectedArtifact, compareCandidate, compareEnabled);" in render_body
     assert re.search(
         r"if \(compareEnabled && selectedArtifact && compareCandidate\) \{[\s\S]*?"
-        r"if \(captionSidecar\) _renderArtifactMetadataCard\(selected, selectedArtifact\);[\s\S]*?"
+        r"if \(captioningEvidenceVisible\) _renderArtifactMetadataCard\(selected, selectedArtifact\);[\s\S]*?"
         r"\} else if \(artifactIsPreviewable\(selectedArtifact\)\)",
         render_body,
     )
@@ -5186,6 +5213,10 @@ def test_index_job_artifacts_classifies_captioning_sidecar_only_as_advisory_capt
     assert sidecar_item["display_hint"]["label"] == "Advisory Caption"
     assert raw_item["display_hint"]["role"] == "log"
     assert proxy_item["display_hint"]["role"] == "review_preview"
+    for item in (sidecar_item, raw_item, proxy_item):
+        assert not Path(item["path"]).is_absolute()
+        assert str(output_dir) not in item["path"]
+        assert item["relative_path"] == item["path"]
 
 
 def test_index_job_artifacts_skips_entries_resolving_outside_output_dir(tmp_path: Path) -> None:

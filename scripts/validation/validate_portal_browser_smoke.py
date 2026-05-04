@@ -1055,6 +1055,17 @@ def _state_probe_expression() -> str:
       const el = document.querySelector('[data-ui="advisory-caption-panel"]');
       return el ? String(el.textContent || '').trim() : '';
     })(),
+    captioningEvidenceStripVisible: (() => {
+      const el = document.querySelector('[data-ui="captioning-evidence-strip"]');
+      return !!(el && !el.classList.contains('hidden'));
+    })(),
+    captioningEvidenceText: (() => {
+      const el = document.querySelector('[data-ui="captioning-evidence-strip"]');
+      return el ? String(el.textContent || '').trim() : '';
+    })(),
+    captioningSidecarLinkVisible: !!document.querySelector('[data-ui="captioning-sidecar-link"]'),
+    captioningRawLinkVisible: !!document.querySelector('[data-ui="captioning-raw-link"]'),
+    captioningProxyLinkVisible: !!document.querySelector('[data-ui="captioning-proxy-link"]'),
     v2PresetVisible: (() => {
       const el = document.getElementById('v2PresetField');
       return !!(el && !el.classList.contains('hidden'));
@@ -1517,6 +1528,50 @@ def _inject_compare_ready_review_expression(job_id: str) -> str:
       role: 'vlm_caption'
     }}
   }});
+  upsertArtifact(job, {{
+    path: 'synthetic/review-primary.png.vlm_captioning.raw.txt',
+    relative_path: 'synthetic/review-primary.png.vlm_captioning.raw.txt',
+    artifact_type: 'vlm_caption_raw',
+    media_kind: 'metadata',
+    previewable: false,
+    content_type: 'text/plain',
+    size_bytes: 256,
+    sha256: '5555555555555555555555555555555555555555555555555555555555555555',
+    display_hint: {{
+      label: 'Advisory Caption Raw',
+      role: 'log'
+    }}
+  }});
+  upsertArtifact(job, {{
+    path: 'synthetic/review-primary.png_proxy.png',
+    relative_path: 'synthetic/review-primary.png_proxy.png',
+    artifact_type: 'vlm_caption_proxy',
+    media_kind: 'image',
+    previewable: true,
+    content_type: 'image/png',
+    size_bytes: 1024,
+    sha256: '6666666666666666666666666666666666666666666666666666666666666666',
+    display_hint: {{
+      label: 'Advisory Caption Proxy',
+      role: 'review_preview'
+    }}
+  }});
+  job.run_summary = {{
+    ...(job.run_summary || {{}}),
+    captioning_status: {{
+      status: 'succeeded',
+      enabled: true,
+      backend: 'fastvlm',
+      model_role: 'smoke',
+      model_id: 'apple/FastVLM-0.5B-fp16',
+      role: 'advisory',
+      sidecar_count: 1,
+      raw_count: 1,
+      proxy_count: 1,
+      failed_count: 0,
+      used_for_quality_gate: false
+    }}
+  }};
   state.artifactUi.selectedByJob[String(cfg.job_id)] = 'synthetic/review-primary.png';
   state.artifactUi.compareByJob[String(cfg.job_id)] = false;
   renderReviewSurfaces();
@@ -2543,6 +2598,17 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
             "Advisory" in str(compare_ready_state.get("advisoryCaptionPanelText", "")),
             f"Review metadata should show the advisory FastVLM caption panel when a sidecar is indexed: {compare_ready_state}",
         )
+        _expect(
+            bool(compare_ready_state.get("captioningEvidenceStripVisible"))
+            and "FastVLM: Succeeded" in str(compare_ready_state.get("captioningEvidenceText", "")),
+            f"Review metadata should show the FastVLM evidence strip for indexed captioning artifacts: {compare_ready_state}",
+        )
+        _expect(
+            bool(compare_ready_state.get("captioningSidecarLinkVisible"))
+            and bool(compare_ready_state.get("captioningRawLinkVisible"))
+            and bool(compare_ready_state.get("captioningProxyLinkVisible")),
+            f"FastVLM evidence strip should expose sidecar/raw/proxy artifact links: {compare_ready_state}",
+        )
 
         compare_toggle_selector = ""
         if str(compare_ready_state.get("actionSecondary2Key", "")).strip() == "toggle_compare":
@@ -2578,6 +2644,13 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
             bool(compare_state.get("advisoryCaptionPanelVisible"))
             and "Advisory" in str(compare_state.get("advisoryCaptionPanelText", "")),
             f"Compare mode should keep a freshly rendered advisory FastVLM caption panel: {compare_state}",
+        )
+        _expect(
+            bool(compare_state.get("captioningEvidenceStripVisible"))
+            and bool(compare_state.get("captioningSidecarLinkVisible"))
+            and bool(compare_state.get("captioningRawLinkVisible"))
+            and bool(compare_state.get("captioningProxyLinkVisible")),
+            f"Compare mode should keep FastVLM evidence links visible: {compare_state}",
         )
 
         print("portal-browser-smoke: opening the artifact viewer from review", flush=True)
