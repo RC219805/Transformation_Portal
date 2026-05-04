@@ -47,13 +47,29 @@ def script_module():
     return _load_script_module()
 
 
-def _write_coverage(path: Path, classes: list[tuple[str, list[int]]]) -> None:
+def _write_coverage(
+    path: Path,
+    classes: list[tuple[str, list[int]]],
+    sources: list[str] | None = None,
+) -> None:
     """Build a tiny synthetic Cobertura XML.
 
     ``classes`` is a list of (filename, hits_per_line) tuples — e.g.
     ``[("src/tp/x.py", [1, 0, 1])]`` means file with 3 lines, 2 hit.
+
+    ``sources`` is an optional list of absolute ``<source>`` paths that
+    coverage.py emits when ``--cov`` is given source roots; class
+    filenames are typically relative to one of those roots when this
+    is set. Pass ``None`` for the simpler case where filenames are
+    already repo-relative.
     """
-    body = ['<?xml version="1.0" ?>', "<coverage>", "  <packages>", "    <package>", "      <classes>"]
+    body = ['<?xml version="1.0" ?>', "<coverage>"]
+    if sources:
+        body.append("  <sources>")
+        for source in sources:
+            body.append(f"    <source>{source}</source>")
+        body.append("  </sources>")
+    body.extend(["  <packages>", "    <package>", "      <classes>"])
     for filename, hits in classes:
         body.append(f'        <class name="x" filename="{filename}">')
         body.append("          <lines>")
@@ -162,6 +178,108 @@ class TestAggregateAbsolutePaths:
         assert results[0].valid == 4
         assert results[0].percentage == 100.0
         assert results[0].passed is True
+
+
+class TestAggregateSourceRelative:
+    """Regression tests for coverage.py's <source>-relative class filenames.
+
+    coverage.py emits a top-level ``<sources>`` block listing the absolute
+    roots that each ``<class filename>`` is relative to. The first
+    iteration of this script naively prefix-matched filenames like
+    ``merkle.py`` against ``src/tp/`` and got 0 matches across the board,
+    silently failing every per-package floor with ``matched 0 covered
+    source files``. The resolver now joins each filename to a probed
+    source root and uses the first one where the file actually exists.
+    """
+
+    def test_filename_relative_to_source_root_resolves(self, script_module, tmp_path: Path):
+        # Simulate the coverage.py shape: <source> root + bare filename.
+        # The class file must exist on disk for the resolver to pick it,
+        # so write the actual files into tmp_path.
+        src_tp = tmp_path / "src" / "tp"
+        src_tp.mkdir(parents=True)
+        (src_tp / "merkle.py").write_text("# real file\n", encoding="utf-8")
+
+        coverage = tmp_path / "coverage.xml"
+        _write_coverage(
+            coverage,
+            [("merkle.py", [1, 1])],
+            sources=[str(src_tp)],
+        )
+        floors = (script_module.PackageFloor("src/tp/", 50.0),)
+
+        results = script_module.aggregate(coverage, floors)
+        # The resolver must reconstruct "src/tp/merkle.py" so the floor
+        # matches; otherwise this test fails the same way CI did with
+        # "0/0 lines, matched 0 covered source files".
+        assert results[0].valid == 2
+        assert results[0].percentage == 100.0
+        assert results[0].passed is True
+
+    def test_filename_attributed_to_correct_source_when_two_roots(self, script_module, tmp_path: Path):
+        # Two source roots, two unambiguous files (one per root, with
+        # distinguishing path components in the filename). The src-only
+        # file must aggregate under src/tp/, not under
+        # src/transformation_portal/, even though both roots are listed.
+        src_tp = tmp_path / "src" / "tp"
+        src_tp.mkdir(parents=True)
+        (src_tp / "phase4").mkdir()
+        (src_tp / "phase4" / "exceptions.py").write_text("# tp file\n", encoding="utf-8")
+
+        src_tp_main = tmp_path / "src" / "transformation_portal"
+        src_tp_main.mkdir(parents=True)
+        (src_tp_main / "lux_depth_v3").mkdir()
+        (src_tp_main / "lux_depth_v3" / "orchestrator.py").write_text("# main file\n", encoding="utf-8")
+
+        coverage = tmp_path / "coverage.xml"
+        _write_coverage(
+            coverage,
+            [
+                ("phase4/exceptions.py", [1, 1, 0, 0]),  # src/tp/ file: 50%
+                ("lux_depth_v3/orchestrator.py", [1, 1, 1, 1]),  # main file: 100%
+            ],
+            sources=[str(src_tp), str(src_tp_main)],
+        )
+        floors = (
+            script_module.PackageFloor("src/tp/", 40.0),
+            script_module.PackageFloor("src/transformation_portal/lux_depth_v3/", 80.0),
+        )
+
+        results = script_module.aggregate(coverage, floors)
+        tp_result, ldv3_result = results
+
+        # phase4/exceptions.py only — src/transformation_portal/phase4/
+        # doesn't exist on disk so it must NOT be cross-attributed.
+        assert tp_result.valid == 4
+        assert tp_result.percentage == 50.0
+
+        # lux_depth_v3/orchestrator.py only — src/tp/lux_depth_v3/
+        # doesn't exist on disk so it must NOT be cross-attributed.
+        assert ldv3_result.valid == 4
+        assert ldv3_result.percentage == 100.0
+
+    def test_missing_file_does_not_inflate_other_packages(self, script_module, tmp_path: Path):
+        # If a class filename doesn't exist under any source root (e.g.
+        # the file was deleted between pytest and the coverage check),
+        # the resolver falls back to the bare normalized filename rather
+        # than fabricating an attribution. The class still appears in
+        # results, but only against a prefix that matches the bare form
+        # — it must not be silently rolled into an unrelated package.
+        src_tp = tmp_path / "src" / "tp"
+        src_tp.mkdir(parents=True)
+
+        coverage = tmp_path / "coverage.xml"
+        _write_coverage(
+            coverage,
+            [("ghost.py", [1, 0])],
+            sources=[str(src_tp)],
+        )
+        floors = (script_module.PackageFloor("src/tp/", 50.0),)
+
+        results = script_module.aggregate(coverage, floors)
+        # Bare "ghost.py" doesn't match "src/tp/" prefix → 0/0 → fail loud.
+        assert results[0].valid == 0
+        assert results[0].passed is False
 
 
 class TestAggregateNestedExclusion:

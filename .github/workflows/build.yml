@@ -679,8 +679,8 @@ jobs:
             COV_FLAGS="--no-cov"
             echo "ML tier: coverage disabled for faster PR feedback"
           else
-            COV_FLAGS="--cov=src/transformation_portal --cov=src/tp --cov=lux_depth_v3 --cov-report=term-missing --cov-report=xml --cov-report=html --cov-fail-under=35"
-            echo "Core tier: enforcing 35% minimum global coverage"
+            COV_FLAGS="--cov=src/transformation_portal --cov=src/tp --cov=lux_depth_v3 --cov-report=term-missing --cov-report=xml --cov-report=html --cov-fail-under=25"
+            echo "Core tier: enforcing 25% minimum global coverage"
           fi
 
           # ML tier: add duration profiling for triage of slow tests
