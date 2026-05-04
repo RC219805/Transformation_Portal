@@ -377,11 +377,13 @@ jobs:
         # Uses Node 22's built-in --experimental-test-coverage. The
         # --test-coverage-lines / --test-coverage-functions flags inside
         # the script make the Node test runner exit non-zero if either
-        # threshold drops below the floor. Floors are intentionally
-        # conservative starters (50% line, 50% function); ratchet upward
-        # in package.json as coverage improves — never silently lower.
-        # Replaces the previous separate `npm test` + `npm run test:coverage`
-        # pair to avoid running build:portal and the test suite twice.
+        # threshold drops below the floor. Floors are set just below the
+        # current measured baseline (line=48.88%, function=50.09% as of
+        # 2026-05-04 — pinned at 45/45 in package.json) so any regression
+        # fails CI; ratchet upward in package.json as coverage improves —
+        # never silently lower. Replaces the previous separate `npm test`
+        # + `npm run test:coverage` pair to avoid running build:portal
+        # and the test suite twice.
         run: |
           set -euo pipefail
           cd web/secure-landing

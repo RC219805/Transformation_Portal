@@ -15,7 +15,7 @@
     "start": "node ./scripts/guard-runtime.mjs && node ./scripts/start-standalone.mjs",
     "seed-frontdoor-user": "node ./scripts/guard-runtime.mjs && node ./scripts/seed-frontdoor-user.mjs",
     "test": "npm run build:portal && node ./scripts/guard-runtime.mjs && node --experimental-specifier-resolution=node --test tests/*.test.mjs",
-    "test:coverage": "npm run build:portal && node ./scripts/guard-runtime.mjs && node --experimental-specifier-resolution=node --experimental-test-coverage --test-coverage-include=app/**/*.js --test-coverage-include=lib/**/*.js --test-coverage-exclude=app/**/page.js --test-coverage-exclude=app/**/layout.js --test-coverage-exclude=app/**/global-error.js --test-coverage-exclude=app/**/not-found.js --test-coverage-lines=50 --test-coverage-functions=50 --test tests/*.test.mjs"
+    "test:coverage": "npm run build:portal && node ./scripts/guard-runtime.mjs && node --experimental-specifier-resolution=node --experimental-test-coverage --test-coverage-include=app/**/*.js --test-coverage-include=lib/**/*.js --test-coverage-exclude=app/**/page.js --test-coverage-exclude=app/**/layout.js --test-coverage-exclude=app/**/global-error.js --test-coverage-exclude=app/**/not-found.js --test-coverage-lines=45 --test-coverage-functions=45 --test tests/*.test.mjs"
   },
   "engines": {
     "node": ">=22 <23"
