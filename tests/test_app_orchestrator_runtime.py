@@ -1388,7 +1388,10 @@ def test_portal_artifact_gallery_renders_visual_review_controls() -> None:
     assert "function _artifactRouteKey(artifact) {" in content
     assert "function _openManagedArtifactWindow(job, artifact, surface = 'artifact_review') {" in content
     assert "buildArtifactUrl(selected, selectedArtifact)" in review_body
-    assert "artifactIsPreviewable(selectedArtifact)" in review_body
+    # Browser-previewable check (item 8 of executive diagnosis): TIFF/EXR are
+    # not browser-previewable, so the inline <img> path is gated on the
+    # narrower flag rather than the legacy `previewable` field.
+    assert "artifactIsBrowserPreviewable(selectedArtifact)" in review_body
     assert "artifactDisplayLabel(selectedArtifact)" in review_body
     assert "artifactDisplayLabel(artifact)" in review_body
     assert "button.dataset.artifactPath = _artifactRouteKey(artifact);" in review_body
@@ -1639,7 +1642,7 @@ def test_portal_review_surface_supports_compare_summary_and_keyboard_selection()
     assert re.search(
         r"if \(compareEnabled && selectedArtifact && compareCandidate\) \{[\s\S]*?"
         r"if \(captioningEvidenceVisible\) _renderArtifactMetadataCard\(selected, selectedArtifact\);[\s\S]*?"
-        r"\} else if \(artifactIsPreviewable\(selectedArtifact\)\)",
+        r"\} else if \(selectedBrowserPreviewable\)",
         render_body,
     )
     assert re.search(
