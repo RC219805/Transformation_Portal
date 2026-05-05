@@ -29,9 +29,6 @@ Recent current-state contract anchors:
 - `docs/ci/WORKFLOW_MATRIX.md` is the current 30-workflow GitHub Actions inventory.
 - `docs/governance/audit/archive-gates-2026-04-27.md` is the current archive
   Gates A/B/C readiness audit evidence.
-- APEX current state includes offline model-family characterization, SAM2
-  tile-merge regression coverage, real failure-code surfacing, confidence-only
-  Materials V3 passthrough, and V2 fallback behavior.
 
 Optimize for:
 

@@ -142,15 +142,16 @@ When escalation criteria are met, stop. **Silence is not approval.**
 
 ### Mandatory Escalation Triggers
 
-Escalate instead of implementing when the task touches any of the following:
-
-- `pyproject.toml`, `requirements/*`, dependency tiers, lockfile policy, banned dependency policy, new ML models, new runtimes, or supply-chain changes
-- `.github/workflows/*`, release automation, packaging/publishing, required checks, or deployment behavior
-- `.github/copilot-instructions.md`, `.github/agents/*`, custom-agent role
-  boundaries, or docs topology changes
-- security-sensitive input handling, subprocess behavior, path validation, secrets, runtime fetches, or trust-boundary changes
-- cross-pipeline contracts, shared metadata/file-layout expectations, public CLI flags/defaults, documented outputs, HTTP response schemas, or backward compatibility
-- ADR conflicts, ambiguous trade-offs, or any change likely to create future architectural debate
+Stop and escalate to the Architect when a task falls under any escalation
+criterion in `docs/architecture/agent_governance.md` §"Escalation Criteria"
+(A: dependency / supply-chain; B: CI/CD, release, repository automation; B2:
+agent and documentation topology including `.github/copilot-instructions.md`,
+`.github/agents/*`, and `tests/test_custom_agent_config.py`; C: security
+posture and untrusted input handling; D: cross-pipeline contracts and public
+interfaces — including `app.py`, typed `/v1/*` envelopes, public CLI flags,
+documented outputs, and HTTP response schemas; E: ADR conflicts or
+architectural uncertainty). Treat `agent_governance.md` as the authoritative
+list; do not work around it from this profile.
 
 ---
 
