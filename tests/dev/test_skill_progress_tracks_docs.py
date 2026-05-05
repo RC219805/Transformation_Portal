@@ -39,6 +39,17 @@ EXPECTED_2026_05_03_TRACKS = {
     "Docs And Status Truthfulness": ("PR #1629", "PR #1628"),
 }
 
+EXPECTED_2026_05_05_TRACKS = {
+    "Deterministic Validation-System Design": ("PR #1641", "asset_bundle.py"),
+    "Documentation Governance Consistency": ("PR #1646", "AGENTS.md"),
+    "Contract-Driven Portal And Frontdoor State Modeling": (
+        "PR #1637",
+        "review-surface-deferred.js",
+    ),
+    "Scripts Failure-Mode And Fixture Hygiene": ("PR #1634", "download_samples.py"),
+    "Pipeline Re-Export And Import-Surface Discipline": ("PR #1645", "SciPy"),
+}
+
 
 def _read(path: Path) -> str:
     assert path.exists(), f"Missing expected documentation file: {path}"
@@ -78,6 +89,7 @@ def test_skill_progress_tracks_document_exists_and_links_from_current_guides() -
     assert "SKILL_PROGRESS_TRACKS.md" in documentation_map
     assert "## 2026-05-02 Review-Thread Refresh" in tracks_text
     assert "## 2026-05-03 Review-Thread Refresh" in tracks_text
+    assert "## 2026-05-05 Review-Thread Refresh" in tracks_text
 
 
 @pytest.mark.parametrize("heading, evidence", EXPECTED_TRACKS.items())
@@ -148,6 +160,30 @@ def test_2026_05_03_refresh_locks_reviewed_skill_names() -> None:
     refresh = _section(_read(TRACKS_PATH), "2026-05-03 Review-Thread Refresh")
 
     for heading in EXPECTED_2026_05_03_TRACKS:
+        assert f"### {heading}" in refresh
+
+
+@pytest.mark.parametrize("heading, evidence", EXPECTED_2026_05_05_TRACKS.items())
+def test_2026_05_05_skill_progress_refresh_tracks_have_evidence_drills_and_acceptance(
+    heading: str,
+    evidence: tuple[str, str],
+) -> None:
+    refresh = _section(_read(TRACKS_PATH), "2026-05-05 Review-Thread Refresh")
+    section = _subsection(refresh, heading)
+
+    for pr_anchor in evidence:
+        assert pr_anchor in section
+
+    assert section.count("Drill 1 -") == 1
+    assert section.count("Drill 2 -") == 1
+    assert section.count("Acceptance tests:") == 2
+    assert "Expected behavior:" in section
+
+
+def test_2026_05_05_refresh_locks_reviewed_skill_names() -> None:
+    refresh = _section(_read(TRACKS_PATH), "2026-05-05 Review-Thread Refresh")
+
+    for heading in EXPECTED_2026_05_05_TRACKS:
         assert f"### {heading}" in refresh
 
 
