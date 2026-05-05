@@ -102,6 +102,18 @@ LOGGER = logging.getLogger(__name__)
 _PORTAL_EVENT_LOG_WRITE_LOCK = threading.Lock()
 _MANAGED_SAM2_CHECKSUM_CACHE_LOCK = threading.Lock()
 
+# Optionally suppress successful /healthz and /ready access-log lines so
+# operator log streams stay focused on actionable failures. Errors are never
+# suppressed. Controlled via TP_LOG_HEALTHCHECKS=0 (default keeps the lines).
+try:
+    from transformation_portal.core.observability.log_classification import (
+        install_healthcheck_log_filter as _install_healthcheck_log_filter,
+    )
+
+    _install_healthcheck_log_filter()
+except Exception:  # pragma: no cover - observability never blocks startup
+    LOGGER.debug("healthcheck log filter unavailable", exc_info=True)
+
 
 @dataclass(frozen=True)
 class ManagedSam2CheckpointValidationResult:
@@ -6404,6 +6416,47 @@ def _artifact_is_previewable(path: Path) -> bool:
     return _artifact_media_kind(path) == "image" and _artifact_content_type(path).startswith("image/")
 
 
+# MIME types browsers reliably render via <img> / <picture>. TIFF, EXR, and
+# similar formats are excluded so the portal never asks the browser to decode
+# them; previewing those goes through a sibling PNG proxy when available.
+_BROWSER_PREVIEWABLE_MIME_TYPES = frozenset(
+    {
+        "image/png",
+        "image/jpeg",
+        "image/webp",
+        "image/gif",
+        "image/avif",
+        "image/svg+xml",
+    }
+)
+
+
+def _artifact_is_browser_previewable(path: Path) -> bool:
+    return _artifact_content_type(path).lower() in _BROWSER_PREVIEWABLE_MIME_TYPES
+
+
+def _artifact_preview_proxy_path(path: Path) -> Optional[Path]:
+    """Return a sibling PNG proxy for browser-unfriendly image artifacts.
+
+    The naming convention is ``<original>.preview.png`` adjacent to the source
+    file. Pipelines that emit TIFF/EXR outputs are responsible for writing this
+    sidecar; the serializer only surfaces what already exists on disk so the
+    HTTP API never speculates about files it cannot deliver.
+    """
+
+    if _artifact_is_browser_previewable(path):
+        return None
+    if _artifact_media_kind(path) != "image":
+        return None
+    candidate = path.with_name(path.name + ".preview.png")
+    try:
+        if candidate.is_file():
+            return candidate
+    except OSError:
+        return None
+    return None
+
+
 def _safe_artifact_attachment_filename(path: Path) -> str:
     """Return an ASCII-safe filename for Content-Disposition attachments.
 
@@ -6572,19 +6625,35 @@ def _serialize_indexed_artifact(
 
     content_type = _artifact_content_type(path)
     sha256_hex, fingerprint_status = _artifact_fingerprint(path, size_bytes)
+    download_url = _artifact_url(job_id, relative_path)
+    proxy_path = _artifact_preview_proxy_path(path)
+    proxy_relative = (
+        f"{relative_path}.preview.png" if proxy_path is not None else None
+    )
+    browser_previewable = _artifact_is_browser_previewable(path) or proxy_path is not None
     payload: Dict[str, Any] = {
         "artifact_type": _infer_artifact_type(path),
         "media_kind": _artifact_media_kind(path),
         "previewable": _artifact_is_previewable(path),
+        # Narrower than `previewable`: excludes TIFF/EXR which browsers cannot
+        # render via <img>. The portal review surface uses this flag to decide
+        # whether to inline-preview an artifact or render a download-only card.
+        "browser_previewable": browser_previewable,
         "content_type": content_type,
+        "mime_type": content_type,
         "display_hint": _artifact_display_hint(relative_path, path),
-        "url": _artifact_url(job_id, relative_path),
+        # `url` retained as the canonical download URL for backward compat.
+        "url": download_url,
+        "download_url": download_url,
         # Do not expose absolute server paths in API/SSE payloads.
         "path": relative_path,
         "relative_path": relative_path,
         "size_bytes": size_bytes,
         "fingerprint_status": fingerprint_status,
     }
+    if proxy_relative is not None:
+        payload["preview_url"] = _artifact_url(job_id, proxy_relative)
+        payload["preview_mime_type"] = "image/png"
     if sha256_hex is not None:
         payload["sha256"] = sha256_hex
     return payload

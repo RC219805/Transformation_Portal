@@ -5199,18 +5199,65 @@ def test_index_job_artifacts_populates_job_payload(tmp_path: Path) -> None:
     render_item = next(item for item in indexed if item["path"] == "render.png")
     assert render_item["media_kind"] == "image"
     assert render_item["previewable"] is True
+    assert render_item["browser_previewable"] is True
     assert render_item["content_type"] == "image/png"
+    assert render_item["mime_type"] == "image/png"
     assert render_item["display_hint"]["role"] == "primary_preview"
     assert render_item["display_hint"]["priority"] == 1000
     assert render_item["display_hint"]["label"] == "Primary Preview"
     assert render_item["display_hint"]["compare_group"]
     assert render_item["url"] == f"/v1/jobs/{job.id}/artifacts/render.png"
+    assert render_item["download_url"] == render_item["url"]
+    assert "preview_url" not in render_item  # browser handles PNG natively
     manifest_item = next(item for item in indexed if item["path"] == "manifest.json")
     assert manifest_item["media_kind"] == "metadata"
     assert manifest_item["previewable"] is False
+    assert manifest_item["browser_previewable"] is False
     assert manifest_item["display_hint"]["role"] == "manifest"
     assert manifest_item["display_hint"]["priority"] == 240
     assert manifest_item["display_hint"]["label"] == "Manifest"
+
+
+def test_index_job_artifacts_marks_tiff_without_proxy_as_not_browser_previewable(
+    tmp_path: Path,
+) -> None:
+    output_dir = tmp_path / "out"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    (output_dir / "render.tif").write_bytes(b"II*\x00")
+
+    job = orchestrator_app.Job(
+        id="job_tiff",
+        created_at=orchestrator_app._now(),
+        request={"pipeline": "lux-depth-v3", "args": {"output_dir": str(output_dir)}},
+    )
+    indexed = orchestrator_app._index_job_artifacts(job)
+    tiff_item = next(item for item in indexed if item["path"] == "render.tif")
+
+    assert tiff_item["previewable"] is True  # legacy field stays as-is
+    assert tiff_item["browser_previewable"] is False
+    assert "preview_url" not in tiff_item
+
+
+def test_index_job_artifacts_surfaces_tiff_preview_proxy_when_present(
+    tmp_path: Path,
+) -> None:
+    output_dir = tmp_path / "out"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    (output_dir / "render.tif").write_bytes(b"II*\x00")
+    (output_dir / "render.tif.preview.png").write_bytes(b"\x89PNG")
+
+    job = orchestrator_app.Job(
+        id="job_tiff_proxy",
+        created_at=orchestrator_app._now(),
+        request={"pipeline": "lux-depth-v3", "args": {"output_dir": str(output_dir)}},
+    )
+    indexed = orchestrator_app._index_job_artifacts(job)
+    tiff_item = next(item for item in indexed if item["path"] == "render.tif")
+
+    assert tiff_item["browser_previewable"] is True
+    assert tiff_item["preview_url"] == f"/v1/jobs/{job.id}/artifacts/render.tif.preview.png"
+    assert tiff_item["preview_mime_type"] == "image/png"
+    assert tiff_item["download_url"] == f"/v1/jobs/{job.id}/artifacts/render.tif"
 
 
 def test_index_job_artifacts_does_not_misclassify_catalog_metadata_as_log(tmp_path: Path) -> None:

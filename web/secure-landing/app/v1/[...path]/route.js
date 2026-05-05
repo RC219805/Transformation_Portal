@@ -65,13 +65,34 @@ async function streamSse(upstream, session, traceparent) {
   });
 
   void (async () => {
+    let terminalSeen = false;
+    let bufferedTail = "";
+    const decoder = new TextDecoder("utf-8", { fatal: false });
+
+    const inspectChunk = (value) => {
+      try {
+        const chunk = typeof value === "string" ? value : decoder.decode(value, { stream: true });
+        if (!chunk) return;
+        const combined = bufferedTail + chunk;
+        // The backend signals job termination with an `event: done` SSE frame
+        // (app.py:_job_events). Detecting it lets the frontdoor distinguish
+        // a clean job-end close from a transport disconnect.
+        if (/(?:^|\n)event:\s*done\s*(?:\r?\n|\r|$)/.test(combined)) {
+          terminalSeen = true;
+        }
+        bufferedTail = combined.slice(-128);
+      } catch {
+        // Best-effort terminal detection; never let it interfere with proxying.
+      }
+    };
+
     try {
       if (!reader) {
         await writer.close();
         audit("sse_proxy_close", {
           username: session.username,
           accessEmail: session.accessEmail,
-          empty: true
+          reason: "no_upstream_body"
         });
         return;
       }
@@ -79,18 +100,38 @@ async function streamSse(upstream, session, traceparent) {
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
+        inspectChunk(value);
         await writer.write(value);
       }
       audit("sse_proxy_close", {
         username: session.username,
-        accessEmail: session.accessEmail
+        accessEmail: session.accessEmail,
+        reason: terminalSeen ? "terminal_event" : "upstream_eof"
       });
     } catch (error) {
-      audit("sse_proxy_error", {
-        username: session.username,
-        accessEmail: session.accessEmail,
-        message: error instanceof Error ? error.message : String(error)
-      });
+      const isAbort = error?.name === "AbortError" || /aborted/i.test(error?.message || "");
+      const message = error instanceof Error ? error.message : String(error);
+      if (isAbort) {
+        audit("sse_proxy_close", {
+          username: session.username,
+          accessEmail: session.accessEmail,
+          reason: "client_abort"
+        });
+      } else if (!message || !message.trim()) {
+        // Empty error payloads typically come from an upstream that closed
+        // mid-frame; this is not actionable for operators.
+        audit("sse_proxy_close", {
+          username: session.username,
+          accessEmail: session.accessEmail,
+          reason: "upstream_disconnect"
+        });
+      } else {
+        audit("sse_proxy_error", {
+          username: session.username,
+          accessEmail: session.accessEmail,
+          message
+        });
+      }
     } finally {
       try {
         await writer.close();

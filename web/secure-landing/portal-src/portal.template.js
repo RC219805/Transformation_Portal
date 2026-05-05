@@ -2996,6 +2996,45 @@ function artifactIsPreviewable(artifact) {
     return Boolean(artifact?.previewable) && artifactMediaKind(artifact) === 'image';
 }
 
+// Strict subset of `artifactIsPreviewable`: artifacts the browser can render
+// directly via <img> (PNG/JPEG/WebP/GIF/AVIF/SVG) or that have a sibling PNG
+// proxy (preview_url). TIFF/EXR without a proxy are excluded so the portal
+// never asks the browser to decode a format it cannot, avoiding the failed-
+// load → retry loop that produced the 503/.tif churn in the diagnosis logs.
+function artifactIsBrowserPreviewable(artifact) {
+    if (!artifact) return false;
+    if (Boolean(artifact.browser_previewable)) return true;
+    if (typeof artifact.preview_url === 'string' && artifact.preview_url.trim()) return true;
+    return false;
+}
+
+// Resolve the URL that should be used as <img src> for inline preview. Returns
+// the empty string when the artifact is not browser-previewable so callers can
+// skip rendering an <img> entirely.
+function artifactPreviewSrc(job, artifact) {
+    if (!artifactIsBrowserPreviewable(artifact)) return '';
+    const previewUrl = String(artifact?.preview_url || '').trim();
+    if (previewUrl) {
+        return sanitizeManagedAssetUrl(previewUrl);
+    }
+    return buildArtifactUrl(job, artifact);
+}
+
+// Page-lifetime cache of artifact URLs that previously returned 404. The viewer
+// uses this to skip retries for artifacts that have already been confirmed
+// missing, preventing the repeated-fetch loop seen in the diagnosis logs.
+const _artifactNotFoundUrls = new Set();
+
+function _markArtifactUrlNotFound(url) {
+    if (typeof url !== 'string' || !url) return;
+    _artifactNotFoundUrls.add(url);
+}
+
+function _isArtifactUrlKnownMissing(url) {
+    if (typeof url !== 'string' || !url) return false;
+    return _artifactNotFoundUrls.has(url);
+}
+
 function artifactLabel(artifact) {
     return String(artifact?.relative_path || artifact?.path || 'artifact').trim();
 }
@@ -4771,6 +4810,93 @@ function _portalPrivilegesReady() {
     return _isBootstrapReady() && !_isManagedUnavailableMode();
 }
 
+// Generalized retry discipline for protected /v1/* fetches.
+//
+// The managed front door already classifies upstream 401/403 as
+// CONFIG_FAILURE with retryable:false (web/secure-landing/lib/managed-failure.js).
+// Bootstrap honors that flag; everything else (refreshJobStatus, RUM, portal
+// events, config-preview/metadata, readiness, presets) used to swallow it and
+// keep polling, which is the 503 storm visible in the diagnosis logs.
+//
+// Behaviour:
+//   - When a protected fetch returns a body with details.retryable === false,
+//     the corresponding endpoint family is suppressed for the page lifetime.
+//   - Subsequent calls to _isProtectedFamilySuppressed(family) return true so
+//     callers can skip the fetch entirely.
+//   - One console.warn per family makes the diagnosis visible in DevTools.
+//   - _resetProtectedFamilySuppression() clears the map; a future Retry button
+//     in the failure banner can call it.
+const _protectedFamilySuppression = new Map();
+
+function _classifyProtectedEndpointFamily(url) {
+    const path = String(url || '').split('?')[0];
+    if (!path) return '';
+    if (path.includes('/v1/jobs/') && path.endsWith('/events')) return 'jobs_events';
+    if (path.includes('/v1/jobs/') && path.endsWith('/cancel')) return 'jobs_cancel';
+    if (/\/v1\/jobs\/[^/]+$/.test(path)) return 'jobs_detail';
+    if (path.endsWith('/v1/jobs')) return 'jobs_list';
+    if (path.endsWith('/v1/config-metadata')) return 'config_metadata';
+    if (path.endsWith('/v1/config-preview')) return 'config_preview';
+    if (path.endsWith('/v1/portal/rum')) return 'portal_rum';
+    if (path.endsWith('/v1/portal/events')) return 'portal_events';
+    if (path.endsWith('/v1/readiness')) return 'readiness';
+    if (path.endsWith('/v1/presets')) return 'presets';
+    if (path.endsWith('/v1/uploads/staging')) return 'uploads_staging';
+    return '';
+}
+
+function _isProtectedFamilySuppressed(family) {
+    return Boolean(family) && _protectedFamilySuppression.has(family);
+}
+
+function _recordProtectedFamilySuppression(family, payload) {
+    if (!family || _protectedFamilySuppression.has(family)) return;
+    const detail = payload && typeof payload === 'object' ? payload : {};
+    _protectedFamilySuppression.set(family, {
+        recordedAt: Date.now(),
+        reason: String(detail.reason || 'config_failure'),
+        upstreamStatus: Number.isFinite(Number(detail.upstreamStatus)) ? Number(detail.upstreamStatus) : 0
+    });
+    try {
+        // eslint-disable-next-line no-console
+        console.warn(
+            `[portal] suppressing further requests to ${family}: reason=${detail.reason || 'config_failure'} ` +
+            `upstreamStatus=${detail.upstreamStatus || 'unknown'}. ` +
+            `Resolve frontdoor configuration (TP_BACKEND_API_KEY / backend TP_API_KEY).`
+        );
+    } catch {
+        // logging is best-effort
+    }
+}
+
+// Inspect a non-OK protected response. If the body carries details.retryable === false,
+// suppress the family and return true so the caller can short-circuit.
+async function _maybeSuppressOnProtectedResponse(family, response) {
+    if (!family || !response || response.ok) return false;
+    let body = null;
+    try {
+        body = await response.clone().json();
+    } catch {
+        return false;
+    }
+    const details = body && typeof body === 'object' ? body.details : null;
+    const isNonRetryable = details && typeof details === 'object' && details.retryable === false;
+    if (!isNonRetryable) return false;
+    _recordProtectedFamilySuppression(family, {
+        reason: details.reason,
+        upstreamStatus: details.upstreamStatus
+    });
+    return true;
+}
+
+function _resetProtectedFamilySuppression(family) {
+    if (typeof family === 'string' && family) {
+        _protectedFamilySuppression.delete(family);
+    } else {
+        _protectedFamilySuppression.clear();
+    }
+}
+
 function _queueBootstrapOnlineFollowup() {
     state.bootstrap.pendingOnlineFollowup = true;
     state.bootstrap.onlineFollowupComplete = false;
@@ -5984,6 +6110,10 @@ function _createDeferredReviewSurfaceHost() {
         buildArtifactUrl,
         sanitizeManagedAssetUrl,
         artifactIsPreviewable,
+        artifactIsBrowserPreviewable,
+        artifactPreviewSrc,
+        _markArtifactUrlNotFound,
+        _isArtifactUrlKnownMissing,
         artifactLabel,
         artifactDisplayHint,
         artifactDisplayLabel,
@@ -6311,11 +6441,15 @@ function _syncHydratedJob(existing, hydrated, rawJob = null) {
 
 async function refreshJobStatus(job) {
     if (!job || !job.id) return;
+    if (_isProtectedFamilySuppressed('jobs_detail')) return;
     try {
         const headers = _buildAuthHeaders({ 'Accept': 'application/json' });
         const encodedId = encodeURIComponent(String(job.id));
         const res = await fetch(`${API_BASE}/v1/jobs/${encodedId}`, { headers, cache: 'no-store' });
-        if (!res.ok) return;
+        if (!res.ok) {
+            await _maybeSuppressOnProtectedResponse('jobs_detail', res);
+            return;
+        }
         const payload = await res.json();
         const rawJob = payload?.data;
         if (!rawJob || String(rawJob.id || '') !== String(job.id)) return;
@@ -6500,6 +6634,12 @@ async function _flushQueuedPortalRumSamples(options = {}) {
     if (state.rum.queuedSamples.length === 0) {
         return;
     }
+    if (_isProtectedFamilySuppressed('portal_rum')) {
+        // Drop the queued samples; they will not be accepted while the
+        // frontdoor is in non-retryable config_failure state.
+        state.rum.queuedSamples.splice(0, state.rum.queuedSamples.length);
+        return;
+    }
     const flushOptions = options && typeof options === 'object' ? options : {};
     const keepalive = Boolean(flushOptions.keepalive);
     const queued = state.rum.queuedSamples.splice(0, state.rum.queuedSamples.length);
@@ -6508,7 +6648,7 @@ async function _flushQueuedPortalRumSamples(options = {}) {
             const headers = _buildAuthHeaders({ 'Content-Type': 'application/json' }, 'POST', {
                 traceparent: sample.traceparent
             });
-            await fetch(`${API_BASE}/v1/portal/rum`, {
+            const res = await fetch(`${API_BASE}/v1/portal/rum`, {
                 method: 'POST',
                 headers,
                 body: JSON.stringify({
@@ -6522,6 +6662,9 @@ async function _flushQueuedPortalRumSamples(options = {}) {
                 }),
                 keepalive: keepalive || sample.keepalive
             });
+            if (res && !res.ok) {
+                await _maybeSuppressOnProtectedResponse('portal_rum', res);
+            }
         } catch {
             // best-effort telemetry only
         }
@@ -7640,6 +7783,7 @@ function syncRuntimeWorkerModeControls() {
 
 async function emitPortalEvent(eventType, options = {}) {
     if (!state.backendOk || !_isBootstrapReady()) return;
+    if (_isProtectedFamilySuppressed('portal_events')) return;
     const eventOptions = options && typeof options === 'object' ? options : {};
     const payload = {
         event_type: String(eventType || '').trim().toLowerCase(),
@@ -7651,11 +7795,14 @@ async function emitPortalEvent(eventType, options = {}) {
     };
     try {
         const headers = _buildAuthHeaders({ 'Content-Type': 'application/json' }, 'POST');
-        await fetch(`${API_BASE}/v1/portal/events`, {
+        const res = await fetch(`${API_BASE}/v1/portal/events`, {
             method: 'POST',
             headers,
             body: JSON.stringify(payload)
         });
+        if (res && !res.ok) {
+            await _maybeSuppressOnProtectedResponse('portal_events', res);
+        }
     } catch {
         // best-effort telemetry only
     }
@@ -7675,13 +7822,17 @@ async function fetchConfigMetadata(pipelineName = state.pipeline, silent = false
         renderReviewSurfaces();
         return;
     }
+    if (_isProtectedFamilySuppressed('config_metadata')) return;
     try {
         const headers = _buildAuthHeaders({ 'Accept': 'application/json' });
         const res = await fetch(`${API_BASE}/v1/config-metadata?pipeline=${encodeURIComponent(pipelineName)}`, {
             headers,
             cache: 'no-store'
         });
-        if (!res.ok) throw new Error(`config metadata fetch failed (${res.status})`);
+        if (!res.ok) {
+            await _maybeSuppressOnProtectedResponse('config_metadata', res);
+            throw new Error(`config metadata fetch failed (${res.status})`);
+        }
         const payload = await res.json();
         const data = payload?.success === true && payload?.data && typeof payload.data === 'object'
             ? payload.data
@@ -7732,6 +7883,10 @@ function _scheduleConfigPreviewServiceRetry() {
 }
 
 async function fetchConfigPreview(payload) {
+    if (_isProtectedFamilySuppressed('config_preview')) {
+        _clearConfigPreviewServiceRetry();
+        return;
+    }
     const currentPayload = payload && typeof payload === 'object' ? payload : generatePayload();
     const requestKey = _configPreviewRequestKey(currentPayload);
     const refreshPreviewDrivenSurfaces = (nextPayload = currentPayload) => {
@@ -7764,6 +7919,9 @@ async function fetchConfigPreview(payload) {
             headers,
             body: JSON.stringify(currentPayload)
         });
+        if (!res.ok) {
+            await _maybeSuppressOnProtectedResponse('config_preview', res);
+        }
         const response = await res.json();
         if (!res.ok) {
             const errorPayload = response?.error && typeof response.error === 'object' ? response.error : {};
@@ -8671,10 +8829,14 @@ function parsePresetsResponse(payload, pipelineName) {
 
 async function fetchPresetsForPipeline(pipelineName, silent = false) {
     if (!pipelineName || pipelineName !== 'lux-depth-v3' || !state.backendOk) return;
+    if (_isProtectedFamilySuppressed('presets')) return;
     try {
         const headers = _buildAuthHeaders({ 'Accept': 'application/json' });
         const res = await fetch(`${API_BASE}/v1/presets?pipeline=${encodeURIComponent(pipelineName)}`, { headers });
-        if (!res.ok) throw new Error(`preset fetch failed (${res.status})`);
+        if (!res.ok) {
+            await _maybeSuppressOnProtectedResponse('presets', res);
+            throw new Error(`preset fetch failed (${res.status})`);
+        }
         const payload = await res.json();
         const presets = parsePresetsResponse(payload, pipelineName)
             .filter((preset) => preset && typeof preset.name === 'string')
@@ -8705,10 +8867,14 @@ async function fetchPresetsForPipeline(pipelineName, silent = false) {
 
 async function fetchReadiness(silent = false) {
     if (!state.backendOk || !_isBootstrapReady()) return;
+    if (_isProtectedFamilySuppressed('readiness')) return;
     try {
         const headers = _buildAuthHeaders({ 'Accept': 'application/json' });
         const res = await fetch(`${API_BASE}/v1/readiness`, { headers });
-        if (!res.ok) throw new Error(`readiness fetch failed (${res.status})`);
+        if (!res.ok) {
+            await _maybeSuppressOnProtectedResponse('readiness', res);
+            throw new Error(`readiness fetch failed (${res.status})`);
+        }
         const payload = await res.json();
         if (!payload || payload.success !== true || !payload.data) throw new Error('invalid readiness payload');
         state.readiness = {

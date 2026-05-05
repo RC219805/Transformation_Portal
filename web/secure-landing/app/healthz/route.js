@@ -64,10 +64,12 @@ async function evaluateBackend(config) {
       required: true,
       configured: false,
       status: 503,
+      auth_status: 0,
       reason: "missing_backend_api_key"
     };
   }
 
+  let readyStatus;
   try {
     const upstream = await fetch(new URL("/ready", config.fastapiOrigin), {
       headers: {
@@ -76,22 +78,84 @@ async function evaluateBackend(config) {
       cache: "no-store",
       signal: AbortSignal.timeout(2000)
     });
-    return {
-      ok: upstream.ok,
-      required: true,
-      configured: true,
-      status: upstream.status,
-      reason: upstream.ok ? null : "backend_not_ready"
-    };
+    readyStatus = upstream.status;
+    if (!upstream.ok) {
+      return {
+        ok: false,
+        required: true,
+        configured: true,
+        status: readyStatus,
+        auth_status: 0,
+        reason: "backend_not_ready"
+      };
+    }
   } catch {
     return {
       ok: false,
       required: true,
       configured: true,
       status: 0,
+      auth_status: 0,
       reason: "backend_unreachable"
     };
   }
+
+  // Reachable + ready. Probe a protected endpoint to confirm the configured
+  // TP_BACKEND_API_KEY actually matches what the backend expects. A 401/403
+  // here means the keys have drifted — the visible 503 storm in the portal.
+  let authStatus;
+  try {
+    const probe = await fetch(
+      new URL("/v1/config-metadata?pipeline=lux-depth-v3", config.fastapiOrigin),
+      {
+        headers: {
+          Accept: "application/json",
+          "x-api-key": config.backendApiKey
+        },
+        cache: "no-store",
+        signal: AbortSignal.timeout(2000)
+      }
+    );
+    authStatus = probe.status;
+  } catch {
+    return {
+      ok: false,
+      required: true,
+      configured: true,
+      status: readyStatus,
+      auth_status: 0,
+      reason: "backend_unreachable"
+    };
+  }
+
+  if (authStatus === 401 || authStatus === 403) {
+    return {
+      ok: false,
+      required: true,
+      configured: true,
+      status: readyStatus,
+      auth_status: authStatus,
+      reason: "backend_auth_mismatch"
+    };
+  }
+  if (authStatus >= 500) {
+    return {
+      ok: false,
+      required: true,
+      configured: true,
+      status: readyStatus,
+      auth_status: authStatus,
+      reason: "backend_not_ready"
+    };
+  }
+  return {
+    ok: true,
+    required: true,
+    configured: true,
+    status: readyStatus,
+    auth_status: authStatus,
+    reason: null
+  };
 }
 
 export async function GET() {

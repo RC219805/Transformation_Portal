@@ -9,10 +9,10 @@
     "check:css-layer-parity": "node ./scripts/guard-runtime.mjs && node ./scripts/check-portal-css-layer-parity.mjs",
     "check:css-layer-dry-run": "npm run check:css-layer-parity --",
     "check:utility-ownership": "node ./scripts/guard-runtime.mjs && node ./scripts/check-portal-utility-ownership.mjs",
-    "dev": "npm run build:portal && node ./scripts/guard-runtime.mjs && next dev",
+    "dev": "npm run build:portal && node ./scripts/guard-runtime.mjs && node ./scripts/preflight-backend-auth.mjs && next dev",
     "build": "npm run build:portal && node ./scripts/guard-runtime.mjs && next build",
     "lint:css": "stylelint \"portal-src/styles/**/*.css\" && node ./scripts/build-portal-bundle.mjs --check-css && node ./scripts/check-portal-css-contract.mjs && node ./scripts/check-portal-css-architecture.mjs && node ./scripts/check-portal-utility-ownership.mjs",
-    "start": "node ./scripts/guard-runtime.mjs && node ./scripts/start-standalone.mjs",
+    "start": "node ./scripts/guard-runtime.mjs && node ./scripts/preflight-backend-auth.mjs && node ./scripts/start-standalone.mjs",
     "seed-frontdoor-user": "node ./scripts/guard-runtime.mjs && node ./scripts/seed-frontdoor-user.mjs",
     "test": "npm run build:portal && node ./scripts/guard-runtime.mjs && node --experimental-specifier-resolution=node --test tests/*.test.mjs",
     "test:coverage": "npm run build:portal && node ./scripts/guard-runtime.mjs && node --experimental-specifier-resolution=node --experimental-test-coverage --test-coverage-include=app/**/*.js --test-coverage-include=lib/**/*.js --test-coverage-exclude=app/**/page.js --test-coverage-exclude=app/**/layout.js --test-coverage-exclude=app/**/global-error.js --test-coverage-exclude=app/**/not-found.js --test-coverage-lines=45 --test-coverage-functions=45 --test tests/*.test.mjs"

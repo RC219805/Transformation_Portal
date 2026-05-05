@@ -3424,6 +3424,53 @@ test("healthz reports backend outages as degraded readiness", async () => {
   }
 });
 
+test("healthz reports backend_auth_mismatch when the protected probe returns 401", async () => {
+  const env = withTempEnvironment({
+    usersFileEntries: [
+      {
+        username: "admin",
+        password_hash: "hash",
+        access_email: "admin@example.com",
+        role: "admin"
+      }
+    ]
+  });
+
+  try {
+    const { GET } = await importFresh("../app/healthz/route.js");
+    const originalFetch = global.fetch;
+    global.fetch = async (input) => {
+      const url = String(input?.url || input);
+      if (url.includes("/v1/config-metadata")) {
+        return new Response(JSON.stringify({ error: "unauthorized" }), {
+          status: 401,
+          headers: { "content-type": "application/json" }
+        });
+      }
+      return new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { "content-type": "application/json" }
+      });
+    };
+
+    try {
+      const response = await GET();
+      const body = await response.json();
+
+      assert.equal(response.status, 503);
+      assert.equal(body.frontend, "degraded");
+      assert.equal(body.checks.backend.ok, false);
+      assert.equal(body.checks.backend.reason, "backend_auth_mismatch");
+      assert.equal(body.checks.backend.auth_status, 401);
+      assert.equal(body.checks.backend.status, 200);
+    } finally {
+      global.fetch = originalFetch;
+    }
+  } finally {
+    env.cleanup();
+  }
+});
+
 test("proxy does not redirect /login based only on cookie presence", async () => {
   const { proxy } = await importFresh("../proxy.js");
   const response = proxy(

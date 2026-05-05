@@ -24,6 +24,10 @@ export function createDeferredReviewSurfaceApi(host) {
     buildArtifactUrl,
     sanitizeManagedAssetUrl,
     artifactIsPreviewable,
+    artifactIsBrowserPreviewable,
+    artifactPreviewSrc,
+    _markArtifactUrlNotFound,
+    _isArtifactUrlKnownMissing,
     artifactLabel,
     artifactDisplayHint,
     artifactDisplayLabel,
@@ -232,6 +236,9 @@ export function createDeferredReviewSurfaceApi(host) {
         if (controller) fetchOptions.signal = controller.signal;
         const response = await fetch(context.url, fetchOptions);
         if (!response.ok) {
+          if (response.status === 404 && typeof _markArtifactUrlNotFound === "function") {
+            _markArtifactUrlNotFound(context.url);
+          }
           throw new Error(`artifact_preview_${response.status}`);
         }
         const objectUrl = URL.createObjectURL(await response.blob());
@@ -1083,28 +1090,48 @@ export function createDeferredReviewSurfaceApi(host) {
       els.artifactCompareStage.classList.toggle("hidden", !compareEnabled);
       els.artifactCompareStage.setAttribute("aria-hidden", compareEnabled ? "false" : "true");
     }
+    const selectedBrowserPreviewable = artifactIsBrowserPreviewable(selectedArtifact);
+    const compareBrowserPreviewable = artifactIsBrowserPreviewable(compareCandidate);
     if (els.artifactPreviewSoloImage) {
-      els.artifactPreviewSoloImage.classList.toggle("hidden", compareEnabled || !artifactIsPreviewable(selectedArtifact));
+      els.artifactPreviewSoloImage.classList.toggle("hidden", compareEnabled || !selectedBrowserPreviewable);
     }
     if (els.artifactMetadataCard) {
-      els.artifactMetadataCard.classList.toggle("hidden", artifactIsPreviewable(selectedArtifact) && !captioningEvidenceVisible);
+      els.artifactMetadataCard.classList.toggle("hidden", selectedBrowserPreviewable && !captioningEvidenceVisible);
     }
     if (compareEnabled && selectedArtifact && compareCandidate) {
+      const selectedPreviewSrc = artifactPreviewSrc(selected, selectedArtifact);
+      const comparePreviewSrc = artifactPreviewSrc(selected, compareCandidate);
       if (els.artifactPreviewImage) {
-        els.artifactPreviewImage.src = buildArtifactUrl(selected, selectedArtifact);
-        els.artifactPreviewImage.classList.remove("hidden");
+        if (selectedPreviewSrc && !_isArtifactUrlKnownMissing(selectedPreviewSrc)) {
+          els.artifactPreviewImage.src = selectedPreviewSrc;
+          els.artifactPreviewImage.classList.remove("hidden");
+        } else {
+          els.artifactPreviewImage.classList.add("hidden");
+          els.artifactPreviewImage.removeAttribute("src");
+        }
       }
       if (els.artifactPreviewPrimaryCaption) els.artifactPreviewPrimaryCaption.textContent = artifactLabel(selectedArtifact);
       if (els.artifactCompareImage) {
-        els.artifactCompareImage.src = buildArtifactUrl(selected, compareCandidate);
-        els.artifactCompareImage.classList.remove("hidden");
+        if (comparePreviewSrc && !_isArtifactUrlKnownMissing(comparePreviewSrc)) {
+          els.artifactCompareImage.src = comparePreviewSrc;
+          els.artifactCompareImage.classList.remove("hidden");
+        } else {
+          els.artifactCompareImage.classList.add("hidden");
+          els.artifactCompareImage.removeAttribute("src");
+        }
       }
       if (els.artifactCompareCaption) els.artifactCompareCaption.textContent = artifactLabel(compareCandidate);
       if (captioningEvidenceVisible) _renderArtifactMetadataCard(selected, selectedArtifact);
-    } else if (artifactIsPreviewable(selectedArtifact)) {
+    } else if (selectedBrowserPreviewable) {
+      const selectedPreviewSrc = artifactPreviewSrc(selected, selectedArtifact);
       if (els.artifactPreviewSoloImage) {
-        els.artifactPreviewSoloImage.src = buildArtifactUrl(selected, selectedArtifact);
-        els.artifactPreviewSoloImage.classList.remove("hidden");
+        if (selectedPreviewSrc && !_isArtifactUrlKnownMissing(selectedPreviewSrc)) {
+          els.artifactPreviewSoloImage.src = selectedPreviewSrc;
+          els.artifactPreviewSoloImage.classList.remove("hidden");
+        } else {
+          els.artifactPreviewSoloImage.classList.add("hidden");
+          els.artifactPreviewSoloImage.removeAttribute("src");
+        }
       }
       if (els.artifactPreviewImage) {
         els.artifactPreviewImage.classList.add("hidden");
@@ -1144,10 +1171,13 @@ export function createDeferredReviewSurfaceApi(host) {
         ? "rounded-2xl border border-cyan-300 dark:border-cyan-900/60 bg-cyan-50/90 dark:bg-cyan-900/20 p-3 text-left shadow-sm transition-colors"
         : "rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/50 p-3 text-left hover:bg-white/90 dark:hover:bg-slate-800/80 transition-colors";
 
-      if (artifactIsPreviewable(artifact)) {
+      const thumbPreviewSrc = artifactIsBrowserPreviewable(artifact)
+        ? artifactPreviewSrc(selected, artifact)
+        : "";
+      if (thumbPreviewSrc && !_isArtifactUrlKnownMissing(thumbPreviewSrc)) {
         const thumb = document.createElement("img");
         thumb.alt = artifactLabel(artifact);
-        thumb.src = buildArtifactUrl(selected, artifact);
+        thumb.src = thumbPreviewSrc;
         thumb.className = "h-24 w-full rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-900/60 object-cover";
         button.appendChild(thumb);
       } else {
@@ -1199,14 +1229,17 @@ export function createDeferredReviewSurfaceApi(host) {
       artifacts[0] ||
       null;
     const index = artifact ? artifacts.findIndex((candidate) => candidate.path === artifact.path) : -1;
-    const url = artifact ? sanitizeManagedAssetUrl(buildArtifactUrl(job, artifact)) : "";
+    const previewSrc = artifact ? artifactPreviewSrc(job, artifact) : "";
+    const downloadUrl = artifact ? sanitizeManagedAssetUrl(buildArtifactUrl(job, artifact)) : "";
+    const inlineUrl = previewSrc && !_isArtifactUrlKnownMissing(previewSrc) ? previewSrc : "";
     return {
       job,
       artifacts,
       artifact,
       index,
-      url,
-      inlinePreview: Boolean(artifact && artifactIsPreviewable(artifact) && url),
+      url: inlineUrl,
+      downloadUrl,
+      inlinePreview: Boolean(artifact && artifactIsBrowserPreviewable(artifact) && inlineUrl),
       zoomPercent: clamp(Number(viewerState.zoomPercent || 100), 50, 250)
     };
   }

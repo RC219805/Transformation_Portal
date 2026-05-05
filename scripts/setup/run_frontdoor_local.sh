@@ -39,6 +39,17 @@ ensure_command npm
 
 if [[ -z "${BACKEND_API_KEY}" ]]; then
   echo "Set TP_API_KEY or TP_BACKEND_API_KEY before starting the managed front door."
+  echo "Generate a canonical local env file with: ./scripts/dev/write_local_env.sh"
+  exit 1
+fi
+
+if [[ -n "${TP_API_KEY:-}" && -n "${TP_BACKEND_API_KEY:-}" \
+      && "${TP_API_KEY}" != "${TP_BACKEND_API_KEY}" ]]; then
+  echo "Refusing to start: TP_API_KEY (backend) and TP_BACKEND_API_KEY (frontdoor) differ."
+  echo "These must be equal so the frontdoor can authenticate to the backend."
+  echo "Source the canonical env file in both shells:"
+  echo "  source /tmp/tp-local-http-all-on.env"
+  echo "Or regenerate it: ./scripts/dev/write_local_env.sh --rotate"
   exit 1
 fi
 
@@ -74,6 +85,24 @@ if ! curl -fsS "${FASTAPI_ORIGIN}/ready" >/dev/null; then
   echo "FastAPI origin is not ready at ${FASTAPI_ORIGIN}/ready."
   echo "Start the backend first, then retry."
   exit 1
+fi
+
+# When run alongside scripts/dev/run_cloudflared.sh, the tunnel hostname is
+# written to a sentinel file. Append it to TP_TRUSTED_HOSTS so the FastAPI
+# Trusted-Host middleware does not reject proxied requests.
+CF_HOST_FILE="${TP_CLOUDFLARED_HOST_FILE:-/tmp/tp-cloudflared-host}"
+if [[ -r "${CF_HOST_FILE}" ]]; then
+  CF_HOSTNAME="$(head -n 1 "${CF_HOST_FILE}" | tr -d '[:space:]')"
+  if [[ -n "${CF_HOSTNAME}" ]]; then
+    if [[ -n "${TP_TRUSTED_HOSTS:-}" ]] \
+        && ! [[ ",${TP_TRUSTED_HOSTS}," == *",${CF_HOSTNAME},"* ]]; then
+      export TP_TRUSTED_HOSTS="${TP_TRUSTED_HOSTS},${CF_HOSTNAME}"
+      echo "Appended ${CF_HOSTNAME} to TP_TRUSTED_HOSTS."
+    elif [[ -z "${TP_TRUSTED_HOSTS:-}" ]]; then
+      export TP_TRUSTED_HOSTS="localhost,127.0.0.1,::1,testserver,${CF_HOSTNAME}"
+      echo "Set TP_TRUSTED_HOSTS to include ${CF_HOSTNAME}."
+    fi
+  fi
 fi
 
 export NODE_ENV=development

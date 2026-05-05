@@ -27,7 +27,7 @@ PHASE6_SMOKE_TESTS := \
 	tests/test_lux_render_pipeline_smoke.py \
 	tests/lux_depth_v3/test_orchestrator_smoke.py
 
-.PHONY: help test-fast test-novideo test-full test-integration test-structure test-utils test-orchestrator-contract test-orchestrator-http-contract test-portal-contract test-frontdoor-contract test-archive-gate-contract seed-frontdoor-user run-frontdoor-local validate-orchestrator-http validate-portal-lux-materials-live validate-portal-fastvlm-captioning-live validate-portal-css-layer-parity validate-portal-browser validate-frontdoor-browser validate-frontdoor-deployment-gate audit-pipeline-readiness coverage-fast-scope coverage-report coverage-diff coverage-package venv repair-core-venv setup clean \
+.PHONY: help test-fast test-novideo test-full test-integration test-structure test-utils test-orchestrator-contract test-orchestrator-http-contract test-portal-contract test-frontdoor-contract test-archive-gate-contract seed-frontdoor-user run-frontdoor-local run-backend-local run-backend-local-noreload dev-write-env dev-start dev-stop check-vercel-env validate-orchestrator-http validate-portal-lux-materials-live validate-portal-fastvlm-captioning-live validate-portal-css-layer-parity validate-portal-browser validate-frontdoor-browser validate-frontdoor-deployment-gate audit-pipeline-readiness coverage-fast-scope coverage-report coverage-diff coverage-package venv repair-core-venv setup clean \
         lint lint-parity ci ci-full pre-commit install-hooks quality-check fix-quality validate-ci organize-docs check-json-serialization check-piptools-cache \
         check-python-headers check-yaml-governance check-stale-docs check-doc-heading-links lock lock-prod lock-ci lock-dev install-core install-ml install-ml-core install-ml-raw install-ml-sam2 install-ml-coreml install-fastvlm-runtime check-fastvlm-runtime docs docs-clean \
         check check-test-markers check-ci-sync check-todo-governance check-environment check-portal-asset-budgets check-dependency-pinning validate-full validate-quick clean-frontdoor clean-all check-worktree \
@@ -310,6 +310,46 @@ seed-frontdoor-user:
 run-frontdoor-local:
 	@echo "Starting the canonical local managed frontdoor on localhost:3000..."
 	@./scripts/setup/run_frontdoor_local.sh
+
+run-backend-local:
+	@echo "Starting FastAPI backend on 127.0.0.1:8000 with scoped --reload..."
+	@if [ -z "$${TP_API_KEY:-}" ]; then \
+		echo "TP_API_KEY is not set. Run './scripts/dev/write_local_env.sh' and 'source /tmp/tp-local-http-all-on.env' first."; \
+		exit 1; \
+	fi
+	@"$(PY)" -m uvicorn app:app \
+		--host 127.0.0.1 --port 8000 --reload \
+		--reload-dir src --reload-dir app.py \
+		--reload-exclude '.runtime/*' \
+		--reload-exclude 'output/*' \
+		--reload-exclude 'tmp/*' \
+		--reload-exclude 'tests/*' \
+		--reload-exclude 'node_modules/*' \
+		--reload-exclude '.venv/*' \
+		--reload-exclude '.next/*' \
+		--reload-exclude 'web/secure-landing/.next/*' \
+		--reload-exclude 'web/secure-landing/node_modules/*'
+
+run-backend-local-noreload:
+	@echo "Starting FastAPI backend on 127.0.0.1:8000 (no reload)..."
+	@if [ -z "$${TP_API_KEY:-}" ]; then \
+		echo "TP_API_KEY is not set. Run './scripts/dev/write_local_env.sh' and 'source /tmp/tp-local-http-all-on.env' first."; \
+		exit 1; \
+	fi
+	@"$(PY)" -m uvicorn app:app --host 127.0.0.1 --port 8000
+
+dev-write-env:
+	@./scripts/dev/write_local_env.sh
+
+dev-stop:
+	@./scripts/dev/stop_local_stack.sh
+
+dev-start:
+	@./scripts/dev/start_local_stack.sh
+
+check-vercel-env:
+	@echo "Validating frontdoor Vercel/production environment variables..."
+	@"$(PY)" ./scripts/validation/check_frontdoor_vercel_env.py $${TP_VERCEL_ENV_FILE:+--env-file $${TP_VERCEL_ENV_FILE}} $${TP_VERCEL_ENV_PRODUCTION:+--production}
 
 validate-orchestrator-http:
 	@echo "Running live orchestrator HTTP smoke validation..."

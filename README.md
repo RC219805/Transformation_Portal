@@ -434,6 +434,9 @@ make validate-orchestrator-http
 make validate-portal-browser
 make validate-frontdoor-browser
 make run-frontdoor-local
+make run-backend-local
+make dev-start
+make dev-stop
 make audit-pipeline-readiness
 ```
 
@@ -444,8 +447,14 @@ Readiness and validation tiers:
 - `make validate-orchestrator-http` runs the live backend smoke against a running FastAPI origin.
 - `make validate-portal-browser` launches an isolated local backend, then runs the live portal browser smoke and fails early if `/v1/config-preview` cannot authenticate or validate.
 - `make validate-frontdoor-browser` launches isolated local backend and managed front-door runtimes, auto-seeds the canonical local smoke credentials for that ephemeral runtime, and then runs the live browser smoke against the managed proof setup.
-- `make run-frontdoor-local` starts the canonical managed front door on `http://localhost:3000`, auto-seeds the same canonical local user fixture when no explicit frontdoor user source is configured, and refuses to fall back to `:3001`.
+- `make run-frontdoor-local` starts the canonical managed front door on `http://localhost:3000`, auto-seeds the same canonical local user fixture when no explicit frontdoor user source is configured, and refuses to fall back to `:3001`. The startup preflight (`scripts/preflight-backend-auth.mjs`) probes `/v1/config-metadata` with `TP_BACKEND_API_KEY` and refuses to start on 401/403.
+- `make run-backend-local` starts the FastAPI backend on `127.0.0.1:8000` with `--reload` boundaries that exclude `.runtime/`, `output/`, `tmp/`, `tests/`, and `node_modules/` so pipeline runtime writes do not trigger restarts mid-job.
+- `make dev-start` / `make dev-stop` orchestrate the full local stack (env file → backend → readiness wait → frontdoor) and tear it down. See `docs/operations/local_dev.md`.
 - `make audit-pipeline-readiness` runs the safe local four-pipeline readiness audit and reports `ready` / `degraded` / `blocked` outcomes, including separate `lux-depth-v3` base vs canary status.
+
+Configuration coherency:
+- Use `./scripts/dev/write_local_env.sh` to generate `/tmp/tp-local-http-all-on.env` with `TP_API_KEY` and `TP_BACKEND_API_KEY` bound to the same value; source it in any shell that runs the backend or the frontdoor.
+- For Vercel/production: `make check-vercel-env TP_VERCEL_ENV_FILE=...` validates that all required environment variables are present per `docs/operations/frontdoor_vercel_env.md`.
 
 Direct pytest examples:
 ```bash
