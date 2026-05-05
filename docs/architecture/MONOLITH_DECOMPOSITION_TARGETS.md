@@ -162,6 +162,25 @@ Track here but do **not** promote above the top 3 until at least target 1 ships 
 
 ---
 
+## Seam status table
+
+This table is the canonical progress ledger for extraction PRs that draw from the ranked targets above. Update the row for the shipped seam only; ranking changes require a separate governance refresh.
+
+| Seam | Source module | Destination | Status | Latest evidence |
+|---|---|---|---|---|
+| Target 1A — Config fingerprint helpers | `lux_depth_v3/orchestrator.py` | `lux_depth_v3/config_resolver.py` | Not started | Ranked 2026-05-04 |
+| Target 1B — Artifact reload / coercion helpers | `lux_depth_v3/orchestrator.py` | `lux_depth_v3/artifact_manager.py` | Not started | Ranked 2026-05-04 |
+| Target 1C — Backend resolution & state | `lux_depth_v3/orchestrator.py` | `lux_depth_v3/execution_engine.py` | Not started | Ranked 2026-05-04 |
+| Target 2A — Portal asset bundle | `app.py` | `src/transformation_portal/portal/asset_bundle.py` | Not started | Ranked 2026-05-04 |
+| Target 3A — Segmentation cache helpers | `lux_depth_v3/segmentation_backend.py` | `lux_depth_v3/segmentation/_cache.py` | Not started | Ranked 2026-05-04 |
+| Target 3B — Stub backend | `lux_depth_v3/segmentation_backend.py` | `lux_depth_v3/segmentation/stub.py` | Not started | Ranked 2026-05-04 |
+| Target 3C — EfficientSAM backend | `lux_depth_v3/segmentation_backend.py` | `lux_depth_v3/segmentation/efficient_sam.py` | Not started | Ranked 2026-05-04 |
+| Target 3D — SAM2 backend | `lux_depth_v3/segmentation_backend.py` | `lux_depth_v3/segmentation/sam2.py` | Not started | Ranked 2026-05-04 |
+| Target 3E — SAM ViT-H backend | `lux_depth_v3/segmentation_backend.py` | `lux_depth_v3/segmentation/sam_vit_h.py` | Not started | Ranked 2026-05-04 |
+| Target 3F — Segmentation registry | `lux_depth_v3/segmentation_backend.py` | `lux_depth_v3/segmentation/registry.py` | Not started | Ranked 2026-05-04 |
+
+---
+
 ## Process — extraction PRs draw from this list
 
 1. Pick a single seam from §"Top 3 Targets". Open a small PR titled `refactor(<area>): extract <seam> per ADR-045`.

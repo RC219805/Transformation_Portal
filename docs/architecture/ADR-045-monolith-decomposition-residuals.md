@@ -55,7 +55,7 @@ A decomposition PR claiming this ADR **must**:
 5. **Keep imports acyclic.** Use `TYPE_CHECKING` guards if a circular type reference appears; never solve a cycle by re-merging modules.
 6. **Preserve lazy-import discipline.** Heavy ML imports must remain lazy in the new module — the CLAUDE.md "lazy imports are mandatory" rule still applies.
 7. **Run governance gates clean:** `python scripts/validation/scan_todo_inventory.py --check-governance`, `make check-json-serialization check-yaml-governance check-python-headers`, plus the per-target verification commands listed in the targets doc.
-8. **Cite this ADR and update the targets-doc status table** in the PR description.
+8. **Cite this ADR in the PR description and update the corresponding row in the targets-doc status table.**
 
 ### Out of scope (binding)
 
