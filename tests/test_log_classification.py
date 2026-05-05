@@ -24,9 +24,7 @@ def isolated_logger() -> logging.Logger:
 
 
 def _emit(logger: logging.Logger, message: str) -> logging.LogRecord:
-    record = logger.makeRecord(
-        logger.name, logging.INFO, __file__, 0, message, args=None, exc_info=None
-    )
+    record = logger.makeRecord(logger.name, logging.INFO, __file__, 0, message, args=None, exc_info=None)
     return record
 
 
@@ -55,9 +53,7 @@ def test_install_filter_keeps_failed_healthcheck_lines(
 
 
 @pytest.mark.unit
-def test_install_filter_keeps_non_healthcheck_lines(
-    monkeypatch: pytest.MonkeyPatch, isolated_logger: logging.Logger
-) -> None:
+def test_install_filter_keeps_non_healthcheck_lines(monkeypatch: pytest.MonkeyPatch, isolated_logger: logging.Logger) -> None:
     monkeypatch.setenv("TP_LOG_HEALTHCHECKS", "0")
     install_healthcheck_log_filter(logger_name=isolated_logger.name)
     record = _emit(isolated_logger, '127.0.0.1 - "GET /v1/jobs HTTP/1.1" 200')
@@ -66,9 +62,7 @@ def test_install_filter_keeps_non_healthcheck_lines(
 
 
 @pytest.mark.unit
-def test_install_filter_default_keeps_everything(
-    monkeypatch: pytest.MonkeyPatch, isolated_logger: logging.Logger
-) -> None:
+def test_install_filter_default_keeps_everything(monkeypatch: pytest.MonkeyPatch, isolated_logger: logging.Logger) -> None:
     monkeypatch.delenv("TP_LOG_HEALTHCHECKS", raising=False)
     installed = install_healthcheck_log_filter(logger_name=isolated_logger.name)
     assert installed is False

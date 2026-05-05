@@ -57,9 +57,7 @@ class _SuccessfulHealthcheckFilter(logging.Filter):
         # We do not want to over-engineer the parser — falling back to keeping
         # the line on any uncertainty preserves visibility.
         path_alt = "|".join(re.escape(p.rstrip("/")) for p in paths)
-        self._pattern = re.compile(
-            r'"\s*(?:GET|HEAD)\s+(?:' + path_alt + r')(?:[?\s][^"]*)?"\s+(\d{3})'
-        )
+        self._pattern = re.compile(r'"\s*(?:GET|HEAD)\s+(?:' + path_alt + r')(?:[?\s][^"]*)?"\s+(\d{3})')
 
     def filter(self, record: logging.LogRecord) -> bool:  # noqa: D401 - logging API
         try:
