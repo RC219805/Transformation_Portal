@@ -1,0 +1,243 @@
+{
+  "summary": {
+    "total": 25,
+    "ungoverned": 0,
+    "files_scanned": 1492,
+    "by_type": {
+      "NotImplementedError": 25
+    }
+  },
+  "items": [
+    {
+      "path": "scripts/apex_verify_contract.py",
+      "lineno": 42,
+      "col_offset": 8,
+      "type": "NotImplementedError",
+      "message": "(no message)",
+      "has_governance_ref": true,
+      "governance_refs": []
+    },
+    {
+      "path": "scripts/pipelines/tiff_enhancement_pipeline.py",
+      "lineno": 157,
+      "col_offset": 8,
+      "type": "NotImplementedError",
+      "message": "(no message)",
+      "has_governance_ref": true,
+      "governance_refs": []
+    },
+    {
+      "path": "scripts/pipelines/unified_meta_pipeline.py",
+      "lineno": 171,
+      "col_offset": 8,
+      "type": "NotImplementedError",
+      "message": "(no message)",
+      "has_governance_ref": true,
+      "governance_refs": []
+    },
+    {
+      "path": "scripts/utilities/depth_anything_v2.py",
+      "lineno": 167,
+      "col_offset": 12,
+      "type": "NotImplementedError",
+      "message": "(no message)",
+      "has_governance_ref": true,
+      "governance_refs": []
+    },
+    {
+      "path": "src/transformation_portal/comfyui/custom_nodes.py",
+      "lineno": 62,
+      "col_offset": 8,
+      "type": "NotImplementedError",
+      "message": "(no message)",
+      "has_governance_ref": true,
+      "governance_refs": []
+    },
+    {
+      "path": "src/transformation_portal/comfyui/custom_nodes.py",
+      "lineno": 68,
+      "col_offset": 8,
+      "type": "NotImplementedError",
+      "message": "(no message)",
+      "has_governance_ref": true,
+      "governance_refs": []
+    },
+    {
+      "path": "src/transformation_portal/comfyui/custom_nodes.py",
+      "lineno": 73,
+      "col_offset": 8,
+      "type": "NotImplementedError",
+      "message": "(no message)",
+      "has_governance_ref": true,
+      "governance_refs": []
+    },
+    {
+      "path": "src/transformation_portal/depth/models/depth_anything_v2.py",
+      "lineno": 369,
+      "col_offset": 12,
+      "type": "NotImplementedError",
+      "message": "(no message)",
+      "has_governance_ref": true,
+      "governance_refs": []
+    },
+    {
+      "path": "src/transformation_portal/depth/processors/base.py",
+      "lineno": 38,
+      "col_offset": 8,
+      "type": "NotImplementedError",
+      "message": "Subclass must implement process()",
+      "has_governance_ref": true,
+      "governance_refs": []
+    },
+    {
+      "path": "src/transformation_portal/depth/processors/base.py",
+      "lineno": 49,
+      "col_offset": 8,
+      "type": "NotImplementedError",
+      "message": "Subclass must implement _get_config_params()",
+      "has_governance_ref": true,
+      "governance_refs": []
+    },
+    {
+      "path": "src/transformation_portal/execution_graph/nodes/base.py",
+      "lineno": 76,
+      "col_offset": 8,
+      "type": "NotImplementedError",
+      "message": "Subclasses must implement run()",
+      "has_governance_ref": true,
+      "governance_refs": []
+    },
+    {
+      "path": "src/transformation_portal/spatial_ai/orchestration/pipeline.py",
+      "lineno": 1772,
+      "col_offset": 12,
+      "type": "NotImplementedError",
+      "message": "3D reconstruction requires multi-view input. Single-view reconstruction is not yet implemented. (TODO_INVENTORY.md) Use SceneBuilder directly with multiple views for 3DGS.",
+      "has_governance_ref": true,
+      "governance_refs": [
+        "(TODO_INVENTORY.md)"
+      ]
+    },
+    {
+      "path": "src/transformation_portal/spatial_ai/reconstruction/gaussian_backend.py",
+      "lineno": 261,
+      "col_offset": 8,
+      "type": "NotImplementedError",
+      "message": "(no message)",
+      "has_governance_ref": true,
+      "governance_refs": []
+    },
+    {
+      "path": "src/transformation_portal/spatial_ai/reconstruction/scene_builder.py",
+      "lineno": 262,
+      "col_offset": 12,
+      "type": "NotImplementedError",
+      "message": "(no message)",
+      "has_governance_ref": true,
+      "governance_refs": []
+    },
+    {
+      "path": "src/transformation_portal/utils/security.py",
+      "lineno": 418,
+      "col_offset": 8,
+      "type": "NotImplementedError",
+      "message": "timeout() requires signal.SIGALRM (Unix-only). (TODO_INVENTORY.md \u00a72.4) Use multiprocessing or threading-based timeout on Windows.",
+      "has_governance_ref": true,
+      "governance_refs": [
+        "(TODO_INVENTORY.md \u00a72.4)"
+      ]
+    },
+    {
+      "path": "tests/spatial_ai/materials/test_protocol_validation.py",
+      "lineno": 30,
+      "col_offset": 8,
+      "type": "NotImplementedError",
+      "message": "(no message)",
+      "has_governance_ref": true,
+      "governance_refs": []
+    },
+    {
+      "path": "tests/spatial_ai/materials/test_protocol_validation.py",
+      "lineno": 58,
+      "col_offset": 8,
+      "type": "NotImplementedError",
+      "message": "(no message)",
+      "has_governance_ref": true,
+      "governance_refs": []
+    },
+    {
+      "path": "tests/unit/depth/test_depth_protocol.py",
+      "lineno": 284,
+      "col_offset": 16,
+      "type": "NotImplementedError",
+      "message": "(no message)",
+      "has_governance_ref": true,
+      "governance_refs": []
+    },
+    {
+      "path": "tests/unit/depth/test_depth_protocol.py",
+      "lineno": 307,
+      "col_offset": 16,
+      "type": "NotImplementedError",
+      "message": "(no message)",
+      "has_governance_ref": true,
+      "governance_refs": []
+    },
+    {
+      "path": "tests/unit/depth/test_depth_protocol.py",
+      "lineno": 327,
+      "col_offset": 16,
+      "type": "NotImplementedError",
+      "message": "(no message)",
+      "has_governance_ref": true,
+      "governance_refs": []
+    },
+    {
+      "path": "tests/unit/depth/test_depth_protocol.py",
+      "lineno": 391,
+      "col_offset": 16,
+      "type": "NotImplementedError",
+      "message": "(no message)",
+      "has_governance_ref": true,
+      "governance_refs": []
+    },
+    {
+      "path": "tests/unit/depth/test_depth_protocol.py",
+      "lineno": 413,
+      "col_offset": 16,
+      "type": "NotImplementedError",
+      "message": "(no message)",
+      "has_governance_ref": true,
+      "governance_refs": []
+    },
+    {
+      "path": "tests/unit/depth/test_depth_protocol.py",
+      "lineno": 450,
+      "col_offset": 16,
+      "type": "NotImplementedError",
+      "message": "(no message)",
+      "has_governance_ref": true,
+      "governance_refs": []
+    },
+    {
+      "path": "tests/unit/depth/test_depth_protocol.py",
+      "lineno": 472,
+      "col_offset": 16,
+      "type": "NotImplementedError",
+      "message": "(no message)",
+      "has_governance_ref": true,
+      "governance_refs": []
+    },
+    {
+      "path": "tests/unit/depth/test_depth_protocol.py",
+      "lineno": 526,
+      "col_offset": 16,
+      "type": "NotImplementedError",
+      "message": "(no message)",
+      "has_governance_ref": true,
+      "governance_refs": []
+    }
+  ],
+  "errors": [],
+  "governance_compliant": true
+}

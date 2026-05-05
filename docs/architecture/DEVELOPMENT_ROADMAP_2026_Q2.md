@@ -204,6 +204,8 @@ Prevent new feature logic from accumulating in `orchestrator.py` and continue mo
 **Secondary indicator (directional):**
 Reduce `orchestrator.py` by **~200 LOC per quarter** or document why the ratchet is infeasible.
 
+**Target list:** Specific seam candidates for `orchestrator.py` (and other monoliths) live in [MONOLITH_DECOMPOSITION_TARGETS.md](MONOLITH_DECOMPOSITION_TARGETS.md); pattern is governed by [ADR-045](ADR-045-monolith-decomposition-residuals.md).
+
 **Effort:** 4–8 hours ongoing per quarter
 **Owner:** Architect (review) + Specialist (implementation)
 
