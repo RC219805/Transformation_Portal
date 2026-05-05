@@ -1,5 +1,12 @@
 """Internal modules for the 4K rendering pipeline decomposition."""
 
+from .stages import (
+    apply_color_grading,
+    apply_material_response,
+    apply_tone_mapping,
+    apply_upscaling,
+    estimate_depth_simple,
+)
 from .types import (
     STAGE_NAMES,
     AIEnhancementConfig,
@@ -36,4 +43,9 @@ __all__ = [
     "ToneMappingConfig",
     "ToneMappingMethod",
     "UpscalingConfig",
+    "apply_color_grading",
+    "apply_material_response",
+    "apply_tone_mapping",
+    "apply_upscaling",
+    "estimate_depth_simple",
 ]
