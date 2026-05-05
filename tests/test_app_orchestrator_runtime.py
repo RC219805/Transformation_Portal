@@ -738,10 +738,11 @@ def test_portal_asset_manifest_rejects_paths_outside_portal_assets_dir(
         encoding="utf-8",
     )
     monkeypatch.setattr(orchestrator_app, "PORTAL_ASSET_MANIFEST_PATH", manifest_path)
-    monkeypatch.setattr(portal_asset_bundle, "PORTAL_ASSET_MANIFEST_PATH", manifest_path)
 
     with pytest.raises(RuntimeError, match="points outside"):
         orchestrator_app._load_portal_asset_manifest()
+
+    assert portal_asset_bundle.PORTAL_ASSET_MANIFEST_PATH != manifest_path
 
 
 def test_portal_html_asset_references_are_covered_by_manifest() -> None:

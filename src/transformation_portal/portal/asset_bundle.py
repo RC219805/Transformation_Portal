@@ -7,10 +7,11 @@ import hmac
 import json
 import os
 import re
+from collections.abc import Callable, Iterator, Mapping
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
-from typing import Dict, Mapping, Tuple
+from typing import Dict, Generic, Tuple, TypeVar
 from urllib.parse import quote
 
 from starlette.requests import Request
@@ -39,6 +40,7 @@ __all__ = [
     "_build_portal_css_asset",
     "_build_portal_direct_asset_fingerprint",
     "_fingerprint_bytes",
+    "_get_portal_asset_manifest",
     "_get_portal_asset_bundle",
     "_get_portal_css_asset",
     "_get_portal_direct_asset_fingerprint",
@@ -57,6 +59,31 @@ __all__ = [
     "_render_portal_template",
     "_requested_portal_asset_fingerprint",
 ]
+
+_T = TypeVar("_T")
+
+
+class _LazyPortalAssetMapping(Mapping[str, _T], Generic[_T]):
+    def __init__(self, loader: Callable[[], Dict[str, _T]]) -> None:
+        self._loader = loader
+
+    def _data(self) -> Dict[str, _T]:
+        return self._loader()
+
+    def __getitem__(self, key: str) -> _T:
+        return self._data()[key]
+
+    def __iter__(self) -> Iterator[str]:
+        return iter(self._data())
+
+    def __len__(self) -> int:
+        return len(self._data())
+
+    def __repr__(self) -> str:
+        return repr(self._data())
+
+    def __eq__(self, other: object) -> bool:
+        return self._data() == other
 
 
 @dataclass(frozen=True)
@@ -117,9 +144,20 @@ PORTAL_HTML_TEMPLATE_TOKENS = {
 }
 
 
-def _load_portal_asset_manifest() -> Dict[str, PortalAssetSpec]:
+def _load_portal_asset_manifest(
+    *,
+    manifest_path: Path | None = None,
+    repo_root: Path | None = None,
+    assets_dir_real: Path | None = None,
+    assets_dir: Path | None = None,
+) -> Dict[str, PortalAssetSpec]:
+    manifest_path = PORTAL_ASSET_MANIFEST_PATH if manifest_path is None else manifest_path
+    repo_root = REPO_ROOT if repo_root is None else repo_root
+    assets_dir_real = PORTAL_ASSETS_DIR_REAL if assets_dir_real is None else assets_dir_real
+    assets_dir = PORTAL_ASSETS_DIR if assets_dir is None else assets_dir
+
     try:
-        raw_manifest = json.loads(PORTAL_ASSET_MANIFEST_PATH.read_text(encoding="utf-8"))
+        raw_manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
         raise RuntimeError(f"Unable to load portal asset manifest: {exc}") from exc
 
@@ -139,20 +177,56 @@ def _load_portal_asset_manifest() -> Dict[str, PortalAssetSpec]:
         if not repo_path or not media_type:
             raise RuntimeError(f"Portal asset manifest entry for {asset_name!r} is incomplete")
 
-        resolved_path = Path(os.path.realpath(REPO_ROOT / repo_path))
+        resolved_path = Path(os.path.realpath(repo_root / repo_path))
         try:
-            resolved_path.relative_to(PORTAL_ASSETS_DIR_REAL)
+            resolved_path.relative_to(assets_dir_real)
         except ValueError as exc:
-            raise RuntimeError(f"Portal asset manifest entry for {asset_name!r} points outside {PORTAL_ASSETS_DIR}") from exc
+            raise RuntimeError(f"Portal asset manifest entry for {asset_name!r} points outside {assets_dir}") from exc
 
         manifest[asset_name] = PortalAssetSpec(path=resolved_path, media_type=media_type)
 
     return manifest
 
 
-PORTAL_ASSET_MANIFEST = _load_portal_asset_manifest()
-PORTAL_ASSET_PATHS = {name: asset.path for name, asset in PORTAL_ASSET_MANIFEST.items()}
-PORTAL_ASSET_MEDIA_TYPES = {name: asset.media_type for name, asset in PORTAL_ASSET_MANIFEST.items()}
+def _portal_asset_manifest_cache_key() -> Tuple[str, str, str, str]:
+    return (
+        str(PORTAL_ASSET_MANIFEST_PATH),
+        str(REPO_ROOT),
+        str(PORTAL_ASSETS_DIR_REAL),
+        str(PORTAL_ASSETS_DIR),
+    )
+
+
+@lru_cache(maxsize=8)
+def _load_portal_asset_manifest_cached(
+    manifest_path: str,
+    repo_root: str,
+    assets_dir_real: str,
+    assets_dir: str,
+) -> Dict[str, PortalAssetSpec]:
+    return _load_portal_asset_manifest(
+        manifest_path=Path(manifest_path),
+        repo_root=Path(repo_root),
+        assets_dir_real=Path(assets_dir_real),
+        assets_dir=Path(assets_dir),
+    )
+
+
+def _get_portal_asset_manifest() -> Dict[str, PortalAssetSpec]:
+    return _load_portal_asset_manifest_cached(*_portal_asset_manifest_cache_key())
+
+
+def _get_portal_asset_paths() -> Dict[str, Path]:
+    return {name: asset.path for name, asset in _get_portal_asset_manifest().items()}
+
+
+def _get_portal_asset_media_types() -> Dict[str, str]:
+    return {name: asset.media_type for name, asset in _get_portal_asset_manifest().items()}
+
+
+PORTAL_ASSET_MANIFEST = _LazyPortalAssetMapping(_get_portal_asset_manifest)
+PORTAL_ASSET_PATHS = _LazyPortalAssetMapping(_get_portal_asset_paths)
+PORTAL_ASSET_MEDIA_TYPES = _LazyPortalAssetMapping(_get_portal_asset_media_types)
 
 
 def _portal_asset_signature(path: Path) -> Tuple[str, int, int]:

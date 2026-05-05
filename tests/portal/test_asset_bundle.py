@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
 
 import pytest
 from starlette.requests import Request
@@ -50,6 +51,18 @@ def test_load_portal_asset_manifest_rejects_paths_outside_assets_dir(
 
     with pytest.raises(RuntimeError, match="points outside"):
         asset_bundle._load_portal_asset_manifest()
+
+
+def test_portal_asset_manifest_exports_load_lazily_until_access(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(asset_bundle, "PORTAL_ASSET_MANIFEST_PATH", tmp_path / "missing-manifest.json")
+    asset_bundle._load_portal_asset_manifest_cached.cache_clear()
+
+    assert isinstance(asset_bundle.PORTAL_ASSET_MANIFEST, Mapping)
+    with pytest.raises(RuntimeError, match="Unable to load portal asset manifest"):
+        len(asset_bundle.PORTAL_ASSET_MANIFEST)
 
 
 def test_render_portal_template_rejects_missing_required_token() -> None:

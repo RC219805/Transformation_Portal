@@ -21,7 +21,7 @@ import time
 import uuid
 from bisect import bisect_left
 from collections import deque
-from contextlib import asynccontextmanager, suppress
+from contextlib import asynccontextmanager, contextmanager, suppress
 from dataclasses import dataclass
 from dataclasses import field as dataclass_field
 from email.parser import BytesParser
@@ -67,6 +67,7 @@ from transformation_portal.ingest.upload_staging import (
 )
 from transformation_portal.lux_depth_v3.model_registry import resolve_model_spec, resolve_registry_key, visible_cli_model_specs
 from transformation_portal.lux_depth_v3.run_card_contract import infer_run_card_version
+from transformation_portal.portal import asset_bundle as _portal_asset_bundle
 from transformation_portal.portal.asset_bundle import (
     PORTAL_ASSETS_DIR,
     PORTAL_ASSETS_DIR_REAL,
@@ -86,27 +87,6 @@ from transformation_portal.portal.asset_bundle import (
     PortalAssetBundle,
     PortalAssetSpec,
     PortalRenderedTextAsset,
-    _build_portal_asset_bundle,
-    _build_portal_css_asset,
-    _build_portal_direct_asset_fingerprint,
-    _fingerprint_bytes,
-    _get_portal_asset_bundle,
-    _get_portal_css_asset,
-    _get_portal_direct_asset_fingerprint,
-    _load_portal_asset_manifest,
-    _portal_asset_cache_control,
-    _portal_asset_etag,
-    _portal_asset_not_modified_response,
-    _portal_asset_request_etag_matches,
-    _portal_asset_route_path,
-    _portal_asset_signature,
-    _portal_asset_versioned_url,
-    _portal_css_dependency_asset_names,
-    _portal_css_signature,
-    _portal_direct_asset_signature,
-    _portal_html_signature,
-    _render_portal_template,
-    _requested_portal_asset_fingerprint,
 )
 from transformation_portal.vlm_captioning.fastvlm_runtime import (
     FASTVLM_CHECKPOINT_DIRS,
@@ -282,6 +262,150 @@ def _portal_fastvlm_captioning_enabled(actor: Optional[Mapping[str, Any]] = None
 REPO_ROOT = Path(__file__).resolve().parent
 PORTAL_VIDEO_ASSET_NAME = "dna-portal-video-2.mp4"
 PORTAL_VIDEO_PATH = REPO_ROOT / "public" / "video" / PORTAL_VIDEO_ASSET_NAME
+
+_PORTAL_ASSET_BUNDLE_APP_GLOBALS = (
+    "REPO_ROOT",
+    "PORTAL_HTML",
+    "PORTAL_ASSETS_DIR",
+    "PORTAL_ASSETS_DIR_REAL",
+    "PORTAL_ASSET_MANIFEST_PATH",
+    "PORTAL_ASSET_CACHE_CONTROL",
+    "PORTAL_IMMUTABLE_ASSET_CACHE_CONTROL",
+    "PORTAL_ASSET_FINGERPRINT_PARAM",
+    "PORTAL_ASSET_FINGERPRINT_LENGTH",
+    "PORTAL_CSS_TEMPLATE_PATH",
+    "PORTAL_DIRECT_FINGERPRINT_ASSET_NAMES",
+    "PORTAL_CSS_TEMPLATE_TOKENS",
+    "PORTAL_HTML_TEMPLATE_TOKENS",
+    "PORTAL_ASSET_MANIFEST",
+    "PORTAL_ASSET_PATHS",
+    "PORTAL_ASSET_MEDIA_TYPES",
+)
+
+
+@contextmanager
+def _portal_asset_bundle_app_context():
+    saved = {name: getattr(_portal_asset_bundle, name) for name in _PORTAL_ASSET_BUNDLE_APP_GLOBALS}
+    try:
+        for name in _PORTAL_ASSET_BUNDLE_APP_GLOBALS:
+            setattr(_portal_asset_bundle, name, globals()[name])
+        yield
+    finally:
+        for name, value in saved.items():
+            setattr(_portal_asset_bundle, name, value)
+
+
+def _copy_portal_cache_api(wrapper: Callable[..., Any], cached: Callable[..., Any]) -> None:
+    for attr_name in ("cache_clear", "cache_info", "cache_parameters"):
+        if hasattr(cached, attr_name):
+            setattr(wrapper, attr_name, getattr(cached, attr_name))
+
+
+def _load_portal_asset_manifest() -> Dict[str, PortalAssetSpec]:
+    with _portal_asset_bundle_app_context():
+        return _portal_asset_bundle._load_portal_asset_manifest()
+
+
+def _portal_asset_signature(path: Path) -> Tuple[str, int, int]:
+    return _portal_asset_bundle._portal_asset_signature(path)
+
+
+def _fingerprint_bytes(payload: bytes) -> str:
+    return _portal_asset_bundle._fingerprint_bytes(payload)
+
+
+def _portal_asset_route_path(asset_name: str) -> str:
+    with _portal_asset_bundle_app_context():
+        return _portal_asset_bundle._portal_asset_route_path(asset_name)
+
+
+def _portal_asset_versioned_url(asset_name: str, fingerprint: str) -> str:
+    with _portal_asset_bundle_app_context():
+        return _portal_asset_bundle._portal_asset_versioned_url(asset_name, fingerprint)
+
+
+def _render_portal_template(template_text: str, replacements: Mapping[str, str], *, template_name: str) -> str:
+    return _portal_asset_bundle._render_portal_template(template_text, replacements, template_name=template_name)
+
+
+def _portal_direct_asset_signature(asset_name: str) -> Tuple[str, int, int]:
+    with _portal_asset_bundle_app_context():
+        return _portal_asset_bundle._portal_direct_asset_signature(asset_name)
+
+
+def _build_portal_direct_asset_fingerprint(asset_name: str, signature: Tuple[str, int, int]) -> str:
+    with _portal_asset_bundle_app_context():
+        return _portal_asset_bundle._build_portal_direct_asset_fingerprint(asset_name, signature)
+
+
+def _get_portal_direct_asset_fingerprint(asset_name: str) -> str:
+    with _portal_asset_bundle_app_context():
+        return _portal_asset_bundle._get_portal_direct_asset_fingerprint(asset_name)
+
+
+def _portal_css_dependency_asset_names() -> Tuple[str, ...]:
+    with _portal_asset_bundle_app_context():
+        return _portal_asset_bundle._portal_css_dependency_asset_names()
+
+
+def _portal_css_signature() -> Tuple[object, ...]:
+    with _portal_asset_bundle_app_context():
+        return _portal_asset_bundle._portal_css_signature()
+
+
+def _build_portal_css_asset(signature: Tuple[object, ...]) -> PortalRenderedTextAsset:
+    with _portal_asset_bundle_app_context():
+        return _portal_asset_bundle._build_portal_css_asset(signature)
+
+
+def _get_portal_css_asset() -> PortalRenderedTextAsset:
+    with _portal_asset_bundle_app_context():
+        return _portal_asset_bundle._get_portal_css_asset()
+
+
+def _portal_html_signature() -> Tuple[object, ...]:
+    with _portal_asset_bundle_app_context():
+        return _portal_asset_bundle._portal_html_signature()
+
+
+def _build_portal_asset_bundle(signature: Tuple[object, ...]) -> PortalAssetBundle:
+    with _portal_asset_bundle_app_context():
+        return _portal_asset_bundle._build_portal_asset_bundle(signature)
+
+
+def _get_portal_asset_bundle() -> PortalAssetBundle:
+    with _portal_asset_bundle_app_context():
+        return _portal_asset_bundle._get_portal_asset_bundle()
+
+
+def _requested_portal_asset_fingerprint(request: Request) -> str:
+    with _portal_asset_bundle_app_context():
+        return _portal_asset_bundle._requested_portal_asset_fingerprint(request)
+
+
+def _portal_asset_cache_control(current_fingerprint: str, requested_fingerprint: str) -> str:
+    with _portal_asset_bundle_app_context():
+        return _portal_asset_bundle._portal_asset_cache_control(current_fingerprint, requested_fingerprint)
+
+
+def _portal_asset_etag(fingerprint: str) -> str:
+    with _portal_asset_bundle_app_context():
+        return _portal_asset_bundle._portal_asset_etag(fingerprint)
+
+
+def _portal_asset_request_etag_matches(request: Request, current_etag: str) -> bool:
+    with _portal_asset_bundle_app_context():
+        return _portal_asset_bundle._portal_asset_request_etag_matches(request, current_etag)
+
+
+def _portal_asset_not_modified_response(*, etag: str, cache_control: str) -> Response:
+    with _portal_asset_bundle_app_context():
+        return _portal_asset_bundle._portal_asset_not_modified_response(etag=etag, cache_control=cache_control)
+
+
+_copy_portal_cache_api(_build_portal_direct_asset_fingerprint, _portal_asset_bundle._build_portal_direct_asset_fingerprint)
+_copy_portal_cache_api(_build_portal_css_asset, _portal_asset_bundle._build_portal_css_asset)
+_copy_portal_cache_api(_build_portal_asset_bundle, _portal_asset_bundle._build_portal_asset_bundle)
 
 
 ARCHIVE_GOVERNANCE_SCRIPT = REPO_ROOT / "tools" / "archive_governance.py"
