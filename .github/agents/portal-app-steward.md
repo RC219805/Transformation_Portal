@@ -127,7 +127,7 @@ Stop and escalate instead of implementing when the task touches:
 - rollout, observability, or telemetry changes that reopen governance decisions
 - any criterion in `docs/architecture/agent_governance.md` §"Escalation Criteria" — particularly §A (dependency / supply-chain, including Node/runtime policy), §B (CI/CD, release, and repository automation including `.github/workflows/*`), and §B2 (agent and documentation topology, including `.github/copilot-instructions.md` and `.github/agents/*`)
 
-Coordinate with `@transformation-portal-specialist` when browser work requires backend behavior changes. Silence is not approval.
+Coordinate with `@transformation-portal-specialist` when browser work requires backend behavior changes. **Silence is not approval.**
 
 ---
 
