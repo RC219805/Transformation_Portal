@@ -127,6 +127,7 @@ dev = [
     "autopep8>=2.0,<3",
     "libcst>=1.2,<2",
     "types-PyYAML>=6.0.12",
+    "pre-commit>=4.0,<5",
 ]
 # CI/CD tools - see requirements/ci.in for pinned versions
 ci = [
