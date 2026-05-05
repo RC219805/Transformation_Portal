@@ -123,12 +123,11 @@ Stop and escalate instead of implementing when the task touches:
 - auth, session, CSRF, cookie, CSP, cache, proxy, or trusted-host behavior
 - route-contract changes for `/`, `/login`, `/portal`, `/portal/bootstrap`, `/portal/assets/*`, `/portal/video/*`, `/healthz`, or same-origin `/v1/*`
 - typed backend API behavior in `app.py`
-- dependency changes, Node/runtime policy, or `.github/workflows/*`
-- live custom-agent or Copilot instruction changes
 - a React or Next rewrite proposal for the operator console
 - rollout, observability, or telemetry changes that reopen governance decisions
+- any criterion in `docs/architecture/agent_governance.md` §"Escalation Criteria" — particularly §A (dependency / supply-chain, including Node/runtime policy), §B (CI/CD, release, and repository automation including `.github/workflows/*`), and §B2 (agent and documentation topology, including `.github/copilot-instructions.md`, `.github/agents/*`, and `AGENTS.md`)
 
-Coordinate with `@transformation-portal-specialist` when browser work requires backend behavior changes. Silence is not approval.
+Coordinate with `@transformation-portal-specialist` when browser work requires backend behavior changes. **Silence is not approval.**
 
 ---
 

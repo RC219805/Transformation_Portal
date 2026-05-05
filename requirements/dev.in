@@ -27,3 +27,4 @@ libcst>=1.2,<2
 
 # Additional development utilities
 types-PyYAML>=6.0.12
+pre-commit>=4.0,<5  # required by `make install-hooks` and `make pre-commit`; gated by .pre-commit-config.yaml
