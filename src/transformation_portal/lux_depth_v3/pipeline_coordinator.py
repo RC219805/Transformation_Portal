@@ -37,7 +37,7 @@ from __future__ import annotations
 import logging
 import os
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 from ..core.platform_matrix import CURRENT_PLATFORM, PlatformMatrix
 from ..depth.backends.protocol import LicenseRestrictionError
@@ -171,6 +171,17 @@ class ExecutionPlan:
     enable_materials_v3: bool = False
     enable_reconstruction: bool = False
     quality_tier: str = "standard"
+
+
+@dataclass
+class InitializedDepthBackendState:
+    """Initialized depth backend state for orchestrator startup."""
+
+    registry: Any
+    depth_backend: Any
+    backend_cache: Dict[str, Any]
+    init_errors: Dict[str, str]
+    backend_metadata: BackendSelectionMetadata
 
 
 def resolve_runtime_backend_chain(
@@ -487,6 +498,91 @@ def select_backend(
         device=config.depth_device,
         init_errors=init_errors,
     )
+
+
+def initialize_depth_backend_state(
+    config: EnhanceConfig,
+    model_variant: ModelVariant,
+    resolve_model_id: Callable[..., str],
+    *,
+    registry_factory: Optional[Callable[[], Any]] = None,
+) -> InitializedDepthBackendState:
+    """Initialize depth backend registry, backend cache, and metadata."""
+    if registry_factory is None:
+        from ..depth.backends.registry import DepthBackendRegistry
+
+        registry_factory = DepthBackendRegistry
+
+    registry = registry_factory()
+    backend_cache: Dict[str, Any] = {}
+    init_errors: Dict[str, str] = {}
+    allow_synthetic = bool(config.allow_synthetic_fallback) or os.getenv("TP_ALLOW_SYNTHETIC_FALLBACK") == "1"
+
+    try:
+        selection = select_backend(
+            config.depth_backend,
+            config,
+            registry,
+            model_variant,
+        )
+        if not selection.is_success or selection.backend is None or selection.resolved_backend is None:
+            requested = resolve_requested_backend(config.depth_backend, config)
+            candidate_chain = resolve_runtime_backend_chain(requested, config)
+            if not allow_synthetic:
+                raise RuntimeError(
+                    "No depth backend"
+                    " available from"
+                    " candidates"
+                    f" {candidate_chain}."
+                    f" Errors: {selection.init_errors}."
+                    " Install ML deps"
+                    " (torch, transformers)"
+                    " or explicitly enable"
+                    " synthetic fallback for"
+                    " testing (config"
+                    ".allow_synthetic_fallback"
+                    "=True or TP_ALLOW_"
+                    "SYNTHETIC_FALLBACK=1)."
+                )
+            raise RuntimeError(
+                "No depth backend" " available from" " candidates" f" {candidate_chain}." f" Errors: {selection.init_errors}"
+            )
+
+        init_errors = dict(selection.init_errors or {})
+        backend_cache[selection.resolved_backend] = selection.backend
+        backend_metadata = BackendSelectionMetadata(
+            requested_backend=selection.requested_backend,
+            resolved_backend=selection.resolved_backend,
+            resolution_status=selection.status,
+            resolution_reason=selection.reason,
+            model_id=resolve_model_id(
+                selection.resolved_backend,
+                backend=selection.backend,
+            ),
+            device=config.depth_device,
+            attempts=[],
+        )
+
+        logger.info(
+            "Depth backend:" " requested=%s" " resolved=%s device=%s",
+            selection.requested_backend,
+            selection.resolved_backend,
+            config.depth_device,
+        )
+        return InitializedDepthBackendState(
+            registry=registry,
+            depth_backend=selection.backend,
+            backend_cache=backend_cache,
+            init_errors=init_errors,
+            backend_metadata=backend_metadata,
+        )
+
+    except LicenseRestrictionError as e:
+        logger.error(f"License restriction: {e}")
+        raise
+    except Exception as e:
+        logger.error(f"Backend initialization failed: {e}")
+        raise
 
 
 class PipelineCoordinator:

@@ -34,12 +34,14 @@ Usage:
 
 from __future__ import annotations
 
+import copy
 import hashlib
 import logging
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from .manifest import compute_file_sha256
+from ._backend_contract import normalize_backend_provenance
+from .manifest import CombinedManifest, ConfigFingerprint, compute_file_sha256
 from .path_aliasing import normalize_lexical_path, relative_to_path_alias
 from .security import sanitize_path_component_nonlossy
 
@@ -174,6 +176,141 @@ def v2_log_filename(
     if batch_id:
         filename += "__" + sanitize_path_component_nonlossy(str(batch_id))
     return f"{filename}.log"
+
+
+def load_existing_manifest(
+    manifest_path: Path,
+    *,
+    purpose: str,
+) -> Optional[CombinedManifest]:
+    """Best-effort manifest loader for cached-run preservation paths."""
+    if not manifest_path.exists():
+        return None
+    try:
+        return CombinedManifest.load(manifest_path)
+    except Exception as exc:
+        logger.debug(
+            "Failed to load existing manifest for %s: %s",
+            purpose,
+            exc,
+        )
+        return None
+
+
+def coerce_output_paths(raw_paths: Any) -> List[str]:
+    """Normalize V2 output path payloads to a list of strings."""
+    if isinstance(raw_paths, str):
+        return [raw_paths] if raw_paths else []
+    if not isinstance(raw_paths, list):
+        return []
+    return [path_value for path_value in raw_paths if isinstance(path_value, str) and path_value]
+
+
+def normalize_v2_status(raw_status: Any) -> str:
+    """Map runner and manifest status values to the manifest V2 contract."""
+    if raw_status is None:
+        return "skipped"
+    if not isinstance(raw_status, str):
+        return str(raw_status)
+
+    normalized = raw_status.strip().lower()
+    if not normalized:
+        return "skipped"
+    if normalized in {"success", "ok"}:
+        return "ok"
+    if normalized in {"failed", "failure"}:
+        return "error"
+    return normalized
+
+
+def restore_materials_v3_from_manifest(
+    manifest: Optional[CombinedManifest],
+    expected_enhanced_path: Path,
+) -> tuple[Optional[dict], float, Optional[Path]]:
+    """Restore persisted Materials V3 metadata for cached-depth reruns."""
+    if manifest is None or manifest.materials_v3 is None:
+        return None, 0.0, None
+
+    materials_v3 = manifest.materials_v3
+    materials_v3_metadata: Dict[str, Any] = {
+        "version": materials_v3.version,
+    }
+    if materials_v3.segmentation_metadata is not None:
+        materials_v3_metadata["segmentation_metadata"] = copy.deepcopy(
+            materials_v3.segmentation_metadata,
+        )
+
+    enhanced_path: Optional[Path] = expected_enhanced_path if expected_enhanced_path.exists() else None
+    runtime_seconds = materials_v3.runtime_seconds
+    restored_runtime = float(runtime_seconds) if runtime_seconds is not None else 0.0
+    restored_result = {
+        "materials_v3_response_plan": copy.deepcopy(
+            materials_v3.response_plan,
+        ),
+        "materials_v3_pixel_ops": copy.deepcopy(
+            materials_v3.pixel_ops,
+        ),
+        "materials_v3_metadata": materials_v3_metadata,
+    }
+    return restored_result, restored_runtime, enhanced_path
+
+
+def preserved_v2_result_from_manifest(
+    manifest: Optional[CombinedManifest],
+) -> tuple[dict, Optional[Path]]:
+    """Rehydrate V2 result fields from the prior manifest when reruns skip V2."""
+    if manifest is None or manifest.v2 is None:
+        return {"status": "ok"}, None
+
+    previous_v2 = manifest.v2
+    preserved_result: Dict[str, Any] = {
+        "status": previous_v2.status,
+    }
+    if previous_v2.report_path:
+        preserved_result["report_path"] = previous_v2.report_path
+
+    output_paths = coerce_output_paths(previous_v2.output_paths)
+    if output_paths:
+        preserved_result["output_paths"] = output_paths
+        preserved_result["output"] = output_paths[0]
+
+    if previous_v2.error_message:
+        preserved_result["error"] = previous_v2.error_message
+
+    report_path = Path(previous_v2.report_path) if previous_v2.report_path else None
+    return preserved_result, report_path
+
+
+def normalize_backend_provenance_for_reuse(value: Any) -> Optional[str]:
+    """Normalize backend provenance identifiers for reuse checks."""
+    return normalize_backend_provenance(value)
+
+
+def has_expanded_stage_a_fingerprint(
+    config_fingerprint: Optional[ConfigFingerprint],
+) -> bool:
+    """Return True when manifest fingerprint carries the expanded Stage A contract."""
+    if config_fingerprint is None:
+        return False
+    return all(
+        getattr(config_fingerprint, field_name, None) is not None
+        for field_name in (
+            "quality_tier",
+            "materials_config",
+            "pbr_config",
+            "apex_depth_gate_config",
+            "emit_master16",
+            "emit_upscaled16",
+        )
+    )
+
+
+def segmentation_mask_artifact_path(
+    segmentation_dir: Path,
+    output_key: Path,
+) -> Path:
+    """Return canonical segmentation mask artifact path."""
+    return segmentation_dir / output_key.parent / f"{output_key.stem}_materials_v3_masks.npz"
 
 
 def build_artifact_index(
