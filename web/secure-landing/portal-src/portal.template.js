@@ -60,6 +60,8 @@ const SSE_RECONNECT_JITTER_MS = 250;
 const SSE_STALL_CHECK_INTERVAL_MS = 10000;
 const SSE_STALL_THRESHOLD_MS = 45000;
 const CONFIG_PREVIEW_DEBOUNCE_MS = 250;
+const CONFIG_PREVIEW_SERVICE_RETRY_BASE_MS = 2500;
+const CONFIG_PREVIEW_SERVICE_RETRY_MAX_ATTEMPTS = 3;
 const TRANSIENT_DRAFT_PERSIST_DEBOUNCE_MS = 200;
 const DEFERRED_REVIEW_SURFACE_RETRY_WINDOW_MS = 30000;
 const DISPATCH_BACKEND_OFFLINE_MESSAGE = 'Backend is offline. Dispatch is disabled until connectivity is restored.';
@@ -85,6 +87,8 @@ let sseWatchdogIntervalId = null;
 let healthCheckInFlight = false;
 let lastHealthCheckAt = 0;
 let configPreviewTimerId = null;
+let configPreviewServiceRetryTimerId = null;
+let configPreviewServiceRetryAttempts = 0;
 let transientDraftPersistTimerId = null;
 let transientDraftPersistIdleId = null;
 let deferredReviewSurfaceApi = null;
@@ -7700,6 +7704,33 @@ async function fetchConfigMetadata(pipelineName = state.pipeline, silent = false
     }
 }
 
+function _clearConfigPreviewServiceRetry() {
+    if (configPreviewServiceRetryTimerId !== null) {
+        clearTimeout(configPreviewServiceRetryTimerId);
+        configPreviewServiceRetryTimerId = null;
+    }
+    configPreviewServiceRetryAttempts = 0;
+}
+
+function _scheduleConfigPreviewServiceRetry() {
+    if (configPreviewServiceRetryAttempts >= CONFIG_PREVIEW_SERVICE_RETRY_MAX_ATTEMPTS) {
+        return;
+    }
+    if (configPreviewServiceRetryTimerId !== null) {
+        return;
+    }
+    configPreviewServiceRetryAttempts += 1;
+    const delay = CONFIG_PREVIEW_SERVICE_RETRY_BASE_MS * configPreviewServiceRetryAttempts;
+    configPreviewServiceRetryTimerId = window.setTimeout(() => {
+        configPreviewServiceRetryTimerId = null;
+        const payload = generatePayload();
+        if (!_configPreviewEnabledForPipeline(payload.pipeline)) {
+            return;
+        }
+        void fetchConfigPreview(payload);
+    }, delay);
+}
+
 async function fetchConfigPreview(payload) {
     const currentPayload = payload && typeof payload === 'object' ? payload : generatePayload();
     const requestKey = _configPreviewRequestKey(currentPayload);
@@ -7710,6 +7741,7 @@ async function fetchConfigPreview(payload) {
     };
 
     if (!_configPreviewEnabledForPipeline(currentPayload.pipeline)) {
+        _clearConfigPreviewServiceRetry();
         _setPreviewState({
             ..._emptyPreviewState(state.backendOk ? 'local_fallback' : 'offline', currentPayload.pipeline),
             requestKey
@@ -7753,6 +7785,11 @@ async function fetchConfigPreview(payload) {
                 error_reason: classifiedFailure.reason,
                 error_status: res.status
             });
+            if (classifiedFailure.reason === 'service_failure') {
+                _scheduleConfigPreviewServiceRetry();
+            } else {
+                _clearConfigPreviewServiceRetry();
+            }
             if (classifiedFailure.reason === 'validation_error') {
                 void emitPortalEvent('preview_error_seen', {
                     surface: 'reconstruction_runtime',
@@ -7793,6 +7830,7 @@ async function fetchConfigPreview(payload) {
             error_status: 0
         };
         _setPreviewState(_reconcilePreviewRepairedPaths(nextPreviewState));
+        _clearConfigPreviewServiceRetry();
         if (previewFieldErrors.length > 0) {
             void emitPortalEvent('preview_error_seen', {
                 surface: 'reconstruction_runtime',
@@ -7801,6 +7839,9 @@ async function fetchConfigPreview(payload) {
             });
         }
     } catch {
+        if (_configPreviewRequestKey(generatePayload()) !== requestKey) {
+            return;
+        }
         const classifiedFailure = _previewFailureDetails({ error_reason: 'service_failure' });
         _setPreviewState({
             ..._emptyPreviewState('error', currentPayload.pipeline),
@@ -7809,6 +7850,7 @@ async function fetchConfigPreview(payload) {
             error_reason: classifiedFailure.reason,
             error_status: 0
         });
+        _scheduleConfigPreviewServiceRetry();
     } finally {
         refreshPreviewDrivenSurfaces(generatePayload());
     }
@@ -7819,6 +7861,7 @@ function scheduleConfigPreview(immediate = false) {
         clearTimeout(configPreviewTimerId);
         configPreviewTimerId = null;
     }
+    _clearConfigPreviewServiceRetry();
     const payload = generatePayload();
     if (!CONFIG_PREVIEW_SUPPORTED_PIPELINES.has(String(payload.pipeline || '').trim())) {
         _setPreviewState(_emptyPreviewState('idle', payload.pipeline));
