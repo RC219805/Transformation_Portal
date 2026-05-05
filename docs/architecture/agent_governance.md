@@ -13,9 +13,10 @@ This policy applies to:
 
 This policy governs agent decision-making and escalation. It does not replace human review, CI enforcement, or branch protections.
 
-Current baseline: `main` through PR #1562. Current documentation navigation is
-defined by `README.md`, `docs/README.md`,
-`docs/governance/DOCUMENTATION_MAP.md`, and
+Current baseline: repo-wide refresh audit dated April 29, 2026, building on
+`main` through PR #1562. Documentation navigation: `README.md`,
+`docs/README.md`, `docs/governance/DOCUMENTATION_MAP.md`,
+`docs/governance/DOCUMENTATION_REFRESH_AUDIT_2026-04-29.md`, and
 `docs/governance/DOCUMENTATION_STATE_AUDIT_2026-04-27.md`.
 
 ## Authority Model
@@ -86,7 +87,7 @@ Hard-block constraints are an allowed enforcement tool:
 - Introducing new required checks, changing required gates, or bypassing enforcement.
 
 ### B2) Agent and Documentation Topology
-- Changes to `.github/copilot-instructions.md`, `.github/agents/*`,
+- Changes to `.github/copilot-instructions.md`, `.github/agents/*`, `AGENTS.md`,
   `docs/guides/CUSTOM_AGENT_GUIDE.md`, `docs/reference/AGENT_QUICK_REFERENCE.md`,
   or `tests/test_custom_agent_config.py`.
 - Changes to canonical documentation navigation or classification boundaries.
@@ -135,6 +136,7 @@ The following are governance-controlled artifacts and require Architect review:
 - this policy file
 - agent role definitions under `.github/agents/`
 - `.github/copilot-instructions.md`
+- `AGENTS.md`
 - `docs/guides/CUSTOM_AGENT_GUIDE.md`
 - `docs/reference/AGENT_QUICK_REFERENCE.md`
 - ADRs and security policy documents

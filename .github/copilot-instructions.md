@@ -29,9 +29,6 @@ Recent current-state contract anchors:
 - `docs/ci/WORKFLOW_MATRIX.md` is the current 30-workflow GitHub Actions inventory.
 - `docs/governance/audit/archive-gates-2026-04-27.md` is the current archive
   Gates A/B/C readiness audit evidence.
-- APEX current state includes offline model-family characterization, SAM2
-  tile-merge regression coverage, real failure-code surfacing, confidence-only
-  Materials V3 passthrough, and V2 fallback behavior.
 
 Optimize for:
 
@@ -181,6 +178,13 @@ Custom-agent surface:
   existing contracts.
 - `.github/agents/_archive/` and `.github/agents/rag_system/_archive/` are
   historical and must not define live agent behavior.
+
+When agent guidance, ADRs, security policy, and CI enforcement conflict,
+follow the precedence defined in `docs/architecture/agent_governance.md`
+(mechanical enforcement → ADRs → security/dependency policy → Architect →
+Steward / Specialist execution). Use the narrowest live profile that fits
+the work and escalate per `docs/architecture/agent_governance.md`
+§"Escalation Criteria".
 
 ---
 
