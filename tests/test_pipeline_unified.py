@@ -644,7 +644,7 @@ class TestStageExecution:
 
         assert result.success is True
 
-    def test_upscaling_fallback(self, pipeline_module, sample_input_image):
+    def test_upscaling_4k_fallback(self, pipeline_module, sample_input_image):
         """Test 4K upscaling fallback to Lanczos."""
         recipe = {
             "name": "Upscale Test",
