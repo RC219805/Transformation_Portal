@@ -6457,6 +6457,24 @@ def _artifact_preview_proxy_path(path: Path) -> Optional[Path]:
     return None
 
 
+def _add_artifact_preview_proxy_lookup(
+    lookup: Dict[str, Path],
+    *,
+    output_dir: Path,
+    artifact_path: Path,
+) -> None:
+    proxy_path = _artifact_preview_proxy_path(artifact_path)
+    if proxy_path is None:
+        return
+    try:
+        resolved_output_dir = Path(os.path.realpath(output_dir.expanduser()))
+        resolved_proxy_path = Path(os.path.realpath(proxy_path))
+        proxy_relative_path = str(resolved_proxy_path.relative_to(resolved_output_dir))
+    except (OSError, ValueError):
+        return
+    lookup.setdefault(proxy_relative_path, resolved_proxy_path)
+
+
 def _safe_artifact_attachment_filename(path: Path) -> str:
     """Return an ASCII-safe filename for Content-Disposition attachments.
 
@@ -7095,14 +7113,11 @@ def _build_scoped_job_artifacts(
     ]
     selected_lookup = {relative_path: path for relative_path, path in selected_candidates}
     for relative_path, path in selected_candidates:
-        proxy_path = _artifact_preview_proxy_path(path)
-        if proxy_path is None:
-            continue
-        try:
-            proxy_relative_path = str(proxy_path.relative_to(output_dir))
-        except ValueError:
-            continue
-        selected_lookup.setdefault(proxy_relative_path, proxy_path)
+        _add_artifact_preview_proxy_lookup(
+            selected_lookup,
+            output_dir=output_dir,
+            artifact_path=path,
+        )
     return items, selected_lookup, truncated
 
 
@@ -7320,6 +7335,11 @@ def _hydrate_artifact_lookup_from_items(job: Job) -> Dict[str, Path]:
         if not resolved.exists() or not resolved.is_file():
             continue
         lookup[canonical_relative_path] = resolved
+        _add_artifact_preview_proxy_lookup(
+            lookup,
+            output_dir=output_dir,
+            artifact_path=resolved,
+        )
     job.artifact_lookup = lookup
     return lookup
 
@@ -7408,6 +7428,11 @@ def _index_job_artifacts(job: Job) -> List[Dict[str, Any]]:
             )
         )
         selected_lookup[relative_path] = path
+        _add_artifact_preview_proxy_lookup(
+            selected_lookup,
+            output_dir=output_dir,
+            artifact_path=path,
+        )
 
     job.artifacts = {
         "output_dir": str(output_dir),

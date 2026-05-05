@@ -41,7 +41,8 @@ if [[ -n "${CLOUDFLARED_TUNNEL_NAME:-}" ]]; then
   fi
   printf '%s\n' "${HOSTNAME}" > "${SENTINEL}"
   echo "Starting named Cloudflare tunnel '${CLOUDFLARED_TUNNEL_NAME}' (hostname=${HOSTNAME})"
-  exec cloudflared tunnel --protocol "${PROTOCOL}" run "${CLOUDFLARED_TUNNEL_NAME}"
+  cloudflared tunnel --protocol "${PROTOCOL}" run "${CLOUDFLARED_TUNNEL_NAME}"
+  exit $?
 fi
 
 echo "No CLOUDFLARED_TUNNEL_NAME set; starting an ephemeral quick tunnel against ${LOCAL_URL}."

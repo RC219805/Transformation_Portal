@@ -72,6 +72,28 @@ def test_vercel_env_rejects_empty_user_json() -> None:
 
 
 @pytest.mark.unit
+def test_vercel_env_snapshot_accepts_file_backed_user_source_without_local_file() -> None:
+    module = _load_module()
+    ok, rows = module._evaluate(
+        {
+            "TP_FASTAPI_ORIGIN": "https://fastapi.example.com",
+            "TP_BACKEND_API_KEY": "secret",
+            "TP_FRONTDOOR_USERS_FILE": "/vercel/runtime/users.json",
+            "TP_FRONTDOOR_SESSION_SCALING_MODE": "single_instance",
+        },
+        production=False,
+        validate_user_file_contents=False,
+    )
+
+    assert ok is True
+    assert (
+        "ok",
+        "TP_FRONTDOOR_USERS_JSON|TP_FRONTDOOR_USERS_FILE",
+        "declared via TP_FRONTDOOR_USERS_FILE (file contents not available in env snapshot)",
+    ) in rows
+
+
+@pytest.mark.unit
 def test_vercel_env_rejects_runtime_unsupported_session_scaling_mode() -> None:
     module = _load_module()
     ok, rows = module._evaluate(

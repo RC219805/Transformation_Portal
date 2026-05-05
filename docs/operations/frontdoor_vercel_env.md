@@ -40,6 +40,18 @@ the frontdoor reports green readiness:
 curl -s https://<frontdoor-host>/healthz | jq '{ok, frontend, backend, checks}'
 ```
 
+For a pulled Vercel snapshot, run the same contract locally:
+
+```
+TP_VERCEL_ENV_FILE=.vercel/.env.production.local make check-vercel-env
+```
+
+When the snapshot uses `TP_FRONTDOOR_USERS_FILE`, the checker validates that
+the deployment declares a file-backed user source but does not require that
+deployment-local path to exist on the reviewer's machine. Add
+`--validate-user-file` when checking a local runtime env where the file should
+be readable and contain at least one valid user.
+
 Expected shape when healthy:
 
 ```

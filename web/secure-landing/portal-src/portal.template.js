@@ -3156,14 +3156,14 @@ function rankArtifactsForDisplay(artifacts) {
 }
 
 function findCompareArtifact(primaryArtifact, artifacts) {
-    if (!primaryArtifact || !artifactIsPreviewable(primaryArtifact)) return null;
+    if (!primaryArtifact || !artifactIsBrowserPreviewable(primaryArtifact)) return null;
     const primaryGroup = artifactCompareGroup(primaryArtifact);
     if (primaryGroup) {
         const hintedCandidate = rankArtifactsForDisplay(
             artifacts.filter((candidate) => (
                 candidate
                 && candidate.path !== primaryArtifact.path
-                && artifactIsPreviewable(candidate)
+                && artifactIsBrowserPreviewable(candidate)
                 && artifactCompareGroup(candidate) === primaryGroup
             ))
         )[0] || null;
@@ -3175,7 +3175,7 @@ function findCompareArtifact(primaryArtifact, artifacts) {
     let bestScore = -1;
 
     artifacts.forEach((candidate) => {
-        if (!candidate || candidate.path === primaryArtifact.path || !artifactIsPreviewable(candidate)) return;
+        if (!candidate || candidate.path === primaryArtifact.path || !artifactIsBrowserPreviewable(candidate)) return;
         const info = artifactNameParts(candidate);
         const ext = info.fileName.includes('.') ? info.fileName.split('.').pop().toLowerCase() : '';
         let score = 0;
@@ -4828,8 +4828,8 @@ function _portalPrivilegesReady() {
 //   - Subsequent calls to _isProtectedFamilySuppressed(family) return true so
 //     callers can skip the fetch entirely.
 //   - One console.warn per family makes the diagnosis visible in DevTools.
-//   - _resetProtectedFamilySuppression() clears the map; a future Retry button
-//     in the failure banner can call it.
+//   - _resetProtectedFamilySuppression() clears the map when the operator
+//     updates the direct-debug API key or an explicit recovery action retries.
 const _protectedFamilySuppression = new Map();
 
 function _classifyProtectedEndpointFamily(url) {
@@ -4913,6 +4913,19 @@ function _resetProtectedFamilySuppression(family) {
     } else {
         _protectedFamilySuppression.clear();
     }
+}
+
+function _handleDirectDebugApiKeyUpdate(options = null) {
+    const resumeStreams = Boolean(options.resumeStreams);
+    _persistApiKeyFromInputs();
+    _resetProtectedFamilySuppression();
+    if (!resumeStreams) return;
+    resumeBlockedJobStreamsAfterAuthUpdate();
+    void checkBackend(true);
+    void fetchConfigMetadata(state.pipeline, true);
+    void fetchPresetsForPipeline(state.pipeline, true);
+    void fetchReadiness(true);
+    void fetchConfigPreview(generatePayload());
 }
 
 function _queueBootstrapOnlineFollowup() {
@@ -9911,10 +9924,11 @@ function bindInputs() {
     }
 
     if (els.apiKeyInput) {
-        els.apiKeyInput.addEventListener('input', _persistApiKeyFromInputs);
+        els.apiKeyInput.addEventListener('input', () => {
+            _handleDirectDebugApiKeyUpdate();
+        });
         els.apiKeyInput.addEventListener('change', () => {
-            _persistApiKeyFromInputs();
-            resumeBlockedJobStreamsAfterAuthUpdate();
+            _handleDirectDebugApiKeyUpdate({ resumeStreams: true });
         });
     }
 }

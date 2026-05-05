@@ -67,9 +67,11 @@ def _valid_user_count_from_json(raw: str) -> int:
     return valid
 
 
-def _evaluate_user_source(env: dict[str, str]) -> tuple[bool, str]:
+def _evaluate_user_source(env: dict[str, str], *, validate_user_file_contents: bool = True) -> tuple[bool, str]:
     users_file = env.get("TP_FRONTDOOR_USERS_FILE", "").strip()
     if users_file:
+        if not validate_user_file_contents:
+            return True, "declared via TP_FRONTDOOR_USERS_FILE (file contents not available in env snapshot)"
         try:
             with open(users_file, "r", encoding="utf-8") as handle:
                 count = _valid_user_count_from_json(handle.read())
@@ -112,7 +114,7 @@ def _load_env_file(path: str) -> dict[str, str]:
             if not line or line.startswith("#"):
                 continue
             if line.startswith("export "):
-                line = line[len("export "):]
+                line = line[len("export ") :]
             if "=" not in line:
                 continue
             key, _, value = line.partition("=")
@@ -125,13 +127,21 @@ def _load_env_file(path: str) -> dict[str, str]:
     return out
 
 
-def _evaluate(env: dict[str, str], production: bool) -> tuple[bool, List[tuple[str, str, str]]]:
+def _evaluate(
+    env: dict[str, str],
+    production: bool,
+    *,
+    validate_user_file_contents: bool = True,
+) -> tuple[bool, List[tuple[str, str, str]]]:
     rows: List[tuple[str, str, str]] = []
     ok = True
     for var in VARIABLES:
         required = var.required_in == "all" or (production and var.required_in == "production")
         if var.name == "TP_FRONTDOOR_USERS_JSON|TP_FRONTDOOR_USERS_FILE":
-            valid, detail = _evaluate_user_source(env)
+            valid, detail = _evaluate_user_source(
+                env,
+                validate_user_file_contents=validate_user_file_contents,
+            )
             if valid:
                 rows.append(("ok", var.name, detail))
             elif required:
@@ -190,6 +200,14 @@ def main(argv: List[str]) -> int:
         help="Apply production-mode requirements (Cloudflare Access).",
     )
     parser.add_argument(
+        "--validate-user-file",
+        action="store_true",
+        help=(
+            "When --env-file is used, also require TP_FRONTDOOR_USERS_FILE to be "
+            "readable on this machine and contain at least one valid user."
+        ),
+    )
+    parser.add_argument(
         "--no-color",
         action="store_true",
         help="Disable ANSI colour output.",
@@ -204,12 +222,15 @@ def main(argv: List[str]) -> int:
             print(f"check_frontdoor_vercel_env: cannot read {args.env_file}: {exc}", file=sys.stderr)
             return 2
 
-    ok, rows = _evaluate(env, production=args.production)
+    ok, rows = _evaluate(
+        env,
+        production=args.production,
+        validate_user_file_contents=args.validate_user_file or not bool(args.env_file),
+    )
     print(_format(rows, color=sys.stdout.isatty() and not args.no_color))
     if not ok:
         print(
-            "\nSome required variables are missing. "
-            "See docs/operations/frontdoor_vercel_env.md.",
+            "\nSome required variables are missing. " "See docs/operations/frontdoor_vercel_env.md.",
             file=sys.stderr,
         )
         return 1

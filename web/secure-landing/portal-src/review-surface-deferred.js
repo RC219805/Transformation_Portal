@@ -23,7 +23,6 @@ export function createDeferredReviewSurfaceApi(host) {
     findCompareArtifact,
     buildArtifactUrl,
     sanitizeManagedAssetUrl,
-    artifactIsPreviewable,
     artifactIsBrowserPreviewable,
     artifactPreviewSrc,
     _markArtifactUrlNotFound,
@@ -134,10 +133,12 @@ export function createDeferredReviewSurfaceApi(host) {
 
   function _showArtifactViewerFallback(context, artifactName, fallbackOptions) {
     const url = context?.url || "";
+    const downloadUrl = context?.downloadUrl || "";
+    const hasRawAsset = Boolean(downloadUrl);
     const isRetryable = Boolean(fallbackOptions?.retryable && url);
     const fallbackReason = isRetryable
       ? "inline_preview_failed"
-      : url ? "inline_preview_unavailable" : "asset_url_unavailable";
+      : hasRawAsset ? "inline_preview_unavailable" : "asset_url_unavailable";
     if (els.artifactViewerImage) {
       els.artifactViewerImage.classList.add("hidden");
       els.artifactViewerImage.removeAttribute("src");
@@ -149,12 +150,12 @@ export function createDeferredReviewSurfaceApi(host) {
     if (els.artifactViewerFallbackTitle) {
       els.artifactViewerFallbackTitle.textContent = isRetryable
         ? "Inline preview failed to load"
-        : url ? "Inline preview unavailable" : "Artifact URL unavailable";
+        : hasRawAsset ? "Inline preview unavailable" : "Artifact URL unavailable";
     }
     if (els.artifactViewerFallbackDetail) {
       els.artifactViewerFallbackDetail.textContent = isRetryable
         ? "The managed asset request did not complete. Retry the preview or continue reviewing the retained metadata and fingerprints."
-        : url
+        : hasRawAsset
           ? "This artifact stays reviewable through retained metadata, integrity fingerprints, and the managed raw asset link."
           : "The browser cannot resolve a managed asset URL for this artifact, so review stays pinned to the retained metadata above.";
     }
@@ -162,7 +163,7 @@ export function createDeferredReviewSurfaceApi(host) {
     _setArtifactViewerStatus(
       isRetryable
         ? `${artifactName} inline preview failed to load; retry available.`
-        : url
+        : hasRawAsset
           ? `${artifactName} is open with metadata fallback because an inline preview is unavailable.`
           : `${artifactName} is open with metadata fallback because the managed asset URL is unavailable.`
     );
@@ -1037,10 +1038,23 @@ export function createDeferredReviewSurfaceApi(host) {
     const selectedArtifact = _selectedArtifactForJob(selected);
     const compareCandidate = findCompareArtifact(selectedArtifact, artifacts);
     const captioningEvidenceVisible = _hasCaptioningEvidence(selected, selectedArtifact);
-    const compareEnabled = Boolean(compareCandidate) && Boolean(state.artifactUi.compareByJob[String(selected.id || "")]);
+    const selectedBrowserPreviewable = artifactIsBrowserPreviewable(selectedArtifact);
+    const selectedPreviewSrc = selectedArtifact ? artifactPreviewSrc(selected, selectedArtifact) : "";
+    const selectedPreviewAvailable = Boolean(selectedPreviewSrc && !_isArtifactUrlKnownMissing(selectedPreviewSrc));
+    const compareBrowserPreviewable = artifactIsBrowserPreviewable(compareCandidate);
+    const comparePreviewSrc = compareCandidate ? artifactPreviewSrc(selected, compareCandidate) : "";
+    const comparePreviewAvailable = Boolean(comparePreviewSrc && !_isArtifactUrlKnownMissing(comparePreviewSrc));
+    const compareAvailable = Boolean(
+      compareCandidate &&
+      selectedBrowserPreviewable &&
+      compareBrowserPreviewable &&
+      selectedPreviewAvailable &&
+      comparePreviewAvailable
+    );
+    const compareEnabled = compareAvailable && Boolean(state.artifactUi.compareByJob[String(selected.id || "")]);
 
     if (els.artifactCompareBtn) {
-      if (compareCandidate) {
+      if (compareAvailable) {
         els.artifactCompareBtn.classList.remove("hidden");
         els.artifactCompareBtn.textContent = compareEnabled ? "Single View" : "Compare";
         els.artifactCompareBtn.setAttribute("aria-pressed", compareEnabled ? "true" : "false");
@@ -1062,7 +1076,7 @@ export function createDeferredReviewSurfaceApi(host) {
     }
     _renderReviewStatusBanner(selected, selectedArtifact);
     _renderArtifactProvenance(selected, selectedArtifact);
-    _renderReviewCompareSummary(selectedArtifact, compareCandidate, compareEnabled);
+    _renderReviewCompareSummary(selectedArtifact, compareAvailable ? compareCandidate : null, compareEnabled);
 
     if (els.openArtifactBtn) {
       const openUrl = selectedArtifact ? buildArtifactUrl(selected, selectedArtifact) : "";
@@ -1090,17 +1104,13 @@ export function createDeferredReviewSurfaceApi(host) {
       els.artifactCompareStage.classList.toggle("hidden", !compareEnabled);
       els.artifactCompareStage.setAttribute("aria-hidden", compareEnabled ? "false" : "true");
     }
-    const selectedBrowserPreviewable = artifactIsBrowserPreviewable(selectedArtifact);
-    const compareBrowserPreviewable = artifactIsBrowserPreviewable(compareCandidate);
     if (els.artifactPreviewSoloImage) {
-      els.artifactPreviewSoloImage.classList.toggle("hidden", compareEnabled || !selectedBrowserPreviewable);
+      els.artifactPreviewSoloImage.classList.toggle("hidden", compareEnabled || !selectedPreviewAvailable);
     }
     if (els.artifactMetadataCard) {
-      els.artifactMetadataCard.classList.toggle("hidden", selectedBrowserPreviewable && !captioningEvidenceVisible);
+      els.artifactMetadataCard.classList.toggle("hidden", selectedPreviewAvailable && !captioningEvidenceVisible);
     }
     if (compareEnabled && selectedArtifact && compareCandidate) {
-      const selectedPreviewSrc = artifactPreviewSrc(selected, selectedArtifact);
-      const comparePreviewSrc = artifactPreviewSrc(selected, compareCandidate);
       if (els.artifactPreviewImage) {
         if (selectedPreviewSrc && !_isArtifactUrlKnownMissing(selectedPreviewSrc)) {
           els.artifactPreviewImage.src = selectedPreviewSrc;
@@ -1122,8 +1132,7 @@ export function createDeferredReviewSurfaceApi(host) {
       }
       if (els.artifactCompareCaption) els.artifactCompareCaption.textContent = artifactLabel(compareCandidate);
       if (captioningEvidenceVisible) _renderArtifactMetadataCard(selected, selectedArtifact);
-    } else if (selectedBrowserPreviewable) {
-      const selectedPreviewSrc = artifactPreviewSrc(selected, selectedArtifact);
+    } else if (selectedPreviewAvailable) {
       if (els.artifactPreviewSoloImage) {
         if (selectedPreviewSrc && !_isArtifactUrlKnownMissing(selectedPreviewSrc)) {
           els.artifactPreviewSoloImage.src = selectedPreviewSrc;

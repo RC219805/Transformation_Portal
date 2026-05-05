@@ -33,10 +33,14 @@ pids_on_port() {
   fi
 }
 
+join_pids() {
+  awk 'NF { printf "%s%s", sep, $0; sep = " " } END { if (sep != "") printf "\n" }'
+}
+
 clear_port() {
   local port="$1"
   local pids
-  pids="$(pids_on_port "${port}" | xargs -r echo)"
+  pids="$(pids_on_port "${port}" | join_pids)"
   if [[ -z "${pids}" ]]; then
     return 0
   fi
@@ -46,7 +50,7 @@ clear_port() {
   # Wait up to GRACE_SECONDS for graceful exit.
   local waited=0
   while [[ "${waited}" -lt "${GRACE_SECONDS}" ]]; do
-    pids="$(pids_on_port "${port}" | xargs -r echo)"
+    pids="$(pids_on_port "${port}" | join_pids)"
     if [[ -z "${pids}" ]]; then
       return 0
     fi
@@ -73,7 +77,7 @@ echo
 echo "Port status:"
 remaining=0
 for port in "${PORTS[@]}"; do
-  pids="$(pids_on_port "${port}" | xargs -r echo)"
+  pids="$(pids_on_port "${port}" | join_pids)"
   if [[ -z "${pids}" ]]; then
     printf "  :%s  free\n" "${port}"
   else
