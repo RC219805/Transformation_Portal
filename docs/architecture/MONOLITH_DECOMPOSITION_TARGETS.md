@@ -50,7 +50,6 @@ Three sub-seams, each independently extractable. Pick one per PR, ~200 LOC each,
 | Symbol | Location |
 |---|---|
 | `_model_variant` | `orchestrator.py:583` |
-| `_initialize_depth_backend` | `orchestrator.py:589` |
 | `_resolve_backend_model_id` | `orchestrator.py:734` |
 | `_build_depth_cache_fingerprint` | `orchestrator.py:697` |
 | `_build_materials_fingerprint_payload` | `orchestrator.py:1082` |
@@ -78,10 +77,11 @@ Risk: low. Pure-function helpers operating on already-resolved config; the exist
 
 Risk: low–medium. Touches manifest schema; covered by `tests/test_backend_selection.py` and run-card contract tests.
 
-**Seam 1C — Backend resolution & state** → `lux_depth_v3/execution_engine.py`
+**Seam 1C — Backend resolution & state** → `lux_depth_v3/pipeline_coordinator.py`
 
 | Symbol | Location |
 |---|---|
+| `_initialize_depth_backend` | `orchestrator.py:589` |
 | `_resolve_runtime_backend_chain` | `orchestrator.py:677` |
 | `_expected_output_depth_units_for_backend` | `orchestrator.py:688` |
 | `_default_model_id_for_backend` | `orchestrator.py:716` |
@@ -168,9 +168,9 @@ This table is the canonical progress ledger for extraction PRs that draw from th
 
 | Seam | Source module | Destination | Status | Latest evidence |
 |---|---|---|---|---|
-| Target 1A — Config fingerprint helpers | `lux_depth_v3/orchestrator.py` | `lux_depth_v3/config_resolver.py` | Not started | Ranked 2026-05-04 |
-| Target 1B — Artifact reload / coercion helpers | `lux_depth_v3/orchestrator.py` | `lux_depth_v3/artifact_manager.py` | Not started | Ranked 2026-05-04 |
-| Target 1C — Backend resolution & state | `lux_depth_v3/orchestrator.py` | `lux_depth_v3/execution_engine.py` | Not started | Ranked 2026-05-04 |
+| Target 1A — Config fingerprint helpers | `lux_depth_v3/orchestrator.py` | `lux_depth_v3/config_resolver.py` | Landed | This PR: config fingerprint helpers extracted |
+| Target 1B — Artifact reload / coercion helpers | `lux_depth_v3/orchestrator.py` | `lux_depth_v3/artifact_manager.py` | Landed | This PR: manifest reload/coercion helpers extracted |
+| Target 1C — Backend resolution & state | `lux_depth_v3/orchestrator.py` | `lux_depth_v3/pipeline_coordinator.py` | Partial | This PR: backend initialization state extracted; runtime state helpers remain ranked |
 | Target 2A — Portal asset bundle | `app.py` | `src/transformation_portal/portal/asset_bundle.py` | Not started | Ranked 2026-05-04 |
 | Target 3A — Segmentation cache helpers | `lux_depth_v3/segmentation_backend.py` | `lux_depth_v3/segmentation/_cache.py` | Not started | Ranked 2026-05-04 |
 | Target 3B — Stub backend | `lux_depth_v3/segmentation_backend.py` | `lux_depth_v3/segmentation/stub.py` | Not started | Ranked 2026-05-04 |
