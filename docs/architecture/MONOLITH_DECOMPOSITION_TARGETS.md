@@ -171,7 +171,7 @@ This table is the canonical progress ledger for extraction PRs that draw from th
 | Target 1A — Config fingerprint helpers | `lux_depth_v3/orchestrator.py` | `lux_depth_v3/config_resolver.py` | Landed | This PR: config fingerprint helpers extracted |
 | Target 1B — Artifact reload / coercion helpers | `lux_depth_v3/orchestrator.py` | `lux_depth_v3/artifact_manager.py` | Landed | This PR: manifest reload/coercion helpers extracted |
 | Target 1C — Backend resolution & state | `lux_depth_v3/orchestrator.py` | `lux_depth_v3/pipeline_coordinator.py` | Landed | This PR: backend initialization and runtime attempt-state helpers extracted |
-| Target 2A — Portal asset bundle | `app.py` | `src/transformation_portal/portal/asset_bundle.py` | Not started | Ranked 2026-05-04 |
+| Target 2A — Portal asset bundle | `app.py` | `src/transformation_portal/portal/asset_bundle.py` | Landed | This PR: portal asset bundle helpers extracted |
 | Target 3A — Segmentation cache helpers | `lux_depth_v3/segmentation_backend.py` | `lux_depth_v3/segmentation/_cache.py` | Not started | Ranked 2026-05-04 |
 | Target 3B — Stub backend | `lux_depth_v3/segmentation_backend.py` | `lux_depth_v3/segmentation/stub.py` | Not started | Ranked 2026-05-04 |
 | Target 3C — EfficientSAM backend | `lux_depth_v3/segmentation_backend.py` | `lux_depth_v3/segmentation/efficient_sam.py` | Not started | Ranked 2026-05-04 |

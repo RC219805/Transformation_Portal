@@ -28,6 +28,7 @@ from starlette.requests import Request as StarletteRequest
 pytestmark = pytest.mark.unit
 
 orchestrator_app = importlib.import_module("app")
+portal_asset_bundle = importlib.import_module("transformation_portal.portal.asset_bundle")
 upload_staging = importlib.import_module("transformation_portal.ingest.upload_staging")
 PORTAL_HTML_PATH = Path(__file__).resolve().parents[1] / "portal.html"
 PORTAL_ASSET_ROOT = PORTAL_HTML_PATH.parent / "public" / "portal-assets"
@@ -737,6 +738,7 @@ def test_portal_asset_manifest_rejects_paths_outside_portal_assets_dir(
         encoding="utf-8",
     )
     monkeypatch.setattr(orchestrator_app, "PORTAL_ASSET_MANIFEST_PATH", manifest_path)
+    monkeypatch.setattr(portal_asset_bundle, "PORTAL_ASSET_MANIFEST_PATH", manifest_path)
 
     with pytest.raises(RuntimeError, match="points outside"):
         orchestrator_app._load_portal_asset_manifest()
