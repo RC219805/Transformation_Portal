@@ -178,6 +178,7 @@ This table is the canonical progress ledger for extraction PRs that draw from th
 | Target 3D — SAM2 backend | `lux_depth_v3/segmentation_backend.py` | `lux_depth_v3/segmentation/sam2.py` | Landed | This PR: SAM2 backend extracted |
 | Target 3E — SAM ViT-H backend | `lux_depth_v3/segmentation_backend.py` | `lux_depth_v3/segmentation/sam_vit_h.py` | Landed | This PR: SAM ViT-H backend extracted |
 | Target 3F — Segmentation registry | `lux_depth_v3/segmentation_backend.py` | `lux_depth_v3/segmentation/registry.py` | Landed | This PR: segmentation registry extracted |
+| Target 4A — Rendering config/result types | `pipelines/rendering_4k_pipeline.py` | `pipelines/rendering_4k/types.py` | Landed | This PR: rendering config/result types extracted; ranking unchanged pending governance refresh |
 
 ---
 
