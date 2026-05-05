@@ -87,7 +87,7 @@ Hard-block constraints are an allowed enforcement tool:
 - Introducing new required checks, changing required gates, or bypassing enforcement.
 
 ### B2) Agent and Documentation Topology
-- Changes to `.github/copilot-instructions.md`, `.github/agents/*`,
+- Changes to `.github/copilot-instructions.md`, `.github/agents/*`, `AGENTS.md`,
   `docs/guides/CUSTOM_AGENT_GUIDE.md`, `docs/reference/AGENT_QUICK_REFERENCE.md`,
   or `tests/test_custom_agent_config.py`.
 - Changes to canonical documentation navigation or classification boundaries.

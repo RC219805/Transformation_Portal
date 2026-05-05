@@ -146,7 +146,7 @@ Stop and escalate to the Architect when a task falls under any escalation
 criterion in `docs/architecture/agent_governance.md` §"Escalation Criteria"
 (A: dependency / supply-chain; B: CI/CD, release, repository automation; B2:
 agent and documentation topology including `.github/copilot-instructions.md`,
-`.github/agents/*`, and `tests/test_custom_agent_config.py`; C: security
+`.github/agents/*`, `AGENTS.md`, and `tests/test_custom_agent_config.py`; C: security
 posture and untrusted input handling; D: cross-pipeline contracts and public
 interfaces — including `app.py`, typed `/v1/*` envelopes, public CLI flags,
 documented outputs, and HTTP response schemas; E: ADR conflicts or
