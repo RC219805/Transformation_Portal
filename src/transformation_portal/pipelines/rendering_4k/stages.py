@@ -404,6 +404,12 @@ def apply_upscaling(
     scale_w = target_w / current_w
     scale_h = target_h / current_h
     scale = min(scale_w, scale_h)
+    if scale <= 1.0:
+        logger.info(
+            f"Image not upscaled because fitting target resolution would require downscaling "
+            f"({current_w}x{current_h} target {target_w}x{target_h})"
+        )
+        return image
 
     new_w = int(current_w * scale)
     new_h = int(current_h * scale)

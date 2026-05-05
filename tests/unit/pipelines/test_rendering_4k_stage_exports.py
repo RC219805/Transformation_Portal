@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib
+import sys
 
 import numpy as np
 import pytest
@@ -72,6 +73,21 @@ def test_rendering_4k_package_reexports_phase_4b_public_stages_only() -> None:
     for symbol in PRIVATE_STAGE_COMPAT_SYMBOLS:
         assert not hasattr(package, symbol)
         assert symbol not in package.__all__
+
+
+def test_rendering_4k_package_defers_stage_module_import(monkeypatch: pytest.MonkeyPatch) -> None:
+    package_name = "transformation_portal.pipelines.rendering_4k"
+    stages_name = f"{package_name}.stages"
+
+    monkeypatch.delitem(sys.modules, stages_name, raising=False)
+    monkeypatch.delitem(sys.modules, package_name, raising=False)
+
+    package = importlib.import_module(package_name)
+
+    assert stages_name not in sys.modules
+
+    stages = importlib.import_module(stages_name)
+    assert getattr(package, "apply_tone_mapping") is stages.apply_tone_mapping
 
 
 def test_extracted_tone_mapping_smoke_preserves_shape_dtype_and_range() -> None:

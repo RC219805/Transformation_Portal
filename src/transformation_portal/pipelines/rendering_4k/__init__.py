@@ -1,15 +1,7 @@
 """Internal modules for the 4K rendering pipeline decomposition."""
 
-# isort: off
-from .stages import (  # noqa: F401 - intentional package-level re-exports
-    apply_color_grading as apply_color_grading,
-    apply_material_response as apply_material_response,
-    apply_tone_mapping as apply_tone_mapping,
-    apply_upscaling as apply_upscaling,
-    estimate_depth_simple as estimate_depth_simple,
-)
+from importlib import import_module
 
-# isort: on
 from .types import (
     STAGE_NAMES,
     AIEnhancementConfig,
@@ -28,6 +20,14 @@ from .types import (
     ToneMappingMethod,
     UpscalingConfig,
 )
+
+_STAGE_EXPORTS = {
+    "apply_color_grading",
+    "apply_material_response",
+    "apply_tone_mapping",
+    "apply_upscaling",
+    "estimate_depth_simple",
+}
 
 __all__ = [
     "AIEnhancementConfig",
@@ -52,3 +52,17 @@ __all__ = [
     "apply_upscaling",
     "estimate_depth_simple",
 ]
+
+
+def __getattr__(name: str) -> object:
+    """Lazily expose stage functions without importing stage dependencies."""
+    if name in _STAGE_EXPORTS:
+        value = getattr(import_module(f"{__name__}.stages"), name)
+        globals()[name] = value
+        return value
+
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
+def __dir__() -> list[str]:
+    return sorted(set(globals()) | _STAGE_EXPORTS)

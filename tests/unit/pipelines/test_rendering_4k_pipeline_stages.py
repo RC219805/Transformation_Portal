@@ -283,3 +283,14 @@ class TestApplyUpscaling:
         result = apply_upscaling(large, config)
         # Should return original since it's already above target
         assert result.size == large.size
+
+    def test_one_dimension_above_target_does_not_downscale(self):
+        """Fitting to target must not shrink an image in the upscaling stage."""
+        from transformation_portal.pipelines.rendering_4k_pipeline import UpscalingConfig, apply_upscaling
+
+        wide = _pil_image(256, 64)
+        config = UpscalingConfig(enabled=True, target_resolution=(128, 128))
+        result = apply_upscaling(wide, config)
+
+        assert result is wide
+        assert result.size == wide.size
