@@ -403,8 +403,3 @@ def _write_cached_material_masks(
                     temp_path.unlink()
                 except OSError:
                     logger.debug("Failed to remove temporary segmentation cache file: %s", temp_path)
-
-
-# =============================================================================
-# Stub Backend (Default, Production-Safe)
-# =============================================================================
