@@ -56,6 +56,87 @@ def test_write_local_env_shell_quotes_caller_supplied_values(tmp_path: Path) -> 
 
 
 @pytest.mark.unit
+def test_write_local_env_reuses_generated_single_quoted_key(tmp_path: Path) -> None:
+    env_file = tmp_path / "local.env"
+    users_file = tmp_path / "users.json"
+    session_db = tmp_path / "sessions.db"
+    key = "idempotent'key-with-trailing=="
+
+    env = dict(os.environ)
+    env.update(
+        {
+            "TP_LOCAL_ENV_FILE": str(env_file),
+            "TP_FRONTDOOR_USERS_FILE": str(users_file),
+            "TP_FRONTDOOR_SESSION_DB": str(session_db),
+            "TP_LOCAL_API_KEY": key,
+        }
+    )
+
+    subprocess.run(["bash", str(WRITE_LOCAL_ENV_SCRIPT)], check=True, env=env)
+
+    env.pop("TP_LOCAL_API_KEY")
+    result = subprocess.run(
+        ["bash", str(WRITE_LOCAL_ENV_SCRIPT)],
+        check=True,
+        env=env,
+        text=True,
+        capture_output=True,
+    )
+
+    assert "Reused existing key" in result.stdout
+    sourced = subprocess.run(
+        [
+            "bash",
+            "-lc",
+            f'source {shlex.quote(str(env_file))}; printf \'%s\\n%s\' "$TP_API_KEY" "$TP_BACKEND_API_KEY"',
+        ],
+        check=True,
+        text=True,
+        capture_output=True,
+    )
+    assert sourced.stdout.splitlines() == [key, key]
+
+
+@pytest.mark.unit
+def test_write_local_env_reuses_legacy_double_quoted_key(tmp_path: Path) -> None:
+    env_file = tmp_path / "local.env"
+    users_file = tmp_path / "users.json"
+    session_db = tmp_path / "sessions.db"
+    key = "legacy-key-with-trailing=="
+    env_file.write_text(f'export TP_API_KEY="{key}"\n', encoding="utf-8")
+
+    env = dict(os.environ)
+    env.update(
+        {
+            "TP_LOCAL_ENV_FILE": str(env_file),
+            "TP_FRONTDOOR_USERS_FILE": str(users_file),
+            "TP_FRONTDOOR_SESSION_DB": str(session_db),
+        }
+    )
+
+    result = subprocess.run(
+        ["bash", str(WRITE_LOCAL_ENV_SCRIPT)],
+        check=True,
+        env=env,
+        text=True,
+        capture_output=True,
+    )
+
+    assert "Reused existing key" in result.stdout
+    sourced = subprocess.run(
+        [
+            "bash",
+            "-lc",
+            f'source {shlex.quote(str(env_file))}; printf \'%s\\n%s\' "$TP_API_KEY" "$TP_BACKEND_API_KEY"',
+        ],
+        check=True,
+        text=True,
+        capture_output=True,
+    )
+    assert sourced.stdout.splitlines() == [key, key]
+
+
+@pytest.mark.unit
 def test_stop_local_stack_uses_portable_pid_joining() -> None:
     content = STOP_LOCAL_STACK_SCRIPT.read_text(encoding="utf-8")
 

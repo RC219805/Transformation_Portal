@@ -54,9 +54,12 @@ ensure_writable_dir "${SESSION_DB}"
 
 resolve_existing_key() {
   if [[ -f "${ENV_FILE}" ]]; then
-    # Match: export TP_API_KEY="<value>"
+    # Match generated single-quoted keys, plus legacy double-quoted keys.
     # Use sed so trailing '=' in base64 keys is preserved (awk -F= would drop it).
-    sed -n 's/^export TP_API_KEY="\(.*\)"$/\1/p' "${ENV_FILE}" | head -n 1
+    sed -n \
+      -e "s/^export TP_API_KEY='\(.*\)'$/\1/p" \
+      -e 's/^export TP_API_KEY="\(.*\)"$/\1/p' \
+      "${ENV_FILE}" | head -n 1 | sed "s/'\\\\''/'/g"
   fi
 }
 
