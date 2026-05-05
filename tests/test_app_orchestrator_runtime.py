@@ -2488,6 +2488,33 @@ def test_portal_contextual_action_rail_reuses_existing_route_and_recovery_contra
     assert "url.searchParams.set('shortcut'" not in content
 
 
+def test_portal_preview_recovers_from_stale_and_transient_service_failures() -> None:
+    content = _portal_bundle_content()
+    fetch_body = _extract_js_function_body(content, "fetchConfigPreview")
+    schedule_body = _extract_js_function_body(content, "scheduleConfigPreview")
+    clear_body = _extract_js_function_body(content, "_clearConfigPreviewServiceRetry")
+    retry_body = _extract_js_function_body(content, "_scheduleConfigPreviewServiceRetry")
+
+    assert "const CONFIG_PREVIEW_SERVICE_RETRY_BASE_MS = 2500;" in content
+    assert "const CONFIG_PREVIEW_SERVICE_RETRY_MAX_ATTEMPTS = 3;" in content
+    assert "let configPreviewServiceRetryTimerId = null;" in content
+    assert "let configPreviewServiceRetryAttempts = 0;" in content
+
+    catch_marker = "} catch {"
+    catch_index = fetch_body.rfind(catch_marker)
+    assert catch_index >= 0, "fetchConfigPreview catch block not found"
+    catch_block = fetch_body[catch_index:]
+    assert "if (_configPreviewRequestKey(generatePayload()) !== requestKey) {" in catch_block
+    assert "_scheduleConfigPreviewServiceRetry();" in catch_block
+
+    assert "_scheduleConfigPreviewServiceRetry();" in fetch_body
+    assert "_clearConfigPreviewServiceRetry();" in fetch_body
+    assert "_clearConfigPreviewServiceRetry();" in schedule_body
+    assert "configPreviewServiceRetryAttempts >= CONFIG_PREVIEW_SERVICE_RETRY_MAX_ATTEMPTS" in retry_body
+    assert "CONFIG_PREVIEW_SERVICE_RETRY_BASE_MS * configPreviewServiceRetryAttempts" in retry_body
+    assert "configPreviewServiceRetryAttempts = 0;" in clear_body
+
+
 def test_portal_submit_blocks_preview_unavailable_and_debug_bundle_without_acknowledgement() -> None:
     content = _portal_bundle_content()
     guard_body = _extract_js_function_body(content, "_syncBootstrapGuardedControls")
