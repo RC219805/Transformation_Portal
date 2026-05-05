@@ -186,14 +186,24 @@ from .pipeline_coordinator import (
     BackendSelection,
     ExecutionPlan,
     PipelineCoordinator,
+    build_active_depth_state,
+    build_backend_metadata_for_attempts,
     default_model_id_for_backend,
     derive_model_id_from_backend_instance,
     expected_output_depth_units_for_backend,
+    extract_model_artifact_from_attempts,
+    extract_model_id_from_attempts,
+    get_or_create_depth_backend,
+    infer_operational_error_code,
     initialize_depth_backend_state,
+    normalize_sha256,
+    resolve_backend_model_artifact,
     resolve_backend_model_id,
     resolve_requested_backend,
     resolve_runtime_backend_chain,
+    seed_depth_attempts_from_selection_fallback,
     select_backend,
+    typed_nullary_callable,
 )
 
 # ADR-043: Pipeline coordination backward-compatible aliases
@@ -701,19 +711,12 @@ class EnhanceOrchestrator:
     @staticmethod
     def _normalize_sha256(value: Any) -> Optional[str]:
         """Normalize SHA-256 digest to lowercase hex."""
-        if not isinstance(value, str):
-            return None
-        digest = value.strip().lower()
-        if len(digest) == 64 and all(ch in "0123456789abcdef" for ch in digest):
-            return digest
-        return None
+        return normalize_sha256(value)
 
     @staticmethod
     def _typed_nullary_callable(value: Any) -> Optional[Callable[[], Any]]:
         """Return a typed no-arg callable for dynamically loaded attributes."""
-        if callable(value):
-            return cast(Callable[[], Any], value)
-        return None
+        return typed_nullary_callable(value)
 
     def _resolve_backend_model_artifact(
         self,
@@ -723,53 +726,11 @@ class EnhanceOrchestrator:
         backend: Optional[Any] = None,
     ) -> Dict[str, Optional[str]]:
         """Resolve backend model artifact identity fields."""
-        artifact_filename: Optional[str] = None
-        artifact_sha256: Optional[str] = None
-
-        if str(backend_id).strip().lower() != "depth_pro":
-            return {
-                "model_artifact_filename": None,
-                "model_artifact_sha256": None,
-            }
-
-        metadata = result_metadata or {}
-        checkpoint_meta = metadata.get("checkpoint")
-        if isinstance(checkpoint_meta, dict):
-            path_value = checkpoint_meta.get("path")
-            if isinstance(path_value, str) and path_value.strip():
-                artifact_filename = Path(path_value).name
-            artifact_sha256 = self._normalize_sha256(checkpoint_meta.get("sha256"))
-
-        if artifact_filename is None and backend is not None:
-            checkpoint_path = getattr(backend, "_checkpoint_path", None)
-            if checkpoint_path is not None:
-                try:
-                    artifact_filename = Path(checkpoint_path).name
-                except TypeError:
-                    artifact_filename = None
-
-        if artifact_sha256 is None and backend is not None:
-            artifact_sha256 = self._normalize_sha256(
-                getattr(backend, "_checkpoint_hash_cached", None),
-            )
-
-        checkpoint_meta_present = isinstance(checkpoint_meta, dict)
-        if artifact_sha256 is None and checkpoint_meta_present and backend is not None:
-            checkpoint_hash_getter = self._typed_nullary_callable(
-                getattr(backend, "_get_checkpoint_hash", None),
-            )
-            if checkpoint_hash_getter is not None:
-                try:
-                    artifact_sha256 = self._normalize_sha256(
-                        checkpoint_hash_getter(),
-                    )
-                except Exception:  # pragma: no cover - best-effort provenance enrichment
-                    artifact_sha256 = None
-
-        return {
-            "model_artifact_filename": artifact_filename,
-            "model_artifact_sha256": artifact_sha256,
-        }
+        return resolve_backend_model_artifact(
+            backend_id,
+            result_metadata=result_metadata,
+            backend=backend,
+        )
 
     @staticmethod
     def _extract_model_id_from_attempts(
@@ -779,23 +740,11 @@ class EnhanceOrchestrator:
         selected_attempt_index: Optional[int] = None,
     ) -> Optional[str]:
         """Extract selected backend model id from attempt history."""
-        if selected_attempt_index is not None and 0 <= selected_attempt_index < len(attempts):
-            selected_attempt = attempts[selected_attempt_index]
-            if selected_attempt.get("backend") == selected_backend:
-                selected_attempt_model = selected_attempt.get("model_id")
-                if isinstance(selected_attempt_model, str) and selected_attempt_model.strip():
-                    return selected_attempt_model.strip()
-
-        for attempt in attempts:
-            if attempt.get("backend") != selected_backend:
-                continue
-            if attempt.get("status") != "success":
-                continue
-            attempt_model = attempt.get("model_id")
-            if isinstance(attempt_model, str) and attempt_model.strip():
-                return attempt_model.strip()
-
-        return None
+        return extract_model_id_from_attempts(
+            selected_backend,
+            attempts,
+            selected_attempt_index=selected_attempt_index,
+        )
 
     @staticmethod
     def _extract_model_artifact_from_attempts(
@@ -805,140 +754,40 @@ class EnhanceOrchestrator:
         selected_attempt_index: Optional[int] = None,
     ) -> Dict[str, Optional[str]]:
         """Extract selected backend model artifact identity from attempt history."""
-
-        def _normalize_digest(value: Any) -> Optional[str]:
-            if not isinstance(value, str):
-                return None
-            digest = value.strip().lower()
-            if len(digest) == 64 and all(ch in "0123456789abcdef" for ch in digest):
-                return digest
-            return None
-
-        def _extract_from_attempt(attempt: Dict[str, Any]) -> Dict[str, Optional[str]]:
-            raw_filename = attempt.get("model_artifact_filename")
-            artifact_filename = raw_filename.strip() if isinstance(raw_filename, str) and raw_filename.strip() else None
-            return {
-                "model_artifact_filename": artifact_filename,
-                "model_artifact_sha256": _normalize_digest(
-                    attempt.get("model_artifact_sha256"),
-                ),
-            }
-
-        if selected_attempt_index is not None and 0 <= selected_attempt_index < len(attempts):
-            selected_attempt = attempts[selected_attempt_index]
-            if selected_attempt.get("backend") == selected_backend:
-                selected_artifact = _extract_from_attempt(selected_attempt)
-                if selected_artifact["model_artifact_filename"] or selected_artifact["model_artifact_sha256"]:
-                    return selected_artifact
-
-        for attempt in attempts:
-            if attempt.get("backend") != selected_backend:
-                continue
-            if attempt.get("status") != "success":
-                continue
-            selected_artifact = _extract_from_attempt(attempt)
-            if selected_artifact["model_artifact_filename"] or selected_artifact["model_artifact_sha256"]:
-                return selected_artifact
-
-        return {
-            "model_artifact_filename": None,
-            "model_artifact_sha256": None,
-        }
+        return extract_model_artifact_from_attempts(
+            selected_backend,
+            attempts,
+            selected_attempt_index=selected_attempt_index,
+        )
 
     def _seed_depth_attempts_from_selection_fallback(self) -> List[Dict[str, Any]]:
         """Materialize backend-selection fallback into per-image attempt history."""
-        backend_metadata = getattr(self, "_backend_metadata", None)
-        init_errors = getattr(self, "_backend_init_errors", None) or {}
-        requested_backend = normalize_backend_id(getattr(backend_metadata, "requested_backend", None))
-        resolved_backend = normalize_backend_id(getattr(backend_metadata, "resolved_backend", None))
-
-        if (
-            not requested_backend
-            or not resolved_backend
-            or requested_backend == resolved_backend
-            or not isinstance(init_errors, dict)
-        ):
-            return []
-
-        requested_error = init_errors.get(requested_backend)
-        if not isinstance(requested_error, str) or not requested_error.strip():
-            return []
-
-        attempt: Dict[str, Any] = {
-            "attempt": 0,
-            "backend": requested_backend,
-            "model_id": self._default_model_id_for_backend(requested_backend),
-            "device": self.config.depth_device,
-            "status": "failed",
-            "failure_kind": "operational",
-            "error_code": self._infer_operational_error_code(
-                RuntimeError(requested_error),
-            ),
-            "error_message": requested_error,
-            "apex_gate_passed": False,
-            "cached": False,
-            "duration_s": 0.0,
-            "model_artifact_filename": None,
-            "model_artifact_sha256": None,
-        }
-
-        if requested_backend == "depth_pro":
-            checkpoint_path = Path(
-                getattr(self.config, "depth_pro_checkpoint_path", None)
-                or os.environ.get("TRANSFORMATION_PORTAL_DEPTH_PRO_CHECKPOINT")
-                or "checkpoints/depth_pro.pt"
-            )
-            attempt["model_artifact_filename"] = checkpoint_path.name
-
-        return [attempt]
+        return seed_depth_attempts_from_selection_fallback(
+            getattr(self, "_backend_metadata", None),
+            getattr(self, "_backend_init_errors", None),
+            self.config,
+            self._model_variant,
+        )
 
     def _get_or_create_depth_backend(
         self,
         backend_id: str,
     ) -> Any:
         """Fetch backend from cache or registry."""
-        # Respect an already-initialized active backend when it matches the
-        # requested backend id. This keeps injected test doubles stable and
-        # avoids unnecessary registry lookups.
-        active_backend = getattr(self, "depth_backend", None)
-        if (
-            active_backend is not None
-            and getattr(
-                active_backend,
-                "name",
-                None,
-            )
-            == backend_id
-        ):
-            self._depth_backend_cache[backend_id] = active_backend
-            return active_backend
-
-        cached = self._depth_backend_cache.get(backend_id)
-        if cached is not None:
-            return cached
-
-        backend = self._depth_registry.get_backend(backend_id, self.config)
-        backend.ensure_available()
-        self._depth_backend_cache[backend_id] = backend
-        return backend
+        return get_or_create_depth_backend(
+            backend_id,
+            active_backend=getattr(self, "depth_backend", None),
+            backend_cache=self._depth_backend_cache,
+            registry=self._depth_registry,
+            config=self.config,
+        )
 
     @staticmethod
     def _infer_operational_error_code(
         error: Exception,
     ) -> str:
         """Map backend exceptions to error codes."""
-        if isinstance(error, ImportError):
-            return "BACKEND_IMPORT_ERROR"
-        if isinstance(error, FileNotFoundError):
-            return "BACKEND_RESOURCE_MISSING"
-        message = str(error).lower()
-        if "torch not compiled with cuda enabled" in message:
-            return "CUDA_HARDCODED_IN_BACKEND"
-        if "cuda" in message and "not available" in message:
-            return "CUDA_UNAVAILABLE"
-        if "mps" in message and "not available" in message:
-            return "MPS_UNAVAILABLE"
-        return "BACKEND_RUNTIME_ERROR"
+        return infer_operational_error_code(error)
 
     def _set_active_depth_state(
         self,
@@ -947,9 +796,14 @@ class EnhanceOrchestrator:
         selected_attempt_index: Optional[int],
     ) -> None:
         """Persist per-image depth state for downstream error/reporting paths."""
-        self._active_backend_metadata = backend_metadata
-        self._active_depth_attempts = list(depth_attempts)
-        self._active_selected_attempt_index = selected_attempt_index
+        active_state = build_active_depth_state(
+            backend_metadata,
+            depth_attempts,
+            selected_attempt_index,
+        )
+        self._active_backend_metadata = active_state.backend_metadata
+        self._active_depth_attempts = active_state.depth_attempts
+        self._active_selected_attempt_index = active_state.selected_attempt_index
 
     def _build_backend_metadata_for_attempts(
         self,
@@ -959,70 +813,15 @@ class EnhanceOrchestrator:
         selected_attempt_index: Optional[int] = None,
     ) -> BackendSelectionMetadata:
         """Build per-image backend selection metadata."""
-        normalized_selected_backend = (
-            normalize_backend_id(
-                selected_backend,
-            )
-            or selected_backend
-        )
-        requested = normalize_backend_provenance(
-            self._backend_metadata.requested_backend or self._backend_metadata.resolved_backend,
-        )
-        resolution_status = "success" if normalized_selected_backend == requested else "fallback"
-        resolution_reason: Optional[str] = None
-        if resolution_status == "fallback":
-            startup_reason = getattr(self._backend_metadata, "resolution_reason", None)
-            if (
-                isinstance(startup_reason, str)
-                and startup_reason.strip()
-                and normalize_backend_provenance(self._backend_metadata.requested_backend) == requested
-                and normalize_backend_provenance(self._backend_metadata.resolved_backend) == normalized_selected_backend
-                and self._backend_metadata.resolution_status != "success"
-            ):
-                resolution_reason = startup_reason
-            else:
-                failed = [attempt for attempt in attempts if attempt.get("status") == "failed"]
-                if failed:
-                    first_failure = failed[0]
-                    failure_kind = first_failure.get(
-                        "failure_kind",
-                        "operational",
-                    )
-                    failure_code = first_failure.get(
-                        "error_code",
-                        "UNKNOWN",
-                    )
-                    resolution_reason = (
-                        f"Fallback from"
-                        f" '{requested}' to"
-                        f" '{normalized_selected_backend}'"
-                        f" after {failure_kind}"
-                        f" failure ({failure_code})"
-                    )
-                else:
-                    resolution_reason = f"Fallback from" f" '{requested}'" f" to '{normalized_selected_backend}'"
-
-        model_id = self._extract_model_id_from_attempts(
-            normalized_selected_backend,
+        return build_backend_metadata_for_attempts(
+            selected_backend,
             attempts,
+            self._backend_metadata,
+            self.config,
+            self._resolve_backend_model_id,
+            result_metadata=result_metadata,
             selected_attempt_index=selected_attempt_index,
-        )
-        if not model_id:
-            backend_cache = getattr(self, "_depth_backend_cache", {})
-            model_id = self._resolve_backend_model_id(
-                normalized_selected_backend,
-                result_metadata=result_metadata,
-                backend=backend_cache.get(normalized_selected_backend),
-            )
-
-        return BackendSelectionMetadata(
-            requested_backend=requested,
-            resolved_backend=normalized_selected_backend,
-            resolution_status=resolution_status,
-            resolution_reason=resolution_reason,
-            model_id=str(model_id),
-            device=self.config.depth_device,
-            attempts=attempts,
+            backend_cache=getattr(self, "_depth_backend_cache", {}),
         )
 
     # ADR-043: Config resolution methods now delegate to config_resolver module

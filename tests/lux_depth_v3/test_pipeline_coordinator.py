@@ -29,18 +29,30 @@ class TestPipelineCoordinatorImports:
     def test_import_from_pipeline_coordinator(self):
         """Test that we can import from the new pipeline_coordinator module."""
         from transformation_portal.lux_depth_v3.pipeline_coordinator import (
+            ActiveDepthState,
             BackendSelection,
             ExecutionPlan,
             PipelineCoordinator,
+            build_active_depth_state,
+            build_backend_metadata_for_attempts,
             default_model_id_for_backend,
             derive_model_id_from_backend_instance,
             expected_output_depth_units_for_backend,
+            extract_model_artifact_from_attempts,
+            extract_model_id_from_attempts,
+            get_or_create_depth_backend,
+            infer_operational_error_code,
+            normalize_sha256,
+            resolve_backend_model_artifact,
             resolve_backend_model_id,
             resolve_runtime_backend_chain,
+            seed_depth_attempts_from_selection_fallback,
             select_backend,
+            typed_nullary_callable,
         )
 
         assert PipelineCoordinator is not None
+        assert ActiveDepthState is not None
         assert BackendSelection is not None
         assert ExecutionPlan is not None
         assert callable(resolve_runtime_backend_chain)
@@ -49,6 +61,16 @@ class TestPipelineCoordinatorImports:
         assert callable(derive_model_id_from_backend_instance)
         assert callable(resolve_backend_model_id)
         assert callable(expected_output_depth_units_for_backend)
+        assert callable(normalize_sha256)
+        assert callable(typed_nullary_callable)
+        assert callable(resolve_backend_model_artifact)
+        assert callable(extract_model_id_from_attempts)
+        assert callable(extract_model_artifact_from_attempts)
+        assert callable(infer_operational_error_code)
+        assert callable(seed_depth_attempts_from_selection_fallback)
+        assert callable(get_or_create_depth_backend)
+        assert callable(build_active_depth_state)
+        assert callable(build_backend_metadata_for_attempts)
 
 
 class TestResolveRuntimeBackendChain:
@@ -264,6 +286,265 @@ class TestResolveBackendModelId:
 
         result = resolve_backend_model_id("synthetic")
         assert result == "synthetic/depth-analytic-v1"
+
+
+class TestRuntimeBackendStateHelpers:
+    """Test runtime backend state helpers extracted from orchestrator."""
+
+    def test_normalize_sha256_accepts_lowercase_hex_only(self):
+        """Test digest normalization rejects non-SHA256 values."""
+        from transformation_portal.lux_depth_v3.pipeline_coordinator import (
+            normalize_sha256,
+        )
+
+        digest = "A" * 64
+
+        assert normalize_sha256(f" {digest} ") == digest.lower()
+        assert normalize_sha256("not-a-digest") is None
+        assert normalize_sha256(None) is None
+
+    def test_resolve_backend_model_artifact_uses_depth_pro_metadata(self):
+        """Test Depth Pro artifact provenance comes from checkpoint metadata."""
+        from transformation_portal.lux_depth_v3.pipeline_coordinator import (
+            resolve_backend_model_artifact,
+        )
+
+        digest = "B" * 64
+
+        artifact = resolve_backend_model_artifact(
+            "depth_pro",
+            result_metadata={
+                "checkpoint": {
+                    "path": "/models/depth-pro-local.pt",
+                    "sha256": digest,
+                }
+            },
+        )
+
+        assert artifact == {
+            "model_artifact_filename": "depth-pro-local.pt",
+            "model_artifact_sha256": digest.lower(),
+        }
+
+    def test_resolve_backend_model_artifact_uses_depth_pro_backend_fallback(self):
+        """Test backend attributes are best-effort fallback provenance."""
+        from transformation_portal.lux_depth_v3.pipeline_coordinator import (
+            resolve_backend_model_artifact,
+        )
+
+        digest = "C" * 64
+        backend = MagicMock(spec=["_checkpoint_path", "_checkpoint_hash_cached", "_get_checkpoint_hash"])
+        backend._checkpoint_path = "/runtime/depth-pro-fallback.pt"
+        backend._checkpoint_hash_cached = None
+        backend._get_checkpoint_hash.return_value = digest
+
+        artifact = resolve_backend_model_artifact(
+            "depth_pro",
+            result_metadata={"checkpoint": {}},
+            backend=backend,
+        )
+
+        assert artifact == {
+            "model_artifact_filename": "depth-pro-fallback.pt",
+            "model_artifact_sha256": digest.lower(),
+        }
+
+    def test_extract_model_id_from_attempts_prefers_selected_attempt(self):
+        """Test selected runtime attempt wins over earlier successful attempts."""
+        from transformation_portal.lux_depth_v3.pipeline_coordinator import (
+            extract_model_id_from_attempts,
+        )
+
+        attempts = [
+            {"backend": "da3", "status": "success", "model_id": "model/first"},
+            {"backend": "da3", "status": "success", "model_id": "model/selected"},
+        ]
+
+        assert (
+            extract_model_id_from_attempts(
+                "da3",
+                attempts,
+                selected_attempt_index=1,
+            )
+            == "model/selected"
+        )
+
+    def test_extract_model_artifact_from_attempts_prefers_selected_attempt(self):
+        """Test selected runtime attempt wins for artifact identity."""
+        from transformation_portal.lux_depth_v3.pipeline_coordinator import (
+            extract_model_artifact_from_attempts,
+        )
+
+        selected_digest = "D" * 64
+        attempts = [
+            {
+                "backend": "depth_pro",
+                "status": "success",
+                "model_artifact_filename": "first.pt",
+                "model_artifact_sha256": "E" * 64,
+            },
+            {
+                "backend": "depth_pro",
+                "status": "success",
+                "model_artifact_filename": "selected.pt",
+                "model_artifact_sha256": selected_digest,
+            },
+        ]
+
+        assert extract_model_artifact_from_attempts(
+            "depth_pro",
+            attempts,
+            selected_attempt_index=1,
+        ) == {
+            "model_artifact_filename": "selected.pt",
+            "model_artifact_sha256": selected_digest.lower(),
+        }
+
+    def test_infer_operational_error_code_classifies_known_failures(self):
+        """Test backend error classification stays stable."""
+        from transformation_portal.lux_depth_v3.pipeline_coordinator import (
+            infer_operational_error_code,
+        )
+
+        assert infer_operational_error_code(ImportError("missing")) == "BACKEND_IMPORT_ERROR"
+        assert infer_operational_error_code(FileNotFoundError("missing")) == "BACKEND_RESOURCE_MISSING"
+        assert infer_operational_error_code(RuntimeError("cuda not available")) == "CUDA_UNAVAILABLE"
+        assert infer_operational_error_code(RuntimeError("mps not available")) == "MPS_UNAVAILABLE"
+
+    def test_seed_depth_attempts_from_selection_fallback_records_depth_pro_failure(self):
+        """Test startup fallback is materialized into per-image attempt history."""
+        from transformation_portal.lux_depth_v3.config import EnhanceConfig, ModelVariant
+        from transformation_portal.lux_depth_v3.manifest import BackendSelectionMetadata
+        from transformation_portal.lux_depth_v3.pipeline_coordinator import (
+            seed_depth_attempts_from_selection_fallback,
+        )
+
+        metadata = BackendSelectionMetadata(
+            requested_backend="depth_pro",
+            resolved_backend="da3",
+            resolution_status="fallback",
+            resolution_reason="Depth Pro unavailable",
+            model_id="depth-anything/Depth-Anything-3-Metric-Large",
+            device="cpu",
+        )
+        config = EnhanceConfig(
+            depth_device="cpu",
+            depth_pro_checkpoint_path="/models/depth-pro-local.pt",
+        )
+
+        attempts = seed_depth_attempts_from_selection_fallback(
+            metadata,
+            {"depth_pro": "checkpoint not found"},
+            config,
+            ModelVariant.METRIC_LARGE,
+        )
+
+        assert attempts == [
+            {
+                "attempt": 0,
+                "backend": "depth_pro",
+                "model_id": "apple/ml-depth-pro",
+                "device": "cpu",
+                "status": "failed",
+                "failure_kind": "operational",
+                "error_code": "BACKEND_RUNTIME_ERROR",
+                "error_message": "checkpoint not found",
+                "apex_gate_passed": False,
+                "cached": False,
+                "duration_s": 0.0,
+                "model_artifact_filename": "depth-pro-local.pt",
+                "model_artifact_sha256": None,
+            }
+        ]
+
+    def test_get_or_create_depth_backend_prefers_matching_active_backend(self):
+        """Test active backend injection is preserved over stale cache entries."""
+        from transformation_portal.lux_depth_v3.config import EnhanceConfig
+        from transformation_portal.lux_depth_v3.pipeline_coordinator import (
+            get_or_create_depth_backend,
+        )
+
+        active_backend = MagicMock()
+        active_backend.name = "da3"
+        stale_backend = MagicMock()
+        registry = MagicMock()
+        backend_cache = {"da3": stale_backend}
+
+        result = get_or_create_depth_backend(
+            "da3",
+            active_backend=active_backend,
+            backend_cache=backend_cache,
+            registry=registry,
+            config=EnhanceConfig(),
+        )
+
+        assert result is active_backend
+        assert backend_cache["da3"] is active_backend
+        registry.get_backend.assert_not_called()
+
+    def test_build_active_depth_state_copies_attempts(self):
+        """Test active depth state owns its attempt list copy."""
+        from transformation_portal.lux_depth_v3.pipeline_coordinator import (
+            build_active_depth_state,
+        )
+
+        attempts = [{"backend": "da3", "status": "success"}]
+
+        state = build_active_depth_state(None, attempts, 0)
+
+        assert state.backend_metadata is None
+        assert state.depth_attempts == attempts
+        assert state.depth_attempts is not attempts
+        assert state.selected_attempt_index == 0
+
+    def test_build_backend_metadata_for_attempts_records_runtime_fallback(self):
+        """Test per-image backend metadata preserves fallback audit semantics."""
+        from transformation_portal.lux_depth_v3.config import EnhanceConfig
+        from transformation_portal.lux_depth_v3.manifest import BackendSelectionMetadata
+        from transformation_portal.lux_depth_v3.pipeline_coordinator import (
+            build_backend_metadata_for_attempts,
+        )
+
+        startup_metadata = BackendSelectionMetadata(
+            requested_backend="da3",
+            resolved_backend="da3",
+            resolution_status="success",
+            resolution_reason=None,
+            model_id="model/startup",
+            device="cpu",
+        )
+        attempts = [
+            {
+                "backend": "da3",
+                "status": "failed",
+                "failure_kind": "operational",
+                "error_code": "CUDA_UNAVAILABLE",
+            },
+            {
+                "backend": "da2",
+                "status": "success",
+                "model_id": "model/selected-da2",
+            },
+        ]
+        resolve_model_id = MagicMock(return_value="model/fallback")
+
+        metadata = build_backend_metadata_for_attempts(
+            "da2",
+            attempts,
+            startup_metadata,
+            EnhanceConfig(depth_device="cpu"),
+            resolve_model_id,
+            selected_attempt_index=1,
+        )
+
+        assert metadata.requested_backend == "da3"
+        assert metadata.resolved_backend == "da2"
+        assert metadata.resolution_status == "fallback"
+        assert metadata.resolution_reason == ("Fallback from 'da3' to 'da2' after operational failure (CUDA_UNAVAILABLE)")
+        assert metadata.model_id == "model/selected-da2"
+        assert metadata.device == "cpu"
+        assert metadata.attempts == attempts
+        resolve_model_id.assert_not_called()
 
 
 class TestBackendSelection:
