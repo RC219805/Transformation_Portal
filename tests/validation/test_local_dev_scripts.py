@@ -13,6 +13,20 @@ STOP_LOCAL_STACK_SCRIPT = REPO_ROOT / "scripts" / "dev" / "stop_local_stack.sh"
 RUN_CLOUDFLARED_SCRIPT = REPO_ROOT / "scripts" / "dev" / "run_cloudflared.sh"
 
 
+def _source_local_env_key_pair(env_file: Path) -> list[str]:
+    result = subprocess.run(
+        [
+            "bash",
+            "-lc",
+            f'source {shlex.quote(str(env_file))}; printf \'%s\\n%s\' "$TP_API_KEY" "$TP_BACKEND_API_KEY"',
+        ],
+        check=True,
+        text=True,
+        capture_output=True,
+    )
+    return result.stdout.splitlines()
+
+
 @pytest.mark.unit
 def test_write_local_env_shell_quotes_caller_supplied_values(tmp_path: Path) -> None:
     env_file = tmp_path / "local.env"
@@ -60,7 +74,8 @@ def test_write_local_env_reuses_generated_single_quoted_key(tmp_path: Path) -> N
     env_file = tmp_path / "local.env"
     users_file = tmp_path / "users.json"
     session_db = tmp_path / "sessions.db"
-    key = "idempotent'key-with-trailing=="
+    shell_single_quote_escape_fragment = "'\\''"
+    key = f"idempotent{shell_single_quote_escape_fragment}key-with-trailing=="
 
     env = dict(os.environ)
     env.update(
@@ -84,17 +99,7 @@ def test_write_local_env_reuses_generated_single_quoted_key(tmp_path: Path) -> N
     )
 
     assert "Reused existing key" in result.stdout
-    sourced = subprocess.run(
-        [
-            "bash",
-            "-lc",
-            f'source {shlex.quote(str(env_file))}; printf \'%s\\n%s\' "$TP_API_KEY" "$TP_BACKEND_API_KEY"',
-        ],
-        check=True,
-        text=True,
-        capture_output=True,
-    )
-    assert sourced.stdout.splitlines() == [key, key]
+    assert _source_local_env_key_pair(env_file) == [key, key]
 
 
 @pytest.mark.unit
@@ -102,8 +107,11 @@ def test_write_local_env_reuses_legacy_double_quoted_key(tmp_path: Path) -> None
     env_file = tmp_path / "local.env"
     users_file = tmp_path / "users.json"
     session_db = tmp_path / "sessions.db"
-    key = "legacy-key-with-trailing=="
-    env_file.write_text(f'export TP_API_KEY="{key}"\n', encoding="utf-8")
+    key = 'legacy"key\\with$dollar`tick=='
+    env_file.write_text(
+        'export TP_API_KEY="legacy\\"key\\\\with\\$dollar\\`tick=="\n',
+        encoding="utf-8",
+    )
 
     env = dict(os.environ)
     env.update(
@@ -123,17 +131,7 @@ def test_write_local_env_reuses_legacy_double_quoted_key(tmp_path: Path) -> None
     )
 
     assert "Reused existing key" in result.stdout
-    sourced = subprocess.run(
-        [
-            "bash",
-            "-lc",
-            f'source {shlex.quote(str(env_file))}; printf \'%s\\n%s\' "$TP_API_KEY" "$TP_BACKEND_API_KEY"',
-        ],
-        check=True,
-        text=True,
-        capture_output=True,
-    )
-    assert sourced.stdout.splitlines() == [key, key]
+    assert _source_local_env_key_pair(env_file) == [key, key]
 
 
 @pytest.mark.unit

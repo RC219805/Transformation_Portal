@@ -52,15 +52,118 @@ ensure_writable_dir "${ENV_FILE}"
 ensure_writable_dir "${USERS_FILE}"
 ensure_writable_dir "${SESSION_DB}"
 
-resolve_existing_key() {
-  if [[ -f "${ENV_FILE}" ]]; then
-    # Match generated single-quoted keys, plus legacy double-quoted keys.
-    # Use sed so trailing '=' in base64 keys is preserved (awk -F= would drop it).
-    sed -n \
-      -e "s/^export TP_API_KEY='\(.*\)'$/\1/p" \
-      -e 's/^export TP_API_KEY="\(.*\)"$/\1/p' \
-      "${ENV_FILE}" | head -n 1 | sed "s/'\\\\''/'/g"
+decode_single_quoted_export_value() {
+  local token="$1"
+  local value=""
+  local idx=0
+  local len=${#token}
+  local char
+  local closed
+  local next_idx
+
+  while ((idx < len)); do
+    char="${token:idx:1}"
+    if [[ "${char}" == "'" ]]; then
+      idx=$((idx + 1))
+      closed=0
+      while ((idx < len)); do
+        char="${token:idx:1}"
+        if [[ "${char}" == "'" ]]; then
+          closed=1
+          idx=$((idx + 1))
+          break
+        fi
+        value+="${char}"
+        idx=$((idx + 1))
+      done
+      if [[ "${closed}" -ne 1 ]]; then
+        return 1
+      fi
+    elif [[ "${char}" == "\\" ]]; then
+      next_idx=$((idx + 1))
+      if ((next_idx >= len)) || [[ "${token:next_idx:1}" != "'" ]]; then
+        return 1
+      fi
+      value+="'"
+      idx=$((idx + 2))
+    else
+      return 1
+    fi
+  done
+
+  printf '%s\n' "${value}"
+}
+
+decode_double_quoted_export_value() {
+  local token="$1"
+  local len=${#token}
+  if ((len < 2)) || [[ "${token:0:1}" != '"' || "${token:len - 1:1}" != '"' ]]; then
+    return 1
   fi
+
+  local content_len=$((len - 2))
+  local content="${token:1:content_len}"
+  local value=""
+  local idx=0
+  local char
+  local next
+  local next_idx
+
+  while ((idx < content_len)); do
+    char="${content:idx:1}"
+    if [[ "${char}" == '"' ]]; then
+      return 1
+    fi
+    if [[ "${char}" == "\\" ]]; then
+      next_idx=$((idx + 1))
+      if ((next_idx >= content_len)); then
+        return 1
+      fi
+      next="${content:next_idx:1}"
+      case "${next}" in
+        '$' | '"' | '`' | '\')
+          value+="${next}"
+          idx=$((idx + 2))
+          ;;
+        *)
+          value+="\\"
+          idx=$((idx + 1))
+          ;;
+      esac
+    else
+      value+="${char}"
+      idx=$((idx + 1))
+    fi
+  done
+
+  printf '%s\n' "${value}"
+}
+
+resolve_existing_key() {
+  local line
+  local token
+  local parsed
+
+  if [[ ! -f "${ENV_FILE}" ]]; then
+    return 0
+  fi
+
+  while IFS= read -r line; do
+    case "${line}" in
+      export\ TP_API_KEY=*)
+        token="${line#export TP_API_KEY=}"
+        if parsed="$(decode_single_quoted_export_value "${token}")"; then
+          printf '%s\n' "${parsed}"
+          return 0
+        fi
+        if parsed="$(decode_double_quoted_export_value "${token}")"; then
+          printf '%s\n' "${parsed}"
+          return 0
+        fi
+        return 0
+        ;;
+    esac
+  done < "${ENV_FILE}"
 }
 
 EXISTING_KEY="$(resolve_existing_key || true)"
