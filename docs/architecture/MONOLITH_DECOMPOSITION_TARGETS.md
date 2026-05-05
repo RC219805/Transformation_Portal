@@ -172,12 +172,12 @@ This table is the canonical progress ledger for extraction PRs that draw from th
 | Target 1B — Artifact reload / coercion helpers | `lux_depth_v3/orchestrator.py` | `lux_depth_v3/artifact_manager.py` | Landed | This PR: manifest reload/coercion helpers extracted |
 | Target 1C — Backend resolution & state | `lux_depth_v3/orchestrator.py` | `lux_depth_v3/pipeline_coordinator.py` | Landed | This PR: backend initialization and runtime attempt-state helpers extracted |
 | Target 2A — Portal asset bundle | `app.py` | `src/transformation_portal/portal/asset_bundle.py` | Landed | This PR: portal asset bundle helpers extracted |
-| Target 3A — Segmentation cache helpers | `lux_depth_v3/segmentation_backend.py` | `lux_depth_v3/segmentation/_cache.py` | Not started | Ranked 2026-05-04 |
-| Target 3B — Stub backend | `lux_depth_v3/segmentation_backend.py` | `lux_depth_v3/segmentation/stub.py` | Not started | Ranked 2026-05-04 |
-| Target 3C — EfficientSAM backend | `lux_depth_v3/segmentation_backend.py` | `lux_depth_v3/segmentation/efficient_sam.py` | Not started | Ranked 2026-05-04 |
-| Target 3D — SAM2 backend | `lux_depth_v3/segmentation_backend.py` | `lux_depth_v3/segmentation/sam2.py` | Not started | Ranked 2026-05-04 |
-| Target 3E — SAM ViT-H backend | `lux_depth_v3/segmentation_backend.py` | `lux_depth_v3/segmentation/sam_vit_h.py` | Not started | Ranked 2026-05-04 |
-| Target 3F — Segmentation registry | `lux_depth_v3/segmentation_backend.py` | `lux_depth_v3/segmentation/registry.py` | Not started | Ranked 2026-05-04 |
+| Target 3A — Segmentation cache helpers | `lux_depth_v3/segmentation_backend.py` | `lux_depth_v3/segmentation/_cache.py` | Landed | This PR: segmentation cache helpers extracted |
+| Target 3B — Stub backend | `lux_depth_v3/segmentation_backend.py` | `lux_depth_v3/segmentation/stub.py` | Landed | This PR: stub backend extracted |
+| Target 3C — EfficientSAM backend | `lux_depth_v3/segmentation_backend.py` | `lux_depth_v3/segmentation/efficient_sam.py` | Landed | This PR: EfficientSAM backend extracted |
+| Target 3D — SAM2 backend | `lux_depth_v3/segmentation_backend.py` | `lux_depth_v3/segmentation/sam2.py` | Landed | This PR: SAM2 backend extracted |
+| Target 3E — SAM ViT-H backend | `lux_depth_v3/segmentation_backend.py` | `lux_depth_v3/segmentation/sam_vit_h.py` | Landed | This PR: SAM ViT-H backend extracted |
+| Target 3F — Segmentation registry | `lux_depth_v3/segmentation_backend.py` | `lux_depth_v3/segmentation/registry.py` | Landed | This PR: segmentation registry extracted |
 
 ---
 
