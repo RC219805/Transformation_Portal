@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { createSign, generateKeyPairSync } from "node:crypto";
 import os from "node:os";
 import path from "node:path";
@@ -207,6 +208,64 @@ test("run_frontdoor_local launcher supports isolated port, distdir, and local us
   assert.match(script, /Local operator username:/);
   assert.match(script, /Password not printed\./);
   assert.doesNotMatch(script, /Local operator credentials:/);
+  assert.match(script, /Start the backend with that host trusted before launching the frontdoor\./);
+  assert.doesNotMatch(script, /Appended \$\{CF_HOSTNAME\} to TP_TRUSTED_HOSTS/);
+});
+
+test("preflight requires the same FastAPI origin variable consumed by runtime proxy", async () => {
+  const scriptPath = path.resolve(process.cwd(), "scripts", "preflight-backend-auth.mjs");
+  const result = spawnSync(process.execPath, [scriptPath], {
+    cwd: process.cwd(),
+    encoding: "utf-8",
+    env: {
+      ...process.env,
+      NODE_ENV: "development",
+      TP_BACKEND_ORIGIN: "https://backend-origin.example.com",
+      TP_FASTAPI_ORIGIN: "",
+      TP_BACKEND_API_KEY: "secret",
+      TP_FRONTDOOR_PREFLIGHT_DISABLE: "0",
+      TP_FRONTDOOR_USERS_FILE: "",
+      TP_FRONTDOOR_USERS_JSON: JSON.stringify([
+        {
+          username: "admin",
+          password_hash: "hash",
+          access_email: "admin@example.com"
+        }
+      ])
+    }
+  });
+
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /TP_FASTAPI_ORIGIN is not set/);
+  assert.match(result.stderr, /TP_BACKEND_ORIGIN is not consumed/);
+});
+
+test("preflight rejects unreadable or empty frontdoor user sources", async () => {
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), "tp-preflight-users-"));
+  const emptyUsersFile = path.join(tempDir, "users.json");
+  writeFileSync(emptyUsersFile, "[]", "utf-8");
+
+  try {
+    const scriptPath = path.resolve(process.cwd(), "scripts", "preflight-backend-auth.mjs");
+    const result = spawnSync(process.execPath, [scriptPath], {
+      cwd: process.cwd(),
+      encoding: "utf-8",
+      env: {
+        ...process.env,
+        NODE_ENV: "development",
+        TP_FASTAPI_ORIGIN: "http://127.0.0.1:8000",
+        TP_BACKEND_API_KEY: "secret",
+        TP_FRONTDOOR_PREFLIGHT_DISABLE: "0",
+        TP_FRONTDOOR_USERS_FILE: emptyUsersFile,
+        TP_FRONTDOOR_USERS_JSON: ""
+      }
+    });
+
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /TP_FRONTDOOR_USERS_FILE did not contain any valid users/);
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
 });
 
 test("seed-frontdoor-user helper encodes the canonical local smoke credential defaults and writes restrictive fixtures", async () => {
@@ -3416,6 +3475,100 @@ test("healthz reports backend outages as degraded readiness", async () => {
       assert.equal(body.checks.backend.reason, "backend_unreachable");
       assert.equal(body.backend.status, 0);
       assert.equal(body.checks.session_scaling.ok, true);
+    } finally {
+      global.fetch = originalFetch;
+    }
+  } finally {
+    env.cleanup();
+  }
+});
+
+test("healthz reports backend_auth_mismatch when the protected probe returns 401", async () => {
+  const env = withTempEnvironment({
+    usersFileEntries: [
+      {
+        username: "admin",
+        password_hash: "hash",
+        access_email: "admin@example.com",
+        role: "admin"
+      }
+    ]
+  });
+
+  try {
+    const { GET } = await importFresh("../app/healthz/route.js");
+    const originalFetch = global.fetch;
+    global.fetch = async (input) => {
+      const url = String(input?.url || input);
+      if (url.includes("/v1/config-metadata")) {
+        return new Response(JSON.stringify({ error: "unauthorized" }), {
+          status: 401,
+          headers: { "content-type": "application/json" }
+        });
+      }
+      return new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { "content-type": "application/json" }
+      });
+    };
+
+    try {
+      const response = await GET();
+      const body = await response.json();
+
+      assert.equal(response.status, 503);
+      assert.equal(body.frontend, "degraded");
+      assert.equal(body.checks.backend.ok, false);
+      assert.equal(body.checks.backend.reason, "backend_auth_mismatch");
+      assert.equal(body.checks.backend.auth_status, 401);
+      assert.equal(body.checks.backend.status, 200);
+    } finally {
+      global.fetch = originalFetch;
+    }
+  } finally {
+    env.cleanup();
+  }
+});
+
+test("healthz fails closed when protected backend probe returns an unexpected non-OK status", async () => {
+  const env = withTempEnvironment({
+    usersFileEntries: [
+      {
+        username: "admin",
+        password_hash: "hash",
+        access_email: "admin@example.com",
+        role: "admin"
+      }
+    ]
+  });
+
+  try {
+    const { GET } = await importFresh("../app/healthz/route.js");
+    const originalFetch = global.fetch;
+    global.fetch = async (input) => {
+      const url = String(input?.url || input);
+      if (url.includes("/v1/config-metadata")) {
+        return new Response(JSON.stringify({ error: "not found" }), {
+          status: 404,
+          headers: { "content-type": "application/json" }
+        });
+      }
+      return new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { "content-type": "application/json" }
+      });
+    };
+
+    try {
+      const response = await GET();
+      const body = await response.json();
+
+      assert.equal(response.status, 503);
+      assert.equal(body.frontend, "degraded");
+      assert.equal(body.checks.backend.ok, false);
+      assert.equal(body.checks.backend.reason, "backend_protected_probe_unexpected_status");
+      assert.equal(body.checks.backend.auth_status, 404);
+      assert.equal(body.checks.backend.status, 200);
     } finally {
       global.fetch = originalFetch;
     }

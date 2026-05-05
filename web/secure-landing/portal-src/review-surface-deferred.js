@@ -23,7 +23,10 @@ export function createDeferredReviewSurfaceApi(host) {
     findCompareArtifact,
     buildArtifactUrl,
     sanitizeManagedAssetUrl,
-    artifactIsPreviewable,
+    artifactIsBrowserPreviewable,
+    artifactPreviewSrc,
+    _markArtifactUrlNotFound,
+    _isArtifactUrlKnownMissing,
     artifactLabel,
     artifactDisplayHint,
     artifactDisplayLabel,
@@ -130,10 +133,12 @@ export function createDeferredReviewSurfaceApi(host) {
 
   function _showArtifactViewerFallback(context, artifactName, fallbackOptions) {
     const url = context?.url || "";
+    const downloadUrl = context?.downloadUrl || "";
+    const hasRawAsset = Boolean(downloadUrl);
     const isRetryable = Boolean(fallbackOptions?.retryable && url);
     const fallbackReason = isRetryable
       ? "inline_preview_failed"
-      : url ? "inline_preview_unavailable" : "asset_url_unavailable";
+      : hasRawAsset ? "inline_preview_unavailable" : "asset_url_unavailable";
     if (els.artifactViewerImage) {
       els.artifactViewerImage.classList.add("hidden");
       els.artifactViewerImage.removeAttribute("src");
@@ -145,12 +150,12 @@ export function createDeferredReviewSurfaceApi(host) {
     if (els.artifactViewerFallbackTitle) {
       els.artifactViewerFallbackTitle.textContent = isRetryable
         ? "Inline preview failed to load"
-        : url ? "Inline preview unavailable" : "Artifact URL unavailable";
+        : hasRawAsset ? "Inline preview unavailable" : "Artifact URL unavailable";
     }
     if (els.artifactViewerFallbackDetail) {
       els.artifactViewerFallbackDetail.textContent = isRetryable
         ? "The managed asset request did not complete. Retry the preview or continue reviewing the retained metadata and fingerprints."
-        : url
+        : hasRawAsset
           ? "This artifact stays reviewable through retained metadata, integrity fingerprints, and the managed raw asset link."
           : "The browser cannot resolve a managed asset URL for this artifact, so review stays pinned to the retained metadata above.";
     }
@@ -158,7 +163,7 @@ export function createDeferredReviewSurfaceApi(host) {
     _setArtifactViewerStatus(
       isRetryable
         ? `${artifactName} inline preview failed to load; retry available.`
-        : url
+        : hasRawAsset
           ? `${artifactName} is open with metadata fallback because an inline preview is unavailable.`
           : `${artifactName} is open with metadata fallback because the managed asset URL is unavailable.`
     );
@@ -232,6 +237,9 @@ export function createDeferredReviewSurfaceApi(host) {
         if (controller) fetchOptions.signal = controller.signal;
         const response = await fetch(context.url, fetchOptions);
         if (!response.ok) {
+          if (response.status === 404 && typeof _markArtifactUrlNotFound === "function") {
+            _markArtifactUrlNotFound(context.url);
+          }
           throw new Error(`artifact_preview_${response.status}`);
         }
         const objectUrl = URL.createObjectURL(await response.blob());
@@ -1030,10 +1038,23 @@ export function createDeferredReviewSurfaceApi(host) {
     const selectedArtifact = _selectedArtifactForJob(selected);
     const compareCandidate = findCompareArtifact(selectedArtifact, artifacts);
     const captioningEvidenceVisible = _hasCaptioningEvidence(selected, selectedArtifact);
-    const compareEnabled = Boolean(compareCandidate) && Boolean(state.artifactUi.compareByJob[String(selected.id || "")]);
+    const selectedBrowserPreviewable = artifactIsBrowserPreviewable(selectedArtifact);
+    const selectedPreviewSrc = selectedArtifact ? artifactPreviewSrc(selected, selectedArtifact) : "";
+    const selectedPreviewAvailable = Boolean(selectedPreviewSrc && !_isArtifactUrlKnownMissing(selectedPreviewSrc));
+    const compareBrowserPreviewable = artifactIsBrowserPreviewable(compareCandidate);
+    const comparePreviewSrc = compareCandidate ? artifactPreviewSrc(selected, compareCandidate) : "";
+    const comparePreviewAvailable = Boolean(comparePreviewSrc && !_isArtifactUrlKnownMissing(comparePreviewSrc));
+    const compareAvailable = Boolean(
+      compareCandidate &&
+      selectedBrowserPreviewable &&
+      compareBrowserPreviewable &&
+      selectedPreviewAvailable &&
+      comparePreviewAvailable
+    );
+    const compareEnabled = compareAvailable && Boolean(state.artifactUi.compareByJob[String(selected.id || "")]);
 
     if (els.artifactCompareBtn) {
-      if (compareCandidate) {
+      if (compareAvailable) {
         els.artifactCompareBtn.classList.remove("hidden");
         els.artifactCompareBtn.textContent = compareEnabled ? "Single View" : "Compare";
         els.artifactCompareBtn.setAttribute("aria-pressed", compareEnabled ? "true" : "false");
@@ -1055,7 +1076,7 @@ export function createDeferredReviewSurfaceApi(host) {
     }
     _renderReviewStatusBanner(selected, selectedArtifact);
     _renderArtifactProvenance(selected, selectedArtifact);
-    _renderReviewCompareSummary(selectedArtifact, compareCandidate, compareEnabled);
+    _renderReviewCompareSummary(selectedArtifact, compareAvailable ? compareCandidate : null, compareEnabled);
 
     if (els.openArtifactBtn) {
       const openUrl = selectedArtifact ? buildArtifactUrl(selected, selectedArtifact) : "";
@@ -1084,27 +1105,42 @@ export function createDeferredReviewSurfaceApi(host) {
       els.artifactCompareStage.setAttribute("aria-hidden", compareEnabled ? "false" : "true");
     }
     if (els.artifactPreviewSoloImage) {
-      els.artifactPreviewSoloImage.classList.toggle("hidden", compareEnabled || !artifactIsPreviewable(selectedArtifact));
+      els.artifactPreviewSoloImage.classList.toggle("hidden", compareEnabled || !selectedPreviewAvailable);
     }
     if (els.artifactMetadataCard) {
-      els.artifactMetadataCard.classList.toggle("hidden", artifactIsPreviewable(selectedArtifact) && !captioningEvidenceVisible);
+      els.artifactMetadataCard.classList.toggle("hidden", selectedPreviewAvailable && !captioningEvidenceVisible);
     }
     if (compareEnabled && selectedArtifact && compareCandidate) {
       if (els.artifactPreviewImage) {
-        els.artifactPreviewImage.src = buildArtifactUrl(selected, selectedArtifact);
-        els.artifactPreviewImage.classList.remove("hidden");
+        if (selectedPreviewSrc && !_isArtifactUrlKnownMissing(selectedPreviewSrc)) {
+          els.artifactPreviewImage.src = selectedPreviewSrc;
+          els.artifactPreviewImage.classList.remove("hidden");
+        } else {
+          els.artifactPreviewImage.classList.add("hidden");
+          els.artifactPreviewImage.removeAttribute("src");
+        }
       }
       if (els.artifactPreviewPrimaryCaption) els.artifactPreviewPrimaryCaption.textContent = artifactLabel(selectedArtifact);
       if (els.artifactCompareImage) {
-        els.artifactCompareImage.src = buildArtifactUrl(selected, compareCandidate);
-        els.artifactCompareImage.classList.remove("hidden");
+        if (comparePreviewSrc && !_isArtifactUrlKnownMissing(comparePreviewSrc)) {
+          els.artifactCompareImage.src = comparePreviewSrc;
+          els.artifactCompareImage.classList.remove("hidden");
+        } else {
+          els.artifactCompareImage.classList.add("hidden");
+          els.artifactCompareImage.removeAttribute("src");
+        }
       }
       if (els.artifactCompareCaption) els.artifactCompareCaption.textContent = artifactLabel(compareCandidate);
       if (captioningEvidenceVisible) _renderArtifactMetadataCard(selected, selectedArtifact);
-    } else if (artifactIsPreviewable(selectedArtifact)) {
+    } else if (selectedPreviewAvailable) {
       if (els.artifactPreviewSoloImage) {
-        els.artifactPreviewSoloImage.src = buildArtifactUrl(selected, selectedArtifact);
-        els.artifactPreviewSoloImage.classList.remove("hidden");
+        if (selectedPreviewSrc && !_isArtifactUrlKnownMissing(selectedPreviewSrc)) {
+          els.artifactPreviewSoloImage.src = selectedPreviewSrc;
+          els.artifactPreviewSoloImage.classList.remove("hidden");
+        } else {
+          els.artifactPreviewSoloImage.classList.add("hidden");
+          els.artifactPreviewSoloImage.removeAttribute("src");
+        }
       }
       if (els.artifactPreviewImage) {
         els.artifactPreviewImage.classList.add("hidden");
@@ -1144,10 +1180,13 @@ export function createDeferredReviewSurfaceApi(host) {
         ? "rounded-2xl border border-cyan-300 dark:border-cyan-900/60 bg-cyan-50/90 dark:bg-cyan-900/20 p-3 text-left shadow-sm transition-colors"
         : "rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/50 p-3 text-left hover:bg-white/90 dark:hover:bg-slate-800/80 transition-colors";
 
-      if (artifactIsPreviewable(artifact)) {
+      const thumbPreviewSrc = artifactIsBrowserPreviewable(artifact)
+        ? artifactPreviewSrc(selected, artifact)
+        : "";
+      if (thumbPreviewSrc && !_isArtifactUrlKnownMissing(thumbPreviewSrc)) {
         const thumb = document.createElement("img");
         thumb.alt = artifactLabel(artifact);
-        thumb.src = buildArtifactUrl(selected, artifact);
+        thumb.src = thumbPreviewSrc;
         thumb.className = "h-24 w-full rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-900/60 object-cover";
         button.appendChild(thumb);
       } else {
@@ -1188,6 +1227,7 @@ export function createDeferredReviewSurfaceApi(host) {
         artifact: null,
         index: -1,
         url: "",
+        downloadUrl: "",
         inlinePreview: false,
         zoomPercent: 100
       };
@@ -1199,14 +1239,17 @@ export function createDeferredReviewSurfaceApi(host) {
       artifacts[0] ||
       null;
     const index = artifact ? artifacts.findIndex((candidate) => candidate.path === artifact.path) : -1;
-    const url = artifact ? sanitizeManagedAssetUrl(buildArtifactUrl(job, artifact)) : "";
+    const previewSrc = artifact ? artifactPreviewSrc(job, artifact) : "";
+    const downloadUrl = artifact ? sanitizeManagedAssetUrl(buildArtifactUrl(job, artifact)) : "";
+    const inlineUrl = previewSrc && !_isArtifactUrlKnownMissing(previewSrc) ? previewSrc : "";
     return {
       job,
       artifacts,
       artifact,
       index,
-      url,
-      inlinePreview: Boolean(artifact && artifactIsPreviewable(artifact) && url),
+      url: inlineUrl,
+      downloadUrl,
+      inlinePreview: Boolean(artifact && artifactIsBrowserPreviewable(artifact) && inlineUrl),
       zoomPercent: clamp(Number(viewerState.zoomPercent || 100), 50, 250)
     };
   }
@@ -1265,7 +1308,7 @@ export function createDeferredReviewSurfaceApi(host) {
       return;
     }
 
-    const { artifact, index, artifacts, inlinePreview, job, url, zoomPercent } = context;
+    const { artifact, index, artifacts, inlinePreview, job, url, downloadUrl, zoomPercent } = context;
     const relPath = artifactLabel(artifact);
     const fingerprint = artifactFingerprint(artifact);
     const artifactName = artifactNameParts(artifact).fileName;
@@ -1284,8 +1327,12 @@ export function createDeferredReviewSurfaceApi(host) {
     if (els.artifactViewerZoomInBtn) els.artifactViewerZoomInBtn.disabled = !inlinePreview;
     if (els.artifactViewerResetZoomBtn) els.artifactViewerResetZoomBtn.disabled = !inlinePreview;
     if (els.artifactViewerOpenRawBtn) {
-      els.artifactViewerOpenRawBtn.disabled = !url;
-      els.artifactViewerOpenRawBtn.dataset.url = url;
+      els.artifactViewerOpenRawBtn.disabled = !downloadUrl;
+      if (downloadUrl) {
+        els.artifactViewerOpenRawBtn.dataset.url = downloadUrl;
+      } else {
+        delete els.artifactViewerOpenRawBtn.dataset.url;
+      }
     }
     if (els.artifactViewerCopyPathBtn) {
       els.artifactViewerCopyPathBtn.disabled = !relPath;
