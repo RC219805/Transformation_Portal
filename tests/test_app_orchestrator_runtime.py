@@ -884,8 +884,11 @@ def test_portal_fetch_sse_reconnect_schedules_on_unexpected_disconnect_only() ->
 
     assert "let sawDoneEvent = false;" in body
     assert "let shouldReconnect = true;" in body
+    assert "const suppressed = await _maybeSuppressOnProtectedResponse('jobs_events', res);" in body
     assert "const isAuthError = status === 401 || status === 403;" in body
     assert "const isRetryableStatus = status === 429 || status >= 500;" in body
+    assert "shouldReconnect = isRetryableStatus && !suppressed;" in body
+    assert "if (suppressed || !isRetryableStatus) {" in body
     assert "job.reconnectBlocked = true;" in body
     assert "if (shouldReconnect && !sawDoneEvent && !controller.signal.aborted && _isJobStreamRecoverable(job)) {" in body
     assert "scheduleSseReconnect(job);" in body
@@ -909,6 +912,7 @@ def test_portal_start_job_stream_avoids_duplicate_readers() -> None:
     content = _portal_bundle_content()
     body = _extract_js_function_body(content, "startJobEventStream")
 
+    assert "if (_isProtectedFamilySuppressed('jobs_events')) {" in body
     assert "_clearSseRetry(job, false);" in body
     assert "if (_jobHasActiveStream(job)) return;" in body
 
@@ -1066,6 +1070,21 @@ def test_portal_bootstrap_loader_uses_abortable_timeout_and_state_contract() -> 
     assert "(now + delayMs) > state.bootstrap.retry.deadlineAt" in retry_body
     assert "window.setTimeout(() => {" in retry_body
     assert "void loadPortalBootstrap({ isRetryAttempt: true, attempt, retryReason: reason });" in retry_body
+
+
+def test_portal_protected_suppression_reads_managed_error_envelope_details() -> None:
+    content = _portal_bundle_content()
+    details_body = _extract_js_function_body(content, "_protectedErrorDetailsFromPayload")
+    suppress_body = _extract_js_function_body(content, "_maybeSuppressOnProtectedResponse")
+    recover_body = _extract_js_function_body(content, "recoverJobs")
+    upload_body = _extract_js_function_body(content, "_submitStagedUploadSelection")
+
+    assert "payload.error.details" in details_body
+    assert "const details = _nonRetryableProtectedDetails(body);" in suppress_body
+    assert "if (_isProtectedFamilySuppressed('jobs_list')) return;" in recover_body
+    assert "await _maybeSuppressOnProtectedResponse('jobs_list', res);" in recover_body
+    assert "if (_isProtectedFamilySuppressed('uploads_staging')) {" in upload_body
+    assert "_recordProtectedFamilySuppression('uploads_staging', nonRetryableDetails);" in upload_body
 
 
 def test_portal_staged_upload_ui_contract_is_present_in_markup_and_source() -> None:
@@ -1398,6 +1417,9 @@ def test_portal_artifact_gallery_renders_visual_review_controls() -> None:
     assert "artifactDisplayPriority(right)" in rank_body
     assert "artifactCompareGroup(candidate) === primaryGroup" in compare_body
     assert "display_hint: _normalizeArtifactDisplayHint(item.display_hint)" in normalize_body
+    assert "browser_previewable: Boolean(item.browser_previewable)" in normalize_body
+    assert "preview_url: typeof item.preview_url === 'string' ? item.preview_url : ''" in normalize_body
+    assert "preview_mime_type: typeof item.preview_mime_type === 'string' ? item.preview_mime_type : ''" in normalize_body
     assert "if (!artifact || typeof artifact !== 'object') return '';" in route_key_body
     assert "_resetArtifactActionButtons();" in review_body
     assert "renderConsoleContextRibbon();" in review_body
@@ -1414,6 +1436,18 @@ def test_portal_artifact_gallery_renders_visual_review_controls() -> None:
     assert "return true;" in open_artifact_body
     assert "return _openManagedArtifactWindow(job, artifact, surface);" in open_artifact_body
     assert "sanitizeManagedAssetUrl(els.downloadArtifactBtn.dataset.url)" in content
+
+
+def test_portal_artifact_missing_preview_cache_clears_when_artifacts_update() -> None:
+    content = _portal_bundle_content()
+    upsert_body = _extract_js_function_body(content, "upsertArtifact")
+    stream_body = _extract_js_function_body(content, "_applyJobStreamEvent")
+
+    assert "function _clearArtifactUrlNotFoundCache() {" in content
+    assert "_artifactNotFoundUrls.clear();" in content
+    assert "_clearArtifactUrlNotFoundCache();" in upsert_body
+    assert "job.artifacts = normalizeArtifactItems(parsed.artifacts);" in stream_body
+    assert "_clearArtifactUrlNotFoundCache();" in stream_body
 
 
 def test_portal_deferred_review_surface_failures_back_off_until_retry_window_expires() -> None:
@@ -1592,6 +1626,9 @@ def test_portal_artifact_viewer_modal_is_feature_flagged_and_keyboard_complete()
     assert "URL.createObjectURL(await response.blob())" in preview_load_body
     assert "_showArtifactViewerFallback(context, artifactName, { retryable });" in preview_load_body
     assert "els.artifactViewerCopyFingerprintBtn.dataset.fingerprint = fingerprint;" in render_body
+    assert "const { artifact, index, artifacts, inlinePreview, job, url, downloadUrl, zoomPercent } = context;" in render_body
+    assert "els.artifactViewerOpenRawBtn.disabled = !downloadUrl;" in render_body
+    assert "els.artifactViewerOpenRawBtn.dataset.url = downloadUrl;" in render_body
     assert "_setArtifactViewerStatus(" in render_body
     assert "_rememberArtifactSelection(context.job.id, nextPath);" in navigate_body
     assert "renderReviewSurfaces();" in navigate_body
@@ -5261,6 +5298,40 @@ def test_index_job_artifacts_surfaces_tiff_preview_proxy_when_present(
     assert tiff_item["preview_url"] == f"/v1/jobs/{job.id}/artifacts/render.tif.preview.png"
     assert tiff_item["preview_mime_type"] == "image/png"
     assert tiff_item["download_url"] == f"/v1/jobs/{job.id}/artifacts/render.tif"
+
+
+def test_index_job_artifacts_indexes_scoped_tiff_preview_proxy_for_download(
+    tmp_path: Path,
+) -> None:
+    output_dir = tmp_path / "out"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    (output_dir / "render.tif").write_bytes(b"II*\x00")
+    proxy_path = output_dir / "render.tif.preview.png"
+    proxy_path.write_bytes(b"\x89PNG")
+    run_card = output_dir / "run_card_2026-05-05_120000.json"
+    run_card.write_text(
+        json.dumps(
+            {
+                "batch_id": "2026-05-05_120000",
+                "artifact_index": [
+                    {"relative_path": "render.tif"},
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    job = orchestrator_app.Job(
+        id="job_scoped_tiff_proxy",
+        created_at=orchestrator_app._now(),
+        request={"pipeline": "lux-depth-v3", "args": {"output_dir": str(output_dir)}},
+    )
+    indexed = orchestrator_app._index_job_artifacts(job)
+    tiff_item = next(item for item in indexed if item["path"] == "render.tif")
+
+    assert tiff_item["browser_previewable"] is True
+    assert tiff_item["preview_url"] == f"/v1/jobs/{job.id}/artifacts/render.tif.preview.png"
+    assert job.artifact_lookup["render.tif.preview.png"] == proxy_path.resolve()
 
 
 def test_index_job_artifacts_does_not_misclassify_catalog_metadata_as_log(tmp_path: Path) -> None:

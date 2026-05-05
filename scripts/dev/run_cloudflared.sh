@@ -11,8 +11,8 @@
 #     during long-running sessions (per the executive diagnosis logs).
 #
 # After the tunnel is up, the assigned hostname is written to
-# /tmp/tp-cloudflared-host so other scripts (e.g. run_frontdoor_local.sh)
-# can append it to TP_TRUSTED_HOSTS automatically.
+# /tmp/tp-cloudflared-host so scripts/dev/start_local_stack.sh can add it to
+# TP_TRUSTED_HOSTS before the FastAPI backend starts.
 
 set -euo pipefail
 

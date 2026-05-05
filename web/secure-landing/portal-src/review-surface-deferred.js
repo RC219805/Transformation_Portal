@@ -1218,6 +1218,7 @@ export function createDeferredReviewSurfaceApi(host) {
         artifact: null,
         index: -1,
         url: "",
+        downloadUrl: "",
         inlinePreview: false,
         zoomPercent: 100
       };
@@ -1298,7 +1299,7 @@ export function createDeferredReviewSurfaceApi(host) {
       return;
     }
 
-    const { artifact, index, artifacts, inlinePreview, job, url, zoomPercent } = context;
+    const { artifact, index, artifacts, inlinePreview, job, url, downloadUrl, zoomPercent } = context;
     const relPath = artifactLabel(artifact);
     const fingerprint = artifactFingerprint(artifact);
     const artifactName = artifactNameParts(artifact).fileName;
@@ -1317,8 +1318,12 @@ export function createDeferredReviewSurfaceApi(host) {
     if (els.artifactViewerZoomInBtn) els.artifactViewerZoomInBtn.disabled = !inlinePreview;
     if (els.artifactViewerResetZoomBtn) els.artifactViewerResetZoomBtn.disabled = !inlinePreview;
     if (els.artifactViewerOpenRawBtn) {
-      els.artifactViewerOpenRawBtn.disabled = !url;
-      els.artifactViewerOpenRawBtn.dataset.url = url;
+      els.artifactViewerOpenRawBtn.disabled = !downloadUrl;
+      if (downloadUrl) {
+        els.artifactViewerOpenRawBtn.dataset.url = downloadUrl;
+      } else {
+        delete els.artifactViewerOpenRawBtn.dataset.url;
+      }
     }
     if (els.artifactViewerCopyPathBtn) {
       els.artifactViewerCopyPathBtn.disabled = !relPath;

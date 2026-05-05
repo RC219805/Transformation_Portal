@@ -15,11 +15,10 @@ two values as one secret, set them together, rotate them together.
 
 | Variable | Required in | Purpose | `/healthz` reason if missing/wrong |
 |----------|-------------|---------|-------------------------------------|
-| `TP_BACKEND_ORIGIN` | all envs | URL of the FastAPI origin (named Cloudflare tunnel hostname in production). | `backend_unreachable` |
-| `TP_FASTAPI_ORIGIN` | all envs | Alias used by `/healthz` and the v1 proxy. Must equal `TP_BACKEND_ORIGIN` unless an explicit split is intended. | `backend_unreachable` |
+| `TP_FASTAPI_ORIGIN` | all envs | URL of the FastAPI origin used by `/healthz` and the v1 proxy. This is the runtime source of truth; `TP_BACKEND_ORIGIN` is not consumed by the managed frontdoor. | `backend_unreachable` |
 | `TP_BACKEND_API_KEY` | all envs | API key the frontdoor presents to the backend. **Must equal backend `TP_API_KEY`.** | `missing_backend_api_key` (when empty) / `backend_auth_mismatch` (when wrong) |
 | `TP_FRONTDOOR_USERS_JSON` *or* `TP_FRONTDOOR_USERS_FILE` | all envs | At least one configured user. JSON form is `[{"username":"…","password_hash":"…","access_email":"…","role":"admin"}]`. | `no_configured_users` |
-| `TP_FRONTDOOR_SESSION_SCALING_MODE` | all envs | `single_instance` for SQLite, or a multi-instance value backed by an external store. Vercel's stateless runtime needs an external store for multi-instance mode. | `multi_instance_requires_external_session_store` / `invalid_session_scaling_mode` |
+| `TP_FRONTDOOR_SESSION_SCALING_MODE` | all envs | Must be `single_instance` for the current SQLite-backed frontdoor. Multi-instance declarations intentionally fail until an external session-store implementation exists. | `multi_instance_requires_external_session_store` / `invalid_session_scaling_mode` |
 | `TP_FRONTDOOR_SESSION_DB` | when `single_instance` | Path to the SQLite session DB. On Vercel, prefer an external store. | `session_store_unavailable` |
 | `TP_CF_ACCESS_TEAM_DOMAIN` | production | Cloudflare Access team domain (`https://<team>.cloudflareaccess.com`). Validated by the preflight; required when `TP_ALLOW_LOCAL_ACCESS_BYPASS` is unset. | `missing_access_team_domain` |
 | `TP_CF_ACCESS_AUD` | production | Cloudflare Access JWT audience for the protected application. | `missing_access_audience` |

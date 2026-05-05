@@ -25,6 +25,29 @@ echo "[dev-start] Writing canonical env file (${ENV_FILE})..."
 # shellcheck disable=SC1090
 source "${ENV_FILE}"
 
+append_cloudflared_trusted_host() {
+  local host_file="${TP_CLOUDFLARED_HOST_FILE:-/tmp/tp-cloudflared-host}"
+  if [[ ! -r "${host_file}" ]]; then
+    return
+  fi
+  local hostname
+  hostname="$(head -n 1 "${host_file}" | tr -d '[:space:]')"
+  if [[ -z "${hostname}" ]]; then
+    return
+  fi
+  if [[ -n "${TP_TRUSTED_HOSTS:-}" ]] && [[ ",${TP_TRUSTED_HOSTS}," == *",${hostname},"* ]]; then
+    return
+  fi
+  if [[ -n "${TP_TRUSTED_HOSTS:-}" ]]; then
+    export TP_TRUSTED_HOSTS="${TP_TRUSTED_HOSTS},${hostname}"
+  else
+    export TP_TRUSTED_HOSTS="localhost,127.0.0.1,::1,testserver,${hostname}"
+  fi
+  echo "[dev-start] Added Cloudflare tunnel host to backend TP_TRUSTED_HOSTS before startup: ${hostname}"
+}
+
+append_cloudflared_trusted_host
+
 echo "[dev-start] Stopping any existing local stack..."
 ./scripts/dev/stop_local_stack.sh || true
 
@@ -36,7 +59,9 @@ cleanup() {
   echo
   echo "[dev-start] Stopping local stack..."
   kill "${BACKEND_PID}" 2>/dev/null || true
-  kill "${FRONTDOOR_PID:-0}" 2>/dev/null || true
+  if [[ -n "${FRONTDOOR_PID:-}" ]]; then
+    kill "${FRONTDOOR_PID}" 2>/dev/null || true
+  fi
   ./scripts/dev/stop_local_stack.sh || true
 }
 trap cleanup EXIT INT TERM
@@ -69,4 +94,24 @@ echo "  backend   pid=${BACKEND_PID}  log=${BACKEND_LOG}"
 echo "  frontdoor pid=${FRONTDOOR_PID}  log=${FRONTDOOR_LOG}"
 echo "Press Ctrl+C to stop."
 
-wait
+while true; do
+  if ! kill -0 "${FRONTDOOR_PID}" 2>/dev/null; then
+    set +e
+    wait "${FRONTDOOR_PID}"
+    frontdoor_status=$?
+    set -e
+    echo "[dev-start] Frontdoor exited unexpectedly with status ${frontdoor_status}. See ${FRONTDOOR_LOG}." >&2
+    tail -n 40 "${FRONTDOOR_LOG}" >&2 || true
+    exit "${frontdoor_status}"
+  fi
+  if ! kill -0 "${BACKEND_PID}" 2>/dev/null; then
+    set +e
+    wait "${BACKEND_PID}"
+    backend_status=$?
+    set -e
+    echo "[dev-start] Backend exited unexpectedly with status ${backend_status}. See ${BACKEND_LOG}." >&2
+    tail -n 40 "${BACKEND_LOG}" >&2 || true
+    exit "${backend_status}"
+  fi
+  sleep 1
+done

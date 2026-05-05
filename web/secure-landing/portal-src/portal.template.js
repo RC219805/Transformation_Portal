@@ -3030,6 +3030,10 @@ function _markArtifactUrlNotFound(url) {
     _artifactNotFoundUrls.add(url);
 }
 
+function _clearArtifactUrlNotFoundCache() {
+    _artifactNotFoundUrls.clear();
+}
+
 function _isArtifactUrlKnownMissing(url) {
     if (typeof url !== 'string' || !url) return false;
     return _artifactNotFoundUrls.has(url);
@@ -4869,6 +4873,21 @@ function _recordProtectedFamilySuppression(family, payload) {
     }
 }
 
+function _protectedErrorDetailsFromPayload(payload) {
+    if (!payload || typeof payload !== 'object') return null;
+    const nestedDetails = payload.error && typeof payload.error === 'object'
+        ? payload.error.details
+        : null;
+    if (nestedDetails && typeof nestedDetails === 'object') return nestedDetails;
+    const topLevelDetails = payload.details;
+    return topLevelDetails && typeof topLevelDetails === 'object' ? topLevelDetails : null;
+}
+
+function _nonRetryableProtectedDetails(payload) {
+    const details = _protectedErrorDetailsFromPayload(payload);
+    return details && details.retryable === false ? details : null;
+}
+
 // Inspect a non-OK protected response. If the body carries details.retryable === false,
 // suppress the family and return true so the caller can short-circuit.
 async function _maybeSuppressOnProtectedResponse(family, response) {
@@ -4879,9 +4898,8 @@ async function _maybeSuppressOnProtectedResponse(family, response) {
     } catch {
         return false;
     }
-    const details = body && typeof body === 'object' ? body.details : null;
-    const isNonRetryable = details && typeof details === 'object' && details.retryable === false;
-    if (!isNonRetryable) return false;
+    const details = _nonRetryableProtectedDetails(body);
+    if (!details) return false;
     _recordProtectedFamilySuppression(family, {
         reason: details.reason,
         upstreamStatus: details.upstreamStatus
@@ -5616,6 +5634,10 @@ function _applyStagedUploadResult(result) {
 function _submitStagedUploadSelection(fileList) {
     if (_blockManagedUnavailableAction('stage uploads')) return;
     if (!_stagedUploadsVisibleForState()) return;
+    if (_isProtectedFamilySuppressed('uploads_staging')) {
+        createToast('Staged uploads are paused until frontdoor configuration is repaired.', 'error');
+        return;
+    }
 
     const selection = _collectStagedUploadSelection(fileList);
     if (selection.entries.length === 0) {
@@ -5720,6 +5742,10 @@ function _submitStagedUploadSelection(fileList) {
             return;
         }
 
+        const nonRetryableDetails = _nonRetryableProtectedDetails(payload);
+        if (nonRetryableDetails) {
+            _recordProtectedFamilySuppression('uploads_staging', nonRetryableDetails);
+        }
         const errorMessage = _stagedUploadErrorMessage(payload);
         _setStagedUploadState({
             busy: false,
@@ -5978,8 +6004,12 @@ function normalizeArtifactItems(artifactsContainer) {
             artifact_type: String(item.artifact_type || 'file'),
             media_kind: String(item.media_kind || item.artifact_type || 'file'),
             previewable: Boolean(item.previewable),
+            browser_previewable: Boolean(item.browser_previewable),
             content_type: typeof item.content_type === 'string' ? item.content_type : '',
             url: typeof item.url === 'string' ? item.url : '',
+            download_url: typeof item.download_url === 'string' ? item.download_url : '',
+            preview_url: typeof item.preview_url === 'string' ? item.preview_url : '',
+            preview_mime_type: typeof item.preview_mime_type === 'string' ? item.preview_mime_type : '',
             path: String(item.path),
             relative_path: String(item.relative_path || item.path),
             size_bytes: typeof item.size_bytes === 'number' ? item.size_bytes : null,
@@ -6000,8 +6030,12 @@ function upsertArtifact(job, artifact) {
         existing.artifact_type = normalizedArtifact.artifact_type || existing.artifact_type;
         existing.media_kind = normalizedArtifact.media_kind || existing.media_kind;
         existing.previewable = typeof normalizedArtifact.previewable === 'boolean' ? normalizedArtifact.previewable : existing.previewable;
+        existing.browser_previewable = typeof normalizedArtifact.browser_previewable === 'boolean' ? normalizedArtifact.browser_previewable : existing.browser_previewable;
         existing.content_type = normalizedArtifact.content_type || existing.content_type;
         existing.url = normalizedArtifact.url || existing.url;
+        existing.download_url = normalizedArtifact.download_url || existing.download_url;
+        existing.preview_url = normalizedArtifact.preview_url || existing.preview_url;
+        existing.preview_mime_type = normalizedArtifact.preview_mime_type || existing.preview_mime_type;
         existing.relative_path = normalizedArtifact.relative_path || existing.relative_path;
         existing.size_bytes = normalizedArtifact.size_bytes ?? existing.size_bytes;
         existing.sha256 = normalizedArtifact.sha256 || existing.sha256;
@@ -6009,6 +6043,7 @@ function upsertArtifact(job, artifact) {
     } else {
         job.artifacts.push(normalizedArtifact);
     }
+    _clearArtifactUrlNotFoundCache();
     _reconcileJobTimeline(job);
 }
 
@@ -6472,6 +6507,11 @@ async function refreshJobStatus(job) {
 function scheduleSseReconnect(job) {
     if (!_isJobStreamRecoverable(job)) return;
     _ensureJobStreamState(job);
+    if (_isProtectedFamilySuppressed('jobs_events')) {
+        job.reconnectBlocked = true;
+        _clearSseRetry(job, true);
+        return;
+    }
     if (job.reconnectBlocked) return;
     if (job.sseRetry.timer || _jobHasActiveStream(job)) return;
 
@@ -10282,8 +10322,12 @@ function _applyJobStreamEvent(job, eventName, parsed) {
             artifact_type: String(parsed.artifact_type || 'file'),
             media_kind: String(parsed.media_kind || parsed.artifact_type || 'file'),
             previewable: Boolean(parsed.previewable),
+            browser_previewable: Boolean(parsed.browser_previewable),
             content_type: typeof parsed.content_type === 'string' ? parsed.content_type : '',
             url: typeof parsed.url === 'string' ? parsed.url : '',
+            download_url: typeof parsed.download_url === 'string' ? parsed.download_url : '',
+            preview_url: typeof parsed.preview_url === 'string' ? parsed.preview_url : '',
+            preview_mime_type: typeof parsed.preview_mime_type === 'string' ? parsed.preview_mime_type : '',
             path: String(parsed.path || ''),
             relative_path: String(parsed.relative_path || parsed.path || ''),
             size_bytes: typeof parsed.size_bytes === 'number' ? parsed.size_bytes : null,
@@ -10320,6 +10364,7 @@ function _applyJobStreamEvent(job, eventName, parsed) {
         }
         if (parsed.artifacts && parsed.artifacts.items) {
             job.artifacts = normalizeArtifactItems(parsed.artifacts);
+            _clearArtifactUrlNotFoundCache();
         }
         if (parsed.run_summary) {
             job.run_summary = normalizeRunSummary(parsed.run_summary);
@@ -10341,6 +10386,11 @@ function _applyJobStreamEvent(job, eventName, parsed) {
 async function _startAuthorizedFetchSse(job, eventsUrl) {
     if (!job || !eventsUrl || !_isJobStreamRecoverable(job)) return;
     _ensureJobStreamState(job);
+    if (_isProtectedFamilySuppressed('jobs_events')) {
+        job.reconnectBlocked = true;
+        _clearSseRetry(job, true);
+        return;
+    }
     const controller = new AbortController();
     const handle = { close: () => controller.abort() };
     job.fetchAbortController = controller;
@@ -10357,13 +10407,14 @@ async function _startAuthorizedFetchSse(job, eventsUrl) {
             cache: 'no-store'
         });
         if (!res.ok) {
+            const suppressed = await _maybeSuppressOnProtectedResponse('jobs_events', res);
             const parsedError = await extractApiError(res);
             if (parsedError.error) job.error = parsedError.error;
             const status = Number(res.status) || 0;
             const isAuthError = status === 401 || status === 403;
             const isRetryableStatus = status === 429 || status >= 500;
-            shouldReconnect = isRetryableStatus;
-            if (!isRetryableStatus) {
+            shouldReconnect = isRetryableStatus && !suppressed;
+            if (suppressed || !isRetryableStatus) {
                 job.reconnectBlocked = true;
                 _clearSseRetry(job, true);
             }
@@ -10495,6 +10546,11 @@ async function _startAuthorizedFetchSse(job, eventsUrl) {
 function startJobEventStream(job, eventsUrl) {
     if (!job) return;
     _ensureJobStreamState(job);
+    if (_isProtectedFamilySuppressed('jobs_events')) {
+        job.reconnectBlocked = true;
+        _clearSseRetry(job, true);
+        return;
+    }
     if (typeof eventsUrl === 'string' && eventsUrl.trim()) {
         job.eventStreamUrl = eventsUrl.trim();
     }
@@ -10585,6 +10641,7 @@ function startJobEventStream(job, eventsUrl) {
 
 async function recoverJobs() {
     if (!state.backendOk) return;
+    if (_isProtectedFamilySuppressed('jobs_list')) return;
     if (state.jobs.length === 0) {
         state.jobsLoadStatus = 'loading';
         renderJobQueue();
@@ -10593,6 +10650,7 @@ async function recoverJobs() {
         const headers = _buildAuthHeaders({ 'Accept': 'application/json' });
         const res = await fetch(`${API_BASE}/v1/jobs`, { headers });
         if (!res.ok) {
+            await _maybeSuppressOnProtectedResponse('jobs_list', res);
             if (state.jobs.length === 0) {
                 state.jobsLoadStatus = 'error';
                 renderJobQueue();
@@ -10655,6 +10713,7 @@ async function cancelJob(id) {
     const job = state.jobs.find((item) => item.id === id);
     if (!job || (job.state !== 'running' && job.state !== 'queued')) return;
     if (_blockManagedUnavailableAction('change job state')) return;
+    if (_isProtectedFamilySuppressed('jobs_cancel')) return;
 
     void emitPortalEvent('cancel_requested', {
         surface: 'job_queue',
@@ -10673,6 +10732,9 @@ async function cancelJob(id) {
     const headers = _buildAuthHeaders({}, 'POST', { traceparent: requestTraceparent });
     fetch(`${API_BASE}/v1/jobs/${id}/cancel`, { method: 'POST', headers })
         .then((response) => {
+            if (!response.ok) {
+                void _maybeSuppressOnProtectedResponse('jobs_cancel', response);
+            }
             _queuePortalRumSample({
                 eventType: 'queue_request',
                 metric: 'cancel',

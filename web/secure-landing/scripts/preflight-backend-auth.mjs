@@ -6,7 +6,7 @@
 // 503 config_failure responses instead of a single actionable error.
 //
 // Behaviour:
-//   - Always fails closed on missing env (TP_BACKEND_API_KEY, backend origin,
+//   - Always fails closed on missing env (TP_BACKEND_API_KEY, TP_FASTAPI_ORIGIN,
 //     user source). In production, also requires Cloudflare Access config.
 //   - Probes GET ${origin}/v1/config-metadata?pipeline=lux-depth-v3 with the
 //     `x-api-key` header. 401/403 always fails closed (key mismatch).
@@ -15,6 +15,8 @@
 //     be starting up).
 //   - Hard escape hatch: TP_FRONTDOOR_PREFLIGHT_DISABLE=1 skips the script
 //     entirely. Use only for emergencies.
+
+import { readFileSync } from "node:fs";
 
 const PROTECTED_PROBE_PATH = "/v1/config-metadata?pipeline=lux-depth-v3";
 const PROBE_TIMEOUT_MS = 3000;
@@ -28,27 +30,68 @@ function trimmed(value) {
 }
 
 function resolveBackendOrigin() {
-  return (
-    trimmed(process.env.TP_FASTAPI_ORIGIN) ||
-    trimmed(process.env.TP_BACKEND_ORIGIN) ||
-    "http://127.0.0.1:8000"
-  );
+  return trimmed(process.env.TP_FASTAPI_ORIGIN);
 }
 
 function resolveBackendKey() {
   return trimmed(process.env.TP_BACKEND_API_KEY);
 }
 
-function userSourceConfigured() {
-  if (trimmed(process.env.TP_FRONTDOOR_USERS_FILE)) return true;
-  const json = trimmed(process.env.TP_FRONTDOOR_USERS_JSON);
-  if (!json) return false;
+function parseUsersJson(raw) {
+  if (!raw) return [];
   try {
-    const parsed = JSON.parse(json);
-    return Array.isArray(parsed) && parsed.length > 0;
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((item) => {
+      if (!item || typeof item !== "object") return false;
+      return Boolean(
+        trimmed(item.username) &&
+        trimmed(item.password_hash) &&
+        trimmed(item.access_email)
+      );
+    });
   } catch {
-    return false;
+    return [];
   }
+}
+
+function userSourceStatus() {
+  const usersFile = trimmed(process.env.TP_FRONTDOOR_USERS_FILE);
+  if (usersFile) {
+    try {
+      const users = parseUsersJson(readFileSync(usersFile, "utf-8"));
+      return {
+        ok: users.length > 0,
+        source: "file",
+        detail: users.length > 0
+          ? `loaded ${users.length} configured frontdoor user(s) from ${usersFile}`
+          : `TP_FRONTDOOR_USERS_FILE did not contain any valid users: ${usersFile}`
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return {
+        ok: false,
+        source: "file",
+        detail: `TP_FRONTDOOR_USERS_FILE could not be read: ${message}`
+      };
+    }
+  }
+  const json = trimmed(process.env.TP_FRONTDOOR_USERS_JSON);
+  if (!json) {
+    return {
+      ok: false,
+      source: "",
+      detail: "Set TP_FRONTDOOR_USERS_FILE or TP_FRONTDOOR_USERS_JSON before starting."
+    };
+  }
+  const users = parseUsersJson(json);
+  return {
+    ok: users.length > 0,
+    source: "json_env",
+    detail: users.length > 0
+      ? `loaded ${users.length} configured frontdoor user(s) from TP_FRONTDOOR_USERS_JSON`
+      : "TP_FRONTDOOR_USERS_JSON did not contain any valid users."
+  };
 }
 
 function failClosed(reason, detail) {
@@ -75,14 +118,15 @@ function validateEnv() {
   }
   if (!origin) {
     failClosed(
-      "TP_FASTAPI_ORIGIN / TP_BACKEND_ORIGIN is not set",
-      "The frontdoor needs an upstream origin to proxy /v1/* to."
+      "TP_FASTAPI_ORIGIN is not set",
+      "The frontdoor runtime proxies /v1/* through TP_FASTAPI_ORIGIN; TP_BACKEND_ORIGIN is not consumed."
     );
   }
-  if (!userSourceConfigured()) {
+  const users = userSourceStatus();
+  if (!users.ok) {
     failClosed(
       "no frontdoor user source configured",
-      "Set TP_FRONTDOOR_USERS_FILE or TP_FRONTDOOR_USERS_JSON before starting."
+      users.detail
     );
   }
   if (isProduction()) {
@@ -137,23 +181,11 @@ async function probeBackendAuth() {
       "TP_BACKEND_API_KEY does not match backend TP_API_KEY."
     );
   }
-  if (response.status >= 500) {
-    if (isProduction()) {
-      failClosed(
-        `backend protected probe returned ${response.status}`,
-        "Upstream is not healthy enough to serve protected traffic."
-      );
-    }
-    console.warn(
-      `[frontdoor preflight] backend protected probe returned ${response.status}; continuing in dev.`
-    );
-    return;
-  }
   if (!response.ok) {
-    console.warn(
-      `[frontdoor preflight] backend protected probe returned unexpected status ${response.status}; continuing.`
+    failClosed(
+      `backend protected probe returned ${response.status}`,
+      "The configured TP_FASTAPI_ORIGIN did not expose the expected protected config endpoint."
     );
-    return;
   }
   console.log(`[frontdoor preflight] backend protected probe ok (${response.status}) at ${origin}`);
 }

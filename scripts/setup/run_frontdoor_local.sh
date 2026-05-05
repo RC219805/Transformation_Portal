@@ -87,20 +87,20 @@ if ! curl -fsS "${FASTAPI_ORIGIN}/ready" >/dev/null; then
   exit 1
 fi
 
-# When run alongside scripts/dev/run_cloudflared.sh, the tunnel hostname is
-# written to a sentinel file. Append it to TP_TRUSTED_HOSTS so the FastAPI
-# Trusted-Host middleware does not reject proxied requests.
+# When run alongside scripts/dev/run_cloudflared.sh, the backend must be started
+# with the tunnel hostname already present in TP_TRUSTED_HOSTS. This launcher
+# runs after the backend readiness check, so changing TP_TRUSTED_HOSTS here would
+# only affect the frontdoor process and produce a false success message.
 CF_HOST_FILE="${TP_CLOUDFLARED_HOST_FILE:-/tmp/tp-cloudflared-host}"
 if [[ -r "${CF_HOST_FILE}" ]]; then
   CF_HOSTNAME="$(head -n 1 "${CF_HOST_FILE}" | tr -d '[:space:]')"
   if [[ -n "${CF_HOSTNAME}" ]]; then
-    if [[ -n "${TP_TRUSTED_HOSTS:-}" ]] \
-        && ! [[ ",${TP_TRUSTED_HOSTS}," == *",${CF_HOSTNAME},"* ]]; then
-      export TP_TRUSTED_HOSTS="${TP_TRUSTED_HOSTS},${CF_HOSTNAME}"
-      echo "Appended ${CF_HOSTNAME} to TP_TRUSTED_HOSTS."
-    elif [[ -z "${TP_TRUSTED_HOSTS:-}" ]]; then
-      export TP_TRUSTED_HOSTS="localhost,127.0.0.1,::1,testserver,${CF_HOSTNAME}"
-      echo "Set TP_TRUSTED_HOSTS to include ${CF_HOSTNAME}."
+    if [[ -z "${TP_TRUSTED_HOSTS:-}" ]] \
+        || ! [[ ",${TP_TRUSTED_HOSTS}," == *",${CF_HOSTNAME},"* ]]; then
+      echo "Cloudflare tunnel hostname ${CF_HOSTNAME} is not present in TP_TRUSTED_HOSTS."
+      echo "Start the backend with that host trusted before launching the frontdoor."
+      echo "Use scripts/dev/start_local_stack.sh when using the local tunnel sentinel."
+      exit 1
     fi
   fi
 fi

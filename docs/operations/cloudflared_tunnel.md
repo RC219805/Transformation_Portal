@@ -37,8 +37,8 @@ export CLOUDFLARED_TUNNEL_HOSTNAME=backend.example.com
 ```
 
 The script writes `${TP_CLOUDFLARED_HOST_FILE:-/tmp/tp-cloudflared-host}` so
-that `scripts/setup/run_frontdoor_local.sh` and any future `dev-start`
-orchestrator can append the tunnel hostname to `TP_TRUSTED_HOSTS`.
+that `scripts/dev/start_local_stack.sh` can add the tunnel hostname to
+`TP_TRUSTED_HOSTS` before the FastAPI backend starts.
 
 After the tunnel is up, point the frontdoor at the public hostname:
 
@@ -65,9 +65,10 @@ The script:
 ## Trusted Host middleware
 
 The FastAPI app rejects requests whose `Host` header is not in
-`TP_TRUSTED_HOSTS` (`app.py:802-806`). The frontdoor launcher reads the
-sentinel file at startup and appends the tunnel hostname automatically. If you
-launch the backend manually, append the hostname yourself:
+`TP_TRUSTED_HOSTS` (`app.py:802-806`). The backend must read that value at
+startup; changing it later in the frontdoor launcher does not affect the
+already-running FastAPI process. If you launch the backend manually, append the
+hostname yourself before startup:
 
 ```bash
 export TP_TRUSTED_HOSTS="localhost,127.0.0.1,::1,testserver,${CLOUDFLARED_TUNNEL_HOSTNAME}"

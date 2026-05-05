@@ -7094,6 +7094,15 @@ def _build_scoped_job_artifacts(
         for relative_path, path in selected_candidates
     ]
     selected_lookup = {relative_path: path for relative_path, path in selected_candidates}
+    for relative_path, path in selected_candidates:
+        proxy_path = _artifact_preview_proxy_path(path)
+        if proxy_path is None:
+            continue
+        try:
+            proxy_relative_path = str(proxy_path.relative_to(output_dir))
+        except ValueError:
+            continue
+        selected_lookup.setdefault(proxy_relative_path, proxy_path)
     return items, selected_lookup, truncated
 
 

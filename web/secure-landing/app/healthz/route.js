@@ -148,6 +148,16 @@ async function evaluateBackend(config) {
       reason: "backend_not_ready"
     };
   }
+  if (authStatus < 200 || authStatus >= 300) {
+    return {
+      ok: false,
+      required: true,
+      configured: true,
+      status: readyStatus,
+      auth_status: authStatus,
+      reason: "backend_protected_probe_unexpected_status"
+    };
+  }
   return {
     ok: true,
     required: true,

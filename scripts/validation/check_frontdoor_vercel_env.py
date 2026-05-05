@@ -14,6 +14,7 @@ Exit codes:
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import sys
 from dataclasses import dataclass
@@ -28,8 +29,7 @@ class Variable:
 
 
 VARIABLES: tuple[Variable, ...] = (
-    Variable("TP_BACKEND_ORIGIN", "all", "Upstream FastAPI origin URL"),
-    Variable("TP_FASTAPI_ORIGIN", "all", "Origin alias used by /healthz and the v1 proxy"),
+    Variable("TP_FASTAPI_ORIGIN", "all", "Origin used by /healthz and the v1 proxy"),
     Variable("TP_BACKEND_API_KEY", "all", "Frontdoor-presented API key (must equal backend TP_API_KEY)"),
     Variable("TP_FRONTDOOR_USERS_JSON|TP_FRONTDOOR_USERS_FILE", "all", "User source (JSON array or file path)"),
     Variable("TP_FRONTDOOR_SESSION_SCALING_MODE", "all", "single_instance or external-store-backed mode"),
@@ -37,12 +37,71 @@ VARIABLES: tuple[Variable, ...] = (
     Variable("TP_CF_ACCESS_AUD", "production", "Cloudflare Access JWT audience"),
 )
 
+SUPPORTED_SESSION_SCALING_MODES = frozenset({"single_instance"})
+
 
 def _resolve(value_or_alias: str, env: dict[str, str]) -> Optional[str]:
     for name in value_or_alias.split("|"):
         if env.get(name, "").strip():
             return name
     return None
+
+
+def _valid_user_count_from_json(raw: str) -> int:
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError:
+        return 0
+    if not isinstance(parsed, list):
+        return 0
+    valid = 0
+    for item in parsed:
+        if not isinstance(item, dict):
+            continue
+        if (
+            str(item.get("username", "")).strip()
+            and str(item.get("password_hash", "")).strip()
+            and str(item.get("access_email", "")).strip()
+        ):
+            valid += 1
+    return valid
+
+
+def _evaluate_user_source(env: dict[str, str]) -> tuple[bool, str]:
+    users_file = env.get("TP_FRONTDOOR_USERS_FILE", "").strip()
+    if users_file:
+        try:
+            with open(users_file, "r", encoding="utf-8") as handle:
+                count = _valid_user_count_from_json(handle.read())
+        except OSError as exc:
+            return False, f"TP_FRONTDOOR_USERS_FILE unreadable: {exc}"
+        if count <= 0:
+            return False, "TP_FRONTDOOR_USERS_FILE contains zero valid users"
+        return True, f"set via TP_FRONTDOOR_USERS_FILE ({count} valid user(s))"
+
+    users_json = env.get("TP_FRONTDOOR_USERS_JSON", "").strip()
+    if not users_json:
+        return False, "User source (JSON array or file path)"
+    count = _valid_user_count_from_json(users_json)
+    if count <= 0:
+        return False, "TP_FRONTDOOR_USERS_JSON contains zero valid users"
+    return True, f"set via TP_FRONTDOOR_USERS_JSON ({count} valid user(s))"
+
+
+def _normalize_session_scaling_mode(value: str) -> str:
+    return value.strip().lower().replace("-", "_")
+
+
+def _evaluate_session_scaling_mode(env: dict[str, str]) -> tuple[bool, str]:
+    raw = env.get("TP_FRONTDOOR_SESSION_SCALING_MODE", "").strip()
+    if not raw:
+        return False, "single_instance or external-store-backed mode"
+    mode = _normalize_session_scaling_mode(raw)
+    if mode in SUPPORTED_SESSION_SCALING_MODES:
+        return True, f"set via TP_FRONTDOOR_SESSION_SCALING_MODE ({mode})"
+    if mode in {"multi_instance", "ephemeral_runtime"}:
+        return False, f"{mode} requires an external session-store implementation"
+    return False, f"unsupported session scaling mode: {mode}"
 
 
 def _load_env_file(path: str) -> dict[str, str]:
@@ -71,6 +130,26 @@ def _evaluate(env: dict[str, str], production: bool) -> tuple[bool, List[tuple[s
     ok = True
     for var in VARIABLES:
         required = var.required_in == "all" or (production and var.required_in == "production")
+        if var.name == "TP_FRONTDOOR_USERS_JSON|TP_FRONTDOOR_USERS_FILE":
+            valid, detail = _evaluate_user_source(env)
+            if valid:
+                rows.append(("ok", var.name, detail))
+            elif required:
+                ok = False
+                rows.append(("missing", var.name, detail))
+            else:
+                rows.append(("optional", var.name, detail))
+            continue
+        if var.name == "TP_FRONTDOOR_SESSION_SCALING_MODE":
+            valid, detail = _evaluate_session_scaling_mode(env)
+            if valid:
+                rows.append(("ok", var.name, detail))
+            elif required:
+                ok = False
+                rows.append(("missing", var.name, detail))
+            else:
+                rows.append(("optional", var.name, detail))
+            continue
         resolved = _resolve(var.name, env)
         if resolved:
             rows.append(("ok", var.name, f"set via {resolved}"))
