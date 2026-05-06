@@ -128,7 +128,7 @@ Approx LOC: ~415. Re-export from `app.py` as `from transformation_portal.portal.
 
 **Deferred slices (track here, do not promote until 2A lands):**
 - *2B — Path resolution & security helpers* (`app.py:428–667` -> `src/transformation_portal/portal/path_security.py`). High risk: hardening surface; allowed-roots, symlink safety, untrusted-path validation. Landed behind the ADR-046 compatibility contract.
-- *2C — SAM2 checkpoint security helpers* (`app.py` -> `src/transformation_portal/portal/sam2_checkpoint_security.py`). Medium risk: model-lock semantics and bounded cache eviction. Ready after ADR-047/SAM2 checkpoint trust contract; manifest migration remains a separate future decision.
+- *2C — SAM2 checkpoint security helpers* (`app.py` -> `src/transformation_portal/portal/sam2_checkpoint_security.py`). Medium risk: model-lock semantics and bounded cache eviction. Landed behind the ADR-047 SAM2 checkpoint trust contract; manifest migration remains a separate future decision.
 
 ---
 
@@ -173,7 +173,7 @@ This table is the canonical progress ledger for extraction PRs that draw from th
 | Target 1C — Backend resolution & state | `lux_depth_v3/orchestrator.py` | `lux_depth_v3/pipeline_coordinator.py` | Landed | This PR: backend initialization and runtime attempt-state helpers extracted |
 | Target 2A — Portal asset bundle | `app.py` | `src/transformation_portal/portal/asset_bundle.py` | Landed | This PR: portal asset bundle helpers extracted |
 | Target 2B — Path resolution & security helpers | `app.py` | `src/transformation_portal/portal/path_security.py` | Landed | This PR: path security helpers extracted behind ADR-046 app compatibility wrappers |
-| Target 2C — SAM2 checkpoint security helpers | `app.py` | `src/transformation_portal/portal/sam2_checkpoint_security.py` | Ready after ADR-047 | This PR: prep contract pins app-owned SAM2 trust semantics and extraction-sensitive cache behavior |
+| Target 2C — SAM2 checkpoint security helpers | `app.py` | `src/transformation_portal/portal/sam2_checkpoint_security.py` | Landed | This PR: SAM2 checkpoint security helpers extracted behind ADR-047 app compatibility wrappers |
 | Target 3A — Segmentation cache helpers | `lux_depth_v3/segmentation_backend.py` | `lux_depth_v3/segmentation/_cache.py` | Landed | This PR: segmentation cache helpers extracted |
 | Target 3B — Stub backend | `lux_depth_v3/segmentation_backend.py` | `lux_depth_v3/segmentation/stub.py` | Landed | This PR: stub backend extracted |
 | Target 3C — EfficientSAM backend | `lux_depth_v3/segmentation_backend.py` | `lux_depth_v3/segmentation/efficient_sam.py` | Landed | This PR: EfficientSAM backend extracted |

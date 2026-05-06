@@ -10,6 +10,8 @@ from pathlib import Path
 
 import pytest
 
+from transformation_portal.portal import sam2_checkpoint_security
+
 pytestmark = [pytest.mark.unit, pytest.mark.security]
 
 orchestrator_app = importlib.import_module("app")
@@ -44,6 +46,15 @@ def _realpath(path: Path) -> Path:
 def test_phase_2c_legacy_sam2_checkpoint_helpers_remain_available_from_app() -> None:
     for helper_name in _PHASE_2C_LEGACY_NAMES:
         assert getattr(orchestrator_app, helper_name) is not None
+
+
+def test_phase_2c_app_models_are_extracted_module_models() -> None:
+    assert orchestrator_app.ManagedSam2CheckpointValidationResult is (
+        sam2_checkpoint_security.ManagedSam2CheckpointValidationResult
+    )
+    assert orchestrator_app._ManagedSam2ChecksumCacheEntry is sam2_checkpoint_security._ManagedSam2ChecksumCacheEntry
+    assert orchestrator_app._Sam2CacheKey is sam2_checkpoint_security._Sam2CacheKey
+    assert orchestrator_app._ManagedSam2BoundedChecksumCache is (sam2_checkpoint_security._ManagedSam2BoundedChecksumCache)
 
 
 def test_phase_2c_managed_sam2_reason_messages_preserve_codes() -> None:
@@ -135,6 +146,15 @@ def test_phase_2c_oversized_checkpoint_reason_is_preserved(
     with pytest.raises(orchestrator_app._PortalValidationReasonError) as exc_info:
         orchestrator_app._validate_managed_sam2_checkpoint_path(str(checkpoint_path))
     assert exc_info.value.reason == "checkpoint_file_too_large"
+
+
+def test_phase_2c_app_cached_checksum_wrapper_translates_module_error(tmp_path: Path) -> None:
+    missing_path = tmp_path / "missing.pt"
+
+    with pytest.raises(orchestrator_app._PortalValidationReasonError) as exc_info:
+        orchestrator_app._cached_managed_sam2_checksum_result(missing_path)
+
+    assert exc_info.value.reason == "invalid_path_value"
 
 
 def test_phase_2c_checksum_cache_key_shape_tracks_file_identity(tmp_path: Path) -> None:
