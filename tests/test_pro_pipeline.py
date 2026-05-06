@@ -131,6 +131,205 @@ class TestProPipelineConfig:
         assert config.depth_stage.config == {}
 
 
+class TestProPipelineConfigFromYaml:
+    """Tests for the YAML loader added by the `--config` CLI flag."""
+
+    def _write(self, tmp_path, body: str):
+        p = tmp_path / "config.yaml"
+        p.write_text(body)
+        return p
+
+    def test_from_yaml_global_section_maps_to_dataclass_fields(self, tmp_path):
+        yaml_path = self._write(
+            tmp_path,
+            """
+global:
+  device: cpu
+  quality: standard
+  output_format: png
+  bit_depth: 8
+  preserve_metadata: false
+  use_cache: false
+  num_workers: 2
+""",
+        )
+        config = ProPipelineConfig.from_yaml(
+            yaml_path,
+            input_path=tmp_path / "input.jpg",
+            output_dir=tmp_path / "output",
+        )
+        assert config.device == "cpu"
+        assert config.quality == "standard"
+        assert config.output_format == "png"
+        assert config.bit_depth == 8
+        assert config.preserve_metadata is False
+        assert config.use_cache is False
+        assert config.num_workers == 2
+
+    def test_from_yaml_stages_merge_into_pipeline_stage_config(self, tmp_path):
+        yaml_path = self._write(
+            tmp_path,
+            """
+stages:
+  depth:
+    clarity:
+      enabled: true
+      amount: 0.25
+    model: depth-anything-v2-large
+  ai:
+    enabled: false
+    strength: 0.5
+""",
+        )
+        config = ProPipelineConfig.from_yaml(
+            yaml_path,
+            input_path=tmp_path / "input.jpg",
+            output_dir=tmp_path / "output",
+        )
+        # depth stage: enabled key absent → preserves default; other keys merge
+        assert config.depth_stage.enabled is True
+        assert config.depth_stage.config["model"] == "depth-anything-v2-large"
+        assert config.depth_stage.config["clarity"]["amount"] == 0.25
+        # ai stage: explicit `enabled: false` overrides default toggle
+        assert config.ai_stage.enabled is False
+        assert config.ai_stage.config["strength"] == 0.5
+
+    def test_from_yaml_invalid_device_raises(self, tmp_path):
+        yaml_path = self._write(tmp_path, "global:\n  device: gpu-9000\n")
+        with pytest.raises(ValueError, match="Invalid device"):
+            ProPipelineConfig.from_yaml(
+                yaml_path,
+                input_path=tmp_path / "input.jpg",
+                output_dir=tmp_path / "output",
+            )
+
+    def test_from_yaml_invalid_bit_depth_raises(self, tmp_path):
+        yaml_path = self._write(tmp_path, "global:\n  bit_depth: 12\n")
+        with pytest.raises(ValueError, match="Invalid bit_depth"):
+            ProPipelineConfig.from_yaml(
+                yaml_path,
+                input_path=tmp_path / "input.jpg",
+                output_dir=tmp_path / "output",
+            )
+
+    def test_from_yaml_invalid_preset_raises(self, tmp_path):
+        yaml_path = self._write(tmp_path, "preset: not-a-real-preset\n")
+        with pytest.raises(ValueError, match="Invalid preset"):
+            ProPipelineConfig.from_yaml(
+                yaml_path,
+                input_path=tmp_path / "input.jpg",
+                output_dir=tmp_path / "output",
+            )
+
+    def test_from_yaml_missing_file_raises(self, tmp_path):
+        with pytest.raises(FileNotFoundError):
+            ProPipelineConfig.from_yaml(
+                tmp_path / "does-not-exist.yaml",
+                input_path=tmp_path / "input.jpg",
+                output_dir=tmp_path / "output",
+            )
+
+    def test_from_yaml_loads_repo_pro_pipeline_config(self, tmp_path):
+        """The shipped config/pro_pipeline_config.yaml should round-trip."""
+        from pathlib import Path
+
+        repo_yaml = Path(__file__).resolve().parent.parent / "config" / "pro_pipeline_config.yaml"
+        config = ProPipelineConfig.from_yaml(
+            repo_yaml,
+            input_path=tmp_path / "input.jpg",
+            output_dir=tmp_path / "output",
+        )
+        assert config.device == "auto"
+        # 'tiff' is the YAML's spelling; we accept it alongside 'tif'.
+        assert config.output_format == "tiff"
+        assert config.depth_stage.config.get("model") == "depth-anything-v2-base"
+
+
+class TestCliConfigOverrides:
+    """Tests for the merge precedence between --config YAML and CLI flags."""
+
+    def _yaml(self, tmp_path, body: str):
+        p = tmp_path / "config.yaml"
+        p.write_text(body)
+        return p
+
+    def _build(self, tmp_path, **overrides):
+        """Invoke the helper with CLI defaults, optionally overriding flags."""
+        from transformation_portal.pipelines.pro_pipeline import _build_config_with_yaml_overrides
+
+        defaults = dict(
+            config_path=overrides.pop("config_path", None),
+            input_path=tmp_path / "input.jpg",
+            output_dir=tmp_path / "output",
+            preset=PipelinePreset.ARCHITECTURAL_HERO,
+            device="auto",
+            quality="high",
+            output_format="tif",
+            bit_depth=16,
+            linear_output=True,
+            keep_intermediates=False,
+            dry_run=False,
+            num_workers=4,
+            depth_aware=True,
+            ai_enhance=True,
+            material_response=True,
+            color_grading=True,
+            finishing=True,
+        )
+        defaults.update(overrides)
+        return _build_config_with_yaml_overrides(**defaults)
+
+    def test_no_config_uses_cli_only(self, tmp_path):
+        config = self._build(tmp_path, device="cpu", quality="ultra")
+        assert config.device == "cpu"
+        assert config.quality == "ultra"
+
+    def test_yaml_supplies_values_when_cli_at_default(self, tmp_path):
+        yaml_path = self._yaml(
+            tmp_path,
+            """
+global:
+  device: mps
+  quality: draft
+""",
+        )
+        config = self._build(tmp_path, config_path=yaml_path)
+        # CLI flags left at default → YAML wins
+        assert config.device == "mps"
+        assert config.quality == "draft"
+
+    def test_explicit_cli_flag_overrides_yaml(self, tmp_path):
+        yaml_path = self._yaml(
+            tmp_path,
+            """
+global:
+  device: mps
+  quality: draft
+""",
+        )
+        # --device cuda differs from default 'auto' → CLI wins; --quality
+        # left at default → YAML's 'draft' wins.
+        config = self._build(tmp_path, config_path=yaml_path, device="cuda")
+        assert config.device == "cuda"
+        assert config.quality == "draft"
+
+    def test_stage_toggles_always_reflect_cli(self, tmp_path):
+        """`--no-ai` flips the stage even when YAML enables it."""
+        yaml_path = self._yaml(
+            tmp_path,
+            """
+stages:
+  ai:
+    enabled: true
+    strength: 0.9
+""",
+        )
+        config = self._build(tmp_path, config_path=yaml_path, ai_enhance=False)
+        assert config.ai_stage.enabled is False
+        # Stage config payload from YAML still merged in even when toggled off.
+        assert config.ai_stage.config["strength"] == 0.9
+
+
 class TestProPipeline:
     """Tests for ProPipeline orchestrator."""
 
