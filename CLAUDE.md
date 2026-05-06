@@ -54,7 +54,7 @@ make fix-quality / make check-quality   # auto-fix wrappers (scripts/auto_fix_qu
 
 ### Local dev stack
 ```bash
-make dev-write-env                    # (re)writes /tmp/tp-local-http-all-on.env with TP_API_KEY/TP_BACKEND_API_KEY bound; --rotate to regenerate
+make dev-write-env                    # (re)writes /tmp/tp-local-http-all-on.env with TP_API_KEY/TP_BACKEND_API_KEY bound; use ./scripts/dev/write_local_env.sh --rotate to regenerate
 make dev-start                        # full stack: env file → backend (with reload boundaries) → /ready wait → frontdoor; logs at /tmp/tp-{backend,frontdoor}.log
 make dev-stop                         # kill listeners on dev ports (8000/3000/8001/3002) + orphan uvicorn parents
 make run-backend-local                # FastAPI on 127.0.0.1:8000 with reload boundaries that exclude .runtime/output/tmp/tests/node_modules/.next; requires TP_API_KEY
