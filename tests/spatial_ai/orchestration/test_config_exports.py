@@ -3,6 +3,10 @@
 from __future__ import annotations
 
 import importlib
+import json
+import stat
+from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -19,6 +23,28 @@ def test_pipeline_config_identity_is_preserved_across_import_surfaces() -> None:
     assert pipeline_mod.PipelineConfig is config_mod.PipelineConfig
     assert package_mod.PipelineConfig is config_mod.PipelineConfig
     assert "PipelineConfig" in package_mod.__all__
+
+
+def test_pipeline_result_identity_is_preserved_across_import_surfaces() -> None:
+    results_mod = importlib.import_module("transformation_portal.spatial_ai.orchestration.results")
+    pipeline_mod = importlib.import_module("transformation_portal.spatial_ai.orchestration.pipeline")
+    package_mod = importlib.import_module("transformation_portal.spatial_ai.orchestration")
+
+    assert pipeline_mod.PipelineResult is results_mod.PipelineResult
+    assert pipeline_mod.MultiViewReconstructionResult is results_mod.MultiViewReconstructionResult
+    assert package_mod.PipelineResult is results_mod.PipelineResult
+    assert "PipelineResult" in package_mod.__all__
+
+
+def test_pipeline_result_identity_survives_pipeline_reload() -> None:
+    pipeline_mod = importlib.import_module("transformation_portal.spatial_ai.orchestration.pipeline")
+    PipelineResult = pipeline_mod.PipelineResult
+    MultiViewReconstructionResult = pipeline_mod.MultiViewReconstructionResult
+
+    reloaded = importlib.reload(pipeline_mod)
+
+    assert reloaded.PipelineResult is PipelineResult
+    assert reloaded.MultiViewReconstructionResult is MultiViewReconstructionResult
 
 
 def test_spatial_ai_pipeline_accepts_extracted_pipeline_config() -> None:
@@ -79,3 +105,194 @@ def test_extracted_pipeline_config_preserves_validation_contracts(monkeypatch: p
             stages=["ingest", "segment", "materials"],
             materials={"backend": "pbr_fusion", "strict_backend": True},
         )
+
+
+def test_extracted_pipeline_result_save_summary_preserves_single_image_shape(tmp_path: Path) -> None:
+    results_mod = importlib.import_module("transformation_portal.spatial_ai.orchestration.results")
+
+    result = results_mod.PipelineResult(
+        input_path=Path("input.tiff"),
+        output_dir=Path("output"),
+        stages_completed=["ingest", "segmentation", "materials", "reconstruction"],
+        linear_image=object(),
+        segmentation=SimpleNamespace(masks=[object(), object()]),
+        materials={"seg_0": object(), "seg_1": object()},
+        scene_3d=SimpleNamespace(splats=SimpleNamespace(num_gaussians=10000), rmse=0.015),
+        execution_time=123.4,
+        peak_memory_mb=4096.0,
+        errors=["Error 1", "Error 2"],
+        warnings=["Warning 1"],
+        metadata={"custom": "data"},
+        stage_reports=[
+            {"stage": "ingest", "status": "completed", "capability": None, "quality_gate": None},
+            {"stage": "segmentation", "status": "completed", "capability": None, "quality_gate": None},
+            {"stage": "materials", "status": "completed", "capability": None, "quality_gate": None},
+            {"stage": "reconstruction", "status": "completed", "capability": None, "quality_gate": None},
+        ],
+    )
+
+    summary_path = tmp_path / "summary.json"
+    result.save_summary(summary_path)
+
+    summary = json.loads(summary_path.read_text(encoding="utf-8"))
+    assert summary == {
+        "input": "input.tiff",
+        "output_dir": "output",
+        "stages_completed": ["ingest", "segmentation", "materials", "reconstruction"],
+        "execution_time": 123.4,
+        "peak_memory_mb": 4096.0,
+        "errors": ["Error 1", "Error 2"],
+        "warnings": ["Warning 1"],
+        "stage_reports": [
+            {"stage": "ingest", "status": "completed", "capability": None, "quality_gate": None},
+            {"stage": "segmentation", "status": "completed", "capability": None, "quality_gate": None},
+            {"stage": "materials", "status": "completed", "capability": None, "quality_gate": None},
+            {"stage": "reconstruction", "status": "completed", "capability": None, "quality_gate": None},
+        ],
+        "results": {
+            "linear_image": True,
+            "segmentation": {"completed": True, "num_masks": 2},
+            "materials": {"completed": True, "num_segments": 2},
+            "scene_3d": {"completed": True, "num_gaussians": 10000, "rmse": 0.015},
+        },
+        "metadata": {"custom": "data"},
+    }
+
+
+def test_extracted_pipeline_result_save_summary_uses_atomic_writer(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    results_mod = importlib.import_module("transformation_portal.spatial_ai.orchestration.results")
+    calls = []
+
+    def fake_write_json_atomic(path: Path, payload: dict) -> None:
+        calls.append((path, payload))
+
+    monkeypatch.setattr(results_mod, "_write_json_atomic", fake_write_json_atomic)
+    result = results_mod.PipelineResult(
+        input_path=Path("input.tiff"),
+        output_dir=Path("output"),
+        stages_completed=["ingest"],
+    )
+
+    summary_path = tmp_path / "summary.json"
+    result.save_summary(summary_path)
+
+    assert len(calls) == 1
+    assert calls[0][0] == summary_path
+    assert calls[0][1]["input"] == "input.tiff"
+
+
+def test_extracted_result_atomic_writer_preserves_existing_file_on_failure(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    json_io_mod = importlib.import_module("transformation_portal.spatial_ai.orchestration.json_io")
+    summary_path = tmp_path / "summary.json"
+    summary_path.write_text('{"existing": true}', encoding="utf-8")
+    summary_path.chmod(0o640)
+
+    def fail_dump(*args: object, **kwargs: object) -> None:
+        raise RuntimeError("serialization failed")
+
+    monkeypatch.setattr(json_io_mod, "dump_json", fail_dump)
+
+    with pytest.raises(RuntimeError, match="serialization failed"):
+        json_io_mod.write_json_atomic(summary_path, {"existing": False})
+
+    assert summary_path.read_text(encoding="utf-8") == '{"existing": true}'
+    assert stat.S_IMODE(summary_path.stat().st_mode) == 0o640
+
+
+def test_extracted_result_atomic_writer_uses_utf8_and_preserves_existing_mode(tmp_path: Path) -> None:
+    json_io_mod = importlib.import_module("transformation_portal.spatial_ai.orchestration.json_io")
+    summary_path = tmp_path / "summary.json"
+    summary_path.write_text('{"existing": true}', encoding="utf-8")
+    summary_path.chmod(0o640)
+
+    json_io_mod.write_json_atomic(summary_path, {"message": "caf\u00e9"}, ensure_ascii=False)
+
+    assert b"caf\xc3\xa9" in summary_path.read_bytes()
+    assert stat.S_IMODE(summary_path.stat().st_mode) == 0o640
+
+
+def test_extracted_multiview_result_save_summary_preserves_reconstruction_shape(tmp_path: Path) -> None:
+    results_mod = importlib.import_module("transformation_portal.spatial_ai.orchestration.results")
+    scene = SimpleNamespace(
+        splats=SimpleNamespace(num_gaussians=100),
+        rmse=0.02,
+        convergence="converged",
+        quality_score=0.91,
+        iteration=20,
+    )
+
+    result = results_mod.MultiViewReconstructionResult(
+        scene=scene,
+        ply_path=Path("output/reconstruction.ply"),
+        sidecar_path=Path("output/reconstruction.provenance.json"),
+        output_dir=Path("output"),
+        execution_time=12.5,
+        peak_memory_mb=512.0,
+        stages_completed=["reconstruction", "export"],
+        request_metadata={"camera_source_summary": {"explicit": 2}},
+        errors=[],
+        warnings=["warn"],
+        stage_reports=[
+            {"stage": "reconstruction", "status": "completed", "capability": None, "quality_gate": None},
+            {"stage": "export", "status": "completed", "capability": None, "quality_gate": None},
+        ],
+    )
+
+    summary_path = tmp_path / "reconstruction_summary.json"
+    result.save_summary(summary_path)
+
+    summary = json.loads(summary_path.read_text(encoding="utf-8"))
+    assert summary == {
+        "output_dir": "output",
+        "ply_path": "output/reconstruction.ply",
+        "sidecar_path": "output/reconstruction.provenance.json",
+        "stages_completed": ["reconstruction", "export"],
+        "execution_time": 12.5,
+        "peak_memory_mb": 512.0,
+        "errors": [],
+        "warnings": ["warn"],
+        "stage_reports": [
+            {"stage": "reconstruction", "status": "completed", "capability": None, "quality_gate": None},
+            {"stage": "export", "status": "completed", "capability": None, "quality_gate": None},
+        ],
+        "scene": {
+            "num_gaussians": 100,
+            "rmse": 0.02,
+            "convergence": "converged",
+            "quality_score": 0.91,
+            "iteration": 20,
+        },
+        "request_metadata": {"camera_source_summary": {"explicit": 2}},
+    }
+
+
+def test_extracted_multiview_result_save_summary_uses_atomic_writer(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    results_mod = importlib.import_module("transformation_portal.spatial_ai.orchestration.results")
+    calls = []
+    scene = SimpleNamespace(
+        splats=SimpleNamespace(num_gaussians=100),
+        rmse=0.02,
+        convergence="converged",
+        quality_score=0.91,
+        iteration=20,
+    )
+
+    def fake_write_json_atomic(path: Path, payload: dict) -> None:
+        calls.append((path, payload))
+
+    monkeypatch.setattr(results_mod, "_write_json_atomic", fake_write_json_atomic)
+    result = results_mod.MultiViewReconstructionResult(
+        scene=scene,
+        ply_path=Path("output/reconstruction.ply"),
+        sidecar_path=Path("output/reconstruction.provenance.json"),
+        output_dir=Path("output"),
+    )
+
+    summary_path = tmp_path / "reconstruction_summary.json"
+    result.save_summary(summary_path)
+
+    assert len(calls) == 1
+    assert calls[0][0] == summary_path
+    assert calls[0][1]["ply_path"] == "output/reconstruction.ply"
