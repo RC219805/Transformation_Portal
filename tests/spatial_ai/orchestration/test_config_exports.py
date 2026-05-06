@@ -112,7 +112,7 @@ def test_extracted_pipeline_result_save_summary_preserves_single_image_shape(tmp
     result = results_mod.PipelineResult(
         input_path=Path("input.tiff"),
         output_dir=Path("output"),
-        stages_completed=["ingest", "segment", "materials", "reconstruct"],
+        stages_completed=["ingest", "segmentation", "materials", "reconstruction"],
         linear_image=object(),
         segmentation=SimpleNamespace(masks=[object(), object()]),
         materials={"seg_0": object(), "seg_1": object()},
@@ -137,7 +137,7 @@ def test_extracted_pipeline_result_save_summary_preserves_single_image_shape(tmp
     assert summary == {
         "input": "input.tiff",
         "output_dir": "output",
-        "stages_completed": ["ingest", "segment", "materials", "reconstruct"],
+        "stages_completed": ["ingest", "segmentation", "materials", "reconstruction"],
         "execution_time": 123.4,
         "peak_memory_mb": 4096.0,
         "errors": ["Error 1", "Error 2"],
@@ -156,6 +156,46 @@ def test_extracted_pipeline_result_save_summary_preserves_single_image_shape(tmp
         },
         "metadata": {"custom": "data"},
     }
+
+
+def test_extracted_pipeline_result_save_summary_uses_atomic_writer(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    results_mod = importlib.import_module("transformation_portal.spatial_ai.orchestration.results")
+    calls = []
+
+    def fake_write_json_atomic(path: Path, payload: dict) -> None:
+        calls.append((path, payload))
+
+    monkeypatch.setattr(results_mod, "_write_json_atomic", fake_write_json_atomic)
+    result = results_mod.PipelineResult(
+        input_path=Path("input.tiff"),
+        output_dir=Path("output"),
+        stages_completed=["ingest"],
+    )
+
+    summary_path = tmp_path / "summary.json"
+    result.save_summary(summary_path)
+
+    assert len(calls) == 1
+    assert calls[0][0] == summary_path
+    assert calls[0][1]["input"] == "input.tiff"
+
+
+def test_extracted_result_atomic_writer_preserves_existing_file_on_failure(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    results_mod = importlib.import_module("transformation_portal.spatial_ai.orchestration.results")
+    summary_path = tmp_path / "summary.json"
+    summary_path.write_text('{"existing": true}', encoding="utf-8")
+
+    def fail_dump(*args: object, **kwargs: object) -> None:
+        raise RuntimeError("serialization failed")
+
+    monkeypatch.setattr(results_mod.json, "dump", fail_dump)
+
+    with pytest.raises(RuntimeError, match="serialization failed"):
+        results_mod._write_json_atomic(summary_path, {"existing": False})
+
+    assert summary_path.read_text(encoding="utf-8") == '{"existing": true}'
 
 
 def test_extracted_multiview_result_save_summary_preserves_reconstruction_shape(tmp_path: Path) -> None:
@@ -211,3 +251,33 @@ def test_extracted_multiview_result_save_summary_preserves_reconstruction_shape(
         },
         "request_metadata": {"camera_source_summary": {"explicit": 2}},
     }
+
+
+def test_extracted_multiview_result_save_summary_uses_atomic_writer(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    results_mod = importlib.import_module("transformation_portal.spatial_ai.orchestration.results")
+    calls = []
+    scene = SimpleNamespace(
+        splats=SimpleNamespace(num_gaussians=100),
+        rmse=0.02,
+        convergence="converged",
+        quality_score=0.91,
+        iteration=20,
+    )
+
+    def fake_write_json_atomic(path: Path, payload: dict) -> None:
+        calls.append((path, payload))
+
+    monkeypatch.setattr(results_mod, "_write_json_atomic", fake_write_json_atomic)
+    result = results_mod.MultiViewReconstructionResult(
+        scene=scene,
+        ply_path=Path("output/reconstruction.ply"),
+        sidecar_path=Path("output/reconstruction.provenance.json"),
+        output_dir=Path("output"),
+    )
+
+    summary_path = tmp_path / "reconstruction_summary.json"
+    result.save_summary(summary_path)
+
+    assert len(calls) == 1
+    assert calls[0][0] == summary_path
+    assert calls[0][1]["ply_path"] == "output/reconstruction.ply"
