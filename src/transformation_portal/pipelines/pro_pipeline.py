@@ -69,6 +69,51 @@ _CLI_DEFAULTS: Dict[str, Any] = {
     "num_workers": 4,
 }
 
+_BOOLEAN_TRUE_VALUES: FrozenSet[str] = frozenset({"1", "true", "yes", "on"})
+_BOOLEAN_FALSE_VALUES: FrozenSet[str] = frozenset({"0", "false", "no", "off"})
+_OUTPUT_FORMAT_ALIASES: Dict[str, str] = {
+    "jpeg": "jpg",
+    "jpg": "jpg",
+    "png": "png",
+    "tif": "tif",
+    "tiff": "tif",
+}
+
+
+def _parse_yaml_bool(value: Any, *, field: str) -> bool:
+    """Parse config booleans without treating non-empty strings as truthy."""
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int) and value in {0, 1}:
+        return bool(value)
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in _BOOLEAN_TRUE_VALUES:
+            return True
+        if normalized in _BOOLEAN_FALSE_VALUES:
+            return False
+    raise ValueError(f"YAML {field!r} must be a boolean value, got {value!r}")
+
+
+def _parse_yaml_float(value: Any, *, field: str) -> float:
+    """Parse numeric stage tuning values from YAML/env-expanded scalars."""
+    if isinstance(value, bool):
+        raise ValueError(f"YAML {field!r} must be numeric, got {value!r}")
+    try:
+        return float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"YAML {field!r} must be numeric, got {value!r}") from exc
+
+
+def _normalize_output_format(value: Any) -> str:
+    """Return the canonical file extension used for output paths."""
+    normalized = str(value).strip().lower()
+    try:
+        return _OUTPUT_FORMAT_ALIASES[normalized]
+    except KeyError as exc:
+        allowed = sorted(_OUTPUT_FORMAT_ALIASES)
+        raise ValueError(f"Invalid output_format {value!r}; allowed: {allowed}") from exc
+
 
 def _build_config_with_yaml_overrides(
     *,
@@ -127,7 +172,7 @@ def _build_config_with_yaml_overrides(
         if quality != _CLI_DEFAULTS["quality"]:
             config.quality = quality
         if output_format != _CLI_DEFAULTS["output_format"]:
-            config.output_format = output_format
+            config.output_format = _normalize_output_format(output_format)
         if bit_depth != _CLI_DEFAULTS["bit_depth"]:
             config.bit_depth = bit_depth
         if linear_output != _CLI_DEFAULTS["linear_output"]:
@@ -212,6 +257,7 @@ class ProPipelineConfig:
         """Validate and apply preset configurations."""
         self.input_path = Path(self.input_path).resolve()
         self.output_dir = Path(self.output_dir).resolve()
+        self.output_format = _normalize_output_format(self.output_format)
 
         # Apply preset configurations
         if self.preset != PipelinePreset.CUSTOM:
@@ -233,6 +279,13 @@ class ProPipelineConfig:
     _ALLOWED_QUALITY: ClassVar[FrozenSet[str]] = frozenset({"draft", "standard", "high", "ultra"})
     _ALLOWED_FORMATS: ClassVar[FrozenSet[str]] = frozenset({"jpg", "jpeg", "png", "tif", "tiff"})
     _ALLOWED_BIT_DEPTHS: ClassVar[FrozenSet[int]] = frozenset({8, 16, 32})
+    _STAGE_AMOUNT_KEYS: ClassVar[Dict[str, FrozenSet[str]]] = {
+        "depth": frozenset({"clarity"}),
+        "finishing": frozenset({"sharpen", "clarity", "micro_contrast", "glow", "vignette"}),
+    }
+    _STAGE_PATH_KEYS: ClassVar[Dict[str, FrozenSet[str]]] = {
+        "grading": frozenset({"lut"}),
+    }
 
     @classmethod
     def from_yaml(cls, path: Path, *, input_path: Path, output_dir: Path) -> "ProPipelineConfig":
@@ -257,38 +310,44 @@ class ProPipelineConfig:
     ) -> "ProPipelineConfig":
         """Build a ProPipelineConfig from a parsed YAML dictionary.
 
-        The YAML shape is:
+        Supported YAML shape:
 
-        - ``global``: dict of top-level fields (device, quality, output_format,
-          bit_depth, preserve_metadata, use_cache, num_workers).
-        - ``stages.<depth|ai|material|grading|finishing>``: dict merged into
-          the corresponding ``PipelineStage.config`` (additive).
+        - ``global``: top-level runtime/output fields: ``device``, ``quality``,
+          ``output_format``, ``bit_depth``, ``linear_output``,
+          ``preserve_metadata``, ``keep_intermediates``, ``dry_run``,
+          ``batch_size``, ``num_workers`` and ``use_cache``.
+        - ``stages.<depth|ai|material|grading|finishing>``: additive
+          ``PipelineStage.config`` values. Stage ``enabled`` keys are parsed as
+          booleans. Known nested tuning blocks consumed as scalars by stage
+          math, such as ``depth.clarity.amount`` and
+          ``finishing.sharpen.amount``, are normalized to the scalar form.
         - ``preset`` (optional, top-level): a value from ``PipelinePreset``.
-          The CLI ``--preset`` flag takes precedence at call time.
 
-        Other top-level YAML keys (e.g. ``presets``, ``performance``,
-        ``output``) and recipe-loader metadata keys (``_recipe_path``,
-        ``_recipe_dir``) are ignored.
+        CLI precedence is handled by ``_build_config_with_yaml_overrides``:
+        CLI flags override YAML only when their value differs from
+        ``_CLI_DEFAULTS``. Stage toggles still reflect the explicit Typer flag
+        values because those booleans have no "unset" form.
+
+        Other top-level YAML keys, such as ``presets``, ``performance`` and
+        ``output``, plus recipe-loader metadata keys are ignored.
         """
         global_section = config_dict.get("global", {}) or {}
         if not isinstance(global_section, dict):
             raise ValueError(f"YAML 'global' section must be a mapping, got {type(global_section).__name__}")
 
         # --- validate global field values up front (system boundary) ---
-        device = global_section.get("device", "auto")
+        device = str(global_section.get("device", "auto")).strip().lower()
         if device not in cls._ALLOWED_DEVICES:
             raise ValueError(f"Invalid device {device!r}; allowed: {sorted(cls._ALLOWED_DEVICES)}")
-        quality = global_section.get("quality", "high")
+        quality = str(global_section.get("quality", "high")).strip().lower()
         if quality not in cls._ALLOWED_QUALITY:
             raise ValueError(f"Invalid quality {quality!r}; allowed: {sorted(cls._ALLOWED_QUALITY)}")
-        output_format = global_section.get("output_format", "tif")
-        if output_format not in cls._ALLOWED_FORMATS:
-            raise ValueError(f"Invalid output_format {output_format!r}; allowed: {sorted(cls._ALLOWED_FORMATS)}")
+        output_format = _normalize_output_format(global_section.get("output_format", "tif"))
         bit_depth = int(global_section.get("bit_depth", 16))
         if bit_depth not in cls._ALLOWED_BIT_DEPTHS:
             raise ValueError(f"Invalid bit_depth {bit_depth!r}; allowed: {sorted(cls._ALLOWED_BIT_DEPTHS)}")
 
-        preset_name = config_dict.get("preset", PipelinePreset.CUSTOM.value)
+        preset_name = str(config_dict.get("preset", PipelinePreset.CUSTOM.value)).strip()
         try:
             preset = PipelinePreset(preset_name)
         except ValueError as exc:
@@ -302,13 +361,17 @@ class ProPipelineConfig:
             quality=quality,
             output_format=output_format,
             bit_depth=bit_depth,
-            linear_output=bool(global_section.get("linear_output", True)),
-            preserve_metadata=bool(global_section.get("preserve_metadata", True)),
-            keep_intermediates=bool(global_section.get("keep_intermediates", False)),
-            dry_run=bool(global_section.get("dry_run", False)),
+            linear_output=_parse_yaml_bool(global_section.get("linear_output", True), field="global.linear_output"),
+            preserve_metadata=_parse_yaml_bool(
+                global_section.get("preserve_metadata", True), field="global.preserve_metadata"
+            ),
+            keep_intermediates=_parse_yaml_bool(
+                global_section.get("keep_intermediates", False), field="global.keep_intermediates"
+            ),
+            dry_run=_parse_yaml_bool(global_section.get("dry_run", False), field="global.dry_run"),
             batch_size=int(global_section.get("batch_size", 1)),
             num_workers=int(global_section.get("num_workers", 4)),
-            use_cache=bool(global_section.get("use_cache", True)),
+            use_cache=_parse_yaml_bool(global_section.get("use_cache", True), field="global.use_cache"),
         )
 
         # --- merge stages.<key> into the corresponding PipelineStage.config ---
@@ -326,13 +389,41 @@ class ProPipelineConfig:
             # else lands in PipelineStage.config (additive merge so preset values
             # are preserved unless the YAML explicitly overrides them).
             if "enabled" in stage_yaml:
-                stage.enabled = bool(stage_yaml["enabled"])
+                stage.enabled = _parse_yaml_bool(stage_yaml["enabled"], field=f"stages.{yaml_key}.enabled")
             for key, value in stage_yaml.items():
                 if key == "enabled":
                     continue
-                stage.config[key] = value
+                stage.config[key] = cls._normalize_stage_config_value(yaml_key, key, value)
 
         return config
+
+    @classmethod
+    def _normalize_stage_config_value(cls, stage_key: str, key: str, value: Any) -> Any:
+        """Normalize YAML stage payloads into values consumed by stage code."""
+        field = f"stages.{stage_key}.{key}"
+        if isinstance(value, dict):
+            normalized_mapping = dict(value)
+            if "enabled" in normalized_mapping:
+                enabled = _parse_yaml_bool(normalized_mapping["enabled"], field=f"{field}.enabled")
+                normalized_mapping["enabled"] = enabled
+            else:
+                enabled = True
+
+            if key in cls._STAGE_AMOUNT_KEYS.get(stage_key, frozenset()):
+                if not enabled:
+                    return 0.0
+                if "amount" not in normalized_mapping:
+                    raise ValueError(f"YAML {field!r} must include an 'amount' value when enabled")
+                return _parse_yaml_float(normalized_mapping["amount"], field=f"{field}.amount")
+
+            if key in cls._STAGE_PATH_KEYS.get(stage_key, frozenset()):
+                if not enabled:
+                    return ""
+                return str(normalized_mapping.get("path", "")).strip()
+
+            return normalized_mapping
+
+        return value
 
     def _apply_preset(self):
         """Apply preset-specific configurations."""
@@ -699,7 +790,7 @@ class ProPipeline:
 
         # Determine output filename
         stem = input_path.stem
-        ext = self.config.output_format
+        ext = _normalize_output_format(self.config.output_format)
 
         # Add preset suffix
         if self.config.preset != PipelinePreset.CUSTOM:
@@ -714,7 +805,7 @@ class ProPipeline:
         self.config.output_dir.mkdir(parents=True, exist_ok=True)
 
         # Convert to linear colorspace if requested (for TIFF only)
-        if self.config.linear_output and ext.lower() in ["ti", "tiff"]:
+        if self.config.linear_output and ext.lower() in {"tif", "tiff"}:
             try:
                 import tifffile
 
@@ -756,7 +847,7 @@ class ProPipeline:
             save_kwargs["optimize"] = True
         elif ext.lower() == "png":
             save_kwargs["compress_level"] = 6
-        elif ext.lower() in ["ti", "tif"]:
+        elif ext.lower() in {"tif", "tiff"}:
             save_kwargs["compression"] = "tiff_adobe_deflate"
 
         image.save(output_path, **save_kwargs)
@@ -952,7 +1043,7 @@ def batch(
     """
     # Find input images
     input_paths = []
-    for ext in ["jpg", "jpeg", "png", "tif", "ti"]:
+    for ext in ["jpg", "jpeg", "png", "tif", "tiff"]:
         input_paths.extend(input_dir.glob(f"*.{ext}"))
         input_paths.extend(input_dir.glob(f"*.{ext.upper()}"))
 

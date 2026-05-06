@@ -176,6 +176,10 @@ stages:
       enabled: true
       amount: 0.25
     model: depth-anything-v2-large
+  finishing:
+    sharpen:
+      enabled: true
+      amount: 0.2
   ai:
     enabled: false
     strength: 0.5
@@ -189,10 +193,51 @@ stages:
         # depth stage: enabled key absent → preserves default; other keys merge
         assert config.depth_stage.enabled is True
         assert config.depth_stage.config["model"] == "depth-anything-v2-large"
-        assert config.depth_stage.config["clarity"]["amount"] == 0.25
+        assert config.depth_stage.config["clarity"] == pytest.approx(0.25)
+        assert config.finishing_stage.config["sharpen"] == pytest.approx(0.2)
         # ai stage: explicit `enabled: false` overrides default toggle
         assert config.ai_stage.enabled is False
         assert config.ai_stage.config["strength"] == 0.5
+
+    def test_from_yaml_boolean_strings_are_parsed_explicitly(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("TP_TEST_AI_ENABLED", "false")
+        monkeypatch.setenv("TP_TEST_LINEAR_OUTPUT", "false")
+        monkeypatch.setenv("TP_TEST_USE_CACHE", "0")
+        yaml_path = self._write(
+            tmp_path,
+            """
+global:
+  linear_output: ${TP_TEST_LINEAR_OUTPUT}
+  use_cache: ${TP_TEST_USE_CACHE}
+stages:
+  ai:
+    enabled: ${TP_TEST_AI_ENABLED}
+""",
+        )
+        config = ProPipelineConfig.from_yaml(
+            yaml_path,
+            input_path=tmp_path / "input.jpg",
+            output_dir=tmp_path / "output",
+        )
+        assert config.linear_output is False
+        assert config.use_cache is False
+        assert config.ai_stage.enabled is False
+
+    def test_from_yaml_invalid_boolean_string_raises(self, tmp_path):
+        yaml_path = self._write(
+            tmp_path,
+            """
+stages:
+  ai:
+    enabled: sometimes
+""",
+        )
+        with pytest.raises(ValueError, match="stages.ai.enabled"):
+            ProPipelineConfig.from_yaml(
+                yaml_path,
+                input_path=tmp_path / "input.jpg",
+                output_dir=tmp_path / "output",
+            )
 
     def test_from_yaml_invalid_device_raises(self, tmp_path):
         yaml_path = self._write(tmp_path, "global:\n  device: gpu-9000\n")
@@ -240,9 +285,11 @@ stages:
             output_dir=tmp_path / "output",
         )
         assert config.device == "auto"
-        # 'tiff' is the YAML's spelling; we accept it alongside 'tif'.
-        assert config.output_format == "tiff"
+        # 'tiff' is the YAML's spelling; the runtime uses the canonical .tif suffix.
+        assert config.output_format == "tif"
         assert config.depth_stage.config.get("model") == "depth-anything-v2-base"
+        assert isinstance(config.depth_stage.config["clarity"], float)
+        assert isinstance(config.finishing_stage.config["sharpen"], float)
 
 
 class TestCliConfigOverrides:
@@ -519,15 +566,20 @@ class TestProPipeline:
 
     def test_different_output_formats(self, pipeline_config, temp_image_file, sample_image):
         """Test saving in different output formats."""
-        formats = ["jpg", "png", "tif"]
+        formats = {
+            "jpg": ".jpg",
+            "png": ".png",
+            "tif": ".tif",
+            "tiff": ".tif",
+        }
 
-        for fmt in formats:
+        for fmt, expected_suffix in formats.items():
             pipeline_config.output_format = fmt
             pipeline = ProPipeline(pipeline_config)
 
             output = pipeline._save_output(sample_image, temp_image_file)
 
-            assert output.suffix == f".{fmt}"
+            assert output.suffix == expected_suffix
             assert output.exists()
 
     def test_statistics_tracking(self, pipeline_config, tmp_path):
