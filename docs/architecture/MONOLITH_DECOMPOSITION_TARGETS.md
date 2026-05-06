@@ -185,6 +185,7 @@ This table is the canonical progress ledger for extraction PRs that draw from th
 | Target 5A — Spatial AI pipeline config | `spatial_ai/orchestration/pipeline.py` | `spatial_ai/orchestration/config.py` | Landed | This PR: spatial pipeline config model and validation helpers extracted; ranking unchanged pending governance refresh |
 | Target 5B — Spatial AI pipeline result models | `spatial_ai/orchestration/pipeline.py` | `spatial_ai/orchestration/results.py` | Landed | This PR: spatial pipeline result models and summary serializers extracted; ranking unchanged pending governance refresh |
 | Target 5C — Spatial AI segmentation cache helpers | `spatial_ai/orchestration/pipeline.py` | `spatial_ai/orchestration/segmentation_cache.py` | Landed | This PR: segmentation cache helpers extracted; ranking unchanged pending governance refresh |
+| Target 5D — Spatial AI graph execution bridge | `spatial_ai/orchestration/pipeline.py` | `spatial_ai/orchestration/graph_pipeline.py` | Landed | This PR: graph execution bridge extracted; ranking unchanged pending governance refresh |
 
 ---
 
