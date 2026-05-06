@@ -235,64 +235,84 @@ class SceneBuilder:
     ) -> List[CameraParams]:
         """Extract smooth camera path for video rendering.
 
-        Interpolates camera poses between the first and last cameras in the scene
-        using mathematically correct interpolation:
-        - Translation: Linear interpolation (LERP)
-        - Rotation: Spherical linear interpolation (SLERP) via quaternions
+        Interpolates camera poses using mathematically correct interpolation
+        that preserves rigid transformations (no shearing/skewing).
 
-        This ensures rigid transformations are preserved (no shearing/skewing).
+        Modes:
+        - ``"linear"`` (default): Two-keyframe path between the first and last
+          camera. Translation uses linear interpolation (LERP); rotation uses
+          spherical linear interpolation (SLERP) via quaternions. Intermediate
+          cameras in the scene are ignored.
+        - ``"spline"``: Multi-keyframe path that passes through every camera
+          in ``scene.cameras`` (uniformly spaced in path parameter ``t``).
+          Translation uses a natural cubic spline; rotation uses piecewise
+          SLERP across all keyframes. With only two cameras this degenerates
+          to the same result as ``"linear"``.
 
         Args:
             scene: Reconstructed 3D scene.
             num_frames: Number of frames in camera path.
-            interpolation: Interpolation method ("linear" supported).
-                          Both translation and rotation are interpolated smoothly.
+            interpolation: Interpolation method, ``"linear"`` or ``"spline"``.
 
         Returns:
             List of camera parameters along path.
 
         Raises:
             ValueError: If scene has fewer than 2 cameras.
-            NotImplementedError: If interpolation != "linear"
+            NotImplementedError: If ``interpolation`` is neither ``"linear"``
+                nor ``"spline"``.
         """
         if len(scene.cameras) < 2:
             raise ValueError("Need at least 2 cameras for path extraction")
 
-        if interpolation != "linear":
+        if interpolation not in ("linear", "spline"):
             raise NotImplementedError(
-                f"Interpolation method '{interpolation}' not implemented. " "Only 'linear' is supported."
+                f"Interpolation method '{interpolation}' not implemented. "
+                "Supported methods: 'linear', 'spline'."
             )
 
         # Lazy import scipy to maintain module's lazy-loading contract
         from scipy.spatial.transform import Rotation, Slerp
 
-        cam0 = scene.cameras[0]
-        cam1 = scene.cameras[-1]
+        if interpolation == "linear":
+            keyframes = [scene.cameras[0], scene.cameras[-1]]
+        else:  # "spline"
+            keyframes = list(scene.cameras)
 
-        # Extract rotation and translation from extrinsics
+        n_keys = len(keyframes)
+        key_times = np.linspace(0.0, 1.0, n_keys)
+
+        # Stack rotations and translations from keyframe extrinsics.
         # Extrinsics format: [[R|t], [0 0 0 1]] where R is 3x3 rotation, t is 3x1 translation
-        R0 = cam0.extrinsics[:3, :3]
-        R1 = cam1.extrinsics[:3, :3]
-        t0 = cam0.extrinsics[:3, 3]
-        t1 = cam1.extrinsics[:3, 3]
+        key_rotations = np.stack([cam.extrinsics[:3, :3] for cam in keyframes])
+        key_translations = np.stack([cam.extrinsics[:3, 3] for cam in keyframes])
 
-        # Create Rotation objects for SLERP
-        rot0 = Rotation.from_matrix(R0)
-        rot1 = Rotation.from_matrix(R1)
+        # SLERP handles both two-key (linear) and multi-key (spline) cases.
+        slerp = Slerp(key_times, Rotation.from_matrix(key_rotations))
 
-        # Setup SLERP interpolator with key times [0, 1]
-        key_times = [0.0, 1.0]
-        key_rots = Rotation.concatenate([rot0, rot1])
-        slerp = Slerp(key_times, key_rots)
+        if interpolation == "spline" and n_keys >= 3:
+            # Natural cubic spline through all keyframe positions. With <3
+            # keyframes scipy still produces a valid spline but it degenerates
+            # to a straight line, which is identical to LERP — fall through to
+            # the LERP path below to avoid the extra dependency call.
+            from scipy.interpolate import CubicSpline
 
-        path = []
+            translation_fn = CubicSpline(key_times, key_translations, bc_type="natural")
+        else:
+            # Piecewise linear interpolation across keyframes (covers both
+            # 2-keyframe "linear" mode and 2-keyframe "spline" degeneracy).
+            def translation_fn(t: float) -> np.ndarray:
+                return np.array(
+                    [np.interp(t, key_times, key_translations[:, axis]) for axis in range(3)],
+                    dtype=np.float64,
+                )
+
+        cam0 = keyframes[0]
+        path: List[CameraParams] = []
         for i in range(num_frames):
             t = i / (num_frames - 1) if num_frames > 1 else 0.0
 
-            # LERP translation
-            t_interp = (1 - t) * t0 + t * t1
-
-            # SLERP rotation
+            t_interp = np.asarray(translation_fn(t))
             R_interp = slerp(t).as_matrix()
 
             # Reconstruct 4x4 extrinsics matrix
@@ -300,7 +320,7 @@ class SceneBuilder:
             extrinsics[:3, :3] = R_interp.astype(np.float32)
             extrinsics[:3, 3] = t_interp.astype(np.float32)
 
-            # Copy intrinsics from first camera
+            # Copy intrinsics from first keyframe
             cam = CameraParams(
                 intrinsics=cam0.intrinsics.copy(),
                 extrinsics=extrinsics,
