@@ -180,6 +180,7 @@ This table is the canonical progress ledger for extraction PRs that draw from th
 | Target 3F — Segmentation registry | `lux_depth_v3/segmentation_backend.py` | `lux_depth_v3/segmentation/registry.py` | Landed | This PR: segmentation registry extracted |
 | Target 4A — Rendering config/result types | `pipelines/rendering_4k_pipeline.py` | `pipelines/rendering_4k/types.py` | Landed | This PR: rendering config/result types extracted; ranking unchanged pending governance refresh |
 | Target 4B — Rendering pure image stage functions | `pipelines/rendering_4k_pipeline.py` | `pipelines/rendering_4k/stages.py` | Landed | This PR: rendering pure image stage functions extracted; ranking unchanged pending governance refresh |
+| Target 4C — Rendering quality and memory helpers | `pipelines/rendering_4k_pipeline.py` | `pipelines/rendering_4k/quality.py` | Landed | This PR: rendering quality assessor and GPU memory manager extracted; ranking unchanged pending governance refresh |
 
 ---
 
