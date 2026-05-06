@@ -123,9 +123,6 @@ except Exception:  # pragma: no cover - observability never blocks startup
     LOGGER.debug("healthcheck log filter unavailable", exc_info=True)
 
 
-_MANAGED_SAM2_CHECKSUM_CACHE_MAX_ENTRIES = _portal_sam2_checkpoint_security._MANAGED_SAM2_CHECKSUM_CACHE_MAX_ENTRIES
-
-
 def _env_csv(name: str, default: List[str]) -> List[str]:
     raw = os.getenv(name)
     if raw is None:
