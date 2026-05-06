@@ -346,11 +346,10 @@ class ContextAwareRenderingPipeline:
 
         print(f"\n✓ Strategy saved: {strategy_path}")
 
-        # TODO: Integrate with actual processing pipelines
-        # This would call:
-        # 1. depth_pipeline with depth_config
-        # 2. material_response with material_config
-        # 3. luxury_tiff_batch_processor with color_config
+        # Archived: pipeline integration was superseded by Spatial AI
+        # orchestration (Phase 2, ADR-027). See archive/scripts/README.md.
+        # This script emits a strategy/config bundle only; downstream
+        # processing now lives in src/transformation_portal/spatial_ai/.
 
         print("\n💡 Next steps:")
         print(f"  1. Apply depth pipeline with: {strategy_path}")
