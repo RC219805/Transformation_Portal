@@ -40,6 +40,7 @@ import json
 import logging
 import time
 from collections import OrderedDict
+from copy import deepcopy
 from dataclasses import asdict
 from pathlib import Path
 from typing import Dict, List, Optional, Union
@@ -349,7 +350,7 @@ class Rendering4KPipeline:
             available = ", ".join(cls.PRESETS.keys())
             raise ValueError(f"Unknown preset '{preset_name}'. Available: {available}")
 
-        config = cls.PRESETS[preset_name]
+        config = deepcopy(cls.PRESETS[preset_name])
         return cls(config)
 
     @classmethod
@@ -823,8 +824,16 @@ class Rendering4KPipeline:
     def _compute_cache_key(self, image: np.ndarray) -> str:
         """Compute cache key from image content (non-security, non-cryptographic)."""
         # Use SHA-256 for cache key (non-cryptographic; safe for content hashing)
-        data = image.tobytes()[:4096]  # First 4KB for speed
-        return hashlib.sha256(data).hexdigest()
+        digest = hashlib.sha256()
+        digest.update(str(image.shape).encode("ascii"))
+        digest.update(b"|")
+        digest.update(str(image.dtype).encode("ascii"))
+        digest.update(b"|")
+
+        contiguous_image = image if image.flags.c_contiguous else np.ascontiguousarray(image)
+        byte_view = contiguous_image.view(np.uint8).reshape(-1)
+        digest.update(memoryview(byte_view[:4096]))
+        return digest.hexdigest()
 
     def _get_or_load_controlnet_pipe(self):
         """Lazy-load ControlNet pipeline for AI enhancement.

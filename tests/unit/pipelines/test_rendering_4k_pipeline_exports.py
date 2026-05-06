@@ -62,3 +62,56 @@ def test_legacy_rendering_module_cli_dry_run_still_reaches_main(tmp_path: Path) 
 
     assert result.returncode == 0, result.stderr
     assert '"name": "preview"' in f"{result.stdout}\n{result.stderr}"
+
+
+def test_rendering_4k_presets_are_copied_before_pipeline_mutation() -> None:
+    extracted = importlib.import_module(PIPELINE_NAME)
+    preset = extracted.Rendering4KPipeline.PRESETS["preview"]
+    original_depth_enabled = preset.depth.enabled
+
+    first = extracted.Rendering4KPipeline.from_preset("preview")
+    second = extracted.Rendering4KPipeline.from_preset("preview")
+
+    assert first.config is not preset
+    assert second.config is not preset
+    assert first.config is not second.config
+    assert first.config.depth is not preset.depth
+    assert first.config.material_response.surface_types is not preset.material_response.surface_types
+
+    first.config.depth.enabled = not original_depth_enabled
+    first.config.material_response.surface_types.append("review-only-surface")
+
+    assert preset.depth.enabled is original_depth_enabled
+    assert "review-only-surface" not in preset.material_response.surface_types
+    assert "review-only-surface" not in second.config.material_response.surface_types
+
+
+def test_rendering_4k_cache_key_uses_buffer_sample_without_full_tobytes() -> None:
+    import numpy as np
+
+    extracted = importlib.import_module(PIPELINE_NAME)
+
+    class NoToBytesArray(np.ndarray):
+        def tobytes(self, *args: object, **kwargs: object) -> bytes:
+            raise AssertionError("cache key must not call ndarray.tobytes()")
+
+    image = np.arange(8192, dtype=np.uint8).reshape(64, 128).view(NoToBytesArray)
+
+    key = extracted.Rendering4KPipeline._compute_cache_key(object(), image)
+
+    assert len(key) == 64
+    assert key == extracted.Rendering4KPipeline._compute_cache_key(object(), image)
+
+
+def test_rendering_4k_cache_key_includes_shape_and_dtype() -> None:
+    import numpy as np
+
+    extracted = importlib.import_module(PIPELINE_NAME)
+    raw = np.arange(4096, dtype=np.uint8)
+
+    flat_key = extracted.Rendering4KPipeline._compute_cache_key(object(), raw)
+    shaped_key = extracted.Rendering4KPipeline._compute_cache_key(object(), raw.reshape(64, 64))
+    float_key = extracted.Rendering4KPipeline._compute_cache_key(object(), raw.view(np.float32))
+
+    assert shaped_key != flat_key
+    assert float_key != flat_key
