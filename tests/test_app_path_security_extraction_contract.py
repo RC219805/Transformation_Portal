@@ -67,6 +67,20 @@ def test_phase_2b_symlink_escape_is_rejected_for_existing_dir(tmp_path: Path) ->
     assert orchestrator_app._trusted_existing_dir(str(symlink_path), [allowed_root]) is None
 
 
+def test_phase_2b_safe_regular_file_preserves_outside_root_reason(tmp_path: Path) -> None:
+    allowed_root = tmp_path / "allowed"
+    outside_root = tmp_path / "outside"
+    allowed_root.mkdir()
+    outside_root.mkdir()
+    outside_file = outside_root / "asset.png"
+    outside_file.write_bytes(b"x")
+
+    with pytest.raises(orchestrator_app._PortalValidationReasonError) as exc_info:
+        orchestrator_app._ensure_safe_regular_file_path(outside_file, [allowed_root])
+
+    assert exc_info.value.reason == "path_outside_allowed_roots"
+
+
 def test_phase_2b_trusted_creatable_dir_returns_path_without_creating_it(tmp_path: Path) -> None:
     allowed_root = tmp_path / "allowed"
     allowed_root.mkdir()

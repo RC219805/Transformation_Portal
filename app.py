@@ -68,6 +68,7 @@ from transformation_portal.ingest.upload_staging import (
 from transformation_portal.lux_depth_v3.model_registry import resolve_model_spec, resolve_registry_key, visible_cli_model_specs
 from transformation_portal.lux_depth_v3.run_card_contract import infer_run_card_version
 from transformation_portal.portal import asset_bundle as _portal_asset_bundle
+from transformation_portal.portal import path_security as _portal_path_security
 from transformation_portal.portal.asset_bundle import (
     PORTAL_ASSETS_DIR,
     PORTAL_ASSETS_DIR_REAL,
@@ -426,60 +427,15 @@ APP_VERSION = "0.3.0"
 
 
 def _normalize_root_path(value: str | Path) -> Path:
-    raw = str(value or "").strip()
-    if not raw or raw.startswith("~") or "\x00" in raw:
-        raise ValueError("Invalid path root")
-    candidate = Path(raw)
-    if not candidate.is_absolute():
-        candidate = REPO_ROOT / candidate
-    return Path(os.path.realpath(candidate))
+    return _portal_path_security._normalize_root_path(value, repo_root=REPO_ROOT)
 
 
 def _default_allowed_path_roots() -> List[Path]:
-    roots: List[Path] = [REPO_ROOT]
-    candidate_paths: List[Path] = [Path(tempfile.gettempdir()).resolve()]
-    if os.name != "nt":
-        # Accept the common POSIX temp aliases used by operators and local tooling.
-        candidate_paths.extend([Path("/tmp"), Path("/private/tmp")])
-
-    for candidate in candidate_paths:
-        try:
-            normalized = _normalize_root_path(candidate)
-        except (OSError, RuntimeError, ValueError):
-            continue
-        if normalized not in roots:
-            roots.append(normalized)
-    return roots
+    return _portal_path_security._default_allowed_path_roots(repo_root=REPO_ROOT)
 
 
 def _env_path_roots(name: str, default: List[Path]) -> List[Path]:
-    raw = os.getenv(name)
-    if raw is None:
-        values = [str(path) for path in default]
-    else:
-        values = [item.strip() for item in raw.split(",") if item.strip()]
-
-    roots: List[Path] = []
-    invalid_values: List[str] = []
-    for value in values:
-        try:
-            root = _normalize_root_path(value)
-        except (OSError, RuntimeError, ValueError):
-            invalid_values.append(value)
-            continue
-        if root not in roots:
-            roots.append(root)
-    if invalid_values:
-        LOGGER.warning(
-            "%s ignored invalid roots: %s",
-            name,
-            ", ".join(sorted(set(invalid_values))),
-        )
-    if raw is not None and not roots:
-        raise RuntimeError(f"{name} is set but contains no valid roots")
-    if not roots:
-        raise RuntimeError(f"{name} resolved to an empty root allowlist")
-    return roots
+    return _portal_path_security._env_path_roots(name, default, repo_root=REPO_ROOT, logger=LOGGER)
 
 
 def _lux_depth_runner_command() -> List[str]:
@@ -499,13 +455,11 @@ def _lux_depth_runner_available() -> bool:
 
 
 def _resolve_untrusted_request_path(path_value: str) -> Path:
-    raw = str(path_value or "").strip()
-    if not raw or raw.startswith("~") or "\x00" in raw:
-        raise ValueError("Invalid path value")
-    candidate = Path(raw)
-    if not candidate.is_absolute():
-        candidate = REPO_ROOT / candidate
-    return Path(os.path.realpath(candidate))
+    return _portal_path_security._resolve_untrusted_request_path(path_value, repo_root=REPO_ROOT)
+
+
+def _portal_path_security_error(exc: _portal_path_security.PathSecurityValidationError) -> "_PortalValidationReasonError":
+    return _PortalValidationReasonError(str(exc), reason=exc.reason)
 
 
 def _validate_path_against_roots(
@@ -519,27 +473,10 @@ def _resolve_allowed_request_path(
     path_value: str,
     allowed_roots: List[Path],
 ) -> Path:
-    if not allowed_roots:
-        raise _PortalValidationReasonError("No allowed roots configured", reason="invalid_path_value")
-
     try:
-        resolved = _resolve_untrusted_request_path(path_value)
-    except (OSError, RuntimeError, ValueError):
-        raise _PortalValidationReasonError("Invalid path value", reason="invalid_path_value") from None
-
-    for root in allowed_roots:
-        try:
-            root_real = Path(os.path.realpath(root))
-        except (OSError, RuntimeError, ValueError):
-            continue
-        try:
-            resolved.relative_to(root_real)
-        except ValueError:
-            continue
-        else:
-            return resolved
-
-    raise _PortalValidationReasonError("Path outside allowed roots", reason="path_outside_allowed_roots")
+        return _portal_path_security._resolve_allowed_request_path(path_value, allowed_roots, repo_root=REPO_ROOT)
+    except _portal_path_security.PathSecurityValidationError as exc:
+        raise _portal_path_security_error(exc) from None
 
 
 def _resolved_portal_upload_root() -> Path:
@@ -547,41 +484,17 @@ def _resolved_portal_upload_root() -> Path:
 
 
 def _path_is_within_root(resolved_path: Path, root: Path) -> bool:
-    try:
-        resolved_path.relative_to(Path(os.path.realpath(root)))
-    except ValueError:
-        return False
-    return True
+    return _portal_path_security._path_is_within_root(resolved_path, root)
 
 
 def _trusted_allowed_entry(
     resolved_path: Path,
     allowed_roots: List[Path],
 ) -> Optional[Path]:
-    for root in allowed_roots:
-        try:
-            root_real = Path(os.path.realpath(root))
-            relative_parts = resolved_path.relative_to(root_real).parts
-        except (OSError, RuntimeError, ValueError):
-            continue
-        current = root_real
-        if not relative_parts:
-            return current
-        for part in relative_parts:
-            if part in {"", ".", ".."}:
-                return None
-            try:
-                next_path = next((child for child in current.iterdir() if child.name == part), None)
-            except (NotADirectoryError, FileNotFoundError, OSError, RuntimeError, ValueError):
-                return None
-            if next_path is None:
-                return None
-            current = next_path
-        return current
-    return None
+    return _portal_path_security._trusted_allowed_entry(resolved_path, allowed_roots)
 
 
-_UNSAFE_PATH_SEGMENT_RE = re.compile(r"[\x00/\\]")
+_UNSAFE_PATH_SEGMENT_RE = _portal_path_security._UNSAFE_PATH_SEGMENT_RE
 
 
 def _trusted_existing_dir(value: str, allowed_roots: List[Path]) -> Optional[Path]:
@@ -594,19 +507,7 @@ def _trusted_existing_dir(value: str, allowed_roots: List[Path]) -> Optional[Pat
     string to subsequent filesystem APIs.
     """
 
-    try:
-        resolved = _resolve_allowed_request_path(value, allowed_roots)
-    except _PortalValidationReasonError:
-        return None
-    trusted = _trusted_allowed_entry(resolved, allowed_roots)
-    if trusted is None:
-        return None
-    try:
-        if not trusted.is_dir():
-            return None
-    except OSError:
-        return None
-    return trusted
+    return _portal_path_security._trusted_existing_dir(value, allowed_roots, repo_root=REPO_ROOT)
 
 
 def _trusted_creatable_dir(value: str, allowed_roots: List[Path]) -> Optional[Path]:
@@ -618,53 +519,14 @@ def _trusted_creatable_dir(value: str, allowed_roots: List[Path]) -> Optional[Pa
     against :data:`_UNSAFE_PATH_SEGMENT_RE` to defeat traversal injection.
     """
 
-    try:
-        resolved = _resolve_allowed_request_path(value, allowed_roots)
-    except _PortalValidationReasonError:
-        return None
-    for root in allowed_roots:
-        try:
-            root_real = Path(os.path.realpath(root))
-            relative_parts = resolved.relative_to(root_real).parts
-        except (OSError, RuntimeError, ValueError):
-            continue
-        current = root_real
-        creating = False
-        for part in relative_parts:
-            if part in {"", ".", ".."} or _UNSAFE_PATH_SEGMENT_RE.search(part):
-                return None
-            if creating:
-                current = current / part
-                continue
-            try:
-                next_path = next((child for child in current.iterdir() if child.name == part), None)
-            except (NotADirectoryError, FileNotFoundError, OSError, RuntimeError, ValueError):
-                return None
-            if next_path is None:
-                creating = True
-                current = current / part
-            else:
-                current = next_path
-        return current
-    return None
+    return _portal_path_security._trusted_creatable_dir(value, allowed_roots, repo_root=REPO_ROOT)
 
 
 def _ensure_safe_regular_file_path(path_value: Path, allowed_roots: List[Path]) -> Path:
     try:
-        candidate_real = _resolve_allowed_request_path(str(path_value), allowed_roots)
-    except _PortalValidationReasonError:
-        raise
-    except (OSError, RuntimeError, ValueError) as exc:
-        raise _PortalValidationReasonError("Invalid path value", reason="invalid_path_value") from exc
-    trusted_entry = _trusted_allowed_entry(candidate_real, allowed_roots)
-    if trusted_entry is None:
-        raise _PortalValidationReasonError("Invalid path value", reason="invalid_path_value")
-    try:
-        if not trusted_entry.is_file():
-            raise _PortalValidationReasonError("Invalid path value", reason="invalid_path_value")
-    except OSError as exc:
-        raise _PortalValidationReasonError("Invalid path value", reason="invalid_path_value") from exc
-    return trusted_entry
+        return _portal_path_security._ensure_safe_regular_file_path(path_value, allowed_roots, repo_root=REPO_ROOT)
+    except _portal_path_security.PathSecurityValidationError as exc:
+        raise _portal_path_security_error(exc) from exc.__cause__
 
 
 _MANAGED_SAM2_REASON_MESSAGES = {
