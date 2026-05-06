@@ -34,6 +34,10 @@ _QUALITY_EXPORTS = {
     "QualityAssessor",
 }
 
+_PIPELINE_EXPORTS = {
+    "Rendering4KPipeline",
+}
+
 __all__ = [
     "AIEnhancementConfig",
     "ColorGradingConfig",
@@ -49,6 +53,7 @@ __all__ = [
     "QualityLevel",
     "QualityMetrics",
     "STAGE_NAMES",
+    "Rendering4KPipeline",
     "StageMetrics",
     "ToneMappingConfig",
     "ToneMappingMethod",
@@ -73,8 +78,13 @@ def __getattr__(name: str) -> object:
         globals()[name] = value
         return value
 
+    if name in _PIPELINE_EXPORTS:
+        value = getattr(import_module(f"{__name__}.pipeline"), name)
+        globals()[name] = value
+        return value
+
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 def __dir__() -> list[str]:
-    return sorted(set(globals()) | _STAGE_EXPORTS | _QUALITY_EXPORTS)
+    return sorted(set(globals()) | _STAGE_EXPORTS | _QUALITY_EXPORTS | _PIPELINE_EXPORTS)
