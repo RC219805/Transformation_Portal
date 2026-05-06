@@ -5,7 +5,7 @@
 # Transformation Portal Professional Pipeline.
 #
 # Usage:
-#   python pro_pipeline.py process image.jpg --config pro_pipeline_config.yaml
+#   python -m transformation_portal.pipelines.pro_pipeline process image.jpg --config pro_pipeline_config.yaml
 
 # Default global settings
 global:
