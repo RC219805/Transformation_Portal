@@ -2,11 +2,7 @@
 
 from __future__ import annotations
 
-import contextlib
-import json
 import logging
-import os
-import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -17,29 +13,9 @@ from transformation_portal.spatial_ai.materials.contracts import PBRTextures
 from transformation_portal.spatial_ai.reconstruction.contracts import Scene3D
 from transformation_portal.spatial_ai.segmentation.contracts import SegmentationResult
 
+from .json_io import write_json_atomic as _write_json_atomic
+
 logger = logging.getLogger("transformation_portal.spatial_ai.orchestration.pipeline")
-
-
-def _write_json_atomic(path: Path, payload: dict[str, Any]) -> None:
-    """Write JSON via a same-directory temp file, fsync, then replace."""
-    temp_path: Optional[Path] = None
-    with tempfile.NamedTemporaryFile("w", dir=path.parent, delete=False) as handle:
-        temp_path = Path(handle.name)
-        try:
-            json.dump(payload, handle, indent=2)
-            handle.flush()
-            os.fsync(handle.fileno())
-        except Exception:
-            with contextlib.suppress(FileNotFoundError):
-                temp_path.unlink()
-            raise
-
-    try:
-        temp_path.replace(path)
-    except Exception:
-        with contextlib.suppress(FileNotFoundError):
-            temp_path.unlink()
-        raise
 
 
 @dataclass

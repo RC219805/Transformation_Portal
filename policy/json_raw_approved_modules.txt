@@ -38,7 +38,6 @@ src/transformation_portal/pipelines/unified_luxury_pipeline.py
 src/transformation_portal/spatial_ai/ingest/linear_decoder.py
 src/transformation_portal/spatial_ai/orchestration/graph/artifact_store.py
 src/transformation_portal/spatial_ai/orchestration/pipeline.py
-src/transformation_portal/spatial_ai/orchestration/results.py
 src/transformation_portal/spatial_ai/reconstruction/mesh_exporter.py
 src/transformation_portal/stage_graph/stage.py
 src/transformation_portal/streaming/checkpoint.py

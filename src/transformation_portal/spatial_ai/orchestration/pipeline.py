@@ -36,8 +36,6 @@ import hashlib
 import json
 import logging
 import math
-import os
-import tempfile
 import time
 from dataclasses import asdict, is_dataclass
 from functools import lru_cache
@@ -68,6 +66,7 @@ from .config import (
     _normalise_segmentation_cache_policy,
 )
 from .error_handler import ErrorHandler, ErrorRecoveryStrategy, PipelineError
+from .json_io import write_json_atomic as _write_json_atomic
 from .progress_tracker import ProgressTracker
 from .resource_manager import ResourceLimits, ResourceManager
 from .results import MultiViewReconstructionResult, PipelineResult
@@ -299,29 +298,6 @@ def _sanitize_json_value(value: Any) -> Any:
         return value if math.isfinite(value) else None
 
     return value
-
-
-def _write_json_atomic(path: Path, payload: dict[str, Any]) -> None:
-    """Write deterministic JSON atomically via temp file + fsync + replace."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=path.parent, delete=False) as handle:
-        temp_path = Path(handle.name)
-        try:
-            dump_json(payload, handle, indent=2, sort_keys=True, ensure_ascii=False, allow_nan=False)
-            handle.write("\n")
-            handle.flush()
-            os.fsync(handle.fileno())
-        except Exception:
-            with contextlib.suppress(FileNotFoundError):
-                temp_path.unlink()
-            raise
-
-    try:
-        temp_path.replace(path)
-    except Exception:
-        with contextlib.suppress(FileNotFoundError):
-            temp_path.unlink()
-        raise
 
 
 class SpatialAIPipeline:
@@ -1432,7 +1408,14 @@ class SpatialAIPipeline:
             ("provenance.json", provenance_payload),
         ):
             try:
-                _write_json_atomic(seg_dir / filename, _sanitize_json_value(payload))
+                _write_json_atomic(
+                    seg_dir / filename,
+                    _sanitize_json_value(payload),
+                    sort_keys=True,
+                    ensure_ascii=False,
+                    allow_nan=False,
+                    trailing_newline=True,
+                )
             except Exception as exc:
                 logger.warning("Failed to write materials %s for %s: %s", filename, seg_id, exc)
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib
 import json
+import stat
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -183,19 +184,33 @@ def test_extracted_pipeline_result_save_summary_uses_atomic_writer(monkeypatch: 
 def test_extracted_result_atomic_writer_preserves_existing_file_on_failure(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    results_mod = importlib.import_module("transformation_portal.spatial_ai.orchestration.results")
+    json_io_mod = importlib.import_module("transformation_portal.spatial_ai.orchestration.json_io")
     summary_path = tmp_path / "summary.json"
     summary_path.write_text('{"existing": true}', encoding="utf-8")
+    summary_path.chmod(0o640)
 
     def fail_dump(*args: object, **kwargs: object) -> None:
         raise RuntimeError("serialization failed")
 
-    monkeypatch.setattr(results_mod.json, "dump", fail_dump)
+    monkeypatch.setattr(json_io_mod, "dump_json", fail_dump)
 
     with pytest.raises(RuntimeError, match="serialization failed"):
-        results_mod._write_json_atomic(summary_path, {"existing": False})
+        json_io_mod.write_json_atomic(summary_path, {"existing": False})
 
     assert summary_path.read_text(encoding="utf-8") == '{"existing": true}'
+    assert stat.S_IMODE(summary_path.stat().st_mode) == 0o640
+
+
+def test_extracted_result_atomic_writer_uses_utf8_and_preserves_existing_mode(tmp_path: Path) -> None:
+    json_io_mod = importlib.import_module("transformation_portal.spatial_ai.orchestration.json_io")
+    summary_path = tmp_path / "summary.json"
+    summary_path.write_text('{"existing": true}', encoding="utf-8")
+    summary_path.chmod(0o640)
+
+    json_io_mod.write_json_atomic(summary_path, {"message": "caf\u00e9"}, ensure_ascii=False)
+
+    assert b"caf\xc3\xa9" in summary_path.read_bytes()
+    assert stat.S_IMODE(summary_path.stat().st_mode) == 0o640
 
 
 def test_extracted_multiview_result_save_summary_preserves_reconstruction_shape(tmp_path: Path) -> None:
