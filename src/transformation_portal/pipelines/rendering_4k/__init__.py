@@ -29,15 +29,22 @@ _STAGE_EXPORTS = {
     "estimate_depth_simple",
 }
 
+_QUALITY_EXPORTS = {
+    "GPUMemoryManager",
+    "QualityAssessor",
+}
+
 __all__ = [
     "AIEnhancementConfig",
     "ColorGradingConfig",
     "DepthConfig",
     "DeviceType",
+    "GPUMemoryManager",
     "MaterialResponseConfig",
     "OutputConfig",
     "PipelineConfig",
     "ProcessingResult",
+    "QualityAssessor",
     "QualityFeedbackConfig",
     "QualityLevel",
     "QualityMetrics",
@@ -55,9 +62,14 @@ __all__ = [
 
 
 def __getattr__(name: str) -> object:
-    """Lazily expose stage functions without importing stage dependencies."""
+    """Lazily expose stage functions and extracted helpers without importing optional dependencies."""
     if name in _STAGE_EXPORTS:
         value = getattr(import_module(f"{__name__}.stages"), name)
+        globals()[name] = value
+        return value
+
+    if name in _QUALITY_EXPORTS:
+        value = getattr(import_module(f"{__name__}.quality"), name)
         globals()[name] = value
         return value
 
@@ -65,4 +77,4 @@ def __getattr__(name: str) -> object:
 
 
 def __dir__() -> list[str]:
-    return sorted(set(globals()) | _STAGE_EXPORTS)
+    return sorted(set(globals()) | _STAGE_EXPORTS | _QUALITY_EXPORTS)
