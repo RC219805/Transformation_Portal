@@ -3481,9 +3481,11 @@ function currentPipelineReadinessIssues(payload = null) {
 }
 
 function currentPipelineDispatchStatus(payload = null) {
+    const previewReadiness = _currentPreviewReadiness(payload);
     const readiness = currentPipelineReadiness(payload);
     const rawStatus = String(readiness?.status || '').trim().toLowerCase();
     if (!rawStatus) return '';
+    if (previewReadiness && rawStatus === 'blocked') return 'blocked';
     const issues = currentPipelineReadinessIssues(payload);
     if (issues.some((issue) => String(issue?.severity || '').trim().toLowerCase() === 'blocked')) {
         return 'blocked';
@@ -9235,12 +9237,14 @@ function generatePayload() {
     };
 
     if (p === 'lux-depth-v3') {
+        const canonicalLuxArgs = buildCanonicalLuxDepthArgs(c);
         args = {
-            ...args,
+            ...canonicalLuxArgs,
+            input_dir: inputDirValue,
+            output_dir: outputDirValue,
             overwrite: els.flags.overwrite
                 ? Boolean(els.flags.overwrite.checked)
-                : parseBoolLike(c.flags.overwrite, false),
-            ...buildCanonicalLuxDepthArgs(c)
+                : parseBoolLike(c.flags.overwrite, false)
         };
     } else {
         const archiveCommand = canonicalArchiveCommand(p);
@@ -10970,7 +10974,10 @@ async function submitJob() {
         appendJobLog(job, `[ERROR] ${errorMessage}`);
         _reconcileJobTimeline(job);
         scheduleRenderJobQueue();
-        createToast("Backend submission failed.", "error");
+        const toastMessage = errorMessage
+            ? `Backend submission failed: ${truncateMiddle(errorMessage, 180)}`
+            : 'Backend submission failed.';
+        createToast(toastMessage, "error");
         if (state.selectedJobId === job.id && els.logStatusIndicator) els.logStatusIndicator.classList.add('hidden');
     } finally {
         if (els.runJobBtn) {
