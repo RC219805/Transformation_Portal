@@ -16,14 +16,6 @@ from PIL import Image
 
 pytestmark = [pytest.mark.unit]
 
-from transformation_portal.realize_v8.unified import (
-    PRESETS,
-    Preset,
-    _image_to_float_array,
-    _open_any,
-    _save_with_meta,
-    enhance,
-)
 from transformation_portal.realize_v8.cli_extension import (
     VFX_PRESETS,
     apply_color_grade_zones,
@@ -34,7 +26,14 @@ from transformation_portal.realize_v8.cli_extension import (
     enhance_with_vfx,
     estimate_depth_fast,
 )
-
+from transformation_portal.realize_v8.unified import (
+    PRESETS,
+    Preset,
+    _image_to_float_array,
+    _open_any,
+    _save_with_meta,
+    enhance,
+)
 
 # ==================== Fixtures ====================
 

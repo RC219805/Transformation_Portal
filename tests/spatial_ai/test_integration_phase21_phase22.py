@@ -6,9 +6,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-_SAM2_CHECKPOINT = Path(
-    os.environ.get("TP_PORTAL_LUX_SAM2_CHECKPOINT", "checkpoints/sam2_hiera_base_plus.pt")
-)
+_SAM2_CHECKPOINT = Path(os.environ.get("TP_PORTAL_LUX_SAM2_CHECKPOINT", "checkpoints/sam2_hiera_base_plus.pt"))
 _SAM2_AVAILABLE = _SAM2_CHECKPOINT.exists()
 if _SAM2_AVAILABLE:
     try:
