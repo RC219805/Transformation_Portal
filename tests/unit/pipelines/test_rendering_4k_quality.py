@@ -76,6 +76,27 @@ def test_quality_assessor_lpips_disabled_falls_back_to_heuristics() -> None:
     assert 0.0 <= metrics.overall_score <= 1.0
 
 
+def test_quality_assessor_missing_perceptual_assessor_logs_context(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    from transformation_portal.pipelines.rendering_4k import quality
+
+    monkeypatch.setattr(quality, "HAS_PERCEPTUAL_ASSESSOR", False)
+    monkeypatch.setattr(
+        quality,
+        "_PERCEPTUAL_ASSESSOR_IMPORT_ERROR",
+        ImportError("missing optional perceptual module"),
+    )
+
+    with caplog.at_level("DEBUG", logger="transformation_portal.pipelines.rendering_4k_pipeline"):
+        assessor = quality.QualityAssessor(QualityFeedbackConfig(use_lpips=True))
+        assert assessor._get_perceptual_assessor() is None
+
+    assert "PerceptualQualityAssessor is unavailable" in caplog.text
+    assert "missing optional perceptual module" in caplog.text
+
+
 def test_quality_assessor_uses_absolute_perceptual_assessor_import(monkeypatch: pytest.MonkeyPatch) -> None:
     package = importlib.import_module("transformation_portal.pipelines.rendering_4k")
     if hasattr(package, "quality"):

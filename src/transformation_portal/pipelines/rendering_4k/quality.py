@@ -28,12 +28,14 @@ except ImportError:
     torch = None  # noqa: F841 - placeholder for optional import
 
 # Optional: PerceptualQualityAssessor for advanced quality metrics
+_PERCEPTUAL_ASSESSOR_IMPORT_ERROR: Optional[ImportError] = None
 try:
     from enhancements.perceptual_quality_assessment import PerceptualQualityAssessor
 
     HAS_PERCEPTUAL_ASSESSOR = True
-except ImportError:
+except ImportError as e:
     HAS_PERCEPTUAL_ASSESSOR = False
+    _PERCEPTUAL_ASSESSOR_IMPORT_ERROR = e
     PerceptualQualityAssessor = None
 
 from .types import DeviceType, QualityFeedbackConfig, QualityMetrics
@@ -159,9 +161,13 @@ class QualityAssessor:
 
         if not HAS_PERCEPTUAL_ASSESSOR:
             logger.warning(
-                "LPIPS requested but perceptual assessor not available. "
-                "Install torch and lpips for perceptual quality scoring."
+                "LPIPS requested but PerceptualQualityAssessor is unavailable; " "falling back to heuristic quality scoring."
             )
+            if _PERCEPTUAL_ASSESSOR_IMPORT_ERROR is not None:
+                logger.debug(
+                    "PerceptualQualityAssessor import failed: %s",
+                    _PERCEPTUAL_ASSESSOR_IMPORT_ERROR,
+                )
             return None
 
         if self._perceptual_assessor is None:

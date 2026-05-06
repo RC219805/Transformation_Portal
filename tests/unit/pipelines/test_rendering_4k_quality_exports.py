@@ -15,18 +15,37 @@ PHASE_4C_SYMBOLS = (
     "QualityAssessor",
 )
 
+PACKAGE_NAME = "transformation_portal.pipelines.rendering_4k"
+QUALITY_NAME = f"{PACKAGE_NAME}.quality"
+LEGACY_NAME = "transformation_portal.pipelines.rendering_4k_pipeline"
+
+
+def _clear_cached_package_quality_exports() -> None:
+    package = sys.modules.get(PACKAGE_NAME)
+    if package is None:
+        return
+
+    for symbol in (*PHASE_4C_SYMBOLS, "quality"):
+        package.__dict__.pop(symbol, None)
+
+
+def _reload_quality_and_legacy_modules() -> tuple[object, object]:
+    extracted = importlib.reload(importlib.import_module(QUALITY_NAME))
+    legacy = importlib.reload(importlib.import_module(LEGACY_NAME))
+    _clear_cached_package_quality_exports()
+    return legacy, extracted
+
 
 def test_legacy_rendering_module_reexports_phase_4c_quality_helpers() -> None:
-    legacy = importlib.import_module("transformation_portal.pipelines.rendering_4k_pipeline")
-    extracted = importlib.import_module("transformation_portal.pipelines.rendering_4k.quality")
+    legacy, extracted = _reload_quality_and_legacy_modules()
 
     for symbol in PHASE_4C_SYMBOLS:
         assert getattr(legacy, symbol) is getattr(extracted, symbol)
 
 
 def test_rendering_4k_package_reexports_phase_4c_quality_helpers() -> None:
-    package = importlib.import_module("transformation_portal.pipelines.rendering_4k")
-    extracted = importlib.import_module("transformation_portal.pipelines.rendering_4k.quality")
+    _, extracted = _reload_quality_and_legacy_modules()
+    package = importlib.import_module(PACKAGE_NAME)
 
     for symbol in PHASE_4C_SYMBOLS:
         assert getattr(package, symbol) is getattr(extracted, symbol)
@@ -34,15 +53,12 @@ def test_rendering_4k_package_reexports_phase_4c_quality_helpers() -> None:
 
 
 def test_rendering_4k_package_defers_quality_module_import(monkeypatch: pytest.MonkeyPatch) -> None:
-    package_name = "transformation_portal.pipelines.rendering_4k"
-    quality_name = f"{package_name}.quality"
+    monkeypatch.delitem(sys.modules, QUALITY_NAME, raising=False)
+    monkeypatch.delitem(sys.modules, PACKAGE_NAME, raising=False)
 
-    monkeypatch.delitem(sys.modules, quality_name, raising=False)
-    monkeypatch.delitem(sys.modules, package_name, raising=False)
+    package = importlib.import_module(PACKAGE_NAME)
 
-    package = importlib.import_module(package_name)
+    assert QUALITY_NAME not in sys.modules
 
-    assert quality_name not in sys.modules
-
-    quality = importlib.import_module(quality_name)
+    quality = importlib.import_module(QUALITY_NAME)
     assert getattr(package, "QualityAssessor") is quality.QualityAssessor
