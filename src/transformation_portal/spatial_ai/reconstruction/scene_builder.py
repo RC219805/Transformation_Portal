@@ -267,8 +267,7 @@ class SceneBuilder:
 
         if interpolation not in ("linear", "spline"):
             raise NotImplementedError(
-                f"Interpolation method '{interpolation}' not implemented. "
-                "Supported methods: 'linear', 'spline'."
+                f"Interpolation method '{interpolation}' not implemented. " "Supported methods: 'linear', 'spline'."
             )
 
         # Lazy import scipy to maintain module's lazy-loading contract
