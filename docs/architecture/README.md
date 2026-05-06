@@ -31,6 +31,7 @@ ADRs are **binding decisions** that define the repository's architecture, securi
 | [ADR-021](ADR-021-huggingface-revision-policy.md) | HuggingFace Revision Pinning | Accepted | 2026-02-03 | Architect |
 | [ADR-024](ADR-024-apache-iceberg-ban.md) | Apache Iceberg Ban | Accepted | 2026 | Architect |
 | [ADR-046](ADR-046-app-path-security-helper-extraction.md) | App Path Security Helper Extraction Contract | Proposed | 2026-05-06 | Architect |
+| [ADR-047](ADR-047-managed-sam2-checkpoint-security-extraction.md) | Managed SAM2 Checkpoint Security Extraction Contract | Proposed | 2026-05-06 | Architect |
 
 ### Tier & Licensing
 
