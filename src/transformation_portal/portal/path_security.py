@@ -41,7 +41,7 @@ def _default_allowed_path_roots(*, repo_root: Path | None = None) -> List[Path]:
     candidate_paths: List[Path] = [Path(tempfile.gettempdir()).resolve()]
     if os.name != "nt":
         # Accept the common POSIX temp aliases used by operators and local tooling.
-        candidate_paths.extend([Path("/tmp"), Path("/private/tmp")])
+        candidate_paths.extend([Path("/tmp"), Path("/private/tmp")])  # nosec B108 - allowed-root aliases only.
 
     for candidate in candidate_paths:
         try:
