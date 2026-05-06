@@ -119,10 +119,10 @@ def _save_with_meta(
                                 description = meta.get("description")
                                 if description is None and meta:
                                     # Fallback: serialize meta as a string for description
-                                    import json
+                                    from transformation_portal.ingest.canonical_json import dumps_json
 
                                     try:
-                                        description = json.dumps(meta)
+                                        description = dumps_json(meta)
                                     except Exception:
                                         description = str(meta)
                                 if description is not None:
@@ -382,7 +382,7 @@ def main():
     try:
         # pylint: disable=cyclic-import
         # Lazy import to allow VFX extension to import from this module
-        from realize_v8_unified_cli_extension import add_vfx_commands
+        from transformation_portal.realize_v8.cli_extension import add_vfx_commands
 
         has_vfx = True
     except ImportError:

@@ -9,12 +9,12 @@ from pathlib import Path
 
 import pytest
 
-pytestmark = [pytest.mark.unit, pytest.mark.skip(reason="material_response_optimizer not yet migrated to src package")]
+from transformation_portal.processors.material_response.optimizer import (
+    MaterialAwareEnhancementPlanner,
+    RenderEnhancementPlanner,
+)
 
-try:
-    from scripts.utilities.material_response_optimizer import MaterialAwareEnhancementPlanner, RenderEnhancementPlanner
-except ImportError:
-    pass
+pytestmark = [pytest.mark.unit]
 
 
 @pytest.fixture(scope="module")

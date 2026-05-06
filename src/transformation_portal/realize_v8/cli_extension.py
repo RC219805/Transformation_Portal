@@ -38,7 +38,15 @@ import numpy as np
 from PIL import Image
 
 # Your existing infrastructure
-from scripts.utilities.realize_v8_unified import PRESETS, _error, _info, _open_any, _save_with_meta, _warn, enhance
+from transformation_portal.realize_v8.unified import (
+    PRESETS,
+    _error,
+    _info,
+    _open_any,
+    _save_with_meta,
+    _warn,
+    enhance,
+)
 
 # Your depth pipeline (optimized for M4 Max)
 try:

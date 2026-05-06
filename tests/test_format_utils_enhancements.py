@@ -14,33 +14,34 @@ import numpy as np
 import pytest
 from PIL import Image
 
-# Import from the enhancements module
-pytestmark = [pytest.mark.unit, pytest.mark.skip(reason="format_utils_enhancements not yet migrated to src package")]
+from transformation_portal.utils.format_utils_enhancements import (
+    batch_convert_directory,
+    check_tifffile_available,
+    convert_image_format,
+    convert_tiff_preserve_depth,
+    detect_format_from_content,
+    get_image_metadata,
+    get_mime_type,
+    get_optimal_format_for_use_case,
+    get_tiff_compression_info,
+    load_tiff_preserve_depth,
+    optimize_tiff_compression,
+    save_tiff_16bit,
+    smart_convert,
+    validate_image_integrity,
+)
 
-try:
-    from scripts.utilities.format_utils_enhancements import (  # Option 2: Enhanced detection; Option 3: Conversion; Option 4: TIFF handling
-        batch_convert_directory,
-        check_tifffile_available,
-        convert_image_format,
-        convert_tiff_preserve_depth,
-        detect_format_from_content,
-        get_image_metadata,
-        get_mime_type,
-        get_optimal_format_for_use_case,
-        get_tiff_compression_info,
-        load_tiff_preserve_depth,
-        optimize_tiff_compression,
-        save_tiff_16bit,
-        smart_convert,
-        validate_image_integrity,
-    )
-except ImportError:
-    # Module not in src package yet, tests will be skipped
-    pass
+pytestmark = [pytest.mark.unit]
 
 # ==============================================================================
 # Fixtures
 # ==============================================================================
+
+
+@pytest.fixture
+def temp_dir(tmp_path):
+    """Alias for the pytest tmp_path fixture used throughout this module."""
+    return tmp_path
 
 
 @pytest.fixture

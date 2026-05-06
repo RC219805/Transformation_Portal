@@ -15,8 +15,13 @@ re-validate paths.
 
 from pathlib import Path
 
-from realize_v8_unified import _info
-from realize_v8_unified_cli_extension import VFX_PRESETS, _open_any, _save_with_meta, enhance_with_vfx
+from transformation_portal.realize_v8.cli_extension import (
+    VFX_PRESETS,
+    _open_any,
+    _save_with_meta,
+    enhance_with_vfx,
+)
+from transformation_portal.realize_v8.unified import _info
 
 
 def example_single_image():
