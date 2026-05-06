@@ -31,11 +31,15 @@ class TestConfigResolverImports:
             PresetInfo,
             ResolvedConfig,
             build_apex_depth_gate_fingerprint_payload,
+            build_depth_cache_fingerprint,
             build_materials_fingerprint_payload,
+            build_orchestrator_run_card_config_fingerprint,
             build_pbr_fingerprint_payload,
             build_run_card_config_fingerprint,
             compute_config_fingerprint,
             discover_presets,
+            finalize_run_card_config_fingerprint,
+            require_model_variant,
             resolve_preset,
         )
 
@@ -49,6 +53,10 @@ class TestConfigResolverImports:
         assert callable(build_pbr_fingerprint_payload)
         assert callable(build_apex_depth_gate_fingerprint_payload)
         assert callable(build_run_card_config_fingerprint)
+        assert callable(require_model_variant)
+        assert callable(build_depth_cache_fingerprint)
+        assert callable(finalize_run_card_config_fingerprint)
+        assert callable(build_orchestrator_run_card_config_fingerprint)
 
 
 class TestDiscoverPresets:
@@ -753,6 +761,89 @@ class TestBuildRunCardConfigFingerprint:
         fingerprint = build_run_card_config_fingerprint(EnhanceConfig())
 
         assert fingerprint["raw_python_executable"] == REPO_LOCAL_RAW_PYTHON
+
+
+class TestOrchestratorFingerprintHelpers:
+    """Test orchestrator-facing config fingerprint helpers."""
+
+    def test_require_model_variant_returns_resolved_variant(self):
+        """Resolved model variants are exposed for orchestrator delegates."""
+        from transformation_portal.lux_depth_v3.config import EnhanceConfig, ModelVariant
+        from transformation_portal.lux_depth_v3.config_resolver import require_model_variant
+
+        config = EnhanceConfig(model_variant=ModelVariant.METRIC_SMALL)
+
+        assert require_model_variant(config) is ModelVariant.METRIC_SMALL
+
+    def test_build_depth_cache_fingerprint_is_backend_and_units_scoped(self):
+        """Depth cache fingerprint should change with backend output units."""
+        from transformation_portal.lux_depth_v3.config import EnhanceConfig, ModelVariant
+        from transformation_portal.lux_depth_v3.config_resolver import build_depth_cache_fingerprint
+
+        config = EnhanceConfig(depth_backend="da3", model_variant=ModelVariant.METRIC_LARGE)
+
+        relative = build_depth_cache_fingerprint(
+            config,
+            ModelVariant.METRIC_LARGE,
+            "da3",
+            "relative",
+        )
+        metric = build_depth_cache_fingerprint(
+            config,
+            ModelVariant.METRIC_LARGE,
+            "da3",
+            "meters",
+        )
+
+        assert len(relative) == 64
+        assert relative != metric
+
+    def test_finalize_run_card_config_fingerprint_recomputes_canonical_hash(self):
+        """Finalization strips stale hash fields before canonicalization."""
+        from transformation_portal.lux_depth_v3.config_resolver import finalize_run_card_config_fingerprint
+
+        finalized = finalize_run_card_config_fingerprint(
+            {
+                "b": 2,
+                "a": 1,
+                "hash_algorithm": "stale",
+                "canonical_json": "stale",
+                "sha256": "stale",
+            }
+        )
+
+        assert finalized["hash_algorithm"] == "sha256"
+        assert finalized["canonical_json"] == '{"a":1,"b":2}'
+        assert len(finalized["sha256"]) == 64
+
+    def test_orchestrator_run_card_fingerprint_applies_depth_pro_overrides(self):
+        """The extracted orchestrator helper preserves Depth Pro run-card overrides."""
+        from transformation_portal.lux_depth_v3.config import EnhanceConfig, ModelVariant
+        from transformation_portal.lux_depth_v3.config_resolver import (
+            build_orchestrator_run_card_config_fingerprint,
+        )
+        from transformation_portal.lux_depth_v3.manifest import BackendSelectionMetadata
+
+        metadata = BackendSelectionMetadata(
+            requested_backend="depth_pro",
+            resolved_backend="depth_pro",
+            resolution_status="success",
+            resolution_reason="Depth Pro backend ready",
+            model_id="apple/ml-depth-pro",
+            device="cpu",
+            attempts=[],
+        )
+
+        fingerprint = build_orchestrator_run_card_config_fingerprint(
+            EnhanceConfig(depth_backend="depth_pro", model_variant=ModelVariant.METRIC_LARGE),
+            ModelVariant.METRIC_LARGE,
+            metadata,
+        )
+
+        assert fingerprint["model_variant"] == "apple/ml-depth-pro"
+        assert fingerprint["preset_resolved"] == "backend:depth_pro"
+        assert fingerprint["output_depth_units"] == "meters"
+        assert len(fingerprint["sha256"]) == 64
 
 
 class TestConfigResolverClass:

@@ -51,6 +51,7 @@ operator guidance unless they are linked here as canonical documents.
 | Agent governance | [agent_governance.md](../architecture/agent_governance.md) | Maintained |
 | Copilot instructions | [.github/copilot-instructions.md](../../.github/copilot-instructions.md) | Maintained repo-wide Copilot guidance |
 | Claude Code instructions | [CLAUDE.md](../../CLAUDE.md) | Maintained repo-root guide for Claude Code; summarizes contracts, decomposition, marker discipline, and live agent profiles |
+| Maintainer workflow reference | [AGENTS.md](../../AGENTS.md) | Maintained operator command reference (Make targets, validation scripts, AI skill policy) |
 | Skill progression tracks | [SKILL_PROGRESS_TRACKS.md](../guides/SKILL_PROGRESS_TRACKS.md) | Maintained; maps recurring PR review themes to training drills |
 | CI workflow inventory | [WORKFLOW_MATRIX.md](../ci/WORKFLOW_MATRIX.md) | Maintained; current 30-workflow inventory |
 | CI/CD workflow guide | [CI_CD_WORKFLOWS.md](../ci_cd/CI_CD_WORKFLOWS.md) | Maintained |

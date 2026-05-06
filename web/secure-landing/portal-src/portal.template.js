@@ -60,6 +60,8 @@ const SSE_RECONNECT_JITTER_MS = 250;
 const SSE_STALL_CHECK_INTERVAL_MS = 10000;
 const SSE_STALL_THRESHOLD_MS = 45000;
 const CONFIG_PREVIEW_DEBOUNCE_MS = 250;
+const CONFIG_PREVIEW_SERVICE_RETRY_BASE_MS = 2500;
+const CONFIG_PREVIEW_SERVICE_RETRY_MAX_ATTEMPTS = 3;
 const TRANSIENT_DRAFT_PERSIST_DEBOUNCE_MS = 200;
 const DEFERRED_REVIEW_SURFACE_RETRY_WINDOW_MS = 30000;
 const DISPATCH_BACKEND_OFFLINE_MESSAGE = 'Backend is offline. Dispatch is disabled until connectivity is restored.';
@@ -85,6 +87,8 @@ let sseWatchdogIntervalId = null;
 let healthCheckInFlight = false;
 let lastHealthCheckAt = 0;
 let configPreviewTimerId = null;
+let configPreviewServiceRetryTimerId = null;
+let configPreviewServiceRetryAttempts = 0;
 let transientDraftPersistTimerId = null;
 let transientDraftPersistIdleId = null;
 let deferredReviewSurfaceApi = null;
@@ -514,6 +518,7 @@ const els = {
     reviewProvenanceFreshness: _domId('reviewProvenanceFreshness'),
     reviewProvenanceSource: _domId('reviewProvenanceSource'),
     reviewProvenanceBatch: _domId('reviewProvenanceBatch'),
+    reviewProvenanceCaptioning: _domId('reviewProvenanceCaptioning'),
     reviewCompareSummary: _domId('reviewCompareSummary'),
     reviewCompareTitle: _domId('reviewCompareTitle'),
     reviewCompareDetail: _domId('reviewCompareDetail'),
@@ -2991,6 +2996,49 @@ function artifactIsPreviewable(artifact) {
     return Boolean(artifact?.previewable) && artifactMediaKind(artifact) === 'image';
 }
 
+// Strict subset of `artifactIsPreviewable`: artifacts the browser can render
+// directly via <img> (PNG/JPEG/WebP/GIF/AVIF/SVG) or that have a sibling PNG
+// proxy (preview_url). TIFF/EXR without a proxy are excluded so the portal
+// never asks the browser to decode a format it cannot, avoiding the failed-
+// load → retry loop that produced the 503/.tif churn in the diagnosis logs.
+function artifactIsBrowserPreviewable(artifact) {
+    if (!artifact) return false;
+    if (Boolean(artifact.browser_previewable)) return true;
+    if (typeof artifact.preview_url === 'string' && artifact.preview_url.trim()) return true;
+    return false;
+}
+
+// Resolve the URL that should be used as <img src> for inline preview. Returns
+// the empty string when the artifact is not browser-previewable so callers can
+// skip rendering an <img> entirely.
+function artifactPreviewSrc(job, artifact) {
+    if (!artifactIsBrowserPreviewable(artifact)) return '';
+    const previewUrl = String(artifact?.preview_url || '').trim();
+    if (previewUrl) {
+        return sanitizeManagedAssetUrl(previewUrl);
+    }
+    return buildArtifactUrl(job, artifact);
+}
+
+// Page-lifetime cache of artifact URLs that previously returned 404. The viewer
+// uses this to skip retries for artifacts that have already been confirmed
+// missing, preventing the repeated-fetch loop seen in the diagnosis logs.
+const _artifactNotFoundUrls = new Set();
+
+function _markArtifactUrlNotFound(url) {
+    if (typeof url !== 'string' || !url) return;
+    _artifactNotFoundUrls.add(url);
+}
+
+function _clearArtifactUrlNotFoundCache() {
+    _artifactNotFoundUrls.clear();
+}
+
+function _isArtifactUrlKnownMissing(url) {
+    if (typeof url !== 'string' || !url) return false;
+    return _artifactNotFoundUrls.has(url);
+}
+
 function artifactLabel(artifact) {
     return String(artifact?.relative_path || artifact?.path || 'artifact').trim();
 }
@@ -3108,14 +3156,14 @@ function rankArtifactsForDisplay(artifacts) {
 }
 
 function findCompareArtifact(primaryArtifact, artifacts) {
-    if (!primaryArtifact || !artifactIsPreviewable(primaryArtifact)) return null;
+    if (!primaryArtifact || !artifactIsBrowserPreviewable(primaryArtifact)) return null;
     const primaryGroup = artifactCompareGroup(primaryArtifact);
     if (primaryGroup) {
         const hintedCandidate = rankArtifactsForDisplay(
             artifacts.filter((candidate) => (
                 candidate
                 && candidate.path !== primaryArtifact.path
-                && artifactIsPreviewable(candidate)
+                && artifactIsBrowserPreviewable(candidate)
                 && artifactCompareGroup(candidate) === primaryGroup
             ))
         )[0] || null;
@@ -3127,7 +3175,7 @@ function findCompareArtifact(primaryArtifact, artifacts) {
     let bestScore = -1;
 
     artifacts.forEach((candidate) => {
-        if (!candidate || candidate.path === primaryArtifact.path || !artifactIsPreviewable(candidate)) return;
+        if (!candidate || candidate.path === primaryArtifact.path || !artifactIsBrowserPreviewable(candidate)) return;
         const info = artifactNameParts(candidate);
         const ext = info.fileName.includes('.') ? info.fileName.split('.').pop().toLowerCase() : '';
         let score = 0;
@@ -4766,6 +4814,120 @@ function _portalPrivilegesReady() {
     return _isBootstrapReady() && !_isManagedUnavailableMode();
 }
 
+// Generalized retry discipline for protected /v1/* fetches.
+//
+// The managed front door already classifies upstream 401/403 as
+// CONFIG_FAILURE with retryable:false (web/secure-landing/lib/managed-failure.js).
+// Bootstrap honors that flag; everything else (refreshJobStatus, RUM, portal
+// events, config-preview/metadata, readiness, presets) used to swallow it and
+// keep polling, which is the 503 storm visible in the diagnosis logs.
+//
+// Behaviour:
+//   - When a protected fetch returns a body with details.retryable === false,
+//     the corresponding endpoint family is suppressed for the page lifetime.
+//   - Subsequent calls to _isProtectedFamilySuppressed(family) return true so
+//     callers can skip the fetch entirely.
+//   - One console.warn per family makes the diagnosis visible in DevTools.
+//   - _resetProtectedFamilySuppression() clears the map when the operator
+//     updates the direct-debug API key or an explicit recovery action retries.
+const _protectedFamilySuppression = new Map();
+
+function _classifyProtectedEndpointFamily(url) {
+    const path = String(url || '').split('?')[0];
+    if (!path) return '';
+    if (path.includes('/v1/jobs/') && path.endsWith('/events')) return 'jobs_events';
+    if (path.includes('/v1/jobs/') && path.endsWith('/cancel')) return 'jobs_cancel';
+    if (/\/v1\/jobs\/[^/]+$/.test(path)) return 'jobs_detail';
+    if (path.endsWith('/v1/jobs')) return 'jobs_list';
+    if (path.endsWith('/v1/config-metadata')) return 'config_metadata';
+    if (path.endsWith('/v1/config-preview')) return 'config_preview';
+    if (path.endsWith('/v1/portal/rum')) return 'portal_rum';
+    if (path.endsWith('/v1/portal/events')) return 'portal_events';
+    if (path.endsWith('/v1/readiness')) return 'readiness';
+    if (path.endsWith('/v1/presets')) return 'presets';
+    if (path.endsWith('/v1/uploads/staging')) return 'uploads_staging';
+    return '';
+}
+
+function _isProtectedFamilySuppressed(family) {
+    return Boolean(family) && _protectedFamilySuppression.has(family);
+}
+
+function _recordProtectedFamilySuppression(family, payload) {
+    if (!family || _protectedFamilySuppression.has(family)) return;
+    const detail = payload && typeof payload === 'object' ? payload : {};
+    _protectedFamilySuppression.set(family, {
+        recordedAt: Date.now(),
+        reason: String(detail.reason || 'config_failure'),
+        upstreamStatus: Number.isFinite(Number(detail.upstreamStatus)) ? Number(detail.upstreamStatus) : 0
+    });
+    try {
+        // eslint-disable-next-line no-console
+        console.warn(
+            `[portal] suppressing further requests to ${family}: reason=${detail.reason || 'config_failure'} ` +
+            `upstreamStatus=${detail.upstreamStatus || 'unknown'}. ` +
+            `Resolve frontdoor configuration (TP_BACKEND_API_KEY / backend TP_API_KEY).`
+        );
+    } catch {
+        // logging is best-effort
+    }
+}
+
+function _protectedErrorDetailsFromPayload(payload) {
+    if (!payload || typeof payload !== 'object') return null;
+    const nestedDetails = payload.error && typeof payload.error === 'object'
+        ? payload.error.details
+        : null;
+    if (nestedDetails && typeof nestedDetails === 'object') return nestedDetails;
+    const topLevelDetails = payload.details;
+    return topLevelDetails && typeof topLevelDetails === 'object' ? topLevelDetails : null;
+}
+
+function _nonRetryableProtectedDetails(payload) {
+    const details = _protectedErrorDetailsFromPayload(payload);
+    return details && details.retryable === false ? details : null;
+}
+
+// Inspect a non-OK protected response. If the body carries details.retryable === false,
+// suppress the family and return true so the caller can short-circuit.
+async function _maybeSuppressOnProtectedResponse(family, response) {
+    if (!family || !response || response.ok) return false;
+    let body = null;
+    try {
+        body = await response.clone().json();
+    } catch {
+        return false;
+    }
+    const details = _nonRetryableProtectedDetails(body);
+    if (!details) return false;
+    _recordProtectedFamilySuppression(family, {
+        reason: details.reason,
+        upstreamStatus: details.upstreamStatus
+    });
+    return true;
+}
+
+function _resetProtectedFamilySuppression(family) {
+    if (typeof family === 'string' && family) {
+        _protectedFamilySuppression.delete(family);
+    } else {
+        _protectedFamilySuppression.clear();
+    }
+}
+
+function _handleDirectDebugApiKeyUpdate(options = null) {
+    const resumeStreams = Boolean(options.resumeStreams);
+    _persistApiKeyFromInputs();
+    _resetProtectedFamilySuppression();
+    if (!resumeStreams) return;
+    resumeBlockedJobStreamsAfterAuthUpdate();
+    void checkBackend(true);
+    void fetchConfigMetadata(state.pipeline, true);
+    void fetchPresetsForPipeline(state.pipeline, true);
+    void fetchReadiness(true);
+    void fetchConfigPreview(generatePayload());
+}
+
 function _queueBootstrapOnlineFollowup() {
     state.bootstrap.pendingOnlineFollowup = true;
     state.bootstrap.onlineFollowupComplete = false;
@@ -5485,6 +5647,10 @@ function _applyStagedUploadResult(result) {
 function _submitStagedUploadSelection(fileList) {
     if (_blockManagedUnavailableAction('stage uploads')) return;
     if (!_stagedUploadsVisibleForState()) return;
+    if (_isProtectedFamilySuppressed('uploads_staging')) {
+        createToast('Staged uploads are paused until frontdoor configuration is repaired.', 'error');
+        return;
+    }
 
     const selection = _collectStagedUploadSelection(fileList);
     if (selection.entries.length === 0) {
@@ -5589,6 +5755,10 @@ function _submitStagedUploadSelection(fileList) {
             return;
         }
 
+        const nonRetryableDetails = _nonRetryableProtectedDetails(payload);
+        if (nonRetryableDetails) {
+            _recordProtectedFamilySuppression('uploads_staging', nonRetryableDetails);
+        }
         const errorMessage = _stagedUploadErrorMessage(payload);
         _setStagedUploadState({
             busy: false,
@@ -5663,6 +5833,108 @@ function getReadableError(errorObj) {
     return message || code || '';
 }
 
+const CAPTIONING_RUN_STATUS_VALUES = new Set([
+    'off',
+    'requested',
+    'succeeded',
+    'failed',
+    'skipped',
+    'missing_runtime',
+    'invalid_config',
+    'unsupported_backend'
+]);
+
+function toNonNegativeCaptioningRunStatusInt(value) {
+    if (typeof value === 'boolean') return 0;
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed) || parsed < 0) return 0;
+    return Math.round(parsed);
+}
+
+function normalizeCaptioningRunStatus(rawStatus) {
+    if (!rawStatus || typeof rawStatus !== 'object') return null;
+    let status = String(rawStatus.status || '').trim().toLowerCase();
+    const sidecarCount = toNonNegativeCaptioningRunStatusInt(rawStatus.sidecar_count);
+    const failedCount = toNonNegativeCaptioningRunStatusInt(rawStatus.failed_count);
+    const enabled = parseBoolLike(rawStatus.enabled, status !== 'off');
+    if (!CAPTIONING_RUN_STATUS_VALUES.has(status)) {
+        if (!enabled) {
+            status = 'off';
+        } else if (failedCount > 0) {
+            status = 'failed';
+        } else if (sidecarCount > 0) {
+            status = 'succeeded';
+        } else {
+            status = 'skipped';
+        }
+    }
+    return {
+        status,
+        enabled: status === 'off' ? false : enabled,
+        backend: String(rawStatus.backend || 'fastvlm').trim().toLowerCase() || 'fastvlm',
+        model_role: String(rawStatus.model_role || '').trim(),
+        model_id: rawStatus.model_id === null || rawStatus.model_id === undefined ? null : String(rawStatus.model_id),
+        model_path: rawStatus.model_path === null || rawStatus.model_path === undefined ? null : String(rawStatus.model_path),
+        role: 'advisory',
+        sidecar_count: sidecarCount,
+        raw_count: toNonNegativeCaptioningRunStatusInt(rawStatus.raw_count),
+        proxy_count: toNonNegativeCaptioningRunStatusInt(rawStatus.proxy_count),
+        failed_count: failedCount,
+        used_for_quality_gate: false,
+        policy_violation: Boolean(rawStatus.policy_violation)
+    };
+}
+
+function captioningRunStatusLabel(status) {
+    const normalized = String(status?.status || '').trim();
+    if (normalized === 'off') return 'Off';
+    if (normalized === 'requested') return 'Requested';
+    if (normalized === 'succeeded') return 'Succeeded';
+    if (normalized === 'failed') return 'Failed';
+    if (normalized === 'skipped') return 'Skipped';
+    if (normalized === 'missing_runtime') return 'Missing runtime';
+    if (normalized === 'invalid_config') return 'Invalid config';
+    if (normalized === 'unsupported_backend') return 'Unsupported backend';
+    return 'Not requested';
+}
+
+function captioningRunStatusSummary(status) {
+    if (!status) return 'FastVLM: Not requested';
+    const label = captioningRunStatusLabel(status);
+    const sidecars = Number(status.sidecar_count) || 0;
+    const suffix = sidecars > 0 ? ` (${sidecars} sidecar${sidecars === 1 ? '' : 's'})` : '';
+    return `FastVLM: ${label}${suffix}`;
+}
+
+function captioningRunStatusDetail(status) {
+    if (!status) return 'FastVLM: Not requested';
+    const parts = [
+        captioningRunStatusSummary(status),
+        `${Number(status.raw_count) || 0} raw`,
+        `${Number(status.proxy_count) || 0} proxy`,
+    ];
+    if (Number(status.failed_count) > 0) parts.push(`${Number(status.failed_count)} failed`);
+    if (status.model_role) parts.push(`role ${status.model_role}`);
+    if (status.model_id) parts.push(String(status.model_id));
+    return parts.join(' • ');
+}
+
+function createCaptioningRunStatusChip(status) {
+    if (!status) return null;
+    const chip = document.createElement('span');
+    chip.className = 'job-chip';
+    chip.dataset.ui = 'captioning-run-status';
+    chip.dataset.status = String(status.status || 'off');
+    chip.dataset.sidecarCount = String(Number(status.sidecar_count) || 0);
+    chip.dataset.rawCount = String(Number(status.raw_count) || 0);
+    chip.dataset.proxyCount = String(Number(status.proxy_count) || 0);
+    chip.dataset.failedCount = String(Number(status.failed_count) || 0);
+    chip.textContent = captioningRunStatusSummary(status);
+    chip.title = captioningRunStatusDetail(status);
+    chip.setAttribute('aria-label', captioningRunStatusDetail(status));
+    return chip;
+}
+
 function normalizeRunSummary(rawSummary) {
     if (!rawSummary || typeof rawSummary !== 'object') return null;
 
@@ -5681,7 +5953,8 @@ function normalizeRunSummary(rawSummary) {
         error_count: toNonNegativeInt(rawSummary.error_count),
         artifact_index_count: toNonNegativeInt(rawSummary.artifact_index_count),
         reviewable_outputs: Boolean(rawSummary.reviewable_outputs),
-        partial: Boolean(rawSummary.partial)
+        partial: Boolean(rawSummary.partial),
+        captioning_status: normalizeCaptioningRunStatus(rawSummary.captioning_status)
     };
 
     if (
@@ -5698,7 +5971,8 @@ function normalizeRunSummary(rawSummary) {
         || normalized.error_count !== null
         || normalized.artifact_index_count !== null
         || normalized.reviewable_outputs
-        || normalized.partial;
+        || normalized.partial
+        || normalized.captioning_status;
 
     return hasMeaningfulContent ? normalized : null;
 }
@@ -5723,6 +5997,9 @@ function describeRunSummary(summary) {
     if (summary.partial) {
         segments.push('outputs remain reviewable');
     }
+    if (summary.captioning_status) {
+        segments.push(captioningRunStatusSummary(summary.captioning_status));
+    }
 
     return segments.join(' • ');
 }
@@ -5740,8 +6017,12 @@ function normalizeArtifactItems(artifactsContainer) {
             artifact_type: String(item.artifact_type || 'file'),
             media_kind: String(item.media_kind || item.artifact_type || 'file'),
             previewable: Boolean(item.previewable),
+            browser_previewable: Boolean(item.browser_previewable),
             content_type: typeof item.content_type === 'string' ? item.content_type : '',
             url: typeof item.url === 'string' ? item.url : '',
+            download_url: typeof item.download_url === 'string' ? item.download_url : '',
+            preview_url: typeof item.preview_url === 'string' ? item.preview_url : '',
+            preview_mime_type: typeof item.preview_mime_type === 'string' ? item.preview_mime_type : '',
             path: String(item.path),
             relative_path: String(item.relative_path || item.path),
             size_bytes: typeof item.size_bytes === 'number' ? item.size_bytes : null,
@@ -5762,8 +6043,12 @@ function upsertArtifact(job, artifact) {
         existing.artifact_type = normalizedArtifact.artifact_type || existing.artifact_type;
         existing.media_kind = normalizedArtifact.media_kind || existing.media_kind;
         existing.previewable = typeof normalizedArtifact.previewable === 'boolean' ? normalizedArtifact.previewable : existing.previewable;
+        existing.browser_previewable = typeof normalizedArtifact.browser_previewable === 'boolean' ? normalizedArtifact.browser_previewable : existing.browser_previewable;
         existing.content_type = normalizedArtifact.content_type || existing.content_type;
         existing.url = normalizedArtifact.url || existing.url;
+        existing.download_url = normalizedArtifact.download_url || existing.download_url;
+        existing.preview_url = normalizedArtifact.preview_url || existing.preview_url;
+        existing.preview_mime_type = normalizedArtifact.preview_mime_type || existing.preview_mime_type;
         existing.relative_path = normalizedArtifact.relative_path || existing.relative_path;
         existing.size_bytes = normalizedArtifact.size_bytes ?? existing.size_bytes;
         existing.sha256 = normalizedArtifact.sha256 || existing.sha256;
@@ -5771,6 +6056,7 @@ function upsertArtifact(job, artifact) {
     } else {
         job.artifacts.push(normalizedArtifact);
     }
+    _clearArtifactUrlNotFoundCache();
     _reconcileJobTimeline(job);
 }
 
@@ -5852,6 +6138,7 @@ function _createDeferredReviewSurfaceHost() {
         els,
         clamp,
         normalizeRunSummary,
+        captioningRunStatusSummary,
         titleCaseToken,
         formatRelativeTime,
         getReadableError,
@@ -5871,6 +6158,10 @@ function _createDeferredReviewSurfaceHost() {
         buildArtifactUrl,
         sanitizeManagedAssetUrl,
         artifactIsPreviewable,
+        artifactIsBrowserPreviewable,
+        artifactPreviewSrc,
+        _markArtifactUrlNotFound,
+        _isArtifactUrlKnownMissing,
         artifactLabel,
         artifactDisplayHint,
         artifactDisplayLabel,
@@ -6198,11 +6489,15 @@ function _syncHydratedJob(existing, hydrated, rawJob = null) {
 
 async function refreshJobStatus(job) {
     if (!job || !job.id) return;
+    if (_isProtectedFamilySuppressed('jobs_detail')) return;
     try {
         const headers = _buildAuthHeaders({ 'Accept': 'application/json' });
         const encodedId = encodeURIComponent(String(job.id));
         const res = await fetch(`${API_BASE}/v1/jobs/${encodedId}`, { headers, cache: 'no-store' });
-        if (!res.ok) return;
+        if (!res.ok) {
+            await _maybeSuppressOnProtectedResponse('jobs_detail', res);
+            return;
+        }
         const payload = await res.json();
         const rawJob = payload?.data;
         if (!rawJob || String(rawJob.id || '') !== String(job.id)) return;
@@ -6225,6 +6520,11 @@ async function refreshJobStatus(job) {
 function scheduleSseReconnect(job) {
     if (!_isJobStreamRecoverable(job)) return;
     _ensureJobStreamState(job);
+    if (_isProtectedFamilySuppressed('jobs_events')) {
+        job.reconnectBlocked = true;
+        _clearSseRetry(job, true);
+        return;
+    }
     if (job.reconnectBlocked) return;
     if (job.sseRetry.timer || _jobHasActiveStream(job)) return;
 
@@ -6387,6 +6687,12 @@ async function _flushQueuedPortalRumSamples(options = {}) {
     if (state.rum.queuedSamples.length === 0) {
         return;
     }
+    if (_isProtectedFamilySuppressed('portal_rum')) {
+        // Drop the queued samples; they will not be accepted while the
+        // frontdoor is in non-retryable config_failure state.
+        state.rum.queuedSamples.splice(0, state.rum.queuedSamples.length);
+        return;
+    }
     const flushOptions = options && typeof options === 'object' ? options : {};
     const keepalive = Boolean(flushOptions.keepalive);
     const queued = state.rum.queuedSamples.splice(0, state.rum.queuedSamples.length);
@@ -6395,7 +6701,7 @@ async function _flushQueuedPortalRumSamples(options = {}) {
             const headers = _buildAuthHeaders({ 'Content-Type': 'application/json' }, 'POST', {
                 traceparent: sample.traceparent
             });
-            await fetch(`${API_BASE}/v1/portal/rum`, {
+            const res = await fetch(`${API_BASE}/v1/portal/rum`, {
                 method: 'POST',
                 headers,
                 body: JSON.stringify({
@@ -6409,6 +6715,9 @@ async function _flushQueuedPortalRumSamples(options = {}) {
                 }),
                 keepalive: keepalive || sample.keepalive
             });
+            if (res && !res.ok) {
+                await _maybeSuppressOnProtectedResponse('portal_rum', res);
+            }
         } catch {
             // best-effort telemetry only
         }
@@ -7527,6 +7836,7 @@ function syncRuntimeWorkerModeControls() {
 
 async function emitPortalEvent(eventType, options = {}) {
     if (!state.backendOk || !_isBootstrapReady()) return;
+    if (_isProtectedFamilySuppressed('portal_events')) return;
     const eventOptions = options && typeof options === 'object' ? options : {};
     const payload = {
         event_type: String(eventType || '').trim().toLowerCase(),
@@ -7538,11 +7848,14 @@ async function emitPortalEvent(eventType, options = {}) {
     };
     try {
         const headers = _buildAuthHeaders({ 'Content-Type': 'application/json' }, 'POST');
-        await fetch(`${API_BASE}/v1/portal/events`, {
+        const res = await fetch(`${API_BASE}/v1/portal/events`, {
             method: 'POST',
             headers,
             body: JSON.stringify(payload)
         });
+        if (res && !res.ok) {
+            await _maybeSuppressOnProtectedResponse('portal_events', res);
+        }
     } catch {
         // best-effort telemetry only
     }
@@ -7562,13 +7875,17 @@ async function fetchConfigMetadata(pipelineName = state.pipeline, silent = false
         renderReviewSurfaces();
         return;
     }
+    if (_isProtectedFamilySuppressed('config_metadata')) return;
     try {
         const headers = _buildAuthHeaders({ 'Accept': 'application/json' });
         const res = await fetch(`${API_BASE}/v1/config-metadata?pipeline=${encodeURIComponent(pipelineName)}`, {
             headers,
             cache: 'no-store'
         });
-        if (!res.ok) throw new Error(`config metadata fetch failed (${res.status})`);
+        if (!res.ok) {
+            await _maybeSuppressOnProtectedResponse('config_metadata', res);
+            throw new Error(`config metadata fetch failed (${res.status})`);
+        }
         const payload = await res.json();
         const data = payload?.success === true && payload?.data && typeof payload.data === 'object'
             ? payload.data
@@ -7591,7 +7908,38 @@ async function fetchConfigMetadata(pipelineName = state.pipeline, silent = false
     }
 }
 
+function _clearConfigPreviewServiceRetry() {
+    if (configPreviewServiceRetryTimerId !== null) {
+        clearTimeout(configPreviewServiceRetryTimerId);
+        configPreviewServiceRetryTimerId = null;
+    }
+    configPreviewServiceRetryAttempts = 0;
+}
+
+function _scheduleConfigPreviewServiceRetry() {
+    if (configPreviewServiceRetryAttempts >= CONFIG_PREVIEW_SERVICE_RETRY_MAX_ATTEMPTS) {
+        return;
+    }
+    if (configPreviewServiceRetryTimerId !== null) {
+        return;
+    }
+    configPreviewServiceRetryAttempts += 1;
+    const delay = CONFIG_PREVIEW_SERVICE_RETRY_BASE_MS * configPreviewServiceRetryAttempts;
+    configPreviewServiceRetryTimerId = window.setTimeout(() => {
+        configPreviewServiceRetryTimerId = null;
+        const payload = generatePayload();
+        if (!_configPreviewEnabledForPipeline(payload.pipeline)) {
+            return;
+        }
+        void fetchConfigPreview(payload);
+    }, delay);
+}
+
 async function fetchConfigPreview(payload) {
+    if (_isProtectedFamilySuppressed('config_preview')) {
+        _clearConfigPreviewServiceRetry();
+        return;
+    }
     const currentPayload = payload && typeof payload === 'object' ? payload : generatePayload();
     const requestKey = _configPreviewRequestKey(currentPayload);
     const refreshPreviewDrivenSurfaces = (nextPayload = currentPayload) => {
@@ -7601,6 +7949,7 @@ async function fetchConfigPreview(payload) {
     };
 
     if (!_configPreviewEnabledForPipeline(currentPayload.pipeline)) {
+        _clearConfigPreviewServiceRetry();
         _setPreviewState({
             ..._emptyPreviewState(state.backendOk ? 'local_fallback' : 'offline', currentPayload.pipeline),
             requestKey
@@ -7623,6 +7972,9 @@ async function fetchConfigPreview(payload) {
             headers,
             body: JSON.stringify(currentPayload)
         });
+        if (!res.ok) {
+            await _maybeSuppressOnProtectedResponse('config_preview', res);
+        }
         const response = await res.json();
         if (!res.ok) {
             const errorPayload = response?.error && typeof response.error === 'object' ? response.error : {};
@@ -7644,6 +7996,11 @@ async function fetchConfigPreview(payload) {
                 error_reason: classifiedFailure.reason,
                 error_status: res.status
             });
+            if (classifiedFailure.reason === 'service_failure') {
+                _scheduleConfigPreviewServiceRetry();
+            } else {
+                _clearConfigPreviewServiceRetry();
+            }
             if (classifiedFailure.reason === 'validation_error') {
                 void emitPortalEvent('preview_error_seen', {
                     surface: 'reconstruction_runtime',
@@ -7684,6 +8041,7 @@ async function fetchConfigPreview(payload) {
             error_status: 0
         };
         _setPreviewState(_reconcilePreviewRepairedPaths(nextPreviewState));
+        _clearConfigPreviewServiceRetry();
         if (previewFieldErrors.length > 0) {
             void emitPortalEvent('preview_error_seen', {
                 surface: 'reconstruction_runtime',
@@ -7692,6 +8050,9 @@ async function fetchConfigPreview(payload) {
             });
         }
     } catch {
+        if (_configPreviewRequestKey(generatePayload()) !== requestKey) {
+            return;
+        }
         const classifiedFailure = _previewFailureDetails({ error_reason: 'service_failure' });
         _setPreviewState({
             ..._emptyPreviewState('error', currentPayload.pipeline),
@@ -7700,6 +8061,7 @@ async function fetchConfigPreview(payload) {
             error_reason: classifiedFailure.reason,
             error_status: 0
         });
+        _scheduleConfigPreviewServiceRetry();
     } finally {
         refreshPreviewDrivenSurfaces(generatePayload());
     }
@@ -7710,6 +8072,7 @@ function scheduleConfigPreview(immediate = false) {
         clearTimeout(configPreviewTimerId);
         configPreviewTimerId = null;
     }
+    _clearConfigPreviewServiceRetry();
     const payload = generatePayload();
     if (!CONFIG_PREVIEW_SUPPORTED_PIPELINES.has(String(payload.pipeline || '').trim())) {
         _setPreviewState(_emptyPreviewState('idle', payload.pipeline));
@@ -8519,10 +8882,14 @@ function parsePresetsResponse(payload, pipelineName) {
 
 async function fetchPresetsForPipeline(pipelineName, silent = false) {
     if (!pipelineName || pipelineName !== 'lux-depth-v3' || !state.backendOk) return;
+    if (_isProtectedFamilySuppressed('presets')) return;
     try {
         const headers = _buildAuthHeaders({ 'Accept': 'application/json' });
         const res = await fetch(`${API_BASE}/v1/presets?pipeline=${encodeURIComponent(pipelineName)}`, { headers });
-        if (!res.ok) throw new Error(`preset fetch failed (${res.status})`);
+        if (!res.ok) {
+            await _maybeSuppressOnProtectedResponse('presets', res);
+            throw new Error(`preset fetch failed (${res.status})`);
+        }
         const payload = await res.json();
         const presets = parsePresetsResponse(payload, pipelineName)
             .filter((preset) => preset && typeof preset.name === 'string')
@@ -8553,10 +8920,14 @@ async function fetchPresetsForPipeline(pipelineName, silent = false) {
 
 async function fetchReadiness(silent = false) {
     if (!state.backendOk || !_isBootstrapReady()) return;
+    if (_isProtectedFamilySuppressed('readiness')) return;
     try {
         const headers = _buildAuthHeaders({ 'Accept': 'application/json' });
         const res = await fetch(`${API_BASE}/v1/readiness`, { headers });
-        if (!res.ok) throw new Error(`readiness fetch failed (${res.status})`);
+        if (!res.ok) {
+            await _maybeSuppressOnProtectedResponse('readiness', res);
+            throw new Error(`readiness fetch failed (${res.status})`);
+        }
         const payload = await res.json();
         if (!payload || payload.success !== true || !payload.data) throw new Error('invalid readiness payload');
         state.readiness = {
@@ -9553,10 +9924,11 @@ function bindInputs() {
     }
 
     if (els.apiKeyInput) {
-        els.apiKeyInput.addEventListener('input', _persistApiKeyFromInputs);
+        els.apiKeyInput.addEventListener('input', () => {
+            _handleDirectDebugApiKeyUpdate();
+        });
         els.apiKeyInput.addEventListener('change', () => {
-            _persistApiKeyFromInputs();
-            resumeBlockedJobStreamsAfterAuthUpdate();
+            _handleDirectDebugApiKeyUpdate({ resumeStreams: true });
         });
     }
 }
@@ -9683,6 +10055,7 @@ function renderJobQueue(includeReviewSurfaces = true) {
         const artifactCount = Array.isArray(job.artifacts) ? job.artifacts.length : 0;
         const errorLine = getReadableError(job.error);
         const outcomeSummary = jobOutcomeSummary(job);
+        const captioningRunStatus = normalizeRunSummary(job.run_summary)?.captioning_status || null;
         const transportLabel = formatTransportLabel(job);
         const freshnessLabel = formatRelativeTime(Number(job.lastEventAt || job.updatedAt || job.createdAt || 0));
 
@@ -9730,6 +10103,11 @@ function renderJobQueue(includeReviewSurfaces = true) {
         stateBadge.className = `px-2 py-0.5 rounded-full border ${badgeColor}`;
         stateBadge.textContent = displayState;
         metaRight.appendChild(stateBadge);
+
+        const captioningChip = createCaptioningRunStatusChip(captioningRunStatus);
+        if (captioningChip) {
+            metaRight.appendChild(captioningChip);
+        }
 
         meta.appendChild(metaRight);
         li.appendChild(meta);
@@ -9958,8 +10336,12 @@ function _applyJobStreamEvent(job, eventName, parsed) {
             artifact_type: String(parsed.artifact_type || 'file'),
             media_kind: String(parsed.media_kind || parsed.artifact_type || 'file'),
             previewable: Boolean(parsed.previewable),
+            browser_previewable: Boolean(parsed.browser_previewable),
             content_type: typeof parsed.content_type === 'string' ? parsed.content_type : '',
             url: typeof parsed.url === 'string' ? parsed.url : '',
+            download_url: typeof parsed.download_url === 'string' ? parsed.download_url : '',
+            preview_url: typeof parsed.preview_url === 'string' ? parsed.preview_url : '',
+            preview_mime_type: typeof parsed.preview_mime_type === 'string' ? parsed.preview_mime_type : '',
             path: String(parsed.path || ''),
             relative_path: String(parsed.relative_path || parsed.path || ''),
             size_bytes: typeof parsed.size_bytes === 'number' ? parsed.size_bytes : null,
@@ -9996,6 +10378,7 @@ function _applyJobStreamEvent(job, eventName, parsed) {
         }
         if (parsed.artifacts && parsed.artifacts.items) {
             job.artifacts = normalizeArtifactItems(parsed.artifacts);
+            _clearArtifactUrlNotFoundCache();
         }
         if (parsed.run_summary) {
             job.run_summary = normalizeRunSummary(parsed.run_summary);
@@ -10017,6 +10400,11 @@ function _applyJobStreamEvent(job, eventName, parsed) {
 async function _startAuthorizedFetchSse(job, eventsUrl) {
     if (!job || !eventsUrl || !_isJobStreamRecoverable(job)) return;
     _ensureJobStreamState(job);
+    if (_isProtectedFamilySuppressed('jobs_events')) {
+        job.reconnectBlocked = true;
+        _clearSseRetry(job, true);
+        return;
+    }
     const controller = new AbortController();
     const handle = { close: () => controller.abort() };
     job.fetchAbortController = controller;
@@ -10033,13 +10421,14 @@ async function _startAuthorizedFetchSse(job, eventsUrl) {
             cache: 'no-store'
         });
         if (!res.ok) {
+            const suppressed = await _maybeSuppressOnProtectedResponse('jobs_events', res);
             const parsedError = await extractApiError(res);
             if (parsedError.error) job.error = parsedError.error;
             const status = Number(res.status) || 0;
             const isAuthError = status === 401 || status === 403;
             const isRetryableStatus = status === 429 || status >= 500;
-            shouldReconnect = isRetryableStatus;
-            if (!isRetryableStatus) {
+            shouldReconnect = isRetryableStatus && !suppressed;
+            if (suppressed || !isRetryableStatus) {
                 job.reconnectBlocked = true;
                 _clearSseRetry(job, true);
             }
@@ -10171,6 +10560,11 @@ async function _startAuthorizedFetchSse(job, eventsUrl) {
 function startJobEventStream(job, eventsUrl) {
     if (!job) return;
     _ensureJobStreamState(job);
+    if (_isProtectedFamilySuppressed('jobs_events')) {
+        job.reconnectBlocked = true;
+        _clearSseRetry(job, true);
+        return;
+    }
     if (typeof eventsUrl === 'string' && eventsUrl.trim()) {
         job.eventStreamUrl = eventsUrl.trim();
     }
@@ -10261,6 +10655,7 @@ function startJobEventStream(job, eventsUrl) {
 
 async function recoverJobs() {
     if (!state.backendOk) return;
+    if (_isProtectedFamilySuppressed('jobs_list')) return;
     if (state.jobs.length === 0) {
         state.jobsLoadStatus = 'loading';
         renderJobQueue();
@@ -10269,6 +10664,7 @@ async function recoverJobs() {
         const headers = _buildAuthHeaders({ 'Accept': 'application/json' });
         const res = await fetch(`${API_BASE}/v1/jobs`, { headers });
         if (!res.ok) {
+            await _maybeSuppressOnProtectedResponse('jobs_list', res);
             if (state.jobs.length === 0) {
                 state.jobsLoadStatus = 'error';
                 renderJobQueue();
@@ -10331,6 +10727,7 @@ async function cancelJob(id) {
     const job = state.jobs.find((item) => item.id === id);
     if (!job || (job.state !== 'running' && job.state !== 'queued')) return;
     if (_blockManagedUnavailableAction('change job state')) return;
+    if (_isProtectedFamilySuppressed('jobs_cancel')) return;
 
     void emitPortalEvent('cancel_requested', {
         surface: 'job_queue',
@@ -10349,6 +10746,9 @@ async function cancelJob(id) {
     const headers = _buildAuthHeaders({}, 'POST', { traceparent: requestTraceparent });
     fetch(`${API_BASE}/v1/jobs/${id}/cancel`, { method: 'POST', headers })
         .then((response) => {
+            if (!response.ok) {
+                void _maybeSuppressOnProtectedResponse('jobs_cancel', response);
+            }
             _queuePortalRumSample({
                 eventType: 'queue_request',
                 metric: 'cancel',

@@ -1934,4 +1934,21 @@ The previous v2.4.0 count of "12" tracked only `src/` and contained internal ari
 
 ---
 
+## 2026-05-04 Refresh — Monolithic-File TODO Audit
+
+**Trigger:** Branch `claude/fix-monolithic-file-todos-63mEO` review.
+**Scanner snapshot:** [`todo_scanner_snapshot.json`](todo_scanner_snapshot.json) (committed alongside this entry; reproducible via `python scripts/validation/scan_todo_inventory.py --json`).
+
+**Findings:**
+- `python scripts/validation/scan_todo_inventory.py --check-governance` → exit 0; **0 ungoverned TODOs** across 1,492 files scanned.
+- **25** `NotImplementedError` instances, all governed (abstract methods, phase gates, platform limits) — unchanged from the 2026-05-01 baseline in `TODO_INVENTORY_QUICK_REF.md`.
+- **Zero** `TODO|FIXME|XXX|HACK` markers in the five largest source modules: `app.py` (10,039 LOC), `lux_depth_v3/orchestrator.py` (7,257), `lux_depth_v3/segmentation_backend.py` (2,519), `pipelines/rendering_4k_pipeline.py` (2,380), `spatial_ai/orchestration/pipeline.py` (2,121 — only `TODO_INVENTORY.md` reference at line 1774, a governed phase gate for single-view reconstruction).
+- ADR-043 orchestrator decomposition is complete; the open guidance is residual slimming, captured in `DEVELOPMENT_ROADMAP_2026_Q2.md` lines 174–210.
+
+**Action taken:** No source changes. Authored a ranked seam target list at [`../architecture/MONOLITH_DECOMPOSITION_TARGETS.md`](../architecture/MONOLITH_DECOMPOSITION_TARGETS.md) and an ADR stub at [`../architecture/ADR-045-monolith-decomposition-residuals.md`](../architecture/ADR-045-monolith-decomposition-residuals.md) (status: Proposed). Future extraction PRs draw from that target list under the ADR-043 phased pattern.
+
+**Diff vs prior baseline:** none — counts and governance posture identical to the 2026-05-01 review. This refresh replaces the manual narrative drift control with a committed JSON snapshot.
+
+---
+
 **END OF TODO INVENTORY v2.0.0**

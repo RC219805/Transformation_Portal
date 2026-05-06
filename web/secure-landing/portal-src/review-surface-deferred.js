@@ -4,6 +4,7 @@ export function createDeferredReviewSurfaceApi(host) {
     els,
     clamp,
     normalizeRunSummary,
+    captioningRunStatusSummary,
     titleCaseToken,
     formatRelativeTime,
     getReadableError,
@@ -22,7 +23,10 @@ export function createDeferredReviewSurfaceApi(host) {
     findCompareArtifact,
     buildArtifactUrl,
     sanitizeManagedAssetUrl,
-    artifactIsPreviewable,
+    artifactIsBrowserPreviewable,
+    artifactPreviewSrc,
+    _markArtifactUrlNotFound,
+    _isArtifactUrlKnownMissing,
     artifactLabel,
     artifactDisplayHint,
     artifactDisplayLabel,
@@ -129,10 +133,12 @@ export function createDeferredReviewSurfaceApi(host) {
 
   function _showArtifactViewerFallback(context, artifactName, fallbackOptions) {
     const url = context?.url || "";
+    const downloadUrl = context?.downloadUrl || "";
+    const hasRawAsset = Boolean(downloadUrl);
     const isRetryable = Boolean(fallbackOptions?.retryable && url);
     const fallbackReason = isRetryable
       ? "inline_preview_failed"
-      : url ? "inline_preview_unavailable" : "asset_url_unavailable";
+      : hasRawAsset ? "inline_preview_unavailable" : "asset_url_unavailable";
     if (els.artifactViewerImage) {
       els.artifactViewerImage.classList.add("hidden");
       els.artifactViewerImage.removeAttribute("src");
@@ -144,12 +150,12 @@ export function createDeferredReviewSurfaceApi(host) {
     if (els.artifactViewerFallbackTitle) {
       els.artifactViewerFallbackTitle.textContent = isRetryable
         ? "Inline preview failed to load"
-        : url ? "Inline preview unavailable" : "Artifact URL unavailable";
+        : hasRawAsset ? "Inline preview unavailable" : "Artifact URL unavailable";
     }
     if (els.artifactViewerFallbackDetail) {
       els.artifactViewerFallbackDetail.textContent = isRetryable
         ? "The managed asset request did not complete. Retry the preview or continue reviewing the retained metadata and fingerprints."
-        : url
+        : hasRawAsset
           ? "This artifact stays reviewable through retained metadata, integrity fingerprints, and the managed raw asset link."
           : "The browser cannot resolve a managed asset URL for this artifact, so review stays pinned to the retained metadata above.";
     }
@@ -157,7 +163,7 @@ export function createDeferredReviewSurfaceApi(host) {
     _setArtifactViewerStatus(
       isRetryable
         ? `${artifactName} inline preview failed to load; retry available.`
-        : url
+        : hasRawAsset
           ? `${artifactName} is open with metadata fallback because an inline preview is unavailable.`
           : `${artifactName} is open with metadata fallback because the managed asset URL is unavailable.`
     );
@@ -231,6 +237,9 @@ export function createDeferredReviewSurfaceApi(host) {
         if (controller) fetchOptions.signal = controller.signal;
         const response = await fetch(context.url, fetchOptions);
         if (!response.ok) {
+          if (response.status === 404 && typeof _markArtifactUrlNotFound === "function") {
+            _markArtifactUrlNotFound(context.url);
+          }
           throw new Error(`artifact_preview_${response.status}`);
         }
         const objectUrl = URL.createObjectURL(await response.blob());
@@ -316,6 +325,27 @@ export function createDeferredReviewSurfaceApi(host) {
     return type === "vlm_caption_sidecar" || relPath.endsWith(".vlm_captioning.sidecar.json");
   }
 
+  function _isVlmCaptionRawArtifact(artifact) {
+    if (!artifact) return false;
+    const relPath = String(artifact.relative_path || artifact.path || "").toLowerCase();
+    const type = String(artifact.artifact_type || "").toLowerCase();
+    return type === "vlm_caption_raw" || relPath.endsWith(".vlm_captioning.raw.txt");
+  }
+
+  function _isVlmCaptionProxyArtifact(artifact) {
+    if (!artifact) return false;
+    const relPath = String(artifact.relative_path || artifact.path || "").toLowerCase();
+    const type = String(artifact.artifact_type || "").toLowerCase();
+    return type === "vlm_caption_proxy" || /(^|\/)captioning\/.*_proxy\.(png|jpe?g)$/i.test(relPath);
+  }
+
+  function _captionArtifactKind(artifact) {
+    if (_isVlmCaptionSidecarArtifact(artifact)) return "sidecar";
+    if (_isVlmCaptionRawArtifact(artifact)) return "raw";
+    if (_isVlmCaptionProxyArtifact(artifact)) return "proxy";
+    return "";
+  }
+
   function _captionStemFromArtifact(artifact) {
     const relPath = String(artifact?.relative_path || artifact?.path || "");
     const fileName = relPath.split("/").pop() || "";
@@ -325,16 +355,54 @@ export function createDeferredReviewSurfaceApi(host) {
       .replace(/_proxy\.(png|jpe?g)$/i, "");
   }
 
+  function _captioningEvidenceArtifacts(job, artifact) {
+    const artifacts = Array.isArray(job?.artifacts) ? job.artifacts : [];
+    const selectedStem = _captionStemFromArtifact(artifact);
+    const group = { sidecar: null, raw: null, proxy: null };
+    const captionArtifacts = artifacts.filter((candidate) => Boolean(_captionArtifactKind(candidate)));
+    const stemMatchedArtifacts = selectedStem
+      ? captionArtifacts.filter((candidate) => _captionStemFromArtifact(candidate) === selectedStem)
+      : captionArtifacts;
+    const candidates = selectedStem && stemMatchedArtifacts.length === 0 ? captionArtifacts : stemMatchedArtifacts;
+    candidates.forEach((candidate) => {
+      const kind = _captionArtifactKind(candidate);
+      if (kind && !group[kind]) group[kind] = candidate;
+    });
+    return group;
+  }
+
   function _findVlmCaptionSidecar(job, artifact) {
     if (!artifact) return null;
     if (_isVlmCaptionSidecarArtifact(artifact)) return artifact;
-    const artifacts = Array.isArray(job?.artifacts) ? job.artifacts : [];
-    const selectedStem = _captionStemFromArtifact(artifact);
-    return artifacts.find((candidate) => {
-      if (!_isVlmCaptionSidecarArtifact(candidate)) return false;
-      if (!selectedStem) return true;
-      return _captionStemFromArtifact(candidate) === selectedStem;
-    }) || null;
+    return _captioningEvidenceArtifacts(job, artifact).sidecar;
+  }
+
+  function _hasCaptioningEvidence(job, artifact) {
+    const summary = normalizeRunSummary(job?.run_summary);
+    const artifacts = _captioningEvidenceArtifacts(job, artifact);
+    return Boolean(summary?.captioning_status || artifacts.sidecar || artifacts.raw || artifacts.proxy);
+  }
+
+  function _captioningStatusFromEvidence(status, artifacts) {
+    if (status) return status;
+    const sidecarCount = artifacts?.sidecar ? 1 : 0;
+    const rawCount = artifacts?.raw ? 1 : 0;
+    const proxyCount = artifacts?.proxy ? 1 : 0;
+    if (sidecarCount + rawCount + proxyCount === 0) return null;
+    return {
+      status: "succeeded",
+      enabled: true,
+      backend: "fastvlm",
+      model_role: "",
+      model_id: null,
+      model_path: null,
+      role: "advisory",
+      sidecar_count: sidecarCount,
+      raw_count: rawCount,
+      proxy_count: proxyCount,
+      failed_count: 0,
+      used_for_quality_gate: false,
+    };
   }
 
   function _rememberAdvisoryCaptionCacheEntry(cacheKey, entry) {
@@ -426,9 +494,90 @@ export function createDeferredReviewSurfaceApi(host) {
     container.appendChild(row);
   }
 
+  function _captionBooleanLabel(value) {
+    if (value === true) return "Yes";
+    if (value === false) return "No";
+    return "";
+  }
+
+  function _appendCaptioningEvidenceMetric(container, label, value) {
+    const text = value === 0 ? "0" : String(value || "").trim();
+    if (!text) return;
+    const item = document.createElement("span");
+    item.className = "rounded border border-slate-200 px-2 py-1 text-[11px] text-slate-600 dark:border-slate-700 dark:text-slate-300";
+    item.textContent = `${label}: ${text}`;
+    container.appendChild(item);
+  }
+
+  function _appendCaptioningEvidenceLink(container, job, artifact, dataUi, label) {
+    if (!artifact) return;
+    const url = sanitizeManagedAssetUrl(buildArtifactUrl(job, artifact));
+    if (!url) return;
+    const link = document.createElement("a");
+    link.className = "inline-flex items-center rounded border border-slate-200 px-2 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800";
+    link.dataset.ui = dataUi;
+    link.href = url;
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+    link.textContent = label;
+    link.title = artifactLabel(artifact);
+    link.setAttribute("aria-label", `${label}: ${artifactLabel(artifact)}`);
+    container.appendChild(link);
+  }
+
+  function _renderCaptioningEvidenceStrip(job, artifact) {
+    if (!job || !els.artifactMetadataCard || !_hasCaptioningEvidence(job, artifact)) return;
+    const summary = normalizeRunSummary(job.run_summary);
+    const artifacts = _captioningEvidenceArtifacts(job, artifact);
+    const status = _captioningStatusFromEvidence(summary?.captioning_status || null, artifacts);
+    const sidecarCount = Math.max(Number(status?.sidecar_count) || 0, artifacts.sidecar ? 1 : 0);
+    const rawCount = Math.max(Number(status?.raw_count) || 0, artifacts.raw ? 1 : 0);
+    const proxyCount = Math.max(Number(status?.proxy_count) || 0, artifacts.proxy ? 1 : 0);
+    const modelLabel = [status?.model_role, status?.model_id || status?.model_path].filter(Boolean).join(" • ");
+
+    const strip = document.createElement("section");
+    strip.className = "mt-4 rounded border border-slate-200 bg-white/70 p-3 dark:border-slate-700 dark:bg-slate-900";
+    strip.dataset.ui = "captioning-evidence-strip";
+    strip.dataset.status = String(status?.status || "off");
+
+    const metrics = document.createElement("div");
+    metrics.className = "flex flex-wrap gap-2";
+    _appendCaptioningEvidenceMetric(metrics, "Status", captioningRunStatusSummary(status));
+    _appendCaptioningEvidenceMetric(metrics, "Sidecars", sidecarCount);
+    _appendCaptioningEvidenceMetric(metrics, "Raw", rawCount);
+    _appendCaptioningEvidenceMetric(metrics, "Proxy", proxyCount);
+    _appendCaptioningEvidenceMetric(metrics, "Model", modelLabel);
+    strip.appendChild(metrics);
+
+    const links = document.createElement("div");
+    links.className = "mt-3 flex flex-wrap gap-2";
+    _appendCaptioningEvidenceLink(links, job, artifacts.sidecar, "captioning-sidecar-link", "Sidecar");
+    _appendCaptioningEvidenceLink(links, job, artifacts.raw, "captioning-raw-link", "Raw");
+    _appendCaptioningEvidenceLink(links, job, artifacts.proxy, "captioning-proxy-link", "Proxy");
+    if (links.childNodes.length > 0) {
+      links.dataset.ui = "captioning-evidence-link";
+      strip.appendChild(links);
+    }
+    els.artifactMetadataCard.appendChild(strip);
+  }
+
+  function _renderAdvisoryCaptionUnavailable(panel) {
+    panel.innerHTML = "";
+    panel.dataset.status = "unavailable";
+    const message = document.createElement("p");
+    message.className = "text-[12px] font-semibold text-slate-800 dark:text-slate-100";
+    message.textContent = "Advisory caption unavailable.";
+    panel.appendChild(message);
+  }
+
   function _renderAdvisoryCaptionPayload(panel, payload, sidecarArtifact) {
     panel.innerHTML = "";
     const root = payload?.vlm_captioning || {};
+    if (!root || typeof root !== "object" || Array.isArray(root) || Object.keys(root).length === 0) {
+      _renderAdvisoryCaptionUnavailable(panel);
+      return;
+    }
+    panel.dataset.status = String(root.runtime_diagnostics?.status || (root.validated ? "validated" : "available"));
     const caption = root.caption || {};
     const title = document.createElement("p");
     title.className = "text-[12px] font-semibold text-slate-800 dark:text-slate-100";
@@ -442,8 +591,13 @@ export function createDeferredReviewSurfaceApi(host) {
     _appendCaptionRow(fields, "Features", caption.features);
     _appendCaptionRow(fields, "Natural", caption.natural);
     _appendCaptionRow(fields, "Lighting", caption.lighting);
+    _appendCaptionRow(fields, "Issues", caption.issues);
+    _appendCaptionRow(fields, "Uncertain", caption.uncertain);
+    _appendCaptionRow(fields, "Validated", _captionBooleanLabel(root.validated));
     _appendCaptionRow(fields, "Warnings", root.warnings);
     _appendCaptionRow(fields, "Model", root.model);
+    _appendCaptionRow(fields, "Model role", root.model_role);
+    _appendCaptionRow(fields, "Runtime status", root.runtime_diagnostics?.status);
     panel.appendChild(fields);
 
     const proxyPath = String(root.image_proxy?.proxy_path || "").trim();
@@ -489,7 +643,7 @@ export function createDeferredReviewSurfaceApi(host) {
 
     const url = sanitizeManagedAssetUrl(buildArtifactUrl(job, sidecar));
     if (!url) {
-      panel.textContent = "Advisory VLM caption. Not used for quality gates.";
+      _renderAdvisoryCaptionUnavailable(panel);
       return;
     }
     _loadAdvisoryCaptionPayload(url)
@@ -499,7 +653,7 @@ export function createDeferredReviewSurfaceApi(host) {
       })
       .catch(() => {
         if (requestId !== advisoryCaptionRenderRequestId || !panel.isConnected) return;
-        panel.textContent = "Advisory VLM caption. Not used for quality gates.";
+        _renderAdvisoryCaptionUnavailable(panel);
       });
   }
 
@@ -524,6 +678,7 @@ export function createDeferredReviewSurfaceApi(host) {
       detail.textContent = `${artifactDisplayLabel(artifact)} • ${artifactContentType(artifact) || "binary"} • ${formatBytes(artifact.size_bytes)}.`;
     }
     els.artifactMetadataCard.appendChild(detail);
+    _renderCaptioningEvidenceStrip(job, artifact);
     _renderAdvisoryCaptionPanel(job, artifact);
   }
 
@@ -692,6 +847,10 @@ export function createDeferredReviewSurfaceApi(host) {
       if (els.reviewProvenanceFreshness) els.reviewProvenanceFreshness.textContent = "No live telemetry";
       if (els.reviewProvenanceSource) els.reviewProvenanceSource.textContent = "Not reported";
       if (els.reviewProvenanceBatch) els.reviewProvenanceBatch.textContent = "Not reported";
+      if (els.reviewProvenanceCaptioning) {
+        els.reviewProvenanceCaptioning.textContent = "FastVLM: Not requested";
+        els.reviewProvenanceCaptioning.dataset.status = "off";
+      }
       return;
     }
 
@@ -704,6 +863,8 @@ export function createDeferredReviewSurfaceApi(host) {
     const runStateLabel = `${titleCaseToken(job.state, "Unknown")} • ${titleCaseToken(job.pipeline, "Unknown")}`;
     const sourceLabel = summary?.source || titleCaseToken(job.pipeline, "Not reported");
     const batchLabel = summary?.batch_id || "Not reported";
+    const captioningStatus = summary?.captioning_status || null;
+    const captioningLabel = captioningRunStatusSummary(captioningStatus);
 
     if (els.reviewProvenanceArtifactRole) els.reviewProvenanceArtifactRole.textContent = artifactDescriptor;
     if (els.reviewProvenanceRunState) els.reviewProvenanceRunState.textContent = runStateLabel;
@@ -715,6 +876,10 @@ export function createDeferredReviewSurfaceApi(host) {
     if (els.reviewProvenanceFreshness) els.reviewProvenanceFreshness.textContent = freshnessLabel;
     if (els.reviewProvenanceSource) els.reviewProvenanceSource.textContent = sourceLabel;
     if (els.reviewProvenanceBatch) els.reviewProvenanceBatch.textContent = batchLabel;
+    if (els.reviewProvenanceCaptioning) {
+      els.reviewProvenanceCaptioning.textContent = captioningLabel;
+      els.reviewProvenanceCaptioning.dataset.status = String(captioningStatus?.status || "off");
+    }
     els.reviewProvenanceGrid.classList.remove("hidden");
   }
 
@@ -872,11 +1037,24 @@ export function createDeferredReviewSurfaceApi(host) {
     if (els.emptyArtifactState) els.emptyArtifactState.style.display = "none";
     const selectedArtifact = _selectedArtifactForJob(selected);
     const compareCandidate = findCompareArtifact(selectedArtifact, artifacts);
-    const captionSidecar = _findVlmCaptionSidecar(selected, selectedArtifact);
-    const compareEnabled = Boolean(compareCandidate) && Boolean(state.artifactUi.compareByJob[String(selected.id || "")]);
+    const captioningEvidenceVisible = _hasCaptioningEvidence(selected, selectedArtifact);
+    const selectedBrowserPreviewable = artifactIsBrowserPreviewable(selectedArtifact);
+    const selectedPreviewSrc = selectedArtifact ? artifactPreviewSrc(selected, selectedArtifact) : "";
+    const selectedPreviewAvailable = Boolean(selectedPreviewSrc && !_isArtifactUrlKnownMissing(selectedPreviewSrc));
+    const compareBrowserPreviewable = artifactIsBrowserPreviewable(compareCandidate);
+    const comparePreviewSrc = compareCandidate ? artifactPreviewSrc(selected, compareCandidate) : "";
+    const comparePreviewAvailable = Boolean(comparePreviewSrc && !_isArtifactUrlKnownMissing(comparePreviewSrc));
+    const compareAvailable = Boolean(
+      compareCandidate &&
+      selectedBrowserPreviewable &&
+      compareBrowserPreviewable &&
+      selectedPreviewAvailable &&
+      comparePreviewAvailable
+    );
+    const compareEnabled = compareAvailable && Boolean(state.artifactUi.compareByJob[String(selected.id || "")]);
 
     if (els.artifactCompareBtn) {
-      if (compareCandidate) {
+      if (compareAvailable) {
         els.artifactCompareBtn.classList.remove("hidden");
         els.artifactCompareBtn.textContent = compareEnabled ? "Single View" : "Compare";
         els.artifactCompareBtn.setAttribute("aria-pressed", compareEnabled ? "true" : "false");
@@ -898,7 +1076,7 @@ export function createDeferredReviewSurfaceApi(host) {
     }
     _renderReviewStatusBanner(selected, selectedArtifact);
     _renderArtifactProvenance(selected, selectedArtifact);
-    _renderReviewCompareSummary(selectedArtifact, compareCandidate, compareEnabled);
+    _renderReviewCompareSummary(selectedArtifact, compareAvailable ? compareCandidate : null, compareEnabled);
 
     if (els.openArtifactBtn) {
       const openUrl = selectedArtifact ? buildArtifactUrl(selected, selectedArtifact) : "";
@@ -927,27 +1105,42 @@ export function createDeferredReviewSurfaceApi(host) {
       els.artifactCompareStage.setAttribute("aria-hidden", compareEnabled ? "false" : "true");
     }
     if (els.artifactPreviewSoloImage) {
-      els.artifactPreviewSoloImage.classList.toggle("hidden", compareEnabled || !artifactIsPreviewable(selectedArtifact));
+      els.artifactPreviewSoloImage.classList.toggle("hidden", compareEnabled || !selectedPreviewAvailable);
     }
     if (els.artifactMetadataCard) {
-      els.artifactMetadataCard.classList.toggle("hidden", artifactIsPreviewable(selectedArtifact) && !captionSidecar);
+      els.artifactMetadataCard.classList.toggle("hidden", selectedPreviewAvailable && !captioningEvidenceVisible);
     }
     if (compareEnabled && selectedArtifact && compareCandidate) {
       if (els.artifactPreviewImage) {
-        els.artifactPreviewImage.src = buildArtifactUrl(selected, selectedArtifact);
-        els.artifactPreviewImage.classList.remove("hidden");
+        if (selectedPreviewSrc && !_isArtifactUrlKnownMissing(selectedPreviewSrc)) {
+          els.artifactPreviewImage.src = selectedPreviewSrc;
+          els.artifactPreviewImage.classList.remove("hidden");
+        } else {
+          els.artifactPreviewImage.classList.add("hidden");
+          els.artifactPreviewImage.removeAttribute("src");
+        }
       }
       if (els.artifactPreviewPrimaryCaption) els.artifactPreviewPrimaryCaption.textContent = artifactLabel(selectedArtifact);
       if (els.artifactCompareImage) {
-        els.artifactCompareImage.src = buildArtifactUrl(selected, compareCandidate);
-        els.artifactCompareImage.classList.remove("hidden");
+        if (comparePreviewSrc && !_isArtifactUrlKnownMissing(comparePreviewSrc)) {
+          els.artifactCompareImage.src = comparePreviewSrc;
+          els.artifactCompareImage.classList.remove("hidden");
+        } else {
+          els.artifactCompareImage.classList.add("hidden");
+          els.artifactCompareImage.removeAttribute("src");
+        }
       }
       if (els.artifactCompareCaption) els.artifactCompareCaption.textContent = artifactLabel(compareCandidate);
-      if (captionSidecar) _renderArtifactMetadataCard(selected, selectedArtifact);
-    } else if (artifactIsPreviewable(selectedArtifact)) {
+      if (captioningEvidenceVisible) _renderArtifactMetadataCard(selected, selectedArtifact);
+    } else if (selectedPreviewAvailable) {
       if (els.artifactPreviewSoloImage) {
-        els.artifactPreviewSoloImage.src = buildArtifactUrl(selected, selectedArtifact);
-        els.artifactPreviewSoloImage.classList.remove("hidden");
+        if (selectedPreviewSrc && !_isArtifactUrlKnownMissing(selectedPreviewSrc)) {
+          els.artifactPreviewSoloImage.src = selectedPreviewSrc;
+          els.artifactPreviewSoloImage.classList.remove("hidden");
+        } else {
+          els.artifactPreviewSoloImage.classList.add("hidden");
+          els.artifactPreviewSoloImage.removeAttribute("src");
+        }
       }
       if (els.artifactPreviewImage) {
         els.artifactPreviewImage.classList.add("hidden");
@@ -957,7 +1150,7 @@ export function createDeferredReviewSurfaceApi(host) {
         els.artifactCompareImage.classList.add("hidden");
         els.artifactCompareImage.removeAttribute("src");
       }
-      if (captionSidecar) _renderArtifactMetadataCard(selected, selectedArtifact);
+      if (captioningEvidenceVisible) _renderArtifactMetadataCard(selected, selectedArtifact);
     } else {
       if (els.artifactPreviewSoloImage) {
         els.artifactPreviewSoloImage.classList.add("hidden");
@@ -987,10 +1180,13 @@ export function createDeferredReviewSurfaceApi(host) {
         ? "rounded-2xl border border-cyan-300 dark:border-cyan-900/60 bg-cyan-50/90 dark:bg-cyan-900/20 p-3 text-left shadow-sm transition-colors"
         : "rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/50 p-3 text-left hover:bg-white/90 dark:hover:bg-slate-800/80 transition-colors";
 
-      if (artifactIsPreviewable(artifact)) {
+      const thumbPreviewSrc = artifactIsBrowserPreviewable(artifact)
+        ? artifactPreviewSrc(selected, artifact)
+        : "";
+      if (thumbPreviewSrc && !_isArtifactUrlKnownMissing(thumbPreviewSrc)) {
         const thumb = document.createElement("img");
         thumb.alt = artifactLabel(artifact);
-        thumb.src = buildArtifactUrl(selected, artifact);
+        thumb.src = thumbPreviewSrc;
         thumb.className = "h-24 w-full rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-900/60 object-cover";
         button.appendChild(thumb);
       } else {
@@ -1031,6 +1227,7 @@ export function createDeferredReviewSurfaceApi(host) {
         artifact: null,
         index: -1,
         url: "",
+        downloadUrl: "",
         inlinePreview: false,
         zoomPercent: 100
       };
@@ -1042,14 +1239,17 @@ export function createDeferredReviewSurfaceApi(host) {
       artifacts[0] ||
       null;
     const index = artifact ? artifacts.findIndex((candidate) => candidate.path === artifact.path) : -1;
-    const url = artifact ? sanitizeManagedAssetUrl(buildArtifactUrl(job, artifact)) : "";
+    const previewSrc = artifact ? artifactPreviewSrc(job, artifact) : "";
+    const downloadUrl = artifact ? sanitizeManagedAssetUrl(buildArtifactUrl(job, artifact)) : "";
+    const inlineUrl = previewSrc && !_isArtifactUrlKnownMissing(previewSrc) ? previewSrc : "";
     return {
       job,
       artifacts,
       artifact,
       index,
-      url,
-      inlinePreview: Boolean(artifact && artifactIsPreviewable(artifact) && url),
+      url: inlineUrl,
+      downloadUrl,
+      inlinePreview: Boolean(artifact && artifactIsBrowserPreviewable(artifact) && inlineUrl),
       zoomPercent: clamp(Number(viewerState.zoomPercent || 100), 50, 250)
     };
   }
@@ -1108,7 +1308,7 @@ export function createDeferredReviewSurfaceApi(host) {
       return;
     }
 
-    const { artifact, index, artifacts, inlinePreview, job, url, zoomPercent } = context;
+    const { artifact, index, artifacts, inlinePreview, job, url, downloadUrl, zoomPercent } = context;
     const relPath = artifactLabel(artifact);
     const fingerprint = artifactFingerprint(artifact);
     const artifactName = artifactNameParts(artifact).fileName;
@@ -1127,8 +1327,12 @@ export function createDeferredReviewSurfaceApi(host) {
     if (els.artifactViewerZoomInBtn) els.artifactViewerZoomInBtn.disabled = !inlinePreview;
     if (els.artifactViewerResetZoomBtn) els.artifactViewerResetZoomBtn.disabled = !inlinePreview;
     if (els.artifactViewerOpenRawBtn) {
-      els.artifactViewerOpenRawBtn.disabled = !url;
-      els.artifactViewerOpenRawBtn.dataset.url = url;
+      els.artifactViewerOpenRawBtn.disabled = !downloadUrl;
+      if (downloadUrl) {
+        els.artifactViewerOpenRawBtn.dataset.url = downloadUrl;
+      } else {
+        delete els.artifactViewerOpenRawBtn.dataset.url;
+      }
     }
     if (els.artifactViewerCopyPathBtn) {
       els.artifactViewerCopyPathBtn.disabled = !relPath;

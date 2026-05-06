@@ -21,7 +21,7 @@ import time
 import uuid
 from bisect import bisect_left
 from collections import deque
-from contextlib import asynccontextmanager, suppress
+from contextlib import asynccontextmanager, contextmanager, suppress
 from dataclasses import dataclass
 from dataclasses import field as dataclass_field
 from email.parser import BytesParser
@@ -29,7 +29,7 @@ from email.policy import default as email_policy
 from functools import lru_cache
 from importlib.util import find_spec
 from pathlib import Path, PurePosixPath
-from typing import Any, AsyncGenerator, Callable, Deque, Dict, List, Mapping, NamedTuple, Optional, Tuple
+from typing import Any, AsyncGenerator, Callable, Deque, Dict, Iterable, List, Mapping, NamedTuple, Optional, Tuple
 from urllib.parse import quote
 
 from fastapi import FastAPI, HTTPException, Request
@@ -67,6 +67,27 @@ from transformation_portal.ingest.upload_staging import (
 )
 from transformation_portal.lux_depth_v3.model_registry import resolve_model_spec, resolve_registry_key, visible_cli_model_specs
 from transformation_portal.lux_depth_v3.run_card_contract import infer_run_card_version
+from transformation_portal.portal import asset_bundle as _portal_asset_bundle
+from transformation_portal.portal.asset_bundle import (
+    PORTAL_ASSETS_DIR,
+    PORTAL_ASSETS_DIR_REAL,
+    PORTAL_ASSET_CACHE_CONTROL,
+    PORTAL_ASSET_FINGERPRINT_LENGTH,
+    PORTAL_ASSET_FINGERPRINT_PARAM,
+    PORTAL_ASSET_MANIFEST,
+    PORTAL_ASSET_MANIFEST_PATH,
+    PORTAL_ASSET_MEDIA_TYPES,
+    PORTAL_ASSET_PATHS,
+    PORTAL_CSS_TEMPLATE_PATH,
+    PORTAL_CSS_TEMPLATE_TOKENS,
+    PORTAL_DIRECT_FINGERPRINT_ASSET_NAMES,
+    PORTAL_HTML,
+    PORTAL_HTML_TEMPLATE_TOKENS,
+    PORTAL_IMMUTABLE_ASSET_CACHE_CONTROL,
+    PortalAssetBundle,
+    PortalAssetSpec,
+    PortalRenderedTextAsset,
+)
 from transformation_portal.vlm_captioning.fastvlm_runtime import (
     FASTVLM_CHECKPOINT_DIRS,
     default_fastvlm_runtime_root,
@@ -81,28 +102,17 @@ LOGGER = logging.getLogger(__name__)
 _PORTAL_EVENT_LOG_WRITE_LOCK = threading.Lock()
 _MANAGED_SAM2_CHECKSUM_CACHE_LOCK = threading.Lock()
 
+# Optionally suppress successful /healthz and /ready access-log lines so
+# operator log streams stay focused on actionable failures. Errors are never
+# suppressed. Controlled via TP_LOG_HEALTHCHECKS=0 (default keeps the lines).
+try:
+    from transformation_portal.core.observability.log_classification import (
+        install_healthcheck_log_filter as _install_healthcheck_log_filter,
+    )
 
-@dataclass(frozen=True)
-class PortalAssetSpec:
-    path: Path
-    media_type: str
-
-
-@dataclass(frozen=True)
-class PortalAssetBundle:
-    html: str
-    html_bytes: bytes
-    css: str
-    css_bytes: bytes
-    fingerprints: Dict[str, str]
-    urls: Dict[str, str]
-
-
-@dataclass(frozen=True)
-class PortalRenderedTextAsset:
-    text: str
-    content_bytes: bytes
-    fingerprint: str
+    _install_healthcheck_log_filter()
+except Exception:  # pragma: no cover - observability never blocks startup
+    LOGGER.debug("healthcheck log filter unavailable", exc_info=True)
 
 
 @dataclass(frozen=True)
@@ -262,250 +272,152 @@ def _portal_fastvlm_captioning_enabled(actor: Optional[Mapping[str, Any]] = None
 
 
 REPO_ROOT = Path(__file__).resolve().parent
-PORTAL_HTML = REPO_ROOT / "portal.html"
-PORTAL_ASSETS_DIR = REPO_ROOT / "public" / "portal-assets"
-PORTAL_ASSETS_DIR_REAL = Path(os.path.realpath(PORTAL_ASSETS_DIR))
-PORTAL_ASSET_MANIFEST_PATH = REPO_ROOT / "config" / "portal_asset_manifest.json"
 PORTAL_VIDEO_ASSET_NAME = "dna-portal-video-2.mp4"
 PORTAL_VIDEO_PATH = REPO_ROOT / "public" / "video" / PORTAL_VIDEO_ASSET_NAME
-PORTAL_ASSET_CACHE_CONTROL = "no-store"
-PORTAL_IMMUTABLE_ASSET_CACHE_CONTROL = "public, max-age=31536000, immutable"
-PORTAL_ASSET_FINGERPRINT_PARAM = "v"
-PORTAL_ASSET_FINGERPRINT_LENGTH = 12
-PORTAL_CSS_TEMPLATE_PATH = PORTAL_ASSETS_DIR / "portal.css"
-PORTAL_DIRECT_FINGERPRINT_ASSET_NAMES = (
-    "portal.js",
-    "portal-review.js",
-    "portal-review.css",
-    "shared-ui-tokens.css",
-    "fonts/portal-sans.woff2",
-    "fonts/portal-mono.woff2",
-    "brand/dna-symbol-dark.svg",
-    "brand/dna-symbol-light.svg",
+
+_PORTAL_ASSET_BUNDLE_APP_GLOBALS = (
+    "REPO_ROOT",
+    "PORTAL_HTML",
+    "PORTAL_ASSETS_DIR",
+    "PORTAL_ASSETS_DIR_REAL",
+    "PORTAL_ASSET_MANIFEST_PATH",
+    "PORTAL_ASSET_CACHE_CONTROL",
+    "PORTAL_IMMUTABLE_ASSET_CACHE_CONTROL",
+    "PORTAL_ASSET_FINGERPRINT_PARAM",
+    "PORTAL_ASSET_FINGERPRINT_LENGTH",
+    "PORTAL_CSS_TEMPLATE_PATH",
+    "PORTAL_DIRECT_FINGERPRINT_ASSET_NAMES",
+    "PORTAL_CSS_TEMPLATE_TOKENS",
+    "PORTAL_HTML_TEMPLATE_TOKENS",
+    "PORTAL_ASSET_MANIFEST",
+    "PORTAL_ASSET_PATHS",
+    "PORTAL_ASSET_MEDIA_TYPES",
 )
-PORTAL_CSS_TEMPLATE_TOKENS = {
-    "__PORTAL_FONT_SANS_URL__": "fonts/portal-sans.woff2",
-    "__PORTAL_FONT_MONO_URL__": "fonts/portal-mono.woff2",
-}
-PORTAL_HTML_TEMPLATE_TOKENS = {
-    "__PORTAL_CSS_URL__": "portal.css",
-    "__PORTAL_JS_URL__": "portal.js",
-    "__PORTAL_REVIEW_JS_URL__": "portal-review.js",
-    "__PORTAL_REVIEW_CSS_URL__": "portal-review.css",
-    "__PORTAL_BRAND_LIGHT_URL__": "brand/dna-symbol-light.svg",
-    "__PORTAL_BRAND_DARK_URL__": "brand/dna-symbol-dark.svg",
-    "__PORTAL_FONT_SANS_URL__": "fonts/portal-sans.woff2",
-}
+
+
+@contextmanager
+def _portal_asset_bundle_app_context():
+    saved = {name: getattr(_portal_asset_bundle, name) for name in _PORTAL_ASSET_BUNDLE_APP_GLOBALS}
+    try:
+        for name in _PORTAL_ASSET_BUNDLE_APP_GLOBALS:
+            setattr(_portal_asset_bundle, name, globals()[name])
+        yield
+    finally:
+        for name, value in saved.items():
+            setattr(_portal_asset_bundle, name, value)
+
+
+def _copy_portal_cache_api(wrapper: Callable[..., Any], cached: Callable[..., Any]) -> None:
+    for attr_name in ("cache_clear", "cache_info", "cache_parameters"):
+        if hasattr(cached, attr_name):
+            setattr(wrapper, attr_name, getattr(cached, attr_name))
 
 
 def _load_portal_asset_manifest() -> Dict[str, PortalAssetSpec]:
-    try:
-        raw_manifest = json.loads(PORTAL_ASSET_MANIFEST_PATH.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
-        raise RuntimeError(f"Unable to load portal asset manifest: {exc}") from exc
-
-    assets = raw_manifest.get("assets")
-    if not isinstance(assets, dict) or not assets:
-        raise RuntimeError("Portal asset manifest must define a non-empty 'assets' object")
-
-    manifest: Dict[str, PortalAssetSpec] = {}
-    for asset_name, entry in assets.items():
-        if not isinstance(asset_name, str) or not asset_name.strip():
-            raise RuntimeError("Portal asset manifest contains an invalid asset key")
-        if not isinstance(entry, dict):
-            raise RuntimeError(f"Portal asset manifest entry for {asset_name!r} must be an object")
-
-        repo_path = str(entry.get("repo_path", "")).strip()
-        media_type = str(entry.get("media_type", "")).strip()
-        if not repo_path or not media_type:
-            raise RuntimeError(f"Portal asset manifest entry for {asset_name!r} is incomplete")
-
-        resolved_path = Path(os.path.realpath(REPO_ROOT / repo_path))
-        try:
-            resolved_path.relative_to(PORTAL_ASSETS_DIR_REAL)
-        except ValueError as exc:
-            raise RuntimeError(f"Portal asset manifest entry for {asset_name!r} points outside {PORTAL_ASSETS_DIR}") from exc
-
-        manifest[asset_name] = PortalAssetSpec(path=resolved_path, media_type=media_type)
-
-    return manifest
-
-
-PORTAL_ASSET_MANIFEST = _load_portal_asset_manifest()
-PORTAL_ASSET_PATHS = {name: asset.path for name, asset in PORTAL_ASSET_MANIFEST.items()}
-PORTAL_ASSET_MEDIA_TYPES = {name: asset.media_type for name, asset in PORTAL_ASSET_MANIFEST.items()}
+    with _portal_asset_bundle_app_context():
+        return _portal_asset_bundle._load_portal_asset_manifest()
 
 
 def _portal_asset_signature(path: Path) -> Tuple[str, int, int]:
-    stat_result = path.stat()
-    return str(path), stat_result.st_mtime_ns, stat_result.st_size
+    return _portal_asset_bundle._portal_asset_signature(path)
 
 
 def _fingerprint_bytes(payload: bytes) -> str:
-    return hashlib.sha256(payload).hexdigest()[:PORTAL_ASSET_FINGERPRINT_LENGTH]
+    return _portal_asset_bundle._fingerprint_bytes(payload)
 
 
 def _portal_asset_route_path(asset_name: str) -> str:
-    encoded_parts = [quote(part, safe="") for part in asset_name.split("/")]
-    return "/portal/assets/" + "/".join(encoded_parts)
+    with _portal_asset_bundle_app_context():
+        return _portal_asset_bundle._portal_asset_route_path(asset_name)
 
 
 def _portal_asset_versioned_url(asset_name: str, fingerprint: str) -> str:
-    return f"{_portal_asset_route_path(asset_name)}?{PORTAL_ASSET_FINGERPRINT_PARAM}={fingerprint}"
+    with _portal_asset_bundle_app_context():
+        return _portal_asset_bundle._portal_asset_versioned_url(asset_name, fingerprint)
 
 
 def _render_portal_template(template_text: str, replacements: Mapping[str, str], *, template_name: str) -> str:
-    rendered = template_text
-    for token, value in replacements.items():
-        if token not in rendered:
-            raise RuntimeError(f"{template_name} is missing required token {token}")
-        rendered = rendered.replace(token, value)
-
-    unresolved = sorted(set(re.findall(r"__PORTAL_[A-Z0-9_]+__", rendered)))
-    if unresolved:
-        raise RuntimeError(f"{template_name} has unresolved tokens: {', '.join(unresolved)}")
-    return rendered
+    return _portal_asset_bundle._render_portal_template(template_text, replacements, template_name=template_name)
 
 
 def _portal_direct_asset_signature(asset_name: str) -> Tuple[str, int, int]:
-    return _portal_asset_signature(PORTAL_ASSET_PATHS[asset_name])
+    with _portal_asset_bundle_app_context():
+        return _portal_asset_bundle._portal_direct_asset_signature(asset_name)
 
 
-@lru_cache(maxsize=16)
-def _build_portal_direct_asset_fingerprint(asset_name: str, _: Tuple[str, int, int]) -> str:
-    return _fingerprint_bytes(PORTAL_ASSET_PATHS[asset_name].read_bytes())
+def _build_portal_direct_asset_fingerprint(asset_name: str, signature: Tuple[str, int, int]) -> str:
+    with _portal_asset_bundle_app_context():
+        return _portal_asset_bundle._build_portal_direct_asset_fingerprint(asset_name, signature)
 
 
 def _get_portal_direct_asset_fingerprint(asset_name: str) -> str:
-    return _build_portal_direct_asset_fingerprint(asset_name, _portal_direct_asset_signature(asset_name))
+    with _portal_asset_bundle_app_context():
+        return _portal_asset_bundle._get_portal_direct_asset_fingerprint(asset_name)
 
 
 def _portal_css_dependency_asset_names() -> Tuple[str, ...]:
-    return tuple(dict.fromkeys(PORTAL_CSS_TEMPLATE_TOKENS.values()))
+    with _portal_asset_bundle_app_context():
+        return _portal_asset_bundle._portal_css_dependency_asset_names()
 
 
 def _portal_css_signature() -> Tuple[object, ...]:
-    return (
-        _portal_asset_signature(PORTAL_CSS_TEMPLATE_PATH),
-        *(
-            (asset_name, _get_portal_direct_asset_fingerprint(asset_name))
-            for asset_name in _portal_css_dependency_asset_names()
-        ),
-    )
+    with _portal_asset_bundle_app_context():
+        return _portal_asset_bundle._portal_css_signature()
 
 
-@lru_cache(maxsize=4)
-def _build_portal_css_asset(_: Tuple[object, ...]) -> PortalRenderedTextAsset:
-    direct_asset_fingerprints = {
-        asset_name: _get_portal_direct_asset_fingerprint(asset_name)
-        for asset_name in dict.fromkeys(PORTAL_CSS_TEMPLATE_TOKENS.values())
-    }
-    css_template = PORTAL_CSS_TEMPLATE_PATH.read_text(encoding="utf-8")
-    css_render = _render_portal_template(
-        css_template,
-        {
-            token: _portal_asset_versioned_url(asset_name, direct_asset_fingerprints[asset_name])
-            for token, asset_name in PORTAL_CSS_TEMPLATE_TOKENS.items()
-        },
-        template_name="portal.css",
-    )
-    css_bytes = css_render.encode("utf-8")
-    return PortalRenderedTextAsset(
-        text=css_render,
-        content_bytes=css_bytes,
-        fingerprint=_fingerprint_bytes(css_bytes),
-    )
+def _build_portal_css_asset(signature: Tuple[object, ...]) -> PortalRenderedTextAsset:
+    with _portal_asset_bundle_app_context():
+        return _portal_asset_bundle._build_portal_css_asset(signature)
 
 
 def _get_portal_css_asset() -> PortalRenderedTextAsset:
-    return _build_portal_css_asset(_portal_css_signature())
+    with _portal_asset_bundle_app_context():
+        return _portal_asset_bundle._get_portal_css_asset()
 
 
 def _portal_html_signature() -> Tuple[object, ...]:
-    css_asset = _get_portal_css_asset()
-    return (
-        _portal_asset_signature(PORTAL_HTML),
-        ("portal.css", css_asset.fingerprint),
-        *(
-            (asset_name, _get_portal_direct_asset_fingerprint(asset_name))
-            for asset_name in (
-                "portal.js",
-                "portal-review.js",
-                "portal-review.css",
-                "brand/dna-symbol-dark.svg",
-                "brand/dna-symbol-light.svg",
-                "fonts/portal-sans.woff2",
-            )
-        ),
-    )
+    with _portal_asset_bundle_app_context():
+        return _portal_asset_bundle._portal_html_signature()
 
 
-@lru_cache(maxsize=4)
-def _build_portal_asset_bundle(_: Tuple[object, ...]) -> PortalAssetBundle:
-    css_asset = _get_portal_css_asset()
-    fingerprints = {
-        asset_name: _get_portal_direct_asset_fingerprint(asset_name) for asset_name in PORTAL_DIRECT_FINGERPRINT_ASSET_NAMES
-    }
-    fingerprints["portal.css"] = css_asset.fingerprint
-    urls = {
-        asset_name: _portal_asset_versioned_url(asset_name, fingerprint) for asset_name, fingerprint in fingerprints.items()
-    }
-    html_template = PORTAL_HTML.read_text(encoding="utf-8")
-    html_render = _render_portal_template(
-        html_template,
-        {token: urls[asset_name] for token, asset_name in PORTAL_HTML_TEMPLATE_TOKENS.items()},
-        template_name="portal.html",
-    )
-    html_bytes = html_render.encode("utf-8")
-    return PortalAssetBundle(
-        html=html_render,
-        html_bytes=html_bytes,
-        css=css_asset.text,
-        css_bytes=css_asset.content_bytes,
-        fingerprints=fingerprints,
-        urls=urls,
-    )
+def _build_portal_asset_bundle(signature: Tuple[object, ...]) -> PortalAssetBundle:
+    with _portal_asset_bundle_app_context():
+        return _portal_asset_bundle._build_portal_asset_bundle(signature)
 
 
 def _get_portal_asset_bundle() -> PortalAssetBundle:
-    return _build_portal_asset_bundle(_portal_html_signature())
+    with _portal_asset_bundle_app_context():
+        return _portal_asset_bundle._get_portal_asset_bundle()
 
 
 def _requested_portal_asset_fingerprint(request: Request) -> str:
-    return str(request.query_params.get(PORTAL_ASSET_FINGERPRINT_PARAM, "")).strip()
+    with _portal_asset_bundle_app_context():
+        return _portal_asset_bundle._requested_portal_asset_fingerprint(request)
 
 
 def _portal_asset_cache_control(current_fingerprint: str, requested_fingerprint: str) -> str:
-    if requested_fingerprint and hmac.compare_digest(requested_fingerprint, current_fingerprint):
-        return PORTAL_IMMUTABLE_ASSET_CACHE_CONTROL
-    return PORTAL_ASSET_CACHE_CONTROL
+    with _portal_asset_bundle_app_context():
+        return _portal_asset_bundle._portal_asset_cache_control(current_fingerprint, requested_fingerprint)
 
 
 def _portal_asset_etag(fingerprint: str) -> str:
-    return f'"{fingerprint}"'
+    with _portal_asset_bundle_app_context():
+        return _portal_asset_bundle._portal_asset_etag(fingerprint)
 
 
 def _portal_asset_request_etag_matches(request: Request, current_etag: str) -> bool:
-    raw_if_none_match = str(request.headers.get("if-none-match") or "").strip()
-    if not raw_if_none_match:
-        return False
-    for candidate in raw_if_none_match.split(","):
-        normalized = candidate.strip()
-        if normalized == "*":
-            return True
-        if normalized and hmac.compare_digest(normalized, current_etag):
-            return True
-    return False
+    with _portal_asset_bundle_app_context():
+        return _portal_asset_bundle._portal_asset_request_etag_matches(request, current_etag)
 
 
 def _portal_asset_not_modified_response(*, etag: str, cache_control: str) -> Response:
-    return Response(
-        status_code=304,
-        headers={
-            "Cache-Control": cache_control,
-            "ETag": etag,
-        },
-    )
+    with _portal_asset_bundle_app_context():
+        return _portal_asset_bundle._portal_asset_not_modified_response(etag=etag, cache_control=cache_control)
+
+
+_copy_portal_cache_api(_build_portal_direct_asset_fingerprint, _portal_asset_bundle._build_portal_direct_asset_fingerprint)
+_copy_portal_cache_api(_build_portal_css_asset, _portal_asset_bundle._build_portal_css_asset)
+_copy_portal_cache_api(_build_portal_asset_bundle, _portal_asset_bundle._build_portal_asset_bundle)
 
 
 ARCHIVE_GOVERNANCE_SCRIPT = REPO_ROOT / "tools" / "archive_governance.py"
@@ -1369,6 +1281,35 @@ except ImportError:  # pragma: no cover - defensive fallback if core import fail
 
 ALLOWED_LOG_LEVELS = {"DEBUG", "INFO", "WARNING", "ERROR"}
 ALLOWED_VLM_CAPTIONING_BACKENDS = {"fastvlm"}
+FASTVLM_RUN_STATUS_VALUES = {
+    "off",
+    "requested",
+    "succeeded",
+    "failed",
+    "skipped",
+    "missing_runtime",
+    "invalid_config",
+    "unsupported_backend",
+}
+FASTVLM_RUNTIME_STATUS_ALIASES = {
+    "ok": "succeeded",
+    "success": "succeeded",
+    "successful": "succeeded",
+    "succeeded": "succeeded",
+    "error": "failed",
+    "failed": "failed",
+    "failure": "failed",
+    "proxy_error": "failed",
+    "timeout": "failed",
+    "missing_model": "missing_runtime",
+    "missing_runtime": "missing_runtime",
+    "invalid_config": "invalid_config",
+    "unsupported_backend": "unsupported_backend",
+    "skipped": "skipped",
+    "disabled": "off",
+    "off": "off",
+    "requested": "requested",
+}
 ALLOWED_VLM_CAPTIONING_PROXY_FORMATS = {"png", "jpeg"}
 ALLOWED_VLM_CAPTIONING_MODEL_ROLES = frozenset(FASTVLM_CHECKPOINT_DIRS.keys())
 PORTAL_DEFAULT_DA3_MODEL_KEY = "da3-metric"
@@ -6475,6 +6416,65 @@ def _artifact_is_previewable(path: Path) -> bool:
     return _artifact_media_kind(path) == "image" and _artifact_content_type(path).startswith("image/")
 
 
+# MIME types browsers reliably render via <img> / <picture>. TIFF, EXR, and
+# similar formats are excluded so the portal never asks the browser to decode
+# them; previewing those goes through a sibling PNG proxy when available.
+_BROWSER_PREVIEWABLE_MIME_TYPES = frozenset(
+    {
+        "image/png",
+        "image/jpeg",
+        "image/webp",
+        "image/gif",
+        "image/avif",
+        "image/svg+xml",
+    }
+)
+
+
+def _artifact_is_browser_previewable(path: Path) -> bool:
+    return _artifact_content_type(path).lower() in _BROWSER_PREVIEWABLE_MIME_TYPES
+
+
+def _artifact_preview_proxy_path(path: Path) -> Optional[Path]:
+    """Return a sibling PNG proxy for browser-unfriendly image artifacts.
+
+    The naming convention is ``<original>.preview.png`` adjacent to the source
+    file. Pipelines that emit TIFF/EXR outputs are responsible for writing this
+    sidecar; the serializer only surfaces what already exists on disk so the
+    HTTP API never speculates about files it cannot deliver.
+    """
+
+    if _artifact_is_browser_previewable(path):
+        return None
+    if _artifact_media_kind(path) != "image":
+        return None
+    candidate = path.with_name(path.name + ".preview.png")
+    try:
+        if candidate.is_file():
+            return candidate
+    except OSError:
+        return None
+    return None
+
+
+def _add_artifact_preview_proxy_lookup(
+    lookup: Dict[str, Path],
+    *,
+    output_dir: Path,
+    artifact_path: Path,
+) -> None:
+    proxy_path = _artifact_preview_proxy_path(artifact_path)
+    if proxy_path is None:
+        return
+    try:
+        resolved_output_dir = Path(os.path.realpath(output_dir.expanduser()))
+        resolved_proxy_path = Path(os.path.realpath(proxy_path))
+        proxy_relative_path = str(resolved_proxy_path.relative_to(resolved_output_dir))
+    except (OSError, ValueError):
+        return
+    lookup.setdefault(proxy_relative_path, resolved_proxy_path)
+
+
 def _safe_artifact_attachment_filename(path: Path) -> str:
     """Return an ASCII-safe filename for Content-Disposition attachments.
 
@@ -6643,19 +6643,35 @@ def _serialize_indexed_artifact(
 
     content_type = _artifact_content_type(path)
     sha256_hex, fingerprint_status = _artifact_fingerprint(path, size_bytes)
+    download_url = _artifact_url(job_id, relative_path)
+    proxy_path = _artifact_preview_proxy_path(path)
+    proxy_relative = (
+        f"{relative_path}.preview.png" if proxy_path is not None else None
+    )
+    browser_previewable = _artifact_is_browser_previewable(path) or proxy_path is not None
     payload: Dict[str, Any] = {
         "artifact_type": _infer_artifact_type(path),
         "media_kind": _artifact_media_kind(path),
         "previewable": _artifact_is_previewable(path),
+        # Narrower than `previewable`: excludes TIFF/EXR which browsers cannot
+        # render via <img>. The portal review surface uses this flag to decide
+        # whether to inline-preview an artifact or render a download-only card.
+        "browser_previewable": browser_previewable,
         "content_type": content_type,
+        "mime_type": content_type,
         "display_hint": _artifact_display_hint(relative_path, path),
-        "url": _artifact_url(job_id, relative_path),
+        # `url` retained as the canonical download URL for backward compat.
+        "url": download_url,
+        "download_url": download_url,
         # Do not expose absolute server paths in API/SSE payloads.
         "path": relative_path,
         "relative_path": relative_path,
         "size_bytes": size_bytes,
         "fingerprint_status": fingerprint_status,
     }
+    if proxy_relative is not None:
+        payload["preview_url"] = _artifact_url(job_id, proxy_relative)
+        payload["preview_mime_type"] = "image/png"
     if sha256_hex is not None:
         payload["sha256"] = sha256_hex
     return payload
@@ -6671,6 +6687,149 @@ def _coerce_nonnegative_int(value: Any) -> Optional[int]:
     if parsed < 0:
         return None
     return parsed
+
+
+def _captioning_artifact_counts_from_paths(paths: Iterable[str]) -> Dict[str, int]:
+    counts = {"sidecar_count": 0, "raw_count": 0, "proxy_count": 0}
+    for raw_path in paths:
+        lower_path = str(raw_path or "").replace("\\", "/").strip().lower()
+        if not lower_path:
+            continue
+        if lower_path.endswith(".vlm_captioning.sidecar.json"):
+            counts["sidecar_count"] += 1
+        elif lower_path.endswith(".vlm_captioning.raw.txt"):
+            counts["raw_count"] += 1
+        elif "/captioning/" in f"/{lower_path}" and re.search(r"_proxy\.(?:png|jpe?g)$", lower_path):
+            counts["proxy_count"] += 1
+    return counts
+
+
+def _captioning_artifact_counts_from_run_card(payload: Mapping[str, Any]) -> Dict[str, int]:
+    artifact_index = payload.get("artifact_index")
+    if not isinstance(artifact_index, list):
+        return {"sidecar_count": 0, "raw_count": 0, "proxy_count": 0}
+    return _captioning_artifact_counts_from_paths(
+        str(artifact.get("relative_path") or artifact.get("path") or "")
+        for artifact in artifact_index
+        if isinstance(artifact, Mapping)
+    )
+
+
+def _captioning_artifact_counts_from_job_artifacts(artifacts: Mapping[str, Any]) -> Dict[str, int]:
+    items = artifacts.get("items") if isinstance(artifacts, Mapping) else None
+    if not isinstance(items, list):
+        return {"sidecar_count": 0, "raw_count": 0, "proxy_count": 0}
+    return _captioning_artifact_counts_from_paths(
+        str(item.get("relative_path") or item.get("path") or "") for item in items if isinstance(item, Mapping)
+    )
+
+
+def _fastvlm_model_role_from_value(value: Any) -> str:
+    normalized = str(value or "").strip().lower()
+    return normalized if normalized in ALLOWED_VLM_CAPTIONING_MODEL_ROLES else "custom"
+
+
+def _normalize_fastvlm_run_status(
+    raw_status: Any,
+    *,
+    artifact_counts: Optional[Mapping[str, int]] = None,
+    requested: bool = False,
+) -> Optional[Dict[str, Any]]:
+    counts = {
+        "sidecar_count": _coerce_nonnegative_int((artifact_counts or {}).get("sidecar_count")) or 0,
+        "raw_count": _coerce_nonnegative_int((artifact_counts or {}).get("raw_count")) or 0,
+        "proxy_count": _coerce_nonnegative_int((artifact_counts or {}).get("proxy_count")) or 0,
+    }
+    if not isinstance(raw_status, Mapping):
+        if not requested and not any(counts.values()):
+            return None
+        raw_status = {"enabled": True, "status": "requested" if requested else "succeeded"}
+
+    enabled = _as_bool(raw_status.get("enabled"), requested or any(counts.values()))
+    backend = str(raw_status.get("backend") or "fastvlm").strip().lower() or "fastvlm"
+    status_text = str(raw_status.get("status") or "").strip().lower()
+    normalized_status = FASTVLM_RUNTIME_STATUS_ALIASES.get(status_text, "")
+    policy_violation = raw_status.get("used_for_quality_gate") is True
+
+    sidecar_count = max(counts["sidecar_count"], _coerce_nonnegative_int(raw_status.get("sidecar_count")) or 0)
+    raw_count = max(counts["raw_count"], _coerce_nonnegative_int(raw_status.get("raw_count")) or 0)
+    proxy_count = max(counts["proxy_count"], _coerce_nonnegative_int(raw_status.get("proxy_count")) or 0)
+    failed_count = _coerce_nonnegative_int(raw_status.get("failed_count")) or 0
+
+    if policy_violation:
+        normalized_status = "failed"
+        failed_count = max(failed_count, 1)
+    elif backend != "fastvlm":
+        normalized_status = "unsupported_backend"
+    elif normalized_status not in FASTVLM_RUN_STATUS_VALUES:
+        if not enabled:
+            normalized_status = "off"
+        elif failed_count > 0:
+            normalized_status = "failed"
+        elif sidecar_count > 0:
+            normalized_status = "succeeded"
+        elif requested:
+            normalized_status = "requested"
+        else:
+            normalized_status = "skipped"
+
+    if normalized_status == "off":
+        enabled = False
+    if normalized_status == "succeeded" and sidecar_count == 0 and not requested:
+        normalized_status = "skipped"
+
+    normalized: Dict[str, Any] = {
+        "status": normalized_status,
+        "enabled": bool(enabled),
+        "backend": backend,
+        "model_role": str(
+            raw_status.get("model_role") or _fastvlm_model_role_from_value(raw_status.get("model") or "")
+        ).strip()
+        or "custom",
+        "model_id": raw_status.get("model_id") if raw_status.get("model_id") is not None else None,
+        "model_path": str(raw_status.get("model_path") or "").strip() or None,
+        "role": "advisory",
+        "sidecar_count": sidecar_count,
+        "raw_count": raw_count,
+        "proxy_count": proxy_count,
+        "failed_count": failed_count,
+        "used_for_quality_gate": False,
+    }
+    if policy_violation:
+        normalized["policy_violation"] = True
+        normalized["quality_gate_claimed"] = True
+        normalized["error"] = "captioning_status.used_for_quality_gate must be false"
+    elif raw_status.get("error"):
+        normalized["error"] = str(raw_status.get("error"))
+    return normalized
+
+
+def _requested_fastvlm_captioning_status(job: Job) -> Optional[Dict[str, Any]]:
+    args: Mapping[str, Any] = {}
+    for request in (job.effective_request, job.request):
+        candidate = request.get("args") if isinstance(request, Mapping) else None
+        if isinstance(candidate, Mapping) and candidate:
+            args = candidate
+            break
+    if not args:
+        return None
+    enabled = _as_bool(_pick(args, "vlm_captioning_enabled", "vlmCaptioningEnabled", default=False), False)
+    if not enabled:
+        return None
+    model = str(_pick(args, "vlm_captioning_model", "vlmCaptioningModel", default="default") or "default").strip()
+    backend = str(_pick(args, "vlm_captioning_backend", "vlmCaptioningBackend", default="fastvlm") or "fastvlm").strip()
+    return _normalize_fastvlm_run_status(
+        {
+            "enabled": True,
+            "status": "requested",
+            "backend": backend,
+            "model_role": _fastvlm_model_role_from_value(model),
+            "model_id": None,
+            "model_path": model if "/" in model or "\\" in model or model.startswith(".") else None,
+            "used_for_quality_gate": False,
+        },
+        requested=True,
+    )
 
 
 def _load_bounded_json_object(path: Path, *, max_bytes: int = JOB_RUN_SUMMARY_MAX_BYTES) -> Optional[Dict[str, Any]]:
@@ -6753,6 +6912,12 @@ def _summarize_run_card_payload(payload: Mapping[str, Any]) -> Dict[str, Any]:
     partial = reviewable_outputs and bool((error_count or 0) > 0)
     summary["reviewable_outputs"] = reviewable_outputs
     summary["partial"] = partial
+    captioning_status = _normalize_fastvlm_run_status(
+        payload.get("captioning_status"),
+        artifact_counts=_captioning_artifact_counts_from_run_card(payload),
+    )
+    if captioning_status is not None:
+        summary["captioning_status"] = captioning_status
 
     return summary
 
@@ -6947,6 +7112,12 @@ def _build_scoped_job_artifacts(
         for relative_path, path in selected_candidates
     ]
     selected_lookup = {relative_path: path for relative_path, path in selected_candidates}
+    for relative_path, path in selected_candidates:
+        _add_artifact_preview_proxy_lookup(
+            selected_lookup,
+            output_dir=output_dir,
+            artifact_path=path,
+        )
     return items, selected_lookup, truncated
 
 
@@ -7009,6 +7180,36 @@ def _refresh_job_run_summary(job: Job) -> Dict[str, Any]:
     if not summary and existing_summary:
         summary = existing_summary
 
+    if summary:
+        artifact_counts = _captioning_artifact_counts_from_job_artifacts(job.artifacts)
+        existing_captioning_counts = summary.get("captioning_status")
+        if isinstance(existing_captioning_counts, Mapping):
+            artifact_counts = {
+                "sidecar_count": max(
+                    artifact_counts["sidecar_count"],
+                    _coerce_nonnegative_int(existing_captioning_counts.get("sidecar_count")) or 0,
+                ),
+                "raw_count": max(
+                    artifact_counts["raw_count"],
+                    _coerce_nonnegative_int(existing_captioning_counts.get("raw_count")) or 0,
+                ),
+                "proxy_count": max(
+                    artifact_counts["proxy_count"],
+                    _coerce_nonnegative_int(existing_captioning_counts.get("proxy_count")) or 0,
+                ),
+            }
+        raw_captioning_status = None
+        if metadata is not None and metadata.run_card_payload is not None:
+            raw_captioning_status = metadata.run_card_payload.get("captioning_status")
+        if raw_captioning_status is None:
+            raw_captioning_status = existing_summary.get("captioning_status")
+        captioning_status = _normalize_fastvlm_run_status(
+            raw_captioning_status,
+            artifact_counts=artifact_counts,
+        )
+        if captioning_status is not None:
+            summary["captioning_status"] = captioning_status
+
     job.run_summary = summary
 
     if job.state != "canceled" and summary.get("partial"):
@@ -7040,6 +7241,17 @@ def _refresh_job_run_summary(job: Job) -> Dict[str, Any]:
             )
 
     return summary
+
+
+def _serialized_job_run_summary(job: Job) -> Optional[Dict[str, Any]]:
+    if job.state not in ACTIVE_JOB_STATES and job.state != "canceled":
+        _refresh_job_run_summary(job)
+    summary = dict(job.run_summary) if isinstance(job.run_summary, dict) and job.run_summary else {}
+    if job.state in ACTIVE_JOB_STATES:
+        requested_status = _requested_fastvlm_captioning_status(job)
+        if requested_status is not None:
+            summary["captioning_status"] = requested_status
+    return summary or None
 
 
 class ArtifactPathValidationError(ValueError):
@@ -7123,6 +7335,11 @@ def _hydrate_artifact_lookup_from_items(job: Job) -> Dict[str, Path]:
         if not resolved.exists() or not resolved.is_file():
             continue
         lookup[canonical_relative_path] = resolved
+        _add_artifact_preview_proxy_lookup(
+            lookup,
+            output_dir=output_dir,
+            artifact_path=resolved,
+        )
     job.artifact_lookup = lookup
     return lookup
 
@@ -7211,6 +7428,11 @@ def _index_job_artifacts(job: Job) -> List[Dict[str, Any]]:
             )
         )
         selected_lookup[relative_path] = path
+        _add_artifact_preview_proxy_lookup(
+            selected_lookup,
+            output_dir=output_dir,
+            artifact_path=path,
+        )
 
     job.artifacts = {
         "output_dir": str(output_dir),
@@ -7231,8 +7453,7 @@ def _job_events_url(job_id: str, *, api_version: str = "v1") -> str:
 
 
 def _serialize_job(job: Job, *, include_logs: bool = True, api_version: str = "v1") -> Dict[str, Any]:
-    if job.state not in ACTIVE_JOB_STATES and job.state != "canceled":
-        _refresh_job_run_summary(job)
+    run_summary = _serialized_job_run_summary(job)
     data = {
         "id": job.id,
         "pipeline": str(job.request.get("pipeline") or ""),
@@ -7245,7 +7466,7 @@ def _serialize_job(job: Job, *, include_logs: bool = True, api_version: str = "v
         "events_url": _job_events_url(job.id, api_version=api_version),
         "artifacts": job.artifacts,
         "error": job.error,
-        "run_summary": job.run_summary or None,
+        "run_summary": run_summary,
         "last_event_at": job.last_event_at,
     }
     if include_logs:

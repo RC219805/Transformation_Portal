@@ -16,6 +16,7 @@ Always prefer Make targets — they encode the correct env, marker selection, an
 ```bash
 make venv                       # create/validate .venv (Python 3.11+, fail-closed)
 make install-core               # pinned core runtime + dev tooling, editable install --no-deps, pip check
+make repair-core-venv           # nuke/recreate .venv, reinstall pinned core, re-run pip check
 make install-ml-core            # add target-owned ML baseline (Apple Silicon arm64 only; Linux/Intel macOS lanes are retired and fail closed)
 make install-fastvlm-runtime    # optional FastVLM advisory captioning subprocess runtime (.runtime/fastvlm/)
 make check-fastvlm-runtime      # verify FastVLM runtime + selected model roles (TP_FASTVLM_VALIDATE_MODELS=smoke,default by default)
@@ -49,7 +50,18 @@ make pre-commit            # pre-commit hooks with CI-aligned Black/isort
 make install-hooks         # install git pre-commit hook
 make fix-quality / make check-quality   # auto-fix wrappers (scripts/auto_fix_quality.py)
 ```
-`make ci` includes governance gates that often fail edits: `check-json-serialization` (no raw `json.dump(s)` outside approved modules), `check-yaml-governance` (no raw `yaml.safe_load` outside the preset loader), `check-python-headers` (PEP 263 cookies only), `check-piptools-cache`, `check-requirements-lock-contract`, `check-ci-sync`, `check-portal-asset-budgets`. Prefer fixing the root cause over silencing these.
+`make ci` includes governance gates that often fail edits: `check-json-serialization` (no raw `json.dump(s)` outside approved modules), `check-yaml-governance` (no raw `yaml.safe_load` outside the preset loader), `check-python-headers` (PEP 263 cookies only), `check-piptools-cache`, `check-requirements-lock-contract`, `check-dependency-pinning`, `check-ci-sync`, `check-portal-asset-budgets`. Prefer fixing the root cause over silencing these.
+
+### Local dev stack
+```bash
+make dev-write-env                    # (re)writes /tmp/tp-local-http-all-on.env with TP_API_KEY/TP_BACKEND_API_KEY bound; use ./scripts/dev/write_local_env.sh --rotate to regenerate
+make dev-start                        # full stack: env file → backend (with reload boundaries) → /ready wait → frontdoor; logs at /tmp/tp-{backend,frontdoor}.log
+make dev-stop                         # kill listeners on dev ports (8000/3000/8001/3002) + orphan uvicorn parents
+make run-backend-local                # FastAPI on 127.0.0.1:8000 with reload boundaries that exclude .runtime/output/tmp/tests/node_modules/.next; requires TP_API_KEY
+make run-backend-local-noreload       # same backend without --reload (for full-stack smokes)
+make run-frontdoor-local              # canonical local frontdoor on :3000 (refuses :3001 fallback)
+make seed-frontdoor-user              # seeds /tmp/tp-frontdoor-users.json (smoke-admin / correct horse battery staple)
+```
 
 ### Live validation (browser/HTTP smokes)
 ```bash
@@ -59,9 +71,9 @@ make validate-frontdoor-browser       # spawns backend + managed frontdoor, brow
 make validate-portal-lux-materials-live   # live Lux Materials V3 segmentation (EfficientSAM, optional SAM2)
 make validate-portal-fastvlm-captioning-live   # live FastVLM advisory sidecar smoke (asserts used_for_quality_gate: false)
 make validate-portal-css-layer-parity # production portal CSS layer contract vs post-#1592 baseline
+make validate-frontdoor-deployment-gate   # manual shared-deployment frontdoor posture gate (Cloudflare + Vercel + FastAPI)
 make audit-pipeline-readiness         # safe local 4-pipeline readiness audit
-make seed-frontdoor-user              # seeds /tmp/tp-frontdoor-users.json (smoke-admin / correct horse battery staple)
-make run-frontdoor-local              # canonical local frontdoor on :3000 (refuses :3001 fallback)
+make check-vercel-env                 # validate Vercel/production frontdoor env vars (TP_VERCEL_ENV_FILE=..., TP_VERCEL_ENV_PRODUCTION=1 for prod-only)
 ```
 
 ### Dependency lockfiles
@@ -193,6 +205,10 @@ Use `pathlib.Path`, normalize/validate untrusted paths, enforce allowlisted root
 - Lux Depth V3 deliverables/naming → update `docs/cli/LUX_DEPTH_V3_CLI_GUIDE.md` and run-card schema.
 - Portal asset bundles → run `make check-portal-asset-budgets`; update budget contract if intentional.
 - Front-door portal sources → `cd web/secure-landing && npm run build:portal` to regenerate `public/portal-assets/portal.js`.
+
+## Canonical Worktree Discipline
+
+`origin/main` is the only standing source of truth. Desktop siblings like `Transformation_Portal__fastapi` or `Transformation_Portal__upload` are temporary git worktrees, **not** independent repos. When consolidating parallel work, fast-forward local `main` to `origin/main`, create a single integration branch from that updated base, and replay commits there — do not treat sibling worktrees as long-lived branches of record.
 
 ## Documentation Authority
 

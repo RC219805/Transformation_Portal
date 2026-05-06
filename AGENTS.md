@@ -48,6 +48,12 @@ Quick reference for common workflows and commands in this repo.
 - `make test-archive-gate-contract` run archive gate readiness + HTTP contract coverage for archive Gates A/B/C (`tests/test_app_orchestrator_runtime.py`, `tests/test_app_orchestrator_contract_http.py` with `-k "archive_gate"`).
 - `make seed-frontdoor-user` write the canonical local managed-frontdoor credential fixture to `/tmp/tp-frontdoor-users.json` using `smoke-admin` / `correct horse battery staple` unless you override the env vars.
 - `make run-frontdoor-local` start the canonical local managed frontdoor on `http://localhost:3000` after verifying backend readiness, auth env, and no silent fallback to `:3001`; it auto-seeds the canonical local user fixture when no explicit frontdoor user source is configured.
+- `make run-backend-local` start the FastAPI backend on `127.0.0.1:8000` with reload boundaries that exclude `.runtime/`, `output/`, `tmp/`, `tests/`, `node_modules/`, and the frontdoor `.next/` build, so pipeline runtime writes do not trigger restarts mid-job. Requires `TP_API_KEY` (set by `./scripts/dev/write_local_env.sh`).
+- `make run-backend-local-noreload` start the same backend without `--reload` for full-stack smokes.
+- `make dev-write-env` invoke `./scripts/dev/write_local_env.sh` to (re)write `/tmp/tp-local-http-all-on.env` with `TP_API_KEY` and `TP_BACKEND_API_KEY` bound to the same value; pass `--rotate` to generate a new key.
+- `make dev-start` run the full local stack: write the canonical env, stop any leftover listeners, launch the backend with reload boundaries, wait for `/ready`, then launch the frontdoor. Logs go to `/tmp/tp-backend.log` and `/tmp/tp-frontdoor.log`.
+- `make dev-stop` kill any local listeners on dev ports (8000, 3000, 8001, 3002) plus any orphan uvicorn parent/child processes; verifies ports are free.
+- `make check-vercel-env` validate the Vercel/production frontdoor environment variables documented in `docs/operations/frontdoor_vercel_env.md`. Pass `TP_VERCEL_ENV_FILE=...` to check a `vercel env pull` snapshot, and `TP_VERCEL_ENV_PRODUCTION=1` to enforce production-only requirements (Cloudflare Access).
 - `make validate-orchestrator-http` run the live orchestrator HTTP smoke against a running backend.
 - `make validate-portal-lux-materials-live` launch an isolated local backend, submit a live `lux-depth-v3` Materials V3 segmentation job through `/v1/config-preview` and `/v1/jobs` with the governed DA3 non-commercial acknowledgment, require EfficientSAM evidence, and optionally run SAM2 when `TP_PORTAL_LUX_RUN_SAM2=1` (hard gate with `TP_PORTAL_LUX_REQUIRE_SAM2=1`).
 - `make validate-portal-fastvlm-captioning-live` launch an isolated local backend with FastVLM portal captioning enabled, submit a live smoke-role captioning job, and require advisory sidecar/raw/proxy artifacts plus `used_for_quality_gate: false`.
@@ -100,23 +106,14 @@ Quick reference for common workflows and commands in this repo.
 - `make lock-ci` regenerate `requirements-ci.lock.txt`.
 - `make lock-dev` regenerate `requirements-dev.lock.txt`.
 - `make compile-ml-darwin-arm64`, `make update-ml-darwin-arm64`, and `make check-ml-darwin-arm64` delegate to the Darwin arm64 target-owned ML lock workflow under `requirements/` with `LOCK_PYTHON_VERSION=3.11`.
-- `make compile-ml-linux-x86_64`, `make update-ml-linux-x86_64`, and `make check-ml-linux-x86_64` fail closed through the retired unsupported Linux x86_64 ML lane.
-- `make compile-ml-darwin-x86_64`, `make update-ml-darwin-x86_64`, and `make check-ml-darwin-x86_64` fail closed through the retired unsupported Darwin x86_64 ML lane.
+- The Linux x86_64 and Darwin x86_64 ML lock lanes are retired and fail closed; the corresponding top-level `make compile-ml-linux-x86_64` / `update-ml-linux-x86_64` / `check-ml-linux-x86_64` and `make compile-ml-darwin-x86_64` / `update-ml-darwin-x86_64` / `check-ml-darwin-x86_64` targets, the matching `cd requirements && make` variants, and the umbrella `cd requirements && make compile-ml-layers` / `compile-accel` aggregators all exist only as fail-closed stubs that direct operators back to the live Darwin arm64 / generic commands. See `docs/governance/RETIRED_ML_LOCK_LANES_2026-04-30.md`.
 - `cd requirements && make compile LOCK_PYTHON_VERSION=3.11` compile only the generic checked-in layered lockfiles (`all/base/dev/ci/security/tools-archive`).
 - `cd requirements && make compile-ml-darwin-arm64 LOCK_PYTHON_VERSION=3.11` compile the Darwin arm64 target-owned ML lock on native Darwin arm64 only.
-- `cd requirements && make compile-ml-linux-x86_64 LOCK_PYTHON_VERSION=3.11` fail closed because the Linux x86_64 ML lane is retired and has no installable checked-in lockfile.
-- `cd requirements && make compile-ml-darwin-x86_64 LOCK_PYTHON_VERSION=3.11` fail closed because the Darwin x86_64 ML lane is retired and has no installable checked-in lockfile.
-- `cd requirements && make compile-ml-layers LOCK_PYTHON_VERSION=3.11` fail closed and direct operators to the explicit target-owned ML commands.
-- `cd requirements && make compile-accel LOCK_PYTHON_VERSION=3.11` fail closed and direct operators to the explicit target-owned ML commands.
 - `cd requirements && make compile-hash-pilot LOCK_PYTHON_VERSION=3.11` generate advisory hash-enforced pilot lockfiles into `requirements/.hash-pilot/`.
 - `cd requirements && make update LOCK_PYTHON_VERSION=3.11` update only the generic checked-in layered lockfiles.
 - `cd requirements && make update-ml-darwin-arm64 LOCK_PYTHON_VERSION=3.11` update the Darwin arm64 target-owned ML lock on native Darwin arm64 only.
-- `cd requirements && make update-ml-linux-x86_64 LOCK_PYTHON_VERSION=3.11` fail closed because the Linux x86_64 ML lane is retired and has no installable checked-in lockfile.
-- `cd requirements && make update-ml-darwin-x86_64 LOCK_PYTHON_VERSION=3.11` fail closed because the Darwin x86_64 ML lane is retired and has no installable checked-in lockfile.
 - `cd requirements && make check LOCK_PYTHON_VERSION=3.11` verify only the generic checked-in layered lockfiles are current.
 - `cd requirements && make check-ml-darwin-arm64 LOCK_PYTHON_VERSION=3.11` verify the Darwin arm64 target-owned ML lock on native Darwin arm64 only.
-- `cd requirements && make check-ml-linux-x86_64 LOCK_PYTHON_VERSION=3.11` fail closed because the Linux x86_64 ML lane is retired and has no installable checked-in lockfile.
-- `cd requirements && make check-ml-darwin-x86_64 LOCK_PYTHON_VERSION=3.11` fail closed because the Darwin x86_64 ML lane is retired and has no installable checked-in lockfile.
 - `cd requirements && make check-hash-pilot LOCK_PYTHON_VERSION=3.11` validate the pilot lockfiles with `pip install --dry-run --require-hashes`.
 - `python3 scripts/validation/check_requirements_lock_contract.py` validate layered lock contract (headers + target-owned purity/compatibility guards + lock ownership manifest coverage).
 - `make docs` build API docs with Sphinx.

@@ -37,13 +37,14 @@ from __future__ import annotations
 import logging
 import os
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from pathlib import Path
+from typing import Any, Callable, Dict, List, Optional
 
 from ..core.platform_matrix import CURRENT_PLATFORM, PlatformMatrix
 from ..depth.backends.protocol import LicenseRestrictionError
 
 # Use absolute import to avoid circular dependencies
-from ._backend_contract import normalize_backend_id, normalize_backend_sequence
+from ._backend_contract import normalize_backend_id, normalize_backend_provenance, normalize_backend_sequence
 from .config import EnhanceConfig, ModelVariant
 from .config_resolver import (
     apply_effective_da3_runtime_config,
@@ -171,6 +172,26 @@ class ExecutionPlan:
     enable_materials_v3: bool = False
     enable_reconstruction: bool = False
     quality_tier: str = "standard"
+
+
+@dataclass
+class InitializedDepthBackendState:
+    """Initialized depth backend state for orchestrator startup."""
+
+    registry: Any
+    depth_backend: Any
+    backend_cache: Dict[str, Any]
+    init_errors: Dict[str, str]
+    backend_metadata: BackendSelectionMetadata
+
+
+@dataclass
+class ActiveDepthState:
+    """Per-image active backend state for orchestrator reporting paths."""
+
+    backend_metadata: Optional[BackendSelectionMetadata]
+    depth_attempts: List[Dict[str, Any]]
+    selected_attempt_index: Optional[int]
 
 
 def resolve_runtime_backend_chain(
@@ -375,6 +396,333 @@ def resolve_backend_model_id(
     return default_model_id_for_backend(backend_id, model_variant, config=config)
 
 
+def normalize_sha256(value: Any) -> Optional[str]:
+    """Normalize SHA-256 digest to lowercase hex."""
+    if not isinstance(value, str):
+        return None
+    digest = value.strip().lower()
+    if len(digest) == 64 and all(ch in "0123456789abcdef" for ch in digest):
+        return digest
+    return None
+
+
+def typed_nullary_callable(value: Any) -> Optional[Callable[[], Any]]:
+    """Return a typed no-arg callable for dynamically loaded attributes."""
+    if callable(value):
+        return value
+    return None
+
+
+def resolve_backend_model_artifact(
+    backend_id: str,
+    *,
+    result_metadata: Optional[Dict[str, Any]] = None,
+    backend: Optional[Any] = None,
+) -> Dict[str, Optional[str]]:
+    """Resolve backend model artifact identity fields."""
+    artifact_filename: Optional[str] = None
+    artifact_sha256: Optional[str] = None
+
+    if str(backend_id).strip().lower() != "depth_pro":
+        return {
+            "model_artifact_filename": None,
+            "model_artifact_sha256": None,
+        }
+
+    metadata = result_metadata or {}
+    checkpoint_meta = metadata.get("checkpoint")
+    if isinstance(checkpoint_meta, dict):
+        path_value = checkpoint_meta.get("path")
+        if isinstance(path_value, str) and path_value.strip():
+            artifact_filename = Path(path_value).name
+        artifact_sha256 = normalize_sha256(checkpoint_meta.get("sha256"))
+
+    if artifact_filename is None and backend is not None:
+        checkpoint_path = getattr(backend, "_checkpoint_path", None)
+        if checkpoint_path is not None:
+            try:
+                artifact_filename = Path(checkpoint_path).name
+            except TypeError:
+                artifact_filename = None
+
+    if artifact_sha256 is None and backend is not None:
+        artifact_sha256 = normalize_sha256(
+            getattr(backend, "_checkpoint_hash_cached", None),
+        )
+
+    checkpoint_meta_present = isinstance(checkpoint_meta, dict)
+    if artifact_sha256 is None and checkpoint_meta_present and backend is not None:
+        checkpoint_hash_getter = typed_nullary_callable(
+            getattr(backend, "_get_checkpoint_hash", None),
+        )
+        if checkpoint_hash_getter is not None:
+            try:
+                artifact_sha256 = normalize_sha256(
+                    checkpoint_hash_getter(),
+                )
+            except Exception:  # pragma: no cover - best-effort provenance enrichment
+                artifact_sha256 = None
+
+    return {
+        "model_artifact_filename": artifact_filename,
+        "model_artifact_sha256": artifact_sha256,
+    }
+
+
+def extract_model_id_from_attempts(
+    selected_backend: str,
+    attempts: List[Dict[str, Any]],
+    *,
+    selected_attempt_index: Optional[int] = None,
+) -> Optional[str]:
+    """Extract selected backend model id from attempt history."""
+    if selected_attempt_index is not None and 0 <= selected_attempt_index < len(attempts):
+        selected_attempt = attempts[selected_attempt_index]
+        if selected_attempt.get("backend") == selected_backend:
+            selected_attempt_model = selected_attempt.get("model_id")
+            if isinstance(selected_attempt_model, str) and selected_attempt_model.strip():
+                return selected_attempt_model.strip()
+
+    for attempt in attempts:
+        if attempt.get("backend") != selected_backend:
+            continue
+        if attempt.get("status") != "success":
+            continue
+        attempt_model = attempt.get("model_id")
+        if isinstance(attempt_model, str) and attempt_model.strip():
+            return attempt_model.strip()
+
+    return None
+
+
+def extract_model_artifact_from_attempts(
+    selected_backend: str,
+    attempts: List[Dict[str, Any]],
+    *,
+    selected_attempt_index: Optional[int] = None,
+) -> Dict[str, Optional[str]]:
+    """Extract selected backend model artifact identity from attempt history."""
+
+    def _extract_from_attempt(attempt: Dict[str, Any]) -> Dict[str, Optional[str]]:
+        raw_filename = attempt.get("model_artifact_filename")
+        artifact_filename = raw_filename.strip() if isinstance(raw_filename, str) and raw_filename.strip() else None
+        return {
+            "model_artifact_filename": artifact_filename,
+            "model_artifact_sha256": normalize_sha256(
+                attempt.get("model_artifact_sha256"),
+            ),
+        }
+
+    if selected_attempt_index is not None and 0 <= selected_attempt_index < len(attempts):
+        selected_attempt = attempts[selected_attempt_index]
+        if selected_attempt.get("backend") == selected_backend:
+            selected_artifact = _extract_from_attempt(selected_attempt)
+            if selected_artifact["model_artifact_filename"] or selected_artifact["model_artifact_sha256"]:
+                return selected_artifact
+
+    for attempt in attempts:
+        if attempt.get("backend") != selected_backend:
+            continue
+        if attempt.get("status") != "success":
+            continue
+        selected_artifact = _extract_from_attempt(attempt)
+        if selected_artifact["model_artifact_filename"] or selected_artifact["model_artifact_sha256"]:
+            return selected_artifact
+
+    return {
+        "model_artifact_filename": None,
+        "model_artifact_sha256": None,
+    }
+
+
+def infer_operational_error_code(
+    error: Exception,
+) -> str:
+    """Map backend exceptions to error codes."""
+    if isinstance(error, ImportError):
+        return "BACKEND_IMPORT_ERROR"
+    if isinstance(error, FileNotFoundError):
+        return "BACKEND_RESOURCE_MISSING"
+    message = str(error).lower()
+    if "torch not compiled with cuda enabled" in message:
+        return "CUDA_HARDCODED_IN_BACKEND"
+    if "cuda" in message and "not available" in message:
+        return "CUDA_UNAVAILABLE"
+    if "mps" in message and "not available" in message:
+        return "MPS_UNAVAILABLE"
+    return "BACKEND_RUNTIME_ERROR"
+
+
+def seed_depth_attempts_from_selection_fallback(
+    backend_metadata: Optional[BackendSelectionMetadata],
+    init_errors: Optional[Dict[str, str]],
+    config: EnhanceConfig,
+    model_variant: ModelVariant,
+) -> List[Dict[str, Any]]:
+    """Materialize backend-selection fallback into per-image attempt history."""
+    effective_errors = init_errors or {}
+    requested_backend = normalize_backend_id(getattr(backend_metadata, "requested_backend", None))
+    resolved_backend = normalize_backend_id(getattr(backend_metadata, "resolved_backend", None))
+
+    if (
+        not requested_backend
+        or not resolved_backend
+        or requested_backend == resolved_backend
+        or not isinstance(effective_errors, dict)
+    ):
+        return []
+
+    requested_error = effective_errors.get(requested_backend)
+    if not isinstance(requested_error, str) or not requested_error.strip():
+        return []
+
+    attempt: Dict[str, Any] = {
+        "attempt": 0,
+        "backend": requested_backend,
+        "model_id": default_model_id_for_backend(requested_backend, model_variant, config=config),
+        "device": config.depth_device,
+        "status": "failed",
+        "failure_kind": "operational",
+        "error_code": infer_operational_error_code(
+            RuntimeError(requested_error),
+        ),
+        "error_message": requested_error,
+        "apex_gate_passed": False,
+        "cached": False,
+        "duration_s": 0.0,
+        "model_artifact_filename": None,
+        "model_artifact_sha256": None,
+    }
+
+    if requested_backend == "depth_pro":
+        checkpoint_path = Path(
+            getattr(config, "depth_pro_checkpoint_path", None)
+            or os.environ.get("TRANSFORMATION_PORTAL_DEPTH_PRO_CHECKPOINT")
+            or "checkpoints/depth_pro.pt"
+        )
+        attempt["model_artifact_filename"] = checkpoint_path.name
+
+    return [attempt]
+
+
+def get_or_create_depth_backend(
+    backend_id: str,
+    *,
+    active_backend: Optional[Any],
+    backend_cache: Dict[str, Any],
+    registry: Any,
+    config: EnhanceConfig,
+) -> Any:
+    """Fetch backend from cache or registry."""
+    if (
+        active_backend is not None
+        and getattr(
+            active_backend,
+            "name",
+            None,
+        )
+        == backend_id
+    ):
+        backend_cache[backend_id] = active_backend
+        return active_backend
+
+    cached = backend_cache.get(backend_id)
+    if cached is not None:
+        return cached
+
+    backend = registry.get_backend(backend_id, config)
+    backend.ensure_available()
+    backend_cache[backend_id] = backend
+    return backend
+
+
+def build_active_depth_state(
+    backend_metadata: Optional[BackendSelectionMetadata],
+    depth_attempts: List[Dict[str, Any]],
+    selected_attempt_index: Optional[int],
+) -> ActiveDepthState:
+    """Build per-image active backend state for downstream reporting paths."""
+    return ActiveDepthState(
+        backend_metadata=backend_metadata,
+        depth_attempts=list(depth_attempts),
+        selected_attempt_index=selected_attempt_index,
+    )
+
+
+def build_backend_metadata_for_attempts(
+    selected_backend: str,
+    attempts: List[Dict[str, Any]],
+    startup_backend_metadata: BackendSelectionMetadata,
+    config: EnhanceConfig,
+    resolve_model_id: Callable[..., str],
+    *,
+    result_metadata: Optional[Dict[str, Any]] = None,
+    selected_attempt_index: Optional[int] = None,
+    backend_cache: Optional[Dict[str, Any]] = None,
+) -> BackendSelectionMetadata:
+    """Build per-image backend selection metadata."""
+    normalized_selected_backend = normalize_backend_id(selected_backend) or selected_backend
+    requested = normalize_backend_provenance(
+        startup_backend_metadata.requested_backend or startup_backend_metadata.resolved_backend,
+    )
+    resolution_status = "success" if normalized_selected_backend == requested else "fallback"
+    resolution_reason: Optional[str] = None
+    if resolution_status == "fallback":
+        startup_reason = getattr(startup_backend_metadata, "resolution_reason", None)
+        if (
+            isinstance(startup_reason, str)
+            and startup_reason.strip()
+            and normalize_backend_provenance(startup_backend_metadata.requested_backend) == requested
+            and normalize_backend_provenance(startup_backend_metadata.resolved_backend) == normalized_selected_backend
+            and startup_backend_metadata.resolution_status != "success"
+        ):
+            resolution_reason = startup_reason
+        else:
+            failed = [attempt for attempt in attempts if attempt.get("status") == "failed"]
+            if failed:
+                first_failure = failed[0]
+                failure_kind = first_failure.get(
+                    "failure_kind",
+                    "operational",
+                )
+                failure_code = first_failure.get(
+                    "error_code",
+                    "UNKNOWN",
+                )
+                resolution_reason = (
+                    f"Fallback from"
+                    f" '{requested}' to"
+                    f" '{normalized_selected_backend}'"
+                    f" after {failure_kind}"
+                    f" failure ({failure_code})"
+                )
+            else:
+                resolution_reason = f"Fallback from" f" '{requested}'" f" to '{normalized_selected_backend}'"
+
+    model_id = extract_model_id_from_attempts(
+        normalized_selected_backend,
+        attempts,
+        selected_attempt_index=selected_attempt_index,
+    )
+    if not model_id:
+        effective_backend_cache = backend_cache or {}
+        model_id = resolve_model_id(
+            normalized_selected_backend,
+            result_metadata=result_metadata,
+            backend=effective_backend_cache.get(normalized_selected_backend),
+        )
+
+    return BackendSelectionMetadata(
+        requested_backend=requested,
+        resolved_backend=normalized_selected_backend,
+        resolution_status=resolution_status,
+        resolution_reason=resolution_reason,
+        model_id=str(model_id),
+        device=config.depth_device,
+        attempts=attempts,
+    )
+
+
 def select_backend(
     requested: Optional[str],
     config: EnhanceConfig,
@@ -487,6 +835,91 @@ def select_backend(
         device=config.depth_device,
         init_errors=init_errors,
     )
+
+
+def initialize_depth_backend_state(
+    config: EnhanceConfig,
+    model_variant: ModelVariant,
+    resolve_model_id: Callable[..., str],
+    *,
+    registry_factory: Optional[Callable[[], Any]] = None,
+) -> InitializedDepthBackendState:
+    """Initialize depth backend registry, backend cache, and metadata."""
+    if registry_factory is None:
+        from ..depth.backends.registry import DepthBackendRegistry
+
+        registry_factory = DepthBackendRegistry
+
+    registry = registry_factory()
+    backend_cache: Dict[str, Any] = {}
+    init_errors: Dict[str, str] = {}
+    allow_synthetic = bool(config.allow_synthetic_fallback) or os.getenv("TP_ALLOW_SYNTHETIC_FALLBACK") == "1"
+
+    try:
+        selection = select_backend(
+            config.depth_backend,
+            config,
+            registry,
+            model_variant,
+        )
+        if not selection.is_success or selection.backend is None or selection.resolved_backend is None:
+            requested = resolve_requested_backend(config.depth_backend, config)
+            candidate_chain = resolve_runtime_backend_chain(requested, config)
+            if not allow_synthetic:
+                raise RuntimeError(
+                    "No depth backend"
+                    " available from"
+                    " candidates"
+                    f" {candidate_chain}."
+                    f" Errors: {selection.init_errors}."
+                    " Install ML deps"
+                    " (torch, transformers)"
+                    " or explicitly enable"
+                    " synthetic fallback for"
+                    " testing (config"
+                    ".allow_synthetic_fallback"
+                    "=True or TP_ALLOW_"
+                    "SYNTHETIC_FALLBACK=1)."
+                )
+            raise RuntimeError(
+                "No depth backend" " available from" " candidates" f" {candidate_chain}." f" Errors: {selection.init_errors}"
+            )
+
+        init_errors = dict(selection.init_errors or {})
+        backend_cache[selection.resolved_backend] = selection.backend
+        backend_metadata = BackendSelectionMetadata(
+            requested_backend=selection.requested_backend,
+            resolved_backend=selection.resolved_backend,
+            resolution_status=selection.status,
+            resolution_reason=selection.reason,
+            model_id=resolve_model_id(
+                selection.resolved_backend,
+                backend=selection.backend,
+            ),
+            device=config.depth_device,
+            attempts=[],
+        )
+
+        logger.info(
+            "Depth backend:" " requested=%s" " resolved=%s device=%s",
+            selection.requested_backend,
+            selection.resolved_backend,
+            config.depth_device,
+        )
+        return InitializedDepthBackendState(
+            registry=registry,
+            depth_backend=selection.backend,
+            backend_cache=backend_cache,
+            init_errors=init_errors,
+            backend_metadata=backend_metadata,
+        )
+
+    except LicenseRestrictionError as e:
+        logger.error(f"License restriction: {e}")
+        raise
+    except Exception as e:
+        logger.error(f"Backend initialization failed: {e}")
+        raise
 
 
 class PipelineCoordinator:

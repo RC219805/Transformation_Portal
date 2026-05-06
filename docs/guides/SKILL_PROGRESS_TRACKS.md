@@ -9,6 +9,173 @@ Use the tracks after an automation run ranks one of these skills. Keep drills
 small, preserve existing route shapes and CLI contracts, and validate with the
 focused acceptance tests listed here before widening scope.
 
+## 2026-05-05 Review-Thread Refresh
+
+The `2026-05-03T16:55:21.582Z` through `2026-05-05T21:12:57Z`
+automation window surfaced the following current practice tracks from
+GitHub-thread-backed evidence. Treat these as additive drills on top of the
+earlier tracks; where the reviewed defect is already fixed, add focused
+regression coverage that preserves the landed contract.
+
+### Deterministic Validation-System Design
+
+Review evidence:
+
+- PR #1641: `src/transformation_portal/portal/asset_bundle.py` performed
+  portal manifest filesystem I/O at import time.
+- PR #1636: `app.py` hardcoded FastVLM model roles in
+  `_fastvlm_model_role_from_value` instead of deriving them from the governed
+  runtime role contract.
+
+Drill 1 - defer import-time resource validation:
+
+- Target files: one portal or runtime helper that currently loads files,
+  manifests, or optional resources at import time.
+- Expected behavior: importing the module stays side-effect-light, while the
+  runtime helper still fails closed when the required resource is actually
+  used or explicitly validated.
+- Acceptance tests: import the module with the backing file missing, assert the
+  import succeeds, then call the runtime helper and assert the same governed
+  failure message and path context.
+
+Drill 2 - derive runtime roles from canonical metadata:
+
+- Target files: FastVLM or optional-runtime role resolution helpers and their
+  fixtures.
+- Expected behavior: role validation reads the canonical role metadata or
+  manifest, rejects unknown roles, and does not duplicate role names in app
+  code.
+- Acceptance tests: table-drive smoke/default/review role inputs plus one
+  manifest-only added role and one unknown role; assert accepted roles and
+  failure messages match the canonical metadata.
+
+### Documentation Governance Consistency
+
+Review evidence:
+
+- PR #1646: `docs/architecture/agent_governance.md` added `AGENTS.md` to the
+  governance-controlled artifact list without first mirroring that artifact in
+  the escalation criteria.
+- PR #1643: `docs/architecture/MONOLITH_DECOMPOSITION_TARGETS.md` changed the
+  ranked-target list inside an extraction PR even though the document limited
+  extraction PRs to seam status-table updates.
+
+Drill 1 - lock authority surfaces against escalation criteria:
+
+- Target files: agent governance docs, live agent profiles, and custom-agent
+  documentation tests.
+- Expected behavior: every governance-controlled artifact appears in the
+  corresponding escalation criteria and in the live profiles that delegate to
+  those criteria.
+- Acceptance tests: build a table of authority artifacts and assert
+  `AGENTS.md`, `.github/copilot-instructions.md`, `.github/agents/*`, and
+  custom-agent tests are all present in the governance and profile sections.
+
+Drill 2 - separate extraction status from ranking governance:
+
+- Target files: decomposition target docs and docs-governance tests.
+- Expected behavior: extraction PRs update only the status table row for the
+  shipped seam; ranked-target list changes require a separate governance
+  refresh section or PR.
+- Acceptance tests: fixture one status-only extraction update and one ranked
+  list mutation; assert the former passes and the latter fails with the
+  required governance-refresh path.
+
+### Contract-Driven Portal And Frontdoor State Modeling
+
+Review evidence:
+
+- PR #1637: `web/secure-landing/portal-src/review-surface-deferred.js`
+  filtered FastVLM captioning artifacts strictly by the selected artifact stem,
+  dropping available sidecar/raw/proxy links for other selected artifacts.
+- PR #1637: the review evidence strip rendered `FastVLM: Not requested` when
+  indexed captioning artifacts existed but `run_summary.captioning_status` was
+  missing.
+
+Drill 1 - model captioning artifact fallback states:
+
+- Target files: review-surface artifact grouping helpers and portal smoke
+  fixtures.
+- Expected behavior: selected-stem matches are preferred, but job-level
+  captioning artifacts remain available when the selected artifact has no
+  matching captioning evidence.
+- Acceptance tests: fixture selected image, compare image, run card, sidecar,
+  raw, and proxy artifacts; assert the evidence strip renders stable link
+  counts in every selected-artifact state.
+
+Drill 2 - derive visible status from evidence presence:
+
+- Target files: captioning evidence status helpers and review surface smoke
+  tests.
+- Expected behavior: missing `captioning_status` plus indexed captioning
+  artifacts renders an available/evidence-backed state rather than `off` or
+  `not requested`.
+- Acceptance tests: table-drive missing status, explicit off, pending,
+  succeeded, failed, malformed sidecar, and artifact-only inputs; assert
+  `data-status`, label text, and link visibility stay coherent.
+
+### Scripts Failure-Mode And Fixture Hygiene
+
+Review evidence:
+
+- PR #1634: `scripts/download_samples.py` generated minimal fixtures locally,
+  but `image.save()` and directory creation failures lacked the cleanup path
+  used by downloaded sample writes.
+- PR #1631: `scripts/ci/check_per_package_coverage.py` let nested
+  `lux_depth_v3/validators/` files count toward both the child validator floor
+  and the parent `lux_depth_v3` package floor.
+
+Drill 1 - failure-inject local fixture generation:
+
+- Target files: local sample or fixture generation scripts and their tests.
+- Expected behavior: partial writes, directory creation failures, and invalid
+  generated images clean up temporary outputs and report the failed path
+  without leaving stale fixtures.
+- Acceptance tests: monkeypatch directory creation and image saving to raise,
+  then assert temporary files are removed and the command exits with the
+  deterministic cleanup-worthy error.
+
+Drill 2 - prove overlapping path ownership boundaries:
+
+- Target files: package ownership, coverage, or artifact-budget scripts that
+  classify files by path prefix.
+- Expected behavior: child prefixes with their own floor or budget are excluded
+  from the parent rollup unless the contract explicitly opts into aggregation.
+- Acceptance tests: use synthetic parent, child, sibling, and similarly named
+  prefixes; assert each file contributes to exactly one intended owner.
+
+### Pipeline Re-Export And Import-Surface Discipline
+
+Review evidence:
+
+- PR #1645: `src/transformation_portal/pipelines/rendering_4k_pipeline.py`
+  re-exported private helpers from the extracted stages module without making
+  the intentional compatibility surface obvious to lint.
+- PR #1645: `src/transformation_portal/pipelines/rendering_4k/__init__.py`
+  eagerly imported stage functions, expanding the package import surface to
+  optional SciPy-backed code.
+
+Drill 1 - make compatibility re-exports explicit:
+
+- Target files: one extracted package initializer or legacy compatibility shim.
+- Expected behavior: intentional re-exports are covered by `__all__`, identity
+  tests, and explicit lint markers or comments that distinguish compatibility
+  exports from unused imports.
+- Acceptance tests: assert legacy and extracted symbols are identical objects,
+  run the focused lint check, and verify the compatibility shim exports only
+  the documented surface.
+
+Drill 2 - lazy-load optional stage dependencies:
+
+- Target files: package `__init__.py` files or stage modules that expose
+  optional-dependency-backed functions.
+- Expected behavior: importing the package does not import optional heavy
+  dependencies; the dependency is touched only when the specific stage function
+  runs.
+- Acceptance tests: monkeypatch the optional dependency import to fail, import
+  the package successfully, then call the dependent stage and assert the
+  governed optional-dependency failure is raised.
+
 ## 2026-05-03 Review-Thread Refresh
 
 The `2026-05-03T16:55:21.582Z` automation window surfaced the following

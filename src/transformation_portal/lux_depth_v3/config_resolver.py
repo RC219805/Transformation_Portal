@@ -41,7 +41,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from ..core.da3_runtime import REPO_LOCAL_DA3_PYTHON, find_repo_root, repo_local_da3_python_path
 from ..core.raw_runtime import RAW_RUNTIME_ENV_VAR, REPO_LOCAL_RAW_PYTHON, repo_local_raw_python_path
-from ..ingest.canonical_json import canonicalize_json
+from ..ingest.canonical_json import canonicalize_json, dumps_json
 from ._backend_contract import normalize_backend_id
 from .config import DA3Config, EnhanceConfig, ModelVariant, Preset
 from .manifest import ConfigFingerprint
@@ -510,6 +510,32 @@ def build_depth_cache_payload(
     }
 
 
+def require_model_variant(config: EnhanceConfig) -> ModelVariant:
+    """Return the resolved model variant required by orchestrator helpers."""
+    mv = config.model_variant
+    assert mv is not None, "model_variant must be set"
+    return mv
+
+
+def build_depth_cache_fingerprint(
+    config: EnhanceConfig,
+    model_variant: ModelVariant,
+    backend_id: str,
+    output_depth_units: str,
+) -> str:
+    """Build backend-scoped depth cache fingerprint."""
+    cache_payload = build_depth_cache_payload(config, model_variant)
+    base_fp = hashlib.sha256(
+        dumps_json(
+            cache_payload,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+    ).hexdigest()
+    payload = f"{base_fp}|backend={backend_id}|units={output_depth_units}"
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
 def compute_config_fingerprint(
     config: EnhanceConfig,
     model_variant: Optional[ModelVariant] = None,
@@ -631,6 +657,85 @@ def build_run_card_config_fingerprint(
         "canonical_json": canonical_json_str,
         "sha256": hashlib.sha256(canonical_json_bytes).hexdigest(),
     }
+
+
+def finalize_run_card_config_fingerprint(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Attach canonical JSON and SHA-256 over the resolved fingerprint payload."""
+    canonical_payload = {
+        key: value for key, value in payload.items() if key not in {"hash_algorithm", "canonical_json", "sha256"}
+    }
+    canonical_json_bytes = canonicalize_json(canonical_payload)
+    return {
+        **canonical_payload,
+        "hash_algorithm": "sha256",
+        "canonical_json": canonical_json_bytes.decode("utf-8"),
+        "sha256": hashlib.sha256(canonical_json_bytes).hexdigest(),
+    }
+
+
+def build_orchestrator_run_card_config_fingerprint(
+    config: EnhanceConfig,
+    model_variant: ModelVariant,
+    backend_metadata: Optional[Any],
+    *,
+    backend_selection: Optional[Dict[str, Any]] = None,
+    run_card_version: Optional[str] = None,
+    include_proofs: Optional[bool] = None,
+) -> Dict[str, Any]:
+    """Build the orchestrator run-card config fingerprint payload."""
+    fingerprint = build_run_card_config_fingerprint(
+        config,
+        model_variant,
+        backend_metadata,
+    )
+    payload = {key: value for key, value in fingerprint.items() if key not in {"hash_algorithm", "canonical_json", "sha256"}}
+    resolved_backend = None
+    if isinstance(backend_selection, dict):
+        resolved_backend = backend_selection.get("resolved")
+        payload.update(
+            {
+                "resolved_model_id": backend_selection.get("model_id"),
+                "model_artifact_filename": backend_selection.get("model_artifact_filename"),
+                "model_artifact_sha256": backend_selection.get("model_artifact_sha256"),
+            }
+        )
+    if resolved_backend is None:
+        resolved_backend = getattr(backend_metadata, "resolved_backend", None)
+    normalized_resolved_backend = normalize_backend_id(resolved_backend)
+    if normalized_resolved_backend == "depth_pro":
+        payload["model_variant"] = "apple/ml-depth-pro"
+        payload["preset"] = "depth_pro"
+        payload["preset_requested"] = "depth_pro"
+        payload["preset_resolved"] = "backend:depth_pro"
+    payload["output_depth_units"] = "meters" if normalized_resolved_backend == "depth_pro" else "relative"
+    payload["depth_png_encoding"] = "normalized_u16_png"
+    materials_v3_enabled = bool(getattr(config, "enable_materials_v3", False))
+    material_segmentation_enabled = bool(
+        getattr(
+            config,
+            "enable_material_segmentation",
+            False,
+        )
+    )
+    payload["materials_v3_enabled"] = materials_v3_enabled
+    payload["material_segmentation_enabled"] = material_segmentation_enabled
+    payload["material_segmentation_backend"] = getattr(config, "material_segmentation_backend", None)
+    payload["strict_segmentation"] = bool(
+        materials_v3_enabled and material_segmentation_enabled and getattr(config, "strict_backend", False)
+    )
+    payload["pbr_enabled"] = bool(getattr(config, "generate_pbr", False))
+    payload["vlm_captioning_enabled"] = bool(getattr(config, "vlm_captioning_enabled", False))
+    payload["vlm_captioning_backend"] = getattr(config, "vlm_captioning_backend", "fastvlm")
+    payload["vlm_captioning_model"] = getattr(config, "vlm_captioning_model", "default")
+    payload["vlm_captioning_proxy_format"] = getattr(config, "vlm_captioning_proxy_format", "png")
+    payload["vlm_captioning_max_side_px"] = int(getattr(config, "vlm_captioning_max_side_px", 1600) or 1600)
+    payload["fastvlm_timeout_seconds"] = int(getattr(config, "fastvlm_timeout_seconds", 180) or 180)
+    if run_card_version is not None:
+        payload["run_card_version"] = run_card_version
+    if include_proofs is not None:
+        payload["run_card_include_proofs"] = bool(include_proofs)
+    payload["emit_run_card"] = bool(getattr(config, "emit_run_card", False))
+    return finalize_run_card_config_fingerprint(payload)
 
 
 class ConfigResolver:

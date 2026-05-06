@@ -87,6 +87,21 @@ class TestAtmosphericPhysicalInvariants:
 
 
 class TestToneMappingOutputRange:
+    @classmethod
+    def setup_class(cls):
+        import numpy as np
+
+        from transformation_portal.pipelines.rendering_4k_pipeline import (
+            ToneMappingConfig,
+            ToneMappingMethod,
+            apply_tone_mapping,
+        )
+
+        cls.np = np
+        cls.ToneMappingConfig = ToneMappingConfig
+        cls.ToneMappingMethod = ToneMappingMethod
+        cls.apply_tone_mapping = staticmethod(apply_tone_mapping)
+
     @given(
         values=st.lists(
             st.floats(min_value=0.0, max_value=20.0, allow_nan=False, allow_infinity=False),
@@ -97,18 +112,10 @@ class TestToneMappingOutputRange:
         exposure=st.floats(min_value=-3.0, max_value=3.0, allow_nan=False, allow_infinity=False),
     )
     @settings(max_examples=60)
-    def test_output_always_in_unit_range(self, values, method, exposure):
-        import numpy as np
-
-        from transformation_portal.pipelines.rendering_4k_pipeline import (
-            ToneMappingConfig,
-            ToneMappingMethod,
-            apply_tone_mapping,
-        )
-
-        image = np.array(values, dtype=np.float32).reshape((1, 3, 3))
-        config = ToneMappingConfig(method=ToneMappingMethod(method), exposure=exposure)
-        result = apply_tone_mapping(image, config)
+    def test_tone_mapping_output_always_in_unit_range(self, values, method, exposure):
+        image = self.np.array(values, dtype=self.np.float32).reshape((1, 3, 3))
+        config = self.ToneMappingConfig(method=self.ToneMappingMethod(method), exposure=exposure)
+        result = self.apply_tone_mapping(image, config)
         assert result.min() >= -1e-5
         assert result.max() <= 1.0 + 1e-5
 
@@ -117,14 +124,10 @@ class TestToneMappingOutputRange:
         w=st.integers(min_value=4, max_value=32),
     )
     @settings(max_examples=30)
-    def test_output_shape_matches_input_shape(self, h, w):
-        import numpy as np
-
-        from transformation_portal.pipelines.rendering_4k_pipeline import ToneMappingConfig, apply_tone_mapping
-
-        rng = np.random.default_rng(0)
-        image = rng.random((h, w, 3), dtype=np.float32).astype(np.float32)
-        result = apply_tone_mapping(image, ToneMappingConfig())
+    def test_tone_mapping_output_shape_matches_input_shape(self, h, w):
+        rng = self.np.random.default_rng(0)
+        image = rng.random((h, w, 3), dtype=self.np.float32).astype(self.np.float32)
+        result = self.apply_tone_mapping(image, self.ToneMappingConfig())
         assert result.shape == (h, w, 3)
 
 

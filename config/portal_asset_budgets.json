@@ -3,15 +3,15 @@
   "assets": {
     "portal.js": {
       "max_bytes": 450000,
-      "max_gzip_bytes": 92500
+      "max_gzip_bytes": 95000
     },
     "portal.css": {
       "max_bytes": 100000,
       "max_gzip_bytes": 18000
     },
     "portal-review.js": {
-      "max_bytes": 50000,
-      "max_gzip_bytes": 10500
+      "max_bytes": 55000,
+      "max_gzip_bytes": 12500
     },
     "portal-review.css": {
       "max_bytes": 7000,

@@ -28,6 +28,7 @@ from starlette.requests import Request as StarletteRequest
 pytestmark = pytest.mark.unit
 
 orchestrator_app = importlib.import_module("app")
+portal_asset_bundle = importlib.import_module("transformation_portal.portal.asset_bundle")
 upload_staging = importlib.import_module("transformation_portal.ingest.upload_staging")
 PORTAL_HTML_PATH = Path(__file__).resolve().parents[1] / "portal.html"
 PORTAL_ASSET_ROOT = PORTAL_HTML_PATH.parent / "public" / "portal-assets"
@@ -741,6 +742,8 @@ def test_portal_asset_manifest_rejects_paths_outside_portal_assets_dir(
     with pytest.raises(RuntimeError, match="points outside"):
         orchestrator_app._load_portal_asset_manifest()
 
+    assert portal_asset_bundle.PORTAL_ASSET_MANIFEST_PATH != manifest_path
+
 
 def test_portal_html_asset_references_are_covered_by_manifest() -> None:
     bundle = orchestrator_app._get_portal_asset_bundle()
@@ -881,8 +884,11 @@ def test_portal_fetch_sse_reconnect_schedules_on_unexpected_disconnect_only() ->
 
     assert "let sawDoneEvent = false;" in body
     assert "let shouldReconnect = true;" in body
+    assert "const suppressed = await _maybeSuppressOnProtectedResponse('jobs_events', res);" in body
     assert "const isAuthError = status === 401 || status === 403;" in body
     assert "const isRetryableStatus = status === 429 || status >= 500;" in body
+    assert "shouldReconnect = isRetryableStatus && !suppressed;" in body
+    assert "if (suppressed || !isRetryableStatus) {" in body
     assert "job.reconnectBlocked = true;" in body
     assert "if (shouldReconnect && !sawDoneEvent && !controller.signal.aborted && _isJobStreamRecoverable(job)) {" in body
     assert "scheduleSseReconnect(job);" in body
@@ -906,6 +912,7 @@ def test_portal_start_job_stream_avoids_duplicate_readers() -> None:
     content = _portal_bundle_content()
     body = _extract_js_function_body(content, "startJobEventStream")
 
+    assert "if (_isProtectedFamilySuppressed('jobs_events')) {" in body
     assert "_clearSseRetry(job, false);" in body
     assert "if (_jobHasActiveStream(job)) return;" in body
 
@@ -963,11 +970,14 @@ def test_portal_native_eventsource_surfaces_state_and_terminal_errors() -> None:
 def test_portal_resumes_blocked_streams_after_api_key_update() -> None:
     content = _portal_bundle_content()
     helper_body = _extract_js_function_body(content, "resumeBlockedJobStreamsAfterAuthUpdate")
+    api_key_update_body = _extract_js_function_body(content, "_handleDirectDebugApiKeyUpdate")
     bind_body = _extract_js_function_body(content, "bindInputs")
 
     assert "if (!job.reconnectBlocked) return;" in helper_body
     assert "startJobEventStream(job, job.eventStreamUrl);" in helper_body
-    assert "resumeBlockedJobStreamsAfterAuthUpdate();" in bind_body
+    assert "resumeBlockedJobStreamsAfterAuthUpdate();" in api_key_update_body
+    assert "_resetProtectedFamilySuppression();" in api_key_update_body
+    assert "_handleDirectDebugApiKeyUpdate({ resumeStreams: true });" in bind_body
 
 
 def test_portal_bootstrap_loader_uses_abortable_timeout_and_state_contract() -> None:
@@ -1065,6 +1075,25 @@ def test_portal_bootstrap_loader_uses_abortable_timeout_and_state_contract() -> 
     assert "void loadPortalBootstrap({ isRetryAttempt: true, attempt, retryReason: reason });" in retry_body
 
 
+def test_portal_protected_suppression_reads_managed_error_envelope_details() -> None:
+    content = _portal_bundle_content()
+    details_body = _extract_js_function_body(content, "_protectedErrorDetailsFromPayload")
+    suppress_body = _extract_js_function_body(content, "_maybeSuppressOnProtectedResponse")
+    api_key_update_body = _extract_js_function_body(content, "_handleDirectDebugApiKeyUpdate")
+    recover_body = _extract_js_function_body(content, "recoverJobs")
+    upload_body = _extract_js_function_body(content, "_submitStagedUploadSelection")
+
+    assert "payload.error.details" in details_body
+    assert "const details = _nonRetryableProtectedDetails(body);" in suppress_body
+    assert "_resetProtectedFamilySuppression();" in api_key_update_body
+    assert "void fetchConfigMetadata(state.pipeline, true);" in api_key_update_body
+    assert "void fetchConfigPreview(generatePayload());" in api_key_update_body
+    assert "if (_isProtectedFamilySuppressed('jobs_list')) return;" in recover_body
+    assert "await _maybeSuppressOnProtectedResponse('jobs_list', res);" in recover_body
+    assert "if (_isProtectedFamilySuppressed('uploads_staging')) {" in upload_body
+    assert "_recordProtectedFamilySuppression('uploads_staging', nonRetryableDetails);" in upload_body
+
+
 def test_portal_staged_upload_ui_contract_is_present_in_markup_and_source() -> None:
     html = _portal_html_content()
     content = _portal_bundle_content()
@@ -1122,11 +1151,15 @@ def test_portal_managed_mode_clears_api_keys_and_hides_secret_ui() -> None:
 
 def test_portal_fastvlm_captioning_controls_are_feature_gated_and_advisory_only() -> None:
     content = _portal_bundle_content()
+    review_content = _portal_review_source_content()
     canonical_body = _extract_js_function_body(content, "buildCanonicalLuxDepthArgs")
     applicability_body = _extract_js_function_body(content, "syncBuildSurfaceApplicability")
     cli_body = _extract_js_function_body(content, "renderCLI")
     diagnostics_body = _extract_js_function_body(content, "renderPreRunDiagnostics")
     effective_drawer_body = _extract_js_function_body(content, "renderEffectiveConfigDrawer")
+    captioning_status_body = _extract_js_function_body(content, "normalizeCaptioningRunStatus")
+    run_summary_body = _extract_js_function_body(content, "normalizeRunSummary")
+    queue_body = _extract_js_function_body(content, "renderJobQueue")
     bind_body = _extract_js_function_body(content, "bindInputs")
 
     assert 'id="captioningDetails"' in content
@@ -1140,12 +1173,39 @@ def test_portal_fastvlm_captioning_controls_are_feature_gated_and_advisory_only(
     assert 'id="fastVlmMlxVlmDir"' in content
     assert 'id="captioningReadinessScope"' in content
     assert 'id="captioningReadinessList"' in content
+    assert 'id="reviewProvenanceCaptioning"' in content
     assert 'data-ui="captioning-readiness"' in content
+    assert 'data-ui="captioning-run-status"' in content
+    assert '"captioning-evidence-strip"' in review_content
+    assert '"captioning-evidence-link"' in review_content
+    assert '"captioning-sidecar-link"' in review_content
+    assert '"captioning-raw-link"' in review_content
+    assert '"captioning-proxy-link"' in review_content
     assert "FastVLM captions are advisory and never satisfy quality gates." in content
     assert "FastVLM readiness: Off" in content
     assert "function _fastVlmCaptioningFeatureEnabled()" in content
+    assert "const CAPTIONING_RUN_STATUS_VALUES = new Set([" in content
+    assert "function toNonNegativeCaptioningRunStatusInt(value)" in content
+    assert "function normalizeCaptioningRunStatus(rawStatus)" in content
+    assert "function captioningRunStatusSummary(status)" in content
+    assert "function captioningRunStatusDetail(status)" in content
+    assert "function createCaptioningRunStatusChip(status)" in content
     assert "function _captioningRuntimeReadiness(summary = {})" in content
     assert "function _renderCaptioningReadiness(summary = {}, options = {})" in content
+    assert "function _captioningEvidenceArtifacts(job, artifact)" in review_content
+    assert "function _captioningStatusFromEvidence(status, artifacts)" in review_content
+    assert "function _renderCaptioningEvidenceStrip(job, artifact)" in review_content
+    assert "function _renderAdvisoryCaptionUnavailable(panel)" in review_content
+    assert (
+        'return type === "vlm_caption_proxy" || /(^|\\/)captioning\\/.*_proxy\\.(png|jpe?g)$/i.test(relPath);'
+        in review_content
+    )
+    assert "const stemMatchedArtifacts = selectedStem" in review_content
+    assert (
+        "const candidates = selectedStem && stemMatchedArtifacts.length === 0 ? captionArtifacts : stemMatchedArtifacts;"
+        in review_content
+    )
+    assert 'status: "succeeded",' in review_content
     assert "state.auth?.features?.fastVlmCaptioning" in content
     assert "const captioningFeatureVisible = isLuxPipeline && _fastVlmCaptioningFeatureEnabled();" in applicability_body
     assert "_setContextVisibility(els.captioningDetails, captioningFeatureVisible);" in applicability_body
@@ -1161,10 +1221,17 @@ def test_portal_fastvlm_captioning_controls_are_feature_gated_and_advisory_only(
     assert "--fastvlm-python" in cli_body
     assert "--fastvlm-mlx-vlm-dir" in cli_body
     assert "Advisory FastVLM caption sidecars" in diagnostics_body
+    assert "new Set([" not in captioning_status_body
     assert "FastVLM captions are advisory sidecar metadata and do not satisfy quality gates." in diagnostics_body
     assert "FastVLM advisory captioning is enabled and remains outside quality gates." in effective_drawer_body
     assert "FastVLM readiness is" in effective_drawer_body
     assert "captioningReadiness.verification_scope" in effective_drawer_body
+    assert "captioning_status: normalizeCaptioningRunStatus(rawSummary.captioning_status)" in run_summary_body
+    assert "createCaptioningRunStatusChip(captioningRunStatus)" in queue_body
+    assert "chip.dataset.sidecarCount" in content
+    assert "chip.dataset.rawCount" in content
+    assert "chip.dataset.proxyCount" in content
+    assert "chip.setAttribute('aria-label', captioningRunStatusDetail(status));" in content
     assert "'captioning:enableFastVlm': 'vlm_captioning_enabled'" in bind_body
     assert "safeBindCheck(els.captioning.enableFastVlm, 'captioning', 'enableFastVlm');" in bind_body
 
@@ -1347,13 +1414,21 @@ def test_portal_artifact_gallery_renders_visual_review_controls() -> None:
     assert "function _artifactRouteKey(artifact) {" in content
     assert "function _openManagedArtifactWindow(job, artifact, surface = 'artifact_review') {" in content
     assert "buildArtifactUrl(selected, selectedArtifact)" in review_body
-    assert "artifactIsPreviewable(selectedArtifact)" in review_body
+    # Browser-previewable check (item 8 of executive diagnosis): TIFF/EXR are
+    # not browser-previewable, so the inline <img> path is gated on the
+    # narrower flag rather than the legacy `previewable` field.
+    assert "artifactIsBrowserPreviewable(selectedArtifact)" in review_body
     assert "artifactDisplayLabel(selectedArtifact)" in review_body
     assert "artifactDisplayLabel(artifact)" in review_body
     assert "button.dataset.artifactPath = _artifactRouteKey(artifact);" in review_body
     assert "artifactDisplayPriority(right)" in rank_body
+    assert "artifactIsBrowserPreviewable(primaryArtifact)" in compare_body
+    assert "artifactIsBrowserPreviewable(candidate)" in compare_body
     assert "artifactCompareGroup(candidate) === primaryGroup" in compare_body
     assert "display_hint: _normalizeArtifactDisplayHint(item.display_hint)" in normalize_body
+    assert "browser_previewable: Boolean(item.browser_previewable)" in normalize_body
+    assert "preview_url: typeof item.preview_url === 'string' ? item.preview_url : ''" in normalize_body
+    assert "preview_mime_type: typeof item.preview_mime_type === 'string' ? item.preview_mime_type : ''" in normalize_body
     assert "if (!artifact || typeof artifact !== 'object') return '';" in route_key_body
     assert "_resetArtifactActionButtons();" in review_body
     assert "renderConsoleContextRibbon();" in review_body
@@ -1370,6 +1445,18 @@ def test_portal_artifact_gallery_renders_visual_review_controls() -> None:
     assert "return true;" in open_artifact_body
     assert "return _openManagedArtifactWindow(job, artifact, surface);" in open_artifact_body
     assert "sanitizeManagedAssetUrl(els.downloadArtifactBtn.dataset.url)" in content
+
+
+def test_portal_artifact_missing_preview_cache_clears_when_artifacts_update() -> None:
+    content = _portal_bundle_content()
+    upsert_body = _extract_js_function_body(content, "upsertArtifact")
+    stream_body = _extract_js_function_body(content, "_applyJobStreamEvent")
+
+    assert "function _clearArtifactUrlNotFoundCache() {" in content
+    assert "_artifactNotFoundUrls.clear();" in content
+    assert "_clearArtifactUrlNotFoundCache();" in upsert_body
+    assert "job.artifacts = normalizeArtifactItems(parsed.artifacts);" in stream_body
+    assert "_clearArtifactUrlNotFoundCache();" in stream_body
 
 
 def test_portal_deferred_review_surface_failures_back_off_until_retry_window_expires() -> None:
@@ -1418,9 +1505,25 @@ def test_portal_review_surface_exposes_warning_banner_and_provenance_contract() 
     assert 'id="reviewProvenanceFreshness"' in content
     assert 'id="reviewProvenanceSource"' in content
     assert 'id="reviewProvenanceBatch"' in content
+    assert 'id="reviewProvenanceCaptioning"' in content
     assert 'data-ui="review-status-banner"' in content
     assert 'data-ui="review-provenance-grid"' in content
+    assert 'data-ui="captioning-run-status"' in content
+    assert '"captioning-evidence-strip"' in review_content
+    assert '"captioning-evidence-link"' in review_content
+    assert '"captioning-sidecar-link"' in review_content
+    assert '"captioning-raw-link"' in review_content
+    assert '"captioning-proxy-link"' in review_content
     assert "function _reviewStatusState(job, reviewableOutputs, visibleWarning) {" in review_content
+    assert "function _captioningEvidenceArtifacts(job, artifact)" in review_content
+    assert "function _captioningStatusFromEvidence(status, artifacts)" in review_content
+    assert "function _renderCaptioningEvidenceStrip(job, artifact)" in review_content
+    assert "function _renderAdvisoryCaptionUnavailable(panel)" in review_content
+    assert (
+        "const candidates = selectedStem && stemMatchedArtifacts.length === 0 ? captionArtifacts : stemMatchedArtifacts;"
+        in review_content
+    )
+    assert "const status = _captioningStatusFromEvidence(summary?.captioning_status || null, artifacts);" in review_content
     assert "_renderReviewStatusBanner(selected, selectedArtifact);" in render_body
     assert "_renderArtifactProvenance(selected, selectedArtifact);" in render_body
     assert "_renderReviewStatusBanner(selected, null);" in render_body
@@ -1455,8 +1558,15 @@ def test_portal_review_surface_exposes_warning_banner_and_provenance_contract() 
     assert "artifactLabel(artifact)" in provenance_body
     assert "_artifactFingerprintLabel(artifact)" in provenance_body
     assert 'titleCaseToken(job.state, "Unknown")' in provenance_body
+    assert "captioningRunStatusSummary(captioningStatus)" in provenance_body
+    assert "els.reviewProvenanceCaptioning.dataset.status" in provenance_body
     assert "summary?.batch_id" in provenance_body
     assert "summary?.source" in provenance_body
+    assert '_appendCaptionRow(fields, "Issues", caption.issues);' in review_content
+    assert '_appendCaptionRow(fields, "Uncertain", caption.uncertain);' in review_content
+    assert '_appendCaptionRow(fields, "Validated", _captionBooleanLabel(root.validated));' in review_content
+    assert '_appendCaptionRow(fields, "Model role", root.model_role);' in review_content
+    assert '_appendCaptionRow(fields, "Runtime status", root.runtime_diagnostics?.status);' in review_content
 
 
 def test_portal_artifact_viewer_modal_is_feature_flagged_and_keyboard_complete() -> None:
@@ -1505,6 +1615,8 @@ def test_portal_artifact_viewer_modal_is_feature_flagged_and_keyboard_complete()
     assert "artifact_viewer_fallback" in fallback_event_body
     assert 'surface: "artifact_review"' in fallback_event_body
     assert "fallback_reason: fallbackReason" in fallback_event_body
+    assert "const hasRawAsset = Boolean(downloadUrl);" in show_fallback_body
+    assert 'hasRawAsset ? "inline_preview_unavailable" : "asset_url_unavailable";' in show_fallback_body
     assert "const isRetryable = Boolean(fallbackOptions?.retryable && url);" in show_fallback_body
     assert "_renderArtifactViewerRetry(isRetryable ? { context, artifactName } : null);" in show_fallback_body
     assert "_emitArtifactViewerFallback(context, fallbackReason);" in show_fallback_body
@@ -1525,6 +1637,9 @@ def test_portal_artifact_viewer_modal_is_feature_flagged_and_keyboard_complete()
     assert "URL.createObjectURL(await response.blob())" in preview_load_body
     assert "_showArtifactViewerFallback(context, artifactName, { retryable });" in preview_load_body
     assert "els.artifactViewerCopyFingerprintBtn.dataset.fingerprint = fingerprint;" in render_body
+    assert "const { artifact, index, artifacts, inlinePreview, job, url, downloadUrl, zoomPercent } = context;" in render_body
+    assert "els.artifactViewerOpenRawBtn.disabled = !downloadUrl;" in render_body
+    assert "els.artifactViewerOpenRawBtn.dataset.url = downloadUrl;" in render_body
     assert "_setArtifactViewerStatus(" in render_body
     assert "_rememberArtifactSelection(context.job.id, nextPath);" in navigate_body
     assert "renderReviewSurfaces();" in navigate_body
@@ -1571,11 +1686,17 @@ def test_portal_review_surface_supports_compare_summary_and_keyboard_selection()
         render_body,
     )
     assert "button.tabIndex = active ? 0 : -1;" in render_body
-    assert "_renderReviewCompareSummary(selectedArtifact, compareCandidate, compareEnabled);" in render_body
+    assert (
+        "_renderReviewCompareSummary(selectedArtifact, compareAvailable ? compareCandidate : null, compareEnabled);"
+        in render_body
+    )
+    assert "const compareAvailable = Boolean(" in render_body
+    assert "selectedPreviewAvailable &&" in render_body
+    assert "comparePreviewAvailable" in render_body
     assert re.search(
         r"if \(compareEnabled && selectedArtifact && compareCandidate\) \{[\s\S]*?"
-        r"if \(captionSidecar\) _renderArtifactMetadataCard\(selected, selectedArtifact\);[\s\S]*?"
-        r"\} else if \(artifactIsPreviewable\(selectedArtifact\)\)",
+        r"if \(captioningEvidenceVisible\) _renderArtifactMetadataCard\(selected, selectedArtifact\);[\s\S]*?"
+        r"\} else if \(selectedPreviewAvailable\)",
         render_body,
     )
     assert re.search(
@@ -2422,6 +2543,33 @@ def test_portal_contextual_action_rail_reuses_existing_route_and_recovery_contra
     assert "url.searchParams.set('action'" not in content
     assert "url.searchParams.set('mode'" not in content
     assert "url.searchParams.set('shortcut'" not in content
+
+
+def test_portal_preview_recovers_from_stale_and_transient_service_failures() -> None:
+    content = _portal_bundle_content()
+    fetch_body = _extract_js_function_body(content, "fetchConfigPreview")
+    schedule_body = _extract_js_function_body(content, "scheduleConfigPreview")
+    clear_body = _extract_js_function_body(content, "_clearConfigPreviewServiceRetry")
+    retry_body = _extract_js_function_body(content, "_scheduleConfigPreviewServiceRetry")
+
+    assert "const CONFIG_PREVIEW_SERVICE_RETRY_BASE_MS = 2500;" in content
+    assert "const CONFIG_PREVIEW_SERVICE_RETRY_MAX_ATTEMPTS = 3;" in content
+    assert "let configPreviewServiceRetryTimerId = null;" in content
+    assert "let configPreviewServiceRetryAttempts = 0;" in content
+
+    catch_marker = "} catch {"
+    catch_index = fetch_body.rfind(catch_marker)
+    assert catch_index >= 0, "fetchConfigPreview catch block not found"
+    catch_block = fetch_body[catch_index:]
+    assert "if (_configPreviewRequestKey(generatePayload()) !== requestKey) {" in catch_block
+    assert "_scheduleConfigPreviewServiceRetry();" in catch_block
+
+    assert "_scheduleConfigPreviewServiceRetry();" in fetch_body
+    assert "_clearConfigPreviewServiceRetry();" in fetch_body
+    assert "_clearConfigPreviewServiceRetry();" in schedule_body
+    assert "configPreviewServiceRetryAttempts >= CONFIG_PREVIEW_SERVICE_RETRY_MAX_ATTEMPTS" in retry_body
+    assert "CONFIG_PREVIEW_SERVICE_RETRY_BASE_MS * configPreviewServiceRetryAttempts" in retry_body
+    assert "configPreviewServiceRetryAttempts = 0;" in clear_body
 
 
 def test_portal_submit_blocks_preview_unavailable_and_debug_bundle_without_acknowledgement() -> None:
@@ -5108,18 +5256,104 @@ def test_index_job_artifacts_populates_job_payload(tmp_path: Path) -> None:
     render_item = next(item for item in indexed if item["path"] == "render.png")
     assert render_item["media_kind"] == "image"
     assert render_item["previewable"] is True
+    assert render_item["browser_previewable"] is True
     assert render_item["content_type"] == "image/png"
+    assert render_item["mime_type"] == "image/png"
     assert render_item["display_hint"]["role"] == "primary_preview"
     assert render_item["display_hint"]["priority"] == 1000
     assert render_item["display_hint"]["label"] == "Primary Preview"
     assert render_item["display_hint"]["compare_group"]
     assert render_item["url"] == f"/v1/jobs/{job.id}/artifacts/render.png"
+    assert render_item["download_url"] == render_item["url"]
+    assert "preview_url" not in render_item  # browser handles PNG natively
     manifest_item = next(item for item in indexed if item["path"] == "manifest.json")
     assert manifest_item["media_kind"] == "metadata"
     assert manifest_item["previewable"] is False
+    assert manifest_item["browser_previewable"] is False
     assert manifest_item["display_hint"]["role"] == "manifest"
     assert manifest_item["display_hint"]["priority"] == 240
     assert manifest_item["display_hint"]["label"] == "Manifest"
+
+
+def test_index_job_artifacts_marks_tiff_without_proxy_as_not_browser_previewable(
+    tmp_path: Path,
+) -> None:
+    output_dir = tmp_path / "out"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    (output_dir / "render.tif").write_bytes(b"II*\x00")
+
+    job = orchestrator_app.Job(
+        id="job_tiff",
+        created_at=orchestrator_app._now(),
+        request={"pipeline": "lux-depth-v3", "args": {"output_dir": str(output_dir)}},
+    )
+    indexed = orchestrator_app._index_job_artifacts(job)
+    tiff_item = next(item for item in indexed if item["path"] == "render.tif")
+
+    assert tiff_item["previewable"] is True  # legacy field stays as-is
+    assert tiff_item["browser_previewable"] is False
+    assert "preview_url" not in tiff_item
+
+
+def test_index_job_artifacts_surfaces_tiff_preview_proxy_when_present(
+    tmp_path: Path,
+) -> None:
+    output_dir = tmp_path / "out"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    (output_dir / "render.tif").write_bytes(b"II*\x00")
+    (output_dir / "render.tif.preview.png").write_bytes(b"\x89PNG")
+
+    job = orchestrator_app.Job(
+        id="job_tiff_proxy",
+        created_at=orchestrator_app._now(),
+        request={"pipeline": "lux-depth-v3", "args": {"output_dir": str(output_dir)}},
+    )
+    indexed = orchestrator_app._index_job_artifacts(job)
+    tiff_item = next(item for item in indexed if item["path"] == "render.tif")
+
+    assert tiff_item["browser_previewable"] is True
+    assert tiff_item["preview_url"] == f"/v1/jobs/{job.id}/artifacts/render.tif.preview.png"
+    assert tiff_item["preview_mime_type"] == "image/png"
+    assert tiff_item["download_url"] == f"/v1/jobs/{job.id}/artifacts/render.tif"
+    assert job.artifact_lookup["render.tif.preview.png"] == (output_dir / "render.tif.preview.png").resolve()
+
+    job.artifact_lookup = {}
+    hydrated = orchestrator_app._hydrate_artifact_lookup_from_items(job)
+    assert hydrated["render.tif.preview.png"] == (output_dir / "render.tif.preview.png").resolve()
+
+
+def test_index_job_artifacts_indexes_scoped_tiff_preview_proxy_for_download(
+    tmp_path: Path,
+) -> None:
+    output_dir = tmp_path / "out"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    (output_dir / "render.tif").write_bytes(b"II*\x00")
+    proxy_path = output_dir / "render.tif.preview.png"
+    proxy_path.write_bytes(b"\x89PNG")
+    run_card = output_dir / "run_card_2026-05-05_120000.json"
+    run_card.write_text(
+        json.dumps(
+            {
+                "batch_id": "2026-05-05_120000",
+                "artifact_index": [
+                    {"relative_path": "render.tif"},
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    job = orchestrator_app.Job(
+        id="job_scoped_tiff_proxy",
+        created_at=orchestrator_app._now(),
+        request={"pipeline": "lux-depth-v3", "args": {"output_dir": str(output_dir)}},
+    )
+    indexed = orchestrator_app._index_job_artifacts(job)
+    tiff_item = next(item for item in indexed if item["path"] == "render.tif")
+
+    assert tiff_item["browser_previewable"] is True
+    assert tiff_item["preview_url"] == f"/v1/jobs/{job.id}/artifacts/render.tif.preview.png"
+    assert job.artifact_lookup["render.tif.preview.png"] == proxy_path.resolve()
 
 
 def test_index_job_artifacts_does_not_misclassify_catalog_metadata_as_log(tmp_path: Path) -> None:
@@ -5169,6 +5403,10 @@ def test_index_job_artifacts_classifies_captioning_sidecar_only_as_advisory_capt
     assert sidecar_item["display_hint"]["label"] == "Advisory Caption"
     assert raw_item["display_hint"]["role"] == "log"
     assert proxy_item["display_hint"]["role"] == "review_preview"
+    for item in (sidecar_item, raw_item, proxy_item):
+        assert not Path(item["path"]).is_absolute()
+        assert str(output_dir) not in item["path"]
+        assert item["relative_path"] == item["path"]
 
 
 def test_index_job_artifacts_skips_entries_resolving_outside_output_dir(tmp_path: Path) -> None:
@@ -5218,6 +5456,37 @@ def test_hydrate_artifact_lookup_from_items_reuses_existing_index(tmp_path: Path
 
     assert lookup["renders/hero.png"] == artifact_path.resolve()
     assert job.artifact_lookup["renders/hero.png"] == artifact_path.resolve()
+
+
+def test_hydrate_artifact_lookup_from_items_registers_preview_proxy(tmp_path: Path) -> None:
+    output_dir = tmp_path / "out"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    artifact_path = output_dir / "renders" / "hero.tif"
+    artifact_path.parent.mkdir(parents=True, exist_ok=True)
+    artifact_path.write_bytes(b"II*\x00")
+    proxy_path = output_dir / "renders" / "hero.tif.preview.png"
+    proxy_path.write_bytes(b"\x89PNG")
+
+    job = orchestrator_app.Job(
+        id="job_artifacts_lookup_proxy",
+        created_at=orchestrator_app._now(),
+        request={"pipeline": "lux-depth-v3", "args": {"output_dir": str(output_dir)}},
+        artifacts={
+            "output_dir": str(output_dir),
+            "items": [
+                {
+                    "path": "renders/hero.tif",
+                    "relative_path": "renders/hero.tif",
+                    "preview_url": "/v1/jobs/job_artifacts_lookup_proxy/artifacts/renders/hero.tif.preview.png",
+                }
+            ],
+        },
+    )
+
+    lookup = orchestrator_app._hydrate_artifact_lookup_from_items(job)
+
+    assert lookup["renders/hero.tif"] == artifact_path.resolve()
+    assert lookup["renders/hero.tif.preview.png"] == proxy_path.resolve()
 
 
 def test_index_job_artifacts_truncation_is_sorted_and_stable(tmp_path: Path) -> None:
