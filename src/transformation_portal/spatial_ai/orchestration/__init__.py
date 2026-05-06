@@ -34,9 +34,10 @@ from __future__ import annotations
 
 from .config import PipelineConfig
 from .error_handler import ErrorHandler, ErrorRecoveryStrategy, PipelineError
-from .pipeline import PipelineResult, SpatialAIPipeline
+from .pipeline import SpatialAIPipeline
 from .progress_tracker import ProgressEvent, ProgressTracker
 from .resource_manager import ResourceLimits, ResourceManager
+from .results import PipelineResult
 
 __all__ = [
     "SpatialAIPipeline",
