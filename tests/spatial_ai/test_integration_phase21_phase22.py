@@ -6,8 +6,19 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-_SAM2_CHECKPOINT = Path(os.environ.get("TP_PORTAL_LUX_SAM2_CHECKPOINT", "checkpoints/sam2_hiera_base_plus.pt"))
-_SAM2_AVAILABLE = _SAM2_CHECKPOINT.exists()
+_SAM2_CHECKPOINT_DEFAULT = "checkpoints/sam2_hiera_base_plus.pt"
+_SAM2_CHECKPOINT_ENV = os.environ.get("TP_PORTAL_LUX_SAM2_CHECKPOINT")
+# An explicitly-set but empty env var is treated as "not configured" rather than
+# silently falling back to the default — surface the misconfiguration as a skip
+# instead of attempting to load a phantom checkpoint.
+_SAM2_CHECKPOINT_PATH = (
+    Path(_SAM2_CHECKPOINT_ENV) if _SAM2_CHECKPOINT_ENV and _SAM2_CHECKPOINT_ENV.strip() else Path(_SAM2_CHECKPOINT_DEFAULT)
+)
+# is_file() (not exists()) ensures we don't accept a directory; the .pt suffix
+# guards against other file types being pointed at by mistake.
+_SAM2_AVAILABLE = (
+    _SAM2_CHECKPOINT_PATH.is_file() and _SAM2_CHECKPOINT_PATH.suffix == ".pt" and _SAM2_CHECKPOINT_PATH.stat().st_size > 0
+)
 if _SAM2_AVAILABLE:
     try:
         import sam2 as _sam2_pkg  # noqa: F401

@@ -1,11 +1,20 @@
 # Professional Pipeline Configuration
 # ===================================
 #
-# This configuration file defines presets and parameters for the
-# Transformation Portal Professional Pipeline.
+# This file is a documentation reference / preset catalog for the
+# Transformation Portal Professional Pipeline. The CLI in
+# `transformation_portal.pipelines.pro_pipeline` does not currently
+# load this YAML directly — preset selection happens via the
+# `--preset` option (see `python -m transformation_portal.pipelines.pro_pipeline process --help`).
 #
-# Usage:
-#   python -m transformation_portal.pipelines.pro_pipeline process image.jpg --config pro_pipeline_config.yaml
+# Treat this document as the canonical source for preset names,
+# parameter ranges, and intended global defaults; mirror those values
+# in CLI flags or in code that consumes a `ProPipelineConfig` until a
+# YAML loader is wired up.
+#
+# Example invocation (using the equivalent CLI flags):
+#   python -m transformation_portal.pipelines.pro_pipeline process image.jpg \
+#       --preset architectural-hero --out ./enhanced
 
 # Default global settings
 global:

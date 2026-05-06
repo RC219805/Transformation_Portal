@@ -28,9 +28,25 @@ The following tests import from locations outside the main `src/transformation_p
 - **test_pro_pipeline.py** - now imports from `transformation_portal.pipelines.pro_pipeline`
 - **test_realize_v8_vfx_extension.py** - now imports from `transformation_portal.realize_v8.{unified,cli_extension}`
 
-### 3. Added Graceful Import Handling
+### 3. Import Handling
 
-All affected test files now include:
+The four files in *Migrated to src/ (skips removed)* now use direct top-level
+imports — `pytestmark` carries only the relevant test markers (e.g.
+`pytest.mark.unit`), and the prior try/except `ImportError` wrappers have been
+removed because the canonical `transformation_portal.*` modules are guaranteed
+to exist:
+
+```python
+pytestmark = [pytest.mark.unit]
+
+from transformation_portal.<package>.<module> import <items>
+```
+
+The remaining files in *Deprecated (in archive/)* and *Experimental (in
+scripts/, not yet migrated to src/)* still use the graceful-skip pattern,
+because the modules they target either no longer exist or have not yet been
+moved into the `src/` package:
+
 ```python
 pytestmark = pytest.mark.skip(reason="<explanation>")
 
@@ -40,11 +56,11 @@ except ImportError:
     pass
 ```
 
-This ensures:
-- Tests skip cleanly instead of failing collection
-- CI/CD pipeline can complete test discovery
-- No ModuleNotFoundError crashes
-- Future migration path is clear
+Outcome:
+- Migrated tests run unconditionally and exercise the canonical src modules.
+- Remaining deprecated/experimental tests skip cleanly instead of failing
+  collection, so the CI/CD pipeline can complete test discovery without
+  `ModuleNotFoundError` crashes.
 
 ### 4. Documentation Organization
 
