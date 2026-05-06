@@ -9,7 +9,7 @@ for architectural rendering enhancement.
 
 from pathlib import Path
 
-from pro_pipeline import PipelinePreset, ProPipeline, ProPipelineConfig
+from transformation_portal.pipelines.pro_pipeline import PipelinePreset, ProPipeline, ProPipelineConfig
 
 
 def example_single_image():

@@ -34,6 +34,10 @@ IMPORT_MAPPINGS = {
     "from lux_render_pipeline import": "from transformation_portal.pipelines.lux_render_pipeline import",
     "from depth_tools import": "from transformation_portal.pipelines.depth_tools import",
     "from dreaming_pipeline import": "from transformation_portal.pipelines.dreaming_pipeline import",
+    "from pro_pipeline import": "from transformation_portal.pipelines.pro_pipeline import",
+    # Realize V8
+    "from realize_v8_unified import": "from transformation_portal.realize_v8.unified import",
+    "from realize_v8_unified_cli_extension import": "from transformation_portal.realize_v8.cli_extension import",
     # Enhancers
     "from enhance_aerial import": "from transformation_portal.enhancers.enhance_aerial import",
     "from enhance_pool_aerial import": "from transformation_portal.enhancers.enhance_pool_aerial import",
@@ -50,6 +54,7 @@ IMPORT_MAPPINGS = {
     # Utils
     "from color_science import": "from transformation_portal.utils.color_science import",
     "from helpers import": "from transformation_portal.utils.helpers import",
+    "from format_utils_enhancements import": "from transformation_portal.utils.format_utils_enhancements import",
 }
 
 

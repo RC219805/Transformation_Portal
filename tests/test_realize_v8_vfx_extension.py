@@ -12,34 +12,28 @@ import numpy as np
 import pytest
 from PIL import Image
 
+from transformation_portal.realize_v8.cli_extension import (
+    VFX_PRESETS,
+    apply_color_grade_zones,
+    apply_depth_bloom,
+    apply_depth_fog,
+    apply_depth_of_field,
+    apply_lut_with_depth,
+    enhance_with_vfx,
+    estimate_depth_fast,
+)
+from transformation_portal.realize_v8.unified import (
+    PRESETS,
+    Preset,
+    _image_to_float_array,
+    _open_any,
+    _save_with_meta,
+    enhance,
+)
+
 # pylint: disable=redefined-outer-name
 
-pytestmark = [pytest.mark.unit, pytest.mark.skip(reason="realize_v8 modules not yet migrated to src package")]
-
-# Import modules under test
-try:
-    from scripts.utilities.realize_v8_unified import (
-        PRESETS,
-        Preset,
-        _image_to_float_array,
-        _open_any,
-        _save_with_meta,
-        enhance,
-    )
-    from scripts.utilities.realize_v8_unified_cli_extension import (
-        VFX_PRESETS,
-        apply_color_grade_zones,
-        apply_depth_bloom,
-        apply_depth_fog,
-        apply_depth_of_field,
-        apply_lut_with_depth,
-        enhance_with_vfx,
-        estimate_depth_fast,
-    )
-except ImportError as e:
-    # The whole module is already marked skipped, but make missing deps explicit if that ever changes.
-    pytest.skip(f"realize_v8 modules unavailable: {e}", allow_module_level=True)
-
+pytestmark = [pytest.mark.unit]
 
 # ==================== Fixtures ====================
 
