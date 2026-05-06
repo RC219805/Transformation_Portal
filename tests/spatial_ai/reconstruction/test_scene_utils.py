@@ -186,6 +186,101 @@ class TestSceneBuilder:
         expected_mid_t = np.array([0.5, 0.5, 0.0], dtype=np.float32)
         np.testing.assert_allclose(mid_t, expected_mid_t, atol=1e-5)
 
+    def test_extract_camera_path_spline_passes_through_keyframes(self, builder, intrinsics):
+        """Spline interpolation must pass through every keyframe camera.
+
+        With three or more cameras, the natural cubic spline used for
+        translation must hit each input camera's position at the corresponding
+        uniformly-spaced parameter ``t``, and SLERP must reproduce each
+        keyframe rotation at that ``t``.
+        """
+        TEST_RMSE = 0.01
+        TEST_ITERATION = 1000
+        TEST_CONVERGENCE = "converged"
+
+        # Three keyframes with progressive Z-axis rotations (0°, 45°, 90°)
+        # and translations along a curve in the XY plane.
+        angles = [0.0, np.pi / 4, np.pi / 2]
+        positions = [
+            np.array([0.0, 0.0, 0.0], dtype=np.float32),
+            np.array([1.0, 2.0, 0.0], dtype=np.float32),
+            np.array([2.0, 1.0, 0.0], dtype=np.float32),
+        ]
+        cameras = []
+        for angle, pos in zip(angles, positions):
+            extrinsics = np.eye(4, dtype=np.float32)
+            extrinsics[:3, :3] = np.array(
+                [
+                    [np.cos(angle), -np.sin(angle), 0],
+                    [np.sin(angle), np.cos(angle), 0],
+                    [0, 0, 1],
+                ],
+                dtype=np.float32,
+            )
+            extrinsics[:3, 3] = pos
+            cameras.append(CameraParams(intrinsics.copy(), extrinsics, W, H))
+
+        N = 10
+        splats = GaussianSplat(
+            positions=np.zeros((N, 3), dtype=np.float32),
+            colors=np.ones((N, 3), dtype=np.float32) * 0.5,
+            scales=np.ones((N, 3), dtype=np.float32),
+            rotations=np.tile([1, 0, 0, 0], (N, 1)).astype(np.float32),
+            opacities=np.ones((N, 1), dtype=np.float32),
+        )
+        scene = Scene3D(
+            splats=splats,
+            cameras=cameras,
+            rmse=TEST_RMSE,
+            iteration=TEST_ITERATION,
+            convergence=TEST_CONVERGENCE,
+        )
+
+        # Use 5 frames so keyframes land exactly at indices 0, 2, 4 (t=0, 0.5, 1).
+        path = builder.extract_camera_path(scene, num_frames=5, interpolation="spline")
+        assert len(path) == 5
+
+        # Every interpolated rotation must remain a proper rotation matrix.
+        for i, cam in enumerate(path):
+            R = cam.extrinsics[:3, :3]
+            np.testing.assert_allclose(
+                R @ R.T,
+                np.eye(3, dtype=np.float32),
+                atol=1e-5,
+                err_msg=f"Frame {i}: spline rotation lost orthogonality",
+            )
+
+        # Path must pass through every keyframe camera at its uniform t.
+        for keyframe_idx, frame_idx in enumerate((0, 2, 4)):
+            np.testing.assert_allclose(
+                path[frame_idx].extrinsics,
+                cameras[keyframe_idx].extrinsics,
+                atol=1e-4,
+                err_msg=f"Spline path missed keyframe {keyframe_idx} at frame {frame_idx}",
+            )
+
+    def test_extract_camera_path_unknown_interpolation_rejected(self, builder, intrinsics):
+        """Unknown interpolation modes must raise NotImplementedError."""
+        extrinsics0 = np.eye(4, dtype=np.float32)
+        extrinsics1 = np.eye(4, dtype=np.float32)
+        extrinsics1[:3, 3] = [1.0, 0.0, 0.0]
+        cameras = [
+            CameraParams(intrinsics.copy(), extrinsics0, W, H),
+            CameraParams(intrinsics.copy(), extrinsics1, W, H),
+        ]
+        N = 5
+        splats = GaussianSplat(
+            positions=np.zeros((N, 3), dtype=np.float32),
+            colors=np.ones((N, 3), dtype=np.float32) * 0.5,
+            scales=np.ones((N, 3), dtype=np.float32),
+            rotations=np.tile([1, 0, 0, 0], (N, 1)).astype(np.float32),
+            opacities=np.ones((N, 1), dtype=np.float32),
+        )
+        scene = Scene3D(splats=splats, cameras=cameras, rmse=0.01, iteration=1000, convergence="converged")
+
+        with pytest.raises(NotImplementedError):
+            builder.extract_camera_path(scene, num_frames=4, interpolation="bezier")
+
 
 class TestMeshExporter:
     """Test MeshExporter."""
