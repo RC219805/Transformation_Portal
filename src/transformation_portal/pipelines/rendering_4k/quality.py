@@ -29,7 +29,7 @@ except ImportError:
 
 # Optional: PerceptualQualityAssessor for advanced quality metrics
 try:
-    from ...enhancements.perceptual_quality_assessment import PerceptualQualityAssessor
+    from enhancements.perceptual_quality_assessment import PerceptualQualityAssessor
 
     HAS_PERCEPTUAL_ASSESSOR = True
 except ImportError:
@@ -126,10 +126,11 @@ class GPUMemoryManager:
 
 class QualityAssessor:
     """
-    RAG-based quality assessment system.
+    Heuristic and optional perceptual image quality assessment.
 
-    Evaluates image quality using multiple metrics and provides
-    feedback for iterative refinement in the quality feedback loop.
+    Evaluates image quality using lightweight metrics and provides feedback
+    for iterative refinement in the quality feedback loop. RAG indexing is
+    handled by QualityFeedbackBridge when enabled by the pipeline.
 
     Supports two modes:
     1. Heuristic-based: Fast, lightweight quality metrics (sharpness, contrast, etc.)

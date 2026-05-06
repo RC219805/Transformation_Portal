@@ -62,7 +62,7 @@ __all__ = [
 
 
 def __getattr__(name: str) -> object:
-    """Lazily expose extracted helpers without importing optional dependencies."""
+    """Lazily expose stage functions and extracted helpers without importing optional dependencies."""
     if name in _STAGE_EXPORTS:
         value = getattr(import_module(f"{__name__}.stages"), name)
         globals()[name] = value

@@ -2,6 +2,11 @@
 
 from __future__ import annotations
 
+import importlib
+import sys
+import types
+from types import SimpleNamespace
+
 import numpy as np
 import pytest
 
@@ -69,6 +74,51 @@ def test_quality_assessor_lpips_disabled_falls_back_to_heuristics() -> None:
     assert metrics.material_fidelity == 0.0
     assert metrics.perceptual_quality == 0.0
     assert 0.0 <= metrics.overall_score <= 1.0
+
+
+def test_quality_assessor_uses_absolute_perceptual_assessor_import(monkeypatch: pytest.MonkeyPatch) -> None:
+    package = importlib.import_module("transformation_portal.pipelines.rendering_4k")
+    if hasattr(package, "quality"):
+        delattr(package, "quality")
+    quality = importlib.import_module("transformation_portal.pipelines.rendering_4k.quality")
+
+    class FakePerceptualQualityAssessor:
+        def __init__(self, *, use_lpips_package: bool) -> None:
+            self.use_lpips_package = use_lpips_package
+
+        def assess(self, *, enhanced, reference, compute_material_fidelity: bool):
+            assert enhanced.mode == "RGB"
+            assert reference.mode == "RGB"
+            assert compute_material_fidelity is True
+            return SimpleNamespace(
+                lpips_score=0.12,
+                lpips_percentile=97.5,
+                overall_material_fidelity=0.91,
+                composite_score=88.0,
+                ssim_score=0.84,
+                niqe_score=3.2,
+            )
+
+    package = types.ModuleType("enhancements")
+    module = types.ModuleType("enhancements.perceptual_quality_assessment")
+    module.PerceptualQualityAssessor = FakePerceptualQualityAssessor
+
+    with monkeypatch.context() as context:
+        context.setitem(sys.modules, "enhancements", package)
+        context.setitem(sys.modules, "enhancements.perceptual_quality_assessment", module)
+        reloaded_quality = importlib.reload(quality)
+
+        metrics = reloaded_quality.QualityAssessor(QualityFeedbackConfig(use_lpips=True)).assess(
+            _float32_image(),
+            reference=_float32_image(),
+        )
+
+    importlib.reload(quality)
+
+    assert metrics.lpips_score == pytest.approx(0.12)
+    assert metrics.lpips_percentile == pytest.approx(97.5)
+    assert metrics.material_fidelity == pytest.approx(0.91)
+    assert metrics.perceptual_quality == pytest.approx(88.0)
 
 
 def test_quality_assessor_suggests_adjustments_at_thresholds() -> None:
