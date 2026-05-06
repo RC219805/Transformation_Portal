@@ -12,10 +12,6 @@ import numpy as np
 import pytest
 from PIL import Image
 
-# pylint: disable=redefined-outer-name
-
-pytestmark = [pytest.mark.unit]
-
 from transformation_portal.realize_v8.cli_extension import (
     VFX_PRESETS,
     apply_color_grade_zones,
@@ -34,6 +30,10 @@ from transformation_portal.realize_v8.unified import (
     _save_with_meta,
     enhance,
 )
+
+# pylint: disable=redefined-outer-name
+
+pytestmark = [pytest.mark.unit]
 
 # ==================== Fixtures ====================
 

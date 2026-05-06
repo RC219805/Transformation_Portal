@@ -14,8 +14,6 @@ import numpy as np
 import pytest
 from PIL import Image
 
-pytestmark = [pytest.mark.unit]
-
 from transformation_portal.utils.format_utils_enhancements import (
     batch_convert_directory,
     check_tifffile_available,
@@ -32,6 +30,8 @@ from transformation_portal.utils.format_utils_enhancements import (
     smart_convert,
     validate_image_integrity,
 )
+
+pytestmark = [pytest.mark.unit]
 
 # ==============================================================================
 # Fixtures

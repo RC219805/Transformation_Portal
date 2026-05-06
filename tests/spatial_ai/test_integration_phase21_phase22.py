@@ -10,7 +10,7 @@ _SAM2_CHECKPOINT = Path(os.environ.get("TP_PORTAL_LUX_SAM2_CHECKPOINT", "checkpo
 _SAM2_AVAILABLE = _SAM2_CHECKPOINT.exists()
 if _SAM2_AVAILABLE:
     try:
-        import sam2  # noqa: F401
+        import sam2 as _sam2_pkg  # noqa: F401
     except ImportError:
         _SAM2_AVAILABLE = False
 

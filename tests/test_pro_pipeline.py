@@ -11,6 +11,8 @@ Tests cover:
 - Error handling and graceful degradation
 """
 
+# pylint: disable=redefined-outer-name  # pytest fixtures use other fixtures as params
+
 from unittest.mock import Mock, patch
 
 import numpy as np

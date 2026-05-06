@@ -9,12 +9,12 @@ from pathlib import Path
 
 import pytest
 
-pytestmark = [pytest.mark.unit]
-
 from transformation_portal.processors.material_response.optimizer import (
     MaterialAwareEnhancementPlanner,
     RenderEnhancementPlanner,
 )
+
+pytestmark = [pytest.mark.unit]
 
 
 @pytest.fixture(scope="module")
