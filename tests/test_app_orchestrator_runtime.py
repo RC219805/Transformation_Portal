@@ -1094,6 +1094,20 @@ def test_portal_protected_suppression_reads_managed_error_envelope_details() -> 
     assert "_recordProtectedFamilySuppression('uploads_staging', nonRetryableDetails);" in upload_body
 
 
+def test_portal_lux_dispatch_payload_preserves_path_fields_after_canonical_args() -> None:
+    content = _portal_bundle_content()
+    generate_body = _extract_js_function_body(content, "generatePayload")
+
+    canonical_idx = generate_body.index("const canonicalLuxArgs = buildCanonicalLuxDepthArgs(c);")
+    spread_idx = generate_body.index("...canonicalLuxArgs", canonical_idx)
+    input_idx = generate_body.index("input_dir: inputDirValue", spread_idx)
+    output_idx = generate_body.index("output_dir: outputDirValue", input_idx)
+    overwrite_idx = generate_body.index("overwrite:", output_idx)
+
+    assert spread_idx < input_idx < output_idx < overwrite_idx
+    assert "...buildCanonicalLuxDepthArgs(c)" not in generate_body
+
+
 def test_portal_staged_upload_ui_contract_is_present_in_markup_and_source() -> None:
     html = _portal_html_content()
     content = _portal_bundle_content()
@@ -3686,15 +3700,20 @@ def test_portal_dispatch_controls_require_backend_readiness_and_live_backend() -
     content = _portal_bundle_content()
     guard_body = _extract_js_function_body(content, "_syncBootstrapGuardedControls")
     readiness_body = _extract_js_function_body(content, "_dispatchReadinessSnapshot")
+    dispatch_status_body = _extract_js_function_body(content, "currentPipelineDispatchStatus")
     submit_body = _extract_js_function_body(content, "submitJob")
 
     assert "const readiness = _dispatchReadinessSnapshot();" in guard_body
     assert "state.backendOk" in readiness_body
     assert "currentPipelineDispatchStatus(currentPayload)" in readiness_body
+    assert "const previewReadiness = _currentPreviewReadiness(payload);" in dispatch_status_body
+    assert "if (previewReadiness && rawStatus === 'blocked') return 'blocked';" in dispatch_status_body
     assert "canRun: true" in readiness_body
     assert "Execution readiness is still loading." in submit_body
     assert "createToast(DISPATCH_BACKEND_OFFLINE_MESSAGE, 'error');" in submit_body
     assert "Pipeline is blocked by missing prerequisites." in submit_body
+    assert "Backend submission failed: ${truncateMiddle(errorMessage, 180)}" in submit_body
+    assert 'createToast(toastMessage, "error");' in submit_body
     assert "mock simulation" not in submit_body
 
 
