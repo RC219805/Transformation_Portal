@@ -1,14 +1,30 @@
 """Integration test: Phase 2.1 (Segmentation) + Phase 2.2 (Materials)."""
 
+import os
+from pathlib import Path
+
 import numpy as np
 import pytest
 
-# Skip SAM2 integration tests until full model integration is complete
-# (Phase 2.1 uses stub implementation, Phase 2.2 is complete)
+_SAM2_CHECKPOINT = Path(
+    os.environ.get("TP_PORTAL_LUX_SAM2_CHECKPOINT", "checkpoints/sam2_hiera_base_plus.pt")
+)
+_SAM2_AVAILABLE = _SAM2_CHECKPOINT.exists()
+if _SAM2_AVAILABLE:
+    try:
+        import sam2  # noqa: F401
+    except ImportError:
+        _SAM2_AVAILABLE = False
+
 pytestmark = [
     pytest.mark.integration,
-    pytest.mark.skip(
-        reason="SAM2 backend uses stub implementation. Integration tests will be enabled when full SAM2 model is integrated."
+    pytest.mark.ml,
+    pytest.mark.skipif(
+        not _SAM2_AVAILABLE,
+        reason=(
+            "SAM2 integration requires `make install-ml-sam2` and a checkpoint at "
+            "$TP_PORTAL_LUX_SAM2_CHECKPOINT (default: checkpoints/sam2_hiera_base_plus.pt)."
+        ),
     ),
 ]
 

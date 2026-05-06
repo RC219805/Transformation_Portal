@@ -18,13 +18,15 @@ The following tests import from locations outside the main `src/transformation_p
 - **test_prophetic_orchestrator.py** - imports from `archive.deprecated.prophetic_orchestrator`
 
 #### Experimental (in scripts/, not yet migrated to src/)
-- **test_format_utils_enhancements.py** - imports from `scripts.utilities.format_utils_enhancements`
 - **test_material_response.py** - imports from `scripts.utilities.material_response`
-- **test_material_response_optimizer.py** - imports from `scripts.utilities.material_response_optimizer`
-- **test_pro_pipeline.py** - imports from `scripts.pipelines.pro_pipeline`
-- **test_realize_v8_vfx_extension.py** - imports from `scripts.utilities.realize_v8_unified*`
 - **test_synthetic_viewer.py** - imports from `scripts.synthetic_viewer`
 - **test_temporal_evolution.py** - imports from `scripts.temporal_evolution`
+
+#### Migrated to src/ (skips removed)
+- **test_format_utils_enhancements.py** - now imports from `transformation_portal.utils.format_utils_enhancements`
+- **test_material_response_optimizer.py** - now imports from `transformation_portal.processors.material_response.optimizer` (legacy duplicate deleted)
+- **test_pro_pipeline.py** - now imports from `transformation_portal.pipelines.pro_pipeline`
+- **test_realize_v8_vfx_extension.py** - now imports from `transformation_portal.realize_v8.{unified,cli_extension}`
 
 ### 3. Added Graceful Import Handling
 
