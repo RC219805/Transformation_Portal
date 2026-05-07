@@ -55,9 +55,9 @@ Fixed `save_16bit_tiff()` method to use tifffile instead of PIL.
 - ✅ `premium_pipeline_fixed.py` - Fixed (Nov 8, 2025)
 - ✅ `src/transformation_portal/pipelines/unified_luxury_pipeline.py` - Fixed (Nov 8, 2025)
 - ✅ `luxury_tiff_batch_processor/` - Already correct (uses proper float→16-bit conversion)
-- ⚠️  `unified_meta_pipeline.py` - Deprecated, no longer used
-- ⚠️  `tiff_enhancement_pipeline.py` - Deprecated, no longer used
-- ⚠️  `tiff_enhancement_pipeline_v2.py` - Deprecated, no longer used
+- ⚠️  `unified_meta_pipeline.py` - Deprecated, orphan (subprocesses out to deleted `tiff_enhancement_pipeline.py`); deletion candidate
+- 🗑️  `tiff_enhancement_pipeline.py` - Deleted; was orphaned and broken since creation
+- ⚠️  `tiff_enhancement_pipeline_v2.py` - Deprecated, no longer used; deletion candidate
 
 ## Verification Steps
 

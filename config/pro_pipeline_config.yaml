@@ -1,18 +1,44 @@
 # Professional Pipeline Configuration
 # ===================================
 #
-# This file is a documentation reference / preset catalog for the
-# Transformation Portal Professional Pipeline. The CLI in
-# `transformation_portal.pipelines.pro_pipeline` does not currently
-# load this YAML directly — preset selection happens via the
-# `--preset` option (see `python -m transformation_portal.pipelines.pro_pipeline process --help`).
+# Loaded by the `--config` flag on `process` and `batch`. Parsed via
+# `ProPipelineConfig.from_yaml(path)` (see
+# `src/transformation_portal/pipelines/pro_pipeline.py`).
 #
-# Treat this document as the canonical source for preset names,
-# parameter ranges, and intended global defaults; mirror those values
-# in CLI flags or in code that consumes a `ProPipelineConfig` until a
-# YAML loader is wired up.
+# Recognised top-level sections:
+#   global:   maps to top-level dataclass fields (device, quality,
+#             output_format, bit_depth, preserve_metadata, use_cache,
+#             num_workers, linear_output, batch_size).
+#   stages:   each `<depth|ai|material|grading|finishing>` subsection
+#             merges into the matching `PipelineStage.config` dict
+#             (additive). An `enabled: <bool>` key inside a stage
+#             toggles that stage on/off.
+#   preset:   optional top-level scalar; one of the values in
+#             `PipelinePreset` (architectural-hero, interior-dramatic,
+#             ...). The CLI `--preset` flag overrides this when set
+#             explicitly.
 #
-# Example invocation (using the equivalent CLI flags):
+# Other top-level keys (e.g. `presets`, `performance`, `output`) below
+# are reference material today — they're parsed but not consumed by
+# `from_yaml` and exist so this file stays the canonical preset
+# catalog.
+#
+# CLI override precedence: CLI flags only override YAML values when
+# the user passes a value that differs from the documented CLI
+# default. Stage toggles (`--depth-aware` / `--no-depth`) always
+# reflect the CLI value.
+#
+# Example invocations:
+#   # YAML supplies everything (CLI flags left at defaults):
+#   python -m transformation_portal.pipelines.pro_pipeline process image.jpg \
+#       --config config/pro_pipeline_config.yaml --out ./enhanced
+#
+#   # YAML supplies most things; CLI overrides device + preset:
+#   python -m transformation_portal.pipelines.pro_pipeline process image.jpg \
+#       --config config/pro_pipeline_config.yaml --device cpu \
+#       --preset interior-dramatic --out ./enhanced
+#
+#   # CLI-only (no YAML):
 #   python -m transformation_portal.pipelines.pro_pipeline process image.jpg \
 #       --preset architectural-hero --out ./enhanced
 
