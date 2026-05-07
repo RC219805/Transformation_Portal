@@ -141,6 +141,7 @@ async function bundleText(entryPoint, options = {}) {
     format: options.format || "iife",
     globalName: options.globalName,
     legalComments: "none",
+    metafile: Boolean(options.metafile),
     minify: Boolean(options.minify),
     platform: "browser",
     target: ["es2022"],
@@ -160,12 +161,16 @@ async function bundleText(entryPoint, options = {}) {
   if (!outputText) {
     throw new Error(`esbuild did not emit a bundle for ${path.relative(REPO_ROOT, entryPoint)}`);
   }
-  return outputText;
+  return { text: outputText, metafile: bundleResult.metafile || null };
 }
 
 await ensureSupportedRuntime();
 
 const cssOnly = process.argv.includes("--css-only");
+const emitMetafile = process.argv.includes("--emit-metafile");
+const METAFILE_DIR = path.resolve(FRONTDOOR_ROOT, ".metafiles");
+const PORTAL_METAFILE_PATH = path.resolve(METAFILE_DIR, "portal-bundle.json");
+const REVIEW_SURFACE_METAFILE_PATH = path.resolve(METAFILE_DIR, "review-surface-bundle.json");
 
 if (process.argv.includes("--check-css")) {
   if (compatOverridesDisabled() && sourceImportsCompatOverrides()) {
@@ -201,19 +206,33 @@ if (!portalTemplate.includes(PORTAL_INTERNALS_PLACEHOLDER)) {
   throw new Error(`Portal template missing internal bundle placeholder: ${PORTAL_TEMPLATE_PATH}`);
 }
 
-const internalBundle = await bundleText(PORTAL_INTERNAL_ENTRY, {
+const internalBuild = await bundleText(PORTAL_INTERNAL_ENTRY, {
   format: "iife",
   globalName: "__PortalInternal",
+  metafile: emitMetafile,
   minify: true
 });
-const deferredReviewSurfaceBundle = await bundleText(PORTAL_REVIEW_SURFACE_ENTRY, {
+const deferredReviewSurfaceBuild = await bundleText(PORTAL_REVIEW_SURFACE_ENTRY, {
   format: "esm",
+  metafile: emitMetafile,
   minifySyntax: true,
   minifyWhitespace: true
 });
 
+if (emitMetafile) {
+  mkdirSync(METAFILE_DIR, { recursive: true });
+  if (internalBuild.metafile) {
+    writeFileSync(PORTAL_METAFILE_PATH, JSON.stringify(internalBuild.metafile, null, 2), "utf-8");
+  }
+  if (deferredReviewSurfaceBuild.metafile) {
+    writeFileSync(REVIEW_SURFACE_METAFILE_PATH, JSON.stringify(deferredReviewSurfaceBuild.metafile, null, 2), "utf-8");
+  }
+  console.log(`portal metafile: ${path.relative(REPO_ROOT, PORTAL_METAFILE_PATH)}`);
+  console.log(`review surface metafile: ${path.relative(REPO_ROOT, REVIEW_SURFACE_METAFILE_PATH)}`);
+}
+
 const nextPortalBundle = stripStandaloneLineComments(
-  portalTemplate.replace(PORTAL_INTERNALS_PLACEHOLDER, internalBundle.trim())
+  portalTemplate.replace(PORTAL_INTERNALS_PLACEHOLDER, internalBuild.text.trim())
 );
 const compactPortalBundle = (await transform(nextPortalBundle, {
   loader: "js",
@@ -224,7 +243,7 @@ const compactPortalBundle = (await transform(nextPortalBundle, {
   target: ["es2022"]
 })).code.trim();
 const portalChanged = writeIfChanged(PORTAL_ASSET_PATH, `${compactPortalBundle}\n`);
-const reviewSurfaceChanged = writeIfChanged(PORTAL_REVIEW_SURFACE_ASSET_PATH, `${deferredReviewSurfaceBundle.trim()}\n`);
+const reviewSurfaceChanged = writeIfChanged(PORTAL_REVIEW_SURFACE_ASSET_PATH, `${deferredReviewSurfaceBuild.text.trim()}\n`);
 const portalCssChanged = await buildPortalCssAsset();
 const portalTokenChanged = await writeMinifiedCssCopy(SHARED_TOKEN_SOURCE_PATH, PORTAL_SHARED_TOKEN_TARGET);
 const frontdoorTokenChanged = await writeMinifiedCssCopy(SHARED_TOKEN_SOURCE_PATH, FRONTDOOR_SHARED_TOKEN_TARGET);

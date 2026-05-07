@@ -357,5 +357,8 @@ local_artifacts/
 web/secure-landing/.next-build-verify/
 web/secure-landing/.next-smoke-*/
 
+# secure-landing on-demand bundle analysis (esbuild metafiles)
+web/secure-landing/.metafiles/
+
 # uv lockfile — auto-generated on every uv run; not tracked
 uv.lock
