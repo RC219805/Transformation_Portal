@@ -1683,15 +1683,15 @@ Contract notes:
                     <div id="artifactPreviewStage" class="artifact-review-stage rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/50">
                         <div id="artifactCompareStage" class="hidden grid grid-cols-1 md:grid-cols-2 gap-4">
                             <figure class="space-y-3">
-                                <img id="artifactPreviewImage" alt="Selected artifact preview" class="hidden w-full rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-900/60 object-contain max-h-[320px]" />
+                                <img id="artifactPreviewImage" alt="Selected artifact preview" class="hidden w-full rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-900/60 object-contain max-h-[320px]" loading="lazy" decoding="async" />
                                 <figcaption id="artifactPreviewPrimaryCaption" class="text-[11px] font-mono text-slate-500 dark:text-slate-400 break-all"></figcaption>
                             </figure>
                             <figure class="space-y-3">
-                                <img id="artifactCompareImage" alt="Comparison artifact preview" class="hidden w-full rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-900/60 object-contain max-h-[320px]" />
+                                <img id="artifactCompareImage" alt="Comparison artifact preview" class="hidden w-full rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-900/60 object-contain max-h-[320px]" loading="lazy" decoding="async" />
                                 <figcaption id="artifactCompareCaption" class="text-[11px] font-mono text-slate-500 dark:text-slate-400 break-all"></figcaption>
                             </figure>
                         </div>
-                        <img id="artifactPreviewSoloImage" alt="Artifact preview" class="hidden w-full rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-900/60 object-contain max-h-[320px]" />
+                        <img id="artifactPreviewSoloImage" alt="Artifact preview" class="hidden w-full rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-900/60 object-contain max-h-[320px]" loading="lazy" decoding="async" />
                         <div id="artifactMetadataCard" class="rounded-2xl border border-dashed border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-900/70 p-5 text-[12px] leading-6 text-slate-600 dark:text-slate-300">
                             Select a completed run to bring the primary review artifact, provenance context, and next actions into focus here.
                         </div>
@@ -1889,7 +1889,7 @@ Contract notes:
                 </div>
             </div>
             <div id="artifactViewerStage" class="artifact-viewer-stage mt-5">
-                <img id="artifactViewerImage" alt="Artifact viewer preview" class="artifact-viewer-image hidden" />
+                <img id="artifactViewerImage" alt="Artifact viewer preview" class="artifact-viewer-image hidden" loading="lazy" decoding="async" />
                 <div id="artifactViewerFallback" class="artifact-viewer-fallback hidden">
                     <p id="artifactViewerFallbackTitle" class="artifact-viewer-fallback-title">Inline preview unavailable</p>
                     <p id="artifactViewerFallbackDetail" class="artifact-viewer-fallback-detail">This artifact stays reviewable through its retained metadata and the managed raw asset link.</p>
