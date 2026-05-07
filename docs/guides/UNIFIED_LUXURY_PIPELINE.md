@@ -1,10 +1,12 @@
-# Unified Luxury Pipeline
+# Unified Luxury Pipeline (Compatibility)
 
-**Production-grade unified image processing pipeline for luxury real estate rendering, architectural visualization, and editorial post-production.**
+**Compatibility/convenience image-finishing facade for luxury real estate rendering, architectural visualization, and editorial post-production.**
+
+For governed production depth, PBR, Materials V3, APEX, run-card, and portal/orchestrator workflows, use `lux-depth-v3` and the `transformation_portal.lux_depth_v3` package. This pipeline remains available for legacy callers and lightweight multi-format finishing workflows.
 
 ## Overview
 
-The Unified Luxury Pipeline combines the best aspects of all previous pipeline implementations into a single, cohesive, production-ready system:
+The Unified Luxury Pipeline combines the best aspects of earlier image-finishing pipeline implementations into a single compatibility surface:
 
 - **Multi-format output generation** with proper bit-depth handling (from `premium_pipeline_fixed.py`)
 - **Modular stage-based architecture** with graceful failure handling (from `pro_pipeline.py`)

@@ -16,7 +16,6 @@ export function createDeferredOperateSurfaceApi(host) {
         state,
         els,
         portalRenderScheduler,
-        SAFE_JOB_STATES,
         EVENT_SOURCE_READY_STATE_CONNECTING,
         EVENT_SOURCE_READY_STATE_OPEN,
         EVENT_SOURCE_READY_STATE_CLOSED,
@@ -435,7 +434,6 @@ export function createDeferredOperateSurfaceApi(host) {
                 badgeColor = 'bg-red-50 text-red-700 border-red-200 dark:bg-red-900/30 dark:text-red-400 dark:border-red-800';
             }
 
-            const safeState = SAFE_JOB_STATES.has(job.state) ? job.state : 'offline';
             const safePipeline = String(job.pipeline || 'unknown');
             const safeId = String(job.id || 'job_unknown');
             const safeProgress = Math.max(0, Math.min(100, Number(job.progress) || 0));

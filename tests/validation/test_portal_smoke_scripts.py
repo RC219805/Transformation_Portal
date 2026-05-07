@@ -267,6 +267,7 @@ def test_portal_browser_can_inject_compare_ready_review_state():
 
     assert "synthetic/review-primary.png" in expression
     assert "synthetic/review-compare.png" in expression
+    assert "browser_previewable: true" in expression
     assert "portal-smoke-compare" in expression
     assert "renderReviewSurfaces();" in expression
 

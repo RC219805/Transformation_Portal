@@ -175,6 +175,7 @@ This table is the canonical progress ledger for extraction PRs that draw from th
 | Target 2B — Path resolution & security helpers | `app.py` | `src/transformation_portal/portal/path_security.py` | Landed | This PR: path security helpers extracted behind ADR-046 app compatibility wrappers |
 | Target 2C — SAM2 checkpoint security helpers | `app.py` | `src/transformation_portal/portal/sam2_checkpoint_security.py` | Landed | This PR: SAM2 checkpoint security helpers extracted behind ADR-047 app compatibility wrappers |
 | Target 2D — Archive index preflight helpers | `app.py` | `src/transformation_portal/portal/archive_index_preflight.py` | Landed | This PR: archive index preflight helpers extracted behind app compatibility wrappers |
+| Target 2E — Job artifact catalog helpers | `app.py` | `src/transformation_portal/portal/job_artifacts.py` | Landed | This PR: job artifact catalog and indexing helpers extracted behind app compatibility wrappers |
 | Target 3A — Segmentation cache helpers | `lux_depth_v3/segmentation_backend.py` | `lux_depth_v3/segmentation/_cache.py` | Landed | This PR: segmentation cache helpers extracted |
 | Target 3B — Stub backend | `lux_depth_v3/segmentation_backend.py` | `lux_depth_v3/segmentation/stub.py` | Landed | This PR: stub backend extracted |
 | Target 3C — EfficientSAM backend | `lux_depth_v3/segmentation_backend.py` | `lux_depth_v3/segmentation/efficient_sam.py` | Landed | This PR: EfficientSAM backend extracted |

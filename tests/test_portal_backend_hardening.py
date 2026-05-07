@@ -283,6 +283,7 @@ def test_artifact_endpoint_attaches_non_previewable(client: TestClient, tmp_path
     disposition = response.headers.get("content-disposition", "")
     assert "attachment" in disposition
     assert 'filename="report.html"' in disposition
+    assert response.headers["X-Content-Type-Options"] == "nosniff"
 
 
 # ---------------------------------------------------------------------------

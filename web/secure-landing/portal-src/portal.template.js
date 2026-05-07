@@ -6081,7 +6081,6 @@ function _createDeferredOperateSurfaceHost() {
         state,
         els,
         portalRenderScheduler,
-        SAFE_JOB_STATES,
         EVENT_SOURCE_READY_STATE_CONNECTING,
         EVENT_SOURCE_READY_STATE_OPEN,
         EVENT_SOURCE_READY_STATE_CLOSED,
@@ -6119,9 +6118,17 @@ function _loadDeferredOperateSurface() {
     return loadDeferredSurface('operate', _createDeferredOperateSurfaceHost);
 }
 
+function _isOperateQueuePanelVisible() {
+    return Boolean(
+        els.queueShell
+        && !els.queueShell.classList.contains('hidden')
+        && els.queueShell.getAttribute('aria-hidden') !== 'true'
+    );
+}
+
 function _shouldLoadDeferredOperateSurface() {
     if (!_isBootstrapReady()) return false;
-    return state.currentView === 'operate' || state.currentView === 'review';
+    return state.currentView === 'operate' || state.currentView === 'review' || _isOperateQueuePanelVisible();
 }
 
 function _primeDeferredOperateSurface() {
@@ -6156,9 +6163,19 @@ function _shouldLoadDeferredBuildSurface() {
     return state.currentView === 'build';
 }
 
+function _reconcileDeferredBuildSurface(api = _deferredBuildSurfaceApi()) {
+    if (!api) return;
+    if (api.applyLuxMetadataToControls) api.applyLuxMetadataToControls();
+    if (api.renderFieldPreviewStatuses) api.renderFieldPreviewStatuses();
+    if (api.syncRuntimeWorkerModeControls) api.syncRuntimeWorkerModeControls();
+    if (api.refreshArchiveFieldVisibility) api.refreshArchiveFieldVisibility();
+}
+
 function _primeDeferredBuildSurface() {
     if (!_shouldLoadDeferredBuildSurface()) return;
-    void _loadDeferredBuildSurface();
+    void _loadDeferredBuildSurface().then((loaded) => {
+        _reconcileDeferredBuildSurface(loaded);
+    });
 }
 
 function _renderDeferredReviewSurfaceFallback(jobsLoading = false) {
@@ -9798,6 +9815,7 @@ function renderJobQueue(includeReviewSurfaces = true) {
         api.renderJobQueue(includeReviewSurfaces);
         return;
     }
+    if (!_shouldLoadDeferredOperateSurface()) return;
     void _loadDeferredOperateSurface().then((loaded) => {
         if (loaded?.renderJobQueue) loaded.renderJobQueue(includeReviewSurfaces);
     });

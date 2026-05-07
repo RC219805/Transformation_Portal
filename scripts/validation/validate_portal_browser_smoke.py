@@ -1490,6 +1490,7 @@ def _inject_compare_ready_review_expression(job_id: str) -> str:
     artifact_type: 'image',
     media_kind: 'image',
     previewable: true,
+    browser_previewable: true,
     content_type: 'image/png',
     size_bytes: 2048,
     sha256: '1111111111111111111111111111111111111111111111111111111111111111',
@@ -1505,6 +1506,7 @@ def _inject_compare_ready_review_expression(job_id: str) -> str:
     artifact_type: 'image',
     media_kind: 'image',
     previewable: true,
+    browser_previewable: true,
     content_type: 'image/png',
     size_bytes: 1984,
     sha256: '2222222222222222222222222222222222222222222222222222222222222222',
@@ -1548,6 +1550,7 @@ def _inject_compare_ready_review_expression(job_id: str) -> str:
     artifact_type: 'vlm_caption_proxy',
     media_kind: 'image',
     previewable: true,
+    browser_previewable: true,
     content_type: 'image/png',
     size_bytes: 1024,
     sha256: '6666666666666666666666666666666666666666666666666666666666666666',
@@ -2710,40 +2713,50 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
             f"Artifact viewer keyboard previous should restore the primary artifact: {viewer_prev_state}",
         )
 
-        print("portal-browser-smoke: adjusting viewer zoom with keyboard shortcuts", flush=True)
-        connection.evaluate(_key_expression("+"))
-        viewer_zoomed_state = _poll(
-            connection,
-            _state_probe_expression(),
-            predicate=lambda value: (
-                isinstance(value, dict)
-                and bool(value.get("artifactViewerVisible"))
-                and str(value.get("artifactViewerZoomValue", "")).strip() == "125% zoom"
-            ),
-            timeout_seconds=args.timeout_seconds,
-            description="artifact viewer keyboard zoom in",
-        )
-        _expect(
-            "125% zoom" == str(viewer_zoomed_state.get("artifactViewerZoomValue", "")).strip(),
-            f"Artifact viewer keyboard zoom-in should update the viewer state: {viewer_zoomed_state}",
-        )
+        if bool(viewer_prev_state.get("artifactViewerFallbackVisible")):
+            _expect(
+                str(viewer_prev_state.get("artifactViewerFallbackTitle", "")).strip() == "Inline preview unavailable",
+                f"Artifact viewer fallback should be explicit when the inline preview cannot load: {viewer_prev_state}",
+            )
+            _expect(
+                "Inline preview unavailable" in str(viewer_prev_state.get("artifactViewerZoomValue", "")),
+                f"Fallback viewer should replace zoom controls with unavailable-preview status: {viewer_prev_state}",
+            )
+        else:
+            print("portal-browser-smoke: adjusting viewer zoom with keyboard shortcuts", flush=True)
+            connection.evaluate(_key_expression("+"))
+            viewer_zoomed_state = _poll(
+                connection,
+                _state_probe_expression(),
+                predicate=lambda value: (
+                    isinstance(value, dict)
+                    and bool(value.get("artifactViewerVisible"))
+                    and str(value.get("artifactViewerZoomValue", "")).strip() == "125% zoom"
+                ),
+                timeout_seconds=args.timeout_seconds,
+                description="artifact viewer keyboard zoom in",
+            )
+            _expect(
+                "125% zoom" == str(viewer_zoomed_state.get("artifactViewerZoomValue", "")).strip(),
+                f"Artifact viewer keyboard zoom-in should update the viewer state: {viewer_zoomed_state}",
+            )
 
-        connection.evaluate(_key_expression("0"))
-        viewer_reset_state = _poll(
-            connection,
-            _state_probe_expression(),
-            predicate=lambda value: (
-                isinstance(value, dict)
-                and bool(value.get("artifactViewerVisible"))
-                and str(value.get("artifactViewerZoomValue", "")).strip() == "100% zoom"
-            ),
-            timeout_seconds=args.timeout_seconds,
-            description="artifact viewer keyboard zoom reset",
-        )
-        _expect(
-            str(viewer_reset_state.get("artifactViewerStatus", "")).strip(),
-            f"Artifact viewer should expose a live status message while open: {viewer_reset_state}",
-        )
+            connection.evaluate(_key_expression("0"))
+            viewer_reset_state = _poll(
+                connection,
+                _state_probe_expression(),
+                predicate=lambda value: (
+                    isinstance(value, dict)
+                    and bool(value.get("artifactViewerVisible"))
+                    and str(value.get("artifactViewerZoomValue", "")).strip() == "100% zoom"
+                ),
+                timeout_seconds=args.timeout_seconds,
+                description="artifact viewer keyboard zoom reset",
+            )
+            _expect(
+                str(viewer_reset_state.get("artifactViewerStatus", "")).strip(),
+                f"Artifact viewer should expose a live status message while open: {viewer_reset_state}",
+            )
 
         print("portal-browser-smoke: closing the artifact viewer with Escape", flush=True)
         connection.evaluate(_key_expression("Escape"))
