@@ -326,7 +326,7 @@ def test_ml_stack_imports(monkeypatch: pytest.MonkeyPatch):
 
     # Check sklearn (if available)
     assert_importable_if_installed("scikit-learn", "sklearn", "1.8.0")
-    assert_importable_if_installed("diffusers", "diffusers", "0.36.0")
+    assert_importable_if_installed("diffusers", "diffusers", "0.38.0")
     assert_importable_if_installed("transformers", "transformers", "4.57.0")
     assert_importable_if_installed("torchvision", "torchvision", "0.17.2")
     assert_importable_if_installed("timm", "timm")

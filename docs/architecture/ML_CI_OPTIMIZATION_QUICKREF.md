@@ -85,7 +85,7 @@ torchvision==0.25.0+cpu
 # Standard ML dependencies with range pins
 -c constraints.txt  # Banned package enforcement
 transformers>=4.57.0,<6
-diffusers>=0.36.0,<1
+diffusers>=0.38.0,<1
 sentence-transformers>=3.1.0,<6  # CVE-73169 minimum
 controlnet-aux>=0.0.6,<1
 huggingface-hub>=0.19.0,<2

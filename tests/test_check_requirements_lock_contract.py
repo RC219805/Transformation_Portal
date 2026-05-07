@@ -111,7 +111,7 @@ def fixture_isolated_repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Pa
         tmp_path,
         "ml-core-darwin-arm64.txt",
         "3.11",
-        body="torch==2.8.0\ntorchvision==0.23.0\ntransformers==5.0.0\ncoremltools==9.0\n",
+        body="torch==2.8.0\ntorchvision==0.23.0\ndiffusers==0.38.0\ntransformers==5.0.0\ncoremltools==9.0\n",
     )
     return tmp_path
 
@@ -350,7 +350,7 @@ def test_retired_darwin_x86_input_is_reported(isolated_repo: Path) -> None:
 
 def test_darwin_arm64_input_requires_coremltools(isolated_repo: Path) -> None:
     (isolated_repo / "requirements" / "ml-core-darwin-arm64.in").write_text(
-        "torch==2.8.0\ntorchvision==0.23.0\ntransformers>=5.0.0,<5.1\n",
+        "torch==2.8.0\ntorchvision==0.23.0\ndiffusers>=0.38.0,<1\ntransformers>=5.0.0,<5.1\n",
         encoding="utf-8",
     )
 
@@ -364,7 +364,7 @@ def test_darwin_arm64_input_requires_coremltools(isolated_repo: Path) -> None:
 
 def test_darwin_arm64_input_requires_supported_torch_pin(isolated_repo: Path) -> None:
     (isolated_repo / "requirements" / "ml-core-darwin-arm64.in").write_text(
-        "torch==2.7.0\ntorchvision==0.23.0\ntransformers>=5.0.0,<5.1\ncoremltools>=7.0\n",
+        "torch==2.7.0\ntorchvision==0.23.0\ndiffusers>=0.38.0,<1\ntransformers>=5.0.0,<5.1\ncoremltools>=7.0\n",
         encoding="utf-8",
     )
 
@@ -377,7 +377,7 @@ def test_darwin_arm64_input_requires_supported_torch_pin(isolated_repo: Path) ->
 
 def test_darwin_arm64_input_requires_supported_torchvision_pin(isolated_repo: Path) -> None:
     (isolated_repo / "requirements" / "ml-core-darwin-arm64.in").write_text(
-        "torch==2.8.0\ntorchvision==0.22.0\ntransformers>=5.0.0,<5.1\ncoremltools>=7.0\n",
+        "torch==2.8.0\ntorchvision==0.22.0\ndiffusers>=0.38.0,<1\ntransformers>=5.0.0,<5.1\ncoremltools>=7.0\n",
         encoding="utf-8",
     )
 
@@ -390,7 +390,7 @@ def test_darwin_arm64_input_requires_supported_torchvision_pin(isolated_repo: Pa
 
 def test_darwin_arm64_input_requires_supported_transformers_range(isolated_repo: Path) -> None:
     (isolated_repo / "requirements" / "ml-core-darwin-arm64.in").write_text(
-        "torch==2.8.0\ntorchvision==0.23.0\ntransformers>=4.57.0,<5\ncoremltools>=7.0\n",
+        "torch==2.8.0\ntorchvision==0.23.0\ndiffusers>=0.38.0,<1\ntransformers>=4.57.0,<5\ncoremltools>=7.0\n",
         encoding="utf-8",
     )
 
@@ -402,12 +402,26 @@ def test_darwin_arm64_input_requires_supported_transformers_range(isolated_repo:
     ]
 
 
+def test_darwin_arm64_input_requires_supported_diffusers_range(isolated_repo: Path) -> None:
+    (isolated_repo / "requirements" / "ml-core-darwin-arm64.in").write_text(
+        "torch==2.8.0\ntorchvision==0.23.0\ndiffusers>=0.36.0,<1\ntransformers>=5.0.0,<5.1\ncoremltools>=7.0\n",
+        encoding="utf-8",
+    )
+
+    errors = contract.validate_darwin_input_guards()
+
+    assert errors == [
+        f"{isolated_repo / 'requirements' / 'ml-core-darwin-arm64.in'} must declare 'diffusers>=0.38.0,<1' "
+        "for the supported Diffusers security baseline."
+    ]
+
+
 def test_platform_lock_runtime_compatibility_requires_arm64_coremltools(isolated_repo: Path) -> None:
     write_lockfile(
         isolated_repo,
         "ml-core-darwin-arm64.txt",
         "3.11",
-        body="torch==2.8.0\ntorchvision==0.23.0\ntransformers==5.0.0\nnumpy==2.4.3\n",
+        body="torch==2.8.0\ntorchvision==0.23.0\ndiffusers==0.38.0\ntransformers==5.0.0\nnumpy==2.4.3\n",
     )
 
     errors = contract.validate_platform_lock_runtime_compatibility()
@@ -418,12 +432,28 @@ def test_platform_lock_runtime_compatibility_requires_arm64_coremltools(isolated
     ]
 
 
+def test_platform_lock_runtime_compatibility_requires_arm64_diffusers(isolated_repo: Path) -> None:
+    write_lockfile(
+        isolated_repo,
+        "ml-core-darwin-arm64.txt",
+        "3.11",
+        body="torch==2.8.0\ntorchvision==0.23.0\ntransformers==5.0.0\nnumpy==2.4.3\ncoremltools==9.0\n",
+    )
+
+    errors = contract.validate_platform_lock_runtime_compatibility()
+
+    assert errors == [
+        f"{isolated_repo / 'requirements' / 'ml-core-darwin-arm64.txt'} must include a pinned diffusers dependency so the supported Diffusers "
+        "security baseline remains part of the checked-in arm64 contract."
+    ]
+
+
 def test_platform_lock_runtime_compatibility_requires_supported_arm64_torch_rotation(isolated_repo: Path) -> None:
     write_lockfile(
         isolated_repo,
         "ml-core-darwin-arm64.txt",
         "3.11",
-        body="torch==2.2.2\ntorchvision==0.17.2\ntransformers==5.0.0\nnumpy==2.4.3\ncoremltools==9.0\n",
+        body="torch==2.2.2\ntorchvision==0.17.2\ndiffusers==0.38.0\ntransformers==5.0.0\nnumpy==2.4.3\ncoremltools==9.0\n",
     )
 
     errors = contract.validate_platform_lock_runtime_compatibility()
@@ -439,7 +469,7 @@ def test_platform_lock_runtime_compatibility_requires_supported_transformers_rot
         isolated_repo,
         "ml-core-darwin-arm64.txt",
         "3.11",
-        body="torch==2.8.0\ntorchvision==0.23.0\ntransformers==4.57.6\nnumpy==2.4.4\ncoremltools==9.0\n",
+        body="torch==2.8.0\ntorchvision==0.23.0\ndiffusers==0.38.0\ntransformers==4.57.6\nnumpy==2.4.4\ncoremltools==9.0\n",
     )
 
     errors = contract.validate_platform_lock_runtime_compatibility()
@@ -447,6 +477,22 @@ def test_platform_lock_runtime_compatibility_requires_supported_transformers_rot
     assert errors == [
         f"{isolated_repo / 'requirements' / 'ml-core-darwin-arm64.txt'} must rotate to transformers>=5.0.0 "
         "for the supported Transformers security baseline."
+    ]
+
+
+def test_platform_lock_runtime_compatibility_requires_supported_diffusers_rotation(isolated_repo: Path) -> None:
+    write_lockfile(
+        isolated_repo,
+        "ml-core-darwin-arm64.txt",
+        "3.11",
+        body="torch==2.8.0\ntorchvision==0.23.0\ndiffusers==0.37.1\ntransformers==5.0.0\nnumpy==2.4.4\ncoremltools==9.0\n",
+    )
+
+    errors = contract.validate_platform_lock_runtime_compatibility()
+
+    assert errors == [
+        f"{isolated_repo / 'requirements' / 'ml-core-darwin-arm64.txt'} must rotate to diffusers>=0.38.0 "
+        "for the supported Diffusers security baseline."
     ]
 
 
