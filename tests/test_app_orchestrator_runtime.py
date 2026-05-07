@@ -1744,7 +1744,7 @@ def test_portal_artifact_previews_lazy_load_and_decode_async() -> None:
         marker_index = html.index(marker)
         start = html.rindex("<img", 0, marker_index)
         end = html.index(">", marker_index)
-        tag = html[start:end + 1]
+        tag = html[start : end + 1]
         assert 'loading="lazy"' in tag, f'{img_id} missing loading="lazy"'
         assert 'decoding="async"' in tag, f'{img_id} missing decoding="async"'
 
