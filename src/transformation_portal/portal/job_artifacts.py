@@ -1,4 +1,9 @@
-"""Portal job artifact cataloging and response metadata helpers."""
+"""Portal job artifact cataloging and response metadata helpers.
+
+This app-independent module validates, indexes, and serializes job artifacts
+while preserving the legacy app.py payload contract through injected runtime
+limits and compatibility wrappers.
+"""
 
 from __future__ import annotations
 
