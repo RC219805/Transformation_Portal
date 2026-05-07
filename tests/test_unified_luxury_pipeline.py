@@ -26,6 +26,7 @@ import pytest
 from PIL import Image
 
 from transformation_portal.pipelines.unified_luxury_pipeline import (
+    HAS_TIFFFILE,
     OutputFormat,
     PipelineStage,
     PipelineStatistics,
@@ -389,6 +390,42 @@ class TestOutputGeneration:
         for path in results.values():
             assert path.exists()
 
+    def test_requested_output_failure_raises_and_does_not_count_success(self, sample_image_file, temp_dir):
+        """Test requested output failures fail the required output stage."""
+        config = UnifiedPipelineConfig(
+            scene_type=SceneType.INTERIOR,
+            output_dir=temp_dir,
+            output_formats=[OutputFormat.WEB_4K],
+            enable_depth=False,
+            enable_material_response=False,
+            enable_color_grading=False,
+        )
+        pipeline = UnifiedLuxuryPipeline(config)
+
+        with patch.object(pipeline, "_save_web_4k", side_effect=RuntimeError("encoder failed")):
+            with pytest.raises(RuntimeError, match="Failed to generate requested output format"):
+                pipeline.process(sample_image_file)
+
+        assert pipeline.stats.images_processed == 0
+        assert pipeline.stats.images_failed == 1
+
+    @pytest.mark.skipif(not HAS_TIFFFILE, reason="ndarray TIFF path requires tifffile")
+    def test_master_tiff_generation_accepts_ndarray(self, temp_dir):
+        """Test ndarray master TIFF generation logs dimensions without raising."""
+        arr = np.zeros((12, 16, 3), dtype=np.float32)
+        arr[..., 0] = 0.25
+        arr[..., 1] = 0.5
+        arr[..., 2] = 0.75
+
+        config = UnifiedPipelineConfig(output_dir=temp_dir, output_formats=[OutputFormat.MASTER_TIFF])
+        pipeline = UnifiedLuxuryPipeline(config)
+
+        output_path = pipeline._save_master_tiff(arr, "array_input", {})
+
+        assert output_path.exists()
+        loaded = Image.open(output_path)
+        assert loaded.size == (16, 12)
+
 
 class TestMetadataPreservation:
     """Test metadata preservation through pipeline."""
@@ -446,6 +483,93 @@ class TestGracefulDegradation:
         # Should raise exception for non-existent file
         with pytest.raises(FileNotFoundError):
             pipeline.process(Path("nonexistent_file.jpg"))
+
+
+class TestPerCallOverrides:
+    """Test per-call override behavior."""
+
+    def test_process_override_can_disable_depth_for_current_call(self, sample_image_file, temp_dir):
+        """Test enable_depth override gates the current call only."""
+        config = UnifiedPipelineConfig(
+            scene_type=SceneType.INTERIOR,
+            output_dir=temp_dir,
+            output_formats=[OutputFormat.MASTER_TIFF],
+            enable_depth=True,
+            enable_material_response=False,
+            enable_color_grading=False,
+        )
+        pipeline = UnifiedLuxuryPipeline(config)
+
+        with patch.object(pipeline, "_apply_depth_processing", wraps=pipeline._apply_depth_processing) as mock_depth:
+            results = pipeline.process(sample_image_file, enable_depth=False)
+
+        assert results["master"].exists()
+        mock_depth.assert_not_called()
+        assert pipeline.config.enable_depth is True
+
+    def test_process_override_can_enable_vfx_for_current_call(self, sample_image_file, temp_dir):
+        """Test enable_vfx override can activate a constructor-disabled stage."""
+        config = UnifiedPipelineConfig(
+            scene_type=SceneType.INTERIOR,
+            output_dir=temp_dir,
+            output_formats=[OutputFormat.MASTER_TIFF],
+            enable_depth=False,
+            enable_material_response=False,
+            enable_vfx=False,
+            enable_color_grading=False,
+        )
+        pipeline = UnifiedLuxuryPipeline(config)
+
+        with patch.object(pipeline, "_apply_vfx_effects", wraps=pipeline._apply_vfx_effects) as mock_vfx:
+            results = pipeline.process(sample_image_file, enable_vfx=True)
+
+        assert results["master"].exists()
+        mock_vfx.assert_called_once()
+        assert pipeline.config.enable_vfx is False
+
+    def test_process_override_can_enable_material_response_for_current_call(self, sample_image_file, temp_dir):
+        """Test enable_material_response override can activate a constructor-disabled stage."""
+        config = UnifiedPipelineConfig(
+            scene_type=SceneType.INTERIOR,
+            output_dir=temp_dir,
+            output_formats=[OutputFormat.MASTER_TIFF],
+            enable_depth=False,
+            enable_material_response=False,
+            enable_color_grading=False,
+        )
+        pipeline = UnifiedLuxuryPipeline(config)
+
+        with patch.object(
+            pipeline,
+            "_apply_material_response",
+            wraps=pipeline._apply_material_response,
+        ) as mock_material:
+            results = pipeline.process(sample_image_file, enable_material_response=True)
+
+        assert results["master"].exists()
+        mock_material.assert_called_once()
+        assert pipeline.config.enable_material_response is False
+
+    def test_process_override_uses_output_dir_for_current_call(self, sample_image_file, temp_dir):
+        """Test output_dir override does not mutate constructor config."""
+        default_output_dir = temp_dir / "default"
+        override_output_dir = temp_dir / "override"
+        config = UnifiedPipelineConfig(
+            scene_type=SceneType.INTERIOR,
+            output_dir=default_output_dir,
+            output_formats=[OutputFormat.MASTER_TIFF],
+            enable_depth=False,
+            enable_material_response=False,
+            enable_color_grading=False,
+        )
+        pipeline = UnifiedLuxuryPipeline(config)
+
+        results = pipeline.process(sample_image_file, output_dir=override_output_dir)
+
+        assert results["master"].parent == override_output_dir
+        assert results["master"].exists()
+        assert not (default_output_dir / f"{sample_image_file.stem}_MASTER.tif").exists()
+        assert pipeline.config.output_dir == default_output_dir
 
 
 class TestBatchProcessing:
@@ -557,6 +681,45 @@ class TestConvenienceFunctions:
         # Should create pipeline and call process
         assert mock_pipeline_class.called
         assert mock_instance.process.called
+
+    @patch("transformation_portal.pipelines.unified_luxury_pipeline.UnifiedLuxuryPipeline")
+    def test_batch_process_luxury_renders_default_includes_tiff(self, mock_pipeline_class, sample_image, temp_dir):
+        """Test default batch discovery includes .tif and .tiff but not typo extensions."""
+        input_dir = temp_dir / "inputs"
+        input_dir.mkdir()
+        sample_image.save(input_dir / "a.tiff")
+        sample_image.save(input_dir / "b.tif")
+        sample_image.save(input_dir / "c.jpg")
+        (input_dir / "skip.ti").write_text("not an image")
+
+        mock_instance = MagicMock()
+        mock_instance.batch_process.return_value = {}
+        mock_pipeline_class.return_value = mock_instance
+
+        batch_process_luxury_renders(input_dir, output_dir=temp_dir / "output")
+
+        input_paths = mock_instance.batch_process.call_args.args[0]
+        assert input_dir / "a.tiff" in input_paths
+        assert input_dir / "b.tif" in input_paths
+        assert input_dir / "c.jpg" in input_paths
+        assert input_dir / "skip.ti" not in input_paths
+
+    @patch("transformation_portal.pipelines.unified_luxury_pipeline.UnifiedLuxuryPipeline")
+    def test_batch_process_luxury_renders_respects_custom_pattern(self, mock_pipeline_class, sample_image, temp_dir):
+        """Test custom batch discovery pattern is honored."""
+        input_dir = temp_dir / "inputs"
+        input_dir.mkdir()
+        sample_image.save(input_dir / "keep.png")
+        sample_image.save(input_dir / "skip.jpg")
+
+        mock_instance = MagicMock()
+        mock_instance.batch_process.return_value = {}
+        mock_pipeline_class.return_value = mock_instance
+
+        batch_process_luxury_renders(input_dir, output_dir=temp_dir / "output", pattern="*.png")
+
+        input_paths = mock_instance.batch_process.call_args.args[0]
+        assert input_paths == [input_dir / "keep.png"]
 
 
 class TestDeviceDetection:
