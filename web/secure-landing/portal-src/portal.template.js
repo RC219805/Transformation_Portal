@@ -7704,15 +7704,16 @@ function applyLuxMetadataToControls() {
     if (els.raw.demosaic) {
         els.raw.demosaic.value = String(rawDemosaicField?.display_value || rawDemosaicField?.default || state.config.raw?.demosaic || 'AHD');
     }
-    if (els.reconstruction.iterations && iterationsField?.min) {
-        els.reconstruction.iterations.min = String(iterationsField.min);
-    }
-    if (els.runtime.maxWorkers && maxWorkersField?.min) {
-        els.runtime.maxWorkers.min = String(maxWorkersField.min);
-    }
-    if (els.runtime.maxGpuWorkers && maxGpuWorkersField?.min) {
-        els.runtime.maxGpuWorkers.min = String(maxGpuWorkersField.min);
-    }
+    _applyNumericConstraints(els.reconstruction.iterations, iterationsField);
+    _applyNumericConstraints(els.runtime.maxWorkers, maxWorkersField);
+    _applyNumericConstraints(els.runtime.maxGpuWorkers, maxGpuWorkersField);
+}
+
+function _applyNumericConstraints(input, field) {
+    if (!input || !field) return;
+    if (field.min !== undefined && field.min !== null) input.min = String(field.min);
+    if (field.max !== undefined && field.max !== null) input.max = String(field.max);
+    if (field.step !== undefined && field.step !== null) input.step = String(field.step);
 }
 
 function _previewIssueForField(fieldName, payload = null) {
@@ -8961,6 +8962,34 @@ function refreshArchiveFieldVisibility() {
     if (els.rightsManifestField) {
         els.rightsManifestField.classList.toggle('hidden', !(pipelineName === 'archive-gate-b' || pipelineName === 'archive-gate-c'));
     }
+    _setInputRequired(els.archiveIndexPath, pipelineName === 'archive-gate-a');
+    _setInputRequired(els.rightsManifestPath, pipelineName === 'archive-gate-b' || pipelineName === 'archive-gate-c');
+}
+
+function _setInputRequired(input, required) {
+    if (!input) return;
+    if (required) {
+        input.setAttribute('required', '');
+        input.setAttribute('aria-required', 'true');
+    } else {
+        input.removeAttribute('required');
+        input.removeAttribute('aria-required');
+    }
+}
+
+function _firstInvalidBuildInput() {
+    const candidates = [
+        els.inputDir,
+        els.outputDir,
+        els.archiveIndexPath,
+        els.rightsManifestPath
+    ];
+    for (const input of candidates) {
+        if (!input || typeof input.checkValidity !== 'function') continue;
+        if (input.offsetParent === null && input.getClientRects().length === 0) continue;
+        if (!input.checkValidity()) return input;
+    }
+    return null;
 }
 
 function updateUIFromState() {
@@ -10798,6 +10827,16 @@ function handleJobListClick(event) {
 
 async function submitJob() {
     if (_blockManagedUnavailableAction('dispatch jobs')) return;
+    const invalidField = _firstInvalidBuildInput();
+    if (invalidField) {
+        invalidField.reportValidity();
+        void emitPortalEvent('dispatch_blocked', {
+            surface: 'dispatch',
+            field: invalidField.id || '',
+            reasons: ['client_constraint_invalid']
+        });
+        return;
+    }
     const payload = generatePayload();
     const readinessStatus = currentPipelineDispatchStatus();
 
