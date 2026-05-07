@@ -96,14 +96,26 @@ export function buildRequestUrl(request, pathname) {
   return url;
 }
 
-export function applySecurityHeaders(response, { csp = null } = {}) {
+export function generateScriptNonce() {
+  const cryptoImpl = globalThis.crypto;
+  if (!cryptoImpl || typeof cryptoImpl.getRandomValues !== "function") {
+    throw new Error("Secure random source unavailable for script nonce generation");
+  }
+  const bytes = cryptoImpl.getRandomValues(new Uint8Array(16));
+  return Buffer.from(bytes).toString("base64");
+}
+
+export function applySecurityHeaders(response, { csp = null, scriptNonce = null } = {}) {
   for (const [name, value] of Object.entries(BASE_SECURITY_HEADERS)) {
     if (!response.headers.has(name)) {
       response.headers.set(name, value);
     }
   }
   if (csp) {
-    response.headers.set("Content-Security-Policy", csp);
+    const finalCsp = scriptNonce
+      ? csp.replace("script-src 'none'", `script-src 'nonce-${scriptNonce}'`)
+      : csp;
+    response.headers.set("Content-Security-Policy", finalCsp);
   }
   return response;
 }

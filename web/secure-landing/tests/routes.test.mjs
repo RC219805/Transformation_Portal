@@ -723,13 +723,12 @@ test("homepage GET serves the public DNA landing page instead of redirecting", a
   }
 });
 
-test("homepage route is explicitly static and ignores authenticated session hints", async () => {
+test("homepage GET is stateless and ignores authenticated session hints", async () => {
   const env = withTempEnvironment();
 
   try {
     const sessions = await importFresh("../lib/sessions.js");
     const db = getDb(env.dbPath);
-    const routeSource = readFileSync(path.resolve(process.cwd(), "app", "route.js"), "utf-8");
     const { GET } = await importFresh("../app/route.js");
     const authenticatedSession = sessions.rotateAuthenticatedSession(
       sessions.createAnonymousSession(),
@@ -755,7 +754,6 @@ test("homepage route is explicitly static and ignores authenticated session hint
       .prepare("SELECT last_seen_at, idle_expires_at FROM sessions WHERE id = ?")
       .get(authenticatedSession.id);
 
-    assert.match(routeSource, /dynamic = "force-static"/);
     assert.equal(response.status, 200);
     assert.equal(response.headers.get("set-cookie"), null);
     assert.match(html, /(?:data-ui="homepage-utility-cta"[^>]*href="\/login"|href="\/login"[^>]*data-ui="homepage-utility-cta")/);

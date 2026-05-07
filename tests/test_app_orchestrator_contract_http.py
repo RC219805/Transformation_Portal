@@ -2043,6 +2043,121 @@ def test_portal_rum_invalid_payload_returns_sanitized_reason(
     assert body["error"]["details"] == {"field": "payload", "reason": reason}
 
 
+def test_portal_rum_contract_accepts_landing_rendered_event(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("TP_PORTAL_RUM_ENABLED", "1")
+    monkeypatch.setenv("TP_PORTAL_RUM_ROLLOUT_PERCENT", "100")
+
+    response = client.post(
+        "/v1/portal/rum",
+        json={
+            "event_type": "landing_rendered",
+            "route": "/",
+            "view": "landing",
+            "metric": "duration",
+            "value": 142.5,
+            "unit": "ms",
+        },
+    )
+    body = response.json()
+
+    assert response.status_code == 200
+    assert body["success"] is True
+    assert body["data"]["accepted"] is True
+    event = body["data"]["event"]
+    assert event["event_type"] == "landing_rendered"
+    assert event["route"] == "/"
+    assert event["view"] == "landing"
+    assert event["metric"] == "duration"
+    assert event["value"] == 142.5
+    assert event["unit"] == "ms"
+
+
+def test_portal_rum_contract_accepts_login_rendered_event(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("TP_PORTAL_RUM_ENABLED", "1")
+    monkeypatch.setenv("TP_PORTAL_RUM_ROLLOUT_PERCENT", "100")
+
+    response = client.post(
+        "/v1/portal/rum",
+        json={
+            "event_type": "login_rendered",
+            "route": "/login",
+            "view": "login",
+            "metric": "duration",
+            "value": 87.25,
+            "unit": "ms",
+        },
+    )
+    body = response.json()
+
+    assert response.status_code == 200
+    assert body["success"] is True
+    assert body["data"]["accepted"] is True
+    event = body["data"]["event"]
+    assert event["event_type"] == "login_rendered"
+    assert event["route"] == "/login"
+    assert event["view"] == "login"
+
+
+def test_portal_rum_contract_accepts_core_web_vital_from_root_route(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("TP_PORTAL_RUM_ENABLED", "1")
+    monkeypatch.setenv("TP_PORTAL_RUM_ROLLOUT_PERCENT", "100")
+
+    response = client.post(
+        "/v1/portal/rum",
+        json={
+            "event_type": "core_web_vital",
+            "route": "/",
+            "view": "landing",
+            "metric": "lcp",
+            "value": 1820.5,
+            "unit": "ms",
+        },
+    )
+    body = response.json()
+
+    assert response.status_code == 200
+    assert body["data"]["accepted"] is True
+    assert body["data"]["event"]["route"] == "/"
+    assert body["data"]["event"]["view"] == "landing"
+    assert body["data"]["event"]["metric"] == "lcp"
+
+
+def test_portal_rum_contract_accepts_core_web_vital_from_login_route(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("TP_PORTAL_RUM_ENABLED", "1")
+    monkeypatch.setenv("TP_PORTAL_RUM_ROLLOUT_PERCENT", "100")
+
+    response = client.post(
+        "/v1/portal/rum",
+        json={
+            "event_type": "core_web_vital",
+            "route": "/login",
+            "view": "login",
+            "metric": "cls",
+            "value": 0.0125,
+            "unit": "score",
+        },
+    )
+    body = response.json()
+
+    assert response.status_code == 200
+    assert body["data"]["accepted"] is True
+    assert body["data"]["event"]["route"] == "/login"
+    assert body["data"]["event"]["view"] == "login"
+    assert body["data"]["event"]["metric"] == "cls"
+
+
 def test_readiness_contract_reports_pipeline_status_matrix(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,

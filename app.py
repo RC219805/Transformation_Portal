@@ -1256,9 +1256,18 @@ PORTAL_ALLOWED_RUM_EVENT_TYPES = {
     "core_web_vital",
     "queue_request",
     "sse_reconnect",
+    "landing_rendered",
+    "login_rendered",
 }
-PORTAL_ALLOWED_RUM_ROUTES = {"/portal"}
-PORTAL_ALLOWED_RUM_VIEWS = {"overview", "build", "operate", "review"}
+PORTAL_ALLOWED_RUM_ROUTES = {"/portal", "/", "/login"}
+PORTAL_ALLOWED_RUM_VIEWS = {
+    "overview",
+    "build",
+    "operate",
+    "review",
+    "landing",
+    "login",
+}
 PORTAL_ALLOWED_RUM_UNITS = {"ms", "score", "count"}
 PORTAL_ALLOWED_RUM_METRICS = {
     "bootstrap_ready": {"duration"},
@@ -1267,6 +1276,8 @@ PORTAL_ALLOWED_RUM_METRICS = {
     "portal_shell_rendered": {"duration"},
     "queue_request": {"cancel", "submit"},
     "sse_reconnect": set(),
+    "landing_rendered": {"duration"},
+    "login_rendered": {"duration"},
 }
 PATH_SCOPE_INPUT = "input"
 PATH_SCOPE_OUTPUT = "output"

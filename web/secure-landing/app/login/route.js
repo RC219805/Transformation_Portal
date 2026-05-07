@@ -3,8 +3,9 @@ import { NextResponse } from "next/server.js";
 import { resolveAccessContext, resolveAuthenticatedAccessSession, revokeSessionOnAccessFailure } from "../../lib/access.js";
 import { escapeHtml, FRONTDOOR_ASSETS, renderBrandAsset } from "../../lib/brand.js";
 import { audit } from "../../lib/audit.js";
-import { applySecurityHeaders, buildRequestUrl, FRONTDOOR_CSP } from "../../lib/http.js";
+import { applySecurityHeaders, buildRequestUrl, FRONTDOOR_CSP, generateScriptNonce } from "../../lib/http.js";
 import { applyPortalReturnTo, resolvePortalReturnTo, validatePortalReturnTo } from "../../lib/return-to.js";
+import { renderRumClientScript } from "../../lib/rum-client.js";
 import {
   createAnonymousSession,
   destroySession,
@@ -17,10 +18,15 @@ import {
   validateCsrfToken
 } from "../../lib/sessions.js";
 import { getConfig } from "../../lib/config.js";
+import { generateTraceparent } from "../../lib/trace.js";
 import { validateOriginAndReferrer } from "../../lib/request-security.js";
 import { verifyUserCredentials } from "../../lib/users.js";
 
 export const runtime = "nodejs";
+
+function _isRumEnabled() {
+  return String(process.env.TP_PORTAL_RUM_ENABLED || "").trim().toLowerCase() === "true";
+}
 
 function resolveLoginMessage(code) {
   if (code === "access") return "Access verification is required before sign-in can continue. Refresh your Access session and try again.";
@@ -68,7 +74,10 @@ function resolveEntryState({ accessEmail, errorCode, bypass = false }) {
   };
 }
 
-function renderLoginPage({ csrfToken, accessEmail, errorCode, bypass = false, returnTo = "" }) {
+function renderLoginPage({ csrfToken, accessEmail, errorCode, bypass = false, returnTo = "", rumScript = "", scriptNonce = null }) {
+  const rumScriptTag = rumScript && scriptNonce
+    ? `<script nonce="${escapeHtml(scriptNonce)}">${rumScript}</script>`
+    : "";
   const errorMessage = errorCode ? resolveLoginMessage(errorCode) : "";
   const entryState = resolveEntryState({ accessEmail, errorCode, bypass });
   const hasAccessContext = Boolean(bypass || accessEmail);
@@ -236,6 +245,7 @@ function renderLoginPage({ csrfToken, accessEmail, errorCode, bypass = false, re
         </div>
       </section>
     </main>
+    ${rumScriptTag}
   </body>
 </html>`;
 }
@@ -272,12 +282,23 @@ export async function GET(request) {
   // token on the login form is bound to a server-side session from the start.
   session = session || createAnonymousSession();
   const accessContext = await resolveAccessContext(request);
+  const rumEnabled = _isRumEnabled();
+  const scriptNonce = rumEnabled ? generateScriptNonce() : null;
+  const rumScript = rumEnabled
+    ? renderRumClientScript({
+        route: "/login",
+        view: "login",
+        traceparent: generateTraceparent(),
+      })
+    : "";
   const html = renderLoginPage({
     csrfToken: session.csrfToken,
     accessEmail: accessContext.accessEmail,
     errorCode: request.nextUrl.searchParams.get("error"),
     bypass: accessContext.bypass,
-    returnTo: requestedReturnTo || ""
+    returnTo: requestedReturnTo || "",
+    rumScript,
+    scriptNonce
   });
   const response = new NextResponse(html, {
     status: 200,
@@ -287,7 +308,7 @@ export async function GET(request) {
     }
   });
   setSessionCookie(response, session.id);
-  return applySecurityHeaders(response, { csp: FRONTDOOR_CSP });
+  return applySecurityHeaders(response, { csp: FRONTDOOR_CSP, scriptNonce });
 }
 
 export async function POST(request) {

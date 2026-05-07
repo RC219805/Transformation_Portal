@@ -707,6 +707,21 @@ def test_advisory_caption_panel_uses_bounded_payload_cache() -> None:
     assert "requestId !== advisoryCaptionRenderRequestId" in panel_body
 
 
+def test_portal_rum_allowlists_cover_landing_and_login_surfaces() -> None:
+    assert "/portal" in orchestrator_app.PORTAL_ALLOWED_RUM_ROUTES
+    assert "/" in orchestrator_app.PORTAL_ALLOWED_RUM_ROUTES
+    assert "/login" in orchestrator_app.PORTAL_ALLOWED_RUM_ROUTES
+
+    assert "landing_rendered" in orchestrator_app.PORTAL_ALLOWED_RUM_EVENT_TYPES
+    assert "login_rendered" in orchestrator_app.PORTAL_ALLOWED_RUM_EVENT_TYPES
+
+    assert "landing" in orchestrator_app.PORTAL_ALLOWED_RUM_VIEWS
+    assert "login" in orchestrator_app.PORTAL_ALLOWED_RUM_VIEWS
+
+    assert orchestrator_app.PORTAL_ALLOWED_RUM_METRICS["landing_rendered"] == {"duration"}
+    assert orchestrator_app.PORTAL_ALLOWED_RUM_METRICS["login_rendered"] == {"duration"}
+
+
 def test_portal_rum_rollout_reuses_shared_rollout_helper(monkeypatch: pytest.MonkeyPatch) -> None:
     actor = {"username": "portal-admin"}
     captured: list[tuple[str, dict[str, str]]] = []
