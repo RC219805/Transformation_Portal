@@ -8,6 +8,8 @@
 // front door produces samples in the same shape that the backend validator
 // at app.py:_record_portal_rum already accepts.
 
+import { normalizeTraceparent } from "./trace.js";
+
 function _serialize(value) {
   // JSON.stringify is safe inside a <script> body provided we escape the two
   // sequences that can prematurely close the script tag or open an HTML
@@ -21,7 +23,7 @@ function _serialize(value) {
 export function renderRumClientScript({ route, view, traceparent }) {
   const routeLiteral = _serialize(String(route));
   const viewLiteral = _serialize(String(view));
-  const traceparentLiteral = _serialize(String(traceparent));
+  const traceparentLiteral = _serialize(normalizeTraceparent(traceparent));
   const eventTypeLiteral = _serialize(`${String(view)}_rendered`);
 
   return `(function () {
