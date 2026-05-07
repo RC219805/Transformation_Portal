@@ -1,6 +1,7 @@
 export * from "./artifact-security.js";
 export * from "./bootstrap-auth.js";
 export * from "./dom-contract.js";
+export * from "./rate-limit-retry.js";
 export * from "./render-surfaces.js";
 export * from "./rum.js";
 export * from "./routing.js";

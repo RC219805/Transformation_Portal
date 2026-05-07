@@ -1046,7 +1046,10 @@ def test_portal_bootstrap_loader_uses_abortable_timeout_and_state_contract() -> 
     assert "const BOOTSTRAP_RETRY_MAX_WINDOW_MS = 60000;" in content
     assert "const TRANSIENT_DRAFT_STORAGE_KEY = 'tp_portal_transient_draft';" in content
     assert "const TRANSIENT_DRAFT_SCHEMA = 'tp.portal.transient_draft.v1';" in content
-    assert "const BOOTSTRAP_RETRIABLE_HTTP_STATUSES = new Set([500, 502, 503, 504]);" in content
+    # 429 is included so a rate-limited bootstrap response routes through
+    # the retry path; see portal-src/internal/rate-limit-retry.js for the
+    # Retry-After / X-RateLimit-Reset hint contract that drives the delay.
+    assert "const BOOTSTRAP_RETRIABLE_HTTP_STATUSES = new Set([429, 500, 502, 503, 504]);" in content
     assert "fetchWithTimeout(" in body
     assert "return `/login?returnTo=${encodeURIComponent(_managedReturnToPath())}`;" in login_url_body
     assert "`${API_BASE}/portal/bootstrap`" in body
@@ -1067,7 +1070,15 @@ def test_portal_bootstrap_loader_uses_abortable_timeout_and_state_contract() -> 
     assert "_finalizeBootstrapRetry('terminal_auth_redirect', { reason: failure.reason, httpStatus: res.status });" in body
     assert "window.location.assign(_managedLoginUrlForCurrentRoute());" in body
     assert "const status = failure.retryable ? 'degraded' : 'unavailable';" in body
-    assert "const retryScheduled = failure.retryable && _scheduleBootstrapRetry(failure.reason, res.status);" in body
+    # The HTTP-side retry call now forwards a parsed Retry-After /
+    # X-RateLimit-Reset hint as a third arg so 429 bootstrap responses use
+    # the upstream-provided cooldown instead of pure exponential backoff.
+    # The exception/network-side retry call still passes no hint because
+    # there is no response object to read headers from.
+    assert (
+        "const retryScheduled = failure.retryable\n"
+        "                && _scheduleBootstrapRetry(failure.reason, res.status, rateLimitHint);"
+    ) in body
     assert "const retryScheduled = failure.retryable && _scheduleBootstrapRetry(failure.reason, 0);" in body
     assert "_finalizeBootstrapRetry('terminal_invalid_json', { reason: 'invalid_json' });" in body
     assert "_finalizeBootstrapRetry('succeeded', {" in body

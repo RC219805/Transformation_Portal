@@ -529,15 +529,14 @@
       "reason": "observed in portal static markup or generated template output"
     },
     "cursor-not-allowed": {
-      "owner": "static",
+      "owner": "review-only",
       "sources": [
         "public/portal-assets/portal-review.js",
         "public/portal-assets/portal.js",
-        "web/secure-landing/portal-src/portal.template.js",
         "web/secure-landing/portal-src/review-surface-deferred.js"
       ],
       "cssFile": "utilities.required.css",
-      "reason": "observed in portal static markup or generated template output"
+      "reason": "observed in deferred review surface JavaScript"
     },
     "cursor-pointer": {
       "owner": "static",
@@ -2403,8 +2402,7 @@
     "opacity-60": {
       "owner": "static",
       "sources": [
-        "public/portal-assets/portal.js",
-        "web/secure-landing/portal-src/portal.template.js"
+        "public/portal-assets/portal.js"
       ],
       "cssFile": "utilities.required.css",
       "reason": "observed in portal static markup or generated template output"

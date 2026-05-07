@@ -49,7 +49,7 @@ const BOOTSTRAP_RETRY_MAX_EXPONENT = 4;
 const BOOTSTRAP_RETRY_JITTER_MS = 400;
 const BOOTSTRAP_RETRY_MAX_ATTEMPTS = 4;
 const BOOTSTRAP_RETRY_MAX_WINDOW_MS = 60000;
-const BOOTSTRAP_RETRIABLE_HTTP_STATUSES = new Set([500, 502, 503, 504]);
+const BOOTSTRAP_RETRIABLE_HTTP_STATUSES = new Set([429, 500, 502, 503, 504]);
 const HEALTH_CHECK_INTERVAL_MS = 15000;
 const HEALTH_CHECK_TIMEOUT_MS = 2000;
 const HEALTH_CHECK_MIN_GAP_MS = 10000;
@@ -4401,6 +4401,14 @@ function _bootstrapFailureDetails(reason = '', httpStatus = 0, message = '') {
             actionMessage: 'Managed authentication is required. Sign in again before continuing.'
         };
     }
+    if (normalizedReason === 'rate_limited' || normalizedStatus === 429) {
+        return {
+            reason: 'rate_limited',
+            retryable: true,
+            toastMessage: overrideMessage || 'Portal is rate limited. Bootstrap will retry automatically when the cooldown expires.',
+            actionMessage: 'Portal is rate limited. Wait for the cooldown to expire before retrying.'
+        };
+    }
     if (normalizedReason === 'access_outage') {
         return {
             reason: 'access_outage',
@@ -4458,7 +4466,7 @@ function _nextBootstrapRetryDelayMs(attempt) {
     return Math.min(BOOTSTRAP_RETRY_MAX_DELAY_MS, backoff + jitter);
 }
 
-function _scheduleBootstrapRetry(reason = '', httpStatus = 0) {
+function _scheduleBootstrapRetry(reason = '', httpStatus = 0, rateLimitHint = null) {
     if (!_isBootstrapRetryableFailure(reason, httpStatus)) {
         _finalizeBootstrapRetry('terminal_not_retryable', { reason, httpStatus });
         return false;
@@ -4487,7 +4495,22 @@ function _scheduleBootstrapRetry(reason = '', httpStatus = 0) {
         return false;
     }
 
-    const delayMs = _nextBootstrapRetryDelayMs(attempt);
+    // Prefer the upstream Retry-After / X-RateLimit-Reset hint when present
+    // (e.g. on HTTP 429). The parser already clamped the value to a sane
+    // upper bound; we additionally clamp to BOOTSTRAP_RETRY_MAX_DELAY_MS so
+    // the existing fallback's max remains the single source of truth, and
+    // an absurd or buggy upstream cannot stretch a single retry beyond the
+    // bootstrap window.
+    let delayMs = _nextBootstrapRetryDelayMs(attempt);
+    let delaySource = 'exponential_backoff';
+    if (
+        rateLimitHint
+        && Number.isFinite(Number(rateLimitHint.retryAfterMs))
+        && Number(rateLimitHint.retryAfterMs) > 0
+    ) {
+        delayMs = Math.min(Number(rateLimitHint.retryAfterMs), BOOTSTRAP_RETRY_MAX_DELAY_MS);
+        delaySource = String(rateLimitHint.source || 'rate_limit_hint');
+    }
     if ((now + delayMs) > state.bootstrap.retry.deadlineAt) {
         _finalizeBootstrapRetry('terminal_retry_window_elapsed', {
             attempt: state.bootstrap.retry.attempt,
@@ -4501,11 +4524,11 @@ function _scheduleBootstrapRetry(reason = '', httpStatus = 0) {
         state.bootstrap.retry.timer = null;
         state.bootstrap.retry.attempt = attempt;
         state.bootstrap.retry.lastAttemptAt = Date.now();
-        _recordBootstrapRetryEvent('attempt_started', { attempt, reason, httpStatus, delayMs: 0 });
+        _recordBootstrapRetryEvent('attempt_started', { attempt, reason, httpStatus, delayMs: 0, delaySource });
         void loadPortalBootstrap({ isRetryAttempt: true, attempt, retryReason: reason });
     }, delayMs);
 
-    _recordBootstrapRetryEvent('scheduled', { attempt, reason, httpStatus, delayMs });
+    _recordBootstrapRetryEvent('scheduled', { attempt, reason, httpStatus, delayMs, delaySource });
     return true;
 }
 
@@ -5013,14 +5036,25 @@ async function loadPortalBootstrap(options = null) {
             state.rum.pageTraceparent
         );
         if (!res.ok) {
+            // Honour the orchestrator's 429 retry contract (Retry-After +
+            // X-RateLimit-Reset). The hint is captured from the response
+            // object only on HTTP 429; auth (401/403) and other failures
+            // fall through to existing exponential backoff or terminal
+            // handling.
+            const rateLimitHint = res.status === 429
+                ? portalInternals.parseRateLimitRetryHint(res)
+                : null;
             const failure = _bootstrapFailureDetails(
-                payloadParsed && payload && typeof payload === 'object' ? payload.reason : `http_${res.status}`,
+                payloadParsed && payload && typeof payload === 'object'
+                    ? payload.reason
+                    : (res.status === 429 ? 'rate_limited' : `http_${res.status}`),
                 res.status,
                 payloadParsed && payload && typeof payload === 'object' ? payload.message : ''
             );
             const status = failure.retryable ? 'degraded' : 'unavailable';
             _applyPortalBootstrap(fallback, { status, reason: failure.reason, httpStatus: res.status });
-            const retryScheduled = failure.retryable && _scheduleBootstrapRetry(failure.reason, res.status);
+            const retryScheduled = failure.retryable
+                && _scheduleBootstrapRetry(failure.reason, res.status, rateLimitHint);
             if (!isRetryAttempt || !retryScheduled) {
                 createToast(failure.toastMessage, 'error');
             }
@@ -7678,7 +7712,7 @@ function _clearConfigPreviewServiceRetry() {
     configPreviewServiceRetryAttempts = 0;
 }
 
-function _scheduleConfigPreviewServiceRetry() {
+function _scheduleConfigPreviewServiceRetry(rateLimitHint = null) {
     if (configPreviewServiceRetryAttempts >= CONFIG_PREVIEW_SERVICE_RETRY_MAX_ATTEMPTS) {
         return;
     }
@@ -7686,9 +7720,22 @@ function _scheduleConfigPreviewServiceRetry() {
         return;
     }
     configPreviewServiceRetryAttempts += 1;
-    const delay = CONFIG_PREVIEW_SERVICE_RETRY_BASE_MS * configPreviewServiceRetryAttempts;
+    let delay = CONFIG_PREVIEW_SERVICE_RETRY_BASE_MS * configPreviewServiceRetryAttempts;
+    if (
+        rateLimitHint
+        && Number.isFinite(Number(rateLimitHint.retryAfterMs))
+        && Number(rateLimitHint.retryAfterMs) > 0
+    ) {
+        // Clamp to the existing scheduled-window upper bound so a buggy
+        // upstream cannot stretch a single preview retry indefinitely.
+        const maxScheduledDelay = CONFIG_PREVIEW_SERVICE_RETRY_BASE_MS * CONFIG_PREVIEW_SERVICE_RETRY_MAX_ATTEMPTS;
+        delay = Math.min(Number(rateLimitHint.retryAfterMs), maxScheduledDelay);
+    }
     configPreviewServiceRetryTimerId = window.setTimeout(() => {
         configPreviewServiceRetryTimerId = null;
+        // Always retry against the *current* form state, not a stale
+        // snapshot — the cooldown may outlive the user's edit so the next
+        // attempt should reflect what is on screen now.
         const payload = generatePayload();
         if (!_configPreviewEnabledForPipeline(payload.pipeline)) {
             return;
@@ -7741,12 +7788,22 @@ async function fetchConfigPreview(payload) {
         if (!res.ok) {
             const errorPayload = response?.error && typeof response.error === 'object' ? response.error : {};
             const errorDetails = errorPayload.details && typeof errorPayload.details === 'object' ? errorPayload.details : {};
+            // 429 is a transient rate-limit event, not a 4xx validation
+            // failure of the user's draft. Route it to the service-retry
+            // path so the existing scheduled retry runs against the
+            // current form state, with the upstream Retry-After hint.
+            const isRateLimited = res.status === 429;
+            const rateLimitHint = isRateLimited
+                ? portalInternals.parseRateLimitRetryHint(res)
+                : null;
             const classifiedFailure = _previewFailureDetails({
                 error_reason: res.status === 401 || res.status === 403
                     ? 'auth_failure'
-                    : res.status >= 400 && res.status < 500
-                        ? 'validation_error'
-                        : 'service_failure'
+                    : isRateLimited
+                        ? 'service_failure'
+                        : res.status >= 400 && res.status < 500
+                            ? 'validation_error'
+                            : 'service_failure'
             });
             if (_configPreviewRequestKey(generatePayload()) !== requestKey) {
                 return;
@@ -7759,7 +7816,7 @@ async function fetchConfigPreview(payload) {
                 error_status: res.status
             });
             if (classifiedFailure.reason === 'service_failure') {
-                _scheduleConfigPreviewServiceRetry();
+                _scheduleConfigPreviewServiceRetry(rateLimitHint);
             } else {
                 _clearConfigPreviewServiceRetry();
             }
