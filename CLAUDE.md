@@ -61,7 +61,14 @@ make pre-commit            # pre-commit hooks with CI-aligned Black/isort
 make install-hooks         # install git pre-commit hook
 make fix-quality / make check-quality   # auto-fix wrappers (scripts/auto_fix_quality.py)
 ```
-`make ci` includes governance gates that often fail edits: `check-json-serialization` (no raw `json.dump(s)` outside approved modules), `check-yaml-governance` (no raw `yaml.safe_load` outside the preset loader), `check-python-headers` (PEP 263 cookies only), `check-piptools-cache`, `check-requirements-lock-contract`, `check-dependency-pinning`, `check-ci-sync`, `check-portal-asset-budgets`. Adjacent gates enforced by pre-commit / CI: `check-test-markers` (ADR-044 marker coverage), `check-todo-governance` (ungoverned `TODO` strings), `check-stale-docs`, `check-doc-heading-links`. Tautological test assertions (`assert True` in `tests/`) are blocked by `scripts/ci/check_no_tautological_tests.py` (use `# tautology-ok` for the rare intentional placeholder). Prefer fixing the root cause over silencing these.
+`make ci` includes governance gates that often fail edits: `check-json-serialization` (no raw `json.dump(s)` outside approved modules), `check-yaml-governance` (no raw `yaml.safe_load` outside the preset loader), `check-python-headers` (PEP 263 cookies only), `check-piptools-cache`, `check-requirements-lock-contract`, `check-dependency-pinning`, `check-ci-sync`, `check-portal-asset-budgets`. Adjacent enforcement (outside `make ci`):
+- `check-test-markers` (ADR-044 marker coverage) — pre-commit only.
+- Tautological-test ban (`scripts/ci/check_no_tautological_tests.py`, blocks `assert True` and similar literals in `tests/`) — pre-commit + `.github/workflows/enforcement.yml`; use `# tautology-ok` for the rare intentional placeholder.
+- `check-todo-governance` (`scripts/validation/scan_todo_inventory.py`) — `.github/workflows/enforcement.yml` only; flags ungoverned `TODO` / `FIXME` / `HACK` / `XXX` / `NotImplementedError` markers.
+- `check-stale-docs` — `.github/workflows/build.yml` only.
+- `check-doc-heading-links` — local-only `make` helper, not wired into pre-commit or CI; useful to run before pushing.
+
+Prefer fixing the root cause over silencing these.
 
 ### Local dev stack
 ```bash
