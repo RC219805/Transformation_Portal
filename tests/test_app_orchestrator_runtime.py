@@ -1726,6 +1726,33 @@ def test_portal_artifact_viewer_modal_is_feature_flagged_and_keyboard_complete()
     assert "if (key === '0')" in content
 
 
+def test_portal_artifact_previews_lazy_load_and_decode_async() -> None:
+    # The four artifact preview <img> tags start hidden and live behind the
+    # lazy-loaded Review surface bundle. They must carry loading="lazy" and
+    # decoding="async" so assigning .src never blocks the bootstrap path
+    # decoding artifact bytes synchronously. Brand <img> tags above the
+    # fold keep their existing attributes; this test guards both contracts.
+    html = _portal_html_content()
+    for img_id in (
+        "artifactPreviewImage",
+        "artifactCompareImage",
+        "artifactPreviewSoloImage",
+        "artifactViewerImage",
+    ):
+        marker = f'id="{img_id}"'
+        assert marker in html, f"{img_id} not found in portal.html"
+        marker_index = html.index(marker)
+        start = html.rindex("<img", 0, marker_index)
+        end = html.index(">", marker_index)
+        tag = html[start:end + 1]
+        assert 'loading="lazy"' in tag, f'{img_id} missing loading="lazy"'
+        assert 'decoding="async"' in tag, f'{img_id} missing decoding="async"'
+
+    # fetchpriority="high" is reserved for the above-fold light brand logo.
+    # Adding it to lazy previews would defeat the lazy-load contract above.
+    assert html.count('fetchpriority="high"') == 1
+
+
 def test_portal_review_surface_supports_compare_summary_and_keyboard_selection() -> None:
     content = _portal_bundle_content()
     review_content = _portal_review_source_content()
