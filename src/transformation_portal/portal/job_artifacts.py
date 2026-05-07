@@ -1,3 +1,5 @@
+"""Portal job artifact cataloging and response metadata helpers."""
+
 from __future__ import annotations
 
 import hashlib
