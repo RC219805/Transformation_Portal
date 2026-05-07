@@ -64,6 +64,13 @@ const CONFIG_PREVIEW_SERVICE_RETRY_BASE_MS = 2500;
 const CONFIG_PREVIEW_SERVICE_RETRY_MAX_ATTEMPTS = 3;
 const TRANSIENT_DRAFT_PERSIST_DEBOUNCE_MS = 200;
 const DEFERRED_REVIEW_SURFACE_RETRY_WINDOW_MS = 30000;
+const DEFERRED_SURFACE_RETRY_WINDOW_MS = 30000;
+const DEFERRED_SURFACE_REGISTRY = Object.freeze({
+    operate: { datasetKey: 'operateSurfaceJsUrl', factoryName: 'createDeferredOperateSurfaceApi' },
+    build: { datasetKey: 'buildSurfaceJsUrl', factoryName: 'createDeferredBuildSurfaceApi' },
+    overview: { datasetKey: 'overviewSurfaceJsUrl', factoryName: 'createDeferredOverviewSurfaceApi' },
+});
+const _deferredSurfaceState = new Map();
 const DISPATCH_BACKEND_OFFLINE_MESSAGE = 'Backend is offline. Dispatch is disabled until connectivity is restored.';
 const CONFIG_PREVIEW_SUPPORTED_PIPELINES = new Set([
     'lux-depth-v3',
@@ -6255,6 +6262,55 @@ function _primeDeferredReviewSurface(reason = '') {
         api.renderArtifactPanel();
         api.renderArtifactViewer();
     });
+}
+
+function _deferredSurfaceEntry(name) {
+    let entry = _deferredSurfaceState.get(name);
+    if (!entry) {
+        entry = { api: null, loadPromise: null, lastFailureAt: 0, lastToastAt: 0 };
+        _deferredSurfaceState.set(name, entry);
+    }
+    return entry;
+}
+
+function _deferredSurfaceRetryBlocked(entry, now = Date.now()) {
+    return entry.lastFailureAt > 0 && (now - entry.lastFailureAt) < DEFERRED_SURFACE_RETRY_WINDOW_MS;
+}
+
+async function loadDeferredSurface(name, hostFactory) {
+    const descriptor = DEFERRED_SURFACE_REGISTRY[name];
+    if (!descriptor) return null;
+    const entry = _deferredSurfaceEntry(name);
+    if (entry.api) return entry.api;
+    if (entry.loadPromise) return entry.loadPromise;
+    if (_deferredSurfaceRetryBlocked(entry)) return null;
+    const moduleUrl = String(document.body?.dataset?.[descriptor.datasetKey] || '').trim();
+    if (!moduleUrl) return null;
+    entry.loadPromise = import(moduleUrl)
+        .then((module) => {
+            const factory = module?.[descriptor.factoryName];
+            if (typeof factory !== 'function') {
+                throw new Error(`Deferred surface "${name}" missing factory ${descriptor.factoryName}`);
+            }
+            entry.lastFailureAt = 0;
+            entry.api = factory(typeof hostFactory === 'function' ? hostFactory() : {});
+            return entry.api;
+        })
+        .catch((error) => {
+            console.error(`Failed to load deferred surface "${name}"`, error);
+            const now = Date.now();
+            entry.lastFailureAt = now;
+            if ((now - entry.lastToastAt) >= DEFERRED_SURFACE_RETRY_WINDOW_MS) {
+                entry.lastToastAt = now;
+                createToast(`Failed to load the ${name} surface. Reload the portal to retry.`, 'error');
+            }
+            entry.api = null;
+            return null;
+        })
+        .finally(() => {
+            entry.loadPromise = null;
+        });
+    return entry.loadPromise;
 }
 
 function _renderDeferredReviewSurfaceFallback(jobsLoading = false) {

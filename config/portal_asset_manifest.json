@@ -20,6 +20,18 @@
       "repo_path": "public/portal-assets/portal-review.css",
       "media_type": "text/css; charset=utf-8"
     },
+    "portal-operate.js": {
+      "repo_path": "public/portal-assets/portal-operate.js",
+      "media_type": "text/javascript; charset=utf-8"
+    },
+    "portal-build.js": {
+      "repo_path": "public/portal-assets/portal-build.js",
+      "media_type": "text/javascript; charset=utf-8"
+    },
+    "portal-overview.js": {
+      "repo_path": "public/portal-assets/portal-overview.js",
+      "media_type": "text/javascript; charset=utf-8"
+    },
     "fonts/portal-sans.woff2": {
       "repo_path": "public/portal-assets/fonts/portal-sans.woff2",
       "media_type": "font/woff2"

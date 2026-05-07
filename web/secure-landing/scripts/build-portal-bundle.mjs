@@ -13,8 +13,14 @@ const REPO_ROOT = path.resolve(FRONTDOOR_ROOT, "..", "..");
 const PORTAL_TEMPLATE_PATH = path.resolve(FRONTDOOR_ROOT, "portal-src", "portal.template.js");
 const PORTAL_INTERNAL_ENTRY = path.resolve(FRONTDOOR_ROOT, "portal-src", "internal", "index.js");
 const PORTAL_REVIEW_SURFACE_ENTRY = path.resolve(FRONTDOOR_ROOT, "portal-src", "review-surface-deferred.js");
+const PORTAL_OPERATE_SURFACE_ENTRY = path.resolve(FRONTDOOR_ROOT, "portal-src", "operate-surface-deferred.js");
+const PORTAL_BUILD_SURFACE_ENTRY = path.resolve(FRONTDOOR_ROOT, "portal-src", "build-surface-deferred.js");
+const PORTAL_OVERVIEW_SURFACE_ENTRY = path.resolve(FRONTDOOR_ROOT, "portal-src", "overview-surface-deferred.js");
 const PORTAL_ASSET_PATH = path.resolve(REPO_ROOT, "public", "portal-assets", "portal.js");
 const PORTAL_REVIEW_SURFACE_ASSET_PATH = path.resolve(REPO_ROOT, "public", "portal-assets", "portal-review.js");
+const PORTAL_OPERATE_SURFACE_ASSET_PATH = path.resolve(REPO_ROOT, "public", "portal-assets", "portal-operate.js");
+const PORTAL_BUILD_SURFACE_ASSET_PATH = path.resolve(REPO_ROOT, "public", "portal-assets", "portal-build.js");
+const PORTAL_OVERVIEW_SURFACE_ASSET_PATH = path.resolve(REPO_ROOT, "public", "portal-assets", "portal-overview.js");
 const PORTAL_CSS_ASSET_PATH = path.resolve(REPO_ROOT, "public", "portal-assets", "portal.css");
 const PORTAL_CSS_SOURCE_DIR = path.resolve(FRONTDOOR_ROOT, "portal-src", "styles");
 const PORTAL_CSS_INDEX_PATH = path.resolve(PORTAL_CSS_SOURCE_DIR, "index.css");
@@ -171,6 +177,9 @@ const emitMetafile = process.argv.includes("--emit-metafile");
 const METAFILE_DIR = path.resolve(FRONTDOOR_ROOT, ".metafiles");
 const PORTAL_METAFILE_PATH = path.resolve(METAFILE_DIR, "portal-bundle.json");
 const REVIEW_SURFACE_METAFILE_PATH = path.resolve(METAFILE_DIR, "review-surface-bundle.json");
+const OPERATE_SURFACE_METAFILE_PATH = path.resolve(METAFILE_DIR, "operate-surface-bundle.json");
+const BUILD_SURFACE_METAFILE_PATH = path.resolve(METAFILE_DIR, "build-surface-bundle.json");
+const OVERVIEW_SURFACE_METAFILE_PATH = path.resolve(METAFILE_DIR, "overview-surface-bundle.json");
 
 if (process.argv.includes("--check-css")) {
   if (compatOverridesDisabled() && sourceImportsCompatOverrides()) {
@@ -218,6 +227,24 @@ const deferredReviewSurfaceBuild = await bundleText(PORTAL_REVIEW_SURFACE_ENTRY,
   minifySyntax: true,
   minifyWhitespace: true
 });
+const deferredOperateSurfaceBuild = await bundleText(PORTAL_OPERATE_SURFACE_ENTRY, {
+  format: "esm",
+  metafile: emitMetafile,
+  minifySyntax: true,
+  minifyWhitespace: true
+});
+const deferredBuildSurfaceBuild = await bundleText(PORTAL_BUILD_SURFACE_ENTRY, {
+  format: "esm",
+  metafile: emitMetafile,
+  minifySyntax: true,
+  minifyWhitespace: true
+});
+const deferredOverviewSurfaceBuild = await bundleText(PORTAL_OVERVIEW_SURFACE_ENTRY, {
+  format: "esm",
+  metafile: emitMetafile,
+  minifySyntax: true,
+  minifyWhitespace: true
+});
 
 if (emitMetafile) {
   mkdirSync(METAFILE_DIR, { recursive: true });
@@ -227,8 +254,20 @@ if (emitMetafile) {
   if (deferredReviewSurfaceBuild.metafile) {
     writeFileSync(REVIEW_SURFACE_METAFILE_PATH, JSON.stringify(deferredReviewSurfaceBuild.metafile, null, 2), "utf-8");
   }
+  if (deferredOperateSurfaceBuild.metafile) {
+    writeFileSync(OPERATE_SURFACE_METAFILE_PATH, JSON.stringify(deferredOperateSurfaceBuild.metafile, null, 2), "utf-8");
+  }
+  if (deferredBuildSurfaceBuild.metafile) {
+    writeFileSync(BUILD_SURFACE_METAFILE_PATH, JSON.stringify(deferredBuildSurfaceBuild.metafile, null, 2), "utf-8");
+  }
+  if (deferredOverviewSurfaceBuild.metafile) {
+    writeFileSync(OVERVIEW_SURFACE_METAFILE_PATH, JSON.stringify(deferredOverviewSurfaceBuild.metafile, null, 2), "utf-8");
+  }
   console.log(`portal metafile: ${path.relative(REPO_ROOT, PORTAL_METAFILE_PATH)}`);
   console.log(`review surface metafile: ${path.relative(REPO_ROOT, REVIEW_SURFACE_METAFILE_PATH)}`);
+  console.log(`operate surface metafile: ${path.relative(REPO_ROOT, OPERATE_SURFACE_METAFILE_PATH)}`);
+  console.log(`build surface metafile: ${path.relative(REPO_ROOT, BUILD_SURFACE_METAFILE_PATH)}`);
+  console.log(`overview surface metafile: ${path.relative(REPO_ROOT, OVERVIEW_SURFACE_METAFILE_PATH)}`);
 }
 
 const nextPortalBundle = stripStandaloneLineComments(
@@ -244,18 +283,33 @@ const compactPortalBundle = (await transform(nextPortalBundle, {
 })).code.trim();
 const portalChanged = writeIfChanged(PORTAL_ASSET_PATH, `${compactPortalBundle}\n`);
 const reviewSurfaceChanged = writeIfChanged(PORTAL_REVIEW_SURFACE_ASSET_PATH, `${deferredReviewSurfaceBuild.text.trim()}\n`);
+const operateSurfaceChanged = writeIfChanged(PORTAL_OPERATE_SURFACE_ASSET_PATH, `${deferredOperateSurfaceBuild.text.trim()}\n`);
+const buildSurfaceChanged = writeIfChanged(PORTAL_BUILD_SURFACE_ASSET_PATH, `${deferredBuildSurfaceBuild.text.trim()}\n`);
+const overviewSurfaceChanged = writeIfChanged(PORTAL_OVERVIEW_SURFACE_ASSET_PATH, `${deferredOverviewSurfaceBuild.text.trim()}\n`);
 const portalCssChanged = await buildPortalCssAsset();
 const portalTokenChanged = await writeMinifiedCssCopy(SHARED_TOKEN_SOURCE_PATH, PORTAL_SHARED_TOKEN_TARGET);
 const frontdoorTokenChanged = await writeMinifiedCssCopy(SHARED_TOKEN_SOURCE_PATH, FRONTDOOR_SHARED_TOKEN_TARGET);
 
 const portalStats = statSync(PORTAL_ASSET_PATH);
 const reviewSurfaceStats = statSync(PORTAL_REVIEW_SURFACE_ASSET_PATH);
+const operateSurfaceStats = statSync(PORTAL_OPERATE_SURFACE_ASSET_PATH);
+const buildSurfaceStats = statSync(PORTAL_BUILD_SURFACE_ASSET_PATH);
+const overviewSurfaceStats = statSync(PORTAL_OVERVIEW_SURFACE_ASSET_PATH);
 const portalCssStats = statSync(PORTAL_CSS_ASSET_PATH);
 console.log(
   `portal bundle ${portalChanged ? "updated" : "unchanged"}: ${path.relative(REPO_ROOT, PORTAL_ASSET_PATH)} (${portalStats.size} bytes)`
 );
 console.log(
   `review surface bundle ${reviewSurfaceChanged ? "updated" : "unchanged"}: ${path.relative(REPO_ROOT, PORTAL_REVIEW_SURFACE_ASSET_PATH)} (${reviewSurfaceStats.size} bytes)`
+);
+console.log(
+  `operate surface bundle ${operateSurfaceChanged ? "updated" : "unchanged"}: ${path.relative(REPO_ROOT, PORTAL_OPERATE_SURFACE_ASSET_PATH)} (${operateSurfaceStats.size} bytes)`
+);
+console.log(
+  `build surface bundle ${buildSurfaceChanged ? "updated" : "unchanged"}: ${path.relative(REPO_ROOT, PORTAL_BUILD_SURFACE_ASSET_PATH)} (${buildSurfaceStats.size} bytes)`
+);
+console.log(
+  `overview surface bundle ${overviewSurfaceChanged ? "updated" : "unchanged"}: ${path.relative(REPO_ROOT, PORTAL_OVERVIEW_SURFACE_ASSET_PATH)} (${overviewSurfaceStats.size} bytes)`
 );
 console.log(
   `portal css ${portalCssChanged ? "updated" : "unchanged"}: ${path.relative(REPO_ROOT, PORTAL_CSS_ASSET_PATH)} (${portalCssStats.size} bytes)`

@@ -17,6 +17,18 @@
       "max_bytes": 7000,
       "max_gzip_bytes": 1600
     },
+    "portal-operate.js": {
+      "max_bytes": 1024,
+      "max_gzip_bytes": 512
+    },
+    "portal-build.js": {
+      "max_bytes": 1024,
+      "max_gzip_bytes": 512
+    },
+    "portal-overview.js": {
+      "max_bytes": 1024,
+      "max_gzip_bytes": 512
+    },
     "shared-ui-tokens.css": {
       "max_bytes": 2048,
       "max_gzip_bytes": 768
