@@ -77,6 +77,8 @@ def _infer_artifact_type(path: Path) -> str:
         ".tif",
         ".tiff",
         ".webp",
+        ".gif",
+        ".avif",
         ".exr",
     }:
         return "image"

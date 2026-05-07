@@ -119,6 +119,39 @@ def test_svg_artifacts_are_not_browser_previewable_and_are_served_as_attachments
     assert headers["X-Content-Type-Options"] == "nosniff"
 
 
+@pytest.mark.parametrize(
+    ("filename", "content_type"),
+    [
+        ("animated.gif", "image/gif"),
+        ("modern.avif", "image/avif"),
+    ],
+)
+def test_browser_previewable_image_formats_are_served_inline(
+    tmp_path: Path,
+    filename: str,
+    content_type: str,
+) -> None:
+    module = importlib.import_module("transformation_portal.portal.job_artifacts")
+    artifact_path = tmp_path / filename
+    artifact_path.write_bytes(b"image")
+
+    payload = module._serialize_indexed_artifact(
+        job_id="job_artifacts_browser_image",
+        relative_path=filename,
+        path=artifact_path,
+    )
+    headers = module._artifact_response_headers(artifact_path)
+
+    assert module._infer_artifact_type(artifact_path) == "image"
+    assert module._artifact_content_type(artifact_path) == content_type
+    assert module._artifact_is_previewable(artifact_path) is True
+    assert module._artifact_is_browser_previewable(artifact_path) is True
+    assert payload["previewable"] is True
+    assert payload["browser_previewable"] is True
+    assert "Content-Disposition" not in headers
+    assert headers["X-Content-Type-Options"] == "nosniff"
+
+
 def test_app_wrapper_injects_current_artifact_limits(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
