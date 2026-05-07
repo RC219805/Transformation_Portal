@@ -170,7 +170,7 @@ class WorkflowExecutor(ABC):
     @abstractmethod
     def execute(self) -> bool:
         """Execute the workflow. Returns success status."""
-        pass
+        raise NotImplementedError("WorkflowExecutor subclasses must implement execute()")
 
 
 class ArchHeroWorkflow(WorkflowExecutor):
