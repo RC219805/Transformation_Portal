@@ -27,8 +27,11 @@ The umbrella `make install-ml` is **disabled** until a trusted umbrella ML lockf
 ### Tests
 ```bash
 make test-fast                       # fast subset + Phase 6 smoke (default PR lane)
+make test-novideo                    # full suite minus the luxury video master grader tests
 make test-full                       # full suite (parallel if xdist installed)
 make test-orchestrator-contract      # portal/orchestrator route + HTTP contract
+make test-orchestrator-http-contract # HTTP-only orchestrator contract subset
+make test-portal-contract            # portal runtime/browser contract subset
 make test-frontdoor-contract         # web/secure-landing Node 22 contract/build
 make test-archive-gate-contract      # archive Gates A/B/C readiness + HTTP
 make test-integration                # DA3/HF live model loading (requires TP_RUN_HF_MODEL_TESTS=1, often HF_TOKEN)
@@ -37,6 +40,14 @@ make test-integration                # DA3/HF live model loading (requires TP_RU
 pytest -v tests/ -ra -m "(unit or security or regression or golden or integration) and not slow" --maxfail=1
 pytest -v tests/ -ra -m "ml and not slow" --maxfail=1
 pytest -v tests/test_pbr_processor.py::TestName::test_method   # single test
+```
+
+Coverage targets (for governance / diff-coverage gates):
+```bash
+make coverage-report                 # full HTML+XML+terminal report (excludes ml/slow/benchmark)
+make coverage-diff                   # diff coverage vs origin/main, 85% threshold
+make coverage-fast-scope             # focused branch coverage on core/config + streaming
+make coverage-package                # baseline for events/, storage/, runtime/, lux_depth_v3/, hardening/, app.py
 ```
 
 ### CI / Quality
@@ -50,7 +61,14 @@ make pre-commit            # pre-commit hooks with CI-aligned Black/isort
 make install-hooks         # install git pre-commit hook
 make fix-quality / make check-quality   # auto-fix wrappers (scripts/auto_fix_quality.py)
 ```
-`make ci` includes governance gates that often fail edits: `check-json-serialization` (no raw `json.dump(s)` outside approved modules), `check-yaml-governance` (no raw `yaml.safe_load` outside the preset loader), `check-python-headers` (PEP 263 cookies only), `check-piptools-cache`, `check-requirements-lock-contract`, `check-dependency-pinning`, `check-ci-sync`, `check-portal-asset-budgets`. Prefer fixing the root cause over silencing these.
+`make ci` includes governance gates that often fail edits: `check-json-serialization` (no raw `json.dump(s)` outside approved modules), `check-yaml-governance` (no raw `yaml.safe_load` outside the preset loader), `check-python-headers` (PEP 263 cookies only), `check-piptools-cache`, `check-requirements-lock-contract`, `check-dependency-pinning`, `check-ci-sync`, `check-portal-asset-budgets`. Adjacent enforcement (outside `make ci`):
+- `check-test-markers` (ADR-044 marker coverage) — pre-commit only.
+- Tautological-test ban (`scripts/ci/check_no_tautological_tests.py`, blocks `assert True` and similar literals in `tests/`) — pre-commit + `.github/workflows/enforcement.yml`; use `# tautology-ok` for the rare intentional placeholder.
+- `check-todo-governance` (`scripts/validation/scan_todo_inventory.py`) — `.github/workflows/enforcement.yml` only; flags ungoverned `TODO` / `FIXME` / `HACK` / `XXX` / `NotImplementedError` markers.
+- `check-stale-docs` — `.github/workflows/build.yml` only.
+- `check-doc-heading-links` — local-only `make` helper, not wired into pre-commit or CI; useful to run before pushing.
+
+Prefer fixing the root cause over silencing these.
 
 ### Local dev stack
 ```bash
@@ -110,21 +128,23 @@ Use `--da3-python`, `--depth-pro-python`, `--raw-python` flags only to override 
 - `artifact_manager.py` — output hashing/indexing/provenance assembly
 - `validators/` — schema/run-card validation
 - `orchestrator.py` — compatibility-facing surface (`EnhanceOrchestrator` re-export), **not** a dumping ground
-- Backends: `da3_model_backend.py`, `da3_integration.py`, `coreml_backend.py`, `segmentation_backend.py`
+- Backends: `da3_model_backend.py`, `da3_integration.py`, `coreml_backend.py`, `segmentation_backend.py` (the segmentation backend is itself split into `segmentation/` — `efficient_sam.py`, `sam2.py`, `sam_vit_h.py`, `registry.py`, `_cache.py`)
 - Materials/PBR: `materials_v3*.py`, `pbr*.py`
 - I/O & provenance: `io_atomic.py`, `manifest.py`, `provenance.py`, `reconstruction_manifest.py`, `run_card_contract.py`
+
+Sibling subpackages under `src/transformation_portal/` worth knowing about: `api/v1/` (typed envelope foundation), `core/` (CAS DAG executor + security helpers), `events/`, `storage/`, `hardening/`, `rendering/` (4k pipeline stages and types), `spatial_ai/` (graph execution bridge, pipeline result models, segmentation cache), `attestation/`, `vlm_captioning/`. Recent refactors have been extracting helpers from these areas — follow the same decomposition discipline rather than expanding existing modules.
 
 Quality tier (`standard|premium|apex`) and `--preset` are **distinct** concepts. V2 enhancement is optional; backward-compat defaults and fail-fast validation must stay intact. Input discovery deliberately excludes derived artifacts and output dirs to prevent "depth-of-depth" loops — do not weaken this filter.
 
 ### Portal HTTP surfaces
 
-`app.py` (~9k lines) is the FastAPI origin. `portal.html` is the direct-debug HTML. `web/secure-landing/` is the **Node 22.x only** managed front door (Next.js) that splits the browser experience into `/`, `/login`, `/portal`. Authoritative routes:
+`app.py` (~9.8k lines) is the FastAPI origin. `portal.html` is the direct-debug HTML. `web/secure-landing/` is the **Node 22.x only** managed front door (Next.js) that splits the browser experience into `/`, `/login`, `/portal`. Authoritative routes:
 - `GET /healthz` — managed front-door liveness
 - `GET /ready` — backend liveness
 - `GET /v1/readiness` — execution-readiness matrix for the four governed pipelines
 - `/v1/*` — typed envelope contracts (typed OpenAPI response models added in PR #1561/#1562)
 
-Hardening that must remain intact when editing `app.py`: allowed-root path validation, API key + trusted-host enforcement, request size / concurrency / rate limits, pipeline allowlists, typed validation for archive-gate flows. **Fail closed, not open.**
+Hardening that must remain intact when editing `app.py`: allowed-root path validation, API key + trusted-host enforcement, request size / concurrency / rate limits, pipeline allowlists, typed validation for archive-gate flows. **Fail closed, not open.** Recent decomposition has extracted helpers (`path_security`, `sam2_checkpoint_security`, `asset_bundle`) — keep extracting along seams rather than re-monolithizing.
 
 ### Contract families (treat as binding)
 
