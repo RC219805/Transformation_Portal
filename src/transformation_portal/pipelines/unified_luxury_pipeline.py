@@ -4,7 +4,12 @@
 Unified Luxury Pipeline - Transformation Portal
 ===============================================
 
-Production-grade unified pipeline combining the best aspects of:
+Compatibility image-finishing facade for legacy luxury-render workflows.
+For governed production depth, PBR, Materials V3, APEX, run-card, and
+portal/orchestrator workflows, use the `lux-depth-v3` CLI and
+`transformation_portal.lux_depth_v3` package.
+
+This compatibility pipeline combines the best aspects of:
 - premium_pipeline_fixed.py: Multi-format output system with proper bit-depth handling
 - pro_pipeline.py: Modular PipelineStage architecture with graceful failure handling
 - context_aware_pro_pipeline.py: Architectural context intelligence
@@ -103,6 +108,9 @@ class OutputFormat(Enum):
     PRINT_8K = "print"  # 8K print JPEG (7680px)
     SOCIAL = "social"  # 1080p Instagram/social (1080px)
     MAGAZINE = "magazine"  # 2K magazine layout (2048px)
+
+
+DEFAULT_BATCH_PATTERN = "*.{jpg,jpeg,png,tif,tiff,exr}"
 
 
 @dataclass
@@ -370,6 +378,8 @@ class UnifiedLuxuryPipeline:
 
         # Apply overrides to temporary config
         temp_config = self._apply_overrides(overrides)
+        temp_config.output_dir.mkdir(parents=True, exist_ok=True)
+        self._configure_stage_state(temp_config)
 
         try:
             # Stage 1: Load & Validate
@@ -386,7 +396,7 @@ class UnifiedLuxuryPipeline:
 
             # Stage 3: Depth Processing
             if self.stages["depth"].enabled:
-                image = self._execute_stage("depth", self._apply_depth_processing, image, params)
+                image = self._execute_stage("depth", self._apply_depth_processing, image, params, temp_config)
 
             # Stage 4: Material Response
             if self.stages["material"].enabled:
@@ -404,7 +414,13 @@ class UnifiedLuxuryPipeline:
 
             # Stage 6: Color Grading
             if self.stages["color_grade"].enabled:
-                image = self._execute_stage("color_grade", self._apply_color_grading, image, params)
+                image = self._execute_stage(
+                    "color_grade",
+                    self._apply_color_grading,
+                    image,
+                    params,
+                    temp_config,
+                )
 
             # Stage 7: Generate Outputs
             outputs = self._execute_stage(
@@ -504,7 +520,27 @@ class UnifiedLuxuryPipeline:
             if hasattr(temp_config, key):
                 setattr(temp_config, key, value)
 
+        temp_config.__post_init__()
         return temp_config
+
+    def _configure_stage_state(self, config: UnifiedPipelineConfig) -> None:
+        """Reset per-call stage state from the active configuration."""
+        enabled_by_stage = {
+            "load": True,
+            "scene_detect": config.scene_type == SceneType.AUTO,
+            "depth": config.enable_depth,
+            "material": config.enable_material_response,
+            "vfx": config.enable_vfx,
+            "color_grade": config.enable_color_grading,
+            "output": True,
+        }
+
+        self.stats.stage_times.clear()
+        for stage_name, stage in self.stages.items():
+            stage.enabled = enabled_by_stage[stage_name]
+            stage.elapsed_time = 0.0
+            stage.success = False
+            stage.error_message = None
 
     def _execute_stage(self, stage_name: str, func, *args, **kwargs):
         """
@@ -668,7 +704,12 @@ class UnifiedLuxuryPipeline:
 
         return params
 
-    def _apply_depth_processing(self, image: Image.Image, params: Dict[str, Any]) -> Image.Image:
+    def _apply_depth_processing(
+        self,
+        image: Image.Image,
+        params: Dict[str, Any],
+        config: Optional[UnifiedPipelineConfig] = None,
+    ) -> Image.Image:
         """
         Apply depth-aware processing using Depth Anything V2.
 
@@ -680,6 +721,7 @@ class UnifiedLuxuryPipeline:
             Depth-processed PIL Image
         """
         log.info("  Applying depth-aware processing...")
+        active_config = config or self.config
 
         # Lazy load depth pipeline
         if self._depth_pipeline is None:
@@ -712,14 +754,14 @@ class UnifiedLuxuryPipeline:
         # Process image through depth pipeline
         try:
             # Create temporary file for depth processing
-            temp_path = self.config.output_dir / "temp_for_depth.jpg"
+            temp_path = active_config.output_dir / "temp_for_depth.jpg"
             image.save(temp_path, quality=95)
 
             # Process through depth pipeline
             result = self._depth_pipeline.process_render(str(temp_path))
 
             # Clean up temporary file
-            if not self.config.save_intermediates:
+            if not active_config.save_intermediates:
                 temp_path.unlink()
 
             # Handle different result types from depth pipeline
@@ -1011,7 +1053,12 @@ class UnifiedLuxuryPipeline:
 
         return image
 
-    def _apply_color_grading(self, image: Image.Image, params: Dict[str, Any]) -> Image.Image:
+    def _apply_color_grading(
+        self,
+        image: Image.Image,
+        params: Dict[str, Any],
+        config: Optional[UnifiedPipelineConfig] = None,
+    ) -> Image.Image:
         """
         Apply professional color grading with optional LUT.
 
@@ -1023,6 +1070,7 @@ class UnifiedLuxuryPipeline:
             Color-graded PIL Image
         """
         log.info("  Applying color grading...")
+        active_config = config or self.config
 
         arr = np.array(image).astype(np.float32) / 255.0
 
@@ -1049,10 +1097,10 @@ class UnifiedLuxuryPipeline:
             log.info(f"    Saturation: {saturation:.2f}x")
 
         # Apply LUT if specified
-        if self.config.lut_path is not None:
+        if active_config.lut_path is not None:
             try:
-                arr = self._apply_lut(arr, self.config.lut_path, self.config.lut_strength)
-                log.info(f"    LUT: {self.config.lut_path.name} @ {self.config.lut_strength:.0%}")
+                arr = self._apply_lut(arr, active_config.lut_path, active_config.lut_strength)
+                log.info(f"    LUT: {active_config.lut_path.name} @ {active_config.lut_strength:.0%}")
             except Exception as e:
                 log.warning(f"    LUT application failed: {e}")
 
@@ -1099,6 +1147,7 @@ class UnifiedLuxuryPipeline:
 
         basename = input_path.stem
         outputs = {}
+        failures: List[Tuple[OutputFormat, Exception]] = []
 
         # Extract ICC profile if available
         icc_profile = metadata.get("info", {}).get("icc_profile")
@@ -1115,6 +1164,7 @@ class UnifiedLuxuryPipeline:
                         fmt,
                         icc_profile,
                         metadata,
+                        config,
                     )
                     futures[future] = fmt
 
@@ -1125,15 +1175,24 @@ class UnifiedLuxuryPipeline:
                         outputs[fmt.value] = path
                     except Exception as e:
                         log.error(f"    Failed to generate {fmt.value}: {e}")
+                        failures.append((fmt, e))
         else:
             for fmt in config.output_formats:
                 try:
-                    path = self._generate_single_output(image, basename, fmt, icc_profile, metadata)
+                    path = self._generate_single_output(image, basename, fmt, icc_profile, metadata, config)
                     outputs[fmt.value] = path
                 except Exception as e:
                     log.error(f"    Failed to generate {fmt.value}: {e}")
+                    failures.append((fmt, e))
 
         log.info(f"    Generated {len(outputs)} outputs")
+
+        if failures:
+            details = "; ".join(f"{fmt.value}: {exc}" for fmt, exc in failures)
+            raise RuntimeError(f"Failed to generate requested output format(s): {details}")
+
+        if config.output_formats and not outputs:
+            raise RuntimeError("No outputs generated for requested output formats")
 
         return outputs
 
@@ -1144,6 +1203,7 @@ class UnifiedLuxuryPipeline:
         fmt: OutputFormat,
         icc_profile: Optional[bytes],
         metadata: Dict[str, Any],
+        config: Optional[UnifiedPipelineConfig] = None,
     ) -> Path:
         """
         Generate single output format.
@@ -1158,22 +1218,29 @@ class UnifiedLuxuryPipeline:
         Returns:
             Path to generated output file
         """
+        active_config = config or self.config
         if fmt == OutputFormat.MASTER_TIFF:
-            return self._save_master_tiff(image, basename, metadata)
+            return self._save_master_tiff(image, basename, metadata, active_config.output_dir)
         elif fmt == OutputFormat.WEB_4K:
-            return self._save_web_4k(image, basename, icc_profile)
+            return self._save_web_4k(image, basename, icc_profile, active_config.output_dir)
         elif fmt == OutputFormat.PRINT_8K:
-            return self._save_print_8k(image, basename, icc_profile)
+            return self._save_print_8k(image, basename, icc_profile, active_config.output_dir)
         elif fmt == OutputFormat.SOCIAL:
-            return self._save_social(image, basename, icc_profile)
+            return self._save_social(image, basename, icc_profile, active_config.output_dir)
         elif fmt == OutputFormat.MAGAZINE:
-            return self._save_magazine(image, basename, icc_profile)
+            return self._save_magazine(image, basename, icc_profile, active_config.output_dir)
         else:
             raise ValueError(f"Unknown output format: {fmt}")
 
-    def _save_master_tiff(self, image: Image.Image, basename: str, metadata: Dict) -> Path:
+    def _save_master_tiff(
+        self,
+        image: Image.Image,
+        basename: str,
+        metadata: Dict,
+        output_dir: Optional[Path] = None,
+    ) -> Path:
         """Save 16-bit TIFF master with full resolution."""
-        output_path = self.config.output_dir / f"{basename}_MASTER.tif"
+        output_path = (output_dir or self.config.output_dir) / f"{basename}_MASTER.tif"
 
         if HAS_TIFFFILE:
             # Handle both PIL Images and numpy arrays
@@ -1199,6 +1266,7 @@ class UnifiedLuxuryPipeline:
             # CRITICAL: Always clip to [0,1] before converting to 16-bit
             # This prevents float32 TIFFs with values outside [0,1] range
             arr_16bit = (np.clip(arr_float, 0.0, 1.0) * 65535).astype(np.uint16)
+            height, width = arr_16bit.shape[:2]
 
             # Extract ICC profile if available
             icc_profile = metadata.get("info", {}).get("icc_profile")
@@ -1214,9 +1282,7 @@ class UnifiedLuxuryPipeline:
                 compression="lzw",
                 extratags=extratags if extratags else None,
             )
-            log.info(
-                f"    Master TIFF: {image.size[0]}x{image.size[1]}, 16-bit, {output_path.stat().st_size / (1024**2):.1f} MB"
-            )
+            log.info(f"    Master TIFF: {width}x{height}, 16-bit, {output_path.stat().st_size / (1024**2):.1f} MB")
         else:
             # Fallback to PIL (8-bit only)
             log.warning("    tifffile not available - saving 8-bit TIFF (install tifffile for 16-bit)")
@@ -1227,9 +1293,15 @@ class UnifiedLuxuryPipeline:
 
         return output_path
 
-    def _save_web_4k(self, image: Image.Image, basename: str, icc_profile: Optional[bytes]) -> Path:
+    def _save_web_4k(
+        self,
+        image: Image.Image,
+        basename: str,
+        icc_profile: Optional[bytes],
+        output_dir: Optional[Path] = None,
+    ) -> Path:
         """Save 4K web-optimized JPEG."""
-        output_path = self.config.output_dir / f"{basename}_WEB_4K.jpg"
+        output_path = (output_dir or self.config.output_dir) / f"{basename}_WEB_4K.jpg"
 
         # Resize to 4K
         max_dim = 3840
@@ -1258,9 +1330,15 @@ class UnifiedLuxuryPipeline:
 
         return output_path
 
-    def _save_print_8k(self, image: Image.Image, basename: str, icc_profile: Optional[bytes]) -> Path:
+    def _save_print_8k(
+        self,
+        image: Image.Image,
+        basename: str,
+        icc_profile: Optional[bytes],
+        output_dir: Optional[Path] = None,
+    ) -> Path:
         """Save 8K print-quality JPEG."""
-        output_path = self.config.output_dir / f"{basename}_PRINT_8K.jpg"
+        output_path = (output_dir or self.config.output_dir) / f"{basename}_PRINT_8K.jpg"
 
         # Resize to 8K
         max_dim = 7680
@@ -1289,9 +1367,15 @@ class UnifiedLuxuryPipeline:
 
         return output_path
 
-    def _save_social(self, image: Image.Image, basename: str, icc_profile: Optional[bytes]) -> Path:
+    def _save_social(
+        self,
+        image: Image.Image,
+        basename: str,
+        icc_profile: Optional[bytes],
+        output_dir: Optional[Path] = None,
+    ) -> Path:
         """Save 1080p social media optimized JPEG."""
-        output_path = self.config.output_dir / f"{basename}_SOCIAL_1080p.jpg"
+        output_path = (output_dir or self.config.output_dir) / f"{basename}_SOCIAL_1080p.jpg"
 
         # Resize to 1080p
         max_dim = 1080
@@ -1317,9 +1401,15 @@ class UnifiedLuxuryPipeline:
 
         return output_path
 
-    def _save_magazine(self, image: Image.Image, basename: str, icc_profile: Optional[bytes]) -> Path:
+    def _save_magazine(
+        self,
+        image: Image.Image,
+        basename: str,
+        icc_profile: Optional[bytes],
+        output_dir: Optional[Path] = None,
+    ) -> Path:
         """Save 2K magazine layout JPEG."""
-        output_path = self.config.output_dir / f"{basename}_MAGAZINE_2K.jpg"
+        output_path = (output_dir or self.config.output_dir) / f"{basename}_MAGAZINE_2K.jpg"
 
         # Resize to 2K
         max_dim = 2048
@@ -1423,11 +1513,39 @@ def process_luxury_render(
     return pipeline.process(input_path)
 
 
+def _expand_brace_pattern(pattern: str) -> List[str]:
+    """Expand one simple glob brace group, e.g. ``*.{jpg,png}``."""
+    open_count = pattern.count("{")
+    close_count = pattern.count("}")
+    if open_count == 0 and close_count == 0:
+        return [pattern]
+
+    if open_count != 1 or close_count != 1:
+        raise ValueError(f"Invalid brace glob pattern {pattern!r}; expected one '{{...}}' group such as '*." "{jpg,png}'")
+
+    open_index = pattern.index("{")
+    close_index = pattern.index("}")
+    if close_index < open_index:
+        raise ValueError(f"Invalid brace glob pattern {pattern!r}; closing brace must appear after opening brace")
+
+    prefix = pattern[:open_index]
+    choices = pattern[open_index + 1 : close_index]
+    suffix = pattern[close_index + 1 :]
+    if not choices.strip():
+        raise ValueError(f"Invalid brace glob pattern {pattern!r}; brace group must contain at least one choice")
+
+    expanded_choices = [choice.strip() for choice in choices.split(",")]
+    if any(not choice for choice in expanded_choices):
+        raise ValueError(f"Invalid brace glob pattern {pattern!r}; brace choices must be non-empty")
+
+    return [f"{prefix}{choice}{suffix}" for choice in expanded_choices]
+
+
 def batch_process_luxury_renders(
     input_dir: Path,
     output_dir: Path = Path("output"),
     profile: ProcessingProfile = ProcessingProfile.BALANCED,
-    pattern: str = "*.{jpg,jpeg,png,tiff,exr}",
+    pattern: str = DEFAULT_BATCH_PATTERN,
 ) -> Dict[Path, Dict[str, Path]]:
     """
     Convenience function for batch processing luxury renders.
@@ -1447,9 +1565,15 @@ def batch_process_luxury_renders(
             profile=ProcessingProfile.PREMIUM
         )
     """
+    input_root = Path(input_dir)
     input_paths = []
-    for ext in ["jpg", "jpeg", "png", "tif", "ti", "exr"]:
-        input_paths.extend(Path(input_dir).glob(f"*.{ext}"))
+    seen = set()
+    for expanded_pattern in _expand_brace_pattern(pattern):
+        for input_path in sorted(input_root.glob(expanded_pattern)):
+            if not input_path.is_file() or input_path in seen:
+                continue
+            seen.add(input_path)
+            input_paths.append(input_path)
 
     config = UnifiedPipelineConfig(
         scene_type=SceneType.AUTO,
