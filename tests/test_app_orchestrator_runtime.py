@@ -36,6 +36,9 @@ PORTAL_FRONTDOOR_ROOT = PORTAL_HTML_PATH.parent / "web" / "secure-landing"
 PORTAL_INTERNAL_STATE_SOURCE_PATH = PORTAL_FRONTDOOR_ROOT / "portal-src" / "internal" / "state.js"
 PORTAL_TEMPLATE_SOURCE_PATH = PORTAL_FRONTDOOR_ROOT / "portal-src" / "portal.template.js"
 PORTAL_REVIEW_SURFACE_SOURCE_PATH = PORTAL_FRONTDOOR_ROOT / "portal-src" / "review-surface-deferred.js"
+PORTAL_OPERATE_SURFACE_SOURCE_PATH = PORTAL_FRONTDOOR_ROOT / "portal-src" / "operate-surface-deferred.js"
+PORTAL_BUILD_SURFACE_SOURCE_PATH = PORTAL_FRONTDOOR_ROOT / "portal-src" / "build-surface-deferred.js"
+PORTAL_OVERVIEW_SURFACE_SOURCE_PATH = PORTAL_FRONTDOOR_ROOT / "portal-src" / "overview-surface-deferred.js"
 FRONTDOOR_BRAND_ROOT = PORTAL_HTML_PATH.parent / "web" / "secure-landing" / "public" / "brand"
 
 
@@ -145,6 +148,34 @@ def _portal_review_bundle_content() -> str:
 @lru_cache(maxsize=1)
 def _portal_review_source_content() -> str:
     return PORTAL_REVIEW_SURFACE_SOURCE_PATH.read_text(encoding="utf-8")
+
+
+@lru_cache(maxsize=1)
+def _portal_operate_source_content() -> str:
+    """Carved Operate surface source. Hosts the real bodies of renderJobQueue,
+    scheduleRenderJobQueue, renderSelectedJobInspector, setInspectorTab, and
+    related queue/inspector helpers. portal.template.js retains thin shims
+    that lazy-load this module on first call."""
+    return PORTAL_OPERATE_SURFACE_SOURCE_PATH.read_text(encoding="utf-8")
+
+
+@lru_cache(maxsize=1)
+def _portal_build_source_content() -> str:
+    """Carved Build surface source. Hosts renderFieldPreviewStatuses,
+    applyLuxMetadataToControls, syncRuntimeWorkerModeControls,
+    refreshArchiveFieldVisibility, and related Build form helpers. The
+    main bundle keeps shims that delegate on first invocation."""
+    return PORTAL_BUILD_SURFACE_SOURCE_PATH.read_text(encoding="utf-8")
+
+
+@lru_cache(maxsize=1)
+def _portal_overview_source_content() -> str:
+    """Overview surface placeholder. The April 2026 Overview audit verdict
+    (commit fe2ed28) recorded that no Overview-only render code is large
+    enough to justify a real carve, so this file is intentionally a
+    documented seam — the factory returns an empty API and the build
+    pipeline emits a 100-byte placeholder bundle for manifest plumbing."""
+    return PORTAL_OVERVIEW_SURFACE_SOURCE_PATH.read_text(encoding="utf-8")
 
 
 @lru_cache(maxsize=1)
@@ -699,6 +730,11 @@ def test_portal_asset_manifest_is_explicit_and_repo_local() -> None:
         "portal.js": orchestrator_app.PORTAL_ASSETS_DIR / "portal.js",
         "portal-review.js": orchestrator_app.PORTAL_ASSETS_DIR / "portal-review.js",
         "portal-review.css": orchestrator_app.PORTAL_ASSETS_DIR / "portal-review.css",
+        # Surface-split deferred bundles. Operate and Build are real carves;
+        # Overview is an intentional placeholder (see commit fe2ed28).
+        "portal-operate.js": orchestrator_app.PORTAL_ASSETS_DIR / "portal-operate.js",
+        "portal-build.js": orchestrator_app.PORTAL_ASSETS_DIR / "portal-build.js",
+        "portal-overview.js": orchestrator_app.PORTAL_ASSETS_DIR / "portal-overview.js",
         "fonts/portal-sans.woff2": orchestrator_app.PORTAL_ASSETS_DIR / "fonts" / "portal-sans.woff2",
         "fonts/portal-mono.woff2": orchestrator_app.PORTAL_ASSETS_DIR / "fonts" / "portal-mono.woff2",
         "brand/dna-symbol-dark.svg": orchestrator_app.PORTAL_ASSETS_DIR / "brand" / "dna-symbol-dark.svg",
@@ -710,6 +746,9 @@ def test_portal_asset_manifest_is_explicit_and_repo_local() -> None:
         "portal.js": "text/javascript; charset=utf-8",
         "portal-review.js": "text/javascript; charset=utf-8",
         "portal-review.css": "text/css; charset=utf-8",
+        "portal-operate.js": "text/javascript; charset=utf-8",
+        "portal-build.js": "text/javascript; charset=utf-8",
+        "portal-overview.js": "text/javascript; charset=utf-8",
         "fonts/portal-sans.woff2": "font/woff2",
         "fonts/portal-mono.woff2": "font/woff2",
         "brand/dna-symbol-dark.svg": "image/svg+xml",
@@ -1166,6 +1205,7 @@ def test_portal_managed_mode_clears_api_keys_and_hides_secret_ui() -> None:
 def test_portal_fastvlm_captioning_controls_are_feature_gated_and_advisory_only() -> None:
     content = _portal_bundle_content()
     review_content = _portal_review_source_content()
+    operate_content = _portal_operate_source_content()
     canonical_body = _extract_js_function_body(content, "buildCanonicalLuxDepthArgs")
     applicability_body = _extract_js_function_body(content, "syncBuildSurfaceApplicability")
     cli_body = _extract_js_function_body(content, "renderCLI")
@@ -1173,7 +1213,9 @@ def test_portal_fastvlm_captioning_controls_are_feature_gated_and_advisory_only(
     effective_drawer_body = _extract_js_function_body(content, "renderEffectiveConfigDrawer")
     captioning_status_body = _extract_js_function_body(content, "normalizeCaptioningRunStatus")
     run_summary_body = _extract_js_function_body(content, "normalizeRunSummary")
-    queue_body = _extract_js_function_body(content, "renderJobQueue")
+    # renderJobQueue is carved into operate-surface-deferred.js; the main
+    # bundle keeps a thin shim. Read the real body from the deferred source.
+    queue_body = _extract_js_function_body(operate_content, "renderJobQueue")
     bind_body = _extract_js_function_body(content, "bindInputs")
 
     assert 'id="captioningDetails"' in content
@@ -1741,17 +1783,26 @@ def test_portal_review_surface_supports_compare_summary_and_keyboard_selection()
 
 def test_portal_selection_review_surfaces_have_single_render_owner() -> None:
     content = _portal_bundle_content()
+    operate_content = _portal_operate_source_content()
+    # renderReviewSurfaces, renderArtifactPanel (shim), selectJob,
+    # fetchPresetsForPipeline, renderPreRunDiagnostics, checkBackend, init
+    # all stay in the main bundle and call the carved surfaces by their
+    # public function names (the shims dispatch to deferred modules on
+    # first invocation).
     review_body = _extract_js_function_body(content, "renderReviewSurfaces")
     artifact_body = _extract_js_function_body(content, "renderArtifactPanel")
-    queue_body = _extract_js_function_body(content, "renderJobQueue")
     select_body = _extract_js_function_body(content, "selectJob")
-    schedule_body = _extract_js_function_body(content, "scheduleRenderJobQueue")
     presets_body = _extract_js_function_body(content, "fetchPresetsForPipeline")
     diagnostics_body = _extract_js_function_body(content, "renderPreRunDiagnostics")
     backend_body = _extract_js_function_body(content, "checkBackend")
     init_body = _extract_js_function_body(content, "init")
+    # renderJobQueue and scheduleRenderJobQueue are carved into
+    # operate-surface-deferred.js. The queuedReviewSurfaceRefresh batching
+    # invariant lives alongside them in the deferred source.
+    queue_body = _extract_js_function_body(operate_content, "renderJobQueue")
+    schedule_body = _extract_js_function_body(operate_content, "scheduleRenderJobQueue")
 
-    assert "let queuedReviewSurfaceRefresh = false;" in content
+    assert "let queuedReviewSurfaceRefresh = false;" in operate_content
     assert "renderArtifactPanel();" in review_body
     assert "renderSelectedJobInspector();" in review_body
     assert "renderMissionControl(payload);" in review_body
@@ -1777,8 +1828,12 @@ def test_portal_selection_review_surfaces_have_single_render_owner() -> None:
 
 def test_portal_selected_job_inspector_uses_timeline_tabs_and_log_secondary_view() -> None:
     content = _portal_bundle_content()
-    inspector_body = _extract_js_function_body(content, "renderSelectedJobInspector")
-    tab_body = _extract_js_function_body(content, "setInspectorTab")
+    operate_content = _portal_operate_source_content()
+    # renderSelectedJobInspector and setInspectorTab are carved into
+    # operate-surface-deferred.js; portal.template.js keeps thin shims
+    # that dispatch to the deferred bundle on first invocation.
+    inspector_body = _extract_js_function_body(operate_content, "renderSelectedJobInspector")
+    tab_body = _extract_js_function_body(operate_content, "setInspectorTab")
 
     assert 'id="inspectorOverviewTab"' in content
     assert 'id="inspectorTimelineTab"' in content
@@ -1797,17 +1852,26 @@ def test_portal_selected_job_inspector_uses_timeline_tabs_and_log_secondary_view
 def test_portal_operate_surfaces_use_jobs_hydration_skeletons_before_empty_state() -> None:
     content = _portal_bundle_content()
     review_content = _portal_review_source_content()
+    operate_content = _portal_operate_source_content()
+    # _isJobsHydrationPending, _toggleSurfaceSkeleton, recoverJobs,
+    # _flushBootstrapOnlineFollowup, checkBackend remain in the main bundle
+    # because they are shared infrastructure consumed by multiple surfaces.
     helper_body = _extract_js_function_body(content, "_isJobsHydrationPending")
-    queue_empty_body = _extract_js_function_body(content, "_queueEmptyStateCopy")
-    artifact_empty_body = _extract_js_function_body(review_content, "_artifactEmptyStateCopy")
     toggle_body = _extract_js_function_body(content, "_toggleSurfaceSkeleton")
-    queue_body = _extract_js_function_body(content, "renderJobQueue")
-    inspector_body = _extract_js_function_body(content, "renderSelectedJobInspector")
-    artifact_body = _extract_js_function_body(content, "renderArtifactPanel")
-    review_body = _extract_js_function_body(review_content, "renderArtifactPanel")
     recover_body = _extract_js_function_body(content, "recoverJobs")
     flush_body = _extract_js_function_body(content, "_flushBootstrapOnlineFollowup")
     backend_body = _extract_js_function_body(content, "checkBackend")
+    # _queueEmptyStateCopy, renderJobQueue, and renderSelectedJobInspector
+    # bodies all live in operate-surface-deferred.js after the Operate carve.
+    queue_empty_body = _extract_js_function_body(operate_content, "_queueEmptyStateCopy")
+    queue_body = _extract_js_function_body(operate_content, "renderJobQueue")
+    inspector_body = _extract_js_function_body(operate_content, "renderSelectedJobInspector")
+    # The Review artifact panel keeps its main-bundle shim that primes the
+    # deferred bundle and renders the fallback while jobs hydrate. The
+    # implementation body lives in review-surface-deferred.js.
+    artifact_body = _extract_js_function_body(content, "renderArtifactPanel")
+    review_body = _extract_js_function_body(review_content, "renderArtifactPanel")
+    artifact_empty_body = _extract_js_function_body(review_content, "_artifactEmptyStateCopy")
 
     assert "jobsLoadStatus: 'pending'," in content
     assert 'id="queueSkeletonState"' in content
@@ -1971,9 +2035,14 @@ def test_portal_console_routes_reuse_last_selected_job_across_operate_and_review
 def test_portal_console_context_ribbon_tracks_selected_job_and_review_state() -> None:
     content = _portal_bundle_content()
     review_content = _portal_review_source_content()
+    operate_content = _portal_operate_source_content()
+    # renderConsoleContextRibbon and applyConsoleViewLayout remain in the
+    # main bundle (multi-view dispatchers per the Overview audit verdict).
+    # renderSelectedJobInspector is carved into operate-surface-deferred.js;
+    # renderArtifactPanel's body is carved into review-surface-deferred.js.
     ribbon_body = _extract_js_function_body(content, "renderConsoleContextRibbon")
     apply_view_body = _extract_js_function_body(content, "applyConsoleViewLayout")
-    inspector_body = _extract_js_function_body(content, "renderSelectedJobInspector")
+    inspector_body = _extract_js_function_body(operate_content, "renderSelectedJobInspector")
     artifact_body = _extract_js_function_body(review_content, "renderArtifactPanel")
     operate_branch_idx = ribbon_body.index("if (state.currentView === 'operate' || state.currentView === 'review') {")
     operate_return_idx = ribbon_body.index("        return;", operate_branch_idx)
@@ -2262,7 +2331,11 @@ def test_portal_runtime_css_ships_short_viewport_modal_and_phone_stepper_rules()
 
 def test_portal_preview_statuses_render_inline_for_build_fields() -> None:
     content = _portal_bundle_content()
-    body = _extract_js_function_body(content, "renderFieldPreviewStatuses")
+    build_content = _portal_build_source_content()
+    # renderFieldPreviewStatuses is carved into build-surface-deferred.js;
+    # the main bundle keeps a thin shim. renderCLI remains in main and
+    # invokes the function by name (the shim routes the call to deferred).
+    body = _extract_js_function_body(build_content, "renderFieldPreviewStatuses")
 
     assert 'id="inputDirStatus"' in content
     assert 'id="outputDirStatus"' in content
@@ -2292,8 +2365,13 @@ def test_portal_overlay_focus_management_traps_and_restores_focus() -> None:
 
 def test_portal_queue_rows_support_keyboard_selection_navigation() -> None:
     content = _portal_bundle_content()
+    operate_content = _portal_operate_source_content()
+    # handleJobListKeydown stays in the main bundle (it is wired via
+    # addEventListener at init time and only references main-bundle helpers).
+    # renderJobQueue is carved into operate-surface-deferred.js and emits
+    # the listbox role/aria-selected markup there.
     keydown_body = _extract_js_function_body(content, "handleJobListKeydown")
-    queue_body = _extract_js_function_body(content, "renderJobQueue")
+    queue_body = _extract_js_function_body(operate_content, "renderJobQueue")
 
     assert "li.setAttribute('role', 'option');" in queue_body
     assert "li.setAttribute('aria-selected', isSelected ? 'true' : 'false');" in queue_body
@@ -2481,11 +2559,17 @@ def test_portal_preview_metadata_worker_modes_and_export_contract_are_wired() ->
 def test_portal_runtime_briefing_and_recovery_surfaces_stay_additive_and_selector_stable() -> None:
     content = _portal_bundle_content()
     review_content = _portal_review_source_content()
+    operate_content = _portal_operate_source_content()
+    # renderMissionControl is the parent dispatcher and stays in the main
+    # bundle (its 7 callees are mixed-surface, per the Overview audit).
+    # _reviewStatusSnapshot and _artifactEmptyStateCopy live in the Review
+    # deferred bundle. _queueEmptyStateCopy and renderSelectedJobInspector
+    # live in the Operate deferred bundle.
     mission_body = _extract_js_function_body(content, "renderMissionControl")
     review_status_body = _extract_js_function_body(review_content, "_reviewStatusSnapshot")
-    queue_empty_body = _extract_js_function_body(content, "_queueEmptyStateCopy")
+    queue_empty_body = _extract_js_function_body(operate_content, "_queueEmptyStateCopy")
     artifact_empty_body = _extract_js_function_body(review_content, "_artifactEmptyStateCopy")
-    inspector_body = _extract_js_function_body(content, "renderSelectedJobInspector")
+    inspector_body = _extract_js_function_body(operate_content, "renderSelectedJobInspector")
 
     assert 'id="overviewRuntimeBriefing"' in content
     assert 'data-ui="runtime-clarity-grid"' in content
