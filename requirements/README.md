@@ -67,10 +67,10 @@ To ensure deterministic builds, the checked-in ML contract is limited to the sup
 
 | Target | Lockfile | Governed baseline |
 |----------|----------|-------------------|
-| macOS Apple Silicon (`darwin-arm64`) | `ml-core-darwin-arm64.txt` | `torch==2.8.0` + `torchvision==0.23.0` + `transformers==5.0.0` + pinned `coremltools` |
+| macOS Apple Silicon (`darwin-arm64`) | `ml-core-darwin-arm64.txt` | `torch==2.8.0` + `torchvision==0.23.0` + `diffusers>=0.38.0` + `transformers==5.0.0` + pinned `coremltools` |
 
 **Contract notes:**
-- Supported target-owned core locks anchor on torch 2.8.0 / torchvision 0.23.0 and Transformers 5.x.
+- Supported target-owned core locks anchor on torch 2.8.0 / torchvision 0.23.0, Diffusers 0.38.0+, and Transformers 5.x.
 - The Apple Silicon Darwin lock must keep pinned `coremltools` and must remain free of Linux/CUDA-only packages.
 - Darwin target-owned lockfiles must never contain `nvidia-*` or `triton`.
 - Linux and macOS Intel ML lanes are retired unsupported lanes and are not kept as installable `requirements/*.in` or `requirements/*.txt` manifests.

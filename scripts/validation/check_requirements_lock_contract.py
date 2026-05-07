@@ -116,6 +116,8 @@ GENERIC_BASE_RUNTIME_LOCKS = ("all.txt", "base.txt")
 
 SUPPORTED_TORCH_PIN = "2.8.0"
 SUPPORTED_TORCHVISION_PIN = "0.23.0"
+SUPPORTED_DIFFUSERS_MIN = "0.38.0"
+SUPPORTED_DIFFUSERS_INPUT_RANGE = "diffusers>=0.38.0,<1"
 SUPPORTED_TRANSFORMERS_MIN = "5.0.0"
 SUPPORTED_TRANSFORMERS_INPUT_RANGE = "transformers>=5.0.0,<5.1"
 
@@ -420,6 +422,10 @@ def validate_darwin_input_guards() -> list[str]:
         errors.append(
             f"{darwin_arm64_input} must pin torchvision=={SUPPORTED_TORCHVISION_PIN} alongside the supported Apple Silicon torch baseline."
         )
+    if SUPPORTED_DIFFUSERS_INPUT_RANGE not in arm64_non_comment_lines:
+        errors.append(
+            f"{darwin_arm64_input} must declare {SUPPORTED_DIFFUSERS_INPUT_RANGE!r} for the supported Diffusers security baseline."
+        )
     if SUPPORTED_TRANSFORMERS_INPUT_RANGE not in arm64_non_comment_lines:
         errors.append(
             f"{darwin_arm64_input} must declare {SUPPORTED_TRANSFORMERS_INPUT_RANGE!r} for the supported Transformers security baseline."
@@ -449,12 +455,18 @@ def validate_platform_lock_runtime_compatibility() -> list[str]:
         packages = _read_pinned_packages(lock_path)
         torch_version = packages.get("torch")
         torchvision_version = packages.get("torchvision")
+        diffusers_version = packages.get("diffusers")
         transformers_version = packages.get("transformers")
 
         if lock_name == "ml-core-darwin-arm64.txt" and "coremltools" not in packages:
             errors.append(
                 f"{lock_path} must include a pinned coremltools dependency so Apple Silicon "
                 "CoreML support remains part of the checked-in arm64 contract."
+            )
+        if lock_name == "ml-core-darwin-arm64.txt" and "diffusers" not in packages:
+            errors.append(
+                f"{lock_path} must include a pinned diffusers dependency so the supported Diffusers "
+                "security baseline remains part of the checked-in arm64 contract."
             )
 
         if (
@@ -472,6 +484,14 @@ def validate_platform_lock_runtime_compatibility() -> list[str]:
         ):
             errors.append(
                 f"{lock_path} must rotate to torchvision=={SUPPORTED_TORCHVISION_PIN} for the supported Apple Silicon security baseline."
+            )
+        if (
+            lock_name == "ml-core-darwin-arm64.txt"
+            and diffusers_version is not None
+            and _parse_numeric_version(diffusers_version) < _parse_numeric_version(SUPPORTED_DIFFUSERS_MIN)
+        ):
+            errors.append(
+                f"{lock_path} must rotate to diffusers>={SUPPORTED_DIFFUSERS_MIN} for the supported Diffusers security baseline."
             )
         if (
             lock_name == "ml-core-darwin-arm64.txt"

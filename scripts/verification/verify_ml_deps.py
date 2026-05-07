@@ -53,7 +53,7 @@ def check_dependencies():
             ("torch", "PyTorch", "2.8.0"),
             ("torchvision", "TorchVision", "0.23.0"),
             ("transformers", "Transformers", "4.57.6"),
-            ("diffusers", "Diffusers", "0.36.0"),
+            ("diffusers", "Diffusers", "0.38.0"),
         ],
         "Depth": [
             ("depth_pro", "Apple Depth Pro", "0.1"),
