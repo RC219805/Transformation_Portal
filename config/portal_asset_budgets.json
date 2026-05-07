@@ -2,8 +2,8 @@
   "schema": "tp.portal_asset_budgets.v1",
   "assets": {
     "portal.js": {
-      "max_bytes": 450000,
-      "max_gzip_bytes": 96500
+      "max_bytes": 410000,
+      "max_gzip_bytes": 93000
     },
     "portal.css": {
       "max_bytes": 100000,
@@ -18,8 +18,8 @@
       "max_gzip_bytes": 1600
     },
     "portal-operate.js": {
-      "max_bytes": 1024,
-      "max_gzip_bytes": 512
+      "max_bytes": 25000,
+      "max_gzip_bytes": 6500
     },
     "portal-build.js": {
       "max_bytes": 1024,

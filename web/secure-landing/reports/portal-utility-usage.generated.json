@@ -1,7 +1,7 @@
 {
   "version": 1,
   "summary": {
-    "utilityCount": 416,
+    "utilityCount": 414,
     "compatHoldCount": 0,
     "deprecatedImported": false
   },
@@ -98,7 +98,7 @@
       "owner": "static",
       "sources": [
         "portal.html",
-        "public/portal-assets/portal.js"
+        "web/secure-landing/portal-src/operate-surface-deferred.js"
       ],
       "cssFile": "utilities.required.css",
       "cssOwners": [
@@ -111,6 +111,7 @@
       "owner": "static",
       "sources": [
         "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/operate-surface-deferred.js",
         "web/secure-landing/portal-src/portal.template.js"
       ],
       "cssFile": "utilities.required.css",
@@ -124,8 +125,7 @@
       "owner": "static",
       "sources": [
         "portal.html",
-        "public/portal-assets/portal.js",
-        "web/secure-landing/portal-src/portal.template.js"
+        "web/secure-landing/portal-src/operate-surface-deferred.js"
       ],
       "cssFile": "utilities.required.css",
       "cssOwners": [
@@ -137,8 +137,7 @@
       "className": "bg-cyan-50/80",
       "owner": "static",
       "sources": [
-        "public/portal-assets/portal.js",
-        "web/secure-landing/portal-src/portal.template.js"
+        "web/secure-landing/portal-src/operate-surface-deferred.js"
       ],
       "cssFile": "utilities.required.css",
       "cssOwners": [
@@ -177,6 +176,7 @@
       "owner": "static",
       "sources": [
         "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/operate-surface-deferred.js",
         "web/secure-landing/portal-src/portal.template.js"
       ],
       "cssFile": "utilities.required.css",
@@ -190,6 +190,7 @@
       "owner": "static",
       "sources": [
         "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/operate-surface-deferred.js",
         "web/secure-landing/portal-src/portal.template.js"
       ],
       "cssFile": "utilities.required.css",
@@ -275,7 +276,7 @@
       "className": "bg-red-50",
       "owner": "static",
       "sources": [
-        "public/portal-assets/portal.js"
+        "web/secure-landing/portal-src/operate-surface-deferred.js"
       ],
       "cssFile": "utilities.required.css",
       "cssOwners": [
@@ -288,6 +289,7 @@
       "owner": "static",
       "sources": [
         "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/operate-surface-deferred.js",
         "web/secure-landing/portal-src/portal.template.js"
       ],
       "cssFile": "utilities.required.css",
@@ -302,6 +304,7 @@
       "sources": [
         "portal.html",
         "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/operate-surface-deferred.js",
         "web/secure-landing/portal-src/portal.template.js"
       ],
       "cssFile": "utilities.required.css",
@@ -366,8 +369,7 @@
       "className": "bg-slate-50/75",
       "owner": "static",
       "sources": [
-        "public/portal-assets/portal.js",
-        "web/secure-landing/portal-src/portal.template.js"
+        "web/secure-landing/portal-src/operate-surface-deferred.js"
       ],
       "cssFile": "utilities.required.css",
       "cssOwners": [
@@ -486,8 +488,7 @@
       "sources": [
         "portal.html",
         "public/portal-assets/portal-review.js",
-        "public/portal-assets/portal.js",
-        "web/secure-landing/portal-src/portal.template.js",
+        "web/secure-landing/portal-src/operate-surface-deferred.js",
         "web/secure-landing/portal-src/review-surface-deferred.js"
       ],
       "cssFile": "utilities.required.css",
@@ -531,6 +532,7 @@
       "sources": [
         "portal.html",
         "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/operate-surface-deferred.js",
         "web/secure-landing/portal-src/portal.template.js"
       ],
       "cssFile": "utilities.required.css",
@@ -570,8 +572,7 @@
       "owner": "static",
       "sources": [
         "portal.html",
-        "public/portal-assets/portal.js",
-        "web/secure-landing/portal-src/portal.template.js"
+        "web/secure-landing/portal-src/operate-surface-deferred.js"
       ],
       "cssFile": "utilities.required.css",
       "cssOwners": [
@@ -589,18 +590,6 @@
       "cssFile": "utilities.dynamic.css",
       "cssOwners": [
         "web/secure-landing/portal-src/styles/utilities.dynamic.css"
-      ],
-      "status": "covered"
-    },
-    {
-      "className": "border-cyan-500",
-      "owner": "static",
-      "sources": [
-        "web/secure-landing/portal-src/portal.template.js"
-      ],
-      "cssFile": "utilities.required.css",
-      "cssOwners": [
-        "web/secure-landing/portal-src/styles/utilities.required.css"
       ],
       "status": "covered"
     },
@@ -623,6 +612,7 @@
       "owner": "static",
       "sources": [
         "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/operate-surface-deferred.js",
         "web/secure-landing/portal-src/portal.template.js"
       ],
       "cssFile": "utilities.required.css",
@@ -661,6 +651,7 @@
       "owner": "static",
       "sources": [
         "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/operate-surface-deferred.js",
         "web/secure-landing/portal-src/portal.template.js"
       ],
       "cssFile": "utilities.required.css",
@@ -689,6 +680,7 @@
         "portal.html",
         "public/portal-assets/portal-review.js",
         "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/operate-surface-deferred.js",
         "web/secure-landing/portal-src/portal.template.js",
         "web/secure-landing/portal-src/review-surface-deferred.js"
       ],
@@ -789,7 +781,7 @@
       "sources": [
         "portal.html",
         "public/portal-assets/portal-review.js",
-        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/operate-surface-deferred.js",
         "web/secure-landing/portal-src/review-surface-deferred.js"
       ],
       "cssFile": "utilities.required.css",
@@ -803,8 +795,7 @@
       "owner": "static",
       "sources": [
         "portal.html",
-        "public/portal-assets/portal.js",
-        "web/secure-landing/portal-src/portal.template.js"
+        "web/secure-landing/portal-src/operate-surface-deferred.js"
       ],
       "cssFile": "utilities.required.css",
       "cssOwners": [
@@ -828,8 +819,7 @@
       "className": "dark:bg-amber-900/30",
       "owner": "static",
       "sources": [
-        "public/portal-assets/portal.js",
-        "web/secure-landing/portal-src/portal.template.js"
+        "web/secure-landing/portal-src/operate-surface-deferred.js"
       ],
       "cssFile": "utilities.required.css",
       "cssOwners": [
@@ -918,8 +908,7 @@
       "sources": [
         "portal.html",
         "public/portal-assets/portal-review.js",
-        "public/portal-assets/portal.js",
-        "web/secure-landing/portal-src/portal.template.js",
+        "web/secure-landing/portal-src/operate-surface-deferred.js",
         "web/secure-landing/portal-src/review-surface-deferred.js"
       ],
       "cssFile": "utilities.required.css",
@@ -932,8 +921,7 @@
       "className": "dark:bg-emerald-900/10",
       "owner": "static",
       "sources": [
-        "public/portal-assets/portal.js",
-        "web/secure-landing/portal-src/portal.template.js"
+        "web/secure-landing/portal-src/operate-surface-deferred.js"
       ],
       "cssFile": "utilities.required.css",
       "cssOwners": [
@@ -945,8 +933,7 @@
       "className": "dark:bg-emerald-900/30",
       "owner": "static",
       "sources": [
-        "public/portal-assets/portal.js",
-        "web/secure-landing/portal-src/portal.template.js"
+        "web/secure-landing/portal-src/operate-surface-deferred.js"
       ],
       "cssFile": "utilities.required.css",
       "cssOwners": [
@@ -1022,8 +1009,7 @@
       "className": "dark:bg-red-900/10",
       "owner": "static",
       "sources": [
-        "public/portal-assets/portal.js",
-        "web/secure-landing/portal-src/portal.template.js"
+        "web/secure-landing/portal-src/operate-surface-deferred.js"
       ],
       "cssFile": "utilities.required.css",
       "cssOwners": [
@@ -1035,8 +1021,7 @@
       "className": "dark:bg-red-900/30",
       "owner": "static",
       "sources": [
-        "public/portal-assets/portal.js",
-        "web/secure-landing/portal-src/portal.template.js"
+        "web/secure-landing/portal-src/operate-surface-deferred.js"
       ],
       "cssFile": "utilities.required.css",
       "cssOwners": [
@@ -1114,6 +1099,7 @@
       "sources": [
         "portal.html",
         "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/operate-surface-deferred.js",
         "web/secure-landing/portal-src/portal.template.js"
       ],
       "cssFile": "utilities.required.css",
@@ -1154,8 +1140,7 @@
       "className": "dark:bg-slate-900/45",
       "owner": "static",
       "sources": [
-        "public/portal-assets/portal.js",
-        "web/secure-landing/portal-src/portal.template.js"
+        "web/secure-landing/portal-src/operate-surface-deferred.js"
       ],
       "cssFile": "utilities.required.css",
       "cssOwners": [
@@ -1182,8 +1167,7 @@
       "owner": "static",
       "sources": [
         "portal.html",
-        "public/portal-assets/portal.js",
-        "web/secure-landing/portal-src/portal.template.js"
+        "web/secure-landing/portal-src/operate-surface-deferred.js"
       ],
       "cssFile": "utilities.required.css",
       "cssOwners": [
@@ -1264,6 +1248,7 @@
       "owner": "static",
       "sources": [
         "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/operate-surface-deferred.js",
         "web/secure-landing/portal-src/portal.template.js"
       ],
       "cssFile": "utilities.required.css",
@@ -1277,8 +1262,7 @@
       "owner": "static",
       "sources": [
         "portal.html",
-        "public/portal-assets/portal.js",
-        "web/secure-landing/portal-src/portal.template.js"
+        "web/secure-landing/portal-src/operate-surface-deferred.js"
       ],
       "cssFile": "utilities.required.css",
       "cssOwners": [
@@ -1305,8 +1289,7 @@
       "sources": [
         "portal.html",
         "public/portal-assets/portal-review.js",
-        "public/portal-assets/portal.js",
-        "web/secure-landing/portal-src/portal.template.js",
+        "web/secure-landing/portal-src/operate-surface-deferred.js",
         "web/secure-landing/portal-src/review-surface-deferred.js"
       ],
       "cssFile": "utilities.required.css",
@@ -1320,6 +1303,7 @@
       "owner": "static",
       "sources": [
         "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/operate-surface-deferred.js",
         "web/secure-landing/portal-src/portal.template.js"
       ],
       "cssFile": "utilities.required.css",
@@ -1333,6 +1317,7 @@
       "owner": "static",
       "sources": [
         "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/operate-surface-deferred.js",
         "web/secure-landing/portal-src/portal.template.js"
       ],
       "cssFile": "utilities.required.css",
@@ -1371,6 +1356,7 @@
       "owner": "static",
       "sources": [
         "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/operate-surface-deferred.js",
         "web/secure-landing/portal-src/portal.template.js"
       ],
       "cssFile": "utilities.required.css",
@@ -1384,6 +1370,7 @@
       "owner": "static",
       "sources": [
         "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/operate-surface-deferred.js",
         "web/secure-landing/portal-src/portal.template.js"
       ],
       "cssFile": "utilities.required.css",
@@ -1424,6 +1411,7 @@
         "portal.html",
         "public/portal-assets/portal-review.js",
         "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/operate-surface-deferred.js",
         "web/secure-landing/portal-src/portal.template.js",
         "web/secure-landing/portal-src/review-surface-deferred.js"
       ],
@@ -1440,6 +1428,7 @@
         "portal.html",
         "public/portal-assets/portal-review.js",
         "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/operate-surface-deferred.js",
         "web/secure-landing/portal-src/portal.template.js",
         "web/secure-landing/portal-src/review-surface-deferred.js"
       ],
@@ -1489,10 +1478,9 @@
     },
     {
       "className": "dark:hover:bg-slate-800/80",
-      "owner": "static",
+      "owner": "review-only",
       "sources": [
         "public/portal-assets/portal-review.js",
-        "web/secure-landing/portal-src/portal.template.js",
         "web/secure-landing/portal-src/review-surface-deferred.js"
       ],
       "cssFile": "utilities.required.css",
@@ -1630,8 +1618,7 @@
       "owner": "static",
       "sources": [
         "portal.html",
-        "public/portal-assets/portal.js",
-        "web/secure-landing/portal-src/portal.template.js"
+        "web/secure-landing/portal-src/operate-surface-deferred.js"
       ],
       "cssFile": "utilities.required.css",
       "cssOwners": [
@@ -1656,8 +1643,7 @@
       "owner": "static",
       "sources": [
         "portal.html",
-        "public/portal-assets/portal.js",
-        "web/secure-landing/portal-src/portal.template.js"
+        "web/secure-landing/portal-src/operate-surface-deferred.js"
       ],
       "cssFile": "utilities.required.css",
       "cssOwners": [
@@ -1709,8 +1695,7 @@
       "className": "dark:text-emerald-400",
       "owner": "static",
       "sources": [
-        "public/portal-assets/portal.js",
-        "web/secure-landing/portal-src/portal.template.js"
+        "web/secure-landing/portal-src/operate-surface-deferred.js"
       ],
       "cssFile": "utilities.required.css",
       "cssOwners": [
@@ -1774,8 +1759,7 @@
       "owner": "static",
       "sources": [
         "portal.html",
-        "public/portal-assets/portal.js",
-        "web/secure-landing/portal-src/portal.template.js"
+        "web/secure-landing/portal-src/operate-surface-deferred.js"
       ],
       "cssFile": "utilities.required.css",
       "cssOwners": [
@@ -1789,8 +1773,7 @@
       "sources": [
         "portal.html",
         "public/portal-assets/portal-review.js",
-        "public/portal-assets/portal.js",
-        "web/secure-landing/portal-src/portal.template.js",
+        "web/secure-landing/portal-src/operate-surface-deferred.js",
         "web/secure-landing/portal-src/review-surface-deferred.js"
       ],
       "cssFile": "utilities.required.css",
@@ -1822,6 +1805,7 @@
         "portal.html",
         "public/portal-assets/portal-review.js",
         "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/operate-surface-deferred.js",
         "web/secure-landing/portal-src/portal.template.js",
         "web/secure-landing/portal-src/review-surface-deferred.js"
       ],
@@ -1838,6 +1822,7 @@
         "portal.html",
         "public/portal-assets/portal-review.js",
         "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/operate-surface-deferred.js",
         "web/secure-landing/portal-src/portal.template.js",
         "web/secure-landing/portal-src/review-surface-deferred.js"
       ],
@@ -1941,6 +1926,7 @@
         "portal.html",
         "public/portal-assets/portal-review.js",
         "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/operate-surface-deferred.js",
         "web/secure-landing/portal-src/portal.template.js",
         "web/secure-landing/portal-src/review-surface-deferred.js"
       ],
@@ -1955,7 +1941,7 @@
       "owner": "static",
       "sources": [
         "portal.html",
-        "public/portal-assets/portal.js"
+        "web/secure-landing/portal-src/operate-surface-deferred.js"
       ],
       "cssFile": "utilities.required.css",
       "cssOwners": [
@@ -1995,7 +1981,7 @@
       "className": "focus:outline-none",
       "owner": "static",
       "sources": [
-        "public/portal-assets/portal.js"
+        "web/secure-landing/portal-src/operate-surface-deferred.js"
       ],
       "cssFile": "utilities.required.css",
       "cssOwners": [
@@ -2022,6 +2008,7 @@
         "portal.html",
         "public/portal-assets/portal-review.js",
         "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/operate-surface-deferred.js",
         "web/secure-landing/portal-src/portal.template.js",
         "web/secure-landing/portal-src/review-surface-deferred.js"
       ],
@@ -2051,6 +2038,7 @@
       "sources": [
         "portal.html",
         "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/operate-surface-deferred.js",
         "web/secure-landing/portal-src/portal.template.js"
       ],
       "cssFile": "utilities.required.css",
@@ -2066,6 +2054,7 @@
         "portal.html",
         "public/portal-assets/portal-review.js",
         "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/operate-surface-deferred.js",
         "web/secure-landing/portal-src/portal.template.js",
         "web/secure-landing/portal-src/review-surface-deferred.js"
       ],
@@ -2082,6 +2071,7 @@
         "portal.html",
         "public/portal-assets/portal-review.js",
         "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/operate-surface-deferred.js",
         "web/secure-landing/portal-src/portal.template.js",
         "web/secure-landing/portal-src/review-surface-deferred.js"
       ],
@@ -2119,7 +2109,7 @@
       "className": "gap-1.5",
       "owner": "static",
       "sources": [
-        "public/portal-assets/portal.js"
+        "web/secure-landing/portal-src/operate-surface-deferred.js"
       ],
       "cssFile": "utilities.required.css",
       "cssOwners": [
@@ -2133,8 +2123,7 @@
       "sources": [
         "portal.html",
         "public/portal-assets/portal-review.js",
-        "public/portal-assets/portal.js",
-        "web/secure-landing/portal-src/portal.template.js",
+        "web/secure-landing/portal-src/operate-surface-deferred.js",
         "web/secure-landing/portal-src/review-surface-deferred.js"
       ],
       "cssFile": "utilities.required.css",
@@ -2150,6 +2139,7 @@
         "portal.html",
         "public/portal-assets/portal-review.js",
         "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/operate-surface-deferred.js",
         "web/secure-landing/portal-src/portal.template.js",
         "web/secure-landing/portal-src/review-surface-deferred.js"
       ],
@@ -2354,6 +2344,7 @@
         "portal.html",
         "public/portal-assets/portal-review.js",
         "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/operate-surface-deferred.js",
         "web/secure-landing/portal-src/portal.template.js",
         "web/secure-landing/portal-src/review-surface-deferred.js"
       ],
@@ -2392,11 +2383,10 @@
     },
     {
       "className": "hover:bg-white/90",
-      "owner": "static",
+      "owner": "review-only",
       "sources": [
         "public/portal-assets/portal-review.js",
-        "public/portal-assets/portal.js",
-        "web/secure-landing/portal-src/portal.template.js",
+        "web/secure-landing/portal-src/operate-surface-deferred.js",
         "web/secure-landing/portal-src/review-surface-deferred.js"
       ],
       "cssFile": "utilities.required.css",
@@ -2481,7 +2471,7 @@
       "className": "hover:text-red-700",
       "owner": "static",
       "sources": [
-        "public/portal-assets/portal.js"
+        "web/secure-landing/portal-src/operate-surface-deferred.js"
       ],
       "cssFile": "utilities.required.css",
       "cssOwners": [
@@ -2585,6 +2575,7 @@
         "portal.html",
         "public/portal-assets/portal-review.js",
         "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/operate-surface-deferred.js",
         "web/secure-landing/portal-src/portal.template.js",
         "web/secure-landing/portal-src/review-surface-deferred.js"
       ],
@@ -2612,6 +2603,7 @@
       "sources": [
         "portal.html",
         "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/operate-surface-deferred.js",
         "web/secure-landing/portal-src/portal.template.js"
       ],
       "cssFile": "utilities.required.css",
@@ -2626,6 +2618,7 @@
       "sources": [
         "portal.html",
         "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/operate-surface-deferred.js",
         "web/secure-landing/portal-src/portal.template.js"
       ],
       "cssFile": "utilities.required.css",
@@ -2669,6 +2662,7 @@
         "portal.html",
         "public/portal-assets/portal-review.js",
         "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/operate-surface-deferred.js",
         "web/secure-landing/portal-src/portal.template.js",
         "web/secure-landing/portal-src/review-surface-deferred.js"
       ],
@@ -2685,6 +2679,7 @@
         "portal.html",
         "public/portal-assets/portal-review.js",
         "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/operate-surface-deferred.js",
         "web/secure-landing/portal-src/portal.template.js",
         "web/secure-landing/portal-src/review-surface-deferred.js"
       ],
@@ -2942,7 +2937,7 @@
       "className": "max-w-[150px]",
       "owner": "static",
       "sources": [
-        "public/portal-assets/portal.js"
+        "web/secure-landing/portal-src/operate-surface-deferred.js"
       ],
       "cssFile": "utilities.required.css",
       "cssOwners": [
@@ -3050,7 +3045,7 @@
       "className": "mb-2",
       "owner": "static",
       "sources": [
-        "public/portal-assets/portal.js"
+        "web/secure-landing/portal-src/operate-surface-deferred.js"
       ],
       "cssFile": "utilities.required.css",
       "cssOwners": [
@@ -3063,7 +3058,7 @@
       "owner": "static",
       "sources": [
         "portal.html",
-        "public/portal-assets/portal.js"
+        "web/secure-landing/portal-src/operate-surface-deferred.js"
       ],
       "cssFile": "utilities.required.css",
       "cssOwners": [
@@ -3300,6 +3295,7 @@
         "portal.html",
         "public/portal-assets/portal-review.js",
         "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/operate-surface-deferred.js",
         "web/secure-landing/portal-src/portal.template.js",
         "web/secure-landing/portal-src/review-surface-deferred.js"
       ],
@@ -3316,6 +3312,7 @@
         "portal.html",
         "public/portal-assets/portal-review.js",
         "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/operate-surface-deferred.js",
         "web/secure-landing/portal-src/portal.template.js",
         "web/secure-landing/portal-src/review-surface-deferred.js"
       ],
@@ -3332,6 +3329,7 @@
         "portal.html",
         "public/portal-assets/portal-review.js",
         "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/operate-surface-deferred.js",
         "web/secure-landing/portal-src/portal.template.js",
         "web/secure-landing/portal-src/review-surface-deferred.js"
       ],
@@ -3545,6 +3543,7 @@
       "sources": [
         "portal.html",
         "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/operate-surface-deferred.js",
         "web/secure-landing/portal-src/portal.template.js"
       ],
       "cssFile": "utilities.required.css",
@@ -3779,6 +3778,7 @@
         "portal.html",
         "public/portal-assets/portal-review.js",
         "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/operate-surface-deferred.js",
         "web/secure-landing/portal-src/portal.template.js",
         "web/secure-landing/portal-src/review-surface-deferred.js"
       ],
@@ -3808,6 +3808,7 @@
       "sources": [
         "portal.html",
         "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/operate-surface-deferred.js",
         "web/secure-landing/portal-src/portal.template.js"
       ],
       "cssFile": "utilities.required.css",
@@ -3822,6 +3823,7 @@
       "sources": [
         "portal.html",
         "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/operate-surface-deferred.js",
         "web/secure-landing/portal-src/portal.template.js"
       ],
       "cssFile": "utilities.required.css",
@@ -3859,7 +3861,7 @@
       "owner": "static",
       "sources": [
         "portal.html",
-        "public/portal-assets/portal.js"
+        "web/secure-landing/portal-src/operate-surface-deferred.js"
       ],
       "cssFile": "utilities.required.css",
       "cssOwners": [
@@ -3888,8 +3890,7 @@
       "owner": "static",
       "sources": [
         "portal.html",
-        "public/portal-assets/portal.js",
-        "web/secure-landing/portal-src/portal.template.js"
+        "web/secure-landing/portal-src/operate-surface-deferred.js"
       ],
       "cssFile": "utilities.required.css",
       "cssOwners": [
@@ -3929,6 +3930,7 @@
       "sources": [
         "portal.html",
         "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/operate-surface-deferred.js",
         "web/secure-landing/portal-src/portal.template.js"
       ],
       "cssFile": "utilities.required.css",
@@ -4015,20 +4017,7 @@
       "className": "ring-1",
       "owner": "static",
       "sources": [
-        "public/portal-assets/portal.js",
-        "web/secure-landing/portal-src/portal.template.js"
-      ],
-      "cssFile": "utilities.required.css",
-      "cssOwners": [
-        "web/secure-landing/portal-src/styles/utilities.required.css"
-      ],
-      "status": "covered"
-    },
-    {
-      "className": "ring-cyan-500/15",
-      "owner": "static",
-      "sources": [
-        "web/secure-landing/portal-src/portal.template.js"
+        "web/secure-landing/portal-src/operate-surface-deferred.js"
       ],
       "cssFile": "utilities.required.css",
       "cssOwners": [
@@ -4054,8 +4043,7 @@
       "sources": [
         "portal.html",
         "public/portal-assets/portal-review.js",
-        "public/portal-assets/portal.js",
-        "web/secure-landing/portal-src/portal.template.js",
+        "web/secure-landing/portal-src/operate-surface-deferred.js",
         "web/secure-landing/portal-src/review-surface-deferred.js"
       ],
       "cssFile": "utilities.required.css",
@@ -4070,6 +4058,7 @@
       "sources": [
         "portal.html",
         "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/operate-surface-deferred.js",
         "web/secure-landing/portal-src/portal.template.js"
       ],
       "cssFile": "utilities.required.css",
@@ -4215,8 +4204,7 @@
       "className": "shadow-md",
       "owner": "static",
       "sources": [
-        "public/portal-assets/portal.js",
-        "web/secure-landing/portal-src/portal.template.js"
+        "web/secure-landing/portal-src/operate-surface-deferred.js"
       ],
       "cssFile": "utilities.required.css",
       "cssOwners": [
@@ -4470,6 +4458,7 @@
         "portal.html",
         "public/portal-assets/portal-review.js",
         "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/operate-surface-deferred.js",
         "web/secure-landing/portal-src/portal.template.js",
         "web/secure-landing/portal-src/review-surface-deferred.js"
       ],
@@ -4486,6 +4475,7 @@
         "portal.html",
         "public/portal-assets/portal-review.js",
         "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/operate-surface-deferred.js",
         "web/secure-landing/portal-src/portal.template.js",
         "web/secure-landing/portal-src/review-surface-deferred.js"
       ],
@@ -4502,6 +4492,7 @@
         "portal.html",
         "public/portal-assets/portal-review.js",
         "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/operate-surface-deferred.js",
         "web/secure-landing/portal-src/portal.template.js",
         "web/secure-landing/portal-src/review-surface-deferred.js"
       ],
@@ -4589,6 +4580,7 @@
       "sources": [
         "portal.html",
         "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/operate-surface-deferred.js",
         "web/secure-landing/portal-src/portal.template.js"
       ],
       "cssFile": "utilities.required.css",
@@ -4653,8 +4645,7 @@
       "owner": "static",
       "sources": [
         "portal.html",
-        "public/portal-assets/portal.js",
-        "web/secure-landing/portal-src/portal.template.js"
+        "web/secure-landing/portal-src/operate-surface-deferred.js"
       ],
       "cssFile": "utilities.required.css",
       "cssOwners": [
@@ -4668,6 +4659,7 @@
       "sources": [
         "portal.html",
         "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/operate-surface-deferred.js",
         "web/secure-landing/portal-src/portal.template.js"
       ],
       "cssFile": "utilities.required.css",
@@ -4755,7 +4747,7 @@
       "className": "text-red-500",
       "owner": "static",
       "sources": [
-        "public/portal-assets/portal.js"
+        "web/secure-landing/portal-src/operate-surface-deferred.js"
       ],
       "cssFile": "utilities.required.css",
       "cssOwners": [
@@ -4781,6 +4773,7 @@
       "owner": "static",
       "sources": [
         "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/operate-surface-deferred.js",
         "web/secure-landing/portal-src/portal.template.js"
       ],
       "cssFile": "utilities.required.css",
@@ -4819,7 +4812,7 @@
       "className": "text-right",
       "owner": "static",
       "sources": [
-        "public/portal-assets/portal.js"
+        "web/secure-landing/portal-src/operate-surface-deferred.js"
       ],
       "cssFile": "utilities.required.css",
       "cssOwners": [
@@ -4858,6 +4851,7 @@
         "portal.html",
         "public/portal-assets/portal-review.js",
         "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/operate-surface-deferred.js",
         "web/secure-landing/portal-src/portal.template.js",
         "web/secure-landing/portal-src/review-surface-deferred.js"
       ],
@@ -4874,6 +4868,7 @@
         "portal.html",
         "public/portal-assets/portal-review.js",
         "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/operate-surface-deferred.js",
         "web/secure-landing/portal-src/portal.template.js",
         "web/secure-landing/portal-src/review-surface-deferred.js"
       ],
@@ -4921,6 +4916,7 @@
       "sources": [
         "portal.html",
         "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/operate-surface-deferred.js",
         "web/secure-landing/portal-src/portal.template.js"
       ],
       "cssFile": "utilities.required.css",
@@ -5058,6 +5054,7 @@
         "portal.html",
         "public/portal-assets/portal-review.js",
         "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/operate-surface-deferred.js",
         "web/secure-landing/portal-src/portal.template.js",
         "web/secure-landing/portal-src/review-surface-deferred.js"
       ],
@@ -5156,7 +5153,7 @@
       "owner": "static",
       "sources": [
         "portal.html",
-        "public/portal-assets/portal.js"
+        "web/secure-landing/portal-src/operate-surface-deferred.js"
       ],
       "cssFile": "utilities.required.css",
       "cssOwners": [
@@ -5170,8 +5167,7 @@
       "sources": [
         "portal.html",
         "public/portal-assets/portal-review.js",
-        "public/portal-assets/portal.js",
-        "web/secure-landing/portal-src/portal.template.js",
+        "web/secure-landing/portal-src/operate-surface-deferred.js",
         "web/secure-landing/portal-src/review-surface-deferred.js"
       ],
       "cssFile": "utilities.required.css",
@@ -5210,8 +5206,7 @@
       "sources": [
         "portal.html",
         "public/portal-assets/portal-review.js",
-        "public/portal-assets/portal.js",
-        "web/secure-landing/portal-src/portal.template.js",
+        "web/secure-landing/portal-src/operate-surface-deferred.js",
         "web/secure-landing/portal-src/review-surface-deferred.js"
       ],
       "cssFile": "utilities.required.css",
@@ -5227,6 +5222,7 @@
         "portal.html",
         "public/portal-assets/portal-review.js",
         "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/operate-surface-deferred.js",
         "web/secure-landing/portal-src/portal.template.js",
         "web/secure-landing/portal-src/review-surface-deferred.js"
       ],
@@ -5312,8 +5308,7 @@
       "className": "w-8",
       "owner": "static",
       "sources": [
-        "public/portal-assets/portal.js",
-        "web/secure-landing/portal-src/portal.template.js"
+        "web/secure-landing/portal-src/operate-surface-deferred.js"
       ],
       "cssFile": "utilities.required.css",
       "cssOwners": [
