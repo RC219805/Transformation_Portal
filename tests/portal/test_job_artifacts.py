@@ -8,7 +8,7 @@ import importlib
 import json
 import subprocess
 import sys
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 
 import pytest
 
@@ -86,6 +86,39 @@ def test_direct_and_app_index_payloads_match_for_preview_proxy(tmp_path: Path) -
     assert job.artifact_lookup["render.tif.preview.png"] == (output_dir / "render.tif.preview.png").resolve()
 
 
+def test_direct_module_serializes_artifact_relative_paths_as_posix() -> None:
+    module = importlib.import_module("transformation_portal.portal.job_artifacts")
+
+    assert (
+        module._relative_artifact_path(
+            PureWindowsPath("C:/job-output/renders/hero.png"),
+            PureWindowsPath("C:/job-output"),
+        )
+        == "renders/hero.png"
+    )
+
+
+def test_svg_artifacts_are_not_browser_previewable_and_are_served_as_attachments(
+    tmp_path: Path,
+) -> None:
+    module = importlib.import_module("transformation_portal.portal.job_artifacts")
+    artifact_path = tmp_path / "active.svg"
+    artifact_path.write_text('<svg onload="alert(1)"></svg>', encoding="utf-8")
+
+    payload = module._serialize_indexed_artifact(
+        job_id="job_artifacts_svg",
+        relative_path="active.svg",
+        path=artifact_path,
+    )
+    headers = module._artifact_response_headers(artifact_path)
+
+    assert module._artifact_content_type(artifact_path) == "image/svg+xml"
+    assert module._artifact_is_browser_previewable(artifact_path) is False
+    assert payload["browser_previewable"] is False
+    assert "attachment" in headers["Content-Disposition"]
+    assert headers["X-Content-Type-Options"] == "nosniff"
+
+
 def test_app_wrapper_injects_current_artifact_limits(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -160,18 +193,52 @@ def test_direct_index_skips_symlink_escape(tmp_path: Path) -> None:
     module = importlib.import_module("transformation_portal.portal.job_artifacts")
     output_dir = tmp_path / "out"
     output_dir.mkdir()
-    outside = tmp_path / "secret.png"
-    outside.write_bytes(b"secret")
-    link = output_dir / "escape.png"
+    outside_a = tmp_path / "secret-a.png"
+    outside_b = tmp_path / "secret-b.png"
+    outside_a.write_bytes(b"secret-a")
+    outside_b.write_bytes(b"secret-b")
+    link_a = output_dir / "escape-a.png"
+    link_b = output_dir / "escape-b.png"
     try:
-        link.symlink_to(outside)
+        link_a.symlink_to(outside_a)
+        link_b.symlink_to(outside_b)
     except OSError as exc:
         pytest.skip(f"symlink creation unavailable: {exc}")
 
-    result = module._index_job_artifacts(job_id="job_artifacts_symlink", output_dir=output_dir)
+    result = module._index_job_artifacts(
+        job_id="job_artifacts_symlink",
+        output_dir=output_dir,
+        max_indexed_artifacts=1,
+    )
 
     assert result.items == []
     assert result.artifacts["items"] == []
+    assert result.artifacts["truncated"] is False
+    assert result.artifact_lookup == {}
+
+
+def test_direct_index_does_not_descend_into_symlinked_directories(tmp_path: Path) -> None:
+    module = importlib.import_module("transformation_portal.portal.job_artifacts")
+    output_dir = tmp_path / "out"
+    outside_dir = tmp_path / "outside"
+    output_dir.mkdir()
+    outside_dir.mkdir()
+    for index in range(3):
+        (outside_dir / f"secret-{index}.txt").write_text("secret", encoding="utf-8")
+    link = output_dir / "linked"
+    try:
+        link.symlink_to(outside_dir, target_is_directory=True)
+    except OSError as exc:
+        pytest.skip(f"symlink creation unavailable: {exc}")
+
+    result = module._index_job_artifacts(
+        job_id="job_artifacts_symlink_dir",
+        output_dir=output_dir,
+        max_indexed_artifacts=1,
+    )
+
+    assert result.items == []
+    assert result.artifacts["truncated"] is False
     assert result.artifact_lookup == {}
 
 

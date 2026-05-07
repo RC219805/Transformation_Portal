@@ -8,7 +8,7 @@ import re
 from bisect import bisect_left
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
-from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple
+from typing import Any, Dict, Iterable, Iterator, List, Mapping, Optional, Tuple
 from urllib.parse import quote
 
 from transformation_portal.lux_depth_v3.run_card_contract import infer_run_card_version
@@ -108,13 +108,16 @@ _BROWSER_PREVIEWABLE_MIME_TYPES = frozenset(
         "image/webp",
         "image/gif",
         "image/avif",
-        "image/svg+xml",
     }
 )
 
 
 def _artifact_is_browser_previewable(path: Path) -> bool:
     return _artifact_content_type(path).lower() in _BROWSER_PREVIEWABLE_MIME_TYPES
+
+
+def _relative_artifact_path(path: Path, output_dir: Path) -> str:
+    return path.relative_to(output_dir).as_posix()
 
 
 def _artifact_preview_proxy_path(path: Path) -> Optional[Path]:
@@ -145,7 +148,7 @@ def _add_artifact_preview_proxy_lookup(
     try:
         resolved_output_dir = Path(os.path.realpath(output_dir.expanduser()))
         resolved_proxy_path = Path(os.path.realpath(proxy_path))
-        proxy_relative_path = str(resolved_proxy_path.relative_to(resolved_output_dir))
+        proxy_relative_path = _relative_artifact_path(resolved_proxy_path, resolved_output_dir)
     except (OSError, ValueError):
         return
     lookup.setdefault(proxy_relative_path, resolved_proxy_path)
@@ -161,7 +164,10 @@ def _safe_artifact_attachment_filename(path: Path) -> str:
 def _artifact_response_headers(path: Path) -> Dict[str, str]:
     """Build response headers for a job artifact download."""
 
-    headers: Dict[str, str] = {"Cache-Control": "no-store"}
+    headers: Dict[str, str] = {
+        "Cache-Control": "no-store",
+        "X-Content-Type-Options": "nosniff",
+    }
     if not _artifact_is_previewable(path):
         filename = _safe_artifact_attachment_filename(path)
         headers["Content-Disposition"] = f'attachment; filename="{filename}"'
@@ -489,7 +495,7 @@ def _find_newest_artifact_path(output_dir: Path, candidates: List[Path]) -> Opti
         if not resolved.exists() or not resolved.is_file():
             continue
         try:
-            relative_path = str(resolved.relative_to(output_dir))
+            relative_path = _relative_artifact_path(resolved, output_dir)
         except ValueError:
             continue
         normalized_candidates.append((relative_path, resolved))
@@ -516,7 +522,7 @@ def _resolve_artifact_path_within_output_dir(
         )
     )
     try:
-        canonical_relative_path = str(resolved_candidate.relative_to(output_dir))
+        canonical_relative_path = _relative_artifact_path(resolved_candidate, output_dir)
     except ValueError:
         return None
     if not resolved_candidate.exists() or not resolved_candidate.is_file():
@@ -540,7 +546,7 @@ def _resolve_job_run_metadata(
     for candidate in output_dir.glob("run_card_*.json"):
         try:
             resolved_candidate = Path(os.path.realpath(candidate))
-            relative_path = str(resolved_candidate.relative_to(output_dir))
+            relative_path = _relative_artifact_path(resolved_candidate, output_dir)
         except (OSError, ValueError):
             continue
         run_card_payload = _load_bounded_run_card_payload(resolved_candidate, max_bytes=max_bytes)
@@ -608,7 +614,7 @@ def _build_scoped_job_artifacts(
         if not resolved_path.exists() or not resolved_path.is_file():
             continue
         try:
-            relative_path = str(resolved_path.relative_to(output_dir))
+            relative_path = _relative_artifact_path(resolved_path, output_dir)
         except ValueError:
             continue
         discovered[relative_path] = resolved_path
@@ -706,7 +712,7 @@ def _validate_resolved_job_artifact_path(
 
     resolved = Path(os.path.realpath(resolved_artifact))
     try:
-        relative_path = str(resolved.relative_to(output_dir))
+        relative_path = _relative_artifact_path(resolved, output_dir)
     except ValueError as exc:
         raise ArtifactPathOutsideJobOutputDirError from exc
 
@@ -746,6 +752,14 @@ def _hydrate_artifact_lookup_from_items(
             artifact_path=resolved,
         )
     return lookup
+
+
+def _iter_job_artifact_files(output_dir: Path) -> Iterator[Path]:
+    for root, dirnames, filenames in os.walk(output_dir, followlinks=False):
+        root_path = Path(root)
+        dirnames[:] = sorted(dirname for dirname in dirnames if not (root_path / dirname).is_symlink())
+        for filename in sorted(filenames):
+            yield root_path / filename
 
 
 def _index_job_artifacts(
@@ -797,20 +811,20 @@ def _index_job_artifacts(
     selected: List[tuple[tuple[str, str], str, Path]] = []
     selected_keys: List[tuple[str, str]] = []
     total_files = 0
-    for path in output_dir.rglob("*"):
+    for path in _iter_job_artifact_files(output_dir):
         if not path.is_file():
             continue
-        total_files += 1
-        try:
-            relative_path = str(path.relative_to(output_dir))
-        except Exception:
-            relative_path = path.name
 
         resolved_path = Path(os.path.realpath(path))
         try:
             resolved_path.relative_to(output_dir)
         except ValueError:
             continue
+        total_files += 1
+        try:
+            relative_path = _relative_artifact_path(path, output_dir)
+        except ValueError:
+            relative_path = path.name
 
         key = (relative_path.casefold(), relative_path)
 
