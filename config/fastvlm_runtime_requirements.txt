@@ -1,4 +1,4 @@
-pip==26.1
+pip==26.1.1
 aiohappyeyeballs==2.6.1
 aiohttp==3.13.5
 aiosignal==1.4.0
@@ -29,7 +29,7 @@ httpx==0.28.1
 huggingface_hub==1.13.0
 idna==3.13
 Jinja2==3.1.6
-markdown-it-py==4.0.0
+markdown-it-py==4.1.0
 MarkupSafe==3.0.3
 mdurl==0.1.2
 mlx==0.31.2
@@ -73,7 +73,7 @@ tomlkit==0.14.0
 torch==2.11.0
 torchvision==0.26.0
 tqdm==4.67.3
-transformers==5.7.0
+transformers==5.8.0
 typer==0.25.1
 typing-inspection==0.4.2
 typing_extensions==4.15.0
