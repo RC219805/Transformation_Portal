@@ -44,6 +44,7 @@ import shutil
 import subprocess
 import sys
 import time
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -109,7 +110,7 @@ class MetaPipelineConfig:
         (self.output_dir / "final").mkdir(exist_ok=True)
 
 
-class WorkflowExecutor:
+class WorkflowExecutor(ABC):
     """Base class for workflow execution strategies."""
 
     def __init__(self, config: MetaPipelineConfig):
@@ -166,6 +167,7 @@ class WorkflowExecutor:
             log.error(f"Manifest path: {manifest_path}")
             return None
 
+    @abstractmethod
     def execute(self) -> bool:
         """Execute the workflow. Returns success status."""
         raise NotImplementedError
