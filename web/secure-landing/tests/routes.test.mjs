@@ -2777,6 +2777,100 @@ test("v1 normalizes upstream outages into a structured retryable error envelope"
   }
 });
 
+test("v1 preserves rate-limit retry headers and envelope on upstream 429", async () => {
+  // Backend contract (Retry-After + X-RateLimit-Limit/Remaining/Reset) must
+  // reach the browser unchanged through the managed proxy. 429 is *not*
+  // classified as an upstream failure, so the proxy returns the upstream
+  // body and headers verbatim (modulo the hop-by-hop denylist).
+  const env = withTempEnvironment({
+    TP_BACKEND_API_KEY: "backend-secret"
+  });
+
+  try {
+    const sessions = await importFresh("../lib/sessions.js");
+    const route = await importFresh("../app/v1/[...path]/route.js");
+    const restoreFetch = withMockedAccessCerts(async (url) => {
+      assert.equal(String(url), "http://127.0.0.1:8000/v1/jobs");
+      return new Response(
+        JSON.stringify({
+          schema: "tp.orchestrator.error.v1",
+          success: false,
+          data: null,
+          error: {
+            code: "RATE_LIMITED",
+            message: "rate limit exceeded",
+            details: { client_ip: "203.0.113.5" }
+          }
+        }),
+        {
+          status: 429,
+          headers: {
+            "Content-Type": "application/json",
+            "Retry-After": "12",
+            "X-RateLimit-Limit": "60",
+            "X-RateLimit-Remaining": "0",
+            "X-RateLimit-Reset": "1700000060"
+          }
+        }
+      );
+    });
+
+    try {
+      const authenticatedSession = sessions.rotateAuthenticatedSession(
+        sessions.createAnonymousSession(),
+        {
+          username: "admin",
+          accessEmail: "admin@example.com",
+          role: "admin"
+        }
+      );
+
+      const request = buildRequest("https://portal.example.com/v1/jobs", {
+        method: "GET",
+        headers: new Headers({
+          cookie: `__Host-tp_session=${authenticatedSession.id}`,
+          "Cf-Access-Jwt-Assertion": createAccessJwt()
+        })
+      });
+
+      const response = await route.GET(request, {
+        params: { path: ["jobs"] }
+      });
+
+      // Status forwarded.
+      assert.equal(response.status, 429);
+
+      // The four contract headers reach the browser intact. Header lookup
+      // is case-insensitive by Headers semantics; assert lower-case to
+      // avoid coupling the test to a specific casing convention.
+      assert.equal(response.headers.get("retry-after"), "12");
+      assert.equal(response.headers.get("x-ratelimit-limit"), "60");
+      assert.equal(response.headers.get("x-ratelimit-remaining"), "0");
+      assert.equal(response.headers.get("x-ratelimit-reset"), "1700000060");
+
+      // Sensitive request-side headers must not be reflected on responses.
+      assert.equal(response.headers.get("x-api-key"), null);
+      assert.equal(response.headers.get("authorization"), null);
+
+      // Envelope body untouched on 429.
+      const body = await response.json();
+      assert.equal(body.schema, "tp.orchestrator.error.v1");
+      assert.equal(body.success, false);
+      assert.equal(body.data, null);
+      assert.equal(body.error.code, "RATE_LIMITED");
+      assert.equal(body.error.message, "rate limit exceeded");
+      assert.equal(body.error.details.client_ip, "203.0.113.5");
+
+      // Existing v1-proxy invariant: responses are not cacheable.
+      assert.equal(response.headers.get("cache-control"), "no-store");
+    } finally {
+      restoreFetch();
+    }
+  } finally {
+    env.cleanup();
+  }
+});
+
 test("v1 normalizes upstream auth responses into managed config failures", async () => {
   const env = withTempEnvironment({
     TP_BACKEND_API_KEY: "backend-secret"

@@ -151,3 +151,69 @@ class TestRateLimitRejection:
         orchestrator_app.RATE_LIMIT_PER_MINUTE = 0
         for _ in range(20):
             assert auth_client.get("/healthz").status_code == 200
+
+    def test_429_emits_retry_and_ratelimit_headers(self, auth_client):
+        """The per-IP rate-limit 429 path emits the contract header set:
+        Retry-After + X-RateLimit-{Limit,Remaining,Reset}. Header values are
+        validated by parse + range, not exact times, to keep the contract
+        stable across clock jitter.
+        """
+        import time as _time
+
+        orchestrator_app.RATE_LIMIT_PER_MINUTE = 3
+        for _ in range(3):
+            assert auth_client.get("/healthz").status_code == 200
+        before_send = int(_time.time())
+        response = auth_client.get("/healthz")
+        assert response.status_code == 429
+
+        retry_after_raw = response.headers.get("Retry-After")
+        assert retry_after_raw is not None, "Retry-After header missing on 429"
+        retry_after = int(retry_after_raw)
+        assert retry_after >= 1, "Retry-After must be a positive integer"
+
+        limit_raw = response.headers.get("X-RateLimit-Limit")
+        assert limit_raw is not None, "X-RateLimit-Limit header missing on 429"
+        assert int(limit_raw) == 3
+
+        remaining_raw = response.headers.get("X-RateLimit-Remaining")
+        assert remaining_raw is not None, "X-RateLimit-Remaining header missing on 429"
+        assert int(remaining_raw) == 0
+
+        reset_raw = response.headers.get("X-RateLimit-Reset")
+        assert reset_raw is not None, "X-RateLimit-Reset header missing on 429"
+        reset_epoch = int(reset_raw)
+        # Reset is when the oldest bucket entry exits the sliding window.
+        # Loose bound: must not be in the past relative to when we sent.
+        assert reset_epoch >= before_send
+
+    def test_429_envelope_body_unchanged_by_header_addition(self, auth_client):
+        """Adding rate-limit headers must remain additive: the ApiEnvelope
+        error body keeps its existing schema/code/message/details shape.
+        """
+        orchestrator_app.RATE_LIMIT_PER_MINUTE = 1
+        assert auth_client.get("/healthz").status_code == 200
+        response = auth_client.get("/healthz")
+        assert response.status_code == 429
+        body = response.json()
+        # Envelope shape: schema + success + data + error
+        assert body.get("schema") == "tp.orchestrator.error.v1"
+        assert body.get("success") is False
+        assert body.get("data") is None
+        error = body.get("error") or {}
+        assert error.get("code") == "RATE_LIMITED"
+        assert "rate limit exceeded" in error.get("message", "").lower()
+        assert "client_ip" in (error.get("details") or {})
+
+    def test_non_429_responses_do_not_emit_ratelimit_headers(self, auth_client):
+        """The contract is additive only on rejection. Successful liveness
+        responses must not advertise rate-limit headers, since that would
+        imply a budget the route did not actually consume.
+        """
+        orchestrator_app.RATE_LIMIT_PER_MINUTE = 60
+        response = auth_client.get("/healthz")
+        assert response.status_code == 200
+        assert response.headers.get("Retry-After") is None
+        assert response.headers.get("X-RateLimit-Limit") is None
+        assert response.headers.get("X-RateLimit-Remaining") is None
+        assert response.headers.get("X-RateLimit-Reset") is None

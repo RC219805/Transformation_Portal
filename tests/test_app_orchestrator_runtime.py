@@ -5153,8 +5153,12 @@ def test_rate_limiting_returns_true_after_threshold() -> None:
         orchestrator_app.RATE_LIMIT_PER_MINUTE = previous_limit
         orchestrator_app.RATE_LIMIT_BUCKETS.clear()
 
-    assert first is False
-    assert second is True
+    assert first.limited is False
+    assert first.retry_after_seconds == 0
+    assert second.limited is True
+    assert second.retry_after_seconds >= 1
+    # Reset is the moment the oldest bucket entry exits the sliding window.
+    assert second.reset_epoch_seconds >= int(now)
 
 
 def test_client_ip_prefers_peer_by_default() -> None:

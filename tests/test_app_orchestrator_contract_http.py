@@ -3636,6 +3636,27 @@ def test_v1_jobs_rejects_when_max_concurrent_jobs_reached(
     assert body["error"]["details"]["active_jobs"] == 1
     assert body["error"]["details"]["max_concurrent_jobs"] == 1
 
+    # The job-admission 429 path emits the same rate-limit header contract as
+    # the per-IP gate, with values describing the concurrency cap rather than
+    # the per-minute window. We assert parse + range, not exact values.
+    import time as _time
+
+    retry_after_raw = response.headers.get("Retry-After")
+    assert retry_after_raw is not None, "Retry-After header missing on job-admission 429"
+    assert int(retry_after_raw) >= 1
+
+    limit_raw = response.headers.get("X-RateLimit-Limit")
+    assert limit_raw is not None, "X-RateLimit-Limit header missing on job-admission 429"
+    assert int(limit_raw) == 1  # MAX_CONCURRENT_JOBS for this test
+
+    remaining_raw = response.headers.get("X-RateLimit-Remaining")
+    assert remaining_raw is not None, "X-RateLimit-Remaining header missing on job-admission 429"
+    assert int(remaining_raw) == 0
+
+    reset_raw = response.headers.get("X-RateLimit-Reset")
+    assert reset_raw is not None, "X-RateLimit-Reset header missing on job-admission 429"
+    assert int(reset_raw) >= int(_time.time()) - 1  # tolerate <1s clock skew
+
 
 def test_unknown_v1_route_returns_typed_not_found_envelope(client: TestClient) -> None:
     v1_missing = client.get("/v1/not-a-route")
