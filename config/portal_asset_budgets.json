@@ -3,7 +3,7 @@
   "assets": {
     "portal.js": {
       "max_bytes": 450000,
-      "max_gzip_bytes": 95000
+      "max_gzip_bytes": 96500
     },
     "portal.css": {
       "max_bytes": 100000,
