@@ -506,6 +506,40 @@ class TestPerCallOverrides:
         assert results["master"].exists()
         mock_depth.assert_not_called()
         assert pipeline.config.enable_depth is True
+        assert pipeline.stages["depth"].enabled is False
+        assert pipeline.stages["depth"].success is False
+        assert pipeline.stages["depth"].elapsed_time == 0.0
+        assert "Depth Processing" not in pipeline.stats.stage_times
+
+    def test_process_override_resets_stage_state_between_calls(self, sample_image_file, sample_image, temp_dir):
+        """Test skipped per-call stages do not retain previous success/timing state."""
+        config = UnifiedPipelineConfig(
+            scene_type=SceneType.INTERIOR,
+            output_dir=temp_dir,
+            output_formats=[OutputFormat.MASTER_TIFF],
+            enable_depth=True,
+            enable_material_response=False,
+            enable_color_grading=False,
+        )
+        pipeline = UnifiedLuxuryPipeline(config)
+
+        with patch.object(pipeline, "_apply_depth_processing", return_value=sample_image):
+            first_results = pipeline.process(sample_image_file)
+
+        assert first_results["master"].exists()
+        assert pipeline.stages["depth"].enabled is True
+        assert pipeline.stages["depth"].success is True
+        assert pipeline.stages["depth"].elapsed_time > 0.0
+        assert "Depth Processing" in pipeline.stats.stage_times
+
+        second_results = pipeline.process(sample_image_file, enable_depth=False)
+
+        assert second_results["master"].exists()
+        assert pipeline.stages["depth"].enabled is False
+        assert pipeline.stages["depth"].success is False
+        assert pipeline.stages["depth"].elapsed_time == 0.0
+        assert pipeline.stages["depth"].error_message is None
+        assert "Depth Processing" not in pipeline.stats.stage_times
 
     def test_process_override_can_enable_vfx_for_current_call(self, sample_image_file, temp_dir):
         """Test enable_vfx override can activate a constructor-disabled stage."""
@@ -526,6 +560,8 @@ class TestPerCallOverrides:
         assert results["master"].exists()
         mock_vfx.assert_called_once()
         assert pipeline.config.enable_vfx is False
+        assert pipeline.stages["vfx"].enabled is True
+        assert pipeline.stages["vfx"].success is True
 
     def test_process_override_can_enable_material_response_for_current_call(self, sample_image_file, temp_dir):
         """Test enable_material_response override can activate a constructor-disabled stage."""
@@ -549,6 +585,8 @@ class TestPerCallOverrides:
         assert results["master"].exists()
         mock_material.assert_called_once()
         assert pipeline.config.enable_material_response is False
+        assert pipeline.stages["material"].enabled is True
+        assert pipeline.stages["material"].success is True
 
     def test_process_override_uses_output_dir_for_current_call(self, sample_image_file, temp_dir):
         """Test output_dir override does not mutate constructor config."""
@@ -720,6 +758,18 @@ class TestConvenienceFunctions:
 
         input_paths = mock_instance.batch_process.call_args.args[0]
         assert input_paths == [input_dir / "keep.png"]
+
+    @pytest.mark.parametrize("pattern", ["*.{jpg,png", "*.}jpg{", "*.{jpg,}", "*.{}"])
+    @patch("transformation_portal.pipelines.unified_luxury_pipeline.UnifiedLuxuryPipeline")
+    def test_batch_process_luxury_renders_rejects_malformed_brace_pattern(self, mock_pipeline_class, pattern, temp_dir):
+        """Test malformed public brace patterns fail predictably."""
+        input_dir = temp_dir / "inputs"
+        input_dir.mkdir()
+
+        with pytest.raises(ValueError, match="Invalid brace glob pattern"):
+            batch_process_luxury_renders(input_dir, output_dir=temp_dir / "output", pattern=pattern)
+
+        mock_pipeline_class.assert_not_called()
 
 
 class TestDeviceDetection:

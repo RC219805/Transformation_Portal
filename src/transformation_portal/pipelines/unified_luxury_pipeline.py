@@ -379,14 +379,15 @@ class UnifiedLuxuryPipeline:
         # Apply overrides to temporary config
         temp_config = self._apply_overrides(overrides)
         temp_config.output_dir.mkdir(parents=True, exist_ok=True)
+        self._configure_stage_state(temp_config)
 
         try:
             # Stage 1: Load & Validate
             image, metadata = self._execute_stage("load", self._load_image, input_path)
 
             # Stage 2: Scene Detection (if AUTO)
-            if temp_config.scene_type == SceneType.AUTO:
-                scene_type = self._execute_stage("scene_detect", self._detect_scene_type, image, enabled=True)
+            if self.stages["scene_detect"].enabled:
+                scene_type = self._execute_stage("scene_detect", self._detect_scene_type, image)
                 temp_config.scene_type = scene_type
                 log.info(f"  Detected scene type: {scene_type.value}")
 
@@ -394,33 +395,31 @@ class UnifiedLuxuryPipeline:
             params = self._optimize_parameters(temp_config)
 
             # Stage 3: Depth Processing
-            if temp_config.enable_depth:
-                image = self._execute_stage("depth", self._apply_depth_processing, image, params, temp_config, enabled=True)
+            if self.stages["depth"].enabled:
+                image = self._execute_stage("depth", self._apply_depth_processing, image, params, temp_config)
 
             # Stage 4: Material Response
-            if temp_config.enable_material_response:
+            if self.stages["material"].enabled:
                 image = self._execute_stage(
                     "material",
                     self._apply_material_response,
                     image,
                     params,
                     temp_config.scene_type,
-                    enabled=True,
                 )
 
             # Stage 5: VFX Effects
-            if temp_config.enable_vfx:
-                image = self._execute_stage("vfx", self._apply_vfx_effects, image, params, enabled=True)
+            if self.stages["vfx"].enabled:
+                image = self._execute_stage("vfx", self._apply_vfx_effects, image, params)
 
             # Stage 6: Color Grading
-            if temp_config.enable_color_grading:
+            if self.stages["color_grade"].enabled:
                 image = self._execute_stage(
                     "color_grade",
                     self._apply_color_grading,
                     image,
                     params,
                     temp_config,
-                    enabled=True,
                 )
 
             # Stage 7: Generate Outputs
@@ -524,7 +523,26 @@ class UnifiedLuxuryPipeline:
         temp_config.__post_init__()
         return temp_config
 
-    def _execute_stage(self, stage_name: str, func, *args, enabled: Optional[bool] = None, **kwargs):
+    def _configure_stage_state(self, config: UnifiedPipelineConfig) -> None:
+        """Reset per-call stage state from the active configuration."""
+        enabled_by_stage = {
+            "load": True,
+            "scene_detect": config.scene_type == SceneType.AUTO,
+            "depth": config.enable_depth,
+            "material": config.enable_material_response,
+            "vfx": config.enable_vfx,
+            "color_grade": config.enable_color_grading,
+            "output": True,
+        }
+
+        self.stats.stage_times.clear()
+        for stage_name, stage in self.stages.items():
+            stage.enabled = enabled_by_stage[stage_name]
+            stage.elapsed_time = 0.0
+            stage.success = False
+            stage.error_message = None
+
+    def _execute_stage(self, stage_name: str, func, *args, **kwargs):
         """
         Execute pipeline stage with timing and error handling.
 
@@ -541,8 +559,7 @@ class UnifiedLuxuryPipeline:
         """
         stage = self.stages[stage_name]
 
-        should_run = stage.enabled if enabled is None else enabled
-        if not should_run:
+        if not stage.enabled:
             return args[0] if args else None
 
         start = time.time()
@@ -1498,12 +1515,30 @@ def process_luxury_render(
 
 def _expand_brace_pattern(pattern: str) -> List[str]:
     """Expand one simple glob brace group, e.g. ``*.{jpg,png}``."""
-    if "{" not in pattern or "}" not in pattern:
+    open_count = pattern.count("{")
+    close_count = pattern.count("}")
+    if open_count == 0 and close_count == 0:
         return [pattern]
 
-    prefix, remainder = pattern.split("{", 1)
-    choices, suffix = remainder.split("}", 1)
-    return [f"{prefix}{choice.strip()}{suffix}" for choice in choices.split(",") if choice.strip()]
+    if open_count != 1 or close_count != 1:
+        raise ValueError(f"Invalid brace glob pattern {pattern!r}; expected one '{{...}}' group such as '*." "{jpg,png}'")
+
+    open_index = pattern.index("{")
+    close_index = pattern.index("}")
+    if close_index < open_index:
+        raise ValueError(f"Invalid brace glob pattern {pattern!r}; closing brace must appear after opening brace")
+
+    prefix = pattern[:open_index]
+    choices = pattern[open_index + 1 : close_index]
+    suffix = pattern[close_index + 1 :]
+    if not choices.strip():
+        raise ValueError(f"Invalid brace glob pattern {pattern!r}; brace group must contain at least one choice")
+
+    expanded_choices = [choice.strip() for choice in choices.split(",")]
+    if any(not choice for choice in expanded_choices):
+        raise ValueError(f"Invalid brace glob pattern {pattern!r}; brace choices must be non-empty")
+
+    return [f"{prefix}{choice}{suffix}" for choice in expanded_choices]
 
 
 def batch_process_luxury_renders(
