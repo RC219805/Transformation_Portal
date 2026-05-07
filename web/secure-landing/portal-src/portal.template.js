@@ -49,7 +49,7 @@ const BOOTSTRAP_RETRY_MAX_EXPONENT = 4;
 const BOOTSTRAP_RETRY_JITTER_MS = 400;
 const BOOTSTRAP_RETRY_MAX_ATTEMPTS = 4;
 const BOOTSTRAP_RETRY_MAX_WINDOW_MS = 60000;
-const BOOTSTRAP_RETRIABLE_HTTP_STATUSES = new Set([500, 502, 503, 504]);
+const BOOTSTRAP_RETRIABLE_HTTP_STATUSES = new Set([429, 500, 502, 503, 504]);
 const HEALTH_CHECK_INTERVAL_MS = 15000;
 const HEALTH_CHECK_TIMEOUT_MS = 2000;
 const HEALTH_CHECK_MIN_GAP_MS = 10000;
@@ -64,6 +64,13 @@ const CONFIG_PREVIEW_SERVICE_RETRY_BASE_MS = 2500;
 const CONFIG_PREVIEW_SERVICE_RETRY_MAX_ATTEMPTS = 3;
 const TRANSIENT_DRAFT_PERSIST_DEBOUNCE_MS = 200;
 const DEFERRED_REVIEW_SURFACE_RETRY_WINDOW_MS = 30000;
+const DEFERRED_SURFACE_RETRY_WINDOW_MS = 30000;
+const DEFERRED_SURFACE_REGISTRY = Object.freeze({
+    operate: { datasetKey: 'operateSurfaceJsUrl', factoryName: 'createDeferredOperateSurfaceApi' },
+    build: { datasetKey: 'buildSurfaceJsUrl', factoryName: 'createDeferredBuildSurfaceApi' },
+    overview: { datasetKey: 'overviewSurfaceJsUrl', factoryName: 'createDeferredOverviewSurfaceApi' },
+});
+const _deferredSurfaceState = new Map();
 const DISPATCH_BACKEND_OFFLINE_MESSAGE = 'Backend is offline. Dispatch is disabled until connectivity is restored.';
 const CONFIG_PREVIEW_SUPPORTED_PIPELINES = new Set([
     'lux-depth-v3',
@@ -80,8 +87,8 @@ const SAFE_JOB_STATES = new Set(['queued', 'running', 'succeeded', 'partial', 'f
 const SAFE_HTTP_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 
 // Module-level mutable state for scheduling
-let queueRenderScheduled = false;
-let queuedReviewSurfaceRefresh = false;
+let _operatePendingScheduleRender = false;
+let _operatePendingIncludeReview = false;
 let healthPollIntervalId = null;
 let sseWatchdogIntervalId = null;
 let healthCheckInFlight = false;
@@ -2564,6 +2571,8 @@ function navigateConsoleView(viewName, options = {}) {
         _rememberSelectedJob(state.selectedJobId);
     }
     _primeDeferredReviewSurface('route');
+    _primeDeferredOperateSurface();
+    _primeDeferredBuildSurface();
     applyConsoleViewLayout();
     _syncConsoleRoute(replace);
     renderJobQueue();
@@ -2605,6 +2614,8 @@ function applyConsoleRouteFromLocation(replace = false) {
         _rememberSelectedJob(state.selectedJobId);
     }
     _primeDeferredReviewSurface('route');
+    _primeDeferredOperateSurface();
+    _primeDeferredBuildSurface();
     applyConsoleViewLayout();
     _syncConsoleRoute(replace);
 }
@@ -3325,37 +3336,16 @@ function _reconcileJobTimeline(job) {
 }
 
 function setInspectorTab(tabName) {
-    const nextTab = ['overview', 'timeline', 'logs'].includes(tabName) ? tabName : 'overview';
-    state.inspectorTab = nextTab;
-
-    const tabConfig = [
-        { name: 'overview', button: els.inspectorOverviewTab, panel: els.selectedJobOverviewPanel },
-        { name: 'timeline', button: els.inspectorTimelineTab, panel: els.selectedJobTimelinePanel },
-        { name: 'logs', button: els.inspectorLogsTab, panel: els.selectedJobLogsPanel },
-    ];
-
-    tabConfig.forEach(({ name, button, panel }) => {
-        const active = name === nextTab;
-        if (button) {
-            button.setAttribute('role', 'tab');
-            button.setAttribute('aria-selected', active ? 'true' : 'false');
-            button.tabIndex = active ? 0 : -1;
-            button.className = active
-                ? 'rounded-full border border-cyan-200 dark:border-cyan-900/60 bg-cyan-50 dark:bg-cyan-900/20 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-cyan-700 dark:text-cyan-300 transition-colors'
-                : 'rounded-full border border-slate-200 dark:border-slate-800 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400 transition-colors';
-        }
-        if (panel) {
-            panel.classList.toggle('hidden', !active);
-            panel.setAttribute('role', 'tabpanel');
-            panel.setAttribute('aria-hidden', active ? 'false' : 'true');
-        }
-    });
-
-    if (els.logsShell) {
-        const showLogsShell = nextTab === 'logs' || state.currentView === 'review';
-        els.logsShell.classList.toggle('hidden', !showLogsShell);
-        els.logsShell.classList.toggle('flex', showLogsShell);
+    const api = _deferredOperateSurfaceApi();
+    if (api?.setInspectorTab) {
+        api.setInspectorTab(tabName);
+        return;
     }
+    state.inspectorTab = ['overview', 'timeline', 'logs'].includes(tabName) ? tabName : 'overview';
+    if (!_shouldLoadDeferredOperateSurface()) return;
+    void _loadDeferredOperateSurface().then((loaded) => {
+        if (loaded?.setInspectorTab) loaded.setInspectorTab(state.inspectorTab);
+    });
 }
 
 function _derivePresetResearchFlag(preset, fallbackName = '') {
@@ -4274,270 +4264,16 @@ function _syncOverviewBuildLoadingState(payload = null) {
     }
 }
 
-function renderSelectedJobTimeline(job) {
-    if (!els.selectedJobTimelineList || !els.selectedJobTimelineEmpty) return;
-    if (!job) {
-        els.selectedJobTimelineList.innerHTML = '';
-        els.selectedJobTimelineEmpty.classList.remove('hidden');
-        return;
-    }
-
-    _reconcileJobTimeline(job);
-    const entries = Array.isArray(job.timeline) ? [...job.timeline] : [];
-    if (entries.length === 0) {
-        els.selectedJobTimelineList.innerHTML = '';
-        els.selectedJobTimelineEmpty.classList.remove('hidden');
-        return;
-    }
-
-    els.selectedJobTimelineEmpty.classList.add('hidden');
-    const fragment = document.createDocumentFragment();
-    entries.forEach((entry) => {
-        const toneClass = entry.tone === 'error'
-            ? 'border-red-200 bg-red-50/90 dark:border-red-900/50 dark:bg-red-900/10'
-            : entry.tone === 'warn'
-                ? 'border-amber-200 bg-amber-50/90 dark:border-amber-900/50 dark:bg-amber-900/10'
-                : entry.tone === 'success'
-                    ? 'border-emerald-200 bg-emerald-50/90 dark:border-emerald-900/50 dark:bg-emerald-900/10'
-                    : 'border-slate-200 bg-white/80 dark:border-slate-800 dark:bg-slate-900/60';
-        const item = document.createElement('li');
-        item.className = `rounded-2xl border px-4 py-3 ${toneClass}`;
-
-        const header = document.createElement('div');
-        header.className = 'flex items-start justify-between gap-3';
-
-        const label = document.createElement('p');
-        label.className = 'text-[11px] font-bold uppercase tracking-[0.18em] text-slate-600 dark:text-slate-300';
-        label.textContent = String(entry.label || 'Timeline entry');
-        header.appendChild(label);
-
-        const timestamp = document.createElement('span');
-        timestamp.className = 'text-[10px] font-mono text-slate-500 dark:text-slate-400';
-        timestamp.textContent = formatTimelineTimestamp(Number(entry.timestamp || 0));
-        header.appendChild(timestamp);
-        item.appendChild(header);
-
-        const detail = document.createElement('p');
-        detail.className = 'mt-2 text-[12px] leading-6 text-slate-600 dark:text-slate-300';
-        detail.textContent = String(entry.detail || '');
-        item.appendChild(detail);
-
-        fragment.appendChild(item);
-    });
-
-    els.selectedJobTimelineList.innerHTML = '';
-    els.selectedJobTimelineList.appendChild(fragment);
-}
-
-function _selectedJobRecoverySnapshot(job) {
-    if (!job) {
-        return {
-            title: 'Select or dispatch a run',
-            detail: 'Use Queue to inspect a recent run or open Build to create the next governed dispatch.'
-        };
-    }
-
-    const artifactCount = Array.isArray(job.artifacts) ? job.artifacts.length : 0;
-    const visibleWarning = _latestVisibleTransportWarning(job);
-
-    if (job.reconnectBlocked) {
-        return {
-            title: 'Restore authentication',
-            detail: 'Authentication must be restored before live transport can reconnect and freshness can recover.'
-        };
-    }
-
-    if (visibleWarning) {
-        return {
-            title: 'Review the latest warning',
-            detail: String(visibleWarning.detail || 'Live transport reported an operator-visible warning.')
-        };
-    }
-
-    if (job.state === 'failed' || job.state === 'canceled') {
-        return artifactCount > 0
-            ? {
-                title: 'Open review for retained outputs',
-                detail: 'Review the indexed outputs before deciding whether this run needs a retry.'
-            }
-            : {
-                title: 'Inspect failure before rerun',
-                detail: 'No reviewable outputs were indexed. Use the run state and warning context above before retrying.'
-            };
-    }
-
-    if (job.state === 'offline') {
-        return artifactCount > 0
-            ? {
-                title: 'Review cached outputs while backend recovers',
-                detail: 'Outputs remain available, but live backend state is stale until connectivity returns.'
-            }
-            : {
-                title: 'Restore backend connectivity',
-                detail: 'Backend connectivity must recover before this run state can be trusted again.'
-            };
-    }
-
-    if (job.state === 'running' || job.state === 'queued') {
-        return artifactCount > 0
-            ? {
-                title: 'Stay with the live run',
-                detail: 'Fresh artifacts are already indexing. Keep Operate open until review context stabilizes.'
-            }
-            : {
-                title: 'Wait for indexed outputs',
-                detail: 'Use the selected run state, warning context, and freshness above to decide whether to recover or open review.'
-            };
-    }
-
-    if (job.state === 'partial') {
-        return {
-            title: 'Open review for partial outputs',
-            detail: 'Review the indexed artifacts and warning context before deciding whether to rerun the failed inputs.'
-        };
-    }
-
-    return artifactCount > 0
-        ? {
-            title: 'Open review',
-            detail: 'Outputs and provenance are ready. Move to Review when you want compare and artifact actions.'
-        }
-        : {
-            title: 'Wait for indexed outputs',
-            detail: 'Use the selected run state, warning context, and freshness above to decide whether to recover or open review.'
-        };
-}
-
 function renderSelectedJobInspector() {
-    const jobsLoading = _isJobsHydrationPending();
-    _toggleSurfaceSkeleton(els.selectedJobShell, els.selectedJobShellContent, els.selectedJobSkeletonState, jobsLoading);
-    if (jobsLoading) {
-        if (els.selectedJobStateBadge) els.selectedJobStateBadge.textContent = 'Syncing';
-        if (els.selectedJobFreshness) els.selectedJobFreshness.textContent = 'Hydrating queue';
-        if (els.selectedJobMetaLine) {
-            els.selectedJobMetaLine.textContent = 'Recovering recent runs, transport state, and previewable outputs.';
-        }
-        if (els.selectedJobRecoveryTitle) els.selectedJobRecoveryTitle.textContent = 'Recovering selected run context';
-        if (els.selectedJobRecoveryDetail) {
-            els.selectedJobRecoveryDetail.textContent = 'The latest warning, artifact freshness, and recovery action will repopulate here when queue hydration finishes.';
-        }
-        renderSelectedJobRecoveryActions(null);
-        if (els.openRunDetailsBtn) els.openRunDetailsBtn.disabled = true;
-        renderConsoleContextRibbon();
+    const api = _deferredOperateSurfaceApi();
+    if (api?.renderSelectedJobInspector) {
+        api.renderSelectedJobInspector();
         return;
     }
-
-    const selected = state.jobs.find((job) => job.id === state.selectedJobId) || null;
-    if (!selected) {
-        if (els.selectedJobStateBadge) els.selectedJobStateBadge.textContent = 'Idle';
-        if (els.selectedJobIdLabel) els.selectedJobIdLabel.textContent = 'No job selected';
-        if (els.selectedJobPipelineLabel) els.selectedJobPipelineLabel.textContent = 'Awaiting dispatch';
-        if (els.selectedJobArtifactCount) els.selectedJobArtifactCount.textContent = '0 indexed';
-        if (els.selectedJobStreamStatus) els.selectedJobStreamStatus.textContent = 'Inactive';
-        if (els.selectedJobProgressText) els.selectedJobProgressText.textContent = '0%';
-        if (els.selectedJobProgressBar) els.selectedJobProgressBar.value = 0;
-        if (els.selectedJobMetaLine) els.selectedJobMetaLine.textContent = 'Queue idle. Select a run to inspect transport, recency, and output state.';
-        if (els.selectedJobFreshness) els.selectedJobFreshness.textContent = 'No live telemetry';
-        if (els.logMetaLabel) els.logMetaLabel.textContent = 'Select a job to stream or inspect its log output.';
-        if (els.selectedJobSummary) els.selectedJobSummary.textContent = 'Choose a job from the queue or dispatch a new run to inspect progress, artifacts, and live stream state.';
-        if (els.selectedJobRecoveryTitle) els.selectedJobRecoveryTitle.textContent = 'Select or dispatch a run';
-        if (els.selectedJobRecoveryDetail) {
-            els.selectedJobRecoveryDetail.textContent = 'Use Queue to inspect a recent run or open Build to create the next governed dispatch.';
-        }
-        renderSelectedJobRecoveryActions(null);
-        if (els.selectedJobTransportAlert) {
-            els.selectedJobTransportAlert.classList.add('hidden');
-            els.selectedJobTransportAlert.textContent = '';
-        }
-        if (els.openRunDetailsBtn) els.openRunDetailsBtn.disabled = true;
-        if (els.selectedJobLogPreview) {
-            els.selectedJobLogPreview.textContent = 'No live logs yet.';
-        }
-        renderSelectedJobTimeline(null);
-        setInspectorTab(state.inspectorTab);
-        renderConsoleContextRibbon();
-        return;
-    }
-
-    _reconcileJobTimeline(selected);
-    const artifactCount = Array.isArray(selected.artifacts) ? selected.artifacts.length : 0;
-    const readableError = getReadableError(selected.error);
-    const outcomeSummary = jobOutcomeSummary(selected);
-    const nativeReadyState = _nativeEventSourceReadyState(selected.eventSource);
-    const streamStatus = selected.reconnectBlocked
-        ? 'Blocked by auth'
-        : selected.usesFetchSse && _jobHasActiveStream(selected)
-            ? 'Fetch stream active'
-            : nativeReadyState === EVENT_SOURCE_READY_STATE_CONNECTING
-                ? 'SSE stream reconnecting'
-                : nativeReadyState === EVENT_SOURCE_READY_STATE_OPEN
-                    ? 'SSE stream active'
-                    : nativeReadyState === EVENT_SOURCE_READY_STATE_CLOSED
-                        ? 'SSE stream closed'
-                        : _jobHasActiveStream(selected)
-                            ? 'SSE stream active'
-                            : (selected.state === 'running' || selected.state === 'queued' ? 'Waiting for stream' : 'Closed');
-    const transportLabel = formatTransportLabel(selected);
-    const elapsedLabel = formatDuration(Number(selected.createdAt || 0), Number(selected.finishedAt || Date.now()));
-    const displayState = _displayJobState(selected);
-    const latestWarning = Array.isArray(selected.transportWarnings) && selected.transportWarnings.length > 0
-        ? selected.transportWarnings[selected.transportWarnings.length - 1]
-        : null;
-    const visibleAlert = latestWarning && latestWarning.tone !== 'info' ? latestWarning : null;
-
-    if (els.selectedJobStateBadge) els.selectedJobStateBadge.textContent = titleCaseToken(displayState, 'Unknown');
-    if (els.selectedJobIdLabel) {
-        els.selectedJobIdLabel.textContent = String(selected.id || 'unknown');
-        els.selectedJobIdLabel.title = String(selected.id || 'unknown');
-    }
-    if (els.selectedJobPipelineLabel) els.selectedJobPipelineLabel.textContent = String(selected.pipeline || 'unknown');
-    if (els.selectedJobArtifactCount) els.selectedJobArtifactCount.textContent = `${artifactCount} indexed`;
-    if (els.selectedJobStreamStatus) els.selectedJobStreamStatus.textContent = `${streamStatus} • ${elapsedLabel}`;
-    if (els.selectedJobProgressText) els.selectedJobProgressText.textContent = `${Math.max(0, Math.min(100, Number(selected.progress) || 0))}%`;
-    if (els.selectedJobProgressBar) {
-        els.selectedJobProgressBar.max = 100;
-        els.selectedJobProgressBar.value = Math.max(0, Math.min(100, Number(selected.progress) || 0));
-    }
-    if (els.selectedJobMetaLine) {
-        els.selectedJobMetaLine.textContent = `${titleCaseToken(displayState, 'Unknown')} • ${transportLabel} • ${elapsedLabel}`;
-    }
-    if (els.selectedJobFreshness) {
-        els.selectedJobFreshness.textContent = _jobFreshnessLabel(selected);
-    }
-    if (els.logMetaLabel) {
-        els.logMetaLabel.textContent = `${String(selected.pipeline || 'unknown')} • ${transportLabel} • ${artifactCount} artifact${artifactCount === 1 ? '' : 's'}`;
-    }
-    if (els.selectedJobSummary) {
-        els.selectedJobSummary.textContent = selected.state === 'partial' && outcomeSummary
-            ? `${outcomeSummary}.`
-            : readableError
-                ? readableError
-                : outcomeSummary
-                    ? `${outcomeSummary}.`
-                    : `Operators can now read ${titleCaseToken(displayState, 'job')} state at a glance: ${artifactCount} artifact${artifactCount === 1 ? '' : 's'} indexed, ${transportLabel} transport, ${elapsedLabel}.`;
-    }
-    const recovery = _selectedJobRecoverySnapshot(selected);
-    if (els.selectedJobRecoveryTitle) els.selectedJobRecoveryTitle.textContent = recovery.title;
-    if (els.selectedJobRecoveryDetail) els.selectedJobRecoveryDetail.textContent = recovery.detail;
-    renderSelectedJobRecoveryActions(selected);
-    if (els.selectedJobTransportAlert) {
-        if (visibleAlert) {
-            els.selectedJobTransportAlert.textContent = String(visibleAlert.detail || '');
-            els.selectedJobTransportAlert.classList.remove('hidden');
-        } else {
-            els.selectedJobTransportAlert.classList.add('hidden');
-            els.selectedJobTransportAlert.textContent = '';
-        }
-    }
-    if (els.openRunDetailsBtn) els.openRunDetailsBtn.disabled = false;
-    if (els.selectedJobLogPreview) {
-        const previewLines = Array.isArray(selected.logs) ? selected.logs.slice(-12) : [];
-        els.selectedJobLogPreview.textContent = previewLines.length > 0 ? previewLines.join('\n') : 'No live logs yet.';
-    }
-
-    renderSelectedJobTimeline(selected);
-    setInspectorTab(state.inspectorTab);
-    renderConsoleContextRibbon();
+    if (!_shouldLoadDeferredOperateSurface()) return;
+    void _loadDeferredOperateSurface().then((loaded) => {
+        if (loaded?.renderSelectedJobInspector) loaded.renderSelectedJobInspector();
+    });
 }
 
 function createToast(message, type = 'info') {
@@ -4665,6 +4401,14 @@ function _bootstrapFailureDetails(reason = '', httpStatus = 0, message = '') {
             actionMessage: 'Managed authentication is required. Sign in again before continuing.'
         };
     }
+    if (normalizedReason === 'rate_limited' || normalizedStatus === 429) {
+        return {
+            reason: 'rate_limited',
+            retryable: true,
+            toastMessage: overrideMessage || 'Portal is rate limited. Bootstrap will retry automatically when the cooldown expires.',
+            actionMessage: 'Portal is rate limited. Wait for the cooldown to expire before retrying.'
+        };
+    }
     if (normalizedReason === 'access_outage') {
         return {
             reason: 'access_outage',
@@ -4722,7 +4466,7 @@ function _nextBootstrapRetryDelayMs(attempt) {
     return Math.min(BOOTSTRAP_RETRY_MAX_DELAY_MS, backoff + jitter);
 }
 
-function _scheduleBootstrapRetry(reason = '', httpStatus = 0) {
+function _scheduleBootstrapRetry(reason = '', httpStatus = 0, rateLimitHint = null) {
     if (!_isBootstrapRetryableFailure(reason, httpStatus)) {
         _finalizeBootstrapRetry('terminal_not_retryable', { reason, httpStatus });
         return false;
@@ -4751,7 +4495,22 @@ function _scheduleBootstrapRetry(reason = '', httpStatus = 0) {
         return false;
     }
 
-    const delayMs = _nextBootstrapRetryDelayMs(attempt);
+    // Prefer the upstream Retry-After / X-RateLimit-Reset hint when present
+    // (e.g. on HTTP 429). The parser already clamped the value to a sane
+    // upper bound; we additionally clamp to BOOTSTRAP_RETRY_MAX_DELAY_MS so
+    // the existing fallback's max remains the single source of truth, and
+    // an absurd or buggy upstream cannot stretch a single retry beyond the
+    // bootstrap window.
+    let delayMs = _nextBootstrapRetryDelayMs(attempt);
+    let delaySource = 'exponential_backoff';
+    if (
+        rateLimitHint
+        && Number.isFinite(Number(rateLimitHint.retryAfterMs))
+        && Number(rateLimitHint.retryAfterMs) > 0
+    ) {
+        delayMs = Math.min(Number(rateLimitHint.retryAfterMs), BOOTSTRAP_RETRY_MAX_DELAY_MS);
+        delaySource = String(rateLimitHint.source || 'rate_limit_hint');
+    }
     if ((now + delayMs) > state.bootstrap.retry.deadlineAt) {
         _finalizeBootstrapRetry('terminal_retry_window_elapsed', {
             attempt: state.bootstrap.retry.attempt,
@@ -4765,11 +4524,11 @@ function _scheduleBootstrapRetry(reason = '', httpStatus = 0) {
         state.bootstrap.retry.timer = null;
         state.bootstrap.retry.attempt = attempt;
         state.bootstrap.retry.lastAttemptAt = Date.now();
-        _recordBootstrapRetryEvent('attempt_started', { attempt, reason, httpStatus, delayMs: 0 });
+        _recordBootstrapRetryEvent('attempt_started', { attempt, reason, httpStatus, delayMs: 0, delaySource });
         void loadPortalBootstrap({ isRetryAttempt: true, attempt, retryReason: reason });
     }, delayMs);
 
-    _recordBootstrapRetryEvent('scheduled', { attempt, reason, httpStatus, delayMs });
+    _recordBootstrapRetryEvent('scheduled', { attempt, reason, httpStatus, delayMs, delaySource });
     return true;
 }
 
@@ -5277,14 +5036,25 @@ async function loadPortalBootstrap(options = null) {
             state.rum.pageTraceparent
         );
         if (!res.ok) {
+            // Honour the orchestrator's 429 retry contract (Retry-After +
+            // X-RateLimit-Reset). The hint is captured from the response
+            // object only on HTTP 429; auth (401/403) and other failures
+            // fall through to existing exponential backoff or terminal
+            // handling.
+            const rateLimitHint = res.status === 429
+                ? portalInternals.parseRateLimitRetryHint(res)
+                : null;
             const failure = _bootstrapFailureDetails(
-                payloadParsed && payload && typeof payload === 'object' ? payload.reason : `http_${res.status}`,
+                payloadParsed && payload && typeof payload === 'object'
+                    ? payload.reason
+                    : (res.status === 429 ? 'rate_limited' : `http_${res.status}`),
                 res.status,
                 payloadParsed && payload && typeof payload === 'object' ? payload.message : ''
             );
             const status = failure.retryable ? 'degraded' : 'unavailable';
             _applyPortalBootstrap(fallback, { status, reason: failure.reason, httpStatus: res.status });
-            const retryScheduled = failure.retryable && _scheduleBootstrapRetry(failure.reason, res.status);
+            const retryScheduled = failure.retryable
+                && _scheduleBootstrapRetry(failure.reason, res.status, rateLimitHint);
             if (!isRetryAttempt || !retryScheduled) {
                 createToast(failure.toastMessage, 'error');
             }
@@ -6257,6 +6027,157 @@ function _primeDeferredReviewSurface(reason = '') {
     });
 }
 
+function _deferredSurfaceEntry(name) {
+    let entry = _deferredSurfaceState.get(name);
+    if (!entry) {
+        entry = { api: null, loadPromise: null, lastFailureAt: 0, lastToastAt: 0 };
+        _deferredSurfaceState.set(name, entry);
+    }
+    return entry;
+}
+
+function _deferredSurfaceRetryBlocked(entry, now = Date.now()) {
+    return entry.lastFailureAt > 0 && (now - entry.lastFailureAt) < DEFERRED_SURFACE_RETRY_WINDOW_MS;
+}
+
+async function loadDeferredSurface(name, hostFactory) {
+    const descriptor = DEFERRED_SURFACE_REGISTRY[name];
+    if (!descriptor) return null;
+    const entry = _deferredSurfaceEntry(name);
+    if (entry.api) return entry.api;
+    if (entry.loadPromise) return entry.loadPromise;
+    if (_deferredSurfaceRetryBlocked(entry)) return null;
+    const moduleUrl = String(document.body?.dataset?.[descriptor.datasetKey] || '').trim();
+    if (!moduleUrl) return null;
+    entry.loadPromise = import(moduleUrl)
+        .then((module) => {
+            const factory = module?.[descriptor.factoryName];
+            if (typeof factory !== 'function') {
+                throw new Error(`Deferred surface "${name}" missing factory ${descriptor.factoryName}`);
+            }
+            entry.lastFailureAt = 0;
+            entry.api = factory(typeof hostFactory === 'function' ? hostFactory() : {});
+            return entry.api;
+        })
+        .catch((error) => {
+            console.error(`Failed to load deferred surface "${name}"`, error);
+            const now = Date.now();
+            entry.lastFailureAt = now;
+            if ((now - entry.lastToastAt) >= DEFERRED_SURFACE_RETRY_WINDOW_MS) {
+                entry.lastToastAt = now;
+                createToast(`Failed to load the ${name} surface. Reload the portal to retry.`, 'error');
+            }
+            entry.api = null;
+            return null;
+        })
+        .finally(() => {
+            entry.loadPromise = null;
+        });
+    return entry.loadPromise;
+}
+
+function _createDeferredOperateSurfaceHost() {
+    return {
+        state,
+        els,
+        portalRenderScheduler,
+        EVENT_SOURCE_READY_STATE_CONNECTING,
+        EVENT_SOURCE_READY_STATE_OPEN,
+        EVENT_SOURCE_READY_STATE_CLOSED,
+        _displayJobState,
+        _displayJobStateTone,
+        _isJobsHydrationPending,
+        _jobFreshnessLabel,
+        _jobHasActiveStream,
+        _latestVisibleTransportWarning,
+        _nativeEventSourceReadyState,
+        _portalPrivilegesReady,
+        _reconcileJobTimeline,
+        _setSurfaceEmptyState,
+        _toggleSurfaceSkeleton,
+        createCaptioningRunStatusChip,
+        formatDuration,
+        formatRelativeTime,
+        formatTimelineTimestamp,
+        formatTransportLabel,
+        getReadableError,
+        jobOutcomeSummary,
+        normalizeRunSummary,
+        renderConsoleContextRibbon,
+        renderReviewSurfaces,
+        renderSelectedJobRecoveryActions,
+        titleCaseToken,
+    };
+}
+
+function _deferredOperateSurfaceApi() {
+    return _deferredSurfaceState.get('operate')?.api || null;
+}
+
+function _loadDeferredOperateSurface() {
+    return loadDeferredSurface('operate', _createDeferredOperateSurfaceHost);
+}
+
+function _isOperateQueuePanelVisible() {
+    return Boolean(
+        els.queueShell
+        && !els.queueShell.classList.contains('hidden')
+        && els.queueShell.getAttribute('aria-hidden') !== 'true'
+    );
+}
+
+function _shouldLoadDeferredOperateSurface() {
+    if (!_isBootstrapReady()) return false;
+    return state.currentView === 'operate' || state.currentView === 'review' || _isOperateQueuePanelVisible();
+}
+
+function _primeDeferredOperateSurface() {
+    if (!_shouldLoadDeferredOperateSurface()) return;
+    void _loadDeferredOperateSurface();
+}
+
+function _createDeferredBuildSurfaceHost() {
+    return {
+        state,
+        els,
+        _metadataField,
+        _normalizeWorkerMode,
+        _previewIssueForField,
+        _renderIssueStatus,
+        _resolveDa3ModelKey,
+        canonicalArchiveCommand,
+        generatePayload,
+    };
+}
+
+function _deferredBuildSurfaceApi() {
+    return _deferredSurfaceState.get('build')?.api || null;
+}
+
+function _loadDeferredBuildSurface() {
+    return loadDeferredSurface('build', _createDeferredBuildSurfaceHost);
+}
+
+function _shouldLoadDeferredBuildSurface() {
+    if (!_isBootstrapReady()) return false;
+    return state.currentView === 'build';
+}
+
+function _reconcileDeferredBuildSurface(api = _deferredBuildSurfaceApi()) {
+    if (!api) return;
+    if (api.applyLuxMetadataToControls) api.applyLuxMetadataToControls();
+    if (api.renderFieldPreviewStatuses) api.renderFieldPreviewStatuses();
+    if (api.syncRuntimeWorkerModeControls) api.syncRuntimeWorkerModeControls();
+    if (api.refreshArchiveFieldVisibility) api.refreshArchiveFieldVisibility();
+}
+
+function _primeDeferredBuildSurface() {
+    if (!_shouldLoadDeferredBuildSurface()) return;
+    void _loadDeferredBuildSurface().then((loaded) => {
+        _reconcileDeferredBuildSurface(loaded);
+    });
+}
+
 function _renderDeferredReviewSurfaceFallback(jobsLoading = false) {
     _toggleSurfaceSkeleton(els.artifactsShell, els.artifactShellContent, els.artifactSkeletonState, jobsLoading);
     if (jobsLoading) {
@@ -6312,6 +6233,8 @@ function renderArtifactPanel() {
         return;
     }
     _primeDeferredReviewSurface('render');
+    _primeDeferredOperateSurface();
+    _primeDeferredBuildSurface();
     _renderDeferredReviewSurfaceFallback(jobsLoading);
 }
 
@@ -6344,6 +6267,8 @@ function selectJob(jobId) {
         });
     }
     _primeDeferredReviewSurface('route');
+    _primeDeferredOperateSurface();
+    _primeDeferredBuildSurface();
     scheduleRenderJobQueue(false);
 }
 
@@ -6584,14 +6509,20 @@ function cleanupActiveJobHandles() {
 }
 
 function scheduleRenderJobQueue(includeReviewSurfaces = true) {
-    queuedReviewSurfaceRefresh = queuedReviewSurfaceRefresh || includeReviewSurfaces;
-    if (queueRenderScheduled) return;
-    queueRenderScheduled = true;
-    portalRenderScheduler.schedule(() => {
-        queueRenderScheduled = false;
-        const shouldRenderReviewSurfaces = queuedReviewSurfaceRefresh;
-        queuedReviewSurfaceRefresh = false;
-        renderJobQueue(shouldRenderReviewSurfaces);
+    const api = _deferredOperateSurfaceApi();
+    if (api?.scheduleRenderJobQueue) {
+        api.scheduleRenderJobQueue(includeReviewSurfaces);
+        return;
+    }
+    if (!_shouldLoadDeferredOperateSurface()) return;
+    _operatePendingIncludeReview = _operatePendingIncludeReview || includeReviewSurfaces;
+    if (_operatePendingScheduleRender) return;
+    _operatePendingScheduleRender = true;
+    void _loadDeferredOperateSurface().then((loaded) => {
+        const flag = _operatePendingIncludeReview;
+        _operatePendingScheduleRender = false;
+        _operatePendingIncludeReview = false;
+        if (loaded?.scheduleRenderJobQueue) loaded.scheduleRenderJobQueue(flag);
     });
 }
 
@@ -7622,27 +7553,6 @@ function _configPreviewEnabledForPipeline(pipelineName = state.pipeline) {
     return CONFIG_PREVIEW_SUPPORTED_PIPELINES.has(String(pipelineName || '').trim()) && state.backendOk && _isBootstrapReady();
 }
 
-function _setSelectOptions(selectEl, options, selectedValue) {
-    if (!selectEl || !Array.isArray(options) || options.length === 0) return;
-    const normalizedOptions = options
-        .map((option) => ({
-            value: String(option?.value ?? '').trim(),
-            label: String(option?.label ?? option?.value ?? '').trim()
-        }))
-        .filter((option) => option.value);
-    if (normalizedOptions.length === 0) return;
-    const preferred = String(selectedValue ?? selectEl.value ?? '').trim();
-    selectEl.innerHTML = '';
-    normalizedOptions.forEach((option) => {
-        const el = document.createElement('option');
-        el.value = option.value;
-        el.textContent = option.label || option.value;
-        selectEl.appendChild(el);
-    });
-    const hasPreferred = normalizedOptions.some((option) => option.value === preferred);
-    selectEl.value = hasPreferred ? preferred : normalizedOptions[0].value;
-}
-
 function _metadataField(name) {
     const fields = state.metadata && state.metadata.fields && typeof state.metadata.fields === 'object'
         ? state.metadata.fields
@@ -7652,67 +7562,15 @@ function _metadataField(name) {
 }
 
 function applyLuxMetadataToControls() {
-    if (state.pipeline !== 'lux-depth-v3') return;
-
-    const groupingField = _metadataField('grouping_mode');
-    const tierField = _metadataField('reconstruction_tier');
-    const rawIngestField = _metadataField('raw_ingest_mode');
-    const rawWbField = _metadataField('raw_wb_mode');
-    const rawDemosaicField = _metadataField('raw_demosaic');
-    const maxWorkersField = _metadataField('max_workers');
-    const maxGpuWorkersField = _metadataField('max_gpu_workers');
-    const iterationsField = _metadataField('reconstruction_iterations');
-    const logLevelField = _metadataField('log_level');
-    const modelKeyField = _metadataField('model_key');
-
-    if (els.modelKey && modelKeyField?.options) {
-        _setSelectOptions(els.modelKey, modelKeyField.options, state.config.modelKey);
-        state.config.modelKey = _resolveDa3ModelKey(els.modelKey.value || state.config.modelKey);
+    const api = _deferredBuildSurfaceApi();
+    if (api?.applyLuxMetadataToControls) {
+        api.applyLuxMetadataToControls();
+        return;
     }
-
-    if (els.reconstruction.groupingMode && groupingField?.options) {
-        _setSelectOptions(els.reconstruction.groupingMode, groupingField.options, state.config.reconstruction?.groupingMode);
-        state.config.reconstruction.groupingMode = String(els.reconstruction.groupingMode.value || state.config.reconstruction?.groupingMode || 'single');
-    }
-    if (els.reconstruction.tier && tierField?.options) {
-        _setSelectOptions(els.reconstruction.tier, tierField.options, state.config.reconstruction?.tier);
-        state.config.reconstruction.tier = String(els.reconstruction.tier.value || state.config.reconstruction?.tier || 'apex_research');
-    }
-    if (els.raw.ingestMode && rawIngestField?.options) {
-        _setSelectOptions(els.raw.ingestMode, rawIngestField.options, state.config.raw?.ingestMode);
-        state.config.raw.ingestMode = String(els.raw.ingestMode.value || state.config.raw?.ingestMode || 'auto');
-    }
-    if (els.runtime.logLevel && logLevelField?.options) {
-        _setSelectOptions(els.runtime.logLevel, logLevelField.options, state.config.runtime?.logLevel);
-        state.config.runtime.logLevel = String(els.runtime.logLevel.value || state.config.runtime?.logLevel || '');
-    }
-    if (els.raw.wbModeBadge && rawWbField) {
-        els.raw.wbModeBadge.textContent = String(rawWbField.display_value || rawWbField.default || 'camera');
-    }
-    if (els.raw.wbModeHint && rawWbField?.helper_text) {
-        els.raw.wbModeHint.textContent = String(rawWbField.helper_text);
-    }
-    if (els.raw.wbMode) {
-        els.raw.wbMode.value = String(rawWbField?.display_value || rawWbField?.default || state.config.raw?.wbMode || 'camera');
-    }
-    if (els.raw.demosaicBadge && rawDemosaicField) {
-        els.raw.demosaicBadge.textContent = String(rawDemosaicField.display_value || rawDemosaicField.default || 'AHD');
-    }
-    if (els.raw.demosaicHint && rawDemosaicField?.helper_text) {
-        els.raw.demosaicHint.textContent = String(rawDemosaicField.helper_text);
-    }
-    if (els.raw.demosaic) {
-        els.raw.demosaic.value = String(rawDemosaicField?.display_value || rawDemosaicField?.default || state.config.raw?.demosaic || 'AHD');
-    }
-    if (els.reconstruction.iterations && iterationsField?.min) {
-        els.reconstruction.iterations.min = String(iterationsField.min);
-    }
-    if (els.runtime.maxWorkers && maxWorkersField?.min) {
-        els.runtime.maxWorkers.min = String(maxWorkersField.min);
-    }
-    if (els.runtime.maxGpuWorkers && maxGpuWorkersField?.min) {
-        els.runtime.maxGpuWorkers.min = String(maxGpuWorkersField.min);
-    }
+    if (!_shouldLoadDeferredBuildSurface()) return;
+    void _loadDeferredBuildSurface().then((loaded) => {
+        if (loaded?.applyLuxMetadataToControls) loaded.applyLuxMetadataToControls();
+    });
 }
 
 function _previewIssueForField(fieldName, payload = null) {
@@ -7740,49 +7598,16 @@ function _renderIssueStatus(el, helperText, issue) {
     }
 }
 
-function _buildFieldStatusCopy(fieldName, payload = null) {
-    const currentPayload = payload || generatePayload();
-    if (fieldName === 'input_dir') {
-        return currentPayload.pipeline === 'archive-gate-a'
-            ? 'Choose the archive root that fixity-scan should inspect.'
-            : 'Set the source folder for the next run.';
-    }
-    if (fieldName === 'output_dir') {
-        return currentPayload.pipeline === 'lux-depth-v3'
-            ? 'Choose the governed destination for generated outputs.'
-            : 'Choose the governed destination for stage outputs.';
-    }
-    if (fieldName === 'archive_index') {
-        return 'Required for fixity-scan. Supply an existing normalized archive index that is safe to read from the local allowlist.';
-    }
-    if (fieldName === 'manifest_jsonl') {
-        return 'Required for bag-build and mets-export. Point to a rights-manifest artifact produced by an earlier archive stage.';
-    }
-    return '';
-}
-
 function renderFieldPreviewStatuses(payload = null) {
-    const currentPayload = payload || generatePayload();
-    _renderIssueStatus(
-        els.inputDirStatus,
-        _buildFieldStatusCopy('input_dir', currentPayload),
-        _previewIssueForField('input_dir', currentPayload)
-    );
-    _renderIssueStatus(
-        els.outputDirStatus,
-        _buildFieldStatusCopy('output_dir', currentPayload),
-        _previewIssueForField('output_dir', currentPayload)
-    );
-    _renderIssueStatus(
-        els.archiveIndexStatus,
-        _buildFieldStatusCopy('archive_index', currentPayload),
-        _previewIssueForField('archive_index', currentPayload)
-    );
-    _renderIssueStatus(
-        els.rightsManifestStatus,
-        _buildFieldStatusCopy('manifest_jsonl', currentPayload),
-        _previewIssueForField('manifest_jsonl', currentPayload)
-    );
+    const api = _deferredBuildSurfaceApi();
+    if (api?.renderFieldPreviewStatuses) {
+        api.renderFieldPreviewStatuses(payload);
+        return;
+    }
+    if (!_shouldLoadDeferredBuildSurface()) return;
+    void _loadDeferredBuildSurface().then((loaded) => {
+        if (loaded?.renderFieldPreviewStatuses) loaded.renderFieldPreviewStatuses(payload);
+    });
 }
 
 function _jobRecencyValue(job) {
@@ -7811,29 +7636,15 @@ function _latestReviewableJob() {
 }
 
 function syncRuntimeWorkerModeControls() {
-    const runtime = state.config.runtime || {};
-    runtime.maxWorkersMode = _normalizeWorkerMode(runtime.maxWorkersMode || (runtime.maxWorkers ? 'fixed' : 'auto'));
-    runtime.maxGpuWorkersMode = _normalizeWorkerMode(runtime.maxGpuWorkersMode || (runtime.maxGpuWorkers ? 'fixed' : 'auto'));
-    state.config.runtime = runtime;
-
-    if (els.runtime.maxWorkersMode) {
-        els.runtime.maxWorkersMode.value = runtime.maxWorkersMode;
+    const api = _deferredBuildSurfaceApi();
+    if (api?.syncRuntimeWorkerModeControls) {
+        api.syncRuntimeWorkerModeControls();
+        return;
     }
-    if (els.runtime.maxWorkersValueField) {
-        els.runtime.maxWorkersValueField.classList.toggle('hidden', runtime.maxWorkersMode !== 'fixed');
-    }
-    if (els.runtime.maxWorkers) {
-        els.runtime.maxWorkers.disabled = runtime.maxWorkersMode !== 'fixed';
-    }
-    if (els.runtime.maxGpuWorkersMode) {
-        els.runtime.maxGpuWorkersMode.value = runtime.maxGpuWorkersMode;
-    }
-    if (els.runtime.maxGpuWorkersValueField) {
-        els.runtime.maxGpuWorkersValueField.classList.toggle('hidden', runtime.maxGpuWorkersMode !== 'fixed');
-    }
-    if (els.runtime.maxGpuWorkers) {
-        els.runtime.maxGpuWorkers.disabled = runtime.maxGpuWorkersMode !== 'fixed';
-    }
+    if (!_shouldLoadDeferredBuildSurface()) return;
+    void _loadDeferredBuildSurface().then((loaded) => {
+        if (loaded?.syncRuntimeWorkerModeControls) loaded.syncRuntimeWorkerModeControls();
+    });
 }
 
 async function emitPortalEvent(eventType, options = {}) {
@@ -7918,7 +7729,7 @@ function _clearConfigPreviewServiceRetry() {
     configPreviewServiceRetryAttempts = 0;
 }
 
-function _scheduleConfigPreviewServiceRetry() {
+function _scheduleConfigPreviewServiceRetry(rateLimitHint = null) {
     if (configPreviewServiceRetryAttempts >= CONFIG_PREVIEW_SERVICE_RETRY_MAX_ATTEMPTS) {
         return;
     }
@@ -7926,9 +7737,22 @@ function _scheduleConfigPreviewServiceRetry() {
         return;
     }
     configPreviewServiceRetryAttempts += 1;
-    const delay = CONFIG_PREVIEW_SERVICE_RETRY_BASE_MS * configPreviewServiceRetryAttempts;
+    let delay = CONFIG_PREVIEW_SERVICE_RETRY_BASE_MS * configPreviewServiceRetryAttempts;
+    if (
+        rateLimitHint
+        && Number.isFinite(Number(rateLimitHint.retryAfterMs))
+        && Number(rateLimitHint.retryAfterMs) > 0
+    ) {
+        // Clamp to the existing scheduled-window upper bound so a buggy
+        // upstream cannot stretch a single preview retry indefinitely.
+        const maxScheduledDelay = CONFIG_PREVIEW_SERVICE_RETRY_BASE_MS * CONFIG_PREVIEW_SERVICE_RETRY_MAX_ATTEMPTS;
+        delay = Math.min(Number(rateLimitHint.retryAfterMs), maxScheduledDelay);
+    }
     configPreviewServiceRetryTimerId = window.setTimeout(() => {
         configPreviewServiceRetryTimerId = null;
+        // Always retry against the *current* form state, not a stale
+        // snapshot — the cooldown may outlive the user's edit so the next
+        // attempt should reflect what is on screen now.
         const payload = generatePayload();
         if (!_configPreviewEnabledForPipeline(payload.pipeline)) {
             return;
@@ -7981,12 +7805,22 @@ async function fetchConfigPreview(payload) {
         if (!res.ok) {
             const errorPayload = response?.error && typeof response.error === 'object' ? response.error : {};
             const errorDetails = errorPayload.details && typeof errorPayload.details === 'object' ? errorPayload.details : {};
+            // 429 is a transient rate-limit event, not a 4xx validation
+            // failure of the user's draft. Route it to the service-retry
+            // path so the existing scheduled retry runs against the
+            // current form state, with the upstream Retry-After hint.
+            const isRateLimited = res.status === 429;
+            const rateLimitHint = isRateLimited
+                ? portalInternals.parseRateLimitRetryHint(res)
+                : null;
             const classifiedFailure = _previewFailureDetails({
                 error_reason: res.status === 401 || res.status === 403
                     ? 'auth_failure'
-                    : res.status >= 400 && res.status < 500
-                        ? 'validation_error'
-                        : 'service_failure'
+                    : isRateLimited
+                        ? 'service_failure'
+                        : res.status >= 400 && res.status < 500
+                            ? 'validation_error'
+                            : 'service_failure'
             });
             if (_configPreviewRequestKey(generatePayload()) !== requestKey) {
                 return;
@@ -7999,7 +7833,7 @@ async function fetchConfigPreview(payload) {
                 error_status: res.status
             });
             if (classifiedFailure.reason === 'service_failure') {
-                _scheduleConfigPreviewServiceRetry();
+                _scheduleConfigPreviewServiceRetry(rateLimitHint);
             } else {
                 _clearConfigPreviewServiceRetry();
             }
@@ -8947,20 +8781,30 @@ async function fetchReadiness(silent = false) {
 }
 
 function refreshArchiveFieldVisibility() {
-    const pipelineName = state.pipeline;
-    const canonicalCommand = canonicalArchiveCommand(pipelineName);
-    if (els.archiveCanonicalCommand) els.archiveCanonicalCommand.textContent = canonicalCommand || 'archive';
-    if (els.archiveCanonicalCommandHint) {
-        els.archiveCanonicalCommandHint.textContent = pipelineName === 'archive-gate-a'
-            ? 'The portal build flow uses fixity-scan for archive-gate-a. For a safe local smoke run, pair ./tests/fixtures/archive_small/archive_root with /tmp/gate-a-smoke-portal and ./tests/fixtures/archive_small/archive_index_normalized.csv.gz.'
-            : 'The portal build flow uses a prior rights-manifest artifact for downstream archive stages.';
+    const api = _deferredBuildSurfaceApi();
+    if (api?.refreshArchiveFieldVisibility) {
+        api.refreshArchiveFieldVisibility();
+        return;
     }
-    if (els.archiveIndexField) {
-        els.archiveIndexField.classList.toggle('hidden', pipelineName !== 'archive-gate-a');
+    if (!_shouldLoadDeferredBuildSurface()) return;
+    void _loadDeferredBuildSurface().then((loaded) => {
+        if (loaded?.refreshArchiveFieldVisibility) loaded.refreshArchiveFieldVisibility();
+    });
+}
+
+function _firstInvalidBuildInput() {
+    const candidates = [
+        els.inputDir,
+        els.outputDir,
+        els.archiveIndexPath,
+        els.rightsManifestPath
+    ];
+    for (const input of candidates) {
+        if (!input || typeof input.checkValidity !== 'function') continue;
+        if (input.offsetParent === null && input.getClientRects().length === 0) continue;
+        if (!input.checkValidity()) return input;
     }
-    if (els.rightsManifestField) {
-        els.rightsManifestField.classList.toggle('hidden', !(pipelineName === 'archive-gate-b' || pipelineName === 'archive-gate-c'));
-    }
+    return null;
 }
 
 function updateUIFromState() {
@@ -9960,214 +9804,23 @@ function _setSurfaceEmptyState(container, titleEl, detailEl, copy) {
     if (detailEl) detailEl.textContent = String(copy?.detail || '');
 }
 
-function _queueEmptyStateCopy() {
-    if (state.jobsLoadStatus === 'offline' || (!state.backendOk && state.jobs.length === 0)) {
-        return {
-            tone: 'warning',
-            title: 'Queue unavailable',
-            detail: 'Backend connectivity is offline. Restore the managed backend to recover recent runs and live transport state.',
-            action: 'Next action: restore backend connectivity so recent runs and live transport can recover.'
-        };
-    }
-    if (state.jobsLoadStatus === 'error') {
-        return {
-            tone: 'error',
-            title: 'Queue recovery needs attention',
-            detail: 'Recent jobs could not be recovered. Refresh the workspace after backend health returns to continue.',
-            action: 'Next action: confirm backend health, then refresh the workspace to rehydrate recent runs.'
-        };
-    }
-    return {
-        tone: 'neutral',
-        title: 'No runs yet',
-        detail: 'Dispatch a run from Build or wait for recovery to repopulate recent operator activity.',
-        action: 'Next action: open Build to prepare the next run or restore backend connectivity to recover recent history.'
-    };
-}
-
 // ============================================================================
-// 9. JOB RENDERING
+// 9. JOB RENDERING (Operate surface — main bundle keeps thin shims that
+// delegate to operate-surface-deferred.js on first call.)
 // ============================================================================
 
 function renderJobQueue(includeReviewSurfaces = true) {
-    if (!els.jobList) return;
-    els.jobList.setAttribute('role', 'listbox');
-    const queueLoading = _isJobsHydrationPending();
-    if (els.queueShell) {
-        els.queueShell.setAttribute('aria-busy', queueLoading ? 'true' : 'false');
-    }
-    if (els.queueSkeletonState) {
-        els.queueSkeletonState.classList.toggle('hidden', !queueLoading);
-        els.queueSkeletonState.setAttribute('aria-hidden', 'true');
-    }
-    els.jobList.classList.toggle('hidden', queueLoading);
-    if (els.queueCount) els.queueCount.textContent = `${state.jobs.length} jobs`;
-    if (queueLoading) {
-        if (els.queueCount) els.queueCount.textContent = 'Syncing...';
-        if (els.queueStatusSummary) els.queueStatusSummary.textContent = 'Recovering recent runs and live transport state.';
-        if (els.emptyQueueState) els.emptyQueueState.style.display = 'none';
-        els.jobList.innerHTML = '';
-        if (includeReviewSurfaces) renderReviewSurfaces();
+    const api = _deferredOperateSurfaceApi();
+    if (api?.renderJobQueue) {
+        api.renderJobQueue(includeReviewSurfaces);
         return;
     }
-    if (state.jobs.length === 0) {
-        const emptyCopy = _queueEmptyStateCopy();
-        _setSurfaceEmptyState(els.emptyQueueState, els.emptyQueueTitle, els.emptyQueueDetail, emptyCopy);
-        if (els.emptyQueueAction) els.emptyQueueAction.textContent = emptyCopy.action || '';
-        if (els.emptyQueueState) els.emptyQueueState.style.display = 'flex';
-        if (els.queueStatusSummary) {
-            els.queueStatusSummary.textContent = state.jobsLoadStatus === 'ready'
-                ? 'Dispatch a run to populate live queue and inspector context.'
-                : state.jobsLoadStatus === 'offline'
-                    ? 'Queue is paused while backend connectivity is offline.'
-                    : 'Queue recovery needs operator attention before live history can refresh.';
-        }
-        els.jobList.innerHTML = '';
-        if (includeReviewSurfaces) renderReviewSurfaces();
-        return;
-    }
-    if (els.emptyQueueState) els.emptyQueueState.style.display = 'none';
-
-    const fragment = document.createDocumentFragment();
-    [...state.jobs].reverse().forEach((job) => {
-        const li = document.createElement('li');
-        li.dataset.jobId = job.id;
-        li.dataset.ui = 'queue-row';
-        const isSelected = state.selectedJobId === job.id;
-        li.className = `rounded-2xl border p-4 cursor-pointer transition-all ${isSelected ? 'border-cyan-500 bg-cyan-50/80 dark:bg-cyan-900/20 shadow-md ring-1 ring-cyan-500/15' : 'border-slate-200 dark:border-slate-800 bg-slate-50/75 dark:bg-slate-900/45 hover:bg-white/90 dark:hover:bg-slate-800/80'}`;
-        li.tabIndex = 0;
-        li.setAttribute('role', 'option');
-        li.setAttribute('aria-selected', isSelected ? 'true' : 'false');
-
-        let badgeColor = 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700';
-        const displayState = _displayJobState(job);
-        if (displayState === 'running' || displayState === 'indexing' || displayState === 'partial-failure') {
-            badgeColor = 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-800';
-        }
-        if (displayState === 'reviewable') {
-            badgeColor = 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-400 dark:border-emerald-800';
-        }
-        if (displayState === 'failed') {
-            badgeColor = 'bg-red-50 text-red-700 border-red-200 dark:bg-red-900/30 dark:text-red-400 dark:border-red-800';
-        }
-
-        const safeState = SAFE_JOB_STATES.has(job.state) ? job.state : 'offline';
-        const safePipeline = String(job.pipeline || 'unknown');
-        const safeId = String(job.id || 'job_unknown');
-        const safeProgress = Math.max(0, Math.min(100, Number(job.progress) || 0));
-        const canCancel = _portalPrivilegesReady() && (job.state === 'running' || job.state === 'queued');
-        const artifactCount = Array.isArray(job.artifacts) ? job.artifacts.length : 0;
-        const errorLine = getReadableError(job.error);
-        const outcomeSummary = jobOutcomeSummary(job);
-        const captioningRunStatus = normalizeRunSummary(job.run_summary)?.captioning_status || null;
-        const transportLabel = formatTransportLabel(job);
-        const freshnessLabel = formatRelativeTime(Number(job.lastEventAt || job.updatedAt || job.createdAt || 0));
-
-        const header = document.createElement('div');
-        header.className = 'flex items-center justify-between mb-3';
-
-        const headerLeft = document.createElement('div');
-        headerLeft.className = 'flex items-center gap-2';
-
-        const statusDot = document.createElement('span');
-        statusDot.className = `status-dot ${_displayJobStateTone(job)}`;
-        headerLeft.appendChild(statusDot);
-
-        const pipelineSpan = document.createElement('span');
-        pipelineSpan.className = 'text-[12px] font-semibold text-slate-900 dark:text-slate-100 truncate max-w-[150px]';
-        pipelineSpan.textContent = safePipeline;
-        headerLeft.appendChild(pipelineSpan);
-
-        header.appendChild(headerLeft);
-
-        const cancelButton = document.createElement('button');
-        cancelButton.dataset.action = 'cancel-job';
-        cancelButton.dataset.jobId = safeId;
-        cancelButton.className = `text-[10px] uppercase font-bold text-red-500 hover:text-red-700 focus:outline-none ${canCancel ? '' : 'hidden'}`;
-        cancelButton.textContent = 'Cancel';
-        header.appendChild(cancelButton);
-        li.appendChild(header);
-
-        const meta = document.createElement('div');
-        meta.className = 'flex items-center justify-between gap-2 text-[10px] text-slate-500 dark:text-slate-400 font-mono mb-2';
-
-        const idSpan = document.createElement('span');
-        idSpan.textContent = `${safeId.substring(0, 8)}...`;
-        meta.appendChild(idSpan);
-
-        const metaRight = document.createElement('div');
-        metaRight.className = 'flex items-center gap-1.5';
-
-        const transportChip = document.createElement('span');
-        transportChip.className = 'job-chip';
-        transportChip.textContent = transportLabel;
-        metaRight.appendChild(transportChip);
-
-        const stateBadge = document.createElement('span');
-        stateBadge.className = `px-2 py-0.5 rounded-full border ${badgeColor}`;
-        stateBadge.textContent = displayState;
-        metaRight.appendChild(stateBadge);
-
-        const captioningChip = createCaptioningRunStatusChip(captioningRunStatus);
-        if (captioningChip) {
-            metaRight.appendChild(captioningChip);
-        }
-
-        meta.appendChild(metaRight);
-        li.appendChild(meta);
-
-        const subMeta = document.createElement('div');
-        subMeta.className = 'mb-3 flex items-center justify-between gap-2 text-[10px] text-slate-500 dark:text-slate-400';
-
-        const freshness = document.createElement('span');
-        freshness.className = 'micro-status';
-        freshness.textContent = `Updated ${freshnessLabel}`;
-        subMeta.appendChild(freshness);
-
-        const artifacts = document.createElement('span');
-        artifacts.className = 'job-chip';
-        artifacts.textContent = `${artifactCount} artifact${artifactCount === 1 ? '' : 's'}`;
-        subMeta.appendChild(artifacts);
-
-        li.appendChild(subMeta);
-
-        const progressRow = document.createElement('div');
-        progressRow.className = 'flex items-center gap-2 mt-1';
-
-        const progressEl = document.createElement('progress');
-        progressEl.max = 100;
-        progressEl.value = safeProgress;
-        progressEl.className = 'flex-1';
-        progressRow.appendChild(progressEl);
-
-        const progressText = document.createElement('span');
-        progressText.className = 'text-[10px] font-medium text-slate-500 dark:text-slate-400 w-8 text-right';
-        progressText.textContent = `${safeProgress}%`;
-        progressRow.appendChild(progressText);
-        li.appendChild(progressRow);
-
-        const summary = document.createElement('p');
-        summary.className = 'mt-3 text-[11px] leading-5 text-slate-500 dark:text-slate-400';
-        summary.textContent = job.state === 'partial' && outcomeSummary
-            ? outcomeSummary
-            : errorLine
-                ? errorLine
-                : outcomeSummary || `${artifactCount} artifact${artifactCount === 1 ? '' : 's'} indexed`;
-        li.appendChild(summary);
-
-        fragment.appendChild(li);
+    if (!_shouldLoadDeferredOperateSurface()) return;
+    void _loadDeferredOperateSurface().then((loaded) => {
+        if (loaded?.renderJobQueue) loaded.renderJobQueue(includeReviewSurfaces);
     });
-
-    els.jobList.innerHTML = '';
-    els.jobList.appendChild(fragment);
-    if (els.queueStatusSummary) {
-        const selected = state.jobs.find((job) => job.id === state.selectedJobId) || null;
-        els.queueStatusSummary.textContent = selected
-            ? `Inspector focus: ${String(selected.pipeline || 'job')} • updated ${formatRelativeTime(Number(selected.updatedAt || selected.createdAt || 0))}`
-            : 'Newest jobs stay pinned to the top.';
-    }
-    if (includeReviewSurfaces) renderReviewSurfaces();
 }
+
 
 function handleJobListKeydown(event) {
     const row = event.target.closest('li[data-job-id]');
@@ -10798,6 +10451,16 @@ function handleJobListClick(event) {
 
 async function submitJob() {
     if (_blockManagedUnavailableAction('dispatch jobs')) return;
+    const invalidField = _firstInvalidBuildInput();
+    if (invalidField) {
+        invalidField.reportValidity();
+        void emitPortalEvent('dispatch_blocked', {
+            surface: 'dispatch',
+            field: invalidField.id || '',
+            reasons: ['client_constraint_invalid']
+        });
+        return;
+    }
     const payload = generatePayload();
     const readinessStatus = currentPipelineDispatchStatus();
 
@@ -12065,6 +11728,8 @@ async function init() {
     startHealthPolling();
     await bootstrapPromise;
     _primeDeferredReviewSurface('bootstrap');
+    _primeDeferredOperateSurface();
+    _primeDeferredBuildSurface();
     _restoreTransientPortalDraft();
     updateUIFromState();
     _persistTransientPortalDraft();

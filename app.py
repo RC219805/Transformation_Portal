@@ -24,7 +24,7 @@ from email.policy import default as email_policy
 from functools import lru_cache
 from importlib.util import find_spec
 from pathlib import Path
-from typing import Any, AsyncGenerator, Callable, Deque, Dict, List, Mapping, Optional, Tuple
+from typing import Any, AsyncGenerator, Callable, Deque, Dict, List, Mapping, NamedTuple, Optional, Tuple
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exception_handlers import request_validation_exception_handler as fastapi_request_validation_exception_handler
@@ -609,6 +609,11 @@ PORTAL_UPLOAD_MAX_PART_BYTES = _env_int("TP_PORTAL_UPLOAD_MAX_PART_BYTES", MAX_U
 RATE_LIMIT_PER_MINUTE = _env_int("TP_RATE_LIMIT_PER_MINUTE", 60, minimum=0)
 MAX_CONCURRENT_JOBS = _env_int("TP_MAX_CONCURRENT_JOBS", 4, minimum=1)
 RATE_LIMIT_WINDOW_SECONDS = 60.0
+# Default Retry-After (seconds) returned when the job-admission concurrency cap
+# (MAX_CONCURRENT_JOBS) rejects a request. Not tied to a deterministic schedule
+# because jobs free their slot when they finish, so this is a conservative
+# best-effort hint rather than a precise reset.
+JOB_ADMISSION_RETRY_AFTER_SECONDS = 5
 DEFAULT_ALLOWED_PATH_ROOTS = _default_allowed_path_roots()
 ALLOWED_INPUT_ROOTS = _env_path_roots(
     "TP_ALLOWED_INPUT_ROOTS",
@@ -5499,9 +5504,21 @@ def _extract_client_ip(request: Request) -> str:
     return "unknown"
 
 
-def _is_rate_limited(client_ip: str, now: float) -> bool:
+class _RateLimitDecision(NamedTuple):
+    """Outcome of a rate-limit check, including retry hints for response headers."""
+
+    limited: bool
+    retry_after_seconds: int
+    reset_epoch_seconds: int
+
+
+def _is_rate_limited(client_ip: str, now: float) -> _RateLimitDecision:
     if RATE_LIMIT_PER_MINUTE <= 0:
-        return False
+        return _RateLimitDecision(
+            limited=False,
+            retry_after_seconds=0,
+            reset_epoch_seconds=int(now),
+        )
 
     timestamps = RATE_LIMIT_BUCKETS.get(client_ip)
     if timestamps is None:
@@ -5513,10 +5530,51 @@ def _is_rate_limited(client_ip: str, now: float) -> bool:
         timestamps.popleft()
 
     if len(timestamps) >= RATE_LIMIT_PER_MINUTE:
-        return True
+        # The oldest entry exits the sliding window at oldest + WINDOW; that
+        # is when a new request slot frees up for this client. Clamp to >= 1
+        # so Retry-After is always a positive integer per HTTP semantics.
+        oldest = timestamps[0]
+        reset_epoch = oldest + RATE_LIMIT_WINDOW_SECONDS
+        retry_after = max(1, math.ceil(reset_epoch - now))
+        return _RateLimitDecision(
+            limited=True,
+            retry_after_seconds=int(retry_after),
+            reset_epoch_seconds=int(reset_epoch),
+        )
 
     timestamps.append(now)
-    return False
+    return _RateLimitDecision(
+        limited=False,
+        retry_after_seconds=0,
+        reset_epoch_seconds=int(now + RATE_LIMIT_WINDOW_SECONDS),
+    )
+
+
+def _rate_limit_response_headers(
+    *,
+    limit: int,
+    remaining: int,
+    retry_after: int,
+    reset_epoch: int,
+) -> Dict[str, str]:
+    """Build the standard rate-limit response header set for a 429 reply.
+
+    Header set (additive, envelope-compatible):
+      Retry-After          integer seconds (>= 1)
+      X-RateLimit-Limit    integer request/concurrency limit (>= 0)
+      X-RateLimit-Remaining integer requests left in window (>= 0)
+      X-RateLimit-Reset    unix epoch seconds when the window/slot frees up
+    """
+    safe_retry_after = max(1, int(retry_after))
+    safe_limit = max(0, int(limit))
+    safe_remaining = max(0, int(remaining))
+    safe_reset = max(0, int(reset_epoch))
+    return {
+        "Retry-After": str(safe_retry_after),
+        "X-RateLimit-Limit": str(safe_limit),
+        "X-RateLimit-Remaining": str(safe_remaining),
+        "X-RateLimit-Reset": str(safe_reset),
+    }
 
 
 def _has_valid_api_key(request: Request) -> bool:
@@ -7747,12 +7805,20 @@ async def security_layer(
             return response
 
     client_ip = _extract_client_ip(request)
-    if _is_rate_limited(client_ip, _now()):
+    rate_decision = _is_rate_limited(client_ip, _now())
+    if rate_decision.limited:
+        rate_headers = _rate_limit_response_headers(
+            limit=RATE_LIMIT_PER_MINUTE,
+            remaining=0,
+            retry_after=rate_decision.retry_after_seconds,
+            reset_epoch=rate_decision.reset_epoch_seconds,
+        )
         response = _error_response(
             429,
             code="RATE_LIMITED",
             message="rate limit exceeded",
             details={"client_ip": client_ip},
+            headers=rate_headers,
         )
         if should_echo_traceparent:
             response.headers.setdefault("traceparent", request.state.trace_context.traceparent)
@@ -8323,6 +8389,12 @@ async def _create_job(
         _cleanup_expired_jobs(_now())
         active_jobs = _active_job_count()
         if active_jobs >= MAX_CONCURRENT_JOBS:
+            job_admission_headers = _rate_limit_response_headers(
+                limit=MAX_CONCURRENT_JOBS,
+                remaining=0,
+                retry_after=JOB_ADMISSION_RETRY_AFTER_SECONDS,
+                reset_epoch=int(_now()) + JOB_ADMISSION_RETRY_AFTER_SECONDS,
+            )
             return _error_response(
                 429,
                 code="RATE_LIMITED",
@@ -8331,6 +8403,7 @@ async def _create_job(
                     "active_jobs": active_jobs,
                     "max_concurrent_jobs": MAX_CONCURRENT_JOBS,
                 },
+                headers=job_admission_headers,
             )
         # Materialise output_dir only after admission succeeds so 429-rejected
         # requests never leave behind directories on disk.
