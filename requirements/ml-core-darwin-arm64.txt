@@ -40,7 +40,7 @@ controlnet-aux==0.0.10
     # via -r ml-core-darwin-arm64.in
 coremltools==9.0
     # via -r ml-core-darwin-arm64.in
-diffusers==0.37.1
+diffusers==0.38.0
     # via -r ml-core-darwin-arm64.in
 efficientsam==1.0.0
     # via -r ml-core-darwin-arm64.in
@@ -193,7 +193,7 @@ rich==15.0.0
     # via
     #   -c base.txt
     #   typer
-safetensors==0.7.0
+safetensors==0.8.0rc0
     # via
     #   accelerate
     #   diffusers

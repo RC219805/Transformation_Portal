@@ -26,7 +26,7 @@ FLUX.1 represents the state-of-the-art for architectural image enhancement with 
 
 ```bash
 # Update diffusers and transformers
-pip install diffusers>=0.30.0 transformers>=4.38.0 accelerate
+python -m pip install "diffusers>=0.38.0" "transformers>=4.38.0" accelerate
 
 # Optional: ControlNet auxiliary models
 pip install controlnet-aux
