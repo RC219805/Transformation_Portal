@@ -1330,7 +1330,8 @@
       "owner": "static",
       "sources": [
         "portal.html",
-        "public/portal-assets/portal.js"
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/build-surface-deferred.js"
       ],
       "cssFile": "utilities.required.css",
       "reason": "observed in portal static markup or generated template output"
@@ -1634,6 +1635,7 @@
         "portal.html",
         "public/portal-assets/portal-review.js",
         "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/build-surface-deferred.js",
         "web/secure-landing/portal-src/operate-surface-deferred.js",
         "web/secure-landing/portal-src/portal.template.js",
         "web/secure-landing/portal-src/review-surface-deferred.js"
