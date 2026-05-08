@@ -311,6 +311,7 @@ test("renderRumClientScript login submit listener never preventDefaults or leaks
     traceparent: "",
   });
   const listenerStart = body.indexOf('addEventListener("submit"');
+  assert.ok(listenerStart >= 0, "expected a submit listener in the login script");
   const listenerSection = body.slice(listenerStart);
 
   // The listener must not block native form submission; the form
@@ -344,6 +345,7 @@ test("renderRumClientScript routes the submit emission through keepalive fetch",
     traceparent: "",
   });
   const listenerStart = body.indexOf('addEventListener("submit"');
+  assert.ok(listenerStart >= 0, "expected a submit listener in the login script");
   const listenerSection = body.slice(listenerStart);
 
   // The listener uses the existing enqueue/postSample path with

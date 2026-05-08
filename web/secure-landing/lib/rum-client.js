@@ -36,14 +36,24 @@ export function renderRumClientScript({ route, view, traceparent }) {
     var emitted = Object.create(null);
     var vitals = { lcpMs: null, inpMs: null, clsScore: 0, finalized: false };
     var queue = [];
+    // Anchor for the Date.now() fallback so nowMs() always returns an
+    // elapsed-since-script-load duration even on runtimes without
+    // performance.now(). Without this anchor the fallback would emit raw
+    // epoch milliseconds (multi-billion ms values) for any duration metric.
+    var SCRIPT_LOAD_EPOCH = Date.now();
 
     function nowMs() {
       try {
-        return (window.performance && typeof window.performance.now === "function")
-          ? window.performance.now()
-          : Date.now();
+        if (window.performance && typeof window.performance.now === "function") {
+          return window.performance.now();
+        }
       } catch (_err) {
-        return Date.now();
+        // fall through to the anchored Date.now() fallback below
+      }
+      try {
+        return Math.max(0, Date.now() - SCRIPT_LOAD_EPOCH);
+      } catch (_err) {
+        return 0;
       }
     }
 
@@ -203,6 +213,16 @@ export function renderRumClientScript({ route, view, traceparent }) {
       // Browser-side counterpart to the server-side login_submit_attempt
       // (#1684). Only the login surface has a submission form; the landing
       // surface short-circuits here.
+      //
+      // Dedup contract for aggregators: the server-side handler also emits
+      // login_submit_attempt with metric=count value=1 (no metadata.source).
+      // This client emission carries metadata.source="client" so dashboards
+      // can either (a) filter to one source for an authoritative count, or
+      // (b) sum both sources for an "all observed submissions" view that
+      // includes browser-only signals (closed tab, network failure before
+      // request reaches server, HTML5-validated submissions that never
+      // dispatch). Naive sum-by-event_type aggregations will double-count;
+      // dashboards must filter by metadata.source to avoid that.
       if (VIEW !== "login") return;
       if (typeof document === "undefined") return;
       var form = null;

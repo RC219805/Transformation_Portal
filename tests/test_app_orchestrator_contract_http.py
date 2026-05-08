@@ -2228,13 +2228,23 @@ def test_portal_rum_contract_accepts_client_login_submit_attempt_metadata(
     assert event["metadata"] == {"source": "client", "duration_ms": 18420}
 
 
-def test_portal_rum_contract_strips_pii_from_client_login_submit_metadata(
+def test_portal_rum_contract_drops_non_token_metadata_for_client_login_submit(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Defense-in-depth: even if a misbehaving client tucks PII into the
-    metadata of a login_submit_attempt, the backend sanitizer must drop
-    the PII fields while preserving the allowed source/duration_ms keys.
+    """Pin the actual contract of ``_portal_sanitize_metadata`` for the
+    client-side login_submit_attempt path: values that fail the
+    ``_portal_is_token`` regex (emails with '@', free-text containing
+    spaces, raw JWTs, etc.) are dropped entirely.
+
+    Token-shaped metadata keys/values (``username``, ``csrf_token``,
+    ``role``, etc.) DO survive the sanitizer if a caller stuffs them in.
+    The client emitter never sets those keys — the contract is enforced
+    at the source (``rum-client.js`` only ever emits
+    ``{source, duration_ms}``). A sanitizer-level denylist is a
+    separate, broader change deferred from this PR; aggregators that
+    consume the persisted JSONL should treat any unexpected metadata
+    key as suspect.
     """
     monkeypatch.setenv("TP_PORTAL_RUM_ENABLED", "1")
     monkeypatch.setenv("TP_PORTAL_RUM_ROLLOUT_PERCENT", "100")
@@ -2251,10 +2261,10 @@ def test_portal_rum_contract_strips_pii_from_client_login_submit_metadata(
             "metadata": {
                 "source": "client",
                 "duration_ms": 12345,
-                "username": "admin",
+                # Non-token VALUES (contain '@' or whitespace) are dropped
+                # wholesale by the sanitizer's string branch.
                 "email": "admin@example.com",
                 "password": "correct horse battery staple",
-                "csrf_token": "abc123",
             },
         },
     )
@@ -2262,14 +2272,16 @@ def test_portal_rum_contract_strips_pii_from_client_login_submit_metadata(
 
     assert response.status_code == 200
     metadata = body["data"]["event"]["metadata"]
+
+    # Allowed metadata: the two keys the client emitter actually sets.
     assert metadata.get("source") == "client"
     assert metadata.get("duration_ms") == 12345
-    # PII / secret keys must be either absent or stripped of their
-    # original values (the sanitizer accepts string-token values, but
-    # an email-with-@ and the literal password fail _portal_is_token
-    # and so are dropped entirely).
-    assert "email" not in metadata or "@" not in str(metadata.get("email", ""))
-    assert "password" not in metadata or "horse" not in str(metadata.get("password", ""))
+
+    # Non-token VALUES are dropped: the sanitizer's string branch only
+    # admits values passing _portal_is_token, so emails (contain '@')
+    # and free-text passwords (contain spaces) are filtered out cleanly.
+    assert "email" not in metadata
+    assert "password" not in metadata
 
 
 def test_portal_rum_contract_accepts_login_submit_success(
