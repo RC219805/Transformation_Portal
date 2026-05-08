@@ -36,21 +36,41 @@ export function renderRumClientScript({ route, view, traceparent }) {
     var emitted = Object.create(null);
     var vitals = { lcpMs: null, inpMs: null, clsScore: 0, finalized: false };
     var queue = [];
-    // Anchor for the Date.now() fallback so nowMs() always returns an
-    // elapsed-since-script-load duration even on runtimes without
-    // performance.now(). Without this anchor the fallback would emit raw
-    // epoch milliseconds (multi-billion ms values) for any duration metric.
+    // Anchor for the deepest Date.now() fallback path. Used only when
+    // neither performance.now() NOR performance.timeOrigin is available
+    // (very rare). The other two branches normalize against
+    // performance.timeOrigin so durations from all paths share the same
+    // navigation-start origin and stay comparable across runtimes.
     var SCRIPT_LOAD_EPOCH = Date.now();
 
     function nowMs() {
       try {
         if (window.performance && typeof window.performance.now === "function") {
+          // Returns time elapsed since performance.timeOrigin
+          // (navigation start). This is the canonical fast path.
           return window.performance.now();
         }
       } catch (_err) {
-        // fall through to the anchored Date.now() fallback below
+        // fall through
       }
       try {
+        if (
+          window.performance
+          && typeof window.performance.timeOrigin === "number"
+          && isFinite(window.performance.timeOrigin)
+        ) {
+          // Match the performance.now() branch's origin so values from
+          // either runtime path can be aggregated together.
+          return Math.max(0, Date.now() - window.performance.timeOrigin);
+        }
+      } catch (_err) {
+        // fall through
+      }
+      try {
+        // Deepest fallback: anchor at the IIFE's first execution. Origin
+        // here is script-load rather than navigation-start, so values
+        // observed via this branch will read ~10-200ms LOWER than the
+        // performance.now() branch on the same wall-clock moment.
         return Math.max(0, Date.now() - SCRIPT_LOAD_EPOCH);
       } catch (_err) {
         return 0;
