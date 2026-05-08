@@ -722,6 +722,16 @@ def test_portal_rum_allowlists_cover_landing_and_login_surfaces() -> None:
     assert orchestrator_app.PORTAL_ALLOWED_RUM_METRICS["login_rendered"] == {"duration"}
 
 
+def test_portal_rum_allowlists_cover_login_submission_events() -> None:
+    assert "login_submit_attempt" in orchestrator_app.PORTAL_ALLOWED_RUM_EVENT_TYPES
+    assert "login_submit_success" in orchestrator_app.PORTAL_ALLOWED_RUM_EVENT_TYPES
+    assert "login_submit_failure" in orchestrator_app.PORTAL_ALLOWED_RUM_EVENT_TYPES
+
+    assert orchestrator_app.PORTAL_ALLOWED_RUM_METRICS["login_submit_attempt"] == {"count"}
+    assert orchestrator_app.PORTAL_ALLOWED_RUM_METRICS["login_submit_success"] == {"duration"}
+    assert orchestrator_app.PORTAL_ALLOWED_RUM_METRICS["login_submit_failure"] == {"duration"}
+
+
 def test_portal_rum_rollout_reuses_shared_rollout_helper(monkeypatch: pytest.MonkeyPatch) -> None:
     actor = {"username": "portal-admin"}
     captured: list[tuple[str, dict[str, str]]] = []

@@ -1258,6 +1258,9 @@ PORTAL_ALLOWED_RUM_EVENT_TYPES = {
     "sse_reconnect",
     "landing_rendered",
     "login_rendered",
+    "login_submit_attempt",
+    "login_submit_success",
+    "login_submit_failure",
 }
 PORTAL_ALLOWED_RUM_ROUTES = {"/portal", "/", "/login"}
 PORTAL_ALLOWED_RUM_VIEWS = {
@@ -1278,6 +1281,9 @@ PORTAL_ALLOWED_RUM_METRICS = {
     "sse_reconnect": set(),
     "landing_rendered": {"duration"},
     "login_rendered": {"duration"},
+    "login_submit_attempt": {"count"},
+    "login_submit_success": {"duration"},
+    "login_submit_failure": {"duration"},
 }
 PATH_SCOPE_INPUT = "input"
 PATH_SCOPE_OUTPUT = "output"
