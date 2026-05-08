@@ -199,10 +199,46 @@ export function renderRumClientScript({ route, view, traceparent }) {
       }
     }
 
+    function scheduleLoginSubmitListener() {
+      // Browser-side counterpart to the server-side login_submit_attempt
+      // (#1684). Only the login surface has a submission form; the landing
+      // surface short-circuits here.
+      if (VIEW !== "login") return;
+      if (typeof document === "undefined") return;
+      var form = null;
+      try {
+        form = document.querySelector('[data-ui="login-form"]');
+      } catch (_err) {
+        return;
+      }
+      if (!form || typeof form.addEventListener !== "function") return;
+      // The submit event only fires AFTER native HTML5 validation passes,
+      // so an unsubmitted form (empty required field, etc.) produces no
+      // telemetry. We never call preventDefault — the form proceeds.
+      form.addEventListener("submit", function () {
+        try {
+          var elapsedMs = Math.max(0, Math.round(nowMs()));
+          enqueue({
+            event_type: "login_submit_attempt",
+            metric: "count",
+            unit: "count",
+            value: 1,
+            metadata: {
+              source: "client",
+              duration_ms: elapsedMs
+            }
+          }, { keepalive: true });
+        } catch (_err) {
+          // best-effort telemetry only
+        }
+      }, { once: true });
+    }
+
     function bootstrap() {
       startObservers();
       emitRendered();
       scheduleFirstViewInteractive();
+      scheduleLoginSubmitListener();
     }
 
     if (document.readyState === "loading") {

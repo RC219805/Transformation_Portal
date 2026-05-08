@@ -2189,6 +2189,89 @@ def test_portal_rum_contract_accepts_login_submit_attempt(
     assert event["metadata"] == {}
 
 
+def test_portal_rum_contract_accepts_client_login_submit_attempt_metadata(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Survival contract for the client-side login_submit_attempt emission.
+
+    The browser-side counterpart to the server-side login_submit_attempt
+    (#1684) re-uses the existing event_type/metric/unit allowlist and
+    carries the form-render-to-submit duration as metadata. This test
+    pins that the existing _portal_sanitize_metadata accepts the
+    {source: "client", duration_ms: <int>} shape unchanged so we never
+    have to widen the backend allowlist.
+    """
+    monkeypatch.setenv("TP_PORTAL_RUM_ENABLED", "1")
+    monkeypatch.setenv("TP_PORTAL_RUM_ROLLOUT_PERCENT", "100")
+
+    response = client.post(
+        "/v1/portal/rum",
+        json={
+            "event_type": "login_submit_attempt",
+            "route": "/login",
+            "view": "login",
+            "metric": "count",
+            "value": 1,
+            "unit": "count",
+            "metadata": {"source": "client", "duration_ms": 18420},
+        },
+    )
+    body = response.json()
+
+    assert response.status_code == 200
+    assert body["data"]["accepted"] is True
+    event = body["data"]["event"]
+    assert event["event_type"] == "login_submit_attempt"
+    assert event["metric"] == "count"
+    # Both metadata keys survive the sanitizer round-trip unchanged.
+    assert event["metadata"] == {"source": "client", "duration_ms": 18420}
+
+
+def test_portal_rum_contract_strips_pii_from_client_login_submit_metadata(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Defense-in-depth: even if a misbehaving client tucks PII into the
+    metadata of a login_submit_attempt, the backend sanitizer must drop
+    the PII fields while preserving the allowed source/duration_ms keys.
+    """
+    monkeypatch.setenv("TP_PORTAL_RUM_ENABLED", "1")
+    monkeypatch.setenv("TP_PORTAL_RUM_ROLLOUT_PERCENT", "100")
+
+    response = client.post(
+        "/v1/portal/rum",
+        json={
+            "event_type": "login_submit_attempt",
+            "route": "/login",
+            "view": "login",
+            "metric": "count",
+            "value": 1,
+            "unit": "count",
+            "metadata": {
+                "source": "client",
+                "duration_ms": 12345,
+                "username": "admin",
+                "email": "admin@example.com",
+                "password": "correct horse battery staple",
+                "csrf_token": "abc123",
+            },
+        },
+    )
+    body = response.json()
+
+    assert response.status_code == 200
+    metadata = body["data"]["event"]["metadata"]
+    assert metadata.get("source") == "client"
+    assert metadata.get("duration_ms") == 12345
+    # PII / secret keys must be either absent or stripped of their
+    # original values (the sanitizer accepts string-token values, but
+    # an email-with-@ and the literal password fail _portal_is_token
+    # and so are dropped entirely).
+    assert "email" not in metadata or "@" not in str(metadata.get("email", ""))
+    assert "password" not in metadata or "horse" not in str(metadata.get("password", ""))
+
+
 def test_portal_rum_contract_accepts_login_submit_success(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
