@@ -42,6 +42,8 @@ from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple
 import numpy as np
 from PIL import Image, ImageFilter, ImageOps
 
+from ..depth.depth_aware_dof import DepthAwareDofOptions, DepthAwareDofResult, run_depth_aware_dof
+
 # ----- Optional accelerated libraries -----
 
 try:
