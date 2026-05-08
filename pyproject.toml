@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "transformation-portal"
-version = "0.1.0"
+version = "0.2.0"
 description = "Professional image and video processing toolkit for luxury real estate rendering and architectural visualization."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -152,6 +152,9 @@ transform-analyze = "transformation_portal.cli:analyze_cli"
 
 # Lux Depth V3 Pipeline CLI (APEX command variants)
 lux-depth-v3 = "transformation_portal.lux_depth_v3.__main__:app"
+
+# Depth-aware post-processing CLI
+depth-aware-dof = "transformation_portal.depth.depth_aware_dof:main"
 
 # Luxury TIFF Batch Processor CLI
 luxury-tiff-batch = "luxury_tiff_batch_processor.cli:main"
