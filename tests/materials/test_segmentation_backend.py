@@ -1271,6 +1271,65 @@ def test_efficientsam_backend_lazy_loading(sample_image):
 # =============================================================================
 
 
+def test_efficientsam_device_resolution_handles_missing_torch(monkeypatch):
+    """GPU-like device requests must not dereference torch when torch is unavailable."""
+    import transformation_portal.lux_depth_v3.segmentation_backend as seg_module
+
+    monkeypatch.setattr(seg_module, "TORCH_AVAILABLE", False)
+    monkeypatch.setattr(seg_module, "torch", None)
+
+    backend = EfficientSAMBackend()
+
+    assert backend._resolve_device("mps") == "cpu"
+    assert backend._resolve_device("cuda") == "cpu"
+    assert backend._resolve_device("auto") == "cpu"
+
+
+def test_segment_materials_sam2_strict_mps_missing_torch_reports_dependency_error(
+    sample_image,
+    monkeypatch,
+):
+    """SAM2 strict mode should report dependency failure, not torch NoneType internals."""
+    import transformation_portal.lux_depth_v3.segmentation_backend as seg_module
+
+    captured: dict[str, object] = {}
+
+    class FakeSpatialSAM2Backend:
+        def __init__(self, **kwargs):
+            captured["device"] = kwargs["device"]
+            self.device = kwargs["device"]
+            self.tiling = kwargs.get("tiling")
+
+        def segment(self, seg_input):
+            del seg_input
+            raise RuntimeError("SAM2 requires sam2 and torch. Install with: pip install sam2 torch torchvision")
+
+    monkeypatch.setattr(seg_module, "TORCH_AVAILABLE", False)
+    monkeypatch.setattr(seg_module, "torch", None)
+    monkeypatch.setattr(seg_module, "SPATIAL_SAM2_AVAILABLE", True)
+    monkeypatch.setattr(seg_module, "SpatialSAM2Backend", FakeSpatialSAM2Backend)
+    seg_module._get_backend_instance.cache_clear()
+
+    config = EnhanceConfig(
+        enable_material_segmentation=True,
+        material_segmentation_backend="sam2",
+        strict_backend=True,
+        depth_device="mps",
+    )
+
+    try:
+        with pytest.raises(RuntimeError) as exc_info:
+            segment_materials(sample_image, config)
+    finally:
+        seg_module._get_backend_instance.cache_clear()
+
+    message = str(exc_info.value)
+    assert "SAM2 requires sam2 and torch" in message
+    assert "NoneType" not in message
+    assert "backends" not in message
+    assert captured["device"] == "cpu"
+
+
 @pytest.mark.ml
 def test_efficientsam_backend_not_loaded_error(sample_image):
     """Test that segmentation fails if model not loaded."""
