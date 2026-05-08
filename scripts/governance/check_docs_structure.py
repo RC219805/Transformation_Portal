@@ -31,6 +31,7 @@ ALLOWED_DOCS_TOP_LEVEL_DIRS = {
     "deprecation",
     "depth_model",
     "depth_pipeline",
+    "design",
     "development",
     "examples",
     "fixes",
