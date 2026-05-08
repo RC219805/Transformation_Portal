@@ -154,21 +154,20 @@ def test_check_mode_returns_zero_when_committed_doc_matches_sources(
     assert "up to date" in result.stdout
 
 
-def test_check_mode_returns_nonzero_with_diff_on_drift(tmp_path: Path) -> None:
+def test_check_mode_returns_nonzero_with_diff_on_drift(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
     module = _load_module()
-    doc_path = REPO_ROOT / "docs" / "design" / "tokens.md"
-    original = doc_path.read_text(encoding="utf-8")
-    doc_path.write_text(original + "\n<!-- drift -->\n", encoding="utf-8")
-    try:
-        result = subprocess.run(
-            [sys.executable, str(SCRIPT_PATH), "--check"],
-            cwd=REPO_ROOT,
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        assert result.returncode != 0
-        assert "drifted" in result.stderr
-        assert module.REGENERATE_COMMAND in result.stderr
-    finally:
-        doc_path.write_text(original, encoding="utf-8")
+    doc_path = tmp_path / "tokens.md"
+    committed = module.GENERATED_DOC_PATH.read_text(encoding="utf-8")
+    doc_path.write_text(committed + "\n<!-- drift -->\n", encoding="utf-8")
+    monkeypatch.setattr(module, "GENERATED_DOC_PATH", doc_path)
+
+    result = module.main(["--check"])
+    captured = capsys.readouterr()
+
+    assert result != 0
+    assert "drifted" in captured.err
+    assert module.REGENERATE_COMMAND in captured.err

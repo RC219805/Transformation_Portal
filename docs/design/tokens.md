@@ -5,7 +5,8 @@ To refresh after editing the source CSS, run:
     python3 scripts/validation/generate_design_tokens_doc.py
 
 Drift is enforced by `make check-design-tokens-doc`, a pre-commit hook,
-and the design-tokens step in .github/workflows/build.yml.
+and the "Validate generated design tokens reference" step in
+.github/workflows/build.yml.
 Do not edit by hand.
 -->
 
