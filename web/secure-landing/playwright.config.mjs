@@ -17,6 +17,15 @@ import { defineConfig, devices } from "@playwright/test";
 
 const isCi = Boolean(process.env.CI);
 const baseURL = process.env.PLAYWRIGHT_BASE_URL || "http://127.0.0.1:3000";
+const frontdoorSmokeUsersJson = JSON.stringify([
+  {
+    username: "smoke-admin",
+    password_hash:
+      "$argon2id$v=19$m=65536,t=3,p=4$PGOdFy1HPgK0hvRb9JmVfQ$/9WdFZwFgUs0IY0Pv0EKNixg/LB3oQH5w9y9lLwqYZQ",
+    access_email: "smoke-admin@local.invalid",
+    role: "admin",
+  },
+]);
 
 export default defineConfig({
   testDir: "tests/e2e",
@@ -51,13 +60,16 @@ export default defineConfig({
     reuseExistingServer: !isCi,
     timeout: 120_000,
     env: {
-      NODE_ENV: "production",
+      NODE_ENV: "development",
       // Stub backend so the dev server boots; smoke tests do not call
-      // protected /v1/* routes that would require a real upstream.
+      // protected /v1/* routes that would require a real upstream. The
+      // development preflight still requires a configured user source, but
+      // allows the stub backend to be unavailable.
       TP_FASTAPI_ORIGIN: "http://127.0.0.1:9999",
       TP_BACKEND_API_KEY: "frontdoor-browser-smoke",
-      TP_FRONTDOOR_USERS_JSON: "[]",
+      TP_FRONTDOOR_USERS_JSON: frontdoorSmokeUsersJson,
       TP_ALLOW_LOCAL_ACCESS_BYPASS: "1",
+      WATCHPACK_POLLING: "true",
     },
   },
 });
