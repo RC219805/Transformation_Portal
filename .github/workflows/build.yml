@@ -142,6 +142,11 @@ jobs:
           set -euo pipefail
           python3 scripts/governance/check_stale_docs_paths.py
 
+      - name: Validate generated design tokens reference
+        run: |
+          set -euo pipefail
+          python3 scripts/validation/generate_design_tokens_doc.py --check
+
       - name: Enforce documentation structure
         run: |
           set -euo pipefail

@@ -553,6 +553,14 @@ check-stale-docs:
 check-doc-heading-links:
 	@"$(PY)" scripts/validation/check_doc_heading_links.py
 
+generate-design-tokens-doc:
+	@echo "Generating docs/design/tokens.md from CSS token sources..."
+	@"$(PY)" scripts/validation/generate_design_tokens_doc.py
+
+check-design-tokens-doc:
+	@echo "Checking docs/design/tokens.md is up to date..."
+	@"$(PY)" scripts/validation/generate_design_tokens_doc.py --check
+
 # Validate CI configuration
 validate-ci:
 	@echo "Validating GitHub Actions workflows..."
