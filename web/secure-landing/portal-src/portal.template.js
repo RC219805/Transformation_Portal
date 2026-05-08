@@ -1642,24 +1642,54 @@ function _renderBannerDetailWithRetryCountdown(detailEl, detailText, retryCountd
     const targetMs = Number(retryCountdownAtMs);
     if (!Number.isFinite(targetMs) || targetMs <= Date.now()) return;
     if (typeof document === 'undefined' || !document?.createElement) return;
-    detailEl.appendChild(document.createTextNode(' '));
+
+    // Visible countdown — aria-hidden so screen readers don't hear a 1Hz
+    // ticker. The synchronous first onTick from startRetryCountdown writes
+    // its initial textContent before we append it, so the span is never
+    // observed in an empty state by the user or by layout.
     const span = document.createElement('span');
     span.setAttribute('data-retry-countdown', '');
     span.setAttribute('aria-hidden', 'true');
-    span.textContent = portalInternals.formatRetryCountdown(
-        Math.ceil((targetMs - Date.now()) / 1000)
-    );
-    detailEl.appendChild(span);
-    _activeRetryCountdownCancellers.set(detailEl, portalInternals.startRetryCountdown({
+
+    // Screen-reader companion — an sr-only aria-live region that mirrors the
+    // countdown state at coarse cadence (every 10s + the final 5s + the
+    // "Retrying now" transition) to give assistive-tech users meaningful
+    // updates without per-second announcement spam.
+    const srSpan = document.createElement('span');
+    srSpan.className = 'sr-only';
+    srSpan.setAttribute('data-retry-countdown-sr', '');
+    srSpan.setAttribute('aria-live', 'polite');
+    srSpan.setAttribute('aria-atomic', 'true');
+
+    let initialAnnounced = false;
+    const _shouldAnnounce = (secondsRemaining) => {
+        if (!initialAnnounced) {
+            initialAnnounced = true;
+            return true;
+        }
+        return secondsRemaining <= 5 || secondsRemaining % 10 === 0;
+    };
+
+    const cancel = portalInternals.startRetryCountdown({
         retryAtMs: targetMs,
         onTick: (secondsRemaining) => {
-            span.textContent = portalInternals.formatRetryCountdown(secondsRemaining);
+            const text = portalInternals.formatRetryCountdown(secondsRemaining);
+            span.textContent = text;
+            if (_shouldAnnounce(secondsRemaining)) {
+                srSpan.textContent = text;
+            }
         },
         onComplete: () => {
-            span.textContent = portalInternals.formatRetryCountdown(0);
+            const text = portalInternals.formatRetryCountdown(0);
+            span.textContent = text;
+            srSpan.textContent = text;
             _activeRetryCountdownCancellers.delete(detailEl);
         }
-    }));
+    });
+    detailEl.appendChild(document.createTextNode(' '));
+    detailEl.appendChild(span);
+    detailEl.appendChild(srSpan);
+    _activeRetryCountdownCancellers.set(detailEl, cancel);
 }
 
 function renderOperatorActionRail() {
@@ -7826,9 +7856,13 @@ function _clearConfigPreviewServiceRetry() {
 }
 
 function _scheduleConfigPreviewServiceRetry(rateLimitHint = null) {
+    // Clear any stale hint when the new failure carries no usable Retry-After
+    // (e.g., a 5xx or network error following a prior 429). This prevents the
+    // dispatch-readiness banner from showing a countdown for a non-rate-limit
+    // service failure.
     configPreviewLastRateLimitHint = rateLimitHint && Number(rateLimitHint?.retryAtMs) > 0
         ? rateLimitHint
-        : configPreviewLastRateLimitHint;
+        : null;
     if (configPreviewServiceRetryAttempts >= CONFIG_PREVIEW_SERVICE_RETRY_MAX_ATTEMPTS) {
         return;
     }

@@ -335,6 +335,40 @@ test("retry-after countdown banner uses createElement, never inline HTML", () =>
     renderHelperBody,
     /_activeRetryCountdownCancellers\.delete\(detailEl\)/
   );
+  // Single source of truth for the initial value: the helper's synchronous
+  // first onTick populates the visible span, never a manual pre-fill that
+  // could observe a different Date.now() boundary.
+  assert.ok(
+    !/Math\.ceil\(\(targetMs - Date\.now\(\)\) \/ 1000\)/.test(renderHelperBody),
+    "renderer must not pre-compute the initial countdown value before startRetryCountdown"
+  );
+});
+
+test("retry-after countdown banner provides an sr-only aria-live mirror", () => {
+  const renderHelperStart = portalTemplate.indexOf(
+    "function _renderBannerDetailWithRetryCountdown"
+  );
+  const renderHelperEnd = portalTemplate.indexOf("\nfunction ", renderHelperStart + 1);
+  const renderHelperBody = portalTemplate.slice(
+    renderHelperStart,
+    renderHelperEnd > renderHelperStart ? renderHelperEnd : portalTemplate.length
+  );
+  // A second sr-only span carries the countdown for screen readers, with
+  // aria-live="polite" + aria-atomic="true" so updates are announced as
+  // single units at the next pause in user activity.
+  assert.match(renderHelperBody, /srSpan\.className = 'sr-only'/);
+  assert.match(renderHelperBody, /setAttribute\('aria-live', 'polite'\)/);
+  assert.match(renderHelperBody, /setAttribute\('aria-atomic', 'true'\)/);
+  assert.match(renderHelperBody, /setAttribute\('data-retry-countdown-sr'/);
+  // The sr-only span updates at coarse cadence (initial + every 10s + the
+  // last 5s + completion) to avoid 1Hz announcement spam.
+  assert.match(renderHelperBody, /secondsRemaining <= 5 \|\| secondsRemaining % 10 === 0/);
+  // On completion, the sr-only span ALWAYS gets the final "Retrying now…"
+  // text without going through the milestone gate.
+  const onCompleteSection = renderHelperBody.slice(
+    renderHelperBody.indexOf("onComplete:")
+  );
+  assert.match(onCompleteSection, /srSpan\.textContent = text/);
 });
 
 test("dispatch-readiness banner surfaces the config-preview countdown", () => {
