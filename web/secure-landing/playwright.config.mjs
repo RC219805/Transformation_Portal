@@ -33,7 +33,10 @@ function getWebServerPort(playwrightBaseURL) {
   if (url.protocol !== "http:" && url.protocol !== "https:") {
     throw new Error(`Unsupported PLAYWRIGHT_BASE_URL protocol: ${url.protocol}`);
   }
-  return url.port || (url.protocol === "https:" ? "443" : "80");
+  if (!url.port) {
+    throw new Error("PLAYWRIGHT_BASE_URL must include an explicit port for frontdoor browser smoke tests.");
+  }
+  return url.port;
 }
 
 export default defineConfig({

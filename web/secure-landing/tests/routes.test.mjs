@@ -239,6 +239,24 @@ test("playwright frontdoor smoke config derives webServer port from PLAYWRIGHT_B
   }
 });
 
+test("playwright frontdoor smoke config rejects PLAYWRIGHT_BASE_URL without an explicit port", async () => {
+  const previous = process.env.PLAYWRIGHT_BASE_URL;
+  process.env.PLAYWRIGHT_BASE_URL = "http://127.0.0.1";
+
+  try {
+    await assert.rejects(
+      importFresh("../playwright.config.mjs"),
+      /PLAYWRIGHT_BASE_URL must include an explicit port for frontdoor browser smoke tests/
+    );
+  } finally {
+    if (typeof previous === "string") {
+      process.env.PLAYWRIGHT_BASE_URL = previous;
+    } else {
+      delete process.env.PLAYWRIGHT_BASE_URL;
+    }
+  }
+});
+
 test("run_frontdoor_local launcher supports isolated port, distdir, and local user seeding defaults", async () => {
   const scriptPath = path.resolve(process.cwd(), "..", "..", "scripts", "setup", "run_frontdoor_local.sh");
   const script = readFileSync(scriptPath, "utf-8");
