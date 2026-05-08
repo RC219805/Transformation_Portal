@@ -351,21 +351,49 @@ class EfficientSAMBackend:
         Follows same pattern as depth backends in inference.py.
         """
         device_lower = device.lower()
+        torch_runtime = torch if TORCH_AVAILABLE and torch is not None else None
+
+        def cuda_available() -> bool:
+            if torch_runtime is None:
+                return False
+            cuda = getattr(torch_runtime, "cuda", None)
+            is_available = getattr(cuda, "is_available", None)
+            if not callable(is_available):
+                return False
+            try:
+                return bool(is_available())
+            except Exception as exc:
+                logger.debug("Failed to query CUDA availability for segmentation: %s", exc)
+                return False
+
+        def mps_available() -> bool:
+            if torch_runtime is None:
+                return False
+            backends = getattr(torch_runtime, "backends", None)
+            mps = getattr(backends, "mps", None)
+            is_available = getattr(mps, "is_available", None)
+            if not callable(is_available):
+                return False
+            try:
+                return bool(is_available())
+            except Exception as exc:
+                logger.debug("Failed to query MPS availability for segmentation: %s", exc)
+                return False
 
         # Explicit device override
-        if device_lower == "cuda" and torch.cuda.is_available():
+        if device_lower == "cuda" and cuda_available():
             return "cuda"
-        if device_lower == "mps" and torch.backends.mps.is_available():
+        if device_lower == "mps" and mps_available():
             return "mps"
         if device_lower == "cpu":
             return "cpu"
 
         # Auto-detect (prefer MPS on Apple Silicon, then CUDA, then CPU)
         if device_lower == "auto" or device_lower not in ["cuda", "mps", "cpu"]:
-            if torch.backends.mps.is_available():
+            if mps_available():
                 logger.info("Auto-detected MPS (Apple Silicon) for segmentation")
                 return "mps"
-            if torch.cuda.is_available():
+            if cuda_available():
                 logger.info("Auto-detected CUDA for segmentation")
                 return "cuda"
             logger.info("Using CPU for segmentation (no GPU detected)")
