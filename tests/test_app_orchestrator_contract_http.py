@@ -2189,6 +2189,101 @@ def test_portal_rum_contract_accepts_login_submit_attempt(
     assert event["metadata"] == {}
 
 
+def test_portal_rum_contract_accepts_client_login_submit_attempt_metadata(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Survival contract for the client-side login_submit_attempt emission.
+
+    The browser-side counterpart to the server-side login_submit_attempt
+    (#1684) re-uses the existing event_type/metric/unit allowlist and
+    carries the form-render-to-submit duration as metadata. This test
+    pins that the existing _portal_sanitize_metadata accepts the
+    {source: "client", duration_ms: <int>} shape unchanged so we never
+    have to widen the backend allowlist.
+    """
+    monkeypatch.setenv("TP_PORTAL_RUM_ENABLED", "1")
+    monkeypatch.setenv("TP_PORTAL_RUM_ROLLOUT_PERCENT", "100")
+
+    response = client.post(
+        "/v1/portal/rum",
+        json={
+            "event_type": "login_submit_attempt",
+            "route": "/login",
+            "view": "login",
+            "metric": "count",
+            "value": 1,
+            "unit": "count",
+            "metadata": {"source": "client", "duration_ms": 18420},
+        },
+    )
+    body = response.json()
+
+    assert response.status_code == 200
+    assert body["data"]["accepted"] is True
+    event = body["data"]["event"]
+    assert event["event_type"] == "login_submit_attempt"
+    assert event["metric"] == "count"
+    # Both metadata keys survive the sanitizer round-trip unchanged.
+    assert event["metadata"] == {"source": "client", "duration_ms": 18420}
+
+
+def test_portal_rum_contract_drops_non_token_metadata_for_client_login_submit(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Pin the actual contract of ``_portal_sanitize_metadata`` for the
+    client-side login_submit_attempt path: values that fail the
+    ``_portal_is_token`` regex (emails with '@', free-text containing
+    spaces, raw JWTs, etc.) are dropped entirely.
+
+    Token-shaped metadata keys/values (``username``, ``csrf_token``,
+    ``role``, etc.) DO survive the sanitizer if a caller stuffs them in.
+    The client emitter never sets those keys — the contract is enforced
+    at the source (``rum-client.js`` only ever emits
+    ``{source, duration_ms}``). A sanitizer-level denylist is a
+    separate, broader change deferred from this PR; aggregators that
+    consume the persisted JSONL should treat any unexpected metadata
+    key as suspect.
+    """
+    monkeypatch.setenv("TP_PORTAL_RUM_ENABLED", "1")
+    monkeypatch.setenv("TP_PORTAL_RUM_ROLLOUT_PERCENT", "100")
+
+    response = client.post(
+        "/v1/portal/rum",
+        json={
+            "event_type": "login_submit_attempt",
+            "route": "/login",
+            "view": "login",
+            "metric": "count",
+            "value": 1,
+            "unit": "count",
+            "metadata": {
+                "source": "client",
+                "duration_ms": 12345,
+                # Non-token VALUES (contain '@' or whitespace) are dropped
+                # wholesale by the sanitizer's string branch.
+                "email": "admin@example.com",
+                "password": "correct horse battery staple",
+            },
+        },
+    )
+    body = response.json()
+
+    assert response.status_code == 200
+    metadata = body["data"]["event"]["metadata"]
+
+    # Allowed metadata: the two keys the client emitter actually sets.
+    assert metadata.get("source") == "client"
+    assert metadata.get("duration_ms") == 12345
+
+    # Non-token VALUES are dropped: the sanitizer's string branch only
+    # admits values passing _portal_is_token, so emails (contain '@')
+    # and free-text passwords (contain spaces) are filtered out cleanly.
+    assert "email" not in metadata
+    assert "password" not in metadata
+
+
 def test_portal_rum_contract_accepts_login_submit_success(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,

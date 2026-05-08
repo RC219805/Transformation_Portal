@@ -36,14 +36,44 @@ export function renderRumClientScript({ route, view, traceparent }) {
     var emitted = Object.create(null);
     var vitals = { lcpMs: null, inpMs: null, clsScore: 0, finalized: false };
     var queue = [];
+    // Anchor for the deepest Date.now() fallback path. Used only when
+    // neither performance.now() NOR performance.timeOrigin is available
+    // (very rare). The other two branches normalize against
+    // performance.timeOrigin so durations from all paths share the same
+    // navigation-start origin and stay comparable across runtimes.
+    var SCRIPT_LOAD_EPOCH = Date.now();
 
     function nowMs() {
       try {
-        return (window.performance && typeof window.performance.now === "function")
-          ? window.performance.now()
-          : Date.now();
+        if (window.performance && typeof window.performance.now === "function") {
+          // Returns time elapsed since performance.timeOrigin
+          // (navigation start). This is the canonical fast path.
+          return window.performance.now();
+        }
       } catch (_err) {
-        return Date.now();
+        // fall through
+      }
+      try {
+        if (
+          window.performance
+          && typeof window.performance.timeOrigin === "number"
+          && isFinite(window.performance.timeOrigin)
+        ) {
+          // Match the performance.now() branch's origin so values from
+          // either runtime path can be aggregated together.
+          return Math.max(0, Date.now() - window.performance.timeOrigin);
+        }
+      } catch (_err) {
+        // fall through
+      }
+      try {
+        // Deepest fallback: anchor at the IIFE's first execution. Origin
+        // here is script-load rather than navigation-start, so values
+        // observed via this branch will read ~10-200ms LOWER than the
+        // performance.now() branch on the same wall-clock moment.
+        return Math.max(0, Date.now() - SCRIPT_LOAD_EPOCH);
+      } catch (_err) {
+        return 0;
       }
     }
 
@@ -199,10 +229,56 @@ export function renderRumClientScript({ route, view, traceparent }) {
       }
     }
 
+    function scheduleLoginSubmitListener() {
+      // Browser-side counterpart to the server-side login_submit_attempt
+      // (#1684). Only the login surface has a submission form; the landing
+      // surface short-circuits here.
+      //
+      // Dedup contract for aggregators: the server-side handler also emits
+      // login_submit_attempt with metric=count value=1 (no metadata.source).
+      // This client emission carries metadata.source="client" so dashboards
+      // can either (a) filter to one source for an authoritative count, or
+      // (b) sum both sources for an "all observed submissions" view that
+      // includes browser-only signals (closed tab, network failure before
+      // request reaches server, HTML5-validated submissions that never
+      // dispatch). Naive sum-by-event_type aggregations will double-count;
+      // dashboards must filter by metadata.source to avoid that.
+      if (VIEW !== "login") return;
+      if (typeof document === "undefined") return;
+      var form = null;
+      try {
+        form = document.querySelector('[data-ui="login-form"]');
+      } catch (_err) {
+        return;
+      }
+      if (!form || typeof form.addEventListener !== "function") return;
+      // The submit event only fires AFTER native HTML5 validation passes,
+      // so an unsubmitted form (empty required field, etc.) produces no
+      // telemetry. We never call preventDefault — the form proceeds.
+      form.addEventListener("submit", function () {
+        try {
+          var elapsedMs = Math.max(0, Math.round(nowMs()));
+          enqueue({
+            event_type: "login_submit_attempt",
+            metric: "count",
+            unit: "count",
+            value: 1,
+            metadata: {
+              source: "client",
+              duration_ms: elapsedMs
+            }
+          }, { keepalive: true });
+        } catch (_err) {
+          // best-effort telemetry only
+        }
+      }, { once: true });
+    }
+
     function bootstrap() {
       startObservers();
       emitRendered();
       scheduleFirstViewInteractive();
+      scheduleLoginSubmitListener();
     }
 
     if (document.readyState === "loading") {

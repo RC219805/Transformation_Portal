@@ -243,6 +243,162 @@ test("homepage GET mints a fresh nonce on every request when RUM is enabled", as
   }
 });
 
+test("renderRumClientScript wires a login-form submit listener only for view=login", async () => {
+  const { renderRumClientScript } = await importFresh("../lib/rum-client.js");
+  const loginBody = renderRumClientScript({
+    route: "/login",
+    view: "login",
+    traceparent: "",
+  });
+  const landingBody = renderRumClientScript({
+    route: "/",
+    view: "landing",
+    traceparent: "",
+  });
+
+  // The login script registers a submit listener against the stable
+  // data-ui="login-form" selector with { once: true } so re-submits
+  // within the same page render don't double-count.
+  assert.match(loginBody, /scheduleLoginSubmitListener\s*\(\s*\)/);
+  assert.match(loginBody, /\[data-ui="login-form"\]/);
+  assert.match(loginBody, /addEventListener\("submit",[\s\S]+?\{\s*once:\s*true\s*\}\)/);
+
+  // The view-conditional gate keeps the listener body inert on the
+  // landing view: scheduleLoginSubmitListener is still defined in the
+  // bundled IIFE for both views, but the function returns early when
+  // VIEW !== "login".
+  assert.match(loginBody, /if\s*\(VIEW\s*!==\s*"login"\)\s*return/);
+  assert.match(landingBody, /if\s*\(VIEW\s*!==\s*"login"\)\s*return/);
+  // The landing script's VIEW literal pins it away from "login" so the
+  // form-submit branch is unreachable there.
+  assert.match(landingBody, /VIEW\s*=\s*"landing"/);
+  assert.doesNotMatch(landingBody, /VIEW\s*=\s*"login"/);
+});
+
+test("renderRumClientScript emits login_submit_attempt with count/count/1 + safe metadata", async () => {
+  const { renderRumClientScript } = await importFresh("../lib/rum-client.js");
+  const body = renderRumClientScript({
+    route: "/login",
+    view: "login",
+    traceparent: "",
+  });
+
+  // Locate the submit listener body so we assert against the exact
+  // emission shape, not unrelated parts of the script.
+  const listenerStart = body.indexOf('addEventListener("submit"');
+  assert.ok(listenerStart >= 0, "expected a submit listener in the login script");
+  const listenerSection = body.slice(listenerStart);
+
+  // Backend allowlist contract — count/count/1 only.
+  assert.match(listenerSection, /event_type:\s*"login_submit_attempt"/);
+  assert.match(listenerSection, /metric:\s*"count"/);
+  assert.match(listenerSection, /unit:\s*"count"/);
+  assert.match(listenerSection, /value:\s*1\b/);
+
+  // Sanitized metadata: only the two allowed keys.
+  assert.match(listenerSection, /source:\s*"client"/);
+  assert.match(listenerSection, /duration_ms:\s*elapsedMs/);
+  // duration_ms is computed once at submit time and clamped to a
+  // non-negative integer millisecond count.
+  assert.match(listenerSection, /Math\.max\(0,\s*Math\.round\(nowMs\(\)\)\)/);
+});
+
+test("renderRumClientScript login submit listener never preventDefaults or leaks PII", async () => {
+  const { renderRumClientScript } = await importFresh("../lib/rum-client.js");
+  const body = renderRumClientScript({
+    route: "/login",
+    view: "login",
+    traceparent: "",
+  });
+  const listenerStart = body.indexOf('addEventListener("submit"');
+  assert.ok(listenerStart >= 0, "expected a submit listener in the login script");
+  const listenerSection = body.slice(listenerStart);
+
+  // The listener must not block native form submission; the form
+  // proceeds to the server unchanged.
+  assert.doesNotMatch(listenerSection, /preventDefault\s*\(/);
+  assert.doesNotMatch(listenerSection, /stopPropagation\s*\(/);
+
+  // No PII / secret tokens may flow through the emitted metadata.
+  for (const piiToken of [
+    "username",
+    "password",
+    "email",
+    "csrf",
+    "session",
+    "throttle",
+    "accessEmail",
+    "Authorization",
+  ]) {
+    assert.ok(
+      !listenerSection.includes(piiToken),
+      `submit listener must not reference ${piiToken}: ${listenerSection.slice(0, 200)}`
+    );
+  }
+});
+
+test("renderRumClientScript routes the submit emission through keepalive fetch", async () => {
+  const { renderRumClientScript } = await importFresh("../lib/rum-client.js");
+  const body = renderRumClientScript({
+    route: "/login",
+    view: "login",
+    traceparent: "",
+  });
+  const listenerStart = body.indexOf('addEventListener("submit"');
+  assert.ok(listenerStart >= 0, "expected a submit listener in the login script");
+  const listenerSection = body.slice(listenerStart);
+
+  // The listener uses the existing enqueue/postSample path with
+  // keepalive: true so the request survives the form's page navigation.
+  assert.match(listenerSection, /enqueue\(\{[\s\S]+?\},\s*\{\s*keepalive:\s*true\s*\}\)/);
+  // The postSample helper (shared with the existing observers) is the
+  // single transport — no separate fetch in the submit branch.
+  assert.doesNotMatch(listenerSection, /fetch\s*\(/);
+});
+
+test("login GET HTML omits the submit-listener selector when RUM is disabled", async () => {
+  const env = withRumEnvironment({ rumEnabled: false });
+
+  try {
+    getDb(env.dbPath);
+    const { GET } = await importFresh("../app/login/route.js");
+    const request = buildRequest("https://portal.example.com/login");
+
+    const response = await GET(request);
+    const html = await response.text();
+
+    assert.equal(response.status, 200);
+    // No inline RUM script means no submit listener is registered.
+    assert.doesNotMatch(html, /<script\b/);
+    assert.doesNotMatch(html, /data-ui="login-form"[\s\S]*?login_submit_attempt/);
+  } finally {
+    env.cleanup();
+  }
+});
+
+test("login GET HTML embeds the submit listener payload when RUM is enabled", async () => {
+  const env = withRumEnvironment({ rumEnabled: true });
+
+  try {
+    getDb(env.dbPath);
+    const { GET } = await importFresh("../app/login/route.js");
+    const request = buildRequest("https://portal.example.com/login");
+
+    const response = await GET(request);
+    const html = await response.text();
+
+    assert.equal(response.status, 200);
+    // The login form's stable data-ui selector is present in BOTH the
+    // form markup and the inline RUM script's listener registration.
+    assert.match(html, /<form[^>]*data-ui="login-form"/);
+    assert.match(html, /\[data-ui="login-form"\]/);
+    assert.match(html, /event_type:\s*"login_submit_attempt"/);
+    assert.match(html, /source:\s*"client"/);
+  } finally {
+    env.cleanup();
+  }
+});
+
 test("applySecurityHeaders inserts script nonces into the script-src directive", async () => {
   const { applySecurityHeaders } = await importFresh("../lib/http.js");
   const response = new Response("ok");
