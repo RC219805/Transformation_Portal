@@ -38,6 +38,7 @@ operator guidance unless they are linked here as canonical documents.
 | Context-aware rendering | [Context-Aware Rendering](../guides/CONTEXT_AWARE_RENDERING.md) | Maintained |
 | PBR processing | [PBR Processor Quickstart](../guides/PBR_PROCESSOR_QUICKSTART.md) | Maintained |
 | Supported formats | [Supported File Formats](../guides/SUPPORTED_FILE_FORMATS.md) | Maintained |
+| Design tokens reference | [Design tokens](../design/tokens.md) | Maintained (generated from `web/shared/shared-ui-tokens.css` + `web/secure-landing/portal-src/styles/tokens.css`) |
 
 ## Governance, CI, And Validation
 

@@ -98,6 +98,13 @@ repos:
         types: [python]
         pass_filenames: false
 
+      - id: check-design-tokens-doc
+        name: Validate generated design tokens reference
+        entry: scripts/setup/run_repo_python.sh scripts/validation/generate_design_tokens_doc.py --check
+        language: system
+        files: ^(web/shared/shared-ui-tokens\.css|web/secure-landing/portal-src/styles/tokens\.css|scripts/validation/generate_design_tokens_doc\.py|docs/design/tokens\.md)$
+        pass_filenames: false
+
   # Local parity with ci-quality-firewall.yml "Check for secrets with gitleaks".
   # CI downloads gitleaks v8.21.2 and runs:
   #     gitleaks detect --config .gitleaks.toml --source . --verbose --no-git --exit-code 1
