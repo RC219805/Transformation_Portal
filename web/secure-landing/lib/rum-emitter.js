@@ -5,15 +5,24 @@
 // browser proxy because server-internal calls have no Origin/Referrer headers
 // to validate.
 //
+// Gate contract:
+//   - The CALLER is the sole feature-flag gate. This emitter does NOT consult
+//     `isPortalRumEnabled()` so paired events (attempt + terminal) cannot
+//     diverge if the env flag flips between calls. The route handler captures
+//     `isPortalRumEnabled()` once per request and short-circuits its own
+//     wrapper before reaching this function.
+//
 // Safety contract:
 //   - Returns synchronously; the caller never awaits.
-//   - Catches every promise rejection internally.
-//   - Wraps fetch in an AbortController with a short timeout so a slow upstream
-//     never keeps the Node event loop alive past the response.
-//   - Emission failure must never alter login response status, redirect, cookie,
-//     session rotation, CSRF handling, or response timing.
+//   - Catches every promise rejection internally so no unhandled rejection
+//     can escape the emitter.
+//   - Times out via `AbortSignal.timeout(...)`, which uses an internally
+//     `unref`'d timer so a slow upstream cannot extend Node process lifetime
+//     past the response.
+//   - Emission failure must never alter login response status, redirect,
+//     cookie, session rotation, CSRF handling, or response timing.
 
-import { getConfig, isPortalRumEnabled } from "./config.js";
+import { getConfig } from "./config.js";
 import { buildUpstreamHeaders, buildUpstreamUrl } from "./proxy.js";
 import { generateTraceparent, normalizeTraceparent } from "./trace.js";
 
@@ -59,7 +68,6 @@ export function emitLoginRumEvent({
   traceparent = "",
 }) {
   if (!LOGIN_EVENT_TYPES.has(eventType)) return;
-  if (!isPortalRumEnabled()) return;
 
   const config = getConfig();
   if (!config.backendApiKey) return;
@@ -98,16 +106,9 @@ export function emitLoginRumEvent({
     metadata,
   });
 
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => {
-    try {
-      controller.abort();
-    } catch {
-      // already aborted
-    }
-  }, RUM_EMIT_TIMEOUT_MS);
-
-  // Detach from the event loop so the caller never awaits and unhandled
+  // AbortSignal.timeout uses an internally unref'd timer so it cannot keep
+  // the Node event loop alive past the response. Detach from the event loop
+  // via Promise.resolve().then so the caller never awaits and unhandled
   // rejections cannot escape.
   void Promise.resolve()
     .then(() =>
@@ -117,14 +118,11 @@ export function emitLoginRumEvent({
         body,
         cache: "no-store",
         keepalive: true,
-        signal: controller.signal,
+        signal: AbortSignal.timeout(RUM_EMIT_TIMEOUT_MS),
         redirect: "manual",
       })
     )
     .catch(() => {
       // best-effort telemetry; never propagate
-    })
-    .finally(() => {
-      clearTimeout(timeoutId);
     });
 }

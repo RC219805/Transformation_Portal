@@ -314,9 +314,10 @@ export async function GET(request) {
 }
 
 export async function POST(request) {
-  // Capture the RUM enable decision once at handler entry. Both the attempt
-  // event and the terminal success/failure event reuse it so a flag flip
-  // mid-request cannot produce inconsistent metrics.
+  // Capture the RUM enable decision once at handler entry. This is the SOLE
+  // gate for paired emissions: the emitter intentionally does not re-check
+  // isPortalRumEnabled() so a flag flip mid-request cannot produce a partial
+  // attempt/terminal pair (one captured but not the other).
   const rumActive = isPortalRumEnabled();
   const attemptStart = Date.now();
   const rumTraceparent = rumActive ? resolveRequestTraceparent(request) : "";

@@ -8,7 +8,7 @@ import { createSign, generateKeyPairSync } from "node:crypto";
 import argon2 from "argon2";
 import { NextRequest } from "next/server.js";
 
-import { getDb, resetDbCache } from "../lib/db.js";
+import { resetDbCache } from "../lib/db.js";
 
 const ENV_KEYS = [
   "NODE_ENV",
