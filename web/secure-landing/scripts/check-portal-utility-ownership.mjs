@@ -136,6 +136,77 @@ function recordClassTokenList(rawClassText, sourceLabel, classTokens) {
   }
 }
 
+function collectStringLiteralBodies(content) {
+  const bodies = [];
+  let index = 0;
+  let state = "code";
+  let quote = "";
+  let body = "";
+
+  while (index < content.length) {
+    const char = content[index];
+    const next = content[index + 1];
+
+    if (state === "code") {
+      if (char === "/" && next === "/") {
+        state = "line-comment";
+        index += 2;
+        continue;
+      }
+      if (char === "/" && next === "*") {
+        state = "block-comment";
+        index += 2;
+        continue;
+      }
+      if (char === "\"" || char === "'" || char === "`") {
+        state = "string";
+        quote = char;
+        body = "";
+        index += 1;
+        continue;
+      }
+      index += 1;
+      continue;
+    }
+
+    if (state === "line-comment") {
+      if (char === "\n" || char === "\r") {
+        state = "code";
+      }
+      index += 1;
+      continue;
+    }
+
+    if (state === "block-comment") {
+      if (char === "*" && next === "/") {
+        state = "code";
+        index += 2;
+        continue;
+      }
+      index += 1;
+      continue;
+    }
+
+    if (char === "\\") {
+      body += content.slice(index, index + 2);
+      index += 2;
+      continue;
+    }
+    if (char === quote) {
+      bodies.push(body);
+      state = "code";
+      quote = "";
+      body = "";
+      index += 1;
+      continue;
+    }
+    body += char;
+    index += 1;
+  }
+
+  return bodies;
+}
+
 function collectUtilityClassTokens() {
   const classTokens = new Map();
   const sourceFiles = [
@@ -151,8 +222,8 @@ function collectUtilityClassTokens() {
     for (const match of content.matchAll(/\bclass=(["'])(.*?)\1/gs)) {
       recordClassTokenList(match[2], sourceLabel, classTokens);
     }
-    for (const match of content.matchAll(/(["'`])((?:\\.|(?!\1)[\s\S])*?)\1/g)) {
-      recordClassTokenList(match[2], sourceLabel, classTokens);
+    for (const literalBody of collectStringLiteralBodies(content)) {
+      recordClassTokenList(literalBody, sourceLabel, classTokens);
     }
   }
 
