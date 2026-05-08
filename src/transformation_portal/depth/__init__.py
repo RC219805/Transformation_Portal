@@ -12,12 +12,22 @@ from typing import Any, Dict, Tuple
 __version__ = "1.0.0"
 __author__ = "Transformation Portal"
 
-__all__ = ["ArchitecturalDepthPipeline", "DepthAnythingV2Model", "DepthCache"]
+__all__ = [
+    "ArchitecturalDepthPipeline",
+    "DepthAnythingV2Model",
+    "DepthCache",
+    "DepthAwareDofOptions",
+    "DepthAwareDofResult",
+    "run_depth_aware_dof",
+]
 
 _LAZY_EXPORTS: Dict[str, Tuple[str, str]] = {
     "ArchitecturalDepthPipeline": (".pipeline", "ArchitecturalDepthPipeline"),
     "DepthAnythingV2Model": (".models.depth_anything_v2", "DepthAnythingV2Model"),
     "DepthCache": (".utils.cache", "DepthCache"),
+    "DepthAwareDofOptions": (".depth_aware_dof", "DepthAwareDofOptions"),
+    "DepthAwareDofResult": (".depth_aware_dof", "DepthAwareDofResult"),
+    "run_depth_aware_dof": (".depth_aware_dof", "run_depth_aware_dof"),
 }
 
 
