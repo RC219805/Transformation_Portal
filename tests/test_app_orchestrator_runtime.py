@@ -2227,7 +2227,13 @@ def test_portal_dispatch_lane_surfaces_live_readiness_reason() -> None:
     assert "Preview-backed validation is refreshing. Dispatch unlocks when the current draft settles." in snapshot_body
     assert "Debug bundle acknowledgement is required before dispatch." in snapshot_body
     assert "detail: DISPATCH_BACKEND_OFFLINE_MESSAGE" in snapshot_body
-    assert "els.dispatchReadinessReason.textContent = readiness.detail;" in guard_body
+    # Banner detail is set via the shared createElement-based renderer so a
+    # live retry-countdown can be appended next to the static detail text
+    # without ever round-tripping through innerHTML.
+    assert "_renderBannerDetailWithRetryCountdown(" in guard_body
+    assert "els.dispatchReadinessReason," in guard_body
+    assert "readiness.detail," in guard_body
+    assert "readiness.retryCountdownAtMs" in guard_body
     assert "els.dispatchReadinessReason.dataset.tone = readiness.tone;" in guard_body
 
 
