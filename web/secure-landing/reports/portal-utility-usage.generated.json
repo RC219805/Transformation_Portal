@@ -2530,9 +2530,10 @@
     },
     {
       "className": "inline",
-      "owner": "review-only",
+      "owner": "static",
       "sources": [
         "public/portal-assets/portal-review.js",
+        "web/secure-landing/portal-src/portal.template.js",
         "web/secure-landing/portal-src/review-surface-deferred.js"
       ],
       "cssFile": "utilities.dynamic.css",

@@ -182,6 +182,7 @@ export function createPortalBootstrapState(now = Date.now()) {
     status: "pending",
     lastErrorReason: "",
     lastHttpStatus: 0,
+    lastRateLimitHint: null,
     activeController: null,
     activeTimeoutId: null,
     lastTransitionAt,
