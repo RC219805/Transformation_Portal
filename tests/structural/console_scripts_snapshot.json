@@ -1,6 +1,7 @@
 {
-  "_version_marker": "0.1.0",
+  "_version_marker": "0.2.0",
   "scripts": {
+    "depth-aware-dof": "transformation_portal.depth.depth_aware_dof:main",
     "lux-depth-v3": "transformation_portal.lux_depth_v3.__main__:app",
     "lux_render": "transformation_portal.pipelines.lux_render_pipeline:main",
     "luxury-tiff-batch": "luxury_tiff_batch_processor.cli:main",

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "transformation-portal"
-version = "0.1.0"
+version = "0.2.0"
 description = "Professional image and video processing toolkit for luxury real estate rendering and architectural visualization."
 readme = "README.md"
 requires-python = ">=3.11"

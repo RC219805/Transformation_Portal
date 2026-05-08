@@ -18,6 +18,8 @@ from typing import Any, Iterable, Literal, Mapping, Optional
 import numpy as np
 from PIL import Image, ImageDraw
 
+from transformation_portal.ingest.canonical_json import dumps_json
+
 from .tools import gaussian_blur_float
 
 try:
@@ -123,8 +125,8 @@ def run_depth_aware_dof(options: DepthAwareDofOptions) -> DepthAwareDofResult:
 
     opts.out_dir.mkdir(parents=True, exist_ok=True)
     stem = opts.source.stem
-    production_tiff = opts.out_dir / f"{stem}_depth_aware_DOF_16bit.tiff"
-    preview_jpeg = opts.out_dir / f"{stem}_depth_aware_DOF_preview_2400px.jpg"
+    production_tiff = opts.out_dir / f"{stem}_depth_aware_DOF_{source.bit_depth}bit.tiff"
+    preview_jpeg = opts.out_dir / f"{stem}_depth_aware_DOF_preview_{opts.preview_long_edge}px.jpg"
     diagnostic_contact_sheet = opts.out_dir / f"{stem}_depth_dof_diagnostic_contact_sheet.jpg"
     summary_json = opts.out_dir / f"{stem}_depth_dof_summary.json"
     package_zip = opts.out_dir / f"{stem}_depth_dof_package.zip"
@@ -161,7 +163,7 @@ def run_depth_aware_dof(options: DepthAwareDofOptions) -> DepthAwareDofResult:
         },
         artifact_hashes=artifact_hashes,
     )
-    summary_json.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    summary_json.write_text(dumps_json(summary, indent=2, sort_keys=True, allow_nan=False) + "\n", encoding="utf-8")
 
     _write_package_zip(
         package_zip,
@@ -247,7 +249,7 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
         return 2
 
     print(
-        json.dumps(
+        dumps_json(
             {
                 "production_tiff": str(result.production_tiff),
                 "preview_jpeg": str(result.preview_jpeg),
@@ -258,6 +260,7 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
                 "depth_convention": result.depth_convention,
             },
             sort_keys=True,
+            allow_nan=False,
         )
     )
     return 0
@@ -272,9 +275,17 @@ def _normalize_options(options: DepthAwareDofOptions) -> DepthAwareDofOptions:
             raise FileNotFoundError(f"{field_name.replace('_', ' ')} not found: {path}")
         if not path.is_file():
             raise ValueError(f"{field_name.replace('_', ' ')} is not a file: {path}")
-    for path in (options.metadata, options.protect_mask, options.sky_mask, options.edge_mask):
+    optional_inputs = (
+        ("metadata", options.metadata),
+        ("protect mask", options.protect_mask),
+        ("sky mask", options.sky_mask),
+        ("edge mask", options.edge_mask),
+    )
+    for field_name, path in optional_inputs:
         if path is not None and not path.exists():
-            raise FileNotFoundError(f"Optional input not found: {path}")
+            raise FileNotFoundError(f"{field_name} not found: {path}")
+        if path is not None and not path.is_file():
+            raise ValueError(f"{field_name} is not a file: {path}")
     if options.focus_depth is not None and not np.isfinite(options.focus_depth):
         raise ValueError("focus_depth must be finite")
     if options.depth_convention is not None and options.depth_convention not in _VALID_CONVENTIONS:
@@ -379,6 +390,8 @@ def _load_depth_npy(depth_path: Path) -> np.ndarray:
     depth = np.load(depth_path, allow_pickle=False)
     if depth.ndim != 2:
         raise ValueError(f"Depth .npy must be a 2D array, got shape {depth.shape}")
+    if depth.shape[0] <= 0 or depth.shape[1] <= 0:
+        raise ValueError(f"Depth .npy must be non-empty with positive height and width, got shape {depth.shape}")
     if not np.issubdtype(depth.dtype, np.floating):
         raise ValueError(f"Depth .npy must use a floating dtype, got {depth.dtype}")
     depth32 = np.asarray(depth, dtype=np.float32)
@@ -651,14 +664,15 @@ def _build_summary(
             "focus_protection": float(options.focus_protection),
             "preview_long_edge": int(options.preview_long_edge),
         },
-        "outputs": {
-            key: {
-                "path": str(path),
-                "sha256": artifact_hashes.get(key),
-            }
-            for key, path in artifacts.items()
-        },
+        "outputs": {key: _artifact_summary(path, artifact_hashes.get(key)) for key, path in artifacts.items()},
     }
+
+
+def _artifact_summary(path: Path, sha256: Optional[str]) -> dict[str, str]:
+    payload = {"path": str(path)}
+    if sha256 is not None:
+        payload["sha256"] = sha256
+    return payload
 
 
 def _write_package_zip(package_zip: Path, members: Mapping[str, Path]) -> None:

@@ -60,6 +60,26 @@ def test_run_depth_aware_dof_uses_metadata_convention_and_writes_package(tmp_pat
     assert summary["depth"]["convention"] == "higher-is-farther"
     assert summary["depth"]["metadata_model"] == "depth_pro"
     assert summary["outputs"]["production_tiff"]["sha256"] == result.artifact_hashes["production_tiff"]
+    assert "sha256" not in summary["outputs"]["summary_json"]
+    assert "sha256" not in summary["outputs"]["package_zip"]
+
+
+def test_output_filenames_reflect_source_depth_and_preview_size(tmp_path):
+    source, depth_path, metadata = _write_fixture(tmp_path)
+
+    result = run_depth_aware_dof(
+        DepthAwareDofOptions(
+            source=source,
+            depth_npy=depth_path,
+            metadata=metadata,
+            out_dir=tmp_path / "out",
+            focus_depth=9.0,
+            preview_long_edge=512,
+        )
+    )
+
+    assert result.production_tiff.name == "source_depth_aware_DOF_16bit.tiff"
+    assert result.preview_jpeg.name == "source_depth_aware_DOF_preview_512px.jpg"
 
 
 def test_missing_metadata_convention_fails_closed(tmp_path):
@@ -91,6 +111,22 @@ def test_depth_npy_requires_float_and_disallows_pickle(tmp_path):
         )
 
 
+def test_empty_depth_npy_fails_closed(tmp_path):
+    source, _depth_path, metadata = _write_fixture(tmp_path)
+    empty_depth = tmp_path / "empty_depth.npy"
+    np.save(empty_depth, np.empty((0, 12), dtype=np.float32))
+
+    with pytest.raises(ValueError, match="non-empty with positive height and width"):
+        run_depth_aware_dof(
+            DepthAwareDofOptions(
+                source=source,
+                depth_npy=empty_depth,
+                metadata=metadata,
+                out_dir=tmp_path / "out",
+            )
+        )
+
+
 def test_depth_source_dimension_mismatch_fails(tmp_path):
     source, _depth_path, metadata = _write_fixture(tmp_path)
     mismatched_depth = tmp_path / "mismatched_depth.npy"
@@ -102,6 +138,23 @@ def test_depth_source_dimension_mismatch_fails(tmp_path):
                 source=source,
                 depth_npy=mismatched_depth,
                 metadata=metadata,
+                out_dir=tmp_path / "out",
+            )
+        )
+
+
+def test_optional_inputs_must_be_files(tmp_path):
+    source, depth_path, _metadata = _write_fixture(tmp_path)
+    metadata_dir = tmp_path / "metadata_dir"
+    metadata_dir.mkdir()
+
+    with pytest.raises(ValueError, match="metadata is not a file"):
+        run_depth_aware_dof(
+            DepthAwareDofOptions(
+                source=source,
+                depth_npy=depth_path,
+                metadata=metadata_dir,
+                depth_convention="higher-is-farther",
                 out_dir=tmp_path / "out",
             )
         )
