@@ -17,6 +17,7 @@ import { defineConfig, devices } from "@playwright/test";
 
 const isCi = Boolean(process.env.CI);
 const baseURL = process.env.PLAYWRIGHT_BASE_URL || "http://127.0.0.1:3000";
+const webServerPort = getWebServerPort(baseURL);
 const frontdoorSmokeUsersJson = JSON.stringify([
   {
     username: "smoke-admin",
@@ -26,6 +27,14 @@ const frontdoorSmokeUsersJson = JSON.stringify([
     role: "admin",
   },
 ]);
+
+function getWebServerPort(playwrightBaseURL) {
+  const url = new URL(playwrightBaseURL);
+  if (url.protocol !== "http:" && url.protocol !== "https:") {
+    throw new Error(`Unsupported PLAYWRIGHT_BASE_URL protocol: ${url.protocol}`);
+  }
+  return url.port || (url.protocol === "https:" ? "443" : "80");
+}
 
 export default defineConfig({
   testDir: "tests/e2e",
@@ -55,7 +64,7 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: "npm run dev -- --port 3000",
+    command: `npm run dev -- --port ${webServerPort}`,
     url: baseURL,
     reuseExistingServer: !isCi,
     timeout: 120_000,
