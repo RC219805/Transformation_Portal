@@ -2158,6 +2158,124 @@ def test_portal_rum_contract_accepts_core_web_vital_from_login_route(
     assert body["data"]["event"]["metric"] == "cls"
 
 
+def test_portal_rum_contract_accepts_login_submit_attempt(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("TP_PORTAL_RUM_ENABLED", "1")
+    monkeypatch.setenv("TP_PORTAL_RUM_ROLLOUT_PERCENT", "100")
+
+    response = client.post(
+        "/v1/portal/rum",
+        json={
+            "event_type": "login_submit_attempt",
+            "route": "/login",
+            "view": "login",
+            "metric": "count",
+            "value": 1,
+            "unit": "count",
+        },
+    )
+    body = response.json()
+
+    assert response.status_code == 200
+    assert body["data"]["accepted"] is True
+    event = body["data"]["event"]
+    assert event["event_type"] == "login_submit_attempt"
+    assert event["route"] == "/login"
+    assert event["view"] == "login"
+    assert event["metric"] == "count"
+    assert event["unit"] == "count"
+    assert event["metadata"] == {}
+
+
+def test_portal_rum_contract_accepts_login_submit_success(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("TP_PORTAL_RUM_ENABLED", "1")
+    monkeypatch.setenv("TP_PORTAL_RUM_ROLLOUT_PERCENT", "100")
+
+    response = client.post(
+        "/v1/portal/rum",
+        json={
+            "event_type": "login_submit_success",
+            "route": "/login",
+            "view": "login",
+            "metric": "duration",
+            "value": 142.5,
+            "unit": "ms",
+        },
+    )
+    body = response.json()
+
+    assert response.status_code == 200
+    assert body["data"]["accepted"] is True
+    event = body["data"]["event"]
+    assert event["event_type"] == "login_submit_success"
+    assert event["metric"] == "duration"
+    assert event["unit"] == "ms"
+    assert event["value"] == 142.5
+    assert event["metadata"] == {}
+
+
+def test_portal_rum_contract_accepts_login_submit_failure_with_failure_code(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("TP_PORTAL_RUM_ENABLED", "1")
+    monkeypatch.setenv("TP_PORTAL_RUM_ROLLOUT_PERCENT", "100")
+
+    response = client.post(
+        "/v1/portal/rum",
+        json={
+            "event_type": "login_submit_failure",
+            "route": "/login",
+            "view": "login",
+            "metric": "duration",
+            "value": 87.0,
+            "unit": "ms",
+            "metadata": {"failure_code": "invalid"},
+        },
+    )
+    body = response.json()
+
+    assert response.status_code == 200
+    assert body["data"]["accepted"] is True
+    event = body["data"]["event"]
+    assert event["event_type"] == "login_submit_failure"
+    assert event["metric"] == "duration"
+    assert event["metadata"] == {"failure_code": "invalid"}
+    # Round-trip discipline: PII must never appear in the persisted event,
+    # even if a caller stuffs it into metadata.
+    assert "username" not in event["metadata"]
+    assert "accessEmail" not in event["metadata"]
+
+
+def test_portal_rum_contract_rejects_login_submit_attempt_with_unknown_metric(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("TP_PORTAL_RUM_ENABLED", "1")
+    monkeypatch.setenv("TP_PORTAL_RUM_ROLLOUT_PERCENT", "100")
+
+    response = client.post(
+        "/v1/portal/rum",
+        json={
+            "event_type": "login_submit_attempt",
+            "route": "/login",
+            "view": "login",
+            "metric": "duration",
+            "value": 10,
+            "unit": "ms",
+        },
+    )
+    body = response.json()
+
+    assert response.status_code == 400
+    assert body["error"]["details"] == {"field": "payload", "reason": "invalid_metric"}
+
+
 def test_readiness_contract_reports_pipeline_status_matrix(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,

@@ -8,6 +8,11 @@ import { applySecurityHeaders, buildRequestUrl, FRONTDOOR_CSP, generateScriptNon
 import { applyPortalReturnTo, resolvePortalReturnTo, validatePortalReturnTo } from "../../lib/return-to.js";
 import { renderRumClientScript } from "../../lib/rum-client.js";
 import {
+  emitLoginRumEvent,
+  LOGIN_RUM_EVENT_TYPES,
+  LOGIN_RUM_FAILURE_CODES
+} from "../../lib/rum-emitter.js";
+import {
   createAnonymousSession,
   destroySession,
   getRemoteAddress,
@@ -19,7 +24,7 @@ import {
   validateCsrfToken
 } from "../../lib/sessions.js";
 import { getConfig } from "../../lib/config.js";
-import { generateTraceparent } from "../../lib/trace.js";
+import { generateTraceparent, resolveRequestTraceparent } from "../../lib/trace.js";
 import { validateOriginAndReferrer } from "../../lib/request-security.js";
 import { verifyUserCredentials } from "../../lib/users.js";
 
@@ -309,6 +314,27 @@ export async function GET(request) {
 }
 
 export async function POST(request) {
+  // Capture the RUM enable decision once at handler entry. Both the attempt
+  // event and the terminal success/failure event reuse it so a flag flip
+  // mid-request cannot produce inconsistent metrics.
+  const rumActive = isPortalRumEnabled();
+  const attemptStart = Date.now();
+  const rumTraceparent = rumActive ? resolveRequestTraceparent(request) : "";
+  const emitLoginRum = (eventType, failureCode = null) => {
+    if (!rumActive) return;
+    const value = eventType === LOGIN_RUM_EVENT_TYPES.ATTEMPT
+      ? 1
+      : Math.max(0, Date.now() - attemptStart);
+    emitLoginRumEvent({
+      eventType,
+      value,
+      failureCode,
+      traceparent: rumTraceparent
+    });
+  };
+
+  emitLoginRum(LOGIN_RUM_EVENT_TYPES.ATTEMPT);
+
   let session = getSessionFromRequest(request, { touch: false });
   if (!session) {
     session = createAnonymousSession();
@@ -319,6 +345,7 @@ export async function POST(request) {
       path: "/login",
       remoteAddr: getRemoteAddress(request)
     });
+    emitLoginRum(LOGIN_RUM_EVENT_TYPES.FAILURE, LOGIN_RUM_FAILURE_CODES.CSRF);
     return redirectToLogin(request, "csrf", session);
   }
 
@@ -330,16 +357,19 @@ export async function POST(request) {
       path: "/login",
       remoteAddr: getRemoteAddress(request)
     });
+    emitLoginRum(LOGIN_RUM_EVENT_TYPES.FAILURE, LOGIN_RUM_FAILURE_CODES.CSRF);
     return redirectToLogin(request, "csrf", session, requestedReturnTo);
   }
 
   const config = getConfig();
   if (!config.users.length) {
+    emitLoginRum(LOGIN_RUM_EVENT_TYPES.FAILURE, LOGIN_RUM_FAILURE_CODES.CONFIGURATION);
     return redirectToLogin(request, "configuration", session, requestedReturnTo);
   }
 
   const accessContext = await resolveAccessContext(request);
   if (accessContext.errorCode === "configuration") {
+    emitLoginRum(LOGIN_RUM_EVENT_TYPES.FAILURE, LOGIN_RUM_FAILURE_CODES.CONFIGURATION);
     return redirectToLogin(request, "configuration", session, requestedReturnTo);
   }
   if (!accessContext.accessEmail && !accessContext.bypass) {
@@ -349,6 +379,7 @@ export async function POST(request) {
       assertedEmail: accessContext.assertedEmail,
       errorCode: accessContext.errorCode
     });
+    emitLoginRum(LOGIN_RUM_EVENT_TYPES.FAILURE, LOGIN_RUM_FAILURE_CODES.ACCESS);
     return redirectToLogin(request, "access", session, requestedReturnTo);
   }
 
@@ -363,6 +394,7 @@ export async function POST(request) {
       accessEmail: accessContext.accessEmail,
       remoteAddr
     });
+    emitLoginRum(LOGIN_RUM_EVENT_TYPES.FAILURE, LOGIN_RUM_FAILURE_CODES.THROTTLED);
     return redirectToLogin(request, "throttled", session, requestedReturnTo);
   }
 
@@ -385,6 +417,7 @@ export async function POST(request) {
       remoteAddr,
       bypass: accessContext.bypass
     });
+    emitLoginRum(LOGIN_RUM_EVENT_TYPES.FAILURE, LOGIN_RUM_FAILURE_CODES.INVALID);
     return redirectToLogin(request, "invalid", session, requestedReturnTo);
   }
 
@@ -400,6 +433,8 @@ export async function POST(request) {
     remoteAddr,
     bypass: accessContext.bypass
   });
+
+  emitLoginRum(LOGIN_RUM_EVENT_TYPES.SUCCESS);
 
   const response = applySecurityHeaders(
     NextResponse.redirect(buildRequestUrl(request, resolvePortalReturnTo(requestedReturnTo)), 303)
