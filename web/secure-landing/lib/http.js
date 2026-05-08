@@ -96,14 +96,48 @@ export function buildRequestUrl(request, pathname) {
   return url;
 }
 
-export function applySecurityHeaders(response, { csp = null } = {}) {
+export function generateScriptNonce() {
+  const cryptoImpl = globalThis.crypto;
+  if (!cryptoImpl || typeof cryptoImpl.getRandomValues !== "function") {
+    throw new Error("Secure random source unavailable for script nonce generation");
+  }
+  const bytes = cryptoImpl.getRandomValues(new Uint8Array(16));
+  return Buffer.from(bytes).toString("base64");
+}
+
+function applyScriptNonceToCsp(csp, scriptNonce) {
+  const nonceToken = `'nonce-${scriptNonce}'`;
+  let scriptDirectiveUpdated = false;
+  const directives = String(csp || "")
+    .split(";")
+    .map((directive) => directive.trim())
+    .filter(Boolean)
+    .map((directive) => {
+      const [name, ...tokens] = directive.split(/\s+/);
+      if (String(name || "").toLowerCase() !== "script-src") {
+        return directive;
+      }
+      scriptDirectiveUpdated = true;
+      const sourceTokens = tokens.filter((token) => token !== "'none'" && token !== nonceToken);
+      return ["script-src", nonceToken, ...sourceTokens].join(" ");
+    });
+
+  if (!scriptDirectiveUpdated) {
+    throw new Error("CSP script-src directive required when scriptNonce is provided");
+  }
+
+  return directives.join("; ");
+}
+
+export function applySecurityHeaders(response, { csp = null, scriptNonce = null } = {}) {
   for (const [name, value] of Object.entries(BASE_SECURITY_HEADERS)) {
     if (!response.headers.has(name)) {
       response.headers.set(name, value);
     }
   }
   if (csp) {
-    response.headers.set("Content-Security-Policy", csp);
+    const finalCsp = scriptNonce ? applyScriptNonceToCsp(csp, scriptNonce) : csp;
+    response.headers.set("Content-Security-Policy", finalCsp);
   }
   return response;
 }

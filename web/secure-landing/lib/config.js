@@ -11,6 +11,14 @@ export function isLocalAccessBypassEnabled(env = process.env) {
   return (env.NODE_ENV || "development") === "development" && env.TP_ALLOW_LOCAL_ACCESS_BYPASS === "1";
 }
 
+export function isTruthyEnvFlag(value) {
+  return ["1", "true", "yes", "on"].includes(String(value || "").trim().toLowerCase());
+}
+
+export function isPortalRumEnabled(env = process.env) {
+  return isTruthyEnvFlag(env.TP_PORTAL_RUM_ENABLED);
+}
+
 export function normalizeUsername(value) {
   return String(value || "").trim().toLowerCase();
 }

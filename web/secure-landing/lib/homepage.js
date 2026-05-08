@@ -411,7 +411,10 @@ function renderReleaseBundlePreview() {
   </section>`;
 }
 
-export function renderHomepage() {
+export function renderHomepage({ rumScript = "", scriptNonce = null } = {}) {
+  const rumScriptTag = rumScript && scriptNonce
+    ? `<script nonce="${escapeHtml(scriptNonce)}">${rumScript}</script>`
+    : "";
   return `<!DOCTYPE html>
 <html lang="en">
   <head>
@@ -653,6 +656,7 @@ export function renderHomepage() {
         <a class="site-link" href="/login" data-ui="homepage-footer-login">Operator Login</a>
       </div>
     </footer>
+    ${rumScriptTag}
   </body>
 </html>`;
 }

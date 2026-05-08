@@ -4,6 +4,7 @@ import { NextResponse } from "next/server.js";
 
 import { revokeSessionOnAccessFailure, resolveAuthenticatedAccessSession } from "../../../lib/access.js";
 import { audit } from "../../../lib/audit.js";
+import { isPortalRumEnabled } from "../../../lib/config.js";
 import { applySecurityHeaders } from "../../../lib/http.js";
 import {
   auditManagedSurfaceFailure,
@@ -57,7 +58,7 @@ function resolveReviewSurfaceDeferred(session, env = process.env) {
 }
 
 function resolveRumTelemetry(session, env = process.env) {
-  if (String(env.TP_PORTAL_RUM_ENABLED || "").trim().toLowerCase() !== "1") {
+  if (!isPortalRumEnabled(env)) {
     return false;
   }
   return resolvePortalRollout(session, "TP_PORTAL_RUM_ROLLOUT_PERCENT", env);
