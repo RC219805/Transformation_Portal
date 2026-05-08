@@ -1199,6 +1199,10 @@ test("portal CSS lint script checks generated artifact freshness and architectur
   assert.match(runNodeScript("scripts/check-portal-css-contract.mjs"), /portal css contract: OK/);
   assert.match(runNodeScript("scripts/check-portal-css-architecture.mjs"), /portal css architecture: OK/);
   assert.match(runNodeScript("scripts/check-portal-utility-ownership.mjs"), /portal utility ownership: OK/);
+  assert.match(
+    runNodeScript("scripts/check-portal-utility-ownership.mjs", "--self-test-tokenizer"),
+    /portal utility ownership tokenizer: OK/
+  );
 
   const expectedPortalTemplateSource = "web/secure-landing/portal-src/portal.template.js";
   const utilityOwnership = JSON.parse(readFileSync(UTILITY_OWNERSHIP_PATH, "utf8"));

@@ -1,3 +1,4 @@
+import assert from "node:assert/strict";
 import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -26,6 +27,7 @@ const args = new Set(process.argv.slice(2));
 const WRITE_OWNERSHIP = args.has("--write-ownership");
 const WRITE_REPORT = args.has("--write-report");
 const WRITE_SPLIT = args.has("--write-split");
+const SELF_TEST_TOKENIZER = args.has("--self-test-tokenizer");
 
 const UTILITY_EXACT_CLASSES = new Set([
   "absolute",
@@ -73,6 +75,21 @@ const DYNAMIC_UTILITY_TOKENS = new Set([
   "pointer-events-auto",
   "pointer-events-none",
   "sr-only"
+]);
+const REGEX_LITERAL_PREFIX_KEYWORDS = new Set([
+  "await",
+  "case",
+  "delete",
+  "do",
+  "else",
+  "in",
+  "instanceof",
+  "of",
+  "return",
+  "throw",
+  "typeof",
+  "void",
+  "yield"
 ]);
 
 function relativePath(filePath) {
@@ -136,12 +153,39 @@ function recordClassTokenList(rawClassText, sourceLabel, classTokens) {
   }
 }
 
+function isRegexLiteralStart(content, slashIndex) {
+  let index = slashIndex - 1;
+  while (index >= 0 && /\s/.test(content[index])) {
+    index -= 1;
+  }
+  if (index < 0) {
+    return true;
+  }
+
+  const previous = content[index];
+  if ("([{=,:;!&|?+-*~^<>%".includes(previous)) {
+    return true;
+  }
+
+  if (/[A-Za-z0-9_$]/.test(previous)) {
+    let wordStart = index;
+    while (wordStart >= 0 && /[A-Za-z0-9_$]/.test(content[wordStart])) {
+      wordStart -= 1;
+    }
+    const word = content.slice(wordStart + 1, index + 1);
+    return REGEX_LITERAL_PREFIX_KEYWORDS.has(word);
+  }
+
+  return false;
+}
+
 function collectStringLiteralBodies(content) {
   const bodies = [];
   let index = 0;
   let state = "code";
   let quote = "";
   let body = "";
+  let inRegexClass = false;
 
   while (index < content.length) {
     const char = content[index];
@@ -156,6 +200,12 @@ function collectStringLiteralBodies(content) {
       if (char === "/" && next === "*") {
         state = "block-comment";
         index += 2;
+        continue;
+      }
+      if (char === "/" && isRegexLiteralStart(content, index)) {
+        state = "regex";
+        inRegexClass = false;
+        index += 1;
         continue;
       }
       if (char === "\"" || char === "'" || char === "`") {
@@ -187,6 +237,33 @@ function collectStringLiteralBodies(content) {
       continue;
     }
 
+    if (state === "regex") {
+      if (char === "\\") {
+        index += 2;
+        continue;
+      }
+      if (char === "[" && !inRegexClass) {
+        inRegexClass = true;
+        index += 1;
+        continue;
+      }
+      if (char === "]" && inRegexClass) {
+        inRegexClass = false;
+        index += 1;
+        continue;
+      }
+      if (char === "/" && !inRegexClass) {
+        index += 1;
+        while (index < content.length && /[A-Za-z]/.test(content[index])) {
+          index += 1;
+        }
+        state = "code";
+        continue;
+      }
+      index += 1;
+      continue;
+    }
+
     if (char === "\\") {
       body += content.slice(index, index + 2);
       index += 2;
@@ -205,6 +282,18 @@ function collectStringLiteralBodies(content) {
   }
 
   return bodies;
+}
+
+function runTokenizerSelfTest() {
+  const bodies = collectStringLiteralBodies(`
+    const escaped = String(value).replace(/["'\\/[\\]]+/g, '\\\\"');
+    const cls = "absolute";
+    const className = \`bg-red-100\`;
+    const classAttr = '<span class="inline"></span>';
+    const ratio = total / divisor / 2;
+  `);
+  assert.deepEqual(bodies, ['\\\\"', "absolute", "bg-red-100", '<span class="inline"></span>']);
+  console.log("portal utility ownership tokenizer: OK");
 }
 
 function collectUtilityClassTokens() {
@@ -519,6 +608,11 @@ function compareJsonFile(filePath, expected, failures) {
 }
 
 const failures = [];
+
+if (SELF_TEST_TOKENIZER) {
+  runTokenizerSelfTest();
+  process.exit(0);
+}
 
 if (WRITE_SPLIT) {
   const { counters, files } = buildSplitCss();
