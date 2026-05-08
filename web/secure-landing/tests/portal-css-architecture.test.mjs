@@ -23,6 +23,8 @@ const PORTAL_CSS_INDEX_PATH = path.join(FRONTDOOR_ROOT, "portal-src", "styles", 
 const PORTAL_CSS_ASSET_PATH = path.join(REPO_ROOT, "public", "portal-assets", "portal.css");
 const COMPAT_HOLD_CSS_PATH = path.join(FRONTDOOR_ROOT, "portal-src", "styles", "utilities.compat-hold.css");
 const OVERRIDES_COMPAT_CSS_PATH = path.join(FRONTDOOR_ROOT, "portal-src", "styles", "overrides.compat.css");
+const UTILITY_OWNERSHIP_PATH = path.join(FRONTDOOR_ROOT, "portal-src", "styles", "utility-ownership.json");
+const UTILITY_USAGE_REPORT_PATH = path.join(FRONTDOOR_ROOT, "reports", "portal-utility-usage.generated.json");
 const OWNERSHIP_DRAIN_REPORT_PATH = path.join(FRONTDOOR_ROOT, "reports", "portal-css-ownership-drain.json");
 const SENTINEL_FIXTURE_DIR = path.join(FRONTDOOR_ROOT, "tests", "fixtures", "sentinel");
 const ARCHITECTURE_SCRIPT_PATH = path.join(FRONTDOOR_ROOT, "scripts", "check-portal-css-architecture.mjs");
@@ -1197,6 +1199,21 @@ test("portal CSS lint script checks generated artifact freshness and architectur
   assert.match(runNodeScript("scripts/check-portal-css-contract.mjs"), /portal css contract: OK/);
   assert.match(runNodeScript("scripts/check-portal-css-architecture.mjs"), /portal css architecture: OK/);
   assert.match(runNodeScript("scripts/check-portal-utility-ownership.mjs"), /portal utility ownership: OK/);
+  assert.match(
+    runNodeScript("scripts/check-portal-utility-ownership.mjs", "--self-test-tokenizer"),
+    /portal utility ownership tokenizer: OK/
+  );
+
+  const expectedPortalTemplateSource = "web/secure-landing/portal-src/portal.template.js";
+  const utilityOwnership = JSON.parse(readFileSync(UTILITY_OWNERSHIP_PATH, "utf8"));
+  assert.ok(
+    utilityOwnership.utilities.absolute.sources.includes(expectedPortalTemplateSource),
+    "absolute utility ownership must include portal template string literals"
+  );
+
+  const utilityReport = JSON.parse(readFileSync(UTILITY_USAGE_REPORT_PATH, "utf8"));
+  const absoluteUsage = utilityReport.utilities.find((entry) => entry.className === "absolute");
+  assert.ok(absoluteUsage?.sources.includes(expectedPortalTemplateSource));
 });
 
 test("portal CSS sentinel fixtures enforce comments-only architecture", () => {

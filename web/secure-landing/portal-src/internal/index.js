@@ -3,6 +3,7 @@ export * from "./bootstrap-auth.js";
 export * from "./dom-contract.js";
 export * from "./rate-limit-retry.js";
 export * from "./render-surfaces.js";
+export * from "./retry-countdown.js";
 export * from "./rum.js";
 export * from "./routing.js";
 export * from "./state.js";

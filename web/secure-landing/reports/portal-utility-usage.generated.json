@@ -762,10 +762,11 @@
     },
     {
       "className": "cursor-not-allowed",
-      "owner": "review-only",
+      "owner": "static",
       "sources": [
         "public/portal-assets/portal-review.js",
         "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js",
         "web/secure-landing/portal-src/review-surface-deferred.js"
       ],
       "cssFile": "utilities.required.css",
@@ -1745,7 +1746,8 @@
       "owner": "static",
       "sources": [
         "portal.html",
-        "public/portal-assets/portal.js"
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
       ],
       "cssFile": "utilities.required.css",
       "cssOwners": [
@@ -1911,7 +1913,8 @@
       "sources": [
         "portal.html",
         "public/portal-assets/portal.js",
-        "web/secure-landing/portal-src/build-surface-deferred.js"
+        "web/secure-landing/portal-src/build-surface-deferred.js",
+        "web/secure-landing/portal-src/portal.template.js"
       ],
       "cssFile": "utilities.required.css",
       "cssOwners": [
@@ -3462,7 +3465,8 @@
       "className": "opacity-60",
       "owner": "static",
       "sources": [
-        "public/portal-assets/portal.js"
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
       ],
       "cssFile": "utilities.required.css",
       "cssOwners": [
@@ -4430,7 +4434,9 @@
       "className": "sr-only",
       "owner": "static",
       "sources": [
-        "portal.html"
+        "portal.html",
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
       ],
       "cssFile": "utilities.required.css",
       "cssOwners": [
@@ -4760,7 +4766,8 @@
       "owner": "static",
       "sources": [
         "portal.html",
-        "public/portal-assets/portal.js"
+        "public/portal-assets/portal.js",
+        "web/secure-landing/portal-src/portal.template.js"
       ],
       "cssFile": "utilities.required.css",
       "cssOwners": [

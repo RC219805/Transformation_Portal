@@ -264,6 +264,151 @@ test("native EventSource path is not changed by this commit", () => {
   );
 });
 
+test("retry-after countdown is wired into the operator recovery banner", () => {
+  // Bootstrap state carries the latest hint so the recovery banner renderer
+  // can pick it up out-of-band from the per-request rateLimitHint argument.
+  assert.match(
+    portalTemplate,
+    /state\.bootstrap\.lastRateLimitHint = rateLimitHint && Number\(rateLimitHint\?\.retryAtMs\) > 0/
+  );
+  // The hint is cleared whenever the bootstrap retry concludes (success or
+  // terminal outcome) so a stale countdown never lingers past the cooldown.
+  assert.match(
+    portalTemplate,
+    /state\.bootstrap\.lastRateLimitHint = null;\s*\n\s*_recordBootstrapRetryEvent/
+  );
+  // The failure-details function accepts the hint and surfaces retryAtMs on
+  // the rate_limited branch only.
+  assert.match(
+    portalTemplate,
+    /function _bootstrapFailureDetails\(reason = '', httpStatus = 0, message = '', rateLimitHint = null\)/
+  );
+  assert.match(
+    portalTemplate,
+    /reason: 'rate_limited',\s*\n\s*retryable: true,\s*\n\s*toastMessage:[^\n]*\n\s*actionMessage:[^\n]*\n\s*retryAtMs/
+  );
+  // The recovery banner snapshot threads state.bootstrap.lastRateLimitHint
+  // into the failure-details call.
+  assert.match(
+    portalTemplate,
+    /_bootstrapFailureDetails\(\s*\n?\s*state\.bootstrap\.lastErrorReason,\s*\n?\s*state\.bootstrap\.lastHttpStatus,\s*\n?\s*'',\s*\n?\s*state\.bootstrap\.lastRateLimitHint\s*\n?\s*\)/
+  );
+  // The banner data structure exposes retryCountdownAtMs to the renderer.
+  assert.match(portalTemplate, /retryCountdownAtMs:\s*retryAtMs/);
+});
+
+test("retry-after countdown banner uses createElement, never inline HTML", () => {
+  // The shared banner renderer is the only consumer; both surfaces call it.
+  const renderHelperStart = portalTemplate.indexOf(
+    "function _renderBannerDetailWithRetryCountdown"
+  );
+  assert.ok(renderHelperStart >= 0, "expected _renderBannerDetailWithRetryCountdown helper");
+  const renderHelperEnd = portalTemplate.indexOf("\nfunction ", renderHelperStart + 1);
+  const renderHelperBody = portalTemplate.slice(
+    renderHelperStart,
+    renderHelperEnd > renderHelperStart ? renderHelperEnd : portalTemplate.length
+  );
+  // Discipline guards: never inject inline HTML through textContent /
+  // detail strings; the countdown is always built via createElement.
+  assert.ok(
+    !/innerHTML/.test(renderHelperBody),
+    "renderer must never use innerHTML for the countdown placeholder"
+  );
+  assert.match(renderHelperBody, /document\.createElement\('span'\)/);
+  assert.match(renderHelperBody, /setAttribute\('data-retry-countdown'/);
+  assert.match(renderHelperBody, /setAttribute\('aria-hidden', 'true'\)/);
+  // The static detail text is set via textContent so caller-supplied
+  // strings cannot inject markup.
+  assert.match(renderHelperBody, /detailEl\.textContent = String\(detailText \|\| ''\)/);
+  // Countdown text comes from the helper, not from string concatenation.
+  assert.match(renderHelperBody, /portalInternals\.formatRetryCountdown/);
+  // Active countdown is tracked in a per-element WeakMap so banner
+  // re-renders cancel the previous countdown deterministically.
+  assert.match(portalTemplate, /const _activeRetryCountdownCancellers = new WeakMap\(\)/);
+  // Cancellation is inlined at the top of the renderer so a re-render
+  // always supersedes the prior countdown.
+  assert.match(
+    renderHelperBody,
+    /_activeRetryCountdownCancellers\.get\(detailEl\)/
+  );
+  assert.match(
+    renderHelperBody,
+    /_activeRetryCountdownCancellers\.delete\(detailEl\)/
+  );
+  // Single source of truth for the initial value: the helper's synchronous
+  // first onTick populates the visible span, never a manual pre-fill that
+  // could observe a different Date.now() boundary.
+  assert.ok(
+    !/Math\.ceil\(\(targetMs - Date\.now\(\)\) \/ 1000\)/.test(renderHelperBody),
+    "renderer must not pre-compute the initial countdown value before startRetryCountdown"
+  );
+});
+
+test("retry-after countdown banner provides an sr-only aria-live mirror", () => {
+  const renderHelperStart = portalTemplate.indexOf(
+    "function _renderBannerDetailWithRetryCountdown"
+  );
+  const renderHelperEnd = portalTemplate.indexOf("\nfunction ", renderHelperStart + 1);
+  const renderHelperBody = portalTemplate.slice(
+    renderHelperStart,
+    renderHelperEnd > renderHelperStart ? renderHelperEnd : portalTemplate.length
+  );
+  // A second sr-only span carries the countdown for screen readers, with
+  // aria-live="polite" + aria-atomic="true" so updates are announced as
+  // single units at the next pause in user activity.
+  assert.match(renderHelperBody, /srSpan\.className = 'sr-only'/);
+  assert.match(renderHelperBody, /setAttribute\('aria-live', 'polite'\)/);
+  assert.match(renderHelperBody, /setAttribute\('aria-atomic', 'true'\)/);
+  assert.match(renderHelperBody, /setAttribute\('data-retry-countdown-sr'/);
+  // The sr-only span updates at coarse cadence (initial + every 10s + the
+  // last 5s + completion) to avoid 1Hz announcement spam.
+  assert.match(renderHelperBody, /secondsRemaining <= 5 \|\| secondsRemaining % 10 === 0/);
+  // On completion, the sr-only span ALWAYS gets the final "Retrying now…"
+  // text without going through the milestone gate.
+  const onCompleteSection = renderHelperBody.slice(
+    renderHelperBody.indexOf("onComplete:")
+  );
+  assert.match(onCompleteSection, /srSpan\.textContent = text/);
+});
+
+test("dispatch-readiness banner surfaces the config-preview countdown", () => {
+  // A module-local slot persists the config-preview hint between fetches so
+  // the dispatch readiness snapshot can pick it up.
+  assert.match(portalTemplate, /let configPreviewLastRateLimitHint = null/);
+  // Cleared on terminal success / cancellation.
+  assert.match(
+    portalTemplate,
+    /configPreviewLastRateLimitHint = null;\s*\n\s*\}\s*\n\s*function _scheduleConfigPreviewServiceRetry/
+  );
+  // Persisted only when the hint carries a positive retryAtMs.
+  assert.match(
+    portalTemplate,
+    /configPreviewLastRateLimitHint = rateLimitHint && Number\(rateLimitHint\?\.retryAtMs\) > 0/
+  );
+  // The dispatch-readiness snapshot returns retryCountdownAtMs only when
+  // the failure is service_failure AND there is a usable hint.
+  assert.match(
+    portalTemplate,
+    /previewFailure\.reason === 'service_failure'\s*\n\s*&& configPreviewLastRateLimitHint/
+  );
+  // The consumer at _syncBootstrapGuardedControls uses the createElement
+  // renderer rather than the prior textContent assignment.
+  assert.match(
+    portalTemplate,
+    /_renderBannerDetailWithRetryCountdown\(\s*\n?\s*els\.dispatchReadinessReason,\s*\n?\s*readiness\.detail,\s*\n?\s*readiness\.retryCountdownAtMs/
+  );
+});
+
+test("retry-countdown helper is exported from portalInternals", () => {
+  // Smoke contract: the helper is reachable through portalInternals so the
+  // portal bundle's IIFE can call it without re-importing.
+  const indexSource = readFileSync(
+    path.resolve(__dirname, "../portal-src/internal/index.js"),
+    "utf8"
+  );
+  assert.match(indexSource, /export \* from "\.\/retry-countdown\.js"/);
+});
+
 test("mutating POSTs (job dispatch / upload) are not silently auto-replayed", () => {
   // Sanity guard: the parser is only consumed in the two retry sites
   // wired above. Searching the source for parseRateLimitRetryHint should

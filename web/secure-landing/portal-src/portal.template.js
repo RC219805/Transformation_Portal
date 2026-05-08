@@ -96,6 +96,10 @@ let lastHealthCheckAt = 0;
 let configPreviewTimerId = null;
 let configPreviewServiceRetryTimerId = null;
 let configPreviewServiceRetryAttempts = 0;
+// Latest Retry-After / X-RateLimit-Reset hint observed for the config-preview
+// fetch path, parked here so the dispatch readiness banner can surface a live
+// countdown to the user. Cleared on success and on _clearConfigPreviewServiceRetry.
+let configPreviewLastRateLimitHint = null;
 let transientDraftPersistTimerId = null;
 let transientDraftPersistIdleId = null;
 let deferredReviewSurfaceApi = null;
@@ -1356,8 +1360,16 @@ function _operatorRecoveryActionSnapshot(context) {
 
     const failure = reconnectBlocked
         ? _bootstrapFailureDetails('auth_failure', 401)
-        : _bootstrapFailureDetails(state.bootstrap.lastErrorReason, state.bootstrap.lastHttpStatus);
+        : _bootstrapFailureDetails(
+            state.bootstrap.lastErrorReason,
+            state.bootstrap.lastHttpStatus,
+            '',
+            state.bootstrap.lastRateLimitHint
+        );
     const tone = failure.retryable ? 'warning' : 'blocked';
+    const retryAtMs = Number.isFinite(Number(failure.retryAtMs)) && Number(failure.retryAtMs) > 0
+        ? Number(failure.retryAtMs)
+        : null;
 
     if (failure.reason === 'auth_failure' || reconnectBlocked) {
         return {
@@ -1382,6 +1394,7 @@ function _operatorRecoveryActionSnapshot(context) {
     return {
         title: failure.reason === 'access_outage' ? 'Managed access is degraded' : 'Portal recovery is required',
         detail: failure.actionMessage,
+        retryCountdownAtMs: retryAtMs,
         tone,
         primary: _operatorAction('retry_status_check', 'Retry Status Check', {
             jobId: context.jobId,
@@ -1607,16 +1620,101 @@ function _renderContextualActionRow(container, primaryButton, secondaryButton, p
     _renderOperatorActionButton(secondaryButton, secondaryAction);
 }
 
+// WeakMap keyed by a banner's detail DOM element to its active countdown's
+// cancel function. Per-element keying lets each banner surface (operator
+// action rail, dispatch readiness reason) track its own countdown so a
+// re-render of one cannot cancel the other.
+const _activeRetryCountdownCancellers = new WeakMap();
+
+// Render a banner's detail text and, when a rate-limit Retry-After hint is
+// present, append a live countdown span built via createElement (never inline
+// HTML). The static detail text stays unchanged for screen-reader semantics;
+// the countdown carries aria-hidden="true" so it is purely visual. Replacing
+// the banner cancels any previously active countdown for this DOM element.
+function _renderBannerDetailWithRetryCountdown(detailEl, detailText, retryCountdownAtMs) {
+    if (!detailEl) return;
+    const priorCancel = _activeRetryCountdownCancellers.get(detailEl);
+    if (typeof priorCancel === 'function') {
+        try { priorCancel(); } catch (_err) { /* best-effort */ }
+    }
+    _activeRetryCountdownCancellers.delete(detailEl);
+    detailEl.textContent = String(detailText || '');
+    const targetMs = Number(retryCountdownAtMs);
+    if (!Number.isFinite(targetMs) || targetMs <= Date.now()) return;
+    if (typeof document === 'undefined' || !document?.createElement) return;
+
+    // Visible countdown — aria-hidden so screen readers don't hear a 1Hz
+    // ticker. The synchronous first onTick from startRetryCountdown writes
+    // its initial textContent before we append it, so the span is never
+    // observed in an empty state by the user or by layout.
+    const span = document.createElement('span');
+    span.setAttribute('data-retry-countdown', '');
+    span.setAttribute('aria-hidden', 'true');
+
+    // Screen-reader companion — an sr-only aria-live region that mirrors the
+    // countdown state at coarse cadence (every 10s + the final 5s + the
+    // "Retrying now" transition) to give assistive-tech users meaningful
+    // updates without per-second announcement spam.
+    const srSpan = document.createElement('span');
+    srSpan.className = 'sr-only';
+    srSpan.setAttribute('data-retry-countdown-sr', '');
+    srSpan.setAttribute('aria-live', 'polite');
+    srSpan.setAttribute('aria-atomic', 'true');
+
+    let initialAnnounced = false;
+    const _shouldAnnounce = (secondsRemaining) => {
+        if (!initialAnnounced) {
+            initialAnnounced = true;
+            return true;
+        }
+        return secondsRemaining <= 5 || secondsRemaining % 10 === 0;
+    };
+
+    const cancel = portalInternals.startRetryCountdown({
+        retryAtMs: targetMs,
+        onTick: (secondsRemaining) => {
+            const text = portalInternals.formatRetryCountdown(secondsRemaining);
+            span.textContent = text;
+            if (_shouldAnnounce(secondsRemaining)) {
+                srSpan.textContent = text;
+            }
+        },
+        onComplete: () => {
+            const text = portalInternals.formatRetryCountdown(0);
+            span.textContent = text;
+            srSpan.textContent = text;
+            _activeRetryCountdownCancellers.delete(detailEl);
+        }
+    });
+    detailEl.appendChild(document.createTextNode(' '));
+    detailEl.appendChild(span);
+    detailEl.appendChild(srSpan);
+    _activeRetryCountdownCancellers.set(detailEl, cancel);
+}
+
 function renderOperatorActionRail() {
     if (!els.consoleActionRail) return;
     const visible = ['overview', 'build', 'operate', 'review'].includes(state.currentView);
     els.consoleActionRail.classList.toggle('hidden', !visible);
-    if (!visible) return;
+    if (!visible) {
+        // Cancel any active countdown when the rail is hidden so the timer
+        // doesn't keep ticking against a detached element.
+        if (els.consoleActionRailDetail) {
+            _renderBannerDetailWithRetryCountdown(els.consoleActionRailDetail, '', null);
+        }
+        return;
+    }
 
     const snapshot = _operatorActionRailSnapshot();
     els.consoleActionRail.dataset.tone = snapshot.tone || 'info';
     if (els.consoleActionRailTitle) els.consoleActionRailTitle.textContent = snapshot.title;
-    if (els.consoleActionRailDetail) els.consoleActionRailDetail.textContent = snapshot.detail;
+    if (els.consoleActionRailDetail) {
+        _renderBannerDetailWithRetryCountdown(
+            els.consoleActionRailDetail,
+            snapshot.detail,
+            snapshot.retryCountdownAtMs
+        );
+    }
     if (els.consoleActionRailHint) {
         els.consoleActionRailHint.innerHTML = _operatorActionHintHtml();
     }
@@ -1829,11 +1927,21 @@ function _dispatchReadinessSnapshot(payload = null) {
         }
         if (preview.status === 'error') {
             const previewFailure = _previewFailureDetails(preview);
+            // Surface a live countdown only when the failure is a service
+            // failure (mapped from 429) AND we have a usable Retry-After hint.
+            // Other failure modes (auth, validation) do not carry a cooldown.
+            const retryAtMs = previewFailure.reason === 'service_failure'
+                && configPreviewLastRateLimitHint
+                && Number.isFinite(Number(configPreviewLastRateLimitHint.retryAtMs))
+                && Number(configPreviewLastRateLimitHint.retryAtMs) > Date.now()
+                ? Number(configPreviewLastRateLimitHint.retryAtMs)
+                : null;
             return {
                 canRun: false,
                 tone: 'blocked',
                 detail: String(previewFailure.luxBlockedMessage || 'Preview-backed validation needs attention before dispatch.')
                     .replace(/^(BLOCKED|WARNING):\s*/i, ''),
+                retryCountdownAtMs: retryAtMs,
             };
         }
         if (Array.isArray(preview.field_errors) && preview.field_errors.length > 0) {
@@ -4385,13 +4493,18 @@ function _hasBootstrapRetryHistory() {
 function _finalizeBootstrapRetry(outcome, details = null) {
     _clearBootstrapRetryTimer();
     state.bootstrap.retry.deadlineAt = 0;
+    state.bootstrap.lastRateLimitHint = null;
     _recordBootstrapRetryEvent(outcome, details);
 }
 
-function _bootstrapFailureDetails(reason = '', httpStatus = 0, message = '') {
+function _bootstrapFailureDetails(reason = '', httpStatus = 0, message = '', rateLimitHint = null) {
     const normalizedReason = String(reason || '').trim().toLowerCase();
     const normalizedStatus = Number.isFinite(Number(httpStatus)) ? Number(httpStatus) : 0;
     const overrideMessage = String(message || '').trim();
+    const retryAtMs = rateLimitHint && Number.isFinite(Number(rateLimitHint.retryAtMs))
+        && Number(rateLimitHint.retryAtMs) > 0
+        ? Number(rateLimitHint.retryAtMs)
+        : null;
 
     if (normalizedReason === 'auth_failure' || normalizedReason === 'auth' || normalizedStatus === 401 || normalizedStatus === 403) {
         return {
@@ -4406,7 +4519,8 @@ function _bootstrapFailureDetails(reason = '', httpStatus = 0, message = '') {
             reason: 'rate_limited',
             retryable: true,
             toastMessage: overrideMessage || 'Portal is rate limited. Bootstrap will retry automatically when the cooldown expires.',
-            actionMessage: 'Portal is rate limited. Wait for the cooldown to expire before retrying.'
+            actionMessage: 'Portal is rate limited. Wait for the cooldown to expire before retrying.',
+            retryAtMs
         };
     }
     if (normalizedReason === 'access_outage') {
@@ -4467,6 +4581,13 @@ function _nextBootstrapRetryDelayMs(attempt) {
 }
 
 function _scheduleBootstrapRetry(reason = '', httpStatus = 0, rateLimitHint = null) {
+    // Persist the parsed hint so the recovery banner renderer can surface a
+    // live countdown to the user. The slot is cleared by
+    // _finalizeBootstrapRetry on success / terminal outcomes so a stale hint
+    // never lingers past the cooldown window.
+    state.bootstrap.lastRateLimitHint = rateLimitHint && Number(rateLimitHint?.retryAtMs) > 0
+        ? rateLimitHint
+        : null;
     if (!_isBootstrapRetryableFailure(reason, httpStatus)) {
         _finalizeBootstrapRetry('terminal_not_retryable', { reason, httpStatus });
         return false;
@@ -4723,7 +4844,11 @@ function _syncBootstrapGuardedControls() {
         els.runJobBtn.disabled = !readiness.canRun;
     }
     if (els.dispatchReadinessReason) {
-        els.dispatchReadinessReason.textContent = readiness.detail;
+        _renderBannerDetailWithRetryCountdown(
+            els.dispatchReadinessReason,
+            readiness.detail,
+            readiness.retryCountdownAtMs
+        );
         els.dispatchReadinessReason.dataset.tone = readiness.tone;
     }
 }
@@ -7727,9 +7852,17 @@ function _clearConfigPreviewServiceRetry() {
         configPreviewServiceRetryTimerId = null;
     }
     configPreviewServiceRetryAttempts = 0;
+    configPreviewLastRateLimitHint = null;
 }
 
 function _scheduleConfigPreviewServiceRetry(rateLimitHint = null) {
+    // Clear any stale hint when the new failure carries no usable Retry-After
+    // (e.g., a 5xx or network error following a prior 429). This prevents the
+    // dispatch-readiness banner from showing a countdown for a non-rate-limit
+    // service failure.
+    configPreviewLastRateLimitHint = rateLimitHint && Number(rateLimitHint?.retryAtMs) > 0
+        ? rateLimitHint
+        : null;
     if (configPreviewServiceRetryAttempts >= CONFIG_PREVIEW_SERVICE_RETRY_MAX_ATTEMPTS) {
         return;
     }
