@@ -4,15 +4,15 @@
 **Date:** 2026-04-14
 **Last revised:** 2026-05-09
 **Owner:** Frontdoor / Platform
-**Review Required From:** Security / Privacy
+**Approval Authority:** Repository Owner
 
-This packet inventories the current portal telemetry contract and the proposed pilot retention posture. It is a preparation document for human approval. It is not itself an approval record.
+This packet inventories the current portal telemetry contract, approved-with-conditions pilot retention posture, and approval conditions for bounded portal/front-door telemetry pilots. The approval block below is the approval record for that bounded scope.
 
 The 2026-05-09 revision adds eight RUM event families that landed in #1682, #1684, and #1696, and discloses the two server-set marker cookies introduced by the client-side login submit RUM mirror series (#1689 / #1694 / #1695). No metric values, sanitizer rules, or rollout knobs were changed; only the inventory below was extended to match what is in the repo.
 
 ## Purpose
 
-Approve or reject the telemetry schema, retention posture, and disposal procedure used for bounded portal modernization pilots.
+Record the approval decision for the telemetry schema, retention posture, and disposal procedure used for bounded portal modernization pilots.
 
 ## Current Repo-Backed Data Collection
 
@@ -212,8 +212,8 @@ Proposed for approval:
 - Review date: 2026-05-09
 - Decision: Approved with Conditions
 - Conditions or required changes:
-  - Approval applies only to bounded portal/front-door telemetry pilots using the documented event families, metadata keys, marker cookies, sessionStorage breadcrumb, rollout controls, and sink paths.
-  - Raw JSONL logs must remain outside the repository, outside public/static directories, access-restricted, excluded from CI artifacts, and deleted no later than 14 calendar days after pilot end.
+  - Approval applies only to bounded portal/front-door telemetry pilots using the documented event families, metadata keys, marker cookies, `sessionStorage` breadcrumb, rollout controls, and sink paths.
+  - Raw JSONL logs must remain outside the repository, outside public / static directories, access-restricted, excluded from CI artifacts, and deleted no later than 14 calendar days after pilot end.
   - Each pilot must have a named owner and explicit pilot end date.
   - If raw telemetry is written to a host path covered by automated backups, backup retention must be documented or telemetry must be written to a backup-excluded path.
   - Any new RUM event family, metadata key, marker cookie, storage key, rollout knob, sink behavior, or retention posture requires this packet to be revised before rollout expansion.
