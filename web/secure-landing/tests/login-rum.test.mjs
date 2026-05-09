@@ -212,6 +212,25 @@ function assertClearsLoginFailureMarkerCookie(response) {
   assert.match(cookieHeader, /\bPath=\/login\b/);
 }
 
+function assertLoginSuccessMarkerCookie(response) {
+  const cookieHeader = response.headers.get("set-cookie") || "";
+  // Path=/ (NOT /login) so the cookie crosses to /portal where the
+  // portal bundle reads it; the value is a fixed presence marker.
+  assert.match(cookieHeader, /\btp_login_submit_success=1\b/);
+  assert.match(cookieHeader, /\bMax-Age=60\b/);
+  assert.match(cookieHeader, /\btp_login_submit_success=[^;]*;[^,]*\bPath=\/(?!login)/);
+  assert.match(cookieHeader, /\bSameSite=Lax\b/i);
+  // The cookie must be readable from JS so the portal bundle can
+  // observe and clear it.
+  assert.doesNotMatch(cookieHeader, /HttpOnly[^,]*tp_login_submit_success/i);
+}
+
+function assertClearsLoginSuccessMarkerCookie(response) {
+  const cookieHeader = response.headers.get("set-cookie") || "";
+  assert.match(cookieHeader, /\btp_login_submit_success=;/);
+  assert.match(cookieHeader, /\btp_login_submit_success=[^;]*;[^,]*\bPath=\/(?!login)/);
+}
+
 function assertNoPiiInRumPosts(rumCalls) {
   for (const call of rumCalls) {
     const flat = JSON.stringify(call.body);
@@ -283,6 +302,7 @@ test("login POST emits attempt + success events on successful credential rotatio
     assert.ok(typeof success.body.value === "number" && success.body.value >= 0);
     assert.deepEqual(success.body.metadata, {});
     assert.doesNotMatch(response.headers.get("set-cookie") || "", /\btp_login_submit_failure=/);
+    assertLoginSuccessMarkerCookie(response);
 
     // Backend auth + traceparent are forwarded.
     assert.equal(attempt.headers["authorization"], "Bearer backend-secret");
@@ -479,6 +499,42 @@ test("login POST success clears a stale client failure marker without setting a 
     assert.equal(response.headers.get("location"), "https://portal.example.com/portal");
     assert.equal(rumCalls[1].body.event_type, "login_submit_success");
     assertClearsLoginFailureMarkerCookie(response);
+    // The same response also installs the success marker so the portal
+    // bundle can recognize the redirect target as a real submit.
+    assertLoginSuccessMarkerCookie(response);
+  } finally {
+    restoreFetch();
+    env.cleanup();
+  }
+});
+
+test("login POST failure clears a stale client success marker without setting a new one", async () => {
+  // Cross-marker hygiene: a failed submission must not leave a stale
+  // tp_login_submit_success cookie alive on /portal. The two markers
+  // are mutually exclusive — at most one can be live for any given
+  // submission outcome — so the failure path explicitly clears the
+  // opposite cookie when one is observed in the request.
+  const env = withTestEnvironment({ usersFileEntries: [await buildAdminUserFixture()] });
+  const rumCalls = [];
+  const restoreFetch = installFetchMock({ rumCalls });
+
+  try {
+    const sessions = await importFresh("../lib/sessions.js");
+    const { POST } = await importFresh("../app/login/route.js");
+    const session = sessions.createAnonymousSession();
+    const request = buildPostRequest({
+      session,
+      csrfToken: "wrong-token",
+      extraCookies: ["tp_login_submit_success=1"],
+    });
+
+    const response = await POST(request);
+    await flushFireAndForget();
+
+    assert.equal(response.status, 303);
+    assert.equal(rumCalls[1].body.event_type, "login_submit_failure");
+    assertLoginFailureMarkerCookie(response, "csrf");
+    assertClearsLoginSuccessMarkerCookie(response);
   } finally {
     restoreFetch();
     env.cleanup();

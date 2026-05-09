@@ -2,7 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import os from "node:os";
 import path from "node:path";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 
 import { NextRequest } from "next/server.js";
 
@@ -581,6 +582,78 @@ test("renderRumClientScript failure listener allowlist matches server-side LOGIN
       `client failure allowlist missing server-side code: ${code}`
     );
   }
+});
+
+test("rum-client.js exports the login_submit_success marker constants for the portal bundle", async () => {
+  const {
+    LOGIN_SUBMIT_BREADCRUMB_KEY,
+    LOGIN_SUBMIT_SUCCESS_MARKER_COOKIE,
+    LOGIN_SUBMIT_SUCCESS_MARKER_VALUE,
+    LOGIN_SUBMIT_SUCCESS_MARKER_MAX_AGE_SECONDS,
+  } = await importFresh("../lib/rum-client.js");
+
+  // Wire-format pins. The portal bundle inlines copies of these
+  // strings (see drift test below); changing either side without the
+  // other is the most likely way for the success mirror to silently
+  // stop firing.
+  assert.equal(LOGIN_SUBMIT_BREADCRUMB_KEY, "tpLoginSubmitStartedAt");
+  assert.equal(LOGIN_SUBMIT_SUCCESS_MARKER_COOKIE, "tp_login_submit_success");
+  assert.equal(LOGIN_SUBMIT_SUCCESS_MARKER_VALUE, "1");
+  assert.equal(LOGIN_SUBMIT_SUCCESS_MARKER_MAX_AGE_SECONDS, 60);
+});
+
+test("portal bundle source pins the same login_submit_success constants as lib/rum-client.js", async () => {
+  const {
+    LOGIN_SUBMIT_BREADCRUMB_KEY,
+    LOGIN_SUBMIT_SUCCESS_MARKER_COOKIE,
+    LOGIN_SUBMIT_SUCCESS_MARKER_MAX_AGE_SECONDS,
+  } = await importFresh("../lib/rum-client.js");
+
+  // Drift guard between the two surfaces:
+  // - lib/rum-client.js writes the breadcrumb at submit time and the
+  //   server-side login route sets the marker cookie on success.
+  // - portal-src/portal.template.js reads both on /portal first load
+  //   and emits login_submit_success.
+  // The portal bundle deliberately inlines the literal strings (no
+  // shared import) to keep the bundle self-contained; this test pins
+  // both sides against the canonical lib/ exports.
+  const here = path.dirname(fileURLToPath(import.meta.url));
+  const portalSrc = readFileSync(
+    path.resolve(here, "..", "portal-src", "portal.template.js"),
+    "utf-8"
+  );
+
+  assert.match(
+    portalSrc,
+    new RegExp(`LOGIN_SUBMIT_BREADCRUMB_KEY\\s*=\\s*['"]${LOGIN_SUBMIT_BREADCRUMB_KEY}['"]`),
+    "portal bundle must inline the same breadcrumb key as lib/rum-client.js"
+  );
+  assert.match(
+    portalSrc,
+    new RegExp(`LOGIN_SUBMIT_SUCCESS_MARKER_COOKIE\\s*=\\s*['"]${LOGIN_SUBMIT_SUCCESS_MARKER_COOKIE}['"]`),
+    "portal bundle must inline the same success-marker cookie name as lib/rum-client.js"
+  );
+  // Freshness cap is expressed in milliseconds inside the bundle.
+  const expectedFreshnessMs = LOGIN_SUBMIT_SUCCESS_MARKER_MAX_AGE_SECONDS * 1000;
+  assert.match(
+    portalSrc,
+    new RegExp(`LOGIN_SUBMIT_SUCCESS_FRESHNESS_MS\\s*=\\s*${expectedFreshnessMs}\\b`),
+    "portal bundle freshness cap must equal max-age in ms"
+  );
+  // The bundle MUST emit the login_submit_success milestone, MUST
+  // route through _recordPortalRumMilestone (so the idempotent
+  // emittedMilestones guard applies), and MUST carry source="client"
+  // metadata so dashboards can dedupe against server-side emissions.
+  assert.match(
+    portalSrc,
+    /_recordPortalRumMilestone\(\s*['"]login_submit_success['"]/,
+    "portal bundle must emit login_submit_success via the milestone helper"
+  );
+  assert.match(
+    portalSrc,
+    /metadata:\s*\{\s*source:\s*['"]client['"]\s*\}/,
+    "portal bundle must tag the success emit with metadata.source='client'"
+  );
 });
 
 test("renderRumClientScript failure listener uses Date.now() (not performance.now()) for elapsed time", async () => {
