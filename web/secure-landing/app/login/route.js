@@ -7,12 +7,12 @@ import { isPortalRumEnabled } from "../../lib/config.js";
 import { applySecurityHeaders, buildRequestUrl, FRONTDOOR_CSP, generateScriptNonce } from "../../lib/http.js";
 import { applyPortalReturnTo, resolvePortalReturnTo, validatePortalReturnTo } from "../../lib/return-to.js";
 import {
-  LOGIN_SUBMIT_FAILURE_MARKER_COOKIE,
-  LOGIN_SUBMIT_FAILURE_MARKER_MAX_AGE_SECONDS,
-  LOGIN_SUBMIT_SUCCESS_MARKER_COOKIE,
-  LOGIN_SUBMIT_SUCCESS_MARKER_MAX_AGE_SECONDS,
+  clearRumMarkerCookie,
+  LOGIN_SUBMIT_FAILURE_MARKER,
+  LOGIN_SUBMIT_SUCCESS_MARKER,
   LOGIN_SUBMIT_SUCCESS_MARKER_VALUE,
-  renderRumClientScript
+  renderRumClientScript,
+  setRumMarkerCookie
 } from "../../lib/rum-client.js";
 import {
   emitLoginRumEvent,
@@ -265,69 +265,17 @@ function redirectToLogin(request, errorCode, session, returnTo = "") {
   applyPortalReturnTo(url, returnTo);
   const response = applySecurityHeaders(NextResponse.redirect(url, 303));
   if (errorCode) {
-    setLoginSubmitFailureMarkerCookie(response, errorCode);
+    setRumMarkerCookie(response, LOGIN_SUBMIT_FAILURE_MARKER, errorCode);
     // A failure path must not leave behind a stale success marker —
     // clearing here mirrors the success path's failure-marker clear
     // so the two markers can never both be live for the same submit.
-    if (request.cookies.get(LOGIN_SUBMIT_SUCCESS_MARKER_COOKIE)?.value) {
-      clearLoginSubmitSuccessMarkerCookie(response);
+    if (request.cookies.get(LOGIN_SUBMIT_SUCCESS_MARKER.name)?.value) {
+      clearRumMarkerCookie(response, LOGIN_SUBMIT_SUCCESS_MARKER);
     }
   }
   if (session?.id) {
     setSessionCookie(response, session.id);
   }
-  return response;
-}
-
-function setLoginSubmitFailureMarkerCookie(response, failureCode) {
-  const config = getConfig();
-  response.cookies.set(LOGIN_SUBMIT_FAILURE_MARKER_COOKIE, String(failureCode || ""), {
-    httpOnly: false,
-    secure: config.sessionCookieSecure,
-    sameSite: "lax",
-    path: "/login",
-    maxAge: LOGIN_SUBMIT_FAILURE_MARKER_MAX_AGE_SECONDS
-  });
-  return response;
-}
-
-function clearLoginSubmitFailureMarkerCookie(response) {
-  const config = getConfig();
-  response.cookies.set(LOGIN_SUBMIT_FAILURE_MARKER_COOKIE, "", {
-    httpOnly: false,
-    secure: config.sessionCookieSecure,
-    sameSite: "lax",
-    path: "/login",
-    expires: new Date(0)
-  });
-  return response;
-}
-
-function setLoginSubmitSuccessMarkerCookie(response) {
-  // Path=/ (NOT /login) so the portal bundle on /portal can read it.
-  // The cookie value is a fixed presence marker; the portal-side
-  // emitter computes elapsed time from the sessionStorage breadcrumb,
-  // never from this cookie.
-  const config = getConfig();
-  response.cookies.set(LOGIN_SUBMIT_SUCCESS_MARKER_COOKIE, LOGIN_SUBMIT_SUCCESS_MARKER_VALUE, {
-    httpOnly: false,
-    secure: config.sessionCookieSecure,
-    sameSite: "lax",
-    path: "/",
-    maxAge: LOGIN_SUBMIT_SUCCESS_MARKER_MAX_AGE_SECONDS
-  });
-  return response;
-}
-
-function clearLoginSubmitSuccessMarkerCookie(response) {
-  const config = getConfig();
-  response.cookies.set(LOGIN_SUBMIT_SUCCESS_MARKER_COOKIE, "", {
-    httpOnly: false,
-    secure: config.sessionCookieSecure,
-    sameSite: "lax",
-    path: "/",
-    expires: new Date(0)
-  });
   return response;
 }
 
@@ -509,9 +457,9 @@ export async function POST(request) {
     NextResponse.redirect(buildRequestUrl(request, resolvePortalReturnTo(requestedReturnTo)), 303)
   );
   setSessionCookie(response, authenticatedSession.id);
-  setLoginSubmitSuccessMarkerCookie(response);
-  if (request.cookies.get(LOGIN_SUBMIT_FAILURE_MARKER_COOKIE)?.value) {
-    clearLoginSubmitFailureMarkerCookie(response);
+  setRumMarkerCookie(response, LOGIN_SUBMIT_SUCCESS_MARKER, LOGIN_SUBMIT_SUCCESS_MARKER_VALUE);
+  if (request.cookies.get(LOGIN_SUBMIT_FAILURE_MARKER.name)?.value) {
+    clearRumMarkerCookie(response, LOGIN_SUBMIT_FAILURE_MARKER);
   }
   return response;
 }
