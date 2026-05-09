@@ -28,6 +28,12 @@ test.describe(
   () => {
     for (const [view, affordances] of Object.entries(VIEW_AFFORDANCES)) {
       test(`/portal?view=${view} keeps the shared shell and reaches the ${view} affordances`, async ({ page }) => {
+        const consoleErrors = [];
+        page.on("console", (msg) => {
+          if (msg.type() === "error") consoleErrors.push(msg.text());
+        });
+        page.on("pageerror", (err) => consoleErrors.push(String(err)));
+
         const response = await page.goto(`/portal?view=${view}`);
         expect(response?.status()).toBe(200);
 
@@ -38,6 +44,11 @@ test.describe(
         for (const viewAnchor of affordances) {
           await expect(page.locator(viewAnchor).first()).toBeVisible();
         }
+
+        expect(
+          consoleErrors,
+          `unexpected console errors: ${consoleErrors.join("\n")}`
+        ).toEqual([]);
       });
     }
   }

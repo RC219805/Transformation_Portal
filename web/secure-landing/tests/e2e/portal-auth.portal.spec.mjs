@@ -1,10 +1,16 @@
 // @portal-browser portal-auth/session smoke.
 //
 // Verifies the authenticated session captured by the portal-setup
-// project survives across reloads and deep-link navigations, and
-// that an unauthenticated context redirects to /login (the negative
-// path covered by portal-shell.spec.mjs's @frontdoor-browser tag is
-// inverted here against an authenticated context).
+// project survives across reloads and deep-link navigations.
+//
+// Suite-coverage map (intentional duplication-free pyramid layout):
+//   - Unauthenticated /portal → /login redirect: covered by
+//     tests/e2e/portal-shell.spec.mjs (tag: @frontdoor-browser, from
+//     PR #1690). NOT a .portal.spec.mjs — the suffix-less filename
+//     belongs to the @frontdoor-browser project.
+//   - Authenticated /portal positive paths: this file. Includes a
+//     scoped negative case (clearing cookies mid-test) to assert the
+//     same session boundary from the authenticated side.
 
 import { test, expect } from "@playwright/test";
 
@@ -13,6 +19,12 @@ test.describe(
   { tag: "@portal-browser" },
   () => {
     test("session survives reload and deep-link navigation", async ({ page }) => {
+      const consoleErrors = [];
+      page.on("console", (msg) => {
+        if (msg.type() === "error") consoleErrors.push(msg.text());
+      });
+      page.on("pageerror", (err) => consoleErrors.push(String(err)));
+
       await page.goto("/portal");
       expect(page.url()).toMatch(/\/portal(\?|$)/);
       await expect(page.locator('[data-ui="portal-topbar"]')).toBeVisible();
@@ -29,9 +41,20 @@ test.describe(
       expect(page.url()).toContain("/portal");
       expect(page.url()).not.toContain("/login");
       await expect(page.locator('[data-ui="view-switcher"]')).toBeVisible();
+
+      expect(
+        consoleErrors,
+        `unexpected console errors: ${consoleErrors.join("\n")}`
+      ).toEqual([]);
     });
 
     test("session is scoped — clearing cookies forces a redirect to /login", async ({ page, context }) => {
+      const consoleErrors = [];
+      page.on("console", (msg) => {
+        if (msg.type() === "error") consoleErrors.push(msg.text());
+      });
+      page.on("pageerror", (err) => consoleErrors.push(String(err)));
+
       // Pre-condition: authenticated visit succeeds.
       await page.goto("/portal");
       await expect(page.locator('[data-ui="portal-topbar"]')).toBeVisible();
@@ -45,6 +68,11 @@ test.describe(
       // Login form is rendered — same anchor #1690's @frontdoor-browser
       // suite pins.
       await expect(page.locator('[data-ui="login-form"]')).toBeVisible();
+
+      expect(
+        consoleErrors,
+        `unexpected console errors: ${consoleErrors.join("\n")}`
+      ).toEqual([]);
     });
   }
 );

@@ -21,6 +21,12 @@ test.describe(
   { tag: "@portal-browser" },
   () => {
     test("authenticated /portal renders the shell with stable view-switcher hooks", async ({ page }) => {
+      const consoleErrors = [];
+      page.on("console", (msg) => {
+        if (msg.type() === "error") consoleErrors.push(msg.text());
+      });
+      page.on("pageerror", (err) => consoleErrors.push(String(err)));
+
       const response = await page.goto("/portal");
       expect(response?.status()).toBe(200);
 
@@ -42,6 +48,11 @@ test.describe(
       await expect(
         page.locator('[data-view-link="overview"]')
       ).toHaveAttribute("aria-current", "page");
+
+      expect(
+        consoleErrors,
+        `unexpected console errors: ${consoleErrors.join("\n")}`
+      ).toEqual([]);
     });
   }
 );

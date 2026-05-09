@@ -24,13 +24,20 @@ const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..
 const PORTAL_HTML_PATH = process.env.MOCK_FASTAPI_PORTAL_HTML
   ? path.resolve(process.env.MOCK_FASTAPI_PORTAL_HTML)
   : path.join(REPO_ROOT, "portal.html");
+const PUBLIC_ORIGIN = `http://${HOST}:${PORT}`;
 
 // Mock-served stub asset paths the placeholder substitutions point at.
-// Each stub returns a minimal valid body so the browser does not log
-// console errors that would trip the @portal-browser suite's console-error
-// gate. The portal shell's interactive JS is intentionally NOT loaded —
-// these tests assert markup contracts, not runtime behavior. Live JS/CSS
-// behavior remains the responsibility of validate_portal_browser_smoke.py.
+// Asset URLs in the substituted HTML are *fully qualified* back to the
+// mock origin (PUBLIC_ORIGIN below), because the front-door serves the
+// proxied portal HTML at port 3000 — root-relative paths would resolve
+// to the front-door origin and 404 there. Cross-origin GETs to port
+// 9999 work without CORS preflight (no fetch credentials, no custom
+// headers), and the /portal route doesn't apply CSP (lib/http.js:138),
+// so cross-origin <link>/<script>/<img> loads have no policy hurdle.
+//
+// Each stub returns a minimal valid body so the browser does not raise
+// errors when loading these assets — the @portal-browser specs assert
+// `consoleErrors === []` end-to-end.
 const STUB_ROUTES = new Map([
   ["/__mock-portal-asset.css", { type: "text/css; charset=utf-8", body: "/* mock portal css */\n" }],
   ["/__mock-portal-asset.js", { type: "text/javascript; charset=utf-8", body: "/* mock portal js */\n" }],
@@ -41,21 +48,21 @@ const STUB_ROUTES = new Map([
 ]);
 
 // Substitution map for the __PORTAL_*_URL__ placeholders defined in
-// src/transformation_portal/portal/asset_bundle.py. CSS/JS placeholders
-// route to the inert stubs above; the brand SVG and font placeholders
-// route to a transparent SVG stub (the font is also stubbed to a tiny
-// SVG since the preload is non-essential for shell-anchor coverage).
+// src/transformation_portal/portal/asset_bundle.py. All placeholders
+// resolve to fully-qualified URLs at the mock origin so the browser
+// loads them from port 9999 (where the stubs are served), not from the
+// front-door at port 3000 where they would 404.
 const PLACEHOLDER_SUBSTITUTIONS = Object.freeze({
-  __PORTAL_CSS_URL__: "/__mock-portal-asset.css",
-  __PORTAL_REVIEW_CSS_URL__: "/__mock-portal-asset.css",
-  __PORTAL_JS_URL__: "/__mock-portal-asset.js",
-  __PORTAL_BUILD_JS_URL__: "/__mock-portal-asset.js",
-  __PORTAL_OPERATE_JS_URL__: "/__mock-portal-asset.js",
-  __PORTAL_OVERVIEW_JS_URL__: "/__mock-portal-asset.js",
-  __PORTAL_REVIEW_JS_URL__: "/__mock-portal-asset.js",
-  __PORTAL_BRAND_LIGHT_URL__: "/__mock-portal-asset.svg",
-  __PORTAL_BRAND_DARK_URL__: "/__mock-portal-asset.svg",
-  __PORTAL_FONT_SANS_URL__: "/__mock-portal-asset.svg"
+  __PORTAL_CSS_URL__: `${PUBLIC_ORIGIN}/__mock-portal-asset.css`,
+  __PORTAL_REVIEW_CSS_URL__: `${PUBLIC_ORIGIN}/__mock-portal-asset.css`,
+  __PORTAL_JS_URL__: `${PUBLIC_ORIGIN}/__mock-portal-asset.js`,
+  __PORTAL_BUILD_JS_URL__: `${PUBLIC_ORIGIN}/__mock-portal-asset.js`,
+  __PORTAL_OPERATE_JS_URL__: `${PUBLIC_ORIGIN}/__mock-portal-asset.js`,
+  __PORTAL_OVERVIEW_JS_URL__: `${PUBLIC_ORIGIN}/__mock-portal-asset.js`,
+  __PORTAL_REVIEW_JS_URL__: `${PUBLIC_ORIGIN}/__mock-portal-asset.js`,
+  __PORTAL_BRAND_LIGHT_URL__: `${PUBLIC_ORIGIN}/__mock-portal-asset.svg`,
+  __PORTAL_BRAND_DARK_URL__: `${PUBLIC_ORIGIN}/__mock-portal-asset.svg`,
+  __PORTAL_FONT_SANS_URL__: `${PUBLIC_ORIGIN}/__mock-portal-asset.svg`
 });
 
 function renderPortalHtml() {

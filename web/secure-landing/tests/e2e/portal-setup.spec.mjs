@@ -16,6 +16,9 @@
 //     code path the front-door uses in production.
 // No new env vars, no new auth code, no new password hashes.
 
+import { mkdirSync } from "node:fs";
+import path from "node:path";
+
 import { test as setup, expect } from "@playwright/test";
 
 const STORAGE_STATE_PATH = "tests/e2e/.auth/portal-state.json";
@@ -46,5 +49,9 @@ setup("authenticate the smoke-admin operator", async ({ page }) => {
   // any auth-side regressions before the @portal-browser specs run.
   await expect(page.locator('[data-ui="portal-topbar"]')).toBeVisible();
 
+  // Ensure the parent directory exists before storageState() writes —
+  // a clean checkout has no tests/e2e/.auth/ and node:fs writes do not
+  // mkdir-p, so the persist would otherwise fail with ENOENT.
+  mkdirSync(path.dirname(STORAGE_STATE_PATH), { recursive: true });
   await page.context().storageState({ path: STORAGE_STATE_PATH });
 });
