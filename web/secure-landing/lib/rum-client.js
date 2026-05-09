@@ -10,6 +10,10 @@
 
 import { normalizeTraceparent } from "./trace.js";
 
+export const LOGIN_SUBMIT_BREADCRUMB_KEY = "tpLoginSubmitStartedAt";
+export const LOGIN_SUBMIT_FAILURE_MARKER_COOKIE = "tp_login_submit_failure";
+export const LOGIN_SUBMIT_FAILURE_MARKER_MAX_AGE_SECONDS = 60;
+
 function _serialize(value) {
   // JSON.stringify is safe inside a <script> body provided we escape the two
   // sequences that can prematurely close the script tag or open an HTML
@@ -25,6 +29,9 @@ export function renderRumClientScript({ route, view, traceparent }) {
   const viewLiteral = _serialize(String(view));
   const traceparentLiteral = _serialize(normalizeTraceparent(traceparent));
   const eventTypeLiteral = _serialize(`${String(view)}_rendered`);
+  const loginSubmitBreadcrumbKeyLiteral = _serialize(LOGIN_SUBMIT_BREADCRUMB_KEY);
+  const loginSubmitFailureMarkerCookieLiteral = _serialize(LOGIN_SUBMIT_FAILURE_MARKER_COOKIE);
+  const loginSubmitFailureFreshnessMs = LOGIN_SUBMIT_FAILURE_MARKER_MAX_AGE_SECONDS * 1000;
 
   return `(function () {
   try {
@@ -33,6 +40,9 @@ export function renderRumClientScript({ route, view, traceparent }) {
     var TRACEPARENT = ${traceparentLiteral};
     var RENDERED_EVENT = ${eventTypeLiteral};
     var ENDPOINT = "/v1/portal/rum";
+    var LOGIN_SUBMIT_BREADCRUMB_KEY = ${loginSubmitBreadcrumbKeyLiteral};
+    var LOGIN_SUBMIT_FAILURE_MARKER_COOKIE = ${loginSubmitFailureMarkerCookieLiteral};
+    var LOGIN_SUBMIT_FAILURE_FRESHNESS_MS = ${loginSubmitFailureFreshnessMs};
     var emitted = Object.create(null);
     var vitals = { lcpMs: null, inpMs: null, clsScore: 0, finalized: false };
     var queue = [];
@@ -74,6 +84,35 @@ export function renderRumClientScript({ route, view, traceparent }) {
         return Math.max(0, Date.now() - SCRIPT_LOAD_EPOCH);
       } catch (_err) {
         return 0;
+      }
+    }
+
+    function readCookieValue(name) {
+      try {
+        var prefix = name + "=";
+        var parts = String(document.cookie || "").split(";");
+        for (var i = 0; i < parts.length; i += 1) {
+          var part = parts[i].replace(/^\\s+/, "");
+          if (part.indexOf(prefix) === 0) {
+            var raw = part.slice(prefix.length);
+            try {
+              return decodeURIComponent(raw);
+            } catch (_decodeErr) {
+              return raw;
+            }
+          }
+        }
+      } catch (_cookieErr) {
+        // cookie access unavailable; treat as missing.
+      }
+      return "";
+    }
+
+    function clearCookieValue(name) {
+      try {
+        document.cookie = name + "=; Max-Age=0; Path=/login; SameSite=Lax";
+      } catch (_cookieErr) {
+        // best-effort removal
       }
     }
 
@@ -275,7 +314,7 @@ export function renderRumClientScript({ route, view, traceparent }) {
           // would always read 0 on the receiving page.
           try {
             window.sessionStorage.setItem(
-              "tpLoginSubmitStartedAt",
+              LOGIN_SUBMIT_BREADCRUMB_KEY,
               String(Date.now())
             );
           } catch (_storageErr) {
@@ -311,17 +350,19 @@ export function renderRumClientScript({ route, view, traceparent }) {
       // from a closed-tab submit out of a future visitor's session.
       var rawStart = null;
       try {
-        rawStart = window.sessionStorage.getItem("tpLoginSubmitStartedAt");
+        rawStart = window.sessionStorage.getItem(LOGIN_SUBMIT_BREADCRUMB_KEY);
       } catch (_storageErr) {
         // sessionStorage unavailable; bail without emitting.
         return;
       }
       try {
-        window.sessionStorage.removeItem("tpLoginSubmitStartedAt");
+        window.sessionStorage.removeItem(LOGIN_SUBMIT_BREADCRUMB_KEY);
       } catch (_storageErr) {
         // best-effort removal
       }
-      if (!rawStart) return;
+      var failureMarker = readCookieValue(LOGIN_SUBMIT_FAILURE_MARKER_COOKIE);
+      clearCookieValue(LOGIN_SUBMIT_FAILURE_MARKER_COOKIE);
+      if (!rawStart || !failureMarker) return;
       var errorCode = "";
       try {
         var url = new URL(window.location.href);
@@ -343,13 +384,14 @@ export function renderRumClientScript({ route, view, traceparent }) {
         }
       }
       if (!matched) return;
+      if (failureMarker !== errorCode) return;
       var startedAt = Number(rawStart);
       if (!isFinite(startedAt) || startedAt <= 0) return;
       var elapsedMs = Math.max(0, Math.round(Date.now() - startedAt));
       // Freshness cap: production submit→failure latency is sub-second,
       // so 60s catches network drops while excluding stale-back-button
       // false positives.
-      if (elapsedMs > 60000) return;
+      if (elapsedMs > LOGIN_SUBMIT_FAILURE_FRESHNESS_MS) return;
       try {
         enqueue({
           event_type: "login_submit_failure",

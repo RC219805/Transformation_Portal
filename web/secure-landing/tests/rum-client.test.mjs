@@ -432,8 +432,9 @@ test("renderRumClientScript writes the tpLoginSubmitStartedAt breadcrumb at subm
   // Date.now() epoch-ms breadcrumb (NOT performance.now() — that resets
   // on each navigation and would always read 0 on the redirect target).
   assert.match(listenerSection, /sessionStorage\.setItem\(/);
-  assert.match(listenerSection, /"tpLoginSubmitStartedAt"/);
+  assert.match(listenerSection, /LOGIN_SUBMIT_BREADCRUMB_KEY/);
   assert.match(listenerSection, /String\(Date\.now\(\)\)/);
+  assert.match(body, /LOGIN_SUBMIT_BREADCRUMB_KEY\s*=\s*"tpLoginSubmitStartedAt"/);
   // Storage failure (private mode) must not abort the submit handler.
   assert.match(listenerSection, /catch\s*\(\s*_storageErr\s*\)/);
 });
@@ -489,6 +490,7 @@ test("renderRumClientScript failure listener emits login_submit_failure with dur
   // emitter at lib/rum-emitter.js:88).
   assert.match(fnBody, /source:\s*"client"/);
   assert.match(fnBody, /failure_code:\s*errorCode/);
+  assert.match(fnBody, /failureMarker\s*!==\s*errorCode/);
   // Reuses the existing keepalive enqueue path — no separate fetch.
   assert.match(fnBody, /enqueue\(\{[\s\S]+?\},\s*\{\s*keepalive:\s*true\s*\}\)/);
   assert.doesNotMatch(fnBody, /fetch\s*\(/);
@@ -532,19 +534,32 @@ test("renderRumClientScript failure listener clears the breadcrumb on every logi
   // /login load — the removeItem call must precede the early-returns
   // that gate the actual emit, so stale entries can't survive a
   // /login visit that doesn't ultimately emit.
-  const getIdx = fnBody.indexOf('sessionStorage.getItem("tpLoginSubmitStartedAt")');
-  const removeIdx = fnBody.indexOf('sessionStorage.removeItem("tpLoginSubmitStartedAt")');
+  const getIdx = fnBody.indexOf("sessionStorage.getItem(LOGIN_SUBMIT_BREADCRUMB_KEY)");
+  const removeIdx = fnBody.indexOf("sessionStorage.removeItem(LOGIN_SUBMIT_BREADCRUMB_KEY)");
   assert.ok(getIdx >= 0, "expected sessionStorage.getItem call");
   assert.ok(removeIdx > getIdx, "expected sessionStorage.removeItem to follow getItem");
+
+  // A server-set failure marker is also read and cleared on the same
+  // /login load. This suppresses stale successful-submit breadcrumbs:
+  // success redirects never set the marker, so a later manual
+  // /login?error=... cannot emit a client failure.
+  const markerReadIdx = fnBody.indexOf("readCookieValue(LOGIN_SUBMIT_FAILURE_MARKER_COOKIE)");
+  const markerClearIdx = fnBody.indexOf("clearCookieValue(LOGIN_SUBMIT_FAILURE_MARKER_COOKIE)");
+  assert.ok(markerReadIdx > removeIdx, "expected marker read after breadcrumb clear");
+  assert.ok(markerClearIdx > markerReadIdx, "expected marker clear after marker read");
+  const markerRequiredIdx = fnBody.indexOf("if (!rawStart || !failureMarker) return");
+  assert.ok(markerRequiredIdx > markerClearIdx, "expected marker requirement after marker clear");
 
   // The error-code allowlist gate runs AFTER removeItem so unknown
   // codes still clear the breadcrumb without emitting.
   const allowedIdx = fnBody.indexOf('"csrf"');
   assert.ok(allowedIdx > removeIdx, "expected error-code allowlist check after breadcrumb clear");
+  const markerMatchIdx = fnBody.indexOf("failureMarker !== errorCode");
+  assert.ok(markerMatchIdx > allowedIdx, "expected marker/error match after allowlist");
 
   // The freshness cap also runs AFTER removeItem so stale breadcrumbs
   // are discarded rather than left to ride a future submit.
-  const freshnessIdx = fnBody.indexOf("60000");
+  const freshnessIdx = fnBody.indexOf("LOGIN_SUBMIT_FAILURE_FRESHNESS_MS");
   assert.ok(freshnessIdx > removeIdx, "expected freshness cap check after breadcrumb clear");
 });
 
@@ -628,6 +643,7 @@ test("login GET HTML embeds the failure listener payload when RUM is enabled", a
     assert.match(html, /event_type:\s*"login_submit_failure"/);
     assert.match(html, /failure_code:\s*errorCode/);
     assert.match(html, /"tpLoginSubmitStartedAt"/);
+    assert.match(html, /"tp_login_submit_failure"/);
   } finally {
     env.cleanup();
   }

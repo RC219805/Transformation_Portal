@@ -6,7 +6,11 @@ import { audit } from "../../lib/audit.js";
 import { isPortalRumEnabled } from "../../lib/config.js";
 import { applySecurityHeaders, buildRequestUrl, FRONTDOOR_CSP, generateScriptNonce } from "../../lib/http.js";
 import { applyPortalReturnTo, resolvePortalReturnTo, validatePortalReturnTo } from "../../lib/return-to.js";
-import { renderRumClientScript } from "../../lib/rum-client.js";
+import {
+  LOGIN_SUBMIT_FAILURE_MARKER_COOKIE,
+  LOGIN_SUBMIT_FAILURE_MARKER_MAX_AGE_SECONDS,
+  renderRumClientScript
+} from "../../lib/rum-client.js";
 import {
   emitLoginRumEvent,
   LOGIN_RUM_EVENT_TYPES,
@@ -257,9 +261,36 @@ function redirectToLogin(request, errorCode, session, returnTo = "") {
   if (errorCode) url.searchParams.set("error", errorCode);
   applyPortalReturnTo(url, returnTo);
   const response = applySecurityHeaders(NextResponse.redirect(url, 303));
+  if (errorCode) {
+    setLoginSubmitFailureMarkerCookie(response, errorCode);
+  }
   if (session?.id) {
     setSessionCookie(response, session.id);
   }
+  return response;
+}
+
+function setLoginSubmitFailureMarkerCookie(response, failureCode) {
+  const config = getConfig();
+  response.cookies.set(LOGIN_SUBMIT_FAILURE_MARKER_COOKIE, String(failureCode || ""), {
+    httpOnly: false,
+    secure: config.sessionCookieSecure,
+    sameSite: "lax",
+    path: "/login",
+    maxAge: LOGIN_SUBMIT_FAILURE_MARKER_MAX_AGE_SECONDS
+  });
+  return response;
+}
+
+function clearLoginSubmitFailureMarkerCookie(response) {
+  const config = getConfig();
+  response.cookies.set(LOGIN_SUBMIT_FAILURE_MARKER_COOKIE, "", {
+    httpOnly: false,
+    secure: config.sessionCookieSecure,
+    sameSite: "lax",
+    path: "/login",
+    expires: new Date(0)
+  });
   return response;
 }
 
@@ -441,5 +472,8 @@ export async function POST(request) {
     NextResponse.redirect(buildRequestUrl(request, resolvePortalReturnTo(requestedReturnTo)), 303)
   );
   setSessionCookie(response, authenticatedSession.id);
+  if (request.cookies.get(LOGIN_SUBMIT_FAILURE_MARKER_COOKIE)?.value) {
+    clearLoginSubmitFailureMarkerCookie(response);
+  }
   return response;
 }
