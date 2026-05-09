@@ -656,6 +656,41 @@ test("portal bundle source pins the same login_submit_success constants as lib/r
   );
 });
 
+test("portal bundle source clears login_submit_success marker state when sessionStorage read fails", async () => {
+  const here = path.dirname(fileURLToPath(import.meta.url));
+  const portalSrc = readFileSync(
+    path.resolve(here, "..", "portal-src", "portal.template.js"),
+    "utf-8"
+  );
+  const fnStart = portalSrc.indexOf("function _scheduleLoginSubmitSuccessRum()");
+  const fnEnd = portalSrc.indexOf("function _finalizePortalRumVitals", fnStart);
+  const fnBody = portalSrc.slice(fnStart, fnEnd);
+
+  assert.ok(fnStart >= 0, "expected login_submit_success scheduler");
+  assert.ok(fnEnd > fnStart, "expected scheduler body boundary");
+
+  const getIdx = fnBody.indexOf("sessionStorage.getItem(LOGIN_SUBMIT_BREADCRUMB_KEY)");
+  const removeIdx = fnBody.indexOf("sessionStorage.removeItem(LOGIN_SUBMIT_BREADCRUMB_KEY)");
+  const markerReadIdx = fnBody.indexOf(
+    "_readLoginSubmitMarkerCookie(LOGIN_SUBMIT_SUCCESS_MARKER_COOKIE)"
+  );
+  const markerClearIdx = fnBody.indexOf(
+    "_clearLoginSubmitMarkerCookie(LOGIN_SUBMIT_SUCCESS_MARKER_COOKIE)"
+  );
+  const markerRequiredIdx = fnBody.indexOf("if (!rawStart || !marker) return");
+
+  assert.ok(getIdx >= 0, "expected sessionStorage getItem call");
+  assert.ok(removeIdx > getIdx, "expected breadcrumb removal after read attempt");
+  assert.doesNotMatch(
+    fnBody.slice(getIdx, removeIdx),
+    /\breturn\b/,
+    "storage read failures must not skip marker cleanup"
+  );
+  assert.ok(markerReadIdx > removeIdx, "expected marker read after breadcrumb removal");
+  assert.ok(markerClearIdx > markerReadIdx, "expected marker clear after marker read");
+  assert.ok(markerRequiredIdx > markerClearIdx, "expected marker requirement after marker clear");
+});
+
 test("renderRumClientScript failure listener uses Date.now() (not performance.now()) for elapsed time", async () => {
   const { renderRumClientScript } = await importFresh("../lib/rum-client.js");
   const body = renderRumClientScript({

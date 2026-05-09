@@ -6869,7 +6869,8 @@ function _scheduleLoginSubmitSuccessRum() {
     try {
         rawStart = sessionStorage.getItem(LOGIN_SUBMIT_BREADCRUMB_KEY);
     } catch (_storageErr) {
-        return;
+        // Continue to clear marker state below; blocked storage only
+        // suppresses the latency emit.
     }
     try {
         sessionStorage.removeItem(LOGIN_SUBMIT_BREADCRUMB_KEY);
