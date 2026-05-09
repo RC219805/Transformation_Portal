@@ -94,6 +94,10 @@ jobs:
               /^config\/portal_asset_manifest\.json$/,
               /^scripts\/validation\/validate_frontdoor_browser_smoke\.py$/,
               /^docs\/guides\/PORTAL_SECURE_FRONTDOOR_QUICKSTART\.md$/,
+              // The @portal-browser Playwright suite serves portal.html
+              // through the mock FastAPI origin, so changes to the
+              // portal markup template must trigger frontdoor-contract.
+              /^portal\.html$/,
             ];
 
             const runFrontdoor = names.some(name => frontdoorMatchers.some(re => re.test(name)));
@@ -416,12 +420,14 @@ jobs:
           cd web/secure-landing
           npx playwright install --with-deps chromium
 
-      - name: Run frontdoor browser smoke suite
+      - name: Run frontdoor + portal browser smoke suite
         env:
           CI: "1"
         run: |
           set -euo pipefail
           cd web/secure-landing
+          # Runs all Playwright projects in dependency order:
+          # chromium (@frontdoor-browser) + portal-setup → portal-browser.
           npm run test:browser
 
       - name: Upload Playwright report on failure

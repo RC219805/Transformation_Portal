@@ -192,16 +192,61 @@ test("next config honors TP_NEXT_DIST_DIR for isolated local frontdoor runs", as
   }
 });
 
+function frontdoorWebServerEntry(config) {
+  // The webServer field is now an array — entry 0 is the mock FastAPI
+  // origin, entry 1 is the front-door dev server. The front-door entry
+  // is identified by its `npm run dev` command.
+  const entries = Array.isArray(config.webServer) ? config.webServer : [config.webServer];
+  return entries.find((entry) => /npm run dev/.test(entry.command));
+}
+
+function mockFastapiWebServerEntry(config) {
+  const entries = Array.isArray(config.webServer) ? config.webServer : [config.webServer];
+  return entries.find((entry) => /mock-fastapi-origin/.test(entry.command));
+}
+
+// Env vars that influence playwright.config.mjs's runtime shape — the
+// config tests below pin defaults, so the caller's environment must be
+// scrubbed during the test and restored on exit.
+const PLAYWRIGHT_CONFIG_ENV_KEYS = [
+  "PLAYWRIGHT_BASE_URL",
+  "MOCK_FASTAPI_HOST",
+  "MOCK_FASTAPI_PORT"
+];
+
+function snapshotPlaywrightConfigEnv() {
+  return new Map(PLAYWRIGHT_CONFIG_ENV_KEYS.map((key) => [key, process.env[key]]));
+}
+
+function clearPlaywrightConfigEnv() {
+  for (const key of PLAYWRIGHT_CONFIG_ENV_KEYS) {
+    delete process.env[key];
+  }
+}
+
+function restorePlaywrightConfigEnv(snapshot) {
+  for (const key of PLAYWRIGHT_CONFIG_ENV_KEYS) {
+    const previous = snapshot.get(key);
+    if (typeof previous === "string") {
+      process.env[key] = previous;
+    } else {
+      delete process.env[key];
+    }
+  }
+}
+
 test("playwright frontdoor smoke config uses local preflight-safe fixtures", async () => {
-  const previous = process.env.PLAYWRIGHT_BASE_URL;
-  delete process.env.PLAYWRIGHT_BASE_URL;
+  const snapshot = snapshotPlaywrightConfigEnv();
+  clearPlaywrightConfigEnv();
 
   try {
     const configModule = await importFresh("../playwright.config.mjs");
-    const env = configModule.default.webServer.env;
+    const frontdoor = frontdoorWebServerEntry(configModule.default);
+    assert.ok(frontdoor, "front-door webServer entry must exist");
+    const env = frontdoor.env;
     const users = JSON.parse(env.TP_FRONTDOOR_USERS_JSON);
 
-    assert.equal(configModule.default.webServer.command, "npm run dev -- --port 3000");
+    assert.equal(frontdoor.command, "npm run dev -- --port 3000");
     assert.equal(env.NODE_ENV, "development");
     assert.equal(env.TP_ALLOW_LOCAL_ACCESS_BYPASS, "1");
     assert.equal(env.TP_FASTAPI_ORIGIN, "http://127.0.0.1:9999");
@@ -211,31 +256,34 @@ test("playwright frontdoor smoke config uses local preflight-safe fixtures", asy
     assert.equal(users[0].username, "smoke-admin");
     assert.equal(users[0].access_email, "smoke-admin@local.invalid");
     assert.match(users[0].password_hash, /^\$argon2/);
+
+    // The mock FastAPI origin must be wired alongside the front-door so
+    // the @portal-browser suite can serve portal.html upstream-proxied
+    // through the front-door without spawning real FastAPI.
+    const mock = mockFastapiWebServerEntry(configModule.default);
+    assert.ok(mock, "mock FastAPI origin webServer entry must exist");
+    assert.equal(mock.url, "http://127.0.0.1:9999/healthz");
+    assert.equal(mock.env.MOCK_FASTAPI_PORT, "9999");
+    assert.equal(mock.env.MOCK_FASTAPI_HOST, "127.0.0.1");
   } finally {
-    if (typeof previous === "string") {
-      process.env.PLAYWRIGHT_BASE_URL = previous;
-    } else {
-      delete process.env.PLAYWRIGHT_BASE_URL;
-    }
+    restorePlaywrightConfigEnv(snapshot);
   }
 });
 
 test("playwright frontdoor smoke config derives webServer port from PLAYWRIGHT_BASE_URL", async () => {
-  const previous = process.env.PLAYWRIGHT_BASE_URL;
+  const snapshot = snapshotPlaywrightConfigEnv();
+  clearPlaywrightConfigEnv();
   process.env.PLAYWRIGHT_BASE_URL = "http://127.0.0.1:3017";
 
   try {
     const configModule = await importFresh("../playwright.config.mjs");
+    const frontdoor = frontdoorWebServerEntry(configModule.default);
 
     assert.equal(configModule.default.use.baseURL, "http://127.0.0.1:3017");
-    assert.equal(configModule.default.webServer.url, "http://127.0.0.1:3017");
-    assert.equal(configModule.default.webServer.command, "npm run dev -- --port 3017");
+    assert.equal(frontdoor.url, "http://127.0.0.1:3017");
+    assert.equal(frontdoor.command, "npm run dev -- --port 3017");
   } finally {
-    if (typeof previous === "string") {
-      process.env.PLAYWRIGHT_BASE_URL = previous;
-    } else {
-      delete process.env.PLAYWRIGHT_BASE_URL;
-    }
+    restorePlaywrightConfigEnv(snapshot);
   }
 });
 

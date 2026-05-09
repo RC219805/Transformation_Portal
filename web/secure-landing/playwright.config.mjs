@@ -1,23 +1,40 @@
-// Playwright configuration for the front-door browser smoke suite.
+// Playwright configuration for the front-door + portal browser smoke
+// suites.
 //
-// Scope (Phase-1 closeout):
-//   - Chromium only.
-//   - Three @frontdoor-browser specs covering /, /login, and the
-//     unauthenticated /portal redirect to /login.
+// Scope:
+//   - Chromium only, headless only.
+//   - @frontdoor-browser specs covering /, /login, and the
+//     unauthenticated /portal redirect to /login (#1690).
+//   - @portal-browser specs covering the signed-in /portal shell
+//     served via the front-door upstream proxy (this config). The
+//     proxy fetches from a Node mock FastAPI origin started by the
+//     second webServer entry below — no Python in CI.
 //   - Supplemental coverage that runs alongside the existing node:test
 //     unit suite. The CDP-based scripts/validation/validate_portal_browser_smoke.py
 //     and validate_frontdoor_browser_smoke.py remain the governed Make
 //     lanes; this Playwright config does NOT replace them.
 //
-// The webServer block boots the Next.js dev server with a minimal env so
-// the smoke tests can render pages without depending on a live FastAPI
-// origin.
+// The two webServer entries boot:
+//   1. The Node mock FastAPI origin on MOCK_FASTAPI_PORT (default 9999).
+//      Serves portal.html with placeholder URLs substituted to inert
+//      mock-asset stubs.
+//   2. The front-door Next.js dev server on PLAYWRIGHT_BASE_URL's port.
+//      Configured via TP_FASTAPI_ORIGIN to proxy to the mock above.
+//
+// Authentication for @portal-browser is handled by the portal-setup
+// project, which performs a real form-POST login against the seeded
+// smoke-admin user (the same credentials already pre-baked here for
+// #1690). The login flow uses production code paths verbatim — no
+// test-only auth shortcut.
 
 import { defineConfig, devices } from "@playwright/test";
 
 const isCi = Boolean(process.env.CI);
 const baseURL = process.env.PLAYWRIGHT_BASE_URL || "http://127.0.0.1:3000";
 const webServerPort = getWebServerPort(baseURL);
+const mockFastapiHost = process.env.MOCK_FASTAPI_HOST || "127.0.0.1";
+const mockFastapiPort = process.env.MOCK_FASTAPI_PORT || "9999";
+const mockFastapiOrigin = `http://${mockFastapiHost}:${mockFastapiPort}`;
 const frontdoorSmokeUsersJson = JSON.stringify([
   {
     username: "smoke-admin",
@@ -27,6 +44,7 @@ const frontdoorSmokeUsersJson = JSON.stringify([
     role: "admin",
   },
 ]);
+const portalAuthStateFile = "tests/e2e/.auth/portal-state.json";
 
 function getWebServerPort(playwrightBaseURL) {
   const url = new URL(playwrightBaseURL);
@@ -63,25 +81,67 @@ export default defineConfig({
   projects: [
     {
       name: "chromium",
+      // Default project: @frontdoor-browser specs (landing, login,
+      // unauthenticated portal redirect). Excludes the portal-setup
+      // bootstrap and the .portal.spec.mjs files which require an
+      // authenticated context.
+      testIgnore: [
+        "**/portal-setup.spec.mjs",
+        "**/*.portal.spec.mjs",
+      ],
       use: { ...devices["Desktop Chrome"] },
     },
-  ],
-  webServer: {
-    command: `npm run dev -- --port ${webServerPort}`,
-    url: baseURL,
-    reuseExistingServer: !isCi,
-    timeout: 120_000,
-    env: {
-      NODE_ENV: "development",
-      // Stub backend so the dev server boots; smoke tests do not call
-      // protected /v1/* routes that would require a real upstream. The
-      // development preflight still requires a configured user source, but
-      // allows the stub backend to be unavailable.
-      TP_FASTAPI_ORIGIN: "http://127.0.0.1:9999",
-      TP_BACKEND_API_KEY: "frontdoor-browser-smoke",
-      TP_FRONTDOOR_USERS_JSON: frontdoorSmokeUsersJson,
-      TP_ALLOW_LOCAL_ACCESS_BYPASS: "1",
-      WATCHPACK_POLLING: "true",
+    {
+      // Setup project: performs the real form-POST login against the
+      // pre-seeded smoke-admin user and persists storageState for the
+      // portal-browser project. Runs once per session.
+      name: "portal-setup",
+      testMatch: /portal-setup\.spec\.mjs/,
+      use: { ...devices["Desktop Chrome"] },
     },
-  },
+    {
+      // @portal-browser specs run against the authenticated context
+      // captured by portal-setup. Project dependency makes Playwright
+      // run portal-setup first and skip portal-browser if it fails.
+      name: "portal-browser",
+      testMatch: /\.portal\.spec\.mjs$/,
+      dependencies: ["portal-setup"],
+      use: {
+        ...devices["Desktop Chrome"],
+        storageState: portalAuthStateFile,
+      },
+    },
+  ],
+  webServer: [
+    {
+      // Node mock FastAPI origin — serves portal.html (with placeholders
+      // substituted) for the front-door's upstream proxy. No Python in CI.
+      command: `node tests/e2e/fixtures/mock-fastapi-origin.mjs`,
+      url: `${mockFastapiOrigin}/healthz`,
+      reuseExistingServer: !isCi,
+      timeout: 30_000,
+      env: {
+        MOCK_FASTAPI_HOST: mockFastapiHost,
+        MOCK_FASTAPI_PORT: mockFastapiPort,
+      },
+    },
+    {
+      // Next.js front-door dev server. Proxies /portal upstream to the
+      // mock FastAPI origin above. Auth bypass for Cloudflare Access is
+      // enabled via TP_ALLOW_LOCAL_ACCESS_BYPASS=1 +
+      // NODE_ENV=development (lib/config.js:10-12).
+      command: `npm run dev -- --port ${webServerPort}`,
+      url: baseURL,
+      reuseExistingServer: !isCi,
+      timeout: 120_000,
+      env: {
+        NODE_ENV: "development",
+        TP_FASTAPI_ORIGIN: mockFastapiOrigin,
+        TP_BACKEND_API_KEY: "frontdoor-browser-smoke",
+        TP_FRONTDOOR_USERS_JSON: frontdoorSmokeUsersJson,
+        TP_ALLOW_LOCAL_ACCESS_BYPASS: "1",
+        WATCHPACK_POLLING: "true",
+      },
+    },
+  ],
 });
