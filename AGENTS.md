@@ -100,6 +100,8 @@ Quick reference for common workflows and commands in this repo.
 - `make check-docs` dry-run docs organization.
 - `make check-stale-docs` detect changed-file references to deleted or moved docs root paths.
 - `make check-doc-heading-links` validate markdown links that target related TODO/quick-win/binary-cleanup document headings.
+- `make generate-design-tokens-doc` regenerate `docs/design/tokens.md` from the shared/frontdoor CSS token sources.
+- `make check-design-tokens-doc` fail when the generated design token reference is stale.
 - `python3 scripts/governance/check_docs_structure.py --all` run the canonical documentation structure validator across all docs.
 - `make lock` regenerate all requirements lockfiles.
 - `make lock-prod` regenerate `requirements.lock.txt`.
@@ -133,6 +135,9 @@ Quick reference for common workflows and commands in this repo.
 - `cd web/secure-landing && npm run build:portal` bundle the modularized portal sources back into the shipped `public/portal-assets/portal.js` asset and sync shared UI token primitives.
 - `cd web/secure-landing && npm run check:utility-ownership` validate the portal utility ownership manifest, generated usage report, and compat-hold/deprecated utility gates.
 - `cd web/secure-landing && npm run check:css-layer-parity` verify the production portal CSS layer graph, generated layer order, and unlayered-rule contract before running browser parity.
+- `cd web/secure-landing && npm run test:browser:install` install the Chromium browser dependency for the frontdoor Playwright smoke suite.
+- `cd web/secure-landing && npm run test:browser` run the supplemental Playwright smoke suite for `/`, `/login`, and the unauthenticated `/portal` auth boundary; this does not replace the governed `make validate-frontdoor-browser` lane.
+- `python3 scripts/validation/generate_design_tokens_doc.py --check` verify the generated `docs/design/tokens.md` reference outside Make.
 - `./scripts/validation/run_full_validation_suite.sh` all-in-one validation orchestrator.
 - `./scripts/validation/run_full_validation_suite.sh --quick` skip browser smokes for faster iteration.
 - `./scripts/validation/run_full_validation_suite.sh --skip-frontdoor` Python-only validation.
@@ -169,6 +174,7 @@ Quick reference for common workflows and commands in this repo.
 - `./scripts/pipelines/run_800_picacho_efficientsam_validation.sh` run the 800 Picacho EfficientSAM production validation pass with DA3, Materials V3, V2 tone mapping, and PBR enabled.
 - `./scripts/pipelines/run_sealed_eval_72h.sh --archive-index <path> --archive-root <path>` run sealed pre/post fixity verification around an optional eval command and emit an audit package.
 - `./scripts/pipelines/hdr_production_pipeline.sh` interactive HDR video mastering workflow that pairs source footage with a 3D LUT and writes web deliverables.
+- `depth-aware-dof --source <image.tiff> --depth-npy <depth.npy> --metadata <metadata.json> --out-dir <dir>` run single-image depth-aware DOF, preserving 16-bit TIFF output and writing preview, diagnostics, summary JSON, and a package ZIP; use `--depth-convention` when metadata does not provide one.
 - `./scripts/setup/install_da3_runtime.sh` install the repo-local DA3 subprocess runtime (validated `.runtime/Depth-Anything-3` ref + auto-discovered `./.runtime/Depth-Anything-3/.venv-da3/bin/python` contract + `.runtime/da3-pip-freeze.txt` snapshot).
 - `./scripts/setup/install_fastvlm_runtime.sh` install the manifest-pinned optional FastVLM advisory captioning runtime; default model roles are `smoke,default`, with `review` available through `--models smoke,default,review` or `--all-models`.
 - FastVLM advisory captioning is optional and subprocess-only. Keep the runtime under `.runtime/fastvlm/.venv-fastvlm`, keep model checkpoints/vendor clones under `.runtime/fastvlm/`, and use `--vlm-captioning on` only when local advisory sidecars are desired. FastVLM output is never quality-gate evidence.
