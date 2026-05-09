@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import sys
 import urllib.error
 from pathlib import Path
@@ -803,20 +804,50 @@ def test_frontdoor_browser_tail_text_reads_only_a_bounded_suffix(tmp_path: Path)
 
 def test_frontdoor_browser_prunes_only_stale_smoke_distdirs(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     module = _load_module(FRONTDOOR_BROWSER_SCRIPT_PATH, "tests_validate_frontdoor_browser_smoke_stale_distdirs")
+    now = 1_000_000.0
+    old_mtime = now - module.FRONTDOOR_STALE_DIST_DIR_MIN_AGE_SECONDS - 1
+    fresh_mtime = now - module.FRONTDOOR_STALE_DIST_DIR_MIN_AGE_SECONDS + 1
     active = tmp_path / ".next-smoke-3000"
     stale = tmp_path / ".next-smoke-3001"
+    fresh = tmp_path / ".next-smoke-3002"
     unrelated = tmp_path / ".next"
     active.mkdir()
     stale.mkdir()
+    fresh.mkdir()
     unrelated.mkdir()
+    for candidate in (active, stale, unrelated):
+        os.utime(candidate, (old_mtime, old_mtime))
+    os.utime(fresh, (fresh_mtime, fresh_mtime))
 
     monkeypatch.setattr(module, "FRONTDOOR_ROOT", tmp_path)
 
-    module._prune_stale_frontdoor_dist_dirs(active)
+    module._prune_stale_frontdoor_dist_dirs(active, now=now)
 
     assert active.is_dir()
     assert not stale.exists()
+    assert fresh.is_dir()
     assert unrelated.is_dir()
+
+
+def test_frontdoor_browser_prune_reports_cleanup_failures(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+    module = _load_module(FRONTDOOR_BROWSER_SCRIPT_PATH, "tests_validate_frontdoor_browser_smoke_stale_failure")
+    now = 1_000_000.0
+    old_mtime = now - module.FRONTDOOR_STALE_DIST_DIR_MIN_AGE_SECONDS - 1
+    active = tmp_path / ".next-smoke-3000"
+    stale = tmp_path / ".next-smoke-3001"
+    active.mkdir()
+    stale.mkdir()
+    for candidate in (active, stale):
+        os.utime(candidate, (old_mtime, old_mtime))
+
+    def _fail_rmtree(_candidate: Path) -> None:
+        raise OSError("permission denied")
+
+    monkeypatch.setattr(module, "FRONTDOOR_ROOT", tmp_path)
+    monkeypatch.setattr(module.shutil, "rmtree", _fail_rmtree)
+
+    with pytest.raises(module.SmokeFailure, match="Could not remove stale front-door smoke distDir.*permission denied"):
+        module._prune_stale_frontdoor_dist_dirs(active, now=now)
 
 
 def test_frontdoor_browser_main_terminates_spawned_runtimes_on_setup_failure(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):

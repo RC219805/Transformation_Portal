@@ -4,6 +4,7 @@ import { spawnSync } from "node:child_process";
 import { createSign, generateKeyPairSync } from "node:crypto";
 import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 
 import argon2 from "argon2";
@@ -36,6 +37,8 @@ const ENV_KEYS = [
 const TEST_CF_ACCESS_TEAM_DOMAIN = "https://tp-frontdoor-tests.cloudflareaccess.com";
 const TEST_CF_ACCESS_AUD = "tp-frontdoor-aud";
 const TEST_CF_ACCESS_KID = "tp-frontdoor-key";
+const FRONTDOOR_APP_ROOT = fileURLToPath(new URL("../", import.meta.url));
+const REPO_ROOT = path.resolve(FRONTDOOR_APP_ROOT, "../..");
 const TEST_CF_ACCESS_KEYS = generateKeyPairSync("rsa", {
   modulusLength: 2048
 });
@@ -186,7 +189,7 @@ test("next config honors TP_NEXT_DIST_DIR for isolated local frontdoor runs", as
     assert.equal(configModule.default.turbopack, undefined);
     assert.equal(
       path.resolve(configModule.default.outputFileTracingRoot),
-      path.resolve(process.cwd(), "../.."),
+      REPO_ROOT,
       "standalone tracing must still include repo-root files such as the portal asset manifest"
     );
   } finally {

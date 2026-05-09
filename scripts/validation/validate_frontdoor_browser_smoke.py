@@ -67,6 +67,7 @@ DEFAULT_FRONTDOOR_ROLE = "admin"
 FRONTDOOR_ROOT = SCRIPT_DIR.parent.parent / "web" / "secure-landing"
 FRONTDOOR_SEED_SCRIPT = FRONTDOOR_ROOT / "scripts" / "seed-frontdoor-user.mjs"
 FRONTDOOR_SMOKE_DIST_DIR_PREFIX = ".next-smoke-"
+FRONTDOOR_STALE_DIST_DIR_MIN_AGE_SECONDS = 5 * 60
 
 
 def _request_frontdoor_health(base_url: str) -> tuple[int, dict]:
@@ -168,13 +169,38 @@ def _generate_frontdoor_users_file(username: str, password: str, runtime_root: P
     )
 
 
-def _prune_stale_frontdoor_dist_dirs(active_dist_dir: Path) -> None:
+def _prune_stale_frontdoor_dist_dirs(
+    active_dist_dir: Path,
+    *,
+    now: Optional[float] = None,
+    min_age_seconds: float = FRONTDOOR_STALE_DIST_DIR_MIN_AGE_SECONDS,
+) -> None:
     active_dist_dir = active_dist_dir.resolve()
+    current_time = time.time() if now is None else now
     for candidate in FRONTDOOR_ROOT.glob(f"{FRONTDOOR_SMOKE_DIST_DIR_PREFIX}*"):
         if candidate.resolve() == active_dist_dir:
             continue
         if candidate.is_dir():
-            shutil.rmtree(candidate, ignore_errors=True)
+            try:
+                candidate_mtime = candidate.stat().st_mtime
+            except FileNotFoundError:
+                continue
+            except OSError as exc:
+                raise SmokeFailure(
+                    f"Could not inspect front-door smoke distDir {candidate}: {exc}",
+                    kind="runtime",
+                ) from exc
+            if current_time - candidate_mtime < min_age_seconds:
+                continue
+            try:
+                shutil.rmtree(candidate)
+            except FileNotFoundError:
+                continue
+            except OSError as exc:
+                raise SmokeFailure(
+                    f"Could not remove stale front-door smoke distDir {candidate}: {exc}",
+                    kind="runtime",
+                ) from exc
 
 
 def _spawn_local_frontdoor(
