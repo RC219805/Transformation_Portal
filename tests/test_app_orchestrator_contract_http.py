@@ -2640,13 +2640,17 @@ def test_portal_rum_contract_rejects_logout_submit_attempt_with_unknown_route(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Defense-in-depth pin against accidental route-allowlist drift.
+    """Pin exact-match routing on the new ``/logout`` allowlist entry.
 
-    If a refactor drops ``/logout`` from PORTAL_ALLOWED_RUM_ROUTES, this
-    test will pass (200) instead of failing (400) when the value is
-    rejected. We instead verify a known-bad route still gets rejected,
-    proving the allowlist is enforced at all and the new ``/logout``
-    entry isn't a wildcard.
+    Paired with ``test_portal_rum_contract_accepts_logout_submit_attempt``
+    above (which pins exactly ``/logout`` returns 200), this test pins
+    that a sibling sub-path under ``/logout/...`` is rejected. Together
+    the pair encodes the invariant: ``/logout`` is allowed iff the
+    request route equals ``/logout`` exactly. If a refactor ever
+    weakens the route check from a set-membership test (``route in
+    PORTAL_ALLOWED_RUM_ROUTES``) to a prefix/glob match (e.g.
+    ``any(route.startswith(p) for p in ...)``), ``/logout/anything-else``
+    would suddenly start being accepted and this test would fail.
     """
     monkeypatch.setenv("TP_PORTAL_RUM_ENABLED", "1")
     monkeypatch.setenv("TP_PORTAL_RUM_ROLLOUT_PERCENT", "100")
