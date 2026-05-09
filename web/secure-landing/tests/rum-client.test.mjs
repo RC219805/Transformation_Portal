@@ -5,7 +5,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 
-import { NextRequest } from "next/server.js";
+import { NextRequest, NextResponse } from "next/server.js";
 
 import { getDb, resetDbCache } from "../lib/db.js";
 
@@ -689,6 +689,42 @@ test("portal bundle source clears login_submit_success marker state when session
   assert.ok(markerReadIdx > removeIdx, "expected marker read after breadcrumb removal");
   assert.ok(markerClearIdx > markerReadIdx, "expected marker clear after marker read");
   assert.ok(markerRequiredIdx > markerClearIdx, "expected marker requirement after marker clear");
+});
+
+test("setRumMarkerCookie preserves explicit falsy marker values", async () => {
+  const env = withRumEnvironment();
+
+  try {
+    const { setRumMarkerCookie } = await importFresh("../lib/rum-client.js");
+    const marker = Object.freeze({
+      name: "tp_test_marker",
+      path: "/test-marker",
+      maxAgeSeconds: 60,
+    });
+    const cases = [
+      { value: 0, expected: "0" },
+      { value: false, expected: "false" },
+      { value: null, expected: "" },
+      { value: undefined, expected: "" },
+    ];
+
+    for (const { value, expected } of cases) {
+      const response = NextResponse.next();
+      setRumMarkerCookie(response, marker, value);
+      const cookieHeader = response.headers.get("set-cookie") || "";
+      if (expected) {
+        assert.match(cookieHeader, new RegExp(`\\btp_test_marker=${expected}\\b`));
+      } else {
+        assert.match(cookieHeader, /\btp_test_marker=;/);
+      }
+      assert.match(cookieHeader, /\bPath=\/test-marker\b/);
+      assert.match(cookieHeader, /\bMax-Age=60\b/);
+      assert.match(cookieHeader, /\bSameSite=Lax\b/i);
+      assert.doesNotMatch(cookieHeader, /HttpOnly/i);
+    }
+  } finally {
+    env.cleanup();
+  }
 });
 
 test("renderRumClientScript failure listener uses Date.now() (not performance.now()) for elapsed time", async () => {

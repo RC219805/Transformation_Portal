@@ -50,13 +50,14 @@ export const LOGIN_SUBMIT_SUCCESS_MARKER = Object.freeze({
 // these from JS; secure tracks config.sessionCookieSecure so local-dev
 // HTTP loopbacks don't strip the cookie; sameSite="lax" lets the
 // cookie ride the same-origin 303 redirect from POST /login (or
-// future /logout) to the GET landing page. ``value`` is coerced to a
-// non-empty string defensively so a caller passing null/undefined
+// future /logout) to the GET landing page. Nullish values are coerced
+// to an empty string defensively so a caller passing null/undefined
 // doesn't end up with the literal strings "null" / "undefined" as the
-// cookie value.
+// cookie value, while explicit falsy marker values like 0/false remain
+// observable.
 export function setRumMarkerCookie(response, marker, value) {
   const config = getConfig();
-  response.cookies.set(marker.name, String(value || ""), {
+  response.cookies.set(marker.name, String(value ?? ""), {
     httpOnly: false,
     secure: config.sessionCookieSecure,
     sameSite: "lax",
