@@ -183,6 +183,12 @@ test("next config honors TP_NEXT_DIST_DIR for isolated local frontdoor runs", as
   try {
     const configModule = await importFresh("../next.config.js");
     assert.equal(configModule.default.distDir, ".next-smoke-test");
+    assert.equal(configModule.default.turbopack, undefined);
+    assert.equal(
+      path.resolve(configModule.default.outputFileTracingRoot),
+      path.resolve(process.cwd(), "../.."),
+      "standalone tracing must still include repo-root files such as the portal asset manifest"
+    );
   } finally {
     if (typeof previous === "string") {
       process.env.TP_NEXT_DIST_DIR = previous;

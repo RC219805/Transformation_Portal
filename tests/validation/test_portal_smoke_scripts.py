@@ -801,6 +801,24 @@ def test_frontdoor_browser_tail_text_reads_only_a_bounded_suffix(tmp_path: Path)
     assert len(tail) <= 24
 
 
+def test_frontdoor_browser_prunes_only_stale_smoke_distdirs(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+    module = _load_module(FRONTDOOR_BROWSER_SCRIPT_PATH, "tests_validate_frontdoor_browser_smoke_stale_distdirs")
+    active = tmp_path / ".next-smoke-3000"
+    stale = tmp_path / ".next-smoke-3001"
+    unrelated = tmp_path / ".next"
+    active.mkdir()
+    stale.mkdir()
+    unrelated.mkdir()
+
+    monkeypatch.setattr(module, "FRONTDOOR_ROOT", tmp_path)
+
+    module._prune_stale_frontdoor_dist_dirs(active)
+
+    assert active.is_dir()
+    assert not stale.exists()
+    assert unrelated.is_dir()
+
+
 def test_frontdoor_browser_main_terminates_spawned_runtimes_on_setup_failure(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     module = _load_module(FRONTDOOR_BROWSER_SCRIPT_PATH, "tests_validate_frontdoor_browser_smoke_runtime_cleanup")
     backend_runtime = SimpleNamespace(base_url="http://127.0.0.1:8124")

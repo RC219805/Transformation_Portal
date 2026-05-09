@@ -66,6 +66,7 @@ DEFAULT_FRONTDOOR_PASSWORD = "correct horse battery staple"
 DEFAULT_FRONTDOOR_ROLE = "admin"
 FRONTDOOR_ROOT = SCRIPT_DIR.parent.parent / "web" / "secure-landing"
 FRONTDOOR_SEED_SCRIPT = FRONTDOOR_ROOT / "scripts" / "seed-frontdoor-user.mjs"
+FRONTDOOR_SMOKE_DIST_DIR_PREFIX = ".next-smoke-"
 
 
 def _request_frontdoor_health(base_url: str) -> tuple[int, dict]:
@@ -167,6 +168,15 @@ def _generate_frontdoor_users_file(username: str, password: str, runtime_root: P
     )
 
 
+def _prune_stale_frontdoor_dist_dirs(active_dist_dir: Path) -> None:
+    active_dist_dir = active_dist_dir.resolve()
+    for candidate in FRONTDOOR_ROOT.glob(f"{FRONTDOOR_SMOKE_DIST_DIR_PREFIX}*"):
+        if candidate.resolve() == active_dist_dir:
+            continue
+        if candidate.is_dir():
+            shutil.rmtree(candidate, ignore_errors=True)
+
+
 def _spawn_local_frontdoor(
     *,
     username: str,
@@ -192,13 +202,15 @@ def _spawn_local_frontdoor(
     log_path = runtime_root / "frontdoor.log"
     port = _find_free_port()
     base_url = f"http://localhost:{port}"
-    dist_dir_name = f".next-smoke-{port}"
+    dist_dir_name = f"{FRONTDOOR_SMOKE_DIST_DIR_PREFIX}{port}"
     dist_dir_path = FRONTDOOR_ROOT / dist_dir_name
+    _prune_stale_frontdoor_dist_dirs(dist_dir_path)
 
     env = os.environ.copy()
     env.update(
         {
             "NEXT_TELEMETRY_DISABLED": "1",
+            "WATCHPACK_POLLING": "true",
             "TP_FRONTDOOR_HOST": "127.0.0.1",
             "TP_FRONTDOOR_PORT": str(port),
             "TP_FRONTDOOR_USERS_FILE": str(users_file),
