@@ -38,7 +38,7 @@ Current schema fields captured by repo code:
 `trace_id`, `cohort_bucket`, and `auth_mode` are telemetry routing / correlation fields with the following repo-backed semantics:
 
 - `trace_id`: W3C `traceparent` correlation ID, normalized from the incoming request header when valid or generated from secure random bytes when absent. It is not generated from username, email, session ID, API key, CSRF token, access JWT, request IP, or other plain-text identity fields. If this field is ever made stable across sessions outside normal trace propagation, this packet must be revised to classify that behavior before rollout expansion.
-- `cohort_bucket`: integer rollout bucket in the range `0..99`, computed by hashing the rollout cohort key and taking a modulo-100 bucket. Current repo code may use managed username, access email, role, or the direct-debug cohort key as the pre-hash cohort input, but the raw cohort key is not persisted in the RUM record. Because the bucket is stable for the same cohort key, reviewers should treat it as coarse pseudonymous rollout telemetry rather than identity-free randomness.
+- `cohort_bucket`: integer rollout bucket. Non-empty cohort keys produce a `0..99` bucket by hashing the rollout cohort key and taking a modulo-100 bucket; the shared `_stable_rollout_bucket` helper reserves `100` for missing or empty cohort keys. Current repo code may use managed username, access email, role, or the direct-debug cohort key as the pre-hash cohort input, but the raw cohort key is not persisted in the RUM record. Because the bucket is stable for the same cohort key, reviewers should treat it as coarse pseudonymous rollout telemetry rather than identity-free randomness.
 - `auth_mode`: bounded runtime auth-mode label only (`managed` for managed portal actors, otherwise the repo auth mode such as `direct_debug`). It must not contain raw credentials, access emails, JWT claims, session identifiers, CSRF tokens, or throttle keys.
 
 Current supported event families:
@@ -84,7 +84,7 @@ Cookie values are deterministic and bounded:
 - The failure cookie value is one of the five values in `LOGIN_RUM_FAILURE_CODES` (`csrf`, `configuration`, `access`, `throttled`, `invalid`). It is not derived from user input.
 - The success cookie value is the fixed string `1`. The actual submit-to-render duration is computed from a `sessionStorage` breadcrumb (`tpLoginSubmitStartedAt`) the client wrote at submit time; the cookie itself carries no timing information.
 
-Cookie clear discipline (`clearRumMarkerCookie` in `lib/rum-client.js`) writes an empty value with `expires=epoch` on the original `Path` so the browser drops the cookie immediately on receipt of the response. Cross-marker hygiene is enforced: a successful login also clears any stale failure marker, and a failed login clears any stale success marker, so the two markers can never both be live for the same submit.
+Cookie clear discipline (`clearRumMarkerCookie` in `web/secure-landing/lib/rum-client.js`) writes an empty value with `expires=epoch` on the original `Path` so the browser drops the cookie immediately on receipt of the response. Cross-marker hygiene is enforced: a successful login also clears any stale failure marker, and a failed login clears any stale success marker, so the two markers can never both be live for the same submit.
 
 The logout route (#1696) currently sets no marker cookies on the user device. Server-side `logout_submit_*` events fire from `/logout` directly without a client-mirror handshake, because the portal exposes no logout button today; a future client-mirror PR for logout would extend this section accordingly.
 
@@ -141,8 +141,8 @@ Repo-backed sanitization currently guarantees:
 The repo-owned login-submit and logout-submit emitters carry only the metadata keys below. The token-safe sanitizer in `app.py:_portal_sanitize_metadata` filters metadata to token-safe keys and bool / integer / finite-float / token-string values before persistence; the inventory below gives reviewers the exact repo-emitted key set for these families.
 
 - `failure_code` — set on `login_submit_failure` and `logout_submit_failure` only.
-  - Login enum: `csrf`, `configuration`, `access`, `throttled`, `invalid` (`LOGIN_RUM_FAILURE_CODES` in `lib/rum-emitter.js`).
-  - Logout enum: `csrf` only (`LOGOUT_RUM_FAILURE_CODES` in `lib/rum-emitter.js`); the route has one failure surface today, audited as `csrf_failure`.
+  - Login enum: `csrf`, `configuration`, `access`, `throttled`, `invalid` (`LOGIN_RUM_FAILURE_CODES` in `web/secure-landing/lib/rum-emitter.js`).
+  - Logout enum: `csrf` only (`LOGOUT_RUM_FAILURE_CODES` in `web/secure-landing/lib/rum-emitter.js`); the route has one failure surface today, audited as `csrf_failure`.
 - `source` — set to the literal string `"client"` by the browser-side mirrors only (#1689 / #1694 / #1695). Lets dashboards distinguish a server-side emission from a client-side mirror so the two are not double-counted.
 - `duration_ms` — set only on the browser-side `login_submit_attempt` mirror. It is a non-negative integer elapsed milliseconds value computed by the browser at validated submit-listener execution time, not derived from user input.
 
