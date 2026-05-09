@@ -2528,6 +2528,148 @@ def test_portal_rum_contract_drops_non_token_metadata_for_client_login_submit_fa
     assert "password" not in metadata
 
 
+def test_portal_rum_contract_accepts_logout_submit_attempt(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Server-side logout_submit_attempt round-trip.
+
+    Mirrors the login_submit_attempt contract: the front-door's POST
+    /logout handler emits this event at handler entry to anchor the
+    paired attempt/terminal latency calculation. ``route="/logout"``
+    requires the new entry in PORTAL_ALLOWED_RUM_ROUTES; ``view="login"``
+    matches the redirect destination, paralleling how the login event
+    types report the user-facing shell.
+    """
+    monkeypatch.setenv("TP_PORTAL_RUM_ENABLED", "1")
+    monkeypatch.setenv("TP_PORTAL_RUM_ROLLOUT_PERCENT", "100")
+
+    response = client.post(
+        "/v1/portal/rum",
+        json={
+            "event_type": "logout_submit_attempt",
+            "route": "/logout",
+            "view": "login",
+            "metric": "count",
+            "value": 1,
+            "unit": "count",
+        },
+    )
+    body = response.json()
+
+    assert response.status_code == 200
+    assert body["data"]["accepted"] is True
+    event = body["data"]["event"]
+    assert event["event_type"] == "logout_submit_attempt"
+    assert event["route"] == "/logout"
+    assert event["view"] == "login"
+    assert event["metric"] == "count"
+    assert event["unit"] == "count"
+    assert event["metadata"] == {}
+
+
+def test_portal_rum_contract_accepts_logout_submit_success(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("TP_PORTAL_RUM_ENABLED", "1")
+    monkeypatch.setenv("TP_PORTAL_RUM_ROLLOUT_PERCENT", "100")
+
+    response = client.post(
+        "/v1/portal/rum",
+        json={
+            "event_type": "logout_submit_success",
+            "route": "/logout",
+            "view": "login",
+            "metric": "duration",
+            "value": 73.4,
+            "unit": "ms",
+        },
+    )
+    body = response.json()
+
+    assert response.status_code == 200
+    assert body["data"]["accepted"] is True
+    event = body["data"]["event"]
+    assert event["event_type"] == "logout_submit_success"
+    assert event["route"] == "/logout"
+    assert event["view"] == "login"
+    assert event["metric"] == "duration"
+    assert event["unit"] == "ms"
+    assert event["value"] == 73.4
+    assert event["metadata"] == {}
+
+
+def test_portal_rum_contract_accepts_logout_submit_failure_with_csrf_code(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The logout route currently has only one failure surface (CSRF).
+
+    Both the Origin/Referrer mismatch path and the x-csrf-token mismatch
+    path fold into ``failure_code: "csrf"``. If a future change widens
+    the failure surface, both this test and ``ALLOWED_LOGOUT_FAILURE_CODES``
+    in ``lib/rum-emitter.js`` must be extended together.
+    """
+    monkeypatch.setenv("TP_PORTAL_RUM_ENABLED", "1")
+    monkeypatch.setenv("TP_PORTAL_RUM_ROLLOUT_PERCENT", "100")
+
+    response = client.post(
+        "/v1/portal/rum",
+        json={
+            "event_type": "logout_submit_failure",
+            "route": "/logout",
+            "view": "login",
+            "metric": "duration",
+            "value": 41.0,
+            "unit": "ms",
+            "metadata": {"failure_code": "csrf"},
+        },
+    )
+    body = response.json()
+
+    assert response.status_code == 200
+    assert body["data"]["accepted"] is True
+    event = body["data"]["event"]
+    assert event["event_type"] == "logout_submit_failure"
+    assert event["metric"] == "duration"
+    assert event["metadata"] == {"failure_code": "csrf"}
+
+
+def test_portal_rum_contract_rejects_logout_submit_attempt_with_unknown_route(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Pin exact-match routing on the new ``/logout`` allowlist entry.
+
+    Paired with ``test_portal_rum_contract_accepts_logout_submit_attempt``
+    above (which pins exactly ``/logout`` returns 200), this test pins
+    that a sibling sub-path under ``/logout/...`` is rejected. Together
+    the pair encodes the invariant: ``/logout`` is allowed iff the
+    request route equals ``/logout`` exactly. If a refactor ever
+    weakens the route check from a set-membership test (``route in
+    PORTAL_ALLOWED_RUM_ROUTES``) to a prefix/glob match (e.g.
+    ``any(route.startswith(p) for p in ...)``), ``/logout/anything-else``
+    would suddenly start being accepted and this test would fail.
+    """
+    monkeypatch.setenv("TP_PORTAL_RUM_ENABLED", "1")
+    monkeypatch.setenv("TP_PORTAL_RUM_ROLLOUT_PERCENT", "100")
+
+    response = client.post(
+        "/v1/portal/rum",
+        json={
+            "event_type": "logout_submit_attempt",
+            "route": "/logout/anything-else",
+            "view": "login",
+            "metric": "count",
+            "value": 1,
+            "unit": "count",
+        },
+    )
+
+    assert response.status_code == 400
+
+
 def test_portal_rum_contract_rejects_login_submit_attempt_with_unknown_metric(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
