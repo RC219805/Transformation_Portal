@@ -167,18 +167,27 @@ async function buildAdminUserFixture() {
   };
 }
 
-function buildPostRequest({ session, csrfToken, password = "correct horse battery staple", username = "admin", accessEmail = "admin@example.com", origin = "https://portal.example.com" }) {
+function buildPostRequest({
+  session,
+  csrfToken,
+  password = "correct horse battery staple",
+  username = "admin",
+  accessEmail = "admin@example.com",
+  origin = "https://portal.example.com",
+  extraCookies = [],
+}) {
   const form = new URLSearchParams({
     username,
     password,
     csrf_token: csrfToken,
   });
+  const cookie = [`__Host-tp_session=${session.id}`, ...extraCookies].join("; ");
   return buildRequest(`${origin}/login`, {
     method: "POST",
     headers: new Headers({
       origin,
       "content-type": "application/x-www-form-urlencoded",
-      cookie: `__Host-tp_session=${session.id}`,
+      cookie,
       "Cf-Access-Jwt-Assertion": createAccessJwt({ email: accessEmail }),
       "cf-access-authenticated-user-email": accessEmail,
     }),
@@ -187,6 +196,21 @@ function buildPostRequest({ session, csrfToken, password = "correct horse batter
 }
 
 const PII_FORBIDDEN_KEYS = ["username", "accessEmail", "access_email", "role", "session_id", "sessionId", "throttle_key", "throttleKey", "remote_addr", "remoteAddr"];
+
+function assertLoginFailureMarkerCookie(response, failureCode) {
+  const cookieHeader = response.headers.get("set-cookie") || "";
+  assert.match(cookieHeader, new RegExp(`\\btp_login_submit_failure=${failureCode}\\b`));
+  assert.match(cookieHeader, /\bMax-Age=60\b/);
+  assert.match(cookieHeader, /\bPath=\/login\b/);
+  assert.match(cookieHeader, /\bSameSite=Lax\b/i);
+  assert.doesNotMatch(cookieHeader, /HttpOnly[^,]*tp_login_submit_failure/i);
+}
+
+function assertClearsLoginFailureMarkerCookie(response) {
+  const cookieHeader = response.headers.get("set-cookie") || "";
+  assert.match(cookieHeader, /\btp_login_submit_failure=;/);
+  assert.match(cookieHeader, /\bPath=\/login\b/);
+}
 
 function assertNoPiiInRumPosts(rumCalls) {
   for (const call of rumCalls) {
@@ -258,6 +282,7 @@ test("login POST emits attempt + success events on successful credential rotatio
     assert.equal(success.body.unit, "ms");
     assert.ok(typeof success.body.value === "number" && success.body.value >= 0);
     assert.deepEqual(success.body.metadata, {});
+    assert.doesNotMatch(response.headers.get("set-cookie") || "", /\btp_login_submit_failure=/);
 
     // Backend auth + traceparent are forwarded.
     assert.equal(attempt.headers["authorization"], "Bearer backend-secret");
@@ -292,6 +317,7 @@ test("login POST emits attempt + failure(csrf) when the CSRF token mismatches", 
     assert.equal(rumCalls[0].body.event_type, "login_submit_attempt");
     assert.equal(rumCalls[1].body.event_type, "login_submit_failure");
     assert.deepEqual(rumCalls[1].body.metadata, { failure_code: "csrf" });
+    assertLoginFailureMarkerCookie(response, "csrf");
     assertNoPiiInRumPosts(rumCalls);
   } finally {
     restoreFetch();
@@ -317,6 +343,7 @@ test("login POST emits attempt + failure(configuration) when no users are config
     assert.equal(rumCalls.length, 2);
     assert.equal(rumCalls[1].body.event_type, "login_submit_failure");
     assert.deepEqual(rumCalls[1].body.metadata, { failure_code: "configuration" });
+    assertLoginFailureMarkerCookie(response, "configuration");
     assertNoPiiInRumPosts(rumCalls);
   } finally {
     restoreFetch();
@@ -356,6 +383,7 @@ test("login POST emits attempt + failure(access) when CF Access verification fai
     assert.equal(rumCalls.length, 2);
     assert.equal(rumCalls[1].body.event_type, "login_submit_failure");
     assert.deepEqual(rumCalls[1].body.metadata, { failure_code: "access" });
+    assertLoginFailureMarkerCookie(response, "access");
     assertNoPiiInRumPosts(rumCalls);
   } finally {
     restoreFetch();
@@ -385,6 +413,7 @@ test("login POST emits attempt + failure(invalid) when the password is wrong", a
     assert.equal(rumCalls.length, 2);
     assert.equal(rumCalls[1].body.event_type, "login_submit_failure");
     assert.deepEqual(rumCalls[1].body.metadata, { failure_code: "invalid" });
+    assertLoginFailureMarkerCookie(response, "invalid");
     assertNoPiiInRumPosts(rumCalls);
   } finally {
     restoreFetch();
@@ -420,7 +449,36 @@ test("login POST emits attempt + failure(throttled) when the throttle limit is r
     assert.equal(rumCalls.length, 2);
     assert.equal(rumCalls[1].body.event_type, "login_submit_failure");
     assert.deepEqual(rumCalls[1].body.metadata, { failure_code: "throttled" });
+    assertLoginFailureMarkerCookie(response, "throttled");
     assertNoPiiInRumPosts(rumCalls);
+  } finally {
+    restoreFetch();
+    env.cleanup();
+  }
+});
+
+test("login POST success clears a stale client failure marker without setting a new one", async () => {
+  const env = withTestEnvironment({ usersFileEntries: [await buildAdminUserFixture()] });
+  const rumCalls = [];
+  const restoreFetch = installFetchMock({ rumCalls });
+
+  try {
+    const sessions = await importFresh("../lib/sessions.js");
+    const { POST } = await importFresh("../app/login/route.js");
+    const session = sessions.createAnonymousSession();
+    const request = buildPostRequest({
+      session,
+      csrfToken: session.csrfToken,
+      extraCookies: ["tp_login_submit_failure=invalid"],
+    });
+
+    const response = await POST(request);
+    await flushFireAndForget();
+
+    assert.equal(response.status, 303);
+    assert.equal(response.headers.get("location"), "https://portal.example.com/portal");
+    assert.equal(rumCalls[1].body.event_type, "login_submit_success");
+    assertClearsLoginFailureMarkerCookie(response);
   } finally {
     restoreFetch();
     env.cleanup();

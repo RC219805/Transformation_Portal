@@ -2347,6 +2347,99 @@ def test_portal_rum_contract_accepts_login_submit_failure_with_failure_code(
     assert "accessEmail" not in event["metadata"]
 
 
+@pytest.mark.parametrize(
+    "failure_code",
+    ["csrf", "configuration", "access", "throttled", "invalid"],
+)
+def test_portal_rum_contract_accepts_client_login_submit_failure_metadata(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+    failure_code: str,
+) -> None:
+    """Survival contract for the client-side login_submit_failure emission.
+
+    The browser-side counterpart in ``rum-client.js`` posts
+    ``{source: "client", failure_code: <code>}`` for each of the five
+    server-side LOGIN_RUM_FAILURE_CODES. This test pins that the existing
+    ``_portal_sanitize_metadata`` accepts both keys together for every
+    code, so we never have to widen ``PORTAL_ALLOWED_RUM_METRICS`` or the
+    sanitizer to ship the failure mirror.
+    """
+    monkeypatch.setenv("TP_PORTAL_RUM_ENABLED", "1")
+    monkeypatch.setenv("TP_PORTAL_RUM_ROLLOUT_PERCENT", "100")
+
+    response = client.post(
+        "/v1/portal/rum",
+        json={
+            "event_type": "login_submit_failure",
+            "route": "/login",
+            "view": "login",
+            "metric": "duration",
+            "value": 142,
+            "unit": "ms",
+            "metadata": {"source": "client", "failure_code": failure_code},
+        },
+    )
+    body = response.json()
+
+    assert response.status_code == 200
+    assert body["data"]["accepted"] is True
+    event = body["data"]["event"]
+    assert event["event_type"] == "login_submit_failure"
+    assert event["metric"] == "duration"
+    assert event["unit"] == "ms"
+    assert event["value"] == 142
+    # Both keys survive the sanitizer with values intact and lowercased.
+    assert event["metadata"] == {"source": "client", "failure_code": failure_code}
+
+
+def test_portal_rum_contract_drops_non_token_metadata_for_client_login_submit_failure(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Defense-in-depth: even if a caller stuffs PII into the
+    login_submit_failure metadata, ``_portal_sanitize_metadata`` drops
+    values that fail ``_portal_is_token`` (emails with '@', free-text
+    passwords with whitespace) before persistence. The client emitter
+    never sets those keys — the contract is enforced at the source
+    (``rum-client.js`` only ever emits ``{source, failure_code}``).
+    """
+    monkeypatch.setenv("TP_PORTAL_RUM_ENABLED", "1")
+    monkeypatch.setenv("TP_PORTAL_RUM_ROLLOUT_PERCENT", "100")
+
+    response = client.post(
+        "/v1/portal/rum",
+        json={
+            "event_type": "login_submit_failure",
+            "route": "/login",
+            "view": "login",
+            "metric": "duration",
+            "value": 95,
+            "unit": "ms",
+            "metadata": {
+                "source": "client",
+                "failure_code": "invalid",
+                # Non-token VALUES (contain '@' or whitespace) are dropped
+                # wholesale by the sanitizer's string branch.
+                "email": "victim@example.com",
+                "password": "correct horse battery staple",
+            },
+        },
+    )
+    body = response.json()
+
+    assert response.status_code == 200
+    metadata = body["data"]["event"]["metadata"]
+
+    # Allowed metadata: the two keys the client emitter actually sets.
+    assert metadata.get("source") == "client"
+    assert metadata.get("failure_code") == "invalid"
+
+    # Non-token VALUES are dropped wholesale by the sanitizer's string branch.
+    assert "email" not in metadata
+    assert "password" not in metadata
+
+
 def test_portal_rum_contract_rejects_login_submit_attempt_with_unknown_metric(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
