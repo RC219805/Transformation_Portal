@@ -268,10 +268,102 @@ export function renderRumClientScript({ route, view, traceparent }) {
               duration_ms: elapsedMs
             }
           }, { keepalive: true });
+          // Persist a Date.now() epoch-ms breadcrumb so the redirect
+          // target (/login?error=<code> on failure) can compute the
+          // submit-to-failure latency. Date.now() is cross-navigation
+          // safe; performance.now() resets on each new page load and
+          // would always read 0 on the receiving page.
+          try {
+            window.sessionStorage.setItem(
+              "tpLoginSubmitStartedAt",
+              String(Date.now())
+            );
+          } catch (_storageErr) {
+            // sessionStorage unavailable (private mode / blocked);
+            // silently no-op so the failure mirror simply does not
+            // emit on this submission.
+          }
         } catch (_err) {
           // best-effort telemetry only
         }
       }, { once: true });
+    }
+
+    function scheduleLoginSubmitFailureListener() {
+      // Browser-side counterpart to the server-side login_submit_failure
+      // event (#1684). Emits when /login is loaded with a redirect-back
+      // ?error=<code> AND a fresh sessionStorage breadcrumb (written by
+      // scheduleLoginSubmitListener at submit time) proves we just
+      // submitted from this tab. Manual visits to /login?error=… and
+      // stale browser-back state therefore do NOT produce telemetry.
+      //
+      // Dedup contract: server-side already emits login_submit_failure
+      // with metric=duration. This client emission carries
+      // metadata.source="client" so dashboards can filter to one source
+      // for an authoritative count or sum both for an "all observed
+      // failures" view that includes browser-only signals (closed tab,
+      // network drop after submit). Naive sum-by-event_type aggregations
+      // will double-count; dashboards must filter by metadata.source.
+      if (VIEW !== "login") return;
+      if (typeof window === "undefined") return;
+      // Always read AND clear the breadcrumb on every /login load,
+      // regardless of whether we ultimately emit. Keeps stale entries
+      // from a closed-tab submit out of a future visitor's session.
+      var rawStart = null;
+      try {
+        rawStart = window.sessionStorage.getItem("tpLoginSubmitStartedAt");
+      } catch (_storageErr) {
+        // sessionStorage unavailable; bail without emitting.
+        return;
+      }
+      try {
+        window.sessionStorage.removeItem("tpLoginSubmitStartedAt");
+      } catch (_storageErr) {
+        // best-effort removal
+      }
+      if (!rawStart) return;
+      var errorCode = "";
+      try {
+        var url = new URL(window.location.href);
+        errorCode = String(url.searchParams.get("error") || "")
+          .trim()
+          .toLowerCase();
+      } catch (_urlErr) {
+        return;
+      }
+      if (!errorCode) return;
+      // Mirrors LOGIN_RUM_FAILURE_CODES at lib/rum-emitter.js. A drift
+      // test pins both lists.
+      var allowed = ["csrf", "configuration", "access", "throttled", "invalid"];
+      var matched = false;
+      for (var i = 0; i < allowed.length; i += 1) {
+        if (allowed[i] === errorCode) {
+          matched = true;
+          break;
+        }
+      }
+      if (!matched) return;
+      var startedAt = Number(rawStart);
+      if (!isFinite(startedAt) || startedAt <= 0) return;
+      var elapsedMs = Math.max(0, Math.round(Date.now() - startedAt));
+      // Freshness cap: production submit→failure latency is sub-second,
+      // so 60s catches network drops while excluding stale-back-button
+      // false positives.
+      if (elapsedMs > 60000) return;
+      try {
+        enqueue({
+          event_type: "login_submit_failure",
+          metric: "duration",
+          unit: "ms",
+          value: elapsedMs,
+          metadata: {
+            source: "client",
+            failure_code: errorCode
+          }
+        }, { keepalive: true });
+      } catch (_err) {
+        // best-effort telemetry only
+      }
     }
 
     function bootstrap() {
@@ -279,6 +371,7 @@ export function renderRumClientScript({ route, view, traceparent }) {
       emitRendered();
       scheduleFirstViewInteractive();
       scheduleLoginSubmitListener();
+      scheduleLoginSubmitFailureListener();
     }
 
     if (document.readyState === "loading") {
