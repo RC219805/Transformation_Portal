@@ -52,7 +52,7 @@ Current supported event families:
 - `logout_submit_success` *(added in #1696)*
 - `logout_submit_failure` *(added in #1696)*
 
-Allowed event-type / metric / unit triples are pinned by `PORTAL_ALLOWED_RUM_EVENT_TYPES`, `PORTAL_ALLOWED_RUM_METRICS`, and `PORTAL_ALLOWED_RUM_UNITS` in `app.py`. The contract tests under `tests/test_app_orchestrator_contract_http.py` round-trip every family above; widening the inventory requires a paired schema update plus contract test in the same change.
+Allowed event-type / metric / unit triples are pinned by `PORTAL_ALLOWED_RUM_EVENT_TYPES`, `PORTAL_ALLOWED_RUM_METRICS`, and `PORTAL_ALLOWED_RUM_UNITS` in `app.py`. Coverage is split across the repo: `tests/test_app_orchestrator_contract_http.py` round-trips the HTTP sink contract for `queue_request`, `core_web_vital`, and the login/logout submit families; `tests/test_app_orchestrator_runtime.py` pins the portal bundle emissions for `portal_shell_rendered`, `first_view_interactive`, `queue_request`, and `sse_reconnect`; `web/secure-landing/tests/rum-client.test.mjs`, `web/secure-landing/tests/login-rum.test.mjs`, and `web/secure-landing/tests/logout-rum.test.mjs` pin the managed frontdoor render and submit emitters. Widening the inventory requires paired schema and coverage updates in the same change.
 
 ### RUM Marker Cookies
 
@@ -60,7 +60,7 @@ The client-side login submit RUM mirrors (#1689 / #1694 / #1695) require two ser
 
 | Cookie name | Path | Max-Age | Sample value | Set when | Cleared when |
 |---|---|---|---|---|---|
-| `tp_login_submit_failure` | `/login` | 60 s | `csrf` / `configuration` / `access` / `throttled` / `invalid` | POST `/login` returns a 303 with `?error=<code>` | `/login` GET reads + clears (success of a later submit) |
+| `tp_login_submit_failure` | `/login` | 60 s | `csrf` / `configuration` / `access` / `throttled` / `invalid` | POST `/login` returns a 303 with `?error=<code>` | Immediate `/login` GET after the failure redirect reads + clears; a later successful POST also clears any stale failure marker server-side |
 | `tp_login_submit_success` | `/` | 60 s | `1` (fixed presence marker) | POST `/login` returns a 303 to `/portal` | Portal bundle reads + clears on first `/portal` load |
 
 Properties of both markers:
