@@ -9,6 +9,7 @@
 // at app.py:_record_portal_rum already accepts.
 
 import { normalizeTraceparent } from "./trace.js";
+import { getConfig } from "./config.js";
 
 export const LOGIN_SUBMIT_BREADCRUMB_KEY = "tpLoginSubmitStartedAt";
 export const LOGIN_SUBMIT_FAILURE_MARKER_COOKIE = "tp_login_submit_failure";
@@ -22,6 +23,65 @@ export const LOGIN_SUBMIT_FAILURE_MARKER_MAX_AGE_SECONDS = 60;
 export const LOGIN_SUBMIT_SUCCESS_MARKER_COOKIE = "tp_login_submit_success";
 export const LOGIN_SUBMIT_SUCCESS_MARKER_VALUE = "1";
 export const LOGIN_SUBMIT_SUCCESS_MARKER_MAX_AGE_SECONDS = 60;
+
+// Marker descriptors that pin every variant of the RUM cookie pair to a
+// single shape: { name, path, maxAgeSeconds }. The setRumMarkerCookie /
+// clearRumMarkerCookie primitives below consume these descriptors so a
+// future logout client-mirror lands by adding two more constants
+// (LOGOUT_SUBMIT_FAILURE_MARKER, LOGOUT_SUBMIT_SUCCESS_MARKER) instead
+// of duplicating four near-identical helpers.
+//
+// The failure marker is scoped to Path=/login so it never reaches
+// /portal; the success marker is scoped to Path=/ so the portal bundle
+// can read and clear it on first load.
+export const LOGIN_SUBMIT_FAILURE_MARKER = Object.freeze({
+  name: LOGIN_SUBMIT_FAILURE_MARKER_COOKIE,
+  path: "/login",
+  maxAgeSeconds: LOGIN_SUBMIT_FAILURE_MARKER_MAX_AGE_SECONDS,
+});
+export const LOGIN_SUBMIT_SUCCESS_MARKER = Object.freeze({
+  name: LOGIN_SUBMIT_SUCCESS_MARKER_COOKIE,
+  path: "/",
+  maxAgeSeconds: LOGIN_SUBMIT_SUCCESS_MARKER_MAX_AGE_SECONDS,
+});
+
+// Set a server-set RUM marker cookie. httpOnly=false because the
+// portal bundle and the inline rum-client.js script both need to read
+// these from JS; secure tracks config.sessionCookieSecure so local-dev
+// HTTP loopbacks don't strip the cookie; sameSite="lax" lets the
+// cookie ride the same-origin 303 redirect from POST /login (or
+// future /logout) to the GET landing page. Nullish values are coerced
+// to an empty string defensively so a caller passing null/undefined
+// doesn't end up with the literal strings "null" / "undefined" as the
+// cookie value, while explicit falsy marker values like 0/false remain
+// observable.
+export function setRumMarkerCookie(response, marker, value) {
+  const config = getConfig();
+  response.cookies.set(marker.name, String(value ?? ""), {
+    httpOnly: false,
+    secure: config.sessionCookieSecure,
+    sameSite: "lax",
+    path: marker.path,
+    maxAge: marker.maxAgeSeconds,
+  });
+  return response;
+}
+
+// Clear a server-set RUM marker cookie by writing an empty value with
+// expires=epoch on the same path the set helper uses. Path discipline
+// matters: clearing has to match the original Path attribute or the
+// browser keeps the prior cookie alive.
+export function clearRumMarkerCookie(response, marker) {
+  const config = getConfig();
+  response.cookies.set(marker.name, "", {
+    httpOnly: false,
+    secure: config.sessionCookieSecure,
+    sameSite: "lax",
+    path: marker.path,
+    expires: new Date(0),
+  });
+  return response;
+}
 
 function _serialize(value) {
   // JSON.stringify is safe inside a <script> body provided we escape the two
