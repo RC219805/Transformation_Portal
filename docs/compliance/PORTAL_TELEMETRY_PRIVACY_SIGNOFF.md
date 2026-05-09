@@ -1,6 +1,6 @@
 # Portal Telemetry Privacy Sign-Off Packet
 
-**Status:** Pending Human Approval
+**Status:** Approved with Conditions
 **Date:** 2026-04-14
 **Last revised:** 2026-05-09
 **Owner:** Frontdoor / Platform
@@ -207,10 +207,14 @@ Proposed for approval:
 
 ## Approval Block
 
-Pending reviewer completion:
-
-- Reviewer:
-- Role:
-- Review date:
-- Decision:
+- Reviewer: RC219805
+- Role: Repository Owner
+- Review date: 2026-05-09
+- Decision: Approved with Conditions
 - Conditions or required changes:
+  - Approval applies only to bounded portal/front-door telemetry pilots using the documented event families, metadata keys, marker cookies, sessionStorage breadcrumb, rollout controls, and sink paths.
+  - Raw JSONL logs must remain outside the repository, outside public/static directories, access-restricted, excluded from CI artifacts, and deleted no later than 14 calendar days after pilot end.
+  - Each pilot must have a named owner and explicit pilot end date.
+  - If raw telemetry is written to a host path covered by automated backups, backup retention must be documented or telemetry must be written to a backup-excluded path.
+  - Any new RUM event family, metadata key, marker cookie, storage key, rollout knob, sink behavior, or retention posture requires this packet to be revised before rollout expansion.
+  - Stricter controls are approved for follow-up tracking and are not blockers for the current bounded-pilot approval unless Security / Privacy later raises the policy bar.
