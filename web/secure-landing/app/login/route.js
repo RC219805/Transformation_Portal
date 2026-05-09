@@ -9,6 +9,9 @@ import { applyPortalReturnTo, resolvePortalReturnTo, validatePortalReturnTo } fr
 import {
   LOGIN_SUBMIT_FAILURE_MARKER_COOKIE,
   LOGIN_SUBMIT_FAILURE_MARKER_MAX_AGE_SECONDS,
+  LOGIN_SUBMIT_SUCCESS_MARKER_COOKIE,
+  LOGIN_SUBMIT_SUCCESS_MARKER_MAX_AGE_SECONDS,
+  LOGIN_SUBMIT_SUCCESS_MARKER_VALUE,
   renderRumClientScript
 } from "../../lib/rum-client.js";
 import {
@@ -263,6 +266,12 @@ function redirectToLogin(request, errorCode, session, returnTo = "") {
   const response = applySecurityHeaders(NextResponse.redirect(url, 303));
   if (errorCode) {
     setLoginSubmitFailureMarkerCookie(response, errorCode);
+    // A failure path must not leave behind a stale success marker —
+    // clearing here mirrors the success path's failure-marker clear
+    // so the two markers can never both be live for the same submit.
+    if (request.cookies.get(LOGIN_SUBMIT_SUCCESS_MARKER_COOKIE)?.value) {
+      clearLoginSubmitSuccessMarkerCookie(response);
+    }
   }
   if (session?.id) {
     setSessionCookie(response, session.id);
@@ -289,6 +298,34 @@ function clearLoginSubmitFailureMarkerCookie(response) {
     secure: config.sessionCookieSecure,
     sameSite: "lax",
     path: "/login",
+    expires: new Date(0)
+  });
+  return response;
+}
+
+function setLoginSubmitSuccessMarkerCookie(response) {
+  // Path=/ (NOT /login) so the portal bundle on /portal can read it.
+  // The cookie value is a fixed presence marker; the portal-side
+  // emitter computes elapsed time from the sessionStorage breadcrumb,
+  // never from this cookie.
+  const config = getConfig();
+  response.cookies.set(LOGIN_SUBMIT_SUCCESS_MARKER_COOKIE, LOGIN_SUBMIT_SUCCESS_MARKER_VALUE, {
+    httpOnly: false,
+    secure: config.sessionCookieSecure,
+    sameSite: "lax",
+    path: "/",
+    maxAge: LOGIN_SUBMIT_SUCCESS_MARKER_MAX_AGE_SECONDS
+  });
+  return response;
+}
+
+function clearLoginSubmitSuccessMarkerCookie(response) {
+  const config = getConfig();
+  response.cookies.set(LOGIN_SUBMIT_SUCCESS_MARKER_COOKIE, "", {
+    httpOnly: false,
+    secure: config.sessionCookieSecure,
+    sameSite: "lax",
+    path: "/",
     expires: new Date(0)
   });
   return response;
@@ -472,6 +509,7 @@ export async function POST(request) {
     NextResponse.redirect(buildRequestUrl(request, resolvePortalReturnTo(requestedReturnTo)), 303)
   );
   setSessionCookie(response, authenticatedSession.id);
+  setLoginSubmitSuccessMarkerCookie(response);
   if (request.cookies.get(LOGIN_SUBMIT_FAILURE_MARKER_COOKIE)?.value) {
     clearLoginSubmitFailureMarkerCookie(response);
   }

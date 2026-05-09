@@ -13,6 +13,15 @@ import { normalizeTraceparent } from "./trace.js";
 export const LOGIN_SUBMIT_BREADCRUMB_KEY = "tpLoginSubmitStartedAt";
 export const LOGIN_SUBMIT_FAILURE_MARKER_COOKIE = "tp_login_submit_failure";
 export const LOGIN_SUBMIT_FAILURE_MARKER_MAX_AGE_SECONDS = 60;
+// Server-set marker the portal bundle reads on first /portal load to
+// emit login_submit_success (#1689 client-side mirror series). Path=/
+// so the cookie crosses from the front-door /login response to the
+// portal page; max-age caps stale-tab false positives. The cookie
+// value is a fixed "1" presence marker — the actual elapsed time is
+// computed from the sessionStorage breadcrumb, never from the cookie.
+export const LOGIN_SUBMIT_SUCCESS_MARKER_COOKIE = "tp_login_submit_success";
+export const LOGIN_SUBMIT_SUCCESS_MARKER_VALUE = "1";
+export const LOGIN_SUBMIT_SUCCESS_MARKER_MAX_AGE_SECONDS = 60;
 
 function _serialize(value) {
   // JSON.stringify is safe inside a <script> body provided we escape the two

@@ -2314,6 +2314,94 @@ def test_portal_rum_contract_accepts_login_submit_success(
     assert event["metadata"] == {}
 
 
+def test_portal_rum_contract_accepts_client_login_submit_success_metadata(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Survival contract for the client-side login_submit_success emission.
+
+    The portal-bundle counterpart in ``portal.template.js`` posts
+    ``{source: "client"}`` metadata to differentiate browser-side
+    samples from the server-side emission. This test pins that the
+    existing ``_portal_sanitize_metadata`` accepts the key without any
+    allowlist widening, mirroring the equivalent attempt/failure
+    survival contracts established in #1689 and #1694.
+    """
+    monkeypatch.setenv("TP_PORTAL_RUM_ENABLED", "1")
+    monkeypatch.setenv("TP_PORTAL_RUM_ROLLOUT_PERCENT", "100")
+
+    response = client.post(
+        "/v1/portal/rum",
+        json={
+            "event_type": "login_submit_success",
+            "route": "/portal",
+            # The portal bundle normalizes state.currentView before
+            # emitting; "overview" is the default first view after
+            # bootstrap_ready, so it's the realistic value to assert.
+            "view": "overview",
+            "metric": "duration",
+            "value": 312,
+            "unit": "ms",
+            "metadata": {"source": "client"},
+        },
+    )
+    body = response.json()
+
+    assert response.status_code == 200
+    assert body["data"]["accepted"] is True
+    event = body["data"]["event"]
+    assert event["event_type"] == "login_submit_success"
+    assert event["metric"] == "duration"
+    assert event["unit"] == "ms"
+    assert event["value"] == 312
+    assert event["metadata"] == {"source": "client"}
+
+
+def test_portal_rum_contract_drops_non_token_metadata_for_client_login_submit_success(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Defense-in-depth for the client-side success path: even if a
+    caller stuffs PII into login_submit_success metadata, the existing
+    sanitizer drops values that fail ``_portal_is_token`` (emails with
+    '@', free-text passwords with whitespace) before persistence. The
+    portal-bundle emitter only ever sets ``{source: "client"}``; this
+    test pins the round-trip discipline at the boundary.
+    """
+    monkeypatch.setenv("TP_PORTAL_RUM_ENABLED", "1")
+    monkeypatch.setenv("TP_PORTAL_RUM_ROLLOUT_PERCENT", "100")
+
+    response = client.post(
+        "/v1/portal/rum",
+        json={
+            "event_type": "login_submit_success",
+            "route": "/portal",
+            "view": "overview",
+            "metric": "duration",
+            "value": 220,
+            "unit": "ms",
+            "metadata": {
+                "source": "client",
+                # Non-token VALUES (contain '@' or whitespace) are dropped
+                # wholesale by the sanitizer's string branch.
+                "email": "victim@example.com",
+                "password": "correct horse battery staple",
+            },
+        },
+    )
+    body = response.json()
+
+    assert response.status_code == 200
+    metadata = body["data"]["event"]["metadata"]
+
+    # Allowed metadata: the single key the portal emitter actually sets.
+    assert metadata.get("source") == "client"
+
+    # Non-token VALUES are dropped wholesale.
+    assert "email" not in metadata
+    assert "password" not in metadata
+
+
 def test_portal_rum_contract_accepts_login_submit_failure_with_failure_code(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,

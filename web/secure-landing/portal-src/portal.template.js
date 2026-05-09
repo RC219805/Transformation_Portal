@@ -5206,6 +5206,7 @@ async function loadPortalBootstrap(options = null) {
             traceparent: bootstrapTraceparent
         });
         _scheduleFirstViewInteractiveRum();
+        _scheduleLoginSubmitSuccessRum();
         const nextHealthEndpointPath = _healthEndpointPath();
         if (state.backendOk && previousHealthEndpointPath && previousHealthEndpointPath !== nextHealthEndpointPath) {
             _queueBootstrapOnlineFollowup();
@@ -6812,6 +6813,83 @@ function _scheduleFirstViewInteractiveRum() {
         return;
     }
     window.setTimeout(emit, 0);
+}
+
+// Mirror of LOGIN_SUBMIT_BREADCRUMB_KEY / LOGIN_SUBMIT_SUCCESS_MARKER_COOKIE
+// in lib/rum-client.js. A drift test in tests/rum-client.test.mjs pins
+// the literal strings against the lib/ exports so the front-door write
+// and portal-side read can never diverge.
+const LOGIN_SUBMIT_BREADCRUMB_KEY = 'tpLoginSubmitStartedAt';
+const LOGIN_SUBMIT_SUCCESS_MARKER_COOKIE = 'tp_login_submit_success';
+const LOGIN_SUBMIT_SUCCESS_FRESHNESS_MS = 60000;
+
+function _readLoginSubmitMarkerCookie(name) {
+    try {
+        const prefix = `${name}=`;
+        const parts = String(document.cookie || '').split(';');
+        for (const part of parts) {
+            const trimmed = part.replace(/^\s+/, '');
+            if (trimmed.indexOf(prefix) === 0) {
+                try {
+                    return decodeURIComponent(trimmed.slice(prefix.length));
+                } catch (_decodeErr) {
+                    return trimmed.slice(prefix.length);
+                }
+            }
+        }
+    } catch (_cookieErr) {
+        // cookie access unavailable; treat as missing.
+    }
+    return '';
+}
+
+function _clearLoginSubmitMarkerCookie(name) {
+    try {
+        document.cookie = `${name}=; Max-Age=0; Path=/; SameSite=Lax`;
+    } catch (_cookieErr) {
+        // best-effort removal
+    }
+}
+
+function _scheduleLoginSubmitSuccessRum() {
+    // Browser-side counterpart to the server-side login_submit_success
+    // event (#1684), completing the attempt/failure/success client
+    // mirror trio (#1689 / #1694 / this PR). Emits when the portal
+    // first loads after a successful submit: the front-door 303
+    // response sets the tp_login_submit_success marker cookie at
+    // Path=/, and the sessionStorage breadcrumb (written by the
+    // front-door rum-client at submit time) carries the Date.now()
+    // anchor so submit→portal-ready latency is computable across the
+    // cross-origin redirect.
+    //
+    // Read AND clear the breadcrumb + marker cookie unconditionally so
+    // stale state from a prior closed-tab submit cannot ride a future
+    // /portal visit even when telemetry is disabled.
+    let rawStart = null;
+    try {
+        rawStart = sessionStorage.getItem(LOGIN_SUBMIT_BREADCRUMB_KEY);
+    } catch (_storageErr) {
+        // Continue to clear marker state below; blocked storage only
+        // suppresses the latency emit.
+    }
+    try {
+        sessionStorage.removeItem(LOGIN_SUBMIT_BREADCRUMB_KEY);
+    } catch (_storageErr) {
+        // best-effort removal
+    }
+    const marker = _readLoginSubmitMarkerCookie(LOGIN_SUBMIT_SUCCESS_MARKER_COOKIE);
+    _clearLoginSubmitMarkerCookie(LOGIN_SUBMIT_SUCCESS_MARKER_COOKIE);
+    if (!rawStart || !marker) return;
+    const startedAt = Number(rawStart);
+    if (!Number.isFinite(startedAt) || startedAt <= 0) return;
+    const elapsedMs = Math.max(0, Math.round(Date.now() - startedAt));
+    // Freshness cap mirrors the failure-mirror's 60s window: production
+    // submit→portal-ready latency is sub-second; 60s catches network
+    // drops while excluding stale-back-button false positives.
+    if (elapsedMs > LOGIN_SUBMIT_SUCCESS_FRESHNESS_MS) return;
+    _recordPortalRumMilestone('login_submit_success', elapsedMs, {
+        metadata: { source: 'client' }
+    });
 }
 
 function _finalizePortalRumVitals() {
