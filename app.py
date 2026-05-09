@@ -1261,8 +1261,11 @@ PORTAL_ALLOWED_RUM_EVENT_TYPES = {
     "login_submit_attempt",
     "login_submit_success",
     "login_submit_failure",
+    "logout_submit_attempt",
+    "logout_submit_success",
+    "logout_submit_failure",
 }
-PORTAL_ALLOWED_RUM_ROUTES = {"/portal", "/", "/login"}
+PORTAL_ALLOWED_RUM_ROUTES = {"/portal", "/", "/login", "/logout"}
 PORTAL_ALLOWED_RUM_VIEWS = {
     "overview",
     "build",
@@ -1284,6 +1287,9 @@ PORTAL_ALLOWED_RUM_METRICS = {
     "login_submit_attempt": {"count"},
     "login_submit_success": {"duration"},
     "login_submit_failure": {"duration"},
+    "logout_submit_attempt": {"count"},
+    "logout_submit_success": {"duration"},
+    "logout_submit_failure": {"duration"},
 }
 PATH_SCOPE_INPUT = "input"
 PATH_SCOPE_OUTPUT = "output"
