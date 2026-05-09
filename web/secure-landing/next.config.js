@@ -10,9 +10,6 @@ const nextConfig = {
   output: "standalone",
   distDir: requestedDistDir || ".next",
   outputFileTracingRoot: repoRoot,
-  turbopack: {
-    root: repoRoot
-  },
   outputFileTracingIncludes: {
     "/portal/assets/[...path]": ["../../config/portal_asset_manifest.json"]
   }
