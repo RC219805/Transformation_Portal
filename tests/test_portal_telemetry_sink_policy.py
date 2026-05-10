@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib
 import os
+import stat
 import subprocess
 import sys
 from pathlib import Path
@@ -37,6 +38,10 @@ def _assert_policy_reason(path_value: str, reason: str, *, repo_root: Path) -> N
     assert exc_info.value.reason == reason
 
 
+def _stat_result(*, mode: int, dev: int = 1, ino: int = 10) -> os.stat_result:
+    return os.stat_result((mode, ino, dev, 1, 0, 0, 0, 0, 0, 0))
+
+
 def test_unset_sink_path_remains_noop_at_config_layer(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("TP_PORTAL_RUM_LOG_PATH", raising=False)
     monkeypatch.delenv("TP_PORTAL_EVENT_LOG_PATH", raising=False)
@@ -55,6 +60,7 @@ def test_persist_portal_event_record_opens_sink_relative_to_parent_dir_fd(
     open_calls = []
     closed_fds = []
     next_fd = iter([101, 102])
+    parent_stat = orchestrator_app.os.stat(sink_path.parent, follow_symlinks=False)
 
     def fake_open(path, flags, mode=0o777, *, dir_fd=None):
         fd = next(next_fd)
@@ -69,8 +75,14 @@ def test_persist_portal_event_record_opens_sink_relative_to_parent_dir_fd(
         )
         return fd
 
+    def fake_fstat(fd):
+        if fd == 101:
+            return parent_stat
+        return _stat_result(mode=stat.S_IFREG | 0o600, dev=parent_stat.st_dev, ino=parent_stat.st_ino + 1)
+
     monkeypatch.setattr(orchestrator_app.os, "open", fake_open)
     monkeypatch.setattr(orchestrator_app.os, "supports_dir_fd", {*orchestrator_app.os.supports_dir_fd, fake_open})
+    monkeypatch.setattr(orchestrator_app.os, "fstat", fake_fstat)
     monkeypatch.setattr(orchestrator_app.os, "write", lambda _fd, data: len(data))
     monkeypatch.setattr(orchestrator_app.os, "close", lambda fd: closed_fds.append(fd))
 
@@ -85,6 +97,115 @@ def test_persist_portal_event_record_opens_sink_relative_to_parent_dir_fd(
         assert open_calls[0]["flags"] & no_follow_flag
         assert open_calls[1]["flags"] & no_follow_flag
     assert closed_fds == [open_calls[1]["fd"], open_calls[0]["fd"]]
+
+
+def test_persist_portal_event_record_rejects_parent_fd_identity_mismatch(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    orchestrator_app = importlib.import_module("app")
+    sink_path = _external_sink(tmp_path)
+    unsafe_content = "do-not-leak-raw-log-content"
+    open_calls = []
+    close_calls = []
+    write_calls = []
+    real_stat = orchestrator_app.os.stat
+    real_fstat = orchestrator_app.os.fstat
+    expected_parent_stat = _stat_result(mode=stat.S_IFDIR | 0o700, dev=1, ino=10)
+    changed_parent_stat = _stat_result(mode=stat.S_IFDIR | 0o700, dev=2, ino=20)
+
+    monkeypatch.setattr(
+        orchestrator_app._portal_path_security,
+        "validate_portal_telemetry_sink_path",
+        lambda _path, *, repo_root=None: sink_path,
+    )
+
+    def fake_stat(path, *args, follow_symlinks=True, **kwargs):
+        if isinstance(path, (str, os.PathLike)) and Path(path) == sink_path.parent:
+            return expected_parent_stat
+        return real_stat(path, *args, follow_symlinks=follow_symlinks, **kwargs)
+
+    def fake_fstat(fd):
+        if fd == 101:
+            return changed_parent_stat
+        return real_fstat(fd)
+
+    def fake_open(path, flags, mode=0o777, *, dir_fd=None):
+        open_calls.append((path, flags, mode, dir_fd))
+        return 101
+
+    monkeypatch.setattr(orchestrator_app.os, "open", fake_open)
+    monkeypatch.setattr(orchestrator_app.os, "supports_dir_fd", {*orchestrator_app.os.supports_dir_fd, fake_open})
+    monkeypatch.setattr(orchestrator_app.os, "stat", fake_stat)
+    monkeypatch.setattr(orchestrator_app.os, "fstat", fake_fstat)
+    monkeypatch.setattr(orchestrator_app.os, "write", lambda fd, data: write_calls.append((fd, data)) or len(data))
+    monkeypatch.setattr(orchestrator_app.os, "close", lambda fd: close_calls.append(fd))
+
+    with caplog.at_level("WARNING"):
+        orchestrator_app._persist_portal_event_record({"schema": "test", "raw": unsafe_content}, sink_path)
+
+    assert len(open_calls) == 1
+    assert write_calls == []
+    assert close_calls == [101]
+    assert "failed to persist portal event telemetry" in caplog.text
+    assert unsafe_content not in caplog.text
+
+
+def test_persist_portal_event_record_requires_regular_opened_file_fd(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    orchestrator_app = importlib.import_module("app")
+    sink_path = _external_sink(tmp_path)
+    unsafe_content = "do-not-leak-raw-log-content"
+    open_calls = []
+    close_calls = []
+    write_calls = []
+    real_stat = orchestrator_app.os.stat
+    real_fstat = orchestrator_app.os.fstat
+    parent_stat = _stat_result(mode=stat.S_IFDIR | 0o700, dev=1, ino=10)
+    fifo_stat = _stat_result(mode=stat.S_IFIFO | 0o600, dev=1, ino=11)
+
+    monkeypatch.setattr(
+        orchestrator_app._portal_path_security,
+        "validate_portal_telemetry_sink_path",
+        lambda _path, *, repo_root=None: sink_path,
+    )
+
+    def fake_stat(path, *args, follow_symlinks=True, **kwargs):
+        if isinstance(path, (str, os.PathLike)) and Path(path) == sink_path.parent:
+            return parent_stat
+        return real_stat(path, *args, follow_symlinks=follow_symlinks, **kwargs)
+
+    def fake_fstat(fd):
+        if fd == 101:
+            return parent_stat
+        if fd == 102:
+            return fifo_stat
+        return real_fstat(fd)
+
+    def fake_open(path, flags, mode=0o777, *, dir_fd=None):
+        fd = 101 if dir_fd is None else 102
+        open_calls.append((path, flags, mode, dir_fd, fd))
+        return fd
+
+    monkeypatch.setattr(orchestrator_app.os, "fstat", fake_fstat)
+    monkeypatch.setattr(orchestrator_app.os, "stat", fake_stat)
+    monkeypatch.setattr(orchestrator_app.os, "open", fake_open)
+    monkeypatch.setattr(orchestrator_app.os, "supports_dir_fd", {*orchestrator_app.os.supports_dir_fd, fake_open})
+    monkeypatch.setattr(orchestrator_app.os, "write", lambda fd, data: write_calls.append((fd, data)) or len(data))
+    monkeypatch.setattr(orchestrator_app.os, "close", lambda fd: close_calls.append(fd))
+
+    with caplog.at_level("WARNING"):
+        orchestrator_app._persist_portal_event_record({"schema": "test", "raw": unsafe_content}, sink_path)
+
+    assert len(open_calls) == 2
+    assert write_calls == []
+    assert close_calls == [102, 101]
+    assert "failed to persist portal event telemetry" in caplog.text
+    assert unsafe_content not in caplog.text
 
 
 def test_external_jsonl_sink_path_is_accepted(tmp_path: Path) -> None:

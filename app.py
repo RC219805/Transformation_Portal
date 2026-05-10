@@ -10,6 +10,7 @@ import os
 import re
 import shlex
 import signal
+import stat
 import sys
 import tempfile
 import threading
@@ -5406,11 +5407,21 @@ def _persist_portal_event_record(record: Dict[str, Any], log_path: Optional[Path
         no_follow_flag = getattr(os, "O_NOFOLLOW", 0)
         parent_flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | no_follow_flag
         file_flags = os.O_APPEND | os.O_CREAT | os.O_WRONLY | no_follow_flag
+        expected_parent_stat = os.stat(log_path.parent, follow_symlinks=False)
         with _PORTAL_EVENT_LOG_WRITE_LOCK:
             parent_fd = os.open(log_path.parent, parent_flags)
             try:
+                actual_parent_stat = os.fstat(parent_fd)
+                if (
+                    actual_parent_stat.st_dev != expected_parent_stat.st_dev
+                    or actual_parent_stat.st_ino != expected_parent_stat.st_ino
+                ):
+                    raise OSError("portal telemetry sink parent changed before open")
                 fd = os.open(log_path.name, file_flags, 0o600, dir_fd=parent_fd)
                 try:
+                    opened_file_stat = os.fstat(fd)
+                    if not stat.S_ISREG(opened_file_stat.st_mode):
+                        raise OSError("portal telemetry sink is not a regular file")
                     bytes_written = 0
                     while bytes_written < len(encoded_record):
                         chunk_size = os.write(fd, encoded_record[bytes_written:])
