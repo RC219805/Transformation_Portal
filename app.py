@@ -5401,18 +5401,26 @@ def _persist_portal_event_record(record: Dict[str, Any], log_path: Optional[Path
     encoded_record = (json.dumps(record, sort_keys=True) + "\n").encode("utf-8")
     try:
         log_path = _portal_path_security.validate_portal_telemetry_sink_path(str(log_path), repo_root=REPO_ROOT)
-        open_flags = os.O_APPEND | os.O_CREAT | os.O_WRONLY | getattr(os, "O_NOFOLLOW", 0)
+        if os.open not in os.supports_dir_fd:
+            raise OSError("dir_fd is required for portal telemetry sink writes")
+        no_follow_flag = getattr(os, "O_NOFOLLOW", 0)
+        parent_flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | no_follow_flag
+        file_flags = os.O_APPEND | os.O_CREAT | os.O_WRONLY | no_follow_flag
         with _PORTAL_EVENT_LOG_WRITE_LOCK:
-            fd = os.open(log_path, open_flags, 0o600)
+            parent_fd = os.open(log_path.parent, parent_flags)
             try:
-                bytes_written = 0
-                while bytes_written < len(encoded_record):
-                    chunk_size = os.write(fd, encoded_record[bytes_written:])
-                    if chunk_size <= 0:
-                        raise OSError("short write while appending portal telemetry")
-                    bytes_written += chunk_size
+                fd = os.open(log_path.name, file_flags, 0o600, dir_fd=parent_fd)
+                try:
+                    bytes_written = 0
+                    while bytes_written < len(encoded_record):
+                        chunk_size = os.write(fd, encoded_record[bytes_written:])
+                        if chunk_size <= 0:
+                            raise OSError("short write while appending portal telemetry")
+                        bytes_written += chunk_size
+                finally:
+                    os.close(fd)
             finally:
-                os.close(fd)
+                os.close(parent_fd)
     except (OSError, _portal_path_security.PathSecurityValidationError):
         LOGGER.warning(
             "failed to persist portal event telemetry to %s",

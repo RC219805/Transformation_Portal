@@ -46,6 +46,47 @@ def test_unset_sink_path_remains_noop_at_config_layer(monkeypatch: pytest.Monkey
     assert orchestrator_app._portal_telemetry_sink_path_from_env("TP_PORTAL_EVENT_LOG_PATH") is None
 
 
+def test_persist_portal_event_record_opens_sink_relative_to_parent_dir_fd(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    orchestrator_app = importlib.import_module("app")
+    sink_path = _external_sink(tmp_path)
+    open_calls = []
+    closed_fds = []
+    next_fd = iter([101, 102])
+
+    def fake_open(path, flags, mode=0o777, *, dir_fd=None):
+        fd = next(next_fd)
+        open_calls.append(
+            {
+                "path": path,
+                "flags": flags,
+                "mode": mode,
+                "dir_fd": dir_fd,
+                "fd": fd,
+            }
+        )
+        return fd
+
+    monkeypatch.setattr(orchestrator_app.os, "open", fake_open)
+    monkeypatch.setattr(orchestrator_app.os, "supports_dir_fd", {*orchestrator_app.os.supports_dir_fd, fake_open})
+    monkeypatch.setattr(orchestrator_app.os, "write", lambda _fd, data: len(data))
+    monkeypatch.setattr(orchestrator_app.os, "close", lambda fd: closed_fds.append(fd))
+
+    orchestrator_app._persist_portal_event_record({"schema": "test"}, sink_path)
+
+    assert open_calls[0]["path"] == Path(os.path.realpath(sink_path)).parent
+    assert open_calls[0]["dir_fd"] is None
+    assert open_calls[1]["path"] == sink_path.name
+    assert open_calls[1]["dir_fd"] == open_calls[0]["fd"]
+    no_follow_flag = getattr(orchestrator_app.os, "O_NOFOLLOW", 0)
+    if no_follow_flag:
+        assert open_calls[0]["flags"] & no_follow_flag
+        assert open_calls[1]["flags"] & no_follow_flag
+    assert closed_fds == [open_calls[1]["fd"], open_calls[0]["fd"]]
+
+
 def test_external_jsonl_sink_path_is_accepted(tmp_path: Path) -> None:
     repo_root = _repo_root(tmp_path)
     sink_path = _external_sink(tmp_path)
