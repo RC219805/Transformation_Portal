@@ -195,6 +195,7 @@ Proposed for approval:
 5. Aggregate evidence should be extracted with `tools/portal_modernization_evidence.py`.
 6. Only aggregate evidence needed for RFC or rollout review may be preserved after raw-log deletion.
 7. The operator must record deletion date, deleted path, and reviewer / approver in the pilot evidence packet.
+   The governed operator workflow is documented in `docs/operations/portal_telemetry_retention.md`.
 8. If the host path is covered by automated backups, backup retention must be documented or raw telemetry must be written to a path excluded from backups.
 9. Standard file unlink / delete is acceptable only for encrypted disks or equivalent managed storage; environments requiring stronger deletion controls must document that stronger control before pilot rollout.
 
