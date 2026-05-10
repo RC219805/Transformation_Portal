@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server.js";
 
 import { applySecurityHeaders, buildRequestUrl } from "../../lib/http.js";
-import { isPortalRumEnabled } from "../../lib/config.js";
+import { isFrontdoorRumTelemetryEnabled } from "../../lib/config.js";
 import {
   emitLogoutRumEvent,
   LOGOUT_RUM_EVENT_TYPES,
@@ -22,12 +22,12 @@ export const runtime = "nodejs";
 export async function POST(request) {
   // Capture the RUM enable decision once at handler entry. This is the SOLE
   // gate for paired emissions: the emitter intentionally does not re-check
-  // isPortalRumEnabled() so a flag flip mid-request cannot produce a partial
+  // isFrontdoorRumTelemetryEnabled() so a flag flip mid-request cannot produce a partial
   // attempt/terminal pair (one captured but not the other). Mirrors the
   // /login handler's contract from #1684.
-  const rumActive = isPortalRumEnabled();
+  const rumTraceparent = resolveRequestTraceparent(request);
+  const rumActive = isFrontdoorRumTelemetryEnabled({ traceparent: rumTraceparent });
   const attemptStart = Date.now();
-  const rumTraceparent = rumActive ? resolveRequestTraceparent(request) : "";
   const emitLogoutRum = (eventType, failureCode = null) => {
     if (!rumActive) return;
     const value = eventType === LOGOUT_RUM_EVENT_TYPES.ATTEMPT

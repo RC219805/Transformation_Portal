@@ -19,7 +19,9 @@ const ENV_KEYS = [
   "TP_CF_ACCESS_AUD",
   "TP_ALLOW_LOCAL_ACCESS_BYPASS",
   "TP_PORTAL_RUM_ENABLED",
-  "TP_PORTAL_RUM_ROLLOUT_PERCENT"
+  "TP_PORTAL_RUM_ROLLOUT_PERCENT",
+  "TP_FRONTDOOR_RUM_ENABLED",
+  "TP_FRONTDOOR_RUM_ROLLOUT_PERCENT"
 ];
 
 const TEST_CF_ACCESS_TEAM_DOMAIN = "https://tp-frontdoor-tests.cloudflareaccess.com";
@@ -67,6 +69,11 @@ function withTempEnvironment(overrides = {}) {
   } else {
     delete process.env.TP_ALLOW_LOCAL_ACCESS_BYPASS;
   }
+
+  delete process.env.TP_PORTAL_RUM_ENABLED;
+  delete process.env.TP_PORTAL_RUM_ROLLOUT_PERCENT;
+  delete process.env.TP_FRONTDOOR_RUM_ENABLED;
+  delete process.env.TP_FRONTDOOR_RUM_ROLLOUT_PERCENT;
 
   resetDbCache();
 

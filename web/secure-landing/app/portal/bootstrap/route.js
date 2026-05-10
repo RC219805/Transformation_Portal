@@ -1,11 +1,10 @@
-import { createHash } from "node:crypto";
-
 import { NextResponse } from "next/server.js";
 
 import { revokeSessionOnAccessFailure, resolveAuthenticatedAccessSession } from "../../../lib/access.js";
 import { audit } from "../../../lib/audit.js";
 import { isPortalRumEnabled } from "../../../lib/config.js";
 import { applySecurityHeaders } from "../../../lib/http.js";
+import { stableRolloutBucket } from "../../../lib/rollout.js";
 import {
   auditManagedSurfaceFailure,
   buildManagedBootstrapFailure,
@@ -22,15 +21,6 @@ function parseRolloutPercent(rawValue) {
     return 0;
   }
   return Math.max(0, Math.min(100, parsed));
-}
-
-function stableRolloutBucket(key) {
-  const normalized = String(key || "").trim().toLowerCase();
-  if (!normalized) {
-    return 100;
-  }
-  const digest = createHash("sha256").update(normalized).digest("hex");
-  return Number.parseInt(digest.slice(0, 8), 16) % 100;
 }
 
 function resolveRolloutCohortKey(session) {

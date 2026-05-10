@@ -1,7 +1,10 @@
 import { readFileSync } from "node:fs";
 
+import { stableRolloutBucket } from "./rollout.js";
+
 const DEFAULT_SESSION_DB_PATH = "/tmp/transformation-portal-frontdoor-sessions.db";
 const DEFAULT_SESSION_SCALING_MODE = "single_instance";
+const DEFAULT_FRONTDOOR_RUM_ROLLOUT_PERCENT = 100;
 const SESSION_IDLE_TIMEOUT_MS = 8 * 60 * 60 * 1000;
 const SESSION_ABSOLUTE_TIMEOUT_MS = 24 * 60 * 60 * 1000;
 const LOGIN_WINDOW_MS = 15 * 60 * 1000;
@@ -17,6 +20,52 @@ export function isTruthyEnvFlag(value) {
 
 export function isPortalRumEnabled(env = process.env) {
   return isTruthyEnvFlag(env.TP_PORTAL_RUM_ENABLED);
+}
+
+function parseFrontdoorRumRolloutPercent(rawValue) {
+  const raw = String(rawValue ?? "").trim();
+  if (!raw) {
+    return DEFAULT_FRONTDOOR_RUM_ROLLOUT_PERCENT;
+  }
+  if (!/^\d+$/u.test(raw)) {
+    return 0;
+  }
+  const parsed = Number(raw);
+  if (!Number.isSafeInteger(parsed)) {
+    return 0;
+  }
+  return Math.max(0, Math.min(100, parsed));
+}
+
+export function resolveFrontdoorRumRolloutPercent(env = process.env) {
+  return parseFrontdoorRumRolloutPercent(env.TP_FRONTDOOR_RUM_ROLLOUT_PERCENT);
+}
+
+export function shouldDisableFrontdoorRumHomepageCache(env = process.env) {
+  if (!isPortalRumEnabled(env)) {
+    return false;
+  }
+  if (!isTruthyEnvFlag(env.TP_FRONTDOOR_RUM_ENABLED)) {
+    return false;
+  }
+  return resolveFrontdoorRumRolloutPercent(env) > 0;
+}
+
+export function isFrontdoorRumTelemetryEnabled({ traceparent = "", env = process.env } = {}) {
+  if (!isPortalRumEnabled(env)) {
+    return false;
+  }
+  if (!isTruthyEnvFlag(env.TP_FRONTDOOR_RUM_ENABLED)) {
+    return false;
+  }
+  const rolloutPercent = resolveFrontdoorRumRolloutPercent(env);
+  if (rolloutPercent <= 0) {
+    return false;
+  }
+  if (rolloutPercent >= 100) {
+    return true;
+  }
+  return stableRolloutBucket(traceparent) < rolloutPercent;
 }
 
 export function normalizeUsername(value) {

@@ -8,9 +8,9 @@
 //
 // Gate contract:
 //   - The CALLER is the sole feature-flag gate. This emitter does NOT consult
-//     `isPortalRumEnabled()` so paired events (attempt + terminal) cannot
+//     `isFrontdoorRumTelemetryEnabled()` so paired events (attempt + terminal) cannot
 //     diverge if the env flag flips between calls. The route handler captures
-//     `isPortalRumEnabled()` once per request and short-circuits its own
+//     `isFrontdoorRumTelemetryEnabled()` once per request and short-circuits its own
 //     wrapper before reaching this function.
 //
 // Safety contract:

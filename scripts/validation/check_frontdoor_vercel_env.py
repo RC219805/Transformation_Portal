@@ -18,13 +18,16 @@ import json
 import os
 import sys
 from dataclasses import dataclass
-from typing import Iterable, List, Optional
+from typing import Iterable, List, Literal, Optional
+
+
+RequiredScope = Literal["all", "production", "optional"]
 
 
 @dataclass(frozen=True)
 class Variable:
     name: str
-    required_in: str  # "all" | "production"
+    required_in: RequiredScope
     description: str
 
 
@@ -35,6 +38,10 @@ VARIABLES: tuple[Variable, ...] = (
     Variable("TP_FRONTDOOR_SESSION_SCALING_MODE", "all", "single_instance or external-store-backed mode"),
     Variable("TP_CF_ACCESS_TEAM_DOMAIN", "production", "Cloudflare Access team domain"),
     Variable("TP_CF_ACCESS_AUD", "production", "Cloudflare Access JWT audience"),
+    Variable("TP_PORTAL_RUM_ENABLED", "optional", "Shared portal/frontdoor RUM kill switch"),
+    Variable("TP_PORTAL_RUM_ROLLOUT_PERCENT", "optional", "Managed portal/bootstrap RUM rollout percent"),
+    Variable("TP_FRONTDOOR_RUM_ENABLED", "optional", "Independent landing/login/logout RUM flag"),
+    Variable("TP_FRONTDOOR_RUM_ROLLOUT_PERCENT", "optional", "Independent front-door RUM sampling percent"),
 )
 
 SUPPORTED_SESSION_SCALING_MODES = frozenset({"single_instance"})
