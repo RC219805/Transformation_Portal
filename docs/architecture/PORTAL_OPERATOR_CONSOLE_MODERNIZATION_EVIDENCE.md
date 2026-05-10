@@ -51,9 +51,13 @@ Optional review-time segmentation refinement is not part of the shipped scope ca
 ```bash
 export TP_PORTAL_RUM_ENABLED=1
 export TP_PORTAL_RUM_ROLLOUT_PERCENT=100
+export TP_FRONTDOOR_RUM_ENABLED=1
+export TP_FRONTDOOR_RUM_ROLLOUT_PERCENT=100
 export TP_PORTAL_RUM_LOG_PATH="/absolute/path/to/portal-rum.jsonl"
 export TP_PORTAL_EVENT_LOG_PATH="/absolute/path/to/portal-events.jsonl"
 ```
+
+`TP_PORTAL_RUM_ENABLED` is the shared master kill switch and `TP_PORTAL_RUM_ROLLOUT_PERCENT` only governs managed portal/bootstrap RUM. The independent `TP_FRONTDOOR_RUM_*` gates added in #1707 must also be set or `make validate-frontdoor-browser` will silently produce zero landing/login/logout samples in the JSONL log even though the pilot appears to run.
 
 2. Run the current browser validation backbone:
 
