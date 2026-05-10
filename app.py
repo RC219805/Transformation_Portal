@@ -10,6 +10,7 @@ import os
 import re
 import shlex
 import signal
+import stat
 import sys
 import tempfile
 import threading
@@ -392,6 +393,16 @@ def _default_allowed_path_roots() -> List[Path]:
 
 def _env_path_roots(name: str, default: List[Path]) -> List[Path]:
     return _portal_path_security._env_path_roots(name, default, repo_root=REPO_ROOT, logger=LOGGER)
+
+
+def _portal_telemetry_sink_path_from_env(name: str) -> Optional[Path]:
+    raw_value = os.getenv(name, "").strip()
+    if not raw_value:
+        return None
+    try:
+        return _portal_path_security.validate_portal_telemetry_sink_path(raw_value, repo_root=REPO_ROOT)
+    except _portal_path_security.PathSecurityValidationError as exc:
+        raise RuntimeError(f"{name} violates portal telemetry sink path policy: {exc}") from exc
 
 
 def _lux_depth_runner_command() -> List[str]:
@@ -1398,19 +1409,8 @@ LUX_RECONSTRUCTION_FIELD_ALIASES: Dict[str, Tuple[str, ...]] = {
 }
 LUX_DEBUG_BUNDLE_DESTINATION_TEMPLATE = "reconstruction/<scene-fingerprint>/debug"
 
-_portal_event_log_path_raw = os.getenv("TP_PORTAL_EVENT_LOG_PATH", "").strip()
-try:
-    PORTAL_EVENT_LOG_PATH = _normalize_root_path(_portal_event_log_path_raw) if _portal_event_log_path_raw else None
-except (OSError, RuntimeError, ValueError):
-    LOGGER.warning("TP_PORTAL_EVENT_LOG_PATH ignored invalid path: %s", _portal_event_log_path_raw)
-    PORTAL_EVENT_LOG_PATH = None
-
-_portal_rum_log_path_raw = os.getenv("TP_PORTAL_RUM_LOG_PATH", "").strip()
-try:
-    PORTAL_RUM_LOG_PATH = _normalize_root_path(_portal_rum_log_path_raw) if _portal_rum_log_path_raw else None
-except (OSError, RuntimeError, ValueError):
-    LOGGER.warning("TP_PORTAL_RUM_LOG_PATH ignored invalid path: %s", _portal_rum_log_path_raw)
-    PORTAL_RUM_LOG_PATH = None
+PORTAL_EVENT_LOG_PATH = _portal_telemetry_sink_path_from_env("TP_PORTAL_EVENT_LOG_PATH")
+PORTAL_RUM_LOG_PATH = _portal_telemetry_sink_path_from_env("TP_PORTAL_RUM_LOG_PATH")
 
 
 class JobPreflightError(RuntimeError):
@@ -5401,19 +5401,44 @@ def _persist_portal_event_record(record: Dict[str, Any], log_path: Optional[Path
         return
     encoded_record = (json.dumps(record, sort_keys=True) + "\n").encode("utf-8")
     try:
-        log_path.parent.mkdir(parents=True, exist_ok=True)
+        log_path = _portal_path_security.validate_portal_telemetry_sink_path(str(log_path), repo_root=REPO_ROOT)
+        if os.open not in os.supports_dir_fd:
+            raise OSError("dir_fd is required for portal telemetry sink writes")
+        no_follow_flag = getattr(os, "O_NOFOLLOW", 0)
+        parent_flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | no_follow_flag
+        file_flags = os.O_APPEND | os.O_CREAT | os.O_WRONLY | no_follow_flag | getattr(os, "O_NONBLOCK", 0)
+        expected_parent_stat = os.stat(log_path.parent, follow_symlinks=False)
         with _PORTAL_EVENT_LOG_WRITE_LOCK:
-            fd = os.open(log_path, os.O_APPEND | os.O_CREAT | os.O_WRONLY, 0o600)
+            parent_fd = os.open(log_path.parent, parent_flags)
             try:
-                bytes_written = 0
-                while bytes_written < len(encoded_record):
-                    chunk_size = os.write(fd, encoded_record[bytes_written:])
-                    if chunk_size <= 0:
-                        raise OSError("short write while appending portal telemetry")
-                    bytes_written += chunk_size
+                actual_parent_stat = os.fstat(parent_fd)
+                if (
+                    actual_parent_stat.st_dev != expected_parent_stat.st_dev
+                    or actual_parent_stat.st_ino != expected_parent_stat.st_ino
+                ):
+                    raise OSError("portal telemetry sink parent changed before open")
+                try:
+                    existing_file_stat = os.stat(log_path.name, dir_fd=parent_fd, follow_symlinks=False)
+                except FileNotFoundError:
+                    existing_file_stat = None
+                if existing_file_stat is not None and not stat.S_ISREG(existing_file_stat.st_mode):
+                    raise OSError("portal telemetry sink target is not a regular file")
+                fd = os.open(log_path.name, file_flags, 0o600, dir_fd=parent_fd)
+                try:
+                    opened_file_stat = os.fstat(fd)
+                    if not stat.S_ISREG(opened_file_stat.st_mode):
+                        raise OSError("portal telemetry sink is not a regular file")
+                    bytes_written = 0
+                    while bytes_written < len(encoded_record):
+                        chunk_size = os.write(fd, encoded_record[bytes_written:])
+                        if chunk_size <= 0:
+                            raise OSError("short write while appending portal telemetry")
+                        bytes_written += chunk_size
+                finally:
+                    os.close(fd)
             finally:
-                os.close(fd)
-    except OSError:
+                os.close(parent_fd)
+    except (OSError, _portal_path_security.PathSecurityValidationError):
         LOGGER.warning(
             "failed to persist portal event telemetry to %s",
             log_path,

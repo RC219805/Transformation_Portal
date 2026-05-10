@@ -6,10 +6,27 @@ import os
 import re
 import tempfile
 from pathlib import Path
-from typing import Any, List, Optional
+from typing import Any, List, Optional, Sequence
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 _UNSAFE_PATH_SEGMENT_RE = re.compile(r"[\x00/\\]")
+_GLOB_PATH_CHARS = set("*?[]{}")
+_PORTAL_TELEMETRY_SINK_SUFFIXES = (".jsonl", ".jsonl.gz")
+_CI_ROOT_ENV_VARS = (
+    "GITHUB_WORKSPACE",
+    "RUNNER_TEMP",
+    "RUNNER_TOOL_CACHE",
+    "CI_ARTIFACTS_DIR",
+    "ARTIFACTS_DIR",
+    "ARTIFACT_DIR",
+    "CI_OUTPUT_DIR",
+)
+_CI_FILE_ENV_VARS = (
+    "GITHUB_ENV",
+    "GITHUB_OUTPUT",
+    "GITHUB_PATH",
+    "GITHUB_STEP_SUMMARY",
+)
 
 
 class PathSecurityValidationError(ValueError):
@@ -143,6 +160,194 @@ def _path_is_within_root(resolved_path: Path, root: Path) -> bool:
     except ValueError:
         return False
     return True
+
+
+def _portal_telemetry_public_roots(repo_root: Path) -> List[Path]:
+    return [
+        repo_root / "public",
+        repo_root / "static",
+        repo_root / "web" / "secure-landing" / "public",
+        repo_root / "web" / "secure-landing" / "static",
+    ]
+
+
+def _portal_telemetry_ci_roots() -> List[Path]:
+    roots: List[Path] = []
+    for env_var in _CI_ROOT_ENV_VARS:
+        raw_value = str(os.getenv(env_var) or "").strip()
+        if raw_value:
+            roots.append(Path(raw_value))
+    for env_var in _CI_FILE_ENV_VARS:
+        raw_value = str(os.getenv(env_var) or "").strip()
+        if raw_value:
+            roots.append(Path(raw_value).parent)
+    return roots
+
+
+def _has_glob_chars(value: str) -> bool:
+    return any(char in _GLOB_PATH_CHARS for char in value)
+
+
+def _has_portal_telemetry_sink_suffix(path: Path) -> bool:
+    path_text = str(path)
+    return any(path_text.endswith(suffix) for suffix in _PORTAL_TELEMETRY_SINK_SUFFIXES)
+
+
+def _normalized_roots(roots: Sequence[Path]) -> List[Path]:
+    normalized: List[Path] = []
+    for root in roots:
+        try:
+            normalized_root = Path(os.path.realpath(root))
+        except (OSError, RuntimeError, ValueError):
+            continue
+        if normalized_root not in normalized:
+            normalized.append(normalized_root)
+    return normalized
+
+
+def _absolute_roots(roots: Sequence[Path]) -> List[Path]:
+    absolute: List[Path] = []
+    for root in roots:
+        try:
+            absolute_root = Path(os.path.abspath(root))
+        except (OSError, RuntimeError, ValueError):
+            continue
+        if absolute_root not in absolute:
+            absolute.append(absolute_root)
+    return absolute
+
+
+def _path_is_lexically_within_root(path: Path, root: Path) -> bool:
+    try:
+        path.relative_to(root)
+    except ValueError:
+        return False
+    return True
+
+
+def validate_portal_telemetry_sink_path(
+    path: str,
+    *,
+    repo_root: Path | None = None,
+    public_roots: Sequence[Path] | None = None,
+    ci_roots: Sequence[Path] | None = None,
+) -> Path:
+    """Validate a configured portal telemetry raw JSONL sink path."""
+
+    raw_path = str(path or "").strip()
+    if not raw_path:
+        raise PathSecurityValidationError(
+            "Portal telemetry sink path must not be empty",
+            reason="empty_portal_telemetry_sink_path",
+        )
+    if raw_path.startswith("~") or "\x00" in raw_path:
+        raise PathSecurityValidationError(
+            "Portal telemetry sink path is invalid",
+            reason="invalid_portal_telemetry_sink_path",
+        )
+    if _has_glob_chars(raw_path):
+        raise PathSecurityValidationError(
+            "Portal telemetry sink path must not contain glob characters",
+            reason="glob_portal_telemetry_sink_path",
+        )
+
+    candidate = Path(raw_path)
+    if not candidate.is_absolute():
+        raise PathSecurityValidationError(
+            "Portal telemetry sink path must be absolute",
+            reason="relative_portal_telemetry_sink_path",
+        )
+    if not _has_portal_telemetry_sink_suffix(candidate):
+        raise PathSecurityValidationError(
+            "Portal telemetry sink path must end with .jsonl or .jsonl.gz",
+            reason="invalid_portal_telemetry_sink_suffix",
+        )
+    if candidate.is_symlink():
+        raise PathSecurityValidationError(
+            "Portal telemetry sink path must not be a symlink",
+            reason="symlink_portal_telemetry_sink_path",
+        )
+    try:
+        if candidate.exists() and candidate.is_dir():
+            raise PathSecurityValidationError(
+                "Portal telemetry sink path must not be a directory",
+                reason="directory_portal_telemetry_sink_path",
+            )
+        if candidate.exists() and not candidate.is_file():
+            raise PathSecurityValidationError(
+                "Portal telemetry sink path must be a regular file",
+                reason="invalid_portal_telemetry_sink_path",
+            )
+    except OSError as exc:
+        raise PathSecurityValidationError(
+            "Portal telemetry sink path is invalid",
+            reason="invalid_portal_telemetry_sink_path",
+        ) from exc
+
+    lexical = Path(os.path.abspath(candidate))
+    resolved = Path(os.path.realpath(candidate))
+    resolved_repo_root = _repo_root(repo_root)
+    lexical_repo_root = Path(os.path.abspath(resolved_repo_root))
+    portal_public_roots = _portal_telemetry_public_roots(resolved_repo_root) if public_roots is None else public_roots
+    portal_ci_roots = _portal_telemetry_ci_roots() if ci_roots is None else ci_roots
+    lexical_public_roots = _absolute_roots(portal_public_roots)
+    resolved_public_roots = _normalized_roots(portal_public_roots)
+    lexical_ci_roots = _absolute_roots(portal_ci_roots)
+    resolved_ci_roots = _normalized_roots(portal_ci_roots)
+
+    for lexical_public_root in lexical_public_roots:
+        if _path_is_lexically_within_root(lexical, lexical_public_root):
+            raise PathSecurityValidationError(
+                "Portal telemetry sink path must not be inside public/static asset surfaces",
+                reason="public_static_portal_telemetry_sink_path",
+            )
+    for resolved_public_root in resolved_public_roots:
+        if _path_is_within_root(resolved, resolved_public_root):
+            raise PathSecurityValidationError(
+                "Portal telemetry sink path must not be inside public/static asset surfaces",
+                reason="public_static_portal_telemetry_sink_path",
+            )
+    if _path_is_lexically_within_root(lexical, lexical_repo_root) or _path_is_within_root(resolved, resolved_repo_root):
+        raise PathSecurityValidationError(
+            "Portal telemetry sink path must not be inside the repository",
+            reason="repo_portal_telemetry_sink_path",
+        )
+    for lexical_ci_root in lexical_ci_roots:
+        if _path_is_lexically_within_root(lexical, lexical_ci_root):
+            raise PathSecurityValidationError(
+                "Portal telemetry sink path must not be inside CI workspace or artifact paths",
+                reason="ci_portal_telemetry_sink_path",
+            )
+    for resolved_ci_root in resolved_ci_roots:
+        if _path_is_within_root(resolved, resolved_ci_root):
+            raise PathSecurityValidationError(
+                "Portal telemetry sink path must not be inside CI workspace or artifact paths",
+                reason="ci_portal_telemetry_sink_path",
+            )
+
+    parent = candidate.parent
+    try:
+        if not parent.exists():
+            raise PathSecurityValidationError(
+                "Portal telemetry sink parent must already exist",
+                reason="missing_portal_telemetry_sink_parent",
+            )
+        if parent.is_symlink():
+            raise PathSecurityValidationError(
+                "Portal telemetry sink parent must not be a symlink",
+                reason="symlink_portal_telemetry_sink_parent",
+            )
+        if not parent.is_dir():
+            raise PathSecurityValidationError(
+                "Portal telemetry sink parent must be a directory",
+                reason="invalid_portal_telemetry_sink_parent",
+            )
+    except OSError as exc:
+        raise PathSecurityValidationError(
+            "Portal telemetry sink parent is invalid",
+            reason="invalid_portal_telemetry_sink_parent",
+        ) from exc
+    return resolved
 
 
 def _trusted_allowed_entry(
