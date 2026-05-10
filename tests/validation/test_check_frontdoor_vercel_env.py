@@ -48,6 +48,44 @@ def test_vercel_env_accepts_runtime_fastapi_origin_without_backend_alias() -> No
 
     assert ok is True
     assert all(row[1] != "TP_BACKEND_ORIGIN" for row in rows)
+    assert (
+        "optional",
+        "TP_FRONTDOOR_RUM_ENABLED",
+        "Independent landing/login/logout RUM flag",
+    ) in rows
+    assert (
+        "optional",
+        "TP_FRONTDOOR_RUM_ROLLOUT_PERCENT",
+        "Independent front-door RUM sampling percent",
+    ) in rows
+
+
+@pytest.mark.unit
+def test_vercel_env_reports_frontdoor_rum_knobs_when_configured() -> None:
+    module = _load_module()
+    ok, rows = module._evaluate(
+        {
+            "TP_FASTAPI_ORIGIN": "https://fastapi.example.com",
+            "TP_BACKEND_API_KEY": "secret",
+            "TP_FRONTDOOR_USERS_JSON": _valid_user_json(),
+            "TP_FRONTDOOR_SESSION_SCALING_MODE": "single_instance",
+            "TP_PORTAL_RUM_ENABLED": "1",
+            "TP_PORTAL_RUM_ROLLOUT_PERCENT": "100",
+            "TP_FRONTDOOR_RUM_ENABLED": "1",
+            "TP_FRONTDOOR_RUM_ROLLOUT_PERCENT": "25",
+        },
+        production=False,
+    )
+
+    assert ok is True
+    assert ("ok", "TP_PORTAL_RUM_ENABLED", "set via TP_PORTAL_RUM_ENABLED") in rows
+    assert ("ok", "TP_PORTAL_RUM_ROLLOUT_PERCENT", "set via TP_PORTAL_RUM_ROLLOUT_PERCENT") in rows
+    assert ("ok", "TP_FRONTDOOR_RUM_ENABLED", "set via TP_FRONTDOOR_RUM_ENABLED") in rows
+    assert (
+        "ok",
+        "TP_FRONTDOOR_RUM_ROLLOUT_PERCENT",
+        "set via TP_FRONTDOOR_RUM_ROLLOUT_PERCENT",
+    ) in rows
 
 
 @pytest.mark.unit

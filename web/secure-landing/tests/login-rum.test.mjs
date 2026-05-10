@@ -22,6 +22,8 @@ const ENV_KEYS = [
   "TP_ALLOW_LOCAL_ACCESS_BYPASS",
   "TP_PORTAL_RUM_ENABLED",
   "TP_PORTAL_RUM_ROLLOUT_PERCENT",
+  "TP_FRONTDOOR_RUM_ENABLED",
+  "TP_FRONTDOOR_RUM_ROLLOUT_PERCENT",
 ];
 
 const TEST_CF_ACCESS_TEAM_DOMAIN = "https://tp-frontdoor-tests.cloudflareaccess.com";
@@ -52,7 +54,12 @@ function restoreEnv(snapshot) {
   }
 }
 
-function withTestEnvironment({ rumEnabled = true, usersFileEntries = [] } = {}) {
+function withTestEnvironment({
+  rumEnabled = true,
+  frontdoorRumEnabled = rumEnabled,
+  frontdoorRolloutPercent = "100",
+  usersFileEntries = []
+} = {}) {
   const snapshot = snapshotEnv();
   const tempDir = mkdtempSync(path.join(os.tmpdir(), "tp-frontdoor-login-rum-"));
   const dbPath = path.join(tempDir, "sessions.sqlite");
@@ -75,6 +82,14 @@ function withTestEnvironment({ rumEnabled = true, usersFileEntries = [] } = {}) 
   } else {
     delete process.env.TP_PORTAL_RUM_ENABLED;
     delete process.env.TP_PORTAL_RUM_ROLLOUT_PERCENT;
+  }
+
+  if (frontdoorRumEnabled) {
+    process.env.TP_FRONTDOOR_RUM_ENABLED = "1";
+    process.env.TP_FRONTDOOR_RUM_ROLLOUT_PERCENT = frontdoorRolloutPercent;
+  } else {
+    delete process.env.TP_FRONTDOOR_RUM_ENABLED;
+    delete process.env.TP_FRONTDOOR_RUM_ROLLOUT_PERCENT;
   }
 
   resetDbCache();
@@ -249,7 +264,7 @@ function assertNoPiiInRumPosts(rumCalls) {
   }
 }
 
-test("login POST emits no RUM events when front-door RUM is disabled", async () => {
+test("login POST emits no RUM events when the shared RUM master flag is disabled", async () => {
   const env = withTestEnvironment({ rumEnabled: false, usersFileEntries: [await buildAdminUserFixture()] });
   const rumCalls = [];
   const restoreFetch = installFetchMock({ rumCalls });
@@ -265,6 +280,59 @@ test("login POST emits no RUM events when front-door RUM is disabled", async () 
 
     assert.equal(response.status, 303);
     assert.equal(rumCalls.length, 0, `expected no RUM POSTs, got ${rumCalls.length}`);
+  } finally {
+    restoreFetch();
+    env.cleanup();
+  }
+});
+
+test("login POST emits no RUM events when the front-door RUM flag is disabled", async () => {
+  const env = withTestEnvironment({
+    rumEnabled: true,
+    frontdoorRumEnabled: false,
+    usersFileEntries: [await buildAdminUserFixture()]
+  });
+  const rumCalls = [];
+  const restoreFetch = installFetchMock({ rumCalls });
+
+  try {
+    const sessions = await importFresh("../lib/sessions.js");
+    const { POST } = await importFresh("../app/login/route.js");
+    const session = sessions.createAnonymousSession();
+    const request = buildPostRequest({ session, csrfToken: session.csrfToken });
+
+    const response = await POST(request);
+    await flushFireAndForget();
+
+    assert.equal(response.status, 303);
+    assert.equal(rumCalls.length, 0, `expected no RUM POSTs, got ${rumCalls.length}`);
+  } finally {
+    restoreFetch();
+    env.cleanup();
+  }
+});
+
+test("login POST emits no RUM events when front-door rollout percent samples out", async () => {
+  const env = withTestEnvironment({
+    rumEnabled: true,
+    frontdoorRumEnabled: true,
+    frontdoorRolloutPercent: "0",
+    usersFileEntries: [await buildAdminUserFixture()]
+  });
+  const rumCalls = [];
+  const restoreFetch = installFetchMock({ rumCalls });
+
+  try {
+    const sessions = await importFresh("../lib/sessions.js");
+    const { POST } = await importFresh("../app/login/route.js");
+    const session = sessions.createAnonymousSession();
+    const request = buildPostRequest({ session, csrfToken: session.csrfToken });
+
+    const response = await POST(request);
+    await flushFireAndForget();
+
+    assert.equal(response.status, 303);
+    assert.equal(rumCalls.length, 0, `expected sampled-out RUM POSTs, got ${rumCalls.length}`);
   } finally {
     restoreFetch();
     env.cleanup();

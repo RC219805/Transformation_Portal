@@ -166,9 +166,19 @@ Current rollout knobs:
 ```bash
 export TP_PORTAL_RUM_ENABLED=0
 export TP_PORTAL_RUM_ROLLOUT_PERCENT=0
+export TP_FRONTDOOR_RUM_ENABLED=0
+export TP_FRONTDOOR_RUM_ROLLOUT_PERCENT=0
 ```
 
-`TP_PORTAL_RUM_ENABLED` is the shared master flag for portal and front-door RUM scripts / emitters. `TP_PORTAL_RUM_ROLLOUT_PERCENT` gates managed portal bootstrap RUM telemetry by rollout cohort. The current front-door landing, login, and logout RUM paths do not define a separate front-door rollout or sampling env var in this revision; they are controlled by the shared enabled flag.
+Portal RUM controls:
+
+- `TP_PORTAL_RUM_ENABLED` remains the shared master kill switch for portal and front-door RUM scripts / emitters.
+- `TP_PORTAL_RUM_ROLLOUT_PERCENT` gates managed portal bootstrap RUM telemetry by rollout cohort.
+
+Front-door RUM controls:
+
+- `TP_FRONTDOOR_RUM_ENABLED` independently gates landing, login, logout, and front-door RUM proxy telemetry after the shared master flag is enabled.
+- `TP_FRONTDOOR_RUM_ROLLOUT_PERCENT` independently samples front-door RUM requests; it defaults to `100` when front-door RUM is enabled, clamps to `0..100`, and treats invalid values as `0`.
 
 Current sink path knobs:
 

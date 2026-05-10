@@ -3,7 +3,7 @@ import { NextResponse } from "next/server.js";
 import { resolveAccessContext, resolveAuthenticatedAccessSession, revokeSessionOnAccessFailure } from "../../lib/access.js";
 import { escapeHtml, FRONTDOOR_ASSETS, renderBrandAsset } from "../../lib/brand.js";
 import { audit } from "../../lib/audit.js";
-import { isPortalRumEnabled } from "../../lib/config.js";
+import { isFrontdoorRumTelemetryEnabled } from "../../lib/config.js";
 import { applySecurityHeaders, buildRequestUrl, FRONTDOOR_CSP, generateScriptNonce } from "../../lib/http.js";
 import { applyPortalReturnTo, resolvePortalReturnTo, validatePortalReturnTo } from "../../lib/return-to.js";
 import {
@@ -31,7 +31,7 @@ import {
   validateCsrfToken
 } from "../../lib/sessions.js";
 import { getConfig } from "../../lib/config.js";
-import { generateTraceparent, resolveRequestTraceparent } from "../../lib/trace.js";
+import { resolveRequestTraceparent } from "../../lib/trace.js";
 import { validateOriginAndReferrer } from "../../lib/request-security.js";
 import { verifyUserCredentials } from "../../lib/users.js";
 
@@ -300,13 +300,14 @@ export async function GET(request) {
   // token on the login form is bound to a server-side session from the start.
   session = session || createAnonymousSession();
   const accessContext = await resolveAccessContext(request);
-  const rumEnabled = isPortalRumEnabled();
+  const rumTraceparent = resolveRequestTraceparent(request);
+  const rumEnabled = isFrontdoorRumTelemetryEnabled({ traceparent: rumTraceparent });
   const scriptNonce = rumEnabled ? generateScriptNonce() : null;
   const rumScript = rumEnabled
     ? renderRumClientScript({
         route: "/login",
         view: "login",
-        traceparent: generateTraceparent(),
+        traceparent: rumTraceparent,
       })
     : "";
   const html = renderLoginPage({
@@ -332,11 +333,11 @@ export async function GET(request) {
 export async function POST(request) {
   // Capture the RUM enable decision once at handler entry. This is the SOLE
   // gate for paired emissions: the emitter intentionally does not re-check
-  // isPortalRumEnabled() so a flag flip mid-request cannot produce a partial
+  // isFrontdoorRumTelemetryEnabled() so a flag flip mid-request cannot produce a partial
   // attempt/terminal pair (one captured but not the other).
-  const rumActive = isPortalRumEnabled();
+  const rumTraceparent = resolveRequestTraceparent(request);
+  const rumActive = isFrontdoorRumTelemetryEnabled({ traceparent: rumTraceparent });
   const attemptStart = Date.now();
-  const rumTraceparent = rumActive ? resolveRequestTraceparent(request) : "";
   const emitLoginRum = (eventType, failureCode = null) => {
     if (!rumActive) return;
     const value = eventType === LOGIN_RUM_EVENT_TYPES.ATTEMPT

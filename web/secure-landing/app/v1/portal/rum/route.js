@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server.js";
 
-import { getConfig, isPortalRumEnabled } from "../../../../lib/config.js";
+import { getConfig, isFrontdoorRumTelemetryEnabled } from "../../../../lib/config.js";
 import { applySecurityHeaders } from "../../../../lib/http.js";
 import {
   auditManagedSurfaceFailure,
@@ -75,7 +75,7 @@ export async function POST(request) {
     );
   }
 
-  if (!isPortalRumEnabled()) {
+  if (!isFrontdoorRumTelemetryEnabled({ traceparent: requestTraceparent })) {
     return successEnvelope({ accepted: false, disabled: true }, requestTraceparent);
   }
 

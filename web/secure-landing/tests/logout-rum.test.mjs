@@ -17,6 +17,8 @@ const ENV_KEYS = [
   "TP_FRONTDOOR_SESSION_DB",
   "TP_PORTAL_RUM_ENABLED",
   "TP_PORTAL_RUM_ROLLOUT_PERCENT",
+  "TP_FRONTDOOR_RUM_ENABLED",
+  "TP_FRONTDOOR_RUM_ROLLOUT_PERCENT",
 ];
 
 const FASTAPI_ORIGIN = "http://127.0.0.1:8000";
@@ -36,7 +38,11 @@ function restoreEnv(snapshot) {
   }
 }
 
-function withTestEnvironment({ rumEnabled = true } = {}) {
+function withTestEnvironment({
+  rumEnabled = true,
+  frontdoorRumEnabled = rumEnabled,
+  frontdoorRolloutPercent = "100"
+} = {}) {
   const snapshot = snapshotEnv();
   const tempDir = mkdtempSync(path.join(os.tmpdir(), "tp-frontdoor-logout-rum-"));
   const dbPath = path.join(tempDir, "sessions.sqlite");
@@ -56,6 +62,14 @@ function withTestEnvironment({ rumEnabled = true } = {}) {
   } else {
     delete process.env.TP_PORTAL_RUM_ENABLED;
     delete process.env.TP_PORTAL_RUM_ROLLOUT_PERCENT;
+  }
+
+  if (frontdoorRumEnabled) {
+    process.env.TP_FRONTDOOR_RUM_ENABLED = "1";
+    process.env.TP_FRONTDOOR_RUM_ROLLOUT_PERCENT = frontdoorRolloutPercent;
+  } else {
+    delete process.env.TP_FRONTDOOR_RUM_ENABLED;
+    delete process.env.TP_FRONTDOOR_RUM_ROLLOUT_PERCENT;
   }
 
   resetDbCache();
@@ -179,7 +193,7 @@ function assertNoPiiInRumPosts(rumCalls) {
   }
 }
 
-test("logout POST emits no RUM events when front-door RUM is disabled", async () => {
+test("logout POST emits no RUM events when the shared RUM master flag is disabled", async () => {
   const env = withTestEnvironment({ rumEnabled: false });
   const rumCalls = [];
   const restoreFetch = installFetchMock({ rumCalls });
@@ -197,6 +211,58 @@ test("logout POST emits no RUM events when front-door RUM is disabled", async ()
     assert.equal(response.headers.get("location"), "https://portal.example.com/login");
     assert.equal(rumCalls.length, 0, `expected zero RUM calls when disabled, got ${rumCalls.length}`);
     // Session was destroyed even though RUM was off — RUM must never alter behavior.
+    assert.equal(sessions.getSessionById(session.id, { touch: false }), null);
+  } finally {
+    restoreFetch();
+    env.cleanup();
+  }
+});
+
+test("logout POST emits no RUM events when the front-door RUM flag is disabled", async () => {
+  const env = withTestEnvironment({ rumEnabled: true, frontdoorRumEnabled: false });
+  const rumCalls = [];
+  const restoreFetch = installFetchMock({ rumCalls });
+
+  try {
+    const sessions = await importFresh("../lib/sessions.js");
+    const { POST } = await importFresh("../app/logout/route.js");
+    const session = buildAuthenticatedSession(sessions);
+    const request = buildLogoutPostRequest({ session, csrfHeader: session.csrfToken });
+
+    const response = await POST(request);
+    await flushFireAndForget();
+
+    assert.equal(response.status, 303);
+    assert.equal(response.headers.get("location"), "https://portal.example.com/login");
+    assert.equal(rumCalls.length, 0, `expected zero RUM calls when disabled, got ${rumCalls.length}`);
+    assert.equal(sessions.getSessionById(session.id, { touch: false }), null);
+  } finally {
+    restoreFetch();
+    env.cleanup();
+  }
+});
+
+test("logout POST emits no RUM events when front-door rollout percent samples out", async () => {
+  const env = withTestEnvironment({
+    rumEnabled: true,
+    frontdoorRumEnabled: true,
+    frontdoorRolloutPercent: "0"
+  });
+  const rumCalls = [];
+  const restoreFetch = installFetchMock({ rumCalls });
+
+  try {
+    const sessions = await importFresh("../lib/sessions.js");
+    const { POST } = await importFresh("../app/logout/route.js");
+    const session = buildAuthenticatedSession(sessions);
+    const request = buildLogoutPostRequest({ session, csrfHeader: session.csrfToken });
+
+    const response = await POST(request);
+    await flushFireAndForget();
+
+    assert.equal(response.status, 303);
+    assert.equal(response.headers.get("location"), "https://portal.example.com/login");
+    assert.equal(rumCalls.length, 0, `expected sampled-out RUM calls, got ${rumCalls.length}`);
     assert.equal(sessions.getSessionById(session.id, { touch: false }), null);
   } finally {
     restoreFetch();

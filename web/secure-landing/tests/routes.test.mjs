@@ -30,6 +30,8 @@ const ENV_KEYS = [
   "TP_PORTAL_REVIEW_SURFACE_DEFER_ROLLOUT_PERCENT",
   "TP_PORTAL_RUM_ENABLED",
   "TP_PORTAL_RUM_ROLLOUT_PERCENT",
+  "TP_FRONTDOOR_RUM_ENABLED",
+  "TP_FRONTDOOR_RUM_ROLLOUT_PERCENT",
   "TP_PORTAL_FASTVLM_CAPTIONING_ENABLED",
   "TP_PORTAL_FASTVLM_CAPTIONING_ROLLOUT_PERCENT"
 ];
@@ -148,6 +150,18 @@ function withTempEnvironment(overrides = {}) {
     process.env.TP_PORTAL_RUM_ROLLOUT_PERCENT = overrides.TP_PORTAL_RUM_ROLLOUT_PERCENT;
   } else {
     delete process.env.TP_PORTAL_RUM_ROLLOUT_PERCENT;
+  }
+
+  if (typeof overrides.TP_FRONTDOOR_RUM_ENABLED === "string") {
+    process.env.TP_FRONTDOOR_RUM_ENABLED = overrides.TP_FRONTDOOR_RUM_ENABLED;
+  } else {
+    delete process.env.TP_FRONTDOOR_RUM_ENABLED;
+  }
+
+  if (typeof overrides.TP_FRONTDOOR_RUM_ROLLOUT_PERCENT === "string") {
+    process.env.TP_FRONTDOOR_RUM_ROLLOUT_PERCENT = overrides.TP_FRONTDOOR_RUM_ROLLOUT_PERCENT;
+  } else {
+    delete process.env.TP_FRONTDOOR_RUM_ROLLOUT_PERCENT;
   }
 
   if (typeof overrides.TP_PORTAL_FASTVLM_CAPTIONING_ENABLED === "string") {
@@ -1667,6 +1681,44 @@ test("managed bootstrap enables rum telemetry for rollout cohorts", async () => 
   const env = withTempEnvironment({
     TP_PORTAL_RUM_ENABLED: "1",
     TP_PORTAL_RUM_ROLLOUT_PERCENT: "100"
+  });
+
+  try {
+    const sessions = await importFresh("../lib/sessions.js");
+    const { GET } = await importFresh("../app/portal/bootstrap/route.js");
+    const authenticatedSession = sessions.rotateAuthenticatedSession(
+      sessions.createAnonymousSession(),
+      {
+        username: "admin",
+        accessEmail: "admin@example.com",
+        role: "admin"
+      }
+    );
+
+    const request = buildRequest("https://portal.example.com/portal/bootstrap", {
+      method: "GET",
+      headers: new Headers({
+        cookie: `__Host-tp_session=${authenticatedSession.id}`,
+        "Cf-Access-Jwt-Assertion": createAccessJwt()
+      })
+    });
+
+    const response = await GET(request);
+    const body = await response.json();
+
+    assert.equal(response.status, 200);
+    assert.equal(body.features.rumTelemetry, true);
+  } finally {
+    env.cleanup();
+  }
+});
+
+test("managed bootstrap rum telemetry ignores front-door RUM rollout controls", async () => {
+  const env = withTempEnvironment({
+    TP_PORTAL_RUM_ENABLED: "1",
+    TP_PORTAL_RUM_ROLLOUT_PERCENT: "100",
+    TP_FRONTDOOR_RUM_ENABLED: "0",
+    TP_FRONTDOOR_RUM_ROLLOUT_PERCENT: "0"
   });
 
   try {

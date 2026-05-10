@@ -20,7 +20,9 @@ const ENV_KEYS = [
   "TP_CF_ACCESS_AUD",
   "TP_ALLOW_LOCAL_ACCESS_BYPASS",
   "TP_PORTAL_RUM_ENABLED",
-  "TP_PORTAL_RUM_ROLLOUT_PERCENT"
+  "TP_PORTAL_RUM_ROLLOUT_PERCENT",
+  "TP_FRONTDOOR_RUM_ENABLED",
+  "TP_FRONTDOOR_RUM_ROLLOUT_PERCENT"
 ];
 
 function snapshotEnv() {
@@ -38,7 +40,12 @@ function restoreEnv(snapshot) {
   }
 }
 
-function withRumEnvironment({ rumEnabled = false, rumFlagValue = "1" } = {}) {
+function withRumEnvironment({
+  rumEnabled = false,
+  rumFlagValue = "1",
+  frontdoorRumEnabled = rumEnabled,
+  frontdoorRolloutPercent = "100"
+} = {}) {
   const snapshot = snapshotEnv();
   const tempDir = mkdtempSync(path.join(os.tmpdir(), "tp-frontdoor-rum-"));
   const dbPath = path.join(tempDir, "sessions.sqlite");
@@ -61,6 +68,14 @@ function withRumEnvironment({ rumEnabled = false, rumFlagValue = "1" } = {}) {
   } else {
     delete process.env.TP_PORTAL_RUM_ENABLED;
     delete process.env.TP_PORTAL_RUM_ROLLOUT_PERCENT;
+  }
+
+  if (frontdoorRumEnabled) {
+    process.env.TP_FRONTDOOR_RUM_ENABLED = "1";
+    process.env.TP_FRONTDOOR_RUM_ROLLOUT_PERCENT = frontdoorRolloutPercent;
+  } else {
+    delete process.env.TP_FRONTDOOR_RUM_ENABLED;
+    delete process.env.TP_FRONTDOOR_RUM_ROLLOUT_PERCENT;
   }
 
   resetDbCache();
@@ -117,6 +132,77 @@ test("homepage GET omits the RUM script tag and keeps script-src 'none' when RUM
     assert.match(csp, /script-src 'none'/);
     assert.doesNotMatch(csp, /script-src 'nonce-/);
     assert.doesNotMatch(html, /<script\b/);
+    assert.match(response.headers.get("cache-control") || "", /\bpublic\b/i);
+  } finally {
+    env.cleanup();
+  }
+});
+
+test("homepage GET omits front-door RUM when only the front-door flag is disabled", async () => {
+  const env = withRumEnvironment({ rumEnabled: true, frontdoorRumEnabled: false });
+
+  try {
+    getDb(env.dbPath);
+    const { GET } = await importFresh("../app/route.js");
+    const request = buildRequest("https://portal.example.com/");
+
+    const response = await GET(request);
+    const html = await response.text();
+    const csp = response.headers.get("content-security-policy") || "";
+
+    assert.equal(response.status, 200);
+    assert.match(csp, /script-src 'none'/);
+    assert.doesNotMatch(html, /landing_rendered/);
+    assert.match(response.headers.get("cache-control") || "", /\bpublic\b/i);
+  } finally {
+    env.cleanup();
+  }
+});
+
+test("homepage GET samples out front-door RUM when rollout percent is zero", async () => {
+  const env = withRumEnvironment({
+    rumEnabled: true,
+    frontdoorRumEnabled: true,
+    frontdoorRolloutPercent: "0"
+  });
+
+  try {
+    getDb(env.dbPath);
+    const { GET } = await importFresh("../app/route.js");
+    const request = buildRequest("https://portal.example.com/");
+
+    const response = await GET(request);
+    const html = await response.text();
+    const csp = response.headers.get("content-security-policy") || "";
+
+    assert.equal(response.status, 200);
+    assert.match(csp, /script-src 'none'/);
+    assert.doesNotMatch(html, /landing_rendered/);
+    assert.match(response.headers.get("cache-control") || "", /\bpublic\b/i);
+  } finally {
+    env.cleanup();
+  }
+});
+
+test("homepage GET treats invalid front-door RUM rollout values as sampled out", async () => {
+  const env = withRumEnvironment({
+    rumEnabled: true,
+    frontdoorRumEnabled: true,
+    frontdoorRolloutPercent: "not-a-number"
+  });
+
+  try {
+    getDb(env.dbPath);
+    const { GET } = await importFresh("../app/route.js");
+    const request = buildRequest("https://portal.example.com/");
+
+    const response = await GET(request);
+    const html = await response.text();
+    const csp = response.headers.get("content-security-policy") || "";
+
+    assert.equal(response.status, 200);
+    assert.match(csp, /script-src 'none'/);
+    assert.doesNotMatch(html, /landing_rendered/);
     assert.match(response.headers.get("cache-control") || "", /\bpublic\b/i);
   } finally {
     env.cleanup();
@@ -222,6 +308,38 @@ test("renderRumClientScript omits invalid or missing traceparent values", async 
   assert.doesNotMatch(missingTraceparentBody, /TRACEPARENT\s*=\s*"undefined"/);
   assert.doesNotMatch(invalidTraceparentBody, /TRACEPARENT\s*=\s*"undefined"/);
   assert.doesNotMatch(invalidTraceparentBody, /TRACEPARENT\s*=\s*"null"/);
+});
+
+test("front-door RUM rollout config defaults, clamps, and fails closed on invalid values", async () => {
+  const {
+    isFrontdoorRumTelemetryEnabled,
+    resolveFrontdoorRumRolloutPercent
+  } = await importFresh("../lib/config.js");
+  const traceparent = "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01";
+
+  assert.equal(
+    resolveFrontdoorRumRolloutPercent({}),
+    100,
+    "front-door rollout defaults to 100 when the env value is omitted"
+  );
+  assert.equal(resolveFrontdoorRumRolloutPercent({ TP_FRONTDOOR_RUM_ROLLOUT_PERCENT: "150" }), 100);
+  assert.equal(resolveFrontdoorRumRolloutPercent({ TP_FRONTDOOR_RUM_ROLLOUT_PERCENT: "-10" }), 0);
+  assert.equal(resolveFrontdoorRumRolloutPercent({ TP_FRONTDOOR_RUM_ROLLOUT_PERCENT: "bogus" }), 0);
+
+  assert.equal(isFrontdoorRumTelemetryEnabled({
+    traceparent,
+    env: {
+      TP_PORTAL_RUM_ENABLED: "1",
+      TP_FRONTDOOR_RUM_ENABLED: "1"
+    }
+  }), true);
+  assert.equal(isFrontdoorRumTelemetryEnabled({
+    traceparent,
+    env: {
+      TP_PORTAL_RUM_ENABLED: "0",
+      TP_FRONTDOOR_RUM_ENABLED: "1"
+    }
+  }), false);
 });
 
 test("homepage GET mints a fresh nonce on every request when RUM is enabled", async () => {
@@ -950,6 +1068,45 @@ test("public RUM route rejects cross-origin samples before proxying", async () =
       assert.equal(response.status, 403);
       assert.equal(body.error.code, "INVALID_CSRF");
       assert.equal(body.error.details.path, "/v1/portal/rum");
+    } finally {
+      restoreFetch();
+    }
+  } finally {
+    env.cleanup();
+  }
+});
+
+test("public RUM route noops when only front-door RUM is disabled", async () => {
+  const env = withRumEnvironment({ rumEnabled: true, frontdoorRumEnabled: false });
+
+  try {
+    const route = await importFresh("../app/v1/portal/rum/route.js");
+    const restoreFetch = withMockedFetch(async () => {
+      assert.fail("front-door-disabled public RUM requests must not reach the backend");
+    });
+
+    try {
+      const request = buildRequest("https://portal.example.com/v1/portal/rum", {
+        method: "POST",
+        headers: new Headers({
+          "content-type": "application/json",
+          origin: "https://portal.example.com"
+        }),
+        body: JSON.stringify({
+          event_type: "landing_rendered",
+          route: "/",
+          view: "landing",
+          metric: "duration",
+          value: 25,
+          unit: "ms"
+        })
+      });
+
+      const response = await route.POST(request);
+      const body = await response.json();
+
+      assert.equal(response.status, 200);
+      assert.deepEqual(body.data, { accepted: false, disabled: true });
     } finally {
       restoreFetch();
     }

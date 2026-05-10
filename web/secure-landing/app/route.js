@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server.js";
 
-import { isPortalRumEnabled } from "../lib/config.js";
+import { isFrontdoorRumTelemetryEnabled } from "../lib/config.js";
 import { applySecurityHeaders, FRONTDOOR_CSP, generateScriptNonce } from "../lib/http.js";
 import { renderHomepage } from "../lib/homepage.js";
 import { renderRumClientScript } from "../lib/rum-client.js";
-import { generateTraceparent } from "../lib/trace.js";
+import { resolveRequestTraceparent } from "../lib/trace.js";
 
 export const runtime = "nodejs";
 // force-dynamic ensures GET re-runs per request so each response carries a
@@ -17,14 +17,15 @@ export const dynamic = "force-dynamic";
 const HOMEPAGE_CACHE_CONTROL_STATIC = "public, max-age=300, must-revalidate";
 const HOMEPAGE_CACHE_CONTROL_DYNAMIC = "no-store";
 
-export async function GET() {
-  const rumEnabled = isPortalRumEnabled();
+export async function GET(request) {
+  const rumTraceparent = resolveRequestTraceparent(request);
+  const rumEnabled = isFrontdoorRumTelemetryEnabled({ traceparent: rumTraceparent });
   const scriptNonce = rumEnabled ? generateScriptNonce() : null;
   const rumScript = rumEnabled
     ? renderRumClientScript({
         route: "/",
         view: "landing",
-        traceparent: generateTraceparent(),
+        traceparent: rumTraceparent,
       })
     : "";
   const html = renderHomepage({ rumScript, scriptNonce });
