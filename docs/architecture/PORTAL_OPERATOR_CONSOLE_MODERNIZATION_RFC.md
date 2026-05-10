@@ -57,7 +57,7 @@ The following sections are non-normative:
 
 ### Partial
 
-- M1 Measurement Foundation is implemented with bounded-pilot telemetry sign-off approved with conditions, but it is not formally closed until measured pilot evidence is attached.
+- M1 Measurement Foundation is implemented, and the bounded-pilot telemetry sign-off status is `Approved with Conditions`, but it is not formally closed until measured pilot evidence is attached.
 - M4 Performance and Rendering is implemented but not formally closed pending measured pilot evidence against the provisional CWV, queue-latency, and SSE targets.
 - M5 Artifact Review is implemented for deferred review loading, modal viewer behavior, metadata visibility, fingerprint copy, and explicit fallback states, but it is not formally closed pending measured pilot evidence.
 - M5's optional segmentation refinement is not counted as shipped in this RFC. Current shipped scope is the viewer and fallback path only.
@@ -544,4 +544,4 @@ These are provisional targets and should be confirmed or adjusted after pilot ca
 - `tools/portal_rum_summary.py` remains the contract-stable RUM-only summary path.
 - `tools/portal_modernization_evidence.py` is the repo-owned pilot evidence path for M1, M4, and M5.
 - `docs/architecture/PORTAL_OPERATOR_CONSOLE_MODERNIZATION_EVIDENCE.md` records the evidence collection workflow and open gates.
-- `docs/compliance/PORTAL_TELEMETRY_PRIVACY_SIGNOFF.md` is the approved-with-conditions bounded-pilot sign-off record for the current telemetry schema, retention, and disposal posture.
+- `docs/compliance/PORTAL_TELEMETRY_PRIVACY_SIGNOFF.md` is the `Approved with Conditions` bounded-pilot sign-off record for the current telemetry schema, retention, and disposal posture.

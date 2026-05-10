@@ -83,7 +83,7 @@ python tools/portal_modernization_evidence.py \
 | Gate | Repo-Owned Input | Current State |
 | --- | --- | --- |
 | M1 visibility | `portal_rum_summary.py`, `portal_modernization_evidence.py` | Implemented, waiting for pilot capture |
-| M1 telemetry sign-off | `docs/compliance/PORTAL_TELEMETRY_PRIVACY_SIGNOFF.md` | Approved with conditions for bounded portal/front-door pilots |
+| M1 telemetry sign-off | `docs/compliance/PORTAL_TELEMETRY_PRIVACY_SIGNOFF.md` | `Approved with Conditions` for bounded portal/front-door pilots |
 | M4 pilot metrics | `portal_modernization_evidence.py` plus browser validation | Open |
 | M5 viewer evidence | `portal_modernization_evidence.py` plus browser validation | Open |
 | ADR-050 rewrite evidence | `docs/decisions/ADR-050-portal-react-migration.md` | Open |
