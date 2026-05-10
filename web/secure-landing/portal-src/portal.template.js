@@ -5334,8 +5334,16 @@ function _buildAuthHeaders(base = {}, method = 'GET', options = null) {
 // Only wired in managed auth mode (direct-debug mode has no session cookie
 // to destroy and is gated out at bootstrap-ready time). The POST is
 // fire-and-forget for navigation purposes — we always assign the location
-// after the request completes, success or fail, so an upstream outage or
-// timeout still gets the operator out of the authenticated shell.
+// after the request settles (success, error, or timeout) so an upstream
+// outage or hung connection still gets the operator out of the
+// authenticated shell.
+//
+// fetchWithTimeout (not bare fetch) is required because fetch() has no
+// built-in timeout: a hung TCP connection or a missing /logout response
+// would otherwise pin window.location.assign behind an indefinite wait.
+// BOOTSTRAP_TIMEOUT_MS (3.5s) matches the timeout budget the rest of the
+// bundle already uses for one-shot POSTs and is long enough to absorb a
+// realistic session-destroy + audit-log write.
 //
 // redirect:"manual" prevents fetch from following the server's 303 to
 // /login GET (which would waste a fetched HTML response we don't render);
@@ -5347,13 +5355,18 @@ function _handlePortalLogout() {
     state.auth.logoutPending = true;
     if (els.logoutBtn) els.logoutBtn.disabled = true;
     const headers = _buildAuthHeaders({}, 'POST');
-    fetch('/logout', {
-        method: 'POST',
-        headers,
-        credentials: 'same-origin',
-        redirect: 'manual',
-    })
-        .catch(() => { /* navigate anyway; the server destroys the session before responding */ })
+    fetchWithTimeout(
+        '/logout',
+        {
+            method: 'POST',
+            headers,
+            credentials: 'same-origin',
+            redirect: 'manual',
+        },
+        BOOTSTRAP_TIMEOUT_MS,
+        'logout_timeout',
+    )
+        .catch(() => { /* navigate anyway — server destroys the session before responding, and a timeout still implies the user wanted out */ })
         .finally(() => { window.location.assign('/login'); });
 }
 

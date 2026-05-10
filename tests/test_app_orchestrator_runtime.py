@@ -1792,24 +1792,35 @@ def test_portal_logout_button_in_topbar() -> None:
 def test_portal_bundle_logout_handler_posts_to_logout_and_navigates() -> None:
     # The portal bundle must wire the logout button to a handler that:
     #   * gates re-entry via state.auth.logoutPending
-    #   * POSTs to /logout (the front-door handler that destroys the session)
-    #   * always navigates the browser to /login, even on fetch rejection,
-    #     so an operator can never be stuck inside the authenticated shell
-    #     after clicking sign-out.
+    #   * POSTs to /logout via fetchWithTimeout (NOT bare fetch) so a hung
+    #     request cannot pin the .finally indefinitely and leave the
+    #     operator stranded inside the authenticated shell
+    #   * always navigates the browser to /login, even on fetch rejection
+    #     or timeout, so an operator can never be stuck inside the
+    #     authenticated shell after clicking sign-out
     # The handler also must NOT call _buildAuthHeaders with GET, because the
     # X-CSRF-Token auto-attach only fires for unsafe methods.
     content = _portal_bundle_content()
     handler_body = _extract_js_function_body(content, "_handlePortalLogout")
 
     assert "state.auth.logoutPending" in handler_body, "logout handler must gate re-entry via state.auth.logoutPending"
-    assert "fetch('/logout'" in handler_body or 'fetch("/logout"' in handler_body
+    # The handler must use fetchWithTimeout, not bare fetch(), to bound
+    # how long .finally can be deferred when the upstream hangs. The
+    # timeout reason must be a stable, grepable string so future review
+    # of telemetry / audit can distinguish a logout-specific abort from
+    # other timeouts in the bundle.
+    assert "fetchWithTimeout(" in handler_body, "logout handler must use fetchWithTimeout, not bare fetch()"
+    assert "'/logout'" in handler_body or '"/logout"' in handler_body
+    assert (
+        "'logout_timeout'" in handler_body or '"logout_timeout"' in handler_body
+    ), "logout handler must pass a logout-specific timeout reason for telemetry distinguishability"
     assert "method: 'POST'" in handler_body or 'method: "POST"' in handler_body
     assert (
         "_buildAuthHeaders({}, 'POST')" in handler_body or '_buildAuthHeaders({}, "POST")' in handler_body
     ), "logout handler must POST through _buildAuthHeaders so X-CSRF-Token is auto-attached"
     assert (
         "window.location.assign('/login')" in handler_body or 'window.location.assign("/login")' in handler_body
-    ), "logout handler must always navigate to /login (even on fetch failure)"
+    ), "logout handler must always navigate to /login (even on fetch failure or timeout)"
     # The fetch must use redirect:"manual" so we don't waste a fetched
     # /login HTML response we're about to discard.
     assert "redirect: 'manual'" in handler_body or 'redirect: "manual"' in handler_body

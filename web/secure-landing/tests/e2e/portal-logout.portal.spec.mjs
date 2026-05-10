@@ -1,61 +1,73 @@
-// @portal-browser portal-logout smoke.
+// @portal-browser portal-logout structural smoke.
 //
-// Verifies the topbar logout button:
-//   - is visible on the authenticated /portal shell (managed mode)
-//   - POSTs to /logout via the portal bundle's existing fetch path
-//   - lands the operator on /login with the session cookie cleared,
-//     completing the same boundary that portal-auth.portal.spec.mjs
-//     exercises from the cookie-clear side.
+// Verifies that the logout button is server-rendered into the topbar
+// of the live /portal HTML stream with all the structural contracts a
+// managed-mode operator depends on: stable selector hook, accessible
+// label, `hidden`-by-default discipline, placement inside the topbar
+// actions row. The full click → POST /logout → /login redirect flow
+// is intentionally NOT exercised here.
 //
-// Suite-coverage map: this is the only Playwright spec that drives a
-// click on [data-ui="logout-button"]; the portal-shell, portal-views,
-// and portal-auth specs assert presence of the topbar and view switcher
-// but do not invoke logout themselves.
+// Architectural split (preserved from PR #1692):
+//   - The @portal-browser fixture (mock-fastapi-origin.mjs) substitutes
+//     __PORTAL_JS_URL__ to /__mock-portal-asset.js, an inert stub. The
+//     real portal bundle never executes in this lane, so the
+//     bootstrap-ready code that un-hides the logout button never runs
+//     and a click handler is never attached. Asserting visibility or
+//     POST-fire from this suite would always fail.
+//   - The end-to-end click flow is pinned by two complementary suites:
+//     (1) tests/test_app_orchestrator_runtime.py::
+//         test_portal_bundle_logout_handler_posts_to_logout_and_navigates
+//         greps the minified bundle for the four behavioral invariants
+//         (state.auth.logoutPending guard, fetchWithTimeout to /logout,
+//         redirect:"manual", always-navigate to /login, exactly-one
+//         click listener, managed-mode-only un-hide); and
+//     (2) scripts/validation/validate_portal_browser_smoke.py is the
+//         governed CDP suite that runs the real backend + real bundle
+//         and is the natural home for any future live-click flow.
+//
+// Suite-coverage map: this is the only Playwright spec that asserts
+// the logout button's server-rendered HTML structure. The portal-shell,
+// portal-views, and portal-auth specs assert presence of the topbar
+// and view switcher but do not assert the logout button explicitly.
 
 import { test, expect } from "@playwright/test";
 
 test.describe(
-  "portal logout (authenticated)",
+  "portal logout (server-rendered structure)",
   { tag: "@portal-browser" },
   () => {
-    test("logout button posts to /logout and redirects to /login", async ({ page }) => {
+    test("logout button is server-rendered into the topbar with the expected contract", async ({ page }) => {
       const consoleErrors = [];
       page.on("console", (msg) => {
         if (msg.type() === "error") consoleErrors.push(msg.text());
       });
       page.on("pageerror", (err) => consoleErrors.push(String(err)));
 
-      // Pre-condition: authenticated /portal renders the topbar.
       await page.goto("/portal");
-      await expect(page.locator('[data-ui="portal-topbar"]')).toBeVisible();
+      await expect(page.locator('[data-ui="portal-topbar"]')).toBeAttached();
 
-      // The logout button is rendered with `hidden` and only un-hidden in
-      // managed mode after bootstrap; this assertion catches the case
-      // where bootstrap silently fails to flip the flag, which would
-      // otherwise pass an HTML-only presence test.
+      // The logout button lives in the live HTML response — proves the
+      // FastAPI portal HTML template substituted the topbar markup
+      // correctly under the @portal-browser fixture.
       const logoutButton = page.locator('[data-ui="logout-button"]');
-      await expect(logoutButton).toBeVisible();
-      await expect(logoutButton).toHaveAccessibleName(
-        /sign out of the operator console/i
-      );
+      await expect(logoutButton).toBeAttached();
 
-      // Watch for the POST /logout request so we can pin both the method
-      // and the X-CSRF-Token header before the navigation completes.
-      const logoutRequestPromise = page.waitForRequest((request) => {
-        return request.method() === "POST" && request.url().endsWith("/logout");
-      });
+      // The button must default to ``hidden`` in the server-rendered
+      // HTML so direct-debug operators never see a control that would
+      // silently bounce them to /login. The portal bundle un-hides it
+      // only in managed mode after bootstrap-ready; the stubbed bundle
+      // in this fixture cannot un-hide it, so it must remain not
+      // visible here.
+      await expect(logoutButton).toBeHidden();
+      await expect(logoutButton).toHaveAttribute("aria-label", /sign out of the operator console/i);
+      await expect(logoutButton).toHaveAttribute("type", "button");
 
-      await logoutButton.click();
-
-      const logoutRequest = await logoutRequestPromise;
-      const csrfHeader = await logoutRequest.headerValue("x-csrf-token");
-      expect(csrfHeader, "POST /logout must carry a non-empty X-CSRF-Token").toBeTruthy();
-
-      // Wait for the explicit window.location.assign('/login') to land
-      // the operator on the login page.
-      await page.waitForURL(/\/login(\?|$)/);
-      expect(page.url()).toContain("/login");
-      await expect(page.locator('[data-ui="login-form"]')).toBeVisible();
+      // The button lives inside the portal-topbar__actions row, not in
+      // any deferred surface; a managed-mode operator always sees it
+      // without any further bundle load (when the real bundle runs).
+      const topbarActions = page.locator('[data-ui="portal-topbar-actions"]');
+      const logoutInsideActions = topbarActions.locator('[data-ui="logout-button"]');
+      await expect(logoutInsideActions).toBeAttached();
 
       expect(
         consoleErrors,
