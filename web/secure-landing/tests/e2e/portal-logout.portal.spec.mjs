@@ -17,7 +17,7 @@
 //   - The end-to-end click flow is pinned by two complementary suites:
 //     (1) tests/test_app_orchestrator_runtime.py::
 //         test_portal_bundle_logout_handler_posts_to_logout_and_navigates
-//         greps the minified bundle for the four behavioral invariants
+//         greps the minified bundle for the six behavioral invariants
 //         (state.auth.logoutPending guard, fetchWithTimeout to /logout,
 //         redirect:"manual", always-navigate to /login, exactly-one
 //         click listener, managed-mode-only un-hide); and

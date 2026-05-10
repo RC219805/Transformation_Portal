@@ -5331,8 +5331,11 @@ function _buildAuthHeaders(base = {}, method = 'GET', options = null) {
 }
 
 // Posts to the front-door /logout endpoint and lands the user on /login.
-// Only wired in managed auth mode (direct-debug mode has no session cookie
-// to destroy and is gated out at bootstrap-ready time). The POST is
+// Only surfaced in managed auth mode (direct-debug mode has no session cookie
+// to destroy and keeps the server-rendered button hidden after bootstrap).
+// The click listener can be registered before bootstrap because the hidden
+// button is not exposed until _applyPortalBootstrap confirms managed mode.
+// The POST is
 // fire-and-forget for navigation purposes — we always assign the location
 // after the request settles (success, error, or timeout) so an upstream
 // outage or hung connection still gets the operator out of the
