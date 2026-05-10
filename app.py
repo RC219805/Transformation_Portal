@@ -5406,7 +5406,7 @@ def _persist_portal_event_record(record: Dict[str, Any], log_path: Optional[Path
             raise OSError("dir_fd is required for portal telemetry sink writes")
         no_follow_flag = getattr(os, "O_NOFOLLOW", 0)
         parent_flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | no_follow_flag
-        file_flags = os.O_APPEND | os.O_CREAT | os.O_WRONLY | no_follow_flag
+        file_flags = os.O_APPEND | os.O_CREAT | os.O_WRONLY | no_follow_flag | getattr(os, "O_NONBLOCK", 0)
         expected_parent_stat = os.stat(log_path.parent, follow_symlinks=False)
         with _PORTAL_EVENT_LOG_WRITE_LOCK:
             parent_fd = os.open(log_path.parent, parent_flags)
@@ -5417,6 +5417,12 @@ def _persist_portal_event_record(record: Dict[str, Any], log_path: Optional[Path
                     or actual_parent_stat.st_ino != expected_parent_stat.st_ino
                 ):
                     raise OSError("portal telemetry sink parent changed before open")
+                try:
+                    existing_file_stat = os.stat(log_path.name, dir_fd=parent_fd, follow_symlinks=False)
+                except FileNotFoundError:
+                    existing_file_stat = None
+                if existing_file_stat is not None and not stat.S_ISREG(existing_file_stat.st_mode):
+                    raise OSError("portal telemetry sink target is not a regular file")
                 fd = os.open(log_path.name, file_flags, 0o600, dir_fd=parent_fd)
                 try:
                     opened_file_stat = os.fstat(fd)
