@@ -394,6 +394,16 @@ def _env_path_roots(name: str, default: List[Path]) -> List[Path]:
     return _portal_path_security._env_path_roots(name, default, repo_root=REPO_ROOT, logger=LOGGER)
 
 
+def _portal_telemetry_sink_path_from_env(name: str) -> Optional[Path]:
+    raw_value = os.getenv(name, "").strip()
+    if not raw_value:
+        return None
+    try:
+        return _portal_path_security.validate_portal_telemetry_sink_path(raw_value, repo_root=REPO_ROOT)
+    except _portal_path_security.PathSecurityValidationError as exc:
+        raise RuntimeError(f"{name} violates portal telemetry sink path policy: {exc}") from exc
+
+
 def _lux_depth_runner_command() -> List[str]:
     return [sys.executable, "-m", LUX_DEPTH_MODULE]
 
@@ -1398,19 +1408,8 @@ LUX_RECONSTRUCTION_FIELD_ALIASES: Dict[str, Tuple[str, ...]] = {
 }
 LUX_DEBUG_BUNDLE_DESTINATION_TEMPLATE = "reconstruction/<scene-fingerprint>/debug"
 
-_portal_event_log_path_raw = os.getenv("TP_PORTAL_EVENT_LOG_PATH", "").strip()
-try:
-    PORTAL_EVENT_LOG_PATH = _normalize_root_path(_portal_event_log_path_raw) if _portal_event_log_path_raw else None
-except (OSError, RuntimeError, ValueError):
-    LOGGER.warning("TP_PORTAL_EVENT_LOG_PATH ignored invalid path: %s", _portal_event_log_path_raw)
-    PORTAL_EVENT_LOG_PATH = None
-
-_portal_rum_log_path_raw = os.getenv("TP_PORTAL_RUM_LOG_PATH", "").strip()
-try:
-    PORTAL_RUM_LOG_PATH = _normalize_root_path(_portal_rum_log_path_raw) if _portal_rum_log_path_raw else None
-except (OSError, RuntimeError, ValueError):
-    LOGGER.warning("TP_PORTAL_RUM_LOG_PATH ignored invalid path: %s", _portal_rum_log_path_raw)
-    PORTAL_RUM_LOG_PATH = None
+PORTAL_EVENT_LOG_PATH = _portal_telemetry_sink_path_from_env("TP_PORTAL_EVENT_LOG_PATH")
+PORTAL_RUM_LOG_PATH = _portal_telemetry_sink_path_from_env("TP_PORTAL_RUM_LOG_PATH")
 
 
 class JobPreflightError(RuntimeError):
