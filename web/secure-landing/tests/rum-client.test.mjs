@@ -1128,6 +1128,84 @@ test("public RUM route noops when only front-door RUM is disabled", async () => 
   }
 });
 
+test("public RUM route noops front-door core web vitals when only front-door RUM is disabled", async () => {
+  const env = withRumEnvironment({ rumEnabled: true, frontdoorRumEnabled: false });
+
+  try {
+    const route = await importFresh("../app/v1/portal/rum/route.js");
+    const restoreFetch = withMockedFetch(async () => {
+      assert.fail("front-door-disabled core web vital samples must not reach the backend");
+    });
+
+    try {
+      const request = buildRequest("https://portal.example.com/v1/portal/rum", {
+        method: "POST",
+        headers: new Headers({
+          "content-type": "application/json",
+          origin: "https://portal.example.com"
+        }),
+        body: JSON.stringify({
+          event_type: "core_web_vital",
+          route: "/",
+          view: "landing",
+          metric: "lcp",
+          value: 100,
+          unit: "ms"
+        })
+      });
+
+      const response = await route.POST(request);
+      const body = await response.json();
+
+      assert.equal(response.status, 200);
+      assert.deepEqual(body.data, { accepted: false, disabled: true });
+    } finally {
+      restoreFetch();
+    }
+  } finally {
+    env.cleanup();
+  }
+});
+
+test("public RUM route noops front-door interactive metrics when only front-door RUM is disabled", async () => {
+  const env = withRumEnvironment({ rumEnabled: true, frontdoorRumEnabled: false });
+
+  try {
+    const route = await importFresh("../app/v1/portal/rum/route.js");
+    const restoreFetch = withMockedFetch(async () => {
+      assert.fail("front-door-disabled interactive samples must not reach the backend");
+    });
+
+    try {
+      const request = buildRequest("https://portal.example.com/v1/portal/rum", {
+        method: "POST",
+        headers: new Headers({
+          "content-type": "application/json",
+          origin: "https://portal.example.com"
+        }),
+        body: JSON.stringify({
+          event_type: "first_view_interactive",
+          route: "/login",
+          view: "login",
+          metric: "duration",
+          value: 100,
+          unit: "ms"
+        })
+      });
+
+      const response = await route.POST(request);
+      const body = await response.json();
+
+      assert.equal(response.status, 200);
+      assert.deepEqual(body.data, { accepted: false, disabled: true });
+    } finally {
+      restoreFetch();
+    }
+  } finally {
+    env.cleanup();
+  }
+});
+
 test("public RUM route keeps portal-family payloads independent from front-door RUM controls", async () => {
   const env = withRumEnvironment({ rumEnabled: true, frontdoorRumEnabled: false });
   const traceparent = "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01";
@@ -1141,11 +1219,11 @@ test("public RUM route keeps portal-family payloads independent from front-door 
       assert.equal(init.headers.get("x-api-key"), "backend-secret");
       assert.equal(init.headers.get("traceparent"), traceparent);
       assert.equal(await new Response(init.body).text(), JSON.stringify({
-        event_type: "portal_shell_rendered",
+        event_type: "core_web_vital",
         route: "/portal",
-        view: "portal",
-        metric: "duration",
-        value: 25,
+        view: "overview",
+        metric: "lcp",
+        value: 100,
         unit: "ms"
       }));
       return Response.json(
@@ -1173,11 +1251,11 @@ test("public RUM route keeps portal-family payloads independent from front-door 
           traceparent
         }),
         body: JSON.stringify({
-          event_type: "portal_shell_rendered",
+          event_type: "core_web_vital",
           route: "/portal",
-          view: "portal",
-          metric: "duration",
-          value: 25,
+          view: "overview",
+          metric: "lcp",
+          value: 100,
           unit: "ms"
         })
       });

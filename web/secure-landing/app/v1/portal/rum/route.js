@@ -26,6 +26,8 @@ const FRONTDOOR_RUM_EVENT_TYPES = new Set([
   "logout_submit_success",
   "logout_submit_failure",
 ]);
+const FRONTDOOR_RUM_ROUTES = new Set(["/", "/login"]);
+const FRONTDOOR_RUM_VIEWS = new Set(["landing", "login"]);
 
 function successEnvelope(data, traceparent = "") {
   return applySecurityHeaders(
@@ -74,7 +76,14 @@ function errorEnvelope(status, code, message, details = {}, traceparent = "") {
 function isFrontdoorRumPayload(bodyText) {
   try {
     const parsed = JSON.parse(bodyText || "{}");
-    return FRONTDOOR_RUM_EVENT_TYPES.has(String(parsed?.event_type || ""));
+    const eventType = String(parsed?.event_type || "").trim();
+    const route = String(parsed?.route || "").trim();
+    const view = String(parsed?.view || "").trim().toLowerCase();
+    return (
+      FRONTDOOR_RUM_EVENT_TYPES.has(eventType)
+      || FRONTDOOR_RUM_ROUTES.has(route)
+      || FRONTDOOR_RUM_VIEWS.has(view)
+    );
   } catch {
     return false;
   }
