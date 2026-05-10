@@ -118,11 +118,41 @@ def test_nested_repo_sink_path_is_rejected(tmp_path: Path) -> None:
     )
 
 
+def test_repo_symlink_parent_to_external_sink_is_rejected(tmp_path: Path) -> None:
+    repo_root = _repo_root(tmp_path)
+    external_root = tmp_path / "operator-owned"
+    external_root.mkdir()
+    link_path = repo_root / "logs-link"
+    link_path.symlink_to(external_root, target_is_directory=True)
+
+    _assert_policy_reason(
+        str(link_path / "portal-rum.jsonl"),
+        "repo_portal_telemetry_sink_path",
+        repo_root=repo_root,
+    )
+
+
 def test_frontdoor_public_sink_path_is_rejected(tmp_path: Path) -> None:
     repo_root = _repo_root(tmp_path)
 
     _assert_policy_reason(
         str(repo_root / "web" / "secure-landing" / "public" / "portal-rum.jsonl"),
+        "public_static_portal_telemetry_sink_path",
+        repo_root=repo_root,
+    )
+
+
+def test_frontdoor_public_symlink_parent_to_external_sink_is_rejected(tmp_path: Path) -> None:
+    repo_root = _repo_root(tmp_path)
+    external_root = tmp_path / "operator-owned"
+    external_root.mkdir()
+    public_root = repo_root / "web" / "secure-landing" / "public"
+    public_root.mkdir(parents=True)
+    link_path = public_root / "logs-link"
+    link_path.symlink_to(external_root, target_is_directory=True)
+
+    _assert_policy_reason(
+        str(link_path / "portal-rum.jsonl"),
         "public_static_portal_telemetry_sink_path",
         repo_root=repo_root,
     )

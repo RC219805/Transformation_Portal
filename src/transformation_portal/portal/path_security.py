@@ -205,6 +205,26 @@ def _normalized_roots(roots: Sequence[Path]) -> List[Path]:
     return normalized
 
 
+def _absolute_roots(roots: Sequence[Path]) -> List[Path]:
+    absolute: List[Path] = []
+    for root in roots:
+        try:
+            absolute_root = Path(os.path.abspath(root))
+        except (OSError, RuntimeError, ValueError):
+            continue
+        if absolute_root not in absolute:
+            absolute.append(absolute_root)
+    return absolute
+
+
+def _path_is_lexically_within_root(path: Path, root: Path) -> bool:
+    try:
+        path.relative_to(root)
+    except ValueError:
+        return False
+    return True
+
+
 def validate_portal_telemetry_sink_path(
     path: str,
     *,
@@ -277,26 +297,42 @@ def validate_portal_telemetry_sink_path(
             reason="invalid_portal_telemetry_sink_parent",
         ) from exc
 
+    lexical = Path(os.path.abspath(candidate))
     resolved = Path(os.path.realpath(candidate))
     resolved_repo_root = _repo_root(repo_root)
-    resolved_public_roots = _normalized_roots(
-        _portal_telemetry_public_roots(resolved_repo_root) if public_roots is None else public_roots
-    )
-    resolved_ci_roots = _normalized_roots(_portal_telemetry_ci_roots() if ci_roots is None else ci_roots)
+    lexical_repo_root = Path(os.path.abspath(resolved_repo_root))
+    portal_public_roots = _portal_telemetry_public_roots(resolved_repo_root) if public_roots is None else public_roots
+    portal_ci_roots = _portal_telemetry_ci_roots() if ci_roots is None else ci_roots
+    lexical_public_roots = _absolute_roots(portal_public_roots)
+    resolved_public_roots = _normalized_roots(portal_public_roots)
+    lexical_ci_roots = _absolute_roots(portal_ci_roots)
+    resolved_ci_roots = _normalized_roots(portal_ci_roots)
 
-    for public_root in resolved_public_roots:
-        if _path_is_within_root(resolved, public_root):
+    for lexical_public_root in lexical_public_roots:
+        if _path_is_lexically_within_root(lexical, lexical_public_root):
             raise PathSecurityValidationError(
                 "Portal telemetry sink path must not be inside public/static asset surfaces",
                 reason="public_static_portal_telemetry_sink_path",
             )
-    if _path_is_within_root(resolved, resolved_repo_root):
+    for resolved_public_root in resolved_public_roots:
+        if _path_is_within_root(resolved, resolved_public_root):
+            raise PathSecurityValidationError(
+                "Portal telemetry sink path must not be inside public/static asset surfaces",
+                reason="public_static_portal_telemetry_sink_path",
+            )
+    if _path_is_lexically_within_root(lexical, lexical_repo_root) or _path_is_within_root(resolved, resolved_repo_root):
         raise PathSecurityValidationError(
             "Portal telemetry sink path must not be inside the repository",
             reason="repo_portal_telemetry_sink_path",
         )
-    for ci_root in resolved_ci_roots:
-        if _path_is_within_root(resolved, ci_root):
+    for lexical_ci_root in lexical_ci_roots:
+        if _path_is_lexically_within_root(lexical, lexical_ci_root):
+            raise PathSecurityValidationError(
+                "Portal telemetry sink path must not be inside CI workspace or artifact paths",
+                reason="ci_portal_telemetry_sink_path",
+            )
+    for resolved_ci_root in resolved_ci_roots:
+        if _path_is_within_root(resolved, resolved_ci_root):
             raise PathSecurityValidationError(
                 "Portal telemetry sink path must not be inside CI workspace or artifact paths",
                 reason="ci_portal_telemetry_sink_path",
