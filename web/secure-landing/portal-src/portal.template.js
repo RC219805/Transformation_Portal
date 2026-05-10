@@ -551,6 +551,7 @@ const els = {
 
     themeBtn: _domId('themeBtn'),
     shortcutsBtn: _domId('shortcutsBtn'),
+    logoutBtn: _domId('logoutBtn'),
     shortcutsModal: _domId('shortcutsModal'),
     shortcutsPanel: _domId('shortcutsPanel'),
     closeShortcutsBtn: _domId('closeShortcutsBtn'),
@@ -5049,6 +5050,7 @@ function _applyPortalBootstrap(rawBootstrap, options = {}) {
         mode,
         csrfToken: mode === 'managed' ? String(bootstrap.csrfToken || '') : '',
         actor: mode === 'managed' && bootstrap.actor && typeof bootstrap.actor === 'object' ? bootstrap.actor : null,
+        logoutPending: false,
         features: {
             apiKeyInput: mode === 'direct_debug' && bootstrap.features?.apiKeyInput !== false,
             directDebug: mode === 'direct_debug' && bootstrap.features?.directDebug !== false,
@@ -5059,6 +5061,12 @@ function _applyPortalBootstrap(rawBootstrap, options = {}) {
             fastVlmCaptioning: Boolean(bootstrap.features?.fastVlmCaptioning)
         }
     };
+    // The logout button is rendered with the `hidden` attribute and only
+    // un-hidden in managed mode: direct-debug operators have no session
+    // cookie to destroy, and a /logout POST from that mode would just
+    // bounce them to /login (the existing fail-open path) with no
+    // operational gain.
+    if (els.logoutBtn) els.logoutBtn.hidden = mode !== 'managed';
     const bootstrapTraceparent = portalInternals.normalizePortalRumTraceparent(
         options.traceparent,
         state.rum.pageTraceparent
@@ -5320,6 +5328,33 @@ function _buildAuthHeaders(base = {}, method = 'GET', options = null) {
         headers['x-api-key'] = token;
     }
     return headers;
+}
+
+// Posts to the front-door /logout endpoint and lands the user on /login.
+// Only wired in managed auth mode (direct-debug mode has no session cookie
+// to destroy and is gated out at bootstrap-ready time). The POST is
+// fire-and-forget for navigation purposes — we always assign the location
+// after the request completes, success or fail, so an upstream outage or
+// timeout still gets the operator out of the authenticated shell.
+//
+// redirect:"manual" prevents fetch from following the server's 303 to
+// /login GET (which would waste a fetched HTML response we don't render);
+// the explicit window.location.assign drives a real browser navigation so
+// the post-logout /login page receives a clean GET with the cleared
+// session cookie.
+function _handlePortalLogout() {
+    if (state.auth.logoutPending) return;
+    state.auth.logoutPending = true;
+    if (els.logoutBtn) els.logoutBtn.disabled = true;
+    const headers = _buildAuthHeaders({}, 'POST');
+    fetch('/logout', {
+        method: 'POST',
+        headers,
+        credentials: 'same-origin',
+        redirect: 'manual',
+    })
+        .catch(() => { /* navigate anyway; the server destroys the session before responding */ })
+        .finally(() => { window.location.assign('/login'); });
 }
 
 function _normalizeStagedUploadRelativePath(file) {
@@ -11640,6 +11675,7 @@ const toggleEffectiveConfigDrawer = (show, trigger = document.activeElement) => 
     _restoreOverlayFocus();
 };
 
+if (els.logoutBtn) els.logoutBtn.addEventListener('click', _handlePortalLogout);
 if (els.shortcutsBtn) els.shortcutsBtn.addEventListener('click', (event) => toggleModal(true, event.currentTarget));
 if (els.closeShortcutsBtn) els.closeShortcutsBtn.addEventListener('click', () => toggleModal(false));
 if (els.shortcutsModal) els.shortcutsModal.addEventListener('click', (e) => {
