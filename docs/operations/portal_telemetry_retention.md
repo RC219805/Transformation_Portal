@@ -42,6 +42,7 @@ Evidence is written after deletion attempts and includes only path metadata, del
 - Configured telemetry sinks fail closed if they point inside the repository, public / static asset surfaces, or detected CI workspace / artifact paths.
 - Raw logs must stay outside the repository, outside public / static directories, access-restricted, and excluded from CI artifacts.
 - Sink paths must be absolute approved JSONL sink names ending in `.jsonl` or `.jsonl.gz`.
+- Configured sink parent directories must already exist and must not be symlinks.
 - Evidence output must be an absolute non-symlink path and must not match a sink path.
 - Missing sink paths are represented in evidence without failing the run.
 - Relative paths, directories, glob-like paths, and symlinks are rejected.

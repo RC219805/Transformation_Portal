@@ -284,19 +284,6 @@ def validate_portal_telemetry_sink_path(
             reason="invalid_portal_telemetry_sink_path",
         ) from exc
 
-    parent = candidate.parent
-    try:
-        if parent.exists() and not parent.is_dir():
-            raise PathSecurityValidationError(
-                "Portal telemetry sink parent must be a directory",
-                reason="invalid_portal_telemetry_sink_parent",
-            )
-    except OSError as exc:
-        raise PathSecurityValidationError(
-            "Portal telemetry sink parent is invalid",
-            reason="invalid_portal_telemetry_sink_parent",
-        ) from exc
-
     lexical = Path(os.path.abspath(candidate))
     resolved = Path(os.path.realpath(candidate))
     resolved_repo_root = _repo_root(repo_root)
@@ -337,6 +324,29 @@ def validate_portal_telemetry_sink_path(
                 "Portal telemetry sink path must not be inside CI workspace or artifact paths",
                 reason="ci_portal_telemetry_sink_path",
             )
+
+    parent = candidate.parent
+    try:
+        if not parent.exists():
+            raise PathSecurityValidationError(
+                "Portal telemetry sink parent must already exist",
+                reason="missing_portal_telemetry_sink_parent",
+            )
+        if parent.is_symlink():
+            raise PathSecurityValidationError(
+                "Portal telemetry sink parent must not be a symlink",
+                reason="symlink_portal_telemetry_sink_parent",
+            )
+        if not parent.is_dir():
+            raise PathSecurityValidationError(
+                "Portal telemetry sink parent must be a directory",
+                reason="invalid_portal_telemetry_sink_parent",
+            )
+    except OSError as exc:
+        raise PathSecurityValidationError(
+            "Portal telemetry sink parent is invalid",
+            reason="invalid_portal_telemetry_sink_parent",
+        ) from exc
     return resolved
 
 

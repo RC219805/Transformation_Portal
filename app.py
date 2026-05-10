@@ -5400,9 +5400,10 @@ def _persist_portal_event_record(record: Dict[str, Any], log_path: Optional[Path
         return
     encoded_record = (json.dumps(record, sort_keys=True) + "\n").encode("utf-8")
     try:
-        log_path.parent.mkdir(parents=True, exist_ok=True)
+        log_path = _portal_path_security.validate_portal_telemetry_sink_path(str(log_path), repo_root=REPO_ROOT)
+        open_flags = os.O_APPEND | os.O_CREAT | os.O_WRONLY | getattr(os, "O_NOFOLLOW", 0)
         with _PORTAL_EVENT_LOG_WRITE_LOCK:
-            fd = os.open(log_path, os.O_APPEND | os.O_CREAT | os.O_WRONLY, 0o600)
+            fd = os.open(log_path, open_flags, 0o600)
             try:
                 bytes_written = 0
                 while bytes_written < len(encoded_record):
@@ -5412,7 +5413,7 @@ def _persist_portal_event_record(record: Dict[str, Any], log_path: Optional[Path
                     bytes_written += chunk_size
             finally:
                 os.close(fd)
-    except OSError:
+    except (OSError, _portal_path_security.PathSecurityValidationError):
         LOGGER.warning(
             "failed to persist portal event telemetry to %s",
             log_path,

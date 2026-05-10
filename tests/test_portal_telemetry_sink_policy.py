@@ -16,7 +16,6 @@ from transformation_portal.portal.path_security import PathSecurityValidationErr
 pytestmark = [pytest.mark.unit, pytest.mark.security]
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-orchestrator_app = importlib.import_module("app")
 
 
 def _repo_root(tmp_path: Path) -> Path:
@@ -41,6 +40,7 @@ def _assert_policy_reason(path_value: str, reason: str, *, repo_root: Path) -> N
 def test_unset_sink_path_remains_noop_at_config_layer(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("TP_PORTAL_RUM_LOG_PATH", raising=False)
     monkeypatch.delenv("TP_PORTAL_EVENT_LOG_PATH", raising=False)
+    orchestrator_app = importlib.import_module("app")
 
     assert orchestrator_app._portal_telemetry_sink_path_from_env("TP_PORTAL_RUM_LOG_PATH") is None
     assert orchestrator_app._portal_telemetry_sink_path_from_env("TP_PORTAL_EVENT_LOG_PATH") is None
@@ -84,6 +84,13 @@ def test_non_jsonl_sink_suffix_is_rejected(tmp_path: Path) -> None:
     )
 
 
+def test_missing_parent_sink_path_is_rejected(tmp_path: Path) -> None:
+    repo_root = _repo_root(tmp_path)
+    sink_path = tmp_path / "operator-owned" / "missing-parent" / "portal-rum.jsonl"
+
+    _assert_policy_reason(str(sink_path), "missing_portal_telemetry_sink_parent", repo_root=repo_root)
+
+
 def test_existing_directory_sink_path_is_rejected(tmp_path: Path) -> None:
     repo_root = _repo_root(tmp_path)
     sink_path = _external_sink(tmp_path, "portal-rum.jsonl")
@@ -100,6 +107,22 @@ def test_symlink_sink_path_is_rejected(tmp_path: Path) -> None:
     symlink_path.symlink_to(target_path)
 
     _assert_policy_reason(str(symlink_path), "symlink_portal_telemetry_sink_path", repo_root=repo_root)
+
+
+def test_external_symlink_parent_sink_path_is_rejected(tmp_path: Path) -> None:
+    repo_root = _repo_root(tmp_path)
+    operator_root = tmp_path / "operator-owned"
+    operator_root.mkdir()
+    target_root = tmp_path / "operator-target"
+    target_root.mkdir()
+    link_path = operator_root / "logs-link"
+    link_path.symlink_to(target_root, target_is_directory=True)
+
+    _assert_policy_reason(
+        str(link_path / "portal-rum.jsonl"),
+        "symlink_portal_telemetry_sink_parent",
+        repo_root=repo_root,
+    )
 
 
 def test_repo_root_sink_path_is_rejected(tmp_path: Path) -> None:
