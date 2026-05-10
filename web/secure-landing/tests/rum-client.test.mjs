@@ -209,6 +209,33 @@ test("homepage GET treats invalid front-door RUM rollout values as sampled out",
   }
 });
 
+test("homepage GET disables shared cache for nonzero rollout even when sampled out", async () => {
+  const env = withRumEnvironment({
+    rumEnabled: true,
+    frontdoorRumEnabled: true,
+    frontdoorRolloutPercent: "25"
+  });
+
+  try {
+    getDb(env.dbPath);
+    const { GET } = await importFresh("../app/route.js");
+    const request = buildRequest("https://portal.example.com/");
+
+    const response = await GET(request);
+    const html = await response.text();
+    const csp = response.headers.get("content-security-policy") || "";
+    const cacheControl = response.headers.get("cache-control") || "";
+
+    assert.equal(response.status, 200);
+    assert.match(csp, /script-src 'none'/);
+    assert.doesNotMatch(html, /landing_rendered/);
+    assert.match(cacheControl, /no-store/);
+    assert.doesNotMatch(cacheControl, /\bpublic\b/i);
+  } finally {
+    env.cleanup();
+  }
+});
+
 test("homepage GET injects a nonced inline RUM script and matching CSP when RUM is enabled", async () => {
   const env = withRumEnvironment({ rumEnabled: true });
 
@@ -313,7 +340,8 @@ test("renderRumClientScript omits invalid or missing traceparent values", async 
 test("front-door RUM rollout config defaults, clamps, and fails closed on invalid values", async () => {
   const {
     isFrontdoorRumTelemetryEnabled,
-    resolveFrontdoorRumRolloutPercent
+    resolveFrontdoorRumRolloutPercent,
+    shouldDisableFrontdoorRumHomepageCache
   } = await importFresh("../lib/config.js");
   const traceparent = "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01";
 
@@ -342,6 +370,36 @@ test("front-door RUM rollout config defaults, clamps, and fails closed on invali
       TP_PORTAL_RUM_ENABLED: "0",
       TP_FRONTDOOR_RUM_ENABLED: "1"
     }
+  }), false);
+  assert.equal(shouldDisableFrontdoorRumHomepageCache({
+    TP_PORTAL_RUM_ENABLED: "0",
+    TP_FRONTDOOR_RUM_ENABLED: "1",
+    TP_FRONTDOOR_RUM_ROLLOUT_PERCENT: "25"
+  }), false);
+  assert.equal(shouldDisableFrontdoorRumHomepageCache({
+    TP_PORTAL_RUM_ENABLED: "1",
+    TP_FRONTDOOR_RUM_ENABLED: "0",
+    TP_FRONTDOOR_RUM_ROLLOUT_PERCENT: "25"
+  }), false);
+  assert.equal(shouldDisableFrontdoorRumHomepageCache({
+    TP_PORTAL_RUM_ENABLED: "1",
+    TP_FRONTDOOR_RUM_ENABLED: "1",
+    TP_FRONTDOOR_RUM_ROLLOUT_PERCENT: "0"
+  }), false);
+  assert.equal(shouldDisableFrontdoorRumHomepageCache({
+    TP_PORTAL_RUM_ENABLED: "1",
+    TP_FRONTDOOR_RUM_ENABLED: "1",
+    TP_FRONTDOOR_RUM_ROLLOUT_PERCENT: "25"
+  }), true);
+  assert.equal(shouldDisableFrontdoorRumHomepageCache({
+    TP_PORTAL_RUM_ENABLED: "1",
+    TP_FRONTDOOR_RUM_ENABLED: "1",
+    TP_FRONTDOOR_RUM_ROLLOUT_PERCENT: "100"
+  }), true);
+  assert.equal(shouldDisableFrontdoorRumHomepageCache({
+    TP_PORTAL_RUM_ENABLED: "1",
+    TP_FRONTDOOR_RUM_ENABLED: "1",
+    TP_FRONTDOOR_RUM_ROLLOUT_PERCENT: "invalid"
   }), false);
 });
 

@@ -41,6 +41,16 @@ export function resolveFrontdoorRumRolloutPercent(env = process.env) {
   return parseFrontdoorRumRolloutPercent(env.TP_FRONTDOOR_RUM_ROLLOUT_PERCENT);
 }
 
+export function shouldDisableFrontdoorRumHomepageCache(env = process.env) {
+  if (!isPortalRumEnabled(env)) {
+    return false;
+  }
+  if (!isTruthyEnvFlag(env.TP_FRONTDOOR_RUM_ENABLED)) {
+    return false;
+  }
+  return resolveFrontdoorRumRolloutPercent(env) > 0;
+}
+
 export function isFrontdoorRumTelemetryEnabled({ traceparent = "", env = process.env } = {}) {
   if (!isPortalRumEnabled(env)) {
     return false;
