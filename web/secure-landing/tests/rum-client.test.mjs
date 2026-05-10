@@ -215,11 +215,30 @@ test("homepage GET disables shared cache for nonzero rollout even when sampled o
     frontdoorRumEnabled: true,
     frontdoorRolloutPercent: "25"
   });
+  const sampledOutTraceparent = "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01";
 
   try {
     getDb(env.dbPath);
+    const { stableRolloutBucket } = await importFresh("../lib/rollout.js");
+    const { isFrontdoorRumTelemetryEnabled } = await importFresh("../lib/config.js");
+    // The final "-01" is the W3C trace-flags field, not the rollout decision.
+    // The assertions below pin this fixture as sampled out for 25%.
+    const bucket = stableRolloutBucket(sampledOutTraceparent);
+    assert.ok(
+      bucket >= 25,
+      `expected fixed traceparent bucket ${bucket} to be sampled out for 25% rollout`
+    );
+    assert.equal(
+      isFrontdoorRumTelemetryEnabled({ traceparent: sampledOutTraceparent }),
+      false
+    );
+
     const { GET } = await importFresh("../app/route.js");
-    const request = buildRequest("https://portal.example.com/");
+    const request = buildRequest("https://portal.example.com/", {
+      headers: {
+        traceparent: sampledOutTraceparent
+      }
+    });
 
     const response = await GET(request);
     const html = await response.text();
