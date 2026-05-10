@@ -89,7 +89,7 @@ Notes:
 - `TP_PORTAL_EVENT_LOG_PATH` is optional. When set, FastAPI appends PII-free portal event JSONL for viewer, review, and stream telemetry evidence.
 - Direct-debug rollout stability reuses `TP_PORTAL_DIRECT_DEBUG_COHORT_KEY`.
 - Managed rollout stability uses the authenticated actor identity already present on the front door; raw usernames and emails are not stored in the RUM sink.
-- Rollout expansion remains blocked until `docs/compliance/PORTAL_TELEMETRY_PRIVACY_SIGNOFF.md` has explicit Security / Privacy approval.
+- Bounded pilot rollout is approved with conditions by `docs/compliance/PORTAL_TELEMETRY_PRIVACY_SIGNOFF.md`; revise that packet before adding any new telemetry event family, metadata key, marker cookie, storage key, rollout knob, sink behavior, or retention posture.
 
 ## Optional Review Surface Pilot Knobs
 
