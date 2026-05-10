@@ -215,11 +215,20 @@ test("homepage GET disables shared cache for nonzero rollout even when sampled o
     frontdoorRumEnabled: true,
     frontdoorRolloutPercent: "25"
   });
+  const sampledOutTraceparent = "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01";
 
   try {
+    const { stableRolloutBucket } = await importFresh("../lib/rollout.js");
+    // The -01 suffix is W3C trace flags; front-door rollout hashes the full traceparent.
+    assert.equal(stableRolloutBucket(sampledOutTraceparent), 79);
+
     getDb(env.dbPath);
     const { GET } = await importFresh("../app/route.js");
-    const request = buildRequest("https://portal.example.com/");
+    const request = buildRequest("https://portal.example.com/", {
+      headers: {
+        traceparent: sampledOutTraceparent
+      }
+    });
 
     const response = await GET(request);
     const html = await response.text();
