@@ -83,7 +83,7 @@ export TP_PORTAL_EVENT_LOG_PATH="/absolute/path/to/portal-events.jsonl"
 Notes:
 - `TP_PORTAL_RUM_ENABLED=0` keeps `/v1/portal/rum` in success/no-op mode and keeps `features.rumTelemetry=false` on both bootstrap surfaces.
 - `TP_PORTAL_RUM_ROLLOUT_PERCENT=0` keeps managed portal/bootstrap RUM disabled even when the hard flag is on.
-- `TP_FRONTDOOR_RUM_ENABLED=0` independently disables landing, login, logout, and front-door RUM proxy telemetry after the shared hard flag is on.
+- `TP_FRONTDOOR_RUM_ENABLED=0` independently disables landing, login, logout, and front-door event-family payloads submitted through the RUM proxy after the shared hard flag is on.
 - `TP_FRONTDOOR_RUM_ROLLOUT_PERCENT=0` samples out front-door RUM even when both hard flags are on.
 - `TP_PORTAL_RUM_LOG_PATH` is optional. When set, FastAPI appends PII-free JSONL records for the pilot summary CLI.
 - `TP_PORTAL_EVENT_LOG_PATH` is optional. When set, FastAPI appends PII-free portal event JSONL for viewer, review, and stream telemetry evidence.

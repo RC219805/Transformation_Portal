@@ -18,13 +18,16 @@ import json
 import os
 import sys
 from dataclasses import dataclass
-from typing import Iterable, List, Optional
+from typing import Iterable, List, Literal, Optional
+
+
+RequiredScope = Literal["all", "production", "optional"]
 
 
 @dataclass(frozen=True)
 class Variable:
     name: str
-    required_in: str  # "all" | "production"
+    required_in: RequiredScope
     description: str
 
 

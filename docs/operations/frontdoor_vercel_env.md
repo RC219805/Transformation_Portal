@@ -31,8 +31,8 @@ two values as one secret, set them together, rotate them together.
 | `TP_ALLOW_LOCAL_ACCESS_BYPASS` | unset | Development-only bypass for Cloudflare Access verification. **Never set in production.** |
 | `TP_NEXT_DIST_DIR` | unset | Override Next.js build output directory; rarely needed on Vercel. |
 | `TP_PORTAL_RUM_ENABLED` | unset | Shared master kill switch for managed portal/bootstrap RUM and front-door RUM. Set to a truthy value before any RUM path can emit or proxy samples. |
-| `TP_PORTAL_RUM_ROLLOUT_PERCENT` | `0` | Managed portal/bootstrap RUM rollout percentage. Does not govern landing, login, logout, or front-door RUM proxy sampling. |
-| `TP_FRONTDOOR_RUM_ENABLED` | unset | Independent flag for landing, login, logout, and front-door RUM proxy telemetry after `TP_PORTAL_RUM_ENABLED` is enabled. |
+| `TP_PORTAL_RUM_ROLLOUT_PERCENT` | `0` | Managed portal/bootstrap RUM rollout percentage. Does not govern landing, login, logout, or front-door event-family proxy sampling. |
+| `TP_FRONTDOOR_RUM_ENABLED` | unset | Independent flag for landing, login, logout, and front-door event-family payloads submitted through the RUM proxy after `TP_PORTAL_RUM_ENABLED` is enabled. |
 | `TP_FRONTDOOR_RUM_ROLLOUT_PERCENT` | `100` when front-door RUM is enabled | Independent front-door RUM sampling percentage. Values clamp to `0..100`; invalid values are treated as `0`. |
 
 ## Verification

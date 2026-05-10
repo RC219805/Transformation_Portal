@@ -1,5 +1,6 @@
-import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
+
+import { stableRolloutBucket } from "./rollout.js";
 
 const DEFAULT_SESSION_DB_PATH = "/tmp/transformation-portal-frontdoor-sessions.db";
 const DEFAULT_SESSION_SCALING_MODE = "single_instance";
@@ -26,20 +27,14 @@ function parseFrontdoorRumRolloutPercent(rawValue) {
   if (!raw) {
     return DEFAULT_FRONTDOOR_RUM_ROLLOUT_PERCENT;
   }
-  const parsed = Number.parseInt(raw, 10);
-  if (!Number.isFinite(parsed)) {
+  if (!/^\d+$/u.test(raw)) {
+    return 0;
+  }
+  const parsed = Number(raw);
+  if (!Number.isSafeInteger(parsed)) {
     return 0;
   }
   return Math.max(0, Math.min(100, parsed));
-}
-
-function stableRolloutBucket(key) {
-  const normalized = String(key || "").trim().toLowerCase();
-  if (!normalized) {
-    return 100;
-  }
-  const digest = createHash("sha256").update(normalized).digest("hex");
-  return Number.parseInt(digest.slice(0, 8), 16) % 100;
 }
 
 export function resolveFrontdoorRumRolloutPercent(env = process.env) {

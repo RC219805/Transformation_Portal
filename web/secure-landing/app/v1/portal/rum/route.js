@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server.js";
 
-import { getConfig, isFrontdoorRumTelemetryEnabled } from "../../../../lib/config.js";
+import { getConfig, isFrontdoorRumTelemetryEnabled, isPortalRumEnabled } from "../../../../lib/config.js";
 import { applySecurityHeaders } from "../../../../lib/http.js";
 import {
   auditManagedSurfaceFailure,
@@ -16,6 +16,16 @@ import { resolveRequestTraceparent, traceIdFromTraceparent, normalizeTraceparent
 export const runtime = "nodejs";
 
 const PUBLIC_RUM_PATH = "/v1/portal/rum";
+const FRONTDOOR_RUM_EVENT_TYPES = new Set([
+  "landing_rendered",
+  "login_rendered",
+  "login_submit_attempt",
+  "login_submit_success",
+  "login_submit_failure",
+  "logout_submit_attempt",
+  "logout_submit_success",
+  "logout_submit_failure",
+]);
 
 function successEnvelope(data, traceparent = "") {
   return applySecurityHeaders(
@@ -61,6 +71,15 @@ function errorEnvelope(status, code, message, details = {}, traceparent = "") {
   );
 }
 
+function isFrontdoorRumPayload(bodyText) {
+  try {
+    const parsed = JSON.parse(bodyText || "{}");
+    return FRONTDOOR_RUM_EVENT_TYPES.has(String(parsed?.event_type || ""));
+  } catch {
+    return false;
+  }
+}
+
 export async function POST(request) {
   const requestTraceparent = resolveRequestTraceparent(request);
   const traceId = traceIdFromTraceparent(requestTraceparent);
@@ -75,7 +94,15 @@ export async function POST(request) {
     );
   }
 
-  if (!isFrontdoorRumTelemetryEnabled({ traceparent: requestTraceparent })) {
+  if (!isPortalRumEnabled()) {
+    return successEnvelope({ accepted: false, disabled: true }, requestTraceparent);
+  }
+
+  const bodyText = await request.text();
+  if (
+    isFrontdoorRumPayload(bodyText)
+    && !isFrontdoorRumTelemetryEnabled({ traceparent: requestTraceparent })
+  ) {
     return successEnvelope({ accepted: false, disabled: true }, requestTraceparent);
   }
 
@@ -114,7 +141,7 @@ export async function POST(request) {
     upstream = await fetch(buildUpstreamUrl(PUBLIC_RUM_PATH, request.nextUrl.search), {
       method: "POST",
       headers: upstreamHeaders,
-      body: request.body,
+      body: bodyText,
       cache: "no-store",
       redirect: "manual",
       duplex: "half"

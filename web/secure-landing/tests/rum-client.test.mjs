@@ -324,6 +324,9 @@ test("front-door RUM rollout config defaults, clamps, and fails closed on invali
   );
   assert.equal(resolveFrontdoorRumRolloutPercent({ TP_FRONTDOOR_RUM_ROLLOUT_PERCENT: "150" }), 100);
   assert.equal(resolveFrontdoorRumRolloutPercent({ TP_FRONTDOOR_RUM_ROLLOUT_PERCENT: "-10" }), 0);
+  assert.equal(resolveFrontdoorRumRolloutPercent({ TP_FRONTDOOR_RUM_ROLLOUT_PERCENT: "10.5" }), 0);
+  assert.equal(resolveFrontdoorRumRolloutPercent({ TP_FRONTDOOR_RUM_ROLLOUT_PERCENT: "25%" }), 0);
+  assert.equal(resolveFrontdoorRumRolloutPercent({ TP_FRONTDOOR_RUM_ROLLOUT_PERCENT: "0x10" }), 0);
   assert.equal(resolveFrontdoorRumRolloutPercent({ TP_FRONTDOOR_RUM_ROLLOUT_PERCENT: "bogus" }), 0);
 
   assert.equal(isFrontdoorRumTelemetryEnabled({
@@ -340,6 +343,16 @@ test("front-door RUM rollout config defaults, clamps, and fails closed on invali
       TP_FRONTDOOR_RUM_ENABLED: "1"
     }
   }), false);
+});
+
+test("stableRolloutBucket preserves empty-key sentinel and case-insensitive buckets", async () => {
+  const { stableRolloutBucket } = await importFresh("../lib/rollout.js");
+
+  assert.equal(stableRolloutBucket(""), 100);
+  assert.equal(stableRolloutBucket("   "), 100);
+  assert.equal(stableRolloutBucket("Admin@Example.Com"), stableRolloutBucket("admin@example.com"));
+  assert.ok(stableRolloutBucket("admin@example.com") >= 0);
+  assert.ok(stableRolloutBucket("admin@example.com") < 100);
 });
 
 test("homepage GET mints a fresh nonce on every request when RUM is enabled", async () => {
@@ -1107,6 +1120,74 @@ test("public RUM route noops when only front-door RUM is disabled", async () => 
 
       assert.equal(response.status, 200);
       assert.deepEqual(body.data, { accepted: false, disabled: true });
+    } finally {
+      restoreFetch();
+    }
+  } finally {
+    env.cleanup();
+  }
+});
+
+test("public RUM route keeps portal-family payloads independent from front-door RUM controls", async () => {
+  const env = withRumEnvironment({ rumEnabled: true, frontdoorRumEnabled: false });
+  const traceparent = "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01";
+
+  try {
+    const route = await importFresh("../app/v1/portal/rum/route.js");
+    const restoreFetch = withMockedFetch(async (url, init) => {
+      assert.equal(String(url), "http://127.0.0.1:8000/v1/portal/rum");
+      assert.equal(init.method, "POST");
+      assert.equal(init.headers.get("authorization"), "Bearer backend-secret");
+      assert.equal(init.headers.get("x-api-key"), "backend-secret");
+      assert.equal(init.headers.get("traceparent"), traceparent);
+      assert.equal(await new Response(init.body).text(), JSON.stringify({
+        event_type: "portal_shell_rendered",
+        route: "/portal",
+        view: "portal",
+        metric: "duration",
+        value: 25,
+        unit: "ms"
+      }));
+      return Response.json(
+        {
+          schema: "tp.orchestrator.portal_rum_ingest.v1",
+          success: true,
+          data: { accepted: true },
+          error: null
+        },
+        {
+          headers: {
+            traceparent
+          }
+        }
+      );
+    });
+
+    try {
+      const request = buildRequest("https://portal.example.com/v1/portal/rum", {
+        method: "POST",
+        headers: new Headers({
+          "content-type": "application/json",
+          origin: "https://portal.example.com",
+          referer: "https://portal.example.com/portal",
+          traceparent
+        }),
+        body: JSON.stringify({
+          event_type: "portal_shell_rendered",
+          route: "/portal",
+          view: "portal",
+          metric: "duration",
+          value: 25,
+          unit: "ms"
+        })
+      });
+
+      const response = await route.POST(request);
+      const body = await response.json();
+
+      assert.equal(response.status, 200);
+      assert.equal(response.headers.get("traceparent"), traceparent);
+      assert.deepEqual(body.data, { accepted: true });
     } finally {
       restoreFetch();
     }

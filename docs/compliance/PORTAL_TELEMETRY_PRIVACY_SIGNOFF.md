@@ -177,7 +177,7 @@ Portal RUM controls:
 
 Front-door RUM controls:
 
-- `TP_FRONTDOOR_RUM_ENABLED` independently gates landing, login, logout, and front-door RUM proxy telemetry after the shared master flag is enabled.
+- `TP_FRONTDOOR_RUM_ENABLED` independently gates landing, login, logout, and front-door event-family payloads submitted through the RUM proxy after the shared master flag is enabled.
 - `TP_FRONTDOOR_RUM_ROLLOUT_PERCENT` independently samples front-door RUM requests; it defaults to `100` when front-door RUM is enabled, clamps to `0..100`, and treats invalid values as `0`.
 
 Current sink path knobs:
