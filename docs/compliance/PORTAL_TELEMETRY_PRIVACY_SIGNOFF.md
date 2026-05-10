@@ -2,13 +2,13 @@
 
 **Status:** Approved with Conditions
 **Date:** 2026-04-14
-**Last revised:** 2026-05-09
+**Last revised:** 2026-05-10
 **Owner:** Frontdoor / Platform
 **Approval Authority:** Repository Owner
 
 This packet inventories the current portal telemetry contract, approved-with-conditions pilot retention posture, and approval conditions for bounded portal/front-door telemetry pilots. The approval block below is the approval record for that bounded scope.
 
-The 2026-05-09 revision adds eight RUM event families that landed in #1682, #1684, and #1696, and discloses the two server-set marker cookies introduced by the client-side login submit RUM mirror series (#1689 / #1694 / #1695). No metric values, sanitizer rules, or rollout knobs were changed; only the inventory below was extended to match what is in the repo.
+The 2026-05-09 revision adds eight RUM event families that landed in #1682, #1684, and #1696, and discloses the two server-set marker cookies introduced by the client-side login submit RUM mirror series (#1689 / #1694 / #1695). No metric values, sanitizer rules, or rollout knobs were changed; only the inventory below was extended to match what is in the repo. The 2026-05-10 revision updates the logout control wording only; no logout client-side mirror, marker cookie, metric value, sanitizer rule, or rollout knob changed.
 
 ## Purpose
 
@@ -86,7 +86,7 @@ Cookie values are deterministic and bounded:
 
 Cookie clear discipline (`clearRumMarkerCookie` in `web/secure-landing/lib/rum-client.js`) writes an empty value with `expires=epoch` on the original `Path` so the browser drops the cookie immediately on receipt of the response. Cross-marker hygiene is enforced: a successful login also clears any stale failure marker, and a failed login clears any stale success marker, so the two markers can never both be live for the same submit.
 
-The logout route (#1696) currently sets no marker cookies on the user device. Server-side `logout_submit_*` events fire from `/logout` directly without a client-mirror handshake, because the portal exposes no logout button today; a future client-mirror PR for logout would extend this section accordingly.
+The logout route (#1696) currently sets no marker cookies on the user device. Server-side `logout_submit_*` events fire from `/logout` directly. The portal now exposes a managed-mode Sign out control, but this revision still does not add a logout client-side RUM mirror or marker-cookie handshake; a future client-mirror PR for logout would extend this section accordingly.
 
 ### RUM Session Storage Breadcrumbs
 
