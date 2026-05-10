@@ -164,6 +164,7 @@ export function createPortalAuthState() {
     mode: "managed_unavailable",
     csrfToken: "",
     actor: null,
+    logoutPending: false,
     features: {
       apiKeyInput: false,
       directDebug: false,

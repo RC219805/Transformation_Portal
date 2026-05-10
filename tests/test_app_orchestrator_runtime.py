@@ -1751,6 +1751,94 @@ def test_portal_artifact_viewer_modal_is_feature_flagged_and_keyboard_complete()
     assert "if (key === '0')" in content
 
 
+def test_portal_logout_button_in_topbar() -> None:
+    # The logout button must be present in the topbar actions row alongside
+    # the existing Shortcuts and Theme buttons, must start ``hidden`` so the
+    # direct-debug mode never accidentally exposes a control that would
+    # silently redirect to /login (no session cookie to destroy), must
+    # carry a screen-reader label that names the operator-console scope,
+    # and must expose a stable ``data-ui`` hook so Playwright smokes don't
+    # depend on the visible button copy.
+    html = _portal_html_content()
+    button_marker = 'id="logoutBtn"'
+    assert button_marker in html, "logout button missing from portal.html"
+    marker_index = html.index(button_marker)
+    button_start = html.rindex("<button", 0, marker_index)
+    button_end = html.index("</button>", marker_index) + len("</button>")
+    button = html[button_start:button_end]
+
+    assert 'data-ui="logout-button"' in button
+    assert (
+        " hidden " in button or button.find(" hidden>") >= 0
+    ), "logout button must default to hidden so direct-debug mode never exposes it"
+    assert 'aria-label="Sign out of the operator console"' in button
+    assert 'type="button"' in button
+    assert "portal-action-control--topbar" in button
+    # The visible label is allowed to change without breaking Playwright
+    # smokes that select by ``data-ui="logout-button"``, but it must remain
+    # human-readable copy rather than an icon-only affordance.
+    assert ">Sign out<" in button.replace("\n", "").replace("    ", "")
+
+    # The button lives inside the portal-topbar__actions row, not in any
+    # deferred surface, so a managed-mode operator always sees it without
+    # any further bundle load.
+    topbar_actions_index = html.index('data-ui="portal-topbar-actions"')
+    topbar_close_index = html.index("</div>", topbar_actions_index)
+    assert (
+        button_start > topbar_actions_index and button_end < topbar_close_index
+    ), "logout button must live inside the portal-topbar__actions row"
+
+
+def test_portal_bundle_logout_handler_posts_to_logout_and_navigates() -> None:
+    # The portal bundle must wire the logout button to a handler that:
+    #   * gates re-entry via state.auth.logoutPending
+    #   * POSTs to /logout via fetchWithTimeout (NOT bare fetch) so a hung
+    #     request cannot pin the .finally indefinitely and leave the
+    #     operator stranded inside the authenticated shell
+    #   * always navigates the browser to /login, even on fetch rejection
+    #     or timeout, so an operator can never be stuck inside the
+    #     authenticated shell after clicking sign-out
+    # The handler also must NOT call _buildAuthHeaders with GET, because the
+    # X-CSRF-Token auto-attach only fires for unsafe methods.
+    content = _portal_bundle_content()
+    handler_body = _extract_js_function_body(content, "_handlePortalLogout")
+
+    assert "state.auth.logoutPending" in handler_body, "logout handler must gate re-entry via state.auth.logoutPending"
+    # The handler must use fetchWithTimeout, not bare fetch(), to bound
+    # how long .finally can be deferred when the upstream hangs. The
+    # timeout reason must be a stable, grepable string so future review
+    # of telemetry / audit can distinguish a logout-specific abort from
+    # other timeouts in the bundle.
+    assert "fetchWithTimeout(" in handler_body, "logout handler must use fetchWithTimeout, not bare fetch()"
+    assert "'/logout'" in handler_body or '"/logout"' in handler_body
+    assert (
+        "'logout_timeout'" in handler_body or '"logout_timeout"' in handler_body
+    ), "logout handler must pass a logout-specific timeout reason for telemetry distinguishability"
+    assert "method: 'POST'" in handler_body or 'method: "POST"' in handler_body
+    assert (
+        "_buildAuthHeaders({}, 'POST')" in handler_body or '_buildAuthHeaders({}, "POST")' in handler_body
+    ), "logout handler must POST through _buildAuthHeaders so X-CSRF-Token is auto-attached"
+    assert (
+        "window.location.assign('/login')" in handler_body or 'window.location.assign("/login")' in handler_body
+    ), "logout handler must always navigate to /login (even on fetch failure or timeout)"
+    # The fetch must use redirect:"manual" so we don't waste a fetched
+    # /login HTML response we're about to discard.
+    assert "redirect: 'manual'" in handler_body or 'redirect: "manual"' in handler_body
+
+    # The button must be un-hidden only when the bootstrap response reports
+    # managed mode; direct-debug mode keeps the rendered button hidden.
+    assert (
+        "els.logoutBtn.hidden = mode !== 'managed'" in content or 'els.logoutBtn.hidden = mode !== "managed"' in content
+    ), "managed-mode visibility wiring missing for the logout button"
+
+    # The click listener must be wired exactly once.
+    listener_pattern = "els.logoutBtn.addEventListener('click', _handlePortalLogout)"
+    listener_pattern_dq = 'els.logoutBtn.addEventListener("click", _handlePortalLogout)'
+    assert (
+        content.count(listener_pattern) + content.count(listener_pattern_dq) == 1
+    ), "logout button must have exactly one click listener wired to _handlePortalLogout"
+
+
 def test_portal_artifact_previews_lazy_load_and_decode_async() -> None:
     # The four artifact preview <img> tags start hidden and live behind the
     # lazy-loaded Review surface bundle. They must carry loading="lazy" and
