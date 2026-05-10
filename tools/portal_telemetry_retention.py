@@ -5,8 +5,10 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import sys
+import tempfile
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -17,6 +19,7 @@ RETENTION_WINDOW_DAYS = 14
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 PUBLIC_STATIC_PARTS = {"public", "static"}
 GLOB_CHARS = set("*?[]{}")
+APPROVED_SINK_SUFFIXES = (".jsonl", ".jsonl.gz")
 
 
 def _utc_timestamp() -> str:
@@ -38,6 +41,11 @@ def _parse_pilot_end_date(value: str) -> date:
 
 def _has_glob_chars(value: str) -> bool:
     return any(char in GLOB_CHARS for char in value)
+
+
+def _has_approved_sink_suffix(path: Path) -> bool:
+    path_text = str(path)
+    return any(path_text.endswith(suffix) for suffix in APPROVED_SINK_SUFFIXES)
 
 
 def _is_relative_to(path: Path, parent: Path) -> bool:
@@ -80,6 +88,8 @@ def _validate_sink_path(raw_path: str) -> Path:
     path = Path(candidate)
     if not path.is_absolute():
         raise ValueError(f"sink paths must be absolute: {raw_path}")
+    if not _has_approved_sink_suffix(path):
+        raise ValueError("sink paths must end with .jsonl or .jsonl.gz")
     if path.is_symlink():
         raise ValueError(f"sink paths must not be symlinks: {raw_path}")
     if path.exists():
@@ -91,7 +101,17 @@ def _validate_sink_path(raw_path: str) -> Path:
 
 
 def _validate_evidence_path(evidence_out: str, sink_paths: List[Path]) -> Path:
-    path = Path(evidence_out)
+    candidate = evidence_out.strip()
+    if not candidate:
+        raise ValueError("--evidence-out must not be empty")
+    if _has_glob_chars(candidate):
+        raise ValueError("--evidence-out must not contain glob characters")
+
+    path = Path(candidate)
+    if not path.is_absolute():
+        raise ValueError("--evidence-out must be absolute")
+    if path.is_symlink():
+        raise ValueError(f"evidence output must not be a symlink: {evidence_out}")
     if path.exists() and path.is_dir():
         raise ValueError(f"evidence output must not be a directory: {evidence_out}")
     resolved_evidence = path.resolve(strict=False)
@@ -101,17 +121,70 @@ def _validate_evidence_path(evidence_out: str, sink_paths: List[Path]) -> Path:
     return path
 
 
-def _sink_record(path: Path, *, delete: bool) -> Dict[str, Any]:
+def _preflight_evidence_output(path: Path) -> None:
+    probe_path: Optional[str] = None
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with tempfile.NamedTemporaryFile(
+            "w",
+            delete=False,
+            dir=str(path.parent),
+            encoding="utf-8",
+            prefix=f".{path.name}.",
+            suffix=".write-probe",
+        ) as handle:
+            probe_path = handle.name
+            handle.write("{}\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+    except OSError as exc:
+        raise RuntimeError(f"evidence output is not writable: {path}: {exc}") from exc
+    finally:
+        if probe_path is not None:
+            try:
+                Path(probe_path).unlink()
+            except OSError:
+                pass
+
+
+def _write_evidence_atomic(path: Path, evidence: Dict[str, Any]) -> None:
+    payload = json.dumps(evidence, indent=2, sort_keys=True) + "\n"
+    tmp_path: Optional[str] = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            "w",
+            delete=False,
+            dir=str(path.parent),
+            encoding="utf-8",
+            prefix=f".{path.name}.",
+            suffix=".tmp",
+        ) as handle:
+            tmp_path = handle.name
+            handle.write(payload)
+            handle.flush()
+            os.fsync(handle.fileno())
+        Path(tmp_path).replace(path)
+    except OSError as exc:
+        if tmp_path is not None:
+            try:
+                Path(tmp_path).unlink()
+            except OSError:
+                pass
+        raise RuntimeError(f"failed to write evidence atomically: {path}: {exc}") from exc
+
+
+def _sink_record(path: Path, *, delete: bool, retention_deadline: date, generated_date: date) -> Dict[str, Any]:
     record: Dict[str, Any] = {
         "deleted": False,
         "deleted_at": None,
         "delete_error": None,
         "deletion_attempted": False,
-        "eligible_for_deletion": False,
         "exists": False,
         "mtime": None,
         "path": str(path),
         "path_policy": _path_policy(path),
+        "present_at_review": False,
+        "retention_deadline_passed": generated_date > retention_deadline,
         "size_bytes": None,
     }
 
@@ -125,9 +198,9 @@ def _sink_record(path: Path, *, delete: bool) -> Dict[str, Any]:
 
     record.update(
         {
-            "eligible_for_deletion": True,
             "exists": True,
             "mtime": _mtime_timestamp(stat_result.st_mtime),
+            "present_at_review": True,
             "size_bytes": stat_result.st_size,
         }
     )
@@ -154,16 +227,27 @@ def _build_evidence(
     sink_paths: List[Path],
 ) -> Dict[str, Any]:
     delete = mode == "delete"
-    sink_records = [_sink_record(path, delete=delete) for path in sink_paths]
+    generated_at = _utc_timestamp()
+    generated_date = date.fromisoformat(generated_at[:10])
+    retention_deadline = pilot_end_date + timedelta(days=RETENTION_WINDOW_DAYS)
+    sink_records = [
+        _sink_record(
+            path,
+            delete=delete,
+            generated_date=generated_date,
+            retention_deadline=retention_deadline,
+        )
+        for path in sink_paths
+    ]
     bytes_seen = sum(int(record["size_bytes"] or 0) for record in sink_records)
     bytes_deleted = sum(int(record["size_bytes"] or 0) for record in sink_records if record["deleted"])
 
     return {
-        "generated_at": _utc_timestamp(),
+        "generated_at": generated_at,
         "mode": mode,
         "pilot_end_date": pilot_end_date.isoformat(),
         "pilot_owner": pilot_owner,
-        "retention_deadline": (pilot_end_date + timedelta(days=RETENTION_WINDOW_DAYS)).isoformat(),
+        "retention_deadline": retention_deadline.isoformat(),
         "retention_window_days": RETENTION_WINDOW_DAYS,
         "reviewer": reviewer,
         "schema": SCHEMA,
@@ -231,6 +315,13 @@ def _parse_args(argv: Optional[List[str]]) -> argparse.Namespace:
 def main(argv: Optional[List[str]] = None) -> int:
     args = _parse_args(argv)
     mode = "delete" if args.delete else "dry-run"
+    evidence_path: Path = args.evidence_out_path
+    try:
+        _preflight_evidence_output(evidence_path)
+    except RuntimeError as exc:
+        print(f"portal telemetry retention: {exc}", file=sys.stderr)
+        return 1
+
     evidence = _build_evidence(
         mode=mode,
         pilot_owner=args.pilot_owner,
@@ -239,9 +330,11 @@ def main(argv: Optional[List[str]] = None) -> int:
         sink_paths=args.sink_paths,
     )
 
-    evidence_path: Path = args.evidence_out_path
-    evidence_path.parent.mkdir(parents=True, exist_ok=True)
-    evidence_path.write_text(json.dumps(evidence, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    try:
+        _write_evidence_atomic(evidence_path, evidence)
+    except RuntimeError as exc:
+        print(f"portal telemetry retention: {exc}", file=sys.stderr)
+        return 1
     print(f"wrote portal telemetry retention evidence to {evidence_path}")
 
     if any(record.get("delete_error") for record in evidence["sink_paths"]):

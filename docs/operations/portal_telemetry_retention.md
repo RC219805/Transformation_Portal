@@ -40,6 +40,8 @@ Evidence is written after deletion attempts and includes only path metadata, del
 ## Placement And Evidence Expectations
 
 - Raw logs must stay outside the repository, outside public / static directories, access-restricted, and excluded from CI artifacts.
+- Sink paths must be absolute approved JSONL sink names ending in `.jsonl` or `.jsonl.gz`.
+- Evidence output must be an absolute non-symlink path and must not match a sink path.
 - Missing sink paths are represented in evidence without failing the run.
 - Relative paths, directories, glob-like paths, and symlinks are rejected.
 - The retention deadline is `pilot-end-date + 14 calendar days`.

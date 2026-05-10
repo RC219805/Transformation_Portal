@@ -68,7 +68,8 @@ def test_dry_run_produces_evidence_and_deletes_nothing(tmp_path: Path) -> None:
     }
     sink_record = payload["sink_paths"][0]
     assert sink_record["exists"] is True
-    assert sink_record["eligible_for_deletion"] is True
+    assert sink_record["present_at_review"] is True
+    assert isinstance(sink_record["retention_deadline_passed"], bool)
     assert sink_record["deleted"] is False
     assert sink_record["deletion_attempted"] is False
 
@@ -174,8 +175,83 @@ def test_sink_path_rejects_relative_paths_and_globs(
     assert expected_error in result.stderr
 
 
+def test_sink_path_rejects_non_jsonl_suffix(tmp_path: Path) -> None:
+    sink_path = tmp_path / "unrelated.txt"
+
+    result = _run_cli(*_base_args(tmp_path, sink_path, tmp_path / "deletion-evidence.json"), "--dry-run")
+
+    assert result.returncode != 0
+    assert "sink paths must end with .jsonl or .jsonl.gz" in result.stderr
+
+
+@pytest.mark.parametrize(
+    ("raw_evidence_path", "expected_error"),
+    [
+        ("relative/deletion-evidence.json", "--evidence-out must be absolute"),
+        ("/tmp/deletion-*.json", "--evidence-out must not contain glob characters"),
+    ],
+)
+def test_evidence_path_rejects_relative_paths_and_globs(
+    tmp_path: Path,
+    raw_evidence_path: str,
+    expected_error: str,
+) -> None:
+    sink_path = tmp_path / "portal-rum.jsonl"
+    sink_path.write_text("{}\n", encoding="utf-8")
+
+    result = _run_cli(
+        "--pilot-owner",
+        "RC219805",
+        "--pilot-end-date",
+        "2026-05-09",
+        "--reviewer",
+        "RC219805",
+        "--sink-path",
+        str(sink_path),
+        "--evidence-out",
+        raw_evidence_path,
+        "--dry-run",
+    )
+
+    assert result.returncode != 0
+    assert expected_error in result.stderr
+
+
+def test_evidence_path_rejects_symlinks(tmp_path: Path) -> None:
+    sink_path = tmp_path / "portal-rum.jsonl"
+    target_path = tmp_path / "deletion-evidence-target.json"
+    evidence_path = tmp_path / "deletion-evidence-link.json"
+    sink_path.write_text("{}\n", encoding="utf-8")
+    target_path.write_text("{}\n", encoding="utf-8")
+    evidence_path.symlink_to(target_path)
+
+    result = _run_cli(*_base_args(tmp_path, sink_path, evidence_path), "--dry-run")
+
+    assert result.returncode != 0
+    assert "evidence output must not be a symlink" in result.stderr
+
+
+def test_delete_mode_preflights_evidence_output_before_unlinking_sink(tmp_path: Path) -> None:
+    sink_path = tmp_path / "portal-rum.jsonl"
+    blocker_path = tmp_path / "not-a-directory"
+    evidence_path = blocker_path / "deletion-evidence.json"
+    sink_path.write_text("{}\n", encoding="utf-8")
+    blocker_path.write_text("blocks parent mkdir\n", encoding="utf-8")
+
+    result = _run_cli(
+        *_base_args(tmp_path, sink_path, evidence_path),
+        "--delete",
+        "--confirm-delete",
+        CONFIRM_DELETE,
+    )
+
+    assert result.returncode == 1
+    assert "evidence output is not writable" in result.stderr
+    assert sink_path.exists()
+
+
 def test_directories_are_rejected(tmp_path: Path) -> None:
-    sink_path = tmp_path / "portal-rum-directory"
+    sink_path = tmp_path / "portal-rum-directory.jsonl"
     sink_path.mkdir()
 
     result = _run_cli(*_base_args(tmp_path, sink_path, tmp_path / "deletion-evidence.json"), "--dry-run")
@@ -243,7 +319,7 @@ def test_missing_sink_path_is_represented_safely(tmp_path: Path) -> None:
     }
     sink_record = payload["sink_paths"][0]
     assert sink_record["exists"] is False
-    assert sink_record["eligible_for_deletion"] is False
+    assert sink_record["present_at_review"] is False
     assert sink_record["deleted"] is False
     assert sink_record["delete_error"] is None
 
