@@ -5357,6 +5357,8 @@ function _handlePortalLogout() {
     if (state.auth.logoutPending) return;
     state.auth.logoutPending = true;
     if (els.logoutBtn) els.logoutBtn.disabled = true;
+    const logoutStartedAt = _portalRumNow();
+    _queueClientLogoutRumSample('logout_submit_attempt', 1);
     const headers = _buildAuthHeaders({}, 'POST');
     fetchWithTimeout(
         '/logout',
@@ -5369,6 +5371,11 @@ function _handlePortalLogout() {
         BOOTSTRAP_TIMEOUT_MS,
         'logout_timeout',
     )
+        .then(() => _queueClientLogoutRumSample(
+            'logout_submit_success',
+            Math.max(0, Math.round(_portalRumNow() - logoutStartedAt)),
+            true
+        ))
         .catch(() => { /* navigate anyway — server destroys the session before responding, and a timeout still implies the user wanted out */ })
         .finally(() => { window.location.assign('/login'); });
 }
@@ -6765,7 +6772,7 @@ function _portalRumBasePayload(sample = {}) {
     const sampleOptions = sample && typeof sample === 'object' ? sample : {};
     return {
         event_type: String(sampleOptions.eventType || '').trim().toLowerCase(),
-        route: '/portal',
+        route: sampleOptions.route === '/logout' ? '/logout' : '/portal',
         view: portalInternals.normalizePortalRumView(sampleOptions.view || state.currentView),
         value: Number(sampleOptions.value),
         unit: String(sampleOptions.unit || '').trim().toLowerCase(),
@@ -6845,6 +6852,19 @@ function _recordPortalRumMilestone(eventType, value, options = {}) {
         traceparent: options.traceparent || _portalRumTraceparent(),
         view: options.view,
         metadata: options.metadata
+    });
+}
+
+function _queueClientLogoutRumSample(eventType, value, isDuration = false) {
+    _queuePortalRumSample({
+        eventType,
+        route: '/logout',
+        view: 'login',
+        metric: isDuration ? 'duration' : 'count',
+        value,
+        unit: isDuration ? 'ms' : 'count',
+        metadata: { source: 'client' },
+        keepalive: true
     });
 }
 

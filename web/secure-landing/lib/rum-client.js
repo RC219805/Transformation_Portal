@@ -24,12 +24,10 @@ export const LOGIN_SUBMIT_SUCCESS_MARKER_COOKIE = "tp_login_submit_success";
 export const LOGIN_SUBMIT_SUCCESS_MARKER_VALUE = "1";
 export const LOGIN_SUBMIT_SUCCESS_MARKER_MAX_AGE_SECONDS = 60;
 
-// Marker descriptors that pin every variant of the RUM cookie pair to a
-// single shape: { name, path, maxAgeSeconds }. The setRumMarkerCookie /
-// clearRumMarkerCookie primitives below consume these descriptors so a
-// future logout client-mirror lands by adding two more constants
-// (LOGOUT_SUBMIT_FAILURE_MARKER, LOGOUT_SUBMIT_SUCCESS_MARKER) instead
-// of duplicating four near-identical helpers.
+// Marker descriptors that pin the login RUM cookie pair to a single shape:
+// { name, path, maxAgeSeconds }. Logout client mirrors intentionally do not
+// use marker cookies; they emit only while the portal logout click handler
+// controls the POST lifecycle on the current page.
 //
 // The failure marker is scoped to Path=/login so it never reaches
 // /portal; the success marker is scoped to Path=/ so the portal bundle
