@@ -864,6 +864,78 @@ test("portal bundle source pins the same login_submit_success constants as lib/r
   );
 });
 
+test("portal bundle source emits logout client mirror attempt and success only", async () => {
+  const here = path.dirname(fileURLToPath(import.meta.url));
+  const portalSrc = readFileSync(
+    path.resolve(here, "..", "portal-src", "portal.template.js"),
+    "utf-8"
+  );
+  const helperStart = portalSrc.indexOf("function _queueClientLogoutRumSample");
+  const helperEnd = portalSrc.indexOf("function _scheduleFirstViewInteractiveRum", helperStart);
+  const handlerStart = portalSrc.indexOf("function _handlePortalLogout()");
+  const handlerEnd = portalSrc.indexOf("function _normalizeStagedUploadRelativePath", handlerStart);
+  assert.ok(helperStart >= 0, "expected logout client RUM helper");
+  assert.ok(helperEnd > helperStart, "expected logout client RUM helper boundary");
+  assert.ok(handlerStart >= 0, "expected portal logout handler");
+  assert.ok(handlerEnd > handlerStart, "expected portal logout handler boundary");
+  const helperBody = portalSrc.slice(helperStart, helperEnd);
+  const handlerBody = portalSrc.slice(handlerStart, handlerEnd);
+
+  assert.match(helperBody, /eventType,/);
+  assert.match(helperBody, /route:\s*['"]\/logout['"]/);
+  assert.match(helperBody, /view:\s*['"]login['"]/);
+  assert.match(helperBody, /metadata:\s*\{\s*source:\s*['"]client['"]\s*\}/);
+  assert.match(helperBody, /keepalive:\s*true/);
+  assert.doesNotMatch(helperBody, /logout_submit_failure/);
+
+  assert.match(handlerBody, /_queueClientLogoutRumSample\(\s*['"]logout_submit_attempt['"],\s*1\s*\)/);
+  assert.match(handlerBody, /fetchWithTimeout\(\s*['"]\/logout['"]/);
+  assert.match(handlerBody, /_buildAuthHeaders\(\s*\{\s*\},\s*['"]POST['"]\s*\)/);
+  assert.match(handlerBody, /\.then\(\(\)\s*=>\s*_queueClientLogoutRumSample\(\s*['"]logout_submit_success['"]/);
+  assert.match(handlerBody, /Math\.max\(\s*0,\s*Math\.round\(_portalRumNow\(\)\s*-\s*logoutStartedAt\)\s*\)/);
+  assert.match(handlerBody, /\.catch\(\(\)\s*=>\s*\{/);
+  assert.match(handlerBody, /window\.location\.assign\(\s*['"]\/login['"]\s*\)/);
+  assert.doesNotMatch(handlerBody, /logout_submit_failure/);
+});
+
+test("logout client mirror adds no marker cookies or sessionStorage keys", async () => {
+  const here = path.dirname(fileURLToPath(import.meta.url));
+  const portalSrc = readFileSync(
+    path.resolve(here, "..", "portal-src", "portal.template.js"),
+    "utf-8"
+  );
+  const rumClientSrc = readFileSync(
+    path.resolve(here, "..", "lib", "rum-client.js"),
+    "utf-8"
+  );
+  const helperStart = portalSrc.indexOf("function _queueClientLogoutRumSample");
+  const helperEnd = portalSrc.indexOf("function _scheduleFirstViewInteractiveRum", helperStart);
+  const handlerStart = portalSrc.indexOf("function _handlePortalLogout()");
+  const handlerEnd = portalSrc.indexOf("function _normalizeStagedUploadRelativePath", handlerStart);
+  const logoutClientSource = `${portalSrc.slice(helperStart, helperEnd)}\n${portalSrc.slice(handlerStart, handlerEnd)}`;
+
+  assert.doesNotMatch(rumClientSrc, /LOGOUT_SUBMIT_.*MARKER/);
+  assert.doesNotMatch(rumClientSrc, /tp_logout/i);
+  assert.doesNotMatch(logoutClientSource, /document\.cookie/);
+  assert.doesNotMatch(logoutClientSource, /sessionStorage/);
+  assert.doesNotMatch(logoutClientSource, /LOGOUT_SUBMIT_.*(?:COOKIE|MARKER|BREADCRUMB|STORAGE)/);
+  assert.doesNotMatch(logoutClientSource, /tp_logout/i);
+});
+
+test("privacy packet pins logout client mirror storage and failure boundaries", async () => {
+  const here = path.dirname(fileURLToPath(import.meta.url));
+  const packet = readFileSync(
+    path.resolve(here, "..", "..", "..", "docs", "compliance", "PORTAL_TELEMETRY_PRIVACY_SIGNOFF.md"),
+    "utf-8"
+  );
+
+  assert.match(packet, /Client-side logout mirror emits `logout_submit_attempt` and `logout_submit_success` only\./);
+  assert.match(packet, /No logout marker cookies are added\./);
+  assert.match(packet, /No logout `sessionStorage` breadcrumb is added\./);
+  assert.match(packet, /No new `failure_code` values are added\./);
+  assert.match(packet, /`logout_submit_failure` remains server-side `csrf`-only unless separately approved\./);
+});
+
 test("portal bundle source clears login_submit_success marker state when sessionStorage read fails", async () => {
   const here = path.dirname(fileURLToPath(import.meta.url));
   const portalSrc = readFileSync(

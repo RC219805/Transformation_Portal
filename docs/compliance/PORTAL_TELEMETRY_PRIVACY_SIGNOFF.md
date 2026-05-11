@@ -2,13 +2,13 @@
 
 **Status:** Approved with Conditions
 **Date:** 2026-04-14
-**Last revised:** 2026-05-10
+**Last revised:** 2026-05-11
 **Owner:** Frontdoor / Platform
 **Approval Authority:** Repository Owner
 
 This packet inventories the current portal telemetry contract, approved-with-conditions pilot retention posture, and approval conditions for bounded portal/front-door telemetry pilots. The approval block below is the approval record for that bounded scope.
 
-The 2026-05-09 revision adds eight RUM event families that landed in #1682, #1684, and #1696, and discloses the two server-set marker cookies introduced by the client-side login submit RUM mirror series (#1689 / #1694 / #1695). No metric values, sanitizer rules, or rollout knobs were changed; only the inventory below was extended to match what is in the repo. The 2026-05-10 revision updates the logout control wording only; no logout client-side mirror, marker cookie, metric value, sanitizer rule, or rollout knob changed.
+The 2026-05-09 revision adds eight RUM event families that landed in #1682, #1684, and #1696, and discloses the two server-set marker cookies introduced by the client-side login submit RUM mirror series (#1689 / #1694 / #1695). No metric values, sanitizer rules, or rollout knobs were changed; only the inventory below was extended to match what is in the repo. The 2026-05-10 revision updates the logout control wording only; no logout client-side mirror, marker cookie, metric value, sanitizer rule, or rollout knob changed. The 2026-05-11 revision documents the client-side logout attempt/success mirror; it adds no event families, marker cookies, `sessionStorage` keys, failure-code values, rollout knobs, sink behavior, or retention posture.
 
 ## Purpose
 
@@ -54,11 +54,11 @@ Current supported event families:
 - `login_submit_attempt` *(added in #1684; client mirror in #1689)*
 - `login_submit_success` *(added in #1684; client mirror in #1695)*
 - `login_submit_failure` *(added in #1684; client mirror in #1694)*
-- `logout_submit_attempt` *(added in #1696)*
-- `logout_submit_success` *(added in #1696)*
-- `logout_submit_failure` *(added in #1696)*
+- `logout_submit_attempt` *(added in #1696; client mirror documented 2026-05-11)*
+- `logout_submit_success` *(added in #1696; client mirror documented 2026-05-11)*
+- `logout_submit_failure` *(added in #1696; server-side `csrf` only)*
 
-Allowed event-type / metric / unit triples are pinned by `PORTAL_ALLOWED_RUM_EVENT_TYPES`, `PORTAL_ALLOWED_RUM_METRICS`, and `PORTAL_ALLOWED_RUM_UNITS` in `app.py`. Coverage is split across the repo: `tests/test_app_orchestrator_contract_http.py` round-trips the HTTP sink contract for `queue_request`, `core_web_vital`, and the login/logout submit families; `tests/test_app_orchestrator_runtime.py` pins the portal bundle emissions for `portal_shell_rendered`, `first_view_interactive`, `queue_request`, and `sse_reconnect`; `web/secure-landing/tests/rum-client.test.mjs`, `web/secure-landing/tests/login-rum.test.mjs`, and `web/secure-landing/tests/logout-rum.test.mjs` pin the managed frontdoor render and submit emitters. Widening the inventory requires paired schema and coverage updates in the same change.
+Allowed event-type / metric / unit triples are pinned by `PORTAL_ALLOWED_RUM_EVENT_TYPES`, `PORTAL_ALLOWED_RUM_METRICS`, and `PORTAL_ALLOWED_RUM_UNITS` in `app.py`. Coverage is split across the repo: `tests/test_app_orchestrator_contract_http.py` round-trips the HTTP sink contract for `queue_request`, `core_web_vital`, and the login/logout submit families; `tests/test_app_orchestrator_runtime.py` pins the portal bundle emissions for `portal_shell_rendered`, `first_view_interactive`, `queue_request`, and `sse_reconnect`; `web/secure-landing/tests/rum-client.test.mjs`, `web/secure-landing/tests/login-rum.test.mjs`, and `web/secure-landing/tests/logout-rum.test.mjs` pin the managed frontdoor render and submit emitters, including the client-side logout attempt/success mirror boundary. Widening the inventory requires paired schema and coverage updates in the same change.
 
 ### RUM Marker Cookies
 
@@ -86,7 +86,7 @@ Cookie values are deterministic and bounded:
 
 Cookie clear discipline (`clearRumMarkerCookie` in `web/secure-landing/lib/rum-client.js`) writes an empty value with `expires=epoch` on the original `Path` so the browser drops the cookie immediately on receipt of the response. Cross-marker hygiene is enforced: a successful login also clears any stale failure marker, and a failed login clears any stale success marker, so the two markers can never both be live for the same submit.
 
-The logout route (#1696) currently sets no marker cookies on the user device. Server-side `logout_submit_*` events fire from `/logout` directly. The portal now exposes a managed-mode Sign out control, but this revision still does not add a logout client-side RUM mirror or marker-cookie handshake; a future client-mirror PR for logout would extend this section accordingly.
+The logout route (#1696) currently sets no marker cookies on the user device. Server-side `logout_submit_*` events fire from `/logout` directly. The portal now exposes a managed-mode Sign out control, and the client-side logout mirror emits `logout_submit_attempt` and `logout_submit_success` only while the existing portal logout handler controls the same-page POST lifecycle. No logout marker cookies are added.
 
 ### RUM Session Storage Breadcrumbs
 
@@ -102,6 +102,8 @@ Properties:
 - Contains no username, email, password, role, session ID, JWT, API key, CSRF token, throttle key, IP address, or query string.
 - Used only to compute elapsed client-side submit-to-render duration.
 - The raw timestamp is not intended to be persisted in RUM logs; only a bounded elapsed duration may be emitted through the approved `metric` / `value` / `unit` fields for the relevant terminal event family.
+
+No logout `sessionStorage` breadcrumb is added. The logout client mirror runs on the current `/portal` page before navigating to `/login`, so it does not need cross-page browser storage.
 
 ### Portal Event Sink
 
@@ -143,10 +145,12 @@ The repo-owned login-submit and logout-submit emitters carry only the metadata k
 - `failure_code` — set on `login_submit_failure` and `logout_submit_failure` only.
   - Login enum: `csrf`, `configuration`, `access`, `throttled`, `invalid` (`LOGIN_RUM_FAILURE_CODES` in `web/secure-landing/lib/rum-emitter.js`).
   - Logout enum: `csrf` only (`LOGOUT_RUM_FAILURE_CODES` in `web/secure-landing/lib/rum-emitter.js`); the route has one failure surface today, audited as `csrf_failure`.
-- `source` — set to the literal string `"client"` by the browser-side mirrors only (#1689 / #1694 / #1695). Lets dashboards distinguish a server-side emission from a client-side mirror so the two are not double-counted.
+- `source` — set to the literal string `"client"` by the browser-side mirrors only (#1689 / #1694 / #1695 and the logout attempt/success mirror documented 2026-05-11). Lets dashboards distinguish a server-side emission from a client-side mirror so the two are not double-counted.
 - `duration_ms` — set only on the browser-side `login_submit_attempt` mirror. It is a non-negative integer elapsed milliseconds value computed by the browser at validated submit-listener execution time, not derived from user input.
 
 The submit-to-terminal-render duration computed from `tpLoginSubmitStartedAt` is not persisted as metadata. It is emitted only through the approved `metric` / `value` / `unit` fields on the client-side `login_submit_success` and `login_submit_failure` terminal event families.
+
+Client-side logout mirror emits `logout_submit_attempt` and `logout_submit_success` only. No new `failure_code` values are added. `logout_submit_failure` remains server-side `csrf`-only unless separately approved. Browser-visible timeout or network rejection during the logout click remains UX-only: the portal still navigates to `/login`, and no terminal client event is emitted.
 
 None of these metadata keys carries user input: values come from closed-enum constants, the literal mirror source, or browser-computed timing.
 

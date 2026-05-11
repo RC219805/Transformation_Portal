@@ -913,7 +913,7 @@ def test_portal_rum_emits_once_per_page_load_and_keys_samples_by_route_view() ->
     record_body = _extract_js_function_block(content, "_recordPortalRumMilestone")
     first_view_body = _extract_js_function_body(content, "_scheduleFirstViewInteractiveRum")
 
-    assert "route: '/portal'" in base_payload_body
+    assert "route: sampleOptions.route === '/logout' ? '/logout' : '/portal'" in base_payload_body
     assert "view: portalInternals.normalizePortalRumView(sampleOptions.view || state.currentView)" in base_payload_body
     assert "if (state.rum.emittedMilestones[eventType]) return;" in record_body
     assert "state.rum.emittedMilestones[eventType] = true;" in record_body

@@ -6,10 +6,13 @@ export const PORTAL_RUM_EVENT_TYPES = Object.freeze([
   "first_view_interactive",
   "core_web_vital",
   "queue_request",
-  "sse_reconnect"
+  "sse_reconnect",
+  "login_submit_success",
+  "logout_submit_attempt",
+  "logout_submit_success"
 ]);
 
-export const PORTAL_RUM_VIEWS = Object.freeze(["overview", "build", "operate", "review"]);
+export const PORTAL_RUM_VIEWS = Object.freeze(["overview", "build", "operate", "review", "login"]);
 
 export function createPortalRumState() {
   return {
