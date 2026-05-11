@@ -2,10 +2,10 @@
 
 You are working in a governed production repository for **luxury real estate / ArchViz rendering, ingest, archive, and portal orchestration**.
 
-Current baseline: repo-wide documentation refresh audit dated April 29, 2026,
-building on `main` through PR #1562. Use the root `README.md`,
+Current baseline: repo-wide documentation refresh audit dated May 11, 2026,
+building on `main` through PR #1721. Use the root `README.md`,
 `docs/README.md`, `docs/governance/DOCUMENTATION_MAP.md`,
-`docs/governance/DOCUMENTATION_REFRESH_AUDIT_2026-04-29.md`, and
+`docs/governance/DOCUMENTATION_REFRESH_AUDIT_2026-05-11.md`, and
 `docs/governance/DOCUMENTATION_STATE_AUDIT_2026-04-27.md` for current
 navigation. Historical project reports may retain old dates and facts; do not
 treat them as live guidance unless the documentation map promotes them.
@@ -23,6 +23,8 @@ Recent current-state contract anchors:
 - PR #1561/#1562 added the typed API v1 envelope/schema foundation and typed
   OpenAPI response models for `/healthz`, `/ready`, and `/v1/readiness` while
   preserving existing wire shapes.
+- Post-#1562 follow-ups added typed response models for job lifecycle routes
+  while preserving their existing `/v1/*` wire shapes.
 - The managed front door in `web/secure-landing/` is Node 22.x only.
 - Root `.env.example` is the Docker/FastAPI template; `web/secure-landing/.env.example`
   is the managed front-door template.

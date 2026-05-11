@@ -2,7 +2,7 @@
 
 Retrieval-Augmented Generation (RAG) system that enhances the Transformation Portal Specialist custom agent with:
 
-Current baseline: `main` through PR #1562. This package supports retrieval and
+Current baseline: `main` through PR #1721. This package supports retrieval and
 citation workflows; live agent behavior is governed by `.github/agents/README.md`,
 `.github/copilot-instructions.md`, and `docs/architecture/agent_governance.md`.
 

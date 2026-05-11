@@ -2,7 +2,7 @@
 
 **Status**: Ready to Use
 **Scope**: Governed execution inside current repository contracts
-**Current documentation baseline**: repo-wide refresh audit dated April 29, 2026, building on `main` through PR #1562
+**Current documentation baseline**: repo-wide refresh audit dated May 11, 2026, building on `main` through PR #1721
 
 ---
 
@@ -112,7 +112,7 @@ Use the smallest command set that proves the change. If a broader command is nee
 - `README.md`
 - `../copilot-instructions.md`
 - `../../docs/governance/DOCUMENTATION_MAP.md`
-- `../../docs/governance/DOCUMENTATION_REFRESH_AUDIT_2026-04-29.md`
+- `../../docs/governance/DOCUMENTATION_REFRESH_AUDIT_2026-05-11.md`
 - `../../docs/governance/DOCUMENTATION_STATE_AUDIT_2026-04-27.md`
 - `docs/guides/CUSTOM_AGENT_GUIDE.md`
 - `docs/reference/AGENT_QUICK_REFERENCE.md`

@@ -42,6 +42,7 @@ Approved top-level directories:
 - `docs/deprecation/`
 - `docs/depth_model/`
 - `docs/depth_pipeline/`
+- `docs/design/`
 - `docs/development/`
 - `docs/examples/`
 - `docs/fixes/`
@@ -60,6 +61,7 @@ Approved top-level directories:
 - `docs/pipeline/`
 - `docs/pipeline_docs/`
 - `docs/pr_archive/`
+- `docs/pr_reports/`
 - `docs/pr_summaries/`
 - `docs/processing/`
 - `docs/project-status/`
@@ -75,6 +77,7 @@ Approved top-level directories:
 - `docs/spatial_ai/`
 - `docs/status/`
 - `docs/summaries/`
+- `docs/testing/`
 - `docs/validation/`
 - `docs/verification/`
 - `docs/version_history/`
