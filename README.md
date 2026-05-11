@@ -18,12 +18,14 @@ It combines orchestrated depth estimation, PBR map generation, material-aware fi
 
 `main` tracks the active development branch for the repository.
 
-Current documentation baseline: repo-wide refresh audit dated April 29, 2026,
-building on `main` through PR #1562 (April 27, 2026).
-Recent merged work added typed API v1 envelopes and OpenAPI response models for
-health/readiness routes, Docker health/env wiring, CI workflow hardening and a
-30-workflow matrix, archive-gate readiness evidence, and APEX fallback /
-failure-code hardening.
+Current documentation baseline: repo-wide refresh audit dated May 11, 2026,
+building on `main` through PR #1721.
+Recent merged work added typed API v1 envelopes, typed health/readiness and job
+lifecycle response models, Docker health/env wiring, CI workflow hardening and
+a 30-workflow matrix, archive-gate readiness evidence, APEX fallback /
+failure-code hardening, optional FastVLM advisory captioning, portal/frontdoor
+modularization, governed RUM/privacy controls, logout UX, dependency
+maintenance, and the Portal UX/UI status snapshot.
 
 For reproducible installs, pin a specific release tag from [GitHub Releases](https://github.com/RC219805/Transformation_Portal/releases) instead of relying on branch prose. The release badge above reflects the latest tagged GitHub release.
 
@@ -53,7 +55,7 @@ Replace `<release-tag>` with a tag from [GitHub Releases](https://github.com/RC2
 Key docs:
 - [Documentation Index](docs/README.md)
 - [Documentation Map](docs/governance/DOCUMENTATION_MAP.md)
-- [2026-04-29 Documentation Refresh Audit](docs/governance/DOCUMENTATION_REFRESH_AUDIT_2026-04-29.md)
+- [2026-05-11 Documentation Refresh Audit](docs/governance/DOCUMENTATION_REFRESH_AUDIT_2026-05-11.md)
 - [Portal + Orchestrator Quickstart](docs/guides/PORTAL_ORCHESTRATOR_QUICKSTART.md)
 - [Portal Secure Front Door Quickstart](docs/guides/PORTAL_SECURE_FRONTDOOR_QUICKSTART.md)
 - [CI Workflow Matrix](docs/ci/WORKFLOW_MATRIX.md)
@@ -61,7 +63,7 @@ Key docs:
 - [Custom Agent Guide](docs/guides/CUSTOM_AGENT_GUIDE.md)
 - [Portal Orchestrator Roadmap (Re-Baselined)](docs/architecture/PORTAL_ORCHESTRATOR_ROADMAP.md)
 - [Portal Frontdoor Roadmap](docs/architecture/PORTAL_FRONTDOOR_ROADMAP.md)
-- [DNA UX/UI Strategy Re-baseline](docs/architecture/DNA_UX_UI_STRATEGY_REBASELINE_2026-04-08.md)
+- [Portal UX/UI Status Snapshot](docs/architecture/DNA_UX_UI_STRATEGY_REBASELINE_2026-04-08.md)
 - [Lux Depth V3 CLI Guide](docs/cli/LUX_DEPTH_V3_CLI_GUIDE.md)
 - [Context-Aware Rendering Guide](docs/guides/CONTEXT_AWARE_RENDERING.md)
 
@@ -492,7 +494,7 @@ Start here:
 
 Historical project reports, PR summaries, and 2025 pipeline/depth-model notes are
 retained under `docs/` for audit context. Use the documentation map and
-[2026-04-29 documentation refresh audit](docs/governance/DOCUMENTATION_REFRESH_AUDIT_2026-04-29.md)
+[2026-05-11 documentation refresh audit](docs/governance/DOCUMENTATION_REFRESH_AUDIT_2026-05-11.md)
 to distinguish current guidance from archive-only material.
 
 ---
@@ -527,4 +529,4 @@ Resources:
 
 ---
 
-Last Updated: 2026-04-29
+Last Updated: 2026-05-11

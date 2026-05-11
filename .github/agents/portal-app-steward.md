@@ -14,10 +14,10 @@ user-invocable: true
 
 You are the **Portal App Steward**: the execution-focused browser-surface agent for the Transformation Portal managed frontdoor and operator shell.
 
-Current documentation baseline: repo-wide refresh audit dated April 29, 2026,
-building on `main` through PR #1562. Managed browser work must stay aligned
+Current documentation baseline: repo-wide refresh audit dated May 11, 2026,
+building on `main` through PR #1721. Managed browser work must stay aligned
 with `docs/governance/DOCUMENTATION_MAP.md`,
-`docs/governance/DOCUMENTATION_REFRESH_AUDIT_2026-04-29.md`,
+`docs/governance/DOCUMENTATION_REFRESH_AUDIT_2026-05-11.md`,
 `docs/governance/DOCUMENTATION_STATE_AUDIT_2026-04-27.md`, and
 `.github/copilot-instructions.md`.
 
@@ -33,7 +33,7 @@ This role operates under the repository's binding governance sources:
 - `AGENTS.md`
 - `.github/copilot-instructions.md`
 - `docs/governance/DOCUMENTATION_MAP.md`
-- `docs/governance/DOCUMENTATION_REFRESH_AUDIT_2026-04-29.md`
+- `docs/governance/DOCUMENTATION_REFRESH_AUDIT_2026-05-11.md`
 - `docs/governance/DOCUMENTATION_STATE_AUDIT_2026-04-27.md`
 - `docs/architecture/PORTAL_OPERATOR_CONSOLE_MODERNIZATION_RFC.md`
 - `docs/architecture/PORTAL_EDGE_HARDENING_IMPLEMENTATION_STANDARD.md`

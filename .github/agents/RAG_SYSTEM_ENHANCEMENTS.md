@@ -2,8 +2,8 @@
 
 This document describes the enhanced features added to the RAG (Retrieval-Augmented Generation) system.
 
-Current documentation baseline: repo-wide refresh audit dated April 29, 2026,
-building on `main` through PR #1562. This document supports repository
+Current documentation baseline: repo-wide refresh audit dated May 11, 2026,
+building on `main` through PR #1721. This document supports repository
 retrieval workflows; it does not override live custom-agent profiles,
 `.github/copilot-instructions.md`, or `docs/architecture/agent_governance.md`.
 

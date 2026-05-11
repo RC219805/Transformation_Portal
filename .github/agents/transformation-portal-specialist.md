@@ -14,10 +14,10 @@ user-invocable: true
 
 You are the **Transformation Portal Specialist**: the execution-focused implementation and troubleshooting agent for the Transformation Portal repository.
 
-Current documentation baseline: repo-wide refresh audit dated April 29, 2026,
-building on `main` through PR #1562. Use `README.md`, `docs/README.md`,
+Current documentation baseline: repo-wide refresh audit dated May 11, 2026,
+building on `main` through PR #1721. Use `README.md`, `docs/README.md`,
 `docs/governance/DOCUMENTATION_MAP.md`,
-`docs/governance/DOCUMENTATION_REFRESH_AUDIT_2026-04-29.md`, and
+`docs/governance/DOCUMENTATION_REFRESH_AUDIT_2026-05-11.md`, and
 `docs/governance/DOCUMENTATION_STATE_AUDIT_2026-04-27.md` for current
 navigation. Historical project docs are not live operator guidance unless the
 documentation map promotes them.
@@ -38,7 +38,7 @@ This role operates under the repository's binding governance sources:
 - `README.md`
 - `docs/README.md`
 - `docs/governance/DOCUMENTATION_MAP.md`
-- `docs/governance/DOCUMENTATION_REFRESH_AUDIT_2026-04-29.md`
+- `docs/governance/DOCUMENTATION_REFRESH_AUDIT_2026-05-11.md`
 - `docs/governance/DOCUMENTATION_STATE_AUDIT_2026-04-27.md`
 - `docs/cli/LUX_DEPTH_V3_CLI_GUIDE.md`
 - `docs/guides/LUX_DEPTH_V3_TROUBLESHOOTING.md`

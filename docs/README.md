@@ -5,8 +5,8 @@ records. Use this page for current navigation; point-in-time reports remain in
 place for audit context but are not live runbooks unless they are linked below
 as canonical documents.
 
-**Current baseline:** repo-wide refresh audit dated April 29, 2026, building on
-`main` through PR #1562.
+**Current baseline:** repo-wide refresh audit dated May 11, 2026, building on
+`main` through PR #1721.
 
 ## Start Here
 
@@ -14,8 +14,8 @@ as canonical documents.
 | --- | --- |
 | Repository overview and setup | [Main README](../README.md) |
 | Full documentation map | [Documentation Map](governance/DOCUMENTATION_MAP.md) |
-| Documentation refresh audit | [2026-04-29 Documentation Refresh Audit](governance/DOCUMENTATION_REFRESH_AUDIT_2026-04-29.md) |
-| Documentation state audit | [2026-04-27 Documentation State Audit](governance/DOCUMENTATION_STATE_AUDIT_2026-04-27.md) |
+| Documentation refresh audit | [2026-05-11 Documentation Refresh Audit](governance/DOCUMENTATION_REFRESH_AUDIT_2026-05-11.md) |
+| Prior documentation state audit | [2026-04-27 Documentation State Audit](governance/DOCUMENTATION_STATE_AUDIT_2026-04-27.md) |
 | Local setup and environment checks | [Setup Guide](guides/SETUP_GUIDE.md) |
 | Portal and orchestrator contracts | [Portal + Orchestrator Quickstart](guides/PORTAL_ORCHESTRATOR_QUICKSTART.md) |
 | Managed front door | [Portal Secure Front Door Quickstart](guides/PORTAL_SECURE_FRONTDOOR_QUICKSTART.md) |
@@ -27,7 +27,7 @@ as canonical documents.
 
 | Area | Canonical Docs | Notes |
 | --- | --- | --- |
-| Portal / API | [Portal Quickstart](guides/PORTAL_ORCHESTRATOR_QUICKSTART.md), [API docs](api/) | `/healthz`, `/ready`, and `/v1/readiness` are current health/readiness surfaces. PR #1562 added typed OpenAPI response models while preserving the existing wire contracts. |
+| Portal / API | [Portal Quickstart](guides/PORTAL_ORCHESTRATOR_QUICKSTART.md), [API docs](api/) | `/healthz`, `/ready`, `/v1/readiness`, and job lifecycle routes are current governed surfaces. PR #1562 and later follow-ups added typed OpenAPI response models while preserving existing wire contracts. |
 | Secure front door | [Front Door Quickstart](guides/PORTAL_SECURE_FRONTDOOR_QUICKSTART.md) | Node 22.x is the enforced local/runtime contract for `web/secure-landing`. |
 | Docker / environment | [Main README](../README.md), [`.env.example`](../.env.example) | Docker Compose reads the root `.env` template with `required: false`; set `TP_API_KEY` for non-throwaway runs. |
 | CI / validation | [Workflow Matrix](ci/WORKFLOW_MATRIX.md), [CI/CD Workflows](ci_cd/CI_CD_WORKFLOWS.md) | The current GitHub Actions inventory contains 30 workflows after the Phase 1.4 refresh. |
@@ -36,6 +36,7 @@ as canonical documents.
 | Archive gates | [Archive Machine Contract](api/ARCHIVE_MACHINE_MODE_CONTRACT.md), [2026-04-27 Archive Gates Audit](governance/audit/archive-gates-2026-04-27.md) | Gates A/B/C are documented with the April 27 readiness audit and normalized JSON evidence. |
 | APEX / Materials | [APEX Governance Status](apex/GOVERNANCE_STATUS.md), [APEX Workflow Design](architecture/APEX_WORKFLOW_DESIGN.md), [APEX Model Family Characterization](validation/APEX_MODEL_FAMILY_CHARACTERIZATION_PROTOCOL.md) | Recent merges added offline model-family characterization, failure-code surfacing, confidence-only pixel-op passthrough, V2 fallback, and SAM2 tile-merge regression coverage. |
 | Advisory captioning | [FastVLM Runtime](runtimes/fastvlm.md) | Optional subprocess-isolated sidecars only; captions are advisory and never satisfy APEX or Materials V3 gates. |
+| Portal UX/UI planning | [Portal UX/UI Status Snapshot](architecture/DNA_UX_UI_STRATEGY_REBASELINE_2026-04-08.md) | Current planning context through #1721; status snapshot only, not a next-PR selector. |
 | Dependency policy | [ADR-032](architecture/ADR-032-dependency-pinning-strategy.md), [Retired ML Lock Lanes](governance/RETIRED_ML_LOCK_LANES_2026-04-30.md), [AGENTS.md](../AGENTS.md) | Layered lockfiles and the Apple Silicon target-owned ML lane are the current dependency governance model. |
 
 ## Historical And Archive Material
@@ -66,7 +67,7 @@ current documentation map.
   duplicate or superseded material should be archived, labeled historical, or
   removed from current indexes.
 - Repo-wide classification evidence lives in
-  [2026-04-29 Documentation Refresh Audit](governance/DOCUMENTATION_REFRESH_AUDIT_2026-04-29.md)
+  [2026-05-11 Documentation Refresh Audit](governance/DOCUMENTATION_REFRESH_AUDIT_2026-05-11.md)
   and its inventory CSV.
 - Validate documentation structure with:
 
@@ -77,4 +78,4 @@ make check-doc-heading-links
 python3 scripts/governance/check_docs_structure.py --all
 ```
 
-**Last Updated:** 2026-04-29
+**Last Updated:** 2026-05-11

@@ -1,8 +1,9 @@
 # Custom Agent Quick Reference
 
-Current baseline: `main` through PR #1562. Use the documentation map and state
-audit for current repo navigation; historical agent/RAG notes are not live
-instructions unless promoted by the live agent README.
+Current baseline: `main` through PR #1721. Use the documentation map, May 11
+refresh audit, and state audit for current repo navigation; historical
+agent/RAG notes are not live instructions unless promoted by the live agent
+README.
 
 ## Use The Right Agent
 
@@ -78,6 +79,7 @@ Example:
 - **Quick Start**: [QUICK_START_v2.md](../../.github/agents/QUICK_START_v2.md)
 - **Copilot Instructions**: [.github/copilot-instructions.md](../../.github/copilot-instructions.md)
 - **Documentation Map**: [DOCUMENTATION_MAP.md](../governance/DOCUMENTATION_MAP.md)
+- **Documentation Refresh Audit**: [DOCUMENTATION_REFRESH_AUDIT_2026-05-11.md](../governance/DOCUMENTATION_REFRESH_AUDIT_2026-05-11.md)
 - **Documentation State Audit**: [DOCUMENTATION_STATE_AUDIT_2026-04-27.md](../governance/DOCUMENTATION_STATE_AUDIT_2026-04-27.md)
 
 ---

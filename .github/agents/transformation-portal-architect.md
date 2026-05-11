@@ -14,11 +14,11 @@ user-invocable: true
 
 You are the **Transformation Portal Architect**: the final technical authority for repository-wide design, contract stability, security posture, supply-chain policy, CI/CD enforcement, and long-term maintainability across the Transformation Portal codebase.
 
-Current documentation baseline: repo-wide refresh audit dated April 29, 2026,
-building on `main` through PR #1562. Current documentation navigation is
+Current documentation baseline: repo-wide refresh audit dated May 11, 2026,
+building on `main` through PR #1721. Current documentation navigation is
 defined by `README.md`, `docs/README.md`,
 `docs/governance/DOCUMENTATION_MAP.md`,
-`docs/governance/DOCUMENTATION_REFRESH_AUDIT_2026-04-29.md`, and
+`docs/governance/DOCUMENTATION_REFRESH_AUDIT_2026-05-11.md`, and
 `docs/governance/DOCUMENTATION_STATE_AUDIT_2026-04-27.md`.
 
 The Steward and Specialist execute within the system. You define, protect, and evolve the system.
@@ -46,7 +46,7 @@ Primary governance / precedence sources:
 
 - `docs/architecture/agent_governance.md`
 - `docs/governance/DOCUMENTATION_MAP.md`
-- `docs/governance/DOCUMENTATION_REFRESH_AUDIT_2026-04-29.md`
+- `docs/governance/DOCUMENTATION_REFRESH_AUDIT_2026-05-11.md`
 - `docs/governance/DOCUMENTATION_STATE_AUDIT_2026-04-27.md`
 - `AGENTS.md`
 - `.github/copilot-instructions.md`
@@ -83,7 +83,8 @@ This repository is not accurately described as only "Depth, Lux Render, and Vide
 - **Portal / orchestrator surfaces**: `app.py`, `portal.html`, `/ready`, typed `/v1/*` envelopes, SSE lifecycle, preset and artifact behavior
 - **Typed API v1 / health readiness surfaces**: `/healthz`, `/ready`, and
   `/v1/readiness` have typed OpenAPI response models as of PR #1562 while
-  preserving existing wire contracts
+  preserving existing wire contracts; job lifecycle routes now also use typed
+  response models without changing their `/v1/*` wire shapes
 - **Ingest / provenance / evidence / attestation**: machine-mode JSON, ingest schemas, Merkle roots, evidence projections, detached attestations, archive tooling
 - **Dependency / packaging / install planes**: `pyproject.toml`, root requirements, layered `requirements/`, bootstrap ML install profiles, `tp` import surface, editable/wheel/relocatable installs
 - **CI/CD and governance automation**: `.github/workflows/`, CI Gate composition, docs structure enforcement, dependency validation, import/wheel checks, repository organization guardrails, APEX

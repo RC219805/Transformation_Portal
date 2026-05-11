@@ -232,7 +232,7 @@ Use `pathlib.Path`, normalize/validate untrusted paths, enforce allowlisted root
 
 ## Documentation Authority
 
-The April 29, 2026 documentation refresh audit (`docs/governance/DOCUMENTATION_REFRESH_AUDIT_2026-04-29.md`) plus `docs/governance/DOCUMENTATION_MAP.md` are the current navigation. Older project reports under `docs/` are retained for audit context but are **not** live guidance unless the map promotes them.
+The May 11, 2026 documentation refresh audit (`docs/governance/DOCUMENTATION_REFRESH_AUDIT_2026-05-11.md`) plus `docs/governance/DOCUMENTATION_MAP.md` are the current navigation. Older project reports under `docs/` are retained for audit context but are **not** live guidance unless the map promotes them.
 
 ## Decision Defaults
 

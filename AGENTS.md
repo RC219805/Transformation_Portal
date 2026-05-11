@@ -9,8 +9,8 @@ Quick reference for common workflows and commands in this repo.
 - After validation lands, retire obsolete Desktop worktrees and prune their local-only branches so `Transformation_Portal/` remains the canonical checkout.
 
 ## Agent and documentation authority
-- Current documentation baseline is the April 29, 2026 repo-wide refresh audit, building on `main` through PR #1562.
-- Current docs navigation lives in `README.md`, `docs/README.md`, `docs/governance/DOCUMENTATION_MAP.md`, `docs/governance/DOCUMENTATION_REFRESH_AUDIT_2026-04-29.md`, and `docs/governance/DOCUMENTATION_STATE_AUDIT_2026-04-27.md`.
+- Current documentation baseline is the May 11, 2026 repo-wide refresh audit, building on `main` through PR #1721.
+- Current docs navigation lives in `README.md`, `docs/README.md`, `docs/governance/DOCUMENTATION_MAP.md`, `docs/governance/DOCUMENTATION_REFRESH_AUDIT_2026-05-11.md`, and `docs/governance/DOCUMENTATION_STATE_AUDIT_2026-04-27.md`.
 - Historical docs may keep old dates and project facts, but they are not current operator guidance unless the documentation map promotes them.
 - Live Copilot/custom-agent instructions are:
   - `.github/copilot-instructions.md`
