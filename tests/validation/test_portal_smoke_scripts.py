@@ -940,6 +940,41 @@ def test_frontdoor_browser_waits_for_managed_portal_bootstrap_before_passing():
     assert "--spawn-local-backend" in content
 
 
+def test_frontdoor_browser_smoke_pins_managed_logout_click_flow():
+    """Pin the #1713 governed logout click smoke against silent removal.
+
+    The smoke at scripts/validation/validate_frontdoor_browser_smoke.py
+    is the only repo-owned harness that exercises the real-bundle
+    managed logout click flow end to end (the @portal-browser
+    Playwright lane stubs portal.js so it can only assert
+    server-rendered structure). Future edits could quietly drop the
+    new probe fields, swap the click selector for the legacy id-only
+    form, rename the poll descriptions, or skip the post-logout
+    bounce check; none of those would fail a Chrome-less CI lane and
+    none would fail flake8. This content-grep pins the exact tokens
+    the smoke needs so any of those regressions trip an explicit
+    test failure with a clear name.
+    """
+    content = FRONTDOOR_BROWSER_SCRIPT_PATH.read_text(encoding="utf-8")
+
+    # Probe extension — three new fields the new poll predicates read.
+    assert "logoutButtonPresent" in content
+    assert "logoutButtonVisible" in content
+    # Click target must be the data-ui hook, not a brittle text or id
+    # selector (matches the data-ui="logout-button" attribute pinned
+    # by tests/test_app_orchestrator_runtime.py for the rendered HTML).
+    assert '[data-ui="logout-button"]' in content
+    # Both _poll descriptions must remain stable so a poll-timeout
+    # error message names the actual flow being asserted.
+    assert "front-door logout to return to login" in content
+    assert "post-logout portal access to require login" in content
+    # The defense-in-depth post-logout bounce navigates to the same
+    # managed deep link the entry block uses; keeping the literal
+    # string here pins that we still exercise the deep link, not just
+    # the bare /portal path.
+    assert "/portal?view=build" in content
+
+
 def test_frontdoor_browser_accessibility_probe_tracks_target_size_and_reduced_motion():
     module = _load_module(FRONTDOOR_BROWSER_SCRIPT_PATH, "tests_validate_frontdoor_browser_smoke_accessibility_probe")
 
