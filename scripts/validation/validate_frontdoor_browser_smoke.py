@@ -11,6 +11,8 @@ Coverage:
 2. Login loads with the operator form and front-door video shell.
 3. Username/password authentication succeeds.
 4. Managed portal entry honors a validated `/portal?view=build` returnTo and keeps browser-side API key input hidden.
+5. The managed-mode logout button is rendered and visible, clicking it returns the browser to /login with the login form rendered.
+6. A subsequent direct navigation to `/portal?view=build` bounces back to /login (the session cookie cleared by /logout cannot silently restore the authenticated shell).
 
 Run via:
     python scripts/validation/validate_frontdoor_browser_smoke.py
@@ -473,7 +475,10 @@ def _frontdoor_state_probe_expression() -> str:
     buildViewVisible: visibleById('build-shell'),
     overviewViewVisible: visibleById('overview-shell'),
     operateViewVisible: visibleById('jobs-shell'),
-    portalAccessStateReady: !!document.querySelector('[data-ui="portal-access-state"]')
+    portalAccessStateReady: !!document.querySelector('[data-ui="portal-access-state"]'),
+    logoutButtonPresent: !!document.querySelector('[data-ui="logout-button"]'),
+    logoutButtonVisible: visibleById('logoutBtn'),
+    logoutButtonHidden: hiddenById('logoutBtn')
   };
 })()
 """
@@ -837,10 +842,73 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
             f"Managed portal did not hide browser API key workflow cleanly: {portal_state}",
         )
 
+        # Logout click-flow smoke (#1711 follow-up): the managed-mode Sign
+        # out button was added in #1711 with structural-only Playwright
+        # coverage because the @portal-browser fixture serves an inert
+        # portal JS stub. The governed front-door smoke is the natural
+        # home for the real-bundle behavior — the real portal.js runs,
+        # the bootstrap-ready code un-hides the button, the click
+        # handler fires fetchWithTimeout('/logout'), and the session
+        # cookie is actually destroyed by the front-door route.
+        print("frontdoor-browser-smoke: validating portal logout click flow", flush=True)
+        _expect(
+            bool(portal_state.get("logoutButtonPresent")),
+            f'Managed portal did not render the [data-ui="logout-button"] control: {portal_state}',
+        )
+        _expect(
+            bool(portal_state.get("logoutButtonVisible")),
+            f"Managed portal logout button stayed hidden after bootstrap-ready (managed-mode un-hide did not fire): {portal_state}",
+        )
+        connection.evaluate(_click_expression('[data-ui="logout-button"]'))
+        logout_state = _poll(
+            connection,
+            _frontdoor_state_probe_expression(),
+            predicate=lambda value: (
+                isinstance(value, dict)
+                and str(value.get("readyState", "")) == "complete"
+                and str(value.get("pathname", "")) == "/login"
+                and bool(value.get("loginFormPresent"))
+            ),
+            timeout_seconds=args.timeout_seconds,
+            description="front-door logout to return to login",
+        )
+        _expect(
+            str(logout_state.get("pathname", "")) == "/login",
+            f"Logout click did not land the browser on /login: {logout_state}",
+        )
+        _expect(
+            bool(logout_state.get("loginFormPresent")),
+            f"Login form was not rendered after logout: {logout_state}",
+        )
+
+        # Defense-in-depth: a direct navigation to a managed deep link
+        # must not silently restore the prior authenticated shell. The
+        # session cookie was cleared by the /logout route, so the
+        # front-door /portal handler must redirect back to /login.
+        connection.evaluate(_navigate_expression("/portal?view=build"))
+        post_logout_state = _poll(
+            connection,
+            _frontdoor_state_probe_expression(),
+            predicate=lambda value: (
+                isinstance(value, dict)
+                and str(value.get("readyState", "")) == "complete"
+                and str(value.get("pathname", "")) == "/login"
+                and bool(value.get("loginFormPresent"))
+            ),
+            timeout_seconds=args.timeout_seconds,
+            description="post-logout portal access to require login",
+        )
+        _expect(
+            str(post_logout_state.get("pathname", "")) == "/login",
+            f"Post-logout /portal?view=build did not redirect to /login: {post_logout_state}",
+        )
+
         print("frontdoor-browser-smoke: ok")
         print(f"base_url: {base_url}")
         print(f"portal_path: {portal_state.get('pathname')}")
         print(f"view: {portal_state.get('currentView')}")
+        print(f"logout_path: {logout_state.get('pathname')}")
+        print(f"post_logout_path: {post_logout_state.get('pathname')}")
         return 0
     finally:
         if connection is not None:
