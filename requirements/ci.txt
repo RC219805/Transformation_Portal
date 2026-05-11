@@ -193,7 +193,7 @@ twine==6.2.0
     # via
     #   -c all.txt
     #   -r ci.in
-urllib3==2.6.3
+urllib3==2.7.0
     # via
     #   -c all.txt
     #   id
