@@ -117,11 +117,13 @@ From the `Approved with Conditions` block in
 expansion beyond that envelope, including client-side logout failure telemetry,
 is a separate telemetry/privacy decision.
 
-## Branch naming convention
+## Branch naming note
 
-New UX/UI branches should default to `claude/<slug>`. Use `codex/<slug>` only
-when continuing an existing Codex-thread branch or when the specific automation
-path requires it.
+This snapshot does not establish a repo-wide branch naming convention. For
+normal contributor work, follow the feature-branch guidance in
+[CONTRIBUTING.md](../../CONTRIBUTING.md). For automation-assisted follow-ups,
+use the branch prefix required by the active workflow, runbook, or existing PR
+thread, and keep that choice local to the scoped work item.
 
 ## Critical files
 
