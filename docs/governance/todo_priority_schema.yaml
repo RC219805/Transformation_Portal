@@ -105,7 +105,8 @@ categories:
     inventory_governed:
       description: "Known gaps governed by TODO_INVENTORY.md section references"
       requires_tracking: true
-      tracking_pattern: "(TODO_INVENTORY.md §X.Y)"
+      tracking_pattern: "(TODO_INVENTORY.md) or (TODO_INVENTORY.md §X.Y)"
+      note: "Section references are recommended for precision but are not required by current scanner enforcement."
 
     security_pattern:
       description: "False positives from security regex patterns"
@@ -184,7 +185,7 @@ governance:
       description: "Owner-assigned work"
       example: "# TODO(@specialist): Review..."
 
-    - pattern: "(TODO_INVENTORY.md §X.Y)"
+    - pattern: "(TODO_INVENTORY.md) or (TODO_INVENTORY.md §X.Y)"
       description: "Inventory-linked known gap"
       example: 'raise NotImplementedError("... (TODO_INVENTORY.md §2.4)")'
 

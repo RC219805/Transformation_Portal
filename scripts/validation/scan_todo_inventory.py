@@ -30,8 +30,10 @@ import argparse
 import ast
 import io
 import json
+import os
 import re
 import sys
+import tempfile
 import tokenize
 from dataclasses import dataclass, field
 from enum import Enum
@@ -200,8 +202,34 @@ def _write_json_snapshot(payload: dict[str, Any], raw_path: str) -> Path:
     """Write a scanner snapshot JSON file and return the resolved path."""
     snapshot_path = _resolve_snapshot_path(raw_path)
     snapshot_path.parent.mkdir(parents=True, exist_ok=True)
-    snapshot_path.write_text(_format_json_payload(payload), encoding="utf-8")
+    _atomic_write_text(snapshot_path, _format_json_payload(payload))
     return snapshot_path
+
+
+def _atomic_write_text(path: Path, content: str) -> None:
+    """Atomically write text to a path using a same-directory temp file."""
+    temp_path: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            dir=path.parent,
+            prefix=f".{path.name}.",
+            suffix=".tmp",
+            delete=False,
+        ) as temp_file:
+            temp_path = Path(temp_file.name)
+            temp_file.write(content)
+            temp_file.flush()
+            os.fsync(temp_file.fileno())
+        temp_path.replace(path)
+    except Exception:
+        if temp_path is not None:
+            try:
+                temp_path.unlink()
+            except FileNotFoundError:
+                pass
+        raise
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -631,6 +659,12 @@ def main() -> int:
     snapshot_arg = getattr(args, "write_snapshot", None)
     snapshot_path: Path | None = None
     if snapshot_arg is not None:
+        if result.errors:
+            print(
+                f"❌ Refusing to write TODO scanner snapshot: {len(result.errors)} scan error(s) encountered",
+                file=sys.stderr,
+            )
+            return 2
         try:
             snapshot_path = _write_json_snapshot(payload, snapshot_arg)
         except (OSError, ValueError) as exc:

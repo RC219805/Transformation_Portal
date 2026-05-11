@@ -311,6 +311,30 @@ class TestSnapshotWriting:
         with pytest.raises(ValueError, match="repository root"):
             scanner_module._resolve_snapshot_path("../outside.json")
 
+    def test_write_json_snapshot_is_atomic_on_replace_failure(
+        self, tmp_path: Path, scanner_module: ModuleType, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Snapshot writer preserves existing content if the atomic replace fails."""
+        monkeypatch.setattr(scanner_module, "PROJECT_ROOT", tmp_path)
+        snapshot_dir = tmp_path / "docs" / "analysis"
+        snapshot_dir.mkdir(parents=True)
+        snapshot_path = snapshot_dir / "todo_scanner_snapshot.json"
+        snapshot_path.write_text("existing\n", encoding="utf-8")
+        original_replace = Path.replace
+
+        def fail_replace(self: Path, target: Path) -> Path:
+            if self.name.startswith(".todo_scanner_snapshot.json."):
+                raise OSError("simulated replace failure")
+            return original_replace(self, target)
+
+        monkeypatch.setattr(Path, "replace", fail_replace)
+
+        with pytest.raises(OSError, match="simulated replace failure"):
+            scanner_module._write_json_snapshot({"summary": {"total": 1}}, snapshot_path.as_posix())
+
+        assert snapshot_path.read_text(encoding="utf-8") == "existing\n"
+        assert not list(snapshot_dir.glob(".todo_scanner_snapshot.json.*.tmp"))
+
 
 # ============================================================================
 # TEST: Exit Codes
@@ -403,6 +427,29 @@ class TestExitCodes:
 
         exit_code = scanner_module.main()
         assert exit_code == 0
+
+    def test_exit_2_and_no_snapshot_when_snapshot_scan_has_errors(
+        self, tmp_path: Path, scanner_module: ModuleType, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Snapshot writing fails closed when scan errors are present."""
+
+        class MockArgs:
+            json = False
+            check_governance = False
+            write_snapshot = "docs/analysis/todo_scanner_snapshot.json"
+
+        monkeypatch.setattr(scanner_module, "PROJECT_ROOT", tmp_path)
+        mock_result = scanner_module.ScanResult()
+        mock_result.files_scanned = 1
+        mock_result.errors.append("test.py: syntax error: invalid syntax")
+
+        monkeypatch.setattr(scanner_module, "_parse_args", lambda: MockArgs())
+        monkeypatch.setattr(scanner_module, "scan_repository", lambda: mock_result)
+
+        exit_code = scanner_module.main()
+
+        assert exit_code == 2
+        assert not (tmp_path / "docs" / "analysis" / "todo_scanner_snapshot.json").exists()
 
 
 # ============================================================================
