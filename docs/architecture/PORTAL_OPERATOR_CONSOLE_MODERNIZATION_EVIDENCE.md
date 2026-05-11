@@ -2,6 +2,7 @@
 
 **Status:** Working evidence register
 **Date:** 2026-04-14
+**Last revised:** 2026-05-10
 **Owner:** Frontdoor / Platform
 
 This note tracks the repo-owned evidence package for the portal modernization RFC. It does not create human approval or invent pilot results. It records what the repo can prove now, how pilot measurements should be collected, and which gates remain open.
@@ -82,13 +83,13 @@ python tools/portal_modernization_evidence.py \
 | Gate | Repo-Owned Input | Current State |
 | --- | --- | --- |
 | M1 visibility | `portal_rum_summary.py`, `portal_modernization_evidence.py` | Implemented, waiting for pilot capture |
-| M1 telemetry sign-off | `docs/compliance/PORTAL_TELEMETRY_PRIVACY_SIGNOFF.md` | Open human approval |
+| M1 telemetry sign-off | `docs/compliance/PORTAL_TELEMETRY_PRIVACY_SIGNOFF.md` | `Approved with Conditions` for bounded portal/front-door pilots |
 | M4 pilot metrics | `portal_modernization_evidence.py` plus browser validation | Open |
 | M5 viewer evidence | `portal_modernization_evidence.py` plus browser validation | Open |
 | ADR-050 rewrite evidence | `docs/decisions/ADR-050-portal-react-migration.md` | Open |
 
 ## Remaining Open Gates
 
-- Security / Privacy approval of telemetry schema, retention, and disposal posture
 - Pilot measurements for CWV, queue latency, SSE reconnect rate, and artifact-viewer success
+- Privacy packet revision before any new RUM event family, metadata key, marker cookie, storage key, rollout knob, sink behavior, or retention posture
 - ADR-050 evidence that compares rewrite vs no-rewrite delivery, quality, and developer-experience tradeoffs
