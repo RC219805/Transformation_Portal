@@ -482,12 +482,13 @@ python -m transformation_portal.spatial_ai segment \
 3. **Performance targets are estimates** - need real-world validation
 4. **Fallback chains are critical** - graceful degradation to stable backends
 
-**TODO Statistics (Updated 2026-03-25):**
+**TODO Statistics (Updated 2026-05-11):**
 - **Source code TODOs (`src/`):** 0 (all cleaned up)
-- **Test TODOs (`tests/`):** 3 (observational tracking only)
+- **Scanner-visible Test TODO comments (`tests/`):** 0
+- **Governed NotImplementedError items:** 24 (abstract methods, phase gates, platform limits)
 - **Documentation TODO markers:** ~38 (experimental-feature-focused subset; see Note below)
 
-> **Note on Documentation TODO counts:** This ~38 count represents markers within **experimental feature documentation** (this file and related guides). The broader ~190 repository-wide TODO markers are tracked in `TODO_ACTION_PLAN.md`. Neither set requires implementation action—they are documentation annotations retained for context.
+> **Note on Documentation TODO counts:** This ~38 count represents markers within **experimental feature documentation** (this file and related guides). Scanner-enforced source/test/script/web markers are tracked by `TODO_ACTION_PLAN.md` and `todo_scanner_snapshot.json`; as of 2026-05-11 there are 0 ungoverned scanner-visible TODOs. Documentation annotations retained for context are not implementation action items by themselves.
 
 **Experimental Feature Tracking:**
 - **Blocked on external artifact source**: 1 (3DGS canonical Inria checkpoint)
@@ -500,8 +501,8 @@ python -m transformation_portal.spatial_ai segment \
 
 **Current Status:**
 - All source code TODOs in `src/` have been cleaned up
-- 3 test observational TODOs remain (performance tracking only)
-- 12 NotImplementedError instances are intentional (abstract methods, phase gates, platform limitations)
+- 0 scanner-visible test TODO comments remain
+- 24 NotImplementedError instances are intentional and governed (abstract methods, phase gates, platform limitations)
 - P3 experimental features (ComfyUI, NVDIFFREC, MaterialGAN) remain deferred
 
 **2026-03-28 Updates:**

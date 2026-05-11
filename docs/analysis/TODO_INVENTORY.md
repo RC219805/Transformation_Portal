@@ -1,9 +1,9 @@
 # TODO Inventory - Transformation Portal
 
-**Document Version:** 2.4.6
-**Date:** May 4, 2026
-**Last Updated:** 2026-05-04 (QW-1 ComfyUI @abstractmethod closure recorded)
-**Previous Version:** 2.4.5 (2026-05-02)
+**Document Version:** 2.4.7
+**Date:** May 11, 2026
+**Last Updated:** 2026-05-11 (scanner snapshot refreshed; 24 governed items)
+**Previous Version:** 2.4.6 (2026-05-04)
 
 ---
 
@@ -16,6 +16,20 @@ This document provides a **complete, categorized inventory** of all TODOs, NotIm
 - Audit trail for architectural decisions
 - Integration with issue tracking systems
 - Binding inventory enforced by Architect governance
+
+## Version 2.4.7 Changes (2026-05-11)
+
+**Governance snapshot refresh:**
+- ✅ **Scanner snapshot regenerated from live repo state.** `python scripts/validation/scan_todo_inventory.py --write-snapshot` now refreshes
+  [`todo_scanner_snapshot.json`](todo_scanner_snapshot.json) directly from the scanner payload.
+- 📊 **Current scanner baseline:** 24 `NotImplementedError` items, 0 ungoverned TODOs, 1,570 files scanned.
+- 📊 **Baseline delta:** 25 → 24 governed items. The prior snapshot included
+  `scripts/pipelines/tiff_enhancement_pipeline.py`, which is no longer present
+  in the tracked tree. This is scanner-state reconciliation, not a newly closed
+  action item.
+- ✅ **No source-code `TODO|FIXME|HACK|XXX` backlog opened.** The only scanner
+  hits remain governed `NotImplementedError` stubs: abstract/base-class
+  contracts, phase gates, platform limits, or test protocol stubs.
 
 ## Version 2.4.6 Changes (2026-05-04)
 
@@ -735,19 +749,18 @@ raise NotImplementedError(f"Backend {self.backend} not implemented")
 
 ---
 
-### 3.3 Performance Regression Investigation
+### 3.3 Performance Regression Investigation — ✅ TODO COMMENTS REMOVED
 
-**Status:** 🟢 OBSERVATIONAL (NOT A BLOCKER)
+**Status:** ✅ RESOLVED AS TODO GOVERNANCE ITEM
 **Priority:** P4 (Low)
 **Action:** Track in IMPROVEMENT_OPPORTUNITIES.md (already done)
 
-**Location:** `tests/stress/test_stress_large_batch.py`
+**Former Location:** `tests/stress/test_stress_large_batch.py`
 
-#### 3.3.1 Draft Preset Performance (line 326)
+#### 3.3.1 Draft Preset Performance
 
-```python
-# TODO: Investigate why draft is slower than expected (expected: draft < standard)
-```
+The scanner-visible TODO comment was removed. The current test asserts that the
+draft preset stays within the accepted tolerance of the standard preset.
 
 **Context:**
 - Draft preset sometimes slower than standard
@@ -756,18 +769,18 @@ raise NotImplementedError(f"Backend {self.backend} not implemented")
 
 **Status:** Already tracked in `docs/guides/IMPROVEMENT_OPPORTUNITIES.md:281` (TEST-006)
 
-#### 3.3.2 Preset Performance Ordering (line 372)
+#### 3.3.2 Preset Performance Ordering
 
-```python
-# TODO: Investigate preset performance ordering regression
-```
+The scanner-visible TODO comment was removed. The current batch stress test
+asserts bounded draft-vs-standard throughput behavior.
 
 **Context:**
 - Preset performance ordering inconsistent
 - May be environment-dependent (CI vs local)
 - Already documented in IMPROVEMENT_OPPORTUNITIES.md:287
 
-**Decision:** No immediate action (performance optimization, not bug)
+**Decision:** No TODO-governance action remains. Broader performance optimization
+can stay in [IMPROVEMENT_OPPORTUNITIES.md](../guides/IMPROVEMENT_OPPORTUNITIES.md).
 
 ---
 
@@ -1546,12 +1559,12 @@ pytestmark = pytest.mark.skipif(not TORCH_AVAILABLE, reason="torch required for 
 
 ---
 
-### 🚫 No Action Required (63% of inventory!)
+### 🚫 No Scanner-Governance Action Required
 
 **Items That Are Correct As-Is:**
 
-- **25 NotImplementedError instances** - Correct stubs (abstract methods, phase gates, platform limitations)
-- **4 Code TODOs** - Observational (performance regression tracking)
+- **24 NotImplementedError instances** - Correct stubs (abstract methods, phase gates, platform limitations)
+- **0 scanner-visible TODO comments** - Source/test/script/tool/web scanner scope is clean
 - **2 Documentation TODOs** - Status markers, not tasks
 - **2 Test patterns** - Dependency-conditional skips (correct pattern)
 - **9 Completed items** - Celebrate and move on!
@@ -1783,7 +1796,7 @@ def execute(self):
 raise NotImplementedError("Windows not supported (Unix-only security features)")
 
 # TECHNICAL DEBT: Missing implementation
-raise NotImplementedError("TODO: Implement NVDIFFREC integration")
+raise NotImplementedError("Single-view reconstruction not yet implemented (TODO_INVENTORY.md)")
 ```
 
 **Rule:** All new NotImplementedError must include context (feature gate/abstract/limitation/debt)
@@ -1861,39 +1874,40 @@ raise NotImplementedError("TODO: Implement NVDIFFREC integration")
 
 ## Appendix B: TODO Comment Audit Trail
 
-**Methodology:** `grep -r "# TODO" src/ tests/` (2026-03-25)
+**Methodology:** `python scripts/validation/scan_todo_inventory.py --write-snapshot` (2026-05-11)
 
-**Total Count:** 3 TODO comments (was 11 in 2026-02-13)
+**Total Count:** 0 scanner-visible TODO comments
 
 **Source Code (`src/`):** 0 TODO comments ✅
 - All source code TODOs have been cleaned up or addressed
 
-**Tests (`tests/`):** 3 TODO comments
-- **Performance investigations (2):** `tests/stress/test_stress_large_batch.py:328,374` - observational tracking only
-- **Test fixture content (1):** `tests/security/test_pipeline_isolation.py:92` - embedded test data, not actionable
+**Tests (`tests/`):** 0 scanner-visible TODO comments ✅
+- Historical performance notes in `tests/stress/test_stress_large_batch.py` were replaced by direct tolerance assertions.
+- Test fixture text that resembles TODO prose is not a scanner-visible TODO comment.
 
-**NotImplementedError Count:** 25 instances across `src/`, `tests/`, `scripts/`, `tools/` (all governed)
+**NotImplementedError Count:** 24 instances across `src/`, `tests/`, `scripts/`, `tools/` (all governed)
 
 The canonical, line-accurate list is now machine-generated by the scanner:
 ```bash
 python scripts/validation/scan_todo_inventory.py --json
+python scripts/validation/scan_todo_inventory.py --write-snapshot
 ```
 CI runs this on every PR (`.github/workflows/enforcement.yml`, `hf-revision-policy` job), so drift is caught at PR time rather than at the next manual review.
 
-**Categorical breakdown** (as of 2026-05-01 scan):
+**Categorical breakdown** (as of 2026-05-11 scan):
 - **Abstract methods (ABC pattern):** ~6 instances — `comfyui/custom_nodes.py` BaseNode, `execution_graph/nodes/base.py`, `depth/processors/base.py`
-- **Phase gates / feature stubs:** ~5 instances — single-view reconstruction (`spatial_ai/orchestration/pipeline.py`), non-linear scene interp, unknown-backend guard, etc.
+- **Phase gates / feature stubs:** ~4 instances — single-view reconstruction (`spatial_ai/orchestration/pipeline.py`), non-linear scene interpolation guard, unknown-backend guard, etc.
 - **Platform limits:** 1 — `utils/security.py` Unix-only timeout
-- **Technical debt (deferred):** ~2 — NVDIFFREC, gaussian_backend SHA verification
+- **Technical debt (deferred):** ~2 — single-view reconstruction, gaussian_backend SHA verification
 - **Test protocol stubs:** ~10 — protocol validation patterns under `tests/`
-- **Scripts / one-shots:** ~1 — `scripts/apex_verify_contract.py`
+- **Scripts / one-shots:** ~3 — `scripts/apex_verify_contract.py`, `scripts/pipelines/unified_meta_pipeline.py`, `scripts/utilities/depth_anything_v2.py`
 
-The previous v2.4.0 count of "12" tracked only `src/` and contained internal arithmetic errors (5+4+1≠12). The new 25 is the full scanner scope and is the figure CI enforces against.
+The previous v2.4.0 count of "12" tracked only `src/` and contained internal arithmetic errors (5+4+1≠12). The current 24-item scanner baseline is the full scanner scope and is the figure CI enforces against.
 
 **Priority Recommendation:**
 - No source code TODOs requiring action
-- Test TODOs are observational (P4 - performance tracking)
-- All NotImplementedError instances are governed; no governance violations as of 2026-05-01
+- Scanner-visible test TODO comments are 0
+- All NotImplementedError instances are governed; no governance violations as of 2026-05-11
 
 ---
 
@@ -1951,4 +1965,22 @@ The previous v2.4.0 count of "12" tracked only `src/` and contained internal ari
 
 ---
 
-**END OF TODO INVENTORY v2.0.0**
+## 2026-05-11 Refresh — Scanner Snapshot And Schema Alignment
+
+**Trigger:** Post-#1722 repo-wide documentation baseline refresh.
+**Scanner snapshot:** [`todo_scanner_snapshot.json`](todo_scanner_snapshot.json) regenerated with `python scripts/validation/scan_todo_inventory.py --write-snapshot`.
+
+**Findings:**
+- `python scripts/validation/scan_todo_inventory.py --check-governance` → exit 0; **0 ungoverned TODOs** across 1,570 files scanned.
+- **24** `NotImplementedError` instances, all governed (abstract methods, phase gates, platform limits, or test protocol stubs).
+- **Zero** `TODO|FIXME|XXX|HACK` comment markers in scanner scope.
+- The 25 → 24 delta comes from removal of the previously scanned `scripts/pipelines/tiff_enhancement_pipeline.py`; no new backlog item was opened or closed by this refresh.
+- The scanner now owns snapshot generation through `--write-snapshot`, avoiding ad hoc shell redirection for the committed JSON baseline.
+
+**Action taken:** Refreshed this inventory, the action plan, quick reference, scanner snapshot, and TODO priority schema so all current counts, commands, and governance language point at the same live scanner contract.
+
+**Diff vs prior baseline:** scanner scope grew from 1,492 to 1,570 files because repo content expanded; governed item count decreased by one because a previously scanned script file is absent from the tracked tree. Governance posture remains unchanged: 0 ungoverned TODOs.
+
+---
+
+**END OF TODO INVENTORY v2.4.7**

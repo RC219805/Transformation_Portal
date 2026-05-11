@@ -1,9 +1,9 @@
 # TODO Action Plan - Transformation Portal
 
 **Generated**: 2026-03-13
-**Last Updated**: 2026-05-01
+**Last Updated**: 2026-05-11
 **Scope**: Comprehensive review of all outstanding TODOs across the codebase
-**Cross-Reference**: [TODO_INVENTORY.md](./TODO_INVENTORY.md) (v2.4.2)
+**Cross-Reference**: [TODO_INVENTORY.md](./TODO_INVENTORY.md) (v2.4.7)
 
 ---
 
@@ -16,19 +16,35 @@ This action plan consolidates findings from a codebase-wide TODO review and prov
 | Category | Count | Action Required |
 |----------|-------|-----------------|
 | **Active Source Code TODOs** | 0 | ✅ All cleaned up |
-| **Test Observational TODOs** | 3 | Track only (2 perf + 1 fixture) |
+| **Scanner-visible Test TODO comments** | 0 | ✅ No scanner-enforced test TODO comments |
+| **Governed NotImplementedError items** | 24 | No governance action; all governed |
 | **Config/Preset TODOs** | 0 | ✅ Completed (2026-03-14) |
 | **Security Pattern TODOs** | 2 | Intentional (no action) |
-| **Documentation TODOs** | ~190 | Non-actionable historical markers (see Note below) |
+| **Documentation TODOs** | Narrative only | Non-actionable historical markers (see Note below) |
 
-All source code TODOs in `src/` have been cleaned up. The remaining test TODOs are observational notes for performance tracking.
+All source code TODOs in `src/` have been cleaned up. The live scanner reports
+24 governed `NotImplementedError` items, 0 ungoverned TODOs, and 1,570 files
+scanned.
 
-> **Note on Documentation TODO counts:** The ~190 count represents **repository-wide TODO markers** found in markdown files (historical notes, status markers, archive candidates). This is distinct from the ~38 **experimental-feature-focused markers** tracked in `OUTSTANDING_TODOS_EXPERIMENTAL_FEATURES.md`. Neither set requires implementation action—they are documentation annotations retained for context.
+> **Note on Documentation TODO counts:** Markdown TODO prose is intentionally outside the CI scanner scope. Historical notes, status markers, and archive candidates remain narrative context unless promoted into the scanner-enforced code/test/script/tool/web surfaces. The experimental-feature-focused markers tracked in `OUTSTANDING_TODOS_EXPERIMENTAL_FEATURES.md` remain documentation annotations, not implementation blockers.
+
+### Recent Governance Completion (2026-05-11)
+
+- `scripts/validation/scan_todo_inventory.py` now supports `--write-snapshot`,
+  which writes the canonical JSON payload to
+  `docs/analysis/todo_scanner_snapshot.json` without ad hoc shell redirection.
+- Live scanner baseline: 24 `NotImplementedError` items, 0 ungoverned TODOs,
+  1,570 files scanned.
+- Baseline delta: 25 → 24 because `scripts/pipelines/tiff_enhancement_pipeline.py`
+  is no longer present in the tracked tree. No new backlog item was opened.
+- `docs/governance/todo_priority_schema.yaml` now records the current scan
+  baseline, scan scope, generated-output exclusions, inventory-reference
+  governance pattern, and snapshot refresh command.
 
 ### Recent Governance Completion (2026-05-01)
 
 - TODO governance scanner is now enforced in CI. `scripts/validation/scan_todo_inventory.py --check-governance` runs in the `hf-revision-policy` job of `.github/workflows/enforcement.yml`. PRs introducing ungoverned action markers now fail. Enforced patterns: Python `# TODO:` / `# FIXME:` / `# HACK:` / `# XXX:` comments, `raise NotImplementedError(...)` AST nodes, and JS/TS `// TODO|FIXME|HACK|XXX` and block-comment markers. Enforced scopes: `src/`, `tests/`, `scripts/`, `tools/`, and `web/` (JS/TS). Required reference: `(Phase X)`, `(ADR-###)`, `(#1234)`, `(@owner)`, or `(TODO_INVENTORY.md ...)`. Bare `raise NotImplementedError` and abstract-method messages (e.g., "Subclass must implement") are auto-governed.
-- NotImplementedError baseline corrected from 12 (src-only, with arithmetic errors) to 25 (full scope across `src/`, `tests/`, `scripts/`, `tools/`). All instances remain properly governed.
+- NotImplementedError baseline corrected from 12 (src-only, with arithmetic errors) to the full scanner scope across `src/`, `tests/`, `scripts/`, `tools/`, and `web/`. The current 2026-05-11 baseline is 24, and all instances remain properly governed.
 - Manual monthly inventory review is no longer the primary drift control; it now serves as a periodic narrative refresh on top of automated enforcement.
 
 ### Recent Governance Completion (2026-03-26)
@@ -44,11 +60,15 @@ All source code TODOs in `src/` have been cleaned up. The remaining test TODOs a
 - **P1 (Immediate)**: ~~3 items~~ 1 item remaining (HuggingFace revision pinning ✅, Rollback docs ✅ verified existing; Branch protection verification: 15 min pending)
 - **P2 (Near-term)**: ~~4 items~~ 3 items remaining (ICC preservation ✅ completed)
 - **P3 (Deferred)**: ~~4 items~~ 3 items remaining (SLERP interpolation ✅ completed 2026-03-16)
-- **No Action Required**: ~195 items (95%; historical, observational, or intentionally retained)
+- **No Scanner-Governance Action Required**: all 24 scanner-visible items are governed; historical documentation markers remain narrative context.
 
 ---
 
 ## Category 1: Active Source Code TODOs
+
+Current scanner count: 0 active source-code TODO comments. Entries below are
+completed work or research backlog items retained for planning context, not
+scanner-governance violations.
 
 ### ✅ COMPLETED: ICC Profile Preservation (v2_enhance.py)
 
@@ -69,31 +89,29 @@ All source code TODOs in `src/` have been cleaned up. The remaining test TODOs a
 
 ---
 
-### P3: Material Backend Integration Stubs (3 items)
+### P3: Material Backend Research Tracks (3 items)
 
 **Location**: `src/transformation_portal/spatial_ai/materials/material_backend.py`
 
-#### 1. ComfyUI Subprocess Integration (Line 281)
-```python
-# TODO: Implement ComfyUI subprocess integration
-```
-**Status**: Placeholder with graceful fallback to heuristic
+These are not scanner-visible source TODO comments as of 2026-05-11. They remain
+research-deferred feature tracks documented here and in
+[OUTSTANDING_TODOS_EXPERIMENTAL_FEATURES.md](./OUTSTANDING_TODOS_EXPERIMENTAL_FEATURES.md).
+
+#### 1. ComfyUI Subprocess Integration
+
+**Status**: Optional integration path; current material backend routes unsupported modes through governed fallbacks and validation.
 **Action**: Keep as-is until Phase 5B implementation
 **Priority**: P3 (Deferred - experimental feature)
 
-#### 2. NVDIFFREC Integration (Line 323)
-```python
-# TODO: Implement NVDIFFREC integration
-```
-**Status**: Placeholder with graceful fallback to heuristic
+#### 2. NVDIFFREC Integration
+
+**Status**: Research track; current material backend keeps licensing, GPU, and multi-view evidence requirements explicit.
 **Action**: Defer to v2.3.0+ (requires ADR for GPU requirements)
 **Priority**: P3 (Research feature)
 
-#### 3. MaterialGAN Integration (Line 359)
-```python
-# TODO: Implement MaterialGAN integration
-```
-**Status**: Placeholder with graceful fallback to heuristic
+#### 3. MaterialGAN Integration
+
+**Status**: Research track; current material backend requires appropriate capture evidence before any real backend execution.
 **Action**: Defer to v2.3.0+ (requires ADR for model licensing)
 **Priority**: P3 (Research feature)
 
@@ -216,20 +234,21 @@ re.compile(r"TODO_REPLACE", re.IGNORECASE),
 
 ---
 
-## Category 4: Test TODOs (Observational - No Action)
+## Category 4: Test TODOs (Resolved)
 
-**Location**: `tests/stress/test_stress_large_batch.py` (Lines 326, 372)
+**Former Location**: `tests/stress/test_stress_large_batch.py` (historical lines 326, 372)
 
-```python
-# TODO: Investigate why draft is slower than expected (expected: draft < standard)
-# TODO: Investigate preset performance ordering regression
-```
+**Current Status**: The scanner-visible test TODO comments are gone. The stress
+tests now assert bounded preset-performance behavior directly, so the current
+scanner baseline reports 0 test TODO comments.
 
-**Context**: These are observational notes tracking inconsistent preset performance, likely due to resource contention in stress tests.
+**Context**: The historical notes tracked inconsistent preset performance, likely
+due to resource contention in stress tests.
 
 **Impact**: None - Performance observation, not a bug.
 
-**Action**: Track in [IMPROVEMENT_OPPORTUNITIES.md](../guides/IMPROVEMENT_OPPORTUNITIES.md) (already done).
+**Action**: Continue tracking broader performance opportunities in
+[IMPROVEMENT_OPPORTUNITIES.md](../guides/IMPROVEMENT_OPPORTUNITIES.md) if needed.
 **Priority**: P4 (Optimization research)
 
 ---
@@ -292,16 +311,16 @@ test_file.write_text("""# TODO: Consider using spatial_ai for this
 
 ---
 
-### No Action Required (195 reviewed TODO instances, 95%)
+### No Action Required (scanner-governed backlog remains clean)
 
 The following categories require **no action**:
 
-1. **Documentation TODO markers** (~190 items): Repository-wide historical notes, status markers, or archive candidates reviewed for context rather than implementation. This broader count includes all markdown TODO annotations; the ~38 experimental-feature-focused subset is tracked separately in `OUTSTANDING_TODOS_EXPERIMENTAL_FEATURES.md`.
+1. **Documentation TODO markers:** Repository-wide historical notes, status markers, or archive candidates reviewed for context rather than implementation. Markdown TODO prose is outside scanner enforcement unless promoted into source/test/script/tool/web surfaces.
 2. **Security Patterns** (2 items): `TODO_REPLACE` regex patterns used to detect placeholder values
-3. **Observational Notes** (2 items): Performance investigation tracking already captured in follow-up documentation
-4. **Test Fixture Content** (1 item): Embedded `TODO` text used as scanner test data
+3. **Observational Notes:** Performance investigation tracking already captured in follow-up documentation
+4. **Test Fixture Content:** Embedded `TODO` text used as scanner test data
 
-These 195 reviewed instances are intentionally excluded from the 11-item P1/P2/P3 backlog above.
+These reviewed instances are intentionally excluded from the 11-item P1/P2/P3 backlog above.
 
 ---
 
@@ -333,7 +352,7 @@ Require for all preset changes:
 
 | Document | Purpose | Status |
 |----------|---------|--------|
-| [TODO_INVENTORY.md](./TODO_INVENTORY.md) | Comprehensive v2.4.0 inventory | ✅ Current |
+| [TODO_INVENTORY.md](./TODO_INVENTORY.md) | Comprehensive v2.4.7 inventory | ✅ Current |
 | [OUTSTANDING_TODOS_EXPERIMENTAL_FEATURES.md](./OUTSTANDING_TODOS_EXPERIMENTAL_FEATURES.md) | Experimental feature tracking | ✅ Current |
 | [HF_REVISION_PINNING_GUIDE.md](./HF_REVISION_PINNING_GUIDE.md) | Model pinning procedures | ✅ Current |
 | [IMPROVEMENT_OPPORTUNITIES.md](../guides/IMPROVEMENT_OPPORTUNITIES.md) | Performance optimization tracking | ✅ Current |
@@ -342,25 +361,28 @@ Require for all preset changes:
 
 ## Summary
 
-**Total Items Reviewed**: 206 TODO instances
-**Action Required**: 4 items total (2%)
+**Scanner Baseline Reviewed**: 24 governed items across 1,570 files
+**Scanner-Governance Action Required**: 0 items
   - 0 active source code TODOs (all cleaned up)
-  - 3 test observational TODOs (tracking only)
-  - 1 admin action (branch protection verification)
-**No Action Required**: 202 items (98%)
+  - 0 ungoverned scanner-visible TODOs
 
-**Completion Progress (2026-03-25)**:
+**Planning Backlog Action Required**: 4 items total
+  - 1 admin action (branch protection verification)
+  - 3 future research/integration items (ComfyUI, NVDIFFREC, MaterialGAN)
+**No Action Required**: all 24 scanner-visible items are governed
+
+**Completion Progress (2026-05-11)**:
 - ✅ 10 items completed (HF pinning, ICC preservation, rollback docs verified, depth_canonical archived, PR docs archived, SLERP interpolation, TODO_INVENTORY corrected, source code TODO cleanup)
 - ⏳ 1 item pending external action (branch protection - requires admin UI access)
 - ⏳ 3 items pending future phases (ComfyUI, NVDIFFREC, MaterialGAN)
 
-**Key Takeaway**: The majority of reviewed TODO instances are **historical documentation notes**, **intentional validation patterns**, or **observational tracking**. Only 4 items require actual action, with 1 remaining P1 item (branch protection verification pending external admin access). All source code TODOs in `src/` have been cleaned up.
+**Key Takeaway**: The scanner-governed TODO surface has no open governance violations. The remaining action items are planning backlog entries, with 1 remaining P1 item (branch protection verification pending external admin access) and 3 deferred research/integration tracks. All source code TODOs in `src/` have been cleaned up.
 
 The codebase demonstrates mature TODO management with proper documentation and categorization. The existing [TODO_INVENTORY.md](./TODO_INVENTORY.md) provides comprehensive tracking and should continue to be the authoritative source for TODO governance.
 
 ---
 
-**Document Version**: 1.4.0
+**Document Version**: 1.5.0
 **Author**: Transformation Portal Architect Review
-**Last Updated**: 2026-05-01
+**Last Updated**: 2026-05-11
 **Next Review**: Before v2.5.0 release planning (CI now blocks ungoverned TODOs at PR time)

@@ -13,7 +13,7 @@
 
 ADR-043 successfully decomposed `EnhanceOrchestrator` (was 6,108 LOC) into five focused seams (`config_resolver`, `pipeline_coordinator`, `execution_engine`, `artifact_manager`, `validators/`). It explicitly scoped that work to a single class and a single module. It did **not** establish a reusable governance pattern for the rest of the repo.
 
-The 2026-05-04 audit ([TODO Inventory refresh](../analysis/TODO_INVENTORY.md), snapshot at [`todo_scanner_snapshot.json`](../analysis/todo_scanner_snapshot.json)) confirms:
+The 2026-05-04 audit ([TODO Inventory refresh](../analysis/TODO_INVENTORY.md), snapshot at [`todo_scanner_snapshot.json`](../analysis/todo_scanner_snapshot.json)) triggered this ADR. The 2026-05-11 scanner refresh kept the same conclusion for decomposition planning and refreshed the tracked snapshot to 24 governed `NotImplementedError` items, 0 ungoverned TODOs, and 1,570 files scanned. The audit confirms:
 
 - `src/` source-code TODOs about decomposition: **0** (CI-enforced via `enforcement.yml`).
 - Five known monoliths still exceed informal "acceptable" sizes: `app.py` (10,039 LOC), `lux_depth_v3/orchestrator.py` (7,257), `lux_depth_v3/segmentation_backend.py` (2,519), `pipelines/rendering_4k_pipeline.py` (2,380), `spatial_ai/orchestration/pipeline.py` (2,121).
@@ -149,6 +149,6 @@ This ADR is governance, not implementation. Activation follows three phases:
 - [ADR-043 Orchestrator Decomposition Strategy](ADR-043-orchestrator-decomposition.md) — predecessor; concrete instance the pattern generalizes.
 - [Monolith Decomposition Targets](MONOLITH_DECOMPOSITION_TARGETS.md) — operational target list.
 - [Development Roadmap Q2 2026 §4](DEVELOPMENT_ROADMAP_2026_Q2.md) — residual-slimming pressure.
-- [TODO Inventory 2026-05-04 Refresh](../analysis/TODO_INVENTORY.md) — audit that triggered this ADR.
+- [TODO Inventory 2026-05-11 Refresh](../analysis/TODO_INVENTORY.md) — current scanner baseline and the earlier 2026-05-04 audit that triggered this ADR.
 - [`docs/analysis/todo_scanner_snapshot.json`](../analysis/todo_scanner_snapshot.json) — reproducible scanner baseline.
 - [CLAUDE.md "do not re-monolithize"](../../CLAUDE.md) — invariant generalized by this ADR.

@@ -10,6 +10,7 @@ Tests cover:
 from __future__ import annotations
 
 import importlib.util
+import json
 import sys
 from pathlib import Path
 from textwrap import dedent
@@ -268,6 +269,47 @@ class TestErrorSurfacing:
 
         # Should have a tokenize or syntax error recorded
         assert len(errors) >= 1
+
+
+# ============================================================================
+# TEST: Snapshot Writing
+# ============================================================================
+
+
+class TestSnapshotWriting:
+    """Tests for canonical scanner snapshot output."""
+
+    def test_json_payload_includes_governance_compliance(self, scanner_module: ModuleType) -> None:
+        """JSON payload includes the same compliance flag as CLI JSON output."""
+        result = scanner_module.ScanResult()
+        result.files_scanned = 1
+
+        payload = scanner_module._json_payload(result)
+
+        assert payload["summary"]["total"] == 0
+        assert payload["governance_compliant"] is True
+
+    def test_write_json_snapshot_stays_under_repo(
+        self, tmp_path: Path, scanner_module: ModuleType, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Snapshot writer writes stable JSON under the configured repo root."""
+        monkeypatch.setattr(scanner_module, "PROJECT_ROOT", tmp_path)
+        payload = {"summary": {"total": 0}, "governance_compliant": True}
+
+        snapshot_path = scanner_module._write_json_snapshot(payload, "docs/analysis/todo_scanner_snapshot.json")
+
+        assert snapshot_path == tmp_path / "docs" / "analysis" / "todo_scanner_snapshot.json"
+        assert snapshot_path.read_text(encoding="utf-8").endswith("\n")
+        assert json.loads(snapshot_path.read_text(encoding="utf-8")) == payload
+
+    def test_snapshot_path_outside_repo_rejected(
+        self, tmp_path: Path, scanner_module: ModuleType, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Snapshot writer rejects paths outside the repository root."""
+        monkeypatch.setattr(scanner_module, "PROJECT_ROOT", tmp_path)
+
+        with pytest.raises(ValueError, match="repository root"):
+            scanner_module._resolve_snapshot_path("../outside.json")
 
 
 # ============================================================================

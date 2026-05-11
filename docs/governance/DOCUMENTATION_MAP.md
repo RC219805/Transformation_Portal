@@ -54,6 +54,7 @@ operator guidance unless they are linked here as canonical documents.
 | Claude Code instructions | [CLAUDE.md](../../CLAUDE.md) | Maintained repo-root guide for Claude Code; summarizes contracts, decomposition, marker discipline, and live agent profiles |
 | Maintainer workflow reference | [AGENTS.md](../../AGENTS.md) | Maintained operator command reference (Make targets, validation scripts, AI skill policy) |
 | Skill progression tracks | [SKILL_PROGRESS_TRACKS.md](../guides/SKILL_PROGRESS_TRACKS.md) | Maintained; maps recurring PR review themes to training drills |
+| TODO governance | [TODO Inventory](../analysis/TODO_INVENTORY.md), [TODO Action Plan](../analysis/TODO_ACTION_PLAN.md), [TODO Inventory Quick Reference](../architecture/TODO_INVENTORY_QUICK_REF.md), [TODO Priority Schema](todo_priority_schema.yaml) | Maintained; scanner-governed baseline refreshed May 11, 2026 |
 | CI workflow inventory | [WORKFLOW_MATRIX.md](../ci/WORKFLOW_MATRIX.md) | Maintained; current 30-workflow inventory |
 | CI/CD workflow guide | [CI_CD_WORKFLOWS.md](../ci_cd/CI_CD_WORKFLOWS.md) | Maintained |
 | Branch protection | [BRANCH_PROTECTION_SETUP.md](../ci/BRANCH_PROTECTION_SETUP.md) | Maintained |

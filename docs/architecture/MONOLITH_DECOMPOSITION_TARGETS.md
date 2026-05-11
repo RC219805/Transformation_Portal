@@ -1,15 +1,15 @@
 # Monolith Decomposition — Ranked Seam Targets
 
-**Status:** Active inventory (2026-05-04)
+**Status:** Active inventory (refreshed 2026-05-11)
 **Authority:** Companion to [ADR-043 Orchestrator Decomposition](ADR-043-orchestrator-decomposition.md) and [ADR-045 Monolith Decomposition Residuals](ADR-045-monolith-decomposition-residuals.md).
 **Source of pressure:** [Development Roadmap Q2 2026 §4 "Orchestrator Residual Slimming & Boundary Enforcement"](DEVELOPMENT_ROADMAP_2026_Q2.md).
-**Predecessor audit:** [TODO Inventory 2026-05-04 Refresh](../analysis/TODO_INVENTORY.md).
+**Predecessor audit:** [TODO Inventory 2026-05-04 Refresh](../analysis/TODO_INVENTORY.md); scanner baseline refreshed 2026-05-11.
 
 ---
 
 ## Why this list exists
 
-The 2026-05-04 audit confirmed there are **zero `TODO|FIXME|XXX|HACK` markers** in the five largest source modules:
+The 2026-05-04 audit confirmed, and the 2026-05-11 scanner refresh preserves, **zero `TODO|FIXME|XXX|HACK` markers** in the five largest source modules:
 
 | File | LOC | Markers | Governance signal |
 |---|---:|---:|---|

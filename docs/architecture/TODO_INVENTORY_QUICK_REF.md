@@ -1,6 +1,6 @@
 # TODO Inventory Quick Reference
 
-**Version:** 2.4.2 | **Date:** 2026-05-01 | **Status:** ACTIVE
+**Version:** 2.4.7 | **Date:** 2026-05-11 | **Status:** ACTIVE
 
 **Full Inventory:** [docs/analysis/TODO_INVENTORY.md](../analysis/TODO_INVENTORY.md)
 **Action Plan:** [docs/analysis/TODO_ACTION_PLAN.md](../analysis/TODO_ACTION_PLAN.md)
@@ -12,8 +12,8 @@
 | Metric | Value |
 |--------|-------|
 | **Source Code TODOs (`src/`)** | 0 ✅ |
-| **Test TODOs** | 3 (observational) |
-| **NotImplementedError** | 25 (all governed: abstract methods, phase gates, platform limits) |
+| **Scanner-visible Test TODO comments** | 0 ✅ |
+| **NotImplementedError** | 24 (all governed: abstract methods, phase gates, platform limits) |
 | **P0 Blockers** | 0 |
 | **P1 Pending** | 1 (branch protection verification) |
 | **P2 Pending** | 3 (sample uploads) |
@@ -32,14 +32,19 @@
 
 **Recently Completed (2026-05-01):**
 - TODO governance scanner wired into CI (`enforcement.yml` → `hf-revision-policy` job runs `scan_todo_inventory.py --check-governance`). Ungoverned TODOs now fail PR builds; replaces the manual monthly review cadence as the primary drift control. ✅
-- Inventory recount: NotImplementedError baseline corrected from 12 → 25. All 25 instances are properly governed (abstract methods, phase gates, platform limits); the discrepancy was doc drift, not a code issue. ✅
+- Inventory recount: NotImplementedError baseline corrected from 12 → 25. All 25 instances were properly governed (abstract methods, phase gates, platform limits); the discrepancy was doc drift, not a code issue. ✅
+
+**Recently Completed (2026-05-11):**
+- TODO scanner can now refresh the tracked JSON snapshot directly with `python scripts/validation/scan_todo_inventory.py --write-snapshot`. ✅
+- Inventory snapshot refreshed from live repo state: 24 governed `NotImplementedError` items, 0 ungoverned TODOs, and 1,570 files scanned. The 25 → 24 delta is from retired code, not a changed governance rule. ✅
+- `docs/governance/todo_priority_schema.yaml` now records the current scanner baseline and snapshot command. ✅
 
 ---
 
 ## Immediate Actions (v2.4.0+ Planning)
 
 **Total Effort:** ~4 hours
-**Last Updated:** 2026-03-25
+**Last Updated:** 2026-05-11
 
 | # | Task | Priority | Effort | Owner | Status |
 |---|------|----------|--------|-------|--------|
@@ -84,8 +89,8 @@
 - Curated Starlette 1.0 compatibility validation and merge (#1278)
 
 ### 🟢 CORRECT (No Action Required)
-- 12 NotImplementedError instances (abstract methods, phase gates, limitations)
-- 3 Test TODOs (observational performance tracking)
+- 24 NotImplementedError instances (abstract methods, phase gates, limitations)
+- 0 scanner-visible test TODO comments
 - 2 Security patterns (TODO_REPLACE regex matchers)
 
 ### 📦 ARCHIVED (Cleanup Complete)
@@ -164,7 +169,7 @@ All NotImplementedError must include context:
 - Feature gate: `"RAW format is Phase II (ADR-027)"`
 - Abstract method: `"Subclass must implement"`
 - Platform limitation: `"Windows not supported"`
-- Technical debt: `"TODO: Implement NVDIFFREC"`
+- Technical debt: `"Single-view reconstruction not yet implemented (TODO_INVENTORY.md)"`
 
 ---
 
@@ -194,10 +199,10 @@ All NotImplementedError must include context:
 A: 0 P0 blockers. 1 P1 item (branch protection - GitHub Admin task).
 
 **Q: How many items are technical debt?**
-A: Of the 25 `NotImplementedError` instances the scanner reports, the majority are intentional stubs (abstract methods, bare-raise scaffolds, test protocol stubs, platform limitations). A handful are actionable phase gates / known gaps (e.g., single-view 3D reconstruction in `spatial_ai/orchestration/pipeline.py`, GaussianBackend pending checkpoint integration, non-linear interpolation in `scene_builder.py`). The canonical, line-accurate list is the scanner output — `python scripts/validation/scan_todo_inventory.py --json` — not a hand-maintained name list (which is what caused prior drift). Note: NVDIFFREC and MaterialGAN are *not* `NotImplementedError` raises; those backends fall back to the heuristic generator at `material_backend.py` and are tracked separately under research-deferred work.
+A: Of the 24 `NotImplementedError` instances the scanner reports, the majority are intentional stubs (abstract methods, bare-raise scaffolds, test protocol stubs, platform limitations). A handful are actionable phase gates / known gaps (e.g., single-view 3D reconstruction in `spatial_ai/orchestration/pipeline.py`, GaussianBackend pending checkpoint integration, non-linear interpolation in `scene_builder.py`). The canonical, line-accurate list is the scanner output — `python scripts/validation/scan_todo_inventory.py --json` — not a hand-maintained name list (which is what caused prior drift). Note: NVDIFFREC and MaterialGAN are *not* `NotImplementedError` raises; those backends fall back to the heuristic generator at `material_backend.py` and are tracked separately under research-deferred work.
 
 **Q: When should we update the inventory?**
-A: CI now enforces `--check-governance` on every PR via `enforcement.yml`, so ungoverned TODOs cannot land. Manual narrative refresh (counts, completion logs) still occurs monthly or per-release. This review: 2026-05-01.
+A: CI now enforces `--check-governance` on every PR via `enforcement.yml`, so ungoverned TODOs cannot land. Manual narrative refresh (counts, completion logs) still occurs monthly or per-release. Refresh the tracked scanner snapshot with `python scripts/validation/scan_todo_inventory.py --write-snapshot`. This review: 2026-05-11.
 
 **Q: Can we release v2.4.0 with pending items?**
 A: Yes. All P1 items except branch protection are complete.
@@ -216,14 +221,14 @@ A: None identified. Repository health is excellent.
 
 ---
 
-**Last Updated:** 2026-05-01
+**Last Updated:** 2026-05-11
 **Next Review:** June 2026 (v2.5.0 planning); CI now enforces ungoverned-TODO blocks on every PR
 **Authority:** Binding under architectural governance
 
 ---
 
 **Quick Links:**
-- [Full Inventory](../analysis/TODO_INVENTORY.md) (1,954 lines, comprehensive)
+- [Full Inventory](../analysis/TODO_INVENTORY.md) (current scanner-governed inventory)
 - [Executive Summary](TODO_INVENTORY_EXECUTIVE_SUMMARY.md) (2 pages, key findings)
 - [Agent Governance](agent_governance.md) (escalation protocol)
 - [Monolith Decomposition Targets](MONOLITH_DECOMPOSITION_TARGETS.md) — ranked seam list (companion to [ADR-045](ADR-045-monolith-decomposition-residuals.md))
