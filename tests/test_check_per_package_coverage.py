@@ -42,9 +42,25 @@ def _load_script_module():
     return module
 
 
+def _load_cobertura_module():
+    repo_root = Path(__file__).resolve().parents[1]
+    script_path = repo_root / "scripts" / "ci" / "cobertura_xml.py"
+    spec = importlib.util.spec_from_file_location("cobertura_xml", script_path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
 @pytest.fixture(scope="module")
 def script_module():
     return _load_script_module()
+
+
+@pytest.fixture(scope="module")
+def cobertura_module():
+    return _load_cobertura_module()
 
 
 def _write_coverage(
@@ -82,36 +98,36 @@ def _write_coverage(
 
 
 class TestNormalizeFilename:
-    def test_relative_path_unchanged(self, script_module):
-        assert script_module._normalize_filename("src/tp/x.py") == "src/tp/x.py"
+    def test_relative_path_unchanged(self, cobertura_module):
+        assert cobertura_module._normalize_filename("src/tp/x.py") == "src/tp/x.py"
 
-    def test_dot_slash_prefix_stripped(self, script_module):
-        assert script_module._normalize_filename("./src/tp/x.py") == "src/tp/x.py"
+    def test_dot_slash_prefix_stripped(self, cobertura_module):
+        assert cobertura_module._normalize_filename("./src/tp/x.py") == "src/tp/x.py"
 
-    def test_backslashes_to_forward_slashes(self, script_module):
-        assert script_module._normalize_filename("src\\tp\\x.py") == "src/tp/x.py"
+    def test_backslashes_to_forward_slashes(self, cobertura_module):
+        assert cobertura_module._normalize_filename("src\\tp\\x.py") == "src/tp/x.py"
 
-    def test_absolute_path_sliced_at_src(self, script_module):
+    def test_absolute_path_sliced_at_src(self, cobertura_module):
         # The bug review thread #4 caught: lstrip("./") on an absolute
         # path silently dropped only the leading "/" producing
         # "home/.../src/tp/x.py" which would not match "src/tp/" prefix.
         absolute = "/home/runner/work/Transformation_Portal/Transformation_Portal/src/tp/foo.py"
-        assert script_module._normalize_filename(absolute) == "src/tp/foo.py"
+        assert cobertura_module._normalize_filename(absolute) == "src/tp/foo.py"
 
-    def test_absolute_path_with_src_in_repo_name_uses_last_src(self, script_module):
+    def test_absolute_path_with_src_in_repo_name_uses_last_src(self, cobertura_module):
         # If the repo path itself contains "src" (e.g. the repo is named
         # "my-src-repo"), only the LAST /src/ should be the slice point —
         # otherwise we'd grab a fictional "src" segment from the repo
         # name and produce broken paths.
         absolute = "/work/my-src-repo/src/tp/foo.py"
-        assert script_module._normalize_filename(absolute) == "src/tp/foo.py"
+        assert cobertura_module._normalize_filename(absolute) == "src/tp/foo.py"
 
-    def test_absolute_path_without_src_segment_unchanged_after_norm(self, script_module):
+    def test_absolute_path_without_src_segment_unchanged_after_norm(self, cobertura_module):
         # Defensive: if there's no /src/ in an absolute path, leave it
         # alone (callers will see a 0-match failure with a clear cause
         # rather than a silently-truncated filename).
         absolute = "/var/tmp/standalone/x.py"
-        assert script_module._normalize_filename(absolute) == absolute
+        assert cobertura_module._normalize_filename(absolute) == absolute
 
 
 class TestMatchesPrefix:

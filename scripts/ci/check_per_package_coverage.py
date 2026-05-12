@@ -39,25 +39,9 @@ from pathlib import Path
 from typing import Iterable, List
 
 try:
-    from scripts.ci.cobertura_xml import (
-        _collect_sources,
-        _iter_class_elements,
-        _matches_prefix,
-        _normalize_filename,
-        _resolve_class_path,
-        _source_relative_prefix,
-        load_cobertura_files,
-    )
+    from scripts.ci.cobertura_xml import _matches_prefix, load_cobertura_files
 except ModuleNotFoundError:  # pragma: no cover - direct script execution fallback
-    from cobertura_xml import (  # type: ignore[no-redef]
-        _collect_sources,
-        _iter_class_elements,
-        _matches_prefix,
-        _normalize_filename,
-        _resolve_class_path,
-        _source_relative_prefix,
-        load_cobertura_files,
-    )
+    from cobertura_xml import _matches_prefix, load_cobertura_files  # type: ignore[no-redef]
 
 
 @dataclass(frozen=True)

@@ -31,7 +31,7 @@ try:
     import torch
 
     TORCH_AVAILABLE = True
-except ImportError:
+except (ImportError, OSError):
     torch = None
     TORCH_AVAILABLE = False
     logger.warning("PyTorch is not available. Install LLaVA runtime with: %s", LLAVA_INSTALL_GUIDANCE)
@@ -40,7 +40,7 @@ try:
     from transformers import AutoProcessor, BitsAndBytesConfig, LlavaForConditionalGeneration
 
     TRANSFORMERS_AVAILABLE = True
-except ImportError:
+except (ImportError, OSError):
     AutoProcessor = None
     BitsAndBytesConfig = None
     LlavaForConditionalGeneration = None

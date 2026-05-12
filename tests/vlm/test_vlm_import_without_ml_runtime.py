@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import builtins
 import importlib
 import sys
 from types import ModuleType
@@ -61,3 +62,23 @@ def test_quality_and_scene_constructors_lazy_import_llava(monkeypatch: pytest.Mo
         quality_module.QualityValidator()
     with pytest.raises(ImportError, match="pip install transformers"):
         scene_module.SceneAnalyzer()
+
+
+def test_llava_imports_when_torch_native_import_raises_oserror(monkeypatch: pytest.MonkeyPatch):
+    _clear_vlm_modules(monkeypatch)
+    original_import = builtins.__import__
+
+    def guarded_import(name, globals=None, locals=None, fromlist=(), level=0):
+        if name == "torch" or name.startswith("torch."):
+            raise OSError("native torch runtime failed to load")
+        return original_import(name, globals, locals, fromlist, level)
+
+    monkeypatch.setattr(builtins, "__import__", guarded_import)
+
+    llava_module = importlib.import_module("transformation_portal.vlm.llava")
+
+    assert llava_module.TORCH_AVAILABLE is False
+    assert llava_module.LLAVA_AVAILABLE is False
+    with pytest.raises(ImportError) as exc_info:
+        llava_module.LLaVAProcessor()
+    assert llava_module.LLAVA_INSTALL_GUIDANCE in str(exc_info.value)
