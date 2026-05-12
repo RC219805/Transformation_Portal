@@ -227,15 +227,23 @@ lux-depth-v3 \
 
 ### Segmentation, SAM2, and Advisory Captioning
 
-- `--segmentation TEXT`: Enable governed segmentation for Materials V3 masks.
-- `--segmentation-backend TEXT`: Select the segmentation backend.
-- `--segmentation-sam2 TEXT`: Opt into SAM2 when the local optional runtime is installed.
-- `--segmentation-max-masks INTEGER`: Bound segmentation mask generation.
+- `--enable-segmentation TEXT`: Enable governed segmentation for Materials V3 masks.
+- `--segmentation-backend TEXT`: Select `stub`, `efficientsam`, `sam2`, or `sam_vit_h`.
+- `--strict-segmentation`: Fail closed on segmentation backend errors instead of falling back to `stub`.
+- `--segmentation-cache TEXT`: Select segmentation cache policy (`off` or `read_write`).
+- `--sam2-model-size TEXT`: Select SAM2 model size (`base` or `large`) when `--segmentation-backend sam2` is used.
+- `--sam2-checkpoint-path PATH`: Override the SAM2 checkpoint path.
+- `--sam2-tiling-enabled`: Enable deterministic SAM2 tiling for large images.
+- `--sam2-tile-size-px INTEGER`, `--sam2-overlap-px INTEGER`, `--sam2-global-pass-longest-side INTEGER`, `--sam2-max-concurrency INTEGER`: Tune deterministic SAM2 tiled segmentation.
+- `--sam2-points-per-side INTEGER`, `--sam2-points-per-batch INTEGER`, `--sam2-pred-iou-thresh FLOAT`, `--sam2-stability-score-thresh FLOAT`, `--sam2-crop-n-layers INTEGER`: Tune the SAM2 automatic mask generator.
 - `--vlm-captioning TEXT`: Enable optional advisory FastVLM captioning.
-- `--vlm-model TEXT`: Select the configured FastVLM model role.
-- `--vlm-runtime-python PATH`: Override the FastVLM subprocess interpreter.
-- `--vlm-output-mode TEXT`: Select caption sidecar output behavior.
-- `--vlm-run-card-mode TEXT`: Control run-card caption evidence mode.
+- `--vlm-captioning-backend TEXT`: Select advisory captioning backend (`fastvlm`).
+- `--vlm-captioning-model TEXT`: Select `default`, `review`, `smoke`, or an explicit local model path.
+- `--vlm-captioning-proxy-format TEXT`: Select advisory proxy image format (`png` or `jpeg`).
+- `--vlm-captioning-max-side-px INTEGER`: Bound the longest side for advisory proxy images.
+- `--fastvlm-python PATH`: Override the isolated FastVLM subprocess interpreter.
+- `--fastvlm-mlx-vlm-dir PATH`: Override the isolated `mlx-vlm` checkout.
+- `--fastvlm-timeout-seconds INTEGER`: Bound FastVLM subprocess runtime.
 
 FastVLM captioning is advisory only. Its output is not quality-gate evidence.
 
@@ -276,8 +284,8 @@ FastVLM captioning is advisory only. Its output is not quality-gate evidence.
 - `--strict-inputs TEXT`: Fail closed on unsupported or invalid inputs.
 - `--verify-images TEXT`: Verify image inputs before processing.
 - `--allow-semantic-fallback TEXT`: Allow configured semantic fallback paths.
-- `--workers INTEGER`: Bound parallel worker count.
-- `--job-timeout-seconds INTEGER`: Bound per-job runtime.
+- `--max-workers INTEGER`: Bound CPU/I/O worker threads.
+- `--max-gpu-workers INTEGER`: Bound GPU/MPS inference workers.
 
 ### RAW Ingest
 

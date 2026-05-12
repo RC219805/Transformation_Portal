@@ -115,13 +115,16 @@ Current option groups include:
 - RAW subprocess control: `--raw-python`, `--raw-ingest-mode`,
   `--raw-wb-mode`, `--raw-demosaic`.
 - Materials and PBR: `--materials-v3`, `--pbr`, `--save-float-depth`,
-  `--cache-depth`, segmentation and SAM2 controls.
-- Advisory captioning: `--vlm-captioning`, `--vlm-model`,
-  `--vlm-runtime-python`, `--vlm-output-mode`, `--vlm-run-card-mode`.
+  `--cache-depth`, `--enable-segmentation`, `--segmentation-backend`,
+  `--strict-segmentation`, `--segmentation-cache`, and SAM2 controls.
+- Advisory captioning: `--vlm-captioning`, `--vlm-captioning-backend`,
+  `--vlm-captioning-model`, `--vlm-captioning-proxy-format`,
+  `--vlm-captioning-max-side-px`, `--fastvlm-python`,
+  `--fastvlm-mlx-vlm-dir`, and `--fastvlm-timeout-seconds`.
 - Reproducibility: emit flags, `--emit-run-card`, `--run-card-version`,
   `--keep-intermediates`, and run-card signing/verifier tools.
 - Safety and execution: `--strict-inputs`, `--verify-images`,
-  `--allow-semantic-fallback`, `--workers`, `--job-timeout-seconds`,
+  `--allow-semantic-fallback`, `--max-workers`, `--max-gpu-workers`,
   `--overwrite`, and `--force-depth`.
 
 Repo-governed runtime setup commands are documented in `AGENTS.md` and include:
