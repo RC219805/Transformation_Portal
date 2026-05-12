@@ -1,8 +1,8 @@
 # Dependency Submission Configuration
 
-# This repository uses a custom dependency submission workflow to avoid disk space issues.
-# GitHub's automatic dependency submission runs `pip-compile` which downloads ~5-8GB of packages,
-# causing "No space left on device" errors on GitHub Actions runners.
+# This repository uses a custom dependency submission workflow to avoid disk
+# pressure in the ML-heavy dependency graph while still feeding GitHub's
+# dependency graph.
 
 # To disable GitHub's automatic dependency submission:
 # 1. Go to repository Settings
@@ -10,11 +10,12 @@
 # 3. Under "Dependency graph", find "Dependency submission"
 # 4. Disable "Automatic dependency submission" if it's enabled
 
-# Our custom workflow (.github/workflows/dependency-submission.yml) provides:
-# - Disk space optimization with aggressive cleanup
-# - Syntax validation without downloading all packages
-# - Only validates lightweight requirements-lint.txt with pip-compile
-# - Manual dependency tracking via requirements.txt in the repository
+# Current custom workflow (.github/workflows/dependency-submission.yml):
+# - maximizes runner disk space before dependency graph submission
+# - uses advanced-security/component-detection-dependency-submission-action
+# - disables pip cache use during detection where possible
+# - excludes repository areas that do not own dependency manifests
+# - keeps dependency graph submission non-critical relative to the CI Gate
 
 disable_automatic_submission: true
 use_custom_workflow: true

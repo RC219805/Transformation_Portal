@@ -1,5 +1,25 @@
 # Branch Protection Verification
 
+> Current status note (2026-05-12): This file is a historical verification
+> record for PR #804 plus non-binding policy notes. For live branch protection,
+> verify GitHub repository metadata directly. A live GitHub API check on
+> 2026-05-12 against `main` showed:
+>
+> - Required status check contexts: `CI Gate` only
+> - Require branches to be up to date before merge: enabled
+> - Require conversation resolution: enabled
+> - Enforce protections for admins: enabled
+> - Allow force pushes: disabled
+> - Allow deletions: disabled
+> - Require code-owner review: disabled
+> - Require linear history: disabled
+>
+> Proof command:
+>
+> ```bash
+> gh api repos/RC219805/Transformation_Portal/branches/main/protection
+> ```
+
 ## Verification Status: ✅ COMPLETE
 
 **Verified:** 2026-02-03T19:23:54Z
