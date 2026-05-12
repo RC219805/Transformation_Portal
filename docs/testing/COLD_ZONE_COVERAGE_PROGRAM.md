@@ -4,7 +4,7 @@
 **Last Updated:** 2026-05-12
 **Related Docs:** `docs/testing/STRATEGY.md`, `docs/testing/test_coverage_improvement_plan.md`
 **Related Scripts:** `scripts/ci/check_per_package_coverage.py`
-**Related ADRs:** ADR-031 (test markers), ADR-044 (marker enforcement)
+**Related ADRs:** ADR-031 (test dependency isolation), ADR-044 (marker enforcement)
 
 > This document supersedes the unrevised "cold-zone testing optimization strategy"
 > draft circulated 2026-05-12. It folds in a feasibility audit of the proposed
@@ -66,7 +66,7 @@ coverage work and must land in **PR 0**, not PR 3.
 | `tests/plugins/`                   | `tests/unit/plugins/{test_plugin_manager,test_plugin_registry,test_plugin_validator}.py` plus `tests/security/test_plugin_loading_security.py`    |
 | `tests/depth/test_tools_*.py`      | `tests/test_depth_tools.py` (root) plus `tests/unit/depth/*`                                                                                      |
 | `tests/streaming/`                 | `tests/test_streaming_stages.py`, `tests/test_streaming_async_pipeline.py` (root)                                                                 |
-| `tests/reconstruction/`            | `tests/spatial_ai/reconstruction/` (12 files, exists)                                                                                             |
+| `tests/reconstruction/`            | `tests/spatial_ai/reconstruction/` (16 files at audit time, exists)                                                                               |
 
 **Revision:** new tests land under `tests/unit/<area>/` or alongside existing
 peers. No new top-level test directories.
@@ -75,11 +75,10 @@ peers. No new top-level test directories.
 
 Source is at `src/transformation_portal/spatial_ai/reconstruction/` (not a
 top-level `reconstruction/`). `tests/spatial_ai/reconstruction/` already has
-12 files including `test_contracts.py`, `test_gaussian_backend.py`,
-`test_nvdiffrec_backend.py`, `test_lazy_imports.py`,
-`test_reconstruction_golden_snapshot.py`, `test_gradient_correctness.py`,
-`test_convergence_tracking.py`, `test_performance_budgets.py`,
-`test_scene_utils.py`, `test_coverage_boost.py`, `test_integration_phase23.py`,
+16 test files at audit time, including `test_contracts.py`,
+`test_gaussian_backend.py`, `test_gaussian_rasterizer.py`,
+`test_nvdiffrec_backend.py`, `test_lazy_imports.py`, `test_export_ply.py`,
+`test_phase6a_verification.py`, `test_rasterizer_contract.py`, and
 `test_reconstruction_mvp.py`. Golden snapshot at
 `tests/golden/reconstruction/tiny_scene_cpu.json`.
 
@@ -103,21 +102,23 @@ are set in the **next** PR after the baseline is reviewed.
 - Current floors: `src/tp/` 40%, `lux_depth_v3/validators/` 70%,
   `lux_depth_v3/` 30% (excludes validators). No floors yet for
   plugins/stage_graph/vlm/depth/streaming.
-- All target source files exist with the LOC profile assumed:
+- All target source files exist with the approximate LOC profile assumed.
+  Treat these as audit sizing figures and refresh them before opening the
+  implementation PRs that use them for scope/risk decisions:
 
-  | File                              |   LOC |
-  | --------------------------------- | ----: |
-  | `streaming/stages.py`             |  1239 |
-  | `depth/tools.py`                  |  1111 |
-  | `plugins/loader.py`               |   648 |
-  | `vlm/quality_validator.py`       |   561 |
-  | `vlm/scene_analyzer.py`          |   397 |
-  | `vlm/llava.py`                   |   371 |
-  | `stage_graph/policy.py`          |   343 |
-  | `stage_graph/stages/depth.py`    |   178 |
+  | File                              | Approx. LOC |
+  | --------------------------------- | ----------: |
+  | `streaming/stages.py`             |      ~1,240 |
+  | `depth/tools.py`                  |      ~1,110 |
+  | `plugins/loader.py`               |        ~650 |
+  | `vlm/quality_validator.py`       |        ~560 |
+  | `vlm/scene_analyzer.py`          |        ~400 |
+  | `vlm/llava.py`                   |        ~370 |
+  | `stage_graph/policy.py`          |        ~340 |
+  | `stage_graph/stages/depth.py`    |        ~180 |
 
-  `streaming/stages.py` at 1239 LOC is larger than a 6-file slice will cover
-  cleanly; PR 6 needs further decomposition.
+  `streaming/stages.py` at roughly 1.2k LOC is larger than a 6-file slice will
+  cover cleanly; PR 6 needs further decomposition.
 
 ---
 
@@ -130,8 +131,8 @@ are set in the **next** PR after the baseline is reviewed.
 |   2 | `stage_graph/policy.py` matrix                                            |               85%+ | Pure policy logic; fastest stable branch coverage |
 |   3 | VLM parser tests (cpu/core after PR 0 seam)                              |             70-80% | Was PR 3, unchanged in order but unblocked by PR 0 |
 |   4 | `stage_graph/stages/depth.py` fallback boundaries                         |               70%+ | Mockable model boundary |
-|   5 | `depth/tools.py` behavioral slices                                        |             55-65% | 1111 LOC; slice by behavior |
-|   6 | `streaming/stages.py` async lifecycle (subset 1)                          |             40-50% | 1239 LOC; subset first, finish in 6b |
+|   5 | `depth/tools.py` behavioral slices                                        |             55-65% | ~1.1k LOC; slice by behavior |
+|   6 | `streaming/stages.py` async lifecycle (subset 1)                          |             40-50% | ~1.2k LOC; subset first, finish in 6b |
 |  6b | `streaming/stages.py` subset 2 (worker pool + remaining stages)           |             55-65% | Split out of PR 6 due to size |
 |   7 | Reconstruction / Gaussian: **fill measured gaps only**                    | delta over baseline | Demoted from new-contracts work |
 
@@ -157,8 +158,9 @@ JSON (machine-readable) and Markdown (review-readable) tables with, per file:
 - Recommended marker lane (`unit`, `security`, `ml`, `integration`)
 
 Commits the **first run output** as
-`docs/testing/cold_zone_baseline_2026-05-XX.md`. Reviewers see actual numbers
-before any floor is proposed.
+`docs/testing/cold_zone_baseline_YYYY-MM-DD.md`, using the ISO date when the
+baseline is generated. Reviewers see actual numbers before any floor is
+proposed.
 
 ### 4.2 Branch-aware enforcement (companion mode)
 
@@ -395,16 +397,16 @@ Alongside existing `tests/test_depth_tools.py`, **or** as new files under
 
 ## 10. PR 6 / 6b — `streaming/stages.py` async lifecycle
 
-Split because the source is 1239 LOC.
+Split because the source is roughly 1.2k LOC.
 
 ### PR 6 — subset 1
 
-`tests/streaming/test_image_data.py`
-`tests/streaming/test_image_load_stage.py`
-`tests/streaming/test_image_save_stage.py`
+`tests/unit/streaming/test_image_data.py`
+`tests/unit/streaming/test_image_load_stage.py`
+`tests/unit/streaming/test_image_save_stage.py`
 
-(Or alongside existing `tests/test_streaming_stages.py`; placement decided
-when PR 6 opens based on existing test conventions.)
+(Or as root peer files beside existing `tests/test_streaming_stages.py`;
+placement must not create a new top-level `tests/streaming/` directory.)
 
 | Stage                   | Required tests                                                                 |
 | ----------------------- | ------------------------------------------------------------------------------ |
@@ -414,9 +416,9 @@ when PR 6 opens based on existing test conventions.)
 
 ### PR 6b — subset 2
 
-`tests/streaming/test_depth_estimation_stage_contracts.py`
-`tests/streaming/test_material_response_stage.py`
-`tests/streaming/test_stage_lifecycle.py`
+`tests/unit/streaming/test_depth_estimation_stage_contracts.py`
+`tests/unit/streaming/test_material_response_stage.py`
+`tests/unit/streaming/test_stage_lifecycle.py`
 
 | Stage                   | Required tests                                                                 |
 | ----------------------- | ------------------------------------------------------------------------------ |
@@ -436,8 +438,9 @@ when PR 6 opens based on existing test conventions.)
 ## 11. PR 7 — reconstruction / Gaussian fill-gaps
 
 Reconstruction is at `src/transformation_portal/spatial_ai/reconstruction/`,
-with 12 existing test files under `tests/spatial_ai/reconstruction/`. PR 7 is
-**not** a new-contracts PR; it fills measured gaps from PR 0's baseline.
+with 16 test files under `tests/spatial_ai/reconstruction/` at audit time.
+PR 7 is **not** a new-contracts PR; it fills measured gaps from PR 0's
+baseline.
 
 ### Workflow
 
