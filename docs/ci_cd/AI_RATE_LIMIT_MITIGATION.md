@@ -2,7 +2,7 @@
 
 **Issue:** GitHub Actions workflows using AI services (OpenAI) have experienced rate-limit errors (HTTP 429) during PR reviews and issue summarization, causing workflow failures or degraded experience.
 
-**Current State:** Some mitigation exists, but improvements needed for production reliability.
+**Current State:** AI code review is non-blocking, retries transient OpenAI 429 responses, treats `insufficient_quota` as terminal, and keeps fallback diagnostics in CI logs instead of posting fallback PR comments.
 
 ---
 
@@ -13,7 +13,9 @@
 ✅ **Has retry logic with exponential backoff:**
 - 6 retries with exponential backoff (2^attempt, capped at 60s)
 - Jitter (0.5x-1.5x) to avoid thundering herd
-- Graceful degradation: posts fallback message if all retries exhausted
+- Transient 429 responses are retried
+- `insufficient_quota` is treated as a terminal quota/billing condition and is not retried in the same workflow run
+- Graceful degradation writes a diagnostic fallback response and emits a CI warning without posting a fallback PR comment
 
 ✅ **Has concurrency control:**
 - `cancel-in-progress: true` reduces redundant API calls
@@ -22,6 +24,11 @@
 ✅ **Skips gracefully:**
 - Checks for `OPENAI_API_KEY` presence
 - Exits cleanly if key missing
+
+✅ **Suppresses noisy fallback comments:**
+- Real AI-generated reviews are posted as PR comments
+- AI-unavailable fallback messages stay in the workflow logs/output file
+- Operators should inspect CI logs for terminal quota diagnostics
 
 ### Issue Summarizer Workflow (`.github/workflows/summary.yml`)
 
@@ -34,9 +41,9 @@
 
 ## Recommended Improvements
 
-### 1. Make AI Workflows Non-Blocking (High Priority)
+### 1. Keep AI Workflows Non-Blocking (Implemented)
 
-**Change:** Make AI review/summary jobs **informational only**, not required status checks.
+**Contract:** AI review/summary jobs are **informational only**, not required status checks.
 
 **Implementation:**
 ```yaml
@@ -49,7 +56,7 @@ jobs:
 
 **Rationale:**
 - AI services are external dependencies with variable availability
-- Rate limits can block PR merges even when code is correct
+- Rate limits and quota exhaustion must not block PR merges when code is correct
 - Human review is the authoritative gate; AI is advisory
 
 ### 2. Add Retry Logic to Issue Summarizer (Medium Priority)
@@ -88,6 +95,7 @@ def call_openai_with_retries(client, messages, model="gpt-4o-mini", max_retries=
 **Rationale:**
 - Consistent error handling across AI workflows
 - Transient rate limits should not cause permanent failures
+- Terminal quota errors such as `insufficient_quota` should be logged once and not retried
 
 ### 3. Add Rate-Limit Budget Monitoring (Medium Priority)
 
@@ -120,7 +128,7 @@ check-quota:
 
 **Implementation:**
 - Count changed lines, files, modified areas (git diff stats only)
-- Post simple stats: "PR touches 5 files, +200/-50 lines, no AI review available"
+- Write simple stats to the job summary/output; avoid PR comments for AI-unavailable fallback text
 - No external API calls required
 
 **Rationale:**
@@ -146,17 +154,17 @@ check-quota:
 
 | Priority | Change | Impact | Effort | Recommended Timeline |
 |----------|--------|--------|--------|---------------------|
-| **High** | Make AI workflows non-blocking | Prevents PR merge blockage | Low (1 line change) | Immediate |
+| **Done** | Keep AI workflows non-blocking | Prevents PR merge blockage | Low (1 line change) | Implemented |
 | **Medium** | Add retry to issue summarizer | Improves reliability | Medium (30 mins) | Next sprint |
 | **Medium** | Add rate-limit budget monitoring | Proactive management | Medium (1-2 hours) | Next sprint |
-| **Low** | Add degraded mode fallback | Better UX when limited | High (2-3 hours) | Future consideration |
+| **Low** | Add degraded mode fallback | Better job-summary UX when limited | High (2-3 hours) | Future consideration |
 | **Low** | Alternative AI providers | Risk diversification | High (4-6 hours) | Future consideration |
 
 ---
 
-## Quick Win: Non-Blocking AI Workflows
+## Existing Contract: Non-Blocking AI Workflows
 
-**To implement immediately (1-line change per workflow):**
+**Configured behavior:**
 
 ```diff
 # .github/workflows/ai-code-review.yml
@@ -182,6 +190,7 @@ jobs:
 2. Trigger AI review workflow
 3. Verify that even if AI fails, PR can still merge
 4. Verify that AI comments still post when successful
+5. Verify that `insufficient_quota` logs a warning without repeated retries or a fallback PR comment
 
 ---
 
@@ -189,7 +198,7 @@ jobs:
 
 **To detect ongoing rate-limit issues:**
 
-1. **GitHub Actions logs:** Search for "Rate limited" or "429" in workflow runs
+1. **GitHub Actions logs:** Search for "Rate limited", "429", or `insufficient_quota` in workflow runs
 2. **OpenAI dashboard:** Monitor API usage and quota consumption
 3. **GitHub Issues:** Track rate-limit failures as incidents
 
@@ -209,9 +218,9 @@ jobs:
 
 ## Status
 
-**Current:** AI workflows have retry logic but can still block PRs when quota exhausted.
+**Current:** AI code review retries transient 429s, treats `insufficient_quota` as terminal, stays non-blocking, and avoids fallback PR comments.
 
-**Proposed:** Make workflows non-blocking + add retry to issue summarizer.
+**Proposed:** Add retry classification parity to issue summarizer and consider optional quota monitoring.
 
 **Owner:** Repository maintainers (requires workflow permission to modify).
 

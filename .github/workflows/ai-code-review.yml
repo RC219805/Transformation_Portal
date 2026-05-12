@@ -172,6 +172,15 @@ jobs:
           # Use retry logic with exponential backoff + jitter for rate-limit / transient errors.
           print("🤖 Requesting AI review from GPT-4o-mini with retry logic...")
 
+          def get_openai_error(response):
+              try:
+                  data = response.json()
+              except ValueError:
+                  return {}
+
+              error = data.get("error", {}) if isinstance(data, dict) else {}
+              return error if isinstance(error, dict) else {}
+
           def call_openai_with_retries(api_key, messages, model="gpt-4o-mini", max_retries=6, **kwargs):
               openai_headers = {
                   "Authorization": f"Bearer {api_key}",
@@ -202,13 +211,32 @@ jobs:
                           continue
                       raise RuntimeError("OpenAI request failed after retries") from e
 
-                  if response.status_code == 429 and attempt < max_retries:
-                      base_wait = min(60, 2 ** attempt)
-                      jitter = random.uniform(0.5, 1.5)
-                      wait = base_wait * jitter
-                      print(f"⚠️ Rate limited by OpenAI (attempt {attempt}/{max_retries}). Waiting {wait:.1f}s before retrying...")
-                      time.sleep(wait)
-                      continue
+                  if response.status_code == 429:
+                      error = get_openai_error(response)
+                      error_code = error.get("code")
+                      error_type = error.get("type")
+                      error_message = error.get("message", response.text)
+                      non_retryable_429_codes = {"insufficient_quota"}
+
+                      if error_code in non_retryable_429_codes or error_type in non_retryable_429_codes:
+                          raise RuntimeError(
+                              f"OpenAI HTTP 429 non-retryable {error_code or error_type}: "
+                              f"{error_message[:400]}"
+                          )
+
+                      if attempt < max_retries:
+                          base_wait = min(60, 2 ** attempt)
+                          jitter = random.uniform(0.5, 1.5)
+                          wait = base_wait * jitter
+                          print(
+                              f"⚠️ OpenAI retryable 429 "
+                              f"(code={error_code}, type={error_type}, attempt {attempt}/{max_retries}). "
+                              f"Waiting {wait:.1f}s before retrying..."
+                          )
+                          time.sleep(wait)
+                          continue
+
+                      raise RuntimeError(f"OpenAI HTTP 429: {response.text[:400]}")
 
                   if response.status_code >= 400:
                       raise RuntimeError(f"OpenAI HTTP {response.status_code}: {response.text[:400]}")
@@ -223,6 +251,7 @@ jobs:
           ]
 
           review_text = None
+          should_post_review_comment = False
           try:
               response = call_openai_with_retries(api_key, messages, model="gpt-4o-mini", max_retries=6)
               choices = response.get("choices") if isinstance(response, dict) else None
@@ -230,21 +259,23 @@ jobs:
                   first = choices[0] if choices else {}
                   message = first.get("message", {}) if isinstance(first, dict) else {}
                   review_text = message.get("content") if isinstance(message, dict) else None
+                  should_post_review_comment = bool(review_text)
               else:
                   print("⚠️ OpenAI returned an unexpected response structure.")
           except Exception as e:
-              # If retries exhausted or a non-retryable error occurred, provide a clear fallback review_text
-              print("::warning::AI Code Review OpenAI request failed (non-blocking). See job logs for diagnostic details.")
-              print("Detailed error classification (exception type and basic status/code):", file=sys.stderr)
+              # Keep advisory failures visible in CI logs without adding noisy PR comments.
+              print("::warning::AI Code Review OpenAI request failed non-blocking. See job logs for diagnostics.")
+              print("Detailed error classification:", file=sys.stderr)
               print(f"Exception type: {type(e).__name__}", file=sys.stderr)
-              err_str = str(e)
-              if "HTTP " in err_str:
-                  print(err_str[:500], file=sys.stderr)
-              review_text = ("⚠️ AI review unavailable: the AI service returned errors (rate limits or other). "
-                             "Please retry or review manually. See CI logs for diagnostic details (error type/status/code).")
+              print(str(e)[:500], file=sys.stderr)
+              review_text = (
+                  "AI review unavailable: the AI service returned a non-retryable or exhausted error. "
+                  "See CI logs for diagnostic details."
+              )
+              should_post_review_comment = False
 
-          # Post comment on PR (attempt even if fallback review_text used)
-          if review_text:
+          # Post comments only when OpenAI returned real review content.
+          if should_post_review_comment and review_text:
               comment_body = f"## AI Code Review\n\n{review_text}\n\n---\n*Generated by AI Code Review*"
 
               comment_url = f'https://api.github.com/repos/{repo}/issues/{pr_number}/comments'

@@ -95,6 +95,7 @@ except Exception as e:
 ### Visibility
 - Warnings appear as annotations in GitHub Actions UI
 - Detailed errors logged to job logs (not PR comments)
+- Fallback AI-unavailable diagnostics stay in logs/output files, not PR comments
 - No secrets or sensitive data in warnings
 
 ---
@@ -116,6 +117,12 @@ def call_openai_with_retries(client, messages, model="gpt-4o-mini", max_retries=
             status = getattr(e, "status_code", None) or getattr(e, "http_status", None)
             if status == 429 or "429" in str(e) or "Rate limit" in str(e):
                 status_is_429 = True
+            error_code = getattr(e, "code", None)
+            error_type = getattr(e, "type", None)
+
+            # Quota/billing exhaustion is terminal for the current workflow run.
+            if status_is_429 and "insufficient_quota" in (error_code, error_type):
+                raise
 
             # Retry with exponential backoff
             if status_is_429 and attempt < max_retries:
@@ -134,6 +141,7 @@ def call_openai_with_retries(client, messages, model="gpt-4o-mini", max_retries=
 - `max_retries=6`: Sufficient for typical rate limits
 - Exponential backoff: 2^attempt seconds (capped at 60s)
 - Jitter: 0.5x to 1.5x to avoid thundering herd
+- `insufficient_quota`: Terminal quota/billing condition; log once and do not retry
 
 ---
 
@@ -268,7 +276,8 @@ steps:
 
 | Failure | Detection | Warning Source | Job Result |
 |---------|-----------|----------------|------------|
-| OpenAI rate limit | Exception after retries | Python `::warning::` | Success ✓ |
+| OpenAI transient rate limit | Exception after retries | Python `::warning::` | Success ✓ |
+| OpenAI quota exhausted | Non-retryable 429 classification | Python `::warning::` | Success ✓ |
 | OpenAI timeout | Step timeout (4 min) | Shell `::warning::` | Success ✓ |
 | Python crash | Exception | Python + Shell `::warning::` | Success ✓ |
 | Network error | Exception | Python `::warning::` | Success ✓ |

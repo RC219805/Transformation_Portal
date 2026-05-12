@@ -92,7 +92,8 @@ The repository includes three AI-powered advisory workflows that provide intelli
 - Triggered on pull request opened/synchronize/reopened events.
 - Reviews relevant code files (`.py`, `.js`, `.ts`, `.jsx`, `.tsx`, `.yml`, `.yaml`, `.json`, `.md`).
 - Uses OpenAI `gpt-4o-mini` model with retry logic for rate-limit handling.
-- Posts review comments with code quality assessment, bug detection, security concerns, and best practices.
+- Posts review comments with code quality assessment, bug detection, security concerns, and best practices when OpenAI returns real review content.
+- Keeps AI-unavailable fallback diagnostics in workflow logs instead of posting fallback PR comments.
 - Non-blocking: continues even if AI service fails.
 - Timeout-bounded: 4-minute step timeout, 10-minute job timeout.
 - Requires `OPENAI_API_KEY` in repository secrets.
