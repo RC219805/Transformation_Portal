@@ -11,7 +11,7 @@ Features included:
     • Consolidated mask discovery and loading
     • Enhanced error context and recovery
     • Memory-efficient streaming for large batches
-    • Optional thread-backed parallelism for batch work
+    • Optional multiprocessing for batch work
     • Progress callback support and verbose logging
     • Validation pipeline with early error detection
 
@@ -34,7 +34,7 @@ import math
 import os
 import time
 from collections import OrderedDict
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple
@@ -803,7 +803,7 @@ def _process_single(dp: str, opts: BatchOptions) -> Tuple[str, Optional[str], Op
 
 def process_batch(opts: BatchOptions, progress: Optional[Callable[[int, int, str], None]] = None) -> int:
     """
-    Process a directory of depth maps. If workers > 1, uses ThreadPoolExecutor.
+    Process a directory of depth maps. If workers > 1, uses ProcessPoolExecutor.
     progress callback signature: (done:int, total:int, message:str)
     Returns the number of errors encountered.
     """
@@ -824,18 +824,39 @@ def process_batch(opts: BatchOptions, progress: Optional[Callable[[int, int, str
     )
 
     if opts.workers > 1:
-        with ThreadPoolExecutor(max_workers=opts.workers) as ex:
-            futures = {ex.submit(_process_single, dp, opts): dp for dp in depth_maps}
-            for fut in as_completed(futures):
-                base, out_path, err = fut.result()
-                done += 1
-                if err:
-                    errors.append((base, err))
-                    _log.warning("Base %s failed: %s", base, err)
-                else:
-                    _log.info("Processed %s -> %s", base, out_path)
-                if progress:
-                    progress(done, total, base)
+        # Use multiprocessing
+        try:
+            with ProcessPoolExecutor(max_workers=opts.workers) as ex:
+                futures = {ex.submit(_process_single, dp, opts): dp for dp in depth_maps}
+                for fut in as_completed(futures):
+                    base, out_path, err = fut.result()
+                    done += 1
+                    if err:
+                        errors.append((base, err))
+                        _log.warning("Base %s failed: %s", base, err)
+                    else:
+                        _log.info("Processed %s -> %s", base, out_path)
+                    if progress:
+                        progress(done, total, base)
+        except PermissionError as exc:
+            # Some restricted/sandboxed environments (notably on macOS) disallow querying
+            # semaphore sysconf limits needed by ProcessPoolExecutor.
+            _log.warning(
+                "ProcessPoolExecutor unavailable (%s). Falling back to ThreadPoolExecutor.",
+                exc,
+            )
+            with ThreadPoolExecutor(max_workers=opts.workers) as ex:
+                futures = {ex.submit(_process_single, dp, opts): dp for dp in depth_maps}
+                for fut in as_completed(futures):
+                    base, out_path, err = fut.result()
+                    done += 1
+                    if err:
+                        errors.append((base, err))
+                        _log.warning("Base %s failed: %s", base, err)
+                    else:
+                        _log.info("Processed %s -> %s", base, out_path)
+                    if progress:
+                        progress(done, total, base)
     else:
         for dp in depth_maps:
             base, out_path, err = _process_single(dp, opts)
@@ -895,7 +916,7 @@ def build_cli() -> argparse.ArgumentParser:
             "--workers",
             type=int,
             default=1,
-            help="Parallel worker count (ThreadPoolExecutor)",
+            help="Parallel worker count (ProcessPoolExecutor)",
         )
         p.add_argument("--verbose", action="store_true", help="Verbose logging")
         p.add_argument(
