@@ -24,7 +24,7 @@ The repository has been restructured to consolidate scattered scripts into a coh
 
 **Migration:**
 - `08_Documentation/Version_History/` → `docs/version_history/`
-- `08_Documentation/CHANGELOG_CLI_v1_3.md` → `docs/cli/CHANGELOG_CLI_v1_3.md`
+- `08_Documentation/CHANGELOG_CLI_v1_3.md` -> `docs/historical/cli/CHANGELOG_CLI_v1_3.md`
 - `08_Documentation/lantern_logo_component_spec.md` → `docs/brand/lantern_logo_component_spec.md`
 - `08_Documentation/luxury_rendering_insights.md` → `docs/guides/luxury_rendering_insights.md`
 - `08_Documentation/Palette_Assignment_Guide.md` → `docs/brand/Palette_Assignment_Guide.md`

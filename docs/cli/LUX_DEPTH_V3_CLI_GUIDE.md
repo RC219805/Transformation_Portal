@@ -12,16 +12,39 @@ This document provides usage examples for the `lux-depth-v3` CLI with APEX quali
 
 ## Installation
 
-First, ensure the package is installed with the CLI entry point:
+Use the repository-managed virtual environment and Make targets:
 
 ```bash
-pip install -e .
+source .venv/bin/activate
+make install-core
+make check-environment
 ```
 
-The `lux-depth-v3` command should now be available on your PATH. Alternatively, you can invoke it as a module:
+The `lux-depth-v3` command is installed into `.venv/bin/`. When the virtual
+environment is active, invoke it directly:
 
 ```bash
-python -m transformation_portal.lux_depth_v3 [options]
+lux-depth-v3 --help
+```
+
+When the virtual environment is not active, use the explicit path or module
+entrypoint:
+
+```bash
+.venv/bin/lux-depth-v3 --help
+.venv/bin/python -m transformation_portal.lux_depth_v3 --help
+```
+
+Optional model runtimes are installed through repo-governed scripts instead of
+ad-hoc package installs:
+
+```bash
+make install-ml-core
+./scripts/setup/install_da3_runtime.sh
+./scripts/setup/install_depth_pro_runtime.sh
+./scripts/setup/install_raw_runtime.sh
+./scripts/setup/install_fastvlm_runtime.sh
+make check-fastvlm-runtime
 ```
 
 ## Apache APEX Mode
@@ -83,7 +106,7 @@ lux-depth-v3 \
 
 ## Research-Only APEX+ Variants
 
-⚠️ **Important**: Research-only variants use non-commercial models that require explicit license acknowledgement. Only use these if you comply with the respective license restrictions.
+**Important**: Research-only variants use non-commercial models that require explicit license acknowledgement. Only use these if you comply with the respective license restrictions.
 
 ### Variant A: Depth Anything V3.1 (CC BY-NC 4.0)
 
@@ -188,6 +211,9 @@ lux-depth-v3 \
   - `da3-metric`: Apache-2.0 DA3 selector for the current Lux V3 relative-depth surface
 - `--depth-device TEXT`: Device for depth inference (default: `cpu`)
   - Options: `cpu`, `cuda`, `mps`
+- `--da3-python PATH`: Override the isolated DA3 subprocess interpreter.
+- `--depth-pro-python PATH`: Override the isolated Depth Pro subprocess interpreter.
+- `--raw-python PATH`: Override the isolated RAW subprocess interpreter.
 
 ### Feature Toggles
 
@@ -195,8 +221,31 @@ lux-depth-v3 \
   - Options: `on`, `off`, `true`, `false`, `yes`, `no`, `1`, `0`
 - `--pbr TEXT`: Enable PBR map generation (normal, roughness, AO) (default: `off`)
   - Options: Same as above
+- `--save-float-depth TEXT`: Persist float depth assets for downstream PBR/DOF workflows.
 - `--cache-depth TEXT`: Enable content-addressable depth cache (default: `off`)
   - Options: Same as above
+
+### Segmentation, SAM2, and Advisory Captioning
+
+- `--enable-segmentation TEXT`: Enable governed segmentation for Materials V3 masks.
+- `--segmentation-backend TEXT`: Select `stub`, `efficientsam`, `sam2`, or `sam_vit_h`.
+- `--strict-segmentation`: Fail closed on segmentation backend errors instead of falling back to `stub`.
+- `--segmentation-cache TEXT`: Select segmentation cache policy (`off` or `read_write`).
+- `--sam2-model-size TEXT`: Select SAM2 model size (`base` or `large`) when `--segmentation-backend sam2` is used.
+- `--sam2-checkpoint-path PATH`: Override the SAM2 checkpoint path.
+- `--sam2-tiling-enabled`: Enable deterministic SAM2 tiling for large images.
+- `--sam2-tile-size-px INTEGER`, `--sam2-overlap-px INTEGER`, `--sam2-global-pass-longest-side INTEGER`, `--sam2-max-concurrency INTEGER`: Tune deterministic SAM2 tiled segmentation.
+- `--sam2-points-per-side INTEGER`, `--sam2-points-per-batch INTEGER`, `--sam2-pred-iou-thresh FLOAT`, `--sam2-stability-score-thresh FLOAT`, `--sam2-crop-n-layers INTEGER`: Tune the SAM2 automatic mask generator.
+- `--vlm-captioning TEXT`: Enable optional advisory FastVLM captioning.
+- `--vlm-captioning-backend TEXT`: Select advisory captioning backend (`fastvlm`).
+- `--vlm-captioning-model TEXT`: Select `default`, `review`, `smoke`, or an explicit local model path.
+- `--vlm-captioning-proxy-format TEXT`: Select advisory proxy image format (`png` or `jpeg`).
+- `--vlm-captioning-max-side-px INTEGER`: Bound the longest side for advisory proxy images.
+- `--fastvlm-python PATH`: Override the isolated FastVLM subprocess interpreter.
+- `--fastvlm-mlx-vlm-dir PATH`: Override the isolated `mlx-vlm` checkout.
+- `--fastvlm-timeout-seconds INTEGER`: Bound FastVLM subprocess runtime.
+
+FastVLM captioning is advisory only. Its output is not quality-gate evidence.
 
 ### V2 Enhancement Controls
 
@@ -230,7 +279,13 @@ lux-depth-v3 \
 ### Processing Flags
 
 - `--overwrite`: Force reprocessing even if outputs exist
+- `--keep-intermediates`: Preserve intermediate artifacts for audit/debugging
 - `--force-depth`: Force depth recomputation (ignore cache)
+- `--strict-inputs TEXT`: Fail closed on unsupported or invalid inputs.
+- `--verify-images TEXT`: Verify image inputs before processing.
+- `--allow-semantic-fallback TEXT`: Allow configured semantic fallback paths.
+- `--max-workers INTEGER`: Bound CPU/I/O worker threads.
+- `--max-gpu-workers INTEGER`: Bound GPU/MPS inference workers.
 
 ### RAW Ingest
 
@@ -238,13 +293,13 @@ lux-depth-v3 \
 - `--raw-wb-mode TEXT`: White-balance mode (`camera`).
 - `--raw-demosaic TEXT`: rawpy demosaic algorithm name (default `AHD`).
   The CLI/orchestrator perform a syntactic check (must be a valid
-  `rawpy.DemosaicAlgorithm` member name — uppercase letters, digits, and
+  `rawpy.DemosaicAlgorithm` member name - uppercase letters, digits, and
   underscores; must start with a letter). The actual semantic check happens
   in the RAW decode subprocess, which fails closed with the list of members
   exposed by the installed LibRaw build (typical members: `AHD`, `AAHD`,
   `AMAZE`, `DCB`, `DHT`, `LINEAR`, `LMMSE`, `MODIFIED_AHD`, `PPG`, `VNG`;
   some builds also expose `AFD`, `VCD`, `VCD_MODIFIED_AHD`). Different
-  algorithms produce different pixels — the choice is captured in the
+  algorithms produce different pixels - the choice is captured in the
   Phase II ingest fingerprint for reproducibility.
 
 ### Logging
@@ -322,18 +377,18 @@ For deterministic V2 TIFF output, ICC profiles are preserved when available, inc
 Use the offline verifier for both v1 and v2 bundles:
 
 ```bash
-python scripts/verify_run_card_integrity.py ./path/to/run_card.json --check-canonical-json
+.venv/bin/python scripts/verify_run_card_integrity.py ./path/to/run_card.json --check-canonical-json
 ```
 
 For v2 run cards, detached attestation helpers are available:
 
 ```bash
-python tools/sign_run_card_attestation.py \
+.venv/bin/python tools/sign_run_card_attestation.py \
   --run-card ./path/to/run_card.json \
   --format both \
   --key-id "release-signer"
 
-python tools/verify_run_card_attestation.py \
+.venv/bin/python tools/verify_run_card_attestation.py \
   --run-card ./path/to/run_card.json \
   --require-native \
   --require-dsse
@@ -342,7 +397,7 @@ python tools/verify_run_card_attestation.py \
 When you need policy-based release gating instead of low-level integrity checks, use:
 
 ```bash
-python scripts/validation/assess_run_card_release.py \
+.venv/bin/python scripts/validation/assess_run_card_release.py \
   ./path/to/run_card.json \
   --require-v2 \
   --require-native-attestation \
@@ -371,6 +426,7 @@ lux-depth-v3 \
   --preset "premium" \
   --quality-tier "apex" \
   --depth-device "cuda" \
+  --model-key "da3-metric" \
   --materials-v3 "on" \
   --pbr "on" \
   --cache-depth "on" \
@@ -406,6 +462,7 @@ lux-depth-v3 \
   --output-dir "./output/pbr_only" \
   --quality-tier "apex" \
   --depth-device "mps" \
+  --model-key "da3-metric" \
   --pbr "on" \
   --enable-v2 "off" \
   --emit-master16 "on" \
@@ -426,6 +483,7 @@ lux-depth-v3 \
   --output-dir "./output/commercial_apex" \
   --quality-tier "apex" \
   --depth-device "mps" \
+  --model-key "da3-metric" \
   --materials-v3 "on" \
   --pbr "on" \
   --cache-depth "on" \
@@ -530,21 +588,21 @@ The input directory must contain at least one supported image format:
 
 **Mistake: Mixing quality-tier with incompatible presets**
 ```bash
-# ❌ Don't do this - conflicts between tier and preset
+# Avoid this - conflicts between tier and preset
 --quality-tier "standard" --preset "depth-anything-v3.1-research-m4"
 ```
 Solution: Let presets override quality-tier, or use quality-tier alone.
 
 **Mistake: Forgetting to disable V2 for PBR-only workflows**
 ```bash
-# ❌ V2 is enabled by default but you want PBR-only
+# Avoid this - V2 is enabled by default but you want PBR-only
 --pbr "on" --quality-tier "apex"
 ```
 Solution: Add `--enable-v2 "off"` when you only need depth and PBR outputs.
 
 **Mistake: Using research models without license acknowledgement**
 ```bash
-# ❌ Missing required flags
+# Avoid this - missing required flags
 --preset "depth-anything-v3.1-research-m4"
 ```
 Solution: Add `--non-commercial-ok "true"` for non-commercial models.
@@ -552,12 +610,14 @@ Solution: Add `--non-commercial-ok "true"` for non-commercial models.
 ### Missing ML Dependencies
 If you see warnings about missing torch, transformers, or coremltools:
 ```bash
-pip install -e ".[ml]"
+make install-ml-core
+./scripts/setup/install_da3_runtime.sh
 ```
 
 ## Additional Resources
 
-- [Depth Pipeline README](../depth_pipeline/DEPTH_PIPELINE_README.md)
+- [Current CLI reference](CLI_REFERENCE.md)
+- [PBR CLI testing guide](PBR_CLI_TESTING_GUIDE.md)
+- [Lux Depth V3 troubleshooting](../guides/LUX_DEPTH_V3_TROUBLESHOOTING.md)
 - [Architecture Decision Record: Depth Backend Unification](../architecture/ADR-019-depth-backend-unification.md)
-- [Architecture Decision Record: Depth Pro Integration](../architecture/ADR-018-depth-pro-integration.md)
-- [PBR CLI Coverage Report](PBR_CLI_COVERAGE_REPORT.md)
+- [Architecture Decision Record: RAW Ingest](../architecture/ADR-030-phase2-deterministic-raw-ingest.md)

@@ -1,5 +1,10 @@
 # PBR CLI Test Coverage Report
 
+> Historical note (2026-05-12): this report is retained as point-in-time
+> evidence only. It is not current coverage or CI guidance. Use
+> `docs/cli/PBR_CLI_TESTING_GUIDE.md` and
+> `docs/cli/PBR_CLI_TESTING_QUICK_REF.md` for maintained commands.
+
 **Date**: 2026-02-01
 **Module**: `src/transformation_portal/lux_depth_v3/pbr_cli.py`
 **Coverage**: 79.23% (200 statements, 35 missed, 84 branches, 20 partially covered)
@@ -343,10 +348,10 @@ The PBR CLI test suite provides **strong coverage (79.23%)** of all critical fun
 
 ## Related Documentation
 
-- [PBR CLI Testing Guide](./PBR_CLI_TESTING_GUIDE.md)
-- [Code Quality Standards](./CODE_QUALITY_STANDARDS.md)
-- [Branch Protection Setup](./BRANCH_PROTECTION_SETUP.md)
-- [CI Workflow](../.github/workflows/ci.yml)
+- [PBR CLI Testing Guide](../../cli/PBR_CLI_TESTING_GUIDE.md)
+- [Code Quality Standards](../../guides/CODE_QUALITY_STANDARDS.md)
+- [Branch Protection Setup](../../ci/BRANCH_PROTECTION_SETUP.md)
+- [CI Workflow](../../../.github/workflows/ci.yml)
 
 ---
 

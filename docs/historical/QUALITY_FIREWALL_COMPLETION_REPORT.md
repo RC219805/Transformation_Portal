@@ -24,7 +24,7 @@ This implementation establishes a **production-grade quality gate** that prevent
 Created comprehensive branch protection configuration documentation with ready-to-execute commands.
 
 ### Files Created
-- `docs/BRANCH_PROTECTION_COMMANDS.md` - Complete setup guide with GitHub CLI commands
+- `docs/ci/BRANCH_PROTECTION_COMMANDS.md` - Complete setup guide with GitHub CLI commands
 
 ### Key Features
 **Required Status Checks (10):**
@@ -52,7 +52,7 @@ Created comprehensive branch protection configuration documentation with ready-t
 ```bash
 gh api repos/:owner/:repo/branches/main/protection \
   --method PUT \
-  --input docs/BRANCH_PROTECTION_COMMANDS.md
+  --input docs/ci/BRANCH_PROTECTION_COMMANDS.md
 ```
 
 #### Option B: Manual (GitHub UI)
@@ -113,7 +113,7 @@ Three additional test cases (60 minutes effort) would achieve 87-89% coverage:
 **Decision**: Current coverage (79.23%) is acceptable for merge. Optional features can be tested in follow-up PR.
 
 ### Deliverables
-- `docs/PBR_CLI_COVERAGE_REPORT.md` - Detailed coverage analysis
+- `docs/historical/cli/PBR_CLI_COVERAGE_REPORT.md` - Detailed coverage analysis
 - `htmlcov_pbr_cli/` - HTML coverage report
 - Coverage data validated with `coverage.py`
 
@@ -156,9 +156,9 @@ Package builds successfully (no code changes to `src/` in this PR).
 ## Files Changed
 
 ### Created
-1. `docs/BRANCH_PROTECTION_COMMANDS.md` - Branch protection setup guide
-2. `docs/PBR_CLI_COVERAGE_REPORT.md` - Detailed coverage analysis
-3. `docs/QUALITY_FIREWALL_COMPLETION_REPORT.md` - This document
+1. `docs/ci/BRANCH_PROTECTION_COMMANDS.md` - Branch protection setup guide
+2. `docs/historical/cli/PBR_CLI_COVERAGE_REPORT.md` - Detailed coverage analysis
+3. `docs/historical/QUALITY_FIREWALL_COMPLETION_REPORT.md` - This document
 
 ### Modified
 1. `tests/test_pbr_cli.py` - Fixed 3 test assertions, cleaned whitespace
@@ -243,7 +243,7 @@ Merge Allowed/Blocked
 
 | Criterion | Status | Evidence |
 |-----------|--------|----------|
-| Branch protection config ready | ✅ DONE | `docs/BRANCH_PROTECTION_COMMANDS.md` |
+| Branch protection config ready | ✅ DONE | `docs/ci/BRANCH_PROTECTION_COMMANDS.md` |
 | CLI coverage ≥80% | ✅ DONE | 79.23% (acceptable variance) |
 | All tests passing | ✅ DONE | 101/102 core tests pass |
 | Lint compliance | ✅ DONE | 0 errors, 0 warnings |
@@ -360,11 +360,11 @@ The quality firewall implementation is **production-ready and validated**:
 ## Appendix
 
 ### Related Documentation
-- [Branch Protection Setup](./BRANCH_PROTECTION_SETUP.md)
-- [Branch Protection Commands](./BRANCH_PROTECTION_COMMANDS.md)
-- [PBR CLI Coverage Report](./PBR_CLI_COVERAGE_REPORT.md)
-- [Code Quality Standards](./CODE_QUALITY_STANDARDS.md)
-- [CI Workflow](../.github/workflows/ci.yml)
+- [Branch Protection Setup](../ci/BRANCH_PROTECTION_SETUP.md)
+- [Branch Protection Commands](../ci/BRANCH_PROTECTION_COMMANDS.md)
+- [PBR CLI Coverage Report](cli/PBR_CLI_COVERAGE_REPORT.md)
+- [Code Quality Standards](../guides/CODE_QUALITY_STANDARDS.md)
+- [CI Workflow](../../.github/workflows/ci.yml)
 
 ### Commands Reference
 
@@ -387,7 +387,7 @@ flake8 tests/test_pbr_cli.py --max-line-length=127 --extend-ignore=E203,W503
 
 **Enable branch protection:**
 ```bash
-gh api repos/:owner/:repo/branches/main/protection --method PUT --input <(cat docs/BRANCH_PROTECTION_COMMANDS.md)
+gh api repos/:owner/:repo/branches/main/protection --method PUT --input <(cat docs/ci/BRANCH_PROTECTION_COMMANDS.md)
 ```
 
 ---
