@@ -34,10 +34,30 @@ from __future__ import annotations
 
 import argparse
 import sys
-import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Iterable, List
+
+try:
+    from scripts.ci.cobertura_xml import (
+        _collect_sources,
+        _iter_class_elements,
+        _matches_prefix,
+        _normalize_filename,
+        _resolve_class_path,
+        _source_relative_prefix,
+        load_cobertura_files,
+    )
+except ModuleNotFoundError:  # pragma: no cover - direct script execution fallback
+    from cobertura_xml import (  # type: ignore[no-redef]
+        _collect_sources,
+        _iter_class_elements,
+        _matches_prefix,
+        _normalize_filename,
+        _resolve_class_path,
+        _source_relative_prefix,
+        load_cobertura_files,
+    )
 
 
 @dataclass(frozen=True)
@@ -101,163 +121,21 @@ class PackageResult:
         return self.percentage >= self.floor
 
 
-def _normalize_filename(raw: str) -> str:
-    """Normalize a Cobertura ``filename`` to a repo-relative ``src/...`` form.
-
-    Cobertura emits filenames in whichever form the coverage configuration
-    produces — relative (``src/tp/x.py``), bare-style (``./src/tp/x.py``),
-    or absolute (``/home/runner/work/repo/src/tp/x.py``). All three must
-    normalize to the same string so prefix matching is reliable.
-
-    Strategy:
-    1. Backslashes → forward slashes (Windows-style runners).
-    2. Strip a single leading ``./`` if present.
-    3. If the result is still absolute, find the *last* occurrence of
-       ``/src/`` and slice from there, dropping the absolute prefix.
-       Falling back to the last occurrence (rather than the first) is
-       the safe move when the repo path itself contains ``/src`` —
-       e.g. ``/work/my-src-repo/src/tp/x.py``.
-    """
-    norm = raw.replace("\\", "/")
-    if norm.startswith("./"):
-        norm = norm[2:]
-    if norm.startswith("/"):
-        marker = "/src/"
-        idx = norm.rfind(marker)
-        if idx != -1:
-            # Skip the leading slash so the result starts with "src/".
-            norm = norm[idx + 1 :]
-    return norm
-
-
-def _source_relative_prefix(source_text: str) -> str | None:
-    """Convert an absolute Cobertura ``<source>`` path to its ``src/...`` form.
-
-    coverage.py emits ``<source>`` nodes containing the absolute roots that
-    each ``<class filename="...">`` is relative to (e.g.
-    ``/home/runner/work/repo/src/tp`` and
-    ``/home/runner/work/repo/src/transformation_portal``). Extract the
-    ``src/...`` tail so we can join it with class filenames to recover
-    full repo-relative paths. Returns ``None`` for sources outside ``/src/``.
-    """
-    norm = source_text.replace("\\", "/").rstrip("/")
-    marker = "/src/"
-    idx = norm.rfind(marker)
-    if idx != -1:
-        return norm[idx + 1 :]
-    if norm.endswith("/src"):
-        return "src"
-    if norm == "src":
-        return "src"
-    return None
-
-
-def _resolve_class_path(
-    class_filename: str,
-    source_roots: Iterable[Path],
-    source_prefixes: Iterable[str],
-) -> str | None:
-    """Resolve a Cobertura class filename to its canonical repo-relative path.
-
-    coverage.py emits ``<class filename="...">`` with paths relative to one
-    of the ``<source>`` roots. When multiple ``--cov`` targets are
-    configured (e.g. ``--cov=src/tp --cov=src/transformation_portal``) we
-    can't tell from XML alone which source a given class belongs to, so we
-    probe the filesystem: the canonical path is the first source root
-    under which the file actually exists. That handles the common case
-    (filename includes the package path so it only resolves under one
-    source) and the ambiguous case (top-level ``__init__.py``-style files
-    that exist under multiple sources — we pick the first source listed,
-    which is deterministic across runs).
-
-    Falls back to the normalized filename (without prefixing) when no
-    source root matches — covers configurations that emit repo-relative
-    paths directly and avoids silently dropping coverage data.
-    """
-    norm = _normalize_filename(class_filename)
-    source_pairs = list(zip(source_roots, source_prefixes))
-    for root, prefix in source_pairs:
-        if (root / norm).is_file():
-            return f"{prefix.rstrip('/')}/{norm}"
-    # If none of the sources contain the file (e.g. CI deleted source
-    # files between pytest and the coverage check), fall back to the
-    # bare normalized form. Better to surface a 0-match floor failure
-    # than to silently drop a class.
-    return norm if norm else None
-
-
-def _matches_prefix(filename: str, prefix: str) -> bool:
-    """Return True if filename is matched by prefix (with src/-stripped fallback)."""
-    if filename.startswith(prefix):
-        return True
-    # Some coverage configurations strip the leading "src/" — try
-    # matching against the package path with that segment removed.
-    stripped = prefix.removeprefix("src/")
-    return bool(stripped) and filename.startswith(stripped)
-
-
-def _iter_class_elements(root: ET.Element) -> Iterable[ET.Element]:
-    # coverage.py emits Cobertura with packages > package > classes > class.
-    for cls in root.iter("class"):
-        yield cls
-
-
-def _collect_sources(root: ET.Element) -> tuple[list[Path], list[str]]:
-    """Read ``<sources>`` and return (absolute roots, src-relative prefixes).
-
-    Both lists are returned in the same order so callers can zip them and
-    probe the filesystem alongside the corresponding repo-relative prefix.
-    Sources outside ``/src/`` are skipped because we have no way to
-    express them as governed prefixes.
-    """
-    roots: list[Path] = []
-    prefixes: list[str] = []
-    seen: set[str] = set()
-    for src in root.findall("sources/source"):
-        if not src.text:
-            continue
-        prefix = _source_relative_prefix(src.text)
-        if not prefix or prefix in seen:
-            continue
-        seen.add(prefix)
-        roots.append(Path(src.text))
-        prefixes.append(prefix)
-    return roots, prefixes
-
-
 def aggregate(coverage_xml: Path, floors: Iterable[PackageFloor]) -> List[PackageResult]:
-    tree = ET.parse(coverage_xml)
-    root = tree.getroot()
-
-    source_roots, source_prefixes = _collect_sources(root)
-    classes = list(_iter_class_elements(root))
-    # Resolve every class once so each (filename → repo-relative path)
-    # decision is consistent across all floors and the filesystem probe
-    # is amortized.
-    resolved: list[tuple[str | None, ET.Element]] = [
-        (_resolve_class_path(cls.attrib.get("filename", ""), source_roots, source_prefixes), cls) for cls in classes
-    ]
+    files = load_cobertura_files(coverage_xml)
     results: list[PackageResult] = []
     for floor_spec in floors:
         covered = 0
         valid = 0
         normalized_prefix = floor_spec.prefix.replace("\\", "/")
         normalized_excludes = tuple(p.replace("\\", "/") for p in floor_spec.exclude_prefixes)
-        for filename, cls in resolved:
-            if filename is None:
+        for coverage_file in files:
+            if not _matches_prefix(coverage_file.filename, normalized_prefix):
                 continue
-            if not _matches_prefix(filename, normalized_prefix):
+            if any(_matches_prefix(coverage_file.filename, excl) for excl in normalized_excludes):
                 continue
-            if any(_matches_prefix(filename, excl) for excl in normalized_excludes):
-                continue
-            lines = cls.find("lines")
-            if lines is None:
-                continue
-            for line in lines.findall("line"):
-                valid += 1
-                hits = int(line.attrib.get("hits", "0"))
-                if hits > 0:
-                    covered += 1
+            valid += coverage_file.valid_lines
+            covered += coverage_file.covered_lines
         results.append(PackageResult(prefix=floor_spec.prefix, floor=floor_spec.floor, covered=covered, valid=valid))
     return results
 

@@ -12,14 +12,26 @@ import logging
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
 
 import numpy as np
 from PIL import Image
 
-from transformation_portal.vlm.llava import LLaVAProcessor
+if TYPE_CHECKING:
+    from transformation_portal.vlm.llava import LLaVAProcessor
+
+LLaVAProcessor: Any = None
 
 logger = logging.getLogger(__name__)
+
+
+def _resolve_llava_processor_class() -> Any:
+    global LLaVAProcessor
+    if LLaVAProcessor is None:
+        from transformation_portal.vlm.llava import LLaVAProcessor as resolved_processor
+
+        LLaVAProcessor = resolved_processor
+    return LLaVAProcessor
 
 
 class SpaceType(Enum):
@@ -119,7 +131,7 @@ class SceneAnalyzer:
 
 Provide your analysis in this exact format with clear sections."""
 
-    def __init__(self, llava_processor: Optional[LLaVAProcessor] = None, **llava_kwargs):
+    def __init__(self, llava_processor: Optional["LLaVAProcessor"] = None, **llava_kwargs):
         """Initialize scene analyzer.
 
         Args:
@@ -129,7 +141,7 @@ Provide your analysis in this exact format with clear sections."""
         if llava_processor is not None:
             self.processor = llava_processor
         else:
-            self.processor = LLaVAProcessor(**llava_kwargs)
+            self.processor = _resolve_llava_processor_class()(**llava_kwargs)
 
         logger.info("SceneAnalyzer initialized")
 

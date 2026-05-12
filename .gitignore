@@ -131,6 +131,7 @@ cloudflare/transformationportal-worker/node_modules/
 
 # Coverage artifacts
 .coverage
+coverage.xml
 coverage.json
 htmlcov/
 .coverage.*

@@ -756,10 +756,12 @@ jobs:
             ls -lh coverage.xml htmlcov/ || true
           fi
 
-          # Enforce per-package coverage floors (core tier only, only when tests passed
-          # and a coverage.xml was actually produced — failed runs already exited via rc above).
+          # Enforce per-package line floors and dry-run branch coverage reporting
+          # (core tier only, only when tests passed and a coverage.xml was actually
+          # produced — failed runs already exited via rc above).
           if [ "${{ matrix.test-type }}" != "ml" ] && [ "$rc" -eq 0 ] && [ -f coverage.xml ]; then
             python scripts/ci/check_per_package_coverage.py coverage.xml || rc=$?
+            python scripts/ci/check_per_package_branch_coverage.py coverage.xml --dry-run || rc=$?
           fi
 
           # Cleanup regardless of outcome

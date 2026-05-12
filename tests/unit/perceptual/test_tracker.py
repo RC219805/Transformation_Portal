@@ -161,7 +161,7 @@ class TestEnhancementTracker:
         tracker = EnhancementTracker()
         result = _make_analysis_result(overall_quality=0.6)
         tracker.establish_baseline([result])
-        assert tracker.get_trajectory("/fake/image.jpg") is not None
+        assert tracker.get_trajectory(result.image_path.stem) is not None
 
     def test_track_enhancement_adds_points(self):
         from transformation_portal.perceptual.tracker import EnhancementTracker
@@ -172,8 +172,10 @@ class TestEnhancementTracker:
 
         improved = _make_analysis_result(overall_quality=0.75)
         tracker.track_enhancement(improved, step=1, description="after depth")
-        traj = tracker.get_trajectory("/fake/image.jpg")
-        assert len(traj.points) == 1
+        traj = tracker.get_trajectory(improved.image_path.stem)
+        assert len(traj.points) == 2
+        assert traj.points[-1].step == 1
+        assert traj.points[-1].description == "after depth"
 
     def test_get_trajectory_returns_none_for_unknown(self):
         from transformation_portal.perceptual.tracker import EnhancementTracker
