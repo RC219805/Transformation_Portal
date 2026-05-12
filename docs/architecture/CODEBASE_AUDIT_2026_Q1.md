@@ -32,7 +32,8 @@ Current posture as of this refresh:
   Python test files and 30 workflow YAML files were observed during this
   refresh.
 - Architecture decomposition has progressed, but the repository still contains
-  large integration files, especially `app.py` and `lux_depth_v3/orchestrator.py`.
+  large integration files, especially `app.py` and
+  `src/transformation_portal/lux_depth_v3/orchestrator.py`.
 - Full `make ci` was not run for this document refresh; conclusions below are
   based on static inspection plus documentation validation.
 
@@ -287,7 +288,7 @@ Current risks:
 | Priority | Workstream | Current recommendation |
 | --- | --- | --- |
 | P0 | Preserve contracts | Keep `/healthz`, `/ready`, `/v1/readiness`, job routes, frontdoor selectors, CLI flags, and schema names stable unless a change intentionally updates them with tests. |
-| P1 | Architecture debt | Continue incremental `app.py` and `lux_depth_v3/orchestrator.py` decomposition around already-extracted modules. |
+| P1 | Architecture debt | Continue incremental `app.py` and `src/transformation_portal/lux_depth_v3/orchestrator.py` decomposition around already-extracted modules. |
 | P1 | Frontdoor validation | Keep Node 22, frontdoor health, browser smoke selectors, and portal bundle generation deterministic. |
 | P1 | Dependency governance | Preserve lock ownership, marker contracts, retired ML lane stubs, and optional runtime setup boundaries. |
 | P2 | Documentation hygiene | Maintain current navigation through the documentation map; classify historical material instead of mass-updating dates. |
@@ -325,4 +326,5 @@ CI governance, more test coverage, and stronger telemetry/dependency policy.
 The main remaining engineering risk is not lack of governance; it is the size
 and coupling of central integration surfaces. Future work should preserve the
 current contracts while continuing narrow decomposition of `app.py`,
-`lux_depth_v3/orchestrator.py`, and adjacent runtime/portal seams.
+`src/transformation_portal/lux_depth_v3/orchestrator.py`, and adjacent
+runtime/portal seams.

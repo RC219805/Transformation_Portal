@@ -1,7 +1,7 @@
 # Transformation Portal Health Check Report
 
 **Generated:** 2026-05-12
-**Repository:** `/Users/richardcheetham/Desktop/Transformation_Portal`
+**Repository:** `REPO_ROOT` (`/path/to/Transformation_Portal`)
 **Branch:** `main` tracking `origin/main`
 **HEAD:** `a3cf8030c docs(governance): refresh todo inventory baseline (#1723)`
 **Working Tree:** Clean at inspection time
