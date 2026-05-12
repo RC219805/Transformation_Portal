@@ -1,5 +1,17 @@
 # ✅ Architectural Verification: APPROVED FOR MERGE
 
+> Current status note (2026-05-12): This is a historical approval comment for
+> PR #932. Do not treat it as the current Materials/APEX governance entry
+> point. Later PR #932 evidence lives in:
+>
+> - `docs/architecture/PR_932_ARCHITECTURAL_VERIFICATION.md`
+> - `docs/architecture/PR_932_CRITICAL_FIXES_VERIFICATION.md`
+> - `docs/architecture/PR_932_DOCUMENTATION_ALIGNMENT_COMPLETE.md`
+>
+> The earlier follow-up recommendation to add explicit `allow_pickle=False`
+> has been overtaken by current repository patterns: NumPy artifact reads now
+> use explicit `np.load(..., allow_pickle=False)` in the live code paths.
+
 **PR:** #932 Materials V3 Production Integration
 **Commit:** `00f41198`
 **Reviewer:** @transformation-portal-architect
