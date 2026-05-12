@@ -18,7 +18,6 @@ from pathlib import Path
 from typing import Any, Dict, Optional, Union
 
 import numpy as np
-import torch
 from PIL import Image
 
 from transformation_portal.core.security.model_lock import resolve_model_lock_revision
@@ -29,15 +28,26 @@ MIN_TRANSFORMERS_VERSION = "4.40"
 LLAVA_INSTALL_GUIDANCE = f"pip install transformers>={MIN_TRANSFORMERS_VERSION} accelerate bitsandbytes"
 
 try:
+    import torch
+
+    TORCH_AVAILABLE = True
+except (ImportError, OSError):
+    torch = None
+    TORCH_AVAILABLE = False
+    logger.warning("PyTorch is not available. Install LLaVA runtime with: %s", LLAVA_INSTALL_GUIDANCE)
+
+try:
     from transformers import AutoProcessor, BitsAndBytesConfig, LlavaForConditionalGeneration
 
-    LLAVA_AVAILABLE = True
-except ImportError:
+    TRANSFORMERS_AVAILABLE = True
+except (ImportError, OSError):
     AutoProcessor = None
     BitsAndBytesConfig = None
     LlavaForConditionalGeneration = None
-    LLAVA_AVAILABLE = False
+    TRANSFORMERS_AVAILABLE = False
     logger.warning("LLaVA dependencies not available. Install with: %s", LLAVA_INSTALL_GUIDANCE)
+
+LLAVA_AVAILABLE = TORCH_AVAILABLE and TRANSFORMERS_AVAILABLE
 
 
 class LLaVAProcessor:
@@ -108,7 +118,8 @@ Focus on luxury architectural materials."""
         """
         if not LLAVA_AVAILABLE:
             raise ImportError(
-                f"LLaVA requires transformers>={MIN_TRANSFORMERS_VERSION}. Install with: {LLAVA_INSTALL_GUIDANCE}"
+                "LLaVA requires PyTorch and "
+                f"transformers>={MIN_TRANSFORMERS_VERSION}. Install with: {LLAVA_INSTALL_GUIDANCE}"
             )
 
         self.model_id = model_id

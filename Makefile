@@ -422,6 +422,7 @@ coverage-report:
 	@"$(PY)" -m pytest tests/ \
 		-m "not ml and not slow and not benchmark and not stress" \
 		--cov=src/transformation_portal \
+		--cov=src/tp \
 		--cov-branch \
 		--cov-report=term-missing \
 		--cov-report=html:htmlcov \

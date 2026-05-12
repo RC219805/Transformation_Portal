@@ -14,14 +14,26 @@ import logging
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Dict, List, Optional, Union
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
 
 import numpy as np
 from PIL import Image
 
-from transformation_portal.vlm.llava import LLaVAProcessor
+if TYPE_CHECKING:
+    from transformation_portal.vlm.llava import LLaVAProcessor
+
+LLaVAProcessor: Any = None
 
 logger = logging.getLogger(__name__)
+
+
+def _resolve_llava_processor_class() -> Any:
+    global LLaVAProcessor
+    if LLaVAProcessor is None:
+        from transformation_portal.vlm.llava import LLaVAProcessor as resolved_processor
+
+        LLaVAProcessor = resolved_processor
+    return LLaVAProcessor
 
 
 class QualityAspect(Enum):
@@ -172,7 +184,7 @@ List any critical issues found."""
 
     def __init__(
         self,
-        llava_processor: Optional[LLaVAProcessor] = None,
+        llava_processor: Optional["LLaVAProcessor"] = None,
         pass_threshold: float = 7.0,
         warning_threshold: float = 5.0,
         **llava_kwargs,
@@ -188,7 +200,7 @@ List any critical issues found."""
         if llava_processor is not None:
             self.processor = llava_processor
         else:
-            self.processor = LLaVAProcessor(**llava_kwargs)
+            self.processor = _resolve_llava_processor_class()(**llava_kwargs)
 
         self.pass_threshold = pass_threshold
         self.warning_threshold = warning_threshold

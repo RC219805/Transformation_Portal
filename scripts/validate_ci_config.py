@@ -47,6 +47,7 @@ class CIValidator:
         "--cov-report=html",
         "--cov-fail-under",
     )
+    REQUIRED_BRANCH_DRY_RUN_CHECK = "python scripts/ci/check_per_package_branch_coverage.py coverage.xml --dry-run"
 
     def __init__(self, repo_root: Path, fix_mode: bool = False):
         self.repo_root = repo_root
@@ -321,6 +322,13 @@ class CIValidator:
         if missing_core_flags:
             missing = ", ".join(repr(flag) for flag in missing_core_flags)
             self.log_error(f"build.yml:test: Core test leg must retain coverage generation flags: {missing}")
+            valid = False
+
+        if self.REQUIRED_BRANCH_DRY_RUN_CHECK not in run_script:
+            self.log_error(
+                "build.yml:test: Core test leg must retain branch coverage dry-run check "
+                f"{self.REQUIRED_BRANCH_DRY_RUN_CHECK!r}"
+            )
             valid = False
 
         return valid

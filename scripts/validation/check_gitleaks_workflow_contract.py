@@ -17,7 +17,7 @@ EXPECTED_PATH_REGEX = r"(^|/)public/portal-assets/portal\.js$"
 EXPECTED_ARTIFACT_PATH_REGEX = (
     r"(^|/)(output|output_[^/]*|test_output|test_artifacts|processed_images|processed_output|"
     r"extracted_context|docs/api/_build|__pycache__|\.pytest_cache|\.mypy_cache|\.ruff_cache|\.pyre|"
-    r"web/secure-landing/(?:\.next|\.next-build-verify|\.next-smoke-[^/]*|\.next-codex-[^/]*))(/|$)"
+    r"\.rag_cache|web/secure-landing/(?:\.next|\.next-build-verify|\.next-smoke-[^/]*|\.next-codex-[^/]*))(/|$)"
 )
 EXPECTED_REGEX_TARGET = "line"
 EXPECTED_MATCH_REGEX = r'return normalizedReason==="auth_failure"\|\|normalizedReason==="auth"\|\|normalizedStatus===401\|\|normalizedStatus===403\?\{reason:"auth_failure"'
