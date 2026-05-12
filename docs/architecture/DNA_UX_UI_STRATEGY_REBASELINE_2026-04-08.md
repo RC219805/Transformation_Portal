@@ -1,13 +1,15 @@
-# Portal UX/UI plan - current status snapshot (2026-05-11)
+# Portal UX/UI plan - current status snapshot (verified 2026-05-12)
 
 > File path retained for documentation-link stability. This content supersedes the
-> 2026-04-08 UX/UI rebaseline and reflects repo state through `4ceeee96` / #1720.
+> 2026-04-08 UX/UI rebaseline. Runtime UX/frontdoor facts still reflect #1720;
+> the repo documentation baseline was rechecked through `01dc1d816` / #1728.
 
 ## Snapshot metadata
 
-- `main` / `origin/main`: `4ceeee96`
+- `main` / `origin/main`: `01dc1d816`
 - Last UX/UI-relevant merged PR: #1716
 - Latest operational dependency maintenance: #1718 urllib3, #1720 Next.js
+- Latest repo documentation baseline: #1728
 - Purpose: planning context only; this document does not choose the next
   implementation PR.
 
@@ -158,7 +160,7 @@ Before using this snapshot for planning:
 
 ```bash
 git fetch --prune origin
-git log --oneline 4ceeee96..origin/main
+git log --oneline 01dc1d816..origin/main
 .venv/bin/python scripts/validation/check_portal_asset_budgets.py
 head -10 docs/compliance/PORTAL_TELEMETRY_PRIVACY_SIGNOFF.md
 grep -A2 "## Remaining Open Gates" docs/architecture/PORTAL_OPERATOR_CONSOLE_MODERNIZATION_EVIDENCE.md

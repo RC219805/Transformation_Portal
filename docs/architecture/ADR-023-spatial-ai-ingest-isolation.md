@@ -5,7 +5,10 @@
 **Authority:** Transformation Portal Architect
 **Supersedes:** None
 **Related:** Spatial AI Foundation Roadmap, DATA_CONTRACT.md v1.0.0
-**Enforcement:** CI lint rule (`scripts/security/verify_pipeline_isolation.py`)
+**Enforcement status:** The original enforcement script exists at
+`scripts/security/verify_pipeline_isolation.py`, but it is no longer a green
+description of the live codebase without re-scoping; see the current-state note
+below.
 
 ---
 
@@ -21,19 +24,42 @@
 
 ---
 
+## Current Codebase Verification (2026-05-12)
+
+Running `python3 scripts/security/verify_pipeline_isolation.py` against the live
+tree currently reports violations. The failures are not documentation typos:
+
+- `lux_depth_v3` imports spatial reconstruction and segmentation contracts in
+  several runtime paths.
+- `src/transformation_portal/spatial_ai/ingest/raw_worker.py` imports
+  `lux_depth_v3.raw_loader` for its `load_rgb` bridge.
+
+Treat the blanket cross-import examples below as the original ADR enforcement
+model, not as current green CI evidence. The still-relevant architectural
+boundary is raw pixel-decode contamination: changes touching RAW decode policy
+must either restore/re-scope mechanical enforcement or document an Architect
+decision that supersedes the older blanket-import rule.
+
+---
+
 ## Context
 
 ### Current State
 
-`lux_depth_v3/raw_loader.py` decodes RAW files for rendering:
+`lux_depth_v3/raw_loader.py` decodes RAW files for rendering and
+APEX-compatible ingest bridges:
 - Input: CR2/NEF/ARW (RAW formats)
-- Output: 8-bit sRGB numpy array (H, W, 3) for enhancement pipeline
-- Transform: Auto white balance, gamma 2.2, perceptual tone curve
+- Default legacy output: 8-bit gamma-encoded sRGB numpy array (H, W, 3)
+- Governed APEX-compatible output: 16-bit linear RGB when callers explicitly
+  request `output_linear=True` and `output_bps=16`
+- Transform: Auto/camera white balance, demosaic, and caller-selected gamma /
+  linear output policy
 
-This is **correct for rendering** but **catastrophic for training**:
+The legacy default is **correct for display-oriented compatibility** but
+catastrophic if accidentally reused for training:
 - 8-bit quantization destroys shadow/highlight detail
-- Gamma 2.2 makes light intensity non-linear (breaks physics)
-- sRGB gamut clips saturated colors (luxury materials exceed sRGB)
+- Gamma-encoded sRGB makes light intensity non-linear (breaks physics)
+- sRGB gamut can clip saturated colors (luxury materials exceed sRGB)
 
 ### Spatial AI Requirements (DATA_CONTRACT.md v1.0.0)
 
@@ -103,7 +129,7 @@ src/transformation_portal/
 
 ### 2. Enforcement Strategy
 
-**CI Lint Rule (Mandatory):**
+**Original CI Lint Rule Model:**
 
 ```python
 # scripts/security/verify_pipeline_isolation.py
@@ -126,7 +152,7 @@ def test_no_lux_depth_imports_in_spatial_ingest():
             assert "from transformation_portal.lux_depth_v3.raw_loader" not in content
 ```
 
-**Run in CI:**
+**Original CI integration model:**
 ```yaml
 # .github/workflows/spatial-contract.yml
 - name: Verify Pipeline Isolation
@@ -272,14 +298,15 @@ decoder = RawDecoderRegistry.get(mode)
 
 1. ✅ Approve this ADR
 2. ✅ Create `scripts/security/verify_pipeline_isolation.py`
-3. ✅ Add isolation check to `.github/workflows/spatial-contract.yml`
+3. ⚠️ Re-scope or replace the isolation check before treating it as a current
+   green CI gate
 4. ✅ Document headers in `lux_depth_v3/raw_loader.py`
 
 ### Phase 2: Spatial AI Implementation (Milestone 2)
 
 1. Create `spatial_ai/ingest/linear_decoder.py` (no imports from `lux_depth_v3`)
-2. Create `utils/raw_metadata.py` for shared EXIF extraction only
-3. CI enforces isolation automatically
+2. Create or identify the approved metadata-only sharing boundary
+3. Re-establish mechanical enforcement for the current boundary
 
 ### Phase 3: Audit (After Phase I Complete)
 
@@ -293,10 +320,12 @@ decoder = RawDecoderRegistry.get(mode)
 
 This ADR is successful if:
 
-1. ✅ CI fails when `spatial_ai` imports `lux_depth_v3.raw_loader`
-2. ✅ CI fails when `lux_depth_v3` imports `spatial_ai.ingest`
+1. ⚠️ Mechanical enforcement is re-scoped to the current codebase and fails on
+   unsafe raw pixel-decode contamination
+2. ⚠️ Any approved cross-package contract sharing is explicit and covered by
+   tests or a superseding ADR
 3. ✅ Both pipelines can evolve independently without coordination
-4. ✅ Zero reports of cross-contamination (rendering gets linear, training gets sRGB)
+4. ✅ Zero reports of cross-contamination (rendering gets sRGB, training gets linear)
 
 ---
 

@@ -10,9 +10,11 @@ portal/orchestrator baseline is already re-baselined in
 `docs/architecture/PORTAL_ORCHESTRATOR_ROADMAP.md`.
 
 This roadmap is intentionally narrower than a full shell rewrite. The next
-delivery horizon has already shipped; FastAPI and `portal.html` remain the
-operator-shell system of record, and this document now serves as a status and
-validation record rather than an active feature-phase plan.
+delivery horizon has already shipped; FastAPI, the root `portal.html` template,
+and the `web/secure-landing/portal-src/` source/deferred modules that produce
+the bundled portal assets remain the operator-shell system of record. This
+document now serves as a status and validation record rather than an active
+feature-phase plan.
 
 ## Completed Baseline
 
@@ -90,10 +92,11 @@ The following slices are already shipped and should remain closed:
 - Shipped on `main`.
 - The portal asset allowlist is now a checked-in manifest shared by the
   frontdoor proxy and contract tests.
-- Drift detection fails when FastAPI `portal.html` asset references are no
-  longer covered by the managed manifest.
-- FastAPI and `portal.html` remain the operator-shell system of record for this
-  roadmap horizon.
+- Drift detection fails when FastAPI portal-shell asset references are no longer
+  covered by the checked-in managed manifest.
+- FastAPI, the root `portal.html` template, and the `portal-src/` source and
+  deferred modules that produce the bundled portal assets remain the
+  operator-shell system of record for this roadmap horizon.
 
 ### PR 5: Conditional state-scaling follow-up
 
@@ -114,9 +117,8 @@ The following slices are already shipped and should remain closed:
   - `make test-frontdoor-contract` passed under Node `22.22.2`;
   - `make validate-frontdoor-browser` passed under the same Node `22.22.2`
     environment.
-- The default local workspace runtime may still resolve to Node `25.x`; treat
-  that as an unsupported toolchain posture, not as a frontdoor product
-  regression.
+- Any local runtime outside the package contract `>=22 <23` is an unsupported
+  toolchain posture, not a frontdoor product regression.
 
 ## Acceptance Gates
 
@@ -124,13 +126,13 @@ The following slices are already shipped and should remain closed:
 - `make validate-frontdoor-browser`
 - `make test-orchestrator-contract`
 - CI preflight classifies frontdoor changes as runtime-affecting
-- FastAPI `portal.html` asset references remain covered by the checked-in portal
+- FastAPI portal-shell asset references remain covered by the checked-in portal
   asset manifest
 - `/healthz` exposes the explicit `session_scaling` readiness check and fails
   when unsupported multi-instance or ephemeral-runtime modes are declared
 - Local `make test-frontdoor-contract` verification must run under Node 22.x;
-  the frontdoor package explicitly rejects unsupported runtimes such as the
-  default local Node 25.x toolchain.
+  the frontdoor package explicitly rejects unsupported runtimes outside
+  `>=22 <23`.
 
 ## Explicit Non-Goals For This Horizon
 

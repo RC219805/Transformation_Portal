@@ -6,6 +6,12 @@
 **Review Target:** `docs/spatial_ai/ROADMAP.md` implementation translation
 **Status:** APPROVED with MANDATORY modifications
 
+**Current codebase note (2026-05-12):** This remains a point-in-time
+architectural review. Phase I implementation now exists under
+`src/transformation_portal/spatial_ai/`; tests live under `tests/spatial_ai/`
+plus root and `tests/evals/` APEX files, not a `tests/apex/` directory.
+Where this review says "to be created", check the current ADRs and code first.
+
 ---
 
 ## Executive Summary
@@ -21,7 +27,8 @@ The Spatial AI Foundation roadmap demonstrates strong repository-grounded discip
 1. ✅ **Correct pattern reuse**: Protocol + backend + stub + registry matches `DepthBackend` (ADR-019)
 2. ✅ **Governance alignment**: Hard contract failures, provenance gates, banned dependency enforcement
 3. ✅ **CI testing discipline**: Synthetic PR lane, real nightly checks (mirrors APEX)
-4. ✅ **Dependency tiering**: Optional `requirements/spatial-ai.in` parallel to `ml.in`
+4. ✅ **Dependency tiering**: Optional `pyproject.toml` `spatial-ai` extra;
+   no checked-in `requirements/spatial-ai.in` lock lane exists today
 5. ✅ **C2PA reality check**: Correctly identifies EXR isn't C2PA-signable, proposes pragmatic hybrid
 
 ### Critical Issues Requiring Immediate Resolution
@@ -304,7 +311,9 @@ pytest tests/spatial_ai/ -m "not real and not ml and not benchmark"
 pytest tests/spatial_ai/ -m "real or benchmark" --maxfail=5
 ```
 
-This matches existing `tests/apex/` marker structure.
+This matches the APEX split between workflow-level synthetic/real modes in
+`.github/workflows/apex_performance.yml` and the current root
+`tests/test_apex_*.py` / `tests/evals/test_apex_*.py` files.
 
 ### 3.3 Definition of Done for Phase I
 
@@ -343,14 +352,16 @@ This matches existing `tests/apex/` marker structure.
 
 **Decision: APPROVED**
 
-Roadmap correctly proposes `requirements/spatial-ai.in` parallel to `ml.in`:
+Roadmap correctly proposed an optional spatial dependency lane parallel to the
+ML lane. The current repo exposes a `spatial-ai` optional extra in
+`pyproject.toml`; it does not currently have a checked-in
+`requirements/spatial-ai.in` lock lane.
 
-**Current State:**
+**Current Package Metadata State:**
 ```
-requirements/
-  base.in         # Core (numpy, Pillow, PyYAML)
-  ml.in           # Optional ML (torch, diffusers, transformers)
-  spatial-ai.in   # NEW: Optional spatial (rawpy, OpenEXR, pydantic)
+pyproject.toml
+  [project.optional-dependencies]
+    spatial-ai = [...]  # Optional spatial research dependencies
 ```
 
 **Approval Rationale:**
@@ -360,10 +371,10 @@ requirements/
 
 **MANDATORY ADDITION:**
 
-Add to `requirements/constraints.txt`:
+Already present in `requirements/constraints.txt` under ADR-024:
 ```txt
-# Spatial AI: Apache Iceberg banned until supply chain audit (ADR-XXX)
-apache-iceberg>=9999.0.0  # HARD-BLOCKED pending ADR-XXX
+# apache-iceberg  # Java interop (py4j), supply chain risk not assessed
+apache-iceberg>=9999.0.0
 ```
 
 **Rationale:**
@@ -892,14 +903,18 @@ Before any Phase I implementation PRs:
    - Owner: Architect (me)
    - Timeline: Before M0 PR
 
-2. **[BLOCKER] Create ADR-XXX: Spatial AI Ingest Isolation Boundary**
+2. **[DONE WITH DRIFT] Create ADR-023: Spatial AI Ingest Isolation Boundary**
    - Mandate: No shared RAW decode code between `lux_depth_v3` and `spatial_ai`
-   - Enforcement: CI lint rule (cross-import check)
+   - Current state: ADR-023 exists, but its older blanket cross-import
+     enforcement no longer matches the live codebase; see the ADR current-state
+     note before treating `scripts/security/verify_pipeline_isolation.py` as a
+     green CI gate.
    - Owner: Architect (me)
    - Timeline: Before M2 PR
 
-3. **[BLOCKER] Ban Apache Iceberg pending supply chain audit**
-   - Add `apache-iceberg>=9999.0.0` to `requirements/constraints.txt`
+3. **[DONE] Ban Apache Iceberg pending supply chain audit**
+   - `apache-iceberg>=9999.0.0` is present in `requirements/constraints.txt`
+     and tracked by ADR-024.
    - SQLite Tier A backend only for Phase I
    - Unblock in Phase II after ADR approval
    - Owner: Architect (me)
@@ -1023,11 +1038,12 @@ Any implementation work that:
 
 - [ ] Read this review in full
 - [ ] Verify ACEScg color space decision (Architect will clarify)
-- [ ] Confirm ADR-XXX (Ingest Isolation) exists and is approved
+- [ ] Confirm ADR-023 (Ingest Isolation) still matches the intended boundary
 - [ ] Verify `apache-iceberg>=9999.0.0` in `constraints.txt`
 - [ ] Review existing `DepthBackend` pattern (ADR-019)
 - [ ] Review existing `DepthArtifact` contract (lux_depth_v3/contracts/)
-- [ ] Understand APEX testing markers (tests/apex/)
+- [ ] Understand APEX workflow modes and current `tests/test_apex_*.py` /
+      `tests/evals/test_apex_*.py` coverage
 - [ ] Read SECURITY.md untrusted input handling requirements
 
 **For every Phase I PR:**
@@ -1046,15 +1062,15 @@ Any implementation work that:
 - `src/transformation_portal/depth/backends/protocol.py` — DepthBackend Protocol
 - `src/transformation_portal/lux_depth_v3/contracts/depth_artifact.py` — Contract example
 - `docs/architecture/ADR-019-depth-backend-unification.md` — Backend architecture
-- `tests/apex/` — APEX testing marker taxonomy
+- `tests/test_apex_*.py` and `tests/evals/test_apex_*.py` — current APEX test coverage
 - `.github/workflows/quality-gate.yml` — PR lane enforcement
 - `.github/workflows/nightly.yml` — Deep check strategy
 
 **New Artifacts This Review Requires:**
 
-- `docs/architecture/ADR-XXX-spatial-ai-ingest-isolation.md` (BLOCKER)
+- `docs/architecture/ADR-023-spatial-ai-ingest-isolation.md` (EXISTS; review current-state drift before using its enforcement script)
 - `docs/architecture/ADR-XXX-spatial-pii-redaction-policy.md` (HIGH)
-- `requirements/constraints.txt` update (ban Iceberg) (BLOCKER)
+- `requirements/constraints.txt` update (ban Iceberg) (DONE; see ADR-024)
 - `src/transformation_portal/spatial_ai/validation/query_sanitizer.py` (BLOCKER)
 
 ---

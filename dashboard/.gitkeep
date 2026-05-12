@@ -1,43 +1,14 @@
-# APEX Performance Dashboard Templates
+# APEX Dashboard Placeholder
 
-This directory contains static HTML templates for the APEX dashboard.
+This directory is intentionally tracked for the historical top-level dashboard workspace.
 
-## Auto-Generation Policy
+The live APEX dashboard is generated during CI by `scripts/apex_dashboard_generator.py`.
+The `dashboard_deploy` job in `.github/workflows/apex_performance.yml` writes the static
+site to `_site/` and publishes that artifact through GitHub Pages.
 
-Files in this directory are **reference templates only** and are not directly deployed.
+Generated dashboard files are not committed here. The deployed dashboard is available at:
 
-The actual dashboard is generated during CI via:
-- `scripts/apex_dashboard_generator.py`
-- Deployed to GitHub Pages at `https://<username>.github.io/Transformation_Portal/apex/`
+- `https://rc219805.github.io/Transformation_Portal/`
+- `https://rc219805.github.io/Transformation_Portal/latest.html`
 
-## Workflow
-
-1. CI runs APEX performance tests
-2. Results aggregated into `apex_performance.db` ledger
-3. `apex_dashboard_generator.py` queries ledger and generates static site
-4. GitHub Pages workflow deploys to `_site/` artifact
-5. Dashboard accessible at public URL
-
-## Files
-
-- `index.html` - Main dashboard with Chart.js visualizations
-- `latest.html` - Run explorer with sortable table
-- `data.json` - Raw data export for external tools
-
-## Local Testing
-
-To generate dashboard locally:
-
-```bash
-python scripts/apex_dashboard_generator.py \
-  --ledger-db apex_performance.db \
-  --output-dir _site \
-  --days 90
-```
-
-Then open `_site/index.html` in browser.
-
-## Security Note
-
-All data is static and client-side rendered. No backend infrastructure required.
-Dashboard generation happens in trusted CI environment only.
+Keep this file in place unless the top-level `dashboard/` workspace is formally retired.
