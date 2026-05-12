@@ -29,6 +29,51 @@ updates:
     open-pull-requests-limit: 5
     schedule:
       interval: "weekly"
+  - package-ecosystem: "npm"
+    directory: "/"
+    target-branch: "main"
+    open-pull-requests-limit: 5
+    schedule:
+      interval: "weekly"
+    groups:
+      root-node-tooling:
+        applies-to: "version-updates"
+        patterns:
+          - "*"
+          - "@*/*"
+        update-types:
+          - "minor"
+          - "patch"
+  - package-ecosystem: "npm"
+    directory: "/web/secure-landing"
+    target-branch: "main"
+    open-pull-requests-limit: 5
+    schedule:
+      interval: "weekly"
+    groups:
+      frontdoor-node:
+        applies-to: "version-updates"
+        patterns:
+          - "*"
+          - "@*/*"
+        update-types:
+          - "minor"
+          - "patch"
+  - package-ecosystem: "npm"
+    directory: "/cloudflare/transformationportal-worker"
+    target-branch: "main"
+    open-pull-requests-limit: 5
+    schedule:
+      interval: "weekly"
+    groups:
+      cloudflare-worker-node:
+        applies-to: "version-updates"
+        patterns:
+          - "*"
+          - "@*/*"
+        update-types:
+          - "minor"
+          - "patch"
 """
 
 
@@ -45,12 +90,13 @@ def test_missing_target_branch_is_reported() -> None:
 def test_unsupported_update_target_is_reported() -> None:
     broken = valid_dependabot_text().replace(
         'package-ecosystem: "github-actions"',
-        'package-ecosystem: "npm"',
+        'package-ecosystem: "gomod"',
     )
     errors = dependabot_contract.validate_dependabot_config(broken)
     assert (
-        "dependabot config contains unsupported update target ('npm', '/'); "
-        "expected only [('github-actions', '/'), ('pip', '/')]"
+        "dependabot config contains unsupported update target ('gomod', '/'); "
+        "expected only [('github-actions', '/'), ('npm', '/'), "
+        "('npm', '/cloudflare/transformationportal-worker'), ('npm', '/web/secure-landing'), ('pip', '/')]"
     ) in errors
 
 
@@ -141,3 +187,38 @@ updates:
 """
     errors = dependabot_contract.validate_dependabot_config(broken)
     assert "dependabot config contains duplicate update target ('pip', '/')" in errors
+
+
+def test_missing_npm_group_is_reported() -> None:
+    broken = valid_dependabot_text().replace(
+        """    groups:
+      frontdoor-node:
+        applies-to: "version-updates"
+        patterns:
+          - "*"
+          - "@*/*"
+        update-types:
+          - "minor"
+          - "patch"
+""",
+        "",
+    )
+    errors = dependabot_contract.validate_dependabot_config(broken)
+    assert "dependabot update ('npm', '/web/secure-landing') must define npm version-update groups" in errors
+
+
+def test_npm_group_must_keep_major_updates_separate() -> None:
+    broken = valid_dependabot_text().replace(
+        """        update-types:
+          - "minor"
+          - "patch"
+""",
+        """        update-types:
+          - "major"
+          - "minor"
+          - "patch"
+""",
+        1,
+    )
+    errors = dependabot_contract.validate_dependabot_config(broken)
+    assert "dependabot npm group 'root-node-tooling' must group only ['minor', 'patch'] updates" in errors
