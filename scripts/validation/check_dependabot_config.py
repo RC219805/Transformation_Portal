@@ -18,11 +18,33 @@ DEPENDABOT_PATH = REPO_ROOT / ".github" / "dependabot.yml"
 REQUIRED_UPDATES = {
     ("pip", "/"),
     ("github-actions", "/"),
+    ("npm", "/"),
+    ("npm", "/cloudflare/transformationportal-worker"),
+    ("npm", "/web/secure-landing"),
+}
+REQUIRED_NPM_GROUPS = {
+    ("npm", "/"): "root-node-tooling",
+    ("npm", "/cloudflare/transformationportal-worker"): "cloudflare-worker-node",
+    ("npm", "/web/secure-landing"): "frontdoor-node",
+}
+REQUIRED_SCHEDULES = {
+    ("pip", "/"): {"interval": "weekly", "day": "tuesday", "time": "10:00", "timezone": "Etc/UTC"},
+    ("github-actions", "/"): {"interval": "weekly", "day": "tuesday", "time": "10:15", "timezone": "Etc/UTC"},
+    ("npm", "/"): {"interval": "weekly", "day": "tuesday", "time": "10:30", "timezone": "Etc/UTC"},
+    ("npm", "/web/secure-landing"): {"interval": "weekly", "day": "tuesday", "time": "10:45", "timezone": "Etc/UTC"},
+    ("npm", "/cloudflare/transformationportal-worker"): {
+        "interval": "weekly",
+        "day": "tuesday",
+        "time": "11:00",
+        "timezone": "Etc/UTC",
+    },
 }
 REQUIRED_TARGET_BRANCH = "main"
-REQUIRED_INTERVAL = "weekly"
+REQUIRED_LABELS = {"automated", "dependencies"}
 REQUIRED_OPEN_PR_LIMIT = 5
 REQUIRED_PIP_EXCLUDE_PATHS: set[str] = set()
+REQUIRED_NPM_GROUP_PATTERNS = {"*", "@*/*"}
+REQUIRED_NPM_GROUP_UPDATE_TYPES = {"minor", "patch"}
 
 
 def _load_config(text: str) -> dict[str, Any]:
@@ -87,9 +109,22 @@ def validate_dependabot_config(text: str) -> list[str]:
         if entry.get("open-pull-requests-limit") != REQUIRED_OPEN_PR_LIMIT:
             errors.append(f"dependabot update {pair!r} must set open-pull-requests-limit " f"to {REQUIRED_OPEN_PR_LIMIT}")
 
+        labels = entry.get("labels")
+        if not isinstance(labels, list):
+            errors.append(f"dependabot update {pair!r} must define labels as a list")
+        else:
+            normalized_labels = {value for value in labels if isinstance(value, str) and value}
+            if normalized_labels != REQUIRED_LABELS:
+                errors.append(f"dependabot update {pair!r} must use labels {sorted(REQUIRED_LABELS)!r}")
+
         schedule = entry.get("schedule")
-        if not isinstance(schedule, dict) or schedule.get("interval") != REQUIRED_INTERVAL:
-            errors.append(f"dependabot update {pair!r} must use a {REQUIRED_INTERVAL!r} schedule")
+        required_schedule = REQUIRED_SCHEDULES.get(pair)
+        if not isinstance(schedule, dict):
+            errors.append(f"dependabot update {pair!r} must define schedule as a mapping")
+        elif required_schedule is not None:
+            for key, expected_value in required_schedule.items():
+                if schedule.get(key) != expected_value:
+                    errors.append(f"dependabot update {pair!r} must set schedule {key!r} to {expected_value!r}")
 
         if pair == ("pip", "/"):
             exclude_paths = entry.get("exclude-paths")
@@ -101,6 +136,42 @@ def validate_dependabot_config(text: str) -> list[str]:
                 }
                 for missing in sorted(missing_excludes):
                     errors.append(f"dependabot update ('pip', '/') must exclude unsupported manifest {missing!r}")
+
+        required_group = REQUIRED_NPM_GROUPS.get(pair)
+        if required_group is not None:
+            groups = entry.get("groups")
+            if not isinstance(groups, dict):
+                errors.append(f"dependabot update {pair!r} must define npm version-update groups")
+                continue
+
+            group = groups.get(required_group)
+            if not isinstance(group, dict):
+                errors.append(f"dependabot update {pair!r} must define npm group {required_group!r}")
+                continue
+
+            if group.get("applies-to") != "version-updates":
+                errors.append(f"dependabot npm group {required_group!r} must apply to version-updates")
+
+            patterns = group.get("patterns")
+            if not isinstance(patterns, list):
+                errors.append(f"dependabot npm group {required_group!r} must define patterns as a list")
+            else:
+                missing_patterns = REQUIRED_NPM_GROUP_PATTERNS - {
+                    value for value in patterns if isinstance(value, str) and value
+                }
+                for missing in sorted(missing_patterns):
+                    errors.append(f"dependabot npm group {required_group!r} must include pattern {missing!r}")
+
+            update_types = group.get("update-types")
+            if not isinstance(update_types, list):
+                errors.append(f"dependabot npm group {required_group!r} must define update-types as a list")
+            else:
+                normalized_update_types = {value for value in update_types if isinstance(value, str) and value}
+                if normalized_update_types != REQUIRED_NPM_GROUP_UPDATE_TYPES:
+                    errors.append(
+                        f"dependabot npm group {required_group!r} must group only "
+                        f"{sorted(REQUIRED_NPM_GROUP_UPDATE_TYPES)!r} updates"
+                    )
 
     missing = REQUIRED_UPDATES - seen_pairs
     for pair in sorted(missing):
