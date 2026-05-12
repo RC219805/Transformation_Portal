@@ -1,6 +1,6 @@
 # PR #906 Follow-Up Issues
 
-**Source:** Final Architectural Verification (docs/architecture/PR_906_FINAL_VERIFICATION.md)
+**Source:** Final Architectural Verification (docs/pr_archive/architecture/PR_906_FINAL_VERIFICATION.md)
 **Created:** 2026-02-11
 **Priority:** MEDIUM (complete before Phase 2)
 **Status:** NOT STARTED
@@ -306,6 +306,6 @@ def required_packages(cls) -> list[str]:
 
 ## References
 
-- Full analysis: `docs/architecture/PR_906_FINAL_VERIFICATION.md`
-- Original review: `docs/architecture/PR_906_ARCHITECTURAL_REVIEW.md`
+- Full analysis: `docs/pr_archive/architecture/PR_906_FINAL_VERIFICATION.md`
+- Original review: `docs/pr_archive/architecture/PR_906_ARCHITECTURAL_REVIEW.md`
 - PR #906: feat/apex-research-ultra-phase1

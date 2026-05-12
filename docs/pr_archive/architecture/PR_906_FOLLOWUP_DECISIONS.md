@@ -259,7 +259,7 @@ Deviations require explicit Architect approval and updated ADR.
 
 ## References
 
-- Verification report: `docs/architecture/PR_906_FINAL_VERIFICATION.md`
-- Follow-up tracking: `docs/architecture/PR_906_FOLLOWUP_ISSUES.md`
+- Verification report: `docs/pr_archive/architecture/PR_906_FINAL_VERIFICATION.md`
+- Follow-up tracking: `docs/pr_archive/architecture/PR_906_FOLLOWUP_ISSUES.md`
 - ADR-026: `docs/architecture/ADR-026-apex-research-ultra.md`
 - ADR-023: `docs/architecture/ADR-023-spatial-ai-ingest-isolation.md`

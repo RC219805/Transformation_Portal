@@ -6,7 +6,7 @@ The Transformation Portal implements **audit-grade provenance capture** for all 
 
 ## Phase 4 Hardening Roadmap
 
-For the **forward-looking**, spec-first deterministic rollout plan (schema governance, canonicalization, contract versioning, provenance binding, and CI determinism gates), see `docs/architecture/PHASE4_CAPTURE_PROVENANCE_FLAWLESS_ROADMAP.md`. That roadmap describes planned behavior (including potential shifts to warnings-first defaults with `--strict` for hard failures) and may not match the current hard failure policy documented below.
+For the **forward-looking**, spec-first deterministic rollout plan (schema governance, canonicalization, contract versioning, provenance binding, and CI determinism gates), see `docs/historical/architecture/PHASE4_CAPTURE_PROVENANCE_FLAWLESS_ROADMAP.md`. That roadmap describes planned behavior (including potential shifts to warnings-first defaults with `--strict` for hard failures) and may not match the current hard failure policy documented below.
 
 ## Scope
 

@@ -3,10 +3,11 @@
 **Purpose:** Current source of truth for finding maintained Transformation
 Portal documentation.
 
-**Last Updated:** 2026-05-11
+**Last Updated:** 2026-05-12
 **Maintainer:** Repository Architect
 **Current baseline:** repo-wide refresh audit dated May 11, 2026, building on
-`main` through PR #1721.
+`main` through PR #1721, with the May 12 architecture triage overlay for
+`docs/architecture` file dispositions.
 
 Historical reports remain available for audit context, but they are not current
 operator guidance unless they are linked here as canonical documents.
@@ -18,6 +19,7 @@ operator guidance unless they are linked here as canonical documents.
 | Repository overview | [README.md](../../README.md) | Project overview, install path, current operational surfaces |
 | Documentation index | [docs/README.md](../README.md) | Current docs navigation and historical-boundary guidance |
 | Documentation refresh audit | [DOCUMENTATION_REFRESH_AUDIT_2026-05-11.md](DOCUMENTATION_REFRESH_AUDIT_2026-05-11.md) | Repo-wide inventory and classification refresh |
+| Architecture triage inventory | [architecture-inventory-2026-05-12.csv](audit/architecture-inventory-2026-05-12.csv) | Current architecture-file disposition overlay |
 | Prior documentation state audit | [DOCUMENTATION_STATE_AUDIT_2026-04-27.md](DOCUMENTATION_STATE_AUDIT_2026-04-27.md) | Repo-wide docs classification after PR #1562, retained as historical baseline evidence |
 | Setup | [SETUP_GUIDE.md](../guides/SETUP_GUIDE.md) | Local environment setup and dependency bring-up |
 | Contribution workflow | [CONTRIBUTING.md](../../CONTRIBUTING.md) | Code, docs, issue, and PR expectations |
@@ -45,7 +47,8 @@ operator guidance unless they are linked here as canonical documents.
 | Area | Canonical Document | Status |
 | --- | --- | --- |
 | Documentation policy | [DOCUMENTATION_POLICY.md](DOCUMENTATION_POLICY.md) | Maintained |
-| Documentation inventory | [documentation-inventory-2026-05-11.csv](audit/documentation-inventory-2026-05-11.csv) | Current repo-wide classification ledger |
+| Documentation inventory | [documentation-inventory-2026-05-11.csv](audit/documentation-inventory-2026-05-11.csv) | Current repo-wide classification baseline; architecture overlay is tracked separately below |
+| Architecture triage inventory | [architecture-inventory-2026-05-12.csv](audit/architecture-inventory-2026-05-12.csv) | Current disposition ledger for files formerly or currently under `docs/architecture` |
 | Repository organization | [REPO_ORGANIZATION.md](REPO_ORGANIZATION.md) | Maintained |
 | Custom Agents | [CUSTOM_AGENT_GUIDE.md](../guides/CUSTOM_AGENT_GUIDE.md) | Maintained; live profiles are under `.github/agents/` |
 | Agent quick reference | [AGENT_QUICK_REFERENCE.md](../reference/AGENT_QUICK_REFERENCE.md) | Maintained |
@@ -68,7 +71,8 @@ operator guidance unless they are linked here as canonical documents.
 | Topic | Canonical Document | Status |
 | --- | --- | --- |
 | Architecture overview | [ARCHITECTURE.md](../architecture/ARCHITECTURE.md) | Maintained |
-| ADR index | [architecture/README.md](../architecture/README.md) | Maintained |
+| Architecture index | [architecture/README.md](../architecture/README.md) | Maintained; lists canonical, promoted, review-required, moved historical, and delete-candidate architecture dispositions |
+| Architecture triage ledger | [architecture-inventory-2026-05-12.csv](audit/architecture-inventory-2026-05-12.csv) | Current overlay for architecture-file disposition decisions |
 | Depth backend unification | [ADR-019](../architecture/ADR-019-depth-backend-unification.md) | Maintained |
 | DA3 non-commercial research tier | [ADR-0015](../architecture/adr-0015-da3-1-1-non-commercial-research-tier.md) | Maintained |
 | Portal orchestrator roadmap | [PORTAL_ORCHESTRATOR_ROADMAP.md](../architecture/PORTAL_ORCHESTRATOR_ROADMAP.md) | Maintained planning doc |
@@ -96,7 +100,9 @@ operator guidance unless they are linked here as canonical documents.
 | `docs/750_picacho/`, `docs/analysis/`, `docs/projects/`, `docs/quality_analysis/`, `docs/visual_review/` | Historical or mixed project records | Dated project evidence and investigations; not current operator guidance unless linked above |
 | `docs/depth_model/`, `docs/depth_pipeline/`, `docs/pipeline/`, `docs/pipeline_docs/` | Superseded or historical pipeline/depth material | Use current Lux Depth V3 docs and ADRs instead |
 | `docs/deliverables/`, `docs/project-status/`, `docs/reports/`, `docs/status/`, `docs/summaries/`, `docs/session_summaries/`, `docs/sessions/`, `docs/historical/`, `docs/verification/` | Point-in-time reports | Audit context only |
+| `docs/historical/architecture/` | Architecture historical records | Point-in-time architecture files moved out of current architecture navigation by the May 12 triage |
 | `docs/pr_archive/`, `docs/pr_reports/`, `docs/pr_summaries/` | PR-specific records | Review and merge history only |
+| `docs/pr_archive/architecture/` | Architecture PR/review evidence | PR-specific architecture records moved out of current architecture navigation by the May 12 triage |
 | `docs/_archive/` | Archive-only | Retired or consolidated material |
 
 ## Maintenance Protocol

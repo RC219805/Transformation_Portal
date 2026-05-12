@@ -13,6 +13,15 @@ IGNORE_SUFFIXES = {".pyc"}
 # Test files may contain strings referencing fictional docs paths as test fixtures.
 # Exclude them from stale docs path detection.
 IGNORE_PATH_PATTERNS = {"tests/"}  # Paths starting with these are skipped
+ARCHIVE_DOC_PREFIXES = ("docs/historical/", "docs/pr_archive/")
+INTENTIONAL_MISSING_REF_TERMS = (
+    "broken reference",
+    "broken documentation reference",
+    "did not exist",
+    "does not exist",
+    "missing target",
+    "target does not exist",
+)
 PATH_PATTERN = re.compile(
     "".join(
         [
@@ -111,6 +120,22 @@ def _read_text_if_probably_text(path: pathlib.Path) -> str | None:
     return payload.decode("utf-8", errors="ignore")
 
 
+def _allows_intentional_missing_ref(
+    line: str,
+    relative_path: pathlib.Path | None,
+) -> bool:
+    """Allow archived evidence to quote a path that was broken historically."""
+    if relative_path is None:
+        return False
+
+    rel_str = str(relative_path).replace("\\", "/")
+    if not rel_str.startswith(ARCHIVE_DOC_PREFIXES):
+        return False
+
+    lowered = line.lower()
+    return any(term in lowered for term in INTENTIONAL_MISSING_REF_TERMS)
+
+
 def _find_stale_refs(path: pathlib.Path, relative_path: pathlib.Path | None = None) -> list[str]:
     if not path.exists() or not path.is_file() or _should_skip(path, relative_path):
         return []
@@ -120,9 +145,11 @@ def _find_stale_refs(path: pathlib.Path, relative_path: pathlib.Path | None = No
         return []
 
     stale = set()
-    for match in PATH_PATTERN.findall(text):
-        target = REPO_ROOT / "docs" / match
-        if not target.exists():
+    for line in text.splitlines():
+        for match in PATH_PATTERN.findall(line):
+            target = REPO_ROOT / "docs" / match
+            if target.exists() or _allows_intentional_missing_ref(line, relative_path):
+                continue
             stale.add(f"docs/{match}")
     return sorted(stale)
 

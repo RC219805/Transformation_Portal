@@ -191,6 +191,70 @@ def test_checker_ignores_docs_subdirectory_references(tmp_path: Path) -> None:
     assert "No stale docs path references detected" in result.stdout
 
 
+@pytest.mark.parametrize(
+    "archive_path",
+    [
+        "docs/historical/example.md",
+        "docs/pr_archive/example.md",
+    ],
+)
+def test_checker_allows_explicit_missing_root_doc_reference_in_archive_docs(
+    tmp_path: Path,
+    archive_path: str,
+) -> None:
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+    _init_repo(repo_root)
+    _copy_repo_script(repo_root)
+
+    _write(repo_root / "docs" / "README.md")
+    _track(
+        repo_root,
+        "docs/README.md",
+        "scripts/governance/check_stale_docs_paths.py",
+    )
+    _commit(repo_root)
+
+    _write(
+        repo_root / archive_path,
+        f"Historical broken reference: {MISSING_ROOT_DOC} does not exist.\n",
+    )
+    _track(repo_root, archive_path)
+
+    result = _run_checker(repo_root)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "No stale docs path references detected" in result.stdout
+
+
+def test_checker_still_flags_unqualified_missing_root_doc_reference_in_archive_docs(
+    tmp_path: Path,
+) -> None:
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+    _init_repo(repo_root)
+    _copy_repo_script(repo_root)
+
+    _write(repo_root / "docs" / "README.md")
+    _track(
+        repo_root,
+        "docs/README.md",
+        "scripts/governance/check_stale_docs_paths.py",
+    )
+    _commit(repo_root)
+
+    _write(
+        repo_root / "docs" / "pr_archive" / "example.md",
+        f"See {MISSING_ROOT_DOC}\n",
+    )
+    _track(repo_root, "docs/pr_archive/example.md")
+
+    result = _run_checker(repo_root)
+
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert f"docs/pr_archive/example.md: references missing {MISSING_ROOT_DOC}" in result.stdout
+
+
 def test_checker_ignores_unchanged_files_with_stale_references(
     tmp_path: Path,
 ) -> None:

@@ -6,7 +6,8 @@ place for audit context but are not live runbooks unless they are linked below
 as canonical documents.
 
 **Current baseline:** repo-wide refresh audit dated May 11, 2026, building on
-`main` through PR #1721.
+`main` through PR #1721, with the May 12 architecture triage overlay for
+`docs/architecture` file dispositions.
 
 ## Start Here
 
@@ -15,6 +16,7 @@ as canonical documents.
 | Repository overview and setup | [Main README](../README.md) |
 | Full documentation map | [Documentation Map](governance/DOCUMENTATION_MAP.md) |
 | Documentation refresh audit | [2026-05-11 Documentation Refresh Audit](governance/DOCUMENTATION_REFRESH_AUDIT_2026-05-11.md) |
+| Architecture triage inventory | [2026-05-12 Architecture Inventory](governance/audit/architecture-inventory-2026-05-12.csv) |
 | Prior documentation state audit | [2026-04-27 Documentation State Audit](governance/DOCUMENTATION_STATE_AUDIT_2026-04-27.md) |
 | Local setup and environment checks | [Setup Guide](guides/SETUP_GUIDE.md) |
 | Portal and orchestrator contracts | [Portal + Orchestrator Quickstart](guides/PORTAL_ORCHESTRATOR_QUICKSTART.md) |
@@ -54,6 +56,8 @@ map explicitly links a document as canonical:
 - `docs/reports/`, `docs/status/`, `docs/session_summaries/`,
   `docs/sessions/`, `docs/historical/`, and `docs/pr_archive/` are
   point-in-time records.
+- `docs/historical/architecture/` and `docs/pr_archive/architecture/` contain
+  files moved out of `docs/architecture` by the May 12 architecture triage.
 - `docs/_archive/` contains intentionally retired or consolidated material.
 
 Do not use historical documents as operator runbooks without first checking the
@@ -70,6 +74,8 @@ current documentation map.
 - Repo-wide classification evidence lives in
   [2026-05-11 Documentation Refresh Audit](governance/DOCUMENTATION_REFRESH_AUDIT_2026-05-11.md)
   and its inventory CSV.
+- Architecture-specific disposition evidence lives in
+  [2026-05-12 Architecture Inventory](governance/audit/architecture-inventory-2026-05-12.csv).
 - Validate documentation structure with:
 
 ```bash
@@ -79,4 +85,4 @@ make check-doc-heading-links
 python3 scripts/governance/check_docs_structure.py --all
 ```
 
-**Last Updated:** 2026-05-11
+**Last Updated:** 2026-05-12

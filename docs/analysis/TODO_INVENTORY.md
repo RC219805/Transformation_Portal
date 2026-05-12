@@ -920,7 +920,7 @@ The implementation guide itself (`docs/_archive/2026-Q1-consolidation/ADR-023-im
 **Priority:** P4 (Low)
 **Action:** None (status markers, not TODOs)
 
-**Location:** `docs/architecture/REPOSITORY_HEALTH_REPORT_2026-02-03.md:143`
+**Location:** `docs/historical/architecture/REPOSITORY_HEALTH_REPORT_2026-02-03.md:143`
 
 ```markdown
 #### ⚠️ **Placeholder/TODO Markers**

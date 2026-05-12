@@ -32,14 +32,14 @@ make compile
 - **Branch:** `RC219805-patch-4`
 - **Reason:** Superseded by PRs #882, #909, #907
 - **Action:** Close PR → Delete `origin/RC219805-patch-4`
-- **Reference:** `docs/architecture/pr-review-845-883-superseded.md`
+- **Reference:** `docs/pr_archive/architecture/pr-review-845-883-superseded.md`
 
 #### PR #883 — Close and Delete Branch
 - **URL:** https://github.com/RC-88/Transformation_Portal/pull/883
 - **Branch:** `automated/dependency-updates`
 - **Reason:** Incomplete (only contains CI artifact), superseded by targeted PRs
 - **Action:** Close PR → Delete `origin/automated/dependency-updates`
-- **Reference:** `docs/architecture/pr-review-845-883-superseded.md`
+- **Reference:** `docs/pr_archive/architecture/pr-review-845-883-superseded.md`
 
 ---
 

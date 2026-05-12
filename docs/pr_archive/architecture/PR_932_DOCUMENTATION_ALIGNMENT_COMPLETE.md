@@ -46,8 +46,8 @@ Successfully updated PR #932 description and fixed all remaining documentation i
    - Line 339: `"when masks_dir is None"` → `"when masks_file is None"`
 
 2. **`config/materials_v3_production.yaml`**
-   - Line 7: `"see docs/models.md"` → `"automatic on first use"`
-   - Fixed broken documentation reference (docs/models.md does not exist)
+   - Line 7: replaced the former broken reference `"see docs/models.md"` (target does not exist) with `"automatic on first use"`
+   - Fixed broken documentation reference: `docs/models.md` does not exist
    - Weights download automatically via Hugging Face on first use
 
 ### 3. Verification ✅
@@ -59,8 +59,8 @@ Successfully updated PR #932 description and fixed all remaining documentation i
 
 **Remaining `masks_dir` references (EXPECTED):**
 - `docs/architecture/ADR-030-materials-v3-production-integration.md` - Documents the change history ✅
-- `docs/architecture/PR_932_CRITICAL_FIXES_VERIFICATION.md` - Documents the fix ✅
-- `docs/architecture/PR_932_ARCHITECTURAL_VERIFICATION.md` - Historical reference ✅
+- `docs/pr_archive/architecture/PR_932_CRITICAL_FIXES_VERIFICATION.md` - Documents the fix ✅
+- `docs/pr_archive/architecture/PR_932_ARCHITECTURAL_VERIFICATION.md` - Historical reference ✅
 
 These are **intentionally preserved** as they document the evolution and critical fixes.
 
@@ -197,8 +197,8 @@ The PR description now accurately reflects the code in the repository and provid
 ## Related References
 
 - **ADR-030:** `docs/architecture/ADR-030-materials-v3-production-integration.md`
-- **Critical Fixes Verification:** `docs/architecture/PR_932_CRITICAL_FIXES_VERIFICATION.md`
-- **Architectural Approval:** `docs/architecture/MATERIALS_V3_ARCHITECTURAL_APPROVAL.md`
+- **Critical Fixes Verification:** `docs/pr_archive/architecture/PR_932_CRITICAL_FIXES_VERIFICATION.md`
+- **Architectural Approval:** `docs/historical/architecture/MATERIALS_V3_ARCHITECTURAL_APPROVAL.md`
 - **PR #932:** https://github.com/RC219805/Transformation_Portal/pull/932
 
 ---
@@ -209,7 +209,7 @@ The PR description now accurately reflects the code in the repository and provid
 - [x] All CLI examples show working syntax
 - [x] Architecture diagram shows explicit file path
 - [x] Test docstrings fixed (masks_file not masks_dir)
-- [x] Config broken reference fixed (docs/models.md)
+- [x] Config broken reference fixed (`docs/models.md` did not exist)
 - [x] No lingering masks_dir in Python code
 - [x] Migration note added to PR description
 - [x] Contract rationale explained

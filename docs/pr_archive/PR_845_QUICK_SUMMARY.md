@@ -195,7 +195,7 @@ tests/test_performance_regression.py  ← Keep unchanged
 
 ## Full Analysis
 
-See: `docs/architecture/PR_845_ARCHITECTURAL_REVIEW.md` (comprehensive review)
+See: `docs/pr_archive/architecture/PR_845_ARCHITECTURAL_REVIEW.md` (comprehensive review)
 
 ---
 

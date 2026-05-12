@@ -4,7 +4,7 @@
 **Date:** 2026-02-11
 **Architect:** Transformation Portal Architect
 **Commit:** `179c5348`
-**Previous Review:** `docs/architecture/PR_932_ARCHITECTURAL_VERIFICATION.md` (WITHDRAWN)
+**Previous Review:** `docs/pr_archive/architecture/PR_932_ARCHITECTURAL_VERIFICATION.md` (WITHDRAWN)
 
 ---
 

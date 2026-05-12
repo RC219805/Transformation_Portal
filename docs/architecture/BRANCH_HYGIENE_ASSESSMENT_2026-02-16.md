@@ -50,7 +50,7 @@
 - Remediation requires `>=3.1.0` in `requirements/ml.in`
 - This should be a **separate, focused PR** (see action items below)
 
-**Referenced by:** `docs/architecture/pr-review-845-883-superseded.md` (commit `c0b9a96e`)
+**Referenced by:** `docs/pr_archive/architecture/pr-review-845-883-superseded.md` (commit `c0b9a96e`)
 
 ---
 
@@ -73,7 +73,7 @@
 - Current `test_performance_regression.py` on main tests actual code paths (manifest caching, SHA-256, parallel processing, depth cache, PBR batching)
 - PR #845 replaces these with subprocess-only tests of `tools/performance_ledger.py`
 
-**Referenced by:** `docs/architecture/pr-review-845-883-superseded.md` (commit `c0b9a96e`)
+**Referenced by:** `docs/pr_archive/architecture/pr-review-845-883-superseded.md` (commit `c0b9a96e`)
 
 ---
 
@@ -313,7 +313,7 @@ After completing action items:
 
 ## Related Documentation
 
-- `docs/architecture/pr-review-845-883-superseded.md` — Detailed supersession analysis
+- `docs/pr_archive/architecture/pr-review-845-883-superseded.md` — Detailed supersession analysis
 - `docs/operations/branch_protection_setup.md` — CI Gate pattern documentation
 - `docs/architecture/agent_governance.md` — Escalation and decision authority
 - `CONTRIBUTING.md` — Contribution workflow and PR guidelines

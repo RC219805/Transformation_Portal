@@ -421,7 +421,7 @@ Create a new issue with these tasks:
 - [ ] Issue #6: Either fail loudly on HDR+no-OpenEXR or use 32-bit TIFF fallback
 - [ ] Issue #7: Update `required_packages()` docstring in ensemble backend
 
-**Reference:** docs/architecture/PR_906_FINAL_VERIFICATION.md
+**Reference:** docs/pr_archive/architecture/PR_906_FINAL_VERIFICATION.md
 ```
 
 ---
