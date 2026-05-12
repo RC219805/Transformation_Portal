@@ -207,7 +207,7 @@ After following this plan:
 
 If you have questions about this plan:
 
-1. Review the full architectural analysis: `docs/architecture/PR_845_ARCHITECTURAL_REVIEW.md`
+1. Review the full architectural analysis: `docs/pr_archive/architecture/PR_845_ARCHITECTURAL_REVIEW.md`
 2. Check existing test patterns: `tests/test_performance_ledger_cli.py`
 3. Review testing governance: `docs/architecture/agent_governance.md`
 

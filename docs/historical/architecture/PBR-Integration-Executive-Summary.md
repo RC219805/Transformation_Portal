@@ -213,7 +213,7 @@ This proposal requires explicit approval for:
 - ✅ `docs/architecture/PBR-Integration-Visual-Architecture.md` (25KB)
 - ✅ `docs/architecture/PBR-Integration-Implementation-Roadmap.md` (14KB)
 - ✅ `docs/architecture/PBR-Integration-Quick-Reference.md` (10KB)
-- ✅ `docs/architecture/PBR-Integration-Executive-Summary.md` (this document)
+- ✅ `docs/historical/architecture/PBR-Integration-Executive-Summary.md` (this document)
 
 ### Implementation Artifacts (Pending Approval)
 - Module code (25 files, ~2000 LOC)

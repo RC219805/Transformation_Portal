@@ -51,7 +51,7 @@ This simple wiring will be implemented separately, followed by 6-week validation
 4. Reconsider unified architecture after production data (April 2026+)
 
 **References:**
-- Full Assessment: `docs/architecture/PR_ARCHITECTURAL_ASSESSMENT_793_792_790.md`
+- Full Assessment: `docs/pr_archive/architecture/PR_ARCHITECTURAL_ASSESSMENT_793_792_790.md`
 - ADR-018: `docs/architecture/ADR-018-depth-pro-integration.md`
 - Governance: `docs/architecture/agent_governance.md`
 
@@ -117,7 +117,7 @@ Required before v3.0 architecture:
 4. Design v3.0 informed by real-world needs (April 2026+)
 
 **References:**
-- Full Assessment: `docs/architecture/PR_ARCHITECTURAL_ASSESSMENT_793_792_790.md`
+- Full Assessment: `docs/pr_archive/architecture/PR_ARCHITECTURAL_ASSESSMENT_793_792_790.md`
 - ADR-018: `docs/architecture/ADR-018-depth-pro-integration.md`
 - Executive Summary: `docs/architecture/PR_REVIEW_EXECUTIVE_SUMMARY.md`
 
@@ -178,7 +178,7 @@ diff <(git show main:requirements/all.txt) requirements/all.txt | grep -E "numpy
 - Any known incompatibilities?
 
 **References:**
-- Full Assessment: `docs/architecture/PR_ARCHITECTURAL_ASSESSMENT_793_792_790.md`
+- Full Assessment: `docs/pr_archive/architecture/PR_ARCHITECTURAL_ASSESSMENT_793_792_790.md`
 
 **Status:** Hold until #792/#790 resolved, then review and merge in isolation.
 ```

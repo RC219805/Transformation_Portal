@@ -4,9 +4,9 @@
 > PR #932. Do not treat it as the current Materials/APEX governance entry
 > point. Later PR #932 evidence lives in:
 >
-> - `docs/architecture/PR_932_ARCHITECTURAL_VERIFICATION.md`
-> - `docs/architecture/PR_932_CRITICAL_FIXES_VERIFICATION.md`
-> - `docs/architecture/PR_932_DOCUMENTATION_ALIGNMENT_COMPLETE.md`
+> - `docs/pr_archive/architecture/PR_932_ARCHITECTURAL_VERIFICATION.md`
+> - `docs/pr_archive/architecture/PR_932_CRITICAL_FIXES_VERIFICATION.md`
+> - `docs/pr_archive/architecture/PR_932_DOCUMENTATION_ALIGNMENT_COMPLETE.md`
 >
 > The earlier follow-up recommendation to add explicit `allow_pickle=False`
 > was specific to the PR #932 Materials V3 mask NPZ load and was addressed in
@@ -110,7 +110,7 @@ As **Transformation Portal Architect**, I exercise final authority over:
 
 ## Documentation
 
-Full architectural verification: `docs/architecture/PR_932_ARCHITECTURAL_VERIFICATION.md`
+Full architectural verification: `docs/pr_archive/architecture/PR_932_ARCHITECTURAL_VERIFICATION.md`
 
 **Governance compliance:**
 - ✅ ADR-023: Pipeline Isolation (mechanically verified)

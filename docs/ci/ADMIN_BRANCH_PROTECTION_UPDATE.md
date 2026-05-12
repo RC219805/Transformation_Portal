@@ -10,7 +10,7 @@
 - ✅ Strict mode enabled (branches must be up to date)
 - ✅ No phantom "Expected" checks
 
-**Documentation:** See `docs/architecture/PR_804_GOVERNANCE_ANALYSIS.md` for full validation report.
+**Documentation:** See `docs/pr_archive/architecture/PR_804_GOVERNANCE_ANALYSIS.md` for full validation report.
 
 ---
 
