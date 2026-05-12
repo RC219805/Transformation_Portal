@@ -51,11 +51,13 @@ resolution and runner disk pressure in this ML-heavy repository.
 
 ## Files Modified
 
+Historical list from the original incident fix:
+
 - `.github/workflows/build.yml` - Optimized lint and test jobs
-- `requirements-lint.txt` (new) - Minimal dependencies for linting
-- `.github/workflows/dependency-submission.yml` (new) - Custom dependency graph submission
+- `requirements-lint.txt` - Minimal dependencies for linting
+- `.github/workflows/dependency-submission.yml` - Custom dependency graph submission
 - `.github/workflows/ai-code-review.yml` - Fixed Python syntax errors
-- `.github/dependency-submission-config.yml` (new) - Configuration documentation
+- `.github/dependency-submission-config.yml` - Configuration documentation
 
 ## Disk Space Savings Summary
 

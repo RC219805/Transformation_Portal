@@ -144,6 +144,7 @@ The repository includes a `copilot-firewall.yml` configuration file that specifi
 - Python Package Index (PyPI) for dependency installation
 - PyTorch download servers for ML/AI dependencies
 - GitHub resources for repository access
+- npm registry for managed frontdoor dependency installation
 - Hugging Face for ML models and datasets
 - OpenAI API for AI summarization
 - Common CDNs and NVIDIA toolkit for GPU support
