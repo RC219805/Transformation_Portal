@@ -1,13 +1,13 @@
 # Test Run Summary
 
-Last updated: 2026-05-11 23:47:19 PDT
+Last updated: 2026-05-12
 
 ## Proven Green
 
 - `make test-fast`
-  - Result: 77 passed in 2.51s
+  - Result: 77 passed in 2.91s
 - `.venv/bin/python -m pytest --collect-only -q tests`
-  - Result: 10289 tests collected in 4.92s
+  - Result: 9971 tests collected in 2.95s
 
 ## Incomplete
 
