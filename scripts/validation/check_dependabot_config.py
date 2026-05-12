@@ -27,8 +27,20 @@ REQUIRED_NPM_GROUPS = {
     ("npm", "/cloudflare/transformationportal-worker"): "cloudflare-worker-node",
     ("npm", "/web/secure-landing"): "frontdoor-node",
 }
+REQUIRED_SCHEDULES = {
+    ("pip", "/"): {"interval": "weekly", "day": "tuesday", "time": "10:00", "timezone": "Etc/UTC"},
+    ("github-actions", "/"): {"interval": "weekly", "day": "tuesday", "time": "10:15", "timezone": "Etc/UTC"},
+    ("npm", "/"): {"interval": "weekly", "day": "tuesday", "time": "10:30", "timezone": "Etc/UTC"},
+    ("npm", "/web/secure-landing"): {"interval": "weekly", "day": "tuesday", "time": "10:45", "timezone": "Etc/UTC"},
+    ("npm", "/cloudflare/transformationportal-worker"): {
+        "interval": "weekly",
+        "day": "tuesday",
+        "time": "11:00",
+        "timezone": "Etc/UTC",
+    },
+}
 REQUIRED_TARGET_BRANCH = "main"
-REQUIRED_INTERVAL = "weekly"
+REQUIRED_LABELS = {"automated", "dependencies"}
 REQUIRED_OPEN_PR_LIMIT = 5
 REQUIRED_PIP_EXCLUDE_PATHS: set[str] = set()
 REQUIRED_NPM_GROUP_PATTERNS = {"*", "@*/*"}
@@ -97,9 +109,22 @@ def validate_dependabot_config(text: str) -> list[str]:
         if entry.get("open-pull-requests-limit") != REQUIRED_OPEN_PR_LIMIT:
             errors.append(f"dependabot update {pair!r} must set open-pull-requests-limit " f"to {REQUIRED_OPEN_PR_LIMIT}")
 
+        labels = entry.get("labels")
+        if not isinstance(labels, list):
+            errors.append(f"dependabot update {pair!r} must define labels as a list")
+        else:
+            normalized_labels = {value for value in labels if isinstance(value, str) and value}
+            if normalized_labels != REQUIRED_LABELS:
+                errors.append(f"dependabot update {pair!r} must use labels {sorted(REQUIRED_LABELS)!r}")
+
         schedule = entry.get("schedule")
-        if not isinstance(schedule, dict) or schedule.get("interval") != REQUIRED_INTERVAL:
-            errors.append(f"dependabot update {pair!r} must use a {REQUIRED_INTERVAL!r} schedule")
+        required_schedule = REQUIRED_SCHEDULES.get(pair)
+        if not isinstance(schedule, dict):
+            errors.append(f"dependabot update {pair!r} must define schedule as a mapping")
+        elif required_schedule is not None:
+            for key, expected_value in required_schedule.items():
+                if schedule.get(key) != expected_value:
+                    errors.append(f"dependabot update {pair!r} must set schedule {key!r} to {expected_value!r}")
 
         if pair == ("pip", "/"):
             exclude_paths = entry.get("exclude-paths")

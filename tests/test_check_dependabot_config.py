@@ -21,20 +21,38 @@ updates:
     directory: "/"
     target-branch: "main"
     open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "automated"
     schedule:
       interval: "weekly"
+      day: "tuesday"
+      time: "10:00"
+      timezone: "Etc/UTC"
   - package-ecosystem: "github-actions"
     directory: "/"
     target-branch: "main"
     open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "automated"
     schedule:
       interval: "weekly"
+      day: "tuesday"
+      time: "10:15"
+      timezone: "Etc/UTC"
   - package-ecosystem: "npm"
     directory: "/"
     target-branch: "main"
     open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "automated"
     schedule:
       interval: "weekly"
+      day: "tuesday"
+      time: "10:30"
+      timezone: "Etc/UTC"
     groups:
       root-node-tooling:
         applies-to: "version-updates"
@@ -48,8 +66,14 @@ updates:
     directory: "/web/secure-landing"
     target-branch: "main"
     open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "automated"
     schedule:
       interval: "weekly"
+      day: "tuesday"
+      time: "10:45"
+      timezone: "Etc/UTC"
     groups:
       frontdoor-node:
         applies-to: "version-updates"
@@ -63,8 +87,14 @@ updates:
     directory: "/cloudflare/transformationportal-worker"
     target-branch: "main"
     open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "automated"
     schedule:
       interval: "weekly"
+      day: "tuesday"
+      time: "11:00"
+      timezone: "Etc/UTC"
     groups:
       cloudflare-worker-node:
         applies-to: "version-updates"
@@ -104,6 +134,25 @@ def test_missing_open_pr_limit_is_reported() -> None:
     broken = valid_dependabot_text().replace("    open-pull-requests-limit: 5\n", "", 1)
     errors = dependabot_contract.validate_dependabot_config(broken)
     assert ("dependabot update ('pip', '/') must set open-pull-requests-limit to 5") in errors
+
+
+def test_missing_labels_are_reported() -> None:
+    broken = valid_dependabot_text().replace(
+        """    labels:
+      - "dependencies"
+      - "automated"
+""",
+        "",
+        1,
+    )
+    errors = dependabot_contract.validate_dependabot_config(broken)
+    assert "dependabot update ('pip', '/') must define labels as a list" in errors
+
+
+def test_staggered_schedule_drift_is_reported() -> None:
+    broken = valid_dependabot_text().replace('      time: "10:45"', '      time: "10:30"', 1)
+    errors = dependabot_contract.validate_dependabot_config(broken)
+    assert "dependabot update ('npm', '/web/secure-landing') must set schedule 'time' to '10:45'" in errors
 
 
 def test_pip_exclude_paths_are_not_required_after_retired_manifests_are_removed() -> None:

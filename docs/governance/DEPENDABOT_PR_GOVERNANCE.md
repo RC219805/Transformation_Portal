@@ -16,6 +16,9 @@ This document establishes governance for reviewing and merging Dependabot PRs in
 3. **Node dependency updates** (`package-ecosystem: "npm"`) for `/`, `/web/secure-landing`, and `/cloudflare/transformationportal-worker`
 
 Each category has different risk profiles and merge criteria.
+All configured Dependabot entries carry the `dependencies` and `automated`
+labels and use staggered Tuesday UTC schedules so update PRs remain
+classifiable without arriving in one burst.
 
 ---
 
