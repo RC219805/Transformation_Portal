@@ -299,8 +299,8 @@ class TestCLIParsing:
         assert exit_code == 0
 
 
-class TestMultiprocessing:
-    """Test multiprocessing functionality"""
+class TestParallelBatchProcessing:
+    """Test parallel batch processing functionality"""
 
     def test_batch_with_multiple_workers(self, temp_dirs, deterministic_rng):
         """Test that batch processing works with multiple workers"""
