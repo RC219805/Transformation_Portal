@@ -17,6 +17,9 @@ Usage:
     # JSON output for CI consumption
     python scripts/validation/scan_todo_inventory.py --json
 
+    # Refresh the committed scanner snapshot
+    python scripts/validation/scan_todo_inventory.py --write-snapshot
+
     # Governance enforcement mode (exit 1 on violations)
     python scripts/validation/scan_todo_inventory.py --check-governance
 """
@@ -27,7 +30,10 @@ import argparse
 import ast
 import io
 import json
+import os
 import re
+import sys
+import tempfile
 import tokenize
 from dataclasses import dataclass, field
 from enum import Enum
@@ -39,6 +45,8 @@ from typing import Any
 # ─────────────────────────────────────────────────────────────────────────────
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
+DEFAULT_SNAPSHOT_PATH = PROJECT_ROOT / "docs" / "analysis" / "todo_scanner_snapshot.json"
+DEFAULT_JSON_INDENT = 2
 
 # Directories to scan for Python files
 PYTHON_SCAN_ROOTS = (
@@ -161,6 +169,67 @@ class ScanResult:
             "items": [item.to_dict() for item in self.items],
             "errors": self.errors,
         }
+
+
+def _json_payload(result: ScanResult) -> dict[str, Any]:
+    """Build the stable machine-readable scanner payload."""
+    output = result.to_dict()
+    output["governance_compliant"] = result.ungoverned_count == 0
+    return output
+
+
+def _format_json_payload(payload: dict[str, Any]) -> str:
+    """Format scanner JSON with a stable trailing newline."""
+    return json.dumps(payload, indent=DEFAULT_JSON_INDENT) + "\n"
+
+
+def _resolve_snapshot_path(raw_path: str) -> Path:
+    """Resolve a snapshot path and require it to stay under the repository."""
+    candidate = Path(raw_path)
+    if not candidate.is_absolute():
+        candidate = PROJECT_ROOT / candidate
+
+    resolved = candidate.resolve()
+    repo_root = PROJECT_ROOT.resolve()
+    try:
+        resolved.relative_to(repo_root)
+    except ValueError as exc:
+        raise ValueError(f"Snapshot path must stay under repository root: {raw_path}") from exc
+    return resolved
+
+
+def _write_json_snapshot(payload: dict[str, Any], raw_path: str) -> Path:
+    """Write a scanner snapshot JSON file and return the resolved path."""
+    snapshot_path = _resolve_snapshot_path(raw_path)
+    snapshot_path.parent.mkdir(parents=True, exist_ok=True)
+    _atomic_write_text(snapshot_path, _format_json_payload(payload))
+    return snapshot_path
+
+
+def _atomic_write_text(path: Path, content: str) -> None:
+    """Atomically write text to a path using a same-directory temp file."""
+    temp_path: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            dir=path.parent,
+            prefix=f".{path.name}.",
+            suffix=".tmp",
+            delete=False,
+        ) as temp_file:
+            temp_path = Path(temp_file.name)
+            temp_file.write(content)
+            temp_file.flush()
+            os.fsync(temp_file.fileno())
+        temp_path.replace(path)
+    except Exception:
+        if temp_path is not None:
+            try:
+                temp_path.unlink()
+            except FileNotFoundError:
+                pass
+        raise
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -544,6 +613,9 @@ Examples:
     # JSON output for CI
     python scripts/validation/scan_todo_inventory.py --json
 
+    # Refresh committed scanner snapshot
+    python scripts/validation/scan_todo_inventory.py --write-snapshot
+
     # Governance check (exit 1 if ungoverned TODOs found)
     python scripts/validation/scan_todo_inventory.py --check-governance
 
@@ -564,6 +636,16 @@ Governance Reference Patterns:
         action="store_true",
         help="Governance enforcement mode: exit 1 if ungoverned TODOs are found",
     )
+    parser.add_argument(
+        "--write-snapshot",
+        nargs="?",
+        const=DEFAULT_SNAPSHOT_PATH.relative_to(PROJECT_ROOT).as_posix(),
+        metavar="PATH",
+        help=(
+            "Write the JSON scan payload to PATH, or to "
+            f"{DEFAULT_SNAPSHOT_PATH.relative_to(PROJECT_ROOT).as_posix()} when PATH is omitted"
+        ),
+    )
     return parser.parse_args()
 
 
@@ -572,13 +654,29 @@ def main() -> int:
     args = _parse_args()
 
     result = scan_repository()
+    payload = _json_payload(result)
+
+    snapshot_arg = getattr(args, "write_snapshot", None)
+    snapshot_path: Path | None = None
+    if snapshot_arg is not None:
+        if result.errors:
+            print(
+                f"❌ Refusing to write TODO scanner snapshot: {len(result.errors)} scan error(s) encountered",
+                file=sys.stderr,
+            )
+            return 2
+        try:
+            snapshot_path = _write_json_snapshot(payload, snapshot_arg)
+        except (OSError, ValueError) as exc:
+            print(f"❌ Failed to write TODO scanner snapshot: {exc}", file=sys.stderr)
+            return 2
 
     if args.json:
-        output = result.to_dict()
-        output["governance_compliant"] = result.ungoverned_count == 0
-        print(json.dumps(output, indent=2))
+        print(_format_json_payload(payload), end="")
     else:
         print(_format_human_readable(result, governance_mode=args.check_governance))
+        if snapshot_path is not None:
+            print(f"Wrote TODO scanner snapshot: {snapshot_path.relative_to(PROJECT_ROOT)}")
 
     # Exit codes and final summary
     # Exit 2: scan errors in governance mode (fail closed)

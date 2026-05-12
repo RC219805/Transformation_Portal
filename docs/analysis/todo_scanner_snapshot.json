@@ -1,10 +1,10 @@
 {
   "summary": {
-    "total": 25,
+    "total": 24,
     "ungoverned": 0,
-    "files_scanned": 1492,
+    "files_scanned": 1570,
     "by_type": {
-      "NotImplementedError": 25
+      "NotImplementedError": 24
     }
   },
   "items": [
@@ -18,20 +18,11 @@
       "governance_refs": []
     },
     {
-      "path": "scripts/pipelines/tiff_enhancement_pipeline.py",
-      "lineno": 157,
-      "col_offset": 8,
-      "type": "NotImplementedError",
-      "message": "(no message)",
-      "has_governance_ref": true,
-      "governance_refs": []
-    },
-    {
       "path": "scripts/pipelines/unified_meta_pipeline.py",
-      "lineno": 171,
+      "lineno": 173,
       "col_offset": 8,
       "type": "NotImplementedError",
-      "message": "(no message)",
+      "message": "WorkflowExecutor subclasses must implement execute()",
       "has_governance_ref": true,
       "governance_refs": []
     },
@@ -109,7 +100,7 @@
     },
     {
       "path": "src/transformation_portal/spatial_ai/orchestration/pipeline.py",
-      "lineno": 1772,
+      "lineno": 1234,
       "col_offset": 12,
       "type": "NotImplementedError",
       "message": "3D reconstruction requires multi-view input. Single-view reconstruction is not yet implemented. (TODO_INVENTORY.md) Use SceneBuilder directly with multiple views for 3DGS.",
@@ -129,7 +120,7 @@
     },
     {
       "path": "src/transformation_portal/spatial_ai/reconstruction/scene_builder.py",
-      "lineno": 262,
+      "lineno": 269,
       "col_offset": 12,
       "type": "NotImplementedError",
       "message": "(no message)",
