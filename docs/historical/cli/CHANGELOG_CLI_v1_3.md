@@ -1,3 +1,8 @@
+> Historical note (2026-05-12): this file is retained as point-in-time CLI
+> evidence only. It is not current operator guidance. Use
+> `docs/cli/README.md`, `docs/cli/CLI_REFERENCE.md`, and
+> `docs/cli/LUX_DEPTH_V3_CLI_GUIDE.md` for maintained CLI references.
+
 [CHANGELOG_CLI_v1_3.md](https://github.com/user-attachments/files/22937090/CHANGELOG_CLI_v1_3.md)
 ## v1.3 additions
 ### Auto-measure eye-line & gutters

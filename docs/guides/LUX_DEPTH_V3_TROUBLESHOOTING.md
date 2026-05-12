@@ -609,10 +609,10 @@ lux-depth-v3 \
 
 ## Additional Resources
 
-- [Lux Depth V3 CLI Guide](./LUX_DEPTH_V3_CLI_GUIDE.md) - Complete command reference
-- [Architecture Decision Record: Depth Backend Unification](./architecture/ADR-019-depth-backend-unification.md)
-- [PBR CLI Coverage Report](./PBR_CLI_COVERAGE_REPORT.md)
-- [Main README](../README.md) - Repository overview
+- [Lux Depth V3 CLI Guide](../cli/LUX_DEPTH_V3_CLI_GUIDE.md) - Complete command reference
+- [Architecture Decision Record: Depth Backend Unification](../architecture/ADR-019-depth-backend-unification.md)
+- [PBR CLI Testing Guide](../cli/PBR_CLI_TESTING_GUIDE.md)
+- [Main README](../../README.md) - Repository overview
 
 ---
 
@@ -627,12 +627,13 @@ If you encounter issues not covered in this guide:
 
 2. **Verify installation:**
    ```bash
-   pip list | grep transformation-portal
+   .venv/bin/python -m pip list | grep transformation-portal
    ```
 
 3. **Check ML dependencies:**
    ```bash
-   pip install -e ".[ml]"
+   make check-environment
+   make install-ml-core
    ```
 
 4. **Review configuration:**

@@ -7,7 +7,8 @@ as canonical documents.
 
 **Current baseline:** repo-wide refresh audit dated May 11, 2026, building on
 `main` through PR #1721, with the May 12 architecture triage overlay for
-`docs/architecture` file dispositions.
+`docs/architecture` file dispositions and the May 12 CLI reference alignment
+for `docs/cli`.
 
 ## Start Here
 
@@ -17,11 +18,13 @@ as canonical documents.
 | Full documentation map | [Documentation Map](governance/DOCUMENTATION_MAP.md) |
 | Documentation refresh audit | [2026-05-11 Documentation Refresh Audit](governance/DOCUMENTATION_REFRESH_AUDIT_2026-05-11.md) |
 | Architecture triage inventory | [2026-05-12 Architecture Inventory](governance/audit/architecture-inventory-2026-05-12.csv) |
+| CLI triage inventory | [2026-05-12 CLI Inventory](governance/audit/cli-inventory-2026-05-12.csv) |
 | Prior documentation state audit | [2026-04-27 Documentation State Audit](governance/DOCUMENTATION_STATE_AUDIT_2026-04-27.md) |
 | Local setup and environment checks | [Setup Guide](guides/SETUP_GUIDE.md) |
 | Portal and orchestrator contracts | [Portal + Orchestrator Quickstart](guides/PORTAL_ORCHESTRATOR_QUICKSTART.md) |
 | Managed front door | [Portal Secure Front Door Quickstart](guides/PORTAL_SECURE_FRONTDOOR_QUICKSTART.md) |
 | Lux Depth V3 CLI | [Lux Depth V3 CLI Guide](cli/LUX_DEPTH_V3_CLI_GUIDE.md) |
+| CLI entrypoint reference | [CLI Reference](cli/CLI_REFERENCE.md) |
 | FastVLM advisory captioning runtime | [FastVLM Runtime](runtimes/fastvlm.md) |
 | CI workflow inventory | [Workflow Matrix](ci/WORKFLOW_MATRIX.md) |
 
@@ -38,6 +41,7 @@ as canonical documents.
 | TODO governance | [TODO Inventory](analysis/TODO_INVENTORY.md), [TODO Action Plan](analysis/TODO_ACTION_PLAN.md), [TODO Quick Reference](architecture/TODO_INVENTORY_QUICK_REF.md), [TODO Priority Schema](governance/todo_priority_schema.yaml) | Current scanner-governed baseline: 24 governed `NotImplementedError` items, 0 ungoverned TODOs, snapshot refreshed May 11, 2026. |
 | Archive gates | [Archive Machine Contract](api/ARCHIVE_MACHINE_MODE_CONTRACT.md), [2026-04-27 Archive Gates Audit](governance/audit/archive-gates-2026-04-27.md) | Gates A/B/C are documented with the April 27 readiness audit and normalized JSON evidence. |
 | APEX / Materials | [APEX Governance Status](apex/GOVERNANCE_STATUS.md), [APEX Workflow Design](architecture/APEX_WORKFLOW_DESIGN.md), [APEX Model Family Characterization](validation/APEX_MODEL_FAMILY_CHARACTERIZATION_PROTOCOL.md) | Recent merges added offline model-family characterization, failure-code surfacing, confidence-only pixel-op passthrough, V2 fallback, and SAM2 tile-merge regression coverage. |
+| CLI references | [CLI Index](cli/README.md), [CLI Reference](cli/CLI_REFERENCE.md), [Lux Depth V3 CLI Guide](cli/LUX_DEPTH_V3_CLI_GUIDE.md), [PBR CLI Testing Guide](cli/PBR_CLI_TESTING_GUIDE.md) | Maintained CLI docs use repo-governed `.venv` and Make targets; old PBR coverage/checklist and CLI v1.3 notes are historical evidence. |
 | Advisory captioning | [FastVLM Runtime](runtimes/fastvlm.md) | Optional subprocess-isolated sidecars only; captions are advisory and never satisfy APEX or Materials V3 gates. |
 | Portal UX/UI planning | [Portal UX/UI Status Snapshot](architecture/DNA_UX_UI_STRATEGY_REBASELINE_2026-04-08.md) | Current planning context through #1721; status snapshot only, not a next-PR selector. |
 | Dependency policy | [ADR-032](architecture/ADR-032-dependency-pinning-strategy.md), [Retired ML Lock Lanes](governance/RETIRED_ML_LOCK_LANES_2026-04-30.md), [AGENTS.md](../AGENTS.md) | Layered lockfiles and the Apple Silicon target-owned ML lane are the current dependency governance model. |
@@ -58,6 +62,8 @@ map explicitly links a document as canonical:
   point-in-time records.
 - `docs/historical/architecture/` and `docs/pr_archive/architecture/` contain
   files moved out of `docs/architecture` by the May 12 architecture triage.
+- `docs/historical/cli/` contains point-in-time CLI implementation and coverage
+  records moved out of current `docs/cli` navigation by the May 12 CLI alignment.
 - `docs/_archive/` contains intentionally retired or consolidated material.
 
 Do not use historical documents as operator runbooks without first checking the
@@ -76,6 +82,8 @@ current documentation map.
   and its inventory CSV.
 - Architecture-specific disposition evidence lives in
   [2026-05-12 Architecture Inventory](governance/audit/architecture-inventory-2026-05-12.csv).
+- CLI-specific disposition evidence lives in
+  [2026-05-12 CLI Inventory](governance/audit/cli-inventory-2026-05-12.csv).
 - Validate documentation structure with:
 
 ```bash

@@ -1,5 +1,10 @@
 # PBR CLI Testing Implementation Checklist
 
+> Historical note (2026-05-12): this checklist is retained as point-in-time
+> implementation evidence only. It is not current operator guidance. Use
+> `docs/cli/PBR_CLI_TESTING_GUIDE.md` and
+> `docs/cli/PBR_CLI_TESTING_QUICK_REF.md` for maintained commands.
+
 **Date**: 2026-02-01
 **Status**: ✅ COMPLETED
 **Version**: v2.0.1
