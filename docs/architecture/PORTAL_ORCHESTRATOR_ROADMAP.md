@@ -1,7 +1,9 @@
 # Portal Orchestrator Roadmap (Re-Baselined)
 
 Date: 2026-03-01
-Scope: `app.py` + `portal.html` (single-file UI + FastAPI wrapper)
+Scope: `app.py` + the root `portal.html` shell generated from
+`web/secure-landing/portal-src/portal.template.js` and deferred portal surfaces.
+Current-state refresh: 2026-05-12.
 
 ## Objective
 Re-baseline the portal roadmap against current repository reality, then focus only on remaining high-impact gaps.
@@ -11,7 +13,7 @@ Re-baseline the portal roadmap against current repository reality, then focus on
 | Report Recommendation | Status | Evidence | Action |
 |---|---|---|---|
 | Build backend wrapper (`/ready`, jobs, status, cancel, SSE) | Shipped | `app.py` provides `/ready`, `POST /v1/jobs`, `GET /v1/jobs/{id}`, `POST /v1/jobs/{id}/cancel`, `GET /v1/jobs/{id}/events` | Keep and extend |
-| Build queue/run/cancel UX | Shipped | `portal.html` has queue rendering, cancel actions, and EventSource stream handling | Keep and optimize |
+| Build queue/run/cancel UX | Shipped | `portal.html` and `web/secure-landing/portal-src/portal.template.js` cover queue rendering, cancel actions, and EventSource stream handling, with larger review/operate surfaces carved into deferred modules | Keep and optimize |
 | Add CSP/security hardening | Partial | UI has CSP meta; backend had security headers, auth/rate-limit controls | Added server CSP header + stronger auth scope |
 | Dynamic preset discovery API | Pending (now implemented) | `GET /v1/presets?pipeline=<name>` added in `app.py` | Integrated in UI |
 | Recover history across refresh | Pending (now implemented) | `GET /v1/jobs` added; UI recovery flow added | Validate with focused tests |
@@ -26,11 +28,19 @@ Re-baseline the portal roadmap against current repository reality, then focus on
 - `POST /v1/jobs`
 - `GET /v1/jobs`
 - `GET /v1/jobs/{id}`
+- `GET /v1/jobs/{id}/artifacts/{artifact_path}`
 - `POST /v1/jobs/{id}/cancel`
 - `GET /v1/jobs/{id}/events` (SSE events: `state`, `log`, `progress`, `artifact`, `done`)
+- `/v2/jobs` parity routes for create/list/detail/artifacts/cancel/events.
+  The route inventory contract requires `/v2/jobs/...` to mirror `/v1/jobs/...`
+  method coverage; response schema names remain the existing
+  `tp.orchestrator.*.v1` envelopes unless intentionally changed.
 
 ### Envelope
-All JSON `/v1` orchestrator API endpoints use this envelope for application-level success and failure, including middleware and routed `HTTPException` paths. Non-API routes like `/ready` keep native FastAPI response shapes.
+All JSON `/v1` orchestrator API endpoints and the `/v2/jobs` parity surface use
+this envelope for application-level success and failure, including middleware and
+routed `HTTPException` paths. Non-API routes like `/ready` keep native FastAPI
+response shapes.
 
 ```json
 {
@@ -86,9 +96,9 @@ Error shape:
 
 | Acceptance Item | Implementation Evidence | Automated Evidence |
 |---|---|---|
-| `GET /v1/presets` drives lux-depth preset selector | `app.py:list_presets`, `portal.html:fetchPresetsForPipeline` + `applyPipelinePresetOptions` | `tests/test_app_orchestrator_contract_http.py::test_presets_contract_for_lux_depth_pipeline` |
-| Refresh recovers job list and reconnects streams | `app.py:list_jobs` + `job_events`, `portal.html:recoverJobs` + `startJobEventStream` | `tests/test_app_orchestrator_contract_http.py::test_jobs_list_and_detail_include_recovery_fields` |
-| Artifact events populate artifact panel | `app.py:_index_job_artifacts` + SSE `artifact` event, `portal.html:upsertArtifact` + `renderArtifactPanel` | `tests/test_app_orchestrator_contract_http.py::test_job_events_stream_emits_state_log_progress_artifact_done`, `tests/test_app_orchestrator_contract_http.py::test_artifact_indexing_truncation_visible_via_job_status` |
+| `GET /v1/presets` drives lux-depth preset selector | `app.py:list_presets`, `portal-src/portal.template.js:fetchPresetsForPipeline` + `applyPipelinePresetOptions` | `tests/test_app_orchestrator_contract_http.py::test_presets_contract_for_lux_depth_pipeline` |
+| Refresh recovers job list and reconnects streams | `app.py:list_jobs` + `job_events`, `portal-src/portal.template.js:recoverJobs` + `startJobEventStream` | `tests/test_app_orchestrator_contract_http.py::test_jobs_list_and_detail_include_recovery_fields` |
+| Artifact events populate artifact panel | `app.py:_index_job_artifacts` + SSE `artifact` event, `portal-src/portal.template.js:upsertArtifact` + `review-surface-deferred.js:renderArtifactPanel` | `tests/test_app_orchestrator_contract_http.py::test_job_events_stream_emits_state_log_progress_artifact_done`, `tests/test_app_orchestrator_contract_http.py::test_artifact_indexing_truncation_visible_via_job_status` |
 | API key blocks unauthorized read/list/event access | `app.py:security_layer` + `_has_valid_api_key` | `tests/test_app_orchestrator_contract_http.py::test_v1_routes_enforce_api_key_for_reads_and_events` |
 | Validation errors return typed envelope + 400 | `app.py:create_job` validation path | `tests/test_app_orchestrator_contract_http.py::test_invalid_job_payload_returns_typed_invalid_argument` |
 | Oversized request paths return typed envelope + 413 | `app.py:_enforce_content_length_limit`, `app.py:http_exception_handler` | `tests/test_app_orchestrator_contract_http.py::test_oversized_v1_request_returns_typed_413_envelope` |
@@ -98,6 +108,7 @@ Error shape:
 - [x] `GET /v1/presets` drives lux-depth preset selector.
 - [x] Refresh recovers job list and reconnects streams for running jobs.
 - [x] Artifact events populate artifact panel for completed jobs.
+- [x] `/v2/jobs` route parity preserves the `/v1/jobs` job lifecycle surface.
 - [x] API key blocks unauthorized read/list/event access when `TP_API_KEY` is set.
 - [x] Validation errors return typed envelope and `400` semantics.
 - [x] Oversized payload paths on `/v1/*` return typed envelope and `413` semantics.

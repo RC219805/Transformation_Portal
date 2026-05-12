@@ -856,7 +856,7 @@ def validate_license_ultra(config: EnhanceConfig):
 **Phase 6: Documentation**
 
 - [ ] Update README with Ultra tier examples
-- [ ] Add `docs/apex/ultra_workflow_guide.md`
+- [x] Add `docs/apex/ultra_workflow_quick_guide.md`
 - [ ] Benchmark report: `docs/benchmarks/adr026_validation.md`
 
 ---

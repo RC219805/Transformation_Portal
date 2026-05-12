@@ -144,10 +144,11 @@ on:
 ```
 
 **Dashboard Update Flow (main branch only):**
-1. Download previous ledger artifact (accumulate history)
+1. Download the `apex-ledger` artifact produced by `apex_gate`
 2. Run matrix benchmarks (append new data)
 3. Generate dashboard HTML
-4. Deploy to GitHub Pages via `peaceiris/actions-gh-pages`
+4. Upload `_site/` with `actions/upload-pages-artifact`
+5. Deploy to GitHub Pages via `actions/deploy-pages`
 
 **Weekly Backup Flow:**
 1. Compress ledger database (gzip)
@@ -166,22 +167,22 @@ permissions:
 
 **URL Pattern:**
 ```
-https://<username>.github.io/Transformation_Portal/apex/
+https://rc219805.github.io/Transformation_Portal/
 ```
 
-**Directory Structure:**
+**Generated Artifact Structure:**
 ```
-docs/apex/
+_site/
 ├── index.html      # Main dashboard
 ├── latest.html     # Latest run summary
 └── data.json       # Raw data export
 ```
 
 **Deployment Configuration:**
-- Uses `peaceiris/actions-gh-pages@v4.0.0` (pinned SHA)
-- `destination_dir: apex` - isolates dashboard from other docs
-- `keep_files: true` - preserves historical artifacts
-- `[skip ci]` in commit message - prevents feedback loops
+- Uses `actions/upload-pages-artifact` and `actions/deploy-pages` with pinned SHAs
+  in `.github/workflows/apex_performance.yml`
+- Publishes the generated `_site/` artifact directly through GitHub Pages
+- Does not commit generated dashboard files back into the repository
 
 ---
 
@@ -189,8 +190,9 @@ docs/apex/
 
 ### Accessing the Dashboard
 
-1. **Production URL:** `https://<username>.github.io/Transformation_Portal/apex/`
-2. **Local Preview:** Generate locally and open `docs/apex/index.html`
+1. **Production URL:** `https://rc219805.github.io/Transformation_Portal/`
+2. **Latest Metrics:** `https://rc219805.github.io/Transformation_Portal/latest.html`
+3. **Local Preview:** Generate locally and open `_site/index.html`
 
 ### Dashboard Sections
 
@@ -241,11 +243,11 @@ docs/apex/
 # Generate dashboard locally
 python scripts/apex_dashboard_generator.py \
   --ledger-db apex_performance.db \
-  --output-dir docs/apex \
+  --output-dir _site \
   --days 90
 
 # Preview locally
-open docs/apex/index.html
+open _site/index.html
 ```
 
 ### Restoring from Backup
@@ -260,7 +262,7 @@ gunzip apex_ledger_2026-02-07.db.gz
 # Regenerate dashboard
 python scripts/apex_dashboard_generator.py \
   --ledger-db apex_ledger_2026-02-07.db \
-  --output-dir docs/apex \
+  --output-dir _site \
   --days 365  # Full year if backup is old
 ```
 
@@ -275,7 +277,7 @@ python -m transformation_portal.metrics.ledger prune \
 # Regenerate dashboard after pruning
 python scripts/apex_dashboard_generator.py \
   --ledger-db apex_performance.db \
-  --output-dir docs/apex \
+  --output-dir _site \
   --days 90
 ```
 
@@ -330,7 +332,8 @@ python scripts/apex_dashboard_generator.py \
 
 **Pinned Actions:**
 ```yaml
-peaceiris/actions-gh-pages@4f9cc6602d3f66b9c108549d475ec49e8ef4d45e  # v4.0.0
+actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+actions/deploy-pages@cd2ce8fcbc39b97be8ca5fce6e763baed58fa128 # v5.0.0
 ```
 
 **CDN Dependencies:**
@@ -346,7 +349,7 @@ peaceiris/actions-gh-pages@4f9cc6602d3f66b9c108549d475ec49e8ef4d45e  # v4.0.0
 
 ### Unit Tests
 
-**Location:** `tests/metrics/test_apex_dashboard.py` (to be created)
+**Location:** `tests/test_apex_dashboard.py`
 
 **Coverage:**
 - `generate_dashboard_data()` with mock ledger
@@ -356,7 +359,8 @@ peaceiris/actions-gh-pages@4f9cc6602d3f66b9c108549d475ec49e8ef4d45e  # v4.0.0
 
 ### Integration Tests
 
-**Location:** `tests/integration/test_apex_phase3.py` (to be created)
+**Location:** `tests/test_apex_dashboard.py` and the
+`dashboard_deploy` job in `.github/workflows/apex_performance.yml`
 
 **Coverage:**
 - End-to-end dashboard generation

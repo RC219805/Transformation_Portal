@@ -13,11 +13,12 @@ This policy applies to:
 
 This policy governs agent decision-making and escalation. It does not replace human review, CI enforcement, or branch protections.
 
-Current baseline: repo-wide refresh audit dated May 11, 2026, building on
-`main` through PR #1721. Documentation navigation: `README.md`,
-`docs/README.md`, `docs/governance/DOCUMENTATION_MAP.md`,
-`docs/governance/DOCUMENTATION_REFRESH_AUDIT_2026-05-11.md`, and
-`docs/governance/DOCUMENTATION_STATE_AUDIT_2026-04-27.md`.
+Current baseline: repo-wide refresh audit dated May 11, 2026, building on the
+May 12 documentation follow-up sequence through PR #1728. Documentation
+navigation: `README.md`, `docs/README.md`,
+`docs/governance/DOCUMENTATION_MAP.md`, the May 12 architecture and CLI
+inventory overlays, `docs/governance/DOCUMENTATION_REFRESH_AUDIT_2026-05-11.md`,
+and `docs/governance/DOCUMENTATION_STATE_AUDIT_2026-04-27.md`.
 
 ## Authority Model
 

@@ -173,7 +173,8 @@ class SQLiteCatalogBackend:
    - pyiceberg>=9999.0.0
    ```
 
-3. **Add to `requirements/spatial-ai.in` as optional:**
+3. **Add to the optional spatial dependency surface after a current
+   dependency-lane decision:**
    ```txt
    # Optional Tier B catalog (requires JVM)
    pyiceberg>=0.6.0  # Pinned after audit
@@ -335,7 +336,9 @@ class SQLiteCatalogBackend:
 
 ### Step 2: Dependency Integration
 1. Remove ban from `requirements/constraints.txt`
-2. Add to `requirements/spatial-ai.in`:
+2. Add to the approved optional spatial dependency surface. As of 2026-05-12,
+   that surface is the `pyproject.toml` `spatial-ai` extra unless a checked-in
+   spatial lock lane is introduced first:
    ```txt
    pyiceberg==0.6.1  # Audited 2026-XX-XX, see ADR-024-SUPERSEDED
    py4j==0.10.9.7    # Explicit pin
