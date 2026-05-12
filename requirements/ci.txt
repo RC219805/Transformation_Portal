@@ -5,205 +5,49 @@
 #    pip-compile --constraint=all.txt --output-file=ci.txt ci.in
 #
 backports-tarfile==1.2.0
-    # via
-    #   -c all.txt
-    #   jaraco-context
 bandit==1.9.4
-    # via
-    #   -c all.txt
-    #   -r ci.in
 build==1.5.0
-    # via
-    #   -c all.txt
-    #   -r ci.in
 cachetools==7.0.5
-    # via
-    #   -c all.txt
-    #   tox
 certifi==2026.2.25
-    # via
-    #   -c all.txt
-    #   requests
 cffi==2.0.0
-    # via
-    #   -c all.txt
-    #   cryptography
 charset-normalizer==3.4.7
-    # via
-    #   -c all.txt
-    #   requests
 colorama==0.4.6
-    # via
-    #   -c all.txt
-    #   tox
 cryptography==47.0.0
-    # via
-    #   -c all.txt
-    #   secretstorage
 distlib==0.4.0
-    # via
-    #   -c all.txt
-    #   virtualenv
 docutils==0.22.4
-    # via
-    #   -c all.txt
-    #   readme-renderer
 filelock==3.25.2
-    # via
-    #   -c all.txt
-    #   python-discovery
-    #   tox
-    #   virtualenv
 id==1.6.1
-    # via
-    #   -c all.txt
-    #   twine
 idna==3.11
-    # via
-    #   -c all.txt
-    #   requests
 importlib-metadata==9.0.0
-    # via
-    #   -c all.txt
-    #   keyring
 jaraco-classes==3.4.0
-    # via
-    #   -c all.txt
-    #   keyring
 jaraco-context==6.1.2
-    # via
-    #   -c all.txt
-    #   keyring
 jaraco-functools==4.4.0
-    # via
-    #   -c all.txt
-    #   keyring
 jeepney==0.9.0
-    # via
-    #   -c all.txt
-    #   keyring
-    #   secretstorage
 keyring==25.7.0
-    # via
-    #   -c all.txt
-    #   twine
 markdown-it-py==4.0.0
-    # via
-    #   -c all.txt
-    #   rich
 mdurl==0.1.2
-    # via
-    #   -c all.txt
-    #   markdown-it-py
 more-itertools==11.0.2
-    # via
-    #   -c all.txt
-    #   jaraco-classes
-    #   jaraco-functools
 nh3==0.3.4
-    # via
-    #   -c all.txt
-    #   readme-renderer
 packaging==26.0
-    # via
-    #   -c all.txt
-    #   build
-    #   pyproject-api
-    #   tox
-    #   twine
 platformdirs==4.9.6
-    # via
-    #   -c all.txt
-    #   python-discovery
-    #   tox
-    #   virtualenv
 pluggy==1.6.0
-    # via
-    #   -c all.txt
-    #   tox
 pycparser==3.0
-    # via
-    #   -c all.txt
-    #   cffi
 pygments==2.20.0
-    # via
-    #   -c all.txt
-    #   readme-renderer
-    #   rich
-pypdf==6.10.2
-    # via
-    #   -c all.txt
-    #   -r ci.in
+pypdf==6.11.0
 pyproject-api==1.10.0
-    # via
-    #   -c all.txt
-    #   tox
 pyproject-hooks==1.2.0
-    # via
-    #   -c all.txt
-    #   build
 python-discovery==1.2.2
-    # via
-    #   -c all.txt
-    #   tox
-    #   virtualenv
 pyyaml==6.0.3
-    # via
-    #   -c all.txt
-    #   bandit
 readme-renderer==44.0
-    # via
-    #   -c all.txt
-    #   twine
 requests==2.33.1
-    # via
-    #   -c all.txt
-    #   requests-toolbelt
-    #   twine
 requests-toolbelt==1.0.0
-    # via
-    #   -c all.txt
-    #   twine
 rfc3986==2.0.0
-    # via
-    #   -c all.txt
-    #   twine
 rich==15.0.0
-    # via
-    #   -c all.txt
-    #   bandit
-    #   twine
 secretstorage==3.5.0
-    # via
-    #   -c all.txt
-    #   keyring
 stevedore==5.7.0
-    # via
-    #   -c all.txt
-    #   bandit
 tomli-w==1.2.0
-    # via
-    #   -c all.txt
-    #   tox
 tox==4.53.1
-    # via
-    #   -c all.txt
-    #   -r ci.in
 twine==6.2.0
-    # via
-    #   -c all.txt
-    #   -r ci.in
 urllib3==2.7.0
-    # via
-    #   -c all.txt
-    #   id
-    #   requests
-    #   twine
 virtualenv==21.2.1
-    # via
-    #   -c all.txt
-    #   tox
 zipp==3.23.0
-    # via
-    #   -c all.txt
-    #   importlib-metadata
