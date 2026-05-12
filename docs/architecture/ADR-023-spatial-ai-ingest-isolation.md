@@ -325,7 +325,7 @@ This ADR is successful if:
 2. ⚠️ Any approved cross-package contract sharing is explicit and covered by
    tests or a superseding ADR
 3. ✅ Both pipelines can evolve independently without coordination
-4. ✅ Zero reports of cross-contamination (rendering gets linear, training gets sRGB)
+4. ✅ Zero reports of cross-contamination (rendering gets sRGB, training gets linear)
 
 ---
 

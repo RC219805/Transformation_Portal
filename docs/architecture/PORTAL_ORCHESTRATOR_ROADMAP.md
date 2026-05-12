@@ -1,8 +1,10 @@
 # Portal Orchestrator Roadmap (Re-Baselined)
 
 Date: 2026-03-01
-Scope: `app.py` + the root `portal.html` shell generated from
-`web/secure-landing/portal-src/portal.template.js` and deferred portal surfaces.
+Scope: `app.py` serves the checked-in root `portal.html` template with runtime
+`__PORTAL_*__` placeholder substitution, while the frontdoor owns the generated
+JS/CSS bundles built from `web/secure-landing/portal-src/*` by
+`web/secure-landing/scripts/build-portal-bundle.mjs`.
 Current-state refresh: 2026-05-12.
 
 ## Objective
