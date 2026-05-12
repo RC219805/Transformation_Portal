@@ -19,8 +19,7 @@ def isolated_loader(
         allow_external_plugins=True,
         auto_resolve_dependencies=auto_resolve_dependencies,
     )
-    for path in loader.get_search_paths():
-        loader.remove_search_path(path)
+    loader._search_paths.clear()  # noqa: SLF001 - tests need hermetic paths.
     loader.add_search_path(search_path)
     return loader
 

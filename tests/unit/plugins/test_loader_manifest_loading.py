@@ -39,6 +39,24 @@ def test_discovers_plugin_json_manifest(tmp_path: Path):
     assert discovered[0].is_valid is True
 
 
+def test_isolated_loader_discards_relative_env_default_path(monkeypatch, tmp_path: Path):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("TRANSFORMATION_PORTAL_PLUGINS", "env_plugins")
+
+    env_package_dir = tmp_path / "env_plugins" / "env_package"
+    write_plugin_module(env_package_dir, "env_plugin", plugin_name="env_plugin")
+    write_plugin_json(env_package_dir, name="env_plugin", module_name="env_plugin")
+
+    target_root = tmp_path / "target_plugins"
+    target_package_dir = target_root / "target_package"
+    write_plugin_module(target_package_dir, "target_plugin", plugin_name="target_plugin")
+    write_plugin_json(target_package_dir, name="target_plugin", module_name="target_plugin")
+
+    discovered = isolated_loader(target_root).discover_all()
+
+    assert [plugin.manifest.name for plugin in discovered if plugin.manifest] == ["target_plugin"]
+
+
 def test_discovers_pyproject_manifest_when_plugin_json_absent(tmp_path: Path):
     package_dir = tmp_path / "pyproject_package"
     write_plugin_module(
