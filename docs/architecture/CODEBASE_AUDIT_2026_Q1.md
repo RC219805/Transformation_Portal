@@ -1,425 +1,330 @@
 # Transformation Portal Codebase Audit
 
-**Date:** 2026-03-15
-**Version:** v2.0.0 (Golden Path baseline)
-**Auditor:** Architect Agent
-**Scope:** Full repository health assessment with ratings and actionable roadmap
+**Original audit window:** 2026 Q1
+**Current refresh:** 2026-05-12
+**Repository baseline inspected:** `main` at `a3cf8030c docs(governance): refresh todo inventory baseline (#1723)`
+**Document classification:** current-support
+**Scope:** Refresh the Q1 audit against the current codebase, documentation
+baseline, and validation contracts without changing runtime behavior.
 
 ---
 
 ## Executive Summary
 
-The Transformation Portal is a **sophisticated, production-grade context-aware rendering engine** for luxury real estate and architectural visualization. The codebase demonstrates **strong fundamentals** in security, testing, and governance, but has **targeted areas requiring improvement** in code architecture, documentation organization, and CI/CD optimization.
+Transformation Portal is now best described as a governed image and video
+processing platform for luxury real estate rendering, architectural
+visualization, and editorial finishing. The March 2026 Q1 audit correctly
+identified strong foundations in security, dependency governance, test
+infrastructure, and performance discipline, but several facts in the original
+scorecard are now stale.
 
-### Overall Assessment: **7.6/10** (Good, with focused improvements needed)
+Current posture as of this refresh:
 
-| Category | Rating | Status |
-|----------|--------|--------|
-| **Security** | 8.5/10 | ✅ Phase 1 fixes complete |
-| **Testing** | 7.7/10 | ✅ Strong with documentation gaps |
-| **Dependency Management** | 8.2/10 | ✅ Excellent |
-| **Documentation** | 7.5/10 | ⚠️ Strong substance, organizational challenges |
-| **CI/CD** | 8.0/10 | ✅ Mature and sophisticated |
-| **Code Architecture** | 6.2/10 | ⚠️ Refactoring required |
-| **Performance Governance** | 8.0/10 | ✅ Strong Quality Firewall |
+- The browser-facing architecture is `Browser -> managed Next frontdoor ->
+  FastAPI backend`. A Cloudflare Worker, when present, remains frontdoor-only
+  and must not proxy directly to FastAPI.
+- Health/readiness contracts are active governed surfaces: `/healthz`,
+  `/ready`, and `/v1/readiness` preserve distinct wire shapes and test
+  coverage.
+- Documentation governance has moved from ad hoc cleanup to a May 11, 2026
+  repo-wide documentation baseline and inventory.
+- Testing and CI are substantially larger than the Q1 snapshot: roughly 606
+  Python test files and 30 workflow YAML files were observed during this
+  refresh.
+- Architecture decomposition has progressed, but the repository still contains
+  large integration files, especially `app.py` and
+  `src/transformation_portal/lux_depth_v3/orchestrator.py`.
+- Full `make ci` was not run for this document refresh; conclusions below are
+  based on static inspection plus documentation validation.
 
----
+## Current Directional Scorecard
 
-## Category Ratings (1-10 Scale)
+The old numerical scores are retained only as Q1 context. Current status should
+be read directionally unless a specific validation command is listed as proven
+green.
 
-### 1. Security: 8.5/10 ⭐⭐⭐⭐
+| Area | Current posture | Notes |
+| --- | --- | --- |
+| Security | Strong | Fail-closed path/auth posture, portal RUM controls, dependency scanning, and model/runtime governance are active. |
+| Testing | Strong, broad | Test surface has grown to about 606 Python test files with contract, smoke, governance, security, and fixture coverage. |
+| Dependency governance | Strong | Layered locks, ownership checks, retired ML lane stubs, and governed optional runtime installers remain central. |
+| Documentation | Improved, governed | May 11 repo-wide refresh classified current, support, mixed, historical, and archive-only docs. |
+| CI/CD | Mature, complex | 30 workflow YAML files and Make validation lanes cover CI, security, dependency, docs, portal, and pipeline checks. |
+| Code architecture | Mixed | Decomposition modules exist, but large integration files still require careful ownership and focused refactors. |
+| Performance governance | Strong but lane-specific | Quality firewall, benchmark isolation, APEX, ledger, and determinism surfaces remain active; full live performance status requires lane-specific runs. |
 
-**Strengths:**
-- ✅ Comprehensive security module (`core/security/`) with path validation, sanitization, and restricted unpickler
-- ✅ Banned dependency registry with hard-blocks (CVE-2024-27763 protection)
-- ✅ Multi-layer scanning: pip-audit, safety, bandit, CodeQL, gitleaks
-- ✅ Strong subprocess safety (no `shell=True` usage)
-- ✅ Model lock security with revision pinning
-- ✅ Plugin trust model with external plugins disabled by default
+## Current System Boundaries
 
-**Weaknesses (Pre-Phase 1 findings, now resolved):**
-- ~~❌ Unsafe pickle usage in cache layer (`depth/utils/cache.py`)~~ → ✅ Uses `safe_pickle_load`
-- ~~❌ Incomplete stub implementation (`lux_depth_v3/security.py`)~~ → ✅ Full implementation
-- ~~❌ Unvalidated subprocess arguments in v2_runner.py~~ → ✅ Path validation added
-- ⚠️ No authentication/authorization framework (acceptable for local CLI)
-- ⚠️ Temporary file handling undocumented
+### Frontdoor And Backend
 
-**Risk Matrix:**
+The current runtime topology is:
 
-| Issue | Severity | CVSS | Status |
-|-------|----------|------|--------|
-| Unsafe pickle in cache | HIGH | 8.1 | ✅ Fixed (uses safe_pickle_load) |
-| Unvalidated subprocess args | MEDIUM | 6.2 | ✅ Fixed (path validation added) |
-| Stub security implementation | MEDIUM | 5.5 | ✅ Fixed (full implementation) |
-| Temp file handling | MEDIUM | 5.0 | 🟡 Partial |
-
----
-
-### 2. Testing: 7.7/10 ⭐⭐⭐⭐
-
-**Strengths:**
-- ✅ Sophisticated tier strategy (Core → ML-fast → ML-slow)
-- ✅ 316 test files with comprehensive coverage
-- ✅ Determinism validation with FP state enforcement
-- ✅ Boundary enforcement tests (torch-free core tier)
-- ✅ Security tests (deserialization, checksums, plugins, isolation)
-- ✅ Smart CI integration with change classification
-
-**Weaknesses:**
-- ❌ Only 10 tests marked `@pytest.mark.unit` (should be 80+)
-- ❌ Only 5 tests marked `@pytest.mark.integration`
-- ❌ No `TESTING.md` or test strategy document
-- ❌ `/tests/golden/` directory empty
-- ⚠️ 279 conditional skips may hide flaky tests
-
-**Test Organization:**
-
-| Directory | Count | Quality |
-|-----------|-------|---------|
-| spatial_ai/ | 51 | ✅ Strong |
-| unit/ | 15 | ✅ Excellent |
-| security/ | 4 | ✅ Professional |
-| Root-level | 181 | ⚠️ Needs marker cleanup |
-
----
-
-### 3. Dependency Management: 8.2/10 ⭐⭐⭐⭐
-
-**Strengths:**
-- ✅ Sophisticated pip-tools layered architecture (base/ml/dev/ci)
-- ✅ Two-phase compilation prevents dependency conflicts
-- ✅ 100% pinned dependencies (zero floating deps)
-- ✅ ADR-032 compliant pinning strategy
-- ✅ Banned dependency registry with hard-blocks
-- ✅ Weekly automated updates with safety reports
-
-**Weaknesses:**
-- ⚠️ Lock files occasionally stale (base.txt older than base.in)
-- ⚠️ Dependabot/manual workflow conflict potential
-- ⚠️ ML tier not scanned by pip-audit in PR workflow
-- ⚠️ No SBOM (Software Bill of Materials) generation
-
-**Pinning Strategy:**
-
-| Style | Count | Usage |
-|-------|-------|-------|
-| Range Pin (`>=X,<Y`) | 65% | Production deps |
-| Lower-Bound (`>=X`) | 20% | Dev tools |
-| Strict Pin (`==X.Y.Z`) | 17% | Critical ML deps |
-| Unpinned | 0% | ✅ Excellent |
-
----
-
-### 4. Documentation: 7.5/10 ⭐⭐⭐⭐
-
-**Strengths:**
-- ✅ Excellent README (411 lines, comprehensive)
-- ✅ 42 Architecture Decision Records (ADRs)
-- ✅ Strong API contracts (MACHINE_MODE_CONTRACT.md)
-- ✅ Excellent TODO_INVENTORY.md (v2.1.0, 62 KB)
-- ✅ Keep a Changelog versioning discipline
-
-**Weaknesses:**
-- ❌ 99 directories for ~70 canonical documents (bloated)
-- ❌ Parallel ADR hierarchies (architecture/ + decisions/ + adr/)
-- ❌ 15+ stub documents (<50 lines)
-- ❌ 83% of docs missing "Last Updated" metadata
-- ❌ No V1→V2 migration guide
-
-**Documentation Scorecard:**
-
-| Aspect | Score |
-|--------|-------|
-| README Completeness | 9/10 |
-| Architecture Records | 8.5/10 |
-| User Guides | 7.5/10 |
-| Organization | 5.5/10 |
-
----
-
-### 5. CI/CD: 8.0/10 ⭐⭐⭐⭐
-
-**Strengths:**
-- ✅ Intelligent change detection (5x faster on docs-only PRs)
-- ✅ Multi-layered quality gates (lint, security, test, manifest)
-- ✅ Merkle proof verification for data integrity
-- ✅ Determinism cross-ISA testing
-- ✅ Comprehensive dependency locking
-- ✅ CI gate aggregator pattern for branch protection
-
-**Weaknesses:**
-- ⚠️ Actions not pinned to commit SHAs (use @v6, @v7, @v8)
-- ⚠️ No intra-job test parallelization (sequential pytest)
-- ⚠️ mypy is soft-fail (type errors don't block)
-- ⚠️ No pytest-rerunfailures for flaky tests
-- ⚠️ `fail-fast: true` hides multi-branch failures
-
-**Build Times:**
-
-| Job | Timeout | Status |
-|-----|---------|--------|
-| Lightweight | 5 min | ✅ Fast |
-| Lint | 20 min | ⚠️ Could optimize |
-| Test Matrix | 45 min | ⚠️ Sequential |
-| **Full Suite** | 65-75 min | ⚠️ Could be 40-50 min |
-
----
-
-### 6. Code Architecture: 6.2/10 ⭐⭐⭐
-
-**Strengths:**
-- ✅ Core module exemplary (0 internal cross-imports)
-- ✅ 8 well-designed interface ABCs
-- ✅ Protocol-driven design in spatial_ai/
-- ✅ Immutable data patterns (frozen dataclasses)
-- ✅ Comprehensive type hints
-- ✅ Lazy loading for ML dependencies
-
-**Critical Issues:**
-
-| Issue | File | LOC | Severity |
-|-------|------|-----|----------|
-| Monolithic orchestrator | `lux_depth_v3/orchestrator.py` | 6,108 | 🔴 CRITICAL |
-| Circular imports | `depth/ ↔ lux_depth_v3/` | N/A | 🔴 CRITICAL |
-| Giant pipeline files | `rendering_4k_pipeline.py` | 2,379 | 🟠 HIGH |
-| Unused interfaces | `interfaces/` | 800 | 🟡 MEDIUM |
-
-**Module Ratings:**
-
-| Module | LOC | Rating |
-|--------|-----|--------|
-| core/ | 2.7K | 9/10 ✅ |
-| interfaces/ | 0.8K | 8/10 ✅ |
-| spatial_ai/ | 14K | 7/10 ⚠️ |
-| depth/ | 10K | 5/10 ❌ |
-| pipelines/ | 7.8K | 4/10 ❌ |
-| lux_depth_v3/ | 21.5K | 3/10 ❌ |
-
----
-
-### 7. Performance Governance: 8.0/10 ⭐⭐⭐⭐
-
-**Strengths:**
-- ✅ Quality Firewall with p95/mean latency gates
-- ✅ Performance ledger tracking
-- ✅ Benchmark tests properly isolated (`@pytest.mark.benchmark`)
-- ✅ ADR-034 benchmark exclusion from PR gating
-- ✅ Determinism enforcement layer
-
-**Weaknesses:**
-- ⚠️ No nightly benchmark regression workflow active
-- ⚠️ Performance impact callouts missing in CHANGELOG
-- ⚠️ Some operations use Python loops instead of vectorized ops
-
----
-
-## Actionable Roadmap
-
-### Phase 1: Critical Security Fixes (1-2 days) ✅ COMPLETED
-
-**Effort:** 4-6 hours
-**Priority:** 🔴 CRITICAL
-**Status:** ✅ Implemented 2026-03-16
-
-| Task | File | Effort | Status |
-|------|------|--------|--------|
-| Replace unsafe pickle with `safe_pickle_load()` | `depth/utils/cache.py` | 30 min | ✅ Pre-existing |
-| Add path validation to subprocess calls | `lux_depth_v3/v2_runner.py` | 1 hour | ✅ Complete |
-| Complete security.py stub | `lux_depth_v3/security.py` | 2 hours | ✅ Complete |
-| Add security event logging | `core/security/*.py` | 1 hour | ✅ Complete |
-
-**Implementation Summary:**
-- `cache.py`: Already used `safe_pickle_load` - no changes needed
-- `v2_runner.py`: Added `safe_resolve_path` validation for all path arguments
-- `security.py`: Removed stub notice, added full implementation with logging
-- `path.py`, `serialization.py`: Added security event logging
-
----
-
-### Phase 2: Testing Improvements (1 week)
-
-**Effort:** 10-15 hours
-**Priority:** 🟠 HIGH
-**Status:** ✅ COMPLETE (core items)
-
-| Task | Effort | Impact | Status |
-|------|--------|--------|--------|
-| Retrofit `@pytest.mark.unit` to 80+ tests | 2 hours | Governance | ✅ Complete (81 files) |
-| Add `@pytest.mark.security` to all security tests | 1 hour | Governance | ✅ Complete (7 files) |
-| Create `docs/testing/STRATEGY.md` | 3 hours | Documentation | ✅ Complete |
-| Migrate golden tests to `/tests/golden/` | 2 hours | Organization | ✅ Complete (fixtures exist) |
-| Add pytest-rerunfailures for flaky tests | 1 hour | CI Stability | ✅ Complete (v16.1 installed) |
-| Implement per-subsystem coverage thresholds | 2 hours | Quality | 🔄 Pending (future enhancement) |
-
-**Implementation Summary (2026-03-21):**
-- Created `docs/testing/STRATEGY.md` with comprehensive test strategy
-- Retrofitted `@pytest.mark.unit` markers to 71 additional test files (81 total)
-- Added `@pytest.mark.security` markers to 7 security-focused test files
-- Golden tests exist in `/tests/golden/` with fixtures for phase4, reconstruction, and run_card
-- pytest-rerunfailures configured via `requirements/dev.in` (>=14,<17), currently pinned to v16.1 in `requirements/dev.txt`
-
-**Example Test Strategy Doc:**
-```markdown
-# Test Strategy
-
-## Layer 1: Core (torch-free)
-- Markers: none (default), `not ml and not slow`
-- Duration: < 2 min
-- Coverage: 25% minimum
-
-## Layer 2: ML-Fast
-- Markers: `ml and not slow and not integration`
-- Duration: < 10 min
-- Ceiling: 70 tests (enforced)
-
-## Layer 3: ML-Slow
-- Markers: `ml and slow`
-- Duration: Nightly only
+```text
+Browser
+  -> managed Next frontdoor (`web/secure-landing`)
+  -> FastAPI backend (`app.py`)
+  -> orchestrator jobs, pipeline CLIs, local runtimes, and artifacts
 ```
 
----
+The frontdoor owns browser login/logout, Cloudflare Access posture, local smoke
+credentials, session handling, proxy behavior, frontdoor `/healthz`, RUM
+rollout controls, and portal bundle generation. Node 22.x is the enforced
+frontdoor runtime contract.
 
-### Phase 3: Documentation Organization (1 week)
+The FastAPI backend owns direct-debug portal behavior, typed API envelopes,
+pipeline readiness, job lifecycle, server-sent events, artifact serving, and
+protected API-key routes.
 
-**Effort:** 15-20 hours
-**Priority:** 🟡 MEDIUM
-**Status:** 🟢 IN PROGRESS (core items complete)
+### Health And Readiness
 
-| Task | Effort | Impact | Status |
-|------|--------|--------|--------|
-| Remove/complete 15+ stub documents | 2 hours | Cleanup | 🔄 Pending (stubs are redirects) |
-| Add "Last Updated" metadata to canonical docs | 4 hours | Governance | 🔄 In Progress |
-| Consolidate ADR storage (single directory) | 3 hours | Navigation | ✅ Complete |
-| Archive historical docs to `_archive/` | 2 hours | Clarity | ✅ Complete |
-| Create V1→V2 migration guide | 3 hours | Onboarding | ✅ Complete (updated) |
-| Expand PORTAL_ORCHESTRATOR_QUICKSTART | 2 hours | API Docs | 🔄 Pending |
+Current health contracts are intentionally split:
 
-**Implementation Summary (2026-03-21):**
-- Consolidated ADR storage: moved `docs/architecture/adr/` and `docs/architecture/decisions/` content to `docs/_archive/2026-Q1-consolidation/`
-- Updated `docs/migration/MIGRATION_GUIDE.md` to v2.0.0 with current breaking changes, new features, and deprecation schedule
-- Note: Many "stub" documents are compatibility redirects to canonical locations
+| Route | Contract |
+| --- | --- |
+| `/healthz` | Raw minimal liveness JSON with `ok` and `time`; not API-enveloped. |
+| `/ready` | Raw backend readiness JSON with `ok`, `time`, `version`, and optional verbose fields. |
+| `/v1/readiness` | `tp.orchestrator.readiness.v1` envelope with per-pipeline dispatch truth. |
 
-**Directory Consolidation:**
+The readiness matrix currently covers `lux-depth-v3` and archive gates A/B/C.
+Transport success is not sufficient to prove dispatch readiness; per-pipeline
+state can be `ready`, `degraded`, or `blocked`.
+
+### Pipeline And Artifact Surfaces
+
+Current governed surfaces include:
+
+- Lux Depth V3 depth, materials, PBR, enhancement, run-card, and artifact
+  workflows.
+- APEX quality and model-family characterization surfaces.
+- Archive gates A/B/C and machine-mode archive contracts.
+- Spatial AI reconstruction, segmentation, materials, and ingest research
+  surfaces.
+- Optional FastVLM advisory captioning through subprocess-isolated runtime
+  checks; captions remain advisory and are not quality-gate evidence.
+- Provenance, manifests, attestation, content-addressed storage, run cards, and
+  fixity evidence.
+
+## Findings By Area
+
+### 1. Security And Governance
+
+Current strengths:
+
+- Backend protected endpoints enforce API key policy when enabled.
+- Trusted-host, proxy, content-length, rate-limit, artifact-path, and allowed
+  root boundaries remain fail-closed surfaces.
+- Frontdoor session handling and Cloudflare Access posture are isolated from
+  direct backend debugging.
+- RUM telemetry has explicit allow-lists, rollout controls, retention/deletion
+  evidence, and sink-path governance.
+- Dependency security is governed through lockfiles, banned dependency checks,
+  pip-audit/security workflows, Bandit, CodeQL, and gitleaks.
+
+Current risks:
+
+- Security-sensitive code is spread across backend middleware, frontdoor
+  routing/session helpers, validation scripts, and pipeline path guards. Keep
+  future fixes narrow and contract-tested.
+- Optional local model runtimes introduce filesystem and download boundaries;
+  keep them under governed setup scripts and `.runtime/` contracts.
+
+### 2. Testing
+
+Current strengths:
+
+- The repository now has about 606 Python test files.
+- Coverage includes unit, contract, HTTP, browser-smoke script tests, security,
+  dependency governance, docs governance, ingest, archive, APEX, Materials V3,
+  spatial AI, and runtime fixtures.
+- `pytest-rerunfailures` and `pytest-xdist` are present in the governed dev
+  dependency layer.
+- Frontdoor has Node test, build, CSS, utility-ownership, and Playwright smoke
+  surfaces.
+
+Current risks:
+
+- Broad test volume increases triage cost. Failures should be grouped by root
+  cause: product regression, stale test contract, or environment/tooling.
+- Browser and optional-runtime validations can fail due to local Chrome,
+  sandbox, port, model, or network state. Do not weaken product contracts until
+  the failure class is proven.
+
+Primary validation lanes:
+
+```bash
+make test-fast
+make test-orchestrator-contract
+make test-frontdoor-contract
+make validate-portal-browser
+make validate-frontdoor-browser
+make ci
 ```
-docs/architecture/         # All ADRs (primary)
-docs/architecture/versions/ # Superseded ADR versions
-docs/_archive/2026-Q1/     # Historical sessions, status, pr_archive
+
+### 3. Dependency Management
+
+Current strengths:
+
+- `pyproject.toml` keeps broad package ranges while checked-in lockfiles enforce
+  tested combinations.
+- `requirements/` owns generic, dev, CI, security, tools-archive, and target
+  ML lock surfaces.
+- Darwin arm64 ML is the target-owned ML lane; Linux x86_64 and Darwin x86_64
+  ML lanes are retired fail-closed stubs.
+- Optional DA3, Depth Pro, RAW, SAM2, CoreML, and FastVLM runtimes have
+  explicit setup or validation commands.
+
+Current risks:
+
+- Direct `pip install ...` guidance is not the supported remediation path for
+  normal development health. Prefer Make targets and lock-governed installers.
+- Dependency updates must preserve marker contracts, lock ownership, and
+  current CI sync checks.
+
+Primary commands:
+
+```bash
+make install-core
+make repair-core-venv
+make check-environment
+make check-requirements-lock-contract
+make check-dependency-pinning
+make check-ci-sync
 ```
 
----
+### 4. Documentation
 
-### Phase 4: CI/CD Optimization (2 weeks)
+Current strengths:
 
-**Effort:** 20-25 hours
-**Priority:** 🟡 MEDIUM
-**Status:** 🟢 IN PROGRESS (core items complete)
+- The May 11 documentation refresh established current navigation and a
+  repo-wide classification inventory.
+- `docs/governance/DOCUMENTATION_MAP.md` is the current source of truth for
+  maintained navigation.
+- `docs/architecture/ARCHITECTURE.md` now reflects the current system topology
+  and contract boundaries.
+- Documentation topology is enforced by `scripts/governance/check_docs_structure.py`.
 
-| Task | Effort | Impact | Status |
-|------|--------|--------|--------|
-| Pin all actions to commit SHAs | 3 hours | Security | ✅ Complete |
-| Add pytest-xdist for test parallelization | 2 hours | 20-30% faster CI | ✅ Complete |
-| Make mypy hard-fail for critical modules | 2 hours | Type Safety | ✅ Complete |
-| Add per-test timeouts (`--timeout=60`) | 1 hour | Stability | 🔄 Pending |
-| Set `fail-fast: false` for comprehensive detection | 1 hour | Debugging | ✅ Pre-existing |
-| Implement nightly benchmark regression | 4 hours | Performance | 🔄 Pending |
-| Add SBOM generation | 3 hours | Compliance | 🔄 Pending |
+Current risks:
 
-**Implementation Summary (2026-03-21):**
-- Pinned all GitHub Actions to commit SHAs in `ci.yml` and `build.yml`
-- Added `pytest-xdist>=3.5,<4` to requirements for parallel test execution
-- Updated test commands to use `-n auto` for parallel execution
-- Made mypy type checking hard-fail (removed `continue-on-error: true`)
+- Historical and mixed docs intentionally retain old dates, commands, and
+  conclusions. Do not promote them as current guidance without checking the
+  documentation map.
+- Point-in-time reports should be refreshed only when they are classified as
+  current-support or linked by current navigation.
 
-**Projected CI Time Improvement:**
-- Before: 65-75 min (sequential tests)
-- After: 40-50 min (-35%) with parallel test execution
+Primary commands:
 
----
-
-### Phase 5: Architecture Refactoring (4-6 weeks)
-
-**Effort:** 90-130 hours
-**Priority:** 🟠 HIGH (long-term)
-
-| Task | Effort | Impact |
-|------|--------|--------|
-| Extract orchestrator into 4 focused classes | 40-60 hours | Maintainability |
-| Resolve circular imports (depth ↔ lux_depth_v3) | 10-15 hours | Modularity |
-| Break giant pipeline files into modules | 30-40 hours | Readability |
-| Implement Pipeline ABC contracts | 15-20 hours | Consistency |
-
-**Orchestrator Decomposition:**
-```
-lux_depth_v3/orchestrator.py (6,108 LOC)
-  ├── config_resolver.py (~1,000 LOC)
-  ├── pipeline_coordinator.py (~1,500 LOC)
-  ├── artifact_manager.py (~1,500 LOC)
-  └── execution_engine.py (~2,000 LOC)
+```bash
+make check-docs
+make check-stale-docs
+make check-doc-heading-links
+python3 scripts/governance/check_docs_structure.py --all
 ```
 
-**Expected Improvements:**
-- Maintainability: 5/10 → 8/10 (+60%)
-- Cyclomatic Complexity: ↓ 40-50%
-- Onboarding Time: ↓ 50%
+### 5. CI/CD
 
----
+Current strengths:
 
-## Summary Scorecard
+- `.github/workflows/` contains 30 workflow YAML files.
+- The local `make ci` target chains lint, serialization, YAML governance,
+  pip-tools cache, requirements lock contract, dependency pinning, CI sync,
+  portal asset budgets, fast tests, orchestrator contracts, and frontdoor
+  contracts.
+- CI includes security, dependency, documentation, ML, frontdoor, archive,
+  determinism, APEX, and quality firewall surfaces.
 
-### Category Breakdown
+Current risks:
 
-| Category | Current | Target | Gap |
-|----------|---------|--------|-----|
-| Security | 8.5 | 9.0 | -0.5 |
-| Testing | 7.7 | 8.5 | -0.8 |
-| Dependency Management | 8.2 | 9.0 | -0.8 |
-| Documentation | 7.5 | 8.5 | -1.0 |
-| CI/CD | 8.0 | 9.0 | -1.0 |
-| Code Architecture | 6.2 | 8.0 | -1.8 |
-| Performance | 8.0 | 8.5 | -0.5 |
-| **OVERALL** | **7.6** | **8.6** | **-1.0** |
+- Workflow count and optional lanes make triage noisy. Keep suspected
+  cancellations separate from confirmed root-cause failures.
+- Scheduled/main failures can be stale relative to HEAD. Verify current source
+  files and local validators before reopening already-fixed contract logic.
 
-### Investment vs. Return
+### 6. Code Architecture
 
-| Phase | Effort | Impact | Status |
-|-------|--------|--------|--------|
-| Phase 1: Security | 4-6 hours | Critical risk mitigation | ✅ Complete |
-| Phase 2: Testing | 10-15 hours | Governance + stability | ✅ Complete |
-| Phase 3: Documentation | 15-20 hours | Developer experience | 🟢 In Progress (core complete) |
-| Phase 4: CI/CD | 20-25 hours | 35% faster CI | ✅ Complete |
-| Phase 5: Architecture | 90-130 hours | Long-term maintainability | 🔄 Pending |
+Current strengths:
 
-### Recommended Priority Order
+- Package boundaries are clearer around `api/v1`, `core`, `lux_depth_v3`,
+  `depth`, `stage_graph`, `execution_graph`, `runtime`, `storage`,
+  `spatial_ai`, `ingest`, `attestation`, `schemas`, and frontdoor code.
+- ADR-043 introduced concrete decomposition targets and supporting
+  `lux_depth_v3` modules such as `config_resolver.py`,
+  `pipeline_coordinator.py`, `artifact_manager.py`, and `execution_engine.py`.
+- Typed API models and schema envelopes reduce ambiguity at the route boundary.
 
-1. **Phase 1** (Security) - ✅ COMPLETED
-2. **Phase 2** (Testing) - ✅ COMPLETED (strategy doc + markers + golden tests + rerunfailures)
-3. **Phase 4** (CI/CD) - ✅ COMPLETED (action pinning + xdist + mypy hard-fail)
-4. **Phase 3** (Documentation) - 🟢 IN PROGRESS (ADR consolidation + migration guide done)
-5. **Phase 5** (Architecture) - Strategic, phased over quarters (ADR-043 complete)
+Current risks:
 
----
+- `app.py` is still a large integration module, observed at about 8.9K lines.
+- `src/transformation_portal/lux_depth_v3/orchestrator.py` remains large,
+  observed at about 6.9K lines, even with extracted supporting modules.
+- Architecture work should continue as incremental, contract-preserving
+  slices. Avoid broad rewrites of orchestrator, portal, or frontdoor surfaces.
+
+Recommended refactor posture:
+
+- Extract only when it reduces real coupling or isolates a testable contract.
+- Keep public routes, schema names, CLI flags, selectors, and artifact paths
+  stable unless the change explicitly updates them.
+- Pair every behavior change with focused tests and the correct validation
+  lane.
+
+### 7. Performance And Determinism
+
+Current strengths:
+
+- APEX, quality firewall, performance ledger, benchmark markers, and
+  determinism harnesses remain active governance surfaces.
+- Run cards, manifests, provenance, content-addressed storage, and fixity
+  checks support repeatable artifact review.
+
+Current risks:
+
+- Live performance status is lane-specific. Static docs refreshes should not
+  claim benchmark health unless the relevant benchmark or APEX lane was run.
+- Optional ML backends and local model runtimes can shift performance and
+  availability; readiness should report those states explicitly.
+
+## Updated Roadmap
+
+| Priority | Workstream | Current recommendation |
+| --- | --- | --- |
+| P0 | Preserve contracts | Keep `/healthz`, `/ready`, `/v1/readiness`, job routes, frontdoor selectors, CLI flags, and schema names stable unless a change intentionally updates them with tests. |
+| P1 | Architecture debt | Continue incremental `app.py` and `src/transformation_portal/lux_depth_v3/orchestrator.py` decomposition around already-extracted modules. |
+| P1 | Frontdoor validation | Keep Node 22, frontdoor health, browser smoke selectors, and portal bundle generation deterministic. |
+| P1 | Dependency governance | Preserve lock ownership, marker contracts, retired ML lane stubs, and optional runtime setup boundaries. |
+| P2 | Documentation hygiene | Maintain current navigation through the documentation map; classify historical material instead of mass-updating dates. |
+| P2 | CI triage | Group failures by current root cause and distinguish stale scheduled failures from HEAD regressions. |
+| P2 | Performance evidence | Treat benchmark/APEX/performance claims as current only after lane-specific validation. |
+
+## Validation For This Refresh
+
+This document refresh is documentation-only. The following commands should be
+used to validate the edit:
+
+```bash
+make check-docs
+make check-stale-docs
+make check-doc-heading-links
+python3 scripts/governance/check_docs_structure.py --all
+git diff --check
+```
+
+Full product validation remains outside this refresh unless explicitly run:
+
+```bash
+make ci
+make validate-portal-browser
+make validate-frontdoor-browser
+```
 
 ## Conclusion
 
-The Transformation Portal codebase is **production-grade with strong fundamentals**. The primary areas requiring attention are:
+The Q1 audit remains useful historical context, but the current codebase has
+moved beyond several March assumptions. The repository now has a more explicit
+managed-frontdoor topology, typed health/readiness contracts, broader docs and
+CI governance, more test coverage, and stronger telemetry/dependency policy.
 
-1. **Security fixes** (pickle, subprocess validation) - ✅ COMPLETED
-2. **Testing governance** (markers, strategy) - ✅ COMPLETED
-3. **CI/CD optimization** (action pinning, parallelization, type safety) - ✅ COMPLETED
-4. **Documentation organization** (ADR consolidation, migration guide) - 🟢 IN PROGRESS
-5. **Architecture debt** (monolithic orchestrator) - ✅ ADR-043 COMPLETED
-
-With the proposed roadmap, the overall score has improved significantly. Phases 1, 2, and 4 are complete. Phase 3 documentation consolidation is in progress. Phase 5 orchestrator decomposition was completed per ADR-043.
-
----
-
-**Next Steps:**
-1. ~~Review and approve this audit report~~ ✅
-2. ~~Create GitHub issues for Phase 1 tasks (Critical)~~ ✅
-3. ~~Schedule Phase 2-4 work in upcoming sprints~~ ✅
-4. ~~Plan Phase 5 architecture work as ADR-043~~ ✅ Complete
-5. Complete remaining Phase 3 documentation cleanup
-
-**Document Status:** Approved - Quarterly Refresh
-**Expires:** 2026-06-15 (quarterly refresh)
-**Last Updated:** 2026-03-21
+The main remaining engineering risk is not lack of governance; it is the size
+and coupling of central integration surfaces. Future work should preserve the
+current contracts while continuing narrow decomposition of `app.py`,
+`src/transformation_portal/lux_depth_v3/orchestrator.py`, and adjacent
+runtime/portal seams.
