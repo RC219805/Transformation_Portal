@@ -2,9 +2,9 @@ name: Smart Issue Management
 
 on:
   issues:
-    types: [opened, reopened, labeled, unlabeled]
+    types: [opened, reopened]
   pull_request_target:
-    types: [opened, reopened, labeled, unlabeled]
+    types: [opened, reopened]
 
 # Concurrency control: cancel stale triage runs for the same item.
 concurrency:
@@ -114,6 +114,15 @@ jobs:
           # Use retry logic with exponential backoff + jitter for rate-limit / transient errors.
           print("🤖 Requesting AI classification with retry logic...")
 
+          def get_openai_error(response):
+              try:
+                  data = response.json()
+              except ValueError:
+                  return {}
+
+              error = data.get("error", {}) if isinstance(data, dict) else {}
+              return error if isinstance(error, dict) else {}
+
           def call_openai_with_retries(api_key, messages, model="gpt-4o-mini", max_retries=6, **kwargs):
               openai_headers = {
                   "Authorization": f"Bearer {api_key}",
@@ -142,13 +151,32 @@ jobs:
                           continue
                       raise RuntimeError("OpenAI request failed after retries") from e
 
-                  if response.status_code == 429 and attempt < max_retries:
-                      base_wait = min(60, 2 ** attempt)
-                      jitter = random.uniform(0.5, 1.5)
-                      wait = base_wait * jitter
-                      print(f"⚠️ Rate limited by OpenAI (attempt {attempt}/{max_retries}). Waiting {wait:.1f}s before retrying...")
-                      time.sleep(wait)
-                      continue
+                  if response.status_code == 429:
+                      error = get_openai_error(response)
+                      error_code = error.get("code")
+                      error_type = error.get("type")
+                      error_message = error.get("message", response.text)
+                      non_retryable_429_codes = {"insufficient_quota"}
+
+                      if error_code in non_retryable_429_codes or error_type in non_retryable_429_codes:
+                          raise RuntimeError(
+                              f"OpenAI HTTP 429 non-retryable {error_code or error_type}: "
+                              f"{error_message[:400]}"
+                          )
+
+                      if attempt < max_retries:
+                          base_wait = min(60, 2 ** attempt)
+                          jitter = random.uniform(0.5, 1.5)
+                          wait = base_wait * jitter
+                          print(
+                              f"⚠️ OpenAI retryable 429 "
+                              f"(code={error_code}, type={error_type}, attempt {attempt}/{max_retries}). "
+                              f"Waiting {wait:.1f}s before retrying..."
+                          )
+                          time.sleep(wait)
+                          continue
+
+                      raise RuntimeError(f"OpenAI HTTP 429: {response.text[:400]}")
 
                   if response.status_code >= 400:
                       raise RuntimeError(f"OpenAI HTTP {response.status_code}: {response.text[:400]}")
@@ -300,25 +328,7 @@ jobs:
                   print(f"HTTP status: {status}", file=sys.stderr)
               if error_code is not None:
                   print(f"Error code: {error_code}", file=sys.stderr)
-              # Post error comment (non-blocking)
-              error_comment = f"""## ⚠️ AI Triage Error
-
-          Unable to automatically classify this {'PR' if is_pr else 'issue'}.
-          Please manually add labels and priority.
-
-          Error type: {type(e).__name__}
-
-          ---
-          *The AI service may be experiencing rate limits. Please retry or classify manually.*
-          """
-              try:
-                  requests.post(
-                      f'https://api.github.com/repos/{repo}/issues/{issue_number}/comments',
-                      headers=headers,
-                      json={'body': error_comment}
-                  )
-              except Exception as post_err:
-                  print(f"⚠️ Failed to post error comment: {str(post_err)}")
+              # Fallback AI-unavailable diagnostics stay in logs only; do not post PR/issue comments.
 
           print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
           print("✅ Smart Issue Triage Complete!")
