@@ -3,18 +3,22 @@
 **Purpose**: Define triage policy and merge criteria for Dependabot-generated pull requests
 **Owner**: Transformation Portal Architect
 **Created**: 2026-03-26
-**Last Updated**: 2026-04-23
+**Last Updated**: 2026-05-12
 
 ---
 
 ## Overview
 
-This document establishes governance for reviewing and merging Dependabot PRs in accordance with the repository's enforced policy controls. Dependabot updates fall into two categories:
+This document establishes governance for reviewing and merging Dependabot PRs in accordance with the repository's enforced policy controls. Dependabot updates fall into three categories:
 
 1. **GitHub Actions updates** (`package-ecosystem: "github-actions"`)
 2. **Python dependency updates** (`package-ecosystem: "pip"`)
+3. **Node dependency updates** (`package-ecosystem: "npm"`) for `/`, `/web/secure-landing`, and `/cloudflare/transformationportal-worker`
 
 Each category has different risk profiles and merge criteria.
+All configured Dependabot entries carry the `dependencies` and `automated`
+labels and use staggered Tuesday UTC schedules so update PRs remain
+classifiable without arriving in one burst.
 
 ---
 
@@ -29,6 +33,7 @@ The following are the enforced controls that constrain Dependabot PR acceptance:
 | Action SHA pinning | `enforcement.yml` → `action-pins` job | Third-party actions must be SHA-pinned; official `actions/*@v...` tags are currently allowed, and enforcement is strictest in critical workflows |
 | Banned dependencies | `enforcement.yml` → `banned-dependencies` job | Blocked packages cannot be introduced |
 | Dependency constraints | `build.yml` → `dependency-constraints` job; `ci-quality-firewall.yml` → `validate-dependency-constraints` job | ADR-032 constraint validation |
+| Node runtime boundaries | `web/secure-landing/package.json`; `cloudflare/transformationportal-worker/package.json`; root `package.json` | Frontdoor updates must preserve Node 22, exact Next pin posture, and Cloudflare Worker tooling separation |
 
 ---
 
@@ -52,6 +57,23 @@ The following are the enforced controls that constrain Dependabot PR acceptance:
 | **Medium** | Minor bump, non-pinned dependency | Feature updates to utilities | Review changelog, test coverage |
 | **High** | Any change to exact-pinned dependencies | `starlette`, `fastapi`, `uvicorn` | **HOLD** - requires curated PR |
 | **Critical** | Major version bump to exact-pinned dependencies | `starlette` 0.x → 1.0 | **DO NOT MERGE** as routine bump |
+
+### Node Dependency Updates
+
+Dependabot tracks three checked-in npm lockfile roots:
+
+- `/` for root worker-build tooling.
+- `/web/secure-landing` for the managed Next frontdoor.
+- `/cloudflare/transformationportal-worker` for the frontdoor-only Cloudflare Worker package.
+
+Minor and patch version updates are grouped per directory to reduce PR noise. Major updates remain separate PRs and must be reviewed as compatibility changes.
+
+| Risk Level | Criteria | Examples | Merge Policy |
+|------------|----------|----------|--------------|
+| **Low** | Patch bump in isolated tooling | `wrangler` patch, `@cloudflare/workers-types` patch | Merge after package-lock diff and relevant dry-run/test pass |
+| **Medium** | Minor bump in frontdoor runtime or test tooling | `@playwright/test`, `stylelint`, `argon2` minor | Run `make test-frontdoor-contract` or narrower frontdoor lane before merge |
+| **High** | Exact-pinned frontdoor framework or lock metadata change | `next`, npm package-manager metadata | Require frontdoor contract/build validation and package-lock review |
+| **Critical** | Major framework/runtime boundary change | `next` major, React major, Node engine range change | Curated PR only; do not routine-merge |
 
 ---
 
@@ -190,6 +212,7 @@ Before merging any Dependabot PR:
 - [ ] CI is green on the PR
 - [ ] Change does not modify exact-pinned dependencies in `requirements/base.in`
 - [ ] For major action bumps: runner compatibility verified
+- [ ] For Node major bumps: frontdoor/worker compatibility and package-lock platform metadata reviewed
 - [ ] For post-merge-validation workflows: risk accepted or manual smoke completed
 - [ ] No batching of unrelated risk levels
 
@@ -204,6 +227,7 @@ Before merging any Dependabot PR:
 | 2026-04-16 | Recorded the FastAPI 0.136.0 curated baseline and the "dep pin changed" checklist | Architect |
 | 2026-04-16 | Added ML alert dismissal/remediation governance for supported vs frozen target-owned lanes | Architect |
 | 2026-04-23 | Synced the exact-pinned web stack block with the curated Uvicorn 0.45.0 baseline | Architect |
+| 2026-05-12 | Added npm Dependabot coverage and per-directory grouped minor/patch policy | Architect |
 
 ---
 
