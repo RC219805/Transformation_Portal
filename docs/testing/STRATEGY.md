@@ -293,13 +293,16 @@ make test-fast
 pytest -v tests/ -ra -m "(unit or security or regression or golden or integration) and not ml and not slow and not benchmark" --maxfail=1
 ```
 
-### With ML Dependencies
+### Broad Non-Video Suite
 
 ```bash
 make test-novideo
-# or (matches PR-gating expression)
-pytest -v tests/ -ra -m "ml and not slow and not integration and not benchmark" --maxfail=1
+# or
+pytest -q -k "not video_master_grader"
 ```
+
+This convenience target excludes the luxury video master grader tests. It is
+not an ML-only selector.
 
 ### Full Suite
 
