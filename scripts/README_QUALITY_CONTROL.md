@@ -469,6 +469,6 @@ When adding new quality checks:
 ## See Also
 
 - [Main README](../README.md) - Project overview
-- [CI Configuration](.github/workflows/build.yml) - GitHub Actions setup
-- [Testing Guide](tests/TEST_STATUS.md) - Test suite documentation
-- [Coding Standards](../docs/architecture/ARCHITECTURE.md) - Code style guidelines
+- [CI Configuration](../.github/workflows/build.yml) - GitHub Actions setup
+- [Testing Guide](../tests/TEST_STATUS.md) - Test suite documentation
+- [Repository Architecture](../docs/architecture/ARCHITECTURE.md) - System architecture overview
