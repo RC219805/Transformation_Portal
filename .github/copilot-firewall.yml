@@ -19,6 +19,9 @@ allow:
   - raw.githubusercontent.com
   - objects.githubusercontent.com
 
+  # npm registry - for Node 22 managed frontdoor dependency installation
+  - registry.npmjs.org
+
   # Hugging Face - for ML models and datasets
   - huggingface.co
   - cdn.huggingface.co

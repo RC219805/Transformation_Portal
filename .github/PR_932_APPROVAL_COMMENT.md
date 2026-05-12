@@ -1,5 +1,20 @@
 # ✅ Architectural Verification: APPROVED FOR MERGE
 
+> Current status note (2026-05-12): This is a historical approval comment for
+> PR #932. Do not treat it as the current Materials/APEX governance entry
+> point. Later PR #932 evidence lives in:
+>
+> - `docs/architecture/PR_932_ARCHITECTURAL_VERIFICATION.md`
+> - `docs/architecture/PR_932_CRITICAL_FIXES_VERIFICATION.md`
+> - `docs/architecture/PR_932_DOCUMENTATION_ALIGNMENT_COMPLETE.md`
+>
+> The earlier follow-up recommendation to add explicit `allow_pickle=False`
+> was specific to the PR #932 Materials V3 mask NPZ load and was addressed in
+> the later critical-fixes verification. This note is not a claim that every
+> repository `np.load(...)` call site sets the flag; consult the current code
+> and follow-up verification documents before using this historical comment as
+> active backlog.
+
 **PR:** #932 Materials V3 Production Integration
 **Commit:** `00f41198`
 **Reviewer:** @transformation-portal-architect
@@ -35,7 +50,7 @@ This PR demonstrates exemplary adherence to all architectural invariants, securi
 - ✅ Path safety (controlled filenames, no traversal)
 - ✅ Cleanup guarantee (try-finally, no leakage)
 - ✅ Safe serialization (NumPy NPZ, no pickle)
-- ⚠️ **Low-priority recommendation:** Add `allow_pickle=False` to NPZ load (post-merge hardening)
+- ⚠️ **Historical low-priority recommendation:** Add `allow_pickle=False` to NPZ load (later addressed by PR #932 critical fixes)
 
 ---
 
@@ -71,7 +86,7 @@ This PR demonstrates exemplary adherence to all architectural invariants, securi
 2. **Run post-merge CI** - Final validation gate
 
 ### 📋 Follow-Up Work (Non-Blocking)
-1. **LOW priority:** Add `allow_pickle=False` to `enhance_image.py:195` (hardening)
+1. **LOW priority (historical; later addressed):** Add `allow_pickle=False` to `enhance_image.py:195` (hardening)
 2. **MEDIUM priority:** Add ADR-023 isolation script to CI workflow (automation)
 3. **INFORMATIONAL:** Monitor mask serialization performance in production
 
