@@ -11,7 +11,7 @@
 ## Report Boundary
 
 This document is a point-in-time health snapshot for audit context under
-`docs/fixes/`. It is not promoted canonical operator guidance. Current
+`docs/fixes/`. It is not promoted as canonical operator guidance. Current
 operator navigation remains in `README.md`, `docs/README.md`, and
 `docs/governance/DOCUMENTATION_MAP.md`.
 
@@ -37,8 +37,9 @@ Current health signals:
   focused tests.
 - Managed frontdoor and backend validation are Make-governed and Node/Python
   version-gated.
-- The repository is large, about 91G at inspection time, which is a maintenance
-  concern but not evidence of a code-health failure by itself.
+- The repository is large, approximately 91 GiB at inspection time (`du -sh`
+  reported `91G`), which is a maintenance concern but not evidence of a
+  code-health failure by itself.
 
 Current validation boundary:
 
@@ -215,7 +216,8 @@ All passed during refresh validation.
 
 ## 6. Repository Size
 
-The checkout size was observed at about 91G:
+The checkout size was observed at approximately 91 GiB (`du -sh` reported
+`91G`):
 
 ```bash
 du -sh .
