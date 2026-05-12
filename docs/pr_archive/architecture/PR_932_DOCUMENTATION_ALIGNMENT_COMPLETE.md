@@ -46,8 +46,8 @@ Successfully updated PR #932 description and fixed all remaining documentation i
    - Line 339: `"when masks_dir is None"` → `"when masks_file is None"`
 
 2. **`config/materials_v3_production.yaml`**
-   - Line 7: `"see docs/models[.]md"` -> `"automatic on first use"`
-   - Fixed broken documentation reference (`docs/models[.]md` does not exist)
+   - Line 7: replaced the former broken reference `"see docs/models.md"` (target does not exist) with `"automatic on first use"`
+   - Fixed broken documentation reference: `docs/models.md` does not exist
    - Weights download automatically via Hugging Face on first use
 
 ### 3. Verification ✅
@@ -209,7 +209,7 @@ The PR description now accurately reflects the code in the repository and provid
 - [x] All CLI examples show working syntax
 - [x] Architecture diagram shows explicit file path
 - [x] Test docstrings fixed (masks_file not masks_dir)
-- [x] Config broken reference fixed (`docs/models[.]md`)
+- [x] Config broken reference fixed (`docs/models.md` did not exist)
 - [x] No lingering masks_dir in Python code
 - [x] Migration note added to PR description
 - [x] Contract rationale explained
