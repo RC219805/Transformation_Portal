@@ -1,9 +1,9 @@
 # Cold-Zone Coverage Program
 
 **Document Status:** Active proposal
-**Last Updated:** 2026-05-12
+**Last Updated:** 2026-05-13
 **Related Docs:** `docs/testing/STRATEGY.md`, `docs/testing/test_coverage_improvement_plan.md`
-**Related Scripts:** `scripts/ci/check_per_package_coverage.py`
+**Related Scripts:** `scripts/ci/check_per_package_coverage.py`, `scripts/ci/check_per_package_branch_coverage.py`
 **Related ADRs:** ADR-031 (test dependency isolation), ADR-044 (marker enforcement)
 
 > This document supersedes the unrevised "cold-zone testing optimization strategy"
@@ -477,21 +477,32 @@ Added to `PACKAGE_FLOORS` in `scripts/ci/check_per_package_coverage.py`
 **after** the baseline report lands, set 5-10 points below the measured
 stable coverage. Ratchet upward after two consecutive stable CI runs.
 
-Initial candidate floors (to be confirmed against baseline):
+Post-PR7 floors landed after baseline review. They are deliberately
+conservative, set roughly 5-10 points below the measured 2026-05-13 coverage:
 
 ```python
-PackageFloor("src/transformation_portal/plugins/", 60.0)
-PackageFloor("src/transformation_portal/stage_graph/", 60.0)
-PackageFloor("src/transformation_portal/vlm/", 60.0)
-PackageFloor("src/transformation_portal/depth/", 50.0)
+PackageFloor("src/transformation_portal/plugins/", 45.0)
+PackageFloor("src/transformation_portal/stage_graph/", 70.0)
+PackageFloor("src/transformation_portal/vlm/", 65.0)
+PackageFloor("src/transformation_portal/depth/", 55.0)
 PackageFloor("src/transformation_portal/streaming/", 50.0)
 PackageFloor(
     "src/transformation_portal/spatial_ai/reconstruction/",
-    50.0,
+    42.0,
 )
 ```
 
-Numbers are placeholders. Actual floors land in the PR after PR 0.
+| Package prefix | Measured 2026-05-13 line coverage | Enforced floor |
+| --- | ---: | ---: |
+| `src/transformation_portal/plugins/` | 51.40% | 45.0% |
+| `src/transformation_portal/stage_graph/` | 77.38% | 70.0% |
+| `src/transformation_portal/vlm/` | 72.41% | 65.0% |
+| `src/transformation_portal/depth/` | 64.64% | 55.0% |
+| `src/transformation_portal/streaming/` | 56.64% | 50.0% |
+| `src/transformation_portal/spatial_ai/reconstruction/` | 48.58% | 42.0% |
+
+Branch coverage remains reported by the sibling branch checker in dry-run mode
+until branch floors have two consecutive stable CI baselines.
 
 ### 12.2 Touched-file rule (per-PR, reviewer-enforced)
 
