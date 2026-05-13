@@ -108,13 +108,13 @@ def test_missing_coverage_xml_returns_2(script_module, tmp_path: Path):
 
 
 def test_default_branch_floors_cover_cold_zone_prefixes(script_module):
-    assert tuple(floor.prefix for floor in script_module.BRANCH_FLOORS) == (
-        "src/transformation_portal/plugins/",
-        "src/transformation_portal/stage_graph/",
-        "src/transformation_portal/vlm/",
-        "src/transformation_portal/depth/",
-        "src/transformation_portal/streaming/",
-        "src/transformation_portal/spatial_ai/reconstruction/",
+    assert tuple((floor.prefix, floor.floor) for floor in script_module.BRANCH_FLOORS) == (
+        ("src/transformation_portal/plugins/", 30.0),
+        ("src/transformation_portal/stage_graph/", 60.0),
+        ("src/transformation_portal/vlm/", 50.0),
+        ("src/transformation_portal/depth/", 40.0),
+        ("src/transformation_portal/streaming/", 25.0),
+        ("src/transformation_portal/spatial_ai/reconstruction/", 45.0),
     )
 
 
