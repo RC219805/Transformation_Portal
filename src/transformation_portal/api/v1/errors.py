@@ -11,6 +11,20 @@ coercing an explicit ``None`` to ``{}`` via a ``mode="before"`` validator,
 so callers that pass an ``Optional[dict]`` (e.g. routes that reuse a helper
 returning ``None`` when there are no structured details) don't trip a
 ValidationError that would turn an intended 4xx into a 500.
+
+Phase 2.D — additive ``retriable`` field. Callers that opt in
+(``retriable=True`` for broker-level ``worker_lost_*`` payloads;
+``retriable=False`` for executor-level ``RUNNER_*`` payloads) get the
+key on the wire:
+
+    {"code": code, "message": message, "details": details or {}, "retriable": bool}
+
+Callers that omit the argument (most HTTP-level 4xx envelopes) get the
+pre-Phase-2.D shape with no ``retriable`` key. The omission is enforced
+by ``ErrorObject._drop_unset_retriable``, a wrap ``@model_serializer``
+that pops ``retriable`` when ``None`` — Pydantic v2's default JSON
+output would otherwise emit ``retriable: null`` for the ``None`` default
+and break wire compat with ``_error_obj``.
 """
 
 from __future__ import annotations
@@ -69,10 +83,10 @@ class ErrorObject(BaseModel):
     # Phase 2.D — optional retry classification. ``True`` for broker-level
     # failures whose underlying work is intact (``worker_lost_*``); ``False``
     # for executor-level failures (``RUNNER_EXIT_NONZERO`` / ``RUNNER_ERROR``
-    # / ``RUNNER_NOT_FOUND``); ``None`` (omitted on the wire via
-    # ``exclude_none``) for HTTP-level error envelopes that have not been
-    # opted into the classification. Operator tooling and future auto-retry
-    # policy branch on this field.
+    # / ``RUNNER_NOT_FOUND``); ``None`` (omitted on the wire by the wrap
+    # ``@model_serializer`` below) for HTTP-level error envelopes that have
+    # not been opted into the classification. Operator tooling and future
+    # auto-retry policy branch on this field.
     retriable: bool | None = None
 
     @field_validator("details", mode="before")
