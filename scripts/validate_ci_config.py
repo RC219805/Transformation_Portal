@@ -50,6 +50,11 @@ class CIValidator:
     BRANCH_COVERAGE_SCRIPT = "scripts/ci/check_per_package_branch_coverage.py"
     BRANCH_COVERAGE_XML = "coverage.xml"
     REQUIRED_BRANCH_COVERAGE_CHECK = f"python {BRANCH_COVERAGE_SCRIPT} {BRANCH_COVERAGE_XML}"
+    COLD_ZONE_TOUCHED_FILE_SCRIPT = "scripts/ci/check_cold_zone_touched_files.py"
+    REQUIRED_COLD_ZONE_TOUCHED_FILE_CHECK = (
+        f"python {COLD_ZONE_TOUCHED_FILE_SCRIPT} {BRANCH_COVERAGE_XML} --compare-ref origin/main"
+    )
+    REQUIRED_COLD_ZONE_COMPARE_REF_FETCH = "git fetch --no-tags --depth=1 origin main:refs/remotes/origin/main"
 
     def __init__(self, repo_root: Path, fix_mode: bool = False):
         self.repo_root = repo_root
@@ -341,25 +346,72 @@ class CIValidator:
             )
             valid = False
 
+        touched_file_commands = self._script_invocations(run_script, self.COLD_ZONE_TOUCHED_FILE_SCRIPT)
+        if not any(
+            self.BRANCH_COVERAGE_XML in command and self._command_has_option_value(command, "--compare-ref", "origin/main")
+            for command in touched_file_commands
+        ):
+            self.log_error(
+                "build.yml:test: Core test leg must retain cold-zone touched-file coverage evidence check "
+                f"{self.REQUIRED_COLD_ZONE_TOUCHED_FILE_CHECK!r}"
+            )
+            valid = False
+
+        if not self._has_required_command(run_script, self.REQUIRED_COLD_ZONE_COMPARE_REF_FETCH):
+            self.log_error(
+                "build.yml:test: Core test leg must fetch origin/main before cold-zone touched-file evidence "
+                f"{self.REQUIRED_COLD_ZONE_COMPARE_REF_FETCH!r}"
+            )
+            valid = False
+
         return valid
 
     @classmethod
     def _branch_coverage_checker_commands(cls, run_script: str) -> List[List[str]]:
         """Return shell-tokenized branch coverage checker invocations."""
+        return cls._script_invocations(run_script, cls.BRANCH_COVERAGE_SCRIPT)
+
+    @staticmethod
+    def _script_invocations(run_script: str, script_path: str) -> List[List[str]]:
+        """Return shell-tokenized invocations for a Python script path."""
         logical_script = run_script.replace("\\\n", " ")
         commands: List[List[str]] = []
         for raw_line in logical_script.splitlines():
-            if cls.BRANCH_COVERAGE_SCRIPT not in raw_line:
+            if script_path not in raw_line:
                 continue
             try:
                 tokens = shlex.split(raw_line, comments=True, posix=True)
             except ValueError:
                 tokens = raw_line.split()
-            if cls.BRANCH_COVERAGE_SCRIPT not in tokens:
+            if script_path not in tokens:
                 continue
-            script_index = tokens.index(cls.BRANCH_COVERAGE_SCRIPT)
+            script_index = tokens.index(script_path)
             commands.append(tokens[script_index:])
         return commands
+
+    @staticmethod
+    def _has_required_command(run_script: str, required_command: str) -> bool:
+        """Return True when a shell script contains the required command tokens."""
+        expected_tokens = shlex.split(required_command, comments=True, posix=True)
+        logical_script = run_script.replace("\\\n", " ")
+        for raw_line in logical_script.splitlines():
+            try:
+                tokens = shlex.split(raw_line, comments=True, posix=True)
+            except ValueError:
+                tokens = raw_line.split()
+            if len(tokens) >= len(expected_tokens) and tokens[: len(expected_tokens)] == expected_tokens:
+                return True
+        return False
+
+    @staticmethod
+    def _command_has_option_value(command: List[str], option: str, value: str) -> bool:
+        """Return True when command contains ``--option value`` or ``--option=value``."""
+        for index, token in enumerate(command):
+            if token == option and index + 1 < len(command) and command[index + 1] == value:
+                return True
+            if token == f"{option}={value}":
+                return True
+        return False
 
     @staticmethod
     def _find_step_by_name(steps: List[Dict], name: str) -> Optional[Dict]:

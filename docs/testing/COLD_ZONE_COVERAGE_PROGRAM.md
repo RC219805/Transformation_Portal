@@ -533,6 +533,14 @@ For any PR touching a cold-zone file:
 - New lines must be covered unless explicitly justified.
 - New untested branches require reviewer sign-off in the PR body.
 
+The core coverage lane now runs
+`scripts/ci/check_cold_zone_touched_files.py coverage.xml --compare-ref origin/main`
+after the package line and branch coverage ratchets. The check reports line
+coverage, branch coverage, missed line ranges, and missed branch counts for any
+touched cold-zone source file. It fails only when a touched cold-zone file is
+missing from `coverage.xml`; percentage regressions and newly untested branches
+remain review decisions documented in the PR body.
+
 ---
 
 ## 13. Test quality bar
