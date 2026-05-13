@@ -31,8 +31,9 @@ class RecordingIOPool:
 def test_image_save_stage_writes_float_tiff(tmp_path: Path) -> None:
     output_dir = tmp_path / "out"
     output_dir.mkdir()
+    image_array = np.arange(8 * 6 * 3, dtype=np.float32).reshape(8, 6, 3) / np.float32(8 * 6 * 3 - 1)
     image_data = ImageData(
-        array=np.linspace(0.0, 1.0, 8 * 6 * 3, dtype=np.float32).reshape(8, 6, 3),
+        array=image_array,
         path=tmp_path / "frame.png",
     )
     stage = ImageSaveStage(output_dir=output_dir, output_format="TIFF", suffix="_float")
