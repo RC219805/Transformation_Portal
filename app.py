@@ -9522,21 +9522,26 @@ async def _run_job(job: Job, argv: List[str]) -> None:
             except Exception:
                 pass
 
-        # Phase 2.D — terminal-state authority. If the reclaim sweep
-        # (or any other path) already drove this Job to a terminal
-        # state while ``_run_job`` was mid-flight, that earlier
-        # terminal event is authoritative: do NOT overwrite
-        # ``state``/``exit_code``/``error``, do NOT republish
-        # ``done``. Otherwise SSE early-clients would see two
-        # conflicting terminal events (e.g. ``worker_lost`` then
-        # ``succeeded``/``failed``), and late-clients synthesizing
-        # ``done`` from the final ``Job`` would observe a different
-        # outcome than they did on the wire. The subprocess was
-        # already terminated by the cancellation bridge, so there's
-        # no surviving runner to wait on here.
-        if job.finished_at is not None or job.state in _TERMINAL_JOB_STATES:
+        # Phase 2.D — terminal-state authority. If an *external* path
+        # (the reclaim sweep, restart recovery, etc.) already drove
+        # this Job to a terminal state AND published the terminal
+        # event while ``_run_job`` was mid-flight, that earlier
+        # terminal event is authoritative: do NOT republish ``done``,
+        # do NOT mutate ``state``/``exit_code``/``error``, do NOT
+        # touch ``finished_at``. The presence of ``done_published_at``
+        # is the canonical signal that an external terminal event
+        # already went out — ``_run_job`` itself sets that timestamp
+        # AFTER publishing ``done`` (further down in this finally
+        # block), so by definition only an external publisher could
+        # have set it by now. Checking ``state in
+        # _TERMINAL_JOB_STATES`` here would be wrong because
+        # ``_run_job`` writes ``succeeded``/``failed``/``canceled``
+        # into ``job.state`` ABOVE this finally block on normal
+        # completion, so guarding on state alone would skip the
+        # done-event publication for every happy-path job.
+        if job.done_published_at is not None or job.finished_at is not None:
             LOGGER.info(
-                "job %s reached terminal state=%s before runner exit; skipping duplicate done event",
+                "job %s reached terminal state=%s via an external publisher; skipping duplicate done event",
                 job.id,
                 job.state,
             )
