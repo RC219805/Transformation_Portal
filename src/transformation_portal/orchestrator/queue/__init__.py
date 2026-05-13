@@ -1,14 +1,16 @@
 """Queue-broker factory keyed off ``TP_ORCHESTRATOR_QUEUE_BACKEND``.
 
-Phase 2.A ships the Protocol + the in-process ``memory`` backend.
-The ``redis`` branch is recognised but its import will fail until
-Phase 2.B wires the Redis backend module.
+Phase 2.A shipped the Protocol + the in-process ``memory`` backend.
+Phase 2.B adds the ``redis`` backend behind ``TP_REDIS_URL`` so a
+fleet of workers can consume from a single durable queue.
 
 Supported backends:
 
 - ``memory`` (default) — single-process FIFO + lease table.
   Restart loses state.
-- ``redis`` — added in Phase 2.B; requires ``TP_REDIS_URL``.
+- ``redis`` — Phase 2.B; requires ``TP_REDIS_URL``. Survives
+  orchestrator/worker restarts; lease deadlines pinned to the Redis
+  server clock so multi-host workers share a single source of truth.
 """
 
 from __future__ import annotations
@@ -53,9 +55,9 @@ def get_queue_broker() -> QueueBroker:
             from transformation_portal.orchestrator.queue.redis import RedisQueueBroker
         except ImportError as exc:
             raise RuntimeError(
-                f"{_BACKEND_ENV}=redis requires the redis-py async client + "
-                "the RedisQueueBroker module from Phase 2.B. Until that PR "
-                "lands, only the memory backend is available."
+                f"{_BACKEND_ENV}=redis requires the redis-py async client. "
+                "Reinstall the base runtime dependencies (`make install-core`) "
+                "to pick up `redis>=5`."
             ) from exc
 
         redis_url = os.getenv(_REDIS_URL_ENV, "").strip()

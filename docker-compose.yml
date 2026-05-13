@@ -139,11 +139,44 @@ services:
       retries: 5
       start_period: 10s
 
+  # Durable queue broker backend (Phase 2.B).
+  #
+  # Optional service: only required when the orchestrator runs with
+  # TP_ORCHESTRATOR_QUEUE_BACKEND=redis. The default `memory` backend
+  # never touches Redis. Start with:
+  #
+  #     docker compose up -d redis
+  #     TP_TEST_REDIS_URL=redis://127.0.0.1:6379/0 make test-worker-redis-contract
+  #
+  # AOF is enabled so queued jobs and active leases survive a Redis
+  # restart, matching the durable-by-default contract documented in
+  # docs/governance/PRODUCTION_HARDENING_GAP_2026-05-13.md §5.2.
+  redis:
+    image: redis:7-alpine
+    container_name: transformation-portal-redis
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --maxmemory-policy
+      - "noeviction"
+    ports:
+      - "${TP_REDIS_PUBLIC_PORT:-127.0.0.1:6379}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "PING"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
 volumes:
   input:
   output:
   config:
   postgres_data:
+  redis_data:
 
 networks:
   default:

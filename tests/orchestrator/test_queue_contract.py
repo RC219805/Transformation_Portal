@@ -22,6 +22,7 @@ from __future__ import annotations
 import asyncio
 import os
 import time
+import uuid
 from typing import AsyncIterator
 
 import pytest
@@ -59,8 +60,13 @@ def backend(request: pytest.FixtureRequest) -> str:
 
 
 @pytest_asyncio.fixture
-async def broker(backend: str) -> AsyncIterator[QueueBroker]:
-    """Yield a freshly-reset ``QueueBroker`` for the parameterized backend."""
+async def broker(backend: str, request: pytest.FixtureRequest) -> AsyncIterator[QueueBroker]:
+    """Yield a freshly-reset ``QueueBroker`` for the parameterized backend.
+
+    Redis instances use a per-test ``key_prefix`` so parallel test
+    runs (pytest-xdist) and shared-tenant Redis deployments never
+    collide and never touch keys outside the broker's namespace.
+    """
     reset_singleton()
     if backend == "memory":
         instance: QueueBroker = MemoryQueueBroker()
@@ -69,7 +75,12 @@ async def broker(backend: str) -> AsyncIterator[QueueBroker]:
             from transformation_portal.orchestrator.queue.redis import RedisQueueBroker
         except ImportError:
             pytest.skip("redis backend module not available; expected in Phase 2.B")
-        instance = RedisQueueBroker(redis_url=os.environ[_REDIS_URL_ENV])
+        # Per-test key prefix isolates parallel runs and survives shared Redis.
+        prefix = f"tp:test:{uuid.uuid4().hex[:12]}:"
+        instance = RedisQueueBroker(
+            redis_url=os.environ[_REDIS_URL_ENV],
+            key_prefix=prefix,
+        )
         await instance.reset()
     else:
         raise RuntimeError(f"unknown backend {backend!r}")
