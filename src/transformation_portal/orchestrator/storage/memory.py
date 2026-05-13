@@ -12,6 +12,7 @@ from collections import defaultdict, deque
 from pathlib import Path
 from typing import Any, AsyncIterator, Deque, Dict, List, Optional, Tuple
 
+from transformation_portal.orchestrator.storage.base import UPDATABLE_FIELDS as _UPDATABLE_FIELDS
 from transformation_portal.orchestrator.storage.base import (
     JobEvent,
     JobEventStore,
@@ -63,8 +64,12 @@ class MemoryJobRepository(JobRepository):
             existing = self._records.get(job_id)
             if existing is None:
                 raise JobNotFoundError(job_id)
-            allowed = {f.name for f in _job_record_fields()} - {"id", "created_at"}
-            unknown = set(fields) - allowed
+            # Cross-backend contract: id/created_at are immutable;
+            # artifact_lookup is owned by ``set_artifacts`` (the Postgres
+            # backend persists it through a separate table). Forbidding
+            # it here keeps both backends behavior-identical at the
+            # ``update`` boundary.
+            unknown = set(fields) - _UPDATABLE_FIELDS
             if unknown:
                 raise RepositoryError(f"update received unknown fields: {sorted(unknown)}")
             for key, value in fields.items():
@@ -196,9 +201,3 @@ class MemoryJobEventStore(JobEventStore):
     async def reset(self) -> None:
         self._events.clear()
         self._next_seq.clear()
-
-
-def _job_record_fields() -> Tuple[Any, ...]:
-    from dataclasses import fields
-
-    return fields(JobRecord)

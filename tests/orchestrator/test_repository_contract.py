@@ -367,16 +367,14 @@ async def test_event_store_accepts_arbitrary_job_id(
     assert [e.payload for e in replay] == [{"state": "queued"}]
 
 
-async def test_delete_job_cascades_events(
+async def test_delete_removes_job_from_repository(
     repository_and_events: RepoAndEvents,
 ) -> None:
-    """Deleting a job must remove its event history.
+    """``repo.delete`` must remove the job from the repository on every backend.
 
-    This is a manual cascade in the Postgres backend (no SQL FK on
-    ``job_events.job_id``); the memory backend just keeps the event
-    deque keyed on job_id and naturally orphans it. We assert the
-    cascade semantic ONLY when a repository ``delete`` is followed by
-    a fresh event-store query - test passes for both backends.
+    This is the cross-backend slice of the contract. The Postgres-only
+    cascade-of-events semantic is pinned in
+    ``test_postgres_delete_job_cascades_events`` below.
     """
     repo, events = repository_and_events
     await repo.create(_new_record("job-cascade"))
@@ -384,23 +382,48 @@ async def test_delete_job_cascades_events(
     await events.append("job-cascade", "state", {"v": 2}, created_at=2.0)
 
     await repo.delete("job-cascade")
-
-    # After cascade the durable backend should have no events for the
-    # deleted job. The memory backend doesn't explicitly purge - so we
-    # only assert that the *repository* lost the job, and that events
-    # remain queryable for either case. The cascade-on-delete is a
-    # Postgres-only property and is covered by the second assertion
-    # block which only runs when the backend is Postgres.
     assert await repo.get("job-cascade") is None
 
-    if backend_supports_event_cascade(repo):
-        remaining = [e async for e in events.events_since("job-cascade")]
-        assert remaining == []
+
+async def test_postgres_delete_job_cascades_events(
+    repository_and_events: RepoAndEvents,
+) -> None:
+    """Postgres backend only: ``repo.delete`` cascades event deletion.
+
+    The memory backend's event store is independently keyed and does
+    not cascade; that behavior is intentional and is covered by the
+    cross-backend ``test_delete_removes_job_from_repository``. This
+    test pins the Postgres-specific cascade that ``PostgresJobRepository
+    .delete`` does manually (the SQL FK on ``job_events.job_id`` was
+    deliberately dropped; see models.py).
+    """
+    repo, events = repository_and_events
+    if not _is_postgres_backend(repo):
+        pytest.skip("postgres-only contract: cascade-on-delete in events table")
+
+    await repo.create(_new_record("job-pg-cascade"))
+    await events.append("job-pg-cascade", "state", {"v": 1}, created_at=1.0)
+    await events.append("job-pg-cascade", "state", {"v": 2}, created_at=2.0)
+
+    await repo.delete("job-pg-cascade")
+    remaining = [e async for e in events.events_since("job-pg-cascade")]
+    assert remaining == []
 
 
-def backend_supports_event_cascade(repo: JobRepository) -> bool:
-    """Phase 1.B: only the Postgres backend cascades event deletion."""
-    return type(repo).__name__ == "PostgresJobRepository"
+def _is_postgres_backend(repo: JobRepository) -> bool:
+    """Return True iff ``repo`` is the Postgres backend.
+
+    Uses ``isinstance`` rather than ``type(...).__name__`` so renames or
+    subclasses don't silently change behavior. The import is guarded
+    because ``sqlalchemy`` may not be installed in the offline lane.
+    """
+    try:
+        from transformation_portal.orchestrator.storage.postgres import (
+            PostgresJobRepository,
+        )
+    except ImportError:
+        return False
+    return isinstance(repo, PostgresJobRepository)
 
 
 # ---------------------------------------------------------------------------

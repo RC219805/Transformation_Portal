@@ -38,6 +38,7 @@ from transformation_portal.orchestrator.models import (
     JobEventModel,
     JobModel,
 )
+from transformation_portal.orchestrator.storage.base import UPDATABLE_FIELDS as _UPDATABLE_FIELDS
 from transformation_portal.orchestrator.storage.base import (
     JobEvent,
     JobEventStore,
@@ -51,25 +52,6 @@ logger = logging.getLogger(__name__)
 
 _ACTIVE_STATES = {"queued", "running"}
 _OPTIMISTIC_LOCK_RETRIES = 3
-
-# Fields callers may patch via ``update``. ``id``/``created_at`` are immutable;
-# ``artifact_lookup`` is set via ``set_artifacts``; ``version`` is repo-managed.
-_UPDATABLE_FIELDS = {
-    "state",
-    "progress",
-    "started_at",
-    "finished_at",
-    "done_published_at",
-    "last_event_at",
-    "exit_code",
-    "cancel_requested",
-    "request",
-    "effective_request",
-    "logs_tail",
-    "artifacts",
-    "run_summary",
-    "error",
-}
 
 
 class _SharedEngine:
@@ -410,17 +392,27 @@ class PostgresJobRepository(JobRepository):
             return orphan_ids
 
     async def reset(self) -> None:
-        """Test-only: drop and recreate all orchestrator tables."""
-        engine = (await _SharedEngine.get(self._database_url))[0]
-        async with engine.begin() as conn:
+        """Test-only: drop and recreate all orchestrator tables.
+
+        Routes through ``_ensure_engine()`` so ``self._engine`` /
+        ``self._session_factory`` are populated even if no other API was
+        called first. That makes ``close()`` reliably dispose the shared
+        engine even when a test exercises only ``reset()``.
+        """
+        await self._ensure_engine()
+        assert self._engine is not None  # populated by _ensure_engine
+        async with self._engine.begin() as conn:
             await conn.run_sync(Base.metadata.drop_all)
             await conn.run_sync(Base.metadata.create_all)
 
     async def close(self) -> None:
-        if self._engine is not None:
-            await _SharedEngine.dispose(self._database_url)
-            self._engine = None
-            self._session_factory = None
+        # Dispose the shared engine for our database_url even if
+        # _ensure_engine was never called on this instance: a sibling
+        # PostgresJobEventStore may have constructed the engine via
+        # _SharedEngine.get(database_url), and we own the lifecycle.
+        await _SharedEngine.dispose(self._database_url)
+        self._engine = None
+        self._session_factory = None
 
 
 class PostgresJobEventStore(JobEventStore):
@@ -508,12 +500,20 @@ class PostgresJobEventStore(JobEventStore):
         *,
         after_seq: Optional[int] = None,
     ) -> AsyncIterator[JobEvent]:
+        """Stream events incrementally so long histories don't spike memory.
+
+        Uses ``session.stream_scalars`` so rows are produced as they
+        arrive from Postgres rather than materialized via ``.all()``.
+        The session stays open for the duration of the iteration; the
+        caller must fully consume the iterator (or let it go out of
+        scope) before opening another session against the same engine.
+        """
         async with self._session() as session:
             stmt = select(JobEventModel).where(JobEventModel.job_id == job_id).order_by(JobEventModel.seq.asc())
             if after_seq is not None:
                 stmt = stmt.where(JobEventModel.seq > after_seq)
-            result = await session.execute(stmt)
-            for row in result.scalars().all():
+            stream = await session.stream_scalars(stmt)
+            async for row in stream:
                 yield JobEvent(
                     job_id=row.job_id,
                     seq=row.seq,
