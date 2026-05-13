@@ -36,8 +36,7 @@ class CIValidator:
     MIN_CHECKOUT_MAJOR = 4
     REQUIRED_FLAKE8_FATAL_CODES = {"E9", "F63", "F7", "F82"}
     ML_NO_COV_BLOCK_PATTERN = re.compile(
-        r'if\s+\[\s*"\$\{\{\s*matrix\.test-type\s*\}\}"\s*=\s*"ml"\s*\]\s*;\s*then\s*\n\s*'
-        r'COV_FLAGS="--no-cov"'
+        r'if\s+\[\s*"\$\{\{\s*matrix\.test-type\s*\}\}"\s*=\s*"ml"\s*\]\s*;\s*then\s*\n\s*' r'COV_FLAGS="--no-cov"'
     )
     CORE_COV_FLAGS_PATTERN = re.compile(r'else\s*\n\s*COV_FLAGS="(?P<flags>[^"]*)"')
     REQUIRED_CORE_COVERAGE_FLAGS = (
@@ -47,7 +46,8 @@ class CIValidator:
         "--cov-report=html",
         "--cov-fail-under",
     )
-    REQUIRED_BRANCH_DRY_RUN_CHECK = "python scripts/ci/check_per_package_branch_coverage.py coverage.xml --dry-run"
+    REQUIRED_BRANCH_COVERAGE_CHECK = "python scripts/ci/check_per_package_branch_coverage.py coverage.xml"
+    FORBIDDEN_BRANCH_DRY_RUN_CHECK = "python scripts/ci/check_per_package_branch_coverage.py coverage.xml --dry-run"
 
     def __init__(self, repo_root: Path, fix_mode: bool = False):
         self.repo_root = repo_root
@@ -324,10 +324,17 @@ class CIValidator:
             self.log_error(f"build.yml:test: Core test leg must retain coverage generation flags: {missing}")
             valid = False
 
-        if self.REQUIRED_BRANCH_DRY_RUN_CHECK not in run_script:
+        if self.REQUIRED_BRANCH_COVERAGE_CHECK not in run_script:
             self.log_error(
-                "build.yml:test: Core test leg must retain branch coverage dry-run check "
-                f"{self.REQUIRED_BRANCH_DRY_RUN_CHECK!r}"
+                "build.yml:test: Core test leg must retain branch coverage enforcement check "
+                f"{self.REQUIRED_BRANCH_COVERAGE_CHECK!r}"
+            )
+            valid = False
+
+        if self.FORBIDDEN_BRANCH_DRY_RUN_CHECK in run_script:
+            self.log_error(
+                "build.yml:test: Core test leg must enforce branch coverage without --dry-run "
+                f"({self.FORBIDDEN_BRANCH_DRY_RUN_CHECK!r} is no longer allowed)"
             )
             valid = False
 

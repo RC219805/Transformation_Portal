@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Dry-run branch-coverage reporting for governed package prefixes.
+"""Enforce branch-coverage floors for governed package prefixes.
 
-PR 0 intentionally does not enforce branch floors yet. This companion to
-``check_per_package_coverage.py`` reads the same Cobertura ``coverage.xml`` and
-can enforce branch floors once they are configured, but CI wires it in
-``--dry-run`` mode until the cold-zone baseline is reviewed.
+This companion to ``check_per_package_coverage.py`` reads the same Cobertura
+``coverage.xml`` and enforces conservative branch floors for the cold-zone
+package set. ``--dry-run`` remains available for local floor proposals, but CI
+uses enforcing mode.
 """
 
 from __future__ import annotations
@@ -30,12 +30,20 @@ class BranchFloor:
     exclude_prefixes: tuple[str, ...] = field(default_factory=tuple)
 
 
-# PR 0 only wires branch reporting. Actual floors land after stable branch
-# baselines are reviewed.
-BRANCH_FLOORS: tuple[BranchFloor, ...] = ()
+# Cold-Zone Coverage Program branch ratchets. These floors were set
+# conservatively below the measured 2026-05-13 branch baseline so regressions
+# fail without overfitting to one exact run.
+BRANCH_FLOORS: tuple[BranchFloor, ...] = (
+    BranchFloor("src/transformation_portal/plugins/", 30.0),
+    BranchFloor("src/transformation_portal/stage_graph/", 60.0),
+    BranchFloor("src/transformation_portal/vlm/", 50.0),
+    BranchFloor("src/transformation_portal/depth/", 40.0),
+    BranchFloor("src/transformation_portal/streaming/", 25.0),
+    BranchFloor("src/transformation_portal/spatial_ai/reconstruction/", 45.0),
+)
 
-# While branch floors are empty, CI still runs this checker in ``--dry-run`` mode
-# to capture package-level branch baselines for later ratchets.
+# If a future branch temporarily clears floors, dry-run mode still reports the
+# package-level branch baselines needed for review.
 DRY_RUN_BRANCH_PREFIXES: tuple[str, ...] = (
     "src/transformation_portal/plugins/",
     "src/transformation_portal/stage_graph/",

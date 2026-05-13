@@ -1,4 +1,4 @@
-"""Unit tests for branch-coverage dry-run checker."""
+"""Unit tests for branch-coverage checker."""
 
 from __future__ import annotations
 
@@ -107,7 +107,18 @@ def test_missing_coverage_xml_returns_2(script_module, tmp_path: Path):
     assert script_module.main([str(tmp_path / "missing.xml"), "--dry-run"]) == 2
 
 
-def test_no_default_branch_floors_reports_dry_run_baselines(script_module, tmp_path: Path, capsys):
+def test_default_branch_floors_cover_cold_zone_prefixes(script_module):
+    assert tuple(floor.prefix for floor in script_module.BRANCH_FLOORS) == (
+        "src/transformation_portal/plugins/",
+        "src/transformation_portal/stage_graph/",
+        "src/transformation_portal/vlm/",
+        "src/transformation_portal/depth/",
+        "src/transformation_portal/streaming/",
+        "src/transformation_portal/spatial_ai/reconstruction/",
+    )
+
+
+def test_empty_branch_floors_report_dry_run_baselines(script_module, tmp_path: Path, monkeypatch, capsys):
     coverage = tmp_path / "coverage.xml"
     _write_coverage(
         coverage,
@@ -122,6 +133,7 @@ def test_no_default_branch_floors_reports_dry_run_baselines(script_module, tmp_p
             ),
         ],
     )
+    monkeypatch.setattr(script_module, "BRANCH_FLOORS", ())
 
     rc = script_module.main([str(coverage), "--dry-run"])
 
@@ -135,9 +147,10 @@ def test_no_default_branch_floors_reports_dry_run_baselines(script_module, tmp_p
     assert "DRY-RUN" in captured.out
 
 
-def test_no_default_branch_floors_without_dry_run_is_success(script_module, tmp_path: Path, capsys):
+def test_empty_branch_floors_without_dry_run_is_success(script_module, tmp_path: Path, monkeypatch, capsys):
     coverage = tmp_path / "coverage.xml"
     _write_coverage(coverage, [("src/pkg/x.py", [{"hits": 1}])])
+    monkeypatch.setattr(script_module, "BRANCH_FLOORS", ())
 
     rc = script_module.main([str(coverage)])
 
@@ -145,3 +158,24 @@ def test_no_default_branch_floors_without_dry_run_is_success(script_module, tmp_
     assert rc == 0
     assert "No per-package branch coverage floors configured" in captured.out
     assert "Package" not in captured.out
+
+
+def test_enforced_branch_floor_miss_returns_1(script_module, tmp_path: Path, monkeypatch, capsys):
+    coverage = tmp_path / "coverage.xml"
+    _write_coverage(
+        coverage,
+        [
+            (
+                "src/pkg/branchy.py",
+                [{"hits": 1, "condition_coverage": "25% (1/4)"}],
+            )
+        ],
+    )
+    monkeypatch.setattr(script_module, "BRANCH_FLOORS", (script_module.BranchFloor("src/pkg/", 90.0),))
+
+    rc = script_module.main([str(coverage)])
+
+    captured = capsys.readouterr()
+    assert rc == 1
+    assert "FAIL" in captured.out
+    assert "src/pkg/: 25.00% < floor 90.0%" in captured.err

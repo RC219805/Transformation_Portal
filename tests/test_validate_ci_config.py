@@ -90,16 +90,28 @@ def test_build_workflow_core_leg_keeps_xml_coverage_generation(tmp_path: Path) -
     )
 
 
-def test_build_workflow_core_leg_keeps_branch_coverage_dry_run(tmp_path: Path) -> None:
+def test_build_workflow_core_leg_keeps_branch_coverage_enforcement(tmp_path: Path) -> None:
     workflow_path = _mutated_build_workflow(
         tmp_path,
-        "python scripts/ci/check_per_package_branch_coverage.py coverage.xml --dry-run || rc=$?",
-        "echo branch coverage dry-run removed",
+        "python scripts/ci/check_per_package_branch_coverage.py coverage.xml || rc=$?",
+        "echo branch coverage enforcement removed",
     )
     validator, config = _load_config(workflow_path)
 
     assert validator.validate_build_coverage_contract(workflow_path, config) is False
-    assert any("must retain branch coverage dry-run check" in error for error in validator.errors)
+    assert any("must retain branch coverage enforcement check" in error for error in validator.errors)
+
+
+def test_build_workflow_core_leg_rejects_branch_coverage_dry_run(tmp_path: Path) -> None:
+    workflow_path = _mutated_build_workflow(
+        tmp_path,
+        "python scripts/ci/check_per_package_branch_coverage.py coverage.xml || rc=$?",
+        "python scripts/ci/check_per_package_branch_coverage.py coverage.xml --dry-run || rc=$?",
+    )
+    validator, config = _load_config(workflow_path)
+
+    assert validator.validate_build_coverage_contract(workflow_path, config) is False
+    assert any("must enforce branch coverage without --dry-run" in error for error in validator.errors)
 
 
 def test_build_workflow_coverage_upload_keeps_html_artifact_path(tmp_path: Path) -> None:
