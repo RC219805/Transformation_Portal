@@ -58,6 +58,18 @@ export function resetSessionStoreSingleton() {
   _cachedBackend = null;
 }
 
+/**
+ * Test-only: inject a pre-built store into the factory singleton so
+ * ``sessions.js`` (which calls ``getSessionStore()`` on every request)
+ * resolves against the fake. Use ``resetSessionStoreSingleton()`` to drop
+ * the override between cases. Not exported via ``index.js`` consumers in
+ * production — production code only ever calls ``getSessionStore()``.
+ */
+export function __setSessionStoreForTesting(store, backend = null) {
+  _cachedStore = store;
+  _cachedBackend = backend || store?.backend || null;
+}
+
 // Re-export the canonical backend list so callers can compare against
 // stable string constants instead of magic strings.
 export { SESSION_STORE_BACKEND } from "../session-scaling.js";

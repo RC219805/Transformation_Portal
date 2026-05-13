@@ -207,8 +207,24 @@ export function validateCsrfToken(session, token) {
 }
 
 async function pruneLoginAttempts(currentTime) {
+  const store = getSessionStore();
+  // Phase 3.B perf note: the Redis backend sets a per-bucket TTL inside
+  // ``recordLoginAttempt`` (PEXPIRE = absoluteTimeoutMs), so old failure
+  // buckets auto-expire without an inline sweep. The pre-Phase-3 helper
+  // delegated unconditionally and the Redis implementation backs that with
+  // a ``SCAN ${prefix}login:*`` of every bucket — twice per login attempt
+  // (once from ``isLoginThrottled``, once from ``recordLoginAttempt``).
+  // That's O(N-throttle-keys) on every credential POST in a multi-host
+  // fleet. Short-circuit here so the Redis path relies on TTL +
+  // ``ZCOUNT(sinceMs, +inf)``'s built-in window filter (already used by
+  // ``countLoginFailures``) and never pays the global scan. SQLite keeps
+  // the inline prune because its ``login_attempts`` table has no TTL and
+  // would otherwise accumulate forever.
+  if (store.backend === "redis") {
+    return;
+  }
   const cutoff = currentTime - getConfig().loginWindowMs;
-  await getSessionStore().pruneLoginAttempts(cutoff);
+  await store.pruneLoginAttempts(cutoff);
 }
 
 export async function isLoginThrottled(throttleKey) {
