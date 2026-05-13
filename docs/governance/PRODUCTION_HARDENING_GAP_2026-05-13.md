@@ -78,17 +78,17 @@ implementations or precursors for the items below.
 
 ### 5.1 Phase 1 - durable jobs
 
-**Updated 2026-05-13: Phase 1.A and Phase 1.B have landed.**
+**Updated 2026-05-13: Phase 1.A, Phase 1.B, and Phase 1.C have landed.**
 
 Already done:
 
 - `JobRepository` and `JobEventStore` Protocols + `JobRecord` dataclass + memory backend (Phase 1.A, PR #1756).
-- `PostgresJobRepository` + `PostgresJobEventStore` + SQLAlchemy 2.x async ORM + Alembic initial migration + docker-compose Postgres service + `make db-upgrade` / `make db-revision` / `make test-orchestrator-postgres-contract` (Phase 1.B, this PR). Backend selected via `TP_ORCHESTRATOR_STATE_BACKEND=memory|postgres` and `TP_DATABASE_URL`. See `docs/runtimes/orchestrator-postgres.md` for the operator runbook.
+- `PostgresJobRepository` + `PostgresJobEventStore` + SQLAlchemy 2.x async ORM + Alembic initial migration + docker-compose Postgres service + `make db-upgrade` / `make db-revision` / `make test-orchestrator-postgres-contract` (Phase 1.B, PR #1758). Backend selected via `TP_ORCHESTRATOR_STATE_BACKEND=memory|postgres` and `TP_DATABASE_URL`. See `docs/runtimes/orchestrator-postgres.md` for the operator runbook.
+- Pessimistic restart recovery (Phase 1.C, this PR). `src/transformation_portal/orchestrator/recovery.py:sweep_orphaned_jobs` runs on every FastAPI startup via `_orchestrator_lifespan` in `app.py`: any job that the repository still records as `queued` or `running` but that no live worker in the runtime registry is executing is marked `failed` with `error.code = "worker_lost_on_restart"`. SSE late-clients now see a terminal `done` after a restart instead of hanging. Memory backend: deterministic no-op (per-process state). Postgres backend: durable. The lifespan also disposes the repository's connection pool on shutdown.
 
 Still net-new (follow-up commits / PRs on this branch):
 
-- `app.py` does **not yet** route writes through the repository. The legacy `JOBS: Dict[str, Job]` at `app.py:1002` remains authoritative until the wiring commit lands. Phase 1.B's contract tests prove the Postgres backend is behavior-identical to the memory backend so the cut-over is a single, isolated change.
-- Deterministic restart recovery (Phase 1.C). The `sweep_orphaned` method on both backends is implemented and contract-tested; the FastAPI lifespan hook that calls it is the Phase 1.C deliverable.
+- `app.py` does **not yet** route writes through the repository. The legacy `JOBS: Dict[str, Job]` at `app.py:1002` remains authoritative until the wiring commit lands. Phase 1.B's contract tests prove the Postgres backend is behavior-identical to the memory backend so the cut-over is a single, isolated change. Phase 1.C's sweeper operates on the repository directly so it is unaffected by this gap; once the wiring lands, the sweeper will correctly mark live jobs as orphaned only when the dict and repo agree.
 - `JobCreateRequest` exists at `src/transformation_portal/api/v1/jobs.py:130` but is still "defined, not yet wired" as a handler parameter. Pydantic envelope models in route decorators are still OpenAPI-doc-only (Phase 1.D).
 
 ### 5.2 Phase 2 - worker split
