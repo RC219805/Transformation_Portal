@@ -1,0 +1,295 @@
+# Production Hardening Gap Audit - 2026-05-13
+
+**Document Status:** Active baseline for paid-pilot hardening
+**Last Updated:** 2026-05-13
+**Maintainer:** Repository Architect
+**Related Docs:** `docs/testing/COLD_ZONE_COVERAGE_PROGRAM.md`, `docs/architecture/PORTAL_ORCHESTRATOR_ROADMAP.md`, `docs/architecture/PORTAL_FRONTDOOR_ROADMAP.md`, `docs/deployment/PRODUCTION_READINESS.md`, `docs/operations/portal_telemetry_retention.md`
+**Related Scripts:** `scripts/ci/check_per_package_branch_coverage.py`, `scripts/ci/cold_zone_report.py`, `scripts/ci/check_per_package_coverage.py`, `tools/portal_telemetry_retention.py`
+**Related ADRs:** ADR-031 (test dependency isolation), ADR-044 (marker enforcement)
+
+---
+
+## 1. Why this exists
+
+A multi-phase "Production Hardening Plan For Paid Pilot" was proposed against
+the current `main`. Its summary is directionally correct but understates how
+much hardening work is already merged and how much is genuinely greenfield.
+This document is the empirical baseline: what exists, what is partial, what is
+net-new, and which existing primitives must be reused rather than reinvented.
+
+The intended outcome is a controlled paid pilot, not full self-serve SaaS.
+Phase 0 of the plan is to pin this baseline; Phases 1 through 7 build on it.
+
+## 2. Methodology
+
+The baseline is the result of a three-agent read-only code audit performed on
+2026-05-13 against `origin/main` at commit `2e4dba8`. The audit covered:
+
+- Job orchestrator, queue, and worker execution surfaces.
+- Frontdoor session storage and artifact serving.
+- Tenant isolation, telemetry retention, deployment posture, evidence and
+  attestation, and commercial primitives.
+
+Findings below cite verbatim file paths and class or function names. Where the
+audit recorded "not present", that means a code search returned no
+implementation; it does not mean the surface is forbidden.
+
+## 3. What is already done
+
+The plan treats several Phase 0 items as residual work. They are landed.
+
+| Item | Plan status | Actual status | Evidence |
+| --- | --- | --- | --- |
+| Cold-zone coverage program merged | Plan: "PR #1746 now merged" | Confirmed | `docs/testing/COLD_ZONE_COVERAGE_PROGRAM.md` (#1746), baseline at `docs/testing/cold_zone_baseline_2026-05-12.md` |
+| Cold-zone instrumentation | Plan: Phase 0 deliverable | Already merged via #1748 | `scripts/ci/cold_zone_report.py`, `scripts/ci/check_per_package_branch_coverage.py` |
+| Branch-aware coverage reporting | Plan: Phase 0 deliverable | Already merged via #1748 | `scripts/ci/check_per_package_branch_coverage.py` |
+| VLM lazy-import seam | Cold-zone doc lists as Phase 0 precondition | Resolved via #1748 | See section 5.2 below |
+| `/v1/jobs` and `/v2/jobs` envelope shapes | Plan: "preserve" | Both exist today | `app.py` `POST/GET /v1/jobs*` and `POST/GET /v2/jobs*`; typed models in `src/transformation_portal/api/v1/jobs.py` |
+| Typed orchestrator envelope models | Plan: implicit | Live | `src/transformation_portal/api/v1/envelopes.py` `ApiEnvelope[T]`, `ErrorEnvelope` |
+| Attestation chain (Merkle, DSSE, in-toto, sigstore) | Plan: implicit | Live | `src/tp/phase4/`, `src/tp/crypto/merkle.py`, `src/transformation_portal/attestation/{detached,dsse,gpg,sigstore,verify,run_card_intoto}.py` |
+| Containerized backend | Plan: Phase 5 | Docker + compose live; managed services net-new | `Dockerfile` (cpu/gpu/apple-silicon stages), `docker-compose.yml`, `docs/deployment/PRODUCTION_READINESS.md` |
+
+The actual residual Phase 0 work is therefore narrow:
+
+1. This gap doc itself.
+2. Pinned acceptance command list for paid pilot sign-off (section 7).
+3. No further VLM seam work required.
+4. No further branch-aware coverage script work required.
+
+## 4. Existing primitives to reuse, not reinvent
+
+The plan declares several net-new abstractions whose precursors already exist
+in the repository. Phase 1 through Phase 7 work should extend these rather
+than introduce parallel implementations.
+
+| Plan abstraction | Existing primitive | Location | Reuse note |
+| --- | --- | --- | --- |
+| `JobEventStore` | `EventStore` (per-event `.json` files written under date directories `<storage>/YYYY-MM-DD/<event_id>.json`; `Event` dataclass with `id, type, timestamp, data, metadata, user, correlation_id`) | `src/transformation_portal/events/store.py` | Currently orphaned. Wire to job lifecycle for Phase 1 instead of creating a new abstraction. |
+| Phase 7 organization, RBAC, and quota model | `TenantContext`, `TenantPolicy`, `TenantManager`, `TenantAwareFSGuard`, `create_tenant_sandbox()` (per-tenant `gpu_quota`, `network_allowed`, `allowed_node_types`) | `src/transformation_portal/core/security/tenant.py` | Fully tested but unwired in the request path. Phase 7 should ground the user, organization, and quota model on these primitives. |
+| Phase 6 audit-event table | `tp.phase4.provenance_capture`, `tp.crypto.merkle`, `attestation/{detached,dsse,verify,run_card_intoto}.py` | `src/tp/phase4/`, `src/transformation_portal/attestation/` | Cryptographic provenance is authoritative. The new operational audit table must mirror events, not duplicate the attestation chain. |
+| `ArtifactStore` (Phase 4) | `JobArtifactIndexResult`, `_artifact_fingerprint`, `_validate_resolved_job_artifact_path`, `ArtifactPathOutsideJobOutputDirError`; `ArtifactManager.compute_merkle_root(...)` (method) and module-level `compute_artifact_merkle_root(...)` | `src/transformation_portal/portal/job_artifacts.py`, `src/transformation_portal/lux_depth_v3/artifact_manager.py` | Path-traversal validation, SHA-256 fingerprinting, content-type detection, and Merkle roots are already implemented. The S3 backend must preserve all of these guarantees. |
+| Phase 3 frontdoor session readiness gate | `evaluateSessionScaling()` (returns `ok: false` for `multi_instance` and `ephemeral_runtime` with `*_requires_external_session_store` reason codes) | `web/secure-landing/lib/session-scaling.js` | Add a `redis` branch that flips the gate to `ok: true` rather than rewriting the readiness check. |
+| Phase 0 production-gap doc | This document | `docs/governance/PRODUCTION_HARDENING_GAP_2026-05-13.md` | Treat as the authoritative reference cited by Phase 1 through Phase 7 PRs. |
+
+## 5. Net-new surface (Phases 1 through 7)
+
+The majority of Phases 1 through 7 is genuinely net-new. The audit found no
+implementations or precursors for the items below.
+
+### 5.1 Phase 1 - durable jobs
+
+- No SQLAlchemy, psycopg, or asyncpg imports anywhere in the backend.
+- No `JobRepository` interface. Job state is `JOBS: Dict[str, Job]` at
+  `app.py:1002`; restart loses all job state.
+- No deterministic restart recovery and no event replay against the orchestrator.
+- `JobCreateRequest` exists at `src/transformation_portal/api/v1/jobs.py:130`
+  but is "defined, not yet wired" as a handler parameter. Pydantic envelope
+  models in route decorators are OpenAPI-doc-only; no runtime validation runs.
+- Env vars `TP_ORCHESTRATOR_STATE_BACKEND`, `TP_DATABASE_URL` are unrecognized.
+
+### 5.2 Phase 2 - worker split
+
+- No queue broker, no Redis client, no lease and no heartbeat machinery.
+- Execution today is in-process: `async def _run_job(job, argv)`
+  (`app.py:8788`) calls `asyncio.create_subprocess_exec` at `app.py:8808`.
+  Exit code 0 yields `succeeded`; nonzero yields `failed` with no
+  retryability concept.
+- No `worker_lost` state, no stale-job sweeper, no deduplication.
+- Env vars `TP_ORCHESTRATOR_QUEUE_BACKEND`, `TP_REDIS_URL` are unrecognized.
+
+### 5.3 Phase 3 - external sessions
+
+- `web/secure-landing/lib/sessions.js` and `db.js` use `better-sqlite3` for
+  `sessions` and `login_attempts` tables. Database path defaults to
+  `/tmp/transformation-portal-frontdoor-sessions.db`
+  (`TP_FRONTDOOR_SESSION_DB`).
+- CSRF tokens are SQLite-persisted per session; `validateCsrfToken` uses
+  timing-safe comparison. Cross-instance sharing is not implemented.
+- No `SessionStore` interface, no Redis client in `web/secure-landing/`. Env
+  var `TP_FRONTDOOR_SESSION_STORE` is unrecognized.
+- The readiness gate already exists; it just needs to be unblocked when Redis
+  is configured.
+
+### 5.4 Phase 4 - artifact lifecycle
+
+- No boto3, minio, or other S3 client anywhere in `src/`. Artifacts are
+  filesystem-only today, served via authenticated routes
+  `/{v1,v2}/jobs/{job_id}/artifacts/{artifact_path:path}`.
+- No retention metadata, no signed URLs, no deletion workflow.
+- Existing path-traversal validation, SHA-256 fingerprinting, content-type
+  detection, and Merkle roots must be preserved by any S3 backend (see
+  section 4).
+- Env vars `TP_ARTIFACT_STORE`, `TP_ARTIFACT_BUCKET`, `TP_ARTIFACT_PREFIX`,
+  `TP_ARTIFACT_ENDPOINT_URL` are unrecognized.
+
+### 5.5 Phase 5 - pilot deployment model
+
+- `Dockerfile` provides `base`, `cpu`, `gpu`, and `apple-silicon` stages with
+  health probes.
+- `docker-compose.yml` provides CPU, GPU, worker, and monitor services.
+- No Helm charts, no Terraform, no Kubernetes manifests, no managed
+  PostgreSQL, Redis, or S3 deployment doc, no CI deploy pipeline beyond
+  container build.
+- `docs/deployment/PRODUCTION_READINESS.md` exists but does not cover managed
+  services.
+
+### 5.6 Phase 6 - production evidence
+
+- No `prometheus_client`, no OpenTelemetry, no `structlog`. Logging is stdlib
+  `logging` plus a healthcheck-noise filter at `app.py:120`.
+- No queue-depth, job-latency, failure-rate, or artifact-write metrics.
+- No alert thresholds and no dashboard templates.
+- The only audit log today is `FSGuard.audit_log` (filesystem accesses to a
+  JSONL file at `src/transformation_portal/core/security/fs_guard.py:100`).
+  This is not an audit surface for jobs or the orchestrator.
+- Cryptographic provenance and attestation are complete (see section 4); the
+  operational audit-event table is the net-new piece.
+
+### 5.7 Phase 7 - commercial primitives
+
+- No `User`, `Organization`, `ApiKey`, `Quota`, `Billing`, or `Subscription`
+  models in the codebase.
+- API-key auth is single-tenant only: `TP_API_KEY` and `TP_BACKEND_API_KEY`.
+- Tenant primitives in `src/transformation_portal/core/security/tenant.py`
+  exist but are not wired (see section 4); they should be the foundation for
+  this phase.
+
+## 6. Plan refinements
+
+The following refinements address ambiguity or under-specification in the
+original plan; they do not change its phase order.
+
+1. **`/v2/jobs` is live, not aspirational.** Reframe Phase 1 wording from
+   "preserve `/v1/jobs`, `/v2/jobs` envelope shapes" to "preserve the
+   currently-live `/v1` and `/v2` shapes." All four route families
+   (`POST/GET/cancel/artifacts`) exist today on a shared in-memory backend.
+2. **Pydantic envelopes are OpenAPI-only.** Phase 1 must explicitly switch
+   the typed envelopes to runtime-validated request and response models in
+   the same change as the storage cutover; otherwise the "wire shape stable"
+   claim is unenforceable.
+3. **Audit-event table boundary.** Phase 6 should specify that the new
+   operational audit table is a queryable mirror of events, while
+   `tp.phase4` and the Merkle and attestation chain remain authoritative for
+   evidence. Operational and cryptographic audit must not collide.
+4. **Run-card and reconstruction-manifest continuity in Phase 4.**
+   `lux_depth_v3.artifact_manager.compute_artifact_merkle_root` builds Merkle
+   roots over filesystem layouts. The S3 swap must keep the Merkle inputs
+   deterministic; that means stable iteration order, stable canonical relative
+   paths, and explicit handling of object keys versus directory prefixes.
+5. **Frontdoor session migration.** The plan's assumption "no migration
+   required" is correct **only** if no paid users have logged in before
+   cutover. The Phase 3 PR must include a documented cutover step that either
+   invalidates SQLite sessions or migrates them.
+6. **Tenant primitives are the floor for Phase 7.** Phase 7 must build on
+   `TenantContext`, `TenantPolicy`, `TenantManager`, and `TenantAwareFSGuard`
+   rather than introducing a parallel customer model.
+
+## 7. Pinned acceptance commands for paid pilot sign-off
+
+The following command list is the gate that must pass before the paid pilot
+opens. Each command has a current ownership and expected outcome.
+
+### 7.1 Currently passing
+
+```bash
+make ci                                # advisory lint + governance + test-fast + orchestrator + frontdoor contracts
+make lint-parity                       # CI-aligned Black/isort/flake8/pylint
+make test-orchestrator-contract        # in-memory job orchestrator contract
+make test-frontdoor-contract           # Node 22 frontdoor + Next.js build
+make validate-ci                       # workflow / concurrency / gitleaks / dependabot contracts
+make audit-pipeline-readiness          # 4-pipeline local readiness audit
+make check-portal-asset-budgets        # portal asset size gates
+```
+
+These are the existing gates and should not regress as Phases 1 through 7
+land. They cover the in-memory orchestrator, the SQLite frontdoor, the
+filesystem artifact path, and the workflow and dependency governance.
+
+### 7.2 To be added during Phase 1 through Phase 4
+
+The plan calls for a "new Postgres/Redis/S3 integration target". The
+following targets should be created and added to this list during the
+respective phase:
+
+| Phase | New Make target | What it must prove |
+| --- | --- | --- |
+| 1 | `test-orchestrator-postgres-contract` | `JobRepository` contract identical for memory and Postgres backends; restart recovery; cancel semantics; event replay; artifact index parity. |
+| 2 | `test-worker-redis-contract` | Queue lease and heartbeat expiry; duplicate-consumer protection; `worker_lost` marking; cancellation honored across queue boundary. |
+| 3 | `test-frontdoor-redis-contract` | Multi-instance and ephemeral readiness green paths; CSRF preserved across instances; throttle parity; session TTL semantics. |
+| 4 | `test-artifact-s3-contract` | S3-compatible write, read, delete, signed-URL expiry, checksum mismatch rejection, path-traversal rejection; deterministic Merkle inputs. |
+
+### 7.3 Live validation gates
+
+```bash
+make validate-frontdoor-browser        # frontdoor browser smoke (current: SQLite path)
+make validate-portal-browser           # portal browser smoke (current: in-memory path)
+```
+
+After Phases 1 through 4 land, these should be re-run against the durable
+backend rather than the local in-memory and SQLite defaults.
+
+### 7.4 Evidence and attestation
+
+```bash
+python3 scripts/security/verify_banned_dependencies.py
+python3 scripts/validation/check_requirements_lock_contract.py
+python3 scripts/validation/check_dependency_pinning.py
+```
+
+These cover the supply-chain and dependency-pinning gates. They should pass
+on every pilot-track PR.
+
+## 8. VLM lazy-import seam status
+
+**Status: resolved.**
+
+The cold-zone program (`docs/testing/COLD_ZONE_COVERAGE_PROGRAM.md` section
+2.1 and 4.3) lists the VLM lazy-import seam as a Phase 0 precondition for
+cold-zone PRs 1 through 3. PR #1748 landed the seam:
+
+- `src/transformation_portal/vlm/__init__.py` now uses PEP 562 `__getattr__`
+  with a `_LAZY_EXPORTS` mapping; no eager re-exports.
+- `src/transformation_portal/vlm/llava.py` wraps `import torch` in
+  `try / except (ImportError, OSError)` and exposes `TORCH_AVAILABLE`.
+
+Verification:
+
+```bash
+python -c "import sys; \
+  assert 'torch' not in sys.modules; \
+  import transformation_portal.vlm; \
+  assert 'torch' not in sys.modules"
+```
+
+The cold-zone program doc still lists the seam as Phase 0 work; that doc
+should be updated separately to mark section 2.1 and 4.3 as resolved when
+the next cold-zone PR lands. No further hardening-track work is required for
+the seam itself.
+
+## 9. Open decisions before Phase 1 starts
+
+These decisions are deliberately not made in this gap doc; they require
+operator input.
+
+1. **Deployment target.** Managed Postgres, Redis, and S3-compatible storage
+   per provider (AWS, GCP, Cloudflare R2, Fly, Render, Railway, other). The
+   choice changes Phase 4 endpoint defaults, IAM model, and Phase 5 IaC
+   approach.
+2. **Frontdoor host.** Vercel-managed Next.js (current default in
+   `web/secure-landing/`) or self-hosted standalone Next.js. The choice
+   changes the Phase 3 session-store rollout shape.
+3. **Pilot cutover policy for SQLite frontdoor sessions.** Invalidate or
+   migrate (see section 6 item 5).
+4. **Audit-event table backing.** Same Postgres instance as the job store, a
+   separate database, or a managed log store. This affects retention and
+   querying.
+5. **Customer entitlement model.** Contract-based or quota-based for the
+   pilot; both can ground on `TenantPolicy`. This affects Phase 7 sequencing.
+
+These should be answered before Phase 1 implementation starts so the work
+does not require mid-phase rework.
+
+---
+
+*Phase 0 baseline pinned 2026-05-13. Update this doc when a Phase 1 through
+Phase 7 PR materially changes the audited state.*
