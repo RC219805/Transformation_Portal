@@ -244,7 +244,7 @@ List any critical issues found."""
             recommendations = []
 
         # Calculate overall score
-        overall_score = np.mean([score.score for score in scores])
+        overall_score = float(np.mean([score.score for score in scores]))
 
         # Determine overall status
         overall_status = self._determine_status(overall_score, scores, strict)
@@ -283,14 +283,15 @@ List any critical issues found."""
         enhanced_report = self.validate(enhanced, detailed=True)
 
         # Check for quality degradation
-        quality_improved = enhanced_report.overall_score > original_report.overall_score
+        quality_improved = bool(enhanced_report.overall_score > original_report.overall_score)
         new_artifacts = len(enhanced_report.artifacts) > len(original_report.artifacts)
+        score_delta = float(enhanced_report.overall_score - original_report.overall_score)
 
         # Enhancement-specific validation
         enhancement_validation = {
             "quality_improved": quality_improved,
             "new_artifacts_introduced": new_artifacts,
-            "score_delta": enhanced_report.overall_score - original_report.overall_score,
+            "score_delta": score_delta,
             "enhancement_valid": quality_improved and not new_artifacts,
         }
 
@@ -484,7 +485,8 @@ List any critical issues found."""
         recommendations = []
 
         if "recommendations:" in text.lower():
-            rec_section = text.split("RECOMMENDATIONS:")[-1].split("\n\n")[0]
+            header_start = text.lower().index("recommendations:")
+            rec_section = text[header_start + len("recommendations:") :].split("\n\n")[0]
 
             # Split into bullet points or lines
             for line in rec_section.split("\n"):
