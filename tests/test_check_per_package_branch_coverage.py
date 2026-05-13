@@ -107,12 +107,41 @@ def test_missing_coverage_xml_returns_2(script_module, tmp_path: Path):
     assert script_module.main([str(tmp_path / "missing.xml"), "--dry-run"]) == 2
 
 
-def test_no_default_branch_floors_is_success(script_module, tmp_path: Path, capsys):
+def test_no_default_branch_floors_reports_dry_run_baselines(script_module, tmp_path: Path, capsys):
     coverage = tmp_path / "coverage.xml"
-    _write_coverage(coverage, [("src/pkg/x.py", [{"hits": 1}])])
+    _write_coverage(
+        coverage,
+        [
+            (
+                "src/transformation_portal/plugins/loader.py",
+                [{"hits": 1, "condition_coverage": "50% (1/2)"}],
+            ),
+            (
+                "src/transformation_portal/stage_graph/policy.py",
+                [{"hits": 1, "condition_coverage": "100% (2/2)"}],
+            ),
+        ],
+    )
 
     rc = script_module.main([str(coverage), "--dry-run"])
 
     captured = capsys.readouterr()
     assert rc == 0
     assert "No per-package branch coverage floors configured" in captured.out
+    assert "src/transformation_portal/plugins/" in captured.out
+    assert "src/transformation_portal/stage_graph/" in captured.out
+    assert "1/2" in captured.out
+    assert "  N/A" in captured.out
+    assert "DRY-RUN" in captured.out
+
+
+def test_no_default_branch_floors_without_dry_run_is_success(script_module, tmp_path: Path, capsys):
+    coverage = tmp_path / "coverage.xml"
+    _write_coverage(coverage, [("src/pkg/x.py", [{"hits": 1}])])
+
+    rc = script_module.main([str(coverage)])
+
+    captured = capsys.readouterr()
+    assert rc == 0
+    assert "No per-package branch coverage floors configured" in captured.out
+    assert "Package" not in captured.out
