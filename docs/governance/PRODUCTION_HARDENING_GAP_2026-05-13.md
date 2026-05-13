@@ -140,7 +140,7 @@ implementations or precursors for the items below.
 - No alert thresholds and no dashboard templates.
 - The only audit log today is `FSGuard.audit_log` (filesystem accesses to a
   JSONL file at `src/transformation_portal/core/security/fs_guard.py:100`).
-  This is not a job-or-orchestrator audit surface.
+  This is not an audit surface for jobs or the orchestrator.
 - Cryptographic provenance and attestation are complete (see section 4); the
   operational audit-event table is the net-new piece.
 
