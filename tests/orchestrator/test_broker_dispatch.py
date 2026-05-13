@@ -1,18 +1,19 @@
-"""Phase 2.C - end-to-end contract for broker-mediated job dispatch.
+"""Phase 2.C/2.D/2.E - end-to-end contract for broker-mediated job dispatch.
 
-Exercises the HTTP boundary with ``TP_ORCHESTRATOR_USE_QUEUE_BROKER=1``:
+Exercises the HTTP boundary against the always-on broker substrate:
 the orchestrator must enqueue via the broker, the in-process
 ``WorkerRunner`` pool must lease the job, and a monkey-patched
 ``_run_job`` body must drive the existing in-process ``Job`` to a
 terminal state. Cancellation routes through ``broker.cancel`` for
 both pre-lease (queued, never picked up by a worker) and in-flight
-(leased by a worker, killed mid-run) paths.
+(leased by a worker, killed mid-run) paths. Phase 2.D's reclaim
+reconciler drives jobs to ``worker_lost`` when leases expire.
 
 The Phase 2.A queue-broker contract tests and the Phase 1.B
 repository contract tests cover their respective layers in
 isolation. This file is the integration seam: it proves the
 orchestrator + broker + worker wiring actually does what the
-hardening plan describes for §5.2 Phase 2.C.
+hardening plan describes for §5.2.
 """
 
 from __future__ import annotations
@@ -41,13 +42,13 @@ pytestmark = [pytest.mark.unit]
 
 @pytest.fixture(autouse=True)
 def _reset_orchestrator_globals(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Flip ``USE_QUEUE_BROKER`` on for the duration of the test.
+    """Reset orchestrator + broker singletons for the test.
 
-    Also drops every cached singleton (job repository, queue broker,
+    Drops every cached singleton (job repository, queue broker,
     runtime registry) so a clean broker + worker pool boots inside
-    the ``TestClient`` lifespan.
+    the ``TestClient`` lifespan. Broker dispatch is always-on after
+    Phase 2.E; no env-var or constant flip is needed.
     """
-    monkeypatch.setattr(orchestrator_app, "USE_QUEUE_BROKER", True)
     monkeypatch.setattr(orchestrator_app, "API_KEY_SECRET", "contract-secret")
     monkeypatch.setattr(orchestrator_app, "ENFORCE_JOB_API_KEY", True)
     # Tighten the worker pool's lease/heartbeat so the in-flight cancel
@@ -402,3 +403,67 @@ def test_executor_failure_marks_error_non_retriable(monkeypatch: pytest.MonkeyPa
         assert job.state == "failed"
         assert job.error is not None
         assert job.error.get("retriable") is False
+
+
+# ---------------------------------------------------------------------------
+# Phase 2.E - fail-closed contract when the broker is unavailable
+# ---------------------------------------------------------------------------
+
+
+def test_broker_construction_failure_returns_503_without_running_job(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Phase 2.E regression: broker unavailable → 503 ``QUEUE_UNAVAILABLE``.
+
+    Phase 2.E removed the legacy in-band ``asyncio.create_task(_run_job(...))``
+    fallback so the orchestrator now fail-closes when ``get_queue_broker()``
+    raises (e.g. ``TP_ORCHESTRATOR_QUEUE_BACKEND=redis`` with
+    ``TP_REDIS_URL`` unset). Pin the new contract:
+
+    - The HTTP handler returns 503 with ``error.code=QUEUE_UNAVAILABLE``.
+    - ``_run_job`` is never invoked, so no subprocess is spawned and the
+      orphaned dispatch surface that the fallback exposed is gone.
+    - The JOBS entry is rolled back so the admission slot is freed
+      immediately (a successful retry must not 429 against a stale
+      placeholder).
+    - The empty output_dir that ``_materialize_dispatch_output_dir``
+      created during admission is cleaned up so a misconfigured broker
+      cannot accumulate empty directories per admitted-then-rejected
+      request.
+    """
+    run_job_calls: list[str] = []
+
+    async def fake_run_job(job, _argv) -> None:  # noqa: ANN001 - test stub
+        run_job_calls.append(job.id)
+
+    monkeypatch.setattr(orchestrator_app, "_run_job", fake_run_job)
+
+    def _explode_get_queue_broker() -> Any:
+        raise RuntimeError("simulated broker outage")
+
+    monkeypatch.setattr(orchestrator_app, "get_queue_broker", _explode_get_queue_broker)
+
+    payload = _build_payload(tmp_path)
+    output_dir = Path(payload["args"]["output_dir"]).resolve()
+    # Drop the auto-created output_dir from the helper so we can observe
+    # whether ``_create_job``'s admission path leaves an empty directory
+    # behind on the 503 rollback path.
+    if output_dir.exists():
+        # remove any contents the helper seeded
+        for child in output_dir.iterdir():
+            child.unlink()
+        output_dir.rmdir()
+    assert not output_dir.exists()
+
+    initial_jobs_count = len(orchestrator_app.JOBS)
+    with TestClient(orchestrator_app.app, headers={"x-api-key": "contract-secret"}) as client:
+        response = client.post("/v1/jobs", json=payload)
+
+    assert response.status_code == 503, response.text
+    body = response.json()
+    assert body["success"] is False
+    assert body["error"]["code"] == "QUEUE_UNAVAILABLE"
+    # No subprocess spawned: the in-band fallback is truly gone.
+    assert run_job_calls == [], "broker outage must NOT silently fall back to in-band dispatch"
+    # JOBS rollback: the admission slot is free, no stale placeholder.
+    assert len(orchestrator_app.JOBS) == initial_jobs_count
+    # Empty output_dir cleaned up on rollback.
+    assert not output_dir.exists(), "rollback path must reclaim the output_dir it created during admission"
