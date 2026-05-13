@@ -375,12 +375,13 @@ class PostgresJobRepository(JobRepository):
             error_payload = {
                 "code": reason_code,
                 "message": "Process did not survive backend restart.",
+                "retriable": True,
             }
             await session.execute(
                 update(JobModel)
                 .where(JobModel.id.in_(orphan_ids))
                 .values(
-                    state="failed",
+                    state="worker_lost",
                     finished_at=stamp,
                     done_published_at=stamp,
                     last_event_at=stamp,
