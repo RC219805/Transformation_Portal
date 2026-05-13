@@ -22,23 +22,37 @@ any active row with no live worker is by definition orphaned.
 from __future__ import annotations
 
 import logging
-from typing import List, Optional
+from typing import List, Optional, Protocol
 
-from transformation_portal.orchestrator.runtime_handles import (
-    RuntimeRegistry,
-    get_runtime_registry,
-)
+from transformation_portal.orchestrator.runtime_handles import get_runtime_registry
 from transformation_portal.orchestrator.storage.base import JobRepository
 
 logger = logging.getLogger(__name__)
 
 WORKER_LOST_REASON_CODE = "worker_lost_on_restart"
 
+# How many swept ids to include in the WARNING-level log line. The full
+# list is still emitted at DEBUG so operators can opt in via log level
+# without paying the cost (or polluting the warning channel) on every
+# restart of a Postgres backend that's been offline for a while.
+_SWEPT_LOG_SAMPLE_LIMIT = 20
+
+
+class LiveJobIdsProvider(Protocol):
+    """Minimal contract the sweeper needs from a runtime registry.
+
+    Anything with ``live_job_ids() -> list[str]`` satisfies it. Today
+    that's ``RuntimeRegistry``; Phase 2's Redis-lease-backed registry
+    will satisfy the same Protocol without the sweeper changing.
+    """
+
+    def live_job_ids(self) -> List[str]: ...
+
 
 async def sweep_orphaned_jobs(
     repository: JobRepository,
     *,
-    runtime_registry: Optional[RuntimeRegistry] = None,
+    runtime_registry: Optional[LiveJobIdsProvider] = None,
     reason_code: str = WORKER_LOST_REASON_CODE,
 ) -> List[str]:
     """Mark any active job without a live worker as ``failed``.
@@ -65,10 +79,20 @@ async def sweep_orphaned_jobs(
     swept = await repository.sweep_orphaned(live_job_ids=live, reason_code=reason_code)
 
     if swept:
+        sorted_ids = sorted(swept)
+        sample = sorted_ids[:_SWEPT_LOG_SAMPLE_LIMIT]
         logger.warning(
-            "orchestrator restart recovery marked %d orphaned job(s) as failed: %s",
+            "orchestrator restart recovery marked %d orphaned job(s) as failed " "(sample of up to %d: %s)",
             len(swept),
-            sorted(swept),
+            _SWEPT_LOG_SAMPLE_LIMIT,
+            sample,
+        )
+        # Full list goes to DEBUG so operators can opt in via log level
+        # without flooding the warning channel.
+        logger.debug(
+            "orchestrator restart recovery: full swept id list (%d): %s",
+            len(swept),
+            sorted_ids,
         )
     else:
         logger.info(

@@ -7728,12 +7728,28 @@ async def _orchestrator_lifespan(app: "FastAPI") -> "AsyncGenerator[None, None]"
     # no orphans and the sweep is a deterministic no-op.
     # Postgres backend (TP_ORCHESTRATOR_STATE_BACKEND=postgres): the sweep
     # does the real work.
+    #
+    # Cache the repository on app.state so startup and shutdown share the
+    # same instance: avoids double construction and prevents a confusing
+    # "config error during shutdown" if TP_DATABASE_URL was misconfigured
+    # at boot - the misconfig surfaces once at startup and shutdown is a
+    # quiet no-op rather than a second loud failure.
     try:
-        swept = await sweep_orphaned_jobs(get_job_repository())
-        app.state.restart_recovery_swept = list(swept)
+        repo = get_job_repository()
     except Exception:  # noqa: BLE001 - never block startup on recovery
-        LOGGER.exception("orchestrator restart recovery sweep failed; continuing startup")
+        LOGGER.exception("orchestrator repository construction failed; skipping restart recovery")
+        repo = None
+    app.state.job_repository = repo
+
+    if repo is None:
         app.state.restart_recovery_swept = []
+    else:
+        try:
+            swept = await sweep_orphaned_jobs(repo)
+            app.state.restart_recovery_swept = list(swept)
+        except Exception:  # noqa: BLE001 - never block startup on recovery
+            LOGGER.exception("orchestrator restart recovery sweep failed; continuing startup")
+            app.state.restart_recovery_swept = []
 
     existing_task = getattr(app.state, "cleanup_task", None)
     if existing_task is None or existing_task.done():
@@ -7749,11 +7765,16 @@ async def _orchestrator_lifespan(app: "FastAPI") -> "AsyncGenerator[None, None]"
             app.state.cleanup_task = None
         # Best-effort dispose of the repository's connection pool. The
         # memory backend's close() is a no-op; the Postgres backend
-        # disposes its shared AsyncEngine.
-        try:
-            await get_job_repository().close()
-        except Exception:  # noqa: BLE001 - never block shutdown on close
-            LOGGER.exception("orchestrator repository close failed")
+        # disposes its shared AsyncEngine. Reuse the repository instance
+        # cached at startup so a startup-time construction failure isn't
+        # re-emitted at shutdown.
+        repo_for_close = getattr(app.state, "job_repository", None)
+        if repo_for_close is not None:
+            try:
+                await repo_for_close.close()
+            except Exception:  # noqa: BLE001 - never block shutdown on close
+                LOGGER.exception("orchestrator repository close failed")
+        app.state.job_repository = None
 
 
 app = FastAPI(

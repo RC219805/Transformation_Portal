@@ -83,7 +83,9 @@ async def test_sweep_excludes_jobs_with_live_workers(
         def live_job_ids(self) -> list[str]:
             return ["alive"]
 
-    swept = await sweep_orphaned_jobs(repo, runtime_registry=_FakeRegistry())  # type: ignore[arg-type]
+    # _FakeRegistry satisfies the LiveJobIdsProvider Protocol structurally,
+    # so no type: ignore is needed.
+    swept = await sweep_orphaned_jobs(repo, runtime_registry=_FakeRegistry())
 
     assert swept == ["dead"]
     alive = await repo.get("alive")

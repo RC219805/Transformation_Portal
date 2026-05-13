@@ -78,7 +78,7 @@ implementations or precursors for the items below.
 
 ### 5.1 Phase 1 - durable jobs
 
-**Updated 2026-05-13: Phase 1.A and Phase 1.B have landed.**
+**Updated 2026-05-13: Phase 1.A, Phase 1.B, and Phase 1.C have landed.**
 
 Already done:
 
