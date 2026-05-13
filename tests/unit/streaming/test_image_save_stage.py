@@ -11,21 +11,10 @@ import numpy as np
 import pytest
 from PIL import Image
 
+from tests.unit.streaming._helpers import RecordingIOPool
 from transformation_portal.streaming.stages import ImageData, ImageLoadStage, ImageSaveStage, create_luxury_pipeline_stages
 
 pytestmark = pytest.mark.unit
-
-
-class RecordingIOPool:
-    """Small async worker-pool stand-in for deterministic process() tests."""
-
-    def __init__(self) -> None:
-        self.calls: list[Path] = []
-
-    async def run_io(self, func, *args, **kwargs):
-        output_path = func(*args, **kwargs)
-        self.calls.append(output_path)
-        return output_path
 
 
 def test_image_save_stage_writes_float_tiff(tmp_path: Path) -> None:
@@ -118,7 +107,7 @@ def test_image_save_stage_process_creates_output_dir_and_updates_metadata(tmp_pa
 def test_image_save_stage_process_uses_injected_worker_pool(tmp_path: Path) -> None:
     output_dir = tmp_path / "out"
     output_dir.mkdir()
-    pool = RecordingIOPool()
+    pool = RecordingIOPool(record_result=True)
     image_data = ImageData(
         array=np.zeros((8, 6, 3), dtype=np.uint8),
         path=tmp_path / "frame.png",

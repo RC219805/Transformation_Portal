@@ -13,20 +13,10 @@ import numpy as np
 import pytest
 from PIL import Image
 
+from tests.unit.streaming._helpers import RecordingIOPool
 from transformation_portal.streaming.stages import ImageLoadStage
 
 pytestmark = pytest.mark.unit
-
-
-class RecordingIOPool:
-    """Small async worker-pool stand-in for deterministic process() tests."""
-
-    def __init__(self) -> None:
-        self.calls: list[Path] = []
-
-    async def run_io(self, func, *args, **kwargs):
-        self.calls.append(args[0])
-        return func(*args, **kwargs)
 
 
 class FakeImage:
@@ -191,14 +181,19 @@ def test_image_load_stage_process_uses_injected_worker_pool(tmp_path: Path) -> N
 
 
 def test_image_load_stage_startup_shutdown_manage_owned_worker_pool() -> None:
+    def marker() -> str:
+        return "ready"
+
     async def runner() -> None:
         stage = ImageLoadStage(max_concurrent=1)
         assert stage._worker_pool is None
         await stage.startup()
-        assert stage._worker_pool is not None
-        assert stage._worker_pool._active is True
+        worker_pool = stage._worker_pool
+        assert worker_pool is not None
+        assert await worker_pool.run_io(marker) == "ready"
         await stage.shutdown()
-        assert stage._worker_pool._active is False
+        with pytest.raises(RuntimeError, match="WorkerPool not active"):
+            await worker_pool.run_io(marker)
 
     asyncio.run(runner())
 
