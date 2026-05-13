@@ -4,6 +4,7 @@ import { stableRolloutBucket } from "./rollout.js";
 
 const DEFAULT_SESSION_DB_PATH = "/tmp/transformation-portal-frontdoor-sessions.db";
 const DEFAULT_SESSION_SCALING_MODE = "single_instance";
+const DEFAULT_SESSION_STORE_BACKEND = "sqlite";
 const DEFAULT_FRONTDOOR_RUM_ROLLOUT_PERCENT = 100;
 const SESSION_IDLE_TIMEOUT_MS = 8 * 60 * 60 * 1000;
 const SESSION_ABSOLUTE_TIMEOUT_MS = 24 * 60 * 60 * 1000;
@@ -148,6 +149,20 @@ export function getConfig() {
     sessionDbPath: String(process.env.TP_FRONTDOOR_SESSION_DB || DEFAULT_SESSION_DB_PATH).trim(),
     sessionScalingMode: String(
       process.env.TP_FRONTDOOR_SESSION_SCALING_MODE || DEFAULT_SESSION_SCALING_MODE
+    ).trim(),
+    // Phase 3 - session-store backend selector. ``sqlite`` keeps the
+    // existing ``better-sqlite3`` path (default). ``redis`` activates
+    // the cross-instance store backed by TP_FRONTDOOR_REDIS_URL and
+    // flips ``evaluateSessionScaling`` to ``ok: true`` for
+    // ``multi_instance`` / ``ephemeral_runtime`` deployments.
+    sessionStoreBackend: String(
+      process.env.TP_FRONTDOOR_SESSION_STORE || DEFAULT_SESSION_STORE_BACKEND
+    )
+      .trim()
+      .toLowerCase(),
+    sessionStoreRedisUrl: String(process.env.TP_FRONTDOOR_REDIS_URL || "").trim(),
+    sessionStoreRedisKeyPrefix: String(
+      process.env.TP_FRONTDOOR_REDIS_KEY_PREFIX || "tp:frontdoor:"
     ).trim(),
     users,
     usersFilePath,

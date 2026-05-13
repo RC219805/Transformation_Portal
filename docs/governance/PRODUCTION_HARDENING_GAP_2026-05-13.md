@@ -109,16 +109,24 @@ Still net-new (follow-up commits / PRs on this track):
 
 ### 5.3 Phase 3 - external sessions
 
-- `web/secure-landing/lib/sessions.js` and `db.js` use `better-sqlite3` for
-  `sessions` and `login_attempts` tables. Database path defaults to
-  `/tmp/transformation-portal-frontdoor-sessions.db`
-  (`TP_FRONTDOOR_SESSION_DB`).
-- CSRF tokens are SQLite-persisted per session; `validateCsrfToken` uses
-  timing-safe comparison. Cross-instance sharing is not implemented.
-- No `SessionStore` interface, no Redis client in `web/secure-landing/`. Env
-  var `TP_FRONTDOOR_SESSION_STORE` is unrecognized.
-- The readiness gate already exists; it just needs to be unblocked when Redis
-  is configured.
+**Updated 2026-05-13: Phase 3.A has landed.**
+
+Already done:
+
+- `SessionStore` contract + factory + `SqliteSessionStore` + `RedisSessionStore` skeleton (Phase 3.A, this PR). Lives under `web/secure-landing/lib/session-store/` with one module per concern: `contract.js` (JSDoc-typed wire shape), `sqlite-store.js` (refactor of the pre-Phase-3 SQLite logic — schema and statements byte-identical), `redis-store.js` (ioredis-backed implementation; the `ioredis` import is lazy so sqlite-only deployments don't pay for it), and `index.js` (factory keyed off `TP_FRONTDOOR_SESSION_STORE=sqlite|redis`, default `sqlite`). New env vars: `TP_FRONTDOOR_SESSION_STORE`, `TP_FRONTDOOR_REDIS_URL`, `TP_FRONTDOOR_REDIS_KEY_PREFIX` (default `tp:frontdoor:`).
+- `evaluateSessionScaling()` gate flip (Phase 3.A, this PR). Accepts `sessionStoreBackend` and returns `ok: true` for `multi_instance` / `ephemeral_runtime` modes when `sessionStoreBackend === "redis"`, while keeping the `single_instance` + SQLite default green. Invalid mode declarations still fail closed; unknown backend values (e.g. typo'd `memcached`) fall back to SQLite gate semantics so a misconfigured store can never silently unlock the gate. Verified by 9 cases in `tests/session-scaling.test.mjs` + 7 cases in the new `tests/session-store.test.mjs`.
+
+Still net-new (follow-up commits / PRs on this track):
+
+- `sessions.js` cut-over (Phase 3.B). The frontdoor's session helpers (`createAnonymousSession`, `getSessionFromRequest`, `rotateAuthenticatedSession`, `destroySession`, `validateCsrfToken`, `isLoginThrottled`, `recordLoginAttempt`) still use `better-sqlite3` directly. Switching them to consume `getSessionStore()` is async-shaped (Redis is async in Node) and ripples through every Next.js route handler that calls them, so it is intentionally deferred to a follow-up PR. The Phase 3.A factory + contract make the cut-over a mechanical rewire rather than a parallel implementation.
+- `ioredis` runtime dependency. The `RedisSessionStore` module imports it lazily so sqlite deployments don't need it on disk, but the production multi-instance lane will need a checked-in `package.json` dependency + a wheel-style smoke that builds the Next.js app with the redis branch active. Phase 3.B will land that.
+
+Pre-Phase-3 baseline (now resolved by Phase 3.A scaffolding):
+
+- ~~No `SessionStore` interface, no Redis client in `web/secure-landing/`.~~ Resolved by the new `lib/session-store/` module.
+- ~~Env var `TP_FRONTDOOR_SESSION_STORE` is unrecognized.~~ Now read by `lib/config.js` and surfaced through `evaluateSessionScaling`.
+- ~~The readiness gate already exists; it just needs to be unblocked when Redis is configured.~~ Done in `lib/session-scaling.js`.
+- `better-sqlite3` is still the active backend for the running session helpers; cross-instance sharing waits on Phase 3.B.
 
 ### 5.4 Phase 4 - artifact lifecycle
 
