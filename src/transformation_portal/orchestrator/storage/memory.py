@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 from collections import defaultdict, deque
+from pathlib import Path
 from typing import Any, AsyncIterator, Deque, Dict, List, Optional, Tuple
 
 from transformation_portal.orchestrator.storage.base import (
@@ -86,7 +87,7 @@ class MemoryJobRepository(JobRepository):
         self,
         job_id: str,
         artifacts: Dict[str, Any],
-        artifact_lookup: Dict[str, str],
+        artifact_lookup: Dict[str, Path],
     ) -> None:
         async with self._lock_for(job_id):
             existing = self._records.get(job_id)

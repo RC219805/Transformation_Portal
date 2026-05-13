@@ -8,6 +8,7 @@ included; Postgres activates when ``TP_TEST_POSTGRES_URL`` is set.
 from __future__ import annotations
 
 import asyncio
+from pathlib import Path
 from typing import Tuple
 
 import pytest
@@ -164,12 +165,12 @@ async def test_set_artifacts_replaces_index_and_lookup(
     await repo.set_artifacts(
         "job-art",
         artifacts={"items": [{"path": "out/x.png"}]},
-        artifact_lookup={"out/x.png": "/abs/out/x.png"},
+        artifact_lookup={"out/x.png": Path("/abs/out/x.png")},
     )
     fetched = await repo.get("job-art")
     assert fetched is not None
     assert fetched.artifacts == {"items": [{"path": "out/x.png"}]}
-    assert fetched.artifact_lookup == {"out/x.png": "/abs/out/x.png"}
+    assert fetched.artifact_lookup == {"out/x.png": Path("/abs/out/x.png")}
 
 
 # ---------------------------------------------------------------------------
@@ -258,19 +259,54 @@ async def test_sweep_orphaned_marks_active_jobs_failed(
 # ---------------------------------------------------------------------------
 
 
-async def test_concurrent_updates_do_not_lose_writes(
+async def test_concurrent_append_log_does_not_lose_writes(
     repository_and_events: RepoAndEvents,
 ) -> None:
+    """All concurrently-appended log lines must end up in ``logs_tail``.
+
+    Replaces a weaker progress-race test that could pass even if every
+    update was silently dropped (default ``progress`` is 0). ``append_log``
+    has an accumulating contract: N concurrent appends with a generous
+    ``tail_limit`` must produce exactly N entries.
+    """
     repo, _ = repository_and_events
     await repo.create(_new_record("job-conc"))
 
-    async def bump(progress: int) -> None:
-        await repo.update("job-conc", progress=progress)
+    async def write(i: int) -> None:
+        await repo.append_log("job-conc", f"line-{i}", tail_limit=1000)
 
-    await asyncio.gather(*[bump(p) for p in range(50)])
+    await asyncio.gather(*[write(i) for i in range(50)])
     fetched = await repo.get("job-conc")
     assert fetched is not None
-    assert 0 <= fetched.progress < 50
+    assert len(fetched.logs_tail) == 50
+    # Ordering across the race is intentionally unspecified, but every
+    # input line must be present exactly once - that is what proves no
+    # writes were lost.
+    assert set(fetched.logs_tail) == {f"line-{i}" for i in range(50)}
+
+
+async def test_concurrent_updates_yield_a_consistent_final_value(
+    repository_and_events: RepoAndEvents,
+) -> None:
+    """A race of ``update(progress=N)`` calls must end on one of the N values.
+
+    This is the weaker "last-writer-wins ends consistently" property:
+    we don't assert which value wins, but we do assert the final value
+    is exactly one of the inputs (i.e., the row was not corrupted and
+    a write actually landed). The stronger no-lost-writes property is
+    covered by ``test_concurrent_append_log_does_not_lose_writes``.
+    """
+    repo, _ = repository_and_events
+    await repo.create(_new_record("job-final"))
+
+    async def bump(progress: int) -> None:
+        await repo.update("job-final", progress=progress)
+
+    inputs = list(range(1, 51))
+    await asyncio.gather(*[bump(p) for p in inputs])
+    fetched = await repo.get("job-final")
+    assert fetched is not None
+    assert fetched.progress in inputs
 
 
 # ---------------------------------------------------------------------------

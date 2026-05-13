@@ -13,7 +13,9 @@ must not be persisted.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from copy import deepcopy
 from dataclasses import dataclass, field, replace
+from pathlib import Path
 from typing import Any, AsyncIterator, Dict, List, Optional, Tuple
 
 
@@ -55,21 +57,28 @@ class JobRecord:
     effective_request: Dict[str, Any] = field(default_factory=dict)
     logs_tail: List[str] = field(default_factory=list)
     artifacts: Dict[str, Any] = field(default_factory=dict)
-    artifact_lookup: Dict[str, str] = field(default_factory=dict)
+    artifact_lookup: Dict[str, Path] = field(default_factory=dict)
     run_summary: Dict[str, Any] = field(default_factory=dict)
     error: Optional[Dict[str, Any]] = None
 
     def copy(self) -> "JobRecord":
-        """Return a deep-enough copy: scalar fields shared, container fields copied."""
+        """Return a fully-isolated copy.
+
+        Container fields are deep-copied so callers mutating nested
+        structures (e.g. ``record.request["args"]["foo"] = ...``) cannot
+        reach back into the repository's stored state. ``artifact_lookup``
+        values are ``Path`` instances and are immutable on the relevant
+        attributes, but we deep-copy through them for uniformity.
+        """
         return replace(
             self,
-            request=dict(self.request),
-            effective_request=dict(self.effective_request),
+            request=deepcopy(self.request),
+            effective_request=deepcopy(self.effective_request),
             logs_tail=list(self.logs_tail),
-            artifacts=dict(self.artifacts),
+            artifacts=deepcopy(self.artifacts),
             artifact_lookup=dict(self.artifact_lookup),
-            run_summary=dict(self.run_summary),
-            error=None if self.error is None else dict(self.error),
+            run_summary=deepcopy(self.run_summary),
+            error=None if self.error is None else deepcopy(self.error),
         )
 
 
@@ -131,9 +140,16 @@ class JobRepository(ABC):
         self,
         job_id: str,
         artifacts: Dict[str, Any],
-        artifact_lookup: Dict[str, str],
+        artifact_lookup: Dict[str, Path],
     ) -> None:
-        """Replace the artifact index and lookup map atomically."""
+        """Replace the artifact index and lookup map atomically.
+
+        ``artifact_lookup`` maps relative artifact paths to absolute
+        ``pathlib.Path`` instances, identical to the legacy
+        ``app.py:Job.artifact_lookup`` semantic. Backends that need
+        string serialization (e.g. Postgres) handle the conversion at
+        the persistence boundary.
+        """
 
     @abstractmethod
     async def delete(self, job_id: str) -> None:
