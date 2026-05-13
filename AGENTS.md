@@ -41,15 +41,20 @@ Quick reference for common workflows and commands in this repo.
 - `make test-integration` run DA3/HuggingFace model-loading integration (`tests/test_da3_inference_integration.py`) with `TP_RUN_HF_MODEL_TESTS=1` (downloads models from HF Hub unless offline; typically requires `HF_TOKEN`).
 - `make test-structure` run codebase structure validation.
 - `make test-utils` run performance/error utility tests.
-- `make test-orchestrator-contract` run the full portal/orchestrator contract suite (`tests/test_app_orchestrator_runtime.py`, `tests/test_app_orchestrator_contract_http.py`, `tests/validation/test_portal_smoke_scripts.py`).
+- `make test-orchestrator-contract` run the full portal/orchestrator contract suite (`tests/test_app_orchestrator_runtime.py`, `tests/test_app_orchestrator_contract_http.py`, `tests/validation/test_portal_smoke_scripts.py`, `tests/orchestrator`).
 - `make test-orchestrator-http-contract` run HTTP-only orchestrator contract tests (`tests/test_app_orchestrator_contract_http.py`).
+- `make test-orchestrator-postgres-contract` run the orchestrator repository/recovery contract suite against Postgres; requires `TP_TEST_POSTGRES_URL` pointing at an empty test database, usually after `docker compose up -d postgres`.
+- `make test-worker-redis-contract` run the QueueBroker contract suite against Redis; requires `TP_TEST_REDIS_URL=redis://127.0.0.1:6379/0`, usually after `docker compose up -d redis`.
 - `make test-portal-contract` run portal runtime/browser contract tests (`tests/test_app_orchestrator_runtime.py`, `tests/validation/test_portal_smoke_scripts.py`).
 - `make test-frontdoor-contract` run managed frontdoor Node 22 contract/build checks (`./scripts/setup/ensure_node_version.sh && cd web/secure-landing && npm test && npm run build`).
 - `make test-archive-gate-contract` run archive gate readiness + HTTP contract coverage for archive Gates A/B/C (`tests/test_app_orchestrator_runtime.py`, `tests/test_app_orchestrator_contract_http.py` with `-k "archive_gate"`).
+- `make db-upgrade` apply Alembic migrations for the orchestrator Postgres schema using `TP_DATABASE_URL`.
+- `make db-revision MESSAGE="add foo column"` autogenerate a new Alembic revision from the current orchestrator ORM models.
 - `make seed-frontdoor-user` write the canonical local managed-frontdoor credential fixture to `/tmp/tp-frontdoor-users.json` using `smoke-admin` / `correct horse battery staple` unless you override the env vars.
 - `make run-frontdoor-local` start the canonical local managed frontdoor on `http://localhost:3000` after verifying backend readiness, auth env, and no silent fallback to `:3001`; it auto-seeds the canonical local user fixture when no explicit frontdoor user source is configured.
 - `make run-backend-local` start the FastAPI backend on `127.0.0.1:8000` with reload boundaries that exclude `.runtime/`, `output/`, `tmp/`, `tests/`, `node_modules/`, and the frontdoor `.next/` build, so pipeline runtime writes do not trigger restarts mid-job. Requires `TP_API_KEY` (set by `./scripts/dev/write_local_env.sh`).
 - `make run-backend-local-noreload` start the same backend without `--reload` for full-stack smokes.
+- `TP_ORCHESTRATOR_USE_QUEUE_BROKER=1 make run-backend-local` start the backend with broker-mediated dispatch and an in-process WorkerRunner pool; the legacy in-band dispatch path remains the default until the Phase 2.D cut-over.
 - `make dev-write-env` invoke `./scripts/dev/write_local_env.sh` to (re)write `/tmp/tp-local-http-all-on.env` with `TP_API_KEY` and `TP_BACKEND_API_KEY` bound to the same value; pass `--rotate` to generate a new key.
 - `make dev-start` run the full local stack: write the canonical env, stop any leftover listeners, launch the backend with reload boundaries, wait for `/ready`, then launch the frontdoor. Logs go to `/tmp/tp-backend.log` and `/tmp/tp-frontdoor.log`.
 - `make dev-stop` kill any local listeners on dev ports (8000, 3000, 8001, 3002) plus any orphan uvicorn parent/child processes; verifies ports are free.
@@ -65,7 +70,7 @@ Quick reference for common workflows and commands in this repo.
 - `make validate-quick` run quick validation skipping browser smokes (`./scripts/validation/run_full_validation_suite.sh --quick`).
 - `make audit-pipeline-readiness` run the safe local four-pipeline readiness audit using checked-in archive fixtures.
 - `make coverage-fast-scope` run branch coverage for the audited `core/config` and `streaming` paths with `term-missing` output.
-- `make coverage-report` generate comprehensive coverage report with HTML (`htmlcov/index.html`), XML (`coverage.xml`), and terminal output; excludes ML/slow/benchmark tests.
+- `make coverage-report` generate comprehensive coverage for `src/transformation_portal` and `src/tp` with HTML (`htmlcov/index.html`), XML (`coverage.xml`), and terminal output; excludes ML/slow/benchmark/stress tests.
 - `make coverage-diff` check diff coverage against `origin/main` with 85% threshold; requires `coverage.xml` from `make coverage-report`.
 - `make coverage-package` generate package-level coverage baseline report for priority packages (`events/`, `storage/`, `runtime/`, `lux_depth_v3/`, `hardening/`, `app.py`).
 - `make clean` remove Python caches and build/test artifacts.
@@ -138,6 +143,8 @@ Quick reference for common workflows and commands in this repo.
 - `cd web/secure-landing && npm run test:browser:install` install the Chromium browser dependency for the frontdoor Playwright smoke suite.
 - `cd web/secure-landing && npm run test:browser` run the supplemental Playwright smoke suite for `/`, `/login`, and the unauthenticated `/portal` auth boundary; this does not replace the governed `make validate-frontdoor-browser` lane.
 - `python3 scripts/validation/generate_design_tokens_doc.py --check` verify the generated `docs/design/tokens.md` reference outside Make.
+- `python3 scripts/ci/cold_zone_report.py coverage.xml --markdown-out docs/testing/cold_zone_baseline_YYYY-MM-DD.md --json-out /tmp/cold-zone-baseline.json` generate the cold-zone coverage baseline after `make coverage-report`.
+- `python3 scripts/ci/check_per_package_branch_coverage.py coverage.xml` enforce cold-zone per-package branch coverage floors after pytest-cov; add `--dry-run` only for local floor proposal/reporting runs.
 - `./scripts/validation/run_full_validation_suite.sh` all-in-one validation orchestrator.
 - `./scripts/validation/run_full_validation_suite.sh --quick` skip browser smokes for faster iteration.
 - `./scripts/validation/run_full_validation_suite.sh --skip-frontdoor` Python-only validation.
@@ -148,6 +155,8 @@ Quick reference for common workflows and commands in this repo.
 - `docker compose up --build transformation-portal-gpu` build/run the CUDA service on host port `8001` with the NVIDIA runtime.
 - `docker compose run --rm transformation-portal-worker` run the one-shot batch processor against mounted `./input`, `./output`, and `./config`.
 - `docker compose up --build transformation-portal-monitor` run the optional monitor dashboard on host port `8080`; this service has its own Compose healthcheck.
+- `docker compose up -d postgres` start the optional Postgres 16 durable orchestrator state backend; pair with `TP_DATABASE_URL=postgresql+asyncpg://tp:tp_dev_password@127.0.0.1:5432/transformation_portal make db-upgrade`.
+- `docker compose up -d redis` start the optional Redis 7 durable QueueBroker backend with AOF and `noeviction`; pair with `TP_ORCHESTRATOR_QUEUE_BACKEND=redis` and `TP_REDIS_URL=redis://127.0.0.1:6379/0`.
 - `Dockerfile` image healthchecks for `cpu`, `gpu`, and `apple-silicon` hit `/healthz` on container port `8000`; avoid adding Compose service healthchecks for `cpu`/`gpu` unless intentionally overriding image healthchecks.
 
 ## ML Layer Bootstrap Script (ADR-032 Platform Matrix)
