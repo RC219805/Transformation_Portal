@@ -347,3 +347,23 @@ async def test_event_store_isolates_jobs(
     assert len(y_events) == 1
     assert x_events[0].seq == 1
     assert y_events[0].seq == 1
+
+
+# ---------------------------------------------------------------------------
+# Memory backend - boundary-condition unit tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("bad_cap", [0, -1, -100])
+def test_memory_event_store_rejects_non_positive_per_job_cap(bad_cap: int) -> None:
+    """Constructing a memory event store with a non-positive cap must fail loud.
+
+    A ``deque(maxlen=0)`` would silently drop every appended event while
+    still incrementing the seq counter, which would break SSE replay in
+    an extremely non-obvious way. The constructor refuses up front so the
+    contract violation is caught at construction time, not at first read.
+    """
+    from transformation_portal.orchestrator.storage.memory import MemoryJobEventStore
+
+    with pytest.raises(RepositoryError):
+        MemoryJobEventStore(per_job_cap=bad_cap)

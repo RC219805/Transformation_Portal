@@ -21,7 +21,6 @@ from transformation_portal.orchestrator.storage.base import (
     RepositoryError,
 )
 
-_TERMINAL_STATES = {"succeeded", "partial", "failed", "canceled"}
 _ACTIVE_STATES = {"queued", "running"}
 
 
@@ -153,6 +152,12 @@ class MemoryJobEventStore(JobEventStore):
     DEFAULT_PER_JOB_CAP = 4096
 
     def __init__(self, *, per_job_cap: int = DEFAULT_PER_JOB_CAP) -> None:
+        if per_job_cap <= 0:
+            raise RepositoryError(
+                f"per_job_cap must be positive; got {per_job_cap!r}. A non-positive "
+                "cap silently drops events while incrementing seq counters, which "
+                "would break SSE replay."
+            )
         self._per_job_cap = per_job_cap
         self._events: Dict[str, Deque[JobEvent]] = defaultdict(lambda: deque(maxlen=per_job_cap))
         self._next_seq: Dict[str, int] = defaultdict(lambda: 1)

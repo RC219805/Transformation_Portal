@@ -64,11 +64,18 @@ class JobRecord:
     def copy(self) -> "JobRecord":
         """Return a fully-isolated copy.
 
-        Container fields are deep-copied so callers mutating nested
-        structures (e.g. ``record.request["args"]["foo"] = ...``) cannot
-        reach back into the repository's stored state. ``artifact_lookup``
-        values are ``Path`` instances and are immutable on the relevant
-        attributes, but we deep-copy through them for uniformity.
+        Container fields with mutable nested values (``request``,
+        ``effective_request``, ``artifacts``, ``run_summary``, ``error``)
+        are deep-copied so callers mutating nested structures
+        (e.g. ``record.request["args"]["foo"] = ...``) cannot reach back
+        into the repository's stored state.
+
+        ``logs_tail`` is shallow-copied via ``list(...)``: its entries
+        are ``str``, which is immutable.
+
+        ``artifact_lookup`` is shallow-copied via ``dict(...)``: its
+        values are ``pathlib.Path``, whose user-visible attributes are
+        immutable.
         """
         return replace(
             self,
