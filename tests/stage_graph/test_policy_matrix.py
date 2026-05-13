@@ -67,7 +67,7 @@ def test_device_policy_can_use_batch_respects_memory_headroom() -> None:
 
 
 @pytest.mark.parametrize(
-    ("preset", "expected"),
+    ("preset", "expected", "unchanged_fields"),
     [
         (
             QualityPreset.DRAFT,
@@ -76,8 +76,8 @@ def test_device_policy_can_use_batch_respects_memory_headroom() -> None:
                 "enhancement_strength": 0.3,
                 "clarity_strength": 0.2,
                 "enable_materials": False,
-                "material_strength": 0.6,
             },
+            ("material_strength",),
         ),
         (
             QualityPreset.STANDARD,
@@ -88,6 +88,7 @@ def test_device_policy_can_use_batch_respects_memory_headroom() -> None:
                 "enable_materials": True,
                 "material_strength": 0.5,
             },
+            (),
         ),
         (
             QualityPreset.HIGH,
@@ -98,6 +99,7 @@ def test_device_policy_can_use_batch_respects_memory_headroom() -> None:
                 "enable_materials": True,
                 "material_strength": 0.7,
             },
+            (),
         ),
         (
             QualityPreset.PRODUCTION,
@@ -108,20 +110,25 @@ def test_device_policy_can_use_batch_respects_memory_headroom() -> None:
                 "enable_materials": True,
                 "material_strength": 0.8,
             },
+            (),
         ),
     ],
 )
 def test_quality_policy_apply_preset_exact_fields(
     preset: QualityPreset,
     expected: dict[str, float | bool],
+    unchanged_fields: tuple[str, ...],
 ) -> None:
     policy = QualityPolicy()
+    before = {field_name: getattr(policy, field_name) for field_name in unchanged_fields}
 
     policy.apply_preset(preset)
 
     assert policy.preset is preset
     for field_name, expected_value in expected.items():
         assert getattr(policy, field_name) == expected_value
+    for field_name, before_value in before.items():
+        assert getattr(policy, field_name) == before_value
 
 
 @pytest.mark.parametrize(
@@ -287,6 +294,11 @@ def test_policy_engine_create_policy_defaults_without_inputs(
 
     assert policy.scene_type is SceneType.UNKNOWN
     assert policy.quality.preset is QualityPreset.STANDARD
+    assert policy.quality.upscale_factor == 1.0
+    assert policy.quality.enhancement_strength == 0.7
+    assert policy.quality.clarity_strength == 0.5
+    assert policy.quality.enable_materials is True
+    assert policy.quality.material_strength == 0.6
     assert policy.device.prefer_gpu is True
     assert policy.caching.enabled is True
     assert policy.enable_parallel is True
