@@ -94,7 +94,7 @@ Still net-new (follow-up commits / PRs):
 
 ### 5.2 Phase 2 - worker split
 
-**Updated 2026-05-13: Phases 2.A, 2.B, 2.C, and 2.D have landed.**
+**Updated 2026-05-13: Phases 2.A, 2.B, 2.C, 2.D, and 2.E have landed.**
 
 Already done:
 

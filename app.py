@@ -5961,6 +5961,14 @@ async def _request_cancel(job: Job) -> None:
     try:
         broker = get_queue_broker()
     except Exception:  # noqa: BLE001 - broker construction is best-effort
+        # Now that broker dispatch is the only execution path, a
+        # construction failure here means the cancel cannot reach a
+        # potentially-running job. Log so misconfiguration / outages
+        # surface in production logs instead of looking like
+        # successful cancels; the handler still completes (the
+        # in-process Job is marked ``cancel_requested=True`` above so
+        # any local cleanup paths still observe the intent).
+        LOGGER.exception("queue broker unavailable; skipping broker-mediated cancel for job %s", job.id)
         broker = None
     if broker is not None:
         try:
@@ -8747,7 +8755,11 @@ async def _create_job(
                 headers=job_admission_headers,
             )
         # Materialise output_dir only after admission succeeds so 429-rejected
-        # requests never leave behind directories on disk.
+        # requests never leave behind directories on disk. Track whether the
+        # directory existed before we materialised it so the dispatch
+        # rollback path below can clean up an empty dir we just created
+        # without ever touching a pre-existing one.
+        output_dir_existed_pre_dispatch = trusted_output_dir is not None and trusted_output_dir.is_dir()
         try:
             _materialize_dispatch_output_dir(pipeline, trusted_output_dir)
         except JobPreflightError as exc:
@@ -8773,9 +8785,15 @@ async def _create_job(
         # Broker enqueue raised after we already admitted the job. The
         # enqueue may have partially succeeded; roll back the JOBS entry
         # and let the client retry. Detailed cause is logged inside
-        # ``_dispatch_job``.
+        # ``_dispatch_job``. Also reclaim the materialised output_dir
+        # when WE created it and it is still empty — pre-existing dirs
+        # and dirs with content are left untouched because ``rmdir``
+        # silently fails on non-empty directories.
         JOBS.pop(jid, None)
         EVENT_SUBSCRIBERS.pop(jid, None)
+        if trusted_output_dir is not None and not output_dir_existed_pre_dispatch:
+            with suppress(OSError):
+                trusted_output_dir.rmdir()
         return _error_response(
             503,
             code="QUEUE_UNAVAILABLE",
