@@ -1,10 +1,17 @@
 """Phase 1.D - byte-identical wire-shape regression for /v[12]/jobs routes.
 
-The orchestrator's success-path responses move from
-``JSONResponse(_api_envelope(...))`` to returning Pydantic envelope
-models directly. FastAPI's ``response_model=`` then validates the
-response at runtime, but only if the bytes on the wire are
-*semantically identical* to today's output. This file pins that.
+The orchestrator's four success-path job helpers (``_create_job``,
+``_list_jobs``, ``_get_job``, ``_cancel_job``) now construct a typed
+``ApiEnvelope[T]`` Pydantic model and serialize via
+``model_dump(by_alias=True, exclude_unset=True)``, wrapped in
+``JSONResponse(...)``. Runtime validation comes from the Pydantic
+construction itself - bad field types or missing required fields
+raise at handler time. FastAPI's ``response_model=`` decorator stays
+for OpenAPI typing but does not re-serialize, since the handler
+returns a ``JSONResponse``. (Returning a bare Pydantic model would
+break internal-helper callers that call the helpers directly and
+``.body.decode("utf-8")`` the result; the ``JSONResponse`` wrapper
+preserves that contract while still gaining runtime validation.)
 
 Two layers of coverage:
 
@@ -20,18 +27,21 @@ Two layers of coverage:
    real ``TestClient``: exercise every success-path response (create,
    list, get, cancel, both v1 and v2) and pin the four envelope
    keys (``schema``, ``success``, ``data``, ``error``) plus the
-   per-payload field set. Catches FastAPI-introduced shape changes.
+   per-payload field set. Catches drift in either the Pydantic
+   serialization config or the helper inputs.
 
 The serialization knob that makes Pydantic match the legacy helper
 is ``exclude_unset=True``: legacy ``_api_envelope`` mirrors whatever
 dict the caller passed in (e.g. ``_cancel_job`` passes
 ``{"id": ..., "state": ...}`` with no ``events_url`` key), and
 ``JobBriefData(id=..., state=...)`` with ``events_url`` unset and
-``exclude_unset=True`` produces the same shape. Routes that refactor
-to return Pydantic envelopes use ``response_model_exclude_unset=True``
-for the same reason.
+``exclude_unset=True`` produces the same shape. The handler dumps
+with the same flag inline.
 
 SSE event payloads stay manual and are intentionally out of scope.
+The error path (``_error_response``) is also unchanged - errors
+still emit through ``ErrorEnvelope``-shaped JSON via
+``JSONResponse``.
 """
 
 from __future__ import annotations

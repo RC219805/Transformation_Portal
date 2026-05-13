@@ -37,7 +37,6 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 from starlette.responses import Response, StreamingResponse
 
 from transformation_portal.api.v1 import (
-    ApiEnvelope,
     ConfigMetadataEnvelope,
     ConfigPreviewEnvelope,
     HealthzResponse,
