@@ -143,6 +143,10 @@ export class RedisSessionStore {
       // is called explicitly.
       return;
     }
+    const throttleKey = attempt.throttle_key;
+    if (!throttleKey) {
+      throw new Error("recordLoginAttempt requires attempt.throttle_key");
+    }
     // Score = attempted_at ms; member = unique attempt id (epoch ms +
     // random suffix so duplicates within the same millisecond don't
     // collapse — ZADD uses member identity).

@@ -149,3 +149,146 @@ test("RedisSessionStore exposes the redis backend identifier", () => {
   });
   assert.equal(store.backend, "redis");
 });
+
+// ---------------------------------------------------------------------------
+// RedisSessionStore login-throttle path — exercised with an injected fake
+// client so we do not need a live ioredis connection (and so the typo class
+// of bug Copilot caught on PR #1771 can't slip through again).
+// ---------------------------------------------------------------------------
+
+
+function _makeFakeRedisClient() {
+  const zsets = new Map();
+  const ttls = new Map();
+  const calls = [];
+  return {
+    calls,
+    zsets,
+    ttls,
+    async zadd(key, score, member) {
+      calls.push(["zadd", key, score, member]);
+      let bucket = zsets.get(key);
+      if (!bucket) {
+        bucket = [];
+        zsets.set(key, bucket);
+      }
+      bucket.push({ score, member });
+      return 1;
+    },
+    async pexpire(key, ttlMs) {
+      calls.push(["pexpire", key, ttlMs]);
+      ttls.set(key, ttlMs);
+      return 1;
+    },
+    async zcount(key, min, max) {
+      calls.push(["zcount", key, min, max]);
+      const bucket = zsets.get(key) || [];
+      return bucket.filter((entry) => {
+        const lowOk = min === "-inf" || entry.score >= Number(min);
+        const highOk = max === "+inf" || entry.score <= Number(max);
+        return lowOk && highOk;
+      }).length;
+    },
+    async del(key) {
+      calls.push(["del", key]);
+      zsets.delete(key);
+      ttls.delete(key);
+      return 1;
+    }
+  };
+}
+
+test("RedisSessionStore.recordLoginAttempt writes the ZSET member keyed by throttle_key", async () => {
+  const fake = _makeFakeRedisClient();
+  const store = new RedisSessionStore({
+    redisUrl: "redis://fake",
+    keyPrefix: "tp:test:",
+    idleTimeoutMs: 60_000,
+    absoluteTimeoutMs: 3_600_000,
+    client: fake
+  });
+
+  await store.recordLoginAttempt({
+    throttle_key: "user-a",
+    attempted_at: 1_000,
+    success: 0,
+    remote_addr: "127.0.0.1"
+  });
+
+  // Must use ``attempt.throttle_key`` (Phase 3.A typo regression — pre-fix
+  // this would have thrown ``ReferenceError: throttleKey is not defined``).
+  const zaddCall = fake.calls.find((entry) => entry[0] === "zadd");
+  assert.ok(zaddCall, "recordLoginAttempt must call zadd");
+  assert.equal(zaddCall[1], "tp:test:login:user-a");
+  assert.equal(zaddCall[2], 1_000);
+
+  const pexpireCall = fake.calls.find((entry) => entry[0] === "pexpire");
+  assert.ok(pexpireCall, "recordLoginAttempt must set TTL on the bucket");
+  assert.equal(pexpireCall[1], "tp:test:login:user-a");
+  assert.equal(pexpireCall[2], 3_600_000);
+});
+
+test("RedisSessionStore.recordLoginAttempt is a no-op for successful logins", async () => {
+  const fake = _makeFakeRedisClient();
+  const store = new RedisSessionStore({
+    redisUrl: "redis://fake",
+    keyPrefix: "tp:test:",
+    idleTimeoutMs: 60_000,
+    absoluteTimeoutMs: 3_600_000,
+    client: fake
+  });
+  await store.recordLoginAttempt({
+    throttle_key: "user-a",
+    attempted_at: 1_000,
+    success: 1,
+    remote_addr: "127.0.0.1"
+  });
+  // Successful logins must not touch the failure bucket; the contract says
+  // ``resetLoginAttempts`` is the only path that clears it.
+  assert.equal(fake.calls.length, 0);
+});
+
+test("RedisSessionStore.countLoginFailures filters by score window", async () => {
+  const fake = _makeFakeRedisClient();
+  const store = new RedisSessionStore({
+    redisUrl: "redis://fake",
+    keyPrefix: "tp:test:",
+    idleTimeoutMs: 60_000,
+    absoluteTimeoutMs: 3_600_000,
+    client: fake
+  });
+  // Seed three failure attempts.
+  for (const ts of [1_000, 2_000, 3_000]) {
+    await store.recordLoginAttempt({
+      throttle_key: "user-a",
+      attempted_at: ts,
+      success: 0,
+      remote_addr: "127.0.0.1"
+    });
+  }
+  assert.equal(await store.countLoginFailures("user-a", 1_500), 2);
+  assert.equal(await store.countLoginFailures("user-a", 0), 3);
+  assert.equal(await store.countLoginFailures("user-b", 0), 0);
+});
+
+test("RedisSessionStore.recordLoginAttempt rejects missing throttle_key", async () => {
+  const fake = _makeFakeRedisClient();
+  const store = new RedisSessionStore({
+    redisUrl: "redis://fake",
+    keyPrefix: "tp:test:",
+    idleTimeoutMs: 60_000,
+    absoluteTimeoutMs: 3_600_000,
+    client: fake
+  });
+  await assert.rejects(
+    () =>
+      store.recordLoginAttempt({
+        throttle_key: "",
+        attempted_at: 1_000,
+        success: 0,
+        remote_addr: "127.0.0.1"
+      }),
+    /throttle_key/
+  );
+  assert.equal(fake.calls.length, 0);
+});
