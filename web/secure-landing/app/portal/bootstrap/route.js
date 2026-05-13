@@ -88,7 +88,7 @@ export async function GET(request) {
       extra: traceId ? { traceId } : {}
     });
     if (authState.revokeSession) {
-      revokeSessionOnAccessFailure(authState.session, authState.errorCode);
+      await revokeSessionOnAccessFailure(authState.session, authState.errorCode);
     }
 
     const response = withTraceparent(applySecurityHeaders(

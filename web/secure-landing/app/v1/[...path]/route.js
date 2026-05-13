@@ -160,7 +160,7 @@ async function handleProxy(request, { params }) {
   if (!authState.ok) {
     const reason = classifyManagedAccessFailure(authState.errorCode);
     if (authState.revokeSession) {
-      revokeSessionOnAccessFailure(authState.session, authState.errorCode);
+      await revokeSessionOnAccessFailure(authState.session, authState.errorCode);
     }
     auditManagedSurfaceFailure("v1_proxy", {
       actor: authState.session,

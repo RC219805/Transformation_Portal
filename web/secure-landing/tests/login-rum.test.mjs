@@ -272,7 +272,7 @@ test("login POST emits no RUM events when the shared RUM master flag is disabled
   try {
     const sessions = await importFresh("../lib/sessions.js");
     const { POST } = await importFresh("../app/login/route.js");
-    const session = sessions.createAnonymousSession();
+    const session = await sessions.createAnonymousSession();
     const request = buildPostRequest({ session, csrfToken: session.csrfToken });
 
     const response = await POST(request);
@@ -298,7 +298,7 @@ test("login POST emits no RUM events when the front-door RUM flag is disabled", 
   try {
     const sessions = await importFresh("../lib/sessions.js");
     const { POST } = await importFresh("../app/login/route.js");
-    const session = sessions.createAnonymousSession();
+    const session = await sessions.createAnonymousSession();
     const request = buildPostRequest({ session, csrfToken: session.csrfToken });
 
     const response = await POST(request);
@@ -325,7 +325,7 @@ test("login POST emits no RUM events when front-door rollout percent samples out
   try {
     const sessions = await importFresh("../lib/sessions.js");
     const { POST } = await importFresh("../app/login/route.js");
-    const session = sessions.createAnonymousSession();
+    const session = await sessions.createAnonymousSession();
     const request = buildPostRequest({ session, csrfToken: session.csrfToken });
 
     const response = await POST(request);
@@ -347,7 +347,7 @@ test("login POST emits attempt + success events on successful credential rotatio
   try {
     const sessions = await importFresh("../lib/sessions.js");
     const { POST } = await importFresh("../app/login/route.js");
-    const session = sessions.createAnonymousSession();
+    const session = await sessions.createAnonymousSession();
     const request = buildPostRequest({ session, csrfToken: session.csrfToken });
 
     const response = await POST(request);
@@ -394,7 +394,7 @@ test("login POST emits attempt + failure(csrf) when the CSRF token mismatches", 
   try {
     const sessions = await importFresh("../lib/sessions.js");
     const { POST } = await importFresh("../app/login/route.js");
-    const session = sessions.createAnonymousSession();
+    const session = await sessions.createAnonymousSession();
     const request = buildPostRequest({ session, csrfToken: "wrong-token" });
 
     const response = await POST(request);
@@ -421,7 +421,7 @@ test("login POST emits attempt + failure(configuration) when no users are config
   try {
     const sessions = await importFresh("../lib/sessions.js");
     const { POST } = await importFresh("../app/login/route.js");
-    const session = sessions.createAnonymousSession();
+    const session = await sessions.createAnonymousSession();
     const request = buildPostRequest({ session, csrfToken: session.csrfToken });
 
     const response = await POST(request);
@@ -447,7 +447,7 @@ test("login POST emits attempt + failure(access) when CF Access verification fai
   try {
     const sessions = await importFresh("../lib/sessions.js");
     const { POST } = await importFresh("../app/login/route.js");
-    const session = sessions.createAnonymousSession();
+    const session = await sessions.createAnonymousSession();
     const form = new URLSearchParams({
       username: "admin",
       password: "correct horse battery staple",
@@ -487,7 +487,7 @@ test("login POST emits attempt + failure(invalid) when the password is wrong", a
   try {
     const sessions = await importFresh("../lib/sessions.js");
     const { POST } = await importFresh("../app/login/route.js");
-    const session = sessions.createAnonymousSession();
+    const session = await sessions.createAnonymousSession();
     const request = buildPostRequest({
       session,
       csrfToken: session.csrfToken,
@@ -524,10 +524,10 @@ test("login POST emits attempt + failure(throttled) when the throttle limit is r
     const remoteAddr = "unknown";
     const throttleKey = `admin@example.com:admin:${remoteAddr}`;
     for (let i = 0; i < 6; i += 1) {
-      sessions.recordLoginAttempt({ throttleKey, success: false, remoteAddr });
+      await sessions.recordLoginAttempt({ throttleKey, success: false, remoteAddr });
     }
 
-    const session = sessions.createAnonymousSession();
+    const session = await sessions.createAnonymousSession();
     const request = buildPostRequest({ session, csrfToken: session.csrfToken });
 
     const response = await POST(request);
@@ -553,7 +553,7 @@ test("login POST success clears a stale client failure marker without setting a 
   try {
     const sessions = await importFresh("../lib/sessions.js");
     const { POST } = await importFresh("../app/login/route.js");
-    const session = sessions.createAnonymousSession();
+    const session = await sessions.createAnonymousSession();
     const request = buildPostRequest({
       session,
       csrfToken: session.csrfToken,
@@ -589,7 +589,7 @@ test("login POST failure clears a stale client success marker without setting a 
   try {
     const sessions = await importFresh("../lib/sessions.js");
     const { POST } = await importFresh("../app/login/route.js");
-    const session = sessions.createAnonymousSession();
+    const session = await sessions.createAnonymousSession();
     const request = buildPostRequest({
       session,
       csrfToken: "wrong-token",
@@ -626,7 +626,7 @@ test("login POST still returns the normal redirect when the RUM emitter fetch re
   try {
     const sessions = await importFresh("../lib/sessions.js");
     const { POST } = await importFresh("../app/login/route.js");
-    const session = sessions.createAnonymousSession();
+    const session = await sessions.createAnonymousSession();
     const request = buildPostRequest({ session, csrfToken: session.csrfToken });
 
     const response = await POST(request);

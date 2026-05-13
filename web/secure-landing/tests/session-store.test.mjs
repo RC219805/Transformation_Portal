@@ -292,3 +292,124 @@ test("RedisSessionStore.recordLoginAttempt rejects missing throttle_key", async 
   );
   assert.equal(fake.calls.length, 0);
 });
+
+// ---------------------------------------------------------------------------
+// Phase 3.B perf regression — the login hot path must NOT trigger a global
+// Redis SCAN of ``${prefix}login:*`` on every credential POST. Codex flagged
+// this on PR #1773: ``sessions.js:pruneLoginAttempts`` was delegated to the
+// store unconditionally, which on the Redis backend translates to a full
+// scan of every throttle bucket twice per login attempt
+// (``isLoginThrottled`` + ``recordLoginAttempt``).
+// ---------------------------------------------------------------------------
+
+
+test("sessions.isLoginThrottled does not trigger a Redis SCAN on the hot login path", async () => {
+  // Phase 3.B regression: pre-fix, ``sessions.pruneLoginAttempts`` delegated
+  // unconditionally to the store, and ``RedisSessionStore.pruneLoginAttempts``
+  // is a ``SCAN ${prefix}login:*`` of every throttle bucket. With many
+  // historical throttle keys that's an O(N) scan per credential POST, and
+  // ``isLoginThrottled`` + ``recordLoginAttempt`` triggered it twice per
+  // attempt. The fix: short-circuit the delegation when the store is
+  // backed by Redis — per-bucket ``PEXPIRE`` (set in ``recordLoginAttempt``)
+  // handles auto-expiry, and ``ZCOUNT(sinceMs, +inf)`` already filters
+  // stale entries from the count.
+  const { __setSessionStoreForTesting, resetSessionStoreSingleton } = await import(
+    "../lib/session-store/index.js"
+  );
+
+  const fake = _makeFakeRedisClient();
+  // Pull the scan response shape that ``RedisSessionStore.pruneLoginAttempts``
+  // uses so the test can observe SCAN invocations if the short-circuit
+  // regresses.
+  fake.scan = async (cursor, ...rest) => {
+    fake.calls.push(["scan", cursor, ...rest]);
+    return ["0", []];
+  };
+  const redisStore = new RedisSessionStore({
+    redisUrl: "redis://fake",
+    keyPrefix: "tp:test:",
+    idleTimeoutMs: 60_000,
+    absoluteTimeoutMs: 3_600_000,
+    client: fake
+  });
+  let pruneInvocations = 0;
+  const originalPrune = redisStore.pruneLoginAttempts.bind(redisStore);
+  redisStore.pruneLoginAttempts = async (...args) => {
+    pruneInvocations += 1;
+    return originalPrune(...args);
+  };
+
+  // Steer ``getConfig().sessionStoreBackend`` to "redis" so the factory's
+  // cache key matches the injected store — otherwise ``getSessionStore()``
+  // sees ``_cachedBackend = "redis"`` but config says "sqlite" and
+  // rebuilds the singleton from scratch.
+  const previousBackend = process.env.TP_FRONTDOOR_SESSION_STORE;
+  const previousRedisUrl = process.env.TP_FRONTDOOR_REDIS_URL;
+  process.env.TP_FRONTDOOR_SESSION_STORE = "redis";
+  process.env.TP_FRONTDOOR_REDIS_URL = "redis://fake";
+
+  __setSessionStoreForTesting(redisStore, "redis");
+  try {
+    const sessions = await import(`../lib/sessions.js?case=${Date.now()}-${Math.random()}`);
+    await sessions.isLoginThrottled("user-a");
+    await sessions.recordLoginAttempt({
+      throttleKey: "user-a",
+      success: false,
+      remoteAddr: "127.0.0.1"
+    });
+    const scanCalls = fake.calls.filter((entry) => entry[0] === "scan");
+    assert.equal(
+      scanCalls.length,
+      0,
+      "Redis SCAN must not run on the login hot path; rely on per-bucket TTL + ZCOUNT instead"
+    );
+    assert.equal(
+      pruneInvocations,
+      0,
+      "sessions.js must skip the store's pruneLoginAttempts for the Redis backend"
+    );
+    // The recordLoginAttempt call must still write the failure + set TTL.
+    const zadd = fake.calls.filter((entry) => entry[0] === "zadd");
+    const pexpire = fake.calls.filter((entry) => entry[0] === "pexpire");
+    assert.equal(zadd.length, 1);
+    assert.equal(pexpire.length, 1);
+  } finally {
+    if (previousBackend === undefined) {
+      delete process.env.TP_FRONTDOOR_SESSION_STORE;
+    } else {
+      process.env.TP_FRONTDOOR_SESSION_STORE = previousBackend;
+    }
+    if (previousRedisUrl === undefined) {
+      delete process.env.TP_FRONTDOOR_REDIS_URL;
+    } else {
+      process.env.TP_FRONTDOOR_REDIS_URL = previousRedisUrl;
+    }
+    resetSessionStoreSingleton();
+  }
+});
+
+
+test("RedisSessionStore.pruneLoginAttempts performs a SCAN-and-trim sweep (baseline behavior)", async () => {
+  // Pin the Redis store's prune semantics so the regression test below can
+  // assert that ``sessions.pruneLoginAttempts`` deliberately bypasses this
+  // path for the Redis backend.
+  const fake = _makeFakeRedisClient();
+  // The fake doesn't seed scan responses; SCAN returns an empty cursor 0
+  // immediately. The test still observes that pruneLoginAttempts CALLS
+  // ``scan`` at least once — that's the expensive global sweep we don't
+  // want triggered on the login hot path.
+  fake.scan = async (cursor, ...rest) => {
+    fake.calls.push(["scan", cursor, ...rest]);
+    return ["0", []];
+  };
+  const store = new RedisSessionStore({
+    redisUrl: "redis://fake",
+    keyPrefix: "tp:test:",
+    idleTimeoutMs: 60_000,
+    absoluteTimeoutMs: 3_600_000,
+    client: fake
+  });
+  await store.pruneLoginAttempts(0);
+  const scanCalls = fake.calls.filter((entry) => entry[0] === "scan");
+  assert.ok(scanCalls.length >= 1, "RedisSessionStore.pruneLoginAttempts must SCAN buckets");
+});

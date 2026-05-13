@@ -86,7 +86,7 @@ function classifyAuthenticatedAccessFailure(errorCode) {
 }
 
 export async function resolveAuthenticatedAccessSession(request, { touch = false } = {}) {
-  const session = getSessionFromRequest(request, { touch });
+  const session = await getSessionFromRequest(request, { touch });
   if (!session?.authenticated) {
     return {
       ok: false,
@@ -143,7 +143,7 @@ export async function resolveAuthenticatedAccessSession(request, { touch = false
   };
 }
 
-export function revokeSessionOnAccessFailure(session, errorCode) {
+export async function revokeSessionOnAccessFailure(session, errorCode) {
   if (!session?.id) return;
-  destroySession(session.id, errorCode || "access_validation_failure");
+  await destroySession(session.id, errorCode || "access_validation_failure");
 }

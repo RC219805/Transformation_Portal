@@ -158,7 +158,7 @@ export async function GET(request) {
     }
 
     if (authState.revokeSession) {
-      revokeSessionOnAccessFailure(authState.session, authState.errorCode);
+      await revokeSessionOnAccessFailure(authState.session, authState.errorCode);
     }
 
     const response = applySecurityHeaders(NextResponse.redirect(loginUrl, 302));

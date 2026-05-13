@@ -43,7 +43,7 @@ export async function POST(request) {
 
   emitLogoutRum(LOGOUT_RUM_EVENT_TYPES.ATTEMPT);
 
-  const session = getSessionFromRequest(request, { touch: false });
+  const session = await getSessionFromRequest(request, { touch: false });
   if (!validateOriginAndReferrer(request)) {
     audit("csrf_failure", { path: "/logout" });
     emitLogoutRum(LOGOUT_RUM_EVENT_TYPES.FAILURE, LOGOUT_RUM_FAILURE_CODES.CSRF);
@@ -62,7 +62,7 @@ export async function POST(request) {
   }
 
   if (session?.id) {
-    destroySession(session.id, "logout");
+    await destroySession(session.id, "logout");
   }
 
   emitLogoutRum(LOGOUT_RUM_EVENT_TYPES.SUCCESS);

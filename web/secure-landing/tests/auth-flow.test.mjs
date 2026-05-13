@@ -181,8 +181,8 @@ test("session rotation creates a new authenticated session id", async () => {
   const temp = withTempDb();
   try {
     const sessions = await import(`../lib/sessions.js?case=${Date.now()}`);
-    const anon = sessions.createAnonymousSession();
-    const rotated = sessions.rotateAuthenticatedSession(anon, {
+    const anon = await sessions.createAnonymousSession();
+    const rotated = await sessions.rotateAuthenticatedSession(anon, {
       username: "admin",
       accessEmail: "admin@example.com",
       role: "admin"
@@ -190,7 +190,7 @@ test("session rotation creates a new authenticated session id", async () => {
 
     assert.notEqual(rotated.id, anon.id);
     assert.equal(rotated.authenticated, true);
-    assert.equal(sessions.getSessionById(rotated.id, { touch: false })?.username, "admin");
+    assert.equal((await sessions.getSessionById(rotated.id, { touch: false }))?.username, "admin");
   } finally {
     temp.cleanup();
   }
@@ -203,14 +203,14 @@ test("login throttling trips after repeated failures in the same window", async 
     const key = "admin@example.com:admin:127.0.0.1";
 
     for (let index = 0; index < 5; index += 1) {
-      sessions.recordLoginAttempt({
+      await sessions.recordLoginAttempt({
         throttleKey: key,
         success: false,
         remoteAddr: "127.0.0.1"
       });
     }
 
-    assert.equal(sessions.isLoginThrottled(key), true);
+    assert.equal(await sessions.isLoginThrottled(key), true);
   } finally {
     temp.cleanup();
   }
