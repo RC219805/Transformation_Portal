@@ -64,10 +64,10 @@ than introduce parallel implementations.
 
 | Plan abstraction | Existing primitive | Location | Reuse note |
 | --- | --- | --- | --- |
-| `JobEventStore` | `EventStore` (generic JSONL on disk; `Event` dataclass with `id, type, timestamp, data, metadata, user, correlation_id`) | `src/transformation_portal/events/store.py` | Currently orphaned. Wire to job lifecycle for Phase 1 instead of creating a new abstraction. |
+| `JobEventStore` | `EventStore` (per-event `.json` files written under date directories `<storage>/YYYY-MM-DD/<event_id>.json`; `Event` dataclass with `id, type, timestamp, data, metadata, user, correlation_id`) | `src/transformation_portal/events/store.py` | Currently orphaned. Wire to job lifecycle for Phase 1 instead of creating a new abstraction. |
 | Phase 7 organization, RBAC, and quota model | `TenantContext`, `TenantPolicy`, `TenantManager`, `TenantAwareFSGuard`, `create_tenant_sandbox()` (per-tenant `gpu_quota`, `network_allowed`, `allowed_node_types`) | `src/transformation_portal/core/security/tenant.py` | Fully tested but unwired in the request path. Phase 7 should ground the user, organization, and quota model on these primitives. |
 | Phase 6 audit-event table | `tp.phase4.provenance_capture`, `tp.crypto.merkle`, `attestation/{detached,dsse,verify,run_card_intoto}.py` | `src/tp/phase4/`, `src/transformation_portal/attestation/` | Cryptographic provenance is authoritative. The new operational audit table must mirror events, not duplicate the attestation chain. |
-| `ArtifactStore` (Phase 4) | `JobArtifactIndexResult`, `_artifact_fingerprint`, `_validate_resolved_job_artifact_path`, `ArtifactPathOutsideJobOutputDirError`; `ArtifactManager.compute_artifact_merkle_root` | `src/transformation_portal/portal/job_artifacts.py`, `src/transformation_portal/lux_depth_v3/artifact_manager.py` | Path-traversal validation, SHA-256 fingerprinting, content-type detection, and Merkle roots are already implemented. The S3 backend must preserve all of these guarantees. |
+| `ArtifactStore` (Phase 4) | `JobArtifactIndexResult`, `_artifact_fingerprint`, `_validate_resolved_job_artifact_path`, `ArtifactPathOutsideJobOutputDirError`; `ArtifactManager.compute_merkle_root(...)` (method) and module-level `compute_artifact_merkle_root(...)` | `src/transformation_portal/portal/job_artifacts.py`, `src/transformation_portal/lux_depth_v3/artifact_manager.py` | Path-traversal validation, SHA-256 fingerprinting, content-type detection, and Merkle roots are already implemented. The S3 backend must preserve all of these guarantees. |
 | Phase 3 frontdoor session readiness gate | `evaluateSessionScaling()` (returns `ok: false` for `multi_instance` and `ephemeral_runtime` with `*_requires_external_session_store` reason codes) | `web/secure-landing/lib/session-scaling.js` | Add a `redis` branch that flips the gate to `ok: true` rather than rewriting the readiness check. |
 | Phase 0 production-gap doc | This document | `docs/governance/PRODUCTION_HARDENING_GAP_2026-05-13.md` | Treat as the authoritative reference cited by Phase 1 through Phase 7 PRs. |
 
@@ -90,9 +90,10 @@ implementations or precursors for the items below.
 ### 5.2 Phase 2 - worker split
 
 - No queue broker, no Redis client, no lease and no heartbeat machinery.
-- Execution today is in-process: `_run_job_runner` calls
-  `asyncio.create_subprocess_exec` (`app.py:8808`). Exit code 0 yields
-  `succeeded`; nonzero yields `failed` with no retryability concept.
+- Execution today is in-process: `async def _run_job(job, argv)`
+  (`app.py:8788`) calls `asyncio.create_subprocess_exec` at `app.py:8808`.
+  Exit code 0 yields `succeeded`; nonzero yields `failed` with no
+  retryability concept.
 - No `worker_lost` state, no stale-job sweeper, no deduplication.
 - Env vars `TP_ORCHESTRATOR_QUEUE_BACKEND`, `TP_REDIS_URL` are unrecognized.
 
