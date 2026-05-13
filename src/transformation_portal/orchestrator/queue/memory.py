@@ -49,11 +49,6 @@ class MemoryQueueBroker(QueueBroker):
         # Lets ``enqueue`` reject collisions cheaply and ``queued_job_ids``
         # / ``leased_job_ids`` stay consistent without scanning.
         self._tracked: Set[str] = set()
-        # Cancellation marker for jobs that were cancelled before any
-        # worker called ``acquire_lease``: the request is dropped from
-        # the queue and the cancellation marker is consumed as a no-op
-        # so a future enqueue with the same id is allowed.
-        self._cancelled_pre_lease: Set[str] = set()
         self._lock = asyncio.Lock()
 
     async def enqueue(self, request: JobEnqueueRequest) -> None:
@@ -72,26 +67,21 @@ class MemoryQueueBroker(QueueBroker):
         if lease_seconds <= 0:
             raise QueueBrokerError("lease_seconds must be positive")
         async with self._lock:
-            while self._queue:
-                request = self._queue.popleft()
-                if request.job_id in self._cancelled_pre_lease:
-                    # Pre-lease cancellation consumed; drop the queue entry.
-                    self._cancelled_pre_lease.discard(request.job_id)
-                    self._tracked.discard(request.job_id)
-                    continue
-                deadline = time.monotonic() + lease_seconds
-                self._leases[request.job_id] = _Lease(
-                    worker_id=worker_id,
-                    deadline=deadline,
-                    request=request,
-                )
-                return JobLease(
-                    job_id=request.job_id,
-                    worker_id=worker_id,
-                    deadline=deadline,
-                    request=request,
-                )
-            return None
+            if not self._queue:
+                return None
+            request = self._queue.popleft()
+            deadline = time.monotonic() + lease_seconds
+            self._leases[request.job_id] = _Lease(
+                worker_id=worker_id,
+                deadline=deadline,
+                request=request,
+            )
+            return JobLease(
+                job_id=request.job_id,
+                worker_id=worker_id,
+                deadline=deadline,
+                request=request,
+            )
 
     async def extend_lease(
         self,
@@ -138,10 +128,17 @@ class MemoryQueueBroker(QueueBroker):
                 return False
             lease = self._leases.get(job_id)
             if lease is not None:
+                # In-flight: surface via ``LeaseStatus.cancelled`` on
+                # the next ``extend_lease``; the worker handles the
+                # graceful shutdown of its subprocess.
                 lease.cancellation_requested = True
                 return True
-            # Still queued; mark for drop at the next acquire.
-            self._cancelled_pre_lease.add(job_id)
+            # Still queued: drop the entry immediately so
+            # ``queued_job_ids`` reflects reality and a fresh
+            # ``enqueue`` of the same id is allowed without first
+            # waiting for a worker to ``acquire_lease``.
+            self._queue = deque(request for request in self._queue if request.job_id != job_id)
+            self._tracked.discard(job_id)
             return True
 
     async def queued_job_ids(self) -> List[str]:
@@ -157,7 +154,6 @@ class MemoryQueueBroker(QueueBroker):
             self._queue.clear()
             self._leases.clear()
             self._tracked.clear()
-            self._cancelled_pre_lease.clear()
 
 
 __all__ = ["MemoryQueueBroker"]

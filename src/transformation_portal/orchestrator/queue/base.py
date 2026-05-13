@@ -118,12 +118,16 @@ class QueueBroker(ABC):
 
     @abstractmethod
     async def enqueue(self, request: JobEnqueueRequest) -> None:
-        """Admit a job for execution. Idempotent on ``job_id``.
+        """Admit a job for execution.
 
-        A second ``enqueue`` for the same ``job_id`` while the first
-        is still pending or running raises ``QueueBrokerError`` so
-        admission collisions surface loudly rather than producing a
-        duplicate execution.
+        ``job_id`` is treated as a unique admission token: while the
+        first enqueue is still pending in the queue or held by a
+        worker, a second ``enqueue`` for the same ``job_id`` raises
+        ``QueueBrokerError``. Admission collisions therefore surface
+        loudly at the orchestrator boundary rather than producing a
+        duplicate execution downstream. Re-enqueueing the same id is
+        only valid after the broker has released the previous slot
+        (worker called ``release_lease`` or the job was cancelled).
         """
 
     @abstractmethod
@@ -171,8 +175,12 @@ class QueueBroker(ABC):
 
         Returns the list of reclaimed job ids so callers can
         ``await repo.update(jid, ...)`` them as ``worker_lost`` in
-        Phase 2.D. Memory backend uses real-time clock; Postgres /
-        Redis backends accept ``now`` so tests can pin time.
+        Phase 2.D. The ``now`` parameter is the time source the
+        backend compares against the stored lease deadlines: the
+        memory backend uses ``time.monotonic()`` (so wall-clock
+        adjustments don't move deadlines), and the Phase 2.B Redis
+        backend will use Redis server time. Tests pass an explicit
+        ``now`` to pin time deterministically.
         """
 
     @abstractmethod

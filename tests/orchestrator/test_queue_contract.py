@@ -232,10 +232,18 @@ async def test_reclaim_no_op_when_no_leases(broker: QueueBroker) -> None:
 
 async def test_cancel_pre_lease_drops_queue_entry(broker: QueueBroker) -> None:
     await broker.enqueue(_request("job-cancel-pre"))
+    assert await broker.queued_job_ids() == ["job-cancel-pre"]
+
     assert await broker.cancel("job-cancel-pre") is True
-    # The next acquire skips the cancelled entry and returns None.
+    # The cancelled job_id must be gone from the queue immediately,
+    # not deferred to the next acquire. queued_job_ids reflects the
+    # post-cancel reality.
+    assert await broker.queued_job_ids() == []
+    # The next acquire returns None (queue is empty).
     assert await broker.acquire_lease("worker-1", lease_seconds=10.0) is None
-    # And a fresh enqueue with the same id is allowed (the slot was freed).
+    # And a fresh enqueue with the same id is allowed without first
+    # waiting for a worker to acquire (the slot was freed at cancel
+    # time).
     await broker.enqueue(_request("job-cancel-pre"))
     second = await broker.acquire_lease("worker-1", lease_seconds=10.0)
     assert second is not None and second.job_id == "job-cancel-pre"

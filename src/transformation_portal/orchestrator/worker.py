@@ -53,7 +53,15 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class WorkerConfig:
-    """Tunables for the worker loop. All optional, all env-overridable."""
+    """Tunables for the worker loop.
+
+    ``worker_id`` is required so ``acquire_lease`` / ``extend_lease``
+    can identify the lease holder; the timing knobs are optional and
+    env-overridable via ``_config_from_env``. Production callers
+    typically build the config via ``_config_from_env``, which
+    generates a ``worker_id`` of the form ``worker_<8 hex chars>``
+    when ``TP_WORKER_ID`` is unset.
+    """
 
     worker_id: str
     lease_seconds: float = 30.0
@@ -72,12 +80,14 @@ class CancelledByOrchestrator(Exception):
     """
 
 
-# Signature: ``executor(request, *, cancellation_event) -> int`` where the
+# Signature: ``executor(request, cancellation_event) -> int`` where the
 # return value is an exit code (0 = succeeded, nonzero = failed) that the
-# caller will translate into a JobRepository state update. The
-# ``cancellation_event`` is set by the heartbeat loop when the broker reports
-# ``LeaseStatus.cancelled``; the executor must observe it and exit promptly
-# so the lease can be released.
+# caller will translate into a JobRepository state update. Both arguments
+# are positional so the type alias matches the ``WorkerRunner.step`` /
+# ``_default_executor`` call shape exactly. ``cancellation_event`` is set
+# by the heartbeat loop when the broker reports ``LeaseStatus.cancelled``;
+# the executor must observe it and exit promptly so the lease can be
+# released.
 JobExecutor = Callable[[JobEnqueueRequest, asyncio.Event], Awaitable[int]]
 
 
@@ -211,8 +221,14 @@ async def run_worker_forever(
     """Supervisor loop with exponential backoff when the queue is empty.
 
     ``stop_event`` lets tests / signal handlers ask the loop to exit
-    cleanly between jobs.
+    cleanly between jobs. When this function constructs the broker
+    itself (caller passed ``broker=None``), it also disposes of it
+    via ``await broker.close()`` on exit so the Phase 2.B Redis
+    backend doesn't leak network connections on SIGINT/SIGTERM.
+    Brokers passed in by the caller are left to the caller's
+    lifecycle.
     """
+    broker_was_constructed = broker is None
     broker = broker if broker is not None else get_queue_broker()
     config = config if config is not None else _config_from_env()
     runner = WorkerRunner(broker=broker, config=config, executor=executor)
@@ -222,18 +238,25 @@ async def run_worker_forever(
     logger.info(
         "worker %s starting (lease=%ss, hb=%ss)", config.worker_id, config.lease_seconds, config.heartbeat_interval_seconds
     )
-    while not stop_event.is_set():
-        did_work = await runner.step()
-        if did_work:
-            backoff = config.poll_interval_seconds
-            continue
-        # Empty queue - exponential backoff capped at max_poll_backoff_seconds.
-        try:
-            await asyncio.wait_for(stop_event.wait(), timeout=backoff)
-        except asyncio.TimeoutError:
-            pass
-        backoff = min(backoff * 2, config.max_poll_backoff_seconds)
-    logger.info("worker %s stopping", config.worker_id)
+    try:
+        while not stop_event.is_set():
+            did_work = await runner.step()
+            if did_work:
+                backoff = config.poll_interval_seconds
+                continue
+            # Empty queue - exponential backoff capped at max_poll_backoff_seconds.
+            try:
+                await asyncio.wait_for(stop_event.wait(), timeout=backoff)
+            except asyncio.TimeoutError:
+                pass
+            backoff = min(backoff * 2, config.max_poll_backoff_seconds)
+    finally:
+        if broker_was_constructed:
+            try:
+                await broker.close()
+            except Exception:  # noqa: BLE001 - never block shutdown on close
+                logger.exception("worker %s broker close failed", config.worker_id)
+        logger.info("worker %s stopping", config.worker_id)
 
 
 def _config_from_env() -> WorkerConfig:
