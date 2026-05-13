@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_serializer
+from pydantic import BaseModel, ConfigDict, Field, SerializerFunctionWrapHandler, field_validator, model_serializer
 
 ErrorCode = Literal[
     # Top-level envelope error codes emitted by orchestrator HTTP surfaces.
@@ -89,7 +89,7 @@ class ErrorObject(BaseModel):
         return value
 
     @model_serializer(mode="wrap")
-    def _drop_unset_retriable(self, handler):
+    def _drop_unset_retriable(self, handler: SerializerFunctionWrapHandler) -> dict[str, Any]:
         """Omit ``retriable`` from the wire when not opted in.
 
         Phase 2.D additive contract: callers that set ``retriable`` to
