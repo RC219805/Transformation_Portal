@@ -210,12 +210,21 @@ class JobRepository(ABC):
     ) -> List[str]:
         """Mark any ``queued``/``running`` job not in ``live_job_ids`` as ``worker_lost``.
 
-        Used by the Phase 1.C restart sweeper and the Phase 2.D
-        broker-reclaim reconciler. Sets ``state=worker_lost``,
-        ``finished_at=now``, ``done_published_at=now``, and an
-        ``error`` payload carrying ``reason_code`` plus
-        ``retriable=True`` (the work itself is not broken, the
-        worker that held it is). Returns the list of swept ids.
+        Used by the Phase 1.C restart sweeper (``sweep_orphaned_jobs``
+        in ``orchestrator/recovery.py``) when the process is starting
+        and the runtime registry is empty by construction, so every
+        active repository row is orphaned by definition. Sets
+        ``state=worker_lost``, ``finished_at=now``,
+        ``done_published_at=now``, and an ``error`` payload carrying
+        ``reason_code`` plus ``retriable=True`` (the work itself is
+        not broken, the worker that held it is). Returns the list of
+        swept ids.
+
+        The Phase 2.D running-time reclaim reconciler does NOT call
+        this method — it writes per-job ``state=worker_lost`` through
+        ``update()`` so the in-process ``Job`` and the repository row
+        flip atomically per reclaimed lease, rather than in a bulk
+        sweep keyed on ``live_job_ids``.
         """
 
     @abstractmethod

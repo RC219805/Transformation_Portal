@@ -346,22 +346,25 @@ def test_lease_reclaim_marks_job_worker_lost(monkeypatch: pytest.MonkeyPatch, tm
 
     try:
         with TestClient(orchestrator_app.app, headers={"x-api-key": "contract-secret"}) as client:
-            response = client.post("/v1/jobs", json=_build_payload(tmp_path))
-            assert response.status_code == 200, response.text
-            job_id = response.json()["data"]["id"]
-            _wait_for_state(job_id, expected={"running"})
+            try:
+                response = client.post("/v1/jobs", json=_build_payload(tmp_path))
+                assert response.status_code == 200, response.text
+                job_id = response.json()["data"]["id"]
+                _wait_for_state(job_id, expected={"running"})
 
-            # Wait for the reclaim sweep to drive the Job terminal.
-            _wait_for_finished(job_id, timeout=5.0)
-            job = orchestrator_app.JOBS[job_id]
-            assert job.state == "worker_lost"
-            assert isinstance(job.error, dict)
-            assert job.error.get("retriable") is True
-            assert job.error.get("code") == orchestrator_app.WORKER_LOST_REASON_RECLAIMED
-
-            # Let the executor unblock so the TestClient shutdown
-            # does not hang waiting for it.
-            release.set()
+                # Wait for the reclaim sweep to drive the Job terminal.
+                _wait_for_finished(job_id, timeout=5.0)
+                job = orchestrator_app.JOBS[job_id]
+                assert job.state == "worker_lost"
+                assert isinstance(job.error, dict)
+                assert job.error.get("retriable") is True
+                assert job.error.get("code") == orchestrator_app.WORKER_LOST_REASON_RECLAIMED
+            finally:
+                # Always unblock the executor thread so an assertion
+                # failure above cannot leak the ``asyncio.to_thread``
+                # worker — pytest cancellation does not stop the
+                # underlying ``threading.Event.wait`` once entered.
+                release.set()
     finally:
         # Restore heartbeat for subsequent tests in the same session.
         monkeypatch.setattr(worker_module.WorkerRunner, "_heartbeat_loop", original_heartbeat)

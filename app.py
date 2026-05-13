@@ -1534,8 +1534,24 @@ def _error_obj(
     distinguish executor-level failures (``retriable=False`` —
     re-running the same job will fail the same way) from broker-level
     failures (``retriable=True`` — ``worker_lost`` etc., the job
-    payload is intact and a retry can succeed). ``None`` (default)
-    omits the field so legacy error payloads stay byte-identical.
+    payload is intact and a retry can succeed).
+
+    Emission rules:
+
+    - Callers that pass ``retriable=False`` / ``retriable=True``
+      embed the field on the wire. Phase 2.D opts the executor
+      failure paths (``RUNNER_EXIT_NONZERO`` / ``RUNNER_NOT_FOUND``
+      / ``RUNNER_ERROR``) into ``retriable=False``, so those
+      payloads now grow a ``retriable`` key — clients that did not
+      previously see the field will start seeing it. The change is
+      additive (no existing key changes type or value), so JSON
+      consumers that ignore unknown fields are unaffected.
+    - Callers that omit the argument (``retriable=None``) get the
+      pre-Phase-2.D shape with no ``retriable`` key. The
+      orchestrator's many non-executor errors (HTTP-level
+      validation, request-parse failures, etc.) still use this
+      path, so a typical 4xx envelope on the wire is byte-identical
+      to its pre-2.D form.
     """
     payload: Dict[str, Any] = {"code": code, "message": message, "details": details or {}}
     if retriable is not None:
@@ -7922,7 +7938,7 @@ async def _orchestrator_lifespan(app: "FastAPI") -> "AsyncGenerator[None, None]"
             # Phase 2.D — periodic broker-reclaim reconciler. Shares
             # ``stop_event`` with the worker pool so a single signal
             # winds down the whole broker-dispatch substrate.
-            app.state.reclaim_sweep_task = asyncio.create_task(_reclaim_sweep_loop(broker, stop_event))
+            app.state.reclaim_sweep_task = asyncio.create_task(_reclaim_sweep_loop(broker, repo, stop_event))
     try:
         yield
     finally:
@@ -9307,19 +9323,30 @@ async def _publish_worker_lost_terminal(job: "Job", *, reason_code: str) -> None
     job.finished_at = now
 
 
-async def _reclaim_sweep_once(broker: "QueueBroker") -> List[str]:
+async def _reclaim_sweep_once(broker: "QueueBroker", repository: Any) -> List[str]:
     """One pass of the Phase 2.D broker-reclaim reconciler.
 
     Calls ``broker.reclaim_expired_leases(now=server_time())`` and,
-    for each reclaimed ``job_id``, drives the in-process ``Job``
-    (and through it the SSE subscriber stream) to the terminal
-    ``worker_lost`` state. Returns the reclaimed ids so callers
-    (lifespan loop, tests) can log / metric the sweep.
+    for each reclaimed ``job_id``, drives BOTH:
 
-    The broker's contract still re-queues reclaimed dispatch
-    payloads at the head of the ready FIFO; the orchestrator's
-    executor adapter has an explicit terminal-state guard so a
-    stale lease pickup of a reclaimed-then-terminal job is a no-op.
+    - the in-process ``Job`` (so SSE subscribers see the terminal
+      ``done`` event immediately), and
+    - the durable ``JobRepository`` row (so Postgres-backed state
+      reflects the same ``worker_lost`` + ``retriable=True``
+      payload — without this dual-write a restart could resurrect
+      the row as ``running``).
+
+    Returns the reclaimed ids so callers (lifespan loop, tests)
+    can log / metric the sweep. The broker's contract still
+    re-queues reclaimed dispatch payloads at the head of the ready
+    FIFO; the orchestrator's executor adapter has an explicit
+    terminal-state guard so a stale lease pickup of a reclaimed-
+    then-terminal job is a no-op.
+
+    ``repository`` may be ``None`` when broker construction
+    succeeded but the repository singleton did not; in that case
+    only the in-process Job is updated and a warning is logged so
+    the operator can see the missing persistence.
     """
     try:
         now = await broker.server_time()
@@ -9329,16 +9356,34 @@ async def _reclaim_sweep_once(broker: "QueueBroker") -> List[str]:
         return []
     for jid in reclaimed:
         job = JOBS.get(jid)
-        if job is None:
+        if job is not None:
+            try:
+                await _publish_worker_lost_terminal(job, reason_code=WORKER_LOST_REASON_RECLAIMED)
+            except Exception:  # noqa: BLE001 - one job's failure must not block others
+                LOGGER.exception("publish worker_lost terminal failed for job %s", jid)
+        if repository is None:
+            LOGGER.warning("reclaim sweep skipped repository update for job %s (no repository configured)", jid)
             continue
         try:
-            await _publish_worker_lost_terminal(job, reason_code=WORKER_LOST_REASON_RECLAIMED)
-        except Exception:  # noqa: BLE001 - one job's failure must not block others
-            LOGGER.exception("publish worker_lost terminal failed for job %s", jid)
+            now_ts = _now()
+            await repository.update(
+                jid,
+                state="worker_lost",
+                finished_at=now_ts,
+                done_published_at=now_ts,
+                last_event_at=now_ts,
+                error={
+                    "code": WORKER_LOST_REASON_RECLAIMED,
+                    "message": "Worker lease expired without heartbeat; job marked worker_lost.",
+                    "retriable": True,
+                },
+            )
+        except Exception:  # noqa: BLE001 - persistence failure must not block the loop
+            LOGGER.exception("repository update for reclaimed job %s failed", jid)
     return list(reclaimed)
 
 
-async def _reclaim_sweep_loop(broker: "QueueBroker", stop_event: "asyncio.Event") -> None:
+async def _reclaim_sweep_loop(broker: "QueueBroker", repository: Any, stop_event: "asyncio.Event") -> None:
     """Periodic reconciler driven by ``_orchestrator_lifespan``.
 
     Sleeps ``RECLAIM_SWEEP_INTERVAL_SECONDS`` between sweeps; the
@@ -9350,7 +9395,7 @@ async def _reclaim_sweep_loop(broker: "QueueBroker", stop_event: "asyncio.Event"
     """
     while not stop_event.is_set():
         try:
-            await _reclaim_sweep_once(broker)
+            await _reclaim_sweep_once(broker, repository)
         except Exception:  # noqa: BLE001 - defense in depth; never crash the loop
             LOGGER.exception("reclaim sweep loop iteration raised")
         try:
