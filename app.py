@@ -61,6 +61,8 @@ from transformation_portal.ingest.upload_staging import (
     stage_upload_batch,
 )
 from transformation_portal.lux_depth_v3.model_registry import resolve_model_spec, resolve_registry_key, visible_cli_model_specs
+from transformation_portal.orchestrator import get_job_repository
+from transformation_portal.orchestrator.recovery import sweep_orphaned_jobs
 from transformation_portal.portal import archive_index_preflight as _portal_archive_index_preflight
 from transformation_portal.portal import asset_bundle as _portal_asset_bundle
 from transformation_portal.portal import job_artifacts as _portal_job_artifacts
@@ -7715,6 +7717,24 @@ async def _orchestrator_lifespan(app: "FastAPI") -> "AsyncGenerator[None, None]"
             " TP_API_KEY is unset; protected /v1 endpoints"
             " will return AUTH_CONFIGURATION_ERROR."
         )
+
+    # Phase 1.C restart recovery: at process startup the runtime registry
+    # is empty by construction, so any job the repository still records as
+    # queued/running is necessarily orphaned by a previous process. Mark
+    # them failed with worker_lost_on_restart so SSE late-clients see a
+    # terminal done event instead of hanging on a dead state.
+    #
+    # Memory backend (default): the repository is per-process so there are
+    # no orphans and the sweep is a deterministic no-op.
+    # Postgres backend (TP_ORCHESTRATOR_STATE_BACKEND=postgres): the sweep
+    # does the real work.
+    try:
+        swept = await sweep_orphaned_jobs(get_job_repository())
+        app.state.restart_recovery_swept = list(swept)
+    except Exception:  # noqa: BLE001 - never block startup on recovery
+        LOGGER.exception("orchestrator restart recovery sweep failed; continuing startup")
+        app.state.restart_recovery_swept = []
+
     existing_task = getattr(app.state, "cleanup_task", None)
     if existing_task is None or existing_task.done():
         app.state.cleanup_task = asyncio.create_task(_cleanup_loop())
@@ -7727,6 +7747,13 @@ async def _orchestrator_lifespan(app: "FastAPI") -> "AsyncGenerator[None, None]"
             with suppress(asyncio.CancelledError):
                 await cleanup_task
             app.state.cleanup_task = None
+        # Best-effort dispose of the repository's connection pool. The
+        # memory backend's close() is a no-op; the Postgres backend
+        # disposes its shared AsyncEngine.
+        try:
+            await get_job_repository().close()
+        except Exception:  # noqa: BLE001 - never block shutdown on close
+            LOGGER.exception("orchestrator repository close failed")
 
 
 app = FastAPI(
