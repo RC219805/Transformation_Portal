@@ -19,6 +19,7 @@ Options:
 
 import argparse
 import re
+import shlex
 import sys
 from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple
@@ -36,8 +37,7 @@ class CIValidator:
     MIN_CHECKOUT_MAJOR = 4
     REQUIRED_FLAKE8_FATAL_CODES = {"E9", "F63", "F7", "F82"}
     ML_NO_COV_BLOCK_PATTERN = re.compile(
-        r'if\s+\[\s*"\$\{\{\s*matrix\.test-type\s*\}\}"\s*=\s*"ml"\s*\]\s*;\s*then\s*\n\s*'
-        r'COV_FLAGS="--no-cov"'
+        r'if\s+\[\s*"\$\{\{\s*matrix\.test-type\s*\}\}"\s*=\s*"ml"\s*\]\s*;\s*then\s*\n\s*' r'COV_FLAGS="--no-cov"'
     )
     CORE_COV_FLAGS_PATTERN = re.compile(r'else\s*\n\s*COV_FLAGS="(?P<flags>[^"]*)"')
     REQUIRED_CORE_COVERAGE_FLAGS = (
@@ -47,7 +47,9 @@ class CIValidator:
         "--cov-report=html",
         "--cov-fail-under",
     )
-    REQUIRED_BRANCH_DRY_RUN_CHECK = "python scripts/ci/check_per_package_branch_coverage.py coverage.xml --dry-run"
+    BRANCH_COVERAGE_SCRIPT = "scripts/ci/check_per_package_branch_coverage.py"
+    BRANCH_COVERAGE_XML = "coverage.xml"
+    REQUIRED_BRANCH_COVERAGE_CHECK = f"python {BRANCH_COVERAGE_SCRIPT} {BRANCH_COVERAGE_XML}"
 
     def __init__(self, repo_root: Path, fix_mode: bool = False):
         self.repo_root = repo_root
@@ -324,14 +326,40 @@ class CIValidator:
             self.log_error(f"build.yml:test: Core test leg must retain coverage generation flags: {missing}")
             valid = False
 
-        if self.REQUIRED_BRANCH_DRY_RUN_CHECK not in run_script:
+        branch_coverage_commands = self._branch_coverage_checker_commands(run_script)
+        if not any(self.BRANCH_COVERAGE_XML in command for command in branch_coverage_commands):
             self.log_error(
-                "build.yml:test: Core test leg must retain branch coverage dry-run check "
-                f"{self.REQUIRED_BRANCH_DRY_RUN_CHECK!r}"
+                "build.yml:test: Core test leg must retain branch coverage enforcement check "
+                f"{self.REQUIRED_BRANCH_COVERAGE_CHECK!r}"
+            )
+            valid = False
+
+        if any("--dry-run" in command for command in branch_coverage_commands):
+            self.log_error(
+                "build.yml:test: Core test leg must enforce branch coverage without --dry-run "
+                f"({self.BRANCH_COVERAGE_SCRIPT!r} invocations may not include '--dry-run')"
             )
             valid = False
 
         return valid
+
+    @classmethod
+    def _branch_coverage_checker_commands(cls, run_script: str) -> List[List[str]]:
+        """Return shell-tokenized branch coverage checker invocations."""
+        logical_script = run_script.replace("\\\n", " ")
+        commands: List[List[str]] = []
+        for raw_line in logical_script.splitlines():
+            if cls.BRANCH_COVERAGE_SCRIPT not in raw_line:
+                continue
+            try:
+                tokens = shlex.split(raw_line, comments=True, posix=True)
+            except ValueError:
+                tokens = raw_line.split()
+            if cls.BRANCH_COVERAGE_SCRIPT not in tokens:
+                continue
+            script_index = tokens.index(cls.BRANCH_COVERAGE_SCRIPT)
+            commands.append(tokens[script_index:])
+        return commands
 
     @staticmethod
     def _find_step_by_name(steps: List[Dict], name: str) -> Optional[Dict]:

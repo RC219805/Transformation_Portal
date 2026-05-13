@@ -501,11 +501,29 @@ PackageFloor(
 | `src/transformation_portal/streaming/` | 56.64% | 50.0% |
 | `src/transformation_portal/spatial_ai/reconstruction/` | 48.58% | 42.0% |
 
-Branch coverage remains reported by the sibling branch checker in dry-run mode
-until branch floors have two consecutive stable CI baselines. With no branch
-floors configured, `check_per_package_branch_coverage.py --dry-run` still emits
-a cold-zone package table for the prefixes above so CI logs capture the measured
-branch baseline without enforcing it.
+Post-baseline branch floors also landed after dry-run baseline review. They are
+set roughly 5-10 points below the measured 2026-05-13 branch coverage:
+
+```python
+BranchFloor("src/transformation_portal/plugins/", 30.0)
+BranchFloor("src/transformation_portal/stage_graph/", 60.0)
+BranchFloor("src/transformation_portal/vlm/", 50.0)
+BranchFloor("src/transformation_portal/depth/", 40.0)
+BranchFloor("src/transformation_portal/streaming/", 25.0)
+BranchFloor(
+    "src/transformation_portal/spatial_ai/reconstruction/",
+    45.0,
+)
+```
+
+| Package prefix | Measured 2026-05-13 branch coverage | Enforced floor |
+| --- | ---: | ---: |
+| `src/transformation_portal/plugins/` | 39.86% | 30.0% |
+| `src/transformation_portal/stage_graph/` | 66.46% | 60.0% |
+| `src/transformation_portal/vlm/` | 58.82% | 50.0% |
+| `src/transformation_portal/depth/` | 47.13% | 40.0% |
+| `src/transformation_portal/streaming/` | 32.79% | 25.0% |
+| `src/transformation_portal/spatial_ai/reconstruction/` | 50.93% | 45.0% |
 
 ### 12.2 Touched-file rule (per-PR, reviewer-enforced)
 
