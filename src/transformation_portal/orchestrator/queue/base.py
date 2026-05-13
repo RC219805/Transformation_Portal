@@ -27,7 +27,13 @@ Lease/heartbeat contract:
 - ``reclaim_expired_leases(*, now)`` is the broker's housekeeping:
   any lease whose deadline has passed is reclaimed and the job is
   re-queued for another worker. Returns the list of reclaimed job
-  ids so callers (or tests) can log / metric it.
+  ids so callers (or tests) can log / metric it. Production callers
+  should pass ``await broker.server_time()`` so deadlines and "now"
+  share a single source of truth across a multi-host fleet.
+- ``server_time()`` returns the broker's authoritative clock value
+  (``time.monotonic`` for memory, Redis ``TIME`` for Redis). Use
+  this whenever comparing against a lease deadline to defeat host
+  clock drift.
 - ``cancel(job_id)`` removes a still-queued job, or marks an
   in-progress job for cancellation so the next ``extend_lease`` from
   the worker returns ``LeaseStatus.cancelled`` and the worker can
@@ -36,6 +42,7 @@ Lease/heartbeat contract:
 
 from __future__ import annotations
 
+import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
@@ -175,12 +182,17 @@ class QueueBroker(ABC):
 
         Returns the list of reclaimed job ids so callers can
         ``await repo.update(jid, ...)`` them as ``worker_lost`` in
-        Phase 2.D. The ``now`` parameter is the time source the
-        backend compares against the stored lease deadlines: the
-        memory backend uses ``time.monotonic()`` (so wall-clock
-        adjustments don't move deadlines), and the Phase 2.B Redis
-        backend will use Redis server time. Tests pass an explicit
-        ``now`` to pin time deterministically.
+        Phase 2.D.
+
+        The ``now`` argument is the value the backend compares
+        against the stored lease deadlines. Production callers
+        should pass ``await broker.server_time()`` so deadlines
+        (written from the same clock by ``acquire_lease`` /
+        ``extend_lease``) and the sweep boundary share one source of
+        truth. The explicit float is retained for tests and
+        deterministic simulation: ``reclaim_expired_leases(now=
+        lease.deadline + delta)`` lets a single-process test pin
+        time without sleeping.
         """
 
     @abstractmethod
@@ -205,6 +217,19 @@ class QueueBroker(ABC):
     @abstractmethod
     async def reset(self) -> None:
         """Test-only: clear all queue + lease state."""
+
+    async def server_time(self) -> float:
+        """Return the broker's authoritative clock value.
+
+        Production callers pair this with ``reclaim_expired_leases``
+        so the sweep boundary lives in the same time domain as the
+        deadlines written by ``acquire_lease`` / ``extend_lease``.
+        The default implementation uses ``time.monotonic()`` so
+        single-process backends (memory) and tests behave as a
+        process-local monotonic clock; the Redis backend overrides
+        it to read ``TIME`` from the Redis server.
+        """
+        return time.monotonic()
 
     async def close(self) -> None:
         """Optional shutdown hook for backends that hold connections."""

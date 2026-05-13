@@ -236,6 +236,33 @@ async def test_reclaim_no_op_when_no_leases(broker: QueueBroker) -> None:
     assert await broker.reclaim_expired_leases(now=time.monotonic() + 1000.0) == []
 
 
+async def test_server_time_advances_and_reclaims_against_broker_clock(broker: QueueBroker) -> None:
+    """``server_time()`` is the production sweeper's source of truth.
+
+    Production callers (Phase 2.D's sweeper) pass
+    ``await broker.server_time()`` to ``reclaim_expired_leases`` so
+    that the deadlines written by ``acquire_lease`` and the boundary
+    used for the sweep share one clock. Verify the helper is
+    monotonic and that a sweep at ``server_time() + lease + slack``
+    reclaims an outstanding lease — i.e. the two values are
+    actually expressed in the same time domain.
+    """
+    t0 = await broker.server_time()
+    await asyncio.sleep(0.01)
+    t1 = await broker.server_time()
+    assert t1 >= t0  # monotonic non-decreasing within the same broker
+
+    await broker.enqueue(_request("job-server-clock"))
+    lease = await broker.acquire_lease("worker-clock", lease_seconds=0.1)
+    assert lease is not None
+
+    # Wait past the lease using broker time, then sweep with broker time.
+    await asyncio.sleep(0.15)
+    now = await broker.server_time()
+    reclaimed = await broker.reclaim_expired_leases(now=now)
+    assert "job-server-clock" in reclaimed
+
+
 # ---------------------------------------------------------------------------
 # Cancellation
 # ---------------------------------------------------------------------------

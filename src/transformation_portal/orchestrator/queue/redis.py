@@ -28,9 +28,12 @@ Hash fields on ``{prefix}job:<job_id>``::
 Atomicity is implemented via server-side Lua so that admission
 collisions, lease handoff, heartbeat extension, and reclaim each
 happen in a single round-trip with no chance of partial state. Lease
-deadlines use the Redis server clock (``TIME``) — every worker
-process resolves "now" against the same source of truth, so wall
-clock drift on individual hosts cannot move deadlines.
+deadlines are written from Redis ``TIME`` inside the acquire / extend
+scripts. Production sweepers must read "now" back from the same
+clock — call ``await broker.server_time()`` and pass the result to
+``reclaim_expired_leases`` — so host wall-clock drift on individual
+worker boxes cannot push leases into "expired" early or hold them
+past their real deadline.
 """
 
 from __future__ import annotations
@@ -375,6 +378,18 @@ class RedisQueueBroker(QueueBroker):
     async def leased_job_ids(self) -> List[str]:
         items = await self._client.zrange(self._leases_key, 0, -1)
         return [_decode(item) for item in items]
+
+    async def server_time(self) -> float:
+        """Read the Redis server clock — the broker's source of truth.
+
+        Lease deadlines are written from Redis ``TIME`` inside the
+        acquire / extend Lua scripts, so production sweepers must
+        compare against this same clock to defeat host wall-clock
+        drift in a multi-host fleet. Returns seconds since the Unix
+        epoch as a float (microsecond resolution from Redis).
+        """
+        seconds, microseconds = await self._client.time()
+        return float(seconds) + float(microseconds) / 1_000_000
 
     async def reset(self) -> None:
         """Test-only: drop every key under ``key_prefix``.
