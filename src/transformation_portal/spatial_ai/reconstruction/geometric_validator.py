@@ -80,6 +80,12 @@ class GeometricValidator:
         if rendered_images is None:
             rendered_images = self._render_all_views(scene)
 
+        if len(rendered_images) != len(reference_images):
+            raise ValueError(
+                f"Number of rendered images ({len(rendered_images)}) must match "
+                f"number of reference images ({len(reference_images)})"
+            )
+
         # Compute per-pixel squared error
         total_squared_error = 0.0
         total_pixels = 0
