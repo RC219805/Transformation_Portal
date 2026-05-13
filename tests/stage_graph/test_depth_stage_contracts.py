@@ -33,7 +33,7 @@ def test_compute_fails_with_explicit_missing_image_error() -> None:
 
     result = stage.compute(StageContext(artifacts={}))
 
-    assert result.status is StageStatus.FAILED
+    assert result.status == StageStatus.FAILED
     assert result.error == "Missing 'image' artifact in context"
 
 
@@ -60,7 +60,7 @@ def test_model_load_import_failure_uses_placeholder_without_transformers(monkeyp
 
     result = stage.compute(StageContext(artifacts={"image": image}, device="cpu"))
 
-    assert result.status is StageStatus.COMPLETED
+    assert result.status == StageStatus.COMPLETED
     assert stage._model == "placeholder"
     depth = result.artifacts["depth_map"]
     assert depth.shape == image.shape[:2]
@@ -115,7 +115,7 @@ def test_fake_transformers_pipeline_returns_normalized_depth(monkeypatch: pytest
     stage = DepthEstimationStage()
     result = stage.compute(StageContext(artifacts={"image": _image_uint8()}, device="cuda"))
 
-    assert result.status is StageStatus.COMPLETED
+    assert result.status == StageStatus.COMPLETED
     assert pipeline_calls[0] == {
         "task": "depth-estimation",
         "model": "depth-anything/Depth-Anything-V2-Small-hf",
