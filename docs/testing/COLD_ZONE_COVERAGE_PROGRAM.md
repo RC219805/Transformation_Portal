@@ -502,7 +502,10 @@ PackageFloor(
 | `src/transformation_portal/spatial_ai/reconstruction/` | 48.58% | 42.0% |
 
 Branch coverage remains reported by the sibling branch checker in dry-run mode
-until branch floors have two consecutive stable CI baselines.
+until branch floors have two consecutive stable CI baselines. With no branch
+floors configured, `check_per_package_branch_coverage.py --dry-run` still emits
+a cold-zone package table for the prefixes above so CI logs capture the measured
+branch baseline without enforcing it.
 
 ### 12.2 Touched-file rule (per-PR, reviewer-enforced)
 
