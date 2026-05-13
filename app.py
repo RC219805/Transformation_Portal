@@ -40,8 +40,11 @@ from transformation_portal.api.v1 import (
     ConfigMetadataEnvelope,
     ConfigPreviewEnvelope,
     HealthzResponse,
+    JobBriefData,
     JobEnvelope,
+    JobsListData,
     JobsListEnvelope,
+    JobStatusData,
     JobStatusEnvelope,
     PortalEventEnvelope,
     PortalRumIngestEnvelope,
@@ -8524,17 +8527,23 @@ async def _create_job(
 
     asyncio.create_task(_run_job(job, argv))
 
+    # Phase 1.D: construct a Pydantic envelope so the wire shape is
+    # validated at runtime (Pydantic raises on bad field types / missing
+    # required fields). Serialize through ``model_dump(by_alias=True,
+    # exclude_unset=True)`` to preserve byte-identity with the legacy
+    # ``_api_envelope`` helper (verified by
+    # ``tests/orchestrator/test_envelope_runtime_validation.py``).
     return JSONResponse(
-        _api_envelope(
-            "tp.orchestrator.job.v1",
+        JobEnvelope(
+            schema="tp.orchestrator.job.v1",
             success=True,
-            data={
-                "id": jid,
-                "state": job.state,
-                "events_url": _job_events_url(jid, api_version=api_version),
-            },
+            data=JobBriefData(
+                id=jid,
+                state=job.state,
+                events_url=_job_events_url(jid, api_version=api_version),
+            ),
             error=None,
-        )
+        ).model_dump(mode="json", by_alias=True, exclude_unset=True)
     )
 
 
@@ -8558,17 +8567,21 @@ def _list_jobs(*, limit: int = JOB_LIST_LIMIT, api_version: str = "v1") -> JSONR
     )
     serialized = [_serialize_job(job, include_logs=False, api_version=api_version) for job in jobs_sorted[:bounded_limit]]
 
+    # Phase 1.D: construct via Pydantic for runtime validation, then
+    # serialize with ``exclude_unset=True`` so optional Job fields the
+    # legacy serializer omits when ``include_logs=False`` (notably
+    # ``logs_tail``) stay absent on the wire.
     return JSONResponse(
-        _api_envelope(
-            "tp.orchestrator.jobs.v1",
+        JobsListEnvelope(
+            schema="tp.orchestrator.jobs.v1",
             success=True,
-            data={
-                "jobs": serialized,
-                "total": len(JOBS),
-                "returned": len(serialized),
-            },
+            data=JobsListData(
+                jobs=[JobStatusData(**entry) for entry in serialized],
+                total=len(JOBS),
+                returned=len(serialized),
+            ),
             error=None,
-        )
+        ).model_dump(mode="json", by_alias=True, exclude_unset=True)
     )
 
 
@@ -8592,13 +8605,17 @@ def _get_job(job_id: str, *, include_logs: bool = True, api_version: str = "v1")
             message="job not found",
             details={"job_id": job_id},
         )
+    # Phase 1.D: construct via Pydantic for runtime validation, then
+    # serialize with ``exclude_unset=True`` so the optional
+    # ``logs_tail`` default (None) is omitted when the legacy
+    # ``_serialize_job`` does not include it (``include_logs=False``).
     return JSONResponse(
-        _api_envelope(
-            "tp.orchestrator.job_status.v1",
+        JobStatusEnvelope(
+            schema="tp.orchestrator.job_status.v1",
             success=True,
-            data=_serialize_job(job, include_logs=bool(include_logs), api_version=api_version),
+            data=JobStatusData(**_serialize_job(job, include_logs=bool(include_logs), api_version=api_version)),
             error=None,
-        )
+        ).model_dump(mode="json", by_alias=True, exclude_unset=True)
     )
 
 
@@ -8709,13 +8726,17 @@ async def _cancel_job(job_id: str) -> JSONResponse:
             details={"job_id": job_id},
         )
     await _request_cancel(job)
+    # Phase 1.D: ``events_url`` is deliberately not passed to
+    # ``JobBriefData`` so it stays unset; ``exclude_unset=True`` then
+    # drops it from the wire, matching the legacy ``_api_envelope``
+    # output that omitted it for cancel responses.
     return JSONResponse(
-        _api_envelope(
-            "tp.orchestrator.job.v1",
+        JobEnvelope(
+            schema="tp.orchestrator.job.v1",
             success=True,
-            data={"id": job_id, "state": job.state},
+            data=JobBriefData(id=job_id, state=job.state),
             error=None,
-        )
+        ).model_dump(mode="json", by_alias=True, exclude_unset=True)
     )
 
 
