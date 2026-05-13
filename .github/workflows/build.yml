@@ -762,6 +762,8 @@ jobs:
           if [ "${{ matrix.test-type }}" != "ml" ] && [ "$rc" -eq 0 ] && [ -f coverage.xml ]; then
             python scripts/ci/check_per_package_coverage.py coverage.xml || rc=$?
             python scripts/ci/check_per_package_branch_coverage.py coverage.xml || rc=$?
+            git fetch --no-tags --depth=1 origin main:refs/remotes/origin/main || rc=$?
+            python scripts/ci/check_cold_zone_touched_files.py coverage.xml --compare-ref origin/main || rc=$?
           fi
 
           # Cleanup regardless of outcome

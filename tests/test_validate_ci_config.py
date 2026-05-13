@@ -118,12 +118,60 @@ def test_build_workflow_core_leg_rejects_branch_coverage_dry_run_with_spacing(tm
     workflow_path = _mutated_build_workflow(
         tmp_path,
         "python scripts/ci/check_per_package_branch_coverage.py coverage.xml || rc=$?",
-        "python scripts/ci/check_per_package_branch_coverage.py coverage.xml  \\\n" "            --dry-run || rc=$?",
+        "python scripts/ci/check_per_package_branch_coverage.py coverage.xml  \\\n            --dry-run || rc=$?",
     )
     validator, config = _load_config(workflow_path)
 
     assert validator.validate_build_coverage_contract(workflow_path, config) is False
     assert any("must enforce branch coverage without --dry-run" in error for error in validator.errors)
+
+
+def test_build_workflow_core_leg_keeps_cold_zone_touched_file_evidence(tmp_path: Path) -> None:
+    workflow_path = _mutated_build_workflow(
+        tmp_path,
+        "python scripts/ci/check_cold_zone_touched_files.py coverage.xml --compare-ref origin/main || rc=$?",
+        "echo cold-zone touched-file evidence removed",
+    )
+    validator, config = _load_config(workflow_path)
+
+    assert validator.validate_build_coverage_contract(workflow_path, config) is False
+    assert any("must retain cold-zone touched-file coverage evidence check" in error for error in validator.errors)
+
+
+def test_build_workflow_core_leg_requires_touched_file_compare_ref(tmp_path: Path) -> None:
+    workflow_path = _mutated_build_workflow(
+        tmp_path,
+        "python scripts/ci/check_cold_zone_touched_files.py coverage.xml --compare-ref origin/main || rc=$?",
+        "python scripts/ci/check_cold_zone_touched_files.py coverage.xml || rc=$?",
+    )
+    validator, config = _load_config(workflow_path)
+
+    assert validator.validate_build_coverage_contract(workflow_path, config) is False
+    assert any("must retain cold-zone touched-file coverage evidence check" in error for error in validator.errors)
+
+
+def test_build_workflow_core_leg_accepts_equals_form_compare_ref(tmp_path: Path) -> None:
+    workflow_path = _mutated_build_workflow(
+        tmp_path,
+        "python scripts/ci/check_cold_zone_touched_files.py coverage.xml --compare-ref origin/main || rc=$?",
+        "python scripts/ci/check_cold_zone_touched_files.py coverage.xml --compare-ref=origin/main || rc=$?",
+    )
+    validator, config = _load_config(workflow_path)
+
+    assert validator.validate_build_coverage_contract(workflow_path, config) is True
+    assert validator.errors == []
+
+
+def test_build_workflow_core_leg_fetches_cold_zone_compare_ref(tmp_path: Path) -> None:
+    workflow_path = _mutated_build_workflow(
+        tmp_path,
+        "git fetch --no-tags --depth=1 origin main:refs/remotes/origin/main || rc=$?",
+        "echo origin main fetch removed",
+    )
+    validator, config = _load_config(workflow_path)
+
+    assert validator.validate_build_coverage_contract(workflow_path, config) is False
+    assert any("must fetch origin/main before cold-zone touched-file evidence" in error for error in validator.errors)
 
 
 def test_build_workflow_coverage_upload_keeps_html_artifact_path(tmp_path: Path) -> None:

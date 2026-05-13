@@ -145,6 +145,7 @@ Quick reference for common workflows and commands in this repo.
 - `python3 scripts/validation/generate_design_tokens_doc.py --check` verify the generated `docs/design/tokens.md` reference outside Make.
 - `python3 scripts/ci/cold_zone_report.py coverage.xml --markdown-out docs/testing/cold_zone_baseline_YYYY-MM-DD.md --json-out /tmp/cold-zone-baseline.json` generate the cold-zone coverage baseline after `make coverage-report`.
 - `python3 scripts/ci/check_per_package_branch_coverage.py coverage.xml` enforce cold-zone per-package branch coverage floors after pytest-cov; add `--dry-run` only for local floor proposal/reporting runs.
+- `python3 scripts/ci/check_cold_zone_touched_files.py coverage.xml --compare-ref origin/main` report touched cold-zone file coverage evidence after pytest-cov; it fails only when touched cold-zone files are missing from `coverage.xml`.
 - `./scripts/validation/run_full_validation_suite.sh` all-in-one validation orchestrator.
 - `./scripts/validation/run_full_validation_suite.sh --quick` skip browser smokes for faster iteration.
 - `./scripts/validation/run_full_validation_suite.sh --skip-frontdoor` Python-only validation.
