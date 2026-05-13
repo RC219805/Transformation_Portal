@@ -67,7 +67,7 @@ than introduce parallel implementations.
 | `JobEventStore` | `EventStore` (per-event `.json` files written under date directories `<storage>/YYYY-MM-DD/<event_id>.json`; `Event` dataclass with `id, type, timestamp, data, metadata, user, correlation_id`) | `src/transformation_portal/events/store.py` | Currently orphaned. Wire to job lifecycle for Phase 1 instead of creating a new abstraction. |
 | Phase 7 organization, RBAC, and quota model | `TenantContext`, `TenantPolicy`, `TenantManager`, `TenantAwareFSGuard`, `create_tenant_sandbox()` (per-tenant `gpu_quota`, `network_allowed`, `allowed_node_types`) | `src/transformation_portal/core/security/tenant.py` | Fully tested but unwired in the request path. Phase 7 should ground the user, organization, and quota model on these primitives. |
 | Phase 6 audit-event table | `tp.phase4.provenance_capture`, `tp.crypto.merkle`, `attestation/{detached,dsse,verify,run_card_intoto}.py` | `src/tp/phase4/`, `src/transformation_portal/attestation/` | Cryptographic provenance is authoritative. The new operational audit table must mirror events, not duplicate the attestation chain. |
-| `ArtifactStore` (Phase 4) | `JobArtifactIndexResult`, `_artifact_fingerprint`, `_validate_resolved_job_artifact_path`, `ArtifactPathOutsideJobOutputDirError`; `ArtifactManager.compute_merkle_root(...)` (method) and module-level `compute_artifact_merkle_root(...)` | `src/transformation_portal/portal/job_artifacts.py`, `src/transformation_portal/lux_depth_v3/artifact_manager.py` | Path-traversal validation, SHA-256 fingerprinting, content-type detection, and Merkle roots are already implemented. The S3 backend must preserve all of these guarantees. |
+| `ArtifactStore` (Phase 4) | `JobArtifactIndexResult`, `_artifact_fingerprint`, `_validate_resolved_job_artifact_path`, `ArtifactPathOutsideJobOutputDirError`; `ArtifactManager.compute_merkle_root(...)` (method) and module-level `compute_artifact_merkle_root(...)` | `src/transformation_portal/portal/job_artifacts.py`, `src/transformation_portal/lux_depth_v3/artifact_manager.py` | Phase 4.A landed: `src/transformation_portal/orchestrator/artifact_store/` reuses these helpers behind the `ArtifactStore` Protocol so the local + S3 backends share the validated path-traversal, fingerprint, content-type, and Merkle-input behaviour. Phase 4.B wires the factory into `app.py` and adds retention metadata + signed URLs + a deletion workflow. |
 | Phase 3 frontdoor session readiness gate | `evaluateSessionScaling()` (returns `ok: false` for `multi_instance` and `ephemeral_runtime` with `*_requires_external_session_store` reason codes) | `web/secure-landing/lib/session-scaling.js` | Add a `redis` branch that flips the gate to `ok: true` rather than rewriting the readiness check. |
 | Phase 0 production-gap doc | This document | `docs/governance/PRODUCTION_HARDENING_GAP_2026-05-13.md` | Treat as the authoritative reference cited by Phase 1 through Phase 7 PRs. |
 
@@ -126,15 +126,20 @@ Still net-new (follow-up tracks):
 
 ### 5.4 Phase 4 - artifact lifecycle
 
-- No boto3, minio, or other S3 client anywhere in `src/`. Artifacts are
-  filesystem-only today, served via authenticated routes
-  `/{v1,v2}/jobs/{job_id}/artifacts/{artifact_path:path}`.
-- No retention metadata, no signed URLs, no deletion workflow.
-- Existing path-traversal validation, SHA-256 fingerprinting, content-type
-  detection, and Merkle roots must be preserved by any S3 backend (see
-  section 4).
-- Env vars `TP_ARTIFACT_STORE`, `TP_ARTIFACT_BUCKET`, `TP_ARTIFACT_PREFIX`,
-  `TP_ARTIFACT_ENDPOINT_URL` are unrecognized.
+**Updated 2026-05-13: Phase 4.A has landed.**
+
+Already done:
+
+- `ArtifactStore` Protocol + factory + `LocalArtifactStore` + `S3ArtifactStore` (Phase 4.A). Lives under `src/transformation_portal/orchestrator/artifact_store/` with one module per concern: `base.py` (the async `ArtifactStore` ABC + `ArtifactObjectMetadata` dataclass + `ArtifactNotFoundError` / `ArtifactPathValidationError` / `ArtifactStoreError` exceptions), `local.py` (filesystem backend; reuses `portal.job_artifacts._artifact_content_type`, `ARTIFACT_FINGERPRINT_MAX_BYTES`, and the pre-Phase-4 path-traversal validators so the four guarantees in §4 are preserved byte-for-byte), `s3.py` (boto3-backed S3 backend with lazy `import boto3` so the local lane pays no startup cost; key layout `{prefix}/jobs/{job_id}/{relative_path}`; sha256 computed on a streamed `GetObject` body without materialising the full bytes in memory; bulk delete via `list_objects_v2` + `delete_objects` 1000-key batches), and `__init__.py` (factory keyed off `TP_ARTIFACT_STORE=local|s3`, default `local`).
+- Env vars `TP_ARTIFACT_STORE` (`local`|`s3`, default `local`), `TP_ARTIFACT_BUCKET` (required when backend is `s3`), `TP_ARTIFACT_PREFIX` (default `tp/artifacts`), `TP_ARTIFACT_ENDPOINT_URL` (optional for MinIO / LocalStack / R2), `TP_ARTIFACT_REGION`, `TP_ARTIFACT_LOCAL_ROOT` (filesystem root for the local backend; default `/tmp/transformation-portal-artifacts`).
+- Parametrized contract suite. `tests/orchestrator/test_artifact_store_contract.py` runs 17 cases against `LocalArtifactStore` (always) and `S3ArtifactStore` (default branch uses `moto`'s `mock_aws` so the S3 contract is exercised in every CI lane without live AWS / MinIO credentials; `TP_TEST_S3_URL` + `TP_TEST_S3_BUCKET` switch the same suite to a real S3-compatible endpoint, mirroring Phase 1.B Postgres and Phase 2.B Redis patterns). Coverage: write/head round-trip, open_bytes streaming, list_for_job sort, path-traversal validation (6 forms incl. `..`, absolute paths, null bytes, backslashes, empty paths, empty job_id), single + bulk delete, Merkle parity with `compute_artifact_merkle_root`, oversized-fingerprint `skipped_size` contract.
+- Dependency wiring. `boto3>=1.34,<2` added to `requirements/base.in` (lazy-loaded inside `S3ArtifactStore` so the local lane pays no import cost at orchestrator start-up). `moto[s3]>=5.0,<6` added to `requirements/dev.in` for the parametrized test branch.
+
+Still net-new (Phase 4.B):
+
+- Wire `get_artifact_store()` into `app.py` so the `/{v1,v2}/jobs/{job_id}/artifacts/...` serving routes, the artifact-index ingest path, and the retention/cleanup sweep call the store instead of the filesystem helpers directly.
+- Signed URLs for S3-backed delivery (presigned `GetObject`); preserve the authenticated-redirect shape so the wire contract does not change for filesystem deployments.
+- Per-job retention metadata (TTL, soft-delete vs hard-delete distinction) + an explicit deletion workflow tied to the orchestrator cleanup loop.
 
 ### 5.5 Phase 5 - pilot deployment model
 
