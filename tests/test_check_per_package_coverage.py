@@ -392,6 +392,24 @@ class TestMain:
         assert rc == 0
 
 
+class TestDefaultFloors:
+    def test_post_pr7_cold_zone_ratchets_are_configured(self, script_module):
+        prefixes = [floor.prefix for floor in script_module.PACKAGE_FLOORS]
+        assert len(prefixes) == len(set(prefixes))
+
+        floors = {floor.prefix: floor.floor for floor in script_module.PACKAGE_FLOORS}
+        expected_floors = {
+            "src/transformation_portal/plugins/": 45.0,
+            "src/transformation_portal/stage_graph/": 70.0,
+            "src/transformation_portal/vlm/": 65.0,
+            "src/transformation_portal/depth/": 55.0,
+            "src/transformation_portal/streaming/": 50.0,
+            "src/transformation_portal/spatial_ai/reconstruction/": 42.0,
+        }
+
+        assert {prefix: floors[prefix] for prefix in expected_floors} == expected_floors
+
+
 class TestRenderTable:
     def test_pass_and_fail_rows_distinguishable(self, script_module):
         results = [
