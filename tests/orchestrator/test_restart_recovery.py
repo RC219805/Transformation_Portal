@@ -31,10 +31,16 @@ def _record(job_id: str, *, created_at: float = 1.0) -> JobRecord:
     return JobRecord(id=job_id, created_at=created_at)
 
 
-async def test_sweep_marks_running_and_queued_jobs_failed(
+async def test_sweep_marks_running_and_queued_jobs_worker_lost(
     repository_and_events: RepoAndEvents,
 ) -> None:
-    """At startup with no live workers, every active job must be marked failed."""
+    """At startup with no live workers, every active job must be marked worker_lost.
+
+    Phase 2.D: ``worker_lost`` (distinct from ``failed``) signals the
+    worker died with the lease held — the work itself is not broken
+    and the error envelope carries ``retriable=True`` so callers /
+    operator tooling can distinguish from executor-level errors.
+    """
     repo, _ = repository_and_events
     await repo.create(_record("queued-1"))
     await repo.create(_record("queued-2"))
@@ -54,13 +60,14 @@ async def test_sweep_marks_running_and_queued_jobs_failed(
     for jid in swept:
         rec = await repo.get(jid)
         assert rec is not None
-        assert rec.state == "failed"
+        assert rec.state == "worker_lost"
         assert rec.finished_at is not None
         assert rec.done_published_at is not None
         assert rec.last_event_at is not None
         assert rec.error == {
             "code": WORKER_LOST_REASON_CODE,
             "message": "Process did not survive backend restart.",
+            "retriable": True,
         }
 
     done = await repo.get("done-1")
@@ -119,7 +126,7 @@ async def test_sweep_is_idempotent(
     assert second == []
 
     rec = await repo.get("orphan")
-    assert rec is not None and rec.state == "failed"
+    assert rec is not None and rec.state == "worker_lost"
 
 
 async def test_sweep_uses_default_registry_when_none_passed(

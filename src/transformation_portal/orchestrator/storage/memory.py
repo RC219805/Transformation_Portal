@@ -135,13 +135,14 @@ class MemoryJobRepository(JobRepository):
                 continue
             if jid in live:
                 continue
-            rec.state = "failed"
+            rec.state = "worker_lost"
             rec.finished_at = stamp
             rec.done_published_at = stamp
             rec.last_event_at = stamp
             rec.error = {
                 "code": reason_code,
                 "message": "Process did not survive backend restart.",
+                "retriable": True,
             }
             swept.append(jid)
         return swept

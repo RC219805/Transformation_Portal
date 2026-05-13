@@ -3,10 +3,12 @@
 Phase 1.C wires the existing ``JobRepository.sweep_orphaned`` into the
 FastAPI lifespan: on every startup, any job that the repository still
 records as ``queued`` or ``running`` but that no live worker in this
-process is executing is marked ``failed`` with an explicit
-``worker_lost_on_restart`` error. SSE clients reconnecting after a
-restart see a terminal ``done`` with the recovery error rather than
-hanging on a state that can no longer make progress.
+process is executing is marked ``worker_lost`` (Phase 2.D state)
+with an explicit ``worker_lost_on_restart`` error carrying
+``retriable=True``. SSE clients reconnecting after a restart see a
+terminal ``done`` event rather than hanging on a state that can no
+longer make progress, and operator tooling can distinguish the
+recovered jobs from executor-level failures.
 
 Memory backend: the repository is per-process so it is empty at startup
 and the sweeper is a deterministic no-op. Postgres backend (Phase 1.B):
@@ -55,18 +57,21 @@ async def sweep_orphaned_jobs(
     runtime_registry: Optional[LiveJobIdsProvider] = None,
     reason_code: str = WORKER_LOST_REASON_CODE,
 ) -> List[str]:
-    """Mark any active job without a live worker as ``failed``.
+    """Mark any active job without a live worker as ``worker_lost``.
 
     Returns the list of swept ids so callers (or tests) can log /
     metric the recovery without re-querying. The error payload is
     fixed by the contract:
 
         {"code": "worker_lost_on_restart",
-         "message": "Process did not survive backend restart."}
+         "message": "Process did not survive backend restart.",
+         "retriable": True}
 
-    ``last_event_at`` / ``finished_at`` / ``done_published_at`` are all
-    set to the same timestamp so SSE late-clients see a terminal
-    ``done`` event.
+    ``state`` is ``worker_lost`` (Phase 2.D — distinct from ``failed``
+    so callers can distinguish executor-level failures from worker
+    death), and ``last_event_at`` / ``finished_at`` /
+    ``done_published_at`` are all set to the same timestamp so SSE
+    late-clients see a terminal ``done`` event.
 
     The optional ``runtime_registry`` lets callers pass an alternative
     registry (test isolation). In production, the default singleton is
@@ -82,7 +87,7 @@ async def sweep_orphaned_jobs(
         sorted_ids = sorted(swept)
         sample = sorted_ids[:_SWEPT_LOG_SAMPLE_LIMIT]
         logger.warning(
-            "orchestrator restart recovery marked %d orphaned job(s) as failed " "(sample of up to %d: %s)",
+            "orchestrator restart recovery marked %d orphaned job(s) as worker_lost " "(sample of up to %d: %s)",
             len(swept),
             _SWEPT_LOG_SAMPLE_LIMIT,
             sample,
