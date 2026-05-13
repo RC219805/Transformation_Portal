@@ -40,10 +40,9 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Any, List, Optional
+from typing import TYPE_CHECKING, Any, List, Optional
 
 from redis.asyncio import Redis
-from redis.commands.core import AsyncScript
 
 from transformation_portal.ingest.canonical_json import dumps_json
 from transformation_portal.orchestrator.queue.base import (
@@ -54,6 +53,14 @@ from transformation_portal.orchestrator.queue.base import (
     QueueBroker,
     QueueBrokerError,
 )
+
+if TYPE_CHECKING:
+    # ``AsyncScript`` lives in ``redis.commands.core`` today, but that
+    # module is internal-ish — redis-py reorganizes it occasionally. Keep
+    # the import behind ``TYPE_CHECKING`` so the broker module loads on
+    # any redis-py 5.x / 6.x even if the path moves; at runtime we store
+    # the script handles as ``Any`` (they're called as callables anyway).
+    from redis.commands.core import AsyncScript  # noqa: F401
 
 logger = logging.getLogger(__name__)
 
@@ -224,12 +231,12 @@ class RedisQueueBroker(QueueBroker):
         )
         self._owns_client = client is None
         self._scripts_registered = False
-        self._enqueue_script: Optional[AsyncScript] = None
-        self._acquire_script: Optional[AsyncScript] = None
-        self._extend_script: Optional[AsyncScript] = None
-        self._release_script: Optional[AsyncScript] = None
-        self._reclaim_script: Optional[AsyncScript] = None
-        self._cancel_script: Optional[AsyncScript] = None
+        self._enqueue_script: Optional[Any] = None
+        self._acquire_script: Optional[Any] = None
+        self._extend_script: Optional[Any] = None
+        self._release_script: Optional[Any] = None
+        self._reclaim_script: Optional[Any] = None
+        self._cancel_script: Optional[Any] = None
 
     # ------------------------------------------------------------------ keys
 

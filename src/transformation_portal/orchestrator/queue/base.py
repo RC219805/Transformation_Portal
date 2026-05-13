@@ -28,12 +28,14 @@ Lease/heartbeat contract:
   any lease whose deadline has passed is reclaimed and the job is
   re-queued for another worker. Returns the list of reclaimed job
   ids so callers (or tests) can log / metric it. Production callers
-  should pass ``await broker.server_time()`` so deadlines and "now"
-  share a single source of truth across a multi-host fleet.
+  must pass ``await broker.server_time()`` — ``deadline`` and
+  ``now`` only mean the same thing when they share one clock.
 - ``server_time()`` returns the broker's authoritative clock value
-  (``time.monotonic`` for memory, Redis ``TIME`` for Redis). Use
-  this whenever comparing against a lease deadline to defeat host
-  clock drift.
+  and defines the time domain in which ``JobLease.deadline`` is
+  expressed (``time.monotonic`` for memory, Redis ``TIME`` Unix
+  epoch for Redis). Always compare a ``deadline`` against
+  ``await broker.server_time()`` — never against a host's local
+  wall clock — to defeat clock drift in a multi-host fleet.
 - ``cancel(job_id)`` removes a still-queued job, or marks an
   in-progress job for cancellation so the next ``extend_lease`` from
   the worker returns ``LeaseStatus.cancelled`` and the worker can
@@ -101,10 +103,16 @@ class JobEnqueueRequest:
 class JobLease:
     """What the broker hands back to the worker that successfully acquires.
 
-    ``deadline`` is the absolute monotonic-time-equivalent (epoch
-    seconds) at which the lease expires unless the worker calls
-    ``extend_lease``. The worker should heartbeat well before the
-    deadline (typical: every ``lease_seconds // 3``).
+    ``deadline`` is the absolute clock value (a float) at which the
+    lease expires unless the worker calls ``extend_lease``. The
+    backend's ``server_time()`` is the only valid clock to compare it
+    against — the memory backend stamps deadlines from
+    ``time.monotonic()``, the Redis backend stamps them from Redis
+    ``TIME`` (Unix epoch). Callers must never compare ``deadline``
+    against a host's local wall clock; always use
+    ``await broker.server_time()`` for the comparison boundary. The
+    worker should heartbeat well before the deadline (typical: every
+    ``lease_seconds // 3``).
     """
 
     job_id: str

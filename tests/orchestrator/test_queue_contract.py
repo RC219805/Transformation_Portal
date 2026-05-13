@@ -236,31 +236,39 @@ async def test_reclaim_no_op_when_no_leases(broker: QueueBroker) -> None:
     assert await broker.reclaim_expired_leases(now=time.monotonic() + 1000.0) == []
 
 
-async def test_server_time_advances_and_reclaims_against_broker_clock(broker: QueueBroker) -> None:
-    """``server_time()`` is the production sweeper's source of truth.
+async def test_server_time_shares_domain_with_lease_deadline(broker: QueueBroker) -> None:
+    """``server_time()`` and ``JobLease.deadline`` must share one clock.
 
-    Production callers (Phase 2.D's sweeper) pass
-    ``await broker.server_time()`` to ``reclaim_expired_leases`` so
-    that the deadlines written by ``acquire_lease`` and the boundary
-    used for the sweep share one clock. Verify the helper is
-    monotonic and that a sweep at ``server_time() + lease + slack``
-    reclaims an outstanding lease — i.e. the two values are
-    actually expressed in the same time domain.
+    Production sweepers (Phase 2.D) pass ``await broker.server_time()``
+    to ``reclaim_expired_leases`` and compare it against the deadlines
+    written by ``acquire_lease``. Verify the two values live in the
+    same time domain *without* sleeping: bracket the acquire call
+    between two ``server_time()`` reads, then prove the resulting
+    deadline falls inside ``[t_before + lease_seconds,
+    t_after + lease_seconds]``. That window can only hold if both
+    clocks measure the same thing.
     """
-    t0 = await broker.server_time()
-    await asyncio.sleep(0.01)
-    t1 = await broker.server_time()
-    assert t1 >= t0  # monotonic non-decreasing within the same broker
-
-    await broker.enqueue(_request("job-server-clock"))
-    lease = await broker.acquire_lease("worker-clock", lease_seconds=0.1)
+    lease_seconds = 30.0
+    t_before = await broker.server_time()
+    await broker.enqueue(_request("job-clock-domain"))
+    lease = await broker.acquire_lease("worker-clock", lease_seconds=lease_seconds)
     assert lease is not None
+    t_after = await broker.server_time()
 
-    # Wait past the lease using broker time, then sweep with broker time.
-    await asyncio.sleep(0.15)
-    now = await broker.server_time()
-    reclaimed = await broker.reclaim_expired_leases(now=now)
-    assert "job-server-clock" in reclaimed
+    # server_time is non-decreasing across the call.
+    assert t_after >= t_before
+    # And the lease's deadline lives in the same time domain — it must be
+    # bracketed by [t_before + lease, t_after + lease]. Any other clock
+    # would put deadline outside this window.
+    assert t_before + lease_seconds <= lease.deadline <= t_after + lease_seconds
+
+    # A sweep at "now == deadline - epsilon" must NOT reclaim the lease
+    # (deadline strictly in the future). A sweep at "now == deadline"
+    # must reclaim it (the broker uses <= for expiry).
+    not_yet = await broker.reclaim_expired_leases(now=lease.deadline - 1.0)
+    assert "job-clock-domain" not in not_yet
+    just_expired = await broker.reclaim_expired_leases(now=lease.deadline)
+    assert "job-clock-domain" in just_expired
 
 
 # ---------------------------------------------------------------------------
