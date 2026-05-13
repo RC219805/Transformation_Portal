@@ -30,8 +30,20 @@ class BranchFloor:
     exclude_prefixes: tuple[str, ...] = field(default_factory=tuple)
 
 
-# PR 0 only wires branch reporting. Actual floors land after baseline review.
+# PR 0 only wires branch reporting. Actual floors land after stable branch
+# baselines are reviewed.
 BRANCH_FLOORS: tuple[BranchFloor, ...] = ()
+
+# While branch floors are empty, CI still runs this checker in ``--dry-run`` mode
+# to capture package-level branch baselines for later ratchets.
+DRY_RUN_BRANCH_PREFIXES: tuple[str, ...] = (
+    "src/transformation_portal/plugins/",
+    "src/transformation_portal/stage_graph/",
+    "src/transformation_portal/vlm/",
+    "src/transformation_portal/depth/",
+    "src/transformation_portal/streaming/",
+    "src/transformation_portal/spatial_ai/reconstruction/",
+)
 
 
 @dataclass(frozen=True)
@@ -73,14 +85,20 @@ def aggregate(coverage_xml: Path, floors: Iterable[BranchFloor]) -> list[BranchR
     return results
 
 
-def render_table(results: list[BranchResult], *, dry_run: bool) -> str:
+def aggregate_prefixes(coverage_xml: Path, prefixes: Iterable[str]) -> list[BranchResult]:
+    return aggregate(coverage_xml, (BranchFloor(prefix, 0.0) for prefix in prefixes))
+
+
+def render_table(results: list[BranchResult], *, dry_run: bool, enforce_floors: bool = True) -> str:
     header = f"{'Package':<60}  {'Branches':>14}  {'Coverage':>10}  {'Floor':>8}  Status"
     lines = [header, "-" * len(header)]
     for result in results:
         ratio = f"{result.covered}/{result.valid}" if result.valid else "0/0"
         pct = f"{result.percentage:6.2f}%" if result.valid else "  N/A  "
-        floor = f"{result.floor:5.1f}%"
-        if result.passed:
+        floor = f"{result.floor:5.1f}%" if enforce_floors else "  N/A  "
+        if not enforce_floors:
+            status = "DRY-RUN" if dry_run else "INFO"
+        elif result.passed:
             status = "PASS"
         else:
             status = "DRY-RUN" if dry_run else "FAIL"
@@ -115,6 +133,8 @@ def main(argv: list[str] | None = None) -> int:
     if not BRANCH_FLOORS:
         print("No per-package branch coverage floors configured.")
         if args.dry_run:
+            results = aggregate_prefixes(args.coverage_xml, DRY_RUN_BRANCH_PREFIXES)
+            print(render_table(results, dry_run=True, enforce_floors=False))
             print("Dry-run branch coverage check completed; no floors enforced.")
         return 0
 
