@@ -9522,6 +9522,26 @@ async def _run_job(job: Job, argv: List[str]) -> None:
             except Exception:
                 pass
 
+        # Phase 2.D — terminal-state authority. If the reclaim sweep
+        # (or any other path) already drove this Job to a terminal
+        # state while ``_run_job`` was mid-flight, that earlier
+        # terminal event is authoritative: do NOT overwrite
+        # ``state``/``exit_code``/``error``, do NOT republish
+        # ``done``. Otherwise SSE early-clients would see two
+        # conflicting terminal events (e.g. ``worker_lost`` then
+        # ``succeeded``/``failed``), and late-clients synthesizing
+        # ``done`` from the final ``Job`` would observe a different
+        # outcome than they did on the wire. The subprocess was
+        # already terminated by the cancellation bridge, so there's
+        # no surviving runner to wait on here.
+        if job.finished_at is not None or job.state in _TERMINAL_JOB_STATES:
+            LOGGER.info(
+                "job %s reached terminal state=%s before runner exit; skipping duplicate done event",
+                job.id,
+                job.state,
+            )
+            return
+
         # Index artifacts and publish terminal events BEFORE setting finished_at.
         # This ensures late-connecting SSE clients can deterministically check
         # done_published_at to know if they need to wait for real events or can

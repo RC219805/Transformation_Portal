@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_serializer
 
 ErrorCode = Literal[
     # Top-level envelope error codes emitted by orchestrator HTTP surfaces.
@@ -32,6 +32,7 @@ ErrorCode = Literal[
     "INVALID_ARGUMENT",
     "METHOD_NOT_ALLOWED",
     "NOT_FOUND",
+    "QUEUE_UNAVAILABLE",
     "RATE_LIMITED",
     "REQUEST_TOO_LARGE",
     "SERVICE_UNAVAILABLE",
@@ -43,6 +44,11 @@ ErrorCode = Literal[
     "RUNNER_EXIT_NONZERO",
     "RUNNER_NOT_FOUND",
     "RUNNER_PARTIAL_FAILURE",
+    # Broker-level failure codes (Phase 2.D). Distinct from the executor
+    # RUNNER_* codes so callers and operator tooling can branch on the
+    # ``retriable=True`` flag.
+    "worker_lost_on_restart",
+    "worker_lost_via_lease_reclaim",
 ]
 """Closed set of error codes emitted by orchestrator routes.
 
@@ -60,6 +66,14 @@ class ErrorObject(BaseModel):
     code: ErrorCode
     message: str
     details: dict[str, Any] = Field(default_factory=dict)
+    # Phase 2.D — optional retry classification. ``True`` for broker-level
+    # failures whose underlying work is intact (``worker_lost_*``); ``False``
+    # for executor-level failures (``RUNNER_EXIT_NONZERO`` / ``RUNNER_ERROR``
+    # / ``RUNNER_NOT_FOUND``); ``None`` (omitted on the wire via
+    # ``exclude_none``) for HTTP-level error envelopes that have not been
+    # opted into the classification. Operator tooling and future auto-retry
+    # policy branch on this field.
+    retriable: bool | None = None
 
     @field_validator("details", mode="before")
     @classmethod
@@ -73,3 +87,21 @@ class ErrorObject(BaseModel):
         if value is None:
             return {}
         return value
+
+    @model_serializer(mode="wrap")
+    def _drop_unset_retriable(self, handler):
+        """Omit ``retriable`` from the wire when not opted in.
+
+        Phase 2.D additive contract: callers that set ``retriable`` to
+        ``True``/``False`` (executor failure paths, worker_lost emit)
+        embed the field on the wire; callers that omit the argument
+        (HTTP-level error envelopes) get the pre-Phase-2.D byte-identical
+        shape with no ``retriable`` key. Implemented as a wrap-serializer
+        because Pydantic v2's default JSON output still emits
+        ``retriable: null`` for the ``None`` default, which would break
+        wire compat with ``app.py:_error_obj``.
+        """
+        result = handler(self)
+        if self.retriable is None:
+            result.pop("retriable", None)
+        return result
