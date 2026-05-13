@@ -71,13 +71,14 @@ class JobModel(Base):
         cascade="all, delete-orphan",
         lazy="selectin",
     )
-    events: Mapped[list["JobEventModel"]] = relationship(
-        "JobEventModel",
-        back_populates="job",
-        cascade="all, delete-orphan",
-        order_by="JobEventModel.seq",
-        lazy="select",
-    )
+    # NOTE: ``job_events`` is intentionally *not* a relationship on this
+    # model. The event store contract (see ``JobEventStore.append``) allows
+    # appending events for arbitrary job_ids - including ids that have no
+    # corresponding ``jobs`` row - and the memory backend honors that. A
+    # foreign-key relationship here would FK-violate at the SQL level and
+    # break behavior parity. ``PostgresJobRepository.delete`` and
+    # ``.cleanup_expired`` cascade event deletion at the application layer
+    # instead.
 
 
 class JobArtifactModel(Base):
@@ -101,24 +102,24 @@ class JobArtifactModel(Base):
 
 
 class JobEventModel(Base):
-    """Append-only SSE event history with per-job monotonic seq."""
+    """Append-only SSE event history with per-job monotonic seq.
+
+    ``job_id`` deliberately has no SQL-level foreign key to ``jobs.id``
+    because the ``JobEventStore`` contract allows appending events for
+    arbitrary job ids (the memory backend never enforces a parent).
+    Cascade-on-job-delete is handled in ``PostgresJobRepository.delete``
+    and ``.cleanup_expired``.
+    """
 
     __tablename__ = "job_events"
     __table_args__ = (Index("ix_job_events_job_id_seq", "job_id", "seq", unique=True),)
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
-    job_id: Mapped[str] = mapped_column(
-        String(64),
-        ForeignKey("jobs.id", ondelete="CASCADE"),
-        nullable=False,
-        index=True,
-    )
+    job_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     seq: Mapped[int] = mapped_column(Integer, nullable=False)
     event_type: Mapped[str] = mapped_column(String(64), nullable=False)
     payload: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
     created_at: Mapped[float] = mapped_column(Float, nullable=False)
-
-    job: Mapped[JobModel] = relationship("JobModel", back_populates="events")
 
 
 __all__ = ["Base", "JobArtifactModel", "JobEventModel", "JobModel"]

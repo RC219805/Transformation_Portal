@@ -103,6 +103,10 @@ def upgrade() -> None:
     )
     op.create_index("ix_job_artifacts_job_id", "job_artifacts", ["job_id"], unique=False)
 
+    # No SQL-level FK on job_events.job_id: the JobEventStore contract
+    # allows events for arbitrary job_ids (the memory backend never enforces
+    # a parent), and PostgresJobRepository cascades manually in
+    # delete()/cleanup_expired().
     op.create_table(
         "job_events",
         sa.Column("id", sa.BigInteger(), autoincrement=True, nullable=False),
@@ -116,7 +120,6 @@ def upgrade() -> None:
             server_default=sa.text("'{}'::jsonb"),
         ),
         sa.Column("created_at", sa.Float(), nullable=False),
-        sa.ForeignKeyConstraint(["job_id"], ["jobs.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index("ix_job_events_job_id", "job_events", ["job_id"], unique=False)

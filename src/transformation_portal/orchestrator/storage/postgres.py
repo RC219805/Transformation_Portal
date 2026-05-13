@@ -345,6 +345,10 @@ class PostgresJobRepository(JobRepository):
 
     async def delete(self, job_id: str) -> None:
         async with self._session() as session:
+            # job_events.job_id has no SQL FK (see models.py), so cascade
+            # event deletion explicitly here. job_artifacts still cascades
+            # via its FK on jobs.id.
+            await session.execute(delete(JobEventModel).where(JobEventModel.job_id == job_id))
             await session.execute(delete(JobModel).where(JobModel.id == job_id))
             await session.commit()
 
@@ -357,6 +361,8 @@ class PostgresJobRepository(JobRepository):
             )
             expired_ids = list((await session.execute(ids_stmt)).scalars().all())
             if expired_ids:
+                # Manual cascade for job_events (no SQL FK; see models.py).
+                await session.execute(delete(JobEventModel).where(JobEventModel.job_id.in_(expired_ids)))
                 await session.execute(delete(JobModel).where(JobModel.id.in_(expired_ids)))
                 await session.commit()
             return expired_ids
