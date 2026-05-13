@@ -30,16 +30,17 @@ class BranchFloor:
     exclude_prefixes: tuple[str, ...] = field(default_factory=tuple)
 
 
-# Cold-Zone Coverage Program branch ratchets. These floors were set
-# conservatively below the measured 2026-05-13 branch baseline so regressions
-# fail without overfitting to one exact run.
+# Cold-Zone Coverage Program branch ratchets. These floors were raised after
+# repeated stable CI runs and a fresh 2026-05-13 required CI coverage snapshot.
+# Prefixes with cross-lane variance keep extra headroom until the next measured
+# ratchet.
 BRANCH_FLOORS: tuple[BranchFloor, ...] = (
-    BranchFloor("src/transformation_portal/plugins/", 30.0),
-    BranchFloor("src/transformation_portal/stage_graph/", 60.0),
-    BranchFloor("src/transformation_portal/vlm/", 50.0),
+    BranchFloor("src/transformation_portal/plugins/", 36.0),
+    BranchFloor("src/transformation_portal/stage_graph/", 63.0),
+    BranchFloor("src/transformation_portal/vlm/", 55.0),
     BranchFloor("src/transformation_portal/depth/", 40.0),
-    BranchFloor("src/transformation_portal/streaming/", 25.0),
-    BranchFloor("src/transformation_portal/spatial_ai/reconstruction/", 45.0),
+    BranchFloor("src/transformation_portal/streaming/", 29.0),
+    BranchFloor("src/transformation_portal/spatial_ai/reconstruction/", 47.0),
 )
 
 # If a future branch temporarily clears floors, dry-run mode still reports the

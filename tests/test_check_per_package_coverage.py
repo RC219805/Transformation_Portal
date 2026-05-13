@@ -393,17 +393,17 @@ class TestMain:
 
 
 class TestDefaultFloors:
-    def test_post_pr7_cold_zone_ratchets_are_configured(self, script_module):
+    def test_stable_cold_zone_line_ratchets_are_configured(self, script_module):
         prefixes = [floor.prefix for floor in script_module.PACKAGE_FLOORS]
         assert len(prefixes) == len(set(prefixes))
 
         floors = {floor.prefix: floor.floor for floor in script_module.PACKAGE_FLOORS}
         expected_floors = {
-            "src/transformation_portal/plugins/": 45.0,
-            "src/transformation_portal/stage_graph/": 70.0,
-            "src/transformation_portal/vlm/": 65.0,
-            "src/transformation_portal/depth/": 55.0,
-            "src/transformation_portal/streaming/": 50.0,
+            "src/transformation_portal/plugins/": 48.0,
+            "src/transformation_portal/stage_graph/": 74.0,
+            "src/transformation_portal/vlm/": 69.0,
+            "src/transformation_portal/depth/": 57.0,
+            "src/transformation_portal/streaming/": 53.0,
             "src/transformation_portal/spatial_ai/reconstruction/": 42.0,
         }
 
