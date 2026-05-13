@@ -68,6 +68,7 @@ operator guidance unless they are linked here as canonical documents.
 | Branch protection | [BRANCH_PROTECTION_SETUP.md](../ci/BRANCH_PROTECTION_SETUP.md) | Maintained |
 | Dependency pinning | [ADR-032 Dependency Pinning Strategy](../architecture/ADR-032-dependency-pinning-strategy.md) | Maintained |
 | Retired ML lock lanes | [Retired ML Lock Lanes - 2026-04-30](RETIRED_ML_LOCK_LANES_2026-04-30.md) | Maintained governance record for unsupported Linux/macOS Intel ML lanes |
+| Production hardening gap (paid pilot) | [Production Hardening Gap - 2026-05-13](PRODUCTION_HARDENING_GAP_2026-05-13.md) | Paid-pilot baseline: what is already done, what is partial, what is net-new across Phases 1 through 7, plus pinned pilot acceptance commands |
 | Test marker policy | [ADR-044 Test Marker Enforcement](../architecture/ADR-044-test-marker-enforcement.md) | Maintained |
 | Security hardening report | [security_best_practices_report.md](security_best_practices_report.md) | Maintained status record |
 
