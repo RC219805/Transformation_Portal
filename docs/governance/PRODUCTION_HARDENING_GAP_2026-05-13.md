@@ -109,24 +109,20 @@ Still net-new (follow-up commits / PRs on this track):
 
 ### 5.3 Phase 3 - external sessions
 
-**Updated 2026-05-13: Phase 3.A has landed.**
+**Updated 2026-05-13: Phase 3.A and Phase 3.B have landed.**
 
 Already done:
 
-- `SessionStore` contract + factory + `SqliteSessionStore` + `RedisSessionStore` skeleton (Phase 3.A, this PR). Lives under `web/secure-landing/lib/session-store/` with one module per concern: `contract.js` (JSDoc-typed wire shape), `sqlite-store.js` (refactor of the pre-Phase-3 SQLite logic — schema and statements byte-identical), `redis-store.js` (ioredis-backed implementation; the `ioredis` import is lazy so sqlite-only deployments don't pay for it), and `index.js` (factory keyed off `TP_FRONTDOOR_SESSION_STORE=sqlite|redis`, default `sqlite`). New env vars: `TP_FRONTDOOR_SESSION_STORE`, `TP_FRONTDOOR_REDIS_URL`, `TP_FRONTDOOR_REDIS_KEY_PREFIX` (default `tp:frontdoor:`).
-- `evaluateSessionScaling()` gate flip (Phase 3.A, this PR). Accepts `sessionStoreBackend` and returns `ok: true` for `multi_instance` / `ephemeral_runtime` modes when `sessionStoreBackend === "redis"`, while keeping the `single_instance` + SQLite default green. Invalid mode declarations still fail closed; unknown backend values (e.g. typo'd `memcached`) fall back to SQLite gate semantics so a misconfigured store can never silently unlock the gate. Verified by 9 cases in `tests/session-scaling.test.mjs` + 7 cases in the new `tests/session-store.test.mjs`.
+- `SessionStore` contract + factory + `SqliteSessionStore` + `RedisSessionStore` (Phase 3.A). Lives under `web/secure-landing/lib/session-store/` with one module per concern: `contract.js` (JSDoc-typed wire shape), `sqlite-store.js` (refactor of the pre-Phase-3 SQLite logic — schema and statements byte-identical), `redis-store.js` (ioredis-backed implementation), and `index.js` (factory keyed off `TP_FRONTDOOR_SESSION_STORE=sqlite|redis`, default `sqlite`). Env vars: `TP_FRONTDOOR_SESSION_STORE`, `TP_FRONTDOOR_REDIS_URL`, `TP_FRONTDOOR_REDIS_KEY_PREFIX` (default `tp:frontdoor:`).
+- `evaluateSessionScaling()` gate flip (Phase 3.A). Accepts `sessionStoreBackend` and returns `ok: true` for `multi_instance` / `ephemeral_runtime` modes when `sessionStoreBackend === "redis"`, while keeping the `single_instance` + SQLite default green. Invalid mode declarations still fail closed; unknown backend values fall back to SQLite gate semantics so a misconfigured store can never silently unlock the gate.
+- `sessions.js` cut-over (Phase 3.B, this PR). The frontdoor's session helpers now delegate to `getSessionStore()` rather than touching `better-sqlite3` directly. Persistence-touching helpers (`createAnonymousSession`, `getSessionById`, `getSessionFromRequest`, `rotateAuthenticatedSession`, `destroySession`, `isLoginThrottled`, `recordLoginAttempt`, `revokeSessionOnAccessFailure`) became async; pure-cookie / CSRF helpers (`setSessionCookie`, `clearSessionCookie`, `validateCsrfToken`, `getRemoteAddress`) stay sync since they never touched the store. Every Next.js route handler that imports the helpers (`app/login`, `app/logout`, `app/portal`, `app/portal/bootstrap`, `app/v1/[...path]`) was updated to `await`. The audit-event payloads and the SQLite schema / SQL surface are byte-identical to the pre-Phase-3 implementation — the only observable change is the new backend selection and the async signatures.
+- `ioredis` runtime dep (Phase 3.B, this PR). `web/secure-landing/package.json` pins `ioredis: ^5.7.0` (lock resolves to 5.10.1) and `npm run build` succeeds with the dep present. The `redis-store.js` module's lazy `await import("ioredis")` pattern is unchanged — production multi-instance deployments set the env vars and the runtime activates the Redis path automatically.
+- Test coverage. 250 frontdoor cases pass via `npm test`, including the 11 `tests/session-store.test.mjs` cases (SqliteSessionStore round-trip + RedisSessionStore login-throttle path through an injected fake client) and the 9 `tests/session-scaling.test.mjs` cases (gate semantics for sqlite + redis + invalid modes + unknown backends). The 13-case `tests/auth-flow.test.mjs` integration test exercises the async surface of `createAnonymousSession` / `rotateAuthenticatedSession` / `recordLoginAttempt` / `isLoginThrottled` end-to-end against the SQLite store. The 132-case `tests/routes.test.mjs` HTTP integration suite covers every async-bound route handler in the new shape.
 
-Still net-new (follow-up commits / PRs on this track):
+Still net-new (follow-up tracks):
 
-- `sessions.js` cut-over (Phase 3.B). The frontdoor's session helpers (`createAnonymousSession`, `getSessionFromRequest`, `rotateAuthenticatedSession`, `destroySession`, `validateCsrfToken`, `isLoginThrottled`, `recordLoginAttempt`) still use `better-sqlite3` directly. Switching them to consume `getSessionStore()` is async-shaped (Redis is async in Node) and ripples through every Next.js route handler that calls them, so it is intentionally deferred to a follow-up PR. The Phase 3.A factory + contract make the cut-over a mechanical rewire rather than a parallel implementation.
-- `ioredis` runtime dependency. The `RedisSessionStore` module imports it lazily so sqlite deployments don't need it on disk, but the production multi-instance lane will need a checked-in `package.json` dependency + a wheel-style smoke that builds the Next.js app with the redis branch active. Phase 3.B will land that.
-
-Pre-Phase-3 baseline (now resolved by Phase 3.A scaffolding):
-
-- ~~No `SessionStore` interface, no Redis client in `web/secure-landing/`.~~ Resolved by the new `lib/session-store/` module.
-- ~~Env var `TP_FRONTDOOR_SESSION_STORE` is unrecognized.~~ Now read by `lib/config.js` and surfaced through `evaluateSessionScaling`.
-- ~~The readiness gate already exists; it just needs to be unblocked when Redis is configured.~~ Done in `lib/session-scaling.js`.
-- `better-sqlite3` is still the active backend for the running session helpers; cross-instance sharing waits on Phase 3.B.
+- Operator runbook for the multi-instance Redis deployment (env vars, Cloudflare Workers preview pin, session-replay smoke against the redis branch). Tracked under Phase 5 pilot deployment rather than Phase 3.
+- `RedisSessionStore.persistSession` and `touchSession` set TTL on every write; a follow-up could swap this for `EXPIRE` after a `WATCH`/`MULTI` round-trip to make the absolute timeout strictly monotonic under tab-noise. Not required for the paid-pilot blast radius; logged here as a known follow-up.
 
 ### 5.4 Phase 4 - artifact lifecycle
 

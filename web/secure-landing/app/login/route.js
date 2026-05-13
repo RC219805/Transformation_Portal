@@ -281,7 +281,7 @@ function redirectToLogin(request, errorCode, session, returnTo = "") {
 
 export async function GET(request) {
   const requestedReturnTo = validatePortalReturnTo(request.nextUrl.searchParams.get("returnTo"));
-  const currentSession = getSessionFromRequest(request, { touch: false });
+  const currentSession = await getSessionFromRequest(request, { touch: false });
   let session = currentSession;
   if (currentSession?.authenticated) {
     const authState = await resolveAuthenticatedAccessSession(request, { touch: false });
@@ -291,14 +291,14 @@ export async function GET(request) {
       );
     }
     if (authState.revokeSession) {
-      revokeSessionOnAccessFailure(currentSession, authState.errorCode);
+      await revokeSessionOnAccessFailure(currentSession, authState.errorCode);
       session = null;
     }
   }
 
   // Mint an anonymous session before credentials are posted so the hidden CSRF
   // token on the login form is bound to a server-side session from the start.
-  session = session || createAnonymousSession();
+  session = session || (await createAnonymousSession());
   const accessContext = await resolveAccessContext(request);
   const rumTraceparent = resolveRequestTraceparent(request);
   const rumEnabled = isFrontdoorRumTelemetryEnabled({ traceparent: rumTraceparent });
@@ -353,9 +353,9 @@ export async function POST(request) {
 
   emitLoginRum(LOGIN_RUM_EVENT_TYPES.ATTEMPT);
 
-  let session = getSessionFromRequest(request, { touch: false });
+  let session = await getSessionFromRequest(request, { touch: false });
   if (!session) {
-    session = createAnonymousSession();
+    session = await createAnonymousSession();
   }
 
   if (!validateOriginAndReferrer(request)) {
@@ -406,7 +406,7 @@ export async function POST(request) {
   const remoteAddr = getRemoteAddress(request);
   const throttleKey = `${accessContext.accessEmail || "local"}:${username.toLowerCase()}:${remoteAddr}`;
 
-  if (isLoginThrottled(throttleKey)) {
+  if (await isLoginThrottled(throttleKey)) {
     audit("login_throttle", {
       username: username.toLowerCase(),
       accessEmail: accessContext.accessEmail,
@@ -422,7 +422,7 @@ export async function POST(request) {
     accessEmail: accessContext.accessEmail,
     allowAccessBypass: accessContext.bypass
   });
-  recordLoginAttempt({
+  await recordLoginAttempt({
     throttleKey,
     success: Boolean(user),
     remoteAddr
@@ -439,9 +439,9 @@ export async function POST(request) {
     return redirectToLogin(request, "invalid", session, requestedReturnTo);
   }
 
-  const authenticatedSession = rotateAuthenticatedSession(session, user);
+  const authenticatedSession = await rotateAuthenticatedSession(session, user);
   if (session?.id) {
-    destroySession(session.id, "rotation_cleanup");
+    await destroySession(session.id, "rotation_cleanup");
   }
 
   audit("login_success", {

@@ -568,7 +568,7 @@ test("login POST rotates the session and redirects authenticated users to /porta
     const restoreFetch = withMockedAccessCerts();
 
     try {
-      const anonymousSession = sessions.createAnonymousSession();
+      const anonymousSession = await sessions.createAnonymousSession();
       const form = new URLSearchParams({
         username: "admin",
         password: "correct horse battery staple",
@@ -594,9 +594,9 @@ test("login POST rotates the session and redirects authenticated users to /porta
       assert.equal(response.headers.get("location"), "https://portal.example.com/portal");
       assert.ok(rotatedCookie.value);
       assert.notEqual(rotatedCookie.value, anonymousSession.id);
-      assert.equal(sessions.getSessionById(anonymousSession.id, { touch: false }), null);
+      assert.equal(await sessions.getSessionById(anonymousSession.id, { touch: false }), null);
 
-      const authenticatedSession = sessions.getSessionById(rotatedCookie.value, { touch: false });
+      const authenticatedSession = await sessions.getSessionById(rotatedCookie.value, { touch: false });
       assert.equal(authenticatedSession?.authenticated, true);
       assert.equal(authenticatedSession?.username, "admin");
       assert.match(rotatedCookie.raw, /HttpOnly/);
@@ -629,7 +629,7 @@ test("login POST redirects authenticated users to a validated returnTo route", a
     const restoreFetch = withMockedAccessCerts();
 
     try {
-      const anonymousSession = sessions.createAnonymousSession();
+      const anonymousSession = await sessions.createAnonymousSession();
       const form = new URLSearchParams({
         username: "admin",
         password: "correct horse battery staple",
@@ -709,7 +709,7 @@ test("login GET serves a minimal branded sign-in shell and boots an anonymous se
     assert.doesNotMatch(html, /Local development bypass is enabled\./);
     assert.doesNotMatch(html, /TP_CF_ACCESS_TEAM_DOMAIN/);
     assert.ok(sessionCookie.value);
-    assert.equal(sessions.getSessionById(sessionCookie.value, { touch: false })?.authenticated, false);
+    assert.equal((await sessions.getSessionById(sessionCookie.value, { touch: false }))?.authenticated, false);
   } finally {
     env.cleanup();
   }
@@ -744,8 +744,8 @@ test("login GET redirects authenticated sessions to a validated returnTo route",
     const restoreFetch = withMockedAccessCerts();
 
     try {
-      const authenticatedSession = sessions.rotateAuthenticatedSession(
-        sessions.createAnonymousSession(),
+      const authenticatedSession = await sessions.rotateAuthenticatedSession(
+        await sessions.createAnonymousSession(),
         {
           username: "admin",
           accessEmail: "admin@example.com",
@@ -866,8 +866,8 @@ test("homepage GET is stateless and ignores authenticated session hints", async 
     const sessions = await importFresh("../lib/sessions.js");
     const db = getDb(env.dbPath);
     const { GET } = await importFresh("../app/route.js");
-    const authenticatedSession = sessions.rotateAuthenticatedSession(
-      sessions.createAnonymousSession(),
+    const authenticatedSession = await sessions.rotateAuthenticatedSession(
+      await sessions.createAnonymousSession(),
       {
         username: "admin",
         accessEmail: "admin@example.com",
@@ -931,7 +931,7 @@ test("homepage GET does not touch session state even when a stale cookie is pres
   try {
     const sessions = await importFresh("../lib/sessions.js");
     const { GET } = await importFresh("../app/route.js");
-    const expiredSession = sessions.createAnonymousSession();
+    const expiredSession = await sessions.createAnonymousSession();
     const db = getDb(env.dbPath);
     const now = Date.now();
     db.prepare("UPDATE sessions SET idle_expires_at = ?, absolute_expires_at = ? WHERE id = ?").run(
@@ -978,7 +978,7 @@ test("login POST keeps failures generic when Access email does not match the con
     const restoreFetch = withMockedAccessCerts();
 
     try {
-      const anonymousSession = sessions.createAnonymousSession();
+      const anonymousSession = await sessions.createAnonymousSession();
       const request = buildRequest("https://portal.example.com/login", {
         method: "POST",
         headers: new Headers({
@@ -999,7 +999,7 @@ test("login POST keeps failures generic when Access email does not match the con
 
       assert.equal(response.status, 303);
       assert.equal(response.headers.get("location"), "https://portal.example.com/login?error=invalid");
-      assert.equal(sessions.getSessionById(anonymousSession.id, { touch: false })?.authenticated, false);
+      assert.equal((await sessions.getSessionById(anonymousSession.id, { touch: false }))?.authenticated, false);
     } finally {
       restoreFetch();
     }
@@ -1027,7 +1027,7 @@ test("login POST preserves a validated returnTo when sign-in fails", async () =>
     const restoreFetch = withMockedAccessCerts();
 
     try {
-      const anonymousSession = sessions.createAnonymousSession();
+      const anonymousSession = await sessions.createAnonymousSession();
       const request = buildRequest("https://portal.example.com/login", {
         method: "POST",
         headers: new Headers({
@@ -1079,7 +1079,7 @@ test("login POST rejects invalid CSRF before credential verification", async () 
     const restoreFetch = withMockedAccessCerts();
 
     try {
-      const anonymousSession = sessions.createAnonymousSession();
+      const anonymousSession = await sessions.createAnonymousSession();
       const request = buildRequest("https://portal.example.com/login", {
         method: "POST",
         headers: new Headers({
@@ -1100,7 +1100,7 @@ test("login POST rejects invalid CSRF before credential verification", async () 
 
       assert.equal(response.status, 303);
       assert.equal(response.headers.get("location"), "https://portal.example.com/login?error=csrf");
-      assert.equal(sessions.getSessionById(anonymousSession.id, { touch: false })?.authenticated, false);
+      assert.equal((await sessions.getSessionById(anonymousSession.id, { touch: false }))?.authenticated, false);
     } finally {
       restoreFetch();
     }
@@ -1126,7 +1126,7 @@ test("login POST rejects convenience headers without a verified Access JWT in pr
     const sessions = await importFresh("../lib/sessions.js");
     const { POST } = await importFresh("../app/login/route.js");
 
-    const anonymousSession = sessions.createAnonymousSession();
+    const anonymousSession = await sessions.createAnonymousSession();
     const request = buildRequest("https://portal.example.com/login", {
       method: "POST",
       headers: new Headers({
@@ -1147,7 +1147,7 @@ test("login POST rejects convenience headers without a verified Access JWT in pr
 
     assert.equal(response.status, 303);
     assert.equal(response.headers.get("location"), "https://portal.example.com/login?error=access");
-    assert.equal(sessions.getSessionById(anonymousSession.id, { touch: false })?.authenticated, false);
+    assert.equal((await sessions.getSessionById(anonymousSession.id, { touch: false }))?.authenticated, false);
   } finally {
     env.cleanup();
   }
@@ -1172,7 +1172,7 @@ test("login POST rejects Access JWTs with the wrong audience", async () => {
     const restoreFetch = withMockedAccessCerts();
 
     try {
-      const anonymousSession = sessions.createAnonymousSession();
+      const anonymousSession = await sessions.createAnonymousSession();
       const request = buildRequest("https://portal.example.com/login", {
         method: "POST",
         headers: new Headers({
@@ -1219,7 +1219,7 @@ test("login POST rejects Access JWTs with the wrong issuer", async () => {
     const restoreFetch = withMockedAccessCerts();
 
     try {
-      const anonymousSession = sessions.createAnonymousSession();
+      const anonymousSession = await sessions.createAnonymousSession();
       const request = buildRequest("https://portal.example.com/login", {
         method: "POST",
         headers: new Headers({
@@ -1265,7 +1265,7 @@ test("production ignores the local bypass flag without a verified Access JWT", a
     const sessions = await importFresh("../lib/sessions.js");
     const { POST } = await importFresh("../app/login/route.js");
 
-    const anonymousSession = sessions.createAnonymousSession();
+    const anonymousSession = await sessions.createAnonymousSession();
     const request = buildRequest("https://portal.example.com/login", {
       method: "POST",
       headers: new Headers({
@@ -1308,7 +1308,7 @@ test("development local bypass still allows login without Cloudflare Access", as
     const sessions = await importFresh("../lib/sessions.js");
     const { POST } = await importFresh("../app/login/route.js");
 
-    const anonymousSession = sessions.createAnonymousSession();
+    const anonymousSession = await sessions.createAnonymousSession();
     const request = buildRequest("http://localhost:3000/login", {
       method: "POST",
       headers: new Headers({
@@ -1351,7 +1351,7 @@ test("development local bypass login still works when the browser omits origin a
     const sessions = await importFresh("../lib/sessions.js");
     const { POST } = await importFresh("../app/login/route.js");
 
-    const anonymousSession = sessions.createAnonymousSession();
+    const anonymousSession = await sessions.createAnonymousSession();
     const request = buildRequest("http://127.0.0.1:3000/login", {
       method: "POST",
       headers: new Headers({
@@ -1394,7 +1394,7 @@ test("login POST ignores untrusted host overrides when building redirect targets
     const sessions = await importFresh("../lib/sessions.js");
     const { POST } = await importFresh("../app/login/route.js");
 
-    const anonymousSession = sessions.createAnonymousSession();
+    const anonymousSession = await sessions.createAnonymousSession();
     const request = buildRequest("https://portal.example.com/login", {
       method: "POST",
       headers: new Headers({
@@ -1441,7 +1441,7 @@ test("login POST rejects invalid returnTo values and falls back to /portal", asy
     const sessions = await importFresh("../lib/sessions.js");
     const { POST } = await importFresh("../app/login/route.js");
 
-    const anonymousSession = sessions.createAnonymousSession();
+    const anonymousSession = await sessions.createAnonymousSession();
     const request = buildRequest("http://127.0.0.1:3000/login", {
       method: "POST",
       headers: new Headers({
@@ -1473,8 +1473,8 @@ test("logout POST invalidates the authenticated session and clears the cookie", 
     const sessions = await importFresh("../lib/sessions.js");
     const { POST } = await importFresh("../app/logout/route.js");
 
-    const authenticatedSession = sessions.rotateAuthenticatedSession(
-      sessions.createAnonymousSession(),
+    const authenticatedSession = await sessions.rotateAuthenticatedSession(
+      await sessions.createAnonymousSession(),
       {
         username: "admin",
         accessEmail: "admin@example.com",
@@ -1495,7 +1495,7 @@ test("logout POST invalidates the authenticated session and clears the cookie", 
 
     assert.equal(response.status, 303);
     assert.equal(response.headers.get("location"), "https://portal.example.com/login");
-    assert.equal(sessions.getSessionById(authenticatedSession.id, { touch: false }), null);
+    assert.equal(await sessions.getSessionById(authenticatedSession.id, { touch: false }), null);
     assert.match(response.headers.get("set-cookie") || "", /__Host-tp_session=/);
   } finally {
     env.cleanup();
@@ -1507,16 +1507,16 @@ test("expired sessions are removed for both idle and absolute timeout breaches",
 
   try {
     const sessions = await importFresh("../lib/sessions.js");
-    const idleExpired = sessions.createAnonymousSession();
-    const absoluteExpired = sessions.createAnonymousSession();
+    const idleExpired = await sessions.createAnonymousSession();
+    const absoluteExpired = await sessions.createAnonymousSession();
     const db = getDb(env.dbPath);
     const now = Date.now();
 
     db.prepare("UPDATE sessions SET idle_expires_at = ? WHERE id = ?").run(now - 1_000, idleExpired.id);
     db.prepare("UPDATE sessions SET absolute_expires_at = ? WHERE id = ?").run(now - 1_000, absoluteExpired.id);
 
-    assert.equal(sessions.getSessionById(idleExpired.id, { touch: false }), null);
-    assert.equal(sessions.getSessionById(absoluteExpired.id, { touch: false }), null);
+    assert.equal(await sessions.getSessionById(idleExpired.id, { touch: false }), null);
+    assert.equal(await sessions.getSessionById(absoluteExpired.id, { touch: false }), null);
   } finally {
     env.cleanup();
   }
@@ -1531,8 +1531,8 @@ test("managed bootstrap returns actor metadata and CSRF for authenticated sessio
     const restoreFetch = withMockedAccessCerts();
 
     try {
-      const authenticatedSession = sessions.rotateAuthenticatedSession(
-        sessions.createAnonymousSession(),
+      const authenticatedSession = await sessions.rotateAuthenticatedSession(
+        await sessions.createAnonymousSession(),
         {
           username: "admin",
           accessEmail: "admin@example.com",
@@ -1579,8 +1579,8 @@ test("managed bootstrap enables the artifact viewer modal for rollout cohorts", 
   try {
     const sessions = await importFresh("../lib/sessions.js");
     const { GET } = await importFresh("../app/portal/bootstrap/route.js");
-    const authenticatedSession = sessions.rotateAuthenticatedSession(
-      sessions.createAnonymousSession(),
+    const authenticatedSession = await sessions.rotateAuthenticatedSession(
+      await sessions.createAnonymousSession(),
       {
         username: "admin",
         accessEmail: "admin@example.com",
@@ -1614,8 +1614,8 @@ test("managed bootstrap enables review surface deferral for rollout cohorts", as
   try {
     const sessions = await importFresh("../lib/sessions.js");
     const { GET } = await importFresh("../app/portal/bootstrap/route.js");
-    const authenticatedSession = sessions.rotateAuthenticatedSession(
-      sessions.createAnonymousSession(),
+    const authenticatedSession = await sessions.rotateAuthenticatedSession(
+      await sessions.createAnonymousSession(),
       {
         username: "admin",
         accessEmail: "admin@example.com",
@@ -1650,8 +1650,8 @@ test("managed bootstrap enables staged uploads for rollout cohorts", async () =>
   try {
     const sessions = await importFresh("../lib/sessions.js");
     const { GET } = await importFresh("../app/portal/bootstrap/route.js");
-    const authenticatedSession = sessions.rotateAuthenticatedSession(
-      sessions.createAnonymousSession(),
+    const authenticatedSession = await sessions.rotateAuthenticatedSession(
+      await sessions.createAnonymousSession(),
       {
         username: "admin",
         accessEmail: "admin@example.com",
@@ -1686,8 +1686,8 @@ test("managed bootstrap enables rum telemetry for rollout cohorts", async () => 
   try {
     const sessions = await importFresh("../lib/sessions.js");
     const { GET } = await importFresh("../app/portal/bootstrap/route.js");
-    const authenticatedSession = sessions.rotateAuthenticatedSession(
-      sessions.createAnonymousSession(),
+    const authenticatedSession = await sessions.rotateAuthenticatedSession(
+      await sessions.createAnonymousSession(),
       {
         username: "admin",
         accessEmail: "admin@example.com",
@@ -1724,8 +1724,8 @@ test("managed bootstrap rum telemetry ignores front-door RUM rollout controls", 
   try {
     const sessions = await importFresh("../lib/sessions.js");
     const { GET } = await importFresh("../app/portal/bootstrap/route.js");
-    const authenticatedSession = sessions.rotateAuthenticatedSession(
-      sessions.createAnonymousSession(),
+    const authenticatedSession = await sessions.rotateAuthenticatedSession(
+      await sessions.createAnonymousSession(),
       {
         username: "admin",
         accessEmail: "admin@example.com",
@@ -1761,8 +1761,8 @@ test("managed bootstrap enables FastVLM captioning for enabled rollout cohorts",
   try {
     const sessions = await importFresh("../lib/sessions.js");
     const { GET } = await importFresh("../app/portal/bootstrap/route.js");
-    const authenticatedSession = sessions.rotateAuthenticatedSession(
-      sessions.createAnonymousSession(),
+    const authenticatedSession = await sessions.rotateAuthenticatedSession(
+      await sessions.createAnonymousSession(),
       {
         username: "admin",
         accessEmail: "admin@example.com",
@@ -1799,8 +1799,8 @@ test("managed bootstrap keeps FastVLM captioning disabled when the master switch
   try {
     const sessions = await importFresh("../lib/sessions.js");
     const { GET } = await importFresh("../app/portal/bootstrap/route.js");
-    const authenticatedSession = sessions.rotateAuthenticatedSession(
-      sessions.createAnonymousSession(),
+    const authenticatedSession = await sessions.rotateAuthenticatedSession(
+      await sessions.createAnonymousSession(),
       {
         username: "admin",
         accessEmail: "admin@example.com",
@@ -1837,8 +1837,8 @@ test("managed bootstrap keeps FastVLM captioning disabled when rollout is zero",
   try {
     const sessions = await importFresh("../lib/sessions.js");
     const { GET } = await importFresh("../app/portal/bootstrap/route.js");
-    const authenticatedSession = sessions.rotateAuthenticatedSession(
-      sessions.createAnonymousSession(),
+    const authenticatedSession = await sessions.rotateAuthenticatedSession(
+      await sessions.createAnonymousSession(),
       {
         username: "admin",
         accessEmail: "admin@example.com",
@@ -1875,8 +1875,8 @@ test("managed bootstrap echoes traceparent and includes trace id in audit payloa
     const restoreFetch = withMockedAccessCerts();
 
     try {
-      const authenticatedSession = sessions.rotateAuthenticatedSession(
-        sessions.createAnonymousSession(),
+      const authenticatedSession = await sessions.rotateAuthenticatedSession(
+        await sessions.createAnonymousSession(),
         {
           username: "admin",
           accessEmail: "admin@example.com",
@@ -1919,8 +1919,8 @@ test("managed bootstrap rejects authenticated sessions without a current Access 
     const sessions = await importFresh("../lib/sessions.js");
     const { GET } = await importFresh("../app/portal/bootstrap/route.js");
 
-    const authenticatedSession = sessions.rotateAuthenticatedSession(
-      sessions.createAnonymousSession(),
+    const authenticatedSession = await sessions.rotateAuthenticatedSession(
+      await sessions.createAnonymousSession(),
       {
         username: "admin",
         accessEmail: "admin@example.com",
@@ -1943,7 +1943,7 @@ test("managed bootstrap rejects authenticated sessions without a current Access 
     assert.equal(body.reason, "auth_failure");
     assert.equal(body.retryable, false);
     assert.match(response.headers.get("set-cookie") || "", /__Host-tp_session=/);
-    assert.equal(sessions.getSessionById(authenticatedSession.id, { touch: false }), null);
+    assert.equal(await sessions.getSessionById(authenticatedSession.id, { touch: false }), null);
   } finally {
     env.cleanup();
   }
@@ -1991,8 +1991,8 @@ test("managed bootstrap classifies Access verification outages as retryable acce
     const sessions = await importFresh("../lib/sessions.js");
     const { GET } = await importFresh("../app/portal/bootstrap/route.js");
 
-    const authenticatedSession = sessions.rotateAuthenticatedSession(
-      sessions.createAnonymousSession(),
+    const authenticatedSession = await sessions.rotateAuthenticatedSession(
+      await sessions.createAnonymousSession(),
       {
         username: "admin",
         accessEmail: "admin@example.com",
@@ -2046,8 +2046,8 @@ test("portal returns 503 with no-store when the FastAPI UI origin is unavailable
   try {
     const sessions = await importFresh("../lib/sessions.js");
     const { GET } = await importFresh("../app/portal/route.js");
-    const authenticatedSession = sessions.rotateAuthenticatedSession(
-      sessions.createAnonymousSession(),
+    const authenticatedSession = await sessions.rotateAuthenticatedSession(
+      await sessions.createAnonymousSession(),
       {
         username: "admin",
         accessEmail: "admin@example.com",
@@ -2104,8 +2104,8 @@ test("portal renders waiting recovery posture for Access outages", async () => {
     };
 
     try {
-      const authenticatedSession = sessions.rotateAuthenticatedSession(
-        sessions.createAnonymousSession(),
+      const authenticatedSession = await sessions.rotateAuthenticatedSession(
+        await sessions.createAnonymousSession(),
         {
           username: "admin",
           accessEmail: "admin@example.com",
@@ -2147,8 +2147,8 @@ test("portal returns configuration guidance when managed access config is incomp
   try {
     const sessions = await importFresh("../lib/sessions.js");
     const { GET } = await importFresh("../app/portal/route.js");
-    const authenticatedSession = sessions.rotateAuthenticatedSession(
-      sessions.createAnonymousSession(),
+    const authenticatedSession = await sessions.rotateAuthenticatedSession(
+      await sessions.createAnonymousSession(),
       {
         username: "admin",
         accessEmail: "admin@example.com",
@@ -2191,8 +2191,8 @@ test("portal redirects to login with route context and clears the session when A
   try {
     const sessions = await importFresh("../lib/sessions.js");
     const { GET } = await importFresh("../app/portal/route.js");
-    const authenticatedSession = sessions.rotateAuthenticatedSession(
-      sessions.createAnonymousSession(),
+    const authenticatedSession = await sessions.rotateAuthenticatedSession(
+      await sessions.createAnonymousSession(),
       {
         username: "admin",
         accessEmail: "admin@example.com",
@@ -2218,7 +2218,7 @@ test("portal redirects to login with route context and clears the session when A
       "https://portal.example.com/login?returnTo=%2Fportal%3Fview%3Dreview%26job%3Djob_demo%26artifact%3Dsynthetic%252Freview-primary.png%26compare%3D1"
     );
     assert.match(response.headers.get("set-cookie") || "", /__Host-tp_session=/);
-    assert.equal(sessions.getSessionById(authenticatedSession.id, { touch: false }), null);
+    assert.equal(await sessions.getSessionById(authenticatedSession.id, { touch: false }), null);
   } finally {
     env.cleanup();
   }
@@ -2722,8 +2722,8 @@ test("v1 POST rejects requests missing valid same-origin CSRF protections", asyn
     const sessions = await importFresh("../lib/sessions.js");
     const route = await importFresh("../app/v1/[...path]/route.js");
 
-    const authenticatedSession = sessions.rotateAuthenticatedSession(
-      sessions.createAnonymousSession(),
+    const authenticatedSession = await sessions.rotateAuthenticatedSession(
+      await sessions.createAnonymousSession(),
       {
         username: "admin",
         accessEmail: "admin@example.com",
@@ -2759,8 +2759,8 @@ test("v1 rejects authenticated sessions without a current Access JWT", async () 
     const sessions = await importFresh("../lib/sessions.js");
     const route = await importFresh("../app/v1/[...path]/route.js");
 
-    const authenticatedSession = sessions.rotateAuthenticatedSession(
-      sessions.createAnonymousSession(),
+    const authenticatedSession = await sessions.rotateAuthenticatedSession(
+      await sessions.createAnonymousSession(),
       {
         username: "admin",
         accessEmail: "admin@example.com",
@@ -2785,7 +2785,7 @@ test("v1 rejects authenticated sessions without a current Access JWT", async () 
       assert.equal(body.error.details.reason, "auth_failure");
       assert.equal(body.error.details.retryable, false);
       assert.match(response.headers.get("set-cookie") || "", /__Host-tp_session=/);
-      assert.equal(sessions.getSessionById(authenticatedSession.id, { touch: false }), null);
+      assert.equal(await sessions.getSessionById(authenticatedSession.id, { touch: false }), null);
     } finally {
       env.cleanup();
   }
@@ -2800,8 +2800,8 @@ test("v1 returns forbidden when the current Access identity does not match the a
     const restoreFetch = withMockedAccessCerts();
 
     try {
-      const authenticatedSession = sessions.rotateAuthenticatedSession(
-        sessions.createAnonymousSession(),
+      const authenticatedSession = await sessions.rotateAuthenticatedSession(
+        await sessions.createAnonymousSession(),
         {
           username: "admin",
           accessEmail: "admin@example.com",
@@ -2828,7 +2828,7 @@ test("v1 returns forbidden when the current Access identity does not match the a
       assert.equal(body.error.details.reason, "auth_failure");
       assert.equal(body.error.details.retryable, false);
       assert.match(response.headers.get("set-cookie") || "", /__Host-tp_session=/);
-      assert.equal(sessions.getSessionById(authenticatedSession.id, { touch: false }), null);
+      assert.equal(await sessions.getSessionById(authenticatedSession.id, { touch: false }), null);
     } finally {
       restoreFetch();
     }
@@ -2848,8 +2848,8 @@ test("v1 reports managed proxy config failures when the backend API key is missi
     const restoreFetch = withMockedAccessCerts();
 
     try {
-      const authenticatedSession = sessions.rotateAuthenticatedSession(
-        sessions.createAnonymousSession(),
+      const authenticatedSession = await sessions.rotateAuthenticatedSession(
+        await sessions.createAnonymousSession(),
         {
           username: "admin",
           accessEmail: "admin@example.com",
@@ -2908,8 +2908,8 @@ test("v1 normalizes upstream outages into a structured retryable error envelope"
     });
 
     try {
-      const authenticatedSession = sessions.rotateAuthenticatedSession(
-        sessions.createAnonymousSession(),
+      const authenticatedSession = await sessions.rotateAuthenticatedSession(
+        await sessions.createAnonymousSession(),
         {
           username: "admin",
           accessEmail: "admin@example.com",
@@ -2988,8 +2988,8 @@ test("v1 preserves rate-limit retry headers and envelope on upstream 429", async
     });
 
     try {
-      const authenticatedSession = sessions.rotateAuthenticatedSession(
-        sessions.createAnonymousSession(),
+      const authenticatedSession = await sessions.rotateAuthenticatedSession(
+        await sessions.createAnonymousSession(),
         {
           username: "admin",
           accessEmail: "admin@example.com",
@@ -3062,8 +3062,8 @@ test("v1 normalizes upstream auth responses into managed config failures", async
       });
 
       try {
-        const authenticatedSession = sessions.rotateAuthenticatedSession(
-          sessions.createAnonymousSession(),
+        const authenticatedSession = await sessions.rotateAuthenticatedSession(
+          await sessions.createAnonymousSession(),
           {
             username: "admin",
             accessEmail: "admin@example.com",
@@ -3116,8 +3116,8 @@ test("v1 forwards browser traceparent upstream and includes trace id in queue-ac
     const sessions = await importFresh("../lib/sessions.js");
     const route = await importFresh("../app/v1/[...path]/route.js");
 
-    const authenticatedSession = sessions.rotateAuthenticatedSession(
-      sessions.createAnonymousSession(),
+    const authenticatedSession = await sessions.rotateAuthenticatedSession(
+      await sessions.createAnonymousSession(),
       {
         username: "admin",
         accessEmail: "admin@example.com",
@@ -3189,8 +3189,8 @@ test("v1 SSE proxy preserves event-stream framing while injecting backend auth s
     const sessions = await importFresh("../lib/sessions.js");
     const route = await importFresh("../app/v1/[...path]/route.js");
 
-    const authenticatedSession = sessions.rotateAuthenticatedSession(
-      sessions.createAnonymousSession(),
+    const authenticatedSession = await sessions.rotateAuthenticatedSession(
+      await sessions.createAnonymousSession(),
       {
         username: "admin",
         accessEmail: "admin@example.com",
@@ -3267,8 +3267,8 @@ test("v1 artifact proxy passes binary previews through the managed front door wi
     const sessions = await importFresh("../lib/sessions.js");
     const route = await importFresh("../app/v1/[...path]/route.js");
 
-    const authenticatedSession = sessions.rotateAuthenticatedSession(
-      sessions.createAnonymousSession(),
+    const authenticatedSession = await sessions.rotateAuthenticatedSession(
+      await sessions.createAnonymousSession(),
       {
         username: "admin",
         accessEmail: "admin@example.com",
@@ -3868,7 +3868,7 @@ test("development cookies relax __Host/Secure requirements for local HTTP", asyn
   try {
     const sessions = await importFresh("../lib/sessions.js");
     const response = NextResponse.json({ ok: true });
-    const anonymousSession = sessions.createAnonymousSession();
+    const anonymousSession = await sessions.createAnonymousSession();
 
     sessions.setSessionCookie(response, anonymousSession.id);
 

@@ -111,7 +111,7 @@ test("production login POST ignores the local bypass flag unless development mod
     const sessions = await importFresh("../lib/sessions.js");
     const { POST } = await importFresh("../app/login/route.js");
 
-    const anonymousSession = sessions.createAnonymousSession();
+    const anonymousSession = await sessions.createAnonymousSession();
     const request = buildRequest("https://portal.example.com/login", {
       method: "POST",
       headers: new Headers({
@@ -130,7 +130,7 @@ test("production login POST ignores the local bypass flag unless development mod
 
     assert.equal(response.status, 303);
     assert.equal(response.headers.get("location"), "https://portal.example.com/login?error=access");
-    assert.equal(sessions.getSessionById(anonymousSession.id, { touch: false })?.authenticated, false);
+    assert.equal((await sessions.getSessionById(anonymousSession.id, { touch: false }))?.authenticated, false);
   } finally {
     env.cleanup();
   }

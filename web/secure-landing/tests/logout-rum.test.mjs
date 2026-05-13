@@ -126,9 +126,9 @@ async function flushFireAndForget() {
   await new Promise((resolve) => setImmediate(resolve));
 }
 
-function buildAuthenticatedSession(sessions) {
-  return sessions.rotateAuthenticatedSession(
-    sessions.createAnonymousSession(),
+async function buildAuthenticatedSession(sessions) {
+  return await sessions.rotateAuthenticatedSession(
+    await sessions.createAnonymousSession(),
     {
       username: "admin",
       accessEmail: "admin@example.com",
@@ -201,7 +201,7 @@ test("logout POST emits no RUM events when the shared RUM master flag is disable
   try {
     const sessions = await importFresh("../lib/sessions.js");
     const { POST } = await importFresh("../app/logout/route.js");
-    const session = buildAuthenticatedSession(sessions);
+    const session = await buildAuthenticatedSession(sessions);
     const request = buildLogoutPostRequest({ session, csrfHeader: session.csrfToken });
 
     const response = await POST(request);
@@ -211,7 +211,7 @@ test("logout POST emits no RUM events when the shared RUM master flag is disable
     assert.equal(response.headers.get("location"), "https://portal.example.com/login");
     assert.equal(rumCalls.length, 0, `expected zero RUM calls when disabled, got ${rumCalls.length}`);
     // Session was destroyed even though RUM was off — RUM must never alter behavior.
-    assert.equal(sessions.getSessionById(session.id, { touch: false }), null);
+    assert.equal(await sessions.getSessionById(session.id, { touch: false }), null);
   } finally {
     restoreFetch();
     env.cleanup();
@@ -226,7 +226,7 @@ test("logout POST emits no RUM events when the front-door RUM flag is disabled",
   try {
     const sessions = await importFresh("../lib/sessions.js");
     const { POST } = await importFresh("../app/logout/route.js");
-    const session = buildAuthenticatedSession(sessions);
+    const session = await buildAuthenticatedSession(sessions);
     const request = buildLogoutPostRequest({ session, csrfHeader: session.csrfToken });
 
     const response = await POST(request);
@@ -235,7 +235,7 @@ test("logout POST emits no RUM events when the front-door RUM flag is disabled",
     assert.equal(response.status, 303);
     assert.equal(response.headers.get("location"), "https://portal.example.com/login");
     assert.equal(rumCalls.length, 0, `expected zero RUM calls when disabled, got ${rumCalls.length}`);
-    assert.equal(sessions.getSessionById(session.id, { touch: false }), null);
+    assert.equal(await sessions.getSessionById(session.id, { touch: false }), null);
   } finally {
     restoreFetch();
     env.cleanup();
@@ -254,7 +254,7 @@ test("logout POST emits no RUM events when front-door rollout percent samples ou
   try {
     const sessions = await importFresh("../lib/sessions.js");
     const { POST } = await importFresh("../app/logout/route.js");
-    const session = buildAuthenticatedSession(sessions);
+    const session = await buildAuthenticatedSession(sessions);
     const request = buildLogoutPostRequest({ session, csrfHeader: session.csrfToken });
 
     const response = await POST(request);
@@ -263,7 +263,7 @@ test("logout POST emits no RUM events when front-door rollout percent samples ou
     assert.equal(response.status, 303);
     assert.equal(response.headers.get("location"), "https://portal.example.com/login");
     assert.equal(rumCalls.length, 0, `expected sampled-out RUM calls, got ${rumCalls.length}`);
-    assert.equal(sessions.getSessionById(session.id, { touch: false }), null);
+    assert.equal(await sessions.getSessionById(session.id, { touch: false }), null);
   } finally {
     restoreFetch();
     env.cleanup();
@@ -278,7 +278,7 @@ test("logout POST emits attempt + success on the happy path with an authenticate
   try {
     const sessions = await importFresh("../lib/sessions.js");
     const { POST } = await importFresh("../app/logout/route.js");
-    const session = buildAuthenticatedSession(sessions);
+    const session = await buildAuthenticatedSession(sessions);
     const request = buildLogoutPostRequest({ session, csrfHeader: session.csrfToken });
 
     const response = await POST(request);
@@ -306,7 +306,7 @@ test("logout POST emits attempt + success on the happy path with an authenticate
     assert.deepEqual(success.body.metadata, {});
 
     // Session is destroyed on the success path.
-    assert.equal(sessions.getSessionById(session.id, { touch: false }), null);
+    assert.equal(await sessions.getSessionById(session.id, { touch: false }), null);
 
     // Backend auth + traceparent are forwarded.
     assert.equal(attempt.headers["authorization"], "Bearer backend-secret");
@@ -361,7 +361,7 @@ test("logout POST emits attempt + failure(csrf) when Origin/Referrer validation 
   try {
     const sessions = await importFresh("../lib/sessions.js");
     const { POST } = await importFresh("../app/logout/route.js");
-    const session = buildAuthenticatedSession(sessions);
+    const session = await buildAuthenticatedSession(sessions);
     // Cross-origin POST: the route's validateOriginAndReferrer rejects
     // this (Origin header doesn't match the URL's origin) before even
     // looking at x-csrf-token.
@@ -384,7 +384,7 @@ test("logout POST emits attempt + failure(csrf) when Origin/Referrer validation 
     // Existing route behavior: Origin/Referrer failure does NOT destroy the
     // session in storage, only clears the cookie. RUM emit must not change
     // that.
-    assert.notEqual(sessions.getSessionById(session.id, { touch: false }), null);
+    assert.notEqual(await sessions.getSessionById(session.id, { touch: false }), null);
 
     assertNoPiiInRumPosts(rumCalls);
   } finally {
@@ -401,7 +401,7 @@ test("logout POST emits attempt + failure(csrf) when the x-csrf-token header mis
   try {
     const sessions = await importFresh("../lib/sessions.js");
     const { POST } = await importFresh("../app/logout/route.js");
-    const session = buildAuthenticatedSession(sessions);
+    const session = await buildAuthenticatedSession(sessions);
     const request = buildLogoutPostRequest({ session, csrfHeader: "wrong-token" });
 
     const response = await POST(request);
@@ -415,7 +415,7 @@ test("logout POST emits attempt + failure(csrf) when the x-csrf-token header mis
     assert.deepEqual(rumCalls[1].body.metadata, { failure_code: "csrf" });
 
     // CSRF token failure does NOT destroy the session in storage either.
-    assert.notEqual(sessions.getSessionById(session.id, { touch: false }), null);
+    assert.notEqual(await sessions.getSessionById(session.id, { touch: false }), null);
 
     assertNoPiiInRumPosts(rumCalls);
   } finally {
@@ -441,7 +441,7 @@ test("logout POST still completes the redirect when the RUM emitter fetch reject
   try {
     const sessions = await importFresh("../lib/sessions.js");
     const { POST } = await importFresh("../app/logout/route.js");
-    const session = buildAuthenticatedSession(sessions);
+    const session = await buildAuthenticatedSession(sessions);
     const request = buildLogoutPostRequest({ session, csrfHeader: session.csrfToken });
 
     const response = await POST(request);
@@ -451,7 +451,7 @@ test("logout POST still completes the redirect when the RUM emitter fetch reject
     assert.equal(response.headers.get("location"), "https://portal.example.com/login");
     // Session is still destroyed even when RUM fetches reject — RUM is
     // strictly best-effort and cannot change the session-destruction path.
-    assert.equal(sessions.getSessionById(session.id, { touch: false }), null);
+    assert.equal(await sessions.getSessionById(session.id, { touch: false }), null);
     assert.equal(rumCalls.length, 2, "fetch was attempted for both events");
     assert.equal(unhandled.length, 0, "emitter must catch all rejections");
   } finally {
@@ -473,7 +473,7 @@ test("logout POST does not emit RUM events when no backend api key is configured
   try {
     const sessions = await importFresh("../lib/sessions.js");
     const { POST } = await importFresh("../app/logout/route.js");
-    const session = buildAuthenticatedSession(sessions);
+    const session = await buildAuthenticatedSession(sessions);
     const request = buildLogoutPostRequest({ session, csrfHeader: session.csrfToken });
 
     const response = await POST(request);
