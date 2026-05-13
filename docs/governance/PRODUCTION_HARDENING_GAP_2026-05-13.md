@@ -94,15 +94,15 @@ Still net-new (follow-up commits / PRs):
 
 ### 5.2 Phase 2 - worker split
 
-**Updated 2026-05-13: Phase 2.A has landed.**
+**Updated 2026-05-13: Phases 2.A and 2.B have landed.**
 
 Already done:
 
-- `QueueBroker` Protocol + `JobEnqueueRequest` / `JobLease` dataclasses + `MemoryQueueBroker` (Phase 2.A, this PR). Backend selected via `TP_ORCHESTRATOR_QUEUE_BACKEND=memory|redis`; the `redis` branch is recognised but its import will fail until Phase 2.B lands. The broker contract pins lease/heartbeat semantics (`acquire_lease` / `extend_lease` / `release_lease` / `reclaim_expired_leases`), pre-lease and in-flight cancellation, and admission-collision detection. A worker runner skeleton (`src/transformation_portal/orchestrator/worker.py`) wraps the broker in a poll-with-backoff supervisor loop, a heartbeat coroutine, cooperative `CancelledByOrchestrator` handling, and a `JobExecutor` callable seam that Phase 2.C will replace with the real subprocess dispatch. 17 backend-parametrized contract tests run today against `memory`; the Redis branch will activate when `TP_TEST_REDIS_URL` is set in Phase 2.B.
+- `QueueBroker` Protocol + `JobEnqueueRequest` / `JobLease` dataclasses + `MemoryQueueBroker` (Phase 2.A). Backend selected via `TP_ORCHESTRATOR_QUEUE_BACKEND=memory|redis`. The broker contract pins lease/heartbeat semantics (`acquire_lease` / `extend_lease` / `release_lease` / `reclaim_expired_leases`), pre-lease and in-flight cancellation, and admission-collision detection. A worker runner skeleton (`src/transformation_portal/orchestrator/worker.py`) wraps the broker in a poll-with-backoff supervisor loop, a heartbeat coroutine, cooperative `CancelledByOrchestrator` handling, and a `JobExecutor` callable seam that Phase 2.C will replace with the real subprocess dispatch.
+- `RedisQueueBroker` (Phase 2.B, this PR) backed by `redis>=5` async client + a docker-compose `redis` service (AOF on, `noeviction` policy, healthcheck) + `make test-worker-redis-contract`. Atomicity for acquire / extend / release / reclaim / cancel is implemented as server-side Lua so admission collisions and lease handoff never produce partial state, and lease deadlines are pinned to the Redis server clock (via `redis.call('TIME')`) so a multi-host fleet shares a single source of truth. Per-test `key_prefix` isolation lets pytest-xdist and shared-tenant Redis deployments coexist. The Phase 2.A contract test suite (17 cases) now runs against both backends; Redis activates when `TP_TEST_REDIS_URL` is set, mirroring the Phase 1.B Postgres pattern.
 
 Still net-new (follow-up commits / PRs on this track):
 
-- `RedisQueueBroker` + `redis-py` async client + docker-compose redis service + `make test-worker-redis-contract` (Phase 2.B). Mirrors the Phase 1.B pattern.
 - `app.py` wiring: replace `asyncio.create_subprocess_exec` in `_run_job` with `await broker.enqueue(...)`. The worker runner becomes the actual consumer; the orchestrator process no longer spawns dispatch subprocesses (Phase 2.C).
 - `worker_lost` state distinct from `failed` + retry classification + integration with the Phase 1.C restart sweeper so the broker's `reclaim_expired_leases` and the repository's `sweep_orphaned` agree on which jobs to mark (Phase 2.D). Env vars `TP_WORKER_*` already accepted by `worker.py`'s `_config_from_env` are documented but not yet wired to a runtime registry.
 

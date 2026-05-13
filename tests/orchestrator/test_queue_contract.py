@@ -22,6 +22,7 @@ from __future__ import annotations
 import asyncio
 import os
 import time
+import uuid
 from typing import AsyncIterator
 
 import pytest
@@ -59,8 +60,13 @@ def backend(request: pytest.FixtureRequest) -> str:
 
 
 @pytest_asyncio.fixture
-async def broker(backend: str) -> AsyncIterator[QueueBroker]:
-    """Yield a freshly-reset ``QueueBroker`` for the parameterized backend."""
+async def broker(backend: str, request: pytest.FixtureRequest) -> AsyncIterator[QueueBroker]:
+    """Yield a freshly-reset ``QueueBroker`` for the parameterized backend.
+
+    Redis instances use a per-test ``key_prefix`` so parallel test
+    runs (pytest-xdist) and shared-tenant Redis deployments never
+    collide and never touch keys outside the broker's namespace.
+    """
     reset_singleton()
     if backend == "memory":
         instance: QueueBroker = MemoryQueueBroker()
@@ -69,7 +75,12 @@ async def broker(backend: str) -> AsyncIterator[QueueBroker]:
             from transformation_portal.orchestrator.queue.redis import RedisQueueBroker
         except ImportError:
             pytest.skip("redis backend module not available; expected in Phase 2.B")
-        instance = RedisQueueBroker(redis_url=os.environ[_REDIS_URL_ENV])
+        # Per-test key prefix isolates parallel runs and survives shared Redis.
+        prefix = f"tp:test:{uuid.uuid4().hex[:12]}:"
+        instance = RedisQueueBroker(
+            redis_url=os.environ[_REDIS_URL_ENV],
+            key_prefix=prefix,
+        )
         await instance.reset()
     else:
         raise RuntimeError(f"unknown backend {backend!r}")
@@ -223,6 +234,41 @@ async def test_reclaim_expired_leases_requeues_abandoned_jobs(broker: QueueBroke
 
 async def test_reclaim_no_op_when_no_leases(broker: QueueBroker) -> None:
     assert await broker.reclaim_expired_leases(now=time.monotonic() + 1000.0) == []
+
+
+async def test_server_time_shares_domain_with_lease_deadline(broker: QueueBroker) -> None:
+    """``server_time()`` and ``JobLease.deadline`` must share one clock.
+
+    Production sweepers (Phase 2.D) pass ``await broker.server_time()``
+    to ``reclaim_expired_leases`` and compare it against the deadlines
+    written by ``acquire_lease``. Verify the two values live in the
+    same time domain *without* sleeping: bracket the acquire call
+    between two ``server_time()`` reads, then prove the resulting
+    deadline falls inside ``[t_before + lease_seconds,
+    t_after + lease_seconds]``. That window can only hold if both
+    clocks measure the same thing.
+    """
+    lease_seconds = 30.0
+    t_before = await broker.server_time()
+    await broker.enqueue(_request("job-clock-domain"))
+    lease = await broker.acquire_lease("worker-clock", lease_seconds=lease_seconds)
+    assert lease is not None
+    t_after = await broker.server_time()
+
+    # server_time is non-decreasing across the call.
+    assert t_after >= t_before
+    # And the lease's deadline lives in the same time domain — it must be
+    # bracketed by [t_before + lease, t_after + lease]. Any other clock
+    # would put deadline outside this window.
+    assert t_before + lease_seconds <= lease.deadline <= t_after + lease_seconds
+
+    # A sweep at "now == deadline - epsilon" must NOT reclaim the lease
+    # (deadline strictly in the future). A sweep at "now == deadline"
+    # must reclaim it (the broker uses <= for expiry).
+    not_yet = await broker.reclaim_expired_leases(now=lease.deadline - 1.0)
+    assert "job-clock-domain" not in not_yet
+    just_expired = await broker.reclaim_expired_leases(now=lease.deadline)
+    assert "job-clock-domain" in just_expired
 
 
 # ---------------------------------------------------------------------------

@@ -27,7 +27,15 @@ Lease/heartbeat contract:
 - ``reclaim_expired_leases(*, now)`` is the broker's housekeeping:
   any lease whose deadline has passed is reclaimed and the job is
   re-queued for another worker. Returns the list of reclaimed job
-  ids so callers (or tests) can log / metric it.
+  ids so callers (or tests) can log / metric it. Production callers
+  must pass ``await broker.server_time()`` — ``deadline`` and
+  ``now`` only mean the same thing when they share one clock.
+- ``server_time()`` returns the broker's authoritative clock value
+  and defines the time domain in which ``JobLease.deadline`` is
+  expressed (``time.monotonic`` for memory, Redis ``TIME`` Unix
+  epoch for Redis). Always compare a ``deadline`` against
+  ``await broker.server_time()`` — never against a host's local
+  wall clock — to defeat clock drift in a multi-host fleet.
 - ``cancel(job_id)`` removes a still-queued job, or marks an
   in-progress job for cancellation so the next ``extend_lease`` from
   the worker returns ``LeaseStatus.cancelled`` and the worker can
@@ -36,6 +44,7 @@ Lease/heartbeat contract:
 
 from __future__ import annotations
 
+import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
@@ -94,10 +103,16 @@ class JobEnqueueRequest:
 class JobLease:
     """What the broker hands back to the worker that successfully acquires.
 
-    ``deadline`` is the absolute monotonic-time-equivalent (epoch
-    seconds) at which the lease expires unless the worker calls
-    ``extend_lease``. The worker should heartbeat well before the
-    deadline (typical: every ``lease_seconds // 3``).
+    ``deadline`` is the absolute clock value (a float) at which the
+    lease expires unless the worker calls ``extend_lease``. The
+    backend's ``server_time()`` is the only valid clock to compare it
+    against — the memory backend stamps deadlines from
+    ``time.monotonic()``, the Redis backend stamps them from Redis
+    ``TIME`` (Unix epoch). Callers must never compare ``deadline``
+    against a host's local wall clock; always use
+    ``await broker.server_time()`` for the comparison boundary. The
+    worker should heartbeat well before the deadline (typical: every
+    ``lease_seconds // 3``).
     """
 
     job_id: str
@@ -175,12 +190,17 @@ class QueueBroker(ABC):
 
         Returns the list of reclaimed job ids so callers can
         ``await repo.update(jid, ...)`` them as ``worker_lost`` in
-        Phase 2.D. The ``now`` parameter is the time source the
-        backend compares against the stored lease deadlines: the
-        memory backend uses ``time.monotonic()`` (so wall-clock
-        adjustments don't move deadlines), and the Phase 2.B Redis
-        backend will use Redis server time. Tests pass an explicit
-        ``now`` to pin time deterministically.
+        Phase 2.D.
+
+        The ``now`` argument is the value the backend compares
+        against the stored lease deadlines. Production callers
+        should pass ``await broker.server_time()`` so deadlines
+        (written from the same clock by ``acquire_lease`` /
+        ``extend_lease``) and the sweep boundary share one source of
+        truth. The explicit float is retained for tests and
+        deterministic simulation: ``reclaim_expired_leases(now=
+        lease.deadline + delta)`` lets a single-process test pin
+        time without sleeping.
         """
 
     @abstractmethod
@@ -205,6 +225,19 @@ class QueueBroker(ABC):
     @abstractmethod
     async def reset(self) -> None:
         """Test-only: clear all queue + lease state."""
+
+    async def server_time(self) -> float:
+        """Return the broker's authoritative clock value.
+
+        Production callers pair this with ``reclaim_expired_leases``
+        so the sweep boundary lives in the same time domain as the
+        deadlines written by ``acquire_lease`` / ``extend_lease``.
+        The default implementation uses ``time.monotonic()`` so
+        single-process backends (memory) and tests behave as a
+        process-local monotonic clock; the Redis backend overrides
+        it to read ``TIME`` from the Redis server.
+        """
+        return time.monotonic()
 
     async def close(self) -> None:
         """Optional shutdown hook for backends that hold connections."""

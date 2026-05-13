@@ -120,6 +120,10 @@ pygments==2.20.0
     # via
     #   -c all.txt
     #   rich
+redis==6.4.0
+    # via
+    #   -c all.txt
+    #   -r base.in
 referencing==0.37.0
     # via
     #   -c all.txt
