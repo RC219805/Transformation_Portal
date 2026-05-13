@@ -349,6 +349,83 @@ async def test_event_store_isolates_jobs(
     assert y_events[0].seq == 1
 
 
+async def test_event_store_accepts_arbitrary_job_id(
+    repository_and_events: RepoAndEvents,
+) -> None:
+    """The event store contract does not require a parent job row.
+
+    Memory and Postgres backends must both accept appends for any
+    job_id, including ids that were never created in the repository.
+    This pins down the contract because the Postgres impl deliberately
+    omits a SQL FK on ``job_events.job_id``.
+    """
+    repo, events = repository_and_events
+    # No `await repo.create(...)` for "phantom-job".
+    appended = await events.append("phantom-job", "state", {"state": "queued"}, created_at=1.0)
+    assert appended.seq == 1
+    replay = [e async for e in events.events_since("phantom-job")]
+    assert [e.payload for e in replay] == [{"state": "queued"}]
+
+
+async def test_delete_removes_job_from_repository(
+    repository_and_events: RepoAndEvents,
+) -> None:
+    """``repo.delete`` must remove the job from the repository on every backend.
+
+    This is the cross-backend slice of the contract. The Postgres-only
+    cascade-of-events semantic is pinned in
+    ``test_postgres_delete_job_cascades_events`` below.
+    """
+    repo, events = repository_and_events
+    await repo.create(_new_record("job-cascade"))
+    await events.append("job-cascade", "state", {"v": 1}, created_at=1.0)
+    await events.append("job-cascade", "state", {"v": 2}, created_at=2.0)
+
+    await repo.delete("job-cascade")
+    assert await repo.get("job-cascade") is None
+
+
+async def test_postgres_delete_job_cascades_events(
+    repository_and_events: RepoAndEvents,
+) -> None:
+    """Postgres backend only: ``repo.delete`` cascades event deletion.
+
+    The memory backend's event store is independently keyed and does
+    not cascade; that behavior is intentional and is covered by the
+    cross-backend ``test_delete_removes_job_from_repository``. This
+    test pins the Postgres-specific cascade that ``PostgresJobRepository
+    .delete`` does manually (the SQL FK on ``job_events.job_id`` was
+    deliberately dropped; see models.py).
+    """
+    repo, events = repository_and_events
+    if not _is_postgres_backend(repo):
+        pytest.skip("postgres-only contract: cascade-on-delete in events table")
+
+    await repo.create(_new_record("job-pg-cascade"))
+    await events.append("job-pg-cascade", "state", {"v": 1}, created_at=1.0)
+    await events.append("job-pg-cascade", "state", {"v": 2}, created_at=2.0)
+
+    await repo.delete("job-pg-cascade")
+    remaining = [e async for e in events.events_since("job-pg-cascade")]
+    assert remaining == []
+
+
+def _is_postgres_backend(repo: JobRepository) -> bool:
+    """Return True iff ``repo`` is the Postgres backend.
+
+    Uses ``isinstance`` rather than ``type(...).__name__`` so renames or
+    subclasses don't silently change behavior. The import is guarded
+    because ``sqlalchemy`` may not be installed in the offline lane.
+    """
+    try:
+        from transformation_portal.orchestrator.storage.postgres import (
+            PostgresJobRepository,
+        )
+    except ImportError:
+        return False
+    return isinstance(repo, PostgresJobRepository)
+
+
 # ---------------------------------------------------------------------------
 # Memory backend - boundary-condition unit tests
 # ---------------------------------------------------------------------------

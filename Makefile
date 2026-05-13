@@ -27,7 +27,7 @@ PHASE6_SMOKE_TESTS := \
 	tests/test_lux_render_pipeline_smoke.py \
 	tests/lux_depth_v3/test_orchestrator_smoke.py
 
-.PHONY: help test-fast test-novideo test-full test-integration test-structure test-utils test-orchestrator-contract test-orchestrator-http-contract test-portal-contract test-frontdoor-contract test-archive-gate-contract seed-frontdoor-user run-frontdoor-local run-backend-local run-backend-local-noreload dev-write-env dev-start dev-stop check-vercel-env validate-orchestrator-http validate-portal-lux-materials-live validate-portal-fastvlm-captioning-live validate-portal-css-layer-parity validate-portal-browser validate-frontdoor-browser validate-frontdoor-deployment-gate audit-pipeline-readiness coverage-fast-scope coverage-report coverage-diff coverage-package venv repair-core-venv setup clean \
+.PHONY: help test-fast test-novideo test-full test-integration test-structure test-utils test-orchestrator-contract test-orchestrator-http-contract test-orchestrator-postgres-contract test-portal-contract test-frontdoor-contract test-archive-gate-contract db-upgrade db-revision seed-frontdoor-user run-frontdoor-local run-backend-local run-backend-local-noreload dev-write-env dev-start dev-stop check-vercel-env validate-orchestrator-http validate-portal-lux-materials-live validate-portal-fastvlm-captioning-live validate-portal-css-layer-parity validate-portal-browser validate-frontdoor-browser validate-frontdoor-deployment-gate audit-pipeline-readiness coverage-fast-scope coverage-report coverage-diff coverage-package venv repair-core-venv setup clean \
         lint lint-parity ci ci-full pre-commit install-hooks quality-check fix-quality validate-ci organize-docs check-json-serialization check-piptools-cache \
         check-python-headers check-yaml-governance check-stale-docs check-doc-heading-links lock lock-prod lock-ci lock-dev install-core install-ml install-ml-core install-ml-raw install-ml-sam2 install-ml-coreml install-fastvlm-runtime check-fastvlm-runtime docs docs-clean \
         check check-test-markers check-ci-sync check-todo-governance check-environment check-portal-asset-budgets check-dependency-pinning validate-full validate-quick clean-frontdoor clean-all check-worktree \
@@ -273,11 +273,41 @@ test-utils:
 
 test-orchestrator-contract:
 	@echo "Running portal orchestrator contract suite..."
-	@"$(PY)" -m pytest -q tests/test_app_orchestrator_runtime.py tests/test_app_orchestrator_contract_http.py tests/validation/test_portal_smoke_scripts.py
+	@"$(PY)" -m pytest -q tests/test_app_orchestrator_runtime.py tests/test_app_orchestrator_contract_http.py tests/validation/test_portal_smoke_scripts.py tests/orchestrator
 
 test-orchestrator-http-contract:
 	@echo "Running HTTP-only orchestrator contract tests..."
 	@"$(PY)" -m pytest -q tests/test_app_orchestrator_contract_http.py
+
+# Phase 1.B - durable orchestrator state. Requires TP_TEST_POSTGRES_URL pointing
+# at an empty Postgres database; the conftest under tests/orchestrator/ runs
+# `await repo.reset()` between cases to drop+recreate the schema, so do NOT
+# point this at a production database. `make db-upgrade` is the canonical
+# bootstrap for an empty database.
+test-orchestrator-postgres-contract:
+	@echo "Running orchestrator contract suite against Postgres backend..."
+	@if [ -z "$(TP_TEST_POSTGRES_URL)" ]; then \
+		echo "ERROR: TP_TEST_POSTGRES_URL is not set. Example:"; \
+		echo "  docker compose up -d postgres"; \
+		echo "  TP_TEST_POSTGRES_URL=postgresql+asyncpg://tp:tp_dev_password@127.0.0.1:5432/transformation_portal \\"; \
+		echo "    make test-orchestrator-postgres-contract"; \
+		exit 1; \
+	fi
+	@TP_TEST_POSTGRES_URL="$(TP_TEST_POSTGRES_URL)" "$(PY)" -m pytest -q tests/orchestrator -m unit
+
+# Apply orchestrator schema migrations against TP_DATABASE_URL.
+db-upgrade:
+	@echo "Applying orchestrator Alembic migrations (alembic upgrade head)..."
+	@"$(PY)" -m alembic -c migrations/alembic.ini upgrade head
+
+# Generate a new Alembic revision from the current ORM models.
+db-revision:
+	@if [ -z "$(MESSAGE)" ]; then \
+		echo "ERROR: pass MESSAGE='<short description>' to db-revision"; \
+		exit 1; \
+	fi
+	@echo "Generating Alembic revision: $(MESSAGE)"
+	@"$(PY)" -m alembic -c migrations/alembic.ini revision --autogenerate -m "$(MESSAGE)"
 
 test-portal-contract:
 	@echo "Running portal runtime/browser contract tests..."

@@ -111,10 +111,39 @@ services:
       start_period: 20s
     command: python -m transformation_portal.monitoring.dashboard --port 8080
 
+  # Durable orchestrator state backend (Phase 1.B).
+  #
+  # Optional service: only required when the orchestrator runs with
+  # TP_ORCHESTRATOR_STATE_BACKEND=postgres. The default `memory` backend
+  # never touches the database. Start with:
+  #
+  #     docker compose up -d postgres
+  #     make db-upgrade
+  #
+  # See docs/runtimes/orchestrator-postgres.md for the full operator runbook.
+  postgres:
+    image: postgres:16-alpine
+    container_name: transformation-portal-postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-transformation_portal}
+      POSTGRES_USER: ${POSTGRES_USER:-tp}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-tp_dev_password}
+    ports:
+      - "${TP_POSTGRES_PUBLIC_PORT:-127.0.0.1:5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-tp} -d ${POSTGRES_DB:-transformation_portal}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
 volumes:
   input:
   output:
   config:
+  postgres_data:
 
 networks:
   default:

@@ -35,7 +35,9 @@ cffi==2.0.0
     #   -c all.txt
     #   cryptography
 cfgv==3.5.0
-    # via pre-commit
+    # via
+    #   -c all.txt
+    #   pre-commit
 chardet==7.4.3
     # via
     #   -c all.txt
@@ -94,7 +96,9 @@ hypothesis==6.152.1
     #   -c all.txt
     #   -r dev.in
 identify==2.6.19
-    # via pre-commit
+    # via
+    #   -c all.txt
+    #   pre-commit
 idna==3.11
     # via
     #   -c all.txt
@@ -148,7 +152,9 @@ mypy-extensions==1.1.0
     #   black
     #   mypy
 nodeenv==1.10.0
-    # via pre-commit
+    # via
+    #   -c all.txt
+    #   pre-commit
 packaging==26.0
     # via
     #   -c all.txt
@@ -174,7 +180,9 @@ pluggy==1.6.0
     #   pytest
     #   pytest-cov
 pre-commit==4.6.0
-    # via -r dev.in
+    # via
+    #   -c all.txt
+    #   -r dev.in
 pycodestyle==2.14.0
     # via
     #   -c all.txt

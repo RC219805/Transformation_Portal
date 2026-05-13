@@ -89,6 +89,32 @@ class JobRecord:
         )
 
 
+# Cross-backend contract: which JobRecord fields callers may patch via
+# ``JobRepository.update``. ``id`` / ``created_at`` are immutable;
+# ``artifact_lookup`` is owned by ``set_artifacts`` (the Postgres backend
+# persists it through a separate table). Both ``MemoryJobRepository`` and
+# ``PostgresJobRepository`` enforce the same set so the cut-over in app.py
+# is bit-identical.
+UPDATABLE_FIELDS = frozenset(
+    {
+        "state",
+        "progress",
+        "started_at",
+        "finished_at",
+        "done_published_at",
+        "last_event_at",
+        "exit_code",
+        "cancel_requested",
+        "request",
+        "effective_request",
+        "logs_tail",
+        "artifacts",
+        "run_summary",
+        "error",
+    }
+)
+
+
 @dataclass
 class JobEvent:
     """Single SSE-event entry for replay across restarts."""

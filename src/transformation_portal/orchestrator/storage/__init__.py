@@ -54,9 +54,10 @@ def get_job_repository() -> JobRepository:
             )
         except ImportError as exc:
             raise RuntimeError(
-                f"{_BACKEND_ENV}=postgres requires sqlalchemy[asyncio] and "
-                "asyncpg, which Phase 1.B will add to requirements/base.in. "
-                "Until that PR lands, only the memory backend is available."
+                f"{_BACKEND_ENV}=postgres requires sqlalchemy[asyncio] + "
+                "asyncpg from requirements/base.txt. Install the pinned "
+                "base requirements (make install-core) and retry. (Alembic "
+                "is only needed for `make db-upgrade` / `make db-revision`.)"
             ) from exc
 
         database_url = os.getenv(_DATABASE_URL_ENV, "").strip()
@@ -94,9 +95,10 @@ def get_job_event_store() -> JobEventStore:
             )
         except ImportError as exc:
             raise RuntimeError(
-                f"{_BACKEND_ENV}=postgres requires sqlalchemy[asyncio] and "
-                "asyncpg, which Phase 1.B will add to requirements/base.in. "
-                "Until that PR lands, only the memory backend is available."
+                f"{_BACKEND_ENV}=postgres requires sqlalchemy[asyncio] + "
+                "asyncpg from requirements/base.txt. Install the pinned "
+                "base requirements (make install-core) and retry. (Alembic "
+                "is only needed for `make db-upgrade` / `make db-revision`.)"
             ) from exc
 
         database_url = os.getenv(_DATABASE_URL_ENV, "").strip()
