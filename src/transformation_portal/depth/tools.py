@@ -434,10 +434,10 @@ def save_image_rgb(path: str, rgb01: np.ndarray, fmt: str = "tif", quality: int 
     rgb8 = (np.clip(rgb01, 0.0, 1.0) * 255.0 + 0.5).astype(np.uint8)
     stem = str(Path(path).with_suffix(""))
     fmt = fmt.lower()
-    if fmt in ("tif", "ti") and _TIFFFILE_AVAILABLE:
+    if fmt in ("tif", "tiff", "ti") and _TIFFFILE_AVAILABLE:
         out = f"{stem}.tif"
         tiff.imwrite(out, rgb8, compression="deflate", photometric="rgb")
-    elif fmt in ("tif", "ti") and not _TIFFFILE_AVAILABLE:
+    elif fmt in ("tif", "tiff", "ti") and not _TIFFFILE_AVAILABLE:
         _log.debug("tifffile not available - falling back to PNG for %s", path)
         out = f"{stem}.png"
         Image.fromarray(rgb8).save(out, optimize=True)
@@ -1029,8 +1029,6 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
     workers_arg = int(getattr(args, "workers", 0))
     if workers_arg == 0:
         # Auto-detect: use CPU count - 1, capped at 8
-        import os
-
         optimal_workers = min(max(1, os.cpu_count() - 1), 8)
         _log.info(
             "Auto-detected %d workers (CPU count: %d)",
