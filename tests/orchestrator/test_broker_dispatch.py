@@ -1,18 +1,19 @@
-"""Phase 2.C - end-to-end contract for broker-mediated job dispatch.
+"""Phase 2.C/2.D/2.E - end-to-end contract for broker-mediated job dispatch.
 
-Exercises the HTTP boundary with ``TP_ORCHESTRATOR_USE_QUEUE_BROKER=1``:
+Exercises the HTTP boundary against the always-on broker substrate:
 the orchestrator must enqueue via the broker, the in-process
 ``WorkerRunner`` pool must lease the job, and a monkey-patched
 ``_run_job`` body must drive the existing in-process ``Job`` to a
 terminal state. Cancellation routes through ``broker.cancel`` for
 both pre-lease (queued, never picked up by a worker) and in-flight
-(leased by a worker, killed mid-run) paths.
+(leased by a worker, killed mid-run) paths. Phase 2.D's reclaim
+reconciler drives jobs to ``worker_lost`` when leases expire.
 
 The Phase 2.A queue-broker contract tests and the Phase 1.B
 repository contract tests cover their respective layers in
 isolation. This file is the integration seam: it proves the
 orchestrator + broker + worker wiring actually does what the
-hardening plan describes for §5.2 Phase 2.C.
+hardening plan describes for §5.2.
 """
 
 from __future__ import annotations
@@ -41,13 +42,13 @@ pytestmark = [pytest.mark.unit]
 
 @pytest.fixture(autouse=True)
 def _reset_orchestrator_globals(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Flip ``USE_QUEUE_BROKER`` on for the duration of the test.
+    """Reset orchestrator + broker singletons for the test.
 
-    Also drops every cached singleton (job repository, queue broker,
+    Drops every cached singleton (job repository, queue broker,
     runtime registry) so a clean broker + worker pool boots inside
-    the ``TestClient`` lifespan.
+    the ``TestClient`` lifespan. Broker dispatch is always-on after
+    Phase 2.E; no env-var or constant flip is needed.
     """
-    monkeypatch.setattr(orchestrator_app, "USE_QUEUE_BROKER", True)
     monkeypatch.setattr(orchestrator_app, "API_KEY_SECRET", "contract-secret")
     monkeypatch.setattr(orchestrator_app, "ENFORCE_JOB_API_KEY", True)
     # Tighten the worker pool's lease/heartbeat so the in-flight cancel
