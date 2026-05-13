@@ -203,7 +203,7 @@ virtualenv==21.2.1
     # via
     #   -c all.txt
     #   tox
-zipp==3.23.0
+zipp==3.23.1
     # via
     #   -c all.txt
     #   importlib-metadata

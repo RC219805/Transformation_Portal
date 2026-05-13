@@ -78,14 +78,18 @@ implementations or precursors for the items below.
 
 ### 5.1 Phase 1 - durable jobs
 
-- No SQLAlchemy, psycopg, or asyncpg imports anywhere in the backend.
-- No `JobRepository` interface. Job state is `JOBS: Dict[str, Job]` at
-  `app.py:1002`; restart loses all job state.
-- No deterministic restart recovery and no event replay against the orchestrator.
-- `JobCreateRequest` exists at `src/transformation_portal/api/v1/jobs.py:130`
-  but is "defined, not yet wired" as a handler parameter. Pydantic envelope
-  models in route decorators are OpenAPI-doc-only; no runtime validation runs.
-- Env vars `TP_ORCHESTRATOR_STATE_BACKEND`, `TP_DATABASE_URL` are unrecognized.
+**Updated 2026-05-13: Phase 1.A and Phase 1.B have landed.**
+
+Already done:
+
+- `JobRepository` and `JobEventStore` Protocols + `JobRecord` dataclass + memory backend (Phase 1.A, PR #1756).
+- `PostgresJobRepository` + `PostgresJobEventStore` + SQLAlchemy 2.x async ORM + Alembic initial migration + docker-compose Postgres service + `make db-upgrade` / `make db-revision` / `make test-orchestrator-postgres-contract` (Phase 1.B, this PR). Backend selected via `TP_ORCHESTRATOR_STATE_BACKEND=memory|postgres` and `TP_DATABASE_URL`. See `docs/runtimes/orchestrator-postgres.md` for the operator runbook.
+
+Still net-new (follow-up commits / PRs on this branch):
+
+- `app.py` does **not yet** route writes through the repository. The legacy `JOBS: Dict[str, Job]` at `app.py:1002` remains authoritative until the wiring commit lands. Phase 1.B's contract tests prove the Postgres backend is behavior-identical to the memory backend so the cut-over is a single, isolated change.
+- Deterministic restart recovery (Phase 1.C). The `sweep_orphaned` method on both backends is implemented and contract-tested; the FastAPI lifespan hook that calls it is the Phase 1.C deliverable.
+- `JobCreateRequest` exists at `src/transformation_portal/api/v1/jobs.py:130` but is still "defined, not yet wired" as a handler parameter. Pydantic envelope models in route decorators are still OpenAPI-doc-only (Phase 1.D).
 
 ### 5.2 Phase 2 - worker split
 
