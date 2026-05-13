@@ -284,3 +284,121 @@ def test_inflight_cancel_routes_through_broker_to_executor(monkeypatch: pytest.M
         assert saw_cancel_request.is_set(), "executor's cancellation bridge did not set Job.cancel_requested"
         job = orchestrator_app.JOBS[job_id]
         assert job.state == "canceled"
+
+
+# ---------------------------------------------------------------------------
+# Phase 2.D - worker_lost via broker lease-reclaim reconciler
+# ---------------------------------------------------------------------------
+
+
+def test_lease_reclaim_marks_job_worker_lost(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Worker dies holding the lease → reclaim sweep marks Job worker_lost.
+
+    Pin a very short lease + very fast reclaim interval, monkey-patch the
+    worker's heartbeat to a no-op so the lease genuinely expires while the
+    executor is still hanging, then assert:
+
+    - the broker reclaim returned the job_id,
+    - ``Job.state`` transitioned to ``worker_lost``,
+    - ``Job.error.retriable is True``,
+    - the terminal ``done`` event was published.
+
+    The executor's terminal-state guard means even after the broker
+    re-queues the dispatch payload (Phase 2.A contract), a stale lease
+    pickup is a no-op rather than a second run.
+    """
+    # Short lease so reclaim fires quickly inside the test.
+    monkeypatch.setattr(orchestrator_app, "WORKER_LEASE_SECONDS", 0.2)
+    monkeypatch.setattr(orchestrator_app, "WORKER_HEARTBEAT_INTERVAL_SECONDS", 0.05)
+    monkeypatch.setattr(orchestrator_app, "WORKER_POLL_INTERVAL_SECONDS", 0.01)
+    monkeypatch.setattr(orchestrator_app, "RECLAIM_SWEEP_INTERVAL_SECONDS", 0.02)
+    monkeypatch.setattr(orchestrator_app, "MAX_CONCURRENT_JOBS", 1)
+
+    # Suppress the heartbeat so the lease expires unobserved by the
+    # worker — the moral equivalent of a worker process dying.
+    from transformation_portal.orchestrator import worker as worker_module
+
+    original_heartbeat = worker_module.WorkerRunner._heartbeat_loop
+
+    async def _no_heartbeat(self, job_id, cancellation_event):  # noqa: ANN001
+        # Park forever; the lease will expire and the reclaim sweep
+        # will mark the in-process Job worker_lost.
+        await cancellation_event.wait()
+
+    monkeypatch.setattr(worker_module.WorkerRunner, "_heartbeat_loop", _no_heartbeat)
+
+    # Executor blocks long enough for the lease to expire.
+    release = threading.Event()
+
+    async def fake_run_job(job, _argv) -> None:  # noqa: ANN001
+        job.state = "running"
+        await asyncio.to_thread(release.wait)
+        # If the reclaim sweep already wrote terminal state, do not stomp.
+        if job.finished_at is not None:
+            return
+        job.state = "succeeded"
+        job.exit_code = 0
+        now = orchestrator_app._now()
+        job.done_published_at = now
+        job.finished_at = now
+
+    monkeypatch.setattr(orchestrator_app, "_run_job", fake_run_job)
+
+    try:
+        with TestClient(orchestrator_app.app, headers={"x-api-key": "contract-secret"}) as client:
+            try:
+                response = client.post("/v1/jobs", json=_build_payload(tmp_path))
+                assert response.status_code == 200, response.text
+                job_id = response.json()["data"]["id"]
+                _wait_for_state(job_id, expected={"running"})
+
+                # Wait for the reclaim sweep to drive the Job terminal.
+                _wait_for_finished(job_id, timeout=5.0)
+                job = orchestrator_app.JOBS[job_id]
+                assert job.state == "worker_lost"
+                assert isinstance(job.error, dict)
+                assert job.error.get("retriable") is True
+                assert job.error.get("code") == orchestrator_app.WORKER_LOST_REASON_RECLAIMED
+            finally:
+                # Always unblock the executor thread so an assertion
+                # failure above cannot leak the ``asyncio.to_thread``
+                # worker — pytest cancellation does not stop the
+                # underlying ``threading.Event.wait`` once entered.
+                release.set()
+    finally:
+        # Restore heartbeat for subsequent tests in the same session.
+        monkeypatch.setattr(worker_module.WorkerRunner, "_heartbeat_loop", original_heartbeat)
+
+
+def test_executor_failure_marks_error_non_retriable(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Phase 2.D — executor-level failures carry ``error.retriable=False``.
+
+    Distinguishes the wire shape from broker-level ``worker_lost``
+    (retriable=True) so operator tooling and future auto-retry
+    policy can branch on the field.
+    """
+
+    async def fake_run_job(job, _argv) -> None:  # noqa: ANN001
+        job.state = "failed"
+        job.exit_code = 17
+        job.error = orchestrator_app._error_obj(
+            "RUNNER_EXIT_NONZERO",
+            "runner exited with code 17",
+            {"exit_code": 17},
+            retriable=False,
+        )
+        now = orchestrator_app._now()
+        job.done_published_at = now
+        job.finished_at = now
+
+    monkeypatch.setattr(orchestrator_app, "_run_job", fake_run_job)
+
+    with TestClient(orchestrator_app.app, headers={"x-api-key": "contract-secret"}) as client:
+        response = client.post("/v1/jobs", json=_build_payload(tmp_path))
+        assert response.status_code == 200, response.text
+        job_id = response.json()["data"]["id"]
+        _wait_for_finished(job_id)
+        job = orchestrator_app.JOBS[job_id]
+        assert job.state == "failed"
+        assert job.error is not None
+        assert job.error.get("retriable") is False

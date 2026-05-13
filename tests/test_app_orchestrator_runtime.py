@@ -4895,6 +4895,17 @@ def test_run_job_is_async_and_does_not_block_event_loop() -> None:
         assert job.state == "succeeded"
         assert job.exit_code == 0
         assert job.progress == 100
+        # Phase 2.D regression: ``_run_job``'s finally-block must publish
+        # the terminal ``done`` event and set ``finished_at`` /
+        # ``done_published_at`` on normal happy-path completion. An
+        # earlier draft of the terminal-state guard tripped on
+        # ``state in _TERMINAL_JOB_STATES`` (``state`` was already
+        # ``"succeeded"`` before the finally block ran), which silently
+        # skipped the terminal event and left ``finished_at`` ``None``.
+        # Pin those invariants here so future guard tweaks can't reintroduce
+        # the regression.
+        assert job.finished_at is not None
+        assert job.done_published_at is not None
 
     asyncio.run(scenario())
 

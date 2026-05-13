@@ -45,12 +45,16 @@ JobState = Literal[
     "partial",
     "failed",
     "canceled",
+    "worker_lost",
 ]
 """The closed set of values for ``job.state``.
 
 Sourced from the ``state: str = "queued"`` comment in ``app.py:Job`` and the
-``"queued|running|succeeded|partial|failed|canceled"`` enumeration there. No
-intermediate states are emitted on the wire — cancellation transitions
+``"queued|running|succeeded|partial|failed|canceled|worker_lost"`` enumeration
+there (``worker_lost`` added in Phase 2.D — the worker died holding the
+lease, the job payload is intact and the error envelope carries
+``retriable=True``). No intermediate states are emitted on the wire —
+cancellation transitions
 directly from ``running`` to ``canceled`` (see ``_request_cancel``).
 """
 

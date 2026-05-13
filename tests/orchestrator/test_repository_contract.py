@@ -220,9 +220,17 @@ async def test_delete_is_idempotent(repository_and_events: RepoAndEvents) -> Non
 # ---------------------------------------------------------------------------
 
 
-async def test_sweep_orphaned_marks_active_jobs_failed(
+async def test_sweep_orphaned_marks_active_jobs_worker_lost(
     repository_and_events: RepoAndEvents,
 ) -> None:
+    """Phase 2.D: sweep produces ``state=worker_lost`` (distinct from
+    ``failed``) and a ``retriable=True`` flag on the error envelope.
+
+    ``failed`` is reserved for executor-level errors (RUNNER_EXIT_NONZERO,
+    RUNNER_NOT_FOUND, etc.) where the work itself is broken;
+    ``worker_lost`` signals the worker died with the lease held and the
+    job can safely be re-admitted.
+    """
     repo, _ = repository_and_events
     await repo.create(_new_record("alive"))
     await repo.update("alive", state="running", started_at=1.0)
@@ -237,12 +245,13 @@ async def test_sweep_orphaned_marks_active_jobs_failed(
 
     fetched = await repo.get("dead")
     assert fetched is not None
-    assert fetched.state == "failed"
+    assert fetched.state == "worker_lost"
     assert fetched.finished_at == 10.0
     assert fetched.done_published_at == 10.0
     assert fetched.error == {
         "code": "worker_lost_on_restart",
         "message": "Process did not survive backend restart.",
+        "retriable": True,
     }
 
     fetched_alive = await repo.get("alive")

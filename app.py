@@ -636,25 +636,56 @@ RATE_LIMIT_WINDOW_SECONDS = 60.0
 # because jobs free their slot when they finish, so this is a conservative
 # best-effort hint rather than a precise reset.
 JOB_ADMISSION_RETRY_AFTER_SECONDS = 5
-# Phase 2.C - opt-in broker-mediated dispatch. When enabled the orchestrator
+# Phase 2.C wiring (Phase 2.D promoted to default-on). The orchestrator
 # enqueues via the QueueBroker and an in-process WorkerRunner pool consumes
 # leases; cancellation flows through ``broker.cancel`` rather than directly
-# poking ``Job.cancel_requested``. Off by default for the single-PR Phase 2.C
-# rollout so existing tests / single-process deployments keep their current
-# in-band ``asyncio.create_task(_run_job(...))`` semantics. Phase 2.D will
-# flip the default and remove the in-band path.
-USE_QUEUE_BROKER = _env_bool("TP_ORCHESTRATOR_USE_QUEUE_BROKER", False)
-# Per-worker lease + heartbeat tunables when ``USE_QUEUE_BROKER`` is enabled.
-# Defaults intentionally generous so the in-process worker pool never reclaims
-# its own jobs under realistic single-process load; production multi-host
-# deployments tighten these via env.
-WORKER_LEASE_SECONDS = _env_float("TP_ORCHESTRATOR_WORKER_LEASE_SECONDS", 300.0, minimum=1.0)
-WORKER_HEARTBEAT_INTERVAL_SECONDS = _env_float("TP_ORCHESTRATOR_WORKER_HEARTBEAT_SECONDS", 30.0, minimum=0.1)
-WORKER_POLL_INTERVAL_SECONDS = _env_float("TP_ORCHESTRATOR_WORKER_POLL_SECONDS", 0.05, minimum=0.001)
+# poking ``Job.cancel_requested``. The legacy in-band
+# ``asyncio.create_task(_run_job(...))`` path remains available behind
+# ``TP_ORCHESTRATOR_USE_QUEUE_BROKER=0`` as an explicit opt-out for any
+# single-process deployment or test fixture that needs the pre-Phase-2.C
+# semantics. A subsequent cleanup PR will remove that fallback.
+USE_QUEUE_BROKER = _env_bool("TP_ORCHESTRATOR_USE_QUEUE_BROKER", True)
+
+
+def _worker_env_float(canonical: str, legacy: str, default: float, *, minimum: float) -> float:
+    """Read a worker tunable that accepts both ``TP_WORKER_*`` and the legacy
+    ``TP_ORCHESTRATOR_WORKER_*`` env names introduced in Phase 2.C.
+
+    Phase 2.D unifies the names: ``TP_WORKER_*`` (matching
+    ``worker.py``'s ``_config_from_env``) is the canonical surface, and
+    the legacy ``TP_ORCHESTRATOR_WORKER_*`` form is honored as a
+    fallback so existing deployments do not have to flip env vars
+    twice. The canonical name wins when both are set.
+    """
+    if os.getenv(canonical) is not None:
+        return _env_float(canonical, default, minimum=minimum)
+    return _env_float(legacy, default, minimum=minimum)
+
+
+# Per-worker lease + heartbeat tunables. Defaults intentionally generous so
+# the in-process worker pool never reclaims its own jobs under realistic
+# single-process load; production multi-host deployments tighten these via env.
+WORKER_LEASE_SECONDS = _worker_env_float("TP_WORKER_LEASE_SECONDS", "TP_ORCHESTRATOR_WORKER_LEASE_SECONDS", 300.0, minimum=1.0)
+WORKER_HEARTBEAT_INTERVAL_SECONDS = _worker_env_float(
+    "TP_WORKER_HEARTBEAT_SECONDS", "TP_ORCHESTRATOR_WORKER_HEARTBEAT_SECONDS", 30.0, minimum=0.1
+)
+WORKER_POLL_INTERVAL_SECONDS = _worker_env_float(
+    "TP_WORKER_POLL_SECONDS", "TP_ORCHESTRATOR_WORKER_POLL_SECONDS", 0.05, minimum=0.001
+)
 # Grace period the lifespan shutdown waits for the worker pool to drain
 # cleanly before escalating to ``task.cancel()``. Bounded so a stuck
 # executor cannot block the broker / repository close paths.
 WORKER_SHUTDOWN_GRACE_SECONDS = _env_float("TP_ORCHESTRATOR_WORKER_SHUTDOWN_GRACE_SECONDS", 5.0, minimum=0.1)
+# Phase 2.D - broker reclaim reconciler. Periodically calls
+# ``broker.reclaim_expired_leases(now=server_time())`` so any lease whose
+# heartbeat fell behind (worker died, event-loop blocked, multi-host fleet
+# lost a node) gets the dispatch payload reclaimed; the orchestrator then
+# transitions the in-process ``Job`` and the repository row to
+# ``worker_lost`` with ``error.retriable=True`` and publishes the terminal
+# ``done`` event so SSE late-clients see closure. Interval is bounded
+# below to keep test runs fast and above to keep production overhead small.
+RECLAIM_SWEEP_INTERVAL_SECONDS = _env_float("TP_ORCHESTRATOR_RECLAIM_SWEEP_INTERVAL_SECONDS", 5.0, minimum=0.01)
+WORKER_LOST_REASON_RECLAIMED = "worker_lost_via_lease_reclaim"
 DEFAULT_ALLOWED_PATH_ROOTS = _default_allowed_path_roots()
 ALLOWED_INPUT_ROOTS = _env_path_roots(
     "TP_ALLOWED_INPUT_ROOTS",
@@ -1009,7 +1040,7 @@ class Job:
     finished_at: Optional[float] = None
     done_published_at: Optional[float] = None  # Set after 'done' event is published
     last_event_at: Optional[float] = None
-    state: str = "queued"  # queued|running|succeeded|partial|failed|canceled
+    state: str = "queued"  # queued|running|succeeded|partial|failed|canceled|worker_lost
     progress: int = 0
     exit_code: Optional[int] = None
     request: Dict[str, Any] = dataclass_field(default_factory=dict)
@@ -1034,6 +1065,11 @@ EVENT_SUBSCRIBERS: Dict[str, Dict[str, "asyncio.Queue[Dict[str, Any]]"]] = {}
 RATE_LIMIT_BUCKETS: Dict[str, Deque[float]] = {}
 JOB_ADMISSION_LOCK = asyncio.Lock()
 ACTIVE_JOB_STATES = {"queued", "running"}
+# Phase 2.D - terminal states a job can reach. ``worker_lost`` joins the
+# existing terminal states so the broker-reclaim reconciler, the executor's
+# terminal-state guard, and operator tooling all agree on what "done"
+# means.
+_TERMINAL_JOB_STATES = {"succeeded", "partial", "failed", "canceled", "worker_lost"}
 JOB_RUN_SUMMARY_MAX_BYTES = 1024 * 1024
 
 # Gate pipelines integrated directly
@@ -1489,8 +1525,38 @@ def _error_obj(
     code: str,
     message: str,
     details: Optional[Dict[str, Any]] = None,
+    *,
+    retriable: Optional[bool] = None,
 ) -> Dict[str, Any]:
-    return {"code": code, "message": message, "details": details or {}}
+    """Construct a wire-shape error dict for ``ApiEnvelope.error`` / ``Job.error``.
+
+    Phase 2.D adds the optional ``retriable`` field so callers can
+    distinguish executor-level failures (``retriable=False`` —
+    re-running the same job will fail the same way) from broker-level
+    failures (``retriable=True`` — ``worker_lost`` etc., the job
+    payload is intact and a retry can succeed).
+
+    Emission rules:
+
+    - Callers that pass ``retriable=False`` / ``retriable=True``
+      embed the field on the wire. Phase 2.D opts the executor
+      failure paths (``RUNNER_EXIT_NONZERO`` / ``RUNNER_NOT_FOUND``
+      / ``RUNNER_ERROR``) into ``retriable=False``, so those
+      payloads now grow a ``retriable`` key — clients that did not
+      previously see the field will start seeing it. The change is
+      additive (no existing key changes type or value), so JSON
+      consumers that ignore unknown fields are unaffected.
+    - Callers that omit the argument (``retriable=None``) get the
+      pre-Phase-2.D shape with no ``retriable`` key. The
+      orchestrator's many non-executor errors (HTTP-level
+      validation, request-parse failures, etc.) still use this
+      path, so a typical 4xx envelope on the wire is byte-identical
+      to its pre-2.D form.
+    """
+    payload: Dict[str, Any] = {"code": code, "message": message, "details": details or {}}
+    if retriable is not None:
+        payload["retriable"] = retriable
+    return payload
 
 
 def _api_envelope(
@@ -7841,6 +7907,7 @@ async def _orchestrator_lifespan(app: "FastAPI") -> "AsyncGenerator[None, None]"
     app.state.worker_stop_event = None
     app.state.worker_tasks = []
     app.state.queue_broker = None
+    app.state.reclaim_sweep_task = None
     if USE_QUEUE_BROKER:
         try:
             broker = get_queue_broker()
@@ -7868,13 +7935,30 @@ async def _orchestrator_lifespan(app: "FastAPI") -> "AsyncGenerator[None, None]"
                         )
                     )
                 )
+            # Phase 2.D — periodic broker-reclaim reconciler. Shares
+            # ``stop_event`` with the worker pool so a single signal
+            # winds down the whole broker-dispatch substrate.
+            app.state.reclaim_sweep_task = asyncio.create_task(_reclaim_sweep_loop(broker, repo, stop_event))
     try:
         yield
     finally:
         worker_stop_event = getattr(app.state, "worker_stop_event", None)
         worker_tasks = getattr(app.state, "worker_tasks", []) or []
+        reclaim_sweep_task = getattr(app.state, "reclaim_sweep_task", None)
         if worker_stop_event is not None:
             worker_stop_event.set()
+        # The reclaim sweep observes the same stop_event the worker pool
+        # uses; awaiting it here is bounded by the timeout below.
+        if reclaim_sweep_task is not None:
+            try:
+                await asyncio.wait_for(reclaim_sweep_task, timeout=WORKER_SHUTDOWN_GRACE_SECONDS)
+            except asyncio.TimeoutError:
+                reclaim_sweep_task.cancel()
+                with suppress(asyncio.CancelledError, Exception):
+                    await reclaim_sweep_task
+            except Exception:  # noqa: BLE001 - sweep loop failure must not block shutdown
+                LOGGER.exception("reclaim sweep task raised during shutdown")
+            app.state.reclaim_sweep_task = None
         if worker_tasks:
             # ``run_worker_forever`` only checks ``stop_event`` between
             # jobs, so a long-running executor would otherwise block
@@ -9124,13 +9208,29 @@ async def _orchestrator_job_executor(
     ``job.cancel_requested`` flag that ``_run_job``'s loop already
     observes.
 
-    When the job has been cleaned up between enqueue and lease
-    pickup (e.g. expiry sweep), the executor exits cleanly and the
-    worker releases the lease.
+    Phase 2.D — terminal-state guard. The broker's
+    ``reclaim_expired_leases`` re-queues abandoned jobs by design
+    (Phase 2.A contract). If the orchestrator-level reclaim sweep
+    already drove the in-process ``Job`` to a terminal state
+    (``worker_lost``, ``canceled``, etc.), a stale worker pickup
+    of the same ``job_id`` must NOT re-spawn the dispatch
+    subprocess. Treat the terminal Job as a no-op and release the
+    lease cleanly.
+
+    When the job has been cleaned up entirely between enqueue and
+    lease pickup (expiry sweep removed the JOBS entry), the
+    executor also exits cleanly.
     """
     job = JOBS.get(request.job_id)
     if job is None:
         LOGGER.warning("worker leased unknown job_id=%s; releasing without dispatch", request.job_id)
+        return 0
+    if job.finished_at is not None or job.state in _TERMINAL_JOB_STATES:
+        LOGGER.info(
+            "worker leased already-terminal job_id=%s state=%s; releasing without dispatch",
+            request.job_id,
+            job.state,
+        )
         return 0
 
     async def _bridge_cancel() -> None:
@@ -9180,6 +9280,128 @@ async def _publish_cancellation_terminal(job: "Job") -> None:
     )
     job.done_published_at = now
     job.finished_at = now
+
+
+async def _publish_worker_lost_terminal(job: "Job", *, reason_code: str) -> None:
+    """Publish the terminal ``worker_lost`` event for a reclaimed lease.
+
+    Phase 2.D: the broker-reclaim reconciler calls this when
+    ``broker.reclaim_expired_leases`` surfaces a job whose worker
+    fell behind on its heartbeat. The error envelope carries
+    ``retriable=True`` so callers can distinguish a transient worker
+    death from an executor-level failure.
+
+    Idempotent: a job that already finished (e.g. the worker
+    actually completed and called release after the reclaim window
+    closed) collapses this to a no-op so the terminal event is not
+    duplicated.
+    """
+    if job.finished_at is not None:
+        return
+    job.state = "worker_lost"
+    if job.exit_code is None:
+        job.exit_code = None  # explicitly preserve "no exit" semantics
+    job.error = {
+        "code": reason_code,
+        "message": "Worker lease expired without heartbeat; job marked worker_lost.",
+        "retriable": True,
+    }
+    now = _now()
+    await _publish_event(
+        job.id,
+        "done",
+        {
+            "id": job.id,
+            "state": job.state,
+            "exit_code": job.exit_code,
+            "error": job.error,
+            "artifacts": job.artifacts,
+            "run_summary": job.run_summary or None,
+        },
+    )
+    job.done_published_at = now
+    job.finished_at = now
+
+
+async def _reclaim_sweep_once(broker: "QueueBroker", repository: Any) -> List[str]:
+    """One pass of the Phase 2.D broker-reclaim reconciler.
+
+    Calls ``broker.reclaim_expired_leases(now=server_time())`` and,
+    for each reclaimed ``job_id``, drives BOTH:
+
+    - the in-process ``Job`` (so SSE subscribers see the terminal
+      ``done`` event immediately), and
+    - the durable ``JobRepository`` row (so Postgres-backed state
+      reflects the same ``worker_lost`` + ``retriable=True``
+      payload — without this dual-write a restart could resurrect
+      the row as ``running``).
+
+    Returns the reclaimed ids so callers (lifespan loop, tests)
+    can log / metric the sweep. The broker's contract still
+    re-queues reclaimed dispatch payloads at the head of the ready
+    FIFO; the orchestrator's executor adapter has an explicit
+    terminal-state guard so a stale lease pickup of a reclaimed-
+    then-terminal job is a no-op.
+
+    ``repository`` may be ``None`` when broker construction
+    succeeded but the repository singleton did not; in that case
+    only the in-process Job is updated and a warning is logged so
+    the operator can see the missing persistence.
+    """
+    try:
+        now = await broker.server_time()
+        reclaimed = await broker.reclaim_expired_leases(now=now)
+    except Exception:  # noqa: BLE001 - sweep failures must not crash the loop
+        LOGGER.exception("broker reclaim sweep failed")
+        return []
+    for jid in reclaimed:
+        job = JOBS.get(jid)
+        if job is not None:
+            try:
+                await _publish_worker_lost_terminal(job, reason_code=WORKER_LOST_REASON_RECLAIMED)
+            except Exception:  # noqa: BLE001 - one job's failure must not block others
+                LOGGER.exception("publish worker_lost terminal failed for job %s", jid)
+        if repository is None:
+            LOGGER.warning("reclaim sweep skipped repository update for job %s (no repository configured)", jid)
+            continue
+        try:
+            now_ts = _now()
+            await repository.update(
+                jid,
+                state="worker_lost",
+                finished_at=now_ts,
+                done_published_at=now_ts,
+                last_event_at=now_ts,
+                error={
+                    "code": WORKER_LOST_REASON_RECLAIMED,
+                    "message": "Worker lease expired without heartbeat; job marked worker_lost.",
+                    "retriable": True,
+                },
+            )
+        except Exception:  # noqa: BLE001 - persistence failure must not block the loop
+            LOGGER.exception("repository update for reclaimed job %s failed", jid)
+    return list(reclaimed)
+
+
+async def _reclaim_sweep_loop(broker: "QueueBroker", repository: Any, stop_event: "asyncio.Event") -> None:
+    """Periodic reconciler driven by ``_orchestrator_lifespan``.
+
+    Sleeps ``RECLAIM_SWEEP_INTERVAL_SECONDS`` between sweeps; the
+    ``stop_event`` short-circuits the wait so shutdown completes
+    quickly. Exceptions inside the sweep are already swallowed by
+    ``_reclaim_sweep_once`` (logged at ERROR), but the outer loop
+    keeps an additional guard so a transient bug here cannot brick
+    the lifespan task.
+    """
+    while not stop_event.is_set():
+        try:
+            await _reclaim_sweep_once(broker, repository)
+        except Exception:  # noqa: BLE001 - defense in depth; never crash the loop
+            LOGGER.exception("reclaim sweep loop iteration raised")
+        try:
+            await asyncio.wait_for(stop_event.wait(), timeout=RECLAIM_SWEEP_INTERVAL_SECONDS)
+        except asyncio.TimeoutError:
+            pass
 
 
 async def _run_job(job: Job, argv: List[str]) -> None:
@@ -9246,10 +9468,14 @@ async def _run_job(job: Job, argv: List[str]) -> None:
         else:
             job.state = "succeeded" if rc == 0 else "failed"
             if rc != 0:
+                # Phase 2.D — ``retriable=False`` distinguishes executor-level
+                # failures (the work itself is broken) from the broker-level
+                # ``worker_lost`` state (the worker died holding the lease).
                 job.error = _error_obj(
                     "RUNNER_EXIT_NONZERO",
                     f"runner exited with code {rc}",
                     {"exit_code": int(rc)},
+                    retriable=False,
                 )
 
     except FileNotFoundError:
@@ -9260,6 +9486,7 @@ async def _run_job(job: Job, argv: List[str]) -> None:
             "RUNNER_NOT_FOUND",
             f"Runner executable not found: '{argv[0]}'.",
             {"command": argv[0], "runner": runner_repr},
+            retriable=False,
         )
         msg = f"runner_error: {job.error['message']}"
         job.add_log(msg)
@@ -9279,6 +9506,7 @@ async def _run_job(job: Job, argv: List[str]) -> None:
             "RUNNER_ERROR",
             "unexpected runner failure",
             {"exception_type": type(exc).__name__},
+            retriable=False,
         )
         msg = "runner_error: unexpected runner failure"
         job.add_log(msg)
@@ -9293,6 +9521,31 @@ async def _run_job(job: Job, argv: List[str]) -> None:
                 await job.terminate_task
             except Exception:
                 pass
+
+        # Phase 2.D — terminal-state authority. If an *external* path
+        # (the reclaim sweep, restart recovery, etc.) already drove
+        # this Job to a terminal state AND published the terminal
+        # event while ``_run_job`` was mid-flight, that earlier
+        # terminal event is authoritative: do NOT republish ``done``,
+        # do NOT mutate ``state``/``exit_code``/``error``, do NOT
+        # touch ``finished_at``. The presence of ``done_published_at``
+        # is the canonical signal that an external terminal event
+        # already went out — ``_run_job`` itself sets that timestamp
+        # AFTER publishing ``done`` (further down in this finally
+        # block), so by definition only an external publisher could
+        # have set it by now. Checking ``state in
+        # _TERMINAL_JOB_STATES`` here would be wrong because
+        # ``_run_job`` writes ``succeeded``/``failed``/``canceled``
+        # into ``job.state`` ABOVE this finally block on normal
+        # completion, so guarding on state alone would skip the
+        # done-event publication for every happy-path job.
+        if job.done_published_at is not None or job.finished_at is not None:
+            LOGGER.info(
+                "job %s reached terminal state=%s via an external publisher; skipping duplicate done event",
+                job.id,
+                job.state,
+            )
+            return
 
         # Index artifacts and publish terminal events BEFORE setting finished_at.
         # This ensures late-connecting SSE clients can deterministically check
