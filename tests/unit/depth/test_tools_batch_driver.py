@@ -186,6 +186,28 @@ def test_main_returns_failure_when_partial_success_all_files_fail(tmp_path, monk
     assert exit_code == 1
 
 
+def test_main_auto_workers_handles_missing_cpu_count(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: dict[str, tools.BatchOptions] = {}
+    depths = tmp_path / "depths"
+    images = tmp_path / "images"
+    output = tmp_path / "out"
+    depths.mkdir()
+    images.mkdir()
+    _write_depth(depths / "villa_depth16.png")
+
+    def fake_process_batch(opts: tools.BatchOptions, progress=None) -> int:
+        captured["opts"] = opts
+        return 0
+
+    monkeypatch.setattr(tools.os, "cpu_count", lambda: None)
+    monkeypatch.setattr(tools, "process_batch", fake_process_batch)
+
+    exit_code = tools.main(["haze", str(images), str(depths), str(output)])
+
+    assert exit_code == 0
+    assert captured["opts"].workers == 1
+
+
 def test_main_maps_cli_effect_options_to_batch_options(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
     captured: dict[str, tools.BatchOptions] = {}
     depths = tmp_path / "depths"
@@ -219,7 +241,7 @@ def test_main_maps_cli_effect_options_to_batch_options(tmp_path, monkeypatch: py
             "0.3",
             "--clarity",
             "0.1",
-            "--fallof",
+            "--falloff",
             "2.0",
         ]
     )
@@ -234,3 +256,35 @@ def test_main_maps_cli_effect_options_to_batch_options(tmp_path, monkeypatch: py
     assert opts.aperture == 0.3
     assert opts.clarity == 0.1
     assert opts.falloff == 2.0
+
+
+def test_main_preserves_legacy_fallof_alias(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: dict[str, tools.BatchOptions] = {}
+    depths = tmp_path / "depths"
+    images = tmp_path / "images"
+    output = tmp_path / "out"
+    depths.mkdir()
+    images.mkdir()
+    _write_depth(depths / "villa_depth16.png")
+
+    def fake_process_batch(opts: tools.BatchOptions, progress=None) -> int:
+        captured["opts"] = opts
+        return 0
+
+    monkeypatch.setattr(tools, "process_batch", fake_process_batch)
+
+    exit_code = tools.main(
+        [
+            "do",
+            str(images),
+            str(depths),
+            str(output),
+            "--workers",
+            "1",
+            "--fallof",
+            "2.5",
+        ]
+    )
+
+    assert exit_code == 0
+    assert captured["opts"].falloff == 2.5

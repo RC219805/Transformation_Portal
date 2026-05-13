@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import numpy as np
 import pytest
 
@@ -59,7 +61,7 @@ def test_save_image_rgb_accepts_default_tiff_alias(tmp_path) -> None:
     saved = tools.save_image_rgb(str(tmp_path / "render.tiff"), image, fmt="tiff")
 
     assert saved.endswith((".tif", ".png"))
-    assert (tmp_path / saved.split("/")[-1]).exists()
+    assert (tmp_path / Path(saved).name).exists()
 
 
 def test_save_image_rgb_rejects_unknown_format(tmp_path) -> None:

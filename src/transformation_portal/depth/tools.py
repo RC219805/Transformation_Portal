@@ -1005,7 +1005,7 @@ def build_cli() -> argparse.ArgumentParser:
     pd.add_argument("--focus", type=float, default=35.0)
     pd.add_argument("--aperture", type=float, default=0.22)
     pd.add_argument("--clarity", type=float, default=0.18)
-    pd.add_argument("--fallof", type=float, default=1.4)
+    pd.add_argument("--falloff", "--fallof", dest="falloff", type=float, default=1.4)
 
     return ap
 
@@ -1029,11 +1029,12 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
     workers_arg = int(getattr(args, "workers", 0))
     if workers_arg == 0:
         # Auto-detect: use CPU count - 1, capped at 8
-        optimal_workers = min(max(1, os.cpu_count() - 1), 8)
+        cpu_count = os.cpu_count() or 1
+        optimal_workers = min(max(1, cpu_count - 1), 8)
         _log.info(
             "Auto-detected %d workers (CPU count: %d)",
             optimal_workers,
-            os.cpu_count() or 1,
+            cpu_count,
         )
     else:
         optimal_workers = max(1, workers_arg)
@@ -1068,7 +1069,7 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
         opts.focus = float(getattr(args, "focus", 35.0))
         opts.aperture = float(getattr(args, "aperture", 0.22))
         opts.clarity = float(getattr(args, "clarity", 0.18))
-        opts.falloff = float(getattr(args, "fallof", 1.4))
+        opts.falloff = float(getattr(args, "falloff", 1.4))
 
     try:
         error_count = process_batch(opts, progress=_cli_progress)
