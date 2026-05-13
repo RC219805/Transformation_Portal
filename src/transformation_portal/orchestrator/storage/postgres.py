@@ -451,27 +451,56 @@ class PostgresJobEventStore(JobEventStore):
         *,
         created_at: float,
     ) -> JobEvent:
-        async with self._session() as session:
-            current_max_stmt = select(func.coalesce(func.max(JobEventModel.seq), 0)).where(JobEventModel.job_id == job_id)
-            current_max = int((await session.execute(current_max_stmt)).scalar_one())
-            seq = current_max + 1
-            session.add(
-                JobEventModel(
-                    job_id=job_id,
-                    seq=seq,
-                    event_type=event_type,
-                    payload=dict(payload),
-                    created_at=created_at,
+        """Append one event, deriving ``seq`` as ``MAX(seq)+1`` per job_id.
+
+        Concurrent appends to the same job_id can race on the read-then-write,
+        but the ``unique(job_id, seq)`` index in the migration guarantees the
+        race is visible as an ``IntegrityError`` rather than a silent
+        out-of-order overwrite. We retry on conflict so callers see the same
+        monotonic-seq contract as the memory backend.
+        """
+        for attempt in range(_OPTIMISTIC_LOCK_RETRIES):
+            try:
+                async with self._session() as session:
+                    current_max_stmt = select(func.coalesce(func.max(JobEventModel.seq), 0)).where(
+                        JobEventModel.job_id == job_id
+                    )
+                    current_max = int((await session.execute(current_max_stmt)).scalar_one())
+                    seq = current_max + 1
+                    session.add(
+                        JobEventModel(
+                            job_id=job_id,
+                            seq=seq,
+                            event_type=event_type,
+                            payload=dict(payload),
+                            created_at=created_at,
+                        )
+                    )
+                    await session.commit()
+                    return JobEvent(
+                        job_id=job_id,
+                        seq=seq,
+                        event_type=event_type,
+                        payload=dict(payload),
+                        created_at=created_at,
+                    )
+            except IntegrityError:
+                # Lost the seq race against a concurrent append for the same
+                # job_id; the unique(job_id, seq) index rejected our row.
+                # Back off briefly and retry; another concurrent append has
+                # already advanced MAX(seq), so the next attempt picks a
+                # higher seq.
+                if attempt + 1 < _OPTIMISTIC_LOCK_RETRIES:
+                    await asyncio.sleep(0.005 * (attempt + 1))
+                    continue
+                raise RepositoryError(
+                    f"PostgresJobEventStore.append: monotonic-seq race lost "
+                    f"after {_OPTIMISTIC_LOCK_RETRIES} retries for job_id="
+                    f"{job_id!r}"
                 )
-            )
-            await session.commit()
-            return JobEvent(
-                job_id=job_id,
-                seq=seq,
-                event_type=event_type,
-                payload=dict(payload),
-                created_at=created_at,
-            )
+
+        # Unreachable; included for type-checkers.
+        raise RepositoryError(f"PostgresJobEventStore.append failed for job_id={job_id!r}")
 
     async def events_since(
         self,
