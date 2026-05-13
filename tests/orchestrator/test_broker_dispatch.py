@@ -18,6 +18,7 @@ hardening plan describes for §5.2 Phase 2.C.
 from __future__ import annotations
 
 import asyncio
+import threading
 import time
 from pathlib import Path
 from typing import Any, Dict, Optional
@@ -174,11 +175,18 @@ def test_pre_lease_cancel_drops_queue_and_publishes_terminal_event(monkeypatch: 
     # the test releases it. The pool size is 2, so we enqueue two
     # jobs blocking the slots, then a third that sits pre-lease in
     # the broker's queue, eligible for pre-lease cancel.
-    release = asyncio.Event()
+    #
+    # ``TestClient`` runs the app on a separate thread, so the test
+    # thread and the app's event-loop thread must coordinate across
+    # threads. ``asyncio.Event`` is not thread-safe; use
+    # ``threading.Event`` and bridge into the executor via
+    # ``asyncio.to_thread`` so the event-loop thread can block on a
+    # thread-safe primitive without spinning.
+    release = threading.Event()
 
     async def fake_run_job(job, _argv) -> None:  # noqa: ANN001
         job.state = "running"
-        await release.wait()
+        await asyncio.to_thread(release.wait)
         job.state = "succeeded"
         job.exit_code = 0
         now = orchestrator_app._now()
@@ -207,18 +215,21 @@ def test_pre_lease_cancel_drops_queue_and_publishes_terminal_event(monkeypatch: 
         assert response.status_code == 200, response.text
         queued_id = response.json()["data"]["id"]
 
-        # The queued job has not been leased — assert via the broker
-        # before issuing the cancel.
-        broker = orchestrator_app.app.state.queue_broker
-        # Give the worker pool a moment to skip it (it has no free slot).
+        # Assert pre-lease state via the in-process ``Job`` (visible
+        # from the test thread without crossing event loops). The
+        # broker would also work, but driving its coroutines from a
+        # foreign loop is unsafe — ``MemoryQueueBroker``'s
+        # ``asyncio.Lock`` is bound to the app's event loop. The
+        # ``Job.state`` transition is the same observable in
+        # practice: state stays "queued" until the worker leases.
         deadline = time.monotonic() + 1.0
         while time.monotonic() < deadline:
-            queued_ids = asyncio.run(broker.queued_job_ids())
-            if queued_id in queued_ids:
+            job = orchestrator_app.JOBS.get(queued_id)
+            if job is not None and job.state == "queued":
                 break
             time.sleep(0.01)
         else:
-            raise AssertionError(f"job {queued_id} never reached the broker queue")
+            raise AssertionError(f"job {queued_id} never reached pre-lease queued state")
 
         cancel_resp = client.post(f"/v1/jobs/{queued_id}/cancel")
         assert cancel_resp.status_code in (200, 202), cancel_resp.text
@@ -229,7 +240,8 @@ def test_pre_lease_cancel_drops_queue_and_publishes_terminal_event(monkeypatch: 
         assert cancelled_job.cancel_requested is True
 
         # Unblock the workers so the TestClient shutdown does not hang
-        # waiting for the executor tasks.
+        # waiting for the executor tasks. ``threading.Event.set`` is
+        # safe to call from the test thread.
         release.set()
         for jid in blocking_ids:
             _wait_for_finished(jid)

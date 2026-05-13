@@ -67,7 +67,6 @@ from transformation_portal.lux_depth_v3.model_registry import resolve_model_spec
 from transformation_portal.orchestrator import get_job_repository
 from transformation_portal.orchestrator.queue import (
     JobEnqueueRequest,
-    QueueBroker,
     QueueBrokerError,
     get_queue_broker,
 )
@@ -652,6 +651,10 @@ USE_QUEUE_BROKER = _env_bool("TP_ORCHESTRATOR_USE_QUEUE_BROKER", False)
 WORKER_LEASE_SECONDS = _env_float("TP_ORCHESTRATOR_WORKER_LEASE_SECONDS", 300.0, minimum=1.0)
 WORKER_HEARTBEAT_INTERVAL_SECONDS = _env_float("TP_ORCHESTRATOR_WORKER_HEARTBEAT_SECONDS", 30.0, minimum=0.1)
 WORKER_POLL_INTERVAL_SECONDS = _env_float("TP_ORCHESTRATOR_WORKER_POLL_SECONDS", 0.05, minimum=0.001)
+# Grace period the lifespan shutdown waits for the worker pool to drain
+# cleanly before escalating to ``task.cancel()``. Bounded so a stuck
+# executor cannot block the broker / repository close paths.
+WORKER_SHUTDOWN_GRACE_SECONDS = _env_float("TP_ORCHESTRATOR_WORKER_SHUTDOWN_GRACE_SECONDS", 5.0, minimum=0.1)
 DEFAULT_ALLOWED_PATH_ROOTS = _default_allowed_path_roots()
 ALLOWED_INPUT_ROOTS = _env_path_roots(
     "TP_ALLOWED_INPUT_ROOTS",
@@ -5897,17 +5900,33 @@ async def _request_cancel(job: Job) -> None:
             broker = None
         if broker is not None:
             try:
-                was_leased = job.id in await broker.leased_job_ids()
                 broker_knew_job = await broker.cancel(job.id)
             except Exception:  # noqa: BLE001 - cancel is best-effort
                 LOGGER.exception("broker cancel failed for job %s", job.id)
                 broker_knew_job = False
-                was_leased = job.proc is not None
-            if broker_knew_job and not was_leased:
-                # Pre-lease cancel: no worker will publish the terminal
-                # done event for this job — the orchestrator does it.
-                await _publish_cancellation_terminal(job)
-                return
+            if broker_knew_job:
+                # Distinguish pre-lease vs in-flight by inspecting the
+                # broker AFTER cancel(): the memory + Redis backends
+                # both clear queued entries atomically on pre-lease
+                # cancel and leave the lease entry intact on in-flight
+                # cancel (only flipping cancellation_requested). The
+                # post-cancel ``leased_job_ids`` is therefore the
+                # atomic source of truth — no acquire-during-cancel
+                # race can sneak a job past us here.
+                try:
+                    still_leased = job.id in await broker.leased_job_ids()
+                except Exception:  # noqa: BLE001 - inspection is best-effort
+                    LOGGER.exception("broker leased_job_ids failed after cancel for job %s", job.id)
+                    still_leased = True  # be conservative: assume worker has it
+                if not still_leased:
+                    # Pre-lease cancel: no worker will publish the
+                    # terminal done event for this job — the
+                    # orchestrator does it. ``_publish_cancellation_terminal``
+                    # is itself idempotent against an already-finished
+                    # Job, so the narrow worker-released-between-cancel-
+                    # and-check window collapses to a no-op.
+                    await _publish_cancellation_terminal(job)
+                    return
 
     if job.proc is None or job.proc.returncode is not None:
         return
@@ -7856,9 +7875,41 @@ async def _orchestrator_lifespan(app: "FastAPI") -> "AsyncGenerator[None, None]"
         worker_tasks = getattr(app.state, "worker_tasks", []) or []
         if worker_stop_event is not None:
             worker_stop_event.set()
-        for task in worker_tasks:
-            with suppress(asyncio.CancelledError):
-                await task
+        if worker_tasks:
+            # ``run_worker_forever`` only checks ``stop_event`` between
+            # jobs, so a long-running executor would otherwise block
+            # shutdown indefinitely. Give the pool a bounded grace
+            # period to wind down cleanly, then escalate to
+            # ``task.cancel()`` so the lifespan can complete and the
+            # broker / repository close paths still run. ``gather`` with
+            # ``return_exceptions=True`` so one worker failure cannot
+            # mask the others or prevent the subsequent cleanup.
+            try:
+                await asyncio.wait_for(
+                    asyncio.gather(*worker_tasks, return_exceptions=True),
+                    timeout=WORKER_SHUTDOWN_GRACE_SECONDS,
+                )
+            except asyncio.TimeoutError:
+                LOGGER.warning(
+                    "worker pool did not stop within %.1fs; cancelling %d task(s)",
+                    WORKER_SHUTDOWN_GRACE_SECONDS,
+                    sum(1 for t in worker_tasks if not t.done()),
+                )
+                for task in worker_tasks:
+                    if not task.done():
+                        task.cancel()
+                results = await asyncio.gather(*worker_tasks, return_exceptions=True)
+                for task, result in zip(worker_tasks, results):
+                    if isinstance(result, BaseException) and not isinstance(result, asyncio.CancelledError):
+                        LOGGER.exception("worker task %r raised during shutdown", task, exc_info=result)
+            else:
+                # Even within the grace period, a worker may have raised
+                # before stop_event observed; surface it for ops.
+                for task in worker_tasks:
+                    if task.done() and not task.cancelled():
+                        exc = task.exception()
+                        if exc is not None:
+                            LOGGER.exception("worker task %r raised during shutdown", task, exc_info=exc)
         app.state.worker_stop_event = None
         app.state.worker_tasks = []
         queue_broker = getattr(app.state, "queue_broker", None)
@@ -8633,7 +8684,21 @@ async def _create_job(
         JOBS[jid] = job
         EVENT_SUBSCRIBERS[jid] = {}
 
-    await _dispatch_job(job, argv, pipeline=pipeline)
+    try:
+        await _dispatch_job(job, argv, pipeline=pipeline)
+    except _DispatchError:
+        # Broker enqueue raised after we already admitted the job. The
+        # enqueue may have partially succeeded; roll back the JOBS entry
+        # and let the client retry. Detailed cause is logged inside
+        # ``_dispatch_job``.
+        JOBS.pop(jid, None)
+        EVENT_SUBSCRIBERS.pop(jid, None)
+        return _error_response(
+            503,
+            code="QUEUE_UNAVAILABLE",
+            message="job admission queue is temporarily unavailable; please retry",
+            details={"job_id": jid},
+        )
 
     # Phase 1.D: construct a Pydantic envelope so the wire shape is
     # validated at runtime (Pydantic raises on bad field types / missing
@@ -8979,6 +9044,17 @@ async def _job_events(
 # ---------------------------------------------------------------------------
 
 
+class _DispatchError(Exception):
+    """Raised when ``_dispatch_job`` cannot safely hand the job off.
+
+    ``_create_job`` catches this, rolls back the partial ``JOBS``
+    entry, and emits a 503 so the caller can retry. Distinct from
+    ``QueueBrokerError`` (a contract violation) and from broker
+    construction failures (handled in-line with a fallback to the
+    in-band path).
+    """
+
+
 async def _dispatch_job(job: "Job", argv: List[str], *, pipeline: str) -> None:
     """Hand the job off for execution.
 
@@ -8991,6 +9067,20 @@ async def _dispatch_job(job: "Job", argv: List[str], *, pipeline: str) -> None:
     rate limit). The broker is the execution seam, not the admission
     seam: every job ``_dispatch_job`` sees has already passed
     admission and is recorded in ``JOBS``.
+
+    Failure modes:
+
+    - Broker construction failure (boot-time misconfig) → fall back
+      to the in-band path so a transient broker outage does not
+      block admission. Logged and continued.
+    - Broker rejects with ``QueueBrokerError`` (e.g. job_id
+      collision) → in-band fallback is safe because the broker did
+      not admit the job.
+    - Broker ``enqueue`` raises any other exception (e.g. Redis
+      connection drop after the write hit the wire): the enqueue may
+      have partially succeeded, so falling back to in-band risks
+      duplicate execution. Raise ``_DispatchError`` so ``_create_job``
+      fail-closes and rolls back the ``JOBS`` entry.
     """
     if not USE_QUEUE_BROKER:
         asyncio.create_task(_run_job(job, argv))
@@ -9014,6 +9104,9 @@ async def _dispatch_job(job: "Job", argv: List[str], *, pipeline: str) -> None:
     except QueueBrokerError:
         LOGGER.exception("broker rejected enqueue for job %s; falling back to in-band dispatch", job.id)
         asyncio.create_task(_run_job(job, argv))
+    except Exception as exc:  # noqa: BLE001 - broker IO failures must fail closed
+        LOGGER.exception("broker enqueue raised for job %s; failing closed", job.id)
+        raise _DispatchError(str(exc)) from exc
 
 
 async def _orchestrator_job_executor(
