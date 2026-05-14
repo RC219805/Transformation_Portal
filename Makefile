@@ -376,6 +376,8 @@ test-paid-pilot-services-contract:
 		echo "  make test-paid-pilot-services-contract"; \
 		exit 1; \
 	fi
+	@# Component contracts use TP_TEST_* endpoints directly and should not inherit
+	@# app-level selectors; the final smoke validates full paid-pilot composition.
 	@TP_ORCHESTRATOR_STATE_BACKEND=memory TP_ORCHESTRATOR_QUEUE_BACKEND=memory TP_ARTIFACT_STORE=local $(MAKE) test-orchestrator-postgres-contract
 	@TP_ORCHESTRATOR_STATE_BACKEND=memory TP_ORCHESTRATOR_QUEUE_BACKEND=memory TP_ARTIFACT_STORE=local $(MAKE) test-orchestrator-postgres-app-contract
 	@TP_ORCHESTRATOR_STATE_BACKEND=memory TP_ORCHESTRATOR_QUEUE_BACKEND=memory TP_ARTIFACT_STORE=local $(MAKE) test-worker-redis-contract

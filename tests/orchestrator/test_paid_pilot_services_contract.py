@@ -63,7 +63,11 @@ def _require_paid_pilot_env() -> None:
         pytest.skip(f"set {_RUN_ENV}=1 to run the paid-pilot managed-services smoke")
     missing = _missing_env()
     if missing:
-        pytest.skip("paid-pilot managed-services smoke requires explicit service env; " f"missing: {', '.join(missing)}")
+        pytest.fail(
+            "paid-pilot managed-services smoke was explicitly requested but "
+            f"required service env is missing: {', '.join(missing)}",
+            pytrace=False,
+        )
     for name, expected in _EXPECTED_SELECTORS.items():
         observed = os.getenv(name, "").strip()
         if observed != expected:
@@ -80,6 +84,20 @@ def _require_paid_pilot_env() -> None:
             "paid-pilot service env is set, but required Postgres/Redis/S3 dependencies " f"are unavailable: {exc}",
             pytrace=False,
         )
+
+
+def test_paid_pilot_smoke_fails_when_run_flag_set_but_required_env_missing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv(_RUN_ENV, "1")
+    for name in _REQUIRED_ENV:
+        monkeypatch.delenv(name, raising=False)
+
+    with pytest.raises(pytest.fail.Exception) as exc_info:
+        _require_paid_pilot_env()
+
+    assert "explicitly requested" in str(exc_info.value)
+    assert _REQUIRED_ENV[0] in str(exc_info.value)
 
 
 async def _reset_external_state(
