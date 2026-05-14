@@ -10,16 +10,20 @@ Tests the FastAPI app's route handlers end-to-end via TestClient, covering:
   - POST /v1/jobs/{id}/cancel (found and 404)
 
 Jobs are injected directly into the in-process JOBS dict to test retrieval and
-cancellation without executing actual subprocesses.
+runtime overlay behavior without executing actual subprocesses; durable route
+state is seeded through the JobRepository.
 """
 
 from __future__ import annotations
 
+import asyncio
 import time
 from collections.abc import Iterator
 from typing import Any
 
 import pytest
+
+from transformation_portal.orchestrator import reset_singletons
 
 pytestmark = [pytest.mark.unit]
 
@@ -55,15 +59,23 @@ def _clear_jobs():
     """Ensure the global JOBS dict and rate-limit buckets are clean before and after each test."""
     import app as orchestrator_app
 
+    reset_singletons()
+    orchestrator_app.app.state.job_repository = None
+    orchestrator_app.app.state.job_repository_unavailable = False
     orchestrator_app.JOBS.clear()
+    orchestrator_app.EVENT_SUBSCRIBERS.clear()
     orchestrator_app.RATE_LIMIT_BUCKETS.clear()
     yield
     orchestrator_app.JOBS.clear()
+    orchestrator_app.EVENT_SUBSCRIBERS.clear()
     orchestrator_app.RATE_LIMIT_BUCKETS.clear()
+    reset_singletons()
+    orchestrator_app.app.state.job_repository = None
+    orchestrator_app.app.state.job_repository_unavailable = False
 
 
-def _inject_job(job_id: str = "test-job-001", state: str = "queued") -> Any:
-    """Insert a minimal Job directly into the in-process JOBS dict."""
+def _inject_job(job_id: str = "test-job-001", state: str = "queued", *, cache_runtime: bool = True) -> Any:
+    """Insert a minimal Job through the durable repository, with optional runtime cache overlay."""
     import app as orchestrator_app
 
     job = orchestrator_app.Job(
@@ -72,7 +84,14 @@ def _inject_job(job_id: str = "test-job-001", state: str = "queued") -> Any:
         state=state,
         request={"pipeline": "lux-depth-v3"},
     )
-    orchestrator_app.JOBS[job_id] = job
+
+    async def _seed() -> None:
+        await orchestrator_app._job_repository().create(orchestrator_app._record_from_job(job))
+
+    asyncio.run(_seed())
+    if cache_runtime:
+        orchestrator_app.JOBS[job_id] = job
+        orchestrator_app.EVENT_SUBSCRIBERS.setdefault(job_id, {})
     return job
 
 
@@ -138,6 +157,15 @@ class TestListJobs:
         job_ids = [j.get("id") for j in body["data"]["jobs"]]
         assert "listed-job" in job_ids
 
+    def test_repository_job_appears_in_list_after_runtime_cache_clear(self, client):
+        import app as orchestrator_app
+
+        _inject_job("repo-listed-job")
+        orchestrator_app.JOBS.clear()
+        body = client.get("/v1/jobs").json()
+        job_ids = [j.get("id") for j in body["data"]["jobs"]]
+        assert "repo-listed-job" in job_ids
+
 
 # ---------------------------------------------------------------------------
 # GET /v1/jobs/{job_id} — single job
@@ -162,6 +190,14 @@ class TestGetJob:
         _inject_job("find-me")
         body = client.get("/v1/jobs/find-me").json()
         assert body["data"]["id"] == "find-me"
+
+    def test_returns_repository_job_after_runtime_cache_clear(self, client):
+        import app as orchestrator_app
+
+        _inject_job("repo-find-me")
+        orchestrator_app.JOBS.clear()
+        body = client.get("/v1/jobs/repo-find-me").json()
+        assert body["data"]["id"] == "repo-find-me"
 
     def test_returned_job_has_state(self, client):
         _inject_job("state-job", state="queued")

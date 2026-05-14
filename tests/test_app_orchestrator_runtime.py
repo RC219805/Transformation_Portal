@@ -388,9 +388,11 @@ def _reset_global_state() -> None:
     _reset_job_repository()
     orchestrator_app.JOBS.clear()
     orchestrator_app.EVENT_SUBSCRIBERS.clear()
+    orchestrator_app._LAST_EVENT_PERSISTED_AT.clear()
     yield
     orchestrator_app.JOBS.clear()
     orchestrator_app.EVENT_SUBSCRIBERS.clear()
+    orchestrator_app._LAST_EVENT_PERSISTED_AT.clear()
     _reset_job_repository()
 
 
@@ -5051,6 +5053,53 @@ def test_cleanup_expired_jobs_prunes_old_finished_entries() -> None:
     assert asyncio.run(orchestrator_app._job_repository().get(fresh_job.id)) is not None
     assert fresh_job.id in orchestrator_app.JOBS
     assert running_job.id in orchestrator_app.JOBS
+
+
+def test_overlay_runtime_state_preserves_live_cached_job() -> None:
+    cached_job = orchestrator_app.Job(
+        id="job_live_overlay",
+        created_at=100.0,
+        state="running",
+        progress=75,
+    )
+    cached_job.proc = SimpleNamespace(returncode=None)
+    record_job = orchestrator_app.Job(
+        id=cached_job.id,
+        created_at=90.0,
+        state="queued",
+        progress=5,
+    )
+
+    result = orchestrator_app._overlay_runtime_state(record_job, cached_job)
+
+    assert result is cached_job
+    assert result.state == "running"
+    assert result.progress == 75
+
+
+def test_cleanup_expired_upload_batches_skips_when_retained_scan_fails(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    upload_root = tmp_path / "uploads"
+    managed_dir = upload_root / "upload_123"
+    (managed_dir / "input").mkdir(parents=True)
+    portal_dir = managed_dir / "_portal"
+    portal_dir.mkdir()
+    (portal_dir / upload_staging.UPLOAD_RECEIPT_FILENAME).write_text("{}", encoding="utf-8")
+    os.utime(managed_dir, (100.0, 100.0))
+
+    monkeypatch.setattr(orchestrator_app, "PORTAL_UPLOAD_ROOT", str(upload_root))
+    monkeypatch.setattr(orchestrator_app, "ALLOWED_INPUT_ROOTS", [tmp_path.resolve()])
+
+    def _raise_unavailable() -> Any:
+        raise orchestrator_app._JobRepositoryUnavailable("boom")
+
+    monkeypatch.setattr(orchestrator_app, "_job_repository", _raise_unavailable)
+
+    asyncio.run(orchestrator_app._cleanup_expired_upload_batches(10_000.0))
+
+    assert managed_dir.exists()
 
 
 def test_mutating_job_route_detection() -> None:

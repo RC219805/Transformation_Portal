@@ -597,6 +597,9 @@ CLEANUP_INTERVAL_SECONDS = _env_int(
     60,
     minimum=1,
 )
+JOB_CLEANUP_SCAN_LIMIT = 1000
+JOB_REQUEST_CLEANUP_MIN_INTERVAL_SECONDS = 30.0
+JOB_LAST_EVENT_FLUSH_INTERVAL_SECONDS = 5.0
 CANCEL_GRACE_SECONDS = _env_float(
     "TP_CANCEL_GRACE_SECONDS",
     5.0,
@@ -1091,6 +1094,8 @@ JOBS: Dict[str, Job] = {}
 EVENT_SUBSCRIBERS: Dict[str, Dict[str, "asyncio.Queue[Dict[str, Any]]"]] = {}
 RATE_LIMIT_BUCKETS: Dict[str, Deque[float]] = {}
 JOB_ADMISSION_LOCK = asyncio.Lock()
+_LAST_REQUEST_JOB_CLEANUP_AT = 0.0
+_LAST_EVENT_PERSISTED_AT: Dict[str, float] = {}
 ACTIVE_JOB_STATES = {"queued", "running"}
 # Phase 2.D - terminal states a job can reach. ``worker_lost`` joins the
 # existing terminal states so the broker-reclaim reconciler, the executor's
@@ -1111,20 +1116,18 @@ def _repository_unavailable_response(*, details: Optional[Dict[str, Any]] = None
 
 
 def _job_repository() -> JobRepository:
-    repo = getattr(app.state, "job_repository", None) if "app" in globals() else None
+    repo = getattr(app.state, "job_repository", None)
     if repo is not None:
         return repo
-    if "app" in globals() and bool(getattr(app.state, "job_repository_unavailable", False)):
+    if bool(getattr(app.state, "job_repository_unavailable", False)):
         raise _JobRepositoryUnavailable("cached repository construction failure")
     try:
         repo = get_job_repository()
     except Exception as exc:  # noqa: BLE001 - callers return a redacted 503
-        if "app" in globals():
-            app.state.job_repository_unavailable = True
+        app.state.job_repository_unavailable = True
         raise _JobRepositoryUnavailable("job repository construction failed") from exc
-    if "app" in globals():
-        app.state.job_repository = repo
-        app.state.job_repository_unavailable = False
+    app.state.job_repository = repo
+    app.state.job_repository_unavailable = False
     return repo
 
 
@@ -1182,6 +1185,8 @@ def _job_from_record(record: JobRecord) -> Job:
 def _overlay_runtime_state(job: Job, cached: Optional[Job]) -> Job:
     if cached is None:
         return job
+    if cached.proc is not None and cached.proc.returncode is None:
+        return cached
     proc = cached.proc
     terminate_task = cached.terminate_task
     cached.created_at = job.created_at
@@ -1235,8 +1240,8 @@ def _cache_runtime_job(job: Job) -> Job:
 async def _persist_job_fields(job: Job, **fields: Any) -> Optional[JobRecord]:
     try:
         record = await _job_repository().update(job.id, **fields)
-    except JobNotFoundError:
-        raise
+    except JobNotFoundError as exc:
+        raise _JobRepositoryUnavailable("job repository record missing") from exc
     except _JobRepositoryUnavailable:
         raise
     except Exception as exc:  # noqa: BLE001 - callers decide whether to fail closed
@@ -2944,9 +2949,21 @@ def _public_http_error_message(status_code: int, path: str = "") -> str:
     return PUBLIC_HTTP_ERROR_MESSAGES.get(status_code, "request failed")
 
 
-async def _cleanup_expired_jobs(now: float) -> None:
+async def _cleanup_expired_jobs(
+    now: float,
+    *,
+    force: bool = True,
+    scan_limit: Optional[int] = JOB_CLEANUP_SCAN_LIMIT,
+) -> None:
+    global _LAST_REQUEST_JOB_CLEANUP_AT
+
+    if not force:
+        if now - _LAST_REQUEST_JOB_CLEANUP_AT < JOB_REQUEST_CLEANUP_MIN_INTERVAL_SECONDS:
+            return
+        _LAST_REQUEST_JOB_CLEANUP_AT = now
+
     try:
-        records, _ = await _job_repository().list(limit=None)
+        records, _ = await _job_repository().list(limit=scan_limit)
     except Exception:  # noqa: BLE001 - cleanup must not break request handling
         LOGGER.exception("job repository cleanup scan failed")
         return
@@ -2965,6 +2982,7 @@ async def _cleanup_expired_jobs(now: float) -> None:
                 continue
             JOBS.pop(job.id, None)
             EVENT_SUBSCRIBERS.pop(job.id, None)
+            _LAST_EVENT_PERSISTED_AT.pop(job.id, None)
 
 
 def _job_has_undeleted_artifacts(job: "Job") -> bool:
@@ -3098,9 +3116,13 @@ async def _delete_job_artifacts_for_job(
     return deleted_count
 
 
-async def _cleanup_expired_job_artifacts(now: float) -> None:
+async def _cleanup_expired_job_artifacts(
+    now: float,
+    *,
+    scan_limit: Optional[int] = JOB_CLEANUP_SCAN_LIMIT,
+) -> None:
     try:
-        records, _ = await _job_repository().list(limit=None)
+        records, _ = await _job_repository().list(limit=scan_limit)
     except Exception:  # noqa: BLE001 - cleanup must not break request handling
         LOGGER.exception("job artifact retention scan failed")
         return
@@ -3133,31 +3155,38 @@ def _cleanup_rate_limit_buckets(now: float) -> None:
         RATE_LIMIT_BUCKETS.pop(client_ip, None)
 
 
-async def _retained_staged_input_dirs() -> set[str]:
-    retained: set[str] = set()
+def _add_staged_input_dir(retained: set[str], job: Job) -> None:
+    effective_request = (
+        job.effective_request if isinstance(job.effective_request, dict) and job.effective_request else job.request
+    )
+    if not isinstance(effective_request, dict):
+        return
+    args = effective_request.get("args")
+    if not isinstance(args, dict):
+        return
+    input_dir = args.get("input_dir") or args.get("inputDir")
+    if not input_dir:
+        return
     try:
-        records, _ = await _job_repository().list(limit=None)
+        retained.add(str(Path(os.path.realpath(str(input_dir)))))
+    except (OSError, RuntimeError, ValueError):
+        return
+
+
+async def _retained_staged_input_dirs() -> Optional[set[str]]:
+    retained: set[str] = set()
+    for job in list(JOBS.values()):
+        _add_staged_input_dir(retained, job)
+
+    try:
+        records, _ = await _job_repository().list(limit=JOB_CLEANUP_SCAN_LIMIT)
     except Exception:  # noqa: BLE001 - upload cleanup must not block on repo errors
         LOGGER.exception("job repository retained upload scan failed")
-        return retained
+        return None
 
     for record in records:
         job = _overlay_runtime_state(_job_from_record(record), JOBS.get(record.id))
-        effective_request = (
-            job.effective_request if isinstance(job.effective_request, dict) and job.effective_request else job.request
-        )
-        if not isinstance(effective_request, dict):
-            continue
-        args = effective_request.get("args")
-        if not isinstance(args, dict):
-            continue
-        input_dir = args.get("input_dir") or args.get("inputDir")
-        if not input_dir:
-            continue
-        try:
-            retained.add(str(Path(os.path.realpath(str(input_dir)))))
-        except (OSError, RuntimeError, ValueError):
-            continue
+        _add_staged_input_dir(retained, job)
 
     return retained
 
@@ -3169,11 +3198,16 @@ async def _cleanup_expired_upload_batches(now: float) -> None:
         LOGGER.warning("Skipping staged upload cleanup because TP_PORTAL_UPLOAD_ROOT is outside allowed input roots")
         return
 
+    retained_input_dirs = await _retained_staged_input_dirs()
+    if retained_input_dirs is None:
+        LOGGER.warning("Skipping staged upload cleanup because retained job inputs could not be scanned")
+        return
+
     removed = cleanup_expired_batches(
         upload_root,
         now=now,
         ttl_seconds=PORTAL_UPLOAD_TTL_SECONDS,
-        retained_input_dirs=await _retained_staged_input_dirs(),
+        retained_input_dirs=retained_input_dirs,
     )
     if removed:
         LOGGER.info("Removed %d expired staged upload batches", len(removed))
@@ -3183,8 +3217,8 @@ async def _cleanup_loop() -> None:
     while True:
         await asyncio.sleep(CLEANUP_INTERVAL_SECONDS)
         now = _now()
-        await _cleanup_expired_job_artifacts(now)
-        await _cleanup_expired_jobs(now)
+        await _cleanup_expired_job_artifacts(now, scan_limit=None)
+        await _cleanup_expired_jobs(now, scan_limit=None)
         await _cleanup_expired_upload_batches(now)
         _cleanup_rate_limit_buckets(now)
 
@@ -6207,6 +6241,25 @@ def _sanitized_child_env() -> Dict[str, str]:
     return child_env
 
 
+_LAST_EVENT_AT_ALWAYS_FLUSH_EVENTS = {
+    "artifact",
+    "artifact_deleted",
+    "artifact_deletion_failed",
+    "done",
+    "progress",
+    "state",
+}
+
+
+def _should_flush_last_event_at(job_id: str, event: str, event_at: float) -> bool:
+    if event in _LAST_EVENT_AT_ALWAYS_FLUSH_EVENTS:
+        return True
+    if JOB_LAST_EVENT_FLUSH_INTERVAL_SECONDS <= 0:
+        return True
+    last_flushed_at = _LAST_EVENT_PERSISTED_AT.get(job_id)
+    return last_flushed_at is None or event_at - last_flushed_at >= JOB_LAST_EVENT_FLUSH_INTERVAL_SECONDS
+
+
 async def _publish_event(
     job_id: str,
     event: str,
@@ -6216,10 +6269,13 @@ async def _publish_event(
     job = JOBS.get(job_id)
     if job is not None:
         job.last_event_at = event_at
-    try:
-        await _job_repository().update(job_id, last_event_at=event_at)
-    except Exception:  # noqa: BLE001 - event fanout must not fail on persistence lag
-        LOGGER.debug("job repository last_event_at update skipped/failed for %s", job_id, exc_info=True)
+    if _should_flush_last_event_at(job_id, event, event_at):
+        try:
+            await _job_repository().update(job_id, last_event_at=event_at)
+        except Exception:  # noqa: BLE001 - event fanout must not fail on persistence lag
+            LOGGER.debug("job repository last_event_at update skipped/failed for %s", job_id, exc_info=True)
+        else:
+            _LAST_EVENT_PERSISTED_AT[job_id] = event_at
 
     subscribers = EVENT_SUBSCRIBERS.get(job_id)
     if not subscribers:
@@ -9328,8 +9384,8 @@ async def _create_job(
     except _JobRepositoryUnavailable:
         return _repository_unavailable_response()
 
+    await _cleanup_expired_jobs(_now(), force=False)
     async with JOB_ADMISSION_LOCK:
-        await _cleanup_expired_jobs(_now())
         try:
             active_jobs = await _active_job_count()
         except Exception:  # noqa: BLE001 - admission must not fall back to stale cache
@@ -9394,16 +9450,21 @@ async def _create_job(
         # when WE created it and it is still empty — pre-existing dirs
         # and dirs with content are left untouched because ``rmdir``
         # silently fails on non-empty directories.
+        rollback_delete_failed = False
         try:
             await repo.delete(jid)
         except Exception:  # noqa: BLE001 - leaving an admitted row would be unsafe
+            rollback_delete_failed = True
             LOGGER.exception("job repository rollback delete failed for %s", jid)
+        finally:
+            JOBS.pop(jid, None)
+            EVENT_SUBSCRIBERS.pop(jid, None)
+            _LAST_EVENT_PERSISTED_AT.pop(jid, None)
+            if trusted_output_dir is not None and not output_dir_existed_pre_dispatch:
+                with suppress(OSError):
+                    trusted_output_dir.rmdir()
+        if rollback_delete_failed:
             return _repository_unavailable_response()
-        JOBS.pop(jid, None)
-        EVENT_SUBSCRIBERS.pop(jid, None)
-        if trusted_output_dir is not None and not output_dir_existed_pre_dispatch:
-            with suppress(OSError):
-                trusted_output_dir.rmdir()
         return _error_response(
             503,
             code="QUEUE_UNAVAILABLE",
@@ -9442,7 +9503,7 @@ async def list_jobs_v2(limit: int = JOB_LIST_LIMIT) -> JSONResponse:
 
 
 async def _list_jobs(*, limit: int = JOB_LIST_LIMIT, api_version: str = "v1") -> JSONResponse:
-    await _cleanup_expired_jobs(_now())
+    await _cleanup_expired_jobs(_now(), force=False)
     bounded_limit = max(1, min(limit, JOB_LIST_LIMIT))
     try:
         records, total = await _job_repository().list(limit=bounded_limit)
@@ -9482,7 +9543,7 @@ async def get_job_v2(job_id: str, include_logs: bool = True) -> JSONResponse:
 
 
 async def _get_job(job_id: str, *, include_logs: bool = True, api_version: str = "v1") -> JSONResponse:
-    await _cleanup_expired_jobs(_now())
+    await _cleanup_expired_jobs(_now(), force=False)
     try:
         job = await _load_job_view(job_id)
     except _JobRepositoryUnavailable:
@@ -9529,7 +9590,7 @@ async def delete_job_artifacts_v2(job_id: str) -> JSONResponse:
 
 
 async def _get_job_artifact(job_id: str, artifact_path: str) -> Response:
-    await _cleanup_expired_jobs(_now())
+    await _cleanup_expired_jobs(_now(), force=False)
     try:
         job = await _load_job_view(job_id)
     except _JobRepositoryUnavailable:
@@ -9723,7 +9784,7 @@ async def _get_job_artifact(job_id: str, artifact_path: str) -> Response:
 
 
 async def _delete_job_artifacts(job_id: str, *, api_version: str = "v1") -> JSONResponse:
-    await _cleanup_expired_jobs(_now())
+    await _cleanup_expired_jobs(_now(), force=False)
     try:
         job = await _load_job_view(job_id)
     except _JobRepositoryUnavailable:
@@ -10408,4 +10469,4 @@ async def _run_job(job: Job, argv: List[str]) -> None:
         job.finished_at = job.done_published_at
         await _persist_job_state(job)
         _cache_runtime_job(job)
-        await _cleanup_expired_jobs(_now())
+        await _cleanup_expired_jobs(_now(), force=False)
