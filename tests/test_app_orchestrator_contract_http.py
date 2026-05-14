@@ -3579,6 +3579,83 @@ def test_job_artifact_endpoint_auth_failure_does_not_presign(
     assert response.json()["error"]["code"] == "UNAUTHORIZED"
 
 
+def test_job_artifact_endpoint_redacts_store_setup_exception(
+    client: TestClient,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    secret_message = "Traceback leaked /tmp/internal-store-secret"
+    job = orchestrator_app.Job(
+        id="job_artifact_store_unavailable",
+        created_at=orchestrator_app._now(),
+        request={"pipeline": "lux-depth-v3", "args": {"output_dir": str(tmp_path / "out")}},
+        state="succeeded",
+        artifacts={
+            "items": [{"path": "outputs/payload.txt", "relative_path": "outputs/payload.txt"}],
+            "indexed_count": 1,
+            "truncated": False,
+        },
+    )
+    orchestrator_app.JOBS[job.id] = job
+
+    def _fail_store_access():
+        raise RuntimeError(secret_message)
+
+    monkeypatch.setattr(orchestrator_app, "_artifact_store", _fail_store_access)
+
+    response = client.get(f"/v1/jobs/{job.id}/artifacts/outputs/payload.txt")
+
+    assert response.status_code == 503
+    assert secret_message not in response.text
+    assert response.json()["error"]["details"] == {
+        "job_id": job.id,
+        "reason": "artifact_store_unavailable",
+    }
+    assert job.artifacts["lifecycle"]["mirror_error"] == "artifact_store_unavailable"
+
+
+def test_job_artifact_endpoint_redacts_s3_operation_exception(
+    client: TestClient,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    secret_message = "Traceback leaked from boto credentials"
+
+    class FailingS3Store:
+        backend = "s3"
+
+        async def head(self, job_id: str, relative_path: str):  # noqa: ARG002
+            raise orchestrator_app.ArtifactStoreError(secret_message)
+
+        async def presign_get(self, job_id: str, relative_path: str, *, expires_seconds: int):  # noqa: ARG002
+            raise AssertionError("presign must not run after failed head")
+
+    job = orchestrator_app.Job(
+        id="job_artifact_s3_unavailable",
+        created_at=orchestrator_app._now(),
+        request={"pipeline": "lux-depth-v3", "args": {"output_dir": str(tmp_path / "out")}},
+        state="succeeded",
+        artifact_store_mirrored=True,
+        artifact_store_backend="s3",
+        artifacts={
+            "items": [{"path": "outputs/payload.txt", "relative_path": "outputs/payload.txt"}],
+            "indexed_count": 1,
+            "truncated": False,
+        },
+    )
+    orchestrator_app.JOBS[job.id] = job
+    monkeypatch.setattr(orchestrator_app, "_artifact_store", lambda: FailingS3Store())
+
+    response = client.get(f"/v1/jobs/{job.id}/artifacts/outputs/payload.txt")
+
+    assert response.status_code == 503
+    assert secret_message not in response.text
+    assert response.json()["error"]["details"] == {
+        "job_id": job.id,
+        "reason": "artifact_store_operation_failed",
+    }
+
+
 @pytest.mark.parametrize("jobs_base", ["/v1/jobs", "/v2/jobs"])
 def test_delete_job_artifacts_marks_lifecycle_and_returns_gone_on_fetch(
     client: TestClient,
@@ -3743,6 +3820,22 @@ def test_ready_reports_artifact_store_backend(monkeypatch: pytest.MonkeyPatch, t
         "prefix": "",
         "signed_urls": False,
     }
+
+
+def test_ready_redacts_artifact_store_exception(monkeypatch: pytest.MonkeyPatch) -> None:
+    secret_message = "Traceback leaked /tmp/internal-bucket-secret"
+
+    def _fail_store_access():
+        raise RuntimeError(secret_message)
+
+    monkeypatch.setattr(orchestrator_app, "_artifact_store", _fail_store_access)
+
+    response = asyncio.run(orchestrator_app.ready())
+
+    assert response["ok"] is False
+    assert response["artifact_store"]["configured"] is False
+    assert response["artifact_store"]["error"] == "artifact_store_unavailable"
+    assert secret_message not in json.dumps(response)
 
 
 @pytest.mark.parametrize("jobs_base", ["/v1/jobs", "/v2/jobs"])

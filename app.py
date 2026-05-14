@@ -2839,10 +2839,11 @@ async def _delete_job_artifacts_for_job(job: Job, *, reason: str) -> Optional[in
         store = _artifact_store()
     except Exception as exc:  # noqa: BLE001 - callers surface this as 503
         lifecycle = _ensure_artifact_lifecycle(job, backend=os.getenv("TP_ARTIFACT_STORE", "local"))
+        LOGGER.exception("artifact store unavailable while deleting artifacts for job %s", job.id)
         lifecycle.update(
             {
                 "deletion_status": "failed",
-                "deletion_error": str(exc),
+                "deletion_error": "artifact_store_unavailable",
                 "deletion_reason": reason,
             }
         )
@@ -2857,7 +2858,7 @@ async def _delete_job_artifacts_for_job(job: Job, *, reason: str) -> Optional[in
         lifecycle.update(
             {
                 "deletion_status": "failed",
-                "deletion_error": str(exc),
+                "deletion_error": "artifact_deletion_failed",
                 "deletion_reason": reason,
             }
         )
@@ -2869,7 +2870,7 @@ async def _delete_job_artifacts_for_job(job: Job, *, reason: str) -> Optional[in
             {
                 "id": job.id,
                 "reason": reason,
-                "error": str(exc),
+                "error": "artifact_deletion_failed",
                 "artifact_store_backend": store.backend,
             },
         )
@@ -6726,7 +6727,7 @@ async def _mirror_job_artifacts_to_store(job: Job) -> bool:
         _artifact_lifecycle(job).update(
             {
                 "mirror_status": "failed",
-                "mirror_error": str(exc),
+                "mirror_error": "artifact_store_unavailable",
             }
         )
         LOGGER.exception("artifact store unavailable while mirroring job %s", job.id)
@@ -6799,12 +6800,13 @@ async def _artifact_store_readiness() -> Dict[str, Any]:
             "signed_urls": store.backend == "s3",
         }
     except Exception as exc:  # noqa: BLE001 - readiness must surface config/client failures
+        LOGGER.exception("artifact store readiness check failed")
         return {
             "backend": selected_backend,
             "configured": False,
             "prefix": os.getenv("TP_ARTIFACT_PREFIX", "").strip(),
             "signed_urls": False,
-            "error": str(exc),
+            "error": "artifact_store_unavailable",
         }
 
 
@@ -9327,7 +9329,7 @@ async def _get_job_artifact(job_id: str, artifact_path: str) -> Response:
             503,
             code="ARTIFACT_STORE_UNAVAILABLE",
             message="artifact store unavailable",
-            details={"job_id": job_id, "reason": str(exc)},
+            details={"job_id": job_id, "reason": "artifact_store_unavailable"},
             retriable=True,
         )
 
@@ -9359,7 +9361,7 @@ async def _get_job_artifact(job_id: str, artifact_path: str) -> Response:
                 503,
                 code="ARTIFACT_STORE_UNAVAILABLE",
                 message="artifact store unavailable",
-                details={"job_id": job_id, "reason": str(exc)},
+                details={"job_id": job_id, "reason": "artifact_store_operation_failed"},
                 retriable=True,
             )
         if not presigned_url:
