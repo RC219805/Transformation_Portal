@@ -159,6 +159,7 @@ def paid_pilot_stack(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Iterato
     monkeypatch.setattr(orchestrator_app, "WORKER_HEARTBEAT_INTERVAL_SECONDS", 0.02)
     monkeypatch.setattr(orchestrator_app, "WORKER_POLL_INTERVAL_SECONDS", 0.01)
     monkeypatch.setattr(orchestrator_app, "MAX_CONCURRENT_JOBS", 1)
+    monkeypatch.setattr(orchestrator_app, "RATE_LIMIT_PER_MINUTE", 0)
     monkeypatch.setattr(orchestrator_app, "_resolve_lux_depth_canary_runtime", lambda: Path(sys.executable))
 
     reset_singletons()
@@ -246,6 +247,21 @@ def _wait_for_terminal_detail(client: TestClient, job_id: str, *, timeout: float
     raise AssertionError(f"job {job_id} did not reach terminal state; last body={last_body!r}")
 
 
+def _wait_for_durable_artifacts(client: TestClient, job_id: str, *, timeout: float = 10.0) -> dict[str, Any]:
+    deadline = time.monotonic() + timeout
+    last_body: dict[str, Any] | None = None
+    while time.monotonic() < deadline:
+        orchestrator_app.JOBS.clear()
+        response = client.get(f"/v1/jobs/{job_id}")
+        assert response.status_code == 200, response.text
+        last_body = response.json()["data"]
+        items = last_body.get("artifacts", {}).get("items", [])
+        if last_body.get("state") == "succeeded" and items:
+            return last_body
+        time.sleep(0.05)
+    raise AssertionError(f"job {job_id} did not persist terminal artifacts; last body={last_body!r}")
+
+
 def test_paid_pilot_backend_services_compose_end_to_end(
     paid_pilot_stack: dict[str, Any],
     monkeypatch: pytest.MonkeyPatch,
@@ -289,10 +305,7 @@ def test_paid_pilot_backend_services_compose_end_to_end(
         assert terminal["exit_code"] == 0
 
         orchestrator_app.JOBS.clear()
-        durable_detail = client.get(f"/v1/jobs/{job_id}")
-        assert durable_detail.status_code == 200, durable_detail.text
-        durable_body = durable_detail.json()["data"]
-        assert durable_body["state"] == "succeeded"
+        durable_body = _wait_for_durable_artifacts(client, job_id)
         assert durable_body["artifacts"]["items"], "terminal artifact metadata should persist in Postgres"
 
         artifact_response = client.get(
@@ -324,9 +337,9 @@ def test_paid_pilot_backend_services_compose_end_to_end(
             request={"pipeline": "lux-depth-v3"},
             effective_request={"pipeline": "lux-depth-v3", "args": {}},
         )
-        asyncio.run(repo.create(orchestrator_app._record_from_job(abandoned)))
+        client.portal.call(repo.create, orchestrator_app._record_from_job(abandoned))
         orchestrator_app.JOBS.clear()
-        swept = asyncio.run(sweep_orphaned_jobs(repo))
+        swept = client.portal.call(sweep_orphaned_jobs, repo)
         assert swept == [abandoned.id]
 
         swept_response = client.get(f"/v1/jobs/{abandoned.id}")

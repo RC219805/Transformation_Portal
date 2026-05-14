@@ -1186,7 +1186,39 @@ def _job_from_record(record: JobRecord) -> Job:
 
 
 def _has_durable_artifact_metadata(job: Job) -> bool:
-    return bool(job.artifacts) or bool(job.artifact_lookup)
+    if job.artifact_lookup:
+        return True
+    if not isinstance(job.artifacts, dict):
+        return False
+    items = job.artifacts.get("items")
+    if isinstance(items, list) and items:
+        return True
+    lifecycle = job.artifacts.get(_ARTIFACT_LIFECYCLE_KEY)
+    if not isinstance(lifecycle, dict):
+        return False
+    deletion_status = str(lifecycle.get("deletion_status") or "").strip().lower()
+    mirror_status = str(lifecycle.get("mirror_status") or "").strip().lower()
+    return bool(lifecycle.get("deleted_at")) or deletion_status in {"deleted", "failed"} or mirror_status == "failed"
+
+
+def _merge_durable_artifact_lifecycle(cached: Job, durable: Job) -> bool:
+    if not isinstance(cached.artifacts, dict):
+        return False
+    if not cached.artifact_lookup and not cached.artifacts.get("items"):
+        return False
+    if not isinstance(durable.artifacts, dict):
+        return False
+    lifecycle = durable.artifacts.get(_ARTIFACT_LIFECYCLE_KEY)
+    if not isinstance(lifecycle, dict):
+        return False
+    merged = dict(cached.artifacts)
+    merged[_ARTIFACT_LIFECYCLE_KEY] = dict(lifecycle)
+    cached.artifacts = merged
+    if durable.artifact_store_mirrored:
+        cached.artifact_store_mirrored = True
+    if durable.artifact_store_backend:
+        cached.artifact_store_backend = durable.artifact_store_backend
+    return True
 
 
 def _overlay_runtime_state(job: Job, cached: Optional[Job]) -> Job:
@@ -1227,11 +1259,17 @@ def _overlay_runtime_state(job: Job, cached: Optional[Job]) -> Job:
             cached.artifact_lookup = job.artifact_lookup
             cached.artifact_store_mirrored = job.artifact_store_mirrored
             cached.artifact_store_backend = job.artifact_store_backend
+        else:
+            _merge_durable_artifact_lifecycle(cached, job)
         if job.cancel_requested:
             cached.cancel_requested = True
         return cached
     proc = cached.proc
     terminate_task = cached.terminate_task
+    cached_artifacts = cached.artifacts
+    cached_artifact_lookup = cached.artifact_lookup
+    cached_artifact_store_mirrored = cached.artifact_store_mirrored
+    cached_artifact_store_backend = cached.artifact_store_backend
     cached.created_at = job.created_at
     cached.started_at = job.started_at
     cached.finished_at = job.finished_at
@@ -1243,10 +1281,17 @@ def _overlay_runtime_state(job: Job, cached: Optional[Job]) -> Job:
     cached.request = job.request
     cached.effective_request = job.effective_request
     cached.logs_tail = job.logs_tail
-    cached.artifacts = job.artifacts
-    cached.artifact_lookup = job.artifact_lookup
-    cached.artifact_store_mirrored = job.artifact_store_mirrored
-    cached.artifact_store_backend = job.artifact_store_backend
+    if cached_is_terminal and not _has_durable_artifact_metadata(job):
+        cached.artifacts = cached_artifacts
+        cached.artifact_lookup = cached_artifact_lookup
+        cached.artifact_store_mirrored = cached_artifact_store_mirrored
+        cached.artifact_store_backend = cached_artifact_store_backend
+        _merge_durable_artifact_lifecycle(cached, job)
+    else:
+        cached.artifacts = job.artifacts
+        cached.artifact_lookup = job.artifact_lookup
+        cached.artifact_store_mirrored = job.artifact_store_mirrored
+        cached.artifact_store_backend = job.artifact_store_backend
     cached.run_summary = job.run_summary
     cached.cancel_requested = job.cancel_requested
     cached.error = job.error
