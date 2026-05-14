@@ -477,53 +477,56 @@ Added to `PACKAGE_FLOORS` in `scripts/ci/check_per_package_coverage.py`
 **after** the baseline report lands, set 5-10 points below the measured
 stable coverage. Ratchet upward after two consecutive stable CI runs.
 
-Post-PR7 floors landed after baseline review. They are deliberately
-conservative, set roughly 5-10 points below the measured 2026-05-13 coverage:
+Post-PR7 floors landed after baseline review. A second stability ratchet landed
+after repeated green CI runs and a fresh 2026-05-13 required CI coverage
+snapshot. Floors remain conservative: prefixes with stable required-lane
+headroom were raised, while prefixes with cross-lane variance were held or
+given additional buffer until the next measured ratchet.
 
 ```python
-PackageFloor("src/transformation_portal/plugins/", 45.0)
-PackageFloor("src/transformation_portal/stage_graph/", 70.0)
-PackageFloor("src/transformation_portal/vlm/", 65.0)
-PackageFloor("src/transformation_portal/depth/", 55.0)
-PackageFloor("src/transformation_portal/streaming/", 50.0)
+PackageFloor("src/transformation_portal/plugins/", 48.0)
+PackageFloor("src/transformation_portal/stage_graph/", 74.0)
+PackageFloor("src/transformation_portal/vlm/", 69.0)
+PackageFloor("src/transformation_portal/depth/", 57.0)
+PackageFloor("src/transformation_portal/streaming/", 53.0)
 PackageFloor(
     "src/transformation_portal/spatial_ai/reconstruction/",
     42.0,
 )
 ```
 
-| Package prefix | Measured 2026-05-13 line coverage | Enforced floor |
+| Package prefix | Required CI line coverage snapshot | Enforced floor |
 | --- | ---: | ---: |
-| `src/transformation_portal/plugins/` | 51.40% | 45.0% |
-| `src/transformation_portal/stage_graph/` | 77.38% | 70.0% |
-| `src/transformation_portal/vlm/` | 72.41% | 65.0% |
-| `src/transformation_portal/depth/` | 64.64% | 55.0% |
-| `src/transformation_portal/streaming/` | 56.64% | 50.0% |
-| `src/transformation_portal/spatial_ai/reconstruction/` | 48.58% | 42.0% |
+| `src/transformation_portal/plugins/` | 51.40% | 48.0% |
+| `src/transformation_portal/stage_graph/` | 77.66% | 74.0% |
+| `src/transformation_portal/vlm/` | 73.49% | 69.0% |
+| `src/transformation_portal/depth/` | 59.95% | 57.0% |
+| `src/transformation_portal/streaming/` | 56.72% | 53.0% |
+| `src/transformation_portal/spatial_ai/reconstruction/` | 43.62% | 42.0% |
 
-Post-baseline branch floors also landed after dry-run baseline review. They are
-set roughly 5-10 points below the measured 2026-05-13 branch coverage:
+Post-baseline branch floors also landed after dry-run baseline review, then
+received the same stability ratchet:
 
 ```python
-BranchFloor("src/transformation_portal/plugins/", 30.0)
-BranchFloor("src/transformation_portal/stage_graph/", 60.0)
-BranchFloor("src/transformation_portal/vlm/", 50.0)
+BranchFloor("src/transformation_portal/plugins/", 36.0)
+BranchFloor("src/transformation_portal/stage_graph/", 63.0)
+BranchFloor("src/transformation_portal/vlm/", 55.0)
 BranchFloor("src/transformation_portal/depth/", 40.0)
-BranchFloor("src/transformation_portal/streaming/", 25.0)
+BranchFloor("src/transformation_portal/streaming/", 29.0)
 BranchFloor(
     "src/transformation_portal/spatial_ai/reconstruction/",
-    45.0,
+    47.0,
 )
 ```
 
-| Package prefix | Measured 2026-05-13 branch coverage | Enforced floor |
+| Package prefix | Required CI branch coverage snapshot | Enforced floor |
 | --- | ---: | ---: |
-| `src/transformation_portal/plugins/` | 39.86% | 30.0% |
-| `src/transformation_portal/stage_graph/` | 66.46% | 60.0% |
-| `src/transformation_portal/vlm/` | 58.82% | 50.0% |
-| `src/transformation_portal/depth/` | 47.13% | 40.0% |
-| `src/transformation_portal/streaming/` | 32.79% | 25.0% |
-| `src/transformation_portal/spatial_ai/reconstruction/` | 50.93% | 45.0% |
+| `src/transformation_portal/plugins/` | 39.86% | 36.0% |
+| `src/transformation_portal/stage_graph/` | 66.77% | 63.0% |
+| `src/transformation_portal/vlm/` | 58.82% | 55.0% |
+| `src/transformation_portal/depth/` | 41.76% | 40.0% |
+| `src/transformation_portal/streaming/` | 31.97% | 29.0% |
+| `src/transformation_portal/spatial_ai/reconstruction/` | 49.77% | 47.0% |
 
 ### 12.2 Touched-file rule (per-PR, reviewer-enforced)
 

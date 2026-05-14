@@ -80,14 +80,15 @@ PACKAGE_FLOORS: tuple[PackageFloor, ...] = (
         30.0,
         exclude_prefixes=("src/transformation_portal/lux_depth_v3/validators/",),
     ),
-    # Cold-Zone Coverage Program post-PR7 ratchets. These floors were
-    # set conservatively below the 2026-05-13 post-PR7 measured baseline
-    # so regressions fail without overfitting to one local coverage run.
-    PackageFloor("src/transformation_portal/plugins/", 45.0),
-    PackageFloor("src/transformation_portal/stage_graph/", 70.0),
-    PackageFloor("src/transformation_portal/vlm/", 65.0),
-    PackageFloor("src/transformation_portal/depth/", 55.0),
-    PackageFloor("src/transformation_portal/streaming/", 50.0),
+    # Cold-Zone Coverage Program stability ratchets. These floors were
+    # raised after repeated stable CI runs and a fresh 2026-05-13 required
+    # CI coverage snapshot. Prefixes with cross-lane variance keep extra
+    # headroom until the next measured ratchet.
+    PackageFloor("src/transformation_portal/plugins/", 48.0),
+    PackageFloor("src/transformation_portal/stage_graph/", 74.0),
+    PackageFloor("src/transformation_portal/vlm/", 69.0),
+    PackageFloor("src/transformation_portal/depth/", 57.0),
+    PackageFloor("src/transformation_portal/streaming/", 53.0),
     PackageFloor("src/transformation_portal/spatial_ai/reconstruction/", 42.0),
 )
 
