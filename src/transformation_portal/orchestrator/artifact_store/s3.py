@@ -292,6 +292,69 @@ class S3ArtifactStore(ArtifactStore):
             fingerprint_status=status,
         )
 
+    async def write_file(
+        self,
+        job_id: str,
+        relative_path: str,
+        source_path: Path,
+        *,
+        content_type: Optional[str] = None,
+    ) -> ArtifactObjectMetadata:
+        key = self._object_key(job_id, relative_path)
+        source = Path(source_path)
+        if not source.is_file():
+            raise ArtifactNotFoundError(f"source artifact not found: {source}")
+        try:
+            size_bytes: Optional[int] = source.stat().st_size
+        except OSError:
+            size_bytes = None
+
+        explicit_content_type = str(content_type).strip() if content_type is not None else ""
+        resolved_content_type = explicit_content_type or _content_type_for(relative_path)
+        client = await self._get_client()
+
+        def _upload() -> None:
+            with source.open("rb") as handle:
+                client.upload_fileobj(
+                    handle,
+                    self._bucket,
+                    key,
+                    ExtraArgs={"ContentType": resolved_content_type},
+                )
+
+        try:
+            await asyncio.to_thread(_upload)
+        except Exception as exc:  # noqa: BLE001 - boto3 ClientError
+            raise ArtifactStoreError(f"S3 upload_fileobj failed for {key}") from exc
+
+        sha256_hex, status = self._file_sha256(source, size_bytes)
+        return ArtifactObjectMetadata(
+            relative_path=_normalize_relative_path(relative_path),
+            size_bytes=size_bytes,
+            content_type=resolved_content_type,
+            sha256_hex=sha256_hex,
+            fingerprint_status=status,
+        )
+
+    async def presign_get(
+        self,
+        job_id: str,
+        relative_path: str,
+        *,
+        expires_seconds: int,
+    ) -> Optional[str]:
+        key = self._object_key(job_id, relative_path)
+        client = await self._get_client()
+        try:
+            return await asyncio.to_thread(
+                client.generate_presigned_url,
+                "get_object",
+                Params={"Bucket": self._bucket, "Key": key},
+                ExpiresIn=int(expires_seconds),
+            )
+        except Exception as exc:  # noqa: BLE001 - boto3 ClientError
+            raise ArtifactStoreError(f"S3 presign failed for {key}") from exc
+
     async def delete(self, job_id: str, relative_path: Optional[str] = None) -> int:
         if relative_path is None:
             # Bulk-delete every object under the job prefix.
@@ -396,6 +459,23 @@ class S3ArtifactStore(ArtifactStore):
                     await asyncio.to_thread(close)
                 except Exception:  # noqa: BLE001 - best-effort
                     pass
+        return digest.hexdigest(), "ok"
+
+    def _file_sha256(self, path: Path, size_bytes: Optional[int]) -> tuple[Optional[str], str]:
+        if size_bytes is None:
+            return None, "unavailable"
+        if size_bytes > ARTIFACT_FINGERPRINT_MAX_BYTES:
+            return None, "skipped_size"
+        digest = hashlib.sha256()
+        try:
+            with path.open("rb") as handle:
+                while True:
+                    chunk = handle.read(_CHUNK_BYTES)
+                    if not chunk:
+                        break
+                    digest.update(chunk)
+        except OSError:
+            return None, "unavailable"
         return digest.hexdigest(), "ok"
 
 

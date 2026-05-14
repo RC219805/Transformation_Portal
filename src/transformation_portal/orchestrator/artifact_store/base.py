@@ -35,6 +35,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, AsyncIterator, Dict, List, Optional, Tuple
 
 
@@ -160,6 +161,41 @@ class ArtifactStore(ABC):
         resulting ``ArtifactObjectMetadata`` so callers can verify
         the fingerprint without an additional ``head`` round-trip.
         """
+
+    @abstractmethod
+    async def write_file(
+        self,
+        job_id: str,
+        relative_path: str,
+        source_path: Path,
+        *,
+        content_type: Optional[str] = None,
+    ) -> ArtifactObjectMetadata:
+        """Write an existing file without materializing it in memory.
+
+        Phase 4.B app wiring mirrors runner output into the selected
+        ``ArtifactStore`` after the legacy artifact index has identified
+        safe, confined local files. Backends must stream from
+        ``source_path`` into the destination object, validate
+        ``job_id`` / ``relative_path`` with the same rules as
+        ``write_bytes``, and return metadata for the stored artifact.
+        """
+
+    async def presign_get(
+        self,
+        job_id: str,
+        relative_path: str,
+        *,
+        expires_seconds: int,
+    ) -> Optional[str]:
+        """Return an ephemeral GET URL when the backend supports it.
+
+        Local storage intentionally returns ``None`` so callers keep
+        streaming through the orchestrator. S3 overrides this to mint a
+        short-lived URL only after the app has already authorized the
+        caller and validated the job/path.
+        """
+        return None
 
     @abstractmethod
     async def delete(self, job_id: str, relative_path: Optional[str] = None) -> int:

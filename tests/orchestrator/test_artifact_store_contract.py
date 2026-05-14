@@ -31,6 +31,7 @@ import os
 import threading
 import time
 import uuid
+from pathlib import Path
 from typing import AsyncIterator
 
 import pytest
@@ -206,6 +207,55 @@ async def test_open_bytes_round_trip(store: ArtifactStore) -> None:
     async for chunk in stream:
         chunks.append(chunk)
     assert b"".join(chunks) == body
+
+
+async def test_write_file_round_trip_without_materializing_body(
+    store: ArtifactStore,
+    tmp_path: Path,
+) -> None:
+    body = b"file-backed-artifact-" * 512
+    source = tmp_path / "source.bin"
+    source.write_bytes(body)
+
+    meta = await store.write_file(
+        "job-file",
+        "outputs/source.bin",
+        source,
+        content_type="application/vnd.tp.test",
+    )
+
+    assert meta.relative_path == "outputs/source.bin"
+    assert meta.size_bytes == len(body)
+    assert meta.content_type == "application/vnd.tp.test"
+    assert meta.fingerprint_status == "ok"
+    assert meta.sha256_hex is not None and len(meta.sha256_hex) == 64
+
+    head = await store.head("job-file", "outputs/source.bin")
+    assert head == meta
+
+    stream = await store.open_bytes("job-file", "outputs/source.bin")
+    chunks: list[bytes] = []
+    async for chunk in stream:
+        chunks.append(chunk)
+    assert b"".join(chunks) == body
+
+
+async def test_write_file_raises_on_missing_source(store: ArtifactStore, tmp_path: Path) -> None:
+    with pytest.raises(ArtifactNotFoundError):
+        await store.write_file("job-file-missing", "outputs/missing.bin", tmp_path / "missing.bin")
+
+
+async def test_presign_get_backend_contract(store: ArtifactStore) -> None:
+    await store.write_bytes("job-presign", "outputs/payload.txt", b"payload")
+
+    url = await store.presign_get("job-presign", "outputs/payload.txt", expires_seconds=120)
+
+    if store.backend == "local":
+        assert url is None
+    else:
+        assert isinstance(url, str)
+        assert url.startswith("http")
+        assert "outputs%2Fpayload.txt" not in url
 
 
 async def test_open_bytes_raises_on_missing(store: ArtifactStore) -> None:

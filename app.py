@@ -24,8 +24,9 @@ from email.parser import BytesParser
 from email.policy import default as email_policy
 from functools import lru_cache
 from importlib.util import find_spec
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any, AsyncGenerator, Callable, Deque, Dict, List, Mapping, NamedTuple, Optional, Tuple
+from urllib.parse import unquote
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exception_handlers import request_validation_exception_handler as fastapi_request_validation_exception_handler
@@ -65,6 +66,12 @@ from transformation_portal.ingest.upload_staging import (
 )
 from transformation_portal.lux_depth_v3.model_registry import resolve_model_spec, resolve_registry_key, visible_cli_model_specs
 from transformation_portal.orchestrator import get_job_repository
+from transformation_portal.orchestrator.artifact_store import (
+    ArtifactNotFoundError as StoreArtifactNotFoundError,
+    ArtifactPathValidationError as StoreArtifactPathValidationError,
+    ArtifactStoreError,
+    get_artifact_store,
+)
 from transformation_portal.orchestrator.queue import (
     JobEnqueueRequest,
     QueueBrokerError,
@@ -602,6 +609,16 @@ ARTIFACT_FINGERPRINT_MAX_BYTES = _env_int(
     minimum=1024,
 )
 _ARTIFACT_FINGERPRINT_CHUNK_BYTES = 1024 * 1024
+ARTIFACT_PRESIGN_EXPIRES_SECONDS = min(
+    300,
+    max(60, _env_int("TP_ARTIFACT_PRESIGN_EXPIRES_SECONDS", 120, minimum=1)),
+)
+ARTIFACT_RETENTION_SECONDS = _env_int(
+    "TP_ARTIFACT_RETENTION_SECONDS",
+    JOB_RETENTION_SECONDS,
+    minimum=1,
+)
+_ARTIFACT_LIFECYCLE_KEY = "lifecycle"
 PROGRESS_RE = re.compile(r"progress=(\d{1,3})%")
 DEFAULT_ALLOWED_ORIGINS = [
     "http://localhost",
@@ -1047,6 +1064,8 @@ class Job:
     logs_tail: List[str] = dataclass_field(default_factory=list)
     artifacts: Dict[str, Any] = dataclass_field(default_factory=dict)
     artifact_lookup: Dict[str, Path] = dataclass_field(default_factory=dict)
+    artifact_store_mirrored: bool = False
+    artifact_store_backend: Optional[str] = None
     run_summary: Dict[str, Any] = dataclass_field(default_factory=dict)
     proc: Optional[asyncio.subprocess.Process] = None
     terminate_task: Optional[asyncio.Task[None]] = None
@@ -1576,6 +1595,7 @@ def _error_response(
     details: Optional[Dict[str, Any]] = None,
     schema: str = "tp.orchestrator.error.v1",
     headers: Optional[Mapping[str, str]] = None,
+    retriable: Optional[bool] = None,
 ) -> JSONResponse:
     return JSONResponse(
         status_code=status_code,
@@ -1583,7 +1603,7 @@ def _error_response(
             schema,
             success=False,
             data=None,
-            error=_error_obj(code, message, details),
+            error=_error_obj(code, message, details, retriable=retriable),
         ),
         headers=headers,
     )
@@ -2765,6 +2785,137 @@ def _cleanup_expired_jobs(now: float) -> None:
         EVENT_SUBSCRIBERS.pop(job_id, None)
 
 
+def _artifact_retention_due(job: Job, now: float) -> bool:
+    if job.state not in _TERMINAL_JOB_STATES or _artifacts_deleted(job):
+        return False
+    if not _artifact_known_relative_paths(job):
+        return False
+    lifecycle = _ensure_artifact_lifecycle(job, backend=job.artifact_store_backend)
+    expires_at = lifecycle.get("expires_at")
+    return isinstance(expires_at, (int, float)) and float(expires_at) <= now
+
+
+def _delete_legacy_job_artifact_files(job: Job) -> int:
+    output_dir = _job_output_dir(job)
+    if output_dir is None or not output_dir.exists() or not output_dir.is_dir():
+        return 0
+
+    if not job.artifact_lookup:
+        _hydrate_artifact_lookup_from_items(job)
+
+    candidates: Dict[str, Path] = dict(job.artifact_lookup)
+    for relative_path in _artifact_known_relative_paths(job):
+        if relative_path in candidates:
+            continue
+        try:
+            normalized = _normalize_artifact_relative_path(relative_path)
+        except (
+            InvalidArtifactPathError,
+            AbsoluteArtifactPathError,
+            ArtifactPathOutsideJobOutputDirError,
+            ArtifactPathValidationError,
+        ):
+            continue
+        candidates[normalized] = Path(output_dir) / Path(*PurePosixPath(normalized).parts)
+
+    deleted = 0
+    seen: set[Path] = set()
+    for candidate in candidates.values():
+        _, resolved_artifact, _ = _validate_resolved_job_artifact_path(job, candidate)
+        if resolved_artifact in seen:
+            continue
+        seen.add(resolved_artifact)
+        if not resolved_artifact.exists():
+            continue
+        if not resolved_artifact.is_file():
+            raise ArtifactPathValidationError("artifact_path_not_file")
+        resolved_artifact.unlink()
+        deleted += 1
+    return deleted
+
+
+async def _delete_job_artifacts_for_job(job: Job, *, reason: str) -> Optional[int]:
+    try:
+        store = _artifact_store()
+    except Exception as exc:  # noqa: BLE001 - callers surface this as 503
+        lifecycle = _ensure_artifact_lifecycle(job, backend=os.getenv("TP_ARTIFACT_STORE", "local"))
+        LOGGER.exception("artifact store unavailable while deleting artifacts for job %s", job.id)
+        lifecycle.update(
+            {
+                "deletion_status": "failed",
+                "deletion_error": "artifact_store_unavailable",
+                "deletion_reason": reason,
+            }
+        )
+        await _persist_job_artifact_metadata(job)
+        return None
+
+    lifecycle = _ensure_artifact_lifecycle(job, backend=store.backend)
+    try:
+        store_deleted_count = await store.delete(job.id)
+        legacy_deleted_count = await asyncio.to_thread(_delete_legacy_job_artifact_files, job)
+    except Exception as exc:  # noqa: BLE001 - cleanup/deletion must be observable and non-fatal
+        lifecycle.update(
+            {
+                "deletion_status": "failed",
+                "deletion_error": "artifact_deletion_failed",
+                "deletion_reason": reason,
+            }
+        )
+        LOGGER.exception("artifact deletion failed for job %s", job.id)
+        await _persist_job_artifact_metadata(job)
+        await _publish_event(
+            job.id,
+            "artifact_deletion_failed",
+            {
+                "id": job.id,
+                "reason": reason,
+                "error": "artifact_deletion_failed",
+                "artifact_store_backend": store.backend,
+            },
+        )
+        return None
+
+    deleted_count = max(store_deleted_count, legacy_deleted_count)
+    now = _now()
+    lifecycle.update(
+        {
+            "deleted_at": now,
+            "deleted_count": deleted_count,
+            "legacy_deleted_count": legacy_deleted_count,
+            "store_deleted_count": store_deleted_count,
+            "deletion_status": "deleted",
+            "deletion_reason": reason,
+            "artifact_store_backend": store.backend,
+        }
+    )
+    lifecycle.pop("deletion_error", None)
+    job.artifact_store_mirrored = False
+    await _persist_job_artifact_metadata(job)
+    await _publish_event(
+        job.id,
+        "artifact_deleted",
+        {
+            "id": job.id,
+            "reason": reason,
+            "deleted_count": deleted_count,
+            "legacy_deleted_count": legacy_deleted_count,
+            "store_deleted_count": store_deleted_count,
+            "artifact_store_backend": store.backend,
+        },
+    )
+    return deleted_count
+
+
+async def _cleanup_expired_job_artifacts(now: float) -> None:
+    for job in list(JOBS.values()):
+        if not _artifact_retention_due(job, now):
+            continue
+        deleted = await _delete_job_artifacts_for_job(job, reason="retention_expired")
+        if deleted is None:
+            LOGGER.warning("retention cleanup could not delete artifacts for job %s", job.id)
+
+
 def _active_job_count() -> int:
     return sum(1 for job in JOBS.values() if job.state in ACTIVE_JOB_STATES)
 
@@ -2827,6 +2978,7 @@ async def _cleanup_loop() -> None:
     while True:
         await asyncio.sleep(CLEANUP_INTERVAL_SECONDS)
         now = _now()
+        await _cleanup_expired_job_artifacts(now)
         _cleanup_expired_jobs(now)
         _cleanup_expired_upload_batches(now)
         _cleanup_rate_limit_buckets(now)
@@ -6468,6 +6620,196 @@ def _index_job_artifacts(job: Job) -> List[Dict[str, Any]]:
     return result.items
 
 
+def _artifact_store():
+    return get_artifact_store()
+
+
+def _artifact_lifecycle(job: Job) -> Dict[str, Any]:
+    if not isinstance(job.artifacts, dict):
+        job.artifacts = {}
+    raw_lifecycle = job.artifacts.get(_ARTIFACT_LIFECYCLE_KEY)
+    if isinstance(raw_lifecycle, dict):
+        return raw_lifecycle
+    lifecycle: Dict[str, Any] = {}
+    job.artifacts[_ARTIFACT_LIFECYCLE_KEY] = lifecycle
+    return lifecycle
+
+
+def _ensure_artifact_lifecycle(
+    job: Job,
+    *,
+    backend: Optional[str] = None,
+    now: Optional[float] = None,
+) -> Dict[str, Any]:
+    lifecycle = _artifact_lifecycle(job)
+    timestamp = float(now if now is not None else job.finished_at or _now())
+    created_at = lifecycle.get("created_at")
+    if not isinstance(created_at, (int, float)):
+        lifecycle["created_at"] = timestamp
+        created_at = timestamp
+    lifecycle.setdefault("expires_at", float(created_at) + ARTIFACT_RETENTION_SECONDS)
+    lifecycle.setdefault("retention_policy", f"{ARTIFACT_RETENTION_SECONDS}s_after_created")
+    if backend:
+        lifecycle["artifact_store_backend"] = backend
+    lifecycle.setdefault("deletion_status", "available")
+    return lifecycle
+
+
+def _artifacts_deleted(job: Job) -> bool:
+    if not isinstance(job.artifacts, dict):
+        return False
+    lifecycle = job.artifacts.get(_ARTIFACT_LIFECYCLE_KEY)
+    return isinstance(lifecycle, dict) and bool(lifecycle.get("deleted_at"))
+
+
+def _artifact_relative_path_from_url(url: Any) -> Optional[str]:
+    raw = str(url or "").strip()
+    marker = "/artifacts/"
+    if marker not in raw:
+        return None
+    try:
+        return _normalize_artifact_relative_path(unquote(raw.split(marker, 1)[1]))
+    except (
+        InvalidArtifactPathError,
+        AbsoluteArtifactPathError,
+        ArtifactPathOutsideJobOutputDirError,
+        ArtifactPathValidationError,
+    ):
+        return None
+
+
+def _artifact_known_relative_paths(job: Job) -> set[str]:
+    known = set(job.artifact_lookup.keys())
+    items = job.artifacts.get("items") if isinstance(job.artifacts, dict) else None
+    if not isinstance(items, list):
+        return known
+    for item in items:
+        if not isinstance(item, Mapping):
+            continue
+        for key in ("relative_path", "path"):
+            raw_path = item.get(key)
+            if raw_path is None:
+                continue
+            try:
+                known.add(_normalize_artifact_relative_path(str(raw_path)))
+            except (
+                InvalidArtifactPathError,
+                AbsoluteArtifactPathError,
+                ArtifactPathOutsideJobOutputDirError,
+                ArtifactPathValidationError,
+            ):
+                continue
+        preview_path = _artifact_relative_path_from_url(item.get("preview_url"))
+        if preview_path:
+            known.add(preview_path)
+    return known
+
+
+def _artifact_response_headers_for_relative_path(relative_path: str) -> Dict[str, str]:
+    return _artifact_response_headers(Path(relative_path))
+
+
+async def _persist_job_artifact_metadata(job: Job) -> None:
+    repo = getattr(app.state, "job_repository", None) if "app" in globals() else None
+    if repo is None:
+        return
+    try:
+        await repo.update(job.id, artifacts=job.artifacts)
+    except Exception:  # noqa: BLE001 - repository lag must not break artifact serving
+        LOGGER.debug("job artifact metadata persistence skipped/failed for %s", job.id, exc_info=True)
+
+
+async def _mirror_job_artifacts_to_store(job: Job) -> bool:
+    try:
+        store = _artifact_store()
+    except Exception as exc:  # noqa: BLE001 - surface through lifecycle/readiness
+        _ensure_artifact_lifecycle(job, backend=os.getenv("TP_ARTIFACT_STORE", "local"))
+        _artifact_lifecycle(job).update(
+            {
+                "mirror_status": "failed",
+                "mirror_error": "artifact_store_unavailable",
+            }
+        )
+        LOGGER.exception("artifact store unavailable while mirroring job %s", job.id)
+        await _persist_job_artifact_metadata(job)
+        return False
+
+    if job.artifact_store_mirrored and job.artifact_store_backend == store.backend:
+        return True
+    if _artifacts_deleted(job):
+        return False
+
+    if not job.artifact_lookup:
+        _hydrate_artifact_lookup_from_items(job)
+    if not job.artifact_lookup:
+        return False
+
+    mirrored = 0
+    failures: List[str] = []
+    for relative_path, source_path in sorted(job.artifact_lookup.items()):
+        try:
+            _, resolved_artifact, normalized_relative_path = _validate_resolved_job_artifact_path(job, source_path)
+            if not resolved_artifact.is_file():
+                continue
+            await store.write_file(
+                job.id,
+                normalized_relative_path,
+                resolved_artifact,
+                content_type=_artifact_content_type(resolved_artifact),
+            )
+            mirrored += 1
+        except Exception as exc:  # noqa: BLE001 - continue mirroring independent artifacts
+            failures.append(str(relative_path))
+            LOGGER.warning(
+                "failed to mirror artifact %s for job %s into %s store: %s",
+                relative_path,
+                job.id,
+                store.backend,
+                exc,
+            )
+
+    lifecycle = _ensure_artifact_lifecycle(job, backend=store.backend)
+    lifecycle["mirrored_count"] = mirrored
+    if failures:
+        lifecycle["mirror_status"] = "failed"
+        lifecycle["mirror_failed_paths"] = failures[:10]
+        await _persist_job_artifact_metadata(job)
+        return False
+    lifecycle["mirror_status"] = "mirrored"
+    lifecycle.pop("mirror_error", None)
+    lifecycle.pop("mirror_failed_paths", None)
+    job.artifact_store_mirrored = True
+    job.artifact_store_backend = store.backend
+    await _persist_job_artifact_metadata(job)
+    return True
+
+
+async def _artifact_store_readiness() -> Dict[str, Any]:
+    selected_backend = os.getenv("TP_ARTIFACT_STORE", "local").strip().lower() or "local"
+    try:
+        store = _artifact_store()
+        prefix = ""
+        if hasattr(store, "key_prefix"):
+            prefix = str(getattr(store, "key_prefix"))
+        if store.backend == "s3":
+            await store.presign_get("__readiness__", "probe.txt", expires_seconds=60)
+        return {
+            "backend": store.backend,
+            "configured": True,
+            "prefix": prefix,
+            "signed_urls": store.backend == "s3",
+        }
+    except Exception as exc:  # noqa: BLE001 - readiness must surface config/client failures
+        LOGGER.exception("artifact store readiness check failed")
+        return {
+            "backend": selected_backend,
+            "configured": False,
+            "prefix": os.getenv("TP_ARTIFACT_PREFIX", "").strip(),
+            "signed_urls": False,
+            "error": "artifact_store_unavailable",
+        }
+
+
 def _job_api_prefix(api_version: str = "v1") -> str:
     return "/v2/jobs" if str(api_version) == "v2" else "/v1/jobs"
 
@@ -8047,7 +8389,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
     allow_credentials=False,
-    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
     allow_headers=[
         "Content-Type",
         "Accept",
@@ -8333,10 +8675,12 @@ async def healthz() -> JSONResponse:
     response_model_exclude_none=True,
 )
 async def ready() -> Dict[str, Any]:
+    artifact_store = await _artifact_store_readiness()
     response: Dict[str, Any] = {
-        "ok": True,
+        "ok": bool(artifact_store.get("configured")),
         "time": _now(),
         "version": APP_VERSION,
+        "artifact_store": artifact_store,
     }
     if READY_VERBOSE:
         response["cli"] = {
@@ -8903,6 +9247,16 @@ async def get_job_artifact_v2(job_id: str, artifact_path: str) -> Response:
     return await _get_job_artifact(job_id, artifact_path)
 
 
+@app.delete("/v1/jobs/{job_id}/artifacts", response_model=JobStatusEnvelope)
+async def delete_job_artifacts(job_id: str) -> JSONResponse:
+    return await _delete_job_artifacts(job_id, api_version="v1")
+
+
+@app.delete("/v2/jobs/{job_id}/artifacts", response_model=JobStatusEnvelope)
+async def delete_job_artifacts_v2(job_id: str) -> JSONResponse:
+    return await _delete_job_artifacts(job_id, api_version="v2")
+
+
 async def _get_job_artifact(job_id: str, artifact_path: str) -> Response:
     _cleanup_expired_jobs(_now())
     job = JOBS.get(job_id)
@@ -8940,12 +9294,101 @@ async def _get_job_artifact(job_id: str, artifact_path: str) -> Response:
             details={"job_id": job_id, "reason": reason_code},
         )
 
-    if not job.artifact_lookup:
+    if _artifacts_deleted(job):
+        return _error_response(
+            410,
+            code="ARTIFACT_DELETED",
+            message="artifact deleted",
+            details={"job_id": job_id, "path": requested_relative_path},
+        )
+
+    known_paths = _artifact_known_relative_paths(job)
+    if not known_paths:
         if not _hydrate_artifact_lookup_from_items(job):
             # Fingerprint computation can do bounded synchronous IO; offload
             # the indexing pass to a worker thread to keep the event loop
             # responsive for SSE subscribers and concurrent API callers.
             await asyncio.to_thread(_index_job_artifacts, job)
+        known_paths = _artifact_known_relative_paths(job)
+    if requested_relative_path not in known_paths:
+        return _error_response(
+            404,
+            code="NOT_FOUND",
+            message="artifact not found",
+            details={"job_id": job_id, "path": requested_relative_path},
+        )
+
+    if not job.artifact_store_mirrored:
+        await _mirror_job_artifacts_to_store(job)
+
+    try:
+        store = _artifact_store()
+    except Exception as exc:  # noqa: BLE001 - config/client setup failure
+        LOGGER.exception("artifact store unavailable for job %s", job_id)
+        return _error_response(
+            503,
+            code="ARTIFACT_STORE_UNAVAILABLE",
+            message="artifact store unavailable",
+            details={"job_id": job_id, "reason": "artifact_store_unavailable"},
+            retriable=True,
+        )
+
+    if store.backend == "s3":
+        try:
+            await store.head(job.id, requested_relative_path)
+            presigned_url = await store.presign_get(
+                job.id,
+                requested_relative_path,
+                expires_seconds=ARTIFACT_PRESIGN_EXPIRES_SECONDS,
+            )
+        except StoreArtifactNotFoundError:
+            return _error_response(
+                404,
+                code="NOT_FOUND",
+                message="artifact not found",
+                details={"job_id": job_id, "path": requested_relative_path},
+            )
+        except StoreArtifactPathValidationError:
+            return _error_response(
+                400,
+                code="INVALID_ARGUMENT",
+                message="invalid artifact path",
+                details={"job_id": job_id, "reason": "invalid_artifact_path"},
+            )
+        except ArtifactStoreError as exc:
+            LOGGER.exception("artifact store failed while presigning job %s artifact %s", job_id, requested_relative_path)
+            return _error_response(
+                503,
+                code="ARTIFACT_STORE_UNAVAILABLE",
+                message="artifact store unavailable",
+                details={"job_id": job_id, "reason": "artifact_store_operation_failed"},
+                retriable=True,
+            )
+        if not presigned_url:
+            return _error_response(
+                503,
+                code="ARTIFACT_STORE_UNAVAILABLE",
+                message="artifact store unavailable",
+                details={"job_id": job_id, "reason": "presign_unavailable"},
+                retriable=True,
+            )
+        return RedirectResponse(
+            url=presigned_url,
+            status_code=307,
+            headers={"Cache-Control": "no-store"},
+        )
+
+    try:
+        metadata = await store.head(job.id, requested_relative_path)
+        stream = await store.open_bytes(job.id, requested_relative_path)
+        return StreamingResponse(
+            stream,
+            media_type=metadata.content_type,
+            headers=_artifact_response_headers_for_relative_path(requested_relative_path),
+        )
+    except (StoreArtifactNotFoundError, ArtifactStoreError):
+        LOGGER.debug("artifact store miss for %s/%s; falling back to legacy local lookup", job_id, requested_relative_path)
+
     resolved_artifact = job.artifact_lookup.get(requested_relative_path)
     if resolved_artifact is None:
         return _error_response(
@@ -8977,6 +9420,43 @@ async def _get_job_artifact(job_id: str, artifact_path: str) -> Response:
         resolved_artifact,
         media_type=_artifact_content_type(resolved_artifact),
         headers=_artifact_response_headers(resolved_artifact),
+    )
+
+
+async def _delete_job_artifacts(job_id: str, *, api_version: str = "v1") -> JSONResponse:
+    _cleanup_expired_jobs(_now())
+    job = JOBS.get(job_id)
+    if not job:
+        return _error_response(
+            404,
+            code="NOT_FOUND",
+            message="job not found",
+            details={"job_id": job_id},
+        )
+    if job.state not in _TERMINAL_JOB_STATES:
+        return _error_response(
+            409,
+            code="CONFLICT",
+            message="artifacts cannot be deleted for an active job",
+            details={"job_id": job_id, "state": job.state},
+        )
+    if not _artifacts_deleted(job):
+        deleted = await _delete_job_artifacts_for_job(job, reason="explicit_delete")
+        if deleted is None:
+            return _error_response(
+                503,
+                code="ARTIFACT_STORE_UNAVAILABLE",
+                message="artifact store unavailable",
+                details={"job_id": job_id},
+                retriable=True,
+            )
+    return JSONResponse(
+        JobStatusEnvelope(
+            schema="tp.orchestrator.job_status.v1",
+            success=True,
+            data=JobStatusData(**_serialize_job(job, include_logs=True, api_version=api_version)),
+            error=None,
+        ).model_dump(mode="json", by_alias=True, exclude_unset=True)
     )
 
 
@@ -9561,6 +10041,7 @@ async def _run_job(job: Job, argv: List[str]) -> None:
         # bounded SHA-256 fingerprints, so run it in a worker thread to keep
         # the event loop responsive while large jobs are wrapping up.
         indexed_artifacts = await asyncio.to_thread(_index_job_artifacts, job)
+        await _mirror_job_artifacts_to_store(job)
         _refresh_job_run_summary(job)
         for artifact in indexed_artifacts:
             await _publish_event(
