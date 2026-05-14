@@ -171,12 +171,61 @@ services:
       retries: 5
       start_period: 5s
 
+  # Local S3-compatible ArtifactStore backend for Phase 5.A paid-pilot smoke.
+  #
+  # Optional local-development convenience only; managed pilots should map the
+  # same TP_ARTIFACT_* / AWS_* env vars to their real S3/R2/MinIO service.
+  # Start with:
+  #
+  #     docker compose --profile paid-pilot up -d minio minio-create-bucket
+  #
+  minio:
+    image: ${TP_MINIO_IMAGE:-minio/minio:latest}
+    container_name: transformation-portal-minio
+    profiles: ["paid-pilot"]
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-tp_minio}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-tp_minio_password}
+    ports:
+      - "${TP_MINIO_API_PUBLIC_PORT:-127.0.0.1:9000}:9000"
+      - "${TP_MINIO_CONSOLE_PUBLIC_PORT:-127.0.0.1:9001}:9001"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://127.0.0.1:9000/minio/health/live || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  minio-create-bucket:
+    image: ${TP_MINIO_MC_IMAGE:-minio/mc:latest}
+    container_name: transformation-portal-minio-create-bucket
+    profiles: ["paid-pilot"]
+    depends_on:
+      minio:
+        condition: service_healthy
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-tp_minio}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-tp_minio_password}
+      TP_ARTIFACT_BUCKET: ${TP_ARTIFACT_BUCKET:-tp-artifacts-pilot}
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        set -eu
+        mc alias set local http://minio:9000 "$${MINIO_ROOT_USER}" "$${MINIO_ROOT_PASSWORD}"
+        mc mb -p "local/$${TP_ARTIFACT_BUCKET}" || true
+        mc anonymous set none "local/$${TP_ARTIFACT_BUCKET}" || true
+
 volumes:
   input:
   output:
   config:
   postgres_data:
   redis_data:
+  minio_data:
 
 networks:
   default:
