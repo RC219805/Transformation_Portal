@@ -1,4 +1,4 @@
-"""Filesystem-backed ``ArtifactStore`` (Phase 4.A default).
+"""Filesystem-backed ``ArtifactStore``.
 
 ``LocalArtifactStore`` is the structural extract of the pre-Phase-4
 filesystem helpers in ``transformation_portal.portal.job_artifacts``
@@ -7,10 +7,8 @@ detection) plus a thin ``async`` wrapper so the surface matches the
 ``ArtifactStore`` contract. Explicit content-type overrides are stored
 in a local metadata sidecar so ``write_bytes`` / ``head`` /
 ``list_for_job`` expose the same metadata contract as S3. The legacy
-helpers continue to exist for
-the existing ``app.py`` artifact-serving routes (they will be
-rewired in Phase 4.B); this module gives the new factory-based
-plumbing the same guarantees through one async-shaped facade.
+helpers continue to exist for legacy local fallback paths; normal app
+artifact delivery routes through this factory-based async facade.
 
 Object layout on disk::
 
@@ -41,6 +39,7 @@ from transformation_portal.orchestrator.artifact_store.base import (
     ArtifactObjectMetadata,
     ArtifactPathValidationError,
     ArtifactStore,
+    ArtifactStoreError,
 )
 from transformation_portal.portal.job_artifacts import (  # noqa: PLC2701 - intentional reuse of the validated helper
     ARTIFACT_FINGERPRINT_MAX_BYTES,
@@ -320,6 +319,27 @@ class LocalArtifactStore(ArtifactStore):
             sha256_hex=sha256_hex,
             fingerprint_status=status,
         )
+
+    async def check_ready(self) -> None:
+        await asyncio.to_thread(self._check_ready_sync)
+
+    def _check_ready_sync(self) -> None:
+        self._root.mkdir(parents=True, exist_ok=True)
+        tmp_path = self._root / f".artifact-store-ready-{os.getpid()}-{uuid.uuid4().hex}.tmp"
+        try:
+            with tmp_path.open("wb") as handle:
+                handle.write(b"ready")
+                handle.flush()
+                os.fsync(handle.fileno())
+        except OSError as exc:
+            raise ArtifactStoreError("local artifact store readiness check failed") from exc
+        finally:
+            try:
+                tmp_path.unlink()
+            except FileNotFoundError:
+                pass
+            except OSError:
+                pass
 
     async def delete(self, job_id: str, relative_path: Optional[str] = None) -> int:
         return await asyncio.to_thread(self._delete_sync, job_id, relative_path)

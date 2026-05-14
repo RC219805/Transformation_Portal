@@ -1,10 +1,10 @@
 """Artifact-store factory keyed off ``TP_ARTIFACT_STORE``.
 
-Phase 4.A ships the Protocol + the filesystem ``local`` backend
+Phase 4 ships the Protocol + the filesystem ``local`` backend
 (default, structural extract of the pre-Phase-4 helpers in
 ``portal.job_artifacts``) + the ``s3`` backend (boto3, lazy-import).
-Phase 4.B will wire the factory into ``app.py`` and add retention
-metadata + signed URLs + the deletion workflow.
+``app.py`` uses this factory for artifact delivery, readiness checks,
+signed S3 delivery, retention metadata, and deletion.
 
 Supported backends:
 

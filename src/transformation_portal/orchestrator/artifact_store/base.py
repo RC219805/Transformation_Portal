@@ -1,13 +1,14 @@
 """Artifact-store contract for Phase 4 (gap doc §5.4).
 
-Phase 4.A pins the ``ArtifactStore`` Protocol + a ``LocalArtifactStore``
+Phase 4 pins the ``ArtifactStore`` Protocol + a ``LocalArtifactStore``
 that wraps the existing filesystem-backed primitives in
 ``transformation_portal.portal.job_artifacts`` and the
 ``transformation_portal.lux_depth_v3.artifact_manager`` Merkle helper,
 plus an ``S3ArtifactStore`` selectable via
-``TP_ARTIFACT_STORE=local|s3``. Phase 4.B will wire the factory into
-``app.py`` and add retention metadata + signed URLs + the deletion
-workflow.
+``TP_ARTIFACT_STORE=local|s3``. The app wiring mirrors terminal-job
+artifacts into the selected backend, serves local artifacts through
+the orchestrator, mints short-lived S3 redirects after route auth, and
+records additive lifecycle metadata for retention and deletion.
 
 The contract pins the four pre-Phase-4 guarantees the gap doc calls
 out so any S3 / managed-object backend must preserve them:
@@ -89,7 +90,7 @@ class ArtifactStore(ABC):
     - ``LocalArtifactStore`` — filesystem-backed, wraps the existing
       ``portal.job_artifacts`` primitives. Default for single-instance
       deployments (``TP_ARTIFACT_STORE=local``).
-    - ``S3ArtifactStore`` — Phase 4.A; talks to S3 (or any
+    - ``S3ArtifactStore`` — talks to S3 (or any
       ``TP_ARTIFACT_ENDPOINT_URL``-compatible target — MinIO,
       LocalStack, R2) via lazy ``boto3`` imports so single-instance
       deployments do not pay the dependency cost.
@@ -154,12 +155,12 @@ class ArtifactStore(ABC):
     ) -> ArtifactObjectMetadata:
         """Write ``body`` for ``job_id`` at ``relative_path``.
 
-        Used by the Phase 4.A test surface and by Phase 4.B's
-        artifact upload paths. Validates the relative path with the
-        same rules ``head``/``open_bytes`` use, sets the content-type
-        (or infers from the extension when omitted), and returns the
-        resulting ``ArtifactObjectMetadata`` so callers can verify
-        the fingerprint without an additional ``head`` round-trip.
+        Used by the contract tests and small artifact upload paths.
+        Validates the relative path with the same rules
+        ``head``/``open_bytes`` use, sets the content-type (or infers
+        from the extension when omitted), and returns the resulting
+        ``ArtifactObjectMetadata`` so callers can verify the
+        fingerprint without an additional ``head`` round-trip.
         """
 
     @abstractmethod
@@ -187,14 +188,24 @@ class ArtifactStore(ABC):
         relative_path: str,
         *,
         expires_seconds: int,
+        content_type: Optional[str] = None,
+        content_disposition: Optional[str] = None,
+        cache_control: Optional[str] = None,
     ) -> Optional[str]:
         """Return an ephemeral GET URL when the backend supports it.
 
         Local storage intentionally returns ``None`` so callers keep
         streaming through the orchestrator. S3 overrides this to mint a
         short-lived URL only after the app has already authorized the
-        caller and validated the job/path.
+        caller and validated the job/path. Optional response-header
+        overrides let the orchestrator preserve the legacy artifact
+        download contract (content type, attachment disposition, and
+        no-store cache policy) on the final S3 response.
         """
+        return None
+
+    async def check_ready(self) -> None:
+        """Raise ``ArtifactStoreError`` when the backend is not usable."""
         return None
 
     @abstractmethod

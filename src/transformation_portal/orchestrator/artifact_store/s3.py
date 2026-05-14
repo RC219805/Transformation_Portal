@@ -1,4 +1,4 @@
-"""S3-backed ``ArtifactStore`` (Phase 4.A).
+"""S3-backed ``ArtifactStore``.
 
 Activated by ``TP_ARTIFACT_STORE=s3`` plus the standard S3 env vars:
 
@@ -25,9 +25,11 @@ Implementation notes:
   Objects larger than ``ARTIFACT_FINGERPRINT_MAX_BYTES`` are reported
   as ``fingerprint_status="skipped_size"`` without downloading the
   bytes, matching the ``LocalArtifactStore`` contract.
-- Object metadata sets ``Content-Type`` so signed URL downloads in
-  Phase 4.B serve the artifact with the correct type without an
-  ``out-of-band`` ``HeadObject`` lookup.
+- Object metadata sets ``Content-Type`` and presigned GET URLs can
+  carry response-header overrides so signed delivery preserves the
+  orchestrator's artifact response semantics.
+- Readiness uses ``HeadBucket`` so ``/ready`` verifies bucket/access
+  instead of only proving that the client can sign a URL.
 
 The runtime dependency is part of the base package metadata and
 lockfiles, but the module imports nothing eagerly, so local
@@ -39,7 +41,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any, AsyncIterator, List, Optional
 
 from transformation_portal.orchestrator.artifact_store.base import (
@@ -54,6 +56,16 @@ from transformation_portal.portal.job_artifacts import ARTIFACT_FINGERPRINT_MAX_
 
 _CHUNK_BYTES = 1024 * 1024
 _DEFAULT_PREFIX = "tp/artifacts"
+
+
+def _normalize_prefix(prefix: str) -> str:
+    raw = str(prefix or _DEFAULT_PREFIX).strip().strip("/")
+    if not raw or "\\" in raw or "\x00" in raw:
+        raise ArtifactStoreError("invalid S3 artifact prefix")
+    candidate = PurePosixPath(raw)
+    if candidate.is_absolute() or any(part in {"", ".", ".."} for part in candidate.parts):
+        raise ArtifactStoreError("invalid S3 artifact prefix")
+    return candidate.as_posix()
 
 
 def _content_type_for(relative_path: str) -> str:
@@ -93,7 +105,7 @@ class S3ArtifactStore(ArtifactStore):
         if not bucket:
             raise ArtifactStoreError("S3ArtifactStore requires a non-empty bucket (TP_ARTIFACT_BUCKET).")
         self._bucket = bucket
-        self._prefix = (prefix or _DEFAULT_PREFIX).strip("/")
+        self._prefix = _normalize_prefix(prefix)
         self._endpoint_url = endpoint_url or None
         self._region_name = region_name or None
         self._client = client
@@ -342,18 +354,35 @@ class S3ArtifactStore(ArtifactStore):
         relative_path: str,
         *,
         expires_seconds: int,
+        content_type: Optional[str] = None,
+        content_disposition: Optional[str] = None,
+        cache_control: Optional[str] = None,
     ) -> Optional[str]:
         key = self._object_key(job_id, relative_path)
         client = await self._get_client()
+        params = {"Bucket": self._bucket, "Key": key}
+        if content_type:
+            params["ResponseContentType"] = str(content_type)
+        if content_disposition:
+            params["ResponseContentDisposition"] = str(content_disposition)
+        if cache_control:
+            params["ResponseCacheControl"] = str(cache_control)
         try:
             return await asyncio.to_thread(
                 client.generate_presigned_url,
                 "get_object",
-                Params={"Bucket": self._bucket, "Key": key},
+                Params=params,
                 ExpiresIn=int(expires_seconds),
             )
         except Exception as exc:  # noqa: BLE001 - boto3 ClientError
             raise ArtifactStoreError(f"S3 presign failed for {key}") from exc
+
+    async def check_ready(self) -> None:
+        client = await self._get_client()
+        try:
+            await asyncio.to_thread(client.head_bucket, Bucket=self._bucket)
+        except Exception as exc:  # noqa: BLE001 - boto3 ClientError
+            raise ArtifactStoreError("S3 artifact store readiness check failed") from exc
 
     async def delete(self, job_id: str, relative_path: Optional[str] = None) -> int:
         if relative_path is None:
