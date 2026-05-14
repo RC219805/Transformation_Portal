@@ -59,6 +59,7 @@ _RESERVED_JOB_IDS = frozenset({_CONTENT_TYPE_METADATA_DIR})
 
 
 def _default_local_root() -> Path:
+    """Return the fail-closed local artifact root without a literal temp path."""
     xdg_state_home = os.getenv("XDG_STATE_HOME", "").strip()
     if xdg_state_home:
         return Path(xdg_state_home).expanduser() / _DEFAULT_STATE_ROOT_NAME / _DEFAULT_STATE_ARTIFACT_DIR_NAME

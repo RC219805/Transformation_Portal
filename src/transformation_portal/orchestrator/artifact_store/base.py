@@ -204,9 +204,9 @@ class ArtifactStore(ABC):
         """
         return None
 
+    @abstractmethod
     async def check_ready(self) -> None:
         """Raise ``ArtifactStoreError`` when the backend is not usable."""
-        return None
 
     @abstractmethod
     async def delete(self, job_id: str, relative_path: Optional[str] = None) -> int:

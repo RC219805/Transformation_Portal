@@ -3670,7 +3670,7 @@ def test_job_artifact_endpoint_returns_503_when_s3_first_access_mirror_fails(
     )
     orchestrator_app.JOBS[job.id] = job
     orchestrator_app._index_job_artifacts(job)
-    monkeypatch.setattr(orchestrator_app, "_artifact_store", lambda: FailingMirrorS3Store())
+    monkeypatch.setattr(orchestrator_app, "_artifact_store", FailingMirrorS3Store)
 
     response = client.get(f"/v1/jobs/{job.id}/artifacts/outputs/payload.txt")
 
@@ -3679,6 +3679,62 @@ def test_job_artifact_endpoint_returns_503_when_s3_first_access_mirror_fails(
         "job_id": job.id,
         "reason": "artifact_store_mirror_failed",
     }
+
+
+def test_job_artifact_endpoint_returns_503_when_s3_failed_path_sample_is_truncated(
+    client: TestClient,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class FailingMirrorS3Store:
+        backend = "s3"
+
+        async def write_file(
+            self, job_id: str, relative_path: str, source_path: Path, *, content_type: str | None = None
+        ):  # noqa: ARG002
+            raise orchestrator_app.ArtifactStoreError("mirror write failed")
+
+        async def head(self, job_id: str, relative_path: str):  # noqa: ARG002
+            raise orchestrator_app.StoreArtifactNotFoundError("missing after failed mirror")
+
+        async def presign_get(self, job_id: str, relative_path: str, *, expires_seconds: int, **_kwargs):  # noqa: ARG002
+            raise AssertionError("presign must not run when mirror failures are unsampled")
+
+    output_dir = tmp_path / "legacy-output"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    artifact_lookup: dict[str, Path] = {}
+    items: list[dict[str, str]] = []
+    for index in range(11):
+        relative_path = f"outputs/payload-{index:02d}.txt"
+        artifact_path = output_dir / relative_path
+        artifact_path.parent.mkdir(parents=True, exist_ok=True)
+        artifact_path.write_text(f"legacy source {index}", encoding="utf-8")
+        artifact_lookup[relative_path] = artifact_path
+        items.append({"path": relative_path, "relative_path": relative_path})
+
+    job = orchestrator_app.Job(
+        id="job_artifact_s3_mirror_truncated_failures",
+        created_at=orchestrator_app._now(),
+        request={"pipeline": "lux-depth-v3", "args": {"output_dir": str(output_dir)}},
+        state="succeeded",
+        finished_at=orchestrator_app._now(),
+        artifacts={"items": items, "indexed_count": len(items), "truncated": False},
+        artifact_lookup=artifact_lookup,
+    )
+    orchestrator_app.JOBS[job.id] = job
+    monkeypatch.setattr(orchestrator_app, "_artifact_store", FailingMirrorS3Store)
+
+    unsampled_path = "outputs/payload-10.txt"
+    response = client.get(f"/v1/jobs/{job.id}/artifacts/{unsampled_path}")
+
+    lifecycle = job.artifacts[orchestrator_app._ARTIFACT_LIFECYCLE_KEY]
+    assert response.status_code == 503
+    assert response.json()["error"]["details"] == {
+        "job_id": job.id,
+        "reason": "artifact_store_mirror_failed",
+    }
+    assert lifecycle["mirror_failed_paths_complete"] is False
+    assert unsampled_path not in lifecycle["mirror_failed_paths"]
 
 
 def test_job_artifact_endpoint_auth_failure_does_not_presign(

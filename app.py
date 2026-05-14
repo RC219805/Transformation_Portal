@@ -66,9 +66,9 @@ from transformation_portal.ingest.upload_staging import (
 )
 from transformation_portal.lux_depth_v3.model_registry import resolve_model_spec, resolve_registry_key, visible_cli_model_specs
 from transformation_portal.orchestrator import get_job_repository
+from transformation_portal.orchestrator.artifact_store import ArtifactNotFoundError as StoreArtifactNotFoundError
+from transformation_portal.orchestrator.artifact_store import ArtifactPathValidationError as StoreArtifactPathValidationError
 from transformation_portal.orchestrator.artifact_store import (
-    ArtifactNotFoundError as StoreArtifactNotFoundError,
-    ArtifactPathValidationError as StoreArtifactPathValidationError,
     ArtifactStoreError,
     get_artifact_store,
 )
@@ -85,8 +85,6 @@ from transformation_portal.portal import job_artifacts as _portal_job_artifacts
 from transformation_portal.portal import path_security as _portal_path_security
 from transformation_portal.portal import sam2_checkpoint_security as _portal_sam2_checkpoint_security
 from transformation_portal.portal.asset_bundle import (
-    PORTAL_ASSETS_DIR,
-    PORTAL_ASSETS_DIR_REAL,
     PORTAL_ASSET_CACHE_CONTROL,
     PORTAL_ASSET_FINGERPRINT_LENGTH,
     PORTAL_ASSET_FINGERPRINT_PARAM,
@@ -94,6 +92,8 @@ from transformation_portal.portal.asset_bundle import (
     PORTAL_ASSET_MANIFEST_PATH,
     PORTAL_ASSET_MEDIA_TYPES,
     PORTAL_ASSET_PATHS,
+    PORTAL_ASSETS_DIR,
+    PORTAL_ASSETS_DIR_REAL,
     PORTAL_CSS_TEMPLATE_PATH,
     PORTAL_CSS_TEMPLATE_TOKENS,
     PORTAL_DIRECT_FINGERPRINT_ASSET_NAMES,
@@ -1137,9 +1137,7 @@ ALLOWED_RAW_WB_MODES = {"camera"}
 # Curating a hard-coded allowlist here would artificially block valid members
 # in newer/older LibRaw builds (e.g. AFD, VCD, VCD_MODIFIED_AHD).
 try:
-    from transformation_portal.core.raw_runtime import (
-        is_valid_demosaic_name as _is_valid_demosaic_name,
-    )
+    from transformation_portal.core.raw_runtime import is_valid_demosaic_name as _is_valid_demosaic_name
 except ImportError:  # pragma: no cover - defensive fallback if core import fails
     import re as _re
 
@@ -6724,7 +6722,12 @@ def _artifact_mirror_failed_for_path(job: Job, relative_path: str) -> bool:
     failed_paths = lifecycle.get("mirror_failed_paths")
     if not isinstance(failed_paths, list):
         return True
-    return relative_path in {str(path) for path in failed_paths}
+    failed_path_set = {str(path) for path in failed_paths}
+    if relative_path in failed_path_set:
+        return True
+    if lifecycle.get("mirror_failed_paths_complete") is True:
+        return False
+    return True
 
 
 async def _persist_job_artifact_metadata(job: Job) -> None:
@@ -6791,11 +6794,13 @@ async def _mirror_job_artifacts_to_store(job: Job) -> bool:
     if failures:
         lifecycle["mirror_status"] = "failed"
         lifecycle["mirror_failed_paths"] = failures[:10]
+        lifecycle["mirror_failed_paths_complete"] = len(failures) <= 10
         await _persist_job_artifact_metadata(job)
         return False
     lifecycle["mirror_status"] = "mirrored"
     lifecycle.pop("mirror_error", None)
     lifecycle.pop("mirror_failed_paths", None)
+    lifecycle.pop("mirror_failed_paths_complete", None)
     job.artifact_store_mirrored = True
     job.artifact_store_backend = store.backend
     await _persist_job_artifact_metadata(job)

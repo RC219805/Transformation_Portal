@@ -330,6 +330,45 @@ async def test_check_ready_contract(store: ArtifactStore) -> None:
     await store.check_ready()
 
 
+def test_store_contract_requires_readiness_override() -> None:
+    class MissingReadyStore(ArtifactStore):
+        @property
+        def backend(self) -> str:
+            return "missing-ready"
+
+        async def head(self, job_id: str, relative_path: str):  # noqa: ANN201, ARG002
+            raise ArtifactNotFoundError("missing")
+
+        async def open_bytes(self, job_id: str, relative_path: str) -> AsyncIterator[bytes]:  # noqa: ARG002
+            async def _stream() -> AsyncIterator[bytes]:
+                if job_id and relative_path:
+                    return
+                yield b""
+
+            return _stream()
+
+        async def list_for_job(self, job_id: str):  # noqa: ANN201, ARG002
+            return []
+
+        async def write_bytes(
+            self, job_id: str, relative_path: str, body: bytes, *, content_type=None
+        ):  # noqa: ANN201, ARG002
+            raise ArtifactStoreError("not implemented")
+
+        async def write_file(
+            self, job_id: str, relative_path: str, source_path: Path, *, content_type=None
+        ):  # noqa: ANN201, ARG002
+            raise ArtifactStoreError("not implemented")
+
+        async def delete(self, job_id: str, relative_path: str | None = None) -> int:  # noqa: ARG002
+            return 0
+
+        async def reset(self) -> None:
+            return None
+
+    assert MissingReadyStore.__abstractmethods__ == frozenset({"check_ready"})
+
+
 async def test_open_bytes_raises_on_missing(store: ArtifactStore) -> None:
     with pytest.raises(ArtifactNotFoundError):
         gen = await store.open_bytes("job-missing", "nope.txt")
