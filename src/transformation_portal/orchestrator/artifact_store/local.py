@@ -266,6 +266,61 @@ class LocalArtifactStore(ArtifactStore):
             fingerprint_status=status,
         )
 
+    async def write_file(
+        self,
+        job_id: str,
+        relative_path: str,
+        source_path: Path,
+        *,
+        content_type: Optional[str] = None,
+    ) -> ArtifactObjectMetadata:
+        return await asyncio.to_thread(self._write_file_sync, job_id, relative_path, source_path, content_type)
+
+    def _write_file_sync(
+        self,
+        job_id: str,
+        relative_path: str,
+        source_path: Path,
+        content_type: Optional[str],
+    ) -> ArtifactObjectMetadata:
+        normalized_job_id = _normalize_job_id(job_id)
+        normalized_relative_path = _normalize_relative_path(relative_path)
+        source = Path(source_path)
+        if not source.is_file():
+            raise ArtifactNotFoundError(f"source artifact not found: {source}")
+        path = self._resolve(job_id, relative_path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+
+        try:
+            source_resolved = source.resolve()
+            path_resolved = path.resolve()
+        except OSError:
+            source_resolved = source
+            path_resolved = path
+
+        if source_resolved != path_resolved:
+            self._atomic_copy_file(path, source)
+        size_bytes: Optional[int]
+        try:
+            size_bytes = path.stat().st_size
+        except OSError:
+            size_bytes = None
+        sha256_hex, status = self._fingerprint(path, size_bytes)
+        explicit_content_type = self._normalize_content_type(content_type)
+        resolved_content_type = explicit_content_type or _artifact_content_type(path)
+        self._record_content_type(
+            normalized_job_id,
+            normalized_relative_path,
+            explicit_content_type,
+        )
+        return ArtifactObjectMetadata(
+            relative_path=normalized_relative_path,
+            size_bytes=size_bytes,
+            content_type=resolved_content_type,
+            sha256_hex=sha256_hex,
+            fingerprint_status=status,
+        )
+
     async def delete(self, job_id: str, relative_path: Optional[str] = None) -> int:
         return await asyncio.to_thread(self._delete_sync, job_id, relative_path)
 
@@ -420,6 +475,27 @@ class LocalArtifactStore(ArtifactStore):
         try:
             with tmp_path.open("wb") as handle:
                 handle.write(body)
+                handle.flush()
+                os.fsync(handle.fileno())
+            os.replace(tmp_path, path)
+        except BaseException:
+            try:
+                tmp_path.unlink()
+            except FileNotFoundError:
+                pass
+            raise
+
+    @staticmethod
+    def _atomic_copy_file(path: Path, source_path: Path) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp_path = path.with_name(f".{path.name}.tmp-{os.getpid()}-{uuid.uuid4().hex}")
+        try:
+            with Path(source_path).open("rb") as source, tmp_path.open("wb") as handle:
+                while True:
+                    chunk = source.read(_ARTIFACT_FINGERPRINT_CHUNK_BYTES)
+                    if not chunk:
+                        break
+                    handle.write(chunk)
                 handle.flush()
                 os.fsync(handle.fileno())
             os.replace(tmp_path, path)

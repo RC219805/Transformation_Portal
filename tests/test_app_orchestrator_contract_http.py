@@ -21,6 +21,8 @@ from fastapi.testclient import TestClient
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.requests import Request as StarletteRequest
 
+from transformation_portal.orchestrator.artifact_store.local import LocalArtifactStore
+
 pytestmark = pytest.mark.unit
 
 orchestrator_app = importlib.import_module("app")
@@ -3446,6 +3448,248 @@ def test_job_artifact_endpoint_returns_typed_not_found_for_missing_file(
     assert response.status_code == 404
     assert body["error"]["code"] == "NOT_FOUND"
     assert body["error"]["details"]["path"] == "missing.png"
+
+
+def test_job_artifact_endpoint_serves_local_store_after_source_file_is_gone(
+    client: TestClient,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    output_dir = tmp_path / "out"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    artifact_path = output_dir / "renders" / "result.bin"
+    artifact_path.parent.mkdir(parents=True, exist_ok=True)
+    artifact_path.write_bytes(b"store-backed-bytes")
+
+    store = LocalArtifactStore(root_dir=tmp_path / "artifact-store")
+    monkeypatch.setattr(orchestrator_app, "_artifact_store", lambda: store)
+
+    job = orchestrator_app.Job(
+        id="job_artifact_store_local",
+        created_at=orchestrator_app._now(),
+        request={"pipeline": "lux-depth-v3", "args": {"output_dir": str(output_dir)}},
+        state="succeeded",
+        finished_at=orchestrator_app._now(),
+    )
+    orchestrator_app.JOBS[job.id] = job
+    orchestrator_app._index_job_artifacts(job)
+    asyncio.run(orchestrator_app._mirror_job_artifacts_to_store(job))
+    artifact_path.unlink()
+    job.artifact_lookup = {}
+
+    response = client.get(f"/v1/jobs/{job.id}/artifacts/renders/result.bin")
+
+    assert response.status_code == 200
+    assert response.headers["Cache-Control"] == "no-store"
+    assert response.headers["X-Content-Type-Options"] == "nosniff"
+    assert "attachment" in response.headers.get("content-disposition", "").lower()
+    assert response.content == b"store-backed-bytes"
+
+
+@pytest.mark.parametrize("jobs_base", ["/v1/jobs", "/v2/jobs"])
+def test_job_artifact_endpoint_redirects_to_s3_presigned_url_after_auth(
+    client: TestClient,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    jobs_base: str,
+) -> None:
+    try:
+        import boto3
+        from moto import mock_aws
+    except ImportError:
+        pytest.skip("moto not available; install CI/dev requirements to exercise the S3 app route")
+
+    from transformation_portal.orchestrator.artifact_store.s3 import S3ArtifactStore
+
+    previous_env = {key: os.environ.get(key) for key in ("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_DEFAULT_REGION")}
+    os.environ.update(
+        AWS_ACCESS_KEY_ID="test",
+        AWS_SECRET_ACCESS_KEY="test",
+        AWS_DEFAULT_REGION="us-east-1",
+    )
+    try:
+        with mock_aws():
+            bucket = f"tp-route-{orchestrator_app.uuid.uuid4().hex[:8]}"
+            boto3.client("s3", region_name="us-east-1").create_bucket(Bucket=bucket)
+            store = S3ArtifactStore(bucket=bucket, prefix="phase4b", region_name="us-east-1")
+            monkeypatch.setattr(orchestrator_app, "_artifact_store", lambda: store)
+
+            job = orchestrator_app.Job(
+                id="job_artifact_store_s3",
+                created_at=orchestrator_app._now(),
+                request={"pipeline": "lux-depth-v3", "args": {"output_dir": str(tmp_path / "unused")}},
+                state="succeeded",
+                finished_at=orchestrator_app._now(),
+                artifacts={
+                    "items": [{"path": "outputs/payload.txt", "relative_path": "outputs/payload.txt"}],
+                    "indexed_count": 1,
+                    "truncated": False,
+                },
+            )
+            orchestrator_app.JOBS[job.id] = job
+            asyncio.run(store.write_bytes(job.id, "outputs/payload.txt", b"s3-bytes", content_type="text/plain"))
+
+            response = client.get(
+                f"{jobs_base}/{job.id}/artifacts/outputs/payload.txt",
+                follow_redirects=False,
+            )
+
+            assert response.status_code == 307
+            assert response.headers["Cache-Control"] == "no-store"
+            assert response.headers["location"].startswith("https://")
+            assert response.content == b""
+    finally:
+        for key, value in previous_env.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
+
+
+def test_job_artifact_endpoint_auth_failure_does_not_presign(
+    client: TestClient,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    job = orchestrator_app.Job(
+        id="job_artifact_no_presign",
+        created_at=orchestrator_app._now(),
+        request={"pipeline": "lux-depth-v3", "args": {"output_dir": str(tmp_path / "out")}},
+        state="succeeded",
+        artifacts={
+            "items": [{"path": "outputs/payload.txt", "relative_path": "outputs/payload.txt"}],
+            "indexed_count": 1,
+            "truncated": False,
+        },
+    )
+    orchestrator_app.JOBS[job.id] = job
+
+    def _fail_store_access():
+        raise AssertionError("unauthorized artifact route must not touch artifact store")
+
+    monkeypatch.setattr(orchestrator_app, "_artifact_store", _fail_store_access)
+
+    response = client.get(
+        f"/v1/jobs/{job.id}/artifacts/outputs/payload.txt",
+        headers={"x-api-key": "wrong"},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 401
+    assert response.json()["error"]["code"] == "UNAUTHORIZED"
+
+
+@pytest.mark.parametrize("jobs_base", ["/v1/jobs", "/v2/jobs"])
+def test_delete_job_artifacts_marks_lifecycle_and_returns_gone_on_fetch(
+    client: TestClient,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    jobs_base: str,
+) -> None:
+    output_dir = tmp_path / "out"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    artifact_path = output_dir / "result.txt"
+    artifact_path.write_text("delete me", encoding="utf-8")
+    store = LocalArtifactStore(root_dir=tmp_path / "artifact-store")
+    monkeypatch.setattr(orchestrator_app, "_artifact_store", lambda: store)
+
+    job = orchestrator_app.Job(
+        id="job_artifact_delete",
+        created_at=orchestrator_app._now(),
+        request={"pipeline": "lux-depth-v3", "args": {"output_dir": str(output_dir)}},
+        state="succeeded",
+        finished_at=orchestrator_app._now(),
+    )
+    orchestrator_app.JOBS[job.id] = job
+    orchestrator_app._index_job_artifacts(job)
+    asyncio.run(orchestrator_app._mirror_job_artifacts_to_store(job))
+
+    delete_response = client.delete(f"{jobs_base}/{job.id}/artifacts")
+
+    assert delete_response.status_code == 200
+    lifecycle = delete_response.json()["data"]["artifacts"]["lifecycle"]
+    assert lifecycle["deletion_status"] == "deleted"
+    assert lifecycle["deleted_count"] == 1
+
+    fetch_response = client.get(f"{jobs_base}/{job.id}/artifacts/result.txt")
+    assert fetch_response.status_code == 410
+    assert fetch_response.json()["error"]["code"] == "ARTIFACT_DELETED"
+
+
+@pytest.mark.parametrize("jobs_base", ["/v1/jobs", "/v2/jobs"])
+def test_delete_job_artifacts_rejects_active_jobs(client: TestClient, tmp_path: Path, jobs_base: str) -> None:
+    job = orchestrator_app.Job(
+        id="job_artifact_delete_active",
+        created_at=orchestrator_app._now(),
+        request={"pipeline": "lux-depth-v3", "args": {"output_dir": str(tmp_path / "out")}},
+        state="running",
+    )
+    orchestrator_app.JOBS[job.id] = job
+
+    response = client.delete(f"{jobs_base}/{job.id}/artifacts")
+
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "CONFLICT"
+
+
+def test_artifact_retention_cleanup_skips_active_jobs_and_deletes_terminal(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    store = LocalArtifactStore(root_dir=tmp_path / "artifact-store")
+    monkeypatch.setattr(orchestrator_app, "_artifact_store", lambda: store)
+    now = orchestrator_app._now()
+
+    terminal_output = tmp_path / "terminal"
+    terminal_output.mkdir()
+    (terminal_output / "result.txt").write_text("terminal", encoding="utf-8")
+    terminal_job = orchestrator_app.Job(
+        id="job_artifact_retention_terminal",
+        created_at=now,
+        finished_at=now,
+        state="succeeded",
+        request={"pipeline": "lux-depth-v3", "args": {"output_dir": str(terminal_output)}},
+    )
+    orchestrator_app.JOBS[terminal_job.id] = terminal_job
+    orchestrator_app._index_job_artifacts(terminal_job)
+    asyncio.run(orchestrator_app._mirror_job_artifacts_to_store(terminal_job))
+    terminal_job.artifacts["lifecycle"]["expires_at"] = now - 1
+
+    active_output = tmp_path / "active"
+    active_output.mkdir()
+    (active_output / "result.txt").write_text("active", encoding="utf-8")
+    active_job = orchestrator_app.Job(
+        id="job_artifact_retention_active",
+        created_at=now,
+        state="running",
+        request={"pipeline": "lux-depth-v3", "args": {"output_dir": str(active_output)}},
+    )
+    orchestrator_app.JOBS[active_job.id] = active_job
+    orchestrator_app._index_job_artifacts(active_job)
+    asyncio.run(orchestrator_app._mirror_job_artifacts_to_store(active_job))
+    active_job.artifacts["lifecycle"]["expires_at"] = now - 1
+
+    asyncio.run(orchestrator_app._cleanup_expired_job_artifacts(now))
+
+    assert terminal_job.artifacts["lifecycle"]["deletion_status"] == "deleted"
+    assert "deleted_at" in terminal_job.artifacts["lifecycle"]
+    assert active_job.artifacts["lifecycle"]["deletion_status"] == "available"
+    assert asyncio.run(store.delete(active_job.id)) == 1
+
+
+def test_ready_reports_artifact_store_backend(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    store = LocalArtifactStore(root_dir=tmp_path / "artifact-store")
+    monkeypatch.setattr(orchestrator_app, "_artifact_store", lambda: store)
+
+    response = asyncio.run(orchestrator_app.ready())
+
+    assert response["ok"] is True
+    assert response["artifact_store"] == {
+        "backend": "local",
+        "configured": True,
+        "prefix": "",
+        "signed_urls": False,
+    }
 
 
 @pytest.mark.parametrize("jobs_base", ["/v1/jobs", "/v2/jobs"])

@@ -40,6 +40,9 @@ ErrorCode = Literal[
     # by middleware on a 503 response when the auth env-var contract is
     # incomplete.
     "AUTH_CONFIGURATION_ERROR",
+    "ARTIFACT_DELETED",
+    "ARTIFACT_STORE_UNAVAILABLE",
+    "CONFLICT",
     "FORBIDDEN",
     "HTTP_ERROR",
     "INTERNAL_ERROR",

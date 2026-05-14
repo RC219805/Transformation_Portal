@@ -45,9 +45,9 @@ class HealthzResponse(BaseModel):
 class ReadyResponse(BaseModel):
     """Response shape for ``GET /ready`` (raw, not enveloped).
 
-    Always-present fields: ``ok``, ``time``, ``version``.
+    Always-present fields: ``ok``, ``time``, ``version``, ``artifact_store``.
     Verbose-only fields (when ``TP_READY_VERBOSE=true``): ``cli``, ``jobs``,
-    ``security``. Each is a churning dict of internal-state telemetry; we
+    ``security``. Each nested block is churning internal-state telemetry; we
     model them as ``dict[str, Any]`` rather than nested classes so adding a
     new feature flag to the security dict doesn't require a model bump.
 
@@ -62,6 +62,7 @@ class ReadyResponse(BaseModel):
     ok: bool
     time: float
     version: str
+    artifact_store: dict[str, Any] | None = None
     cli: dict[str, Any] | None = None
     jobs: dict[str, Any] | None = None
     security: dict[str, Any] | None = None

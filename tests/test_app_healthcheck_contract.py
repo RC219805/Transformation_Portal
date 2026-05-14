@@ -63,6 +63,8 @@ def test_ready_keeps_non_enveloped_shape(client: TestClient) -> None:
     body = response.json()
     assert response.status_code == 200
     assert body["ok"] is True
+    assert body["artifact_store"]["backend"] in {"local", "s3"}
+    assert "signed_urls" in body["artifact_store"]
     assert "success" not in body
     assert "schema" not in body
 
