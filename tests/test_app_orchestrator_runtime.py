@@ -4977,6 +4977,93 @@ def test_run_job_persists_logs_in_batches(monkeypatch: pytest.MonkeyPatch) -> No
     asyncio.run(scenario())
 
 
+def test_run_job_repository_write_hiccups_do_not_rewrite_success(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def scenario() -> None:
+        from transformation_portal.orchestrator.storage.memory import MemoryJobRepository
+
+        repo = MemoryJobRepository()
+        original_update = repo.update
+        failed_updates: list[dict[str, object]] = []
+
+        async def update(job_id: str, **fields: object):
+            if set(fields) in (
+                {"state", "started_at"},
+                {"progress"},
+                {"state", "exit_code", "error"},
+            ):
+                failed_updates.append(dict(fields))
+                raise RuntimeError("transient repository write failure")
+            return await original_update(job_id, **fields)
+
+        monkeypatch.setattr(repo, "update", update)
+        monkeypatch.setattr(orchestrator_app, "_job_repository", lambda: repo)
+
+        job = orchestrator_app.Job(id="job_repo_write_hiccup", created_at=orchestrator_app._now())
+        await repo.create(orchestrator_app._record_from_job(job))
+
+        await orchestrator_app._run_job(
+            job,
+            [
+                sys.executable,
+                "-u",
+                "-c",
+                "print('progress=25%', flush=True)",
+            ],
+        )
+
+        fetched = await repo.get(job.id)
+        assert fetched is not None
+        assert failed_updates
+        assert job.state == "succeeded"
+        assert job.exit_code == 0
+        assert job.error is None
+        assert fetched.state == "succeeded"
+        assert fetched.exit_code == 0
+        assert fetched.error is None
+
+    asyncio.run(scenario())
+
+
+def test_run_job_coalesces_progress_persistence(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def scenario() -> None:
+        from transformation_portal.orchestrator.storage.memory import MemoryJobRepository
+
+        repo = MemoryJobRepository()
+        original_update = repo.update
+        progress_updates = 0
+        last_event_updates = 0
+
+        async def update(job_id: str, **fields: object):
+            nonlocal last_event_updates, progress_updates
+            if set(fields) == {"progress"}:
+                progress_updates += 1
+            if set(fields) == {"last_event_at"}:
+                last_event_updates += 1
+            return await original_update(job_id, **fields)
+
+        monkeypatch.setattr(repo, "update", update)
+        monkeypatch.setattr(orchestrator_app, "_job_repository", lambda: repo)
+
+        job = orchestrator_app.Job(id="job_progress_coalesce", created_at=orchestrator_app._now())
+        await repo.create(orchestrator_app._record_from_job(job))
+
+        await orchestrator_app._run_job(
+            job,
+            [
+                sys.executable,
+                "-u",
+                "-c",
+                "for i in range(1, 51): print(f'progress={i}%', flush=True)",
+            ],
+        )
+
+        assert job.progress == 50
+        assert progress_updates <= 1
+        assert last_event_updates <= 2
+
+    asyncio.run(scenario())
+
+
 def test_cancel_request_terminates_running_job() -> None:
     async def scenario() -> None:
         job = orchestrator_app.Job(id="job_cancel", created_at=orchestrator_app._now())
@@ -5146,6 +5233,39 @@ def test_cleanup_expired_upload_batches_skips_when_retained_scan_fails(
     asyncio.run(orchestrator_app._cleanup_expired_upload_batches(10_000.0))
 
     assert managed_dir.exists()
+
+
+def test_retained_staged_input_dirs_scans_beyond_request_cleanup_limit(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def scenario() -> None:
+        from transformation_portal.orchestrator.storage.memory import MemoryJobRepository
+
+        repo = MemoryJobRepository()
+        monkeypatch.setattr(orchestrator_app, "_job_repository", lambda: repo)
+        monkeypatch.setattr(orchestrator_app, "JOB_CLEANUP_SCAN_LIMIT", 1)
+        orchestrator_app.JOBS.clear()
+
+        input_one = tmp_path / "upload-one" / "input"
+        input_two = tmp_path / "upload-two" / "input"
+        input_one.mkdir(parents=True)
+        input_two.mkdir(parents=True)
+        for idx, input_dir in enumerate((input_one, input_two), start=1):
+            job = orchestrator_app.Job(
+                id=f"job_retained_input_{idx}",
+                created_at=float(idx),
+                request={"args": {"input_dir": str(input_dir)}},
+            )
+            await repo.create(orchestrator_app._record_from_job(job))
+
+        retained = await orchestrator_app._retained_staged_input_dirs()
+
+        assert retained is not None
+        assert str(input_one.resolve()) in retained
+        assert str(input_two.resolve()) in retained
+
+    asyncio.run(scenario())
 
 
 def test_mutating_job_route_detection() -> None:

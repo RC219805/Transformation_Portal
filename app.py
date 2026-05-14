@@ -597,11 +597,12 @@ CLEANUP_INTERVAL_SECONDS = _env_int(
     60,
     minimum=1,
 )
-JOB_CLEANUP_SCAN_LIMIT = 1000
+JOB_CLEANUP_SCAN_LIMIT = _env_int("TP_JOB_CLEANUP_SCAN_LIMIT", 1000, minimum=1)
 JOB_REQUEST_CLEANUP_MIN_INTERVAL_SECONDS = 30.0
 JOB_LAST_EVENT_FLUSH_INTERVAL_SECONDS = 5.0
 JOB_LOG_PERSIST_BATCH_SIZE = 25
 JOB_LOG_PERSIST_FLUSH_INTERVAL_SECONDS = 1.0
+JOB_PROGRESS_PERSIST_FLUSH_INTERVAL_SECONDS = 1.0
 CANCEL_GRACE_SECONDS = _env_float(
     "TP_CANCEL_GRACE_SECONDS",
     5.0,
@@ -1269,6 +1270,15 @@ async def _persist_job_fields(job: Job, **fields: Any) -> Optional[JobRecord]:
     except Exception as exc:  # noqa: BLE001 - callers decide whether to fail closed
         raise _JobRepositoryUnavailable("job repository update failed") from exc
     return record
+
+
+async def _persist_job_fields_best_effort(job: Job, context: str, **fields: Any) -> bool:
+    try:
+        await _persist_job_fields(job, **fields)
+    except Exception:  # noqa: BLE001 - runner/event hot paths must not fail on persistence lag
+        LOGGER.debug("job repository %s update skipped/failed for %s", context, job.id, exc_info=True)
+        return False
+    return True
 
 
 async def _persist_job_state(job: Job) -> None:
@@ -3208,7 +3218,7 @@ async def _retained_staged_input_dirs() -> Optional[set[str]]:
         _add_staged_input_dir(retained, job)
 
     try:
-        records, _ = await _job_repository().list(limit=JOB_CLEANUP_SCAN_LIMIT)
+        records, _ = await _job_repository().list(limit=None)
     except Exception:  # noqa: BLE001 - upload cleanup must not block on repo errors
         LOGGER.exception("job repository retained upload scan failed")
         return None
@@ -6275,7 +6285,6 @@ _LAST_EVENT_AT_ALWAYS_FLUSH_EVENTS = {
     "artifact_deleted",
     "artifact_deletion_failed",
     "done",
-    "progress",
     "state",
 }
 
@@ -9669,17 +9678,14 @@ async def _get_job_artifact(job_id: str, artifact_path: str) -> Response:
 
     known_paths = _artifact_known_relative_paths(job)
     if not known_paths:
-        try:
-            if _hydrate_artifact_lookup_from_items(job):
-                await _persist_job_artifact_metadata(job, fail_closed=True)
-            else:
-                # Fingerprint computation can do bounded synchronous IO; offload
-                # the indexing pass to a worker thread to keep the event loop
-                # responsive for SSE subscribers and concurrent API callers.
-                await asyncio.to_thread(_index_job_artifacts, job)
-                await _persist_job_artifact_metadata(job, fail_closed=True)
-        except _JobRepositoryUnavailable:
-            return _repository_unavailable_response()
+        if _hydrate_artifact_lookup_from_items(job):
+            await _persist_job_artifact_metadata(job, fail_closed=False)
+        else:
+            # Fingerprint computation can do bounded synchronous IO; offload
+            # the indexing pass to a worker thread to keep the event loop
+            # responsive for SSE subscribers and concurrent API callers.
+            await asyncio.to_thread(_index_job_artifacts, job)
+            await _persist_job_artifact_metadata(job, fail_closed=False)
         known_paths = _artifact_known_relative_paths(job)
     if requested_relative_path not in known_paths:
         return _error_response(
@@ -9691,7 +9697,6 @@ async def _get_job_artifact(job_id: str, artifact_path: str) -> Response:
 
     if not job.artifact_store_mirrored:
         try:
-            await _persist_job_artifact_metadata(job, fail_closed=True)
             await _mirror_job_artifacts_to_store(job, fail_closed_on_repository=True)
         except _JobRepositoryUnavailable:
             return _repository_unavailable_response()
@@ -10321,7 +10326,7 @@ async def _run_job(job: Job, argv: List[str]) -> None:
     _cache_runtime_job(job)
     job.state = "running"
     job.started_at = _now()
-    await _persist_job_fields(job, state=job.state, started_at=job.started_at)
+    await _persist_job_fields_best_effort(job, "runner_start", state=job.state, started_at=job.started_at)
     await _publish_event(
         job.id,
         "state",
@@ -10330,6 +10335,8 @@ async def _run_job(job: Job, argv: List[str]) -> None:
 
     pending_log_lines: List[str] = []
     last_log_flush_at = _now()
+    pending_progress_persist = False
+    last_progress_flush_at = _now()
 
     async def _flush_log_batch() -> None:
         nonlocal last_log_flush_at
@@ -10342,6 +10349,18 @@ async def _run_job(job: Job, argv: List[str]) -> None:
             await _job_repository().append_logs(job.id, batch, tail_limit=LOG_TAIL_LIMIT)
         except Exception:  # noqa: BLE001 - keep the runner moving if log persistence lags
             LOGGER.exception("job repository append_logs failed for %s", job.id)
+
+    async def _flush_progress(*, force: bool = False) -> None:
+        nonlocal last_progress_flush_at, pending_progress_persist
+        if not pending_progress_persist:
+            return
+        now = _now()
+        if not force and JOB_PROGRESS_PERSIST_FLUSH_INTERVAL_SECONDS > 0:
+            if now - last_progress_flush_at < JOB_PROGRESS_PERSIST_FLUSH_INTERVAL_SECONDS:
+                return
+        if await _persist_job_fields_best_effort(job, "progress", progress=job.progress):
+            pending_progress_persist = False
+            last_progress_flush_at = now
 
     try:
         # NO SHELL EXECUTION.
@@ -10391,7 +10410,8 @@ async def _run_job(job: Job, argv: List[str]) -> None:
             pct = _extract_progress_percent(line)
             if pct is not None and pct != job.progress:
                 job.progress = pct
-                await _persist_job_fields(job, progress=job.progress)
+                pending_progress_persist = True
+                await _flush_progress()
                 await _publish_event(
                     job.id,
                     "progress",
@@ -10399,6 +10419,7 @@ async def _run_job(job: Job, argv: List[str]) -> None:
                 )
 
         await _flush_log_batch()
+        await _flush_progress(force=True)
         rc = await proc.wait()
         job.exit_code = int(rc)
         if job.cancel_requested:
@@ -10415,7 +10436,9 @@ async def _run_job(job: Job, argv: List[str]) -> None:
                     {"exit_code": int(rc)},
                     retriable=False,
                 )
-        await _persist_job_fields(job, state=job.state, exit_code=job.exit_code, error=job.error)
+        await _persist_job_fields_best_effort(
+            job, "runner_terminal", state=job.state, exit_code=job.exit_code, error=job.error
+        )
 
     except FileNotFoundError:
         job.state = "failed"
@@ -10431,7 +10454,14 @@ async def _run_job(job: Job, argv: List[str]) -> None:
         job.add_log(msg)
         with suppress(Exception):
             await _job_repository().append_logs(job.id, [msg], tail_limit=LOG_TAIL_LIMIT)
-        await _persist_job_fields(job, state=job.state, exit_code=job.exit_code, error=job.error, logs_tail=job.logs_tail)
+        await _persist_job_fields_best_effort(
+            job,
+            "runner_not_found",
+            state=job.state,
+            exit_code=job.exit_code,
+            error=job.error,
+            logs_tail=job.logs_tail,
+        )
         await _publish_event(
             job.id,
             "log",
@@ -10455,7 +10485,14 @@ async def _run_job(job: Job, argv: List[str]) -> None:
         job.add_log(msg)
         with suppress(Exception):
             await _job_repository().append_logs(job.id, [msg], tail_limit=LOG_TAIL_LIMIT)
-        await _persist_job_fields(job, state=job.state, exit_code=job.exit_code, error=job.error, logs_tail=job.logs_tail)
+        await _persist_job_fields_best_effort(
+            job,
+            "runner_error",
+            state=job.state,
+            exit_code=job.exit_code,
+            error=job.error,
+            logs_tail=job.logs_tail,
+        )
         await _publish_event(
             job.id,
             "log",
@@ -10464,6 +10501,8 @@ async def _run_job(job: Job, argv: List[str]) -> None:
     finally:
         with suppress(Exception):
             await _flush_log_batch()
+        with suppress(Exception):
+            await _flush_progress(force=True)
         if job.terminate_task is not None:
             try:
                 await job.terminate_task
@@ -10527,6 +10566,9 @@ async def _run_job(job: Job, argv: List[str]) -> None:
         # it's safe to synthesize 'done' if done_published_at is set.
         job.done_published_at = _now()
         job.finished_at = job.done_published_at
-        await _persist_job_state(job)
+        try:
+            await _persist_job_state(job)
+        except Exception:  # noqa: BLE001 - repository lag must not rewrite runner outcome
+            LOGGER.exception("job repository final state persist failed for %s", job.id)
         _cache_runtime_job(job)
         await _cleanup_expired_jobs(_now(), force=False)

@@ -3479,6 +3479,38 @@ def test_artifact_fetch_reads_repository_metadata_after_runtime_cache_clear(
     assert response.content == b"\x89PNG\r\n\x1a\nrepo"
 
 
+def test_artifact_fetch_hydration_metadata_persist_is_best_effort(
+    client: TestClient,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    output_dir = tmp_path / "repo-artifact-hydrate"
+    artifact_path = output_dir / "renders" / "hero.png"
+    artifact_path.parent.mkdir(parents=True)
+    artifact_path.write_bytes(b"\x89PNG\r\n\x1a\nhydrate")
+    job = orchestrator_app.Job(
+        id="job_repo_artifact_hydrate",
+        created_at=orchestrator_app._now(),
+        state="succeeded",
+        finished_at=orchestrator_app._now(),
+        artifacts={"lifecycle": {"mirror_status": "mirrored", "artifact_store_backend": "local"}},
+        request={"pipeline": "lux-depth-v3", "args": {"output_dir": str(output_dir)}},
+    )
+    repo = orchestrator_app._job_repository()
+    asyncio.run(repo.create(orchestrator_app._record_from_job(job)))
+
+    async def set_artifacts(*_args: object, **_kwargs: object) -> None:
+        raise RuntimeError("transient repository artifact write failure")
+
+    monkeypatch.setattr(repo, "set_artifacts", set_artifacts)
+    orchestrator_app.JOBS.clear()
+
+    response = client.get(f"/v1/jobs/{job.id}/artifacts/renders/hero.png")
+
+    assert response.status_code == 200
+    assert response.content == b"\x89PNG\r\n\x1a\nhydrate"
+
+
 def test_artifact_delete_persists_lifecycle_after_runtime_cache_clear(
     client: TestClient,
     tmp_path: Path,
