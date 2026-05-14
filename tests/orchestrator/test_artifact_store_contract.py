@@ -1,4 +1,4 @@
-"""Phase 4.A - shared contract tests for every ``ArtifactStore`` backend.
+"""Phase 4 - shared contract tests for every ``ArtifactStore`` backend.
 
 Local backend is always included. The S3 backend also runs by default
 against a ``moto`` mock so the contract is exercised end-to-end without
@@ -11,10 +11,14 @@ keys.
 
 Coverage:
 
-- ``write_bytes`` round-trip + ``head`` returns the same fingerprint.
+- ``write_bytes`` and ``write_file`` round-trip + ``head`` returns
+  the same fingerprint.
 - ``open_bytes`` streams the body in chunks; reassembly equals the
   written bytes.
 - ``list_for_job`` returns sorted entries with metadata.
+- ``presign_get`` preserves response-header overrides on S3 while
+  local storage keeps orchestrator streaming.
+- ``check_ready`` probes local writability and S3 bucket access.
 - Path-traversal validation rejects ``..``, absolute paths, empty
   job_ids — preserving the pre-Phase-4 guarantees.
 - ``delete`` (single + entire-job) and the resulting absence.
@@ -33,6 +37,7 @@ import time
 import uuid
 from pathlib import Path
 from typing import AsyncIterator
+from urllib.parse import parse_qs, urlparse
 
 import pytest
 import pytest_asyncio
@@ -300,7 +305,14 @@ async def test_write_file_raises_on_missing_source(store: ArtifactStore, tmp_pat
 async def test_presign_get_backend_contract(store: ArtifactStore) -> None:
     await store.write_bytes("job-presign", "outputs/payload.txt", b"payload")
 
-    url = await store.presign_get("job-presign", "outputs/payload.txt", expires_seconds=120)
+    url = await store.presign_get(
+        "job-presign",
+        "outputs/payload.txt",
+        expires_seconds=120,
+        content_type="text/plain",
+        content_disposition='attachment; filename="payload.txt"',
+        cache_control="no-store",
+    )
 
     if store.backend == "local":
         assert url is None
@@ -308,6 +320,53 @@ async def test_presign_get_backend_contract(store: ArtifactStore) -> None:
         assert isinstance(url, str)
         assert url.startswith("http")
         assert "outputs%2Fpayload.txt" not in url
+        query = parse_qs(urlparse(url).query)
+        assert query["response-content-type"] == ["text/plain"]
+        assert query["response-content-disposition"] == ['attachment; filename="payload.txt"']
+        assert query["response-cache-control"] == ["no-store"]
+
+
+async def test_check_ready_contract(store: ArtifactStore) -> None:
+    await store.check_ready()
+
+
+def test_store_contract_requires_readiness_override() -> None:
+    class MissingReadyStore(ArtifactStore):
+        @property
+        def backend(self) -> str:
+            return "missing-ready"
+
+        async def head(self, job_id: str, relative_path: str):  # noqa: ANN201, ARG002
+            raise ArtifactNotFoundError("missing")
+
+        async def open_bytes(self, job_id: str, relative_path: str) -> AsyncIterator[bytes]:  # noqa: ARG002
+            async def _stream() -> AsyncIterator[bytes]:
+                if job_id and relative_path:
+                    return
+                yield b""
+
+            return _stream()
+
+        async def list_for_job(self, job_id: str):  # noqa: ANN201, ARG002
+            return []
+
+        async def write_bytes(
+            self, job_id: str, relative_path: str, body: bytes, *, content_type=None
+        ):  # noqa: ANN201, ARG002
+            raise ArtifactStoreError("not implemented")
+
+        async def write_file(
+            self, job_id: str, relative_path: str, source_path: Path, *, content_type=None
+        ):  # noqa: ANN201, ARG002
+            raise ArtifactStoreError("not implemented")
+
+        async def delete(self, job_id: str, relative_path: str | None = None) -> int:  # noqa: ARG002
+            return 0
+
+        async def reset(self) -> None:
+            return None
+
+    assert MissingReadyStore.__abstractmethods__ == frozenset({"check_ready"})
 
 
 async def test_open_bytes_raises_on_missing(store: ArtifactStore) -> None:

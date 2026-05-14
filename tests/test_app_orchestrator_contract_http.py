@@ -15,6 +15,7 @@ import re
 import sys
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Tuple
+from urllib.parse import parse_qs, urlparse
 
 import pytest
 from fastapi.testclient import TestClient
@@ -3487,11 +3488,22 @@ def test_job_artifact_endpoint_serves_local_store_after_source_file_is_gone(
 
 
 @pytest.mark.parametrize("jobs_base", ["/v1/jobs", "/v2/jobs"])
+@pytest.mark.parametrize(
+    ("artifact_relative_path", "body", "content_type", "expect_disposition"),
+    [
+        ("outputs/payload.txt", b"s3-bytes", "text/plain", True),
+        ("outputs/preview.png", b"\x89PNG\r\n\x1a\npreview", "image/png", False),
+    ],
+)
 def test_job_artifact_endpoint_redirects_to_s3_presigned_url_after_auth(
     client: TestClient,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     jobs_base: str,
+    artifact_relative_path: str,
+    body: bytes,
+    content_type: str,
+    expect_disposition: bool,
 ) -> None:
     try:
         import boto3
@@ -3521,13 +3533,85 @@ def test_job_artifact_endpoint_redirects_to_s3_presigned_url_after_auth(
                 state="succeeded",
                 finished_at=orchestrator_app._now(),
                 artifacts={
-                    "items": [{"path": "outputs/payload.txt", "relative_path": "outputs/payload.txt"}],
+                    "items": [{"path": artifact_relative_path, "relative_path": artifact_relative_path}],
                     "indexed_count": 1,
                     "truncated": False,
                 },
             )
             orchestrator_app.JOBS[job.id] = job
-            asyncio.run(store.write_bytes(job.id, "outputs/payload.txt", b"s3-bytes", content_type="text/plain"))
+            asyncio.run(store.write_bytes(job.id, artifact_relative_path, body, content_type=content_type))
+
+            response = client.get(
+                f"{jobs_base}/{job.id}/artifacts/{artifact_relative_path}",
+                follow_redirects=False,
+            )
+
+            assert response.status_code == 307
+            assert response.headers["Cache-Control"] == "no-store"
+            assert response.headers["X-Content-Type-Options"] == "nosniff"
+            assert response.headers["location"].startswith("https://")
+            assert response.content == b""
+            presign_query = parse_qs(urlparse(response.headers["location"]).query)
+            assert presign_query["response-content-type"] == [content_type]
+            assert presign_query["response-cache-control"] == ["no-store"]
+            if expect_disposition:
+                assert presign_query["response-content-disposition"][0].startswith("attachment; filename=")
+            else:
+                assert "response-content-disposition" not in presign_query
+
+            status_response = client.get(f"{jobs_base}/{job.id}")
+            assert response.headers["location"] not in status_response.text
+            assert response.headers["location"] not in json.dumps(job.artifacts)
+    finally:
+        for key, value in previous_env.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
+
+
+@pytest.mark.parametrize("jobs_base", ["/v1/jobs", "/v2/jobs"])
+def test_job_artifact_endpoint_mirrors_legacy_file_to_s3_on_first_access(
+    client: TestClient,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    jobs_base: str,
+) -> None:
+    try:
+        import boto3
+        from moto import mock_aws
+    except ImportError:
+        pytest.skip("moto not available; install CI/dev requirements to exercise the S3 app route")
+
+    from transformation_portal.orchestrator.artifact_store.s3 import S3ArtifactStore
+
+    previous_env = {key: os.environ.get(key) for key in ("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_DEFAULT_REGION")}
+    os.environ.update(
+        AWS_ACCESS_KEY_ID="test",
+        AWS_SECRET_ACCESS_KEY="test",
+        AWS_DEFAULT_REGION="us-east-1",
+    )
+    try:
+        with mock_aws():
+            bucket = f"tp-mirror-{orchestrator_app.uuid.uuid4().hex[:8]}"
+            boto3.client("s3", region_name="us-east-1").create_bucket(Bucket=bucket)
+            store = S3ArtifactStore(bucket=bucket, prefix="phase4b", region_name="us-east-1")
+            monkeypatch.setattr(orchestrator_app, "_artifact_store", lambda: store)
+
+            output_dir = tmp_path / "legacy-output"
+            output_dir.mkdir(parents=True, exist_ok=True)
+            artifact_path = output_dir / "outputs" / "payload.txt"
+            artifact_path.parent.mkdir(parents=True, exist_ok=True)
+            artifact_path.write_bytes(b"legacy-to-s3")
+            job = orchestrator_app.Job(
+                id="job_artifact_legacy_s3_mirror",
+                created_at=orchestrator_app._now(),
+                request={"pipeline": "lux-depth-v3", "args": {"output_dir": str(output_dir)}},
+                state="succeeded",
+                finished_at=orchestrator_app._now(),
+            )
+            orchestrator_app.JOBS[job.id] = job
+            orchestrator_app._index_job_artifacts(job)
 
             response = client.get(
                 f"{jobs_base}/{job.id}/artifacts/outputs/payload.txt",
@@ -3535,15 +3619,122 @@ def test_job_artifact_endpoint_redirects_to_s3_presigned_url_after_auth(
             )
 
             assert response.status_code == 307
-            assert response.headers["Cache-Control"] == "no-store"
-            assert response.headers["location"].startswith("https://")
-            assert response.content == b""
+            assert job.artifact_store_mirrored is True
+            stream = asyncio.run(store.open_bytes(job.id, "outputs/payload.txt"))
+            chunks: list[bytes] = []
+
+            async def _collect() -> None:
+                async for chunk in stream:
+                    chunks.append(chunk)
+
+            asyncio.run(_collect())
+            assert b"".join(chunks) == b"legacy-to-s3"
     finally:
         for key, value in previous_env.items():
             if value is None:
                 os.environ.pop(key, None)
             else:
                 os.environ[key] = value
+
+
+def test_job_artifact_endpoint_returns_503_when_s3_first_access_mirror_fails(
+    client: TestClient,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class FailingMirrorS3Store:
+        backend = "s3"
+
+        async def write_file(
+            self, job_id: str, relative_path: str, source_path: Path, *, content_type: str | None = None
+        ):  # noqa: ARG002
+            raise orchestrator_app.ArtifactStoreError("mirror write failed with private path")
+
+        async def head(self, job_id: str, relative_path: str):  # noqa: ARG002
+            raise orchestrator_app.StoreArtifactNotFoundError("missing after failed mirror")
+
+        async def presign_get(self, job_id: str, relative_path: str, *, expires_seconds: int, **_kwargs):  # noqa: ARG002
+            raise AssertionError("presign must not run when requested artifact failed to mirror")
+
+    output_dir = tmp_path / "legacy-output"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    artifact_path = output_dir / "outputs" / "payload.txt"
+    artifact_path.parent.mkdir(parents=True, exist_ok=True)
+    artifact_path.write_text("legacy source", encoding="utf-8")
+    job = orchestrator_app.Job(
+        id="job_artifact_s3_mirror_failed",
+        created_at=orchestrator_app._now(),
+        request={"pipeline": "lux-depth-v3", "args": {"output_dir": str(output_dir)}},
+        state="succeeded",
+        finished_at=orchestrator_app._now(),
+    )
+    orchestrator_app.JOBS[job.id] = job
+    orchestrator_app._index_job_artifacts(job)
+    monkeypatch.setattr(orchestrator_app, "_artifact_store", FailingMirrorS3Store)
+
+    response = client.get(f"/v1/jobs/{job.id}/artifacts/outputs/payload.txt")
+
+    assert response.status_code == 503
+    assert response.json()["error"]["details"] == {
+        "job_id": job.id,
+        "reason": "artifact_store_mirror_failed",
+    }
+
+
+def test_job_artifact_endpoint_returns_503_when_s3_failed_path_sample_is_truncated(
+    client: TestClient,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class FailingMirrorS3Store:
+        backend = "s3"
+
+        async def write_file(
+            self, job_id: str, relative_path: str, source_path: Path, *, content_type: str | None = None
+        ):  # noqa: ARG002
+            raise orchestrator_app.ArtifactStoreError("mirror write failed")
+
+        async def head(self, job_id: str, relative_path: str):  # noqa: ARG002
+            raise orchestrator_app.StoreArtifactNotFoundError("missing after failed mirror")
+
+        async def presign_get(self, job_id: str, relative_path: str, *, expires_seconds: int, **_kwargs):  # noqa: ARG002
+            raise AssertionError("presign must not run when mirror failures are unsampled")
+
+    output_dir = tmp_path / "legacy-output"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    artifact_lookup: dict[str, Path] = {}
+    items: list[dict[str, str]] = []
+    for index in range(11):
+        relative_path = f"outputs/payload-{index:02d}.txt"
+        artifact_path = output_dir / relative_path
+        artifact_path.parent.mkdir(parents=True, exist_ok=True)
+        artifact_path.write_text(f"legacy source {index}", encoding="utf-8")
+        artifact_lookup[relative_path] = artifact_path
+        items.append({"path": relative_path, "relative_path": relative_path})
+
+    job = orchestrator_app.Job(
+        id="job_artifact_s3_mirror_truncated_failures",
+        created_at=orchestrator_app._now(),
+        request={"pipeline": "lux-depth-v3", "args": {"output_dir": str(output_dir)}},
+        state="succeeded",
+        finished_at=orchestrator_app._now(),
+        artifacts={"items": items, "indexed_count": len(items), "truncated": False},
+        artifact_lookup=artifact_lookup,
+    )
+    orchestrator_app.JOBS[job.id] = job
+    monkeypatch.setattr(orchestrator_app, "_artifact_store", FailingMirrorS3Store)
+
+    unsampled_path = "outputs/payload-10.txt"
+    response = client.get(f"/v1/jobs/{job.id}/artifacts/{unsampled_path}")
+
+    lifecycle = job.artifacts[orchestrator_app._ARTIFACT_LIFECYCLE_KEY]
+    assert response.status_code == 503
+    assert response.json()["error"]["details"] == {
+        "job_id": job.id,
+        "reason": "artifact_store_mirror_failed",
+    }
+    assert lifecycle["mirror_failed_paths_complete"] is False
+    assert unsampled_path not in lifecycle["mirror_failed_paths"]
 
 
 def test_job_artifact_endpoint_auth_failure_does_not_presign(
@@ -3627,7 +3818,7 @@ def test_job_artifact_endpoint_redacts_s3_operation_exception(
         async def head(self, job_id: str, relative_path: str):  # noqa: ARG002
             raise orchestrator_app.ArtifactStoreError(secret_message)
 
-        async def presign_get(self, job_id: str, relative_path: str, *, expires_seconds: int):  # noqa: ARG002
+        async def presign_get(self, job_id: str, relative_path: str, *, expires_seconds: int, **_kwargs):  # noqa: ARG002
             raise AssertionError("presign must not run after failed head")
 
     job = orchestrator_app.Job(
@@ -3787,6 +3978,42 @@ def test_delete_job_artifacts_rejects_active_jobs(client: TestClient, tmp_path: 
     assert response.json()["error"]["code"] == "CONFLICT"
 
 
+@pytest.mark.parametrize("jobs_base", ["/v1/jobs", "/v2/jobs"])
+def test_delete_job_artifacts_requires_api_key_before_store_access(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    jobs_base: str,
+) -> None:
+    job = orchestrator_app.Job(
+        id="job_artifact_delete_auth",
+        created_at=orchestrator_app._now(),
+        request={"pipeline": "lux-depth-v3", "args": {"output_dir": str(tmp_path / "out")}},
+        state="succeeded",
+        finished_at=orchestrator_app._now(),
+        artifacts={
+            "items": [{"path": "outputs/payload.txt", "relative_path": "outputs/payload.txt"}],
+            "indexed_count": 1,
+            "truncated": False,
+        },
+    )
+    orchestrator_app.JOBS[job.id] = job
+
+    def _fail_store_access():
+        raise AssertionError("unauthorized artifact delete must not touch artifact store")
+
+    monkeypatch.setattr(orchestrator_app, "_artifact_store", _fail_store_access)
+
+    with TestClient(orchestrator_app.app) as anonymous_client:
+        missing_key = anonymous_client.delete(f"{jobs_base}/{job.id}/artifacts")
+    assert missing_key.status_code == 401
+    assert missing_key.json()["error"]["code"] == "UNAUTHORIZED"
+
+    with TestClient(orchestrator_app.app) as wrong_key_client:
+        wrong_key = wrong_key_client.delete(f"{jobs_base}/{job.id}/artifacts", headers={"x-api-key": "wrong"})
+    assert wrong_key.status_code == 401
+    assert wrong_key.json()["error"]["code"] == "UNAUTHORIZED"
+
+
 def test_delete_job_artifacts_routes_use_job_status_response_model() -> None:
     route_models = {}
     for route in orchestrator_app.app.routes:
@@ -3846,6 +4073,52 @@ def test_artifact_retention_cleanup_skips_active_jobs_and_deletes_terminal(
     assert asyncio.run(store.delete(active_job.id)) == 1
 
 
+def test_artifact_retention_cleanup_keeps_job_when_delete_fails_then_retries(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class FailingDeleteStore:
+        backend = "local"
+
+        async def delete(self, job_id: str, relative_path: str | None = None):  # noqa: ARG002
+            raise orchestrator_app.ArtifactStoreError("delete failed")
+
+    now = orchestrator_app._now()
+    output_dir = tmp_path / "retry-delete"
+    output_dir.mkdir()
+    artifact_path = output_dir / "result.txt"
+    artifact_path.write_text("retry me", encoding="utf-8")
+    job = orchestrator_app.Job(
+        id="job_artifact_retention_retry",
+        created_at=now - orchestrator_app.JOB_RETENTION_SECONDS - 10,
+        finished_at=now - orchestrator_app.JOB_RETENTION_SECONDS - 10,
+        state="succeeded",
+        request={"pipeline": "lux-depth-v3", "args": {"output_dir": str(output_dir)}},
+    )
+    orchestrator_app.JOBS[job.id] = job
+    orchestrator_app._index_job_artifacts(job)
+    orchestrator_app._ensure_artifact_lifecycle(job, now=now - orchestrator_app.JOB_RETENTION_SECONDS - 10)
+    job.artifacts["lifecycle"]["expires_at"] = now - 1
+    monkeypatch.setattr(orchestrator_app, "_artifact_store", lambda: FailingDeleteStore())
+
+    asyncio.run(orchestrator_app._cleanup_expired_job_artifacts(now))
+    orchestrator_app._cleanup_expired_jobs(now)
+
+    assert job.id in orchestrator_app.JOBS
+    assert job.artifacts["lifecycle"]["deletion_status"] == "failed"
+    assert job.artifacts["lifecycle"]["deletion_error"] == "artifact_deletion_failed"
+    assert artifact_path.exists()
+
+    store = LocalArtifactStore(root_dir=tmp_path / "artifact-store")
+    monkeypatch.setattr(orchestrator_app, "_artifact_store", lambda: store)
+    asyncio.run(orchestrator_app._cleanup_expired_job_artifacts(now))
+    orchestrator_app._cleanup_expired_jobs(now)
+
+    assert job.artifacts["lifecycle"]["deletion_status"] == "deleted"
+    assert not artifact_path.exists()
+    assert job.id not in orchestrator_app.JOBS
+
+
 def test_ready_reports_artifact_store_backend(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     store = LocalArtifactStore(root_dir=tmp_path / "artifact-store")
     monkeypatch.setattr(orchestrator_app, "_artifact_store", lambda: store)
@@ -3872,6 +4145,28 @@ def test_ready_redacts_artifact_store_exception(monkeypatch: pytest.MonkeyPatch)
     response = asyncio.run(orchestrator_app.ready())
 
     assert response["ok"] is False
+    assert response["artifact_store"]["configured"] is False
+    assert response["artifact_store"]["error"] == "artifact_store_unavailable"
+    assert secret_message not in json.dumps(response)
+
+
+def test_ready_fails_closed_when_s3_head_bucket_fails(monkeypatch: pytest.MonkeyPatch) -> None:
+    from transformation_portal.orchestrator.artifact_store.s3 import S3ArtifactStore
+
+    secret_message = "Traceback leaked bucket-name-and-credentials"
+
+    class FailingHeadBucketClient:
+        def head_bucket(self, **_kwargs):
+            raise RuntimeError(secret_message)
+
+    store = S3ArtifactStore(bucket="private-bucket", prefix="phase4b", client=FailingHeadBucketClient())
+    monkeypatch.setenv("TP_ARTIFACT_STORE", "s3")
+    monkeypatch.setattr(orchestrator_app, "_artifact_store", lambda: store)
+
+    response = asyncio.run(orchestrator_app.ready())
+
+    assert response["ok"] is False
+    assert response["artifact_store"]["backend"] == "s3"
     assert response["artifact_store"]["configured"] is False
     assert response["artifact_store"]["error"] == "artifact_store_unavailable"
     assert secret_message not in json.dumps(response)

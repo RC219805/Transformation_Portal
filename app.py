@@ -66,9 +66,9 @@ from transformation_portal.ingest.upload_staging import (
 )
 from transformation_portal.lux_depth_v3.model_registry import resolve_model_spec, resolve_registry_key, visible_cli_model_specs
 from transformation_portal.orchestrator import get_job_repository
+from transformation_portal.orchestrator.artifact_store import ArtifactNotFoundError as StoreArtifactNotFoundError
+from transformation_portal.orchestrator.artifact_store import ArtifactPathValidationError as StoreArtifactPathValidationError
 from transformation_portal.orchestrator.artifact_store import (
-    ArtifactNotFoundError as StoreArtifactNotFoundError,
-    ArtifactPathValidationError as StoreArtifactPathValidationError,
     ArtifactStoreError,
     get_artifact_store,
 )
@@ -85,8 +85,6 @@ from transformation_portal.portal import job_artifacts as _portal_job_artifacts
 from transformation_portal.portal import path_security as _portal_path_security
 from transformation_portal.portal import sam2_checkpoint_security as _portal_sam2_checkpoint_security
 from transformation_portal.portal.asset_bundle import (
-    PORTAL_ASSETS_DIR,
-    PORTAL_ASSETS_DIR_REAL,
     PORTAL_ASSET_CACHE_CONTROL,
     PORTAL_ASSET_FINGERPRINT_LENGTH,
     PORTAL_ASSET_FINGERPRINT_PARAM,
@@ -94,6 +92,8 @@ from transformation_portal.portal.asset_bundle import (
     PORTAL_ASSET_MANIFEST_PATH,
     PORTAL_ASSET_MEDIA_TYPES,
     PORTAL_ASSET_PATHS,
+    PORTAL_ASSETS_DIR,
+    PORTAL_ASSETS_DIR_REAL,
     PORTAL_CSS_TEMPLATE_PATH,
     PORTAL_CSS_TEMPLATE_TOKENS,
     PORTAL_DIRECT_FINGERPRINT_ASSET_NAMES,
@@ -1137,9 +1137,7 @@ ALLOWED_RAW_WB_MODES = {"camera"}
 # Curating a hard-coded allowlist here would artificially block valid members
 # in newer/older LibRaw builds (e.g. AFD, VCD, VCD_MODIFIED_AHD).
 try:
-    from transformation_portal.core.raw_runtime import (
-        is_valid_demosaic_name as _is_valid_demosaic_name,
-    )
+    from transformation_portal.core.raw_runtime import is_valid_demosaic_name as _is_valid_demosaic_name
 except ImportError:  # pragma: no cover - defensive fallback if core import fails
     import re as _re
 
@@ -2778,11 +2776,17 @@ def _cleanup_expired_jobs(now: float) -> None:
     expired = [
         job_id
         for job_id, job in JOBS.items()
-        if job.finished_at is not None and now - job.finished_at >= JOB_RETENTION_SECONDS
+        if job.finished_at is not None
+        and now - job.finished_at >= JOB_RETENTION_SECONDS
+        and not _job_has_undeleted_artifacts(job)
     ]
     for job_id in expired:
         JOBS.pop(job_id, None)
         EVENT_SUBSCRIBERS.pop(job_id, None)
+
+
+def _job_has_undeleted_artifacts(job: "Job") -> bool:
+    return bool(_artifact_known_relative_paths(job)) and not _artifacts_deleted(job)
 
 
 def _artifact_retention_due(job: Job, now: float) -> bool:
@@ -6709,6 +6713,23 @@ def _artifact_response_headers_for_relative_path(relative_path: str) -> Dict[str
     return _artifact_response_headers(Path(relative_path))
 
 
+def _artifact_mirror_failed_for_path(job: Job, relative_path: str) -> bool:
+    if not isinstance(job.artifacts, dict):
+        return False
+    lifecycle = job.artifacts.get(_ARTIFACT_LIFECYCLE_KEY)
+    if not isinstance(lifecycle, dict) or lifecycle.get("mirror_status") != "failed":
+        return False
+    failed_paths = lifecycle.get("mirror_failed_paths")
+    if not isinstance(failed_paths, list):
+        return True
+    failed_path_set = {str(path) for path in failed_paths}
+    if relative_path in failed_path_set:
+        return True
+    if lifecycle.get("mirror_failed_paths_complete") is True:
+        return False
+    return True
+
+
 async def _persist_job_artifact_metadata(job: Job) -> None:
     repo = getattr(app.state, "job_repository", None) if "app" in globals() else None
     if repo is None:
@@ -6773,11 +6794,13 @@ async def _mirror_job_artifacts_to_store(job: Job) -> bool:
     if failures:
         lifecycle["mirror_status"] = "failed"
         lifecycle["mirror_failed_paths"] = failures[:10]
+        lifecycle["mirror_failed_paths_complete"] = len(failures) <= 10
         await _persist_job_artifact_metadata(job)
         return False
     lifecycle["mirror_status"] = "mirrored"
     lifecycle.pop("mirror_error", None)
     lifecycle.pop("mirror_failed_paths", None)
+    lifecycle.pop("mirror_failed_paths_complete", None)
     job.artifact_store_mirrored = True
     job.artifact_store_backend = store.backend
     await _persist_job_artifact_metadata(job)
@@ -6791,8 +6814,7 @@ async def _artifact_store_readiness() -> Dict[str, Any]:
         prefix = ""
         if hasattr(store, "key_prefix"):
             prefix = str(getattr(store, "key_prefix"))
-        if store.backend == "s3":
-            await store.presign_get("__readiness__", "probe.txt", expires_seconds=60)
+        await store.check_ready()
         return {
             "backend": store.backend,
             "configured": True,
@@ -9335,13 +9357,25 @@ async def _get_job_artifact(job_id: str, artifact_path: str) -> Response:
 
     if store.backend == "s3":
         try:
-            await store.head(job.id, requested_relative_path)
+            metadata = await store.head(job.id, requested_relative_path)
+            response_headers = _artifact_response_headers_for_relative_path(requested_relative_path)
             presigned_url = await store.presign_get(
                 job.id,
                 requested_relative_path,
                 expires_seconds=ARTIFACT_PRESIGN_EXPIRES_SECONDS,
+                content_type=metadata.content_type,
+                content_disposition=response_headers.get("Content-Disposition"),
+                cache_control=response_headers.get("Cache-Control"),
             )
         except StoreArtifactNotFoundError:
+            if _artifact_mirror_failed_for_path(job, requested_relative_path):
+                return _error_response(
+                    503,
+                    code="ARTIFACT_STORE_UNAVAILABLE",
+                    message="artifact store unavailable",
+                    details={"job_id": job_id, "reason": "artifact_store_mirror_failed"},
+                    retriable=True,
+                )
             return _error_response(
                 404,
                 code="NOT_FOUND",
@@ -9375,7 +9409,10 @@ async def _get_job_artifact(job_id: str, artifact_path: str) -> Response:
         return RedirectResponse(
             url=presigned_url,
             status_code=307,
-            headers={"Cache-Control": "no-store"},
+            headers={
+                "Cache-Control": "no-store",
+                "X-Content-Type-Options": "nosniff",
+            },
         )
 
     try:

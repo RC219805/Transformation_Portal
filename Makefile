@@ -27,7 +27,7 @@ PHASE6_SMOKE_TESTS := \
 	tests/test_lux_render_pipeline_smoke.py \
 	tests/lux_depth_v3/test_orchestrator_smoke.py
 
-.PHONY: help test-fast test-novideo test-full test-integration test-structure test-utils test-orchestrator-contract test-orchestrator-http-contract test-orchestrator-postgres-contract test-worker-redis-contract test-portal-contract test-frontdoor-contract test-archive-gate-contract db-upgrade db-revision seed-frontdoor-user run-frontdoor-local run-backend-local run-backend-local-noreload dev-write-env dev-start dev-stop check-vercel-env validate-orchestrator-http validate-portal-lux-materials-live validate-portal-fastvlm-captioning-live validate-portal-css-layer-parity validate-portal-browser validate-frontdoor-browser validate-frontdoor-deployment-gate audit-pipeline-readiness coverage-fast-scope coverage-report coverage-diff coverage-package venv repair-core-venv setup clean \
+.PHONY: help test-fast test-novideo test-full test-integration test-structure test-utils test-orchestrator-contract test-orchestrator-http-contract test-artifact-s3-contract test-orchestrator-postgres-contract test-worker-redis-contract test-portal-contract test-frontdoor-contract test-archive-gate-contract db-upgrade db-revision seed-frontdoor-user run-frontdoor-local run-backend-local run-backend-local-noreload dev-write-env dev-start dev-stop check-vercel-env validate-orchestrator-http validate-portal-lux-materials-live validate-portal-fastvlm-captioning-live validate-portal-css-layer-parity validate-portal-browser validate-frontdoor-browser validate-frontdoor-deployment-gate audit-pipeline-readiness coverage-fast-scope coverage-report coverage-diff coverage-package venv repair-core-venv setup clean \
         lint lint-parity ci ci-full pre-commit install-hooks quality-check fix-quality validate-ci organize-docs check-json-serialization check-piptools-cache \
         check-python-headers check-yaml-governance check-stale-docs check-doc-heading-links lock lock-prod lock-ci lock-dev install-core install-ml install-ml-core install-ml-raw install-ml-sam2 install-ml-coreml install-fastvlm-runtime check-fastvlm-runtime docs docs-clean \
         check check-test-markers check-ci-sync check-todo-governance check-environment check-portal-asset-budgets check-dependency-pinning validate-full validate-quick clean-frontdoor clean-all check-worktree \
@@ -52,6 +52,7 @@ help:
 	@echo "  test-full          Run entire test suite (parallel if xdist present)"
 	@echo "  test-orchestrator-contract  Run route-level portal orchestrator contract suite"
 	@echo "  test-orchestrator-http-contract  Run HTTP-only orchestrator contract tests"
+	@echo "  test-artifact-s3-contract  Run ArtifactStore local + S3/moto contract tests"
 	@echo "  test-portal-contract  Run portal runtime/browser contract tests"
 	@echo "  test-frontdoor-contract  Run managed frontdoor Node contract/build checks"
 	@echo "  test-archive-gate-contract  Run archive gate readiness + HTTP contract tests (Gates A, B, C)"
@@ -278,6 +279,10 @@ test-orchestrator-contract:
 test-orchestrator-http-contract:
 	@echo "Running HTTP-only orchestrator contract tests..."
 	@"$(PY)" -m pytest -q tests/test_app_orchestrator_contract_http.py
+
+test-artifact-s3-contract:
+	@echo "Running ArtifactStore contract suite against local and S3/moto backends..."
+	@"$(PY)" -m pytest -q tests/orchestrator/test_artifact_store_contract.py
 
 # Phase 1.B - durable orchestrator state. Requires TP_TEST_POSTGRES_URL pointing
 # at an empty Postgres database; the conftest under tests/orchestrator/ runs
