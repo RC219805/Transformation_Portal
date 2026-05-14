@@ -189,6 +189,7 @@ def _client_fixture(
     monkeypatch.setattr(orchestrator_app, "_run_job", _instant_complete)
     # Avoid pipeline-validation false-rejects for the lightweight smoke jobs.
     monkeypatch.setattr(orchestrator_app, "_materialize_dispatch_output_dir", lambda *_a, **_kw: None)
+    monkeypatch.setattr(orchestrator_app, "WORKER_POLL_INTERVAL_SECONDS", 0.01)
 
     previous_api_key = orchestrator_app.API_KEY_SECRET
     previous_enforce = orchestrator_app.ENFORCE_JOB_API_KEY
@@ -221,13 +222,16 @@ def _create_dummy_job(client: TestClient, *, api_version: str) -> str:
 
 def _wait_for_job_terminal(client: TestClient, job_id: str, *, api_version: str) -> None:
     last_body: Dict[str, Any] | None = None
-    for _ in range(50):
+    timeout_seconds = max(1.0, orchestrator_app.WORKER_POLL_INTERVAL_SECONDS * 5)
+    sleep_seconds = min(0.05, max(0.005, orchestrator_app.WORKER_POLL_INTERVAL_SECONDS / 5))
+    deadline = time.monotonic() + timeout_seconds
+    while time.monotonic() < deadline:
         response = client.get(f"/{api_version}/jobs/{job_id}")
         assert response.status_code == 200, response.text
         last_body = response.json()
         if last_body["data"]["state"] in orchestrator_app._TERMINAL_JOB_STATES:
             return
-        time.sleep(0.01)
+        time.sleep(sleep_seconds)
     pytest.fail(f"job {job_id} did not reach a terminal state; last response: {last_body}")
 
 
