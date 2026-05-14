@@ -30,6 +30,7 @@ import asyncio
 import hashlib
 import json
 import os
+import threading
 import uuid
 from pathlib import Path, PurePosixPath
 from typing import AsyncIterator, List, Optional
@@ -114,6 +115,8 @@ class LocalArtifactStore(ArtifactStore):
         self._root = Path(os.path.realpath(root_dir))
         self._root.mkdir(parents=True, exist_ok=True)
         self._metadata_root = self._root / _CONTENT_TYPE_METADATA_DIR
+        self._metadata_locks_guard = threading.Lock()
+        self._metadata_locks: dict[str, threading.Lock] = {}
 
     @property
     def backend(self) -> str:
@@ -330,6 +333,14 @@ class LocalArtifactStore(ArtifactStore):
     def _metadata_path(self, normalized_job_id: str) -> Path:
         return self._metadata_root / f"{normalized_job_id}.json"
 
+    def _metadata_lock(self, normalized_job_id: str) -> threading.Lock:
+        with self._metadata_locks_guard:
+            lock = self._metadata_locks.get(normalized_job_id)
+            if lock is None:
+                lock = threading.Lock()
+                self._metadata_locks[normalized_job_id] = lock
+            return lock
+
     def _iter_confined_files(self, job_root: Path) -> List[Path]:
         files: List[Path] = []
         for candidate in job_root.rglob("*"):
@@ -372,26 +383,28 @@ class LocalArtifactStore(ArtifactStore):
         normalized_relative_path: str,
         content_type: Optional[str],
     ) -> None:
-        content_types = self._load_content_types(normalized_job_id)
-        if content_type is None:
-            content_types.pop(normalized_relative_path, None)
-        else:
-            content_types[normalized_relative_path] = content_type
-        metadata_path = self._metadata_path(normalized_job_id)
-        if not content_types:
-            try:
-                metadata_path.unlink()
-            except FileNotFoundError:
-                pass
-            return
-        payload = {"version": 1, "content_types": content_types}
-        self._atomic_write_bytes(metadata_path, canonicalize_json(payload) + b"\n")
+        with self._metadata_lock(normalized_job_id):
+            content_types = self._load_content_types(normalized_job_id)
+            if content_type is None:
+                content_types.pop(normalized_relative_path, None)
+            else:
+                content_types[normalized_relative_path] = content_type
+            metadata_path = self._metadata_path(normalized_job_id)
+            if not content_types:
+                try:
+                    metadata_path.unlink()
+                except FileNotFoundError:
+                    pass
+                return
+            payload = {"version": 1, "content_types": content_types}
+            self._atomic_write_bytes(metadata_path, canonicalize_json(payload) + b"\n")
 
     def _delete_content_type_metadata(self, normalized_job_id: str) -> None:
-        try:
-            self._metadata_path(normalized_job_id).unlink()
-        except FileNotFoundError:
-            pass
+        with self._metadata_lock(normalized_job_id):
+            try:
+                self._metadata_path(normalized_job_id).unlink()
+            except FileNotFoundError:
+                pass
 
     @staticmethod
     def _normalize_content_type(content_type: Optional[str]) -> Optional[str]:

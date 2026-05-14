@@ -26,7 +26,10 @@ Coverage:
 
 from __future__ import annotations
 
+import asyncio
 import os
+import threading
+import time
 import uuid
 from typing import AsyncIterator
 
@@ -405,6 +408,86 @@ async def test_s3_bulk_delete_counts_confirmed_deletions() -> None:
 
     store = S3ArtifactStore(bucket="bucket", prefix="tp/test", client=PartialBulkDeleteClient())
     assert await store.delete("job-bulk") == 1
+
+
+async def test_s3_list_for_job_skips_invalid_external_keys() -> None:
+    from transformation_portal.orchestrator.artifact_store.s3 import S3ArtifactStore
+
+    class InvalidKeyListClient:
+        def __init__(self) -> None:
+            self.head_keys: list[str] = []
+
+        def list_objects_v2(self, **_kwargs):
+            return {
+                "Contents": [
+                    {"Key": "tp/test/jobs/job-external/valid.txt"},
+                    {"Key": "tp/test/jobs/job-external/../escape.txt"},
+                    {"Key": "tp/test/jobs/job-external/back\\slash.txt"},
+                    {"Key": "tp/test/jobs/job-external/sub/../../escape.txt"},
+                ],
+                "IsTruncated": False,
+            }
+
+        def head_object(self, **kwargs):
+            key = kwargs["Key"]
+            self.head_keys.append(key)
+            if key != "tp/test/jobs/job-external/valid.txt":
+                raise AssertionError(f"invalid key should not be headed: {key}")
+            return {
+                "ContentLength": 999_999_999,
+                "ContentType": "text/plain",
+            }
+
+    client = InvalidKeyListClient()
+    store = S3ArtifactStore(bucket="bucket", prefix="tp/test", client=client)
+
+    listed = await store.list_for_job("job-external")
+
+    assert [item.relative_path for item in listed] == ["valid.txt"]
+    assert client.head_keys == ["tp/test/jobs/job-external/valid.txt"]
+
+
+async def test_local_content_type_sidecar_mutations_are_serialized(tmp_path, monkeypatch) -> None:
+    store = LocalArtifactStore(root_dir=tmp_path / "artifacts")
+    original_load = store._load_content_types  # noqa: SLF001 - targeted concurrency regression
+    active_lock = threading.Lock()
+    active_loads = 0
+    max_active_loads = 0
+
+    def slow_load(normalized_job_id: str) -> dict[str, str]:
+        nonlocal active_loads, max_active_loads
+        with active_lock:
+            active_loads += 1
+            max_active_loads = max(max_active_loads, active_loads)
+        try:
+            time.sleep(0.05)
+            return original_load(normalized_job_id)
+        finally:
+            with active_lock:
+                active_loads -= 1
+
+    monkeypatch.setattr(store, "_load_content_types", slow_load)
+
+    await asyncio.gather(
+        *(
+            store.write_bytes(
+                "job-sidecar-race",
+                f"outputs/{index}.bin",
+                b"x",
+                content_type=f"application/vnd.tp.race-{index}",
+            )
+            for index in range(4)
+        )
+    )
+
+    assert max_active_loads == 1
+    listed = await store.list_for_job("job-sidecar-race")
+    assert [item.content_type for item in listed] == [
+        "application/vnd.tp.race-0",
+        "application/vnd.tp.race-1",
+        "application/vnd.tp.race-2",
+        "application/vnd.tp.race-3",
+    ]
 
 
 # ---------------------------------------------------------------------------

@@ -45,6 +45,7 @@ from typing import Any, AsyncIterator, List, Optional
 from transformation_portal.orchestrator.artifact_store.base import (
     ArtifactNotFoundError,
     ArtifactObjectMetadata,
+    ArtifactPathValidationError,
     ArtifactStore,
     ArtifactStoreError,
 )
@@ -215,13 +216,17 @@ class S3ArtifactStore(ArtifactStore):
                 if not relative or relative.endswith("/"):
                     continue
                 try:
+                    normalized_relative = _normalize_relative_path(relative)
+                except ArtifactPathValidationError:
+                    continue
+                try:
                     head = await asyncio.to_thread(client.head_object, Bucket=self._bucket, Key=key)
                 except Exception as exc:  # noqa: BLE001 - boto3 ClientError
                     if _is_not_found(exc):
                         continue
                     raise ArtifactStoreError(f"S3 head_object failed for {key}") from exc
                 size_bytes = int(head.get("ContentLength", 0)) if "ContentLength" in head else None
-                content_type = head.get("ContentType") or _content_type_for(relative)
+                content_type = head.get("ContentType") or _content_type_for(normalized_relative)
                 if size_bytes is None:
                     sha256_hex: Optional[str] = None
                     status = "unavailable"
@@ -232,7 +237,7 @@ class S3ArtifactStore(ArtifactStore):
                     sha256_hex, status = await self._stream_sha256(client, key)
                 results.append(
                     ArtifactObjectMetadata(
-                        relative_path=relative,
+                        relative_path=normalized_relative,
                         size_bytes=size_bytes,
                         content_type=content_type,
                         sha256_hex=sha256_hex,
