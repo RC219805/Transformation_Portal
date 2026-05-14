@@ -287,6 +287,7 @@ class TestPatternMatching:
             "pytest-xdist",
             "hypothesis",
             "httpx",
+            "moto",
         }
         assert sync_module.CORE_TEST_DEPS == expected
 
@@ -315,13 +316,16 @@ class TestSymmetricDriftDetection:
         return repo
 
     def test_detects_test_runners_in_ci_in(self, fake_repo: Path, sync_module: ModuleType) -> None:
-        """Detects test runners incorrectly placed in ci.in (unwanted deps)."""
+        """Detects test dependencies incorrectly placed in ci.in (unwanted deps)."""
         # Setup: test runner in ci.in (wrong)
         root_ci = fake_repo / "requirements-ci.txt"
         root_ci.write_text("pytest>=8.0\n")
 
         nested_ci = fake_repo / "requirements" / "ci.in"
-        nested_ci.write_text("pytest-asyncio>=0.21\n")  # WRONG: should be in dev.in
+        nested_ci.write_text(dedent("""
+            pytest-asyncio>=0.21
+            moto[s3]>=5.0
+        """).strip())  # WRONG: should be in dev.in/root CI
 
         nested_dev = fake_repo / "requirements" / "dev.in"
         nested_dev.write_text("pytest>=8.0\n")
@@ -329,9 +333,10 @@ class TestSymmetricDriftDetection:
         # Extract packages
         nested_ci_packages = sync_module.extract_packages(nested_ci)
         test_deps_in_nested_ci = {p for p in nested_ci_packages if sync_module.TEST_RUNNER_PATTERN.match(p)}
+        test_deps_in_nested_ci |= nested_ci_packages & sync_module.CORE_TEST_DEPS
 
-        # Should detect pytest-asyncio in ci.in
-        assert test_deps_in_nested_ci == {"pytest-asyncio"}
+        # Should detect pytest-asyncio and moto in ci.in
+        assert test_deps_in_nested_ci == {"pytest-asyncio", "moto"}
 
     def test_detects_ci_tools_in_root_ci(self, fake_repo: Path, sync_module: ModuleType) -> None:
         """Detects CI tools incorrectly placed in root requirements-ci.txt."""
@@ -388,6 +393,39 @@ class TestSymmetricDriftDetection:
         # Should detect pytest-asyncio and httpx missing from dev.in
         assert missing_in_dev == {"pytest-asyncio", "httpx"}
 
+    def test_detects_missing_core_test_deps_in_root_ci(self, fake_repo: Path, sync_module: ModuleType) -> None:
+        """Detects core test deps, including moto, missing from root requirements-ci.txt."""
+        root_ci = fake_repo / "requirements-ci.txt"
+        root_ci.write_text(dedent("""
+            pytest>=8.0
+            pytest-cov>=4.0
+            pytest-asyncio>=0.21
+            pytest-json-report>=1.5
+            pytest-xdist>=3.5
+            httpx>=0.28
+            hypothesis>=6.0
+        """).strip())
+
+        nested_ci = fake_repo / "requirements" / "ci.in"
+        nested_ci.write_text("bandit>=1.7\n")
+
+        nested_dev = fake_repo / "requirements" / "dev.in"
+        nested_dev.write_text(dedent("""
+            pytest>=8.0
+            pytest-cov>=4.0
+            pytest-asyncio>=0.21
+            pytest-json-report>=1.5
+            pytest-xdist>=3.5
+            httpx>=0.28
+            hypothesis>=6.0
+            moto[s3]>=5.0
+        """).strip())
+
+        root_ci_packages = sync_module.extract_packages(root_ci)
+        missing_in_root = sync_module.CORE_TEST_DEPS - root_ci_packages
+
+        assert missing_in_root == {"moto"}
+
     def test_no_false_positives_when_synced(self, fake_repo: Path, sync_module: ModuleType) -> None:
         """No drift detected when files are properly synced."""
         # Setup: everything correctly placed
@@ -396,8 +434,11 @@ class TestSymmetricDriftDetection:
             pytest>=8.0
             pytest-cov>=4.0
             pytest-asyncio>=0.21
+            pytest-json-report>=1.5
+            pytest-xdist>=3.5
             httpx>=0.28
             hypothesis>=6.0
+            moto[s3]>=5.0
         """).strip())
 
         nested_ci = fake_repo / "requirements" / "ci.in"
@@ -413,8 +454,11 @@ class TestSymmetricDriftDetection:
             pytest>=8.0
             pytest-cov>=4.0
             pytest-asyncio>=0.21
+            pytest-json-report>=1.5
+            pytest-xdist>=3.5
             httpx>=0.28
             hypothesis>=6.0
+            moto[s3]>=5.0
             black==26.3.1
             isort>=5.13
         """).strip())
@@ -521,8 +565,11 @@ class TestMainIntegration:
             pytest>=8.0
             pytest-cov>=4.0
             pytest-asyncio>=0.21
+            pytest-json-report>=1.5
+            pytest-xdist>=3.5
             httpx>=0.28
             hypothesis>=6.0
+            moto[s3]>=5.0
         """).strip())
 
         # requirements/ci.in with CI tools only (correct)
@@ -539,8 +586,11 @@ class TestMainIntegration:
             pytest>=8.0
             pytest-cov>=4.0
             pytest-asyncio>=0.21
+            pytest-json-report>=1.5
+            pytest-xdist>=3.5
             httpx>=0.28
             hypothesis>=6.0
+            moto[s3]>=5.0
             black>=24.0
         """).strip())
 
@@ -552,12 +602,17 @@ class TestMainIntegration:
 
         # Run the same checks
         test_deps_in_nested_ci = {p for p in nested_ci_packages if sync_module.TEST_RUNNER_PATTERN.match(p)}
+        test_deps_in_nested_ci |= nested_ci_packages & sync_module.CORE_TEST_DEPS
         if test_deps_in_nested_ci:
             errors.append(f"ERROR: test deps in ci.in: {test_deps_in_nested_ci}")
 
         ci_tools_in_root = root_ci_packages & sync_module.CI_TOOLS
         if ci_tools_in_root:
             errors.append(f"ERROR: CI tools in root: {ci_tools_in_root}")
+
+        missing_in_root = sync_module.CORE_TEST_DEPS - root_ci_packages
+        if missing_in_root:
+            errors.append(f"ERROR: missing in root CI: {missing_in_root}")
 
         root_test_deps = root_ci_packages & sync_module.CORE_TEST_DEPS
         dev_test_deps = nested_dev_packages & sync_module.CORE_TEST_DEPS
@@ -618,8 +673,13 @@ class TestMainIntegration:
         root_ci = repo / "requirements-ci.txt"
         root_ci.write_text(dedent("""
             pytest>=8.0
+            pytest-cov>=4.0
             pytest-asyncio>=0.21
+            pytest-json-report>=1.5
+            pytest-xdist>=3.5
             httpx>=0.28
+            hypothesis>=6.0
+            moto[s3]>=5.0
         """).strip())
 
         # ci.in is correct
@@ -628,7 +688,14 @@ class TestMainIntegration:
 
         # dev.in is MISSING pytest-asyncio and httpx
         nested_dev = requirements_dir / "dev.in"
-        nested_dev.write_text("pytest>=8.0\n")
+        nested_dev.write_text(dedent("""
+            pytest>=8.0
+            pytest-cov>=4.0
+            pytest-json-report>=1.5
+            pytest-xdist>=3.5
+            hypothesis>=6.0
+            moto[s3]>=5.0
+        """).strip())
 
         # Run checks manually
         root_ci_packages = sync_module.extract_packages(root_ci)

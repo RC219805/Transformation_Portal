@@ -108,10 +108,10 @@ The repository has **root-level** requirements files that reference this layered
 | `requirements-dev.txt` | Development | References `requirements-ci.txt` + dev tools |
 
 **Important distinctions:**
-- `requirements-ci.txt` (root) contains **test runner** deps (pytest, hypothesis, etc.)
+- `requirements-ci.txt` (root) contains **test runner and test-support** deps (pytest, hypothesis, moto, etc.)
 - `requirements/ci.in` contains **CI pipeline tools** (bandit, safety, build, twine, etc.)
-- Core test runner deps in root `requirements-ci.txt` must match `requirements/dev.in`. The enforced set is defined as `CORE_TEST_DEPS` in `scripts/validation/check_ci_dep_sync.py` (currently: pytest, pytest-cov, pytest-asyncio, pytest-json-report, pytest-xdist, hypothesis, httpx)
-- Run `make check-ci-sync` to verify no drift for this core test runner set between the root files
+- Core test deps in root `requirements-ci.txt` must match `requirements/dev.in`. The enforced set is defined as `CORE_TEST_DEPS` in `scripts/validation/check_ci_dep_sync.py` (currently: pytest, pytest-cov, pytest-asyncio, pytest-json-report, pytest-xdist, hypothesis, httpx, moto)
+- Run `make check-ci-sync` to verify no drift for this core test dependency set between the root files
 
 ### Current Web Runtime Baseline
 
