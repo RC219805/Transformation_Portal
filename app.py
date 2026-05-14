@@ -2876,7 +2876,7 @@ async def _delete_job_artifacts_for_job(job: Job, *, reason: str) -> Optional[in
         )
         return None
 
-    deleted_count = store_deleted_count if store_deleted_count > 0 else legacy_deleted_count
+    deleted_count = max(store_deleted_count, legacy_deleted_count)
     now = _now()
     lifecycle.update(
         {

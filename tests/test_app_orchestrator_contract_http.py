@@ -3733,6 +3733,45 @@ def test_delete_job_artifacts_removes_legacy_files_when_store_is_empty(
 
 
 @pytest.mark.parametrize("jobs_base", ["/v1/jobs", "/v2/jobs"])
+def test_delete_job_artifacts_reports_partial_mirror_unique_count(
+    client: TestClient,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    jobs_base: str,
+) -> None:
+    output_dir = tmp_path / "partial-mirror-output"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    mirrored_path = output_dir / "mirrored.txt"
+    legacy_only_path = output_dir / "legacy-only.txt"
+    mirrored_path.write_text("mirrored artifact", encoding="utf-8")
+    legacy_only_path.write_text("legacy-only artifact", encoding="utf-8")
+    store = LocalArtifactStore(root_dir=tmp_path / "artifact-store")
+    monkeypatch.setattr(orchestrator_app, "_artifact_store", lambda: store)
+
+    job = orchestrator_app.Job(
+        id="job_artifact_delete_partial_mirror",
+        created_at=orchestrator_app._now(),
+        request={"pipeline": "lux-depth-v3", "args": {"output_dir": str(output_dir)}},
+        state="succeeded",
+        finished_at=orchestrator_app._now(),
+    )
+    orchestrator_app.JOBS[job.id] = job
+    orchestrator_app._index_job_artifacts(job)
+    asyncio.run(store.write_file(job.id, "mirrored.txt", mirrored_path))
+
+    delete_response = client.delete(f"{jobs_base}/{job.id}/artifacts")
+
+    assert delete_response.status_code == 200
+    assert not mirrored_path.exists()
+    assert not legacy_only_path.exists()
+    lifecycle = delete_response.json()["data"]["artifacts"]["lifecycle"]
+    assert lifecycle["deletion_status"] == "deleted"
+    assert lifecycle["deleted_count"] == 2
+    assert lifecycle["store_deleted_count"] == 1
+    assert lifecycle["legacy_deleted_count"] == 2
+
+
+@pytest.mark.parametrize("jobs_base", ["/v1/jobs", "/v2/jobs"])
 def test_delete_job_artifacts_rejects_active_jobs(client: TestClient, tmp_path: Path, jobs_base: str) -> None:
     job = orchestrator_app.Job(
         id="job_artifact_delete_active",
