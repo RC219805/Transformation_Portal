@@ -3617,6 +3617,45 @@ def test_delete_job_artifacts_marks_lifecycle_and_returns_gone_on_fetch(
 
 
 @pytest.mark.parametrize("jobs_base", ["/v1/jobs", "/v2/jobs"])
+def test_delete_job_artifacts_removes_legacy_files_when_store_is_empty(
+    client: TestClient,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    jobs_base: str,
+) -> None:
+    output_dir = tmp_path / "legacy-output"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    artifact_path = output_dir / "legacy.txt"
+    artifact_path.write_text("legacy artifact", encoding="utf-8")
+    store = LocalArtifactStore(root_dir=tmp_path / "artifact-store")
+    monkeypatch.setattr(orchestrator_app, "_artifact_store", lambda: store)
+
+    job = orchestrator_app.Job(
+        id="job_artifact_delete_legacy",
+        created_at=orchestrator_app._now(),
+        request={"pipeline": "lux-depth-v3", "args": {"output_dir": str(output_dir)}},
+        state="succeeded",
+        finished_at=orchestrator_app._now(),
+    )
+    orchestrator_app.JOBS[job.id] = job
+    orchestrator_app._index_job_artifacts(job)
+
+    delete_response = client.delete(f"{jobs_base}/{job.id}/artifacts")
+
+    assert delete_response.status_code == 200
+    assert not artifact_path.exists()
+    lifecycle = delete_response.json()["data"]["artifacts"]["lifecycle"]
+    assert lifecycle["deletion_status"] == "deleted"
+    assert lifecycle["deleted_count"] == 1
+    assert lifecycle["store_deleted_count"] == 0
+    assert lifecycle["legacy_deleted_count"] == 1
+
+    fetch_response = client.get(f"{jobs_base}/{job.id}/artifacts/legacy.txt")
+    assert fetch_response.status_code == 410
+    assert fetch_response.json()["error"]["code"] == "ARTIFACT_DELETED"
+
+
+@pytest.mark.parametrize("jobs_base", ["/v1/jobs", "/v2/jobs"])
 def test_delete_job_artifacts_rejects_active_jobs(client: TestClient, tmp_path: Path, jobs_base: str) -> None:
     job = orchestrator_app.Job(
         id="job_artifact_delete_active",
@@ -3630,6 +3669,20 @@ def test_delete_job_artifacts_rejects_active_jobs(client: TestClient, tmp_path: 
 
     assert response.status_code == 409
     assert response.json()["error"]["code"] == "CONFLICT"
+
+
+def test_delete_job_artifacts_routes_use_job_status_response_model() -> None:
+    route_models = {}
+    for route in orchestrator_app.app.routes:
+        path = getattr(route, "path", None)
+        methods = getattr(route, "methods", set()) or set()
+        if path in {"/v1/jobs/{job_id}/artifacts", "/v2/jobs/{job_id}/artifacts"} and "DELETE" in methods:
+            route_models[path] = getattr(route, "response_model", None)
+
+    assert route_models == {
+        "/v1/jobs/{job_id}/artifacts": orchestrator_app.JobStatusEnvelope,
+        "/v2/jobs/{job_id}/artifacts": orchestrator_app.JobStatusEnvelope,
+    }
 
 
 def test_artifact_retention_cleanup_skips_active_jobs_and_deletes_terminal(

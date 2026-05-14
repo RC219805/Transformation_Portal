@@ -217,3 +217,22 @@ class TestRateLimitRejection:
         assert response.headers.get("X-RateLimit-Limit") is None
         assert response.headers.get("X-RateLimit-Remaining") is None
         assert response.headers.get("X-RateLimit-Reset") is None
+
+
+class TestArtifactDeletionRejection:
+    @pytest.mark.parametrize("path", ["/v1/jobs/{job_id}/artifacts", "/v2/jobs/{job_id}/artifacts"])
+    def test_active_job_artifact_delete_returns_409(self, auth_client, path):
+        job = orchestrator_app.Job(
+            id="reject_active_artifact_delete",
+            created_at=orchestrator_app._now(),
+            request={"pipeline": "lux-depth-v3", "args": {}},
+            state="running",
+        )
+        orchestrator_app.JOBS[job.id] = job
+
+        response = auth_client.delete(path.format(job_id=job.id))
+
+        assert response.status_code == 409
+        error = response.json().get("error") or response.json()
+        assert error.get("code") == "CONFLICT"
+        assert error.get("details", {}).get("state") == "running"

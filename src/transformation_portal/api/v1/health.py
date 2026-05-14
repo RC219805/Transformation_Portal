@@ -62,7 +62,7 @@ class ReadyResponse(BaseModel):
     ok: bool
     time: float
     version: str
-    artifact_store: dict[str, Any] | None = None
+    artifact_store: dict[str, Any]
     cli: dict[str, Any] | None = None
     jobs: dict[str, Any] | None = None
     security: dict[str, Any] | None = None

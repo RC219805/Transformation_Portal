@@ -24,7 +24,7 @@ from email.parser import BytesParser
 from email.policy import default as email_policy
 from functools import lru_cache
 from importlib.util import find_spec
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any, AsyncGenerator, Callable, Deque, Dict, List, Mapping, NamedTuple, Optional, Tuple
 from urllib.parse import unquote
 
@@ -2795,6 +2795,45 @@ def _artifact_retention_due(job: Job, now: float) -> bool:
     return isinstance(expires_at, (int, float)) and float(expires_at) <= now
 
 
+def _delete_legacy_job_artifact_files(job: Job) -> int:
+    output_dir = _job_output_dir(job)
+    if output_dir is None or not output_dir.exists() or not output_dir.is_dir():
+        return 0
+
+    if not job.artifact_lookup:
+        _hydrate_artifact_lookup_from_items(job)
+
+    candidates: Dict[str, Path] = dict(job.artifact_lookup)
+    for relative_path in _artifact_known_relative_paths(job):
+        if relative_path in candidates:
+            continue
+        try:
+            normalized = _normalize_artifact_relative_path(relative_path)
+        except (
+            InvalidArtifactPathError,
+            AbsoluteArtifactPathError,
+            ArtifactPathOutsideJobOutputDirError,
+            ArtifactPathValidationError,
+        ):
+            continue
+        candidates[normalized] = Path(output_dir) / Path(*PurePosixPath(normalized).parts)
+
+    deleted = 0
+    seen: set[Path] = set()
+    for candidate in candidates.values():
+        _, resolved_artifact, _ = _validate_resolved_job_artifact_path(job, candidate)
+        if resolved_artifact in seen:
+            continue
+        seen.add(resolved_artifact)
+        if not resolved_artifact.exists():
+            continue
+        if not resolved_artifact.is_file():
+            raise ArtifactPathValidationError("artifact_path_not_file")
+        resolved_artifact.unlink()
+        deleted += 1
+    return deleted
+
+
 async def _delete_job_artifacts_for_job(job: Job, *, reason: str) -> Optional[int]:
     try:
         store = _artifact_store()
@@ -2812,7 +2851,8 @@ async def _delete_job_artifacts_for_job(job: Job, *, reason: str) -> Optional[in
 
     lifecycle = _ensure_artifact_lifecycle(job, backend=store.backend)
     try:
-        deleted_count = await store.delete(job.id)
+        store_deleted_count = await store.delete(job.id)
+        legacy_deleted_count = await asyncio.to_thread(_delete_legacy_job_artifact_files, job)
     except Exception as exc:  # noqa: BLE001 - cleanup/deletion must be observable and non-fatal
         lifecycle.update(
             {
@@ -2835,11 +2875,14 @@ async def _delete_job_artifacts_for_job(job: Job, *, reason: str) -> Optional[in
         )
         return None
 
+    deleted_count = store_deleted_count if store_deleted_count > 0 else legacy_deleted_count
     now = _now()
     lifecycle.update(
         {
             "deleted_at": now,
             "deleted_count": deleted_count,
+            "legacy_deleted_count": legacy_deleted_count,
+            "store_deleted_count": store_deleted_count,
             "deletion_status": "deleted",
             "deletion_reason": reason,
             "artifact_store_backend": store.backend,
@@ -2855,6 +2898,8 @@ async def _delete_job_artifacts_for_job(job: Job, *, reason: str) -> Optional[in
             "id": job.id,
             "reason": reason,
             "deleted_count": deleted_count,
+            "legacy_deleted_count": legacy_deleted_count,
+            "store_deleted_count": store_deleted_count,
             "artifact_store_backend": store.backend,
         },
     )
@@ -9200,12 +9245,12 @@ async def get_job_artifact_v2(job_id: str, artifact_path: str) -> Response:
     return await _get_job_artifact(job_id, artifact_path)
 
 
-@app.delete("/v1/jobs/{job_id}/artifacts")
+@app.delete("/v1/jobs/{job_id}/artifacts", response_model=JobStatusEnvelope)
 async def delete_job_artifacts(job_id: str) -> JSONResponse:
     return await _delete_job_artifacts(job_id, api_version="v1")
 
 
-@app.delete("/v2/jobs/{job_id}/artifacts")
+@app.delete("/v2/jobs/{job_id}/artifacts", response_model=JobStatusEnvelope)
 async def delete_job_artifacts_v2(job_id: str) -> JSONResponse:
     return await _delete_job_artifacts(job_id, api_version="v2")
 

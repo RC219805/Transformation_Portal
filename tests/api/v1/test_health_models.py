@@ -43,6 +43,10 @@ def _lux_depth_pipeline_payload() -> dict[str, Any]:
     }
 
 
+def _artifact_store_payload() -> dict[str, Any]:
+    return {"backend": "local", "configured": True, "prefix": "", "signed_urls": False}
+
+
 def _archive_gate_pipeline_payload(
     pipeline: str,
     *,
@@ -118,18 +122,24 @@ class TestReadyResponse:
     """Mirrors ``ready()``: minimal vs verbose shapes."""
 
     def test_minimal_shape_when_verbose_false(self) -> None:
-        # When TP_READY_VERBOSE=false, the handler returns just ok/time/version.
-        # The route is wired with response_model_exclude_none=True so the
-        # serialized output matches.
-        r = ReadyResponse(ok=True, time=1.0, version="0.1.0")
+        # When TP_READY_VERBOSE=false, the handler returns ok/time/version plus
+        # the always-present artifact_store block. The route is wired with
+        # response_model_exclude_none=True so verbose-only fields stay absent.
+        r = ReadyResponse(ok=True, time=1.0, version="0.1.0", artifact_store=_artifact_store_payload())
         dumped = r.model_dump(mode="json", exclude_none=True)
-        assert dumped == {"ok": True, "time": 1.0, "version": "0.1.0"}
+        assert dumped == {
+            "ok": True,
+            "time": 1.0,
+            "version": "0.1.0",
+            "artifact_store": _artifact_store_payload(),
+        }
 
     def test_verbose_shape_includes_cli_jobs_security(self) -> None:
         r = ReadyResponse(
             ok=True,
             time=1.0,
             version="0.1.0",
+            artifact_store=_artifact_store_payload(),
             cli={"lux-depth-v3": True, "archive-governance": True, "python": "3.11.15"},
             jobs={"active": 0, "total": 5},
             security={
@@ -155,7 +165,13 @@ class TestReadyResponse:
     def test_extra_top_level_keys_pass_through(self) -> None:
         # extra="allow" — the security dict churns and we don't want a strict
         # model to reject a new field added to the handler.
-        r = ReadyResponse(ok=True, time=1.0, version="0.1.0", future_field="ok")
+        r = ReadyResponse(
+            ok=True,
+            time=1.0,
+            version="0.1.0",
+            artifact_store=_artifact_store_payload(),
+            future_field="ok",
+        )
         # extra fields are accepted; they appear in dump
         assert r.model_dump(mode="json")["future_field"] == "ok"
 
@@ -166,6 +182,7 @@ class TestReadyResponse:
             ok=True,
             time=1.0,
             version="0.1.0",
+            artifact_store=_artifact_store_payload(),
             security={"api_key_enforced_for_jobs": True, "future_flag_2027": "rolled out"},
         )
         assert r.security == {"api_key_enforced_for_jobs": True, "future_flag_2027": "rolled out"}
