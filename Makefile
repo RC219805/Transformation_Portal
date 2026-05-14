@@ -541,6 +541,7 @@ coverage-report:
 		-m "not ml and not slow and not benchmark and not stress" \
 		--cov=src/transformation_portal \
 		--cov=src/tp \
+		--cov=app \
 		--cov-branch \
 		--cov-report=term-missing \
 		--cov-report=html:htmlcov \
@@ -581,6 +582,7 @@ coverage-package:
 	@"$(PY)" -m pytest tests/ \
 		-m "not ml and not slow and not benchmark and not stress" \
 		--cov=src/transformation_portal \
+		--cov=app \
 		--cov-branch \
 		--cov-report=xml:coverage.xml \
 		--cov-config=pyproject.toml \

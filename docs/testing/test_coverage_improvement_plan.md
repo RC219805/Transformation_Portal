@@ -45,6 +45,13 @@ The repository has substantial test volume, but high-risk areas remain under-cov
 
 ## Coverage Gate Strategy
 
+### Measurement Scope
+
+The coverage runs (`make coverage-report`, `make coverage-package`, and the
+core test leg in `build.yml`) measure `src/transformation_portal`, `src/tp`,
+and the root `app.py` origin. `app.py` is in scope so the FastAPI surface and
+its `app.py` milestone targets below are actually enforced, not aspirational.
+
 ### Immediate Gate (Active)
 
 ```bash

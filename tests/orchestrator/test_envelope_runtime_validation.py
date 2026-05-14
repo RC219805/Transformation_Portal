@@ -47,6 +47,7 @@ still emit through ``ErrorEnvelope``-shaped JSON via
 from __future__ import annotations
 
 import json
+import time
 from typing import Any, Dict, Iterator
 
 import pytest
@@ -59,12 +60,25 @@ from transformation_portal.api.v1.jobs import (
     JobsListData,
     JobStatusData,
 )
+from transformation_portal.orchestrator import reset_singletons as reset_repository_singletons
+from transformation_portal.orchestrator.queue import reset_singleton as reset_queue_singleton
 
 pytestmark = [pytest.mark.unit]
 
 
 def _canonical(value: Any) -> str:
     return json.dumps(value, sort_keys=True, separators=(",", ":"), default=str)
+
+
+def _reset_runtime_state() -> None:
+    reset_repository_singletons()
+    reset_queue_singleton()
+    orchestrator_app.app.state.job_repository = None
+    orchestrator_app.app.state.job_repository_unavailable = False
+    orchestrator_app.app.state.queue_broker = None
+    orchestrator_app.JOBS.clear()
+    orchestrator_app.EVENT_SUBSCRIBERS.clear()
+    orchestrator_app._LAST_EVENT_PERSISTED_AT.clear()
 
 
 # ---------------------------------------------------------------------------
@@ -175,21 +189,20 @@ def _client_fixture(
     monkeypatch.setattr(orchestrator_app, "_run_job", _instant_complete)
     # Avoid pipeline-validation false-rejects for the lightweight smoke jobs.
     monkeypatch.setattr(orchestrator_app, "_materialize_dispatch_output_dir", lambda *_a, **_kw: None)
+    monkeypatch.setattr(orchestrator_app, "WORKER_POLL_INTERVAL_SECONDS", 0.01)
 
     previous_api_key = orchestrator_app.API_KEY_SECRET
     previous_enforce = orchestrator_app.ENFORCE_JOB_API_KEY
+    _reset_runtime_state()
     orchestrator_app.API_KEY_SECRET = "contract-secret"
     orchestrator_app.ENFORCE_JOB_API_KEY = True
-    orchestrator_app.JOBS.clear()
-    orchestrator_app.EVENT_SUBSCRIBERS.clear()
     try:
         with TestClient(orchestrator_app.app, headers={"x-api-key": "contract-secret"}) as client:
             yield client
     finally:
         orchestrator_app.API_KEY_SECRET = previous_api_key
         orchestrator_app.ENFORCE_JOB_API_KEY = previous_enforce
-        orchestrator_app.JOBS.clear()
-        orchestrator_app.EVENT_SUBSCRIBERS.clear()
+        _reset_runtime_state()
 
 
 def _create_dummy_job(client: TestClient, *, api_version: str) -> str:
@@ -205,6 +218,21 @@ def _create_dummy_job(client: TestClient, *, api_version: str) -> str:
     )
     assert response.status_code == 200, response.text
     return response.json()["data"]["id"]
+
+
+def _wait_for_job_terminal(client: TestClient, job_id: str, *, api_version: str) -> None:
+    last_body: Dict[str, Any] | None = None
+    timeout_seconds = max(1.0, orchestrator_app.WORKER_POLL_INTERVAL_SECONDS * 5)
+    sleep_seconds = min(0.05, max(0.005, orchestrator_app.WORKER_POLL_INTERVAL_SECONDS / 5))
+    deadline = time.monotonic() + timeout_seconds
+    while time.monotonic() < deadline:
+        response = client.get(f"/{api_version}/jobs/{job_id}")
+        assert response.status_code == 200, response.text
+        last_body = response.json()
+        if last_body["data"]["state"] in orchestrator_app._TERMINAL_JOB_STATES:
+            return
+        time.sleep(sleep_seconds)
+    pytest.fail(f"job {job_id} did not reach a terminal state; last response: {last_body}")
 
 
 def _assert_envelope_shape(body: Dict[str, Any], *, expected_schema: str) -> None:
@@ -295,7 +323,8 @@ def test_cancel_job_wire_shape(client: TestClient, api_version: str) -> None:
 
 
 def test_list_jobs_response_is_canonically_deterministic(client: TestClient) -> None:
-    _create_dummy_job(client, api_version="v1")
+    job_id = _create_dummy_job(client, api_version="v1")
+    _wait_for_job_terminal(client, job_id, api_version="v1")
     first = client.get("/v1/jobs").json()
     second = client.get("/v1/jobs").json()
     # In-process determinism: same content yields the same canonical bytes.
