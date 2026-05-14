@@ -37,7 +37,11 @@ async def postgres_app_client(
     try:
         import transformation_portal.orchestrator.storage.postgres  # noqa: F401
     except ImportError:
-        pytest.skip("sqlalchemy[asyncio] not installed; skipping postgres")
+        pytest.fail(
+            f"{_POSTGRES_URL_ENV} is set, but sqlalchemy[asyncio]/asyncpg dependencies are unavailable. "
+            "Install the pinned base requirements before running the Postgres app authority contract.",
+            pytrace=False,
+        )
 
     monkeypatch.setenv("TP_ORCHESTRATOR_STATE_BACKEND", "postgres")
     monkeypatch.setenv("TP_DATABASE_URL", database_url)

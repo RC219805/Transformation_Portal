@@ -5253,6 +5253,40 @@ def test_overlay_runtime_state_preserves_terminal_cache_over_stale_active_record
     assert result.artifact_store_backend == "local"
 
 
+def test_overlay_runtime_state_preserves_terminal_cache_artifacts_when_active_record_is_empty() -> None:
+    cached_job = orchestrator_app.Job(
+        id="job_terminal_cached_artifacts",
+        created_at=100.0,
+        started_at=101.0,
+        finished_at=120.0,
+        done_published_at=121.0,
+        state="succeeded",
+        progress=100,
+        exit_code=0,
+        artifacts={"items": [{"path": "result.txt"}]},
+        artifact_lookup={"result.txt": Path("/tmp/cached-result.txt")},
+        artifact_store_mirrored=True,
+        artifact_store_backend="local",
+    )
+    cached_job.proc = SimpleNamespace(returncode=0)
+    record_job = orchestrator_app.Job(
+        id=cached_job.id,
+        created_at=100.0,
+        started_at=101.0,
+        state="running",
+        progress=80,
+    )
+
+    result = orchestrator_app._overlay_runtime_state(record_job, cached_job)
+
+    assert result is cached_job
+    assert result.state == "succeeded"
+    assert result.artifacts == {"items": [{"path": "result.txt"}]}
+    assert result.artifact_lookup == {"result.txt": Path("/tmp/cached-result.txt")}
+    assert result.artifact_store_mirrored is True
+    assert result.artifact_store_backend == "local"
+
+
 def test_cleanup_expired_upload_batches_skips_when_retained_scan_fails(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
