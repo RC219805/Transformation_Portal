@@ -15,8 +15,8 @@ Object layout on disk::
     {root}/{job_id}/{relative_path}
 
 where ``root`` defaults to ``$TP_ARTIFACT_LOCAL_ROOT`` (or
-``$XDG_STATE_HOME/transformation-portal/artifacts`` /
-``/tmp/transformation-portal-artifacts`` as platform fallbacks).
+``$XDG_STATE_HOME/transformation-portal/artifacts`` / the platform temp
+directory as fallbacks).
 Production ``app.py`` deployments will continue passing
 ``output_dir`` per-job; the local store accepts that as the
 canonical root override on construction.
@@ -28,6 +28,7 @@ import asyncio
 import hashlib
 import json
 import os
+import tempfile
 import threading
 import uuid
 from pathlib import Path, PurePosixPath
@@ -50,9 +51,18 @@ from transformation_portal.portal.job_artifacts import (  # noqa: PLC2701 - inte
 )
 
 _ARTIFACT_FINGERPRINT_CHUNK_BYTES = 1024 * 1024
-_DEFAULT_LOCAL_ROOT = "/tmp/transformation-portal-artifacts"
+_DEFAULT_LOCAL_ROOT_NAME = "transformation-portal-artifacts"
+_DEFAULT_STATE_ROOT_NAME = "transformation-portal"
+_DEFAULT_STATE_ARTIFACT_DIR_NAME = "artifacts"
 _CONTENT_TYPE_METADATA_DIR = ".artifact-store-metadata"
 _RESERVED_JOB_IDS = frozenset({_CONTENT_TYPE_METADATA_DIR})
+
+
+def _default_local_root() -> Path:
+    xdg_state_home = os.getenv("XDG_STATE_HOME", "").strip()
+    if xdg_state_home:
+        return Path(xdg_state_home).expanduser() / _DEFAULT_STATE_ROOT_NAME / _DEFAULT_STATE_ARTIFACT_DIR_NAME
+    return Path(tempfile.gettempdir()) / _DEFAULT_LOCAL_ROOT_NAME
 
 
 def _normalize_job_id(job_id: str) -> str:
@@ -110,7 +120,8 @@ class LocalArtifactStore(ArtifactStore):
 
     def __init__(self, root_dir: Optional[Path] = None) -> None:
         if root_dir is None:
-            root_dir = Path(os.getenv("TP_ARTIFACT_LOCAL_ROOT", _DEFAULT_LOCAL_ROOT)).expanduser()
+            root_env = os.getenv("TP_ARTIFACT_LOCAL_ROOT", "").strip()
+            root_dir = Path(root_env).expanduser() if root_env else _default_local_root()
         self._root = Path(os.path.realpath(root_dir))
         self._root.mkdir(parents=True, exist_ok=True)
         self._metadata_root = self._root / _CONTENT_TYPE_METADATA_DIR

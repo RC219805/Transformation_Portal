@@ -49,6 +49,7 @@ from transformation_portal.orchestrator.artifact_store import (
     ArtifactStore,
     ArtifactStoreError,
 )
+from transformation_portal.orchestrator.artifact_store import local as local_artifact_store_module
 from transformation_portal.orchestrator.artifact_store.local import LocalArtifactStore
 
 pytestmark = [pytest.mark.unit, pytest.mark.asyncio]
@@ -64,6 +65,57 @@ _BAD_JOB_IDS = [
     ".",
     "..",
 ]
+
+
+async def test_local_default_root_honors_explicit_env(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    configured_root = tmp_path / "configured-artifacts"
+    monkeypatch.setenv("TP_ARTIFACT_LOCAL_ROOT", str(configured_root))
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "ignored-state"))
+
+    store = LocalArtifactStore()
+
+    try:
+        assert store.root_dir == configured_root.resolve()
+    finally:
+        await store.reset()
+        await store.close()
+
+
+async def test_local_default_root_prefers_xdg_state_home(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    state_root = tmp_path / "state"
+    monkeypatch.delenv("TP_ARTIFACT_LOCAL_ROOT", raising=False)
+    monkeypatch.setenv("XDG_STATE_HOME", str(state_root))
+
+    store = LocalArtifactStore()
+
+    try:
+        assert store.root_dir == (state_root / "transformation-portal" / "artifacts").resolve()
+    finally:
+        await store.reset()
+        await store.close()
+
+
+async def test_local_default_root_uses_platform_tempdir(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.delenv("TP_ARTIFACT_LOCAL_ROOT", raising=False)
+    monkeypatch.delenv("XDG_STATE_HOME", raising=False)
+    monkeypatch.setattr(local_artifact_store_module.tempfile, "gettempdir", lambda: str(tmp_path))
+
+    store = LocalArtifactStore()
+
+    try:
+        assert store.root_dir == (tmp_path / "transformation-portal-artifacts").resolve()
+    finally:
+        await store.reset()
+        await store.close()
 
 
 def _have_moto() -> bool:

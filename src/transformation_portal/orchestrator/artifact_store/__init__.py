@@ -9,7 +9,8 @@ signed S3 delivery, retention metadata, and deletion.
 Supported backends:
 
 - ``local`` (default) — filesystem under ``TP_ARTIFACT_LOCAL_ROOT``
-  (default ``/tmp/transformation-portal-artifacts``).
+  (default ``$XDG_STATE_HOME/transformation-portal/artifacts`` when set,
+  otherwise the platform temp directory).
 - ``s3`` — requires ``TP_ARTIFACT_BUCKET``;
   ``TP_ARTIFACT_PREFIX`` (default ``tp/artifacts``) and
   ``TP_ARTIFACT_ENDPOINT_URL`` (MinIO / LocalStack / R2) are
