@@ -41,19 +41,19 @@ async function deleteKeysWithPrefix(client, prefix) {
 }
 
 function sessionRow(sessionId) {
-  const now = new Date();
+  const now = Date.now();
   return {
-    session_id: sessionId,
+    id: sessionId,
+    created_at: now,
+    last_seen_at: now,
+    idle_expires_at: now + 60_000,
+    absolute_expires_at: now + 120_000,
+    csrf_token: "csrf-token",
+    authenticated: 1,
     username: "operator",
     access_email: "operator@example.test",
     role: "admin",
-    created_at: now.toISOString(),
-    expires_at: new Date(now.getTime() + 60_000).toISOString(),
-    last_seen_at: now.toISOString(),
-    revoked_at: null,
-    csrf_token: "csrf-token",
-    user_agent: "node:test",
-    ip_hash: "ip-hash",
+    rotated_from: null,
   };
 }
 
@@ -62,8 +62,8 @@ test("RedisSessionStore live contract persists sessions and throttle state", asy
   const store = new RedisSessionStore({
     redisUrl: requireRedisUrl(),
     keyPrefix,
-    sessionTtlSeconds: 120,
-    loginAttemptTtlSeconds: 120,
+    idleTimeoutMs: 60_000,
+    absoluteTimeoutMs: 120_000,
   });
   const client = await store._client_();
 
@@ -74,31 +74,57 @@ test("RedisSessionStore live contract persists sessions and throttle state", asy
     await store.persistSession(sessionRow(sessionId));
 
     const persisted = await store.getRawSessionRow(sessionId);
-    assert.equal(persisted?.session_id, sessionId);
+    assert.equal(persisted?.id, sessionId);
     assert.equal(persisted?.username, "operator");
+    assert.equal(persisted?.authenticated, 1);
 
     const initialTtl = await client.pttl(`${keyPrefix}session:${sessionId}`);
     assert.ok(initialTtl > 0, "persisted session should have a Redis TTL");
 
-    const touchedAt = new Date(Date.now() + 1_000).toISOString();
-    const touched = await store.touchSession(sessionId, touchedAt);
-    assert.equal(touched, true);
+    const touchedAt = Date.now() + 1_000;
+    const idleExpiresAt = touchedAt + 60_000;
+    await store.touchSession(sessionId, touchedAt, idleExpiresAt);
     const touchedRow = await store.getRawSessionRow(sessionId);
     assert.equal(touchedRow?.last_seen_at, touchedAt);
+    assert.equal(touchedRow?.idle_expires_at, idleExpiresAt);
 
-    assert.equal(await store.countLoginFailures("operator"), 0);
-    await store.recordLoginAttempt({ throttle_key: "operator", success: false });
-    await store.recordLoginAttempt({ throttle_key: "operator", success: false });
-    assert.equal(await store.countLoginFailures("operator"), 2);
+    const attemptedAt = Date.now();
+    const sinceMs = attemptedAt - 60_000;
+    assert.equal(await store.countLoginFailures("operator", sinceMs), 0);
+    await store.recordLoginAttempt({
+      throttle_key: "operator",
+      attempted_at: attemptedAt - 1_000,
+      success: 0,
+      remote_addr: "127.0.0.1",
+    });
+    await store.recordLoginAttempt({
+      throttle_key: "operator",
+      attempted_at: attemptedAt - 500,
+      success: 0,
+      remote_addr: "127.0.0.1",
+    });
+    await store.recordLoginAttempt({
+      throttle_key: "operator",
+      attempted_at: attemptedAt - 70_000,
+      success: 0,
+      remote_addr: "127.0.0.1",
+    });
+    await store.recordLoginAttempt({
+      throttle_key: "operator",
+      attempted_at: attemptedAt,
+      success: 1,
+      remote_addr: "127.0.0.1",
+    });
+    assert.equal(await store.countLoginFailures("operator", sinceMs), 2);
     const throttleTtl = await client.pttl(`${keyPrefix}login:operator`);
     assert.ok(throttleTtl > 0, "login throttle counter should have a Redis TTL");
 
     await store.resetLoginAttempts("operator");
-    assert.equal(await store.countLoginFailures("operator"), 0);
+    assert.equal(await store.countLoginFailures("operator", sinceMs), 0);
 
-    const deleted = await store.deleteSession(sessionId);
-    assert.equal(deleted, true);
+    await store.deleteSession(sessionId);
     assert.equal(await store.getRawSessionRow(sessionId), null);
+    await store.deleteSession(sessionId);
   } finally {
     await deleteKeysWithPrefix(client, keyPrefix);
     await store.close();

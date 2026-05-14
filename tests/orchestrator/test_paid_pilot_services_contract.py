@@ -51,12 +51,16 @@ _EXPECTED_SELECTORS = {
     "TP_ARTIFACT_STORE": "s3",
 }
 
+_RUN_ENV = "TP_RUN_PAID_PILOT_SERVICES_CONTRACT"
+
 
 def _missing_env() -> list[str]:
     return [name for name in _REQUIRED_ENV if not os.getenv(name, "").strip()]
 
 
 def _require_paid_pilot_env() -> None:
+    if os.getenv(_RUN_ENV, "").strip() != "1":
+        pytest.skip(f"set {_RUN_ENV}=1 to run the paid-pilot managed-services smoke")
     missing = _missing_env()
     if missing:
         pytest.skip("paid-pilot managed-services smoke requires explicit service env; " f"missing: {', '.join(missing)}")

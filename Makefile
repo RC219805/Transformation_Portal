@@ -381,7 +381,7 @@ test-paid-pilot-services-contract:
 	@TP_ORCHESTRATOR_STATE_BACKEND=memory TP_ORCHESTRATOR_QUEUE_BACKEND=memory TP_ARTIFACT_STORE=local $(MAKE) test-worker-redis-contract
 	@$(MAKE) test-artifact-s3-contract
 	@$(MAKE) test-frontdoor-redis-contract
-	@"$(PY)" -m pytest -q tests/orchestrator/test_paid_pilot_services_contract.py -m unit
+	@TP_RUN_PAID_PILOT_SERVICES_CONTRACT=1 "$(PY)" -m pytest -q tests/orchestrator/test_paid_pilot_services_contract.py -m unit
 
 # Apply orchestrator schema migrations against TP_DATABASE_URL.
 db-upgrade:
