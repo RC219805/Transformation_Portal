@@ -38,6 +38,7 @@ from transformation_portal.orchestrator.queue import (
 from transformation_portal.orchestrator.queue.base import LeaseNotHeldError
 from transformation_portal.orchestrator.queue.memory import MemoryQueueBroker
 from transformation_portal.orchestrator.worker import (
+    RetryableExecutorUnavailable,
     WorkerConfig,
     WorkerRunner,
 )
@@ -332,6 +333,27 @@ async def test_worker_runner_step_processes_one_job(broker: QueueBroker) -> None
     did_work = await runner.step()
     assert did_work is True
     assert await broker.leased_job_ids() == []
+    assert await broker.queued_job_ids() == []
+
+
+async def test_worker_runner_retryable_executor_error_leaves_lease_for_reclaim(
+    broker: QueueBroker,
+) -> None:
+    await broker.enqueue(_request("job-worker-retry"))
+    config = WorkerConfig(
+        worker_id="worker-retryable",
+        lease_seconds=2.0,
+        heartbeat_interval_seconds=5.0,
+        poll_interval_seconds=0.05,
+    )
+
+    async def _unavailable(*_args: object) -> int:
+        raise RetryableExecutorUnavailable("repository unavailable")
+
+    runner = WorkerRunner(broker=broker, config=config, executor=_unavailable)
+    did_work = await runner.step()
+    assert did_work is True
+    assert await broker.leased_job_ids() == ["job-worker-retry"]
     assert await broker.queued_job_ids() == []
 
 

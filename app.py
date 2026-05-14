@@ -83,7 +83,7 @@ from transformation_portal.orchestrator.queue import (
     get_queue_broker,
 )
 from transformation_portal.orchestrator.recovery import sweep_orphaned_jobs
-from transformation_portal.orchestrator.worker import WorkerConfig, run_worker_forever
+from transformation_portal.orchestrator.worker import RetryableExecutorUnavailable, WorkerConfig, run_worker_forever
 from transformation_portal.portal import archive_index_preflight as _portal_archive_index_preflight
 from transformation_portal.portal import asset_bundle as _portal_asset_bundle
 from transformation_portal.portal import job_artifacts as _portal_job_artifacts
@@ -600,6 +600,8 @@ CLEANUP_INTERVAL_SECONDS = _env_int(
 JOB_CLEANUP_SCAN_LIMIT = 1000
 JOB_REQUEST_CLEANUP_MIN_INTERVAL_SECONDS = 30.0
 JOB_LAST_EVENT_FLUSH_INTERVAL_SECONDS = 5.0
+JOB_LOG_PERSIST_BATCH_SIZE = 25
+JOB_LOG_PERSIST_FLUSH_INTERVAL_SECONDS = 1.0
 CANCEL_GRACE_SECONDS = _env_float(
     "TP_CANCEL_GRACE_SECONDS",
     5.0,
@@ -1186,6 +1188,26 @@ def _overlay_runtime_state(job: Job, cached: Optional[Job]) -> Job:
     if cached is None:
         return job
     if cached.proc is not None and cached.proc.returncode is None:
+        # While the subprocess is alive, the runtime object owns volatile
+        # state/progress/log fields. Still refresh durable metadata that may
+        # be advanced by non-runner paths such as artifact delete/retention.
+        cached.artifacts = job.artifacts
+        cached.artifact_lookup = job.artifact_lookup
+        cached.artifact_store_mirrored = job.artifact_store_mirrored
+        cached.artifact_store_backend = job.artifact_store_backend
+        cached.run_summary = job.run_summary
+        if job.cancel_requested:
+            cached.cancel_requested = True
+        if job.error is not None:
+            cached.error = job.error
+        if job.finished_at is not None or job.state in _TERMINAL_JOB_STATES:
+            cached.started_at = job.started_at
+            cached.finished_at = job.finished_at
+            cached.done_published_at = job.done_published_at
+            cached.last_event_at = job.last_event_at
+            cached.state = job.state
+            cached.progress = job.progress
+            cached.exit_code = job.exit_code
         return cached
     proc = cached.proc
     terminate_task = cached.terminate_task
@@ -2963,6 +2985,10 @@ async def _cleanup_expired_jobs(
         _LAST_REQUEST_JOB_CLEANUP_AT = now
 
     try:
+        # Request-path cleanup is deliberately best-effort and bounded so a
+        # read/create request cannot turn into an unbounded table scan. The
+        # periodic cleanup loop calls this with ``scan_limit=None`` and is the
+        # durable reclamation guarantee for rows outside this first page.
         records, _ = await _job_repository().list(limit=scan_limit)
     except Exception:  # noqa: BLE001 - cleanup must not break request handling
         LOGGER.exception("job repository cleanup scan failed")
@@ -3122,6 +3148,9 @@ async def _cleanup_expired_job_artifacts(
     scan_limit: Optional[int] = JOB_CLEANUP_SCAN_LIMIT,
 ) -> None:
     try:
+        # Bounded request-path sweeps are only opportunistic. The periodic
+        # cleanup loop invokes this with ``scan_limit=None`` so old artifact
+        # rows are not permanently starved by repository ordering.
         records, _ = await _job_repository().list(limit=scan_limit)
     except Exception:  # noqa: BLE001 - cleanup must not break request handling
         LOGGER.exception("job artifact retention scan failed")
@@ -6363,7 +6392,8 @@ async def _terminate_process(
 async def _request_cancel(job: Job) -> None:
     already_requested = job.cancel_requested
     job.cancel_requested = True
-    await _persist_job_fields(job, cancel_requested=True)
+    if not already_requested:
+        await _persist_job_fields(job, cancel_requested=True)
 
     # Broker-mediated cancel (Phases 2.C/2.E). Route through
     # ``broker.cancel`` so:
@@ -9975,8 +10005,17 @@ async def _job_events(
             subscribers_for_job = EVENT_SUBSCRIBERS.get(job_id)
             if subscribers_for_job is not None:
                 subscribers_for_job.pop(subscriber_id, None)
-                if not subscribers_for_job and job.finished_at is not None:
-                    EVENT_SUBSCRIBERS.pop(job_id, None)
+                if not subscribers_for_job:
+                    finished = job.finished_at is not None
+                    cached = JOBS.get(job_id)
+                    if cached is not None and cached.finished_at is not None:
+                        finished = True
+                    if not finished:
+                        with suppress(Exception):
+                            current = await _load_job_record(job_id)
+                            finished = current is None or current.finished_at is not None
+                    if finished:
+                        EVENT_SUBSCRIBERS.pop(job_id, None)
 
     return StreamingResponse(
         gen(),
@@ -10092,7 +10131,7 @@ async def _orchestrator_job_executor(
         job = await _load_job_view(request.job_id)
     except _JobRepositoryUnavailable:
         LOGGER.exception("worker could not load job_id=%s from repository", request.job_id)
-        return 1
+        raise RetryableExecutorUnavailable(request.job_id)
     if job is None:
         LOGGER.warning("worker leased unknown job_id=%s; releasing without dispatch", request.job_id)
         return 0
@@ -10289,6 +10328,21 @@ async def _run_job(job: Job, argv: List[str]) -> None:
         {"id": job.id, "state": job.state},
     )
 
+    pending_log_lines: List[str] = []
+    last_log_flush_at = _now()
+
+    async def _flush_log_batch() -> None:
+        nonlocal last_log_flush_at
+        if not pending_log_lines:
+            return
+        batch = list(pending_log_lines)
+        pending_log_lines.clear()
+        last_log_flush_at = _now()
+        try:
+            await _job_repository().append_logs(job.id, batch, tail_limit=LOG_TAIL_LIMIT)
+        except Exception:  # noqa: BLE001 - keep the runner moving if log persistence lags
+            LOGGER.exception("job repository append_logs failed for %s", job.id)
+
     try:
         # NO SHELL EXECUTION.
         spawn_kwargs: Dict[str, Any] = {
@@ -10322,10 +10376,12 @@ async def _run_job(job: Job, argv: List[str]) -> None:
             ).rstrip("\n")
             line = _redact_log_line(line)
             job.add_log(line)
-            try:
-                await _job_repository().append_log(job.id, line, tail_limit=LOG_TAIL_LIMIT)
-            except Exception:  # noqa: BLE001 - keep the runner moving if log persistence lags
-                LOGGER.exception("job repository append_log failed for %s", job.id)
+            pending_log_lines.append(line)
+            if (
+                len(pending_log_lines) >= JOB_LOG_PERSIST_BATCH_SIZE
+                or _now() - last_log_flush_at >= JOB_LOG_PERSIST_FLUSH_INTERVAL_SECONDS
+            ):
+                await _flush_log_batch()
             await _publish_event(
                 job.id,
                 "log",
@@ -10342,6 +10398,7 @@ async def _run_job(job: Job, argv: List[str]) -> None:
                     {"id": job.id, "progress": job.progress},
                 )
 
+        await _flush_log_batch()
         rc = await proc.wait()
         job.exit_code = int(rc)
         if job.cancel_requested:
@@ -10373,7 +10430,7 @@ async def _run_job(job: Job, argv: List[str]) -> None:
         msg = f"runner_error: {job.error['message']}"
         job.add_log(msg)
         with suppress(Exception):
-            await _job_repository().append_log(job.id, msg, tail_limit=LOG_TAIL_LIMIT)
+            await _job_repository().append_logs(job.id, [msg], tail_limit=LOG_TAIL_LIMIT)
         await _persist_job_fields(job, state=job.state, exit_code=job.exit_code, error=job.error, logs_tail=job.logs_tail)
         await _publish_event(
             job.id,
@@ -10385,6 +10442,7 @@ async def _run_job(job: Job, argv: List[str]) -> None:
             "Unhandled runner exception for job %s",
             job.id,
         )
+        await _flush_log_batch()
         job.state = "failed"
         job.exit_code = 1
         job.error = _error_obj(
@@ -10396,7 +10454,7 @@ async def _run_job(job: Job, argv: List[str]) -> None:
         msg = "runner_error: unexpected runner failure"
         job.add_log(msg)
         with suppress(Exception):
-            await _job_repository().append_log(job.id, msg, tail_limit=LOG_TAIL_LIMIT)
+            await _job_repository().append_logs(job.id, [msg], tail_limit=LOG_TAIL_LIMIT)
         await _persist_job_fields(job, state=job.state, exit_code=job.exit_code, error=job.error, logs_tail=job.logs_tail)
         await _publish_event(
             job.id,
@@ -10404,6 +10462,8 @@ async def _run_job(job: Job, argv: List[str]) -> None:
             {"id": job.id, "line": msg},
         )
     finally:
+        with suppress(Exception):
+            await _flush_log_batch()
         if job.terminate_task is not None:
             try:
                 await job.terminate_task

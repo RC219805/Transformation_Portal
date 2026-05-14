@@ -4935,6 +4935,48 @@ def test_run_job_is_async_and_does_not_block_event_loop() -> None:
     asyncio.run(scenario())
 
 
+def test_run_job_persists_logs_in_batches(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def scenario() -> None:
+        from transformation_portal.orchestrator.storage.memory import MemoryJobRepository
+
+        repo = MemoryJobRepository()
+        batches: list[list[str]] = []
+
+        async def append_log(*_args: object, **_kwargs: object) -> None:
+            raise AssertionError("_run_job should persist runner stdout through append_logs")
+
+        original_append_logs = repo.append_logs
+
+        async def append_logs(job_id: str, lines: list[str], *, tail_limit: int) -> None:
+            batches.append(list(lines))
+            await original_append_logs(job_id, lines, tail_limit=tail_limit)
+
+        monkeypatch.setattr(repo, "append_log", append_log)
+        monkeypatch.setattr(repo, "append_logs", append_logs)
+        monkeypatch.setattr(orchestrator_app, "_job_repository", lambda: repo)
+
+        job = orchestrator_app.Job(id="job_log_batch", created_at=orchestrator_app._now())
+        await repo.create(orchestrator_app._record_from_job(job))
+
+        await orchestrator_app._run_job(
+            job,
+            [
+                sys.executable,
+                "-u",
+                "-c",
+                "for i in range(60): print(f'line-{i}', flush=True)",
+            ],
+        )
+
+        fetched = await repo.get(job.id)
+        assert fetched is not None
+        assert fetched.logs_tail[-2:] == ["line-58", "line-59"]
+        assert len(batches) < 60
+        assert all(batches)
+
+    asyncio.run(scenario())
+
+
 def test_cancel_request_terminates_running_job() -> None:
     async def scenario() -> None:
         job = orchestrator_app.Job(id="job_cancel", created_at=orchestrator_app._now())
@@ -5068,6 +5110,8 @@ def test_overlay_runtime_state_preserves_live_cached_job() -> None:
         created_at=90.0,
         state="queued",
         progress=5,
+        artifacts={"lifecycle": {"mirror_status": "mirrored"}},
+        artifact_store_mirrored=True,
     )
 
     result = orchestrator_app._overlay_runtime_state(record_job, cached_job)
@@ -5075,6 +5119,8 @@ def test_overlay_runtime_state_preserves_live_cached_job() -> None:
     assert result is cached_job
     assert result.state == "running"
     assert result.progress == 75
+    assert result.artifacts == {"lifecycle": {"mirror_status": "mirrored"}}
+    assert result.artifact_store_mirrored is True
 
 
 def test_cleanup_expired_upload_batches_skips_when_retained_scan_fails(

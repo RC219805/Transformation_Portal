@@ -21,7 +21,7 @@ import asyncio
 import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Any, AsyncIterator, Dict, List, Optional, Tuple
+from typing import Any, AsyncIterator, Dict, Iterable, List, Optional, Tuple
 
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.exc import IntegrityError
@@ -258,6 +258,14 @@ class PostgresJobRepository(JobRepository):
     async def append_log(self, job_id: str, line: str, *, tail_limit: int) -> None:
         if tail_limit <= 0:
             raise RepositoryError("tail_limit must be positive")
+        await self.append_logs(job_id, [line], tail_limit=tail_limit)
+
+    async def append_logs(self, job_id: str, lines: Iterable[str], *, tail_limit: int) -> None:
+        if tail_limit <= 0:
+            raise RepositoryError("tail_limit must be positive")
+        batch = list(lines)
+        if not batch:
+            return
         for attempt in range(_OPTIMISTIC_LOCK_RETRIES):
             async with self._session() as session:
                 model = await session.get(JobModel, job_id)
@@ -265,7 +273,7 @@ class PostgresJobRepository(JobRepository):
                     raise JobNotFoundError(job_id)
                 current_version = model.version
                 tail = list(model.logs_tail or [])
-                tail.append(line)
+                tail.extend(batch)
                 if len(tail) > tail_limit:
                     tail = tail[-tail_limit:]
                 stmt = (
