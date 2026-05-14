@@ -12,6 +12,19 @@ from typing import Any, Callable
 
 logger = logging.getLogger(__name__)
 
+# Optional FastAPI import. These names must be resolvable at module scope:
+# `from __future__ import annotations` defers annotation evaluation, so
+# FastAPI resolves endpoint annotations (e.g. ``BackgroundTasks``) against
+# the module globals rather than any function-local import.
+try:
+    from fastapi import APIRouter, BackgroundTasks
+
+    FASTAPI_AVAILABLE = True
+except ImportError:  # pragma: no cover - exercised only without FastAPI installed
+    FASTAPI_AVAILABLE = False
+    APIRouter = None
+    BackgroundTasks = None
+
 
 @dataclass
 class OptimizationJobState:
@@ -164,9 +177,7 @@ def create_optimization_router():
     Returns:
         APIRouter with optimization endpoints
     """
-    try:
-        from fastapi import APIRouter, BackgroundTasks
-    except ImportError:
+    if not FASTAPI_AVAILABLE:
         logger.warning("FastAPI not available, optimization API disabled")
         return None
 
