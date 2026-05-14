@@ -117,6 +117,10 @@ docker compose up -d postgres
 make db-upgrade
 TP_TEST_POSTGRES_URL=postgresql+asyncpg://tp:tp_dev_password@127.0.0.1:5432/transformation_portal \
   make test-orchestrator-postgres-contract
+
+# Postgres-backed app route authority smoke (manual/opt-in).
+TP_TEST_POSTGRES_URL=postgresql+asyncpg://tp:tp_dev_password@127.0.0.1:5432/transformation_portal \
+  make test-orchestrator-postgres-app-contract
 ```
 
 `tests/orchestrator/conftest.py` auto-skips the Postgres branch when
@@ -132,6 +136,7 @@ TP_TEST_POSTGRES_URL=postgresql+asyncpg://tp:tp_dev_password@127.0.0.1:5432/tran
 | Backups | Out of scope for Phase 1.B; document in the provider's runbook. The orchestrator never assumes durability beyond commit. |
 | Schema changes | Always go through Alembic and `make db-revision` so the migration graph stays linear. |
 | Secret rotation | `TP_DATABASE_URL` is read once at engine construction; a rotation requires a process restart. The restart sweeper (Phase 1.C, follow-up) will mark any orphaned `running` jobs `failed` with `error.code = worker_lost_on_restart`. |
+| Repository unavailable recovery | `JOB_REPOSITORY_UNAVAILABLE` is fail-closed and redacted. If it appears after fixing `TP_DATABASE_URL`, restart the backend process because repository construction failure is latched in process state. |
 
 ## Known limits in this layer
 

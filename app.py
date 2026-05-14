@@ -1185,6 +1185,10 @@ def _job_from_record(record: JobRecord) -> Job:
     )
 
 
+def _has_durable_artifact_metadata(job: Job) -> bool:
+    return bool(job.artifacts) or bool(job.artifact_lookup)
+
+
 def _overlay_runtime_state(job: Job, cached: Optional[Job]) -> Job:
     if cached is None:
         return job
@@ -1209,6 +1213,22 @@ def _overlay_runtime_state(job: Job, cached: Optional[Job]) -> Job:
             cached.state = job.state
             cached.progress = job.progress
             cached.exit_code = job.exit_code
+        return cached
+    cached_is_terminal = cached.finished_at is not None or cached.state in _TERMINAL_JOB_STATES
+    durable_is_terminal = job.finished_at is not None or job.state in _TERMINAL_JOB_STATES
+    if cached_is_terminal and not durable_is_terminal:
+        # A terminal runtime cache means the local runner already finished,
+        # but its final repository persist may have failed or lagged. Keep
+        # the terminal view so list/detail do not regress to stale active
+        # durable state; still accept durable artifact metadata from other
+        # paths that may have advanced after completion.
+        if _has_durable_artifact_metadata(job):
+            cached.artifacts = job.artifacts
+            cached.artifact_lookup = job.artifact_lookup
+            cached.artifact_store_mirrored = job.artifact_store_mirrored
+            cached.artifact_store_backend = job.artifact_store_backend
+        if job.cancel_requested:
+            cached.cancel_requested = True
         return cached
     proc = cached.proc
     terminate_task = cached.terminate_task

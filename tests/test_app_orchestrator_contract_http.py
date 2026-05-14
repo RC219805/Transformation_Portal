@@ -14,6 +14,7 @@ import os
 import re
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any, Callable, Dict, List, Tuple
 from urllib.parse import parse_qs, urlparse
 
@@ -2896,6 +2897,45 @@ def test_cancel_reads_repository_state_after_runtime_cache_clear(client: TestCli
     record = asyncio.run(orchestrator_app._job_repository().get(job.id))
     assert record is not None
     assert record.cancel_requested is True
+
+
+def test_detail_and_list_preserve_terminal_runtime_overlay_when_repository_lags(client: TestClient) -> None:
+    job = orchestrator_app.Job(
+        id="job_terminal_overlay_http",
+        created_at=orchestrator_app._now(),
+        started_at=orchestrator_app._now(),
+        state="running",
+        progress=70,
+        request={"pipeline": "lux-depth-v3"},
+    )
+    _seed_job(job)
+    cached_job = orchestrator_app.Job(
+        id=job.id,
+        created_at=job.created_at,
+        started_at=job.started_at,
+        finished_at=orchestrator_app._now(),
+        done_published_at=orchestrator_app._now(),
+        last_event_at=orchestrator_app._now(),
+        state="succeeded",
+        progress=100,
+        exit_code=0,
+        request=job.request,
+        logs_tail=["finished locally"],
+    )
+    cached_job.proc = SimpleNamespace(returncode=0)
+    orchestrator_app.JOBS[job.id] = cached_job
+
+    detail_response = client.get(f"/v1/jobs/{job.id}")
+    list_response = client.get("/v1/jobs")
+
+    assert detail_response.status_code == 200
+    assert detail_response.json()["data"]["state"] == "succeeded"
+    assert detail_response.json()["data"]["progress"] == 100
+    assert list_response.status_code == 200
+    listed = list_response.json()["data"]["jobs"][0]
+    assert listed["id"] == job.id
+    assert listed["state"] == "succeeded"
+    assert listed["progress"] == 100
 
 
 def test_job_routes_fail_closed_when_repository_is_unavailable(
