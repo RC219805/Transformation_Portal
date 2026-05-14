@@ -370,6 +370,11 @@ def create_experiment_router() -> "APIRouter":
         except sqlite3.IntegrityError:
             raise HTTPException(status_code=400, detail=f"Experiment '{name}' already exists")
 
+    @router.get("/ui", response_class=HTMLResponse)
+    async def experiments_ui():
+        """Serve the experiments UI."""
+        return get_experiments_html()
+
     @router.get("/{experiment_id}")
     async def api_get_experiment(experiment_id: int):
         """Get experiment details."""
@@ -453,11 +458,6 @@ def create_experiment_router() -> "APIRouter":
 
         complete_run(run_id, status)
         return JSONResponse({"status": "ok"})
-
-    @router.get("/ui", response_class=HTMLResponse)
-    async def experiments_ui():
-        """Serve the experiments UI."""
-        return get_experiments_html()
 
     return router
 
