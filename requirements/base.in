@@ -41,3 +41,9 @@ alembic>=1.13,<2                # schema migration tool for the orchestrator job
 # The client is always installed so the contract test suite and the
 # RedisQueueBroker module load without an optional-extra dance.
 redis>=5.0,<7                   # asyncio Redis client for RedisQueueBroker
+
+# Artifact store backend (Phase 4.A). Filesystem backend remains default;
+# S3 activates when TP_ARTIFACT_STORE=s3 and TP_ARTIFACT_BUCKET is set.
+# boto3 is still imported lazily inside S3ArtifactStore so the local lane
+# pays no import cost at orchestrator start-up.
+boto3>=1.34,<2                  # S3 client for S3ArtifactStore (lazy-loaded)

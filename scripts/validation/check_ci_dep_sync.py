@@ -26,15 +26,15 @@ from pathlib import Path
 # CONFIGURATION: Canonical lists maintained here as the single source of truth
 # ============================================================================
 
-# Packages that are test runners/frameworks (should be in dev.in, NOT ci.in)
-# Pattern matches exact names: pytest, httpx, hypothesis, or any pytest-* plugin
+# Packages that are test runners/frameworks (should be in dev.in/root CI, NOT ci.in).
+# Pattern matches exact names: pytest, httpx, hypothesis, or any pytest-* plugin.
 TEST_RUNNER_PATTERN = re.compile(r"^(pytest|pytest-.+|httpx|hypothesis)$")
 
 # CI pipeline tools (should be in ci.in, NOT root requirements-ci.txt)
 # These are security/packaging/release tools, not test runners
 CI_TOOLS = frozenset({"bandit", "safety", "build", "twine", "tox", "pypdf"})
 
-# Core test framework packages that MUST be in both root requirements-ci.txt
+# Core test support packages that MUST be in both root requirements-ci.txt
 # AND requirements/dev.in to ensure sync. This is a contract.
 # Update this set when adding new core test dependencies.
 CORE_TEST_DEPS = frozenset({
@@ -45,6 +45,7 @@ CORE_TEST_DEPS = frozenset({
     "pytest-xdist",
     "hypothesis",
     "httpx",
+    "moto",
 })
 
 
@@ -89,12 +90,11 @@ def main() -> int:
     nested_dev_packages = extract_packages(nested_dev_in)
 
     # Check 1: Test runner deps should NOT be in nested ci.in (they belong in dev.in or root)
-    test_deps_in_nested_ci = {
-        p for p in nested_ci_packages if TEST_RUNNER_PATTERN.match(p)
-    }
+    test_deps_in_nested_ci = {p for p in nested_ci_packages if TEST_RUNNER_PATTERN.match(p)}
+    test_deps_in_nested_ci |= nested_ci_packages & CORE_TEST_DEPS
     if test_deps_in_nested_ci:
         errors.append(
-            f"ERROR: Test runner deps found in requirements/ci.in (should be in dev.in):\n"
+            f"ERROR: Test deps found in requirements/ci.in (should be in dev.in/root CI):\n"
             f"       {sorted(test_deps_in_nested_ci)}"
         )
 
@@ -107,12 +107,17 @@ def main() -> int:
             f"       {sorted(ci_tools_in_root)}"
         )
 
-    # Check 3: Core test deps in root should also be in dev.in (sync requirement)
+    # Check 3: Core test deps must be in both root CI and dev.in (sync requirement)
     # Uses CORE_TEST_DEPS as the canonical contract
-    root_test_deps = root_ci_packages & CORE_TEST_DEPS
-    dev_test_deps = nested_dev_packages & CORE_TEST_DEPS
+    missing_in_root = CORE_TEST_DEPS - root_ci_packages
+    if missing_in_root:
+        errors.append(
+            f"ERROR: Core test deps missing from requirements-ci.txt:\n"
+            f"       {sorted(missing_in_root)}\n"
+            f"       Add these to requirements-ci.txt so lean CI runs exercise the full test contract."
+        )
 
-    missing_in_dev = root_test_deps - dev_test_deps
+    missing_in_dev = CORE_TEST_DEPS - nested_dev_packages
     if missing_in_dev:
         errors.append(
             f"ERROR: Test deps in requirements-ci.txt missing from requirements/dev.in:\n"

@@ -32,6 +32,7 @@ dependencies = [
     "PyYAML>=6.0,<7",  # required for APEX pipeline config parsing
     "pydantic>=2.0,<3",  # required for ingest contract schema validation
     "jsonschema>=4.21.0,<5",  # required for deterministic contract surface validation
+    "boto3>=1.34,<2",  # required for TP_ARTIFACT_STORE=s3 ArtifactStore runtime
 ]
 classifiers = [
     "Programming Language :: Python :: 3",
@@ -119,6 +120,7 @@ dev = [
     "hypothesis>=6.0,<7",
     "jsonschema>=4.21.0,<5",  # required for machine-mode contract schema validation tests
     "cryptography>=46.0,<48",  # required for Phase 3.1 signing CLI tests
+    "moto[s3]>=5.0,<6",  # required for moto-backed S3 ArtifactStore contract tests
     "mypy>=1.10",
     "flake8>=7.0",
     "pylint>=3.0",

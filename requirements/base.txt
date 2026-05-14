@@ -34,6 +34,15 @@ attrs==26.1.0
     #   -c all.txt
     #   jsonschema
     #   referencing
+boto3==1.43.7
+    # via
+    #   -c all.txt
+    #   -r base.in
+botocore==1.43.7
+    # via
+    #   -c all.txt
+    #   boto3
+    #   s3transfer
 click==8.3.2
     # via
     #   -c all.txt
@@ -59,6 +68,11 @@ imagecodecs==2026.3.6
     # via
     #   -c all.txt
     #   -r base.in
+jmespath==1.1.0
+    # via
+    #   -c all.txt
+    #   boto3
+    #   botocore
 joblib==1.5.3
     # via
     #   -c all.txt
@@ -120,6 +134,10 @@ pygments==2.20.0
     # via
     #   -c all.txt
     #   rich
+python-dateutil==2.9.0.post0
+    # via
+    #   -c all.txt
+    #   botocore
 redis==6.4.0
     # via
     #   -c all.txt
@@ -138,6 +156,10 @@ rpds-py==0.30.0
     #   -c all.txt
     #   jsonschema
     #   referencing
+s3transfer==0.17.0
+    # via
+    #   -c all.txt
+    #   boto3
 scikit-learn==1.8.0
     # via
     #   -c all.txt
@@ -151,6 +173,10 @@ shellingham==1.5.4
     # via
     #   -c all.txt
     #   typer
+six==1.17.0
+    # via
+    #   -c all.txt
+    #   python-dateutil
 sqlalchemy[asyncio]==2.0.49
     # via
     #   -c all.txt
@@ -195,6 +221,10 @@ typing-inspection==0.4.2
     #   -c all.txt
     #   fastapi
     #   pydantic
+urllib3==2.7.0
+    # via
+    #   -c all.txt
+    #   botocore
 uvicorn==0.46.0
     # via
     #   -c all.txt

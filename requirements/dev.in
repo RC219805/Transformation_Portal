@@ -15,6 +15,7 @@ httpx>=0.28,<1  # required for FastAPI/Starlette TestClient in HTTP contract tes
 hypothesis>=6.0,<7
 jsonschema>=4.21.0,<5  # required for machine-mode contract schema validation tests
 cryptography==47.0.0  # CAS determinism + Security: CVE-2024-0727 / GHSA-9v9h-cgj8-h64p fixed
+moto[s3]>=5.0,<6  # S3 mock for the Phase 4.A S3ArtifactStore contract test branch
 
 # Type checking and linting
 mypy>=1.10

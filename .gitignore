@@ -308,7 +308,7 @@ INVESTIGATE
 # -----------------------------------------------------------------------------
 # PDF ingest / extraction artifacts (generated)
 # -----------------------------------------------------------------------------
-artifact_store/
+/artifact_store/
 picacho_architectural/
 picacho_construction/
 *.xlsx

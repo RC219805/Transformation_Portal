@@ -22,6 +22,7 @@ diff-cover>=10.2.0,<11  # diff coverage for local PR validation
 hypothesis>=6,<7
 jsonschema>=4.23,<5
 httpx>=0.28,<1  # required for FastAPI/Starlette TestClient in HTTP contract tests
+moto[s3]>=5.0,<6  # required for moto-backed S3 ArtifactStore contract tests
 
 # Required for RAG system and workflow tests
 PyYAML>=6.0,<7

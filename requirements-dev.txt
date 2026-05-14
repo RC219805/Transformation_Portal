@@ -16,6 +16,9 @@ httpx>=0.28,<1
 # Optional Phase 3.1 detached signing support (tools + tests)
 cryptography>=46.0,<48
 
+# S3 mock for the Phase 4.A ArtifactStore contract tests
+moto[s3]>=5.0,<6
+
 # Linters, formatters, type checkers
 mypy>=1.10
 flake8>=7

@@ -25,11 +25,22 @@ black==26.3.1
     # via
     #   -c all.txt
     #   -r dev.in
+boto3==1.43.7
+    # via
+    #   -c all.txt
+    #   moto
+botocore==1.43.7
+    # via
+    #   -c all.txt
+    #   boto3
+    #   moto
+    #   s3transfer
 certifi==2026.2.25
     # via
     #   -c all.txt
     #   httpcore
     #   httpx
+    #   requests
 cffi==2.0.0
     # via
     #   -c all.txt
@@ -42,6 +53,10 @@ chardet==7.4.3
     # via
     #   -c all.txt
     #   diff-cover
+charset-normalizer==3.4.7
+    # via
+    #   -c all.txt
+    #   requests
 click==8.3.2
     # via
     #   -c all.txt
@@ -54,6 +69,7 @@ cryptography==47.0.0
     # via
     #   -c all.txt
     #   -r dev.in
+    #   moto
 diff-cover==10.2.0
     # via
     #   -c all.txt
@@ -104,6 +120,7 @@ idna==3.11
     #   -c all.txt
     #   anyio
     #   httpx
+    #   requests
 iniconfig==2.3.0
     # via
     #   -c all.txt
@@ -117,6 +134,11 @@ jinja2==3.1.6
     # via
     #   -c all.txt
     #   diff-cover
+jmespath==1.1.0
+    # via
+    #   -c all.txt
+    #   boto3
+    #   botocore
 jsonschema==4.26.0
     # via
     #   -c all.txt
@@ -137,11 +159,16 @@ markupsafe==3.0.3
     # via
     #   -c all.txt
     #   jinja2
+    #   werkzeug
 mccabe==0.7.0
     # via
     #   -c all.txt
     #   flake8
     #   pylint
+moto[s3]==5.2.1
+    # via
+    #   -c all.txt
+    #   -r dev.in
 mypy==1.20.2
     # via
     #   -c all.txt
@@ -183,6 +210,10 @@ pre-commit==4.6.0
     # via
     #   -c all.txt
     #   -r dev.in
+py-partiql-parser==0.6.3
+    # via
+    #   -c all.txt
+    #   moto
 pycodestyle==2.14.0
     # via
     #   -c all.txt
@@ -239,6 +270,10 @@ pytest-xdist==3.8.0
     # via
     #   -c all.txt
     #   -r dev.in
+python-dateutil==2.9.0.post0
+    # via
+    #   -c all.txt
+    #   botocore
 python-discovery==1.2.2
     # via
     #   -c all.txt
@@ -251,17 +286,36 @@ pyyaml==6.0.3
     # via
     #   -c all.txt
     #   libcst
+    #   moto
     #   pre-commit
+    #   responses
 referencing==0.37.0
     # via
     #   -c all.txt
     #   jsonschema
     #   jsonschema-specifications
+requests==2.33.1
+    # via
+    #   -c all.txt
+    #   moto
+    #   responses
+responses==0.26.0
+    # via
+    #   -c all.txt
+    #   moto
 rpds-py==0.30.0
     # via
     #   -c all.txt
     #   jsonschema
     #   referencing
+s3transfer==0.17.0
+    # via
+    #   -c all.txt
+    #   boto3
+six==1.17.0
+    # via
+    #   -c all.txt
+    #   python-dateutil
 sortedcontainers==2.4.0
     # via
     #   -c all.txt
@@ -281,7 +335,21 @@ typing-extensions==4.15.0
     #   mypy
     #   pytest-asyncio
     #   referencing
+urllib3==2.7.0
+    # via
+    #   -c all.txt
+    #   botocore
+    #   requests
+    #   responses
 virtualenv==21.2.1
     # via
     #   -c all.txt
     #   pre-commit
+werkzeug==3.1.8
+    # via
+    #   -c all.txt
+    #   moto
+xmltodict==1.0.4
+    # via
+    #   -c all.txt
+    #   moto
