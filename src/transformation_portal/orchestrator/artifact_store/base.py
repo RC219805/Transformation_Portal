@@ -12,12 +12,16 @@ workflow.
 The contract pins the four pre-Phase-4 guarantees the gap doc calls
 out so any S3 / managed-object backend must preserve them:
 
-- Path-traversal validation (``..`` / absolute paths rejected,
-  resolved paths confined to the job output prefix).
+- Path-traversal validation (``job_id`` must be one safe component;
+  ``relative_path`` rejects ``..`` / absolute paths; resolved paths are
+  confined to the job output prefix).
 - SHA-256 fingerprinting per artifact, bounded to
   ``ARTIFACT_FINGERPRINT_MAX_BYTES`` and reported via
   ``fingerprint_status`` ("ok", "skipped_size", "unavailable").
-- Content-type detection from the file extension + magic bytes.
+- Content-type metadata is backend-consistent: inferred from the
+  artifact path by default, and explicit ``write_bytes(...,
+  content_type=...)`` values are returned by subsequent ``head`` and
+  ``list_for_job`` calls.
 - Deterministic Merkle root via
   ``transformation_portal.lux_depth_v3.artifact_manager.compute_artifact_merkle_root``
   (sort by ``relative_path``, concat sha256 bytes, sha256 the

@@ -29,35 +29,34 @@ Implementation notes:
   Phase 4.B serve the artifact with the correct type without an
   ``out-of-band`` ``HeadObject`` lookup.
 
-The dependency hook in ``base.in`` is intentionally additive: the
-module imports nothing eagerly, so ``boto3`` only needs to be
-installed in deployments that set ``TP_ARTIFACT_STORE=s3``.
+The runtime dependency is part of the base package metadata and
+lockfiles, but the module imports nothing eagerly, so local
+deployments do not pay S3 client construction cost unless they set
+``TP_ARTIFACT_STORE=s3``.
 """
 
 from __future__ import annotations
 
 import asyncio
 import hashlib
-import mimetypes
+from pathlib import Path
 from typing import Any, AsyncIterator, List, Optional
 
 from transformation_portal.orchestrator.artifact_store.base import (
     ArtifactNotFoundError,
     ArtifactObjectMetadata,
-    ArtifactPathValidationError,
     ArtifactStore,
     ArtifactStoreError,
 )
-from transformation_portal.orchestrator.artifact_store.local import _normalize_relative_path
-from transformation_portal.portal.job_artifacts import ARTIFACT_FINGERPRINT_MAX_BYTES
+from transformation_portal.orchestrator.artifact_store.local import _normalize_job_id, _normalize_relative_path
+from transformation_portal.portal.job_artifacts import ARTIFACT_FINGERPRINT_MAX_BYTES, _artifact_content_type
 
 _CHUNK_BYTES = 1024 * 1024
 _DEFAULT_PREFIX = "tp/artifacts"
 
 
 def _content_type_for(relative_path: str) -> str:
-    guessed, _ = mimetypes.guess_type(relative_path)
-    return guessed or "application/octet-stream"
+    return _artifact_content_type(Path(relative_path))
 
 
 def _load_boto3() -> Any:
@@ -127,17 +126,16 @@ class S3ArtifactStore(ArtifactStore):
             return self._client
 
     def _job_prefix(self, job_id: str) -> str:
-        if not job_id:
-            raise ArtifactPathValidationError("empty_job_id")
-        return f"{self._prefix}/jobs/{job_id}"
+        normalized_job_id = _normalize_job_id(job_id)
+        return f"{self._prefix}/jobs/{normalized_job_id}"
 
     def _object_key(self, job_id: str, relative_path: str) -> str:
         normalized = _normalize_relative_path(relative_path)
         return f"{self._job_prefix(job_id)}/{normalized}"
 
     async def head(self, job_id: str, relative_path: str) -> ArtifactObjectMetadata:
-        client = await self._get_client()
         key = self._object_key(job_id, relative_path)
+        client = await self._get_client()
         try:
             head = await asyncio.to_thread(client.head_object, Bucket=self._bucket, Key=key)
         except Exception as exc:  # noqa: BLE001 - boto3 ClientError surfaces here
@@ -170,8 +168,8 @@ class S3ArtifactStore(ArtifactStore):
         job_id: str,
         relative_path: str,
     ) -> AsyncIterator[bytes]:
-        client = await self._get_client()
         key = self._object_key(job_id, relative_path)
+        client = await self._get_client()
         try:
             response = await asyncio.to_thread(client.get_object, Bucket=self._bucket, Key=key)
         except Exception as exc:  # noqa: BLE001 - boto3 ClientError
@@ -196,8 +194,8 @@ class S3ArtifactStore(ArtifactStore):
         return _stream()
 
     async def list_for_job(self, job_id: str) -> List[ArtifactObjectMetadata]:
-        client = await self._get_client()
         prefix = f"{self._job_prefix(job_id)}/"
+        client = await self._get_client()
         results: List[ArtifactObjectMetadata] = []
         continuation: Optional[str] = None
         while True:
@@ -216,8 +214,14 @@ class S3ArtifactStore(ArtifactStore):
                 relative = key[len(prefix) :]
                 if not relative or relative.endswith("/"):
                     continue
-                size_bytes = int(entry.get("Size", 0)) if "Size" in entry else None
-                content_type = _content_type_for(relative)
+                try:
+                    head = await asyncio.to_thread(client.head_object, Bucket=self._bucket, Key=key)
+                except Exception as exc:  # noqa: BLE001 - boto3 ClientError
+                    if _is_not_found(exc):
+                        continue
+                    raise ArtifactStoreError(f"S3 head_object failed for {key}") from exc
+                size_bytes = int(head.get("ContentLength", 0)) if "ContentLength" in head else None
+                content_type = head.get("ContentType") or _content_type_for(relative)
                 if size_bytes is None:
                     sha256_hex: Optional[str] = None
                     status = "unavailable"
@@ -253,9 +257,10 @@ class S3ArtifactStore(ArtifactStore):
         *,
         content_type: Optional[str] = None,
     ) -> ArtifactObjectMetadata:
-        client = await self._get_client()
         key = self._object_key(job_id, relative_path)
-        resolved_content_type = content_type or _content_type_for(relative_path)
+        client = await self._get_client()
+        explicit_content_type = str(content_type).strip() if content_type is not None else ""
+        resolved_content_type = explicit_content_type or _content_type_for(relative_path)
         try:
             await asyncio.to_thread(
                 client.put_object,
@@ -283,10 +288,10 @@ class S3ArtifactStore(ArtifactStore):
         )
 
     async def delete(self, job_id: str, relative_path: Optional[str] = None) -> int:
-        client = await self._get_client()
         if relative_path is None:
             # Bulk-delete every object under the job prefix.
             prefix = f"{self._job_prefix(job_id)}/"
+            client = await self._get_client()
             deleted = 0
             continuation: Optional[str] = None
             while True:
@@ -313,6 +318,13 @@ class S3ArtifactStore(ArtifactStore):
             return deleted
 
         key = self._object_key(job_id, relative_path)
+        client = await self._get_client()
+        try:
+            await asyncio.to_thread(client.head_object, Bucket=self._bucket, Key=key)
+        except Exception as exc:  # noqa: BLE001 - boto3 ClientError
+            if _is_not_found(exc):
+                return 0
+            raise ArtifactStoreError(f"S3 head_object failed for {key}") from exc
         try:
             await asyncio.to_thread(client.delete_object, Bucket=self._bucket, Key=key)
         except Exception as exc:  # noqa: BLE001 - boto3 ClientError

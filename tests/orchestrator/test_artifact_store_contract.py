@@ -45,6 +45,15 @@ pytestmark = [pytest.mark.unit, pytest.mark.asyncio]
 
 _S3_URL_ENV = "TP_TEST_S3_URL"
 _S3_BUCKET_ENV = "TP_TEST_S3_BUCKET"
+_BAD_JOB_IDS = [
+    "../escape",
+    "/absolute",
+    "nested/job",
+    "nested\\job",
+    "\x00bad",
+    ".",
+    "..",
+]
 
 
 def _have_moto() -> bool:
@@ -168,6 +177,23 @@ async def test_write_then_head_returns_matching_metadata(store: ArtifactStore) -
     assert head.fingerprint_status == "ok"
 
 
+async def test_explicit_content_type_round_trips_through_head_and_list(store: ArtifactStore) -> None:
+    content_type = "application/vnd.transformation-portal.test+json"
+    meta = await store.write_bytes(
+        "job-content-type",
+        "outputs/payload.bin",
+        b'{"ok": true}',
+        content_type=content_type,
+    )
+    assert meta.content_type == content_type
+
+    head = await store.head("job-content-type", "outputs/payload.bin")
+    assert head.content_type == content_type
+
+    listed = await store.list_for_job("job-content-type")
+    assert [item.content_type for item in listed] == [content_type]
+
+
 async def test_open_bytes_round_trip(store: ArtifactStore) -> None:
     body = b"deterministic-bytes-" * 200
     await store.write_bytes("job-b", "outputs/log.txt", body)
@@ -216,6 +242,57 @@ async def test_empty_job_id_rejected(store: ArtifactStore) -> None:
         await store.write_bytes("", "outputs/x.txt", b"x")
 
 
+@pytest.mark.parametrize("bad_job_id", _BAD_JOB_IDS)
+@pytest.mark.parametrize(
+    "operation",
+    [
+        "write_bytes",
+        "head",
+        "open_bytes",
+        "list_for_job",
+        "delete_single",
+        "delete_job",
+    ],
+)
+async def test_bad_job_ids_rejected_for_every_public_method(
+    store: ArtifactStore,
+    bad_job_id: str,
+    operation: str,
+) -> None:
+    with pytest.raises(ArtifactPathValidationError):
+        if operation == "write_bytes":
+            await store.write_bytes(bad_job_id, "outputs/x.txt", b"x")
+        elif operation == "head":
+            await store.head(bad_job_id, "outputs/x.txt")
+        elif operation == "open_bytes":
+            stream = await store.open_bytes(bad_job_id, "outputs/x.txt")
+            async for _chunk in stream:
+                pass
+        elif operation == "list_for_job":
+            await store.list_for_job(bad_job_id)
+        elif operation == "delete_single":
+            await store.delete(bad_job_id, "outputs/x.txt")
+        elif operation == "delete_job":
+            await store.delete(bad_job_id)
+        else:  # pragma: no cover - parametrization guard
+            raise AssertionError(f"unexpected operation {operation!r}")
+
+
+async def test_local_symlinked_job_directory_escape_rejected(tmp_path) -> None:
+    root = tmp_path / "artifacts"
+    outside = tmp_path / "outside"
+    root.mkdir()
+    outside.mkdir()
+    try:
+        os.symlink(outside, root / "job-link")
+    except (AttributeError, NotImplementedError, OSError) as exc:
+        pytest.skip(f"symlink unavailable on this platform: {exc}")
+
+    store = LocalArtifactStore(root_dir=root)
+    with pytest.raises(ArtifactPathValidationError):
+        await store.write_bytes("job-link", "outputs/x.txt", b"x")
+
+
 # ---------------------------------------------------------------------------
 # list_for_job
 # ---------------------------------------------------------------------------
@@ -250,6 +327,10 @@ async def test_delete_single_artifact(store: ArtifactStore) -> None:
     assert deleted == 1
     listed = await store.list_for_job("job-d")
     assert [item.relative_path for item in listed] == ["b.txt"]
+
+
+async def test_delete_single_missing_returns_zero(store: ArtifactStore) -> None:
+    assert await store.delete("job-d", "missing.txt") == 0
 
 
 async def test_delete_entire_job(store: ArtifactStore) -> None:

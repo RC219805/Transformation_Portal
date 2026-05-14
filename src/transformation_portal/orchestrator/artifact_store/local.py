@@ -2,9 +2,12 @@
 
 ``LocalArtifactStore`` is the structural extract of the pre-Phase-4
 filesystem helpers in ``transformation_portal.portal.job_artifacts``
-(path-traversal validation, SHA-256 fingerprinting, content-type
+(path-traversal semantics, SHA-256 fingerprinting, content-type
 detection) plus a thin ``async`` wrapper so the surface matches the
-``ArtifactStore`` contract. The legacy helpers continue to exist for
+``ArtifactStore`` contract. Explicit content-type overrides are stored
+in a local metadata sidecar so ``write_bytes`` / ``head`` /
+``list_for_job`` expose the same metadata contract as S3. The legacy
+helpers continue to exist for
 the existing ``app.py`` artifact-serving routes (they will be
 rewired in Phase 4.B); this module gives the new factory-based
 plumbing the same guarantees through one async-shaped facade.
@@ -25,10 +28,13 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import json
 import os
+import uuid
 from pathlib import Path, PurePosixPath
 from typing import AsyncIterator, List, Optional
 
+from transformation_portal.ingest.canonical_json import canonicalize_json
 from transformation_portal.orchestrator.artifact_store.base import (
     ArtifactNotFoundError,
     ArtifactObjectMetadata,
@@ -45,6 +51,23 @@ from transformation_portal.portal.job_artifacts import (  # noqa: PLC2701 - inte
 
 _ARTIFACT_FINGERPRINT_CHUNK_BYTES = 1024 * 1024
 _DEFAULT_LOCAL_ROOT = "/tmp/transformation-portal-artifacts"
+_CONTENT_TYPE_METADATA_DIR = ".artifact-store-metadata"
+_RESERVED_JOB_IDS = frozenset({_CONTENT_TYPE_METADATA_DIR})
+
+
+def _normalize_job_id(job_id: str) -> str:
+    """Validate ``job_id`` as one safe path/key component."""
+    raw = str(job_id or "").strip()
+    if not raw or raw in {".", ".."} or raw in _RESERVED_JOB_IDS:
+        raise ArtifactPathValidationError("invalid_job_id")
+    if "/" in raw or "\\" in raw or "\x00" in raw or raw.startswith("~"):
+        raise ArtifactPathValidationError("invalid_job_id")
+    candidate = PurePosixPath(raw)
+    if candidate.is_absolute() or len(candidate.parts) != 1:
+        raise ArtifactPathValidationError("invalid_job_id")
+    if any(part in {"", ".", ".."} for part in candidate.parts):
+        raise ArtifactPathValidationError("invalid_job_id")
+    return raw
 
 
 def _normalize_relative_path(relative_path: str) -> str:
@@ -90,6 +113,7 @@ class LocalArtifactStore(ArtifactStore):
             root_dir = Path(os.getenv("TP_ARTIFACT_LOCAL_ROOT", _DEFAULT_LOCAL_ROOT)).expanduser()
         self._root = Path(os.path.realpath(root_dir))
         self._root.mkdir(parents=True, exist_ok=True)
+        self._metadata_root = self._root / _CONTENT_TYPE_METADATA_DIR
 
     @property
     def backend(self) -> str:
@@ -108,10 +132,9 @@ class LocalArtifactStore(ArtifactStore):
         verified to be a descendant of ``{root}/{job_id}``. Any
         deviation raises ``ArtifactPathValidationError``.
         """
-        if not job_id:
-            raise ArtifactPathValidationError("empty_job_id")
+        normalized_job_id = _normalize_job_id(job_id)
         normalized = _normalize_relative_path(relative_path)
-        job_root = (self._root / job_id).resolve()
+        job_root = self._resolved_job_root(normalized_job_id)
         candidate = (job_root / normalized).resolve()
         try:
             candidate.relative_to(job_root)
@@ -120,9 +143,15 @@ class LocalArtifactStore(ArtifactStore):
         return candidate
 
     def _job_root(self, job_id: str) -> Path:
-        if not job_id:
-            raise ArtifactPathValidationError("empty_job_id")
-        return (self._root / job_id).resolve()
+        return self._resolved_job_root(_normalize_job_id(job_id))
+
+    def _resolved_job_root(self, normalized_job_id: str) -> Path:
+        job_root = (self._root / normalized_job_id).resolve()
+        try:
+            job_root.relative_to(self._root)
+        except ValueError as exc:
+            raise ArtifactPathValidationError("job_root_outside_artifact_root") from exc
+        return job_root
 
     async def head(self, job_id: str, relative_path: str) -> ArtifactObjectMetadata:
         return await asyncio.to_thread(self._head_sync, job_id, relative_path)
@@ -139,7 +168,7 @@ class LocalArtifactStore(ArtifactStore):
         return ArtifactObjectMetadata(
             relative_path=_normalize_relative_path(relative_path),
             size_bytes=size_bytes,
-            content_type=_artifact_content_type(path),
+            content_type=self._content_type_for(job_id, relative_path, path),
             sha256_hex=sha256_hex,
             fingerprint_status=status,
         )
@@ -171,9 +200,11 @@ class LocalArtifactStore(ArtifactStore):
         return await asyncio.to_thread(self._list_for_job_sync, job_id)
 
     def _list_for_job_sync(self, job_id: str) -> List[ArtifactObjectMetadata]:
-        job_root = self._job_root(job_id)
+        normalized_job_id = _normalize_job_id(job_id)
+        job_root = self._resolved_job_root(normalized_job_id)
         if not job_root.is_dir():
             return []
+        content_types = self._load_content_types(normalized_job_id)
         results: List[ArtifactObjectMetadata] = []
         for absolute in sorted(p for p in job_root.rglob("*") if p.is_file()):
             relative = absolute.relative_to(job_root).as_posix()
@@ -186,7 +217,7 @@ class LocalArtifactStore(ArtifactStore):
                 ArtifactObjectMetadata(
                     relative_path=relative,
                     size_bytes=size_bytes,
-                    content_type=_artifact_content_type(absolute),
+                    content_type=content_types.get(relative) or _artifact_content_type(absolute),
                     sha256_hex=sha256_hex,
                     fingerprint_status=status,
                 )
@@ -210,14 +241,22 @@ class LocalArtifactStore(ArtifactStore):
         body: bytes,
         content_type: Optional[str],
     ) -> ArtifactObjectMetadata:
+        normalized_job_id = _normalize_job_id(job_id)
+        normalized_relative_path = _normalize_relative_path(relative_path)
         path = self._resolve(job_id, relative_path)
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_bytes(body)
+        self._atomic_write_bytes(path, body)
         size_bytes: Optional[int] = len(body)
         sha256_hex, status = self._fingerprint(path, size_bytes)
-        resolved_content_type = content_type or _artifact_content_type(path)
+        explicit_content_type = self._normalize_content_type(content_type)
+        resolved_content_type = explicit_content_type or _artifact_content_type(path)
+        self._record_content_type(
+            normalized_job_id,
+            normalized_relative_path,
+            explicit_content_type,
+        )
         return ArtifactObjectMetadata(
-            relative_path=_normalize_relative_path(relative_path),
+            relative_path=normalized_relative_path,
             size_bytes=size_bytes,
             content_type=resolved_content_type,
             sha256_hex=sha256_hex,
@@ -229,8 +268,10 @@ class LocalArtifactStore(ArtifactStore):
 
     def _delete_sync(self, job_id: str, relative_path: Optional[str]) -> int:
         if relative_path is None:
-            job_root = self._job_root(job_id)
+            normalized_job_id = _normalize_job_id(job_id)
+            job_root = self._resolved_job_root(normalized_job_id)
             if not job_root.is_dir():
+                self._delete_content_type_metadata(normalized_job_id)
                 return 0
             deleted = 0
             for absolute in sorted(
@@ -253,12 +294,16 @@ class LocalArtifactStore(ArtifactStore):
                 job_root.rmdir()
             except OSError:
                 pass
+            self._delete_content_type_metadata(normalized_job_id)
             return deleted
 
+        normalized_job_id = _normalize_job_id(job_id)
+        normalized_relative_path = _normalize_relative_path(relative_path)
         path = self._resolve(job_id, relative_path)
         if not path.is_file():
             return 0
         path.unlink()
+        self._record_content_type(normalized_job_id, normalized_relative_path, None)
         return 1
 
     async def reset(self) -> None:
@@ -284,6 +329,84 @@ class LocalArtifactStore(ArtifactStore):
                 sub.rmdir()
             except OSError:
                 pass
+
+    def _metadata_path(self, normalized_job_id: str) -> Path:
+        return self._metadata_root / f"{normalized_job_id}.json"
+
+    def _content_type_for(self, job_id: str, relative_path: str, path: Path) -> str:
+        normalized_job_id = _normalize_job_id(job_id)
+        normalized_relative_path = _normalize_relative_path(relative_path)
+        return self._load_content_types(normalized_job_id).get(normalized_relative_path) or _artifact_content_type(path)
+
+    def _load_content_types(self, normalized_job_id: str) -> dict[str, str]:
+        metadata_path = self._metadata_path(normalized_job_id)
+        try:
+            payload = json.loads(metadata_path.read_text(encoding="utf-8"))
+        except FileNotFoundError:
+            return {}
+        except (OSError, json.JSONDecodeError):
+            return {}
+        if not isinstance(payload, dict):
+            return {}
+        raw_content_types = payload.get("content_types")
+        if not isinstance(raw_content_types, dict):
+            return {}
+        return {
+            str(relative_path): str(content_type).strip()
+            for relative_path, content_type in raw_content_types.items()
+            if isinstance(relative_path, str) and str(content_type).strip()
+        }
+
+    def _record_content_type(
+        self,
+        normalized_job_id: str,
+        normalized_relative_path: str,
+        content_type: Optional[str],
+    ) -> None:
+        content_types = self._load_content_types(normalized_job_id)
+        if content_type is None:
+            content_types.pop(normalized_relative_path, None)
+        else:
+            content_types[normalized_relative_path] = content_type
+        metadata_path = self._metadata_path(normalized_job_id)
+        if not content_types:
+            try:
+                metadata_path.unlink()
+            except FileNotFoundError:
+                pass
+            return
+        payload = {"version": 1, "content_types": content_types}
+        self._atomic_write_bytes(metadata_path, canonicalize_json(payload) + b"\n")
+
+    def _delete_content_type_metadata(self, normalized_job_id: str) -> None:
+        try:
+            self._metadata_path(normalized_job_id).unlink()
+        except FileNotFoundError:
+            pass
+
+    @staticmethod
+    def _normalize_content_type(content_type: Optional[str]) -> Optional[str]:
+        if content_type is None:
+            return None
+        normalized = str(content_type).strip()
+        return normalized or None
+
+    @staticmethod
+    def _atomic_write_bytes(path: Path, body: bytes) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp_path = path.with_name(f".{path.name}.tmp-{os.getpid()}-{uuid.uuid4().hex}")
+        try:
+            with tmp_path.open("wb") as handle:
+                handle.write(body)
+                handle.flush()
+                os.fsync(handle.fileno())
+            os.replace(tmp_path, path)
+        except BaseException:
+            try:
+                tmp_path.unlink()
+            except FileNotFoundError:
+                pass
+            raise
 
     @staticmethod
     def _fingerprint(
@@ -315,4 +438,4 @@ class LocalArtifactStore(ArtifactStore):
         return digest.hexdigest(), "ok"
 
 
-__all__ = ["LocalArtifactStore"]
+__all__ = ["LocalArtifactStore", "_normalize_job_id", "_normalize_relative_path"]
