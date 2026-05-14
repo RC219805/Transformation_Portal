@@ -25,6 +25,8 @@ from urllib.parse import parse_qs, urlparse
 import pytest
 from starlette.requests import Request as StarletteRequest
 
+from transformation_portal.orchestrator import reset_singletons
+
 pytestmark = pytest.mark.unit
 
 orchestrator_app = importlib.import_module("app")
@@ -40,6 +42,26 @@ PORTAL_OPERATE_SURFACE_SOURCE_PATH = PORTAL_FRONTDOOR_ROOT / "portal-src" / "ope
 PORTAL_BUILD_SURFACE_SOURCE_PATH = PORTAL_FRONTDOOR_ROOT / "portal-src" / "build-surface-deferred.js"
 PORTAL_OVERVIEW_SURFACE_SOURCE_PATH = PORTAL_FRONTDOOR_ROOT / "portal-src" / "overview-surface-deferred.js"
 FRONTDOOR_BRAND_ROOT = PORTAL_HTML_PATH.parent / "web" / "secure-landing" / "public" / "brand"
+
+
+def _reset_job_repository() -> None:
+    reset_singletons()
+    orchestrator_app.app.state.job_repository = None
+    orchestrator_app.app.state.job_repository_unavailable = False
+
+
+async def _seed_job_async(job: Any) -> Any:
+    repo = orchestrator_app._job_repository()
+    await repo.create(orchestrator_app._record_from_job(job))
+    if job.artifacts or job.artifact_lookup:
+        await repo.set_artifacts(job.id, job.artifacts, job.artifact_lookup)
+    orchestrator_app.JOBS[job.id] = job
+    orchestrator_app.EVENT_SUBSCRIBERS.setdefault(job.id, {})
+    return job
+
+
+def _seed_job(job: Any) -> Any:
+    return asyncio.run(_seed_job_async(job))
 
 
 class _FakeRequest:
@@ -363,11 +385,15 @@ def _build_multipart_form_body(
 
 @pytest.fixture(autouse=True)
 def _reset_global_state() -> None:
+    _reset_job_repository()
     orchestrator_app.JOBS.clear()
     orchestrator_app.EVENT_SUBSCRIBERS.clear()
+    orchestrator_app._LAST_EVENT_PERSISTED_AT.clear()
     yield
     orchestrator_app.JOBS.clear()
     orchestrator_app.EVENT_SUBSCRIBERS.clear()
+    orchestrator_app._LAST_EVENT_PERSISTED_AT.clear()
+    _reset_job_repository()
 
 
 def test_argv_normalization_accepts_canonical_keys() -> None:
@@ -4861,8 +4887,7 @@ def test_lux_depth_readiness_blocks_selected_da3_when_runtime_missing(
 def test_run_job_is_async_and_does_not_block_event_loop() -> None:
     async def scenario() -> None:
         job = orchestrator_app.Job(id="job_async", created_at=orchestrator_app._now())
-        orchestrator_app.JOBS[job.id] = job
-        orchestrator_app.EVENT_SUBSCRIBERS[job.id] = {}
+        await _seed_job_async(job)
 
         ticks = 0
         stop = asyncio.Event()
@@ -4910,11 +4935,139 @@ def test_run_job_is_async_and_does_not_block_event_loop() -> None:
     asyncio.run(scenario())
 
 
+def test_run_job_persists_logs_in_batches(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def scenario() -> None:
+        from transformation_portal.orchestrator.storage.memory import MemoryJobRepository
+
+        repo = MemoryJobRepository()
+        batches: list[list[str]] = []
+
+        async def append_log(*_args: object, **_kwargs: object) -> None:
+            raise AssertionError("_run_job should persist runner stdout through append_logs")
+
+        original_append_logs = repo.append_logs
+
+        async def append_logs(job_id: str, lines: list[str], *, tail_limit: int) -> None:
+            batches.append(list(lines))
+            await original_append_logs(job_id, lines, tail_limit=tail_limit)
+
+        monkeypatch.setattr(repo, "append_log", append_log)
+        monkeypatch.setattr(repo, "append_logs", append_logs)
+        monkeypatch.setattr(orchestrator_app, "_job_repository", lambda: repo)
+
+        job = orchestrator_app.Job(id="job_log_batch", created_at=orchestrator_app._now())
+        await repo.create(orchestrator_app._record_from_job(job))
+
+        await orchestrator_app._run_job(
+            job,
+            [
+                sys.executable,
+                "-u",
+                "-c",
+                "for i in range(60): print(f'line-{i}', flush=True)",
+            ],
+        )
+
+        fetched = await repo.get(job.id)
+        assert fetched is not None
+        assert fetched.logs_tail[-2:] == ["line-58", "line-59"]
+        assert len(batches) < 60
+        assert all(batches)
+
+    asyncio.run(scenario())
+
+
+def test_run_job_repository_write_hiccups_do_not_rewrite_success(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def scenario() -> None:
+        from transformation_portal.orchestrator.storage.memory import MemoryJobRepository
+
+        repo = MemoryJobRepository()
+        original_update = repo.update
+        failed_updates: list[dict[str, object]] = []
+
+        async def update(job_id: str, **fields: object):
+            if set(fields) in (
+                {"state", "started_at"},
+                {"progress"},
+                {"state", "exit_code", "error"},
+            ):
+                failed_updates.append(dict(fields))
+                raise RuntimeError("transient repository write failure")
+            return await original_update(job_id, **fields)
+
+        monkeypatch.setattr(repo, "update", update)
+        monkeypatch.setattr(orchestrator_app, "_job_repository", lambda: repo)
+
+        job = orchestrator_app.Job(id="job_repo_write_hiccup", created_at=orchestrator_app._now())
+        await repo.create(orchestrator_app._record_from_job(job))
+
+        await orchestrator_app._run_job(
+            job,
+            [
+                sys.executable,
+                "-u",
+                "-c",
+                "print('progress=25%', flush=True)",
+            ],
+        )
+
+        fetched = await repo.get(job.id)
+        assert fetched is not None
+        assert failed_updates
+        assert job.state == "succeeded"
+        assert job.exit_code == 0
+        assert job.error is None
+        assert fetched.state == "succeeded"
+        assert fetched.exit_code == 0
+        assert fetched.error is None
+
+    asyncio.run(scenario())
+
+
+def test_run_job_coalesces_progress_persistence(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def scenario() -> None:
+        from transformation_portal.orchestrator.storage.memory import MemoryJobRepository
+
+        repo = MemoryJobRepository()
+        original_update = repo.update
+        progress_updates = 0
+        last_event_updates = 0
+
+        async def update(job_id: str, **fields: object):
+            nonlocal last_event_updates, progress_updates
+            if set(fields) == {"progress"}:
+                progress_updates += 1
+            if set(fields) == {"last_event_at"}:
+                last_event_updates += 1
+            return await original_update(job_id, **fields)
+
+        monkeypatch.setattr(repo, "update", update)
+        monkeypatch.setattr(orchestrator_app, "_job_repository", lambda: repo)
+
+        job = orchestrator_app.Job(id="job_progress_coalesce", created_at=orchestrator_app._now())
+        await repo.create(orchestrator_app._record_from_job(job))
+
+        await orchestrator_app._run_job(
+            job,
+            [
+                sys.executable,
+                "-u",
+                "-c",
+                "for i in range(1, 51): print(f'progress={i}%', flush=True)",
+            ],
+        )
+
+        assert job.progress == 50
+        assert progress_updates <= 1
+        assert last_event_updates <= 2
+
+    asyncio.run(scenario())
+
+
 def test_cancel_request_terminates_running_job() -> None:
     async def scenario() -> None:
         job = orchestrator_app.Job(id="job_cancel", created_at=orchestrator_app._now())
-        orchestrator_app.JOBS[job.id] = job
-        orchestrator_app.EVENT_SUBSCRIBERS[job.id] = {}
+        await _seed_job_async(job)
 
         runner = asyncio.create_task(
             orchestrator_app._run_job(
@@ -4946,8 +5099,7 @@ def test_cancel_request_terminates_running_job() -> None:
 def test_sse_broadcast_delivers_events_to_multiple_subscribers() -> None:
     async def scenario() -> None:
         job = orchestrator_app.Job(id="job_sse", created_at=orchestrator_app._now(), state="running")
-        orchestrator_app.JOBS[job.id] = job
-        orchestrator_app.EVENT_SUBSCRIBERS[job.id] = {}
+        await _seed_job_async(job)
 
         req_one = _FakeRequest()
         req_two = _FakeRequest()
@@ -4984,8 +5136,7 @@ def test_sse_broadcast_delivers_events_to_multiple_subscribers() -> None:
 def test_sse_disconnect_cleans_up_subscriber_queue() -> None:
     async def scenario() -> None:
         job = orchestrator_app.Job(id="job_disconnect", created_at=orchestrator_app._now(), state="running")
-        orchestrator_app.JOBS[job.id] = job
-        orchestrator_app.EVENT_SUBSCRIBERS[job.id] = {}
+        await _seed_job_async(job)
 
         request = _FakeRequest()
         response = await orchestrator_app.job_events(request, job.id)
@@ -5016,19 +5167,105 @@ def test_cleanup_expired_jobs_prunes_old_finished_entries() -> None:
     )
     running_job = orchestrator_app.Job(id="job_running", created_at=now, state="running")
 
-    orchestrator_app.JOBS[old_job.id] = old_job
-    orchestrator_app.JOBS[fresh_job.id] = fresh_job
-    orchestrator_app.JOBS[running_job.id] = running_job
+    _seed_job(old_job)
+    _seed_job(fresh_job)
+    _seed_job(running_job)
 
     orchestrator_app.EVENT_SUBSCRIBERS[old_job.id] = {"s1": asyncio.Queue()}
     orchestrator_app.EVENT_SUBSCRIBERS[fresh_job.id] = {"s2": asyncio.Queue()}
 
-    orchestrator_app._cleanup_expired_jobs(now)
+    asyncio.run(orchestrator_app._cleanup_expired_jobs(now))
 
     assert old_job.id not in orchestrator_app.JOBS
     assert old_job.id not in orchestrator_app.EVENT_SUBSCRIBERS
+    assert asyncio.run(orchestrator_app._job_repository().get(old_job.id)) is None
+    assert asyncio.run(orchestrator_app._job_repository().get(fresh_job.id)) is not None
     assert fresh_job.id in orchestrator_app.JOBS
     assert running_job.id in orchestrator_app.JOBS
+
+
+def test_overlay_runtime_state_preserves_live_cached_job() -> None:
+    cached_job = orchestrator_app.Job(
+        id="job_live_overlay",
+        created_at=100.0,
+        state="running",
+        progress=75,
+    )
+    cached_job.proc = SimpleNamespace(returncode=None)
+    record_job = orchestrator_app.Job(
+        id=cached_job.id,
+        created_at=90.0,
+        state="queued",
+        progress=5,
+        artifacts={"lifecycle": {"mirror_status": "mirrored"}},
+        artifact_store_mirrored=True,
+    )
+
+    result = orchestrator_app._overlay_runtime_state(record_job, cached_job)
+
+    assert result is cached_job
+    assert result.state == "running"
+    assert result.progress == 75
+    assert result.artifacts == {"lifecycle": {"mirror_status": "mirrored"}}
+    assert result.artifact_store_mirrored is True
+
+
+def test_cleanup_expired_upload_batches_skips_when_retained_scan_fails(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    upload_root = tmp_path / "uploads"
+    managed_dir = upload_root / "upload_123"
+    (managed_dir / "input").mkdir(parents=True)
+    portal_dir = managed_dir / "_portal"
+    portal_dir.mkdir()
+    (portal_dir / upload_staging.UPLOAD_RECEIPT_FILENAME).write_text("{}", encoding="utf-8")
+    os.utime(managed_dir, (100.0, 100.0))
+
+    monkeypatch.setattr(orchestrator_app, "PORTAL_UPLOAD_ROOT", str(upload_root))
+    monkeypatch.setattr(orchestrator_app, "ALLOWED_INPUT_ROOTS", [tmp_path.resolve()])
+
+    def _raise_unavailable() -> Any:
+        raise orchestrator_app._JobRepositoryUnavailable("boom")
+
+    monkeypatch.setattr(orchestrator_app, "_job_repository", _raise_unavailable)
+
+    asyncio.run(orchestrator_app._cleanup_expired_upload_batches(10_000.0))
+
+    assert managed_dir.exists()
+
+
+def test_retained_staged_input_dirs_scans_beyond_request_cleanup_limit(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def scenario() -> None:
+        from transformation_portal.orchestrator.storage.memory import MemoryJobRepository
+
+        repo = MemoryJobRepository()
+        monkeypatch.setattr(orchestrator_app, "_job_repository", lambda: repo)
+        monkeypatch.setattr(orchestrator_app, "JOB_CLEANUP_SCAN_LIMIT", 1)
+        orchestrator_app.JOBS.clear()
+
+        input_one = tmp_path / "upload-one" / "input"
+        input_two = tmp_path / "upload-two" / "input"
+        input_one.mkdir(parents=True)
+        input_two.mkdir(parents=True)
+        for idx, input_dir in enumerate((input_one, input_two), start=1):
+            job = orchestrator_app.Job(
+                id=f"job_retained_input_{idx}",
+                created_at=float(idx),
+                request={"args": {"input_dir": str(input_dir)}},
+            )
+            await repo.create(orchestrator_app._record_from_job(job))
+
+        retained = await orchestrator_app._retained_staged_input_dirs()
+
+        assert retained is not None
+        assert str(input_one.resolve()) in retained
+        assert str(input_two.resolve()) in retained
+
+    asyncio.run(scenario())
 
 
 def test_mutating_job_route_detection() -> None:
@@ -6559,11 +6796,16 @@ def test_create_job_rejects_when_concurrency_limit_is_reached(
     previous_limit = orchestrator_app.MAX_CONCURRENT_JOBS
     try:
         orchestrator_app.MAX_CONCURRENT_JOBS = 1
-        orchestrator_app.JOBS["job_running"] = orchestrator_app.Job(
-            id="job_running",
-            created_at=orchestrator_app._now(),
-            state="running",
-            request={"pipeline": "lux-depth-v3", "args": {"input_dir": "./input_images", "output_dir": "./output"}},
+        _seed_job(
+            orchestrator_app.Job(
+                id="job_running",
+                created_at=orchestrator_app._now(),
+                state="running",
+                request={
+                    "pipeline": "lux-depth-v3",
+                    "args": {"input_dir": "./input_images", "output_dir": "./output"},
+                },
+            )
         )
 
         response = asyncio.run(
@@ -6630,7 +6872,7 @@ def test_list_jobs_includes_error_and_artifacts() -> None:
         },
         error={"code": "RUNNER_ERROR", "message": "boom", "details": {}},
     )
-    orchestrator_app.JOBS[job.id] = job
+    _seed_job(job)
 
     response = asyncio.run(orchestrator_app.list_jobs())
     body = json.loads(response.body.decode("utf-8"))
@@ -6664,7 +6906,7 @@ def test_get_job_includes_artifacts_and_error() -> None:
         },
         error={"code": "RUNNER_ERROR", "message": "boom", "details": {}},
     )
-    orchestrator_app.JOBS[job.id] = job
+    _seed_job(job)
 
     response = asyncio.run(orchestrator_app.get_job(job.id))
     body = json.loads(response.body.decode("utf-8"))
@@ -6703,8 +6945,7 @@ def test_late_connecting_client_receives_real_events_during_artifact_indexing() 
         # Do NOT set done_published_at yet - simulates artifact indexing in progress.
         # Note: Neither finished_at nor done_published_at is set, simulating the
         # window after terminal state is reached but before events are published.
-        orchestrator_app.JOBS[job.id] = job
-        orchestrator_app.EVENT_SUBSCRIBERS[job.id] = {}
+        await _seed_job_async(job)
 
         request = _FakeRequest()
         response = await orchestrator_app.job_events(request, job.id)
@@ -6771,8 +7012,7 @@ def test_late_connecting_client_synthesizes_done_after_done_published_at() -> No
         # Set both timestamps - this means events were already published
         job.finished_at = now
         job.done_published_at = now
-        orchestrator_app.JOBS[job.id] = job
-        orchestrator_app.EVENT_SUBSCRIBERS[job.id] = {}
+        await _seed_job_async(job)
 
         request = _FakeRequest()
         response = await orchestrator_app.job_events(request, job.id)

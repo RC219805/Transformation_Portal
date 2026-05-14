@@ -143,6 +143,15 @@ async def test_append_log_rotates_tail(repository_and_events: RepoAndEvents) -> 
     assert fetched.logs_tail == ["line-6", "line-7", "line-8", "line-9"]
 
 
+async def test_append_logs_rotates_tail(repository_and_events: RepoAndEvents) -> None:
+    repo, _ = repository_and_events
+    await repo.create(_new_record("job-log-batch"))
+    await repo.append_logs("job-log-batch", [f"line-{i}" for i in range(10)], tail_limit=4)
+    fetched = await repo.get("job-log-batch")
+    assert fetched is not None
+    assert fetched.logs_tail == ["line-6", "line-7", "line-8", "line-9"]
+
+
 async def test_append_log_rejects_zero_or_negative_limit(
     repository_and_events: RepoAndEvents,
 ) -> None:

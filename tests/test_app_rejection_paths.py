@@ -21,10 +21,13 @@ logic reads.
 
 from __future__ import annotations
 
+import asyncio
 import importlib
 
 import pytest
 from fastapi.testclient import TestClient
+
+from transformation_portal.orchestrator import reset_singletons
 
 pytestmark = pytest.mark.unit
 
@@ -40,6 +43,10 @@ def _reset_orchestrator_globals():
     orchestrator_app.ENFORCE_JOB_API_KEY = True
     orchestrator_app.RATE_LIMIT_BUCKETS.clear()
     orchestrator_app.JOBS.clear()
+    orchestrator_app.EVENT_SUBSCRIBERS.clear()
+    reset_singletons()
+    orchestrator_app.app.state.job_repository = None
+    orchestrator_app.app.state.job_repository_unavailable = False
     try:
         yield
     finally:
@@ -48,6 +55,10 @@ def _reset_orchestrator_globals():
         orchestrator_app.RATE_LIMIT_PER_MINUTE = previous_rate_limit
         orchestrator_app.RATE_LIMIT_BUCKETS.clear()
         orchestrator_app.JOBS.clear()
+        orchestrator_app.EVENT_SUBSCRIBERS.clear()
+        reset_singletons()
+        orchestrator_app.app.state.job_repository = None
+        orchestrator_app.app.state.job_repository_unavailable = False
 
 
 @pytest.fixture(name="anon_client")
@@ -228,6 +239,7 @@ class TestArtifactDeletionRejection:
             request={"pipeline": "lux-depth-v3", "args": {}},
             state="running",
         )
+        asyncio.run(orchestrator_app._job_repository().create(orchestrator_app._record_from_job(job)))
         orchestrator_app.JOBS[job.id] = job
 
         response = auth_client.delete(path.format(job_id=job.id))

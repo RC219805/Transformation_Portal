@@ -10,7 +10,7 @@ from __future__ import annotations
 import asyncio
 from collections import defaultdict, deque
 from pathlib import Path
-from typing import Any, AsyncIterator, Deque, Dict, List, Optional, Tuple
+from typing import Any, AsyncIterator, Deque, Dict, Iterable, List, Optional, Tuple
 
 from transformation_portal.orchestrator.storage.base import UPDATABLE_FIELDS as _UPDATABLE_FIELDS
 from transformation_portal.orchestrator.storage.base import (
@@ -84,6 +84,20 @@ class MemoryJobRepository(JobRepository):
             if existing is None:
                 raise JobNotFoundError(job_id)
             existing.logs_tail.append(line)
+            if len(existing.logs_tail) > tail_limit:
+                existing.logs_tail = existing.logs_tail[-tail_limit:]
+
+    async def append_logs(self, job_id: str, lines: Iterable[str], *, tail_limit: int) -> None:
+        if tail_limit <= 0:
+            raise RepositoryError("tail_limit must be positive")
+        batch = list(lines)
+        if not batch:
+            return
+        async with self._lock_for(job_id):
+            existing = self._records.get(job_id)
+            if existing is None:
+                raise JobNotFoundError(job_id)
+            existing.logs_tail.extend(batch)
             if len(existing.logs_tail) > tail_limit:
                 existing.logs_tail = existing.logs_tail[-tail_limit:]
 

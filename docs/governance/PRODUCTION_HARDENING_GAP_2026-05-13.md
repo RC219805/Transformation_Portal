@@ -78,19 +78,20 @@ implementations or precursors for the items below.
 
 ### 5.1 Phase 1 - durable jobs
 
-**Updated 2026-05-13: Phase 1.A, Phase 1.B, Phase 1.C, and Phase 1.D have landed.**
+**Updated 2026-05-14: Phase 1.A through Phase 1.E have landed.**
 
 Already done:
 
 - `JobRepository` and `JobEventStore` Protocols + `JobRecord` dataclass + memory backend (Phase 1.A, PR #1756).
 - `PostgresJobRepository` + `PostgresJobEventStore` + SQLAlchemy 2.x async ORM + Alembic initial migration + docker-compose Postgres service + `make db-upgrade` / `make db-revision` / `make test-orchestrator-postgres-contract` (Phase 1.B, PR #1758). Backend selected via `TP_ORCHESTRATOR_STATE_BACKEND=memory|postgres` and `TP_DATABASE_URL`. See `docs/runtimes/orchestrator-postgres.md` for the operator runbook.
 - Pessimistic restart recovery (Phase 1.C, PR #1759). `src/transformation_portal/orchestrator/recovery.py:sweep_orphaned_jobs` runs on every FastAPI startup via `_orchestrator_lifespan` in `app.py`: any job that the repository still records as `queued` or `running` but that no live worker in the runtime registry is executing is marked `failed` with `error.code = "worker_lost_on_restart"`. SSE late-clients now see a terminal `done` after a restart instead of hanging. Memory backend: deterministic no-op (per-process state). Postgres backend: durable. The lifespan also disposes the repository's connection pool on shutdown.
-- Runtime Pydantic envelope validation on `/v[12]/jobs` success paths (Phase 1.D, this PR). The four success-path returns (`_create_job`, `_list_jobs`, `_get_job`, `_cancel_job`) construct an `ApiEnvelope[T]` Pydantic model at runtime and serialize via `model_dump(by_alias=True, exclude_unset=True)`. Bad field types or missing required fields now raise at construction instead of slipping through as malformed JSON. Byte-identity with the legacy `_api_envelope` helper is pinned by `tests/orchestrator/test_envelope_runtime_validation.py` (12 tests: side-by-side model-vs-helper canonical JSON equality + HTTP-level wire-shape pins across `v1` and `v2`). SSE event payloads stay manual; the error path (`_error_response`) is unchanged.
+- Runtime Pydantic envelope validation on `/v[12]/jobs` success paths (Phase 1.D). The four success-path returns (`_create_job`, `_list_jobs`, `_get_job`, `_cancel_job`) construct an `ApiEnvelope[T]` Pydantic model at runtime and serialize via `model_dump(by_alias=True, exclude_unset=True)`. Bad field types or missing required fields now raise at construction instead of slipping through as malformed JSON. Byte-identity with the legacy `_api_envelope` helper is pinned by `tests/orchestrator/test_envelope_runtime_validation.py` (12 tests: side-by-side model-vs-helper canonical JSON equality + HTTP-level wire-shape pins across `v1` and `v2`). SSE event payloads stay manual; the error path (`_error_response`) is unchanged.
+- `app.py` JobRepository cutover (Phase 1.E). Job list/detail/cancel/artifact/delete/events now load durable state from `JobRepository` first and overlay only runtime handles from `JOBS`; create writes a `JobRecord` before broker enqueue; runner state/progress/log/artifact mutations persist through repository methods; cleanup avoids artifact-unaware `repo.cleanup_expired()` and preserves Phase 4.B delete-retry metadata. Repository failures return redacted `503 JOB_REPOSITORY_UNAVAILABLE` instead of falling back to stale process cache.
 
 Still net-new (follow-up commits / PRs):
 
-- `app.py` does **not yet** route writes through the repository. The legacy `JOBS: Dict[str, Job]` at `app.py:1002` remains authoritative until the wiring commit lands. Phase 1.B's contract tests prove the Postgres backend is behavior-identical to the memory backend so the cut-over is a single, isolated change. Phase 1.C's sweeper operates on the repository directly so it is unaffected by this gap; once the wiring lands, the sweeper will correctly mark live jobs as orphaned only when the dict and repo agree.
 - `JobCreateRequest` exists at `src/transformation_portal/api/v1/jobs.py:130` but is still "defined, not yet wired" as a handler parameter. Wiring it would collapse the specific `_create_job` error reason codes (e.g. `"unsupported_pipeline"`) into a generic `"request_validation_failed"`; that trade-off is intentionally deferred per the module docstring's recommendation and is the next layer's decision.
+- Durable SSE replay through `JobEventStore` remains a separate event-store cutover. Phase 1.E makes the event route repository-backed for existence/state; it does not make event history restart-replayable.
 
 ### 5.2 Phase 2 - worker split
 
@@ -236,7 +237,7 @@ respective phase:
 
 | Phase | New Make target | What it must prove |
 | --- | --- | --- |
-| 1 | `test-orchestrator-postgres-contract` | `JobRepository` contract identical for memory and Postgres backends; restart recovery; cancel semantics; event replay; artifact index parity. |
+| 1 | `test-orchestrator-postgres-contract` | `JobRepository` contract identical for memory and Postgres backends; restart recovery; cancel semantics; artifact index parity. Durable SSE replay remains a separate event-store cutover. |
 | 2 | `test-worker-redis-contract` | Queue lease and heartbeat expiry; duplicate-consumer protection; `worker_lost` marking; cancellation honored across queue boundary. |
 | 3 | `test-frontdoor-redis-contract` | Multi-instance and ephemeral readiness green paths; CSRF preserved across instances; throttle parity; session TTL semantics. |
 | 4 | `test-artifact-s3-contract` | S3-compatible write, read, delete, signed-URL expiry, checksum mismatch rejection, path-traversal rejection; deterministic Merkle inputs. |

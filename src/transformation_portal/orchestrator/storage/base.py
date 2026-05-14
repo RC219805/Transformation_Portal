@@ -16,7 +16,7 @@ from abc import ABC, abstractmethod
 from copy import deepcopy
 from dataclasses import dataclass, field, replace
 from pathlib import Path
-from typing import Any, AsyncIterator, Dict, List, Optional, Tuple
+from typing import Any, AsyncIterator, Dict, Iterable, List, Optional, Tuple
 
 
 class RepositoryError(RuntimeError):
@@ -167,6 +167,18 @@ class JobRepository(ABC):
     @abstractmethod
     async def append_log(self, job_id: str, line: str, *, tail_limit: int) -> None:
         """Append a log line and trim ``logs_tail`` to ``tail_limit``."""
+
+    async def append_logs(self, job_id: str, lines: Iterable[str], *, tail_limit: int) -> None:
+        """Append multiple log lines and trim ``logs_tail`` to ``tail_limit``.
+
+        Backends may override this to perform one atomic tail update. The
+        default keeps older/fake implementations compatible with the expanded
+        repository surface.
+        """
+        if tail_limit <= 0:
+            raise RepositoryError("tail_limit must be positive")
+        for line in lines:
+            await self.append_log(job_id, line, tail_limit=tail_limit)
 
     @abstractmethod
     async def set_artifacts(

@@ -26,14 +26,17 @@ respectively.
 
 from __future__ import annotations
 
+import asyncio
 import importlib
 import os
 import signal
 from pathlib import Path
-from typing import Iterator
+from typing import Any, Iterator
 
 import pytest
 from fastapi.testclient import TestClient
+
+from transformation_portal.orchestrator import reset_singletons
 
 pytestmark = pytest.mark.unit
 
@@ -54,6 +57,9 @@ def _reset_orchestrator_state(tmp_path: Path, mark_da3_runtime_available: None) 
     orchestrator_app.JOBS.clear()
     orchestrator_app.EVENT_SUBSCRIBERS.clear()
     orchestrator_app.RATE_LIMIT_BUCKETS.clear()
+    reset_singletons()
+    orchestrator_app.app.state.job_repository = None
+    orchestrator_app.app.state.job_repository_unavailable = False
     allowed_root = (tmp_path / "allowed").resolve()
     allowed_root.mkdir(parents=True, exist_ok=True)
     orchestrator_app.ALLOWED_INPUT_ROOTS = [allowed_root]
@@ -72,6 +78,9 @@ def _reset_orchestrator_state(tmp_path: Path, mark_da3_runtime_available: None) 
         orchestrator_app.JOBS.clear()
         orchestrator_app.EVENT_SUBSCRIBERS.clear()
         orchestrator_app.RATE_LIMIT_BUCKETS.clear()
+        reset_singletons()
+        orchestrator_app.app.state.job_repository = None
+        orchestrator_app.app.state.job_repository_unavailable = False
 
 
 @pytest.fixture(name="client")
@@ -130,6 +139,19 @@ def _lux_payload(input_dir: Path, output_dir: Path, **extra: object) -> dict:
     return {"pipeline": "lux-depth-v3", "args": args}
 
 
+def _seed_job(job: Any) -> Any:
+    async def _seed() -> None:
+        repo = orchestrator_app._job_repository()
+        await repo.create(orchestrator_app._record_from_job(job))
+        if job.artifacts or job.artifact_lookup:
+            await repo.set_artifacts(job.id, job.artifacts, job.artifact_lookup)
+
+    asyncio.run(_seed())
+    orchestrator_app.JOBS[job.id] = job
+    orchestrator_app.EVENT_SUBSCRIBERS.setdefault(job.id, {})
+    return job
+
+
 def test_dispatch_rejects_missing_input_dir(client: TestClient, tmp_path: Path) -> None:
     allowed = orchestrator_app.ALLOWED_INPUT_ROOTS[0]
     missing_input = allowed / "does-not-exist"
@@ -174,11 +196,13 @@ def test_dispatch_does_not_mkdir_when_admission_rejects(client: TestClient) -> N
     previous_limit = orchestrator_app.MAX_CONCURRENT_JOBS
     try:
         orchestrator_app.MAX_CONCURRENT_JOBS = 1
-        orchestrator_app.JOBS["job_busy"] = orchestrator_app.Job(
-            id="job_busy",
-            created_at=orchestrator_app._now(),
-            state="running",
-            request={"pipeline": "lux-depth-v3", "args": {}},
+        _seed_job(
+            orchestrator_app.Job(
+                id="job_busy",
+                created_at=orchestrator_app._now(),
+                state="running",
+                request={"pipeline": "lux-depth-v3", "args": {}},
+            )
         )
         response = client.post("/v1/jobs", json=_lux_payload(input_dir, output_dir))
     finally:
@@ -248,7 +272,6 @@ def test_artifact_lookup_excludes_non_indexed_files(tmp_path: Path) -> None:
             "args": {"input_dir": str(output_dir), "output_dir": str(output_dir)},
         },
     )
-    orchestrator_app.JOBS[job.id] = job
     orchestrator_app._index_job_artifacts(job)
 
     # Only the two indexed artifacts are reachable through the lookup; the
@@ -275,8 +298,8 @@ def test_artifact_endpoint_attaches_non_previewable(client: TestClient, tmp_path
             "args": {"input_dir": str(output_dir), "output_dir": str(output_dir)},
         },
     )
-    orchestrator_app.JOBS[job.id] = job
     orchestrator_app._index_job_artifacts(job)
+    _seed_job(job)
 
     response = client.get(f"/v1/jobs/{job.id}/artifacts/report.html")
     assert response.status_code == 200
@@ -321,7 +344,7 @@ def test_list_jobs_omits_log_tail(client: TestClient) -> None:
         request={"pipeline": "lux-depth-v3", "args": {}},
     )
     job.add_log("example log line")
-    orchestrator_app.JOBS[job.id] = job
+    _seed_job(job)
 
     list_response = client.get("/v1/jobs")
     assert list_response.status_code == 200
@@ -338,7 +361,7 @@ def test_get_job_includes_log_tail_by_default(client: TestClient) -> None:
         request={"pipeline": "lux-depth-v3", "args": {}},
     )
     job.add_log("detail log line")
-    orchestrator_app.JOBS[job.id] = job
+    _seed_job(job)
 
     detail_response = client.get(f"/v1/jobs/{job.id}")
     assert detail_response.status_code == 200

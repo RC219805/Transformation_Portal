@@ -80,6 +80,15 @@ class CancelledByOrchestrator(Exception):
     """
 
 
+class RetryableExecutorUnavailable(Exception):
+    """Raised when the executor could not safely hydrate or start a job.
+
+    The worker leaves the lease unreleased so the broker can reclaim and
+    requeue it after the lease timeout instead of dropping the dispatch
+    payload while durable job state is unavailable.
+    """
+
+
 # Signature: ``executor(request, cancellation_event) -> int`` where the
 # return value is an exit code (0 = succeeded, nonzero = failed) that the
 # caller will translate into a JobRepository state update. Both arguments
@@ -146,6 +155,7 @@ class WorkerRunner:
 
         cancellation_event = asyncio.Event()
         heartbeat_task = asyncio.create_task(self._heartbeat_loop(lease.job_id, cancellation_event))
+        release_lease = True
         try:
             try:
                 exit_code = await self._executor(lease.request, cancellation_event)
@@ -161,6 +171,13 @@ class WorkerRunner:
                     self._config.worker_id,
                     lease.job_id,
                 )
+            except RetryableExecutorUnavailable:
+                release_lease = False
+                logger.exception(
+                    "worker %s executor could not safely start job %s; leaving lease for reclaim",
+                    self._config.worker_id,
+                    lease.job_id,
+                )
             except Exception:  # noqa: BLE001 - executor errors are job-level
                 logger.exception(
                     "worker %s executor raised for job %s",
@@ -173,7 +190,8 @@ class WorkerRunner:
                 await heartbeat_task
             except (asyncio.CancelledError, LeaseNotHeldError):
                 pass
-            await self._broker.release_lease(self._config.worker_id, lease.job_id)
+            if release_lease:
+                await self._broker.release_lease(self._config.worker_id, lease.job_id)
         return True
 
     async def _heartbeat_loop(
@@ -299,6 +317,7 @@ def monotonic_now() -> float:
 __all__ = [
     "CancelledByOrchestrator",
     "JobExecutor",
+    "RetryableExecutorUnavailable",
     "WorkerConfig",
     "WorkerRunner",
     "main",
