@@ -1,9 +1,9 @@
-# Orchestrator Postgres Runtime (Phase 1.B)
+# Orchestrator Postgres Runtime (Phase 1.B/1.E)
 
 **Document Status:** Active operator runbook for the Postgres-backed
 orchestrator state. The memory backend remains the default; Postgres is
 opt-in via env vars.
-**Last Updated:** 2026-05-13
+**Last Updated:** 2026-05-14
 **Related Docs:**
 - `docs/governance/PRODUCTION_HARDENING_GAP_2026-05-13.md` (the Phase 0
   baseline that introduced this work)
@@ -14,19 +14,24 @@ opt-in via env vars.
 
 ## When to use this
 
-By default the orchestrator stores job state in memory (`JOBS:
-Dict[str, Job]`) and loses it on restart. Phase 1.B introduces a
-durable Postgres backend so:
+By default the orchestrator stores job state in the in-process memory
+`JobRepository` and loses it on restart. Phase 1.B introduced a durable
+Postgres backend, and Phase 1.E wired `app.py` so `JobRepository` is the
+authoritative state surface while `JOBS` only carries runtime handles.
+With the Postgres backend enabled:
 
 - Restart no longer destroys in-flight jobs (the Phase 1.C sweeper
   marks orphans `worker_lost_on_restart`).
 - Multiple orchestrator workers can share state (a precondition for
   Phase 2 horizontal workers).
-- SSE event history survives restart (per-job monotonic `seq` lets a
-  reconnecting client resume mid-stream).
+- Job list/detail/cancel/artifact routes read durable job rows instead
+  of falling back to process-local cache.
 
 The wire shape of `/v1/jobs` and `/v2/jobs` is unchanged. The runtime
-swap is a single env flip.
+swap is a single env flip. Durable SSE replay through `JobEventStore`
+is intentionally separate from this cutover; the event route now checks
+repository-backed job existence/state, but replay history is still a
+later event-store wiring change.
 
 ## Environment variables
 
@@ -133,17 +138,18 @@ TP_TEST_POSTGRES_URL=postgresql+asyncpg://tp:tp_dev_password@127.0.0.1:5432/tran
 - `logs_tail` is stored on the `jobs` row as a JSONB array, bounded
   by the legacy `LOG_TAIL_LIMIT`. A full log table is intentionally
   deferred to Phase 2/6.
-- Artifact files themselves are still on the local filesystem
-  (Phase 4 will replace with S3-compatible storage); `job_artifacts`
-  only holds the lookup map.
-- The `app.py` orchestrator does not yet route writes through the
-  repository - the legacy `JOBS` dict remains authoritative until the
-  wiring lands as a follow-up commit. This layer's contract tests
-  (`tests/orchestrator/test_repository_contract.py`) prove the
-  Postgres backend is behavior-identical to the memory backend so
-  the eventual cut-over is a single-PR change.
+- Artifact files are handled by the `ArtifactStore` abstraction
+  (local or S3-compatible); `job_artifacts` holds the lookup map while
+  `jobs.artifacts.lifecycle` stores mirror/delete/retention metadata.
+- `JOBS` remains process-local by design. It stores live subprocess
+  handles, cancellation tasks, and subscriber queues only; it is not a
+  durable fallback when repository reads or writes fail.
+- Durable SSE replay is not wired through `JobEventStore` yet. Late
+  clients still receive the current process-local replay behavior; a
+  restart-safe event replay cutover is a separate PR.
 
 ---
 
-*Phase 1.B Postgres backend - introduced 2026-05-13. Update this doc
+*Phase 1.B Postgres backend - introduced 2026-05-13. Phase 1.E app
+cutover - introduced 2026-05-14. Update this doc
 when the wiring or any subsequent phase changes the operator surface.*

@@ -167,6 +167,47 @@ def test_orchestrator_dispatches_jobs_through_broker(
     assert dispatched == [job_id], "executor should have been invoked exactly once"
 
 
+def test_worker_executor_hydrates_job_from_repository_when_runtime_cache_is_empty(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    seen: list[str] = []
+
+    async def fake_run_job(job, argv) -> None:  # noqa: ANN001
+        seen.append(job.id)
+        assert argv == ["runner", "--flag"]
+        job.state = "succeeded"
+        job.exit_code = 0
+        now = orchestrator_app._now()
+        job.finished_at = now
+        job.done_published_at = now
+
+    async def scenario() -> int:
+        job = orchestrator_app.Job(
+            id="job_repo_only_worker",
+            created_at=orchestrator_app._now(),
+            state="queued",
+            request={"pipeline": "lux-depth-v3"},
+            effective_request={"pipeline": "lux-depth-v3", "args": {}},
+        )
+        await orchestrator_app._job_repository().create(orchestrator_app._record_from_job(job))
+        orchestrator_app.JOBS.clear()
+        request = orchestrator_app.JobEnqueueRequest(
+            job_id=job.id,
+            argv=["runner", "--flag"],
+            api_version="v1",
+            metadata={"pipeline": "lux-depth-v3"},
+        )
+        return await orchestrator_app._orchestrator_job_executor(request, asyncio.Event())
+
+    monkeypatch.setattr(orchestrator_app, "_run_job", fake_run_job)
+
+    exit_code = asyncio.run(scenario())
+
+    assert exit_code == 0
+    assert seen == ["job_repo_only_worker"]
+    assert orchestrator_app.JOBS["job_repo_only_worker"].state == "succeeded"
+
+
 def test_pre_lease_cancel_drops_queue_and_publishes_terminal_event(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     """Cancel while the job is still queued: broker.cancel returns True,
     no worker ever picks it up, and the orchestrator publishes the
@@ -456,6 +497,9 @@ def test_broker_construction_failure_returns_503_without_running_job(monkeypatch
     initial_jobs_count = len(orchestrator_app.JOBS)
     with TestClient(orchestrator_app.app, headers={"x-api-key": "contract-secret"}) as client:
         response = client.post("/v1/jobs", json=payload)
+        rollback_record = asyncio.run(
+            orchestrator_app.app.state.job_repository.get(response.json()["error"]["details"]["job_id"])
+        )
 
     assert response.status_code == 503, response.text
     body = response.json()
@@ -465,5 +509,32 @@ def test_broker_construction_failure_returns_503_without_running_job(monkeypatch
     assert run_job_calls == [], "broker outage must NOT silently fall back to in-band dispatch"
     # JOBS rollback: the admission slot is free, no stale placeholder.
     assert len(orchestrator_app.JOBS) == initial_jobs_count
+    assert rollback_record is None
     # Empty output_dir cleaned up on rollback.
     assert not output_dir.exists(), "rollback path must reclaim the output_dir it created during admission"
+
+
+def test_broker_construction_failure_preserves_preexisting_output_dir(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Admission rollback must not remove a caller-owned output directory."""
+
+    def _explode_get_queue_broker() -> Any:
+        raise RuntimeError("simulated broker outage")
+
+    monkeypatch.setattr(orchestrator_app, "get_queue_broker", _explode_get_queue_broker)
+    payload = _build_payload(tmp_path)
+    output_dir = Path(payload["args"]["output_dir"]).resolve()
+    assert output_dir.is_dir()
+
+    with TestClient(orchestrator_app.app, headers={"x-api-key": "contract-secret"}) as client:
+        response = client.post("/v1/jobs", json=payload)
+        rollback_record = asyncio.run(
+            orchestrator_app.app.state.job_repository.get(response.json()["error"]["details"]["job_id"])
+        )
+
+    assert response.status_code == 503, response.text
+    assert response.json()["error"]["code"] == "QUEUE_UNAVAILABLE"
+    assert rollback_record is None
+    assert output_dir.is_dir()

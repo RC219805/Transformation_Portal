@@ -65,7 +65,12 @@ from transformation_portal.ingest.upload_staging import (
     stage_upload_batch,
 )
 from transformation_portal.lux_depth_v3.model_registry import resolve_model_spec, resolve_registry_key, visible_cli_model_specs
-from transformation_portal.orchestrator import get_job_repository
+from transformation_portal.orchestrator import (
+    JobNotFoundError,
+    JobRecord,
+    JobRepository,
+    get_job_repository,
+)
 from transformation_portal.orchestrator.artifact_store import ArtifactNotFoundError as StoreArtifactNotFoundError
 from transformation_portal.orchestrator.artifact_store import ArtifactPathValidationError as StoreArtifactPathValidationError
 from transformation_portal.orchestrator.artifact_store import (
@@ -1078,6 +1083,10 @@ class Job:
             self.logs_tail = self.logs_tail[-limit:]
 
 
+class _JobRepositoryUnavailable(RuntimeError):
+    """Raised when the selected durable job repository cannot be used."""
+
+
 JOBS: Dict[str, Job] = {}
 EVENT_SUBSCRIBERS: Dict[str, Dict[str, "asyncio.Queue[Dict[str, Any]]"]] = {}
 RATE_LIMIT_BUCKETS: Dict[str, Deque[float]] = {}
@@ -1089,6 +1098,169 @@ ACTIVE_JOB_STATES = {"queued", "running"}
 # means.
 _TERMINAL_JOB_STATES = {"succeeded", "partial", "failed", "canceled", "worker_lost"}
 JOB_RUN_SUMMARY_MAX_BYTES = 1024 * 1024
+
+
+def _repository_unavailable_response(*, details: Optional[Dict[str, Any]] = None) -> JSONResponse:
+    return _error_response(
+        503,
+        code="JOB_REPOSITORY_UNAVAILABLE",
+        message="job repository unavailable",
+        details=details or {},
+        retriable=True,
+    )
+
+
+def _job_repository() -> JobRepository:
+    repo = getattr(app.state, "job_repository", None) if "app" in globals() else None
+    if repo is not None:
+        return repo
+    if "app" in globals() and bool(getattr(app.state, "job_repository_unavailable", False)):
+        raise _JobRepositoryUnavailable("cached repository construction failure")
+    try:
+        repo = get_job_repository()
+    except Exception as exc:  # noqa: BLE001 - callers return a redacted 503
+        if "app" in globals():
+            app.state.job_repository_unavailable = True
+        raise _JobRepositoryUnavailable("job repository construction failed") from exc
+    if "app" in globals():
+        app.state.job_repository = repo
+        app.state.job_repository_unavailable = False
+    return repo
+
+
+def _record_from_job(job: Job) -> JobRecord:
+    return JobRecord(
+        id=job.id,
+        created_at=job.created_at,
+        state=job.state,
+        progress=job.progress,
+        started_at=job.started_at,
+        finished_at=job.finished_at,
+        done_published_at=job.done_published_at,
+        last_event_at=job.last_event_at,
+        exit_code=job.exit_code,
+        cancel_requested=job.cancel_requested,
+        request=dict(job.request),
+        effective_request=dict(job.effective_request),
+        logs_tail=list(job.logs_tail),
+        artifacts=dict(job.artifacts),
+        artifact_lookup=dict(job.artifact_lookup),
+        run_summary=dict(job.run_summary),
+        error=None if job.error is None else dict(job.error),
+    )
+
+
+def _job_from_record(record: JobRecord) -> Job:
+    artifacts = dict(record.artifacts)
+    lifecycle = artifacts.get(_ARTIFACT_LIFECYCLE_KEY) if isinstance(artifacts, dict) else None
+    lifecycle = lifecycle if isinstance(lifecycle, dict) else {}
+    return Job(
+        id=record.id,
+        created_at=record.created_at,
+        started_at=record.started_at,
+        finished_at=record.finished_at,
+        done_published_at=record.done_published_at,
+        last_event_at=record.last_event_at,
+        state=record.state,
+        progress=record.progress,
+        exit_code=record.exit_code,
+        request=dict(record.request),
+        effective_request=dict(record.effective_request),
+        logs_tail=list(record.logs_tail),
+        artifacts=artifacts,
+        artifact_lookup=dict(record.artifact_lookup),
+        artifact_store_mirrored=lifecycle.get("mirror_status") == "mirrored" and not lifecycle.get("deleted_at"),
+        artifact_store_backend=(
+            str(lifecycle["artifact_store_backend"]) if lifecycle.get("artifact_store_backend") is not None else None
+        ),
+        run_summary=dict(record.run_summary),
+        cancel_requested=record.cancel_requested,
+        error=None if record.error is None else dict(record.error),
+    )
+
+
+def _overlay_runtime_state(job: Job, cached: Optional[Job]) -> Job:
+    if cached is None:
+        return job
+    proc = cached.proc
+    terminate_task = cached.terminate_task
+    cached.created_at = job.created_at
+    cached.started_at = job.started_at
+    cached.finished_at = job.finished_at
+    cached.done_published_at = job.done_published_at
+    cached.last_event_at = job.last_event_at
+    cached.state = job.state
+    cached.progress = job.progress
+    cached.exit_code = job.exit_code
+    cached.request = job.request
+    cached.effective_request = job.effective_request
+    cached.logs_tail = job.logs_tail
+    cached.artifacts = job.artifacts
+    cached.artifact_lookup = job.artifact_lookup
+    cached.artifact_store_mirrored = job.artifact_store_mirrored
+    cached.artifact_store_backend = job.artifact_store_backend
+    cached.run_summary = job.run_summary
+    cached.cancel_requested = job.cancel_requested
+    cached.error = job.error
+    cached.proc = proc
+    cached.terminate_task = terminate_task
+    return cached
+
+
+async def _load_job_record(job_id: str) -> Optional[JobRecord]:
+    try:
+        return await _job_repository().get(job_id)
+    except _JobRepositoryUnavailable:
+        raise
+    except Exception as exc:  # noqa: BLE001 - callers return a redacted 503
+        raise _JobRepositoryUnavailable("job repository read failed") from exc
+
+
+async def _load_job_view(job_id: str) -> Optional[Job]:
+    record = await _load_job_record(job_id)
+    if record is None:
+        return None
+    return _overlay_runtime_state(_job_from_record(record), JOBS.get(job_id))
+
+
+def _cache_runtime_job(job: Job) -> Job:
+    cached = JOBS.get(job.id)
+    if cached is not None:
+        job = _overlay_runtime_state(job, cached)
+    JOBS[job.id] = job
+    EVENT_SUBSCRIBERS.setdefault(job.id, {})
+    return job
+
+
+async def _persist_job_fields(job: Job, **fields: Any) -> Optional[JobRecord]:
+    try:
+        record = await _job_repository().update(job.id, **fields)
+    except JobNotFoundError:
+        raise
+    except _JobRepositoryUnavailable:
+        raise
+    except Exception as exc:  # noqa: BLE001 - callers decide whether to fail closed
+        raise _JobRepositoryUnavailable("job repository update failed") from exc
+    return record
+
+
+async def _persist_job_state(job: Job) -> None:
+    await _persist_job_fields(
+        job,
+        state=job.state,
+        progress=job.progress,
+        started_at=job.started_at,
+        finished_at=job.finished_at,
+        done_published_at=job.done_published_at,
+        last_event_at=job.last_event_at,
+        exit_code=job.exit_code,
+        cancel_requested=job.cancel_requested,
+        request=job.request,
+        effective_request=job.effective_request,
+        run_summary=job.run_summary,
+        error=job.error,
+    )
+
 
 # Gate pipelines integrated directly
 ARCHIVE_GATE_PIPELINES = {"archive-gate-a", "archive-gate-b", "archive-gate-c"}
@@ -2772,17 +2944,27 @@ def _public_http_error_message(status_code: int, path: str = "") -> str:
     return PUBLIC_HTTP_ERROR_MESSAGES.get(status_code, "request failed")
 
 
-def _cleanup_expired_jobs(now: float) -> None:
-    expired = [
-        job_id
-        for job_id, job in JOBS.items()
-        if job.finished_at is not None
-        and now - job.finished_at >= JOB_RETENTION_SECONDS
-        and not _job_has_undeleted_artifacts(job)
-    ]
-    for job_id in expired:
-        JOBS.pop(job_id, None)
-        EVENT_SUBSCRIBERS.pop(job_id, None)
+async def _cleanup_expired_jobs(now: float) -> None:
+    try:
+        records, _ = await _job_repository().list(limit=None)
+    except Exception:  # noqa: BLE001 - cleanup must not break request handling
+        LOGGER.exception("job repository cleanup scan failed")
+        return
+
+    for record in records:
+        job = _overlay_runtime_state(_job_from_record(record), JOBS.get(record.id))
+        if (
+            job.finished_at is not None
+            and now - job.finished_at >= JOB_RETENTION_SECONDS
+            and not _job_has_undeleted_artifacts(job)
+        ):
+            try:
+                await _job_repository().delete(job.id)
+            except Exception:  # noqa: BLE001 - one failed cleanup must not block others
+                LOGGER.exception("job repository cleanup delete failed for %s", job.id)
+                continue
+            JOBS.pop(job.id, None)
+            EVENT_SUBSCRIBERS.pop(job.id, None)
 
 
 def _job_has_undeleted_artifacts(job: "Job") -> bool:
@@ -2838,7 +3020,12 @@ def _delete_legacy_job_artifact_files(job: Job) -> int:
     return deleted
 
 
-async def _delete_job_artifacts_for_job(job: Job, *, reason: str) -> Optional[int]:
+async def _delete_job_artifacts_for_job(
+    job: Job,
+    *,
+    reason: str,
+    fail_closed_on_repository: bool = False,
+) -> Optional[int]:
     try:
         store = _artifact_store()
     except Exception as exc:  # noqa: BLE001 - callers surface this as 503
@@ -2851,7 +3038,7 @@ async def _delete_job_artifacts_for_job(job: Job, *, reason: str) -> Optional[in
                 "deletion_reason": reason,
             }
         )
-        await _persist_job_artifact_metadata(job)
+        await _persist_job_artifact_metadata(job, fail_closed=fail_closed_on_repository)
         return None
 
     lifecycle = _ensure_artifact_lifecycle(job, backend=store.backend)
@@ -2867,7 +3054,7 @@ async def _delete_job_artifacts_for_job(job: Job, *, reason: str) -> Optional[in
             }
         )
         LOGGER.exception("artifact deletion failed for job %s", job.id)
-        await _persist_job_artifact_metadata(job)
+        await _persist_job_artifact_metadata(job, fail_closed=fail_closed_on_repository)
         await _publish_event(
             job.id,
             "artifact_deletion_failed",
@@ -2895,7 +3082,7 @@ async def _delete_job_artifacts_for_job(job: Job, *, reason: str) -> Optional[in
     )
     lifecycle.pop("deletion_error", None)
     job.artifact_store_mirrored = False
-    await _persist_job_artifact_metadata(job)
+    await _persist_job_artifact_metadata(job, fail_closed=fail_closed_on_repository)
     await _publish_event(
         job.id,
         "artifact_deleted",
@@ -2912,7 +3099,14 @@ async def _delete_job_artifacts_for_job(job: Job, *, reason: str) -> Optional[in
 
 
 async def _cleanup_expired_job_artifacts(now: float) -> None:
-    for job in list(JOBS.values()):
+    try:
+        records, _ = await _job_repository().list(limit=None)
+    except Exception:  # noqa: BLE001 - cleanup must not break request handling
+        LOGGER.exception("job artifact retention scan failed")
+        return
+
+    for record in records:
+        job = _overlay_runtime_state(_job_from_record(record), JOBS.get(record.id))
         if not _artifact_retention_due(job, now):
             continue
         deleted = await _delete_job_artifacts_for_job(job, reason="retention_expired")
@@ -2920,8 +3114,8 @@ async def _cleanup_expired_job_artifacts(now: float) -> None:
             LOGGER.warning("retention cleanup could not delete artifacts for job %s", job.id)
 
 
-def _active_job_count() -> int:
-    return sum(1 for job in JOBS.values() if job.state in ACTIVE_JOB_STATES)
+async def _active_job_count() -> int:
+    return await _job_repository().count_active()
 
 
 def _cleanup_rate_limit_buckets(now: float) -> None:
@@ -2939,9 +3133,16 @@ def _cleanup_rate_limit_buckets(now: float) -> None:
         RATE_LIMIT_BUCKETS.pop(client_ip, None)
 
 
-def _retained_staged_input_dirs() -> set[str]:
+async def _retained_staged_input_dirs() -> set[str]:
     retained: set[str] = set()
-    for job in JOBS.values():
+    try:
+        records, _ = await _job_repository().list(limit=None)
+    except Exception:  # noqa: BLE001 - upload cleanup must not block on repo errors
+        LOGGER.exception("job repository retained upload scan failed")
+        return retained
+
+    for record in records:
+        job = _overlay_runtime_state(_job_from_record(record), JOBS.get(record.id))
         effective_request = (
             job.effective_request if isinstance(job.effective_request, dict) and job.effective_request else job.request
         )
@@ -2961,7 +3162,7 @@ def _retained_staged_input_dirs() -> set[str]:
     return retained
 
 
-def _cleanup_expired_upload_batches(now: float) -> None:
+async def _cleanup_expired_upload_batches(now: float) -> None:
     try:
         upload_root = _resolved_portal_upload_root()
     except _PortalValidationReasonError:
@@ -2972,7 +3173,7 @@ def _cleanup_expired_upload_batches(now: float) -> None:
         upload_root,
         now=now,
         ttl_seconds=PORTAL_UPLOAD_TTL_SECONDS,
-        retained_input_dirs=_retained_staged_input_dirs(),
+        retained_input_dirs=await _retained_staged_input_dirs(),
     )
     if removed:
         LOGGER.info("Removed %d expired staged upload batches", len(removed))
@@ -2983,8 +3184,8 @@ async def _cleanup_loop() -> None:
         await asyncio.sleep(CLEANUP_INTERVAL_SECONDS)
         now = _now()
         await _cleanup_expired_job_artifacts(now)
-        _cleanup_expired_jobs(now)
-        _cleanup_expired_upload_batches(now)
+        await _cleanup_expired_jobs(now)
+        await _cleanup_expired_upload_batches(now)
         _cleanup_rate_limit_buckets(now)
 
 
@@ -6011,9 +6212,14 @@ async def _publish_event(
     event: str,
     data: Dict[str, Any],
 ) -> None:
+    event_at = _now()
     job = JOBS.get(job_id)
     if job is not None:
-        job.last_event_at = _now()
+        job.last_event_at = event_at
+    try:
+        await _job_repository().update(job_id, last_event_at=event_at)
+    except Exception:  # noqa: BLE001 - event fanout must not fail on persistence lag
+        LOGGER.debug("job repository last_event_at update skipped/failed for %s", job_id, exc_info=True)
 
     subscribers = EVENT_SUBSCRIBERS.get(job_id)
     if not subscribers:
@@ -6101,6 +6307,7 @@ async def _terminate_process(
 async def _request_cancel(job: Job) -> None:
     already_requested = job.cancel_requested
     job.cancel_requested = True
+    await _persist_job_fields(job, cancel_requested=True)
 
     # Broker-mediated cancel (Phases 2.C/2.E). Route through
     # ``broker.cancel`` so:
@@ -6730,17 +6937,24 @@ def _artifact_mirror_failed_for_path(job: Job, relative_path: str) -> bool:
     return True
 
 
-async def _persist_job_artifact_metadata(job: Job) -> None:
-    repo = getattr(app.state, "job_repository", None) if "app" in globals() else None
-    if repo is None:
-        return
+async def _persist_job_artifact_metadata(job: Job, *, fail_closed: bool = False) -> bool:
     try:
-        await repo.update(job.id, artifacts=job.artifacts)
-    except Exception:  # noqa: BLE001 - repository lag must not break artifact serving
+        await _job_repository().set_artifacts(job.id, job.artifacts, job.artifact_lookup)
+    except _JobRepositoryUnavailable:
+        if fail_closed:
+            raise
         LOGGER.debug("job artifact metadata persistence skipped/failed for %s", job.id, exc_info=True)
+        return False
+    except Exception as exc:  # noqa: BLE001 - callers choose fail-open cleanup vs fail-closed routes
+        if fail_closed:
+            raise _JobRepositoryUnavailable("job repository artifact update failed") from exc
+        LOGGER.debug("job artifact metadata persistence skipped/failed for %s", job.id, exc_info=True)
+        return False
+    _cache_runtime_job(job)
+    return True
 
 
-async def _mirror_job_artifacts_to_store(job: Job) -> bool:
+async def _mirror_job_artifacts_to_store(job: Job, *, fail_closed_on_repository: bool = False) -> bool:
     try:
         store = _artifact_store()
     except Exception as exc:  # noqa: BLE001 - surface through lifecycle/readiness
@@ -6752,7 +6966,7 @@ async def _mirror_job_artifacts_to_store(job: Job) -> bool:
             }
         )
         LOGGER.exception("artifact store unavailable while mirroring job %s", job.id)
-        await _persist_job_artifact_metadata(job)
+        await _persist_job_artifact_metadata(job, fail_closed=fail_closed_on_repository)
         return False
 
     if job.artifact_store_mirrored and job.artifact_store_backend == store.backend:
@@ -6795,7 +7009,7 @@ async def _mirror_job_artifacts_to_store(job: Job) -> bool:
         lifecycle["mirror_status"] = "failed"
         lifecycle["mirror_failed_paths"] = failures[:10]
         lifecycle["mirror_failed_paths_complete"] = len(failures) <= 10
-        await _persist_job_artifact_metadata(job)
+        await _persist_job_artifact_metadata(job, fail_closed=fail_closed_on_repository)
         return False
     lifecycle["mirror_status"] = "mirrored"
     lifecycle.pop("mirror_error", None)
@@ -6803,7 +7017,7 @@ async def _mirror_job_artifacts_to_store(job: Job) -> bool:
     lifecycle.pop("mirror_failed_paths_complete", None)
     job.artifact_store_mirrored = True
     job.artifact_store_backend = store.backend
-    await _persist_job_artifact_metadata(job)
+    await _persist_job_artifact_metadata(job, fail_closed=fail_closed_on_repository)
     return True
 
 
@@ -8251,6 +8465,9 @@ async def _orchestrator_lifespan(app: "FastAPI") -> "AsyncGenerator[None, None]"
     except Exception:  # noqa: BLE001 - never block startup on recovery
         LOGGER.exception("orchestrator repository construction failed; skipping restart recovery")
         repo = None
+        app.state.job_repository_unavailable = True
+    else:
+        app.state.job_repository_unavailable = False
     app.state.job_repository = repo
 
     if repo is None:
@@ -8392,6 +8609,7 @@ async def _orchestrator_lifespan(app: "FastAPI") -> "AsyncGenerator[None, None]"
             except Exception:  # noqa: BLE001 - never block shutdown on close
                 LOGGER.exception("orchestrator repository close failed")
         app.state.job_repository = None
+        app.state.job_repository_unavailable = False
 
 
 app = FastAPI(
@@ -8403,6 +8621,8 @@ app = FastAPI(
     lifespan=_orchestrator_lifespan,
 )
 app.state.cleanup_task = None
+app.state.job_repository = None
+app.state.job_repository_unavailable = False
 
 if ENABLE_TRUSTED_HOSTS:
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=TRUSTED_HOSTS)
@@ -8705,15 +8925,18 @@ async def ready() -> Dict[str, Any]:
         "artifact_store": artifact_store,
     }
     if READY_VERBOSE:
+        try:
+            _, total_jobs = await _job_repository().list(limit=1)
+            active_jobs = await _active_job_count()
+            jobs_block: Dict[str, Any] = {"active": active_jobs, "total": total_jobs}
+        except Exception:  # noqa: BLE001 - verbose readiness should stay redacted
+            jobs_block = {"active": None, "total": None, "repository_unavailable": True}
         response["cli"] = {
             "lux-depth-v3": _lux_depth_runner_available(),
             "archive-governance": ARCHIVE_GOVERNANCE_SCRIPT.is_file(),
             "python": sys.version.split()[0],
         }
-        response["jobs"] = {
-            "active": _active_job_count(),
-            "total": len(JOBS),
-        }
+        response["jobs"] = jobs_block
         response["security"] = {
             "api_key_enforced_for_jobs": _job_api_key_enforced(),
             "rate_limit_per_minute": RATE_LIMIT_PER_MINUTE,
@@ -9100,9 +9323,18 @@ async def _create_job(
             details={"field": "payload", "reason": reason},
         )
 
+    try:
+        repo = _job_repository()
+    except _JobRepositoryUnavailable:
+        return _repository_unavailable_response()
+
     async with JOB_ADMISSION_LOCK:
-        _cleanup_expired_jobs(_now())
-        active_jobs = _active_job_count()
+        await _cleanup_expired_jobs(_now())
+        try:
+            active_jobs = await _active_job_count()
+        except Exception:  # noqa: BLE001 - admission must not fall back to stale cache
+            LOGGER.exception("job repository active-count check failed")
+            return _repository_unavailable_response()
         if active_jobs >= MAX_CONCURRENT_JOBS:
             job_admission_headers = _rate_limit_response_headers(
                 limit=MAX_CONCURRENT_JOBS,
@@ -9142,19 +9374,31 @@ async def _create_job(
         jid = "job_" + uuid.uuid4().hex[:8]
         effective_request = {"pipeline": pipeline, "args": dict(execution_args)}
         job = Job(id=jid, created_at=_now(), request=payload, effective_request=effective_request)
-        JOBS[jid] = job
-        EVENT_SUBSCRIBERS[jid] = {}
+        try:
+            await repo.create(_record_from_job(job))
+        except Exception:  # noqa: BLE001 - create failures must fail closed and stay redacted
+            LOGGER.exception("job repository create failed for %s", jid)
+            if trusted_output_dir is not None and not output_dir_existed_pre_dispatch:
+                with suppress(OSError):
+                    trusted_output_dir.rmdir()
+            return _repository_unavailable_response()
+        _cache_runtime_job(job)
 
     try:
         await _dispatch_job(job, argv, pipeline=pipeline)
     except _DispatchError:
         # Broker enqueue raised after we already admitted the job. The
-        # enqueue may have partially succeeded; roll back the JOBS entry
-        # and let the client retry. Detailed cause is logged inside
+        # enqueue may have partially succeeded; roll back the repository
+        # row/runtime cache and let the client retry. Detailed cause is logged inside
         # ``_dispatch_job``. Also reclaim the materialised output_dir
         # when WE created it and it is still empty — pre-existing dirs
         # and dirs with content are left untouched because ``rmdir``
         # silently fails on non-empty directories.
+        try:
+            await repo.delete(jid)
+        except Exception:  # noqa: BLE001 - leaving an admitted row would be unsafe
+            LOGGER.exception("job repository rollback delete failed for %s", jid)
+            return _repository_unavailable_response()
         JOBS.pop(jid, None)
         EVENT_SUBSCRIBERS.pop(jid, None)
         if trusted_output_dir is not None and not output_dir_existed_pre_dispatch:
@@ -9189,23 +9433,25 @@ async def _create_job(
 
 @app.get("/v1/jobs", response_model=JobsListEnvelope)
 async def list_jobs(limit: int = JOB_LIST_LIMIT) -> JSONResponse:
-    return _list_jobs(limit=limit, api_version="v1")
+    return await _list_jobs(limit=limit, api_version="v1")
 
 
 @app.get("/v2/jobs", response_model=JobsListEnvelope)
 async def list_jobs_v2(limit: int = JOB_LIST_LIMIT) -> JSONResponse:
-    return _list_jobs(limit=limit, api_version="v2")
+    return await _list_jobs(limit=limit, api_version="v2")
 
 
-def _list_jobs(*, limit: int = JOB_LIST_LIMIT, api_version: str = "v1") -> JSONResponse:
-    _cleanup_expired_jobs(_now())
+async def _list_jobs(*, limit: int = JOB_LIST_LIMIT, api_version: str = "v1") -> JSONResponse:
+    await _cleanup_expired_jobs(_now())
     bounded_limit = max(1, min(limit, JOB_LIST_LIMIT))
-    jobs_sorted = sorted(
-        JOBS.values(),
-        key=lambda item: item.created_at,
-        reverse=True,
-    )
-    serialized = [_serialize_job(job, include_logs=False, api_version=api_version) for job in jobs_sorted[:bounded_limit]]
+    try:
+        records, total = await _job_repository().list(limit=bounded_limit)
+    except Exception:  # noqa: BLE001 - never fall back to stale runtime cache
+        LOGGER.exception("job repository list failed")
+        return _repository_unavailable_response()
+
+    jobs = [_overlay_runtime_state(_job_from_record(record), JOBS.get(record.id)) for record in records]
+    serialized = [_serialize_job(job, include_logs=False, api_version=api_version) for job in jobs]
 
     # Phase 1.D: construct via Pydantic for runtime validation, then
     # serialize with ``exclude_unset=True`` so optional Job fields the
@@ -9217,7 +9463,7 @@ def _list_jobs(*, limit: int = JOB_LIST_LIMIT, api_version: str = "v1") -> JSONR
             success=True,
             data=JobsListData(
                 jobs=[JobStatusData(**entry) for entry in serialized],
-                total=len(JOBS),
+                total=total,
                 returned=len(serialized),
             ),
             error=None,
@@ -9227,17 +9473,20 @@ def _list_jobs(*, limit: int = JOB_LIST_LIMIT, api_version: str = "v1") -> JSONR
 
 @app.get("/v1/jobs/{job_id}", response_model=JobStatusEnvelope)
 async def get_job(job_id: str, include_logs: bool = True) -> JSONResponse:
-    return _get_job(job_id, include_logs=include_logs, api_version="v1")
+    return await _get_job(job_id, include_logs=include_logs, api_version="v1")
 
 
 @app.get("/v2/jobs/{job_id}", response_model=JobStatusEnvelope)
 async def get_job_v2(job_id: str, include_logs: bool = True) -> JSONResponse:
-    return _get_job(job_id, include_logs=include_logs, api_version="v2")
+    return await _get_job(job_id, include_logs=include_logs, api_version="v2")
 
 
-def _get_job(job_id: str, *, include_logs: bool = True, api_version: str = "v1") -> JSONResponse:
-    _cleanup_expired_jobs(_now())
-    job = JOBS.get(job_id)
+async def _get_job(job_id: str, *, include_logs: bool = True, api_version: str = "v1") -> JSONResponse:
+    await _cleanup_expired_jobs(_now())
+    try:
+        job = await _load_job_view(job_id)
+    except _JobRepositoryUnavailable:
+        return _repository_unavailable_response()
     if not job:
         return _error_response(
             404,
@@ -9280,8 +9529,11 @@ async def delete_job_artifacts_v2(job_id: str) -> JSONResponse:
 
 
 async def _get_job_artifact(job_id: str, artifact_path: str) -> Response:
-    _cleanup_expired_jobs(_now())
-    job = JOBS.get(job_id)
+    await _cleanup_expired_jobs(_now())
+    try:
+        job = await _load_job_view(job_id)
+    except _JobRepositoryUnavailable:
+        return _repository_unavailable_response()
     if not job:
         return _error_response(
             404,
@@ -9326,11 +9578,17 @@ async def _get_job_artifact(job_id: str, artifact_path: str) -> Response:
 
     known_paths = _artifact_known_relative_paths(job)
     if not known_paths:
-        if not _hydrate_artifact_lookup_from_items(job):
-            # Fingerprint computation can do bounded synchronous IO; offload
-            # the indexing pass to a worker thread to keep the event loop
-            # responsive for SSE subscribers and concurrent API callers.
-            await asyncio.to_thread(_index_job_artifacts, job)
+        try:
+            if _hydrate_artifact_lookup_from_items(job):
+                await _persist_job_artifact_metadata(job, fail_closed=True)
+            else:
+                # Fingerprint computation can do bounded synchronous IO; offload
+                # the indexing pass to a worker thread to keep the event loop
+                # responsive for SSE subscribers and concurrent API callers.
+                await asyncio.to_thread(_index_job_artifacts, job)
+                await _persist_job_artifact_metadata(job, fail_closed=True)
+        except _JobRepositoryUnavailable:
+            return _repository_unavailable_response()
         known_paths = _artifact_known_relative_paths(job)
     if requested_relative_path not in known_paths:
         return _error_response(
@@ -9341,7 +9599,11 @@ async def _get_job_artifact(job_id: str, artifact_path: str) -> Response:
         )
 
     if not job.artifact_store_mirrored:
-        await _mirror_job_artifacts_to_store(job)
+        try:
+            await _persist_job_artifact_metadata(job, fail_closed=True)
+            await _mirror_job_artifacts_to_store(job, fail_closed_on_repository=True)
+        except _JobRepositoryUnavailable:
+            return _repository_unavailable_response()
 
     try:
         store = _artifact_store()
@@ -9461,8 +9723,11 @@ async def _get_job_artifact(job_id: str, artifact_path: str) -> Response:
 
 
 async def _delete_job_artifacts(job_id: str, *, api_version: str = "v1") -> JSONResponse:
-    _cleanup_expired_jobs(_now())
-    job = JOBS.get(job_id)
+    await _cleanup_expired_jobs(_now())
+    try:
+        job = await _load_job_view(job_id)
+    except _JobRepositoryUnavailable:
+        return _repository_unavailable_response()
     if not job:
         return _error_response(
             404,
@@ -9478,7 +9743,15 @@ async def _delete_job_artifacts(job_id: str, *, api_version: str = "v1") -> JSON
             details={"job_id": job_id, "state": job.state},
         )
     if not _artifacts_deleted(job):
-        deleted = await _delete_job_artifacts_for_job(job, reason="explicit_delete")
+        try:
+            await _persist_job_artifact_metadata(job, fail_closed=True)
+            deleted = await _delete_job_artifacts_for_job(
+                job,
+                reason="explicit_delete",
+                fail_closed_on_repository=True,
+            )
+        except _JobRepositoryUnavailable:
+            return _repository_unavailable_response()
         if deleted is None:
             return _error_response(
                 503,
@@ -9508,7 +9781,10 @@ async def cancel_job_v2(job_id: str) -> JSONResponse:
 
 
 async def _cancel_job(job_id: str) -> JSONResponse:
-    job = JOBS.get(job_id)
+    try:
+        job = await _load_job_view(job_id)
+    except _JobRepositoryUnavailable:
+        return _repository_unavailable_response()
     if not job:
         return _error_response(
             404,
@@ -9516,7 +9792,10 @@ async def _cancel_job(job_id: str) -> JSONResponse:
             message="job not found",
             details={"job_id": job_id},
         )
-    await _request_cancel(job)
+    try:
+        await _request_cancel(job)
+    except _JobRepositoryUnavailable:
+        return _repository_unavailable_response()
     # Phase 1.D: ``events_url`` is deliberately not passed to
     # ``JobBriefData`` so it stays unset; ``exclude_unset=True`` then
     # drops it from the wire, matching the legacy ``_api_envelope``
@@ -9551,7 +9830,10 @@ async def _job_events(
     request: Request,
     job_id: str,
 ) -> Response:
-    job = JOBS.get(job_id)
+    try:
+        job = await _load_job_view(job_id)
+    except _JobRepositoryUnavailable:
+        return _repository_unavailable_response()
     if not job:
         return _error_response(
             404,
@@ -9632,7 +9914,7 @@ async def _job_events(
             subscribers_for_job = EVENT_SUBSCRIBERS.get(job_id)
             if subscribers_for_job is not None:
                 subscribers_for_job.pop(subscriber_id, None)
-                if not subscribers_for_job and JOBS.get(job_id) and JOBS[job_id].finished_at is not None:
+                if not subscribers_for_job and job.finished_at is not None:
                     EVENT_SUBSCRIBERS.pop(job_id, None)
 
     return StreamingResponse(
@@ -9662,11 +9944,12 @@ async def _job_events(
 class _DispatchError(Exception):
     """Raised when ``_dispatch_job`` cannot safely hand the job off.
 
-    ``_create_job`` catches this, rolls back the partial ``JOBS``
-    entry, and emits a 503 so the caller can retry. Covers both the
-    boot-time-misconfig case (broker construction raises) and the
-    IO-failure case (``enqueue`` raises a non-``QueueBrokerError``
-    exception, where the write may have partially succeeded).
+    ``_create_job`` catches this, rolls back the repository row and
+    runtime cache entry, and emits a 503 so the caller can retry.
+    Covers both the boot-time-misconfig case (broker construction
+    raises) and the IO-failure case (``enqueue`` raises a
+    non-``QueueBrokerError`` exception, where the write may have
+    partially succeeded).
     """
 
 
@@ -9676,7 +9959,7 @@ async def _dispatch_job(job: "Job", argv: List[str], *, pipeline: str) -> None:
     ``_create_job`` retains its admission control (concurrency cap +
     rate limit). The broker is the execution seam, not the admission
     seam: every job ``_dispatch_job`` sees has already passed
-    admission and is recorded in ``JOBS``.
+    admission and is recorded in the repository plus the runtime cache.
 
     Failure modes:
 
@@ -9724,31 +10007,35 @@ async def _orchestrator_job_executor(
     """``WorkerRunner.executor`` adapter that runs the orchestrator's job.
 
     The broker holds the dispatch payload (argv); the orchestrator
-    still owns the per-job runtime state (``JOBS[jid]``, the SSE
-    subscriber queues, the live ``asyncio.subprocess.Process``
-    handle, log/event accumulation). The executor bridges the two:
-    look up the in-process ``Job`` and run the existing
-    ``_run_job`` body, mirroring broker-side cancellation into the
-    ``job.cancel_requested`` flag that ``_run_job``'s loop already
-    observes.
+    repository owns durable job state; ``JOBS`` only carries runtime
+    handles such as the live ``asyncio.subprocess.Process``, terminate
+    task, and SSE subscriber queues. The executor bridges the two:
+    hydrate the job from the repository, overlay any runtime handles,
+    and run the existing ``_run_job`` body, mirroring broker-side
+    cancellation into the ``job.cancel_requested`` flag that
+    ``_run_job``'s loop already observes.
 
     Phase 2.D — terminal-state guard. The broker's
     ``reclaim_expired_leases`` re-queues abandoned jobs by design
     (Phase 2.A contract). If the orchestrator-level reclaim sweep
     already drove the in-process ``Job`` to a terminal state
-    (``worker_lost``, ``canceled``, etc.), a stale worker pickup
-    of the same ``job_id`` must NOT re-spawn the dispatch
-    subprocess. Treat the terminal Job as a no-op and release the
-    lease cleanly.
+    (``worker_lost``, ``canceled``, etc.), a stale worker pickup of
+    the same ``job_id`` must not re-spawn the dispatch subprocess.
+    Treat the terminal Job as a no-op and release the lease cleanly.
 
     When the job has been cleaned up entirely between enqueue and
-    lease pickup (expiry sweep removed the JOBS entry), the
-    executor also exits cleanly.
+    lease pickup (the repository row is gone), the executor also exits
+    cleanly.
     """
-    job = JOBS.get(request.job_id)
+    try:
+        job = await _load_job_view(request.job_id)
+    except _JobRepositoryUnavailable:
+        LOGGER.exception("worker could not load job_id=%s from repository", request.job_id)
+        return 1
     if job is None:
         LOGGER.warning("worker leased unknown job_id=%s; releasing without dispatch", request.job_id)
         return 0
+    _cache_runtime_job(job)
     if job.finished_at is not None or job.state in _TERMINAL_JOB_STATES:
         LOGGER.info(
             "worker leased already-terminal job_id=%s state=%s; releasing without dispatch",
@@ -9804,6 +10091,7 @@ async def _publish_cancellation_terminal(job: "Job") -> None:
     )
     job.done_published_at = now
     job.finished_at = now
+    await _persist_job_state(job)
 
 
 async def _publish_worker_lost_terminal(job: "Job", *, reason_code: str) -> None:
@@ -9845,6 +10133,7 @@ async def _publish_worker_lost_terminal(job: "Job", *, reason_code: str) -> None
     )
     job.done_published_at = now
     job.finished_at = now
+    await _persist_job_state(job)
 
 
 async def _reclaim_sweep_once(broker: "QueueBroker", repository: Any) -> List[str]:
@@ -9929,8 +10218,10 @@ async def _reclaim_sweep_loop(broker: "QueueBroker", repository: Any, stop_event
 
 
 async def _run_job(job: Job, argv: List[str]) -> None:
+    _cache_runtime_job(job)
     job.state = "running"
     job.started_at = _now()
+    await _persist_job_fields(job, state=job.state, started_at=job.started_at)
     await _publish_event(
         job.id,
         "state",
@@ -9970,6 +10261,10 @@ async def _run_job(job: Job, argv: List[str]) -> None:
             ).rstrip("\n")
             line = _redact_log_line(line)
             job.add_log(line)
+            try:
+                await _job_repository().append_log(job.id, line, tail_limit=LOG_TAIL_LIMIT)
+            except Exception:  # noqa: BLE001 - keep the runner moving if log persistence lags
+                LOGGER.exception("job repository append_log failed for %s", job.id)
             await _publish_event(
                 job.id,
                 "log",
@@ -9979,6 +10274,7 @@ async def _run_job(job: Job, argv: List[str]) -> None:
             pct = _extract_progress_percent(line)
             if pct is not None and pct != job.progress:
                 job.progress = pct
+                await _persist_job_fields(job, progress=job.progress)
                 await _publish_event(
                     job.id,
                     "progress",
@@ -10001,6 +10297,7 @@ async def _run_job(job: Job, argv: List[str]) -> None:
                     {"exit_code": int(rc)},
                     retriable=False,
                 )
+        await _persist_job_fields(job, state=job.state, exit_code=job.exit_code, error=job.error)
 
     except FileNotFoundError:
         job.state = "failed"
@@ -10014,6 +10311,9 @@ async def _run_job(job: Job, argv: List[str]) -> None:
         )
         msg = f"runner_error: {job.error['message']}"
         job.add_log(msg)
+        with suppress(Exception):
+            await _job_repository().append_log(job.id, msg, tail_limit=LOG_TAIL_LIMIT)
+        await _persist_job_fields(job, state=job.state, exit_code=job.exit_code, error=job.error, logs_tail=job.logs_tail)
         await _publish_event(
             job.id,
             "log",
@@ -10034,6 +10334,9 @@ async def _run_job(job: Job, argv: List[str]) -> None:
         )
         msg = "runner_error: unexpected runner failure"
         job.add_log(msg)
+        with suppress(Exception):
+            await _job_repository().append_log(job.id, msg, tail_limit=LOG_TAIL_LIMIT)
+        await _persist_job_fields(job, state=job.state, exit_code=job.exit_code, error=job.error, logs_tail=job.logs_tail)
         await _publish_event(
             job.id,
             "log",
@@ -10103,4 +10406,6 @@ async def _run_job(job: Job, argv: List[str]) -> None:
         # it's safe to synthesize 'done' if done_published_at is set.
         job.done_published_at = _now()
         job.finished_at = job.done_published_at
-        _cleanup_expired_jobs(_now())
+        await _persist_job_state(job)
+        _cache_runtime_job(job)
+        await _cleanup_expired_jobs(_now())

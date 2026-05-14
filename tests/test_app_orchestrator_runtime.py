@@ -25,6 +25,8 @@ from urllib.parse import parse_qs, urlparse
 import pytest
 from starlette.requests import Request as StarletteRequest
 
+from transformation_portal.orchestrator import reset_singletons
+
 pytestmark = pytest.mark.unit
 
 orchestrator_app = importlib.import_module("app")
@@ -40,6 +42,26 @@ PORTAL_OPERATE_SURFACE_SOURCE_PATH = PORTAL_FRONTDOOR_ROOT / "portal-src" / "ope
 PORTAL_BUILD_SURFACE_SOURCE_PATH = PORTAL_FRONTDOOR_ROOT / "portal-src" / "build-surface-deferred.js"
 PORTAL_OVERVIEW_SURFACE_SOURCE_PATH = PORTAL_FRONTDOOR_ROOT / "portal-src" / "overview-surface-deferred.js"
 FRONTDOOR_BRAND_ROOT = PORTAL_HTML_PATH.parent / "web" / "secure-landing" / "public" / "brand"
+
+
+def _reset_job_repository() -> None:
+    reset_singletons()
+    orchestrator_app.app.state.job_repository = None
+    orchestrator_app.app.state.job_repository_unavailable = False
+
+
+async def _seed_job_async(job: Any) -> Any:
+    repo = orchestrator_app._job_repository()
+    await repo.create(orchestrator_app._record_from_job(job))
+    if job.artifacts or job.artifact_lookup:
+        await repo.set_artifacts(job.id, job.artifacts, job.artifact_lookup)
+    orchestrator_app.JOBS[job.id] = job
+    orchestrator_app.EVENT_SUBSCRIBERS.setdefault(job.id, {})
+    return job
+
+
+def _seed_job(job: Any) -> Any:
+    return asyncio.run(_seed_job_async(job))
 
 
 class _FakeRequest:
@@ -363,11 +385,13 @@ def _build_multipart_form_body(
 
 @pytest.fixture(autouse=True)
 def _reset_global_state() -> None:
+    _reset_job_repository()
     orchestrator_app.JOBS.clear()
     orchestrator_app.EVENT_SUBSCRIBERS.clear()
     yield
     orchestrator_app.JOBS.clear()
     orchestrator_app.EVENT_SUBSCRIBERS.clear()
+    _reset_job_repository()
 
 
 def test_argv_normalization_accepts_canonical_keys() -> None:
@@ -4861,8 +4885,7 @@ def test_lux_depth_readiness_blocks_selected_da3_when_runtime_missing(
 def test_run_job_is_async_and_does_not_block_event_loop() -> None:
     async def scenario() -> None:
         job = orchestrator_app.Job(id="job_async", created_at=orchestrator_app._now())
-        orchestrator_app.JOBS[job.id] = job
-        orchestrator_app.EVENT_SUBSCRIBERS[job.id] = {}
+        await _seed_job_async(job)
 
         ticks = 0
         stop = asyncio.Event()
@@ -4913,8 +4936,7 @@ def test_run_job_is_async_and_does_not_block_event_loop() -> None:
 def test_cancel_request_terminates_running_job() -> None:
     async def scenario() -> None:
         job = orchestrator_app.Job(id="job_cancel", created_at=orchestrator_app._now())
-        orchestrator_app.JOBS[job.id] = job
-        orchestrator_app.EVENT_SUBSCRIBERS[job.id] = {}
+        await _seed_job_async(job)
 
         runner = asyncio.create_task(
             orchestrator_app._run_job(
@@ -4946,8 +4968,7 @@ def test_cancel_request_terminates_running_job() -> None:
 def test_sse_broadcast_delivers_events_to_multiple_subscribers() -> None:
     async def scenario() -> None:
         job = orchestrator_app.Job(id="job_sse", created_at=orchestrator_app._now(), state="running")
-        orchestrator_app.JOBS[job.id] = job
-        orchestrator_app.EVENT_SUBSCRIBERS[job.id] = {}
+        await _seed_job_async(job)
 
         req_one = _FakeRequest()
         req_two = _FakeRequest()
@@ -4984,8 +5005,7 @@ def test_sse_broadcast_delivers_events_to_multiple_subscribers() -> None:
 def test_sse_disconnect_cleans_up_subscriber_queue() -> None:
     async def scenario() -> None:
         job = orchestrator_app.Job(id="job_disconnect", created_at=orchestrator_app._now(), state="running")
-        orchestrator_app.JOBS[job.id] = job
-        orchestrator_app.EVENT_SUBSCRIBERS[job.id] = {}
+        await _seed_job_async(job)
 
         request = _FakeRequest()
         response = await orchestrator_app.job_events(request, job.id)
@@ -5016,17 +5036,19 @@ def test_cleanup_expired_jobs_prunes_old_finished_entries() -> None:
     )
     running_job = orchestrator_app.Job(id="job_running", created_at=now, state="running")
 
-    orchestrator_app.JOBS[old_job.id] = old_job
-    orchestrator_app.JOBS[fresh_job.id] = fresh_job
-    orchestrator_app.JOBS[running_job.id] = running_job
+    _seed_job(old_job)
+    _seed_job(fresh_job)
+    _seed_job(running_job)
 
     orchestrator_app.EVENT_SUBSCRIBERS[old_job.id] = {"s1": asyncio.Queue()}
     orchestrator_app.EVENT_SUBSCRIBERS[fresh_job.id] = {"s2": asyncio.Queue()}
 
-    orchestrator_app._cleanup_expired_jobs(now)
+    asyncio.run(orchestrator_app._cleanup_expired_jobs(now))
 
     assert old_job.id not in orchestrator_app.JOBS
     assert old_job.id not in orchestrator_app.EVENT_SUBSCRIBERS
+    assert asyncio.run(orchestrator_app._job_repository().get(old_job.id)) is None
+    assert asyncio.run(orchestrator_app._job_repository().get(fresh_job.id)) is not None
     assert fresh_job.id in orchestrator_app.JOBS
     assert running_job.id in orchestrator_app.JOBS
 
@@ -6559,11 +6581,16 @@ def test_create_job_rejects_when_concurrency_limit_is_reached(
     previous_limit = orchestrator_app.MAX_CONCURRENT_JOBS
     try:
         orchestrator_app.MAX_CONCURRENT_JOBS = 1
-        orchestrator_app.JOBS["job_running"] = orchestrator_app.Job(
-            id="job_running",
-            created_at=orchestrator_app._now(),
-            state="running",
-            request={"pipeline": "lux-depth-v3", "args": {"input_dir": "./input_images", "output_dir": "./output"}},
+        _seed_job(
+            orchestrator_app.Job(
+                id="job_running",
+                created_at=orchestrator_app._now(),
+                state="running",
+                request={
+                    "pipeline": "lux-depth-v3",
+                    "args": {"input_dir": "./input_images", "output_dir": "./output"},
+                },
+            )
         )
 
         response = asyncio.run(
@@ -6630,7 +6657,7 @@ def test_list_jobs_includes_error_and_artifacts() -> None:
         },
         error={"code": "RUNNER_ERROR", "message": "boom", "details": {}},
     )
-    orchestrator_app.JOBS[job.id] = job
+    _seed_job(job)
 
     response = asyncio.run(orchestrator_app.list_jobs())
     body = json.loads(response.body.decode("utf-8"))
@@ -6664,7 +6691,7 @@ def test_get_job_includes_artifacts_and_error() -> None:
         },
         error={"code": "RUNNER_ERROR", "message": "boom", "details": {}},
     )
-    orchestrator_app.JOBS[job.id] = job
+    _seed_job(job)
 
     response = asyncio.run(orchestrator_app.get_job(job.id))
     body = json.loads(response.body.decode("utf-8"))
@@ -6703,8 +6730,7 @@ def test_late_connecting_client_receives_real_events_during_artifact_indexing() 
         # Do NOT set done_published_at yet - simulates artifact indexing in progress.
         # Note: Neither finished_at nor done_published_at is set, simulating the
         # window after terminal state is reached but before events are published.
-        orchestrator_app.JOBS[job.id] = job
-        orchestrator_app.EVENT_SUBSCRIBERS[job.id] = {}
+        await _seed_job_async(job)
 
         request = _FakeRequest()
         response = await orchestrator_app.job_events(request, job.id)
@@ -6771,8 +6797,7 @@ def test_late_connecting_client_synthesizes_done_after_done_published_at() -> No
         # Set both timestamps - this means events were already published
         job.finished_at = now
         job.done_published_at = now
-        orchestrator_app.JOBS[job.id] = job
-        orchestrator_app.EVENT_SUBSCRIBERS[job.id] = {}
+        await _seed_job_async(job)
 
         request = _FakeRequest()
         response = await orchestrator_app.job_events(request, job.id)

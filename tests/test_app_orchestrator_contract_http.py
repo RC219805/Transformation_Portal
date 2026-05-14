@@ -22,11 +22,35 @@ from fastapi.testclient import TestClient
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.requests import Request as StarletteRequest
 
+from transformation_portal.orchestrator import reset_singletons
 from transformation_portal.orchestrator.artifact_store.local import LocalArtifactStore
 
 pytestmark = pytest.mark.unit
 
 orchestrator_app = importlib.import_module("app")
+
+
+def _reset_job_repository() -> None:
+    reset_singletons()
+    orchestrator_app.app.state.job_repository = None
+    orchestrator_app.app.state.job_repository_unavailable = False
+
+
+def _seed_job(job: Any) -> Any:
+    repo = orchestrator_app._job_repository()
+    asyncio.run(repo.create(orchestrator_app._record_from_job(job)))
+    if job.artifacts or job.artifact_lookup:
+        asyncio.run(repo.set_artifacts(job.id, job.artifacts, job.artifact_lookup))
+    orchestrator_app.JOBS[job.id] = job
+    orchestrator_app.EVENT_SUBSCRIBERS.setdefault(job.id, {})
+    return job
+
+
+def _sync_seeded_job(job: Any) -> Any:
+    repo = orchestrator_app._job_repository()
+    asyncio.run(orchestrator_app._persist_job_state(job))
+    asyncio.run(repo.set_artifacts(job.id, job.artifacts, job.artifact_lookup))
+    return job
 
 
 def _write_archive_index(path: Path, relpaths: list[str]) -> None:
@@ -94,6 +118,7 @@ def _reset_orchestrator_globals() -> None:
     orchestrator_app.API_KEY_SECRET = "contract-secret"
     orchestrator_app.ENFORCE_JOB_API_KEY = True
     orchestrator_app.ALLOW_SSE_QUERY_API_KEY = False
+    _reset_job_repository()
     orchestrator_app.JOBS.clear()
     orchestrator_app.EVENT_SUBSCRIBERS.clear()
     orchestrator_app.RATE_LIMIT_BUCKETS.clear()
@@ -116,6 +141,7 @@ def _reset_orchestrator_globals() -> None:
         orchestrator_app.JOBS.clear()
         orchestrator_app.EVENT_SUBSCRIBERS.clear()
         orchestrator_app.RATE_LIMIT_BUCKETS.clear()
+        _reset_job_repository()
 
 
 @pytest.fixture(name="client")
@@ -2793,7 +2819,7 @@ def test_jobs_list_and_detail_include_recovery_fields(client: TestClient) -> Non
         },
         error={"code": "RUNNER_ERROR", "message": "boom", "details": {}},
     )
-    orchestrator_app.JOBS[job.id] = job
+    _seed_job(job)
 
     list_response = client.get("/v1/jobs")
     list_body = list_response.json()
@@ -2828,6 +2854,91 @@ def test_jobs_list_and_detail_include_recovery_fields(client: TestClient) -> Non
     assert v2_detail_response.status_code == 200
     assert v2_detail_body["schema"] == "tp.orchestrator.job_status.v1"
     assert v2_detail_body["data"]["events_url"] == f"/v2/jobs/{job.id}/events"
+
+
+def test_jobs_list_and_detail_are_repository_authoritative_after_runtime_cache_clear(client: TestClient) -> None:
+    job = orchestrator_app.Job(
+        id="job_repo_authority",
+        created_at=orchestrator_app._now(),
+        state="failed",
+        progress=33,
+        request={"pipeline": "lux-depth-v3"},
+        error={"code": "RUNNER_ERROR", "message": "boom", "details": {}},
+    )
+    _seed_job(job)
+    orchestrator_app.JOBS.clear()
+
+    list_response = client.get("/v1/jobs")
+    detail_response = client.get(f"/v1/jobs/{job.id}")
+
+    assert list_response.status_code == 200
+    assert list_response.json()["data"]["jobs"][0]["id"] == job.id
+    assert detail_response.status_code == 200
+    detail_body = detail_response.json()
+    assert detail_body["data"]["id"] == job.id
+    assert detail_body["data"]["error"]["code"] == "RUNNER_ERROR"
+
+
+def test_cancel_reads_repository_state_after_runtime_cache_clear(client: TestClient) -> None:
+    job = orchestrator_app.Job(
+        id="job_repo_cancel",
+        created_at=orchestrator_app._now(),
+        state="queued",
+        request={"pipeline": "lux-depth-v3"},
+    )
+    _seed_job(job)
+    orchestrator_app.JOBS.clear()
+
+    response = client.post(f"/v1/jobs/{job.id}/cancel")
+
+    assert response.status_code == 200
+    assert response.json()["data"] == {"id": job.id, "state": "queued"}
+    record = asyncio.run(orchestrator_app._job_repository().get(job.id))
+    assert record is not None
+    assert record.cancel_requested is True
+
+
+def test_job_routes_fail_closed_when_repository_is_unavailable(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    mark_da3_runtime_available: None,
+) -> None:
+    allowed_root = tmp_path.resolve()
+    input_dir = allowed_root / "input"
+    output_dir = allowed_root / "output"
+    input_dir.mkdir(parents=True)
+    (input_dir / "frame.jpg").write_bytes(b"fixture")
+    monkeypatch.setattr(orchestrator_app, "ALLOWED_INPUT_ROOTS", [allowed_root])
+    monkeypatch.setattr(orchestrator_app, "ALLOWED_OUTPUT_ROOTS", [allowed_root])
+    orchestrator_app.app.state.job_repository = None
+    orchestrator_app.app.state.job_repository_unavailable = True
+
+    checks = [
+        client.get("/v1/jobs"),
+        client.get("/v1/jobs/missing"),
+        client.post("/v1/jobs/missing/cancel"),
+        client.get("/v1/jobs/missing/artifacts/output.txt"),
+        client.get("/v1/jobs/missing/events"),
+        client.post(
+            "/v1/jobs",
+            json={
+                "pipeline": "lux-depth-v3",
+                "args": {
+                    "input_dir": str(input_dir),
+                    "output_dir": str(output_dir),
+                    "non_commercial_ok": True,
+                },
+            },
+        ),
+    ]
+
+    for response in checks:
+        assert response.status_code == 503
+        body = response.json()
+        assert body["error"]["code"] == "JOB_REPOSITORY_UNAVAILABLE"
+        assert body["error"]["message"] == "job repository unavailable"
+        assert "cached repository construction failure" not in response.text
 
 
 def test_partial_run_card_promotes_reviewable_failed_job_state(tmp_path: Path) -> None:
@@ -3032,7 +3143,7 @@ def test_active_fastvlm_job_serializes_requested_captioning_status(client: TestC
             },
         },
     )
-    orchestrator_app.JOBS[job.id] = job
+    _seed_job(job)
 
     list_body = client.get("/v1/jobs").json()
     detail_body = client.get(f"/v1/jobs/{job.id}").json()
@@ -3296,7 +3407,7 @@ def test_jobs_list_and_detail_include_partial_run_summary(client: TestClient) ->
             "details": {"exit_code": 1},
         },
     )
-    orchestrator_app.JOBS[job.id] = job
+    _seed_job(job)
 
     list_response = client.get("/v1/jobs")
     list_body = list_response.json()
@@ -3330,8 +3441,8 @@ def test_job_artifact_endpoint_serves_indexed_binary_without_exposing_absolute_p
         created_at=orchestrator_app._now(),
         request={"pipeline": "lux-depth-v3", "args": {"output_dir": str(output_dir)}},
     )
-    orchestrator_app.JOBS[job.id] = job
     orchestrator_app._index_job_artifacts(job)
+    _seed_job(job)
 
     response = client.get(f"{jobs_base}/{job.id}/artifacts/renders/hero.png")
 
@@ -3341,6 +3452,62 @@ def test_job_artifact_endpoint_serves_indexed_binary_without_exposing_absolute_p
     assert "attachment" not in response.headers.get("content-disposition", "").lower()
     assert response.content == b"\x89PNG\r\n\x1a\npreview"
     assert str(output_dir) not in response.text
+
+
+def test_artifact_fetch_reads_repository_metadata_after_runtime_cache_clear(
+    client: TestClient,
+    tmp_path: Path,
+) -> None:
+    output_dir = tmp_path / "repo-artifact-fetch"
+    artifact_path = output_dir / "renders" / "hero.png"
+    artifact_path.parent.mkdir(parents=True)
+    artifact_path.write_bytes(b"\x89PNG\r\n\x1a\nrepo")
+    job = orchestrator_app.Job(
+        id="job_repo_artifact_fetch",
+        created_at=orchestrator_app._now(),
+        state="succeeded",
+        finished_at=orchestrator_app._now(),
+        request={"pipeline": "lux-depth-v3", "args": {"output_dir": str(output_dir)}},
+    )
+    orchestrator_app._index_job_artifacts(job)
+    _seed_job(job)
+    orchestrator_app.JOBS.clear()
+
+    response = client.get(f"/v1/jobs/{job.id}/artifacts/renders/hero.png")
+
+    assert response.status_code == 200
+    assert response.content == b"\x89PNG\r\n\x1a\nrepo"
+
+
+def test_artifact_delete_persists_lifecycle_after_runtime_cache_clear(
+    client: TestClient,
+    tmp_path: Path,
+) -> None:
+    output_dir = tmp_path / "repo-artifact-delete"
+    artifact_path = output_dir / "result.txt"
+    artifact_path.parent.mkdir(parents=True)
+    artifact_path.write_text("delete me", encoding="utf-8")
+    job = orchestrator_app.Job(
+        id="job_repo_artifact_delete",
+        created_at=orchestrator_app._now(),
+        state="succeeded",
+        finished_at=orchestrator_app._now(),
+        request={"pipeline": "lux-depth-v3", "args": {"output_dir": str(output_dir)}},
+    )
+    orchestrator_app._index_job_artifacts(job)
+    _seed_job(job)
+    orchestrator_app.JOBS.clear()
+
+    delete_response = client.delete(f"/v1/jobs/{job.id}/artifacts")
+
+    assert delete_response.status_code == 200
+    record = asyncio.run(orchestrator_app._job_repository().get(job.id))
+    assert record is not None
+    assert record.artifacts["lifecycle"]["deletion_status"] == "deleted"
+    orchestrator_app.JOBS.clear()
+    fetch_response = client.get(f"/v1/jobs/{job.id}/artifacts/result.txt")
+    assert fetch_response.status_code == 410
+    assert fetch_response.json()["error"]["code"] == "ARTIFACT_DELETED"
 
 
 def test_job_artifact_endpoint_uses_existing_index_without_full_rescan(
@@ -3371,7 +3538,7 @@ def test_job_artifact_endpoint_uses_existing_index_without_full_rescan(
             "truncated": False,
         },
     )
-    orchestrator_app.JOBS[job.id] = job
+    _seed_job(job)
 
     def _fail_reindex(_job) -> None:
         raise AssertionError("artifact fetch should not rebuild the full artifact index")
@@ -3396,7 +3563,7 @@ def test_job_artifact_endpoint_rejects_traversal_outside_job_output_dir(
         created_at=orchestrator_app._now(),
         request={"pipeline": "lux-depth-v3", "args": {"output_dir": str(output_dir)}},
     )
-    orchestrator_app.JOBS[job.id] = job
+    _seed_job(job)
 
     response = client.get(f"/v1/jobs/{job.id}/artifacts/%2E%2E/secret.txt")
     body = response.json()
@@ -3418,7 +3585,7 @@ def test_job_artifact_endpoint_uses_bounded_reason_for_absolute_path(
         created_at=orchestrator_app._now(),
         request={"pipeline": "lux-depth-v3", "args": {"output_dir": str(output_dir)}},
     )
-    orchestrator_app.JOBS[job.id] = job
+    _seed_job(job)
 
     response = client.get(f"/v1/jobs/{job.id}/artifacts//tmp/secret.txt")
     body = response.json()
@@ -3441,7 +3608,7 @@ def test_job_artifact_endpoint_returns_typed_not_found_for_missing_file(
         created_at=orchestrator_app._now(),
         request={"pipeline": "lux-depth-v3", "args": {"output_dir": str(output_dir)}},
     )
-    orchestrator_app.JOBS[job.id] = job
+    _seed_job(job)
 
     response = client.get(f"/v1/jobs/{job.id}/artifacts/missing.png")
     body = response.json()
@@ -3472,8 +3639,8 @@ def test_job_artifact_endpoint_serves_local_store_after_source_file_is_gone(
         state="succeeded",
         finished_at=orchestrator_app._now(),
     )
-    orchestrator_app.JOBS[job.id] = job
     orchestrator_app._index_job_artifacts(job)
+    _seed_job(job)
     asyncio.run(orchestrator_app._mirror_job_artifacts_to_store(job))
     artifact_path.unlink()
     job.artifact_lookup = {}
@@ -3538,7 +3705,7 @@ def test_job_artifact_endpoint_redirects_to_s3_presigned_url_after_auth(
                     "truncated": False,
                 },
             )
-            orchestrator_app.JOBS[job.id] = job
+            _seed_job(job)
             asyncio.run(store.write_bytes(job.id, artifact_relative_path, body, content_type=content_type))
 
             response = client.get(
@@ -3610,8 +3777,8 @@ def test_job_artifact_endpoint_mirrors_legacy_file_to_s3_on_first_access(
                 state="succeeded",
                 finished_at=orchestrator_app._now(),
             )
-            orchestrator_app.JOBS[job.id] = job
             orchestrator_app._index_job_artifacts(job)
+            _seed_job(job)
 
             response = client.get(
                 f"{jobs_base}/{job.id}/artifacts/outputs/payload.txt",
@@ -3668,8 +3835,8 @@ def test_job_artifact_endpoint_returns_503_when_s3_first_access_mirror_fails(
         state="succeeded",
         finished_at=orchestrator_app._now(),
     )
-    orchestrator_app.JOBS[job.id] = job
     orchestrator_app._index_job_artifacts(job)
+    _seed_job(job)
     monkeypatch.setattr(orchestrator_app, "_artifact_store", FailingMirrorS3Store)
 
     response = client.get(f"/v1/jobs/{job.id}/artifacts/outputs/payload.txt")
@@ -3721,7 +3888,7 @@ def test_job_artifact_endpoint_returns_503_when_s3_failed_path_sample_is_truncat
         artifacts={"items": items, "indexed_count": len(items), "truncated": False},
         artifact_lookup=artifact_lookup,
     )
-    orchestrator_app.JOBS[job.id] = job
+    _seed_job(job)
     monkeypatch.setattr(orchestrator_app, "_artifact_store", FailingMirrorS3Store)
 
     unsampled_path = "outputs/payload-10.txt"
@@ -3753,7 +3920,7 @@ def test_job_artifact_endpoint_auth_failure_does_not_presign(
             "truncated": False,
         },
     )
-    orchestrator_app.JOBS[job.id] = job
+    _seed_job(job)
 
     def _fail_store_access():
         raise AssertionError("unauthorized artifact route must not touch artifact store")
@@ -3787,7 +3954,7 @@ def test_job_artifact_endpoint_redacts_store_setup_exception(
             "truncated": False,
         },
     )
-    orchestrator_app.JOBS[job.id] = job
+    _seed_job(job)
 
     def _fail_store_access():
         raise RuntimeError(secret_message)
@@ -3834,7 +4001,7 @@ def test_job_artifact_endpoint_redacts_s3_operation_exception(
             "truncated": False,
         },
     )
-    orchestrator_app.JOBS[job.id] = job
+    _seed_job(job)
     monkeypatch.setattr(orchestrator_app, "_artifact_store", lambda: FailingS3Store())
 
     response = client.get(f"/v1/jobs/{job.id}/artifacts/outputs/payload.txt")
@@ -3868,8 +4035,8 @@ def test_delete_job_artifacts_marks_lifecycle_and_returns_gone_on_fetch(
         state="succeeded",
         finished_at=orchestrator_app._now(),
     )
-    orchestrator_app.JOBS[job.id] = job
     orchestrator_app._index_job_artifacts(job)
+    _seed_job(job)
     asyncio.run(orchestrator_app._mirror_job_artifacts_to_store(job))
 
     delete_response = client.delete(f"{jobs_base}/{job.id}/artifacts")
@@ -3905,8 +4072,8 @@ def test_delete_job_artifacts_removes_legacy_files_when_store_is_empty(
         state="succeeded",
         finished_at=orchestrator_app._now(),
     )
-    orchestrator_app.JOBS[job.id] = job
     orchestrator_app._index_job_artifacts(job)
+    _seed_job(job)
 
     delete_response = client.delete(f"{jobs_base}/{job.id}/artifacts")
 
@@ -3946,8 +4113,8 @@ def test_delete_job_artifacts_reports_partial_mirror_unique_count(
         state="succeeded",
         finished_at=orchestrator_app._now(),
     )
-    orchestrator_app.JOBS[job.id] = job
     orchestrator_app._index_job_artifacts(job)
+    _seed_job(job)
     asyncio.run(store.write_file(job.id, "mirrored.txt", mirrored_path))
 
     delete_response = client.delete(f"{jobs_base}/{job.id}/artifacts")
@@ -3970,7 +4137,7 @@ def test_delete_job_artifacts_rejects_active_jobs(client: TestClient, tmp_path: 
         request={"pipeline": "lux-depth-v3", "args": {"output_dir": str(tmp_path / "out")}},
         state="running",
     )
-    orchestrator_app.JOBS[job.id] = job
+    _seed_job(job)
 
     response = client.delete(f"{jobs_base}/{job.id}/artifacts")
 
@@ -3996,7 +4163,7 @@ def test_delete_job_artifacts_requires_api_key_before_store_access(
             "truncated": False,
         },
     )
-    orchestrator_app.JOBS[job.id] = job
+    _seed_job(job)
 
     def _fail_store_access():
         raise AssertionError("unauthorized artifact delete must not touch artifact store")
@@ -4046,10 +4213,11 @@ def test_artifact_retention_cleanup_skips_active_jobs_and_deletes_terminal(
         state="succeeded",
         request={"pipeline": "lux-depth-v3", "args": {"output_dir": str(terminal_output)}},
     )
-    orchestrator_app.JOBS[terminal_job.id] = terminal_job
     orchestrator_app._index_job_artifacts(terminal_job)
+    _seed_job(terminal_job)
     asyncio.run(orchestrator_app._mirror_job_artifacts_to_store(terminal_job))
     terminal_job.artifacts["lifecycle"]["expires_at"] = now - 1
+    _sync_seeded_job(terminal_job)
 
     active_output = tmp_path / "active"
     active_output.mkdir()
@@ -4060,10 +4228,11 @@ def test_artifact_retention_cleanup_skips_active_jobs_and_deletes_terminal(
         state="running",
         request={"pipeline": "lux-depth-v3", "args": {"output_dir": str(active_output)}},
     )
-    orchestrator_app.JOBS[active_job.id] = active_job
     orchestrator_app._index_job_artifacts(active_job)
+    _seed_job(active_job)
     asyncio.run(orchestrator_app._mirror_job_artifacts_to_store(active_job))
     active_job.artifacts["lifecycle"]["expires_at"] = now - 1
+    _sync_seeded_job(active_job)
 
     asyncio.run(orchestrator_app._cleanup_expired_job_artifacts(now))
 
@@ -4095,28 +4264,31 @@ def test_artifact_retention_cleanup_keeps_job_when_delete_fails_then_retries(
         state="succeeded",
         request={"pipeline": "lux-depth-v3", "args": {"output_dir": str(output_dir)}},
     )
-    orchestrator_app.JOBS[job.id] = job
     orchestrator_app._index_job_artifacts(job)
+    _seed_job(job)
     orchestrator_app._ensure_artifact_lifecycle(job, now=now - orchestrator_app.JOB_RETENTION_SECONDS - 10)
     job.artifacts["lifecycle"]["expires_at"] = now - 1
+    _sync_seeded_job(job)
     monkeypatch.setattr(orchestrator_app, "_artifact_store", lambda: FailingDeleteStore())
 
     asyncio.run(orchestrator_app._cleanup_expired_job_artifacts(now))
-    orchestrator_app._cleanup_expired_jobs(now)
+    asyncio.run(orchestrator_app._cleanup_expired_jobs(now))
 
     assert job.id in orchestrator_app.JOBS
     assert job.artifacts["lifecycle"]["deletion_status"] == "failed"
     assert job.artifacts["lifecycle"]["deletion_error"] == "artifact_deletion_failed"
     assert artifact_path.exists()
+    assert asyncio.run(orchestrator_app._job_repository().get(job.id)) is not None
 
     store = LocalArtifactStore(root_dir=tmp_path / "artifact-store")
     monkeypatch.setattr(orchestrator_app, "_artifact_store", lambda: store)
     asyncio.run(orchestrator_app._cleanup_expired_job_artifacts(now))
-    orchestrator_app._cleanup_expired_jobs(now)
+    asyncio.run(orchestrator_app._cleanup_expired_jobs(now))
 
     assert job.artifacts["lifecycle"]["deletion_status"] == "deleted"
     assert not artifact_path.exists()
     assert job.id not in orchestrator_app.JOBS
+    assert asyncio.run(orchestrator_app._job_repository().get(job.id)) is None
 
 
 def test_ready_reports_artifact_store_backend(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
@@ -4185,7 +4357,7 @@ def test_versioned_job_routes_enforce_api_key_for_reads_and_events(client: TestC
         exit_code=0,
         request={"pipeline": "lux-depth-v3"},
     )
-    orchestrator_app.JOBS[finished_job.id] = finished_job
+    _seed_job(finished_job)
     orchestrator_app.EVENT_SUBSCRIBERS[finished_job.id] = {}
 
     list_unauthorized = client.get(jobs_base, headers={"x-api-key": "wrong"})
@@ -4983,14 +5155,16 @@ def test_v1_jobs_rejects_when_max_concurrent_jobs_reached(
         orchestrator_app.ALLOWED_INPUT_ROOTS = [allowed_root]
         orchestrator_app.ALLOWED_OUTPUT_ROOTS = [allowed_root]
         orchestrator_app.MAX_CONCURRENT_JOBS = 1
-        orchestrator_app.JOBS["job_busy"] = orchestrator_app.Job(
-            id="job_busy",
-            created_at=orchestrator_app._now(),
-            state="running",
-            request={
-                "pipeline": "lux-depth-v3",
-                "args": {"input_dir": str(input_dir), "output_dir": str(output_dir)},
-            },
+        _seed_job(
+            orchestrator_app.Job(
+                id="job_busy",
+                created_at=orchestrator_app._now(),
+                state="running",
+                request={
+                    "pipeline": "lux-depth-v3",
+                    "args": {"input_dir": str(input_dir), "output_dir": str(output_dir)},
+                },
+            )
         )
         response = client.post(
             "/v1/jobs",
@@ -5263,7 +5437,7 @@ def test_late_job_events_done_payload_includes_fastvlm_captioning_status(client:
             },
         },
     )
-    orchestrator_app.JOBS[job.id] = job
+    _seed_job(job)
 
     with client.stream("GET", f"/v1/jobs/{job.id}/events") as stream_response:
         assert stream_response.status_code == 200
@@ -5290,7 +5464,7 @@ def test_artifact_indexing_truncation_visible_via_job_status(client: TestClient,
         request={"pipeline": "lux-depth-v3", "args": {"output_dir": str(output_dir)}},
     )
     orchestrator_app._index_job_artifacts(job)
-    orchestrator_app.JOBS[job.id] = job
+    _seed_job(job)
 
     response = client.get(f"/v1/jobs/{job.id}")
     body = response.json()
