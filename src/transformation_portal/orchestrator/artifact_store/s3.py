@@ -304,12 +304,7 @@ class S3ArtifactStore(ArtifactStore):
                     # ``delete_objects`` accepts up to 1000 keys per call.
                     for batch_start in range(0, len(keys), 1000):
                         batch = keys[batch_start : batch_start + 1000]
-                        await asyncio.to_thread(
-                            client.delete_objects,
-                            Bucket=self._bucket,
-                            Delete={"Objects": batch, "Quiet": True},
-                        )
-                        deleted += len(batch)
+                        deleted += await self._delete_object_batch(client, batch)
                 if not response.get("IsTruncated"):
                     break
                 continuation = response.get("NextContinuationToken")
@@ -352,16 +347,25 @@ class S3ArtifactStore(ArtifactStore):
             if keys:
                 for batch_start in range(0, len(keys), 1000):
                     batch = keys[batch_start : batch_start + 1000]
-                    await asyncio.to_thread(
-                        client.delete_objects,
-                        Bucket=self._bucket,
-                        Delete={"Objects": batch, "Quiet": True},
-                    )
+                    await self._delete_object_batch(client, batch)
             if not response.get("IsTruncated"):
                 break
             continuation = response.get("NextContinuationToken")
             if not continuation:
                 break
+
+    async def _delete_object_batch(self, client: Any, batch: List[dict[str, str]]) -> int:
+        response = await asyncio.to_thread(
+            client.delete_objects,
+            Bucket=self._bucket,
+            Delete={"Objects": batch, "Quiet": False},
+        )
+        errors = response.get("Errors", []) or []
+        if errors:
+            sample = ", ".join(f"{error.get('Key', '<unknown>')}:{error.get('Code', '<unknown>')}" for error in errors[:3])
+            raise ArtifactStoreError(f"S3 delete_objects failed for {len(errors)} keys under {self._prefix}: {sample}")
+        deleted = response.get("Deleted", []) or []
+        return len(deleted)
 
     async def _stream_sha256(self, client: Any, key: str) -> tuple[Optional[str], str]:
         try:

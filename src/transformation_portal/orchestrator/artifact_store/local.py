@@ -206,7 +206,7 @@ class LocalArtifactStore(ArtifactStore):
             return []
         content_types = self._load_content_types(normalized_job_id)
         results: List[ArtifactObjectMetadata] = []
-        for absolute in sorted(p for p in job_root.rglob("*") if p.is_file()):
+        for absolute in self._iter_confined_files(job_root):
             relative = absolute.relative_to(job_root).as_posix()
             try:
                 size_bytes: Optional[int] = absolute.stat().st_size
@@ -274,10 +274,7 @@ class LocalArtifactStore(ArtifactStore):
                 self._delete_content_type_metadata(normalized_job_id)
                 return 0
             deleted = 0
-            for absolute in sorted(
-                (p for p in job_root.rglob("*") if p.is_file()),
-                reverse=True,
-            ):
+            for absolute in sorted(self._iter_confined_files(job_root), reverse=True):
                 absolute.unlink()
                 deleted += 1
             # Remove empty directories left behind, root-last.
@@ -332,6 +329,18 @@ class LocalArtifactStore(ArtifactStore):
 
     def _metadata_path(self, normalized_job_id: str) -> Path:
         return self._metadata_root / f"{normalized_job_id}.json"
+
+    def _iter_confined_files(self, job_root: Path) -> List[Path]:
+        files: List[Path] = []
+        for candidate in job_root.rglob("*"):
+            if candidate.is_symlink() or not candidate.is_file():
+                continue
+            try:
+                candidate.resolve().relative_to(job_root)
+            except ValueError:
+                continue
+            files.append(candidate)
+        return sorted(files)
 
     def _content_type_for(self, job_id: str, relative_path: str, path: Path) -> str:
         normalized_job_id = _normalize_job_id(job_id)

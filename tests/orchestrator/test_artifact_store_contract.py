@@ -38,6 +38,7 @@ from transformation_portal.orchestrator.artifact_store import (
     ArtifactNotFoundError,
     ArtifactPathValidationError,
     ArtifactStore,
+    ArtifactStoreError,
 )
 from transformation_portal.orchestrator.artifact_store.local import LocalArtifactStore
 
@@ -293,6 +294,25 @@ async def test_local_symlinked_job_directory_escape_rejected(tmp_path) -> None:
         await store.write_bytes("job-link", "outputs/x.txt", b"x")
 
 
+async def test_local_list_and_bulk_delete_skip_symlink_escape(tmp_path) -> None:
+    root = tmp_path / "artifacts"
+    outside = tmp_path / "outside"
+    job_root = root / "job-link-file"
+    outside.mkdir()
+    job_root.mkdir(parents=True)
+    outside_file = outside / "secret.txt"
+    outside_file.write_text("secret", encoding="utf-8")
+    try:
+        os.symlink(outside_file, job_root / "escape.txt")
+    except (AttributeError, NotImplementedError, OSError) as exc:
+        pytest.skip(f"symlink unavailable on this platform: {exc}")
+
+    store = LocalArtifactStore(root_dir=root)
+    assert await store.list_for_job("job-link-file") == []
+    assert await store.delete("job-link-file") == 0
+    assert outside_file.read_text(encoding="utf-8") == "secret"
+
+
 # ---------------------------------------------------------------------------
 # list_for_job
 # ---------------------------------------------------------------------------
@@ -341,6 +361,50 @@ async def test_delete_entire_job(store: ArtifactStore) -> None:
     deleted = await store.delete("job-bulk")
     assert deleted == 3
     assert await store.list_for_job("job-bulk") == []
+
+
+async def test_s3_bulk_delete_raises_on_per_key_errors() -> None:
+    from transformation_portal.orchestrator.artifact_store.s3 import S3ArtifactStore
+
+    class ErroringBulkDeleteClient:
+        def list_objects_v2(self, **_kwargs):
+            return {
+                "Contents": [{"Key": "tp/test/jobs/job-bulk/a.txt"}],
+                "IsTruncated": False,
+            }
+
+        def delete_objects(self, **_kwargs):
+            return {
+                "Errors": [{"Key": "tp/test/jobs/job-bulk/a.txt", "Code": "AccessDenied"}],
+                "Deleted": [],
+            }
+
+    store = S3ArtifactStore(bucket="bucket", prefix="tp/test", client=ErroringBulkDeleteClient())
+    with pytest.raises(ArtifactStoreError, match="S3 delete_objects failed"):
+        await store.delete("job-bulk")
+
+
+async def test_s3_bulk_delete_counts_confirmed_deletions() -> None:
+    from transformation_portal.orchestrator.artifact_store.s3 import S3ArtifactStore
+
+    class PartialBulkDeleteClient:
+        def list_objects_v2(self, **_kwargs):
+            return {
+                "Contents": [
+                    {"Key": "tp/test/jobs/job-bulk/a.txt"},
+                    {"Key": "tp/test/jobs/job-bulk/b.txt"},
+                ],
+                "IsTruncated": False,
+            }
+
+        def delete_objects(self, **_kwargs):
+            return {
+                "Errors": [],
+                "Deleted": [{"Key": "tp/test/jobs/job-bulk/a.txt"}],
+            }
+
+    store = S3ArtifactStore(bucket="bucket", prefix="tp/test", client=PartialBulkDeleteClient())
+    assert await store.delete("job-bulk") == 1
 
 
 # ---------------------------------------------------------------------------

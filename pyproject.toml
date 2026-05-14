@@ -120,6 +120,7 @@ dev = [
     "hypothesis>=6.0,<7",
     "jsonschema>=4.21.0,<5",  # required for machine-mode contract schema validation tests
     "cryptography>=46.0,<48",  # required for Phase 3.1 signing CLI tests
+    "moto[s3]>=5.0,<6",  # required for moto-backed S3 ArtifactStore contract tests
     "mypy>=1.10",
     "flake8>=7.0",
     "pylint>=3.0",
