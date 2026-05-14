@@ -27,7 +27,7 @@ PHASE6_SMOKE_TESTS := \
 	tests/test_lux_render_pipeline_smoke.py \
 	tests/lux_depth_v3/test_orchestrator_smoke.py
 
-.PHONY: help test-fast test-novideo test-full test-integration test-structure test-utils test-orchestrator-contract test-orchestrator-http-contract test-artifact-s3-contract test-orchestrator-postgres-contract test-worker-redis-contract test-portal-contract test-frontdoor-contract test-archive-gate-contract db-upgrade db-revision seed-frontdoor-user run-frontdoor-local run-backend-local run-backend-local-noreload dev-write-env dev-start dev-stop check-vercel-env validate-orchestrator-http validate-portal-lux-materials-live validate-portal-fastvlm-captioning-live validate-portal-css-layer-parity validate-portal-browser validate-frontdoor-browser validate-frontdoor-deployment-gate audit-pipeline-readiness coverage-fast-scope coverage-report coverage-diff coverage-package venv repair-core-venv setup clean \
+.PHONY: help test-fast test-novideo test-full test-integration test-structure test-utils test-orchestrator-contract test-orchestrator-http-contract test-artifact-s3-contract test-orchestrator-postgres-contract test-orchestrator-postgres-app-contract test-worker-redis-contract test-portal-contract test-frontdoor-contract test-archive-gate-contract db-upgrade db-revision seed-frontdoor-user run-frontdoor-local run-backend-local run-backend-local-noreload dev-write-env dev-start dev-stop check-vercel-env validate-orchestrator-http validate-portal-lux-materials-live validate-portal-fastvlm-captioning-live validate-portal-css-layer-parity validate-portal-browser validate-frontdoor-browser validate-frontdoor-deployment-gate audit-pipeline-readiness coverage-fast-scope coverage-report coverage-diff coverage-package venv repair-core-venv setup clean \
         lint lint-parity ci ci-full pre-commit install-hooks quality-check fix-quality validate-ci organize-docs check-json-serialization check-piptools-cache \
         check-python-headers check-yaml-governance check-stale-docs check-doc-heading-links lock lock-prod lock-ci lock-dev install-core install-ml install-ml-core install-ml-raw install-ml-sam2 install-ml-coreml install-fastvlm-runtime check-fastvlm-runtime docs docs-clean \
         check check-test-markers check-ci-sync check-todo-governance check-environment check-portal-asset-budgets check-dependency-pinning validate-full validate-quick clean-frontdoor clean-all check-worktree \
@@ -299,6 +299,17 @@ test-orchestrator-postgres-contract:
 		exit 1; \
 	fi
 	@TP_TEST_POSTGRES_URL="$(TP_TEST_POSTGRES_URL)" "$(PY)" -m pytest -q tests/orchestrator -m unit
+
+test-orchestrator-postgres-app-contract:
+	@echo "Running Postgres-backed orchestrator app authority smoke..."
+	@if [ -z "$(TP_TEST_POSTGRES_URL)" ]; then \
+		echo "ERROR: TP_TEST_POSTGRES_URL is not set. Example:"; \
+		echo "  docker compose up -d postgres"; \
+		echo "  TP_TEST_POSTGRES_URL=postgresql+asyncpg://tp:tp_dev_password@127.0.0.1:5432/transformation_portal \\"; \
+		echo "    make test-orchestrator-postgres-app-contract"; \
+		exit 1; \
+	fi
+	@TP_TEST_POSTGRES_URL="$(TP_TEST_POSTGRES_URL)" "$(PY)" -m pytest -q tests/orchestrator/test_postgres_app_authority.py -m unit
 
 # Phase 2.B - durable queue broker. Requires TP_TEST_REDIS_URL pointing at an
 # empty Redis database (typically the docker-compose `redis` service). The
