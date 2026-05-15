@@ -9,6 +9,18 @@ Phase 5.A adds an opt-in validation gate for the current paid-pilot backend topo
 
 This is not production infrastructure-as-code. It is a deterministic smoke gate for proving that the existing durable components compose under explicit service endpoints.
 
+## Managed Provider / Staging Validation
+
+This document defines the paid-pilot smoke gate and local Compose validation
+path. For provider-managed staging validation, use
+[`managed_paid_pilot_staging_runbook.md`](managed_paid_pilot_staging_runbook.md).
+
+Local Compose validation proves the stack against disposable local Postgres,
+Redis, and MinIO services. Managed-provider validation is separate and remains
+pending until the same gate passes against provider-managed Postgres, Redis
+queue storage, Redis frontdoor session storage, and S3-compatible artifact
+storage.
+
 ## Local Compose Services
 
 Bring up the local disposable services:
@@ -55,7 +67,7 @@ TP_TEST_S3_URL=...
 TP_TEST_S3_BUCKET=...
 AWS_ACCESS_KEY_ID=...
 AWS_SECRET_ACCESS_KEY=...
-TP_ARTIFACT_REGION=...
+TP_ARTIFACT_REGION=...   # optional; live S3-compatible tests default to us-east-1 when unset
 ```
 
 `TP_TEST_POSTGRES_URL`, `TP_TEST_REDIS_URL`, and `TP_TEST_S3_BUCKET` must point at disposable validation services. The paid-pilot integrated smoke intentionally remaps the app-facing `TP_DATABASE_URL`, `TP_REDIS_URL`, `TP_ARTIFACT_ENDPOINT_URL`, and `TP_ARTIFACT_BUCKET` to those test endpoints inside the test process before it runs destructive setup/cleanup. The Postgres smoke resets the test schema, Redis tests delete keys under isolated prefixes, and S3 tests delete objects under isolated prefixes.

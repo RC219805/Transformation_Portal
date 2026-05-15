@@ -96,3 +96,13 @@ Phase 5.A is locally validated on the follow-up fix branch. The gate proves the 
 ## Known Limits
 
 This is local Compose validation only. Managed-service validation must rerun the same gate with provider Postgres, Redis, and S3-compatible endpoints. The gate is still manual and opt-in; it does not add Terraform, Helm, durable SSE replay, globally atomic multi-instance admission, broad observability, operational audit events, tenancy, billing, or production secret management.
+
+## Merged Baseline
+
+PR #1784 was squash-merged as
+`07a3e8e847dee4a6e1ccf46d6dcd80b612fe3753`.
+
+This preserves the historical first-run failure evidence above while recording
+the merged local Phase 5.A acceptance baseline. Managed-provider validation
+remains pending and must be recorded separately after the same gate passes
+against provider endpoints.
