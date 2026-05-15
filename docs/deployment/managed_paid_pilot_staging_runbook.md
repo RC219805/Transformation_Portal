@@ -58,7 +58,7 @@ runs.
 Use provider-neutral values only. Store real values in the staging secret
 manager, not in the repository.
 
-| Variable | Required value |
+| Variable | Provider-neutral value |
 | --- | --- |
 | `TP_ORCHESTRATOR_STATE_BACKEND` | `postgres` |
 | `TP_DATABASE_URL` | `postgresql+asyncpg://<user>:<password>@<host>:<port>/<database>` |
@@ -73,12 +73,23 @@ manager, not in the repository.
 | `TP_TEST_S3_URL` | `https://<test-s3-compatible-endpoint>` |
 | `TP_ARTIFACT_BUCKET` | `<staging-artifact-bucket>` |
 | `TP_TEST_S3_BUCKET` | `<disposable-test-artifact-bucket>` |
-| `TP_ARTIFACT_REGION` | `<region>` |
+| `TP_ARTIFACT_REGION` | Optional; set to `<region>` when the endpoint requires an explicit region |
 | `AWS_ACCESS_KEY_ID` | `<redacted>` |
 | `AWS_SECRET_ACCESS_KEY` | `<redacted>` |
 
 Use `redis://` only when the provider endpoint is intentionally non-TLS inside
 a private network. Prefer `rediss://` for managed staging endpoints.
+
+The artifact store accepts an unset `TP_ARTIFACT_REGION`. The paid-pilot
+contract defaults live S3-compatible tests to `us-east-1` when the variable is
+absent.
+
+If the managed endpoint requires an explicit region, export it before running
+the gates:
+
+```bash
+export TP_ARTIFACT_REGION='<region>'
+```
 
 ## Disposable Test Resource Requirements
 
@@ -154,7 +165,6 @@ export TP_ARTIFACT_ENDPOINT_URL='https://<redacted-s3-compatible-endpoint>'
 export TP_TEST_S3_URL='https://<redacted-test-s3-compatible-endpoint>'
 export TP_ARTIFACT_BUCKET='<redacted-staging-artifact-bucket>'
 export TP_TEST_S3_BUCKET='<redacted-disposable-test-bucket>'
-export TP_ARTIFACT_REGION='<region>'
 export AWS_ACCESS_KEY_ID='<redacted>'
 export AWS_SECRET_ACCESS_KEY='<redacted>'
 
@@ -191,7 +201,6 @@ export TP_ARTIFACT_ENDPOINT_URL='https://<redacted-s3-compatible-endpoint>'
 export TP_TEST_S3_URL='https://<redacted-test-s3-compatible-endpoint>'
 export TP_ARTIFACT_BUCKET='<redacted-staging-artifact-bucket>'
 export TP_TEST_S3_BUCKET='<redacted-disposable-test-bucket>'
-export TP_ARTIFACT_REGION='<region>'
 export AWS_ACCESS_KEY_ID='<redacted>'
 export AWS_SECRET_ACCESS_KEY='<redacted>'
 
