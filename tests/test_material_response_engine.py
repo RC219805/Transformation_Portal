@@ -8,8 +8,6 @@ early-return branch is exercised via monkeypatch).
 
 from __future__ import annotations
 
-from typing import Any, Dict
-
 import numpy as np
 import pytest
 from PIL import Image
@@ -33,6 +31,14 @@ def _make_rgb(size: int = 32, seed: int = 0) -> np.ndarray:
     """A small deterministic RGB float32 array in [0, 1]."""
     rng = np.random.default_rng(seed)
     return rng.random((size, size, 3), dtype=np.float32)
+
+
+def _assert_unit_rgb_array(arr: np.ndarray, shape: tuple[int, int, int]) -> None:
+    """Assert an RGB helper result stays finite, shaped, and clipped."""
+    assert arr.shape == shape
+    assert np.isfinite(arr).all()
+    assert float(arr.min()) >= 0.0
+    assert float(arr.max()) <= 1.0
 
 
 @pytest.fixture
@@ -106,11 +112,16 @@ class TestEngineConstructionAndFactory:
         assert eng.config is cfg
 
     def test_from_config_merges_with_profile_defaults(self) -> None:
-        eng = MaterialResponseEngine.from_config({"profile": "luxury_interior", "texture_boost": 0.42})
+        eng = MaterialResponseEngine.from_config({"profile": "wood_floor_oak", "texture_boost": 0.42})
 
         # Explicit values override profile defaults.
         assert eng.config.texture_boost == pytest.approx(0.42)
-        assert eng.config.profile == "luxury_interior"
+        assert eng.config.profile == "wood_floor_oak"
+
+        # Inherited values come from the selected profile, not dataclass defaults.
+        assert eng.config.ambient_occlusion == pytest.approx(0.15)
+        assert eng.config.floor_plank_contrast == pytest.approx(0.22)
+        assert eng.config.haze_tint == (0.85, 0.82, 0.78)
 
     def test_from_config_accepts_haze_tint_as_list(self) -> None:
         eng = MaterialResponseEngine.from_config({"haze_tint": [0.9, 0.7, 0.5, 1.0]})
@@ -154,9 +165,9 @@ class TestApplyEndToEnd:
         # The early-return path hands back the input unchanged (same object).
         assert out is image
 
-    def test_apply_is_a_no_op_when_all_strengths_are_zero(self) -> None:
-        # All enhancement channels disabled -> apply still runs but acts as a
-        # near-identity over the resulting clamped float array.
+    def test_apply_is_a_no_op_when_config_and_call_strength_are_zero(self) -> None:
+        # All enhancement channels and the call-level strength are disabled,
+        # including the metal stage that is controlled by strength alone.
         cfg = MaterialResponseConfig(
             texture_boost=0.0,
             ambient_occlusion=0.0,
@@ -173,10 +184,11 @@ class TestApplyEndToEnd:
         eng = MaterialResponseEngine(cfg)
         image = _make_image()
 
-        out = eng.apply(image, strength=0.5)
+        out = eng.apply(image, strength=0.0)
 
         assert isinstance(out, Image.Image)
         assert out.size == image.size
+        np.testing.assert_array_equal(np.asarray(out), np.asarray(image))
 
 
 class TestEnhancementStages:
@@ -200,8 +212,7 @@ class TestEnhancementStages:
 
         out = engine.enhance_floor(rgb, floor_mask, wood_mask, strength=0.7)
 
-        assert out.shape == rgb.shape
-        assert np.isfinite(out).all()
+        _assert_unit_rgb_array(out, rgb.shape)
 
     def test_enhance_textiles_preserves_shape(self, engine: MaterialResponseEngine) -> None:
         rgb = _make_rgb(seed=3)
@@ -209,8 +220,7 @@ class TestEnhancementStages:
 
         out = engine.enhance_textiles(rgb, textile_mask, strength=0.5)
 
-        assert out.shape == rgb.shape
-        assert np.isfinite(out).all()
+        _assert_unit_rgb_array(out, rgb.shape)
 
     def test_enhance_metals_preserves_shape(self, engine: MaterialResponseEngine) -> None:
         rgb = _make_rgb(seed=4)
@@ -218,8 +228,7 @@ class TestEnhancementStages:
 
         out = engine.enhance_metals(rgb, metal_mask, strength=0.5)
 
-        assert out.shape == rgb.shape
-        assert np.isfinite(out).all()
+        _assert_unit_rgb_array(out, rgb.shape)
 
     def test_add_atmospheric_effects_preserves_shape(self, engine: MaterialResponseEngine) -> None:
         rgb = _make_rgb(seed=5)
@@ -227,5 +236,4 @@ class TestEnhancementStages:
 
         out = engine.add_atmospheric_effects(rgb, h, w, strength=0.5)
 
-        assert out.shape == rgb.shape
-        assert np.isfinite(out).all()
+        _assert_unit_rgb_array(out, rgb.shape)
