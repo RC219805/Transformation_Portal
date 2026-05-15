@@ -1,7 +1,7 @@
 # Production Hardening Gap Audit - 2026-05-13
 
 **Document Status:** Active baseline for paid-pilot hardening
-**Last Updated:** 2026-05-13
+**Last Updated:** 2026-05-15
 **Maintainer:** Repository Architect
 **Related Docs:** `docs/testing/COLD_ZONE_COVERAGE_PROGRAM.md`, `docs/architecture/PORTAL_ORCHESTRATOR_ROADMAP.md`, `docs/architecture/PORTAL_FRONTDOOR_ROADMAP.md`, `docs/deployment/PRODUCTION_READINESS.md`, `docs/operations/portal_telemetry_retention.md`
 **Related Scripts:** `scripts/ci/check_per_package_branch_coverage.py`, `scripts/ci/cold_zone_report.py`, `scripts/ci/check_per_package_coverage.py`, `tools/portal_telemetry_retention.py`
@@ -148,12 +148,24 @@ Still net-new after Phase 4 closeout:
 
 ### 5.5 Phase 5 - pilot deployment model
 
+**Updated 2026-05-15: Phase 5.A local Compose validation has landed.**
+
 - `Dockerfile` provides `base`, `cpu`, `gpu`, and `apple-silicon` stages with
   health probes.
 - `docker-compose.yml` provides CPU, GPU, worker, and monitor services.
-- No Helm charts, no Terraform, no Kubernetes manifests, no managed
-  PostgreSQL, Redis, or S3 deployment doc, no CI deploy pipeline beyond
-  container build.
+- `make test-paid-pilot-services-contract` exists as the opt-in managed
+  services smoke gate.
+- Local Compose validation passed at merge commit
+  `07a3e8e847dee4a6e1ccf46d6dcd80b612fe3753`.
+- The gate composes Postgres `JobRepository`, Redis `QueueBroker`, Redis
+  frontdoor `SessionStore`, S3-compatible `ArtifactStore`, artifact
+  fetch/delete lifecycle, and `worker_lost` recovery.
+- The provider-neutral managed staging procedure is documented in
+  `docs/deployment/managed_paid_pilot_staging_runbook.md`.
+- Still pending: managed-provider/staging validation against provider
+  Postgres, Redis, and S3-compatible endpoints; Helm charts; Terraform;
+  Kubernetes manifests; separate multi-host worker deployment; and a CI deploy
+  pipeline beyond container build.
 - `docs/deployment/PRODUCTION_READINESS.md` exists but does not cover managed
   services.
 
@@ -229,20 +241,31 @@ These are the existing gates and should not regress as Phases 1 through 7
 land. They cover the in-memory orchestrator, the SQLite frontdoor, the
 filesystem artifact path, and the workflow and dependency governance.
 
-### 7.2 To be added during Phase 1 through Phase 4
+### 7.2 Durable service component gates
 
-The plan calls for a "new Postgres/Redis/S3 integration target". The
-following targets should be created and added to this list during the
-respective phase:
+The Postgres, Redis, frontdoor Redis, and S3 component targets now exist. They
+must pass before provider-backed paid-pilot admission:
 
-| Phase | New Make target | What it must prove |
+| Phase | Make target | What it must prove |
 | --- | --- | --- |
 | 1 | `test-orchestrator-postgres-contract` | `JobRepository` contract identical for memory and Postgres backends; restart recovery; cancel semantics; artifact index parity. Durable SSE replay remains a separate event-store cutover. |
 | 2 | `test-worker-redis-contract` | Queue lease and heartbeat expiry; duplicate-consumer protection; `worker_lost` marking; cancellation honored across queue boundary. |
 | 3 | `test-frontdoor-redis-contract` | Multi-instance and ephemeral readiness green paths; CSRF preserved across instances; throttle parity; session TTL semantics. |
 | 4 | `test-artifact-s3-contract` | S3-compatible write, read, delete, signed-URL expiry, checksum mismatch rejection, path-traversal rejection; deterministic Merkle inputs. |
 
-### 7.3 Live validation gates
+### 7.3 Paid-pilot managed-services gate
+
+```bash
+make test-paid-pilot-services-contract
+```
+
+Phase 5.A local Compose validation for this gate is complete at
+`07a3e8e847dee4a6e1ccf46d6dcd80b612fe3753`. Managed-provider validation is
+pending until the same target passes against provider-managed Postgres, Redis
+queue storage, Redis frontdoor session storage, and S3-compatible artifact
+storage.
+
+### 7.4 Live validation gates
 
 ```bash
 make validate-frontdoor-browser        # frontdoor browser smoke (current: SQLite path)
@@ -252,7 +275,7 @@ make validate-portal-browser           # portal browser smoke (current: in-memor
 After Phases 1 through 4 land, these should be re-run against the durable
 backend rather than the local in-memory and SQLite defaults.
 
-### 7.4 Evidence and attestation
+### 7.5 Evidence and attestation
 
 ```bash
 python3 scripts/security/verify_banned_dependencies.py

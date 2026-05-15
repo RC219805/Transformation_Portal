@@ -9,6 +9,18 @@ Phase 5.A adds an opt-in validation gate for the current paid-pilot backend topo
 
 This is not production infrastructure-as-code. It is a deterministic smoke gate for proving that the existing durable components compose under explicit service endpoints.
 
+## Managed Provider / Staging Validation
+
+This document defines the paid-pilot smoke gate and local Compose validation
+path. For provider-managed staging validation, use
+[`managed_paid_pilot_staging_runbook.md`](managed_paid_pilot_staging_runbook.md).
+
+Local Compose validation proves the stack against disposable local Postgres,
+Redis, and MinIO services. Managed-provider validation is separate and remains
+pending until the same gate passes against provider-managed Postgres, Redis
+queue storage, Redis frontdoor session storage, and S3-compatible artifact
+storage.
+
 ## Local Compose Services
 
 Bring up the local disposable services:
