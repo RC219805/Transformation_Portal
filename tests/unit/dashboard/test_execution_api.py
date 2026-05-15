@@ -298,3 +298,123 @@ class TestRaceConditionPrevention:
         # All nodes should be PENDING before execution
         assert data["nodes"]["input"]["status"] == "pending"
         assert data["nodes"]["output"]["status"] == "pending"
+
+
+class TestManagerAccessors:
+    """Tests for get_manager / set_manager."""
+
+    def test_get_manager_creates_singleton_when_unset(self) -> None:
+        from transformation_portal.dashboard import execution_api
+
+        execution_api._manager = None
+        first = execution_api.get_manager()
+        second = execution_api.get_manager()
+
+        assert isinstance(first, ExecutionManager)
+        assert first is second
+
+    def test_set_manager_replaces_global(self) -> None:
+        from transformation_portal.dashboard import execution_api
+
+        replacement = ExecutionManager()
+        set_manager(replacement)
+
+        assert execution_api.get_manager() is replacement
+
+
+class TestBroadcast:
+    """Tests for the WebSocket broadcast helper."""
+
+    @pytest.fixture(autouse=True)
+    def _reset_clients(self) -> Generator[None, None, None]:
+        from transformation_portal.dashboard import execution_api
+
+        execution_api._websocket_clients.clear()
+        yield
+        execution_api._websocket_clients.clear()
+
+    @pytest.mark.asyncio
+    async def test_broadcast_sends_to_clients(self) -> None:
+        from transformation_portal.dashboard import execution_api
+
+        class _Good:
+            def __init__(self) -> None:
+                self.sent: list[dict] = []
+
+            async def send_json(self, msg: dict) -> None:
+                self.sent.append(msg)
+
+        good = _Good()
+        execution_api._websocket_clients.append(good)
+
+        await execution_api.broadcast({"type": "ping"})
+
+        assert good.sent == [{"type": "ping"}]
+
+    @pytest.mark.asyncio
+    async def test_broadcast_drops_disconnected_clients(self) -> None:
+        from transformation_portal.dashboard import execution_api
+
+        class _Broken:
+            async def send_json(self, msg: dict) -> None:
+                raise RuntimeError("gone")
+
+        broken = _Broken()
+        execution_api._websocket_clients.append(broken)
+
+        await execution_api.broadcast({"type": "ping"})
+
+        assert broken not in execution_api._websocket_clients
+
+
+class TestExecutionWebSocket:
+    """Tests for the /api/exec/ws WebSocket endpoint."""
+
+    @pytest.fixture(autouse=True)
+    def _reset_clients(self) -> Generator[None, None, None]:
+        from transformation_portal.dashboard import execution_api
+
+        execution_api._websocket_clients.clear()
+        yield
+        execution_api._websocket_clients.clear()
+
+    def test_ping_pong_and_client_tracking(self, client: TestClient) -> None:
+        from transformation_portal.dashboard import execution_api
+
+        with client.websocket_connect("/api/exec/ws") as ws:
+            assert len(execution_api._websocket_clients) == 1
+            ws.send_text("ping")
+            assert ws.receive_text() == "pong"
+
+        assert len(execution_api._websocket_clients) == 0
+
+
+class TestRunFailurePath:
+    """Tests for the POST /run error handling."""
+
+    def test_returns_500_when_background_start_fails(self, client: TestClient, manager: ExecutionManager) -> None:
+        def _boom(*args: object, **kwargs: object) -> None:
+            raise RuntimeError("scheduler unavailable")
+
+        manager.start_pipeline_background = _boom  # type: ignore[method-assign]
+
+        response = client.post("/api/exec/run", json={"nodes": [], "edges": []})
+
+        assert response.status_code == 500
+
+
+class TestExecutionUi:
+    """Tests for the served HTML route and helper."""
+
+    def test_ui_route_serves_html(self, client: TestClient) -> None:
+        response = client.get("/api/exec/")
+
+        assert response.status_code == 200
+        assert "Pipeline Execution Monitor" in response.text
+
+    def test_html_helper_is_self_contained(self) -> None:
+        from transformation_portal.dashboard.execution_api import get_execution_ui_html
+
+        html = get_execution_ui_html()
+        assert html.startswith("<!DOCTYPE html>")
+        assert html.strip().endswith("</html>")

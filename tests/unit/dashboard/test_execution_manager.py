@@ -19,6 +19,7 @@ import pytest
 
 from transformation_portal.dashboard.execution_manager import (
     ExecutionManager,
+    NodeState,
     NodeStatus,
     RunState,
     RunStatus,
@@ -426,3 +427,269 @@ class TestTerminalStateInvariants:
 
         assert result == "error"
         assert manager.active_runs[run_id].status == RunStatus.ERROR
+
+
+class _ConfigNode:
+    """A registry node that records the config it was constructed with."""
+
+    def __init__(self, **config: Any) -> None:
+        self.config = config
+
+    def run(self, **inputs: Any) -> Dict[str, Any]:
+        return {"echoed": inputs, "config": self.config}
+
+
+class _FailingNode:
+    """A registry node whose run() always raises."""
+
+    def __init__(self, **config: Any) -> None:
+        pass
+
+    def run(self, **inputs: Any) -> Dict[str, Any]:
+        raise RuntimeError("node boom")
+
+
+class TestDataclasses:
+    """Tests for the NodeState / RunState dataclasses."""
+
+    def test_node_state_defaults(self) -> None:
+        node = NodeState(node_id="n1")
+        assert node.status == NodeStatus.PENDING
+        assert node.outputs == {}
+        assert node.logs == []
+        assert node.merkle_hash is None
+
+    def test_run_state_defaults(self) -> None:
+        run = RunState(run_id="r1")
+        assert run.status == RunStatus.PENDING
+        assert run.nodes == {}
+        assert run.cancel_requested is False
+        assert run.current_node_id is None
+
+
+class TestResolveNodeImpl:
+    """Tests for _resolve_node_impl."""
+
+    def test_resolves_from_registry_with_config(self) -> None:
+        manager = ExecutionManager(node_registry={"config_node": _ConfigNode})
+
+        impl = manager._resolve_node_impl({"type": "config_node", "config": {"k": "v"}})
+
+        assert isinstance(impl, _ConfigNode)
+        assert impl.config == {"k": "v"}
+
+    def test_falls_back_to_passthrough_for_unknown_type(self) -> None:
+        from transformation_portal.execution_graph.nodes.base import PassthroughNode
+
+        manager = ExecutionManager()
+
+        impl = manager._resolve_node_impl({"type": "unknown"})
+
+        assert isinstance(impl, PassthroughNode)
+
+
+class TestGetNodeDeps:
+    """Tests for _get_node_deps."""
+
+    def test_extracts_dependencies_from_edges(self) -> None:
+        manager = ExecutionManager()
+        edges = [
+            {"source": "a", "target": "c"},
+            {"source": "b", "target": "c"},
+            {"source": "a", "target": "b"},
+        ]
+
+        assert manager._get_node_deps("c", edges) == ["a", "b"]
+
+    def test_returns_empty_for_root_node(self) -> None:
+        manager = ExecutionManager()
+
+        assert manager._get_node_deps("a", [{"source": "a", "target": "b"}]) == []
+
+
+class TestAllocateRunId:
+    """Tests for allocate_run_id collision avoidance."""
+
+    def test_skips_ids_already_in_history(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from transformation_portal.dashboard import execution_manager
+
+        ids = iter(["AAAAAAAA-collision", "BBBBBBBB-fresh"])
+
+        def _fake_uuid4() -> str:
+            return next(ids)
+
+        monkeypatch.setattr(execution_manager.uuid, "uuid4", _fake_uuid4)
+        manager = ExecutionManager()
+        manager.run_history.append("AAAAAAAA")
+
+        assert manager.allocate_run_id() == "BBBBBBBB"
+
+
+class TestPrepareRunHistoryTrimming:
+    """Tests for the history-trimming branches in prepare_run."""
+
+    def test_keeps_non_terminal_run_during_trim(self) -> None:
+        manager = ExecutionManager()
+        manager._max_history = 1
+
+        first = manager.allocate_run_id()
+        manager.prepare_run(first, {"nodes": [], "edges": []})  # stays PENDING
+        second = manager.allocate_run_id()
+        manager.prepare_run(second, {"nodes": [], "edges": []})
+
+        # The PENDING (non-terminal) run is not evicted.
+        assert first in manager.active_runs
+        assert second in manager.active_runs
+
+    def test_keeps_run_with_live_task_during_trim(self) -> None:
+        manager = ExecutionManager()
+        manager._max_history = 1
+
+        first = manager.allocate_run_id()
+        manager.prepare_run(first, {"nodes": [], "edges": []})
+        manager.active_runs[first].status = RunStatus.COMPLETE
+        manager._tasks_by_run_id[first] = object()  # type: ignore[assignment]
+
+        second = manager.allocate_run_id()
+        manager.prepare_run(second, {"nodes": [], "edges": []})
+
+        # A run with a live task is not evicted even though it is terminal.
+        assert first in manager.active_runs
+
+    def test_drops_history_id_missing_from_active_runs(self) -> None:
+        manager = ExecutionManager()
+        manager._max_history = 1
+        manager.run_history.append("ghost")  # in history, never in active_runs
+
+        run_id = manager.allocate_run_id()
+        manager.prepare_run(run_id, {"nodes": [], "edges": []})
+
+        assert "ghost" not in manager.run_history
+        assert run_id in manager.active_runs
+
+
+class TestStartPipelineBackgroundGuards:
+    """Tests for start_pipeline_background duplicate protection and callbacks."""
+
+    @pytest.mark.asyncio
+    async def test_rejects_duplicate_run_id(self) -> None:
+        manager = ExecutionManager()
+        broadcast = AsyncMock()
+        run_id = manager.allocate_run_id()
+        pipeline = {"nodes": [{"id": "a", "type": "passthrough"}], "edges": []}
+
+        task = manager.start_pipeline_background(run_id, pipeline, broadcast)
+        try:
+            with pytest.raises(ValueError, match="already registered"):
+                manager.start_pipeline_background(run_id, pipeline, broadcast)
+        finally:
+            await task
+
+    @pytest.mark.asyncio
+    async def test_done_callback_clears_task_registry(self) -> None:
+        manager = ExecutionManager()
+        broadcast = AsyncMock()
+        run_id = manager.allocate_run_id()
+
+        task = manager.start_pipeline_background(
+            run_id, {"nodes": [{"id": "a", "type": "passthrough"}], "edges": []}, broadcast
+        )
+        await task
+
+        assert run_id not in manager._tasks_by_run_id
+
+    @pytest.mark.asyncio
+    async def test_done_callback_handles_cancellation(self) -> None:
+        manager = ExecutionManager()
+        broadcast = AsyncMock()
+        run_id = manager.allocate_run_id()
+
+        task = manager.start_pipeline_background(
+            run_id, {"nodes": [{"id": "a", "type": "passthrough"}], "edges": []}, broadcast
+        )
+        await asyncio.sleep(0)  # let the task start
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+
+        assert run_id not in manager._tasks_by_run_id
+
+
+class TestRunPipelineExecution:
+    """Tests for the end-to-end run_pipeline / _execute_pipeline path."""
+
+    @pytest.mark.asyncio
+    async def test_run_pipeline_completes_successfully(self) -> None:
+        manager = ExecutionManager()
+        events: list[str] = []
+
+        async def broadcast(msg: Dict[str, Any]) -> None:
+            events.append(msg["type"])
+
+        run_id = await manager.run_pipeline(
+            {"nodes": [{"id": "a", "type": "passthrough"}], "edges": []},
+            broadcast,
+        )
+
+        run = manager.get_run_state(run_id)
+        assert run is not None
+        assert run.status == RunStatus.COMPLETE
+        assert run.nodes["a"].status == NodeStatus.COMPLETE
+        assert "run_started" in events
+        assert "run_complete" in events
+
+    @pytest.mark.asyncio
+    async def test_node_error_is_isolated_but_run_completes(self) -> None:
+        manager = ExecutionManager(node_registry={"failing": _FailingNode})
+        events: list[str] = []
+
+        async def broadcast(msg: Dict[str, Any]) -> None:
+            events.append(msg["type"])
+
+        run_id = await manager.run_pipeline(
+            {"nodes": [{"id": "a", "type": "failing"}], "edges": []},
+            broadcast,
+        )
+
+        run = manager.get_run_state(run_id)
+        assert run.nodes["a"].status == NodeStatus.ERROR
+        assert "node boom" in run.nodes["a"].error
+        assert "node_error" in events
+        assert run.status == RunStatus.COMPLETE
+
+    @pytest.mark.asyncio
+    async def test_run_level_error_marks_run_errored(self) -> None:
+        manager = ExecutionManager()
+        events: list[str] = []
+
+        async def broadcast(msg: Dict[str, Any]) -> None:
+            events.append(msg["type"])
+
+        # A node definition missing "id" raises inside _execute_pipeline's
+        # scheduler-build loop, exercising the run-level error handler.
+        run_id = await manager.run_pipeline(
+            {"nodes": [{"type": "passthrough"}], "edges": []},
+            broadcast,
+        )
+
+        run = manager.get_run_state(run_id)
+        assert run.status == RunStatus.ERROR
+        assert run.error is not None
+        assert "run_error" in events
+
+    @pytest.mark.asyncio
+    async def test_merkle_hash_recorded_when_dag_provided(self) -> None:
+        from transformation_portal.storage.merkle_dag import MerkleDAG
+
+        dag = MerkleDAG()
+        manager = ExecutionManager(merkle_dag=dag)
+        broadcast = AsyncMock()
+
+        run_id = await manager.run_pipeline(
+            {"nodes": [{"id": "a", "type": "passthrough"}], "edges": []},
+            broadcast,
+        )
+
+        run = manager.get_run_state(run_id)
+        assert run.nodes["a"].merkle_hash is not None
+        assert dag.get_node(run.nodes["a"].merkle_hash) is not None
