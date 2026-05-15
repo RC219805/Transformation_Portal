@@ -102,12 +102,13 @@ end
 local t = redis.call('TIME')
 local now = tonumber(t[1]) + tonumber(t[2]) / 1000000
 local deadline = now + tonumber(ARGV[2])
+local deadline_str = string.format('%.6f', deadline)
 local job_key = KEYS[3] .. job_id
 local request_json = redis.call('HGET', job_key, 'request')
-redis.call('HSET', job_key, 'worker_id', ARGV[1], 'deadline', tostring(deadline))
+redis.call('HSET', job_key, 'worker_id', ARGV[1], 'deadline', deadline_str)
 redis.call('HDEL', job_key, 'cancellation_requested')
-redis.call('ZADD', KEYS[2], deadline, job_id)
-return {job_id, request_json, tostring(deadline)}
+redis.call('ZADD', KEYS[2], deadline_str, job_id)
+return {job_id, request_json, deadline_str}
 """
 
 
@@ -133,8 +134,9 @@ end
 local t = redis.call('TIME')
 local now = tonumber(t[1]) + tonumber(t[2]) / 1000000
 local deadline = now + tonumber(ARGV[3])
-redis.call('HSET', KEYS[2], 'deadline', tostring(deadline))
-redis.call('ZADD', KEYS[1], deadline, ARGV[2])
+local deadline_str = string.format('%.6f', deadline)
+redis.call('HSET', KEYS[2], 'deadline', deadline_str)
+redis.call('ZADD', KEYS[1], deadline_str, ARGV[2])
 return 'active'
 """
 
