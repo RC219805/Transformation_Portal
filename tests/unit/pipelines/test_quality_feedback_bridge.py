@@ -10,7 +10,9 @@ heuristic-only mode in core CI.
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path
+from types import ModuleType
 from typing import Any, Generator
 from unittest.mock import patch
 
@@ -39,13 +41,28 @@ pytestmark = pytest.mark.unit
 
 @pytest.fixture(autouse=True)
 def _reset_dep_caches() -> Generator[None, None, None]:
-    """Reset the module-level dependency-probe caches around each test."""
+    """Reset dependency-probe caches and import state around each test."""
     saved = (qfb._TORCH_AVAILABLE, qfb._LPIPS_AVAILABLE, qfb._PERCEPTUAL_ASSESSOR_AVAILABLE)
+    saved_path = list(sys.path)
+    missing = object()
+    saved_modules = {
+        name: sys.modules.get(name, missing)
+        for name in (
+            "enhancements",
+            "enhancements.perceptual_quality_assessment",
+        )
+    }
     qfb._TORCH_AVAILABLE = None
     qfb._LPIPS_AVAILABLE = None
     qfb._PERCEPTUAL_ASSESSOR_AVAILABLE = None
     yield
     qfb._TORCH_AVAILABLE, qfb._LPIPS_AVAILABLE, qfb._PERCEPTUAL_ASSESSOR_AVAILABLE = saved
+    sys.path[:] = saved_path
+    for name, module in saved_modules.items():
+        if module is missing:
+            sys.modules.pop(name, None)
+        else:
+            sys.modules[name] = module
 
 
 def _synthetic_image(seed: int = 0, size: int = 64) -> np.ndarray:
@@ -77,10 +94,27 @@ class TestToJsonable:
 class TestDependencyProbes:
     """Tests for the lazy dependency-availability probes."""
 
-    def test_torch_available_caches_first_result(self) -> None:
+    def test_torch_available_caches_first_import_result(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        import builtins
+
+        attempts = 0
+        original_import = builtins.__import__
+        fake_torch = ModuleType("torch")
+
+        def _fake_import(name: str, *args: Any, **kwargs: Any) -> Any:
+            nonlocal attempts
+            if name == "torch":
+                attempts += 1
+                return fake_torch
+            return original_import(name, *args, **kwargs)
+
+        monkeypatch.setattr(builtins, "__import__", _fake_import)
+
         first = _check_torch_available()
         # Second call returns the cached value rather than re-importing.
         assert _check_torch_available() is first
+        assert first is True
+        assert attempts == 1
 
     def test_torch_unavailable_when_import_fails(self, monkeypatch: pytest.MonkeyPatch) -> None:
         import builtins
@@ -108,10 +142,40 @@ class TestDependencyProbes:
         monkeypatch.setattr(builtins, "__import__", _missing)
         assert _check_lpips_available() is False
 
-    def test_perceptual_assessor_probe_returns_bool(self) -> None:
-        # The src/enhancements module isn't part of the package; in core CI
-        # this is False. The contract is that a bool is always returned.
-        assert isinstance(_check_perceptual_assessor_available(), bool)
+    def test_perceptual_assessor_available_caches_fake_success(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        import builtins
+
+        attempts = 0
+        original_import = builtins.__import__
+        fake_module = ModuleType("enhancements.perceptual_quality_assessment")
+        fake_module.PerceptualQualityAssessor = object
+
+        def _fake_import(name: str, *args: Any, **kwargs: Any) -> Any:
+            nonlocal attempts
+            if name == "enhancements.perceptual_quality_assessment":
+                attempts += 1
+                return fake_module
+            return original_import(name, *args, **kwargs)
+
+        monkeypatch.setattr(builtins, "__import__", _fake_import)
+
+        first = _check_perceptual_assessor_available()
+        assert _check_perceptual_assessor_available() is first
+        assert first is True
+        assert attempts == 1
+
+    def test_perceptual_assessor_unavailable_when_import_fails(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        import builtins
+
+        original_import = builtins.__import__
+
+        def _missing(name: str, *args: Any, **kwargs: Any) -> Any:
+            if name == "enhancements.perceptual_quality_assessment":
+                raise ImportError("perceptual assessor not installed")
+            return original_import(name, *args, **kwargs)
+
+        monkeypatch.setattr(builtins, "__import__", _missing)
+        assert _check_perceptual_assessor_available() is False
 
 
 class TestDataclasses:
