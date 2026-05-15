@@ -23,6 +23,7 @@ for `docs/cli`.
 | Local setup and environment checks | [Setup Guide](guides/SETUP_GUIDE.md) |
 | Portal and orchestrator contracts | [Portal + Orchestrator Quickstart](guides/PORTAL_ORCHESTRATOR_QUICKSTART.md) |
 | Managed front door | [Portal Secure Front Door Quickstart](guides/PORTAL_SECURE_FRONTDOOR_QUICKSTART.md) |
+| Managed paid-pilot staging | [Managed Paid-Pilot Staging Runbook](deployment/managed_paid_pilot_staging_runbook.md) |
 | Lux Depth V3 CLI | [Lux Depth V3 CLI Guide](cli/LUX_DEPTH_V3_CLI_GUIDE.md) |
 | CLI entrypoint reference | [CLI Reference](cli/CLI_REFERENCE.md) |
 | FastVLM advisory captioning runtime | [FastVLM Runtime](runtimes/fastvlm.md) |
@@ -34,6 +35,7 @@ for `docs/cli`.
 | --- | --- | --- |
 | Portal / API | [Portal Quickstart](guides/PORTAL_ORCHESTRATOR_QUICKSTART.md), [API docs](api/) | `/healthz`, `/ready`, `/v1/readiness`, and job lifecycle routes are current governed surfaces. PR #1562 and later follow-ups added typed OpenAPI response models while preserving existing wire contracts. |
 | Secure front door | [Front Door Quickstart](guides/PORTAL_SECURE_FRONTDOOR_QUICKSTART.md) | Node 22.x is the enforced local/runtime contract for `web/secure-landing`. |
+| Managed paid-pilot staging | [Managed Paid-Pilot Staging Runbook](deployment/managed_paid_pilot_staging_runbook.md), [Paid-Pilot Managed-Services Smoke Gate](deployment/paid_pilot_services.md) | Phase 5.A is locally validated at `07a3e8e847dee4a6e1ccf46d6dcd80b612fe3753`; managed-provider validation remains pending until the same gate passes against provider Postgres, Redis, and S3-compatible storage. |
 | Docker / environment | [Main README](../README.md), [`.env.example`](../.env.example) | Docker Compose reads the root `.env` template with `required: false`; set `TP_API_KEY` for non-throwaway runs. |
 | CI / validation | [Workflow Matrix](ci/WORKFLOW_MATRIX.md), [CI/CD Workflows](ci_cd/CI_CD_WORKFLOWS.md) | The current GitHub Actions inventory contains 30 workflows after the Phase 1.4 refresh. |
 | Agent / Copilot guidance | [Custom Agent Guide](guides/CUSTOM_AGENT_GUIDE.md), [Agent Quick Reference](reference/AGENT_QUICK_REFERENCE.md), [Copilot Instructions](../.github/copilot-instructions.md), [CLAUDE.md](../CLAUDE.md) | Live agent behavior is governed by `.github/agents/`, Copilot instructions, `CLAUDE.md`, and `docs/architecture/agent_governance.md`. |
@@ -93,4 +95,4 @@ make check-doc-heading-links
 python3 scripts/governance/check_docs_structure.py --all
 ```
 
-**Last Updated:** 2026-05-12
+**Last Updated:** 2026-05-15

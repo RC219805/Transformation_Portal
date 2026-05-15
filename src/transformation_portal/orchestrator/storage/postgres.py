@@ -6,9 +6,9 @@ persistent slice of orchestrator jobs into the ORM models defined in
 ``JobRecord`` dataclass that the rest of the orchestrator already knows
 about.
 
-Concurrency: every ``update`` and ``set_artifacts`` call increments the
-row's ``version`` column under an optimistic-concurrency guard and
-retries on conflict.
+Concurrency: per-job ``update`` and log append calls serialize on the
+row lock, while remaining JSON index update paths use optimistic
+concurrency and retry on conflict.
 
 Memory ``logs_tail`` parity: this layer keeps the legacy "bounded
 in-memory tail" semantic - ``append_log`` reads the current tail,
@@ -207,53 +207,33 @@ class PostgresJobRepository(JobRepository):
                 raise JobNotFoundError(job_id)
             return existing
 
-        for attempt in range(_OPTIMISTIC_LOCK_RETRIES):
-            async with self._session() as session:
-                model = await session.get(JobModel, job_id)
-                if model is None:
-                    raise JobNotFoundError(job_id)
-                current_version = model.version
-                payload: Dict[str, Any] = dict(fields)
-                # Normalize JSON-stored containers so SQLAlchemy detects the
-                # mutation (asyncpg JSONB column).
-                for key in (
-                    "request",
-                    "effective_request",
-                    "artifacts",
-                    "run_summary",
-                ):
-                    if key in payload and payload[key] is not None:
-                        payload[key] = dict(payload[key])
-                if "logs_tail" in payload and payload["logs_tail"] is not None:
-                    payload["logs_tail"] = list(payload["logs_tail"])
-                if "error" in payload and payload["error"] is not None:
-                    payload["error"] = dict(payload["error"])
+        async with self._session() as session:
+            stmt = select(JobModel).where(JobModel.id == job_id).with_for_update()
+            model = (await session.execute(stmt)).scalar_one_or_none()
+            if model is None:
+                raise JobNotFoundError(job_id)
+            payload: Dict[str, Any] = dict(fields)
+            # Normalize JSON-stored containers so SQLAlchemy detects the
+            # mutation (asyncpg JSONB column).
+            for key in (
+                "request",
+                "effective_request",
+                "artifacts",
+                "run_summary",
+            ):
+                if key in payload and payload[key] is not None:
+                    payload[key] = dict(payload[key])
+            if "logs_tail" in payload and payload["logs_tail"] is not None:
+                payload["logs_tail"] = list(payload["logs_tail"])
+            if "error" in payload and payload["error"] is not None:
+                payload["error"] = dict(payload["error"])
 
-                stmt = (
-                    update(JobModel)
-                    .where(
-                        JobModel.id == job_id,
-                        JobModel.version == current_version,
-                    )
-                    .values(version=current_version + 1, **payload)
-                )
-                result = await session.execute(stmt)
-                if result.rowcount == 0:
-                    await session.rollback()
-                    if attempt + 1 < _OPTIMISTIC_LOCK_RETRIES:
-                        await asyncio.sleep(0.01 * (attempt + 1))
-                        continue
-                    raise RepositoryError(
-                        f"optimistic-lock conflict on job {job_id} after " f"{_OPTIMISTIC_LOCK_RETRIES} retries"
-                    )
-                await session.commit()
-                refreshed = await session.get(JobModel, job_id)
-                assert refreshed is not None  # just updated successfully
-                await session.refresh(refreshed, ["artifact_index"])
-                return _record_from_model(refreshed)
-
-        # Should be unreachable; included for type-checkers.
-        raise RepositoryError(f"failed to update job {job_id}")
+            for key, value in payload.items():
+                setattr(model, key, value)
+            model.version += 1
+            await session.commit()
+            await session.refresh(model, ["artifact_index"])
+            return _record_from_model(model)
 
     async def append_log(self, job_id: str, line: str, *, tail_limit: int) -> None:
         if tail_limit <= 0:
@@ -266,33 +246,18 @@ class PostgresJobRepository(JobRepository):
         batch = list(lines)
         if not batch:
             return
-        for attempt in range(_OPTIMISTIC_LOCK_RETRIES):
-            async with self._session() as session:
-                model = await session.get(JobModel, job_id)
-                if model is None:
-                    raise JobNotFoundError(job_id)
-                current_version = model.version
-                tail = list(model.logs_tail or [])
-                tail.extend(batch)
-                if len(tail) > tail_limit:
-                    tail = tail[-tail_limit:]
-                stmt = (
-                    update(JobModel)
-                    .where(
-                        JobModel.id == job_id,
-                        JobModel.version == current_version,
-                    )
-                    .values(logs_tail=tail, version=current_version + 1)
-                )
-                result = await session.execute(stmt)
-                if result.rowcount == 0:
-                    await session.rollback()
-                    if attempt + 1 < _OPTIMISTIC_LOCK_RETRIES:
-                        await asyncio.sleep(0.01 * (attempt + 1))
-                        continue
-                    raise RepositoryError(f"optimistic-lock conflict on job {job_id} log append")
-                await session.commit()
-                return
+        async with self._session() as session:
+            stmt = select(JobModel).where(JobModel.id == job_id).with_for_update()
+            model = (await session.execute(stmt)).scalar_one_or_none()
+            if model is None:
+                raise JobNotFoundError(job_id)
+            tail = list(model.logs_tail or [])
+            tail.extend(batch)
+            if len(tail) > tail_limit:
+                tail = tail[-tail_limit:]
+            model.logs_tail = tail
+            model.version += 1
+            await session.commit()
 
     async def set_artifacts(
         self,
