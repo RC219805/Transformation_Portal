@@ -44,7 +44,11 @@ Quick reference for common workflows and commands in this repo.
 - `make test-orchestrator-contract` run the full portal/orchestrator contract suite (`tests/test_app_orchestrator_runtime.py`, `tests/test_app_orchestrator_contract_http.py`, `tests/validation/test_portal_smoke_scripts.py`, `tests/orchestrator`).
 - `make test-orchestrator-http-contract` run HTTP-only orchestrator contract tests (`tests/test_app_orchestrator_contract_http.py`).
 - `make test-orchestrator-postgres-contract` run the orchestrator repository/recovery contract suite against Postgres; requires `TP_TEST_POSTGRES_URL` pointing at an empty test database, usually after `docker compose up -d postgres`.
+- `make test-orchestrator-postgres-app-contract` run the Postgres-backed orchestrator app-route authority smoke; requires `TP_TEST_POSTGRES_URL` pointing at an empty test database.
 - `make test-worker-redis-contract` run the QueueBroker contract suite against Redis; requires `TP_TEST_REDIS_URL=redis://127.0.0.1:6379/0`, usually after `docker compose up -d redis`.
+- `make test-artifact-s3-contract` run ArtifactStore local plus S3/moto contract tests; setting `TP_TEST_S3_URL` and `TP_TEST_S3_BUCKET` switches the S3 branch to a live S3-compatible endpoint.
+- `make test-frontdoor-redis-contract` run the managed frontdoor Redis SessionStore contract; requires `TP_FRONTDOOR_REDIS_URL=redis://127.0.0.1:6379/0`.
+- `make test-paid-pilot-services-contract` run the opt-in Postgres + Redis queue + Redis frontdoor sessions + S3-compatible artifact managed-services smoke gate; requires the env surface documented in `docs/deployment/paid_pilot_services.md`.
 - `make test-portal-contract` run portal runtime/browser contract tests (`tests/test_app_orchestrator_runtime.py`, `tests/validation/test_portal_smoke_scripts.py`).
 - `make test-frontdoor-contract` run managed frontdoor Node 22 contract/build checks (`./scripts/setup/ensure_node_version.sh && cd web/secure-landing && npm test && npm run build`).
 - `make test-archive-gate-contract` run archive gate readiness + HTTP contract coverage for archive Gates A/B/C (`tests/test_app_orchestrator_runtime.py`, `tests/test_app_orchestrator_contract_http.py` with `-k "archive_gate"`).
@@ -158,6 +162,7 @@ Quick reference for common workflows and commands in this repo.
 - `docker compose up --build transformation-portal-monitor` run the optional monitor dashboard on host port `8080`; this service has its own Compose healthcheck.
 - `docker compose up -d postgres` start the optional Postgres 16 durable orchestrator state backend; pair with `TP_DATABASE_URL=postgresql+asyncpg://tp:tp_dev_password@127.0.0.1:5432/transformation_portal make db-upgrade`.
 - `docker compose up -d redis` start the optional Redis 7 durable QueueBroker backend with AOF and `noeviction`; pair with `TP_ORCHESTRATOR_QUEUE_BACKEND=redis` and `TP_REDIS_URL=redis://127.0.0.1:6379/0`.
+- `docker compose --profile paid-pilot up -d minio minio-create-bucket` start the local MinIO S3-compatible ArtifactStore lane and create the default `tp-artifacts-pilot` dev bucket; pair with `docs/deployment/paid-pilot.env.example` for local smoke validation.
 - `Dockerfile` image healthchecks for `cpu`, `gpu`, and `apple-silicon` hit `/healthz` on container port `8000`; avoid adding Compose service healthchecks for `cpu`/`gpu` unless intentionally overriding image healthchecks.
 
 ## ML Layer Bootstrap Script (ADR-032 Platform Matrix)
