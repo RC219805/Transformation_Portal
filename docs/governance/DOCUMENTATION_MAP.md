@@ -3,7 +3,7 @@
 **Purpose:** Current source of truth for finding maintained Transformation
 Portal documentation.
 
-**Last Updated:** 2026-05-12
+**Last Updated:** 2026-05-15
 **Maintainer:** Repository Architect
 **Current baseline:** repo-wide refresh audit dated May 11, 2026, building on
 `main` through PR #1721, with the May 12 architecture triage overlay for
@@ -36,6 +36,7 @@ operator guidance unless they are linked here as canonical documents.
 | API / OpenAPI contracts | [API docs](../api/) | Maintained |
 | Machine-mode metadata API | [Machine Mode Contract](../api/MACHINE_MODE_CONTRACT.md) | Maintained |
 | Archive machine-mode API | [Archive Machine Mode Contract](../api/ARCHIVE_MACHINE_MODE_CONTRACT.md) | Maintained |
+| Managed paid-pilot staging | [Managed Paid-Pilot Staging Runbook](../deployment/managed_paid_pilot_staging_runbook.md) | Maintained; provider-neutral procedure for rerunning the Phase 5.A gate against managed Postgres, Redis, and S3-compatible storage |
 | Lux Depth V3 CLI | [Lux Depth V3 CLI Guide](../cli/LUX_DEPTH_V3_CLI_GUIDE.md) | Maintained |
 | CLI entrypoints | [CLI Reference](../cli/CLI_REFERENCE.md) | Maintained |
 | PBR CLI testing | [PBR CLI Testing Guide](../cli/PBR_CLI_TESTING_GUIDE.md) | Maintained |
@@ -69,7 +70,7 @@ operator guidance unless they are linked here as canonical documents.
 | Branch protection | [BRANCH_PROTECTION_SETUP.md](../ci/BRANCH_PROTECTION_SETUP.md) | Maintained |
 | Dependency pinning | [ADR-032 Dependency Pinning Strategy](../architecture/ADR-032-dependency-pinning-strategy.md) | Maintained |
 | Retired ML lock lanes | [Retired ML Lock Lanes - 2026-04-30](RETIRED_ML_LOCK_LANES_2026-04-30.md) | Maintained governance record for unsupported Linux/macOS Intel ML lanes |
-| Production hardening gap (paid pilot) | [Production Hardening Gap - 2026-05-13](PRODUCTION_HARDENING_GAP_2026-05-13.md) | Paid-pilot baseline: what is already done, what is partial, what is net-new across Phases 1 through 7, plus pinned pilot acceptance commands |
+| Production hardening gap (paid pilot) | [Production Hardening Gap - 2026-05-13](PRODUCTION_HARDENING_GAP_2026-05-13.md) | Paid-pilot baseline: what is already done, what is partial, what is net-new across Phases 1 through 7, plus pinned pilot acceptance commands and Phase 5.A local validation status |
 | Test marker policy | [ADR-044 Test Marker Enforcement](../architecture/ADR-044-test-marker-enforcement.md) | Maintained |
 | Security hardening report | [security_best_practices_report.md](security_best_practices_report.md) | Maintained status record |
 
