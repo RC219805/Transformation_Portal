@@ -5337,6 +5337,153 @@ def test_overlay_runtime_state_keeps_cached_items_when_durable_has_lifecycle_onl
     assert result.artifact_store_backend == "s3"
 
 
+def test_overlay_runtime_state_merges_failed_mirror_lifecycle_without_dropping_cached_items() -> None:
+    cached_job = orchestrator_app.Job(
+        id="job_terminal_failed_mirror_overlay",
+        created_at=100.0,
+        started_at=101.0,
+        finished_at=120.0,
+        done_published_at=121.0,
+        state="succeeded",
+        progress=100,
+        exit_code=0,
+        artifacts={"items": [{"path": "result.txt"}]},
+        artifact_lookup={"result.txt": Path("/tmp/cached-result.txt")},
+        artifact_store_mirrored=True,
+        artifact_store_backend="local",
+    )
+    cached_job.proc = SimpleNamespace(returncode=0)
+    record_job = orchestrator_app.Job(
+        id=cached_job.id,
+        created_at=100.0,
+        started_at=101.0,
+        state="running",
+        progress=80,
+        artifacts={
+            "lifecycle": {
+                "mirror_status": "failed",
+                "mirror_error": "artifact_mirror_failed",
+                "artifact_store_backend": "s3",
+            }
+        },
+        artifact_store_mirrored=False,
+        artifact_store_backend="s3",
+    )
+
+    result = orchestrator_app._overlay_runtime_state(record_job, cached_job)
+
+    assert result is cached_job
+    assert result.state == "succeeded"
+    assert result.artifacts == {
+        "items": [{"path": "result.txt"}],
+        "lifecycle": {
+            "mirror_status": "failed",
+            "mirror_error": "artifact_mirror_failed",
+            "artifact_store_backend": "s3",
+        },
+    }
+    assert result.artifact_lookup == {"result.txt": Path("/tmp/cached-result.txt")}
+    assert result.artifact_store_backend == "s3"
+
+
+def test_overlay_runtime_state_merges_failed_delete_lifecycle_without_dropping_cached_items() -> None:
+    cached_job = orchestrator_app.Job(
+        id="job_terminal_failed_delete_overlay",
+        created_at=100.0,
+        started_at=101.0,
+        finished_at=120.0,
+        done_published_at=121.0,
+        state="succeeded",
+        progress=100,
+        exit_code=0,
+        artifacts={"items": [{"path": "result.txt"}]},
+        artifact_lookup={"result.txt": Path("/tmp/cached-result.txt")},
+        artifact_store_mirrored=True,
+        artifact_store_backend="local",
+    )
+    cached_job.proc = SimpleNamespace(returncode=0)
+    record_job = orchestrator_app.Job(
+        id=cached_job.id,
+        created_at=100.0,
+        started_at=101.0,
+        state="running",
+        progress=80,
+        artifacts={
+            "lifecycle": {
+                "deletion_status": "failed",
+                "deletion_error": "artifact_deletion_failed",
+                "artifact_store_backend": "s3",
+            }
+        },
+        artifact_store_mirrored=False,
+        artifact_store_backend="s3",
+    )
+
+    result = orchestrator_app._overlay_runtime_state(record_job, cached_job)
+
+    assert result is cached_job
+    assert result.state == "succeeded"
+    assert result.artifacts == {
+        "items": [{"path": "result.txt"}],
+        "lifecycle": {
+            "deletion_status": "failed",
+            "deletion_error": "artifact_deletion_failed",
+            "artifact_store_backend": "s3",
+        },
+    }
+    assert result.artifact_lookup == {"result.txt": Path("/tmp/cached-result.txt")}
+    assert result.artifact_store_backend == "s3"
+
+
+def test_overlay_runtime_state_replaces_cached_items_when_durable_artifacts_are_deleted() -> None:
+    cached_job = orchestrator_app.Job(
+        id="job_terminal_deleted_overlay",
+        created_at=100.0,
+        started_at=101.0,
+        finished_at=120.0,
+        done_published_at=121.0,
+        state="succeeded",
+        progress=100,
+        exit_code=0,
+        artifacts={"items": [{"path": "result.txt"}]},
+        artifact_lookup={"result.txt": Path("/tmp/cached-result.txt")},
+        artifact_store_mirrored=True,
+        artifact_store_backend="local",
+    )
+    cached_job.proc = SimpleNamespace(returncode=0)
+    record_job = orchestrator_app.Job(
+        id=cached_job.id,
+        created_at=100.0,
+        started_at=101.0,
+        state="running",
+        progress=80,
+        artifacts={
+            "lifecycle": {
+                "deletion_status": "deleted",
+                "deleted_at": 123.0,
+                "artifact_store_backend": "s3",
+            }
+        },
+        artifact_store_mirrored=False,
+        artifact_store_backend="s3",
+    )
+
+    result = orchestrator_app._overlay_runtime_state(record_job, cached_job)
+
+    assert result is cached_job
+    assert result.state == "succeeded"
+    assert result.artifacts == {
+        "lifecycle": {
+            "deletion_status": "deleted",
+            "deleted_at": 123.0,
+            "artifact_store_backend": "s3",
+        }
+    }
+    assert result.artifact_lookup == {}
+    assert result.artifact_store_mirrored is False
+    assert result.artifact_store_backend == "s3"
+
+
 def test_cleanup_expired_upload_batches_skips_when_retained_scan_fails(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

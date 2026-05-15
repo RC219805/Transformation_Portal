@@ -1185,20 +1185,27 @@ def _job_from_record(record: JobRecord) -> Job:
     )
 
 
-def _has_durable_artifact_metadata(job: Job) -> bool:
+def _has_durable_artifact_inventory(job: Job) -> bool:
     if job.artifact_lookup:
         return True
     if not isinstance(job.artifacts, dict):
         return False
     items = job.artifacts.get("items")
-    if isinstance(items, list) and items:
-        return True
+    return isinstance(items, list) and bool(items)
+
+
+def _has_authoritative_durable_artifact_tombstone(job: Job) -> bool:
+    if not isinstance(job.artifacts, dict):
+        return False
     lifecycle = job.artifacts.get(_ARTIFACT_LIFECYCLE_KEY)
     if not isinstance(lifecycle, dict):
         return False
     deletion_status = str(lifecycle.get("deletion_status") or "").strip().lower()
-    mirror_status = str(lifecycle.get("mirror_status") or "").strip().lower()
-    return bool(lifecycle.get("deleted_at")) or deletion_status in {"deleted", "failed"} or mirror_status == "failed"
+    return bool(lifecycle.get("deleted_at")) or deletion_status == "deleted"
+
+
+def _has_durable_artifact_metadata(job: Job) -> bool:
+    return _has_durable_artifact_inventory(job) or _has_authoritative_durable_artifact_tombstone(job)
 
 
 def _merge_durable_artifact_lifecycle(cached: Job, durable: Job) -> bool:
