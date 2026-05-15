@@ -36,6 +36,14 @@ make test-frontdoor-contract         # web/secure-landing Node 22 contract/build
 make test-archive-gate-contract      # archive Gates A/B/C readiness + HTTP
 make test-integration                # DA3/HF live model loading (requires TP_RUN_HF_MODEL_TESTS=1, often HF_TOKEN)
 
+# Managed-services (paid-pilot) contract gates — require live infra:
+make test-artifact-s3-contract              # ArtifactStore Protocol vs local + S3/moto backends
+make test-orchestrator-postgres-contract    # JobRepository/JobEventStore against Postgres (TP_TEST_POSTGRES_URL)
+make test-orchestrator-postgres-app-contract # app.py Postgres-backed job authority smoke
+make test-worker-redis-contract             # QueueBroker contract against Redis (TP_TEST_REDIS_URL)
+make test-frontdoor-redis-contract          # frontdoor Redis SessionStore (TP_FRONTDOOR_REDIS_URL)
+make test-paid-pilot-services-contract      # full paid-pilot service-matrix gate (Postgres + Redis + S3)
+
 # Direct pytest with marker selection:
 pytest -v tests/ -ra -m "(unit or security or regression or golden or integration) and not slow" --maxfail=1
 pytest -v tests/ -ra -m "ml and not slow" --maxfail=1
@@ -97,11 +105,18 @@ make check-vercel-env                 # validate Vercel/production frontdoor env
 ### Dependency lockfiles
 Edit the right `.in` source under `requirements/`, then regenerate. The umbrella ML and Linux/Darwin-x86_64 ML lanes are **retired and fail closed** — only Darwin arm64 ML and the generic layered locks are live.
 ```bash
-make lock                                                  # all locks
+make lock                                                  # all locks (prod/ci/dev top-level + layered)
 cd requirements && make compile LOCK_PYTHON_VERSION=3.11   # generic layers only
 cd requirements && make compile-ml-darwin-arm64 LOCK_PYTHON_VERSION=3.11   # native arm64 only
 python3 scripts/validation/check_requirements_lock_contract.py             # validate contract
 ```
+
+### Database migrations (orchestrator durable state)
+```bash
+make db-upgrade                                # alembic upgrade head against TP_DATABASE_URL
+make db-revision MESSAGE="<short description>" # alembic --autogenerate
+```
+Migrations live under `migrations/versions/` and target the `JobRepository` / `JobEventStore` Postgres schema. The Postgres backend activates when `TP_ORCHESTRATOR_STATE_BACKEND=postgres` and `TP_DATABASE_URL` is set; the memory backend is the default for local dev and core CI.
 
 ### Subprocess runtimes (DA3 / Depth Pro / RAW / FastVLM)
 These run in **isolated venvs** that the orchestrator auto-discovers:
@@ -136,15 +151,30 @@ Sibling subpackages under `src/transformation_portal/` worth knowing about: `api
 
 Quality tier (`standard|premium|apex`) and `--preset` are **distinct** concepts. V2 enhancement is optional; backward-compat defaults and fail-fast validation must stay intact. Input discovery deliberately excludes derived artifacts and output dirs to prevent "depth-of-depth" loops — do not weaken this filter.
 
+### Production hardening package (paid-pilot phase)
+
+`src/transformation_portal/orchestrator/` is the durable-state surface for the paid-pilot roadmap (`docs/governance/PRODUCTION_HARDENING_GAP_2026-05-13.md` is the authoritative baseline; see also `docs/architecture/PORTAL_ORCHESTRATOR_ROADMAP.md`). It is a **first-class package**, not a helper bucket:
+
+- `storage/` — `JobRepository`, `JobEventStore`, `JobRecord`, `JobEvent` Protocols (`base.py`) + `memory.py` (default) + `postgres.py` (SQLAlchemy 2.x async + Alembic). Backend selected via `TP_ORCHESTRATOR_STATE_BACKEND=memory|postgres` and `TP_DATABASE_URL`.
+- `queue/` — `QueueBroker`, `JobEnqueueRequest`, `JobLease` Protocols + `memory.py` (default) + `redis.py` (server-side Lua atomicity, lease deadlines pinned to Redis TIME). Backend selected via `TP_ORCHESTRATOR_QUEUE_BACKEND=memory|redis` and `TP_REDIS_URL`.
+- `artifact_store/` — `ArtifactStore` Protocol + `local.py` (filesystem, default) + `s3.py` (lazy boto3, supports MinIO/LocalStack via `TP_ARTIFACT_ENDPOINT_URL`). Backend selected via `TP_ARTIFACT_STORE=local|s3` plus `TP_ARTIFACT_BUCKET` / `TP_ARTIFACT_PREFIX` / `TP_ARTIFACT_REGION`.
+- `worker.py` — in-process `WorkerRunner` pool spawned from the FastAPI lifespan; acquires leases via the broker and runs the orchestrator's `_run_job` body. **The legacy in-band `asyncio.create_task(_run_job(...))` dispatch path was removed in Phase 2.E — broker dispatch is now the only execution path.**
+- `recovery.py` — `sweep_orphaned_jobs` runs on every FastAPI startup; jobs stranded as `queued|running` with no live worker handle are marked `worker_lost` (a distinct terminal state) with `error.retriable=True`.
+
+Mirror surface on the managed frontdoor: `web/secure-landing/lib/session-store/` decomposes session persistence into a `contract.js` Protocol + `sqlite-store.js` (default, single-instance) + `redis-store.js` (multi-instance, ships `ioredis`). Backend selected via `TP_FRONTDOOR_SESSION_STORE=sqlite|redis` and `TP_FRONTDOOR_REDIS_URL`. `evaluateSessionScaling()` in `web/secure-landing/lib/session-scaling.js` is the readiness gate — `multi_instance` / `ephemeral_runtime` deployments fail closed unless `redis` is configured.
+
+**Reuse, do not reinvent.** The roadmap explicitly designates these primitives as the integration points for Phase 1–7 paid-pilot work — extend them rather than introducing parallel abstractions. `EventStore` in `events/store.py`, the tenant primitives in `core/security/tenant.py`, and the attestation chain in `tp/phase4/` + `attestation/` are likewise already-shipped surfaces the gap doc enumerates.
+
 ### Portal HTTP surfaces
 
-`app.py` (~9.8k lines) is the FastAPI origin. `portal.html` is the direct-debug HTML. `web/secure-landing/` is the **Node 22.x only** managed front door (Next.js) that splits the browser experience into `/`, `/login`, `/portal`. Authoritative routes:
+`app.py` (~10.6k lines) is the FastAPI origin. `portal.html` is the direct-debug HTML. `web/secure-landing/` is the **Node 22.x only** managed front door (Next.js) that splits the browser experience into `/`, `/login`, `/portal`. Authoritative routes:
 - `GET /healthz` — managed front-door liveness
 - `GET /ready` — backend liveness
 - `GET /v1/readiness` — execution-readiness matrix for the four governed pipelines
-- `/v1/*` — typed envelope contracts (typed OpenAPI response models added in PR #1561/#1562)
+- `/v1/*` and `/v2/*` — typed envelope contracts (`ApiEnvelope[T]` from `src/transformation_portal/api/v1/envelopes.py`). The route inventory contract requires `/v2/jobs/...` to mirror `/v1/jobs/...` method coverage; response schema names remain the existing `tp.orchestrator.*.v1` envelopes unless intentionally changed.
+- Job lifecycle persists through `JobRepository` first; `JOBS` only carries runtime handles. Repository failures return redacted `503 JOB_REPOSITORY_UNAVAILABLE` rather than falling back to stale process cache.
 
-Hardening that must remain intact when editing `app.py`: allowed-root path validation, API key + trusted-host enforcement, request size / concurrency / rate limits, pipeline allowlists, typed validation for archive-gate flows. **Fail closed, not open.** Recent decomposition has extracted helpers (`path_security`, `sam2_checkpoint_security`, `asset_bundle`) — keep extracting along seams rather than re-monolithizing.
+Hardening that must remain intact when editing `app.py`: allowed-root path validation, API key + trusted-host enforcement, request size / concurrency / rate limits, pipeline allowlists, typed validation for archive-gate flows. **Fail closed, not open.** Recent decomposition has extracted helpers (`path_security`, `sam2_checkpoint_security`, `asset_bundle`) under the ADR-045 / ADR-046 / ADR-047 monolith-decomposition pattern — keep extracting along seams rather than re-monolithizing.
 
 ### Contract families (treat as binding)
 
@@ -166,6 +196,14 @@ The repo intentionally maintains separate version numbers — repo/release basel
 
 ### Lazy imports are mandatory
 Core CI and wheel-smoke paths must work **without** torch/transformers/diffusers/rawpy/coreml. Do not move heavy imports to `__init__.py` or top-level CLI/help paths. ML dependencies must degrade gracefully when absent.
+
+### Cold-zone coverage program
+`docs/testing/COLD_ZONE_COVERAGE_PROGRAM.md` defines per-package/per-file branch-coverage floors for historically under-tested modules (`events/`, `storage/`, `runtime/`, `lux_depth_v3/`, `hardening/`, `app.py`). Enforcement gates:
+- `scripts/ci/check_per_package_coverage.py` — per-package line-coverage floors.
+- `scripts/ci/check_per_package_branch_coverage.py` — per-package branch-coverage floors.
+- `scripts/ci/check_cold_zone_touched_files.py` — diff-based cold-zone touched-file ratchet vs `origin/main`.
+
+These run inside `.github/workflows/build.yml` after `coverage.xml` is produced. Coverage gains land via small ratchet PRs — never weaken a floor without an ADR.
 
 ### Test marker discipline (ADR-031, ADR-044)
 Markers in `pyproject.toml`: `unit`, `security`, `regression`, `golden`, `integration`, `ml`, `slow`, `benchmark`, `stress`. ML deps are **not installed** in core CI. Required ML test patterns:
@@ -225,6 +263,10 @@ Use `pathlib.Path`, normalize/validate untrusted paths, enforce allowlisted root
 - Lux Depth V3 deliverables/naming → update `docs/cli/LUX_DEPTH_V3_CLI_GUIDE.md` and run-card schema.
 - Portal asset bundles → run `make check-portal-asset-budgets`; update budget contract if intentional.
 - Front-door portal sources → `cd web/secure-landing && npm run build:portal` to regenerate `public/portal-assets/portal.js`.
+- `orchestrator/storage/` schema → add an Alembic migration under `migrations/versions/`, run `make db-upgrade`, and update `tests/orchestrator/test_postgres_*` + `docs/runtimes/orchestrator-postgres.md`.
+- `orchestrator/queue/` or `orchestrator/artifact_store/` Protocols → keep the memory backend + the live backend (Redis/S3) test parity intact and update the paid-pilot env example at `docs/deployment/paid-pilot.env.example`.
+- New paid-pilot env var → add it to `docs/deployment/paid-pilot.env.example`, the `test-paid-pilot-services-contract` gate, and `docs/deployment/managed_paid_pilot_staging_runbook.md`.
+- Frontdoor `session-store/` backend → mirror the Protocol in `contract.js`, keep parity with `evaluateSessionScaling()` readiness reasons, and update `web/secure-landing/tests/` contract suites.
 
 ## Canonical Worktree Discipline
 
@@ -232,8 +274,17 @@ Use `pathlib.Path`, normalize/validate untrusted paths, enforce allowlisted root
 
 ## Documentation Authority
 
-The May 11, 2026 documentation refresh audit (`docs/governance/DOCUMENTATION_REFRESH_AUDIT_2026-05-11.md`) plus `docs/governance/DOCUMENTATION_MAP.md` are the current navigation. Older project reports under `docs/` are retained for audit context but are **not** live guidance unless the map promotes them.
+`docs/governance/DOCUMENTATION_MAP.md` plus the May 11, 2026 refresh audit (`docs/governance/DOCUMENTATION_REFRESH_AUDIT_2026-05-11.md`) are the current navigation. Two roadmaps and one gap doc anchor active engineering work:
+
+- `docs/governance/PRODUCTION_HARDENING_GAP_2026-05-13.md` — authoritative paid-pilot baseline (what's already shipped, what's net-new, which existing primitives to reuse for Phases 1–7).
+- `docs/architecture/PORTAL_ORCHESTRATOR_ROADMAP.md` — FastAPI orchestrator + portal HTTP surface roadmap.
+- `docs/architecture/PORTAL_FRONTDOOR_ROADMAP.md` — managed Next.js frontdoor roadmap.
+
+Recent ADRs that materially affect routine edits:
+- ADR-043 (orchestrator decomposition pattern), ADR-044 (test marker enforcement), ADR-045 (monolith-decomposition residuals governance), ADR-046 (`path_security` extraction), ADR-047 (SAM2 checkpoint security extraction).
+
+Older project reports under `docs/` are retained for audit context but are **not** live guidance unless the map promotes them.
 
 ## Decision Defaults
 
-When unsure: prefer existing contracts over local convenience, decomposition over monolith expansion, explicit typing/validation over inference, lazy imports over eager heavy imports, offline deterministic tests over networked tests, additive backward-compatible changes over silent semantic drift, small PRs with docs/tests over large "cleanup" rewrites. Changes that touch contracts, schemas, portal behavior, archive governance, evidence/attestation, or performance thresholds are **governed work** — not routine refactoring.
+When unsure: prefer existing contracts over local convenience, decomposition over monolith expansion, explicit typing/validation over inference, lazy imports over eager heavy imports, offline deterministic tests over networked tests, additive backward-compatible changes over silent semantic drift, small PRs with docs/tests over large "cleanup" rewrites. Changes that touch contracts, schemas, portal behavior, archive governance, evidence/attestation, paid-pilot managed-services contracts (`JobRepository` / `QueueBroker` / `ArtifactStore` / `SessionStore`), or performance thresholds are **governed work** — not routine refactoring.
