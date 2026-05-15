@@ -10,13 +10,11 @@ documentation surface, and the ``compose_operations`` /
 
 from __future__ import annotations
 
-import math
 from typing import Any
 
 import numpy as np
 import pytest
 
-from transformation_portal.processors.material_response import core as core_module
 from transformation_portal.processors.material_response.core import (
     MaterialResponseExample,
     MaterialResponsePrinciple,
@@ -281,12 +279,30 @@ class TestComposeOperationsAndMatrixCoercion:
         out = compose_operations({"mix": m}, size=3)
         assert np.allclose(out, np.array(m))
 
-    def test_named_operations_coalesce_by_multiplication(self) -> None:
-        # Two named "warm" operations should be multiplied, not duplicated.
-        op = {"matrix": np.diag([2.0, 1.0, 1.0]).tolist(), "name": "warm"}
-        out = compose_operations(op, op, size=3)
-        # Composition multiplies diagonals: 2 * 2 == 4 on the first channel.
-        assert out[0, 0] == pytest.approx(4.0)
+    def test_named_operations_coalesce_at_first_occurrence(self) -> None:
+        """Duplicate named operations must coalesce into their first slot,
+        which is distinguishable from plain sequential application when a
+        non-commuting operation separates the duplicates.
+
+        With coalescing (current behaviour):
+          composed = [A @ A, swap]  ->  result = diag([4,1,1]) @ swap
+        Without coalescing (regression we want to detect):
+          composed = [A, swap, A]  ->  result = A @ swap @ A
+        The two products differ at row 0, column 1: 4.0 vs 2.0.
+        """
+        a = {"matrix": np.diag([2.0, 1.0, 1.0]).tolist(), "name": "warm"}
+        swap = {
+            "matrix": [[0.0, 1.0, 0.0], [1.0, 0.0, 0.0], [0.0, 0.0, 1.0]],
+            "name": "swap",
+        }
+
+        out = compose_operations(a, swap, a, size=3)
+
+        expected_coalesced = np.diag([4.0, 1.0, 1.0]) @ np.array(swap["matrix"])
+        assert np.allclose(out, expected_coalesced)
+        # The discriminating entry: 4.0 under coalescing, 2.0 if the
+        # second "warm" had been appended instead of merged.
+        assert out[0, 1] == pytest.approx(4.0)
 
     def test_callable_operation_is_invoked_with_size(self) -> None:
         def double(_size: int) -> float:
