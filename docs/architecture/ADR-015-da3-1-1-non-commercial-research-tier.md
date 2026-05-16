@@ -1,10 +1,12 @@
-# ADR-0015: Depth Anything V3.1 (DA3 1.1) Non-Commercial Research Tier
+# ADR-015: Depth Anything V3.1 (DA3 1.1) Non-Commercial Research Tier
 
 **Status:** Adopted
 **Date:** 2026-02-01
 **Authority:** Transformation Portal Architect
 **Supersedes:** None
 **Related:** PR #774, Security Policy (SECURITY.md)
+
+> **2026-05-16 renumbering note:** Originally filed as `ADR-0015` (4-digit prefix). Renumbered to `ADR-015` to match the 3-digit convention used by every other ADR in this series. No content changes.
 
 ---
 
@@ -223,7 +225,7 @@ grep -l "license_restriction: non_commercial" config/presets/*.yaml | \
 3. Ensure compliance tests run on every PR
 
 ### Documentation
-1. ADR-0015 (this document) as source of truth
+1. ADR-015 (this document) as source of truth
 2. README section: licensing tiers and use case guidance
 3. Preset file headers: CC BY-NC 4.0 disclaimer
 4. API docs: `EnhanceConfig.non_commercial_ok` field documentation
@@ -272,13 +274,13 @@ grep -l "license_restriction: non_commercial" config/presets/*.yaml | \
 ## Governance & Audit
 
 ### Approval Chain
-- ✅ Architect: Approved as ADR-0015 (authority: Transformation Portal Architect)
+- ✅ Architect: Approved as ADR-015 (originally ADR-0015; see renumbering note above) (authority: Transformation Portal Architect)
 - Specialist: Implementation per ADR requirements
 - CI: Automated enforcement via preset validation + license compliance tests
 
 ### Review Triggers
 - Any new DA3 1.1 variant: validate license, update preset, add test
-- Any new non-commercial model: follow same ADR-0015 pattern
+- Any new non-commercial model: follow same ADR-015 pattern
 - Quarterly audit: verify no unmarked non-commercial models in production config
 
 ### Escalation
@@ -415,3 +417,4 @@ if __name__ == '__main__':
 
 **Document History**
 - **2026-02-01:** Initial ADR-0015 created; Option A implementation
+- **2026-05-16:** Renumbered from ADR-0015 → ADR-015 for prefix-format consistency (no content changes)

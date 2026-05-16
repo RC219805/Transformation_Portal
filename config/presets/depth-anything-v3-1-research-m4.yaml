@@ -51,7 +51,7 @@ usage_notes: |
 governance:
   author: Transformation Portal Architect
   created_date: "2026-02-01"
-  adr_reference: "ADR-0015"
+  adr_reference: "ADR-015"
   requires_opt_in: false
   license: "Apache-2.0"
   restrictions: ["research-tier", "m4-optimized"]

@@ -4,7 +4,7 @@
 **Date:** 2026-02-02
 **Authority:** Transformation Portal Architect
 **Supersedes:** None
-**Related:** PR #780, ADR-001 (PBR Integration), ADR-0015 (DA3 1.1 Research Tier)
+**Related:** PR #780, ADR-001 (PBR Integration), ADR-015 (DA3 1.1 Research Tier)
 
 ---
 
@@ -332,7 +332,7 @@ depth_backend: depth_pro
 
 - [PR #780: Add Depth Pro as optional leaf stage](https://github.com/RC219805/Transformation_Portal/pull/780)
 - [ADR-001: PBR Integration Architecture](ADR-001-PBR-Integration-Architecture.md)
-- [ADR-0015: DA3 1.1 Non-Commercial Research Tier](adr-0015-da3-1-1-non-commercial-research-tier.md)
+- [ADR-015: DA3 1.1 Non-Commercial Research Tier](ADR-015-da3-1-1-non-commercial-research-tier.md)
 - [Agent Governance Policy](agent_governance.md)
 
 ---

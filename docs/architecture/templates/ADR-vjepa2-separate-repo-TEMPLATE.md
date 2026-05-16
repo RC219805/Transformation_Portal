@@ -379,8 +379,8 @@ transformation-portal-world-model/  # V-JEPA 2
    - Tests: ≥90% coverage
 
 3. ✅ Documentation
-   - `docs/INTEGRATION.md`: How to consume Transformation Portal exports
-   - `docs/SCHEMA_COMPATIBILITY.md`: Version pinning guide
+   - `transformation-portal-world-model/docs/INTEGRATION.md`: How to consume Transformation Portal exports
+   - `transformation-portal-world-model/docs/SCHEMA_COMPATIBILITY.md`: Version pinning guide
    - Examples: `examples/load_spatial_export.py`
 
 **Acceptance Gates:**

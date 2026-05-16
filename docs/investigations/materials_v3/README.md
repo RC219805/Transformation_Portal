@@ -130,7 +130,7 @@ Even though the bugs are fixed, these investigations provide:
 
 ### Production Docs
 - **[Materials V3 Quick Reference](../../materials/ROADMAP_QUICK_REF.md)**: User-facing guide
-- **[ADR-030](../../architectural_decisions/ADR-030-materials-v3-production-integration.md)**: Governance decision
+- **[ADR-048](../../architecture/ADR-048-materials-v3-production-integration.md)**: Governance decision (renumbered 2026-05-16 from ADR-030)
 
 ### Code
 - **[`pixel_ops_executor.py`](../../../src/transformation_portal/lux_depth_v3/pixel_ops_executor.py)**: Production implementation

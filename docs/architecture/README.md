@@ -1,8 +1,9 @@
 # Architecture Documentation Index
 
-**Last Updated:** 2026-05-12
+**Last Updated:** 2026-05-16
 **Classification:** canonical architecture index
 **Current overlay:** [May 12 architecture inventory](../governance/audit/architecture-inventory-2026-05-12.csv) on the preserved May 11 repo-wide documentation inventory.
+**Decision-currency overlay:** [ADR_DECISION_CURRENCY_REVIEW_2026-05-16.md](ADR_DECISION_CURRENCY_REVIEW_2026-05-16.md) — per-ADR classification (implemented / active / obsolete) and the source of the 2026-05-16 renumbering of `adr-0015` → `ADR-015` and `ADR-030-materials-v3` → `ADR-048-materials-v3`, plus the relocation of the V-JEPA 2 template to `templates/`.
 
 This directory now holds maintained architecture, ADR, roadmap, and review-required planning surfaces only. Historical PR/review records were moved to `docs/pr_archive/architecture/`; point-in-time architecture reports were moved to `docs/historical/architecture/`. No redirect stubs are retained here, so update links to the destination paths directly.
 
@@ -21,7 +22,7 @@ These files are maintained as the canonical architecture set named by the May 12
 | [PORTAL_FRONTDOOR_ROADMAP.md](PORTAL_FRONTDOOR_ROADMAP.md) | canonical |
 | [PORTAL_ORCHESTRATOR_ROADMAP.md](PORTAL_ORCHESTRATOR_ROADMAP.md) | canonical |
 | [README.md](README.md) | canonical |
-| [adr-0015-da3-1-1-non-commercial-research-tier.md](adr-0015-da3-1-1-non-commercial-research-tier.md) | canonical |
+| [ADR-015-da3-1-1-non-commercial-research-tier.md](ADR-015-da3-1-1-non-commercial-research-tier.md) | canonical (renumbered 2026-05-16 from `adr-0015`) |
 | [agent_governance.md](agent_governance.md) | canonical |
 | [SPEC-DH-001.md](specifications/SPEC-DH-001.md) | canonical |
 
@@ -57,7 +58,7 @@ These ADRs remain active support material. Keep them in this directory, and revi
 | [ADR-026-apex-research-ultra.md](ADR-026-apex-research-ultra.md) | current-support-adr |
 | [ADR-027-phase2-spatial-ai-extension.md](ADR-027-phase2-spatial-ai-extension.md) | current-support-adr |
 | [ADR-029-execution-graph-abstraction.md](ADR-029-execution-graph-abstraction.md) | current-support-adr |
-| [ADR-030-materials-v3-production-integration.md](ADR-030-materials-v3-production-integration.md) | current-support-adr |
+| [ADR-048-materials-v3-production-integration.md](ADR-048-materials-v3-production-integration.md) | current-support-adr (renumbered 2026-05-16 from `ADR-030` to resolve a collision with the canonical ADR-030 Phase II Deterministic RAW Ingest) |
 | [ADR-031-test-dependency-isolation.md](ADR-031-test-dependency-isolation.md) | current-support-adr |
 | [ADR-033-test-flake-management.md](ADR-033-test-flake-management.md) | current-support-adr |
 | [ADR-034-benchmark-exclusion-from-pr-gating.md](ADR-034-benchmark-exclusion-from-pr-gating.md) | current-support-adr |
@@ -73,7 +74,7 @@ These ADRs remain active support material. Keep them in this directory, and revi
 | [ADR-045-monolith-decomposition-residuals.md](ADR-045-monolith-decomposition-residuals.md) | current-support-adr |
 | [ADR-046-app-path-security-helper-extraction.md](ADR-046-app-path-security-helper-extraction.md) | current-support-adr |
 | [ADR-047-managed-sam2-checkpoint-security-extraction.md](ADR-047-managed-sam2-checkpoint-security-extraction.md) | current-support-adr |
-| [ADR-0XX-vjepa2-separate-repo-TEMPLATE.md](ADR-0XX-vjepa2-separate-repo-TEMPLATE.md) | current-support-adr |
+| [templates/ADR-vjepa2-separate-repo-TEMPLATE.md](templates/ADR-vjepa2-separate-repo-TEMPLATE.md) | template (relocated 2026-05-16 out of the numbered ADR series; not a real ADR) |
 
 ## Review-Required Planning Docs
 

@@ -126,7 +126,7 @@ Transformation Portal supports depth models across two tiers with different lice
 - **Use for:** Explicitly acknowledged research and non-commercial evaluation paths
 - **Requirements:** `non_commercial_ok=True`, plus Apple license acceptance for `depth_pro`
 
-**Important:** The research-default DA3 selector is not part of the Apache-2.0 path. See [ADR-0015: DA3 1.1 Non-Commercial Research Tier](docs/architecture/adr-0015-da3-1-1-non-commercial-research-tier.md) for governance details.
+**Important:** The research-default DA3 selector is not part of the Apache-2.0 path. See [ADR-015: DA3 1.1 Non-Commercial Research Tier](docs/architecture/ADR-015-da3-1-1-non-commercial-research-tier.md) for governance details.
 
 ### Research Preset Example
 

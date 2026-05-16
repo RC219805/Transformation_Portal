@@ -58,7 +58,7 @@ map explicitly links a document as canonical:
   2025 project-specific analysis and delivery records.
 - `docs/depth_model/`, `docs/pipeline/`, and `docs/pipeline_docs/` contain older
   depth-model and luxury-pipeline evaluation material. Current depth behavior is
-  described in the main README, CLI guide, and ADR-019/ADR-0015.
+  described in the main README, CLI guide, and ADR-019/ADR-015.
 - `docs/reports/`, `docs/status/`, `docs/session_summaries/`,
   `docs/sessions/`, `docs/historical/`, and `docs/pr_archive/` are
   point-in-time records.

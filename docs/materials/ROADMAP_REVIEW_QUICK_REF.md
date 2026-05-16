@@ -499,7 +499,7 @@ Week 5+: Planning
 **Implementation Plan:** `MATERIALS_V3_ROADMAP_IMPLEMENTATION_PLAN.md`
 **Quick Ref (Original):** `ROADMAP_QUICK_REF.md`
 **Governance:** `docs/architecture/agent_governance.md`
-**ADR-030:** `docs/architecture/ADR-030-materials-v3-production-integration.md`
+**ADR-048:** `docs/architecture/ADR-048-materials-v3-production-integration.md` (renumbered 2026-05-16 from ADR-030 to resolve collision with the canonical ADR-030)
 
 ---
 

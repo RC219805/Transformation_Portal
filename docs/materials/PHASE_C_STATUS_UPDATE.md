@@ -221,7 +221,7 @@ d8004b35 fix(materials): SAM2 stability - 3D mask crash + memory leak prevention
 - `docs/materials/PHASE_A_COMPLETE.md` — Phase A completion (includes A.6 memory cleanup)
 - `docs/materials/PHASE_B_COMPLETE.md` — Phase B completion (sky material)
 - `docs/architecture/agent_governance.md` — Governance policy
-- `docs/architecture/ADR-030-materials-v3-production-integration.md` — Materials V3 integration ADR
+- `docs/architecture/ADR-048-materials-v3-production-integration.md` — Materials V3 integration ADR (renumbered 2026-05-16 from ADR-030)
 
 ### Code References
 - `src/transformation_portal/spatial_ai/segmentation/sam2_backend.py` — SAM2 backend implementation

@@ -1,7 +1,8 @@
 # ADR-046: App Path Security Helper Extraction Contract
 
-**Status:** Proposed
+**Status:** Implemented
 **Date:** 2026-05-06
+**Status changed:** 2026-05-16 (Proposed → Implemented; extraction shipped as `src/transformation_portal/portal/path_security.py` with `app.py` re-export shims preserved per the compatibility-only contract)
 **Decision Makers:** Architect (review) + Specialist (implementation)
 **Replaces:** None
 **Supersedes:** None

@@ -5,7 +5,7 @@
 > This document describes an older Depth Anything V2 path. Current depth backend
 > guidance lives in [Lux Depth V3 CLI Guide](../cli/LUX_DEPTH_V3_CLI_GUIDE.md),
 > [ADR-019](../architecture/ADR-019-depth-backend-unification.md), and
-> [ADR-0015](../architecture/adr-0015-da3-1-1-non-commercial-research-tier.md).
+> [ADR-015](../architecture/ADR-015-da3-1-1-non-commercial-research-tier.md).
 
 Production-ready depth-aware image processing pipeline optimized for Apple Silicon. Transforms architectural renders using monocular depth estimation with Depth Anything V2.
 

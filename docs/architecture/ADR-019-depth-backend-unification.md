@@ -5,7 +5,7 @@
 **Implementation Date:** 2026-02-09 (PR #906)
 **Authority:** Transformation Portal Architect
 **Supersedes:** None
-**Related:** ADR-018 (Depth Pro Integration), ADR-0015 (DA3 1.1 Research Tier), PR #780, PR #906
+**Related:** ADR-018 (Depth Pro Integration), ADR-015 (DA3 1.1 Research Tier), PR #780, PR #906
 
 ---
 
@@ -36,7 +36,7 @@ The codebase has **three separate depth implementations** with overlapping but i
 
 **License Governance:**
 - `EnhanceConfig.non_commercial_ok: bool` exists but **not enforced** for Depth Pro
-- DA3 1.1 has `@require_non_commercial` decorator (ADR-0015)
+- DA3 1.1 has `@require_non_commercial` decorator (ADR-015)
 - Depth Pro (Apple AMLR license) requires research-only use
 
 ### Problem Statement
@@ -601,7 +601,7 @@ Use JSON for both depth data and metadata.
 ### Internal ADRs
 
 - [ADR-018: Depth Pro Integration Decision](ADR-018-depth-pro-integration.md)
-- [ADR-0015: DA3 1.1 Non-Commercial Research Tier](adr-0015-da3-1-1-non-commercial-research-tier.md)
+- [ADR-015: DA3 1.1 Non-Commercial Research Tier](ADR-015-da3-1-1-non-commercial-research-tier.md)
 - [ADR-001: PBR Integration Architecture](ADR-001-PBR-Integration-Architecture.md)
 - [Agent Governance Policy](agent_governance.md)
 

@@ -4,7 +4,7 @@
 **Date:** 2026-02-10
 **Authority:** Transformation Portal Architect
 **Supersedes:** None
-**Related:** ADR-019 (Depth Backend Unification), ADR-0015 (DA3 1.1 Non-Commercial), ADR-018 (Depth Pro Integration), APEX Policy
+**Related:** ADR-019 (Depth Backend Unification), ADR-015 (DA3 1.1 Non-Commercial), ADR-018 (Depth Pro Integration), APEX Policy
 
 ---
 
@@ -101,7 +101,7 @@ tier: experimental           # Unstable, testing-only
 **Rationale:**
 - Clear separation prevents commercial misuse
 - Explicit hierarchy documents quality expectations
-- Aligns with existing ADR-0015 (DA3 1.1) governance pattern
+- Aligns with existing ADR-015 (DA3 1.1) governance pattern
 
 ---
 
@@ -1101,7 +1101,7 @@ Add cross-reference:
 **Related:** ADR-025 (APEX Research Workflow) — extends backend unification to research tier
 ```
 
-**Update:** `docs/architecture/adr-0015-da3-1-1-non-commercial-research-tier.md`
+**Update:** `docs/architecture/ADR-015-da3-1-1-non-commercial-research-tier.md`
 
 Add cross-reference:
 ```markdown
@@ -1292,7 +1292,7 @@ This ADR is binding. Deviations require:
 ### Internal ADRs
 
 - [ADR-019: Depth Backend Unification](ADR-019-depth-backend-unification.md)
-- [ADR-0015: DA3 1.1 Non-Commercial Research Tier](adr-0015-da3-1-1-non-commercial-research-tier.md)
+- [ADR-015: DA3 1.1 Non-Commercial Research Tier](ADR-015-da3-1-1-non-commercial-research-tier.md)
 - [ADR-018: Depth Pro Integration](ADR-018-depth-pro-integration.md)
 - [ADR-001: PBR Integration Architecture](ADR-001-PBR-Integration-Architecture.md)
 - [Agent Governance Policy](agent_governance.md)

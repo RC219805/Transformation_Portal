@@ -63,7 +63,7 @@ Consult when relevant:
 - `docs/architecture/PORTAL_ORCHESTRATOR_ROADMAP.md`
 - `docs/architecture/ADR-043-orchestrator-decomposition.md`
 - `docs/architecture/ADR-032-dependency-pinning-strategy.md`
-- `docs/architecture/adr-0015-da3-1-1-non-commercial-research-tier.md`
+- `docs/architecture/ADR-015-da3-1-1-non-commercial-research-tier.md`
 - `docs/api/MACHINE_MODE_CONTRACT.md`
 - `docs/apex/ingest_contract.md`
 - Architect decision record: `docs/decisions/ADR-024-performance-regression-authority-canonicalization.md`
