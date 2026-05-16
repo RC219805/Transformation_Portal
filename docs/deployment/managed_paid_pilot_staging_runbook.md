@@ -109,7 +109,8 @@ isolated prefixes, and deletes S3 objects under isolated prefixes. Treat every
 - The disposable Postgres database is empty or approved for reset.
 - The disposable Redis DB or keyspace contains no production data.
 - The disposable S3 bucket contains no production data.
-- Staging secrets are loaded from the provider secret manager.
+- Staging secrets are loaded from the provider secret manager into a private
+  gate-only env file outside the repository.
 - Backend and frontdoor processes can reach each managed endpoint.
 
 ## Startup Order
@@ -117,30 +118,59 @@ isolated prefixes, and deletes S3 objects under isolated prefixes. Treat every
 1. Provision or select the managed Postgres, Redis, and S3-compatible
    resources.
 2. Create the disposable validation database, Redis namespace, and S3 bucket.
-3. Load the staging secret set into the shell or deployment environment.
-4. Run database migrations with `make db-upgrade`.
-5. Start the backend and frontdoor staging processes.
-6. Confirm `/ready` and frontdoor health checks are green.
-7. Run the component gates.
-8. Run `make test-paid-pilot-services-contract`.
-9. Capture validation evidence before opening paid-pilot admission.
+3. Write a private env file outside the repository, usually
+   `/tmp/tp-managed-staging.env`.
+4. Run the clean-process preflight.
+5. Run the clean-process gate, which applies migrations and then invokes
+   `make test-paid-pilot-services-contract`.
+6. Capture validation evidence before opening paid-pilot admission.
 
-## Migration Procedure
+## Clean Env File
 
-Run migrations against the staging `TP_DATABASE_URL` before the gate:
+Create a gate-only env file outside the repository. Do not use the local
+`/tmp/tp-local-http-all-on.env` development profile.
 
 ```bash
-source .venv/bin/activate
-
-export TP_ORCHESTRATOR_STATE_BACKEND=postgres
-export TP_DATABASE_URL='postgresql+asyncpg://<redacted>'
-
-make db-upgrade
+umask 077
+touch /tmp/tp-managed-staging.env
+chmod 600 /tmp/tp-managed-staging.env
+${EDITOR:-vi} /tmp/tp-managed-staging.env
 ```
 
-Do not point `TP_DATABASE_URL` at the disposable test database when migrating
-the staging deployment. `TP_TEST_POSTGRES_URL` is for contract and smoke reset
-behavior only.
+The file must contain real provider values only. The clean launcher rejects
+missing values, placeholder-like values, wrong selectors, local-development
+variables, and unsafe staging/test overlap for the destructive Postgres and S3
+resources.
+
+Do not include local-development variables such as `TP_API_KEY`,
+`TP_BACKEND_API_KEY`, `TP_FASTAPI_ORIGIN`, `TP_ALLOW_LOCAL_ACCESS_BYPASS`,
+`TP_FRONTDOOR_SESSION_DB`, `TP_FRONTDOOR_SESSION_SCALING_MODE`,
+`TP_PORTAL_DIRECT_DEBUG_COHORT_KEY`, telemetry log paths, upload staging vars,
+or FastVLM runtime vars.
+
+## Clean Env Preflight
+
+Run the preflight from any shell. The launcher re-execs itself through `env -i`
+with only `HOME`, `PATH`, `USER`, and `SHELL`, then sources the private env file:
+
+```bash
+TP_MANAGED_PAID_PILOT_ENV_FILE=/tmp/tp-managed-staging.env \
+MANAGED_PAID_PILOT_GATE_ARGS=--preflight-only \
+make run-managed-paid-pilot-gate
+```
+
+The expected preflight output is:
+
+```text
+missing: []
+placeholder-like: []
+wrong selectors: {}
+leaked local-dev vars: []
+unsafe managed/test overlap: {}
+Managed paid-pilot clean-env preflight passed.
+```
+
+Any non-empty bucket is an environment setup blocker, not a product failure.
 
 ## Component Gates
 
@@ -180,33 +210,16 @@ gate runs.
 
 ## Integrated Paid-Pilot Gate
 
-Run the full provider/staging composition gate after the component gates pass:
+Run the full provider/staging composition gate with the same private env file:
 
 ```bash
-source .venv/bin/activate
-
-export TP_ORCHESTRATOR_STATE_BACKEND=postgres
-export TP_DATABASE_URL='postgresql+asyncpg://<redacted>'
-export TP_TEST_POSTGRES_URL='postgresql+asyncpg://<redacted-disposable-test-db>'
-
-export TP_ORCHESTRATOR_QUEUE_BACKEND=redis
-export TP_REDIS_URL='rediss://<redacted>'
-export TP_TEST_REDIS_URL='rediss://<redacted-disposable-test-redis>'
-
-export TP_FRONTDOOR_SESSION_STORE=redis
-export TP_FRONTDOOR_REDIS_URL='rediss://<redacted-session-redis>'
-
-export TP_ARTIFACT_STORE=s3
-export TP_ARTIFACT_ENDPOINT_URL='https://<redacted-s3-compatible-endpoint>'
-export TP_TEST_S3_URL='https://<redacted-test-s3-compatible-endpoint>'
-export TP_ARTIFACT_BUCKET='<redacted-staging-artifact-bucket>'
-export TP_TEST_S3_BUCKET='<redacted-disposable-test-bucket>'
-export AWS_ACCESS_KEY_ID='<redacted>'
-export AWS_SECRET_ACCESS_KEY='<redacted>'
-
-make db-upgrade
-make test-paid-pilot-services-contract
+TP_MANAGED_PAID_PILOT_ENV_FILE=/tmp/tp-managed-staging.env \
+make run-managed-paid-pilot-gate
 ```
+
+The launcher runs `make db-upgrade` against staging `TP_DATABASE_URL`, not
+`TP_TEST_POSTGRES_URL`, before invoking `make test-paid-pilot-services-contract`.
+Do not point `TP_DATABASE_URL` at the disposable test database.
 
 The integrated gate must prove `/v1/jobs` creation through Redis broker
 enqueue, worker subprocess completion, Postgres-backed terminal state after
@@ -221,6 +234,7 @@ Record the following in the staging acceptance note or release record:
 - Git commit under test.
 - Provider names, regions, and service versions where available.
 - Redacted env selector summary.
+- Clean env preflight result.
 - `make db-upgrade` result.
 - Each component gate result.
 - `make test-paid-pilot-services-contract` result.
