@@ -36,8 +36,8 @@ make test-frontdoor-contract         # web/secure-landing Node 22 contract/build
 make test-archive-gate-contract      # archive Gates A/B/C readiness + HTTP
 make test-integration                # DA3/HF live model loading (requires TP_RUN_HF_MODEL_TESTS=1, often HF_TOKEN)
 
-# Managed-services (paid-pilot) contract gates — require live infra:
-make test-artifact-s3-contract              # ArtifactStore Protocol vs local + S3/moto backends
+# Managed-services (paid-pilot) contract gates — mockable/local unless env vars name live services:
+make test-artifact-s3-contract              # ArtifactStore local + S3/moto by default; live S3 via TP_TEST_S3_URL/TP_TEST_S3_BUCKET
 make test-orchestrator-postgres-contract    # JobRepository/JobEventStore against Postgres (TP_TEST_POSTGRES_URL)
 make test-orchestrator-postgres-app-contract # app.py Postgres-backed job authority smoke
 make test-worker-redis-contract             # QueueBroker contract against Redis (TP_TEST_REDIS_URL)
@@ -105,8 +105,8 @@ make check-vercel-env                 # validate Vercel/production frontdoor env
 ### Dependency lockfiles
 Edit the right `.in` source under `requirements/`, then regenerate. The umbrella ML and Linux/Darwin-x86_64 ML lanes are **retired and fail closed** — only Darwin arm64 ML and the generic layered locks are live.
 ```bash
-make lock                                                  # all locks (prod/ci/dev top-level + layered)
-cd requirements && make compile LOCK_PYTHON_VERSION=3.11   # generic layers only
+make lock                                                  # top-level prod/ci/dev locks only (requirements*.lock.txt)
+cd requirements && make compile LOCK_PYTHON_VERSION=3.11   # generic layered locks only
 cd requirements && make compile-ml-darwin-arm64 LOCK_PYTHON_VERSION=3.11   # native arm64 only
 python3 scripts/validation/check_requirements_lock_contract.py             # validate contract
 ```
