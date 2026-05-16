@@ -61,10 +61,15 @@ done
 
 if [[ "${CLEAN_PROCESS}" != "1" ]]; then
     NODE_BIN="$(command -v node 2>/dev/null || true)"
+    PYTHON_BIN="$("${REPO_ROOT}/scripts/setup/resolve_python_311.sh" 2>/dev/null || command -v python3 2>/dev/null || command -v python 2>/dev/null || true)"
     CLEAN_PATH="/usr/bin:/bin:/usr/sbin:/sbin"
     if [[ -n "${NODE_BIN}" ]]; then
         NODE_DIR="$(cd "$(dirname "${NODE_BIN}")" && pwd)"
         CLEAN_PATH="${NODE_DIR}:${CLEAN_PATH}"
+    fi
+    if [[ -n "${PYTHON_BIN}" ]]; then
+        PYTHON_DIR="$(cd "$(dirname "${PYTHON_BIN}")" && pwd)"
+        CLEAN_PATH="${PYTHON_DIR}:${CLEAN_PATH}"
     fi
     REEXEC_ARGS=(--env-file "${ENV_FILE}")
     if [[ "${PREFLIGHT_ONLY}" == "1" ]]; then
@@ -85,13 +90,12 @@ cd "${REPO_ROOT}"
 
 [[ -f "${ENV_FILE}" ]] || die "missing managed provider env file: ${ENV_FILE}"
 [[ "${ENV_FILE}" != "${REPO_ROOT}"/* ]] || die "managed provider env file must live outside the repository"
-[[ -f ".venv/bin/activate" ]] || die "missing .venv/bin/activate; run make install-core before this gate"
-[[ -x ".venv/bin/python" ]] || die "missing .venv/bin/python; run make install-core before this gate"
 
-.venv/bin/python - "${ENV_FILE}" <<'PY'
+PYTHON_BIN="$("${REPO_ROOT}/scripts/setup/resolve_python_311.sh")"
+
+"${PYTHON_BIN}" - "${ENV_FILE}" <<'PY'
 from __future__ import annotations
 
-import os
 import stat
 import sys
 from pathlib import Path
@@ -120,7 +124,12 @@ else:
     raise SystemExit(1)
 PY
 
-source .venv/bin/activate
+if [[ -f ".venv/bin/activate" ]]; then
+    source .venv/bin/activate
+    PYTHON_BIN="$(command -v python)"
+elif [[ "${PREFLIGHT_ONLY}" != "1" ]]; then
+    die "missing .venv/bin/activate; run make install-core before this gate"
+fi
 ./scripts/setup/ensure_node_version.sh
 
 set -a
@@ -128,7 +137,7 @@ set -a
 . "${ENV_FILE}"
 set +a
 
-python - <<'PY'
+"${PYTHON_BIN}" - <<'PY'
 from __future__ import annotations
 
 import os
