@@ -511,7 +511,7 @@ received the same stability ratchet:
 BranchFloor("src/transformation_portal/plugins/", 36.0)
 BranchFloor("src/transformation_portal/stage_graph/", 63.0)
 BranchFloor("src/transformation_portal/vlm/", 55.0)
-BranchFloor("src/transformation_portal/depth/", 40.0)
+BranchFloor("src/transformation_portal/depth/", 42.0)
 BranchFloor("src/transformation_portal/streaming/", 29.0)
 BranchFloor(
     "src/transformation_portal/spatial_ai/reconstruction/",
@@ -524,9 +524,14 @@ BranchFloor(
 | `src/transformation_portal/plugins/` | 39.86% | 36.0% |
 | `src/transformation_portal/stage_graph/` | 66.77% | 63.0% |
 | `src/transformation_portal/vlm/` | 58.82% | 55.0% |
-| `src/transformation_portal/depth/` | 41.76% | 40.0% |
+| `src/transformation_portal/depth/` | 44.19% | 42.0% |
 | `src/transformation_portal/streaming/` | 31.97% | 29.0% |
 | `src/transformation_portal/spatial_ai/reconstruction/` | 49.77% | 47.0% |
+
+The depth branch floor was raised after PR #1794 merged at
+`31361b27526b438dbc2220ada3e4f2f4145807de` and full CI run `25949723087`
+confirmed `src/transformation_portal/depth/` at 601/1360 branches (44.19%)
+in both core coverage lanes.
 
 ### 12.2 Touched-file rule (per-PR, reviewer-enforced)
 

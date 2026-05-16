@@ -80,6 +80,41 @@ def test_aggregate_reads_branch_condition_counts_with_source_relative_paths(scri
     assert results[0].passed is True
 
 
+def test_aggregate_resolves_downloaded_ci_artifact_source_roots(script_module, tmp_path: Path, monkeypatch):
+    src_depth = tmp_path / "src" / "transformation_portal" / "depth"
+    src_depth.mkdir(parents=True)
+    (src_depth / "tools.py").write_text("# source file\n", encoding="utf-8")
+    coverage = tmp_path / "coverage.xml"
+    _write_coverage(
+        coverage,
+        [
+            (
+                "depth/tools.py",
+                [
+                    {"hits": 1, "condition_coverage": "50% (1/2)"},
+                    {"hits": 1, "condition_coverage": "100% (2/2)"},
+                ],
+            )
+        ],
+        sources=[
+            "/home/runner/work/Transformation_Portal/Transformation_Portal",
+            "/home/runner/work/Transformation_Portal/Transformation_Portal/src/tp",
+            "/home/runner/work/Transformation_Portal/Transformation_Portal/src/transformation_portal",
+        ],
+    )
+    monkeypatch.chdir(tmp_path)
+
+    results = script_module.aggregate(
+        coverage,
+        (script_module.BranchFloor("src/transformation_portal/depth/", 75.0),),
+    )
+
+    assert results[0].covered == 3
+    assert results[0].valid == 4
+    assert results[0].percentage == 75.0
+    assert results[0].passed is True
+
+
 def test_dry_run_reports_floor_miss_without_failing(script_module, tmp_path: Path, monkeypatch, capsys):
     coverage = tmp_path / "coverage.xml"
     _write_coverage(
@@ -112,7 +147,7 @@ def test_default_branch_floors_cover_cold_zone_prefixes(script_module):
         ("src/transformation_portal/plugins/", 36.0),
         ("src/transformation_portal/stage_graph/", 63.0),
         ("src/transformation_portal/vlm/", 55.0),
-        ("src/transformation_portal/depth/", 40.0),
+        ("src/transformation_portal/depth/", 42.0),
         ("src/transformation_portal/streaming/", 29.0),
         ("src/transformation_portal/spatial_ai/reconstruction/", 47.0),
     )
