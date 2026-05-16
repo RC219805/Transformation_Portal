@@ -191,7 +191,7 @@ class TestEnhanceBatchDoesNotReingestDepthArtifacts:
         # same dir. The stem `villa_depthpro_depth16` matches the
         # `_depthpro_depth16` entry in DiscoveryConfig.exclude_stem_suffixes
         # (see input_discovery.py:60), so the artifact must be skipped.
-        _make_test_image(input_dir, "villa.png")
+        clean_rgb = _make_test_image(input_dir, "villa.png")
         depth_artifact = input_dir / "villa_depthpro_depth16.png"
         Image.fromarray(
             np.zeros((64, 64), dtype=np.uint16),
@@ -201,10 +201,12 @@ class TestEnhanceBatchDoesNotReingestDepthArtifacts:
         orchestrator = _create_orchestrator(tmp_path, output_root=output_root)
         results = orchestrator.enhance_batch(input_dir=input_dir)
 
-        # Only the clean RGB should be processed; the depth artifact must
-        # be filtered out by the stem-suffix exclusion.
+        # Only the clean RGB should be processed. The orchestrator's
+        # per-image result dict uses the `image` key (see orchestrator.py:3757
+        # and :4854); assert against it directly so the test fails loudly
+        # if the depth artifact slipped through.
         assert isinstance(results, list)
         assert len(results) == 1
-        processed_input = results[0].get("input_path") or results[0].get("input")
-        if processed_input is not None:
-            assert "depthpro_depth16" not in str(processed_input)
+        processed_image = Path(results[0]["image"])
+        assert processed_image.name == clean_rgb.name
+        assert "depthpro_depth16" not in processed_image.name
