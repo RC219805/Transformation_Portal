@@ -142,6 +142,7 @@ from __future__ import annotations
 
 import os
 import sys
+from urllib.parse import urlsplit
 
 required = {
     "TP_ORCHESTRATOR_STATE_BACKEND",
@@ -191,13 +192,29 @@ def placeholder_like(value: str) -> bool:
     return any(token in normalized for token in placeholder_tokens)
 
 
+def postgres_identity(value: str) -> tuple[str, str, int, str]:
+    parsed = urlsplit(value)
+    scheme = parsed.scheme.split("+", 1)[0]
+    host = (parsed.hostname or "").lower()
+    port = parsed.port or 5432
+    database = parsed.path.lstrip("/")
+    return (scheme, host, port, database)
+
+
+provider_env_names = sorted(
+    name for name in os.environ if name.startswith("TP_") or name.startswith("AWS_")
+)
 missing = sorted(name for name in required if not os.getenv(name, "").strip())
-placeholder = sorted(name for name in required if placeholder_like(os.getenv(name, "")))
+placeholder = sorted(name for name in provider_env_names if placeholder_like(os.getenv(name, "")))
 wrong = {name: os.getenv(name, "") for name, value in expected.items() if os.getenv(name) != value}
 leaked = sorted(name for name in os.environ if name in forbidden or name.startswith(forbidden_prefixes))
 unsafe_overlap: dict[str, str] = {}
-if os.getenv("TP_DATABASE_URL") and os.getenv("TP_DATABASE_URL") == os.getenv("TP_TEST_POSTGRES_URL"):
-    unsafe_overlap["TP_TEST_POSTGRES_URL"] = "must not equal TP_DATABASE_URL"
+db_url = os.getenv("TP_DATABASE_URL", "")
+test_db_url = os.getenv("TP_TEST_POSTGRES_URL", "")
+if db_url and test_db_url and postgres_identity(db_url) == postgres_identity(test_db_url):
+    unsafe_overlap["TP_TEST_POSTGRES_URL"] = (
+        "must not target the same Postgres host/port/database as TP_DATABASE_URL"
+    )
 if os.getenv("TP_ARTIFACT_BUCKET") and os.getenv("TP_ARTIFACT_BUCKET") == os.getenv("TP_TEST_S3_BUCKET"):
     unsafe_overlap["TP_TEST_S3_BUCKET"] = "must not equal TP_ARTIFACT_BUCKET"
 

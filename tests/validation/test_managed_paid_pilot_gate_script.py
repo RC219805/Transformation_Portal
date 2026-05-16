@@ -43,10 +43,19 @@ def _write_env_file(path: Path, *, extra: str = "") -> Path:
 
 
 def _run_preflight(env_file: Path, *, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
+    fake_bin = env_file.parent / "fake-bin"
+    fake_bin.mkdir(exist_ok=True)
+    fake_node = fake_bin / "node"
+    fake_node.write_text("#!/bin/sh\nprintf '%s\\n' 'v22.22.2'\n", encoding="utf-8")
+    fake_node.chmod(0o755)
+
+    run_env = dict(os.environ) if env is None else dict(env)
+    run_env["PATH"] = f"{fake_bin}{os.pathsep}{run_env.get('PATH', '')}"
+
     return subprocess.run(
         ["bash", str(SCRIPT_PATH), "--env-file", str(env_file), "--preflight-only"],
         cwd=REPO_ROOT,
-        env=env,
+        env=run_env,
         text=True,
         capture_output=True,
         check=False,
@@ -107,3 +116,36 @@ def test_managed_paid_pilot_preflight_rejects_staging_test_overlap(tmp_path: Pat
 
     assert result.returncode == 1
     assert "'TP_TEST_S3_BUCKET': 'must not equal TP_ARTIFACT_BUCKET'" in result.stdout
+
+
+def test_managed_paid_pilot_preflight_rejects_optional_placeholder_region(tmp_path: Path) -> None:
+    env_file = _write_env_file(
+        tmp_path / "managed.env",
+        extra="TP_ARTIFACT_REGION='<region>'",
+    )
+
+    result = _run_preflight(env_file)
+
+    assert result.returncode == 1
+    assert "placeholder-like:" in result.stdout
+    assert "TP_ARTIFACT_REGION" in result.stdout
+
+
+def test_managed_paid_pilot_preflight_rejects_same_postgres_database_with_different_credentials(
+    tmp_path: Path,
+) -> None:
+    env_file = _write_env_file(
+        tmp_path / "managed.env",
+        extra="\n".join(
+            [
+                "TP_DATABASE_URL=postgresql+asyncpg://staging_user:secret@db.example.test:5432/tp",
+                "TP_TEST_POSTGRES_URL=postgresql+asyncpg://test_user:secret@db.example.test:5432/tp",
+            ]
+        ),
+    )
+
+    result = _run_preflight(env_file)
+
+    assert result.returncode == 1
+    assert "TP_TEST_POSTGRES_URL" in result.stdout
+    assert "same Postgres host/port/database" in result.stdout
