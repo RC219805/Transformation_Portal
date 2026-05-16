@@ -2,7 +2,7 @@
 
 **Date:** 2026-05-16
 **Branch:** `claude/review-adr-docs-JdxZP`
-**Scope:** All 33 numbered ADRs under `docs/architecture/`
+**Scope:** 33 numbered ADR decisions under `docs/architecture/`, plus the `ADR-001-APPROVAL.md` satellite governance record that the file-disposition `README.md` lists as a separate current-support entry (34 file entries total). Classification counts below use the 34-entry basis.
 **Method:** Read each ADR's declared Status field, then verify implementation against code under `src/`, `scripts/`, `tests/`, `migrations/`, and CI workflows. Cross-reference against `docs/architecture/README.md` (file-disposition overlay), `docs/architecture/MONOLITH_DECOMPOSITION_TARGETS.md`, and CLAUDE.md.
 **Relationship to other overlays:** The existing [`README.md`](README.md) is the *file-disposition* overlay (canonical / promoted / current-support / review-required). This document is the orthogonal *decision-currency* overlay (implemented / active / obsolete). The two answer different questions and have different cadences.
 
@@ -12,12 +12,14 @@
 
 | Classification | Count | Notes |
 |---|---|---|
-| **Implemented** (decision shipped, ADR is historical record) | 11 | ADR-019, 029, 030, 031, 042, 043, 044, 046, 047, 048, and the ADR-001 PBR Integration |
+| **Implemented** (decision shipped, ADR is historical record) | 10 | ADR-001 (PBR Integration), 019, 029, 030, 031, 042, 043, 044, 046, 047 |
 | **Active — accepted policy** (still being enforced) | 14 | ADR-001-APPROVAL, ADR-015, 017, 018, 020, 021, 022, 023, 024, 032, 033, 034, 038, 040 |
 | **Active — pending implementation** (Proposed; awaiting work) | 6 | ADR-025, 026, 035, 037, 039, 041 |
-| **Active — partial implementation** | 2 | ADR-027, ADR-036 (Locked but additive layer) |
+| **Active — partial implementation** | 3 | ADR-027, ADR-036 (Locked but additive layer), ADR-048 |
 | **Active — accepted governance pattern** | 1 | ADR-045 (status bumped Proposed → Accepted in this PR) |
 | **Obsolete** (superseded / abandoned / template) | 0 ADRs (1 template moved out of the numbered series) | The `ADR-0XX-vjepa2-...TEMPLATE.md` is not a real ADR; relocated to `templates/` |
+
+Total: 10 + 14 + 6 + 3 + 1 = 34 entries.
 
 **No ADR is fully obsolete in the "delete or supersede" sense.** Every ADR still represents either live policy, completed work worth preserving as a historical record, or proposed work that has not been formally withdrawn. The strongest cleanup targets are structural (number collisions, prefix inconsistency, template-as-ADR) rather than decisional, and those have been resolved in this PR.
 
@@ -34,7 +36,7 @@
 - Verify whether ADR-025 (APEX Research Workflow) and ADR-026 (APEX Research Ultra) are still on the roadmap or have been quietly de-prioritized; if abandoned, mark `Superseded` with a pointer to the current direction.
 - Decide whether ADR-035 (Bundle Root Anchoring) and ADR-041 (Phase 4F External Verifier) should be bumped to `Accepted` or `Implemented` based on Phase 3.4 / Phase 4F evidence-bundle code that may already have shipped (out of scope to verify in this review).
 - Fold ADR-019 satellite docs (`ADR-019_FINAL_CHECKLIST.md`, `ADR-019_VERIFICATION_REPORT.md`) into a `support/` subfolder or link them explicitly from inside ADR-019 to reduce top-level clutter.
-- Consider an `implemented/` subfolder for ADRs whose decisions are fully shipped and unlikely to need future amendment (ADR-019, 029, 030, 031, 042, 043, 044, 046, 047, 048).
+- Consider an `implemented/` subfolder for ADRs whose decisions are fully shipped and unlikely to need future amendment (ADR-019, 029, 030, 031, 042, 043, 044, 046, 047). ADR-048 is **not** in this list because its production wiring remains partial.
 
 ---
 
@@ -434,7 +436,7 @@ Bumping ADR Status fields was deliberately limited in this PR to cases where the
 
 The following ADRs document decisions that have shipped and are unlikely to need future amendment. They are candidates for a future move to a `docs/architecture/implemented/` subfolder to reduce top-level clutter, but only after architect approval (some are actively cited by CLAUDE.md and the move would require updating those cites):
 
-ADR-019, 029, 030, 031, 042, 043, 044, 046, 047, 048.
+ADR-019, 029, 030, 031, 042, 043, 044, 046, 047. (ADR-048 is excluded because its production wiring remains partial.)
 
 ---
 
