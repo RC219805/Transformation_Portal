@@ -1,7 +1,7 @@
 # ADR Decision-Currency Review — 2026-05-16
 
 **Date:** 2026-05-16
-**Branch:** `claude/review-adr-docs-JdxZP`
+**Source:** PR [#1797](https://github.com/RC219805/Transformation_Portal/pull/1797)
 **Scope:** 33 numbered ADR decisions under `docs/architecture/`, plus the `ADR-001-APPROVAL.md` satellite governance record that the file-disposition `README.md` lists as a separate current-support entry (34 file entries total). Classification counts below use the 34-entry basis.
 **Method:** Read each ADR's declared Status field, then verify implementation against code under `src/`, `scripts/`, `tests/`, `migrations/`, and CI workflows. Cross-reference against `docs/architecture/README.md` (file-disposition overlay), `docs/architecture/MONOLITH_DECOMPOSITION_TARGETS.md`, and CLAUDE.md.
 **Relationship to other overlays:** The existing [`README.md`](README.md) is the *file-disposition* overlay (canonical / promoted / current-support / review-required). This document is the orthogonal *decision-currency* overlay (implemented / active / obsolete). The two answer different questions and have different cadences.
