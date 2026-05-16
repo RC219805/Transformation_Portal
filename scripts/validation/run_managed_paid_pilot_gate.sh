@@ -80,7 +80,7 @@ if [[ "${CLEAN_PROCESS}" != "1" ]]; then
         HOME="${HOME:-}" \
         PATH="${CLEAN_PATH}" \
         USER="${USER:-}" \
-        SHELL="/bin/zsh" \
+        SHELL="/bin/bash" \
         /bin/bash "$0" \
         --_clean-process \
         "${REEXEC_ARGS[@]}"

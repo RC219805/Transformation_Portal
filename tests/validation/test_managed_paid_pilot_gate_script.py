@@ -106,6 +106,13 @@ def test_managed_paid_pilot_preflight_rejects_unsafe_secret_file_mode(tmp_path: 
     assert "managed provider env file must be chmod 600 or stricter" in result.stderr
 
 
+def test_managed_paid_pilot_clean_reexec_uses_portable_bash_shell() -> None:
+    script = SCRIPT_PATH.read_text(encoding="utf-8")
+
+    assert 'SHELL="/bin/bash"' in script
+    assert 'SHELL="/bin/zsh"' not in script
+
+
 def test_managed_paid_pilot_preflight_rejects_staging_test_overlap(tmp_path: Path) -> None:
     env_file = _write_env_file(
         tmp_path / "managed.env",
