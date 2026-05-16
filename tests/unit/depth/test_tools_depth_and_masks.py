@@ -128,8 +128,7 @@ def test_load_mask_returns_cached_copy(tmp_path) -> None:
 
 def test_load_mask_accepts_uniform_rgb_without_warning(tmp_path, caplog: pytest.LogCaptureFixture) -> None:
     # When all three channels match, the "differing channels" debug log
-    # branch (lines 532-535) must NOT fire — the silent uniform-RGB path
-    # at line 538 should win.
+    # branch must NOT fire; the silent uniform-RGB path should win.
     mask_path = tmp_path / "villa_mask_building.png"
     rgb = np.full((8, 8, 3), 200, dtype=np.uint8)
     Image.fromarray(rgb, mode="RGB").save(mask_path)
@@ -144,9 +143,9 @@ def test_load_mask_accepts_uniform_rgb_without_warning(tmp_path, caplog: pytest.
 
 def test_load_mask_converts_palette_mode_to_grayscale(tmp_path) -> None:
     # 'P' (palette) mode is none of L/RGBA/RGB, so the else-branch
-    # convert("L") on line 538 must run. Build via L.convert("P") so the
-    # saved PNG carries the default 256-entry palette on every Pillow
-    # version (raw mode="P" without a palette is flaky on save).
+    # convert("L") must run. Build via L.convert("P") so the saved PNG carries
+    # the default 256-entry palette on every Pillow version (raw mode="P"
+    # without a palette is flaky on save).
     mask_path = tmp_path / "villa_mask_sky.png"
     Image.fromarray(np.full((8, 8), 7, dtype=np.uint8), mode="L").convert("P").save(mask_path)
 

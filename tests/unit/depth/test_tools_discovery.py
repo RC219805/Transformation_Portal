@@ -74,8 +74,8 @@ def test_find_mask_for_base_returns_none_without_mask_root() -> None:
 
 def test_find_file_for_base_falls_through_to_no_tag_score(tmp_path) -> None:
     # Candidate matches by extension but contains none of PRIORITY_TAGS;
-    # the score function must return its 9999999 fallback (line 400) and
-    # still produce a result rather than silently dropping the file.
+    # the score function must return its large fallback and still produce a
+    # result rather than silently dropping the file.
     target = tmp_path / "villa_plain.png"
     target.write_text("fixture", encoding="utf-8")
 
@@ -86,7 +86,7 @@ def test_find_file_for_base_falls_through_to_no_tag_score(tmp_path) -> None:
 
 def test_find_mask_for_base_iterates_exact_extension_list(tmp_path) -> None:
     # Place a non-PNG exact-extension match alongside the generic glob so the
-    # explicit ext loop (lines 411-415) wins over the fallback (line 417).
+    # explicit extension loop wins over the fallback glob.
     exact = tmp_path / "villa_mask_sky.tif"
     distractor = tmp_path / "villa_mask_sky.xyz"
     exact.write_text("fixture", encoding="utf-8")

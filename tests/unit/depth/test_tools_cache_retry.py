@@ -99,7 +99,7 @@ def test_retry_on_io_error_reraises_after_max_attempts(monkeypatch: pytest.Monke
 
 def test_retry_on_io_error_raises_runtime_error_when_loop_never_executes() -> None:
     # max_attempts=0 makes range(1, 1) empty; the defensive RuntimeError
-    # fallback path (lines 244-246) must fire instead of returning None.
+    # fallback path must fire instead of returning None.
     @tools.retry_on_io_error(max_attempts=0)
     def never_runs() -> str:
         return "unreachable"

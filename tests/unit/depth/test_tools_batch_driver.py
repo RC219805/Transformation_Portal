@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 import numpy as np
@@ -298,8 +299,8 @@ def _build_depth_and_image(images: Path, depths: Path, base: str = "villa") -> P
 
 
 def test_process_single_runs_clarity_mode(tmp_path) -> None:
-    # Covers the clarity branch (lines 820-831) end-to-end through the batch
-    # driver — previously only the haze mode was exercised at this layer.
+    # Covers the clarity branch end-to-end through the batch driver; previously
+    # only the haze mode was exercised at this layer.
     images = tmp_path / "images"
     depths = tmp_path / "depths"
     output = tmp_path / "out"
@@ -322,7 +323,7 @@ def test_process_single_runs_clarity_mode(tmp_path) -> None:
 
 
 def test_process_single_runs_do_mode(tmp_path) -> None:
-    # Covers the `do` (depth-of-field) branch (lines 832-846).
+    # Covers the `do` (depth-of-field) branch.
     images = tmp_path / "images"
     depths = tmp_path / "depths"
     output = tmp_path / "out"
@@ -346,8 +347,8 @@ def test_process_single_runs_do_mode(tmp_path) -> None:
 
 
 def test_process_single_rejects_unknown_mode(tmp_path) -> None:
-    # Unknown mode raises (line 847-848); the surrounding try/except converts
-    # it into an error tuple instead of propagating.
+    # Unknown mode raises; the surrounding try/except converts it into an error
+    # tuple instead of propagating.
     images = tmp_path / "images"
     depths = tmp_path / "depths"
     images.mkdir()
@@ -369,7 +370,7 @@ def test_process_single_rejects_unknown_mode(tmp_path) -> None:
 
 def test_process_single_uses_provided_mask_root(tmp_path) -> None:
     # Drive the sky_path / building_path discovery branches inside
-    # _process_single (lines 798-805) so the mask-loaded code path is hit.
+    # _process_single so the mask-loaded code path is hit.
     images = tmp_path / "images"
     depths = tmp_path / "depths"
     masks = tmp_path / "masks"
@@ -398,8 +399,8 @@ def test_process_single_uses_provided_mask_root(tmp_path) -> None:
 def test_process_batch_logs_error_summary_when_failures_occur(
     tmp_path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
-    # Covers the error-summary block (lines 910-920) that fires only when at
-    # least one file fails.
+    # Covers the error-summary block that fires only when at least one file
+    # fails.
     depths = tmp_path / "depths"
     depths.mkdir()
     _write_depth(depths / "bad_depth16.png")
@@ -424,8 +425,8 @@ def test_process_batch_logs_error_summary_when_failures_occur(
 
 
 def test_cli_progress_prints_progress_and_newline_on_complete(capsys) -> None:
-    # Covers _cli_progress (lines 1013-1016) — both the mid-stream carriage
-    # return and the final newline branch.
+    # Covers _cli_progress for both the mid-stream carriage return and the
+    # final newline branch.
     tools._cli_progress(1, 3, "villa")
     tools._cli_progress(3, 3, "villa")
 
@@ -435,7 +436,7 @@ def test_cli_progress_prints_progress_and_newline_on_complete(capsys) -> None:
 
 
 def test_main_verbose_flag_enables_debug_logging(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
-    # Covers the verbose==True branch (lines 1023-1024).
+    # Covers the verbose==True logging branch.
     depths = tmp_path / "depths"
     images = tmp_path / "images"
     depths.mkdir()
@@ -457,14 +458,14 @@ def test_main_verbose_flag_enables_debug_logging(tmp_path, monkeypatch: pytest.M
             ]
         )
         assert exit_code == 0
-        assert tools._log.level == 10  # logging.DEBUG
+        assert tools._log.level == logging.DEBUG
     finally:
         tools._log.setLevel(original_level)
 
 
 def test_main_returns_two_on_fatal_exception(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
-    # Covers the fatal-exception catch (lines 1104-1106): exit code 2 on
-    # unexpected error from process_batch.
+    # Covers the fatal-exception catch: exit code 2 on unexpected error from
+    # process_batch.
     depths = tmp_path / "depths"
     images = tmp_path / "images"
     depths.mkdir()
@@ -491,8 +492,8 @@ def test_main_returns_two_on_fatal_exception(tmp_path, monkeypatch: pytest.Monke
 
 
 def test_main_maps_haze_cli_options_to_batch_options(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
-    # Covers the haze-specific option-mapping branch (lines 1057-1062),
-    # currently only the `do` branch is tested.
+    # Covers the haze-specific option-mapping branch; currently only the `do`
+    # branch is tested.
     captured: dict[str, tools.BatchOptions] = {}
     depths = tmp_path / "depths"
     images = tmp_path / "images"
@@ -541,7 +542,7 @@ def test_main_maps_haze_cli_options_to_batch_options(tmp_path, monkeypatch: pyte
 
 
 def test_main_maps_clarity_cli_options_to_batch_options(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
-    # Covers the clarity-specific option-mapping branch (lines 1063-1067).
+    # Covers the clarity-specific option-mapping branch.
     captured: dict[str, tools.BatchOptions] = {}
     depths = tmp_path / "depths"
     images = tmp_path / "images"

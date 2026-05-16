@@ -145,8 +145,8 @@ def test_apply_depth_dof_balanced_quality_skips_bilateral_for_low_complexity(
 def test_apply_depth_dof_balanced_quality_boosts_bilateral_for_high_complexity(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    # Covers the high-complexity else branch (line 711): bilateral_sigma_depth
-    # must be scaled rather than skipped.
+    # Covers the high-complexity adaptive branch where bilateral_sigma_depth
+    # is scaled rather than skipped.
     seen_sigmas: list[float] = []
 
     monkeypatch.setattr(tools, "_CV2_AVAILABLE", True)
@@ -174,17 +174,26 @@ def test_apply_depth_dof_balanced_quality_boosts_bilateral_for_high_complexity(
 
 
 def test_apply_depth_dof_clarity_runs_unsharp_mask_branch() -> None:
-    # clarity > 1e-6 takes the unsharp-mask branch (lines 672-676).
-    out = tools.apply_depth_dof(
+    # clarity > 1e-6 takes the unsharp-mask branch and should alter output.
+    with_clarity = tools.apply_depth_dof(
         _image(),
         _depth(),
         edge_preserving=False,
         quality="fast",
         clarity=0.5,
     )
+    without_clarity = tools.apply_depth_dof(
+        _image(),
+        _depth(),
+        edge_preserving=False,
+        quality="fast",
+        clarity=0.0,
+    )
 
-    assert out.shape == (8, 8, 3)
-    assert out.dtype == np.float32
+    assert with_clarity.shape == without_clarity.shape
+    assert with_clarity.dtype == np.float32
+    assert np.isfinite(with_clarity).all()
+    assert not np.array_equal(with_clarity, without_clarity)
 
 
 def test_estimate_image_complexity_returns_bounded_float() -> None:
@@ -202,14 +211,16 @@ def test_estimate_image_complexity_returns_bounded_float() -> None:
 
 
 def test_gaussian_blur_float_short_circuits_below_threshold() -> None:
-    # sigma <= 0.5 returns the input untouched (line 287-288).
+    # sigma <= 0.5 returns the input untouched.
     img = _image()
     out = tools.gaussian_blur_float(img, sigma=0.3)
     assert out is img
 
 
 def test_gaussian_blur_float_scipy_handles_2d_input(monkeypatch: pytest.MonkeyPatch) -> None:
-    # Force the scipy 2D code path (line 300) by passing a 2D depth-like array.
+    # Force the SciPy 2D code path by passing a 2D depth-like array.
+    pytest.importorskip("scipy.ndimage")
+    assert tools.gaussian_filter is not None
     monkeypatch.setattr(tools, "_SCIPY_AVAILABLE", True)
     arr = _depth()
 
@@ -222,7 +233,7 @@ def test_gaussian_blur_float_scipy_handles_2d_input(monkeypatch: pytest.MonkeyPa
 def test_gaussian_blur_float_cv2_backend_returns_normalized_output(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    # Exercise the cv2 backend branch (lines 306-319) via explicit selection.
+    # Exercise the cv2 backend branch via explicit selection.
     pytest.importorskip("cv2")
     monkeypatch.setattr(tools, "_CV2_AVAILABLE", True)
     img = _image()
@@ -234,7 +245,7 @@ def test_gaussian_blur_float_cv2_backend_returns_normalized_output(
 
 
 def test_gaussian_blur_float_pil_fallback_handles_2d(monkeypatch: pytest.MonkeyPatch) -> None:
-    # PIL fallback with 2D input (lines 322-326).
+    # PIL fallback with 2D input.
     monkeypatch.setattr(tools, "_SCIPY_AVAILABLE", False)
     monkeypatch.setattr(tools, "_CV2_AVAILABLE", False)
     arr = _depth()
@@ -246,7 +257,7 @@ def test_gaussian_blur_float_pil_fallback_handles_2d(monkeypatch: pytest.MonkeyP
 
 
 def test_gaussian_blur_float_pil_fallback_handles_rgb(monkeypatch: pytest.MonkeyPatch) -> None:
-    # PIL fallback with 3D input (lines 327-330).
+    # PIL fallback with 3D input.
     monkeypatch.setattr(tools, "_SCIPY_AVAILABLE", False)
     monkeypatch.setattr(tools, "_CV2_AVAILABLE", False)
 
@@ -259,7 +270,7 @@ def test_gaussian_blur_float_pil_fallback_handles_rgb(monkeypatch: pytest.Monkey
 def test_bilateral_blur_float_falls_back_to_gaussian_without_cv2(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    # Lines 345-346: without cv2, bilateral degrades to gaussian.
+    # Without cv2, bilateral degrades to gaussian.
     monkeypatch.setattr(tools, "_CV2_AVAILABLE", False)
     called: dict[str, float] = {}
 
@@ -278,8 +289,8 @@ def test_bilateral_blur_float_falls_back_to_gaussian_without_cv2(
 def test_bilateral_blur_float_cv2_path_handles_rgb_and_2d(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    # Exercise the per-channel loop (lines 358-362) AND the 2D branch
-    # (lines 355-357). cv2 must be available for both.
+    # Exercise the per-channel loop and the 2D branch. cv2 must be available
+    # for both.
     pytest.importorskip("cv2")
     monkeypatch.setattr(tools, "_CV2_AVAILABLE", True)
 
@@ -293,23 +304,22 @@ def test_bilateral_blur_float_cv2_path_handles_rgb_and_2d(
 
 def test_apply_depth_haze_handles_none_masks() -> None:
     # sky_mask=None and building_mask=None take the zero-mask shortcuts
-    # (lines 578-583); the no-mask path is structurally distinct from the
-    # masked path.
+    # before the structurally distinct masked path.
     out = tools.apply_depth_haze(_image(), _depth(), sky_mask=None, building_mask=None)
     assert out.shape == (8, 8, 3)
     assert 0.0 <= float(out.min()) <= float(out.max()) <= 1.0
 
 
 def test_apply_depth_haze_handles_empty_masks() -> None:
-    # The `.size == 0` arm of the same conditional (line 578/580).
+    # The `.size == 0` arm of the same mask-normalization conditional.
     empty = np.zeros((0,), dtype=np.float32)
     out = tools.apply_depth_haze(_image(), _depth(), sky_mask=empty, building_mask=empty)
     assert out.shape == (8, 8, 3)
 
 
 def test_apply_depth_clarity_handles_flat_depth() -> None:
-    # depth_range collapses to the 1e-6 floor (line 610); the function must
-    # still produce a valid float image rather than dividing by zero.
+    # depth_range collapses to the 1e-6 floor; the function must still produce
+    # a valid float image rather than dividing by zero.
     flat = np.full((8, 8), 0.5, dtype=np.float32)
     out = tools.apply_depth_clarity(_image(), flat, amount=0.3)
 
