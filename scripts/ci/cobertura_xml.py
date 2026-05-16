@@ -113,6 +113,10 @@ def _resolve_class_path(
     for root, prefix in source_pairs:
         if (root / norm).is_file():
             return f"{prefix.rstrip('/')}/{norm}"
+    for _, prefix in source_pairs:
+        repo_relative = f"{prefix.rstrip('/')}/{norm}"
+        if Path(repo_relative).is_file():
+            return repo_relative
     return norm if norm else None
 
 

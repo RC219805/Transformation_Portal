@@ -38,7 +38,7 @@ BRANCH_FLOORS: tuple[BranchFloor, ...] = (
     BranchFloor("src/transformation_portal/plugins/", 36.0),
     BranchFloor("src/transformation_portal/stage_graph/", 63.0),
     BranchFloor("src/transformation_portal/vlm/", 55.0),
-    BranchFloor("src/transformation_portal/depth/", 40.0),
+    BranchFloor("src/transformation_portal/depth/", 42.0),
     BranchFloor("src/transformation_portal/streaming/", 29.0),
     BranchFloor("src/transformation_portal/spatial_ai/reconstruction/", 47.0),
 )
