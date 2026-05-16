@@ -90,6 +90,14 @@ Integrated pilot gate:
 make test-paid-pilot-services-contract
 ```
 
+Managed-provider staging should use the clean launcher so local development env
+does not leak into the gate:
+
+```bash
+TP_MANAGED_PAID_PILOT_ENV_FILE=/tmp/tp-managed-staging.env \
+make run-managed-paid-pilot-gate
+```
+
 The integrated smoke submits a real `/v1/jobs` request, enqueues through Redis, executes through the in-process worker pool with a tiny generated subprocess, persists terminal state in Postgres, mirrors artifacts to S3-compatible storage, verifies repository-backed artifact fetch/delete semantics after `app.JOBS.clear()`, and proves a separate abandoned active row sweeps to `worker_lost`.
 
 ## Startup Order

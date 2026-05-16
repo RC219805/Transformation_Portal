@@ -49,6 +49,7 @@ Quick reference for common workflows and commands in this repo.
 - `make test-artifact-s3-contract` run ArtifactStore local plus S3/moto contract tests; setting `TP_TEST_S3_URL` and `TP_TEST_S3_BUCKET` switches the S3 branch to a live S3-compatible endpoint.
 - `make test-frontdoor-redis-contract` run the managed frontdoor Redis SessionStore contract; requires `TP_FRONTDOOR_REDIS_URL=redis://127.0.0.1:6379/0`.
 - `make test-paid-pilot-services-contract` run the opt-in Postgres + Redis queue + Redis frontdoor sessions + S3-compatible artifact managed-services smoke gate; requires the env surface documented in `docs/deployment/paid_pilot_services.md`.
+- `make run-managed-paid-pilot-gate` run the provider-backed paid-pilot gate from a clean `env -i` process using `TP_MANAGED_PAID_PILOT_ENV_FILE` (default `/tmp/tp-managed-staging.env`); pass `MANAGED_PAID_PILOT_GATE_ARGS=--preflight-only` to validate the env without touching services.
 - `make test-portal-contract` run portal runtime/browser contract tests (`tests/test_app_orchestrator_runtime.py`, `tests/validation/test_portal_smoke_scripts.py`).
 - `make test-frontdoor-contract` run managed frontdoor Node 22 contract/build checks (`./scripts/setup/ensure_node_version.sh && cd web/secure-landing && npm test && npm run build`).
 - `make test-archive-gate-contract` run archive gate readiness + HTTP contract coverage for archive Gates A/B/C (`tests/test_app_orchestrator_runtime.py`, `tests/test_app_orchestrator_contract_http.py` with `-k "archive_gate"`).
