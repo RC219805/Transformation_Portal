@@ -69,3 +69,34 @@ def test_save_image_rgb_rejects_unknown_format(tmp_path) -> None:
 
     with pytest.raises(ValueError, match="Unsupported format"):
         tools.save_image_rgb(str(tmp_path / "render.bmp"), image, fmt="bmp")
+
+
+def test_save_image_rgb_writes_png_branch(tmp_path) -> None:
+    image = np.full((4, 6, 3), 0.5, dtype=np.float32)
+
+    saved = tools.save_image_rgb(str(tmp_path / "render.png"), image, fmt="png")
+
+    assert saved.endswith(".png")
+    assert Path(saved).exists()
+
+
+def test_save_image_rgb_writes_jpg_branch(tmp_path) -> None:
+    image = np.full((4, 6, 3), 0.5, dtype=np.float32)
+
+    saved = tools.save_image_rgb(str(tmp_path / "render.jpg"), image, fmt="jpeg", quality=80)
+
+    assert saved.endswith(".jpg")
+    assert Path(saved).exists()
+
+
+def test_save_image_rgb_falls_back_to_png_when_tifffile_unavailable(
+    tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The tifffile-unavailable branch must produce a PNG instead of failing.
+    monkeypatch.setattr(tools, "_TIFFFILE_AVAILABLE", False)
+    image = np.full((4, 4, 3), 0.25, dtype=np.float32)
+
+    saved = tools.save_image_rgb(str(tmp_path / "render.tif"), image, fmt="tif")
+
+    assert saved.endswith(".png")
+    assert Path(saved).exists()
