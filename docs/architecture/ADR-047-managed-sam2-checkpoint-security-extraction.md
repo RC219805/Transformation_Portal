@@ -1,7 +1,8 @@
 # ADR-047: Managed SAM2 Checkpoint Security Extraction Contract
 
-**Status:** Proposed
+**Status:** Implemented
 **Date:** 2026-05-06
+**Status changed:** 2026-05-16 (Proposed → Implemented; extraction shipped as `src/transformation_portal/portal/sam2_checkpoint_security.py` with `app.py` re-export shims preserved per the compatibility-only contract)
 **Decision Makers:** Architect (review) + Specialist (implementation)
 **Replaces:** None
 **Supersedes:** None

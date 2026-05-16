@@ -82,7 +82,7 @@ operator guidance unless they are linked here as canonical documents.
 | Architecture index | [architecture/README.md](../architecture/README.md) | Maintained; lists canonical, promoted, review-required, moved historical, and delete-candidate architecture dispositions |
 | Architecture triage ledger | [architecture-inventory-2026-05-12.csv](audit/architecture-inventory-2026-05-12.csv) | Current overlay for architecture-file disposition decisions |
 | Depth backend unification | [ADR-019](../architecture/ADR-019-depth-backend-unification.md) | Maintained |
-| DA3 non-commercial research tier | [ADR-0015](../architecture/adr-0015-da3-1-1-non-commercial-research-tier.md) | Maintained |
+| DA3 non-commercial research tier | [ADR-015](../architecture/ADR-015-da3-1-1-non-commercial-research-tier.md) | Maintained |
 | Portal orchestrator roadmap | [PORTAL_ORCHESTRATOR_ROADMAP.md](../architecture/PORTAL_ORCHESTRATOR_ROADMAP.md) | Maintained planning doc |
 | Portal front door roadmap | [PORTAL_FRONTDOOR_ROADMAP.md](../architecture/PORTAL_FRONTDOOR_ROADMAP.md) | Maintained planning doc |
 | Portal UX/UI status snapshot | [Portal UX/UI Status Snapshot](../architecture/DNA_UX_UI_STRATEGY_REBASELINE_2026-04-08.md) | Current planning-context snapshot; does not choose the next implementation PR |

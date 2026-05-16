@@ -1,7 +1,8 @@
 # ADR-045: Monolith Decomposition Residuals — Governance Pattern
 
-**Status:** Proposed
+**Status:** Accepted
 **Date:** 2026-05-04
+**Status changed:** 2026-05-16 (Proposed → Accepted; pattern is in active use by ADR-046, ADR-047, and the "Landed" extractions tracked in `MONOLITH_DECOMPOSITION_TARGETS.md`)
 **Decision Makers:** Architect (review) + Specialist (implementation)
 **Replaces:** None
 **Supersedes:** None

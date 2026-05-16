@@ -229,7 +229,7 @@
 - **Roadmap Review:** `docs/materials/MATERIALS_V3_ROADMAP_COMPREHENSIVE_REVIEW.md`
 - **APEX Phase 2 Scope:** `docs/guides/APEX_REAL_PIPELINE_INTEGRATION.md`
 - **Governance Policy:** `docs/architecture/agent_governance.md`
-- **Materials V3 ADR:** `docs/architecture/ADR-030-materials-v3-production-integration.md`
+- **Materials V3 ADR:** `docs/architecture/ADR-048-materials-v3-production-integration.md` (renumbered 2026-05-16 from ADR-030)
 
 ---
 

@@ -1,9 +1,11 @@
-# ADR-030: Materials V3 Production Integration
+# ADR-048: Materials V3 Production Integration
 
 **Status:** Approved
 **Date:** 2026-02-11
 **Decider:** Transformation Portal Architect
 **Context:** Materials V3 stub implementation complete, need production-ready integration
+
+> **2026-05-16 renumbering note:** Originally filed as `ADR-030`, which collided with the canonical `ADR-030: Phase II Deterministic RAW Ingest` (see `ADR-030-phase2-deterministic-raw-ingest.md`). Renumbered to `ADR-048` (next free slot) to resolve the collision. No content changes.
 
 ---
 
