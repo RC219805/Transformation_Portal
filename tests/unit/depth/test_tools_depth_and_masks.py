@@ -144,9 +144,11 @@ def test_load_mask_accepts_uniform_rgb_without_warning(tmp_path, caplog: pytest.
 
 def test_load_mask_converts_palette_mode_to_grayscale(tmp_path) -> None:
     # 'P' (palette) mode is none of L/RGBA/RGB, so the else-branch
-    # convert("L") on line 538 must run.
+    # convert("L") on line 538 must run. Build via L.convert("P") so the
+    # saved PNG carries the default 256-entry palette on every Pillow
+    # version (raw mode="P" without a palette is flaky on save).
     mask_path = tmp_path / "villa_mask_sky.png"
-    Image.fromarray(np.full((8, 8), 7, dtype=np.uint8), mode="P").save(mask_path)
+    Image.fromarray(np.full((8, 8), 7, dtype=np.uint8), mode="L").convert("P").save(mask_path)
 
     mask = tools.load_mask(str(mask_path), "sky", (4, 4), use_cache=False)
 

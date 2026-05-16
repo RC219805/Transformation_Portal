@@ -223,6 +223,7 @@ def test_gaussian_blur_float_cv2_backend_returns_normalized_output(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     # Exercise the cv2 backend branch (lines 306-319) via explicit selection.
+    pytest.importorskip("cv2")
     monkeypatch.setattr(tools, "_CV2_AVAILABLE", True)
     img = _image()
 
@@ -279,6 +280,7 @@ def test_bilateral_blur_float_cv2_path_handles_rgb_and_2d(
 ) -> None:
     # Exercise the per-channel loop (lines 358-362) AND the 2D branch
     # (lines 355-357). cv2 must be available for both.
+    pytest.importorskip("cv2")
     monkeypatch.setattr(tools, "_CV2_AVAILABLE", True)
 
     rgb_out = tools.bilateral_blur_float(_image(), _depth(), sigma_spatial=1.5)
