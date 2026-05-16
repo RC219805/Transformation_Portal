@@ -377,12 +377,8 @@ def test_process_single_uses_provided_mask_root(tmp_path) -> None:
     for d in (images, depths, masks, output):
         d.mkdir()
     depth_path = _build_depth_and_image(images, depths)
-    Image.fromarray(np.full((8, 8), 255, dtype=np.uint8), mode="L").save(
-        masks / "villa_mask_sky.png"
-    )
-    Image.fromarray(np.full((8, 8), 128, dtype=np.uint8), mode="L").save(
-        masks / "villa_mask_building.png"
-    )
+    Image.fromarray(np.full((8, 8), 255, dtype=np.uint8), mode="L").save(masks / "villa_mask_sky.png")
+    Image.fromarray(np.full((8, 8), 128, dtype=np.uint8), mode="L").save(masks / "villa_mask_building.png")
 
     opts = tools.BatchOptions(
         images_root=str(images),
@@ -438,9 +434,7 @@ def test_cli_progress_prints_progress_and_newline_on_complete(capsys) -> None:
     assert captured.endswith("\n")
 
 
-def test_main_verbose_flag_enables_debug_logging(
-    tmp_path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_main_verbose_flag_enables_debug_logging(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
     # Covers the verbose==True branch (lines 1023-1024).
     depths = tmp_path / "depths"
     images = tmp_path / "images"
@@ -468,9 +462,7 @@ def test_main_verbose_flag_enables_debug_logging(
         tools._log.setLevel(original_level)
 
 
-def test_main_returns_two_on_fatal_exception(
-    tmp_path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_main_returns_two_on_fatal_exception(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
     # Covers the fatal-exception catch (lines 1104-1106): exit code 2 on
     # unexpected error from process_batch.
     depths = tmp_path / "depths"
@@ -498,9 +490,7 @@ def test_main_returns_two_on_fatal_exception(
     assert exit_code == 2
 
 
-def test_main_maps_haze_cli_options_to_batch_options(
-    tmp_path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_main_maps_haze_cli_options_to_batch_options(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
     # Covers the haze-specific option-mapping branch (lines 1057-1062),
     # currently only the `do` branch is tested.
     captured: dict[str, tools.BatchOptions] = {}
@@ -550,9 +540,7 @@ def test_main_maps_haze_cli_options_to_batch_options(
     assert opts.haze_color == pytest.approx((0.5, 0.6, 0.7))
 
 
-def test_main_maps_clarity_cli_options_to_batch_options(
-    tmp_path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_main_maps_clarity_cli_options_to_batch_options(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
     # Covers the clarity-specific option-mapping branch (lines 1063-1067).
     captured: dict[str, tools.BatchOptions] = {}
     depths = tmp_path / "depths"

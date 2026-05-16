@@ -126,9 +126,7 @@ def test_load_mask_returns_cached_copy(tmp_path) -> None:
     assert tools._mask_cache.stats()["hits"] == 1
 
 
-def test_load_mask_accepts_uniform_rgb_without_warning(
-    tmp_path, caplog: pytest.LogCaptureFixture
-) -> None:
+def test_load_mask_accepts_uniform_rgb_without_warning(tmp_path, caplog: pytest.LogCaptureFixture) -> None:
     # When all three channels match, the "differing channels" debug log
     # branch (lines 532-535) must NOT fire — the silent uniform-RGB path
     # at line 538 should win.

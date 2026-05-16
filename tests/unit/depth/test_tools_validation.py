@@ -89,9 +89,7 @@ def test_save_image_rgb_writes_jpg_branch(tmp_path) -> None:
     assert Path(saved).exists()
 
 
-def test_save_image_rgb_falls_back_to_png_when_tifffile_unavailable(
-    tmp_path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_save_image_rgb_falls_back_to_png_when_tifffile_unavailable(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
     # The tifffile-unavailable branch must produce a PNG instead of failing.
     monkeypatch.setattr(tools, "_TIFFFILE_AVAILABLE", False)
     image = np.full((4, 4, 3), 0.25, dtype=np.float32)
