@@ -114,9 +114,10 @@ class TestPresetTierFingerprintCrossProduct:
         config = EnhanceConfig(preset=preset, quality_tier=tier)
         fingerprint = build_run_card_config_fingerprint(config)
 
-        # preset_requested may be the preset value or None depending on
-        # whether the explicit-string path or enum path is taken at
-        # `config_resolver.py:610`; both must equal the preset string.
+        # With `config.preset` set, `config_resolver.py:610-611` always
+        # resolves both `preset_requested` and `preset_resolved` to
+        # `preset.value` — never None. The cross-product must hold for
+        # every (preset, tier) cell.
         assert fingerprint["preset_requested"] == preset.value
         assert fingerprint["preset_resolved"] == preset.value
         # quality_tier survives untouched regardless of which preset is set.
