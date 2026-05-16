@@ -95,3 +95,26 @@ def test_retry_on_io_error_reraises_after_max_attempts(monkeypatch: pytest.Monke
 
     with pytest.raises(OSError, match="disk still unavailable"):
         always_fails()
+
+
+def test_retry_on_io_error_raises_runtime_error_when_loop_never_executes() -> None:
+    # max_attempts=0 makes range(1, 1) empty; the defensive RuntimeError
+    # fallback path must fire instead of returning None.
+    @tools.retry_on_io_error(max_attempts=0)
+    def never_runs() -> str:
+        return "unreachable"
+
+    with pytest.raises(RuntimeError, match="Retry wrapper failed without exception"):
+        never_runs()
+
+
+def test_format_cache_stats_emits_debug_log(caplog: pytest.LogCaptureFixture) -> None:
+    cache = tools.BoundedCache(maxsize=4)
+    cache.put("k", np.ones((1, 1), dtype=np.float32))
+    cache.get("k")
+    cache.get("missing")
+
+    caplog.set_level("DEBUG", logger="depth_tools")
+    tools._format_cache_stats("UnitProbe", cache.stats())
+
+    assert any("UnitProbe cache:" in record.message for record in caplog.records)

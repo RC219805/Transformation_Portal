@@ -124,3 +124,32 @@ def test_load_mask_returns_cached_copy(tmp_path) -> None:
 
     assert cached[0, 0] == 1.0
     assert tools._mask_cache.stats()["hits"] == 1
+
+
+def test_load_mask_accepts_uniform_rgb_without_warning(tmp_path, caplog: pytest.LogCaptureFixture) -> None:
+    # When all three channels match, the "differing channels" debug log
+    # branch must NOT fire; the silent uniform-RGB path should win.
+    mask_path = tmp_path / "villa_mask_building.png"
+    rgb = np.full((8, 8, 3), 200, dtype=np.uint8)
+    Image.fromarray(rgb, mode="RGB").save(mask_path)
+
+    caplog.set_level("DEBUG", logger="depth_tools")
+    mask = tools.load_mask(str(mask_path), "building", (8, 8), use_cache=False)
+
+    assert mask.shape == (8, 8)
+    assert mask.mean() == pytest.approx(200.0 / 255.0, abs=0.01)
+    assert not any("differing channels" in record.message for record in caplog.records)
+
+
+def test_load_mask_converts_palette_mode_to_grayscale(tmp_path) -> None:
+    # 'P' (palette) mode is none of L/RGBA/RGB, so the else-branch
+    # convert("L") must run. Build via L.convert("P") so the saved PNG carries
+    # the default 256-entry palette on every Pillow version (raw mode="P"
+    # without a palette is flaky on save).
+    mask_path = tmp_path / "villa_mask_sky.png"
+    Image.fromarray(np.full((8, 8), 7, dtype=np.uint8), mode="L").convert("P").save(mask_path)
+
+    mask = tools.load_mask(str(mask_path), "sky", (4, 4), use_cache=False)
+
+    assert mask.shape == (4, 4)
+    assert 0.0 <= float(mask.min()) <= float(mask.max()) <= 1.0
