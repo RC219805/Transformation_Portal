@@ -700,11 +700,12 @@ def _resolve_extends_target(extends_value: str, child_path: Path) -> Path:
         resolved = (directory / candidate).resolve()
         if resolved == child_resolved:
             continue
-        if resolved.exists():
+        # Require an actual preset file, not a directory or symlink to a dir.
+        if resolved.is_file():
             return resolved
     raise LicenseRestrictionError(
-        f"`extends: {extends_value}` declared in {child_path} could not be resolved. "
-        f"Searched: {[str(d) for d in search_dirs]}"
+        f"`extends: {extends_value}` declared in {child_path} could not be resolved "
+        f"to a preset file. Searched: {[str(d) for d in search_dirs]}"
     )
 
 

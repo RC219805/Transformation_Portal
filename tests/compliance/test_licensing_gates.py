@@ -1210,6 +1210,19 @@ class TestExtendsResolution:
         with pytest.raises(LicenseRestrictionError, match="must be a non-empty string"):
             load_and_validate_preset(child)
 
+    def test_extends_rejects_directory_target(self, tmp_path):
+        """If `extends:` resolves to a directory (not a file), the resolver
+        must skip it and report an unresolved error rather than letting the
+        caller fail later trying to open a directory as YAML."""
+        # Create a directory named like the candidate the resolver would try
+        dir_target = tmp_path / "parent.yaml"
+        dir_target.mkdir()
+        child = tmp_path / "child.yaml"
+        self._write_yaml(child, {"extends": str(dir_target.with_suffix("")), "name": "child"})
+
+        with pytest.raises(LicenseRestrictionError, match="could not be resolved"):
+            load_and_validate_preset(child)
+
     def test_extends_skips_self_match_and_falls_through_to_config_presets(self, tmp_path):
         """A bare-name `extends:` whose first candidate is the child itself must
         skip the self-match and continue searching `config/presets/`.

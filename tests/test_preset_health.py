@@ -541,6 +541,9 @@ class TestShippedExperimentalPresetsPlaceholderInventory:
     to explicit ``PENDING_VERIFICATION`` (consistent with model_lock_manifest).
     This test pins which files are still allowed to carry placeholders, so the
     list shrinks (not grows) as verifications get unblocked.
+
+    Both checks parse YAML and walk string *values* so that comments mentioning
+    the sentinel strings don't produce false positives.
     """
 
     # Files explicitly allowed to ship with PENDING_VERIFICATION markers until
@@ -553,20 +556,35 @@ class TestShippedExperimentalPresetsPlaceholderInventory:
         "spatial_ai_reconstruction_mvp.yaml",  # graphdeco-inria/gaussian-splatting commit
     }
 
+    @staticmethod
+    def _iter_string_values(node):
+        """Yield every string scalar reached by walking a parsed YAML tree."""
+        if isinstance(node, str):
+            yield node
+        elif isinstance(node, dict):
+            for v in node.values():
+                yield from TestShippedExperimentalPresetsPlaceholderInventory._iter_string_values(v)
+        elif isinstance(node, list):
+            for v in node:
+                yield from TestShippedExperimentalPresetsPlaceholderInventory._iter_string_values(v)
+
     def test_experimental_presets_have_no_legacy_placeholder_strings(self):
         """No experimental preset may still carry the legacy NEEDS_VERIFICATION_0000…
-        or PLACEHOLDER_UPDATE_WHEN_INTEGRATED markers — they were migrated to the
-        unified PENDING_VERIFICATION sentinel."""
+        or PLACEHOLDER_UPDATE_WHEN_INTEGRATED markers in any string *value* — they
+        were migrated to the unified PENDING_VERIFICATION sentinel. Comments are
+        ignored (YAML safe_load discards them)."""
         repo_root = Path(__file__).resolve().parents[1]
         experimental_dir = repo_root / "config" / "presets" / "experimental"
         legacy_markers = ("NEEDS_VERIFICATION_0", "PLACEHOLDER_UPDATE_WHEN_INTEGRATED")
 
         offenders: list[tuple[str, str]] = []
         for preset_path in sorted(experimental_dir.glob("*.yaml")):
-            text = preset_path.read_text(encoding="utf-8")
-            for marker in legacy_markers:
-                if marker in text:
-                    offenders.append((preset_path.name, marker))
+            data = yaml.safe_load(preset_path.read_text(encoding="utf-8"))
+            for value in self._iter_string_values(data):
+                for marker in legacy_markers:
+                    if marker in value:
+                        offenders.append((preset_path.name, marker))
+                        break
 
         assert not offenders, (
             f"Legacy placeholder markers still present in experimental presets: {offenders}. "
@@ -574,8 +592,8 @@ class TestShippedExperimentalPresetsPlaceholderInventory:
         )
 
     def test_only_allowlisted_presets_carry_pending_verification(self):
-        """The set of presets carrying PENDING_VERIFICATION must not grow without
-        an explicit allowlist update."""
+        """The set of presets carrying PENDING_VERIFICATION in their parsed YAML
+        *values* (not in comments) must not grow without an explicit allowlist update."""
         repo_root = Path(__file__).resolve().parents[1]
         scan_dirs = [
             repo_root / "config" / "presets",
@@ -586,9 +604,9 @@ class TestShippedExperimentalPresetsPlaceholderInventory:
             if not d.exists():
                 continue
             for preset_path in sorted(d.glob("*.yaml")):
-                if "PENDING_VERIFICATION" not in preset_path.read_text(encoding="utf-8"):
-                    continue
-                if preset_path.name not in self._ALLOWED_PLACEHOLDER_FILES:
+                data = yaml.safe_load(preset_path.read_text(encoding="utf-8"))
+                has_sentinel = any(value.strip().upper() == "PENDING_VERIFICATION" for value in self._iter_string_values(data))
+                if has_sentinel and preset_path.name not in self._ALLOWED_PLACEHOLDER_FILES:
                     offenders.append(preset_path.name)
 
         assert not offenders, (
