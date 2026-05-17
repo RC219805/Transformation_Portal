@@ -466,6 +466,79 @@ class TestBuildFingerprintPayloads:
         assert "mask_feather_sigma_default" in payload
         assert "sam2_model_size" in payload
 
+    def test_materials_fingerprint_records_effective_sam_vit_h_hash(self):
+        """Manifest fingerprint must record the effective SAM ViT-H hash (config
+        override or SAMVitHBackend.EXPECTED_SHA256 fallback) when sam_vit_h is the
+        selected segmentation backend.
+
+        Without this, full-pipeline manifests written before the backend default
+        became fail-closed (key payload recording ``"sam_vit_h_expected_sha256":
+        null``) would still match a current lookup. orchestrator.should_skip_depth()
+        would replay the cached run and skip segment_materials() entirely,
+        bypassing _validate_checkpoint_sha256() on the underlying checkpoint
+        bytes — i.e. the segmentation-mask cache key fix would be undone at the
+        manifest layer.
+        """
+        from transformation_portal.lux_depth_v3.config import EnhanceConfig
+        from transformation_portal.lux_depth_v3.config_resolver import (
+            build_materials_fingerprint_payload,
+        )
+        from transformation_portal.lux_depth_v3.segmentation.sam_vit_h import SAMVitHBackend
+
+        # Default EnhanceConfig leaves sam_vit_h_expected_sha256 at None. The
+        # fingerprint must still record the pinned class default when sam_vit_h
+        # is the selected backend.
+        config = EnhanceConfig(
+            enable_material_segmentation=True,
+            material_segmentation_backend="sam_vit_h",
+        )
+        assert config.sam_vit_h_expected_sha256 is None
+
+        payload = build_materials_fingerprint_payload(config)
+
+        assert payload["sam_vit_h_expected_sha256"] == SAMVitHBackend.EXPECTED_SHA256
+        assert payload["sam_vit_h_expected_sha256"] is not None
+
+    def test_materials_fingerprint_preserves_explicit_sam_vit_h_hash_override(self):
+        """An explicit EnhanceConfig.sam_vit_h_expected_sha256 must take precedence
+        over the class-level fallback (preserves the override path for fine-tuned
+        checkpoints)."""
+        from transformation_portal.lux_depth_v3.config import EnhanceConfig
+        from transformation_portal.lux_depth_v3.config_resolver import (
+            build_materials_fingerprint_payload,
+        )
+
+        override = "b" * 64
+        config = EnhanceConfig(
+            enable_material_segmentation=True,
+            material_segmentation_backend="sam_vit_h",
+            sam_vit_h_expected_sha256=override,
+        )
+
+        payload = build_materials_fingerprint_payload(config)
+
+        assert payload["sam_vit_h_expected_sha256"] == override
+
+    def test_materials_fingerprint_preserves_none_for_other_segmentation_backends(self):
+        """The effective-hash substitution must be scoped to the sam_vit_h backend
+        so cache entries / manifests for unrelated backends are not invalidated by
+        this fix."""
+        from transformation_portal.lux_depth_v3.config import EnhanceConfig
+        from transformation_portal.lux_depth_v3.config_resolver import (
+            build_materials_fingerprint_payload,
+        )
+
+        config = EnhanceConfig(
+            enable_material_segmentation=True,
+            material_segmentation_backend="efficientsam",
+        )
+
+        payload = build_materials_fingerprint_payload(config)
+
+        # For non-sam_vit_h backends the fingerprint must still record the raw
+        # config value (None by default), preserving existing manifest matches.
+        assert payload["sam_vit_h_expected_sha256"] is None
+
     def test_materials_fingerprint_payload_includes_low_texture_guard_knobs(self):
         """Materials cache fingerprint must include every seam-safe guard knob."""
         from transformation_portal.lux_depth_v3.config import EnhanceConfig
