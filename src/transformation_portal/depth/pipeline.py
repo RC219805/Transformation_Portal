@@ -38,7 +38,7 @@ class ArchitecturalDepthPipeline:
     - Batch processing support
 
     Example:
-        >>> pipeline = ArchitecturalDepthPipeline.from_config('config/default_config.yaml')
+        >>> pipeline = ArchitecturalDepthPipeline.from_config('config/interior_preset.yaml')
         >>> result = pipeline.process_render('render.jpg')
         >>> pipeline.save_result(result, 'output/')
     """

@@ -86,13 +86,17 @@ ai_enhancement:
   target_size_multiple: 64  # Pad to multiples of this value (64 or 96)
 
 # ============================================================================
-# Stage 7: Upscaling (Real-ESRGAN)
+# Stage 7: Upscaling (Lanczos fallback)
 # ============================================================================
+# The `realesrgan` PyPI package is a banned dependency in this repo (see
+# requirements/constraints.txt and scripts/security/verify_banned_dependencies.py
+# per CLAUDE.md). The previous esrgan + RealESRGAN_x4plus.pth configuration
+# would fail the banned-dep gate; upscaling is disabled and the permitted
+# CPU lanczos fallback is documented for re-enabling without the banned package.
 upscaling:
-  enabled: true
-  method: "esrgan"  # esrgan (AI 4x), lanczos (fallback)
+  enabled: false
+  method: "lanczos"  # permitted CPU fallback if re-enabled
   scale_factor: 4.0  # 2.0, 4.0
-  model_path: "weights/RealESRGAN_x4plus.pth"
   tile_size: 512  # Tile size for memory management
   tile_padding: 10  # Padding to avoid seams
 

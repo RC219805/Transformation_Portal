@@ -1,9 +1,22 @@
+# Aerial Rendering Preset
+# Optimized for aerial/drone architectural shots.
+
 depth_model:
   variant: "small"
+  # CoreML on Apple Neural Engine: intentional divergence from sibling presets
+  # (interior/exterior use pytorch_mps). ANE is faster for the small DA2 variant
+  # on aerial workloads.
   backend: "coreml"
   cache_size: 50
 
 processing:
+  # Depth map postprocessing for large-scale aerial scenes
+  depth_postprocessing:
+    enabled: true
+    method: gaussian       # Faster smoothing for large aerial scenes
+    sigma: 4.0
+    preserve_scale: true
+
   depth_aware_denoise:
     enabled: true
     sigma_spatial: 2.0
@@ -21,13 +34,26 @@ processing:
       - {contrast: 0.95, saturation: 0.92}
       - {contrast: 0.85, saturation: 0.85}
 
+  # Field names match AtmosphericEffects.__init__ in
+  # src/transformation_portal/depth/processors/atmospheric_effects.py.
+  # Previous keys (haze_strength / aerial_desaturation / depth_color_shift)
+  # were silently ignored by the consumer.
   atmospheric_effects:
     enabled: true
-    haze_strength: 0.15
-    aerial_desaturation: 0.25
-    depth_color_shift: [0.15, 0.12, 0.08]
+    haze_density: 0.15
+    haze_color: [0.7, 0.8, 0.92]
+    desaturation_strength: 0.25
+    depth_scale: 200.0
+    enable_color_shift: true
 
   depth_guided_filters:
     enabled: true
     clarity_strength: 0.65
     glow_radius: 0
+
+  depth_of_field:
+    enabled: false
+
+optimization:
+  production_resolution: 1024
+  batch_size: 2

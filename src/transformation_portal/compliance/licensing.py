@@ -10,7 +10,7 @@ import hashlib
 import os
 import re
 from pathlib import Path
-from typing import Any, Callable, Dict, Optional, TypeVar, cast
+from typing import Any, Callable, Dict, Optional, Set, TypeVar, cast
 
 import yaml
 
@@ -664,6 +664,87 @@ def validate_materials_preset(
     return True
 
 
+_EXTENDS_KEY = "extends"
+
+
+def _deep_merge_preset(parent: Dict[str, Any], child: Dict[str, Any]) -> Dict[str, Any]:
+    """Recursively merge child into parent. Child wins on conflicts; lists replaced."""
+    merged: Dict[str, Any] = dict(parent)
+    for key, child_value in child.items():
+        parent_value = merged.get(key)
+        if isinstance(parent_value, dict) and isinstance(child_value, dict):
+            merged[key] = _deep_merge_preset(parent_value, child_value)
+        else:
+            merged[key] = child_value
+    return merged
+
+
+def _resolve_extends_target(extends_value: str, child_path: Path) -> Path:
+    """Resolve an ``extends:`` reference to a concrete preset file path.
+
+    Search order: child preset's directory, then ``config/presets/`` under the
+    repo root. Accepts bare names (``apex_research``) or filenames
+    (``apex_research.yaml`` / ``apex_research.yml``).
+
+    A match that resolves to the child file itself is skipped — a preset cannot
+    extend itself. This lets ``config/presets/experimental/foo.yaml`` declare
+    ``extends: foo`` and have it resolve to the sibling ``config/presets/foo.yaml``.
+    """
+    candidate = Path(extends_value)
+    if candidate.suffix not in {".yaml", ".yml"}:
+        candidate = candidate.with_suffix(".yaml")
+
+    child_resolved = child_path.resolve()
+    search_dirs = [child_path.parent, _shared_repo_root() / "config" / "presets"]
+    for directory in search_dirs:
+        resolved = (directory / candidate).resolve()
+        if resolved == child_resolved:
+            continue
+        if resolved.exists():
+            return resolved
+    raise LicenseRestrictionError(
+        f"`extends: {extends_value}` declared in {child_path} could not be resolved. "
+        f"Searched: {[str(d) for d in search_dirs]}"
+    )
+
+
+def _load_with_extends(
+    preset_path: Path, _visited: Optional[Set[Path]] = None
+) -> Dict[str, Any]:
+    """Load a preset and recursively merge any ``extends:`` parents.
+
+    Returns the merged dict with the ``extends`` key stripped. Detects cycles
+    in the inheritance chain and raises ``LicenseRestrictionError``.
+    """
+    visited: Set[Path] = set(_visited or ())
+    resolved = preset_path.resolve()
+    if resolved in visited:
+        raise LicenseRestrictionError(
+            f"Cycle detected in preset `extends:` chain at {resolved}. "
+            f"Visited: {sorted(str(p) for p in visited)}"
+        )
+    visited.add(resolved)
+
+    with preset_path.open(encoding="utf-8") as f:
+        # YAML_GOVERNANCE_AUTHORITY: shared preset loader for config/presets/** and preset-like runtime entrypoints.
+        data = yaml.safe_load(f)
+
+    if not isinstance(data, dict):
+        raise ValueError(f"Preset must be a mapping (dict), got {type(data).__name__}.")
+
+    parent_ref = data.pop(_EXTENDS_KEY, None)
+    if parent_ref is None:
+        return data
+    if not isinstance(parent_ref, str) or not parent_ref.strip():
+        raise LicenseRestrictionError(
+            f"`extends:` in {preset_path} must be a non-empty string, got {parent_ref!r}."
+        )
+
+    parent_path = _resolve_extends_target(parent_ref, preset_path)
+    parent_data = _load_with_extends(parent_path, visited)
+    return _deep_merge_preset(parent_data, data)
+
+
 def load_and_validate_preset(
     preset_path: Path,
     *,
@@ -673,6 +754,11 @@ def load_and_validate_preset(
     verify_runtime_bytes: Optional[bool] = None,
 ) -> Dict[str, Any]:
     """Load a preset YAML file and validate licensing compliance.
+
+    If the preset declares ``extends: <name>``, the named parent preset is
+    resolved (child directory first, then ``config/presets/``), recursively
+    loaded, and deep-merged with the child overriding the parent. The
+    ``extends`` key is stripped before validation and from the return value.
 
     Args:
         preset_path: Path to preset YAML file
@@ -687,23 +773,19 @@ def load_and_validate_preset(
             ``TP_VERIFY_MATERIAL_RUNTIME_BYTES=1`` is set.
 
     Returns:
-        Loaded preset dictionary
+        Loaded preset dictionary (with any ``extends:`` chain resolved)
 
     Raises:
         FileNotFoundError: If preset file does not exist
         ValueError: If the loaded preset root is not a mapping.
         yaml.YAMLError: If YAML is malformed
-        LicenseRestrictionError: If licensing markers are missing
+        LicenseRestrictionError: If licensing markers are missing or the
+            ``extends:`` chain is unresolvable or cyclic.
     """
     if not preset_path.exists():
         raise FileNotFoundError(f"Preset file not found: {preset_path}")
 
-    with preset_path.open(encoding="utf-8") as f:
-        # YAML_GOVERNANCE_AUTHORITY: shared preset loader for config/presets/** and preset-like runtime entrypoints.
-        preset = yaml.safe_load(f)
-
-    if not isinstance(preset, dict):
-        raise ValueError(f"Preset must be a mapping (dict), got {type(preset).__name__}.")
+    preset = _load_with_extends(preset_path)
 
     validate_non_commercial_preset(preset)
     validate_materials_preset(

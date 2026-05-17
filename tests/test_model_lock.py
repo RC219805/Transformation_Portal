@@ -405,3 +405,28 @@ def test_da3_inference_strict_mode_rejects_revisionless_da3_fallback(tmp_path: P
         engine._load_da3_model(model_id)
 
     assert fallback_used["called_without_revision"] is False
+
+
+def test_artifact_attestation_gaussian_splatting_uses_source_only_shape() -> None:
+    """Regression: the 3DGS attestation block in the shipped manifest is source-only.
+
+    The block previously declared `source_type: direct_checkpoint` and a non-existent
+    `gaussian_splatting_base.pt` artifact. Inria distributes source, not weights, so
+    the block was rewritten to `source_type: git_release` with `artifacts: []`.
+    """
+    import re
+
+    repo_root = Path(__file__).resolve().parents[1]
+    manifest_path = repo_root / "config" / "model_lock_manifest.yaml"
+    manifest = yaml.safe_load(manifest_path.read_text(encoding="utf-8"))
+
+    gs = manifest["artifact_attestation"]["gaussian_splatting"]
+    assert gs["source_type"] == "git_release"
+    assert gs["source_url"] == "https://github.com/graphdeco-inria/gaussian-splatting"
+    assert gs["artifacts"] == []
+    assert gs["verification"]["method"] == "source_commit"
+
+    commit = gs["source_commit_or_tag"]
+    assert commit == "PENDING_VERIFICATION" or re.fullmatch(r"[0-9a-f]{40}", commit), (
+        f"source_commit_or_tag must be PENDING_VERIFICATION or a 40-hex commit SHA, got {commit!r}"
+    )
