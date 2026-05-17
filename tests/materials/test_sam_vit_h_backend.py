@@ -739,3 +739,102 @@ def test_segmentation_cache_key_preserves_other_backends(sample_image: np.ndarra
     # For non-sam_vit_h backends, the sam_vit_h hash field should remain at
     # the config value (None by default), preserving existing cache entries.
     assert captured["sam_vit_h_expected_sha256"] is None
+
+
+# =============================================================================
+# 12. Checksum-mismatch fallback policy: integrity failures are never silent
+# =============================================================================
+
+
+def test_sam_vit_h_checksum_mismatch_never_falls_back_to_stub(tmp_path: Path, monkeypatch):
+    """A SHA-256 mismatch must propagate as a hard integrity failure even in
+    non-strict mode. Silently returning the stub backend would hide a tampered
+    checkpoint and let the pipeline emit non-segmentation output as if SAM
+    ViT-H had succeeded.
+
+    Regression guard for the SAMCheckpointIntegrityError contract introduced
+    after PR #1802 review feedback: ``_get_sam_vit_h_instance`` must re-raise
+    that specific exception unconditionally instead of routing through the
+    generic RuntimeError fallback path.
+    """
+    import transformation_portal.lux_depth_v3.segmentation.registry as registry_module
+    import transformation_portal.lux_depth_v3.segmentation.sam_vit_h as sam_module
+
+    monkeypatch.setattr(sam_module, "SAM_AVAILABLE", True)
+    monkeypatch.setattr(sam_module, "TORCH_AVAILABLE", True)
+    registry_module._get_sam_vit_h_instance.cache_clear()
+    registry_module._get_backend_instance.cache_clear()
+
+    checkpoint = tmp_path / SAMVitHBackend.CHECKPOINT_FILENAME
+    checkpoint.write_bytes(b"tampered checkpoint bytes - not the real SAM release")
+
+    with pytest.raises(RuntimeError, match="SHA-256 mismatch"):
+        registry_module._get_sam_vit_h_instance(
+            checkpoint_path=str(checkpoint),
+            expected_sha256=SAMVitHBackend.EXPECTED_SHA256,
+            device="cpu",
+            strict=False,  # critical: non-strict must NOT downgrade an integrity failure
+        )
+
+
+def test_sam_vit_h_checksum_mismatch_raises_dedicated_exception_class(tmp_path: Path):
+    """_validate_checkpoint_sha256 must raise SAMCheckpointIntegrityError
+    (a RuntimeError subclass) so the registry can distinguish integrity
+    failures from generic load failures."""
+    from transformation_portal.lux_depth_v3.segmentation.sam_vit_h import SAMCheckpointIntegrityError
+
+    checkpoint = tmp_path / SAMVitHBackend.CHECKPOINT_FILENAME
+    checkpoint.write_bytes(b"some bytes")
+
+    with pytest.raises(SAMCheckpointIntegrityError, match="SHA-256 mismatch"):
+        SAMVitHBackend._validate_checkpoint_sha256(checkpoint, "a" * 64)
+
+
+def test_sam_vit_h_missing_checkpoint_still_falls_back_to_stub_when_non_strict(tmp_path: Path, monkeypatch):
+    """A missing checkpoint (FileNotFoundError) must continue to fall back to
+    the stub backend in non-strict mode. Paired with the checksum-mismatch
+    test above to pin the policy boundary: integrity breaches fail closed,
+    missing artefacts degrade gracefully.
+    """
+    import transformation_portal.lux_depth_v3.segmentation.registry as registry_module
+    import transformation_portal.lux_depth_v3.segmentation.sam_vit_h as sam_module
+
+    monkeypatch.setattr(sam_module, "SAM_AVAILABLE", True)
+    monkeypatch.setattr(sam_module, "TORCH_AVAILABLE", True)
+    registry_module._get_sam_vit_h_instance.cache_clear()
+    registry_module._get_backend_instance.cache_clear()
+
+    # checkpoint_path points at a file that does not exist on disk
+    missing_checkpoint = tmp_path / "does_not_exist_sam_vit_h.pth"
+    assert not missing_checkpoint.exists()
+
+    backend = registry_module._get_sam_vit_h_instance(
+        checkpoint_path=str(missing_checkpoint),
+        expected_sha256=SAMVitHBackend.EXPECTED_SHA256,
+        device="cpu",
+        strict=False,
+    )
+
+    # Stub backend identity is what the registry returns from the fallback path.
+    assert isinstance(backend, StubBackend)
+
+
+def test_sam_vit_h_missing_checkpoint_raises_when_strict(tmp_path: Path, monkeypatch):
+    """In strict mode the missing-checkpoint path raises (no fallback)."""
+    import transformation_portal.lux_depth_v3.segmentation.registry as registry_module
+    import transformation_portal.lux_depth_v3.segmentation.sam_vit_h as sam_module
+
+    monkeypatch.setattr(sam_module, "SAM_AVAILABLE", True)
+    monkeypatch.setattr(sam_module, "TORCH_AVAILABLE", True)
+    registry_module._get_sam_vit_h_instance.cache_clear()
+    registry_module._get_backend_instance.cache_clear()
+
+    missing_checkpoint = tmp_path / "does_not_exist_sam_vit_h.pth"
+
+    with pytest.raises(RuntimeError, match="Failed to load sam_vit_h backend"):
+        registry_module._get_sam_vit_h_instance(
+            checkpoint_path=str(missing_checkpoint),
+            expected_sha256=SAMVitHBackend.EXPECTED_SHA256,
+            device="cpu",
+            strict=True,
+        )

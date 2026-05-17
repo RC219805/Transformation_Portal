@@ -24,7 +24,7 @@ from ._cache import (
 )
 from .efficient_sam import EfficientSAMBackend
 from .sam2 import SAM2SegmentationBackend
-from .sam_vit_h import SAMVitHBackend
+from .sam_vit_h import SAMCheckpointIntegrityError, SAMVitHBackend
 from .stub import StubBackend
 
 logger = logging.getLogger(__name__)
@@ -59,6 +59,13 @@ def _get_sam_vit_h_instance(
     )
     try:
         backend.load(device=device, expected_sha256=expected_sha256)
+    except SAMCheckpointIntegrityError as e:
+        # Fail closed unconditionally: a tampered or corrupted checkpoint must
+        # be a hard integrity failure regardless of strict mode. Silently
+        # falling back to the stub backend here would hide the integrity
+        # breach and let the pipeline emit non-segmentation output as if SAM
+        # ViT-H had succeeded.
+        raise RuntimeError(f"Failed to load sam_vit_h backend: {e}") from e
     except (FileNotFoundError, RuntimeError) as e:
         if strict:
             raise RuntimeError(f"Failed to load sam_vit_h backend: {e}") from e

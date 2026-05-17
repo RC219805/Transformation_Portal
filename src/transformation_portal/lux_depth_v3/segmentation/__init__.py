@@ -29,7 +29,7 @@ from ._cache import (
 from .efficient_sam import EfficientSAMBackend
 from .registry import _get_backend_instance, _get_sam_vit_h_instance, get_last_segmentation_runtime_metadata, segment_materials
 from .sam2 import SAM2SegmentationBackend
-from .sam_vit_h import SAMVitHBackend
+from .sam_vit_h import SAMCheckpointIntegrityError, SAMVitHBackend
 from .stub import StubBackend
 
 __all__ = [
@@ -37,6 +37,7 @@ __all__ = [
     "SAM2SegmentationBackend",
     "SAM2_AUTO_TILING_MAX_AREA_PX",
     "SAM2_AUTO_TILING_MAX_DIM_PX",
+    "SAMCheckpointIntegrityError",
     "SAMVitHBackend",
     "SEGMENTATION_CACHE_SCHEMA_VERSION",
     "StubBackend",
