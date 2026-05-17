@@ -1041,3 +1041,218 @@ class TestValidateLicensesScript:
 
         assert exit_code == 0
         assert "nested_preset.yaml" in captured.out
+
+
+class TestExtendsResolution:
+    """Tests for the ``extends:`` preset inheritance resolver."""
+
+    @staticmethod
+    def _write_yaml(path: Path, payload: dict) -> None:
+        path.write_text(yaml.safe_dump(payload, sort_keys=False), encoding="utf-8")
+
+    def test_basic_extends_merges_parent_fields(self, tmp_path):
+        parent = tmp_path / "parent.yaml"
+        child = tmp_path / "child.yaml"
+        self._write_yaml(
+            parent,
+            {
+                "name": "parent",
+                "tier": "stable",
+                "model": {"hf_id": "depth-anything/Depth-Anything-V3-Metric-Large-hf"},
+                "io": {"output_format": "png"},
+            },
+        )
+        self._write_yaml(child, {"extends": str(parent), "name": "child"})
+
+        merged = load_and_validate_preset(child)
+
+        assert merged["name"] == "child"
+        assert merged["tier"] == "stable"
+        assert merged["io"] == {"output_format": "png"}
+
+    def test_extends_child_overrides_parent_scalar(self, tmp_path):
+        parent = tmp_path / "parent.yaml"
+        child = tmp_path / "child.yaml"
+        self._write_yaml(
+            parent,
+            {
+                "name": "parent",
+                "tier": "stable",
+                "model": {"hf_id": "depth-anything/Depth-Anything-V3-Metric-Large-hf"},
+                "cache_size": 50,
+            },
+        )
+        self._write_yaml(child, {"extends": str(parent), "cache_size": 200})
+
+        merged = load_and_validate_preset(child)
+
+        assert merged["cache_size"] == 200
+
+    def test_extends_deep_merge_nested_dicts(self, tmp_path):
+        parent = tmp_path / "parent.yaml"
+        child = tmp_path / "child.yaml"
+        self._write_yaml(
+            parent,
+            {
+                "name": "parent",
+                "tier": "stable",
+                "model": {"hf_id": "depth-anything/Depth-Anything-V3-Metric-Large-hf"},
+                "processing": {"denoise": {"sigma": 1.0, "edge": 0.1}, "tone": "agx"},
+            },
+        )
+        self._write_yaml(
+            child,
+            {"extends": str(parent), "processing": {"denoise": {"sigma": 2.5}}},
+        )
+
+        merged = load_and_validate_preset(child)
+
+        assert merged["processing"]["denoise"]["sigma"] == 2.5
+        assert merged["processing"]["denoise"]["edge"] == 0.1
+        assert merged["processing"]["tone"] == "agx"
+
+    def test_extends_child_list_replaces_parent_list(self, tmp_path):
+        parent = tmp_path / "parent.yaml"
+        child = tmp_path / "child.yaml"
+        self._write_yaml(
+            parent,
+            {
+                "name": "parent",
+                "tier": "stable",
+                "model": {"hf_id": "depth-anything/Depth-Anything-V3-Metric-Large-hf"},
+                "zones": [1, 2, 3],
+            },
+        )
+        self._write_yaml(child, {"extends": str(parent), "zones": [9]})
+
+        merged = load_and_validate_preset(child)
+
+        assert merged["zones"] == [9]
+
+    def test_extends_missing_parent_raises_license_error(self, tmp_path):
+        child = tmp_path / "child.yaml"
+        self._write_yaml(child, {"extends": "does_not_exist_preset", "name": "child"})
+
+        with pytest.raises(LicenseRestrictionError, match="could not be resolved"):
+            load_and_validate_preset(child)
+
+    def test_extends_cycle_raises_license_error(self, tmp_path):
+        a = tmp_path / "a.yaml"
+        b = tmp_path / "b.yaml"
+        self._write_yaml(a, {"extends": str(b), "name": "a"})
+        self._write_yaml(b, {"extends": str(a), "name": "b"})
+
+        with pytest.raises(LicenseRestrictionError, match="Cycle detected"):
+            load_and_validate_preset(a)
+
+    def test_extends_three_level_chain_resolves(self, tmp_path):
+        grandparent = tmp_path / "gp.yaml"
+        parent = tmp_path / "parent.yaml"
+        child = tmp_path / "child.yaml"
+        self._write_yaml(
+            grandparent,
+            {
+                "name": "gp",
+                "tier": "stable",
+                "model": {"hf_id": "depth-anything/Depth-Anything-V3-Metric-Large-hf"},
+                "from_gp": True,
+            },
+        )
+        self._write_yaml(parent, {"extends": str(grandparent), "from_parent": True})
+        self._write_yaml(child, {"extends": str(parent), "from_child": True})
+
+        merged = load_and_validate_preset(child)
+
+        assert merged["from_gp"] is True
+        assert merged["from_parent"] is True
+        assert merged["from_child"] is True
+
+    def test_returned_dict_does_not_contain_extends_key(self, tmp_path):
+        parent = tmp_path / "parent.yaml"
+        child = tmp_path / "child.yaml"
+        self._write_yaml(
+            parent,
+            {
+                "name": "parent",
+                "tier": "stable",
+                "model": {"hf_id": "depth-anything/Depth-Anything-V3-Metric-Large-hf"},
+            },
+        )
+        self._write_yaml(child, {"extends": str(parent), "name": "child"})
+
+        merged = load_and_validate_preset(child)
+
+        assert "extends" not in merged
+
+    def test_extends_string_without_suffix_resolves_to_yaml(self, tmp_path):
+        parent = tmp_path / "apex_parent.yaml"
+        child = tmp_path / "child.yaml"
+        self._write_yaml(
+            parent,
+            {
+                "name": "apex_parent",
+                "tier": "stable",
+                "model": {"hf_id": "depth-anything/Depth-Anything-V3-Metric-Large-hf"},
+                "marker": "from_parent",
+            },
+        )
+        # Use bare name "apex_parent" — resolver should add .yaml suffix
+        self._write_yaml(child, {"extends": "apex_parent", "name": "child"})
+
+        merged = load_and_validate_preset(child)
+
+        assert merged["marker"] == "from_parent"
+
+    def test_extends_non_string_value_raises(self, tmp_path):
+        child = tmp_path / "child.yaml"
+        self._write_yaml(child, {"extends": ["a", "b"], "name": "child"})
+
+        with pytest.raises(LicenseRestrictionError, match="must be a non-empty string"):
+            load_and_validate_preset(child)
+
+    def test_extends_rejects_directory_target(self, tmp_path):
+        """If `extends:` resolves to a directory (not a file), the resolver
+        must skip it and report an unresolved error rather than letting the
+        caller fail later trying to open a directory as YAML."""
+        # Create a directory named like the candidate the resolver would try
+        dir_target = tmp_path / "parent.yaml"
+        dir_target.mkdir()
+        child = tmp_path / "child.yaml"
+        self._write_yaml(child, {"extends": str(dir_target.with_suffix("")), "name": "child"})
+
+        with pytest.raises(LicenseRestrictionError, match="could not be resolved"):
+            load_and_validate_preset(child)
+
+    def test_extends_skips_self_match_and_falls_through_to_config_presets(self, tmp_path):
+        """A bare-name `extends:` whose first candidate is the child itself must
+        skip the self-match and continue searching `config/presets/`.
+
+        This is the pattern used by `config/presets/experimental/sam2_segmentation.yaml`
+        which declares `extends: sam2_segmentation` intending the stable parent at
+        `config/presets/sam2_segmentation.yaml`, not itself.
+        """
+        # Simulate the directory layout by writing a parent into config/presets/
+        # via tmp + monkeypatch is heavy; just rely on the real-file integration
+        # test below to cover this on the shipped sam2 experimental preset.
+        repo_root = Path(__file__).resolve().parents[2]
+        child_path = repo_root / "config" / "presets" / "experimental" / "sam2_segmentation.yaml"
+        preset = load_and_validate_preset(child_path, allow_unattested_materials=True)
+        # Inherited from stable parent (config/presets/sam2_segmentation.yaml)
+        assert "model" in preset  # parent + child both populate this
+        # extends key was stripped
+        assert "extends" not in preset
+
+    def test_apex_research_canary_inherits_parent_segmentation_block(self):
+        """Real-file integration: apex_research_canary.yaml must merge with apex_research.yaml."""
+        repo_root = Path(__file__).resolve().parents[2]
+        canary_path = repo_root / "config" / "presets" / "apex_research_canary.yaml"
+
+        preset = load_and_validate_preset(canary_path)
+
+        # Inherited from parent (apex_research.yaml)
+        assert preset["segmentation"]["model_variant"] == "vit_h"
+        assert preset["compliance"]["non_commercial_ok"] is True
+        # Child override
+        assert preset["depth_backend"] == "da3_1.1_nested_giant_large"
+        # extends key stripped
+        assert "extends" not in preset

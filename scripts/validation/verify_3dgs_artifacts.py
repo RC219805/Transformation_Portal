@@ -52,13 +52,15 @@ except ImportError:
 
 # Constants
 MANIFEST_PATH = Path("config/model_lock_manifest.yaml")
-PENDING_MARKERS = frozenset({
-    "PENDING_CANONICAL_URL",
-    "PENDING_VERIFICATION",
-    "PENDING",
-    "TBD",
-    "TODO",
-})
+PENDING_MARKERS = frozenset(
+    {
+        "PENDING_CANONICAL_URL",
+        "PENDING_VERIFICATION",
+        "PENDING",
+        "TBD",
+        "TODO",
+    }
+)
 
 
 def load_manifest(manifest_path: Path) -> dict[str, Any] | None:
@@ -97,11 +99,7 @@ def is_pending(value: Any) -> bool:
     return False
 
 
-def verify_attestation_entry(
-    name: str,
-    entry: dict[str, Any],
-    strict: bool = False
-) -> tuple[list[str], list[str]]:
+def verify_attestation_entry(name: str, entry: dict[str, Any], strict: bool = False) -> tuple[list[str], list[str]]:
     """Verify a single artifact attestation entry.
 
     Args:
@@ -121,6 +119,13 @@ def verify_attestation_entry(
         else:
             warnings.append(msg)
 
+    # Source-only attestations (git_release with no binary artifacts) are the
+    # legitimate shape for upstreams like Inria graphdeco-inria/gaussian-splatting
+    # that distribute source code, not weights. They pin a commit but carry
+    # `artifacts: []` and `verification.method: source_commit`.
+    source_type = entry.get("source_type")
+    is_source_only = source_type == "git_release"
+
     # Check source_url
     source_url = entry.get("source_url")
     if is_pending(source_url):
@@ -135,14 +140,16 @@ def verify_attestation_entry(
     elif not isinstance(source_commit, str):
         errors.append(f"[{name}] source_commit_or_tag must be a string, got: {type(source_commit).__name__}")
 
-    # Check artifacts list
+    # Check artifacts list. For source-only (git_release) attestations, an
+    # empty list is the canonical shape — no binary artifacts to verify.
     artifacts = entry.get("artifacts")
     if artifacts is None:
         errors.append(f"[{name}] 'artifacts' list is missing")
     elif not isinstance(artifacts, list):
         errors.append(f"[{name}] 'artifacts' must be a list, got: {type(artifacts).__name__}")
     elif len(artifacts) == 0:
-        add_issue(f"[{name}] 'artifacts' list is empty")
+        if not is_source_only:
+            add_issue(f"[{name}] 'artifacts' list is empty")
     else:
         for i, artifact in enumerate(artifacts):
             if not isinstance(artifact, dict):
@@ -158,9 +165,7 @@ def verify_attestation_entry(
             elif isinstance(sha256, str):
                 # Validate SHA256 format (64 hex characters)
                 if len(sha256) != 64 or not all(c in "0123456789abcdefABCDEF" for c in sha256):
-                    errors.append(
-                        f"[{name}] {filename}: sha256 is not a valid 64-character hex string: {sha256!r}"
-                    )
+                    errors.append(f"[{name}] {filename}: sha256 is not a valid 64-character hex string: {sha256!r}")
             else:
                 errors.append(f"[{name}] {filename}: sha256 must be a string, got: {type(sha256).__name__}")
 
@@ -169,20 +174,24 @@ def verify_attestation_entry(
             if filesize is None:
                 add_issue(f"[{name}] {filename}: filesize_bytes is null (not yet verified)")
             elif not isinstance(filesize, int):
-                errors.append(
-                    f"[{name}] {filename}: filesize_bytes must be an integer, got: {type(filesize).__name__}"
-                )
+                errors.append(f"[{name}] {filename}: filesize_bytes must be an integer, got: {type(filesize).__name__}")
             elif filesize <= 0:
                 errors.append(f"[{name}] {filename}: filesize_bytes must be positive, got: {filesize}")
 
-    # Check verification section
+    # Check verification section. `source_commit` is the method used by
+    # source-only attestations (git_release shape, no binary artifacts).
     verification = entry.get("verification")
     if verification is not None:
         if not isinstance(verification, dict):
             errors.append(f"[{name}] 'verification' must be a dict, got: {type(verification).__name__}")
         else:
             method = verification.get("method")
-            valid_methods = {"sha256_only", "sha256+source_commit", "reproducibility_trial"}
+            valid_methods = {
+                "sha256_only",
+                "sha256+source_commit",
+                "source_commit",
+                "reproducibility_trial",
+            }
             if method not in valid_methods:
                 errors.append(f"[{name}] verification.method must be one of {valid_methods}, got: {method!r}")
 
@@ -206,10 +215,7 @@ def compute_sha256(filepath: Path) -> str | None:
         return None
 
 
-def verify_actual_files(
-    attestation: dict[str, dict[str, Any]],
-    checkpoint_dir: Path
-) -> tuple[int, int, int]:
+def verify_actual_files(attestation: dict[str, dict[str, Any]], checkpoint_dir: Path) -> tuple[int, int, int]:
     """Verify actual checkpoint files against manifest attestation.
 
     Args:
@@ -330,35 +336,22 @@ Examples:
 
     # Specify custom checkpoint directory
     python scripts/validation/verify_3dgs_artifacts.py --check-files --checkpoint-dir ./models/3dgs
-        """
+        """,
     )
+    parser.add_argument("--strict", action="store_true", help="Treat pending/unverified fields as errors (exit code 2)")
     parser.add_argument(
-        "--strict",
-        action="store_true",
-        help="Treat pending/unverified fields as errors (exit code 2)"
-    )
-    parser.add_argument(
-        "--check-files",
-        action="store_true",
-        help="Also verify actual checkpoint files against manifest hashes"
+        "--check-files", action="store_true", help="Also verify actual checkpoint files against manifest hashes"
     )
     parser.add_argument(
         "--checkpoint-dir",
         type=Path,
         default=Path("checkpoints"),
-        help="Directory containing checkpoint files (default: checkpoints/)"
+        help="Directory containing checkpoint files (default: checkpoints/)",
     )
     parser.add_argument(
-        "--manifest",
-        type=Path,
-        default=MANIFEST_PATH,
-        help=f"Path to model lock manifest (default: {MANIFEST_PATH})"
+        "--manifest", type=Path, default=MANIFEST_PATH, help=f"Path to model lock manifest (default: {MANIFEST_PATH})"
     )
-    parser.add_argument(
-        "--quiet",
-        action="store_true",
-        help="Suppress guidance output on warnings"
-    )
+    parser.add_argument("--quiet", action="store_true", help="Suppress guidance output on warnings")
     args = parser.parse_args(argv)
 
     print("━" * 70)
@@ -381,11 +374,11 @@ Examples:
         print("  artifact_attestation:")
         print("    gaussian_splatting:")
         print("      backend: inria_graphdeco")
-        print("      source_url: \"https://...\"")
-        print("      source_commit_or_tag: \"v1.0\"")
+        print('      source_url: "https://..."')
+        print('      source_commit_or_tag: "v1.0"')
         print("      artifacts:")
-        print("        - filename: \"model.pt\"")
-        print("          sha256: \"abc123...\"")
+        print('        - filename: "model.pt"')
+        print('          sha256: "abc123..."')
         print("          filesize_bytes: 12345678")
         return 2
 
@@ -456,9 +449,7 @@ Examples:
         else:
             print(f"Scanning: {args.checkpoint_dir}")
             print()
-            file_verified, file_mismatched, file_missing = verify_actual_files(
-                attestation, args.checkpoint_dir
-            )
+            file_verified, file_mismatched, file_missing = verify_actual_files(attestation, args.checkpoint_dir)
             print()
 
     # Print summary

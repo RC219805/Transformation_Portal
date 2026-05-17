@@ -45,8 +45,13 @@ segmentation_backend: sam_vit_h
 segmentation:
   model_variant: vit_h
   checkpoint_path: checkpoints/sam_vit_h_4b8939.pth
-  # SHA256 placeholder — update with actual SAM vit_h checkpoint hash
-  expected_sha256: "4b8939a88964f0f4ff5f5b2642c598a6fe38d5b7b5f5b2642c598a6fe38d5b7b"
+  # Previous value was a bogus 64-char string padded from the filename prefix
+  # (4b8939…). Replaced with an explicit PENDING_VERIFICATION marker so the
+  # validators fail closed until the real SHA256 is fetched from upstream:
+  #   https://dl.fbaipublicfiles.com/segment_anything/sam_vit_h_4b8939.pth
+  # (upstream verification could not be completed in the audit sandbox; the
+  # outbound host was blocked by the environment network policy).
+  expected_sha256: "PENDING_VERIFICATION"
   confidence_threshold: 0.85  # Higher threshold for research-grade quality
   device: auto
 

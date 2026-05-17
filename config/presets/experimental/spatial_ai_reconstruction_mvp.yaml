@@ -32,9 +32,12 @@ pipeline:
 backend:
   type: gaussian_splatting
   model:
+    # Upstream is a GitHub repo (not HuggingFace). Pin to a 40-char commit
+    # SHA from https://api.github.com/repos/graphdeco-inria/gaussian-splatting/commits/main
+    # before promoting this preset to production (upstream verification was
+    # blocked by the audit-sandbox network policy).
     repo_id: "graphdeco-inria/gaussian-splatting"
-    # IMPORTANT: Replace with verified commit hash before production use
-    revision: "NEEDS_VERIFICATION_0000000000000000000000"
+    revision: "PENDING_VERIFICATION"  # MUST be pinned to a 40-hex commit SHA before use
     cache_dir: null
 
   device: auto  # auto-detect: cuda > mps > cpu

@@ -532,6 +532,89 @@ class TestFileNotFound:
         assert report.issues[0].category == "file_missing"
 
 
+class TestShippedExperimentalPresetsPlaceholderInventory:
+    """Regression: only known-flagged experimental files may carry PENDING_VERIFICATION.
+
+    The audit-sandbox network policy blocked upstream SHA256/commit verification
+    for several presets, so those entries were migrated from the bogus
+    ``NEEDS_VERIFICATION_0000…`` / ``PLACEHOLDER_UPDATE_WHEN_INTEGRATED`` markers
+    to explicit ``PENDING_VERIFICATION`` (consistent with model_lock_manifest).
+    This test pins which files are still allowed to carry placeholders, so the
+    list shrinks (not grows) as verifications get unblocked.
+
+    Both checks parse YAML and walk string *values* so that comments mentioning
+    the sentinel strings don't produce false positives.
+    """
+
+    # Files explicitly allowed to ship with PENDING_VERIFICATION markers until
+    # the corresponding upstream artifact is fetched and pinned.
+    _ALLOWED_PLACEHOLDER_FILES = {
+        "apex_research.yaml",  # SAM ViT-H SHA256 (upstream blocked)
+        "apex_research_ultra.yaml",  # SAM2 + DepthCrafter + MaterialGAN
+        "nvdiffrec_reconstruction.yaml",  # NVlabs/nvdiffrec commit
+        "gaussian_splat_3d.yaml",  # graphdeco-inria/gaussian-splatting commit
+        "spatial_ai_reconstruction_mvp.yaml",  # graphdeco-inria/gaussian-splatting commit
+    }
+
+    @staticmethod
+    def _iter_string_values(node):
+        """Yield every string scalar reached by walking a parsed YAML tree."""
+        if isinstance(node, str):
+            yield node
+        elif isinstance(node, dict):
+            for v in node.values():
+                yield from TestShippedExperimentalPresetsPlaceholderInventory._iter_string_values(v)
+        elif isinstance(node, list):
+            for v in node:
+                yield from TestShippedExperimentalPresetsPlaceholderInventory._iter_string_values(v)
+
+    def test_experimental_presets_have_no_legacy_placeholder_strings(self):
+        """No experimental preset may still carry the legacy NEEDS_VERIFICATION_0000…
+        or PLACEHOLDER_UPDATE_WHEN_INTEGRATED markers in any string *value* — they
+        were migrated to the unified PENDING_VERIFICATION sentinel. Comments are
+        ignored (YAML safe_load discards them)."""
+        repo_root = Path(__file__).resolve().parents[1]
+        experimental_dir = repo_root / "config" / "presets" / "experimental"
+        legacy_markers = ("NEEDS_VERIFICATION_0", "PLACEHOLDER_UPDATE_WHEN_INTEGRATED")
+
+        offenders: list[tuple[str, str]] = []
+        for preset_path in sorted(experimental_dir.glob("*.yaml")):
+            data = yaml.safe_load(preset_path.read_text(encoding="utf-8"))
+            for value in self._iter_string_values(data):
+                for marker in legacy_markers:
+                    if marker in value:
+                        offenders.append((preset_path.name, marker))
+                        break
+
+        assert not offenders, (
+            f"Legacy placeholder markers still present in experimental presets: {offenders}. "
+            f"Migrate them to PENDING_VERIFICATION (matching model_lock_manifest)."
+        )
+
+    def test_only_allowlisted_presets_carry_pending_verification(self):
+        """The set of presets carrying PENDING_VERIFICATION in their parsed YAML
+        *values* (not in comments) must not grow without an explicit allowlist update."""
+        repo_root = Path(__file__).resolve().parents[1]
+        scan_dirs = [
+            repo_root / "config" / "presets",
+            repo_root / "config" / "presets" / "experimental",
+        ]
+        offenders: list[str] = []
+        for d in scan_dirs:
+            if not d.exists():
+                continue
+            for preset_path in sorted(d.glob("*.yaml")):
+                data = yaml.safe_load(preset_path.read_text(encoding="utf-8"))
+                has_sentinel = any(value.strip().upper() == "PENDING_VERIFICATION" for value in self._iter_string_values(data))
+                if has_sentinel and preset_path.name not in self._ALLOWED_PLACEHOLDER_FILES:
+                    offenders.append(preset_path.name)
+
+        assert not offenders, (
+            f"Unexpected presets carrying PENDING_VERIFICATION: {offenders}. "
+            f"Either pin the real value or add to _ALLOWED_PLACEHOLDER_FILES."
+        )
+
+
 # Pytest markers
 pytestmark = [
     pytest.mark.unit,

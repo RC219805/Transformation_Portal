@@ -102,7 +102,7 @@ stages:
   grading:
     lut:
       enabled: false
-      path: assets/luts/film_emulation/Kodak_2393.cube
+      path: assets/luts/film_emulation/Kodak/Kodak_2393_D55.cube
       intensity: 0.8
     tone_curve: agx  # agx, agx-high, filmic, reinhard
     exposure: 0.0
@@ -157,7 +157,7 @@ presets:
       grading:
         enabled: true
         lut:
-          path: assets/luts/film_emulation/Kodak_2393.cube
+          path: assets/luts/film_emulation/Kodak/Kodak_2393_D55.cube
           intensity: 0.8
         contrast: 1.12
         saturation: 1.08
@@ -210,7 +210,7 @@ presets:
       grading:
         enabled: true
         lut:
-          path: assets/luts/location_aesthetic/California_Golden_Hour.cube
+          path: assets/luts/location_aesthetic/California/Montecito_Golden_Hour_HDR.cube
         temperature: 15
         saturation: 1.10
       finishing:
@@ -272,7 +272,7 @@ presets:
       grading:
         enabled: true
         lut:
-          path: assets/luts/location_aesthetic/Mediterranean_Blue.cube
+          path: assets/luts/location_aesthetic/Mediterranean/Spanish_Colonial_Warm_HDR.cube
         saturation: 1.15
         vibrance: 0.10
       finishing:

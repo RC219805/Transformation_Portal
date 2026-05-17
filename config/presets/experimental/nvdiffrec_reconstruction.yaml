@@ -35,11 +35,14 @@ pipeline:
 backend:
   type: nvdiffrec
   model:
-    # IMPORTANT: Replace with verified commit hash before production
-    # The NVlabs repo should be mirrored to HuggingFace for provenance
-    # NOTE: These are PLACEHOLDER values that will be caught by backend validation
-    repo_id: "nvidia/nvdiffrec"
-    revision: "NEEDS_VERIFICATION_0000000000000000000000"  # MUST be pinned before use
+    # Upstream is NVlabs/nvdiffrec (matches the license URL on line 5).
+    # Previous repo_id was the incorrect "nvidia/nvdiffrec".
+    # Pin the revision to a 40-char commit SHA from
+    #   https://api.github.com/repos/NVlabs/nvdiffrec/commits/main
+    # before promoting this preset to production (upstream verification was
+    # blocked by the audit-sandbox network policy).
+    repo_id: "NVlabs/nvdiffrec"
+    revision: "PENDING_VERIFICATION"  # MUST be pinned to a 40-hex commit SHA before use
     cache_dir: null
 
   # CUDA required (NVDIFFREC uses compiled kernels)

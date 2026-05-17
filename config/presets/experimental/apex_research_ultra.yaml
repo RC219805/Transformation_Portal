@@ -88,10 +88,14 @@ depth:
       device: auto
 
     # Tertiary: DepthCrafter (temporal consistency for video)
+    # NOTE: No canonical "depthcrafter_v1.pt" artifact is published upstream;
+    # Tencent ARC releases under `Tencent/DepthCrafter` on Hugging Face with
+    # filenames that vary per release. Replace expected_sha256 (and possibly
+    # checkpoint path) when the project pins a specific upstream artifact.
     - name: depthcrafter
       weight: 0.2
       checkpoint: checkpoints/depthcrafter_v1.pt
-      expected_sha256: "PLACEHOLDER_UPDATE_WHEN_INTEGRATED"
+      expected_sha256: "PENDING_VERIFICATION"
       license: apache_2.0
       device: auto
 
@@ -118,7 +122,11 @@ segmentation:
 
   model:
     checkpoint: checkpoints/sam2_hiera_l.pt
-    expected_sha256: "PLACEHOLDER_UPDATE_WHEN_INTEGRATED"
+    # SHA256 verification deferred — upstream URL
+    #   https://dl.fbaipublicfiles.com/segment_anything_2/072824/sam2_hiera_large.pt
+    # was blocked by the audit-sandbox network policy. Replace with the real
+    # 64-char hex hash when fetched from upstream.
+    expected_sha256: "PENDING_VERIFICATION"
     device: auto
 
   # Temporal propagation (video)
@@ -136,8 +144,11 @@ materials:
   backend: materialgan  # or "nvdiffrec" for hero shots
 
   model:
+    # NOTE: The original MaterialGAN authors do not publish a "v2" weights
+    # release; the canonical artifact source for this project is not yet
+    # decided. Pin checkpoint path + expected_sha256 once a source is chosen.
     checkpoint: checkpoints/materialgan_v2.pth
-    expected_sha256: "PLACEHOLDER_UPDATE_WHEN_INTEGRATED"
+    expected_sha256: "PENDING_VERIFICATION"
     device: auto
 
   # Use geometric normals (from depth) for better accuracy

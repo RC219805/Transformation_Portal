@@ -162,26 +162,28 @@ repositories:
 
 # Note: SAM2 and LLaVA revisions pinned on 2026-03-27 via huggingface_hub API.
 
-# --- 3DGS Artifact Attestation ---
-# Note: 3DGS artifacts require source-attestation verification, not just HF model lock.
-# These entries track the verification framework; exact artifacts pending Inria release.
+# --- 3DGS Source Attestation ---
+# Note: The Inria gaussian-splatting upstream distributes source code, not a
+# binary checkpoint. There is no "gaussian_splatting_base.pt" artifact released
+# by graphdeco-inria. The previous direct_checkpoint entry attesting one was
+# inaccurate. This block now attests the source repository commit instead.
 artifact_attestation:
   gaussian_splatting:
     backend: inria_graphdeco
-    source_type: direct_checkpoint  # git_release | direct_checkpoint | local_import
-    source_url: "PENDING_CANONICAL_URL"  # Exact URL pending Inria verification
+    source_type: git_release  # git_release | direct_checkpoint | local_import
+    source_url: "https://github.com/graphdeco-inria/gaussian-splatting"
+    # Pin to a 40-hex commit SHA before promoting to production:
+    #   https://api.github.com/repos/graphdeco-inria/gaussian-splatting/commits/main
+    # (Upstream verification was blocked by the audit-sandbox network policy.)
     source_commit_or_tag: "PENDING_VERIFICATION"
-    artifacts:
-      - filename: "gaussian_splatting_base.pt"
-        sha256: "PENDING_VERIFICATION"
-        filesize_bytes: null  # null = not yet verified; validation should fail on null
+    artifacts: []  # No binary release; source-only attestation
     verification:
-      method: sha256+source_commit  # sha256_only | sha256+source_commit | reproducibility_trial
+      method: source_commit  # sha256_only | sha256+source_commit | source_commit | reproducibility_trial
       required: true
       notes: |
-        3DGS revision verification requires verifying the full revision tuple:
-        - code revision
-        - rasterizer backend revision
-        - optimizer behavior
+        3DGS source verification pins the upstream code revision. Runtime
+        reproducibility additionally depends on:
+        - rasterizer backend revision (diff-gaussian-rasterization commit)
+        - optimizer behavior (PyTorch + CUDA versions)
         - serialization format of splat params
         See: scripts/validation/verify_3dgs_artifacts.py
