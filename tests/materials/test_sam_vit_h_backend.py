@@ -517,3 +517,101 @@ def test_get_runtime_metadata_after_mock_load():
     assert meta is not None
     assert meta["backend"] == "sam_vit_h"
     assert meta["device"] == "cpu"
+
+
+# =============================================================================
+# 10. Pinned-checkpoint enforcement (apex_research preset cross-reference)
+# =============================================================================
+
+_PINNED_SAM_VIT_H_SHA256 = "a7bf3b02f3ebf1267aba913ff637d9a2d5c33d3173bb679e46d9f338c26f262e"
+
+
+def test_sam_vit_h_expected_sha256_is_pinned():
+    """SAMVitHBackend.EXPECTED_SHA256 must be the pinned canonical Meta release hash.
+
+    The runtime constant is the fail-closed default: callers that do not
+    populate EnhanceConfig.sam_vit_h_expected_sha256 still get checksum
+    validation against the official checkpoint bytes served by CHECKPOINT_URL.
+    """
+    assert SAMVitHBackend.EXPECTED_SHA256 == _PINNED_SAM_VIT_H_SHA256
+
+
+def test_sam_vit_h_expected_sha256_matches_apex_research_preset():
+    """The backend default hash must match config/presets/apex_research.yaml.
+
+    Drift between the runtime constant and the shipped preset would give
+    operators conflicting checksum guidance and silently weaken the
+    fail-closed posture. Parse the preset YAML directly rather than the
+    inheritance-merged form so this test stays decoupled from preset loaders.
+    """
+    import yaml
+
+    repo_root = Path(__file__).resolve().parents[2]
+    preset_path = repo_root / "config" / "presets" / "apex_research.yaml"
+    with preset_path.open(encoding="utf-8") as fp:
+        # YAML_GOVERNANCE_EXEMPT: contract test reads a single preset for cross-reference.
+        preset = yaml.safe_load(fp)
+    preset_hash = preset["segmentation"]["expected_sha256"]
+    assert preset_hash == SAMVitHBackend.EXPECTED_SHA256, (
+        f"apex_research.yaml segmentation.expected_sha256 ({preset_hash!r}) "
+        f"drifted from SAMVitHBackend.EXPECTED_SHA256 ({SAMVitHBackend.EXPECTED_SHA256!r}). "
+        "Update both together."
+    )
+
+
+def test_sam_vit_h_load_invokes_validation_against_class_default(tmp_path: Path, monkeypatch):
+    """load() must invoke _validate_checkpoint_sha256 with the class default
+    when no explicit expected_sha256 is supplied, so tampered checkpoint bytes
+    fail closed even when callers leave EnhanceConfig.sam_vit_h_expected_sha256 unset.
+    """
+    import transformation_portal.lux_depth_v3.segmentation.sam_vit_h as sam_module
+
+    monkeypatch.setattr(sam_module, "SAM_AVAILABLE", True)
+    monkeypatch.setattr(sam_module, "TORCH_AVAILABLE", True)
+
+    checkpoint = tmp_path / SAMVitHBackend.CHECKPOINT_FILENAME
+    checkpoint.write_bytes(b"tampered checkpoint bytes - not the real SAM release")
+
+    captured: Dict[str, object] = {}
+
+    def fake_validate(path, expected):
+        captured["path"] = Path(path)
+        captured["expected"] = expected
+        raise RuntimeError(f"SHA-256 mismatch: expected {expected}, got tampered")
+
+    monkeypatch.setattr(SAMVitHBackend, "_validate_checkpoint_sha256", staticmethod(fake_validate))
+
+    backend = SAMVitHBackend(checkpoint_path=str(checkpoint))
+    with pytest.raises(RuntimeError, match="SHA-256 mismatch"):
+        backend.load(device="cpu")
+
+    assert captured["path"].resolve() == checkpoint.resolve()
+    assert captured["expected"] == _PINNED_SAM_VIT_H_SHA256
+
+
+def test_sam_vit_h_load_explicit_expected_sha256_overrides_class_default(tmp_path: Path, monkeypatch):
+    """An explicit expected_sha256 argument must take precedence over the
+    class-level EXPECTED_SHA256 (preserves the override path documented on
+    the backend so fine-tuned checkpoints remain usable)."""
+    import transformation_portal.lux_depth_v3.segmentation.sam_vit_h as sam_module
+
+    monkeypatch.setattr(sam_module, "SAM_AVAILABLE", True)
+    monkeypatch.setattr(sam_module, "TORCH_AVAILABLE", True)
+
+    checkpoint = tmp_path / SAMVitHBackend.CHECKPOINT_FILENAME
+    checkpoint.write_bytes(b"fine-tuned checkpoint bytes")
+
+    captured: Dict[str, object] = {}
+    override_hash = "b" * 64
+
+    def fake_validate(path, expected):
+        captured["expected"] = expected
+        raise RuntimeError("stop after validation call")
+
+    monkeypatch.setattr(SAMVitHBackend, "_validate_checkpoint_sha256", staticmethod(fake_validate))
+
+    backend = SAMVitHBackend(checkpoint_path=str(checkpoint))
+    with pytest.raises(RuntimeError, match="stop after validation call"):
+        backend.load(device="cpu", expected_sha256=override_hash)
+
+    assert captured["expected"] == override_hash
