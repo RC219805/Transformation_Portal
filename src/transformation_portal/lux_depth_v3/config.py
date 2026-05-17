@@ -431,9 +431,11 @@ class EnhanceConfig:
     sam_vit_h_points_per_side: int = 32
     sam_vit_h_pred_iou_thresh: float = 0.88
     sam_vit_h_confidence_threshold: float = 0.85
-    # Optional SHA-256 hex digest for checkpoint integrity validation.
-    # None disables validation (default). Provide the hash to fail closed
-    # on corrupted or tampered checkpoints.
+    # Optional SHA-256 hex digest override for checkpoint integrity validation.
+    # None falls through to SAMVitHBackend.EXPECTED_SHA256, the pinned canonical
+    # SAM ViT-H release hash, so the runtime is fail-closed by default. Set this
+    # explicitly only when loading an approved fine-tuned or custom checkpoint
+    # whose digest differs from the canonical Meta release.
     sam_vit_h_expected_sha256: Optional[str] = None
 
     # Emit flags (deliverables)
