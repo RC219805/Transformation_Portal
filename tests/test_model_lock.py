@@ -427,6 +427,6 @@ def test_artifact_attestation_gaussian_splatting_uses_source_only_shape() -> Non
     assert gs["verification"]["method"] == "source_commit"
 
     commit = gs["source_commit_or_tag"]
-    assert commit == "PENDING_VERIFICATION" or re.fullmatch(r"[0-9a-f]{40}", commit), (
-        f"source_commit_or_tag must be PENDING_VERIFICATION or a 40-hex commit SHA, got {commit!r}"
-    )
+    assert commit == "PENDING_VERIFICATION" or re.fullmatch(
+        r"[0-9a-f]{40}", commit
+    ), f"source_commit_or_tag must be PENDING_VERIFICATION or a 40-hex commit SHA, got {commit!r}"

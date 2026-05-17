@@ -708,9 +708,7 @@ def _resolve_extends_target(extends_value: str, child_path: Path) -> Path:
     )
 
 
-def _load_with_extends(
-    preset_path: Path, _visited: Optional[Set[Path]] = None
-) -> Dict[str, Any]:
+def _load_with_extends(preset_path: Path, _visited: Optional[Set[Path]] = None) -> Dict[str, Any]:
     """Load a preset and recursively merge any ``extends:`` parents.
 
     Returns the merged dict with the ``extends`` key stripped. Detects cycles
@@ -720,8 +718,7 @@ def _load_with_extends(
     resolved = preset_path.resolve()
     if resolved in visited:
         raise LicenseRestrictionError(
-            f"Cycle detected in preset `extends:` chain at {resolved}. "
-            f"Visited: {sorted(str(p) for p in visited)}"
+            f"Cycle detected in preset `extends:` chain at {resolved}. " f"Visited: {sorted(str(p) for p in visited)}"
         )
     visited.add(resolved)
 
@@ -736,9 +733,7 @@ def _load_with_extends(
     if parent_ref is None:
         return data
     if not isinstance(parent_ref, str) or not parent_ref.strip():
-        raise LicenseRestrictionError(
-            f"`extends:` in {preset_path} must be a non-empty string, got {parent_ref!r}."
-        )
+        raise LicenseRestrictionError(f"`extends:` in {preset_path} must be a non-empty string, got {parent_ref!r}.")
 
     parent_path = _resolve_extends_target(parent_ref, preset_path)
     parent_data = _load_with_extends(parent_path, visited)

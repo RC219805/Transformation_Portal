@@ -546,11 +546,11 @@ class TestShippedExperimentalPresetsPlaceholderInventory:
     # Files explicitly allowed to ship with PENDING_VERIFICATION markers until
     # the corresponding upstream artifact is fetched and pinned.
     _ALLOWED_PLACEHOLDER_FILES = {
-        "apex_research.yaml",                      # SAM ViT-H SHA256 (upstream blocked)
-        "apex_research_ultra.yaml",                # SAM2 + DepthCrafter + MaterialGAN
-        "nvdiffrec_reconstruction.yaml",           # NVlabs/nvdiffrec commit
-        "gaussian_splat_3d.yaml",                  # graphdeco-inria/gaussian-splatting commit
-        "spatial_ai_reconstruction_mvp.yaml",      # graphdeco-inria/gaussian-splatting commit
+        "apex_research.yaml",  # SAM ViT-H SHA256 (upstream blocked)
+        "apex_research_ultra.yaml",  # SAM2 + DepthCrafter + MaterialGAN
+        "nvdiffrec_reconstruction.yaml",  # NVlabs/nvdiffrec commit
+        "gaussian_splat_3d.yaml",  # graphdeco-inria/gaussian-splatting commit
+        "spatial_ai_reconstruction_mvp.yaml",  # graphdeco-inria/gaussian-splatting commit
     }
 
     def test_experimental_presets_have_no_legacy_placeholder_strings(self):
