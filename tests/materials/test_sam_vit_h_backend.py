@@ -615,3 +615,127 @@ def test_sam_vit_h_load_explicit_expected_sha256_overrides_class_default(tmp_pat
         backend.load(device="cpu", expected_sha256=override_hash)
 
     assert captured["expected"] == override_hash
+
+
+# =============================================================================
+# 11. Segmentation cache cannot bypass pinned hash validation
+# =============================================================================
+
+
+def test_segmentation_cache_key_records_effective_sam_vit_h_hash(sample_image: np.ndarray, monkeypatch):
+    """Cache keys for the sam_vit_h backend must record the effective hash
+    (EnhanceConfig override or SAMVitHBackend.EXPECTED_SHA256 fallback), not
+    the raw config value. Without this substitution, cache entries written
+    before the class default became fail-closed would still match a current
+    lookup (EnhanceConfig.sam_vit_h_expected_sha256 still defaults to None),
+    letting segment_materials() replay cached masks without ever triggering
+    _validate_checkpoint_sha256() on the underlying checkpoint bytes.
+    """
+    import transformation_portal.lux_depth_v3.segmentation as seg_pkg
+    import transformation_portal.lux_depth_v3.segmentation.registry as registry_module
+    import transformation_portal.lux_depth_v3.segmentation_backend as seg_module
+
+    captured: Dict[str, object] = {}
+    original_build = registry_module._build_segmentation_cache_key
+
+    def spy_build(**kwargs):
+        captured.update(kwargs)
+        return original_build(**kwargs)
+
+    monkeypatch.setattr(registry_module, "_build_segmentation_cache_key", spy_build)
+    monkeypatch.setattr(seg_pkg, "_build_segmentation_cache_key", spy_build)
+    # Force a cache miss so the test does not depend on filesystem state.
+    monkeypatch.setattr(registry_module, "_read_cached_material_masks", lambda **_: None)
+    monkeypatch.setattr(registry_module, "_write_cached_material_masks", lambda **_: None)
+
+    class FakeSAMVitHBackend:
+        info = SegmentationBackendInfo("SAM ViT-H", "facebook/sam-vit-huge", requires_weights=True)
+        _device = "cpu"
+
+        def segment(self, img: np.ndarray) -> Dict[str, Tuple[np.ndarray, float]]:
+            mask = np.zeros(img.shape[:2], dtype=np.float32)
+            mask[5:20, 5:20] = 1.0
+            return {"glass": (mask, 0.91)}
+
+        def get_runtime_metadata(self):
+            return {"backend": "sam_vit_h"}
+
+    monkeypatch.setattr(seg_module, "_get_backend_instance", lambda *a, **kw: FakeSAMVitHBackend())
+    monkeypatch.setattr(registry_module, "_get_backend_instance", lambda *a, **kw: FakeSAMVitHBackend())
+
+    config = EnhanceConfig(
+        enable_material_segmentation=True,
+        material_segmentation_backend="sam_vit_h",
+        depth_device="cpu",
+        # Leave sam_vit_h_expected_sha256 at its default (None) — the cache key
+        # must still record the pinned class default, not None.
+        material_segmentation_cache_policy="read_write",
+    )
+
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as tmp:
+        segment_materials(sample_image, config, cache_dir=Path(tmp))
+
+    assert "sam_vit_h_expected_sha256" in captured, (
+        "Cache key builder was not invoked; the regression test is no longer wired in correctly."
+    )
+    assert captured["sam_vit_h_expected_sha256"] == SAMVitHBackend.EXPECTED_SHA256, (
+        f"Cache key recorded sam_vit_h_expected_sha256={captured['sam_vit_h_expected_sha256']!r}; "
+        f"expected the pinned class default {SAMVitHBackend.EXPECTED_SHA256!r} so legacy "
+        "cache entries written with None do not silently bypass integrity validation."
+    )
+    assert captured["sam_vit_h_expected_sha256"] is not None
+
+
+def test_segmentation_cache_key_preserves_other_backends(sample_image: np.ndarray, monkeypatch):
+    """The effective-hash substitution must be scoped to the sam_vit_h backend
+    so cache entries for unrelated backends (efficientsam, sam2, stub) are not
+    invalidated by this fix."""
+    import transformation_portal.lux_depth_v3.segmentation as seg_pkg
+    import transformation_portal.lux_depth_v3.segmentation.registry as registry_module
+    import transformation_portal.lux_depth_v3.segmentation_backend as seg_module
+
+    captured: Dict[str, object] = {}
+    original_build = registry_module._build_segmentation_cache_key
+
+    def spy_build(**kwargs):
+        captured.update(kwargs)
+        return original_build(**kwargs)
+
+    monkeypatch.setattr(registry_module, "_build_segmentation_cache_key", spy_build)
+    monkeypatch.setattr(seg_pkg, "_build_segmentation_cache_key", spy_build)
+    monkeypatch.setattr(registry_module, "_read_cached_material_masks", lambda **_: None)
+    monkeypatch.setattr(registry_module, "_write_cached_material_masks", lambda **_: None)
+
+    class FakeEfficientSAMBackend:
+        info = SegmentationBackendInfo("EfficientSAM", "yformer/efficientsam-tiny", requires_weights=True)
+        _device = "cpu"
+
+        def segment(self, img: np.ndarray) -> Dict[str, Tuple[np.ndarray, float]]:
+            mask = np.zeros(img.shape[:2], dtype=np.float32)
+            mask[5:20, 5:20] = 1.0
+            return {"glass": (mask, 0.91)}
+
+        def get_runtime_metadata(self):
+            return {"backend": "efficientsam"}
+
+    monkeypatch.setattr(seg_module, "_get_backend_instance", lambda *a, **kw: FakeEfficientSAMBackend())
+    monkeypatch.setattr(registry_module, "_get_backend_instance", lambda *a, **kw: FakeEfficientSAMBackend())
+
+    config = EnhanceConfig(
+        enable_material_segmentation=True,
+        material_segmentation_backend="efficientsam",
+        depth_device="cpu",
+        material_segmentation_cache_policy="read_write",
+    )
+
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as tmp:
+        segment_materials(sample_image, config, cache_dir=Path(tmp))
+
+    assert captured.get("backend_name") == "efficientsam"
+    # For non-sam_vit_h backends, the sam_vit_h hash field should remain at
+    # the config value (None by default), preserving existing cache entries.
+    assert captured["sam_vit_h_expected_sha256"] is None
