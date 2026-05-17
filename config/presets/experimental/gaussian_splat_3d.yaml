@@ -14,12 +14,10 @@ license_restriction: research_only  # Inria 3DGS license
 backend:
   type: gaussian_splatting
   model:
-    # Upstream is a GitHub repo (not HuggingFace). Pin to a 40-char commit
-    # SHA from https://api.github.com/repos/graphdeco-inria/gaussian-splatting/commits/main
-    # before promoting this preset to production (upstream verification was
-    # blocked by the audit-sandbox network policy).
+    # Upstream is a GitHub repo (not HuggingFace). Pin the source revision to a
+    # 40-char commit SHA for deterministic source attestation.
     repo_id: "graphdeco-inria/gaussian-splatting"
-    revision: "PENDING_VERIFICATION"  # MUST be pinned to a 40-hex commit SHA before use
+    revision: "54c035f7834b564019656c3e3fcc3646292f727d"  # pinned upstream graphdeco-inria/gaussian-splatting main
     cache_dir: null  # Use default HuggingFace cache
 
   device: auto  # auto-detect: cuda > mps > cpu

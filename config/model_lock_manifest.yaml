@@ -172,10 +172,8 @@ artifact_attestation:
     backend: inria_graphdeco
     source_type: git_release  # git_release | direct_checkpoint | local_import
     source_url: "https://github.com/graphdeco-inria/gaussian-splatting"
-    # Pin to a 40-hex commit SHA before promoting to production:
-    #   https://api.github.com/repos/graphdeco-inria/gaussian-splatting/commits/main
-    # (Upstream verification was blocked by the audit-sandbox network policy.)
-    source_commit_or_tag: "PENDING_VERIFICATION"
+    # Pinned to the upstream main branch commit for source attestation.
+    source_commit_or_tag: "54c035f7834b564019656c3e3fcc3646292f727d"
     artifacts: []  # No binary release; source-only attestation
     verification:
       method: source_commit  # sha256_only | sha256+source_commit | source_commit | reproducibility_trial

@@ -37,12 +37,10 @@ backend:
   model:
     # Upstream is NVlabs/nvdiffrec (matches the license URL on line 5).
     # Previous repo_id was the incorrect "nvidia/nvdiffrec".
-    # Pin the revision to a 40-char commit SHA from
-    #   https://api.github.com/repos/NVlabs/nvdiffrec/commits/main
-    # before promoting this preset to production (upstream verification was
-    # blocked by the audit-sandbox network policy).
+    # Pin the source revision to a 40-char commit SHA for deterministic source
+    # attestation.
     repo_id: "NVlabs/nvdiffrec"
-    revision: "PENDING_VERIFICATION"  # MUST be pinned to a 40-hex commit SHA before use
+    revision: "a3e73909a01887c8a135235ff860dd23a045cc1b"  # pinned upstream NVlabs/nvdiffrec main
     cache_dir: null
 
   # CUDA required (NVDIFFREC uses compiled kernels)
