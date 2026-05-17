@@ -275,6 +275,18 @@ def segment_materials(
     if cache_enabled and cache_dir is not None:
         t_cache = time.perf_counter()
         try:
+            # When the runtime would fall through SAMVitHBackend.EXPECTED_SHA256
+            # (because EnhanceConfig.sam_vit_h_expected_sha256 is unset), record
+            # that effective hash in the cache key. Otherwise cache entries
+            # written before the backend default became fail-closed would still
+            # match — segment_materials() returns cached masks before the
+            # backend is loaded, so a replayed hit would silently bypass the
+            # newly pinned integrity check.
+            effective_sam_vit_h_expected_sha256 = sam_vit_h_expected_sha256
+            if backend_name == "sam_vit_h":
+                effective_sam_vit_h_expected_sha256 = (
+                    sam_vit_h_expected_sha256 or SAMVitHBackend.EXPECTED_SHA256
+                )
             cache_key, cache_payload = _build_segmentation_cache_key(
                 image=image,
                 backend_name=backend_name,
@@ -296,7 +308,7 @@ def segment_materials(
                 sam_vit_h_points_per_side=sam_vit_h_points_per_side,
                 sam_vit_h_pred_iou_thresh=sam_vit_h_pred_iou_thresh,
                 sam_vit_h_confidence_threshold=sam_vit_h_confidence_threshold,
-                sam_vit_h_expected_sha256=sam_vit_h_expected_sha256,
+                sam_vit_h_expected_sha256=effective_sam_vit_h_expected_sha256,
                 sky_top_region_fraction=sky_top_region_fraction,
                 sky_gradient_threshold=sky_gradient_threshold,
                 sky_brightness_threshold=sky_brightness_threshold,
