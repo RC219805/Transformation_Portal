@@ -679,6 +679,15 @@ def _deep_merge_preset(parent: Dict[str, Any], child: Dict[str, Any]) -> Dict[st
     return merged
 
 
+def _is_relative_to(path: Path, root: Path) -> bool:
+    """Return True when resolved path is inside resolved root."""
+    try:
+        path.relative_to(root)
+        return True
+    except ValueError:
+        return False
+
+
 def _resolve_extends_target(extends_value: str, child_path: Path) -> Path:
     """Resolve an ``extends:`` reference to a concrete preset file path.
 
@@ -697,8 +706,13 @@ def _resolve_extends_target(extends_value: str, child_path: Path) -> Path:
     child_resolved = child_path.resolve()
     search_dirs = [child_path.parent, _shared_repo_root() / "config" / "presets"]
     for directory in search_dirs:
+        approved_root = directory.resolve()
         resolved = (directory / candidate).resolve()
         if resolved == child_resolved:
+            continue
+        if resolved.suffix not in {".yaml", ".yml"}:
+            continue
+        if not _is_relative_to(resolved, approved_root):
             continue
         # Require an actual preset file, not a directory or symlink to a dir.
         if resolved.is_file():
