@@ -284,9 +284,7 @@ def segment_materials(
             # newly pinned integrity check.
             effective_sam_vit_h_expected_sha256 = sam_vit_h_expected_sha256
             if backend_name == "sam_vit_h":
-                effective_sam_vit_h_expected_sha256 = (
-                    sam_vit_h_expected_sha256 or SAMVitHBackend.EXPECTED_SHA256
-                )
+                effective_sam_vit_h_expected_sha256 = sam_vit_h_expected_sha256 or SAMVitHBackend.EXPECTED_SHA256
             cache_key, cache_payload = _build_segmentation_cache_key(
                 image=image,
                 backend_name=backend_name,

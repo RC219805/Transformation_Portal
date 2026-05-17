@@ -677,9 +677,9 @@ def test_segmentation_cache_key_records_effective_sam_vit_h_hash(sample_image: n
     with tempfile.TemporaryDirectory() as tmp:
         segment_materials(sample_image, config, cache_dir=Path(tmp))
 
-    assert "sam_vit_h_expected_sha256" in captured, (
-        "Cache key builder was not invoked; the regression test is no longer wired in correctly."
-    )
+    assert (
+        "sam_vit_h_expected_sha256" in captured
+    ), "Cache key builder was not invoked; the regression test is no longer wired in correctly."
     assert captured["sam_vit_h_expected_sha256"] == SAMVitHBackend.EXPECTED_SHA256, (
         f"Cache key recorded sam_vit_h_expected_sha256={captured['sam_vit_h_expected_sha256']!r}; "
         f"expected the pinned class default {SAMVitHBackend.EXPECTED_SHA256!r} so legacy "
