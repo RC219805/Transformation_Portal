@@ -52,11 +52,14 @@ class SAMVitHBackend:
 
     CHECKPOINT_URL = "https://dl.fbaipublicfiles.com/segment_anything/sam_vit_h_4b8939.pth"
     CHECKPOINT_FILENAME = "sam_vit_h_4b8939.pth"
-    # SHA-256 of the official SAM ViT-H checkpoint from Meta AI.
-    # None means validation is skipped by default.  Operators can supply a
-    # hash via EnhanceConfig.sam_vit_h_expected_sha256 to enable integrity
-    # checking without modifying this class constant.
-    EXPECTED_SHA256: Optional[str] = None
+    # SHA-256 of the official SAM ViT-H checkpoint from Meta AI, pinned to the
+    # canonical byte stream served by CHECKPOINT_URL. Pairs with the same hash
+    # in config/presets/apex_research.yaml (segmentation.expected_sha256) so
+    # the runtime fails closed on a tampered checkpoint even when callers do
+    # not populate EnhanceConfig.sam_vit_h_expected_sha256. Operators using a
+    # fine-tuned variant must pass an explicit expected_sha256 to load() to
+    # override (or set EnhanceConfig.sam_vit_h_expected_sha256).
+    EXPECTED_SHA256: Optional[str] = "a7bf3b02f3ebf1267aba913ff637d9a2d5c33d3173bb679e46d9f338c26f262e"
 
     def __init__(
         self,
