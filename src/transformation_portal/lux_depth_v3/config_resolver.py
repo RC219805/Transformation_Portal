@@ -363,6 +363,23 @@ def build_materials_fingerprint_payload(config: EnhanceConfig) -> Dict[str, Any]
     Returns:
         Dictionary of materials configuration for fingerprinting
     """
+    # Mirror the segmentation-mask cache key: when the runtime would fall
+    # through to SAMVitHBackend.EXPECTED_SHA256 (because the operator did not
+    # populate EnhanceConfig.sam_vit_h_expected_sha256), record that effective
+    # hash in the manifest fingerprint too. Otherwise full-pipeline manifests
+    # written before the backend default became fail-closed would still match
+    # a current run — orchestrator.should_skip_depth() could replay the
+    # cached run and skip segment_materials() entirely, bypassing
+    # _validate_checkpoint_sha256() on the underlying checkpoint bytes.
+    raw_sam_vit_h_expected_sha256 = getattr(config, "sam_vit_h_expected_sha256", None)
+    effective_sam_vit_h_expected_sha256 = raw_sam_vit_h_expected_sha256
+    if str(getattr(config, "material_segmentation_backend", "")) == "sam_vit_h":
+        # Lazy import: avoid expanding the config_resolver import surface and
+        # keep the segmentation package out of orchestrator-init hot paths.
+        from .segmentation.sam_vit_h import SAMVitHBackend
+
+        effective_sam_vit_h_expected_sha256 = raw_sam_vit_h_expected_sha256 or SAMVitHBackend.EXPECTED_SHA256
+
     return {
         "enable_materials_v3": bool(config.enable_materials_v3),
         "apply_pixel_ops": bool(config.apply_pixel_ops),
@@ -409,7 +426,7 @@ def build_materials_fingerprint_payload(config: EnhanceConfig) -> Dict[str, Any]
         "sam_vit_h_points_per_side": int(getattr(config, "sam_vit_h_points_per_side", 32)),
         "sam_vit_h_pred_iou_thresh": float(getattr(config, "sam_vit_h_pred_iou_thresh", 0.88)),
         "sam_vit_h_confidence_threshold": float(getattr(config, "sam_vit_h_confidence_threshold", 0.85)),
-        "sam_vit_h_expected_sha256": getattr(config, "sam_vit_h_expected_sha256", None),
+        "sam_vit_h_expected_sha256": effective_sam_vit_h_expected_sha256,
     }
 
 

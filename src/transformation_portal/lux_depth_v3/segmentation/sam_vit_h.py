@@ -36,6 +36,16 @@ except ImportError as _e:
     SamAutomaticMaskGenerator = None  # type: ignore
 
 
+class SAMCheckpointIntegrityError(RuntimeError):
+    """Raised when the SAM ViT-H checkpoint hash does not match the expected digest.
+
+    Distinguished from generic ``RuntimeError`` so the registry can re-raise it
+    unconditionally instead of falling back to the stub backend. A tampered or
+    corrupted checkpoint must be a hard integrity failure, not a silent
+    downgrade to non-segmentation output.
+    """
+
+
 class SAMVitHBackend:
     """SAM ViT-H segmentation backend for APEX Research tier.
 
@@ -47,16 +57,22 @@ class SAMVitHBackend:
     - Checkpoint: sam_vit_h_4b8939.pth (~2.4 GB)
     - Device: MPS > CUDA > CPU auto-detection
     - Lazy loading: model loaded only on first .load() call
-    - Fail-safe: missing checkpoint falls back to stub (non-strict mode)
+    - Fail-safe (non-strict): missing checkpoint / missing torch / segment_anything
+      load failures fall back to the stub backend in the registry.
+    - Fail-closed (always): SHA-256 mismatch raises ``SAMCheckpointIntegrityError``
+      and is never converted to a stub fallback regardless of strict mode.
     """
 
     CHECKPOINT_URL = "https://dl.fbaipublicfiles.com/segment_anything/sam_vit_h_4b8939.pth"
     CHECKPOINT_FILENAME = "sam_vit_h_4b8939.pth"
-    # SHA-256 of the official SAM ViT-H checkpoint from Meta AI.
-    # None means validation is skipped by default.  Operators can supply a
-    # hash via EnhanceConfig.sam_vit_h_expected_sha256 to enable integrity
-    # checking without modifying this class constant.
-    EXPECTED_SHA256: Optional[str] = None
+    # SHA-256 of the official SAM ViT-H checkpoint from Meta AI, pinned to the
+    # canonical byte stream served by CHECKPOINT_URL. Pairs with the same hash
+    # in config/presets/apex_research.yaml (segmentation.expected_sha256) so
+    # the runtime fails closed on a tampered checkpoint even when callers do
+    # not populate EnhanceConfig.sam_vit_h_expected_sha256. Operators using a
+    # fine-tuned variant must pass an explicit expected_sha256 to load() to
+    # override (or set EnhanceConfig.sam_vit_h_expected_sha256).
+    EXPECTED_SHA256: Optional[str] = "a7bf3b02f3ebf1267aba913ff637d9a2d5c33d3173bb679e46d9f338c26f262e"
 
     def __init__(
         self,
@@ -102,7 +118,8 @@ class SAMVitHBackend:
         Raises:
             RuntimeError: If segment_anything or torch not installed
             FileNotFoundError: If checkpoint not found at any search path
-            RuntimeError: If SHA-256 validation fails
+            SAMCheckpointIntegrityError: If SHA-256 validation fails. Always
+                propagates — the registry does not convert this to a stub fallback.
         """
         if self._model_loaded:
             return
@@ -241,7 +258,9 @@ class SAMVitHBackend:
         """Validate checkpoint SHA-256 matches expected hash.
 
         Raises:
-            RuntimeError: On hash mismatch (checkpoint may be corrupted)
+            SAMCheckpointIntegrityError: On hash mismatch (tampered or
+                corrupted checkpoint). The registry treats this as fatal even
+                in non-strict mode.
         """
         digest = hashlib.sha256()
         with checkpoint.open("rb") as f:
@@ -249,7 +268,7 @@ class SAMVitHBackend:
                 digest.update(chunk)
         actual = digest.hexdigest()
         if actual != expected:
-            raise RuntimeError(
+            raise SAMCheckpointIntegrityError(
                 f"SHA-256 mismatch for {checkpoint}:\n"
                 f"  expected: {expected}\n"
                 f"  actual:   {actual}\n"

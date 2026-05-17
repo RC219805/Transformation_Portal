@@ -204,7 +204,7 @@ segmentation_backend: sam_vit_h
 segmentation:
   model_variant: vit_h
   checkpoint_path: checkpoints/sam_vit_h_4b8939.pth
-  expected_sha256: "4b8939a88964f0f4ff5f5b2642c598a6fe38d7a21b7d6f1f8e8b3e9f3e9f3e9f"  # Placeholder
+  expected_sha256: "a7bf3b02f3ebf1267aba913ff637d9a2d5c33d3173bb679e46d9f338c26f262e"
   confidence_threshold: 0.85  # Higher threshold for research quality
 
 # PBR configuration

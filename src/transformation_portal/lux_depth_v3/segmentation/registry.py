@@ -24,7 +24,7 @@ from ._cache import (
 )
 from .efficient_sam import EfficientSAMBackend
 from .sam2 import SAM2SegmentationBackend
-from .sam_vit_h import SAMVitHBackend
+from .sam_vit_h import SAMCheckpointIntegrityError, SAMVitHBackend
 from .stub import StubBackend
 
 logger = logging.getLogger(__name__)
@@ -59,6 +59,14 @@ def _get_sam_vit_h_instance(
     )
     try:
         backend.load(device=device, expected_sha256=expected_sha256)
+    except SAMCheckpointIntegrityError:
+        # Fail closed unconditionally and preserve the typed exception so
+        # downstream callers (and tests) can distinguish integrity failures
+        # from generic load failures. Wrapping into RuntimeError here would
+        # let segment_materials()'s catch-all degrade the breach to {} masks
+        # in non-strict mode — the very bypass this contract is meant to
+        # block.
+        raise
     except (FileNotFoundError, RuntimeError) as e:
         if strict:
             raise RuntimeError(f"Failed to load sam_vit_h backend: {e}") from e
@@ -275,6 +283,16 @@ def segment_materials(
     if cache_enabled and cache_dir is not None:
         t_cache = time.perf_counter()
         try:
+            # When the runtime would fall through SAMVitHBackend.EXPECTED_SHA256
+            # (because EnhanceConfig.sam_vit_h_expected_sha256 is unset), record
+            # that effective hash in the cache key. Otherwise cache entries
+            # written before the backend default became fail-closed would still
+            # match — segment_materials() returns cached masks before the
+            # backend is loaded, so a replayed hit would silently bypass the
+            # newly pinned integrity check.
+            effective_sam_vit_h_expected_sha256 = sam_vit_h_expected_sha256
+            if backend_name == "sam_vit_h":
+                effective_sam_vit_h_expected_sha256 = sam_vit_h_expected_sha256 or SAMVitHBackend.EXPECTED_SHA256
             cache_key, cache_payload = _build_segmentation_cache_key(
                 image=image,
                 backend_name=backend_name,
@@ -296,7 +314,7 @@ def segment_materials(
                 sam_vit_h_points_per_side=sam_vit_h_points_per_side,
                 sam_vit_h_pred_iou_thresh=sam_vit_h_pred_iou_thresh,
                 sam_vit_h_confidence_threshold=sam_vit_h_confidence_threshold,
-                sam_vit_h_expected_sha256=sam_vit_h_expected_sha256,
+                sam_vit_h_expected_sha256=effective_sam_vit_h_expected_sha256,
                 sky_top_region_fraction=sky_top_region_fraction,
                 sky_gradient_threshold=sky_gradient_threshold,
                 sky_brightness_threshold=sky_brightness_threshold,
@@ -425,6 +443,15 @@ def segment_materials(
         )
 
         return masks
+
+    except SAMCheckpointIntegrityError:
+        # Fail closed unconditionally — never degrade an integrity breach to
+        # empty masks. The integrity contract takes precedence over
+        # strict_backend's "graceful degradation" semantics, otherwise a
+        # tampered checkpoint silently produces {} and the pipeline continues
+        # as if no segmentation were requested.
+        logger.error("SAM ViT-H checkpoint integrity validation failed; refusing to degrade to empty masks.")
+        raise
 
     except Exception as e:
         if strict_backend:

@@ -517,3 +517,392 @@ def test_get_runtime_metadata_after_mock_load():
     assert meta is not None
     assert meta["backend"] == "sam_vit_h"
     assert meta["device"] == "cpu"
+
+
+# =============================================================================
+# 10. Pinned-checkpoint enforcement (apex_research preset cross-reference)
+# =============================================================================
+
+_PINNED_SAM_VIT_H_SHA256 = "a7bf3b02f3ebf1267aba913ff637d9a2d5c33d3173bb679e46d9f338c26f262e"
+
+
+def test_sam_vit_h_expected_sha256_is_pinned():
+    """SAMVitHBackend.EXPECTED_SHA256 must be the pinned canonical Meta release hash.
+
+    The runtime constant is the fail-closed default: callers that do not
+    populate EnhanceConfig.sam_vit_h_expected_sha256 still get checksum
+    validation against the official checkpoint bytes served by CHECKPOINT_URL.
+    """
+    assert SAMVitHBackend.EXPECTED_SHA256 == _PINNED_SAM_VIT_H_SHA256
+
+
+def test_sam_vit_h_expected_sha256_matches_apex_research_preset():
+    """The backend default hash must match config/presets/apex_research.yaml.
+
+    Drift between the runtime constant and the shipped preset would give
+    operators conflicting checksum guidance and silently weaken the
+    fail-closed posture. Parse the preset YAML directly rather than the
+    inheritance-merged form so this test stays decoupled from preset loaders.
+    """
+    import yaml
+
+    repo_root = Path(__file__).resolve().parents[2]
+    preset_path = repo_root / "config" / "presets" / "apex_research.yaml"
+    with preset_path.open(encoding="utf-8") as fp:
+        # YAML_GOVERNANCE_EXEMPT: contract test reads a single preset for cross-reference.
+        preset = yaml.safe_load(fp)
+    preset_hash = preset["segmentation"]["expected_sha256"]
+    assert preset_hash == SAMVitHBackend.EXPECTED_SHA256, (
+        f"apex_research.yaml segmentation.expected_sha256 ({preset_hash!r}) "
+        f"drifted from SAMVitHBackend.EXPECTED_SHA256 ({SAMVitHBackend.EXPECTED_SHA256!r}). "
+        "Update both together."
+    )
+
+
+def test_sam_vit_h_load_invokes_validation_against_class_default(tmp_path: Path, monkeypatch):
+    """load() must invoke _validate_checkpoint_sha256 with the class default
+    when no explicit expected_sha256 is supplied, so tampered checkpoint bytes
+    fail closed even when callers leave EnhanceConfig.sam_vit_h_expected_sha256 unset.
+    """
+    import transformation_portal.lux_depth_v3.segmentation.sam_vit_h as sam_module
+
+    monkeypatch.setattr(sam_module, "SAM_AVAILABLE", True)
+    monkeypatch.setattr(sam_module, "TORCH_AVAILABLE", True)
+
+    checkpoint = tmp_path / SAMVitHBackend.CHECKPOINT_FILENAME
+    checkpoint.write_bytes(b"tampered checkpoint bytes - not the real SAM release")
+
+    captured: Dict[str, object] = {}
+
+    def fake_validate(path, expected):
+        captured["path"] = Path(path)
+        captured["expected"] = expected
+        raise RuntimeError(f"SHA-256 mismatch: expected {expected}, got tampered")
+
+    monkeypatch.setattr(SAMVitHBackend, "_validate_checkpoint_sha256", staticmethod(fake_validate))
+
+    backend = SAMVitHBackend(checkpoint_path=str(checkpoint))
+    with pytest.raises(RuntimeError, match="SHA-256 mismatch"):
+        backend.load(device="cpu")
+
+    assert captured["path"].resolve() == checkpoint.resolve()
+    assert captured["expected"] == _PINNED_SAM_VIT_H_SHA256
+
+
+def test_sam_vit_h_load_explicit_expected_sha256_overrides_class_default(tmp_path: Path, monkeypatch):
+    """An explicit expected_sha256 argument must take precedence over the
+    class-level EXPECTED_SHA256 (preserves the override path documented on
+    the backend so fine-tuned checkpoints remain usable)."""
+    import transformation_portal.lux_depth_v3.segmentation.sam_vit_h as sam_module
+
+    monkeypatch.setattr(sam_module, "SAM_AVAILABLE", True)
+    monkeypatch.setattr(sam_module, "TORCH_AVAILABLE", True)
+
+    checkpoint = tmp_path / SAMVitHBackend.CHECKPOINT_FILENAME
+    checkpoint.write_bytes(b"fine-tuned checkpoint bytes")
+
+    captured: Dict[str, object] = {}
+    override_hash = "b" * 64
+
+    def fake_validate(path, expected):
+        captured["expected"] = expected
+        raise RuntimeError("stop after validation call")
+
+    monkeypatch.setattr(SAMVitHBackend, "_validate_checkpoint_sha256", staticmethod(fake_validate))
+
+    backend = SAMVitHBackend(checkpoint_path=str(checkpoint))
+    with pytest.raises(RuntimeError, match="stop after validation call"):
+        backend.load(device="cpu", expected_sha256=override_hash)
+
+    assert captured["expected"] == override_hash
+
+
+# =============================================================================
+# 11. Segmentation cache cannot bypass pinned hash validation
+# =============================================================================
+
+
+def test_segmentation_cache_key_records_effective_sam_vit_h_hash(sample_image: np.ndarray, monkeypatch):
+    """Cache keys for the sam_vit_h backend must record the effective hash
+    (EnhanceConfig override or SAMVitHBackend.EXPECTED_SHA256 fallback), not
+    the raw config value. Without this substitution, cache entries written
+    before the class default became fail-closed would still match a current
+    lookup (EnhanceConfig.sam_vit_h_expected_sha256 still defaults to None),
+    letting segment_materials() replay cached masks without ever triggering
+    _validate_checkpoint_sha256() on the underlying checkpoint bytes.
+    """
+    import transformation_portal.lux_depth_v3.segmentation as seg_pkg
+    import transformation_portal.lux_depth_v3.segmentation.registry as registry_module
+    import transformation_portal.lux_depth_v3.segmentation_backend as seg_module
+
+    captured: Dict[str, object] = {}
+    original_build = registry_module._build_segmentation_cache_key
+
+    def spy_build(**kwargs):
+        captured.update(kwargs)
+        return original_build(**kwargs)
+
+    monkeypatch.setattr(registry_module, "_build_segmentation_cache_key", spy_build)
+    monkeypatch.setattr(seg_pkg, "_build_segmentation_cache_key", spy_build)
+    # Force a cache miss so the test does not depend on filesystem state.
+    monkeypatch.setattr(registry_module, "_read_cached_material_masks", lambda **_: None)
+    monkeypatch.setattr(registry_module, "_write_cached_material_masks", lambda **_: None)
+
+    class FakeSAMVitHBackend:
+        info = SegmentationBackendInfo("SAM ViT-H", "facebook/sam-vit-huge", requires_weights=True)
+        _device = "cpu"
+
+        def segment(self, img: np.ndarray) -> Dict[str, Tuple[np.ndarray, float]]:
+            mask = np.zeros(img.shape[:2], dtype=np.float32)
+            mask[5:20, 5:20] = 1.0
+            return {"glass": (mask, 0.91)}
+
+        def get_runtime_metadata(self):
+            return {"backend": "sam_vit_h"}
+
+    monkeypatch.setattr(seg_module, "_get_backend_instance", lambda *a, **kw: FakeSAMVitHBackend())
+    monkeypatch.setattr(registry_module, "_get_backend_instance", lambda *a, **kw: FakeSAMVitHBackend())
+
+    config = EnhanceConfig(
+        enable_material_segmentation=True,
+        material_segmentation_backend="sam_vit_h",
+        depth_device="cpu",
+        # Leave sam_vit_h_expected_sha256 at its default (None) — the cache key
+        # must still record the pinned class default, not None.
+        material_segmentation_cache_policy="read_write",
+    )
+
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as tmp:
+        segment_materials(sample_image, config, cache_dir=Path(tmp))
+
+    assert (
+        "sam_vit_h_expected_sha256" in captured
+    ), "Cache key builder was not invoked; the regression test is no longer wired in correctly."
+    assert captured["sam_vit_h_expected_sha256"] == SAMVitHBackend.EXPECTED_SHA256, (
+        f"Cache key recorded sam_vit_h_expected_sha256={captured['sam_vit_h_expected_sha256']!r}; "
+        f"expected the pinned class default {SAMVitHBackend.EXPECTED_SHA256!r} so legacy "
+        "cache entries written with None do not silently bypass integrity validation."
+    )
+    assert captured["sam_vit_h_expected_sha256"] is not None
+
+
+def test_segmentation_cache_key_preserves_other_backends(sample_image: np.ndarray, monkeypatch):
+    """The effective-hash substitution must be scoped to the sam_vit_h backend
+    so cache entries for unrelated backends (efficientsam, sam2, stub) are not
+    invalidated by this fix."""
+    import transformation_portal.lux_depth_v3.segmentation as seg_pkg
+    import transformation_portal.lux_depth_v3.segmentation.registry as registry_module
+    import transformation_portal.lux_depth_v3.segmentation_backend as seg_module
+
+    captured: Dict[str, object] = {}
+    original_build = registry_module._build_segmentation_cache_key
+
+    def spy_build(**kwargs):
+        captured.update(kwargs)
+        return original_build(**kwargs)
+
+    monkeypatch.setattr(registry_module, "_build_segmentation_cache_key", spy_build)
+    monkeypatch.setattr(seg_pkg, "_build_segmentation_cache_key", spy_build)
+    monkeypatch.setattr(registry_module, "_read_cached_material_masks", lambda **_: None)
+    monkeypatch.setattr(registry_module, "_write_cached_material_masks", lambda **_: None)
+
+    class FakeEfficientSAMBackend:
+        info = SegmentationBackendInfo("EfficientSAM", "yformer/efficientsam-tiny", requires_weights=True)
+        _device = "cpu"
+
+        def segment(self, img: np.ndarray) -> Dict[str, Tuple[np.ndarray, float]]:
+            mask = np.zeros(img.shape[:2], dtype=np.float32)
+            mask[5:20, 5:20] = 1.0
+            return {"glass": (mask, 0.91)}
+
+        def get_runtime_metadata(self):
+            return {"backend": "efficientsam"}
+
+    monkeypatch.setattr(seg_module, "_get_backend_instance", lambda *a, **kw: FakeEfficientSAMBackend())
+    monkeypatch.setattr(registry_module, "_get_backend_instance", lambda *a, **kw: FakeEfficientSAMBackend())
+
+    config = EnhanceConfig(
+        enable_material_segmentation=True,
+        material_segmentation_backend="efficientsam",
+        depth_device="cpu",
+        material_segmentation_cache_policy="read_write",
+    )
+
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as tmp:
+        segment_materials(sample_image, config, cache_dir=Path(tmp))
+
+    assert captured.get("backend_name") == "efficientsam"
+    # For non-sam_vit_h backends, the sam_vit_h hash field should remain at
+    # the config value (None by default), preserving existing cache entries.
+    assert captured["sam_vit_h_expected_sha256"] is None
+
+
+# =============================================================================
+# 12. Checksum-mismatch fallback policy: integrity failures are never silent
+# =============================================================================
+
+
+def test_sam_vit_h_checksum_mismatch_never_falls_back_to_stub(tmp_path: Path, monkeypatch):
+    """A SHA-256 mismatch must propagate as the *typed* SAMCheckpointIntegrityError
+    even in non-strict mode. Wrapping into a generic RuntimeError would let
+    segment_materials()'s catch-all degrade the breach to {} masks on the public
+    path; silently returning the stub backend would hide it altogether.
+
+    Regression guard for the SAMCheckpointIntegrityError contract introduced
+    after PR #1802 review feedback: ``_get_sam_vit_h_instance`` must re-raise
+    the typed exception unchanged so the public ``segment_materials`` catch
+    can also propagate it instead of degrading.
+    """
+    import transformation_portal.lux_depth_v3.segmentation.registry as registry_module
+    import transformation_portal.lux_depth_v3.segmentation.sam_vit_h as sam_module
+    from transformation_portal.lux_depth_v3.segmentation.sam_vit_h import SAMCheckpointIntegrityError
+
+    monkeypatch.setattr(sam_module, "SAM_AVAILABLE", True)
+    monkeypatch.setattr(sam_module, "TORCH_AVAILABLE", True)
+    registry_module._get_sam_vit_h_instance.cache_clear()
+    registry_module._get_backend_instance.cache_clear()
+
+    checkpoint = tmp_path / SAMVitHBackend.CHECKPOINT_FILENAME
+    checkpoint.write_bytes(b"tampered checkpoint bytes - not the real SAM release")
+
+    with pytest.raises(SAMCheckpointIntegrityError, match="SHA-256 mismatch"):
+        registry_module._get_sam_vit_h_instance(
+            checkpoint_path=str(checkpoint),
+            expected_sha256=SAMVitHBackend.EXPECTED_SHA256,
+            device="cpu",
+            strict=False,  # critical: non-strict must NOT downgrade an integrity failure
+        )
+
+
+def test_sam_vit_h_checksum_mismatch_raises_dedicated_exception_class(tmp_path: Path):
+    """_validate_checkpoint_sha256 must raise SAMCheckpointIntegrityError
+    (a RuntimeError subclass) so the registry can distinguish integrity
+    failures from generic load failures."""
+    from transformation_portal.lux_depth_v3.segmentation.sam_vit_h import SAMCheckpointIntegrityError
+
+    checkpoint = tmp_path / SAMVitHBackend.CHECKPOINT_FILENAME
+    checkpoint.write_bytes(b"some bytes")
+
+    with pytest.raises(SAMCheckpointIntegrityError, match="SHA-256 mismatch"):
+        SAMVitHBackend._validate_checkpoint_sha256(checkpoint, "a" * 64)
+
+
+def test_sam_vit_h_missing_checkpoint_still_falls_back_to_stub_when_non_strict(tmp_path: Path, monkeypatch):
+    """A missing checkpoint (FileNotFoundError) must continue to fall back to
+    the stub backend in non-strict mode. Paired with the checksum-mismatch
+    test above to pin the policy boundary: integrity breaches fail closed,
+    missing artefacts degrade gracefully.
+    """
+    import transformation_portal.lux_depth_v3.segmentation.registry as registry_module
+    import transformation_portal.lux_depth_v3.segmentation.sam_vit_h as sam_module
+
+    monkeypatch.setattr(sam_module, "SAM_AVAILABLE", True)
+    monkeypatch.setattr(sam_module, "TORCH_AVAILABLE", True)
+    registry_module._get_sam_vit_h_instance.cache_clear()
+    registry_module._get_backend_instance.cache_clear()
+
+    # checkpoint_path points at a file that does not exist on disk
+    missing_checkpoint = tmp_path / "does_not_exist_sam_vit_h.pth"
+    assert not missing_checkpoint.exists()
+
+    backend = registry_module._get_sam_vit_h_instance(
+        checkpoint_path=str(missing_checkpoint),
+        expected_sha256=SAMVitHBackend.EXPECTED_SHA256,
+        device="cpu",
+        strict=False,
+    )
+
+    # Stub backend identity is what the registry returns from the fallback path.
+    assert isinstance(backend, StubBackend)
+
+
+def test_sam_vit_h_missing_checkpoint_raises_when_strict(tmp_path: Path, monkeypatch):
+    """In strict mode the missing-checkpoint path raises (no fallback)."""
+    import transformation_portal.lux_depth_v3.segmentation.registry as registry_module
+    import transformation_portal.lux_depth_v3.segmentation.sam_vit_h as sam_module
+
+    monkeypatch.setattr(sam_module, "SAM_AVAILABLE", True)
+    monkeypatch.setattr(sam_module, "TORCH_AVAILABLE", True)
+    registry_module._get_sam_vit_h_instance.cache_clear()
+    registry_module._get_backend_instance.cache_clear()
+
+    missing_checkpoint = tmp_path / "does_not_exist_sam_vit_h.pth"
+
+    with pytest.raises(RuntimeError, match="Failed to load sam_vit_h backend"):
+        registry_module._get_sam_vit_h_instance(
+            checkpoint_path=str(missing_checkpoint),
+            expected_sha256=SAMVitHBackend.EXPECTED_SHA256,
+            device="cpu",
+            strict=True,
+        )
+
+
+def test_segment_materials_checksum_mismatch_propagates_in_non_strict(
+    sample_image: np.ndarray,
+    monkeypatch,
+):
+    """Public-path regression: when ``segment_materials`` is invoked with
+    ``strict_backend=False`` (the default), a checksum mismatch surfaced by
+    the underlying backend must still propagate as ``SAMCheckpointIntegrityError``.
+
+    Before the registry's catch-all ``except Exception`` was made
+    integrity-aware, this exception was silently degraded to an empty
+    ``{}`` mask dict, undoing the fail-closed contract for any caller that
+    didn't explicitly set ``strict_backend=True``.
+    """
+    import transformation_portal.lux_depth_v3.segmentation as seg_pkg
+    import transformation_portal.lux_depth_v3.segmentation.registry as registry_module
+    import transformation_portal.lux_depth_v3.segmentation_backend as seg_module
+    from transformation_portal.lux_depth_v3.segmentation.sam_vit_h import SAMCheckpointIntegrityError
+
+    # Force a cache miss so segment_materials() reaches the backend loader.
+    monkeypatch.setattr(registry_module, "_read_cached_material_masks", lambda **_: None)
+
+    def fail_integrity(*args, **kwargs):
+        raise SAMCheckpointIntegrityError("SHA-256 mismatch for test checkpoint")
+
+    # Cover both lookup paths the registry uses for backend resolution.
+    monkeypatch.setattr(registry_module, "_get_backend_instance", fail_integrity)
+    monkeypatch.setattr(registry_module, "_get_sam_vit_h_instance", fail_integrity)
+    monkeypatch.setattr(seg_pkg, "_get_backend_instance", fail_integrity)
+    monkeypatch.setattr(seg_pkg, "_get_sam_vit_h_instance", fail_integrity)
+    monkeypatch.setattr(seg_module, "_get_backend_instance", fail_integrity)
+    monkeypatch.setattr(seg_module, "_get_sam_vit_h_instance", fail_integrity)
+
+    config = EnhanceConfig(
+        enable_material_segmentation=True,
+        material_segmentation_backend="sam_vit_h",
+        strict_backend=False,  # critical: non-strict must NOT degrade an integrity breach to {}
+        depth_device="cpu",
+    )
+
+    with pytest.raises(SAMCheckpointIntegrityError, match="SHA-256 mismatch"):
+        segment_materials(sample_image, config)
+
+
+def test_sam_checkpoint_integrity_error_legacy_shim_propagates(monkeypatch):
+    """Setting ``SAMCheckpointIntegrityError`` on the legacy
+    ``transformation_portal.lux_depth_v3.segmentation_backend`` compatibility
+    shim must propagate to both the source module (``segmentation.sam_vit_h``)
+    and to ``segmentation.registry``, which imports and consumes the symbol.
+
+    Without ``_segmentation_registry`` in the propagation tuple, monkeypatches
+    via the legacy import surface would silently miss the registry's bound
+    reference, leaving the actual catch site in ``_get_sam_vit_h_instance``
+    looking at a stale class. This pins the propagation contract.
+    """
+    import transformation_portal.lux_depth_v3.segmentation.registry as registry_module
+    import transformation_portal.lux_depth_v3.segmentation.sam_vit_h as sam_module
+    import transformation_portal.lux_depth_v3.segmentation_backend as shim
+
+    class FakeIntegrityError(RuntimeError):
+        pass
+
+    monkeypatch.setattr(shim, "SAMCheckpointIntegrityError", FakeIntegrityError)
+
+    assert sam_module.SAMCheckpointIntegrityError is FakeIntegrityError
+    assert registry_module.SAMCheckpointIntegrityError is FakeIntegrityError
