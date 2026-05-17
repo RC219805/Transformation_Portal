@@ -1224,10 +1224,12 @@ class TestExtendsResolution:
             load_and_validate_preset(child)
 
     def test_extends_rejects_absolute_path_outside_approved_roots(self, tmp_path):
-        outside_parent = tmp_path.parent / "outside_parent.yaml"
-        child = tmp_path / "child.yaml"
+        nested = tmp_path / "nested"
+        nested.mkdir()
+        outside_parent = tmp_path / "outside_parent.yaml"
+        child = nested / "child.yaml"
         self._write_yaml(outside_parent, {"name": "outside", "tier": "stable"})
-        self._write_yaml(child, {"extends": str(outside_parent), "name": "child"})
+        self._write_yaml(child, {"extends": str(outside_parent.resolve()), "name": "child"})
 
         with pytest.raises(LicenseRestrictionError, match="could not be resolved"):
             load_and_validate_preset(child)
@@ -1279,6 +1281,22 @@ class TestExtendsResolution:
 
         assert merged["name"] == "child"
         assert merged["marker"] == "from_parent"
+
+    def test_extends_rejects_non_yaml_suffix(self, tmp_path):
+        parent = tmp_path / "parent.yaml"
+        child = tmp_path / "child.yaml"
+        self._write_yaml(
+            parent,
+            {
+                "name": "parent",
+                "tier": "stable",
+                "model": {"hf_id": "depth-anything/Depth-Anything-V3-Metric-Large-hf"},
+            },
+        )
+        self._write_yaml(child, {"extends": "parent.txt", "name": "child"})
+
+        with pytest.raises(LicenseRestrictionError, match="must reference a .yaml or .yml"):
+            load_and_validate_preset(child)
 
     def test_extends_skips_self_match_and_falls_through_to_config_presets(self, tmp_path):
         """A bare-name `extends:` whose first candidate is the child itself must

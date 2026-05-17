@@ -680,9 +680,9 @@ def _deep_merge_preset(parent: Dict[str, Any], child: Dict[str, Any]) -> Dict[st
 
 
 def _is_relative_to(path: Path, root: Path) -> bool:
-    """Return True when resolved path is inside resolved root."""
+    """Return True when path resolves inside root."""
     try:
-        path.relative_to(root)
+        path.resolve().relative_to(root.resolve())
         return True
     except ValueError:
         return False
@@ -700,7 +700,12 @@ def _resolve_extends_target(extends_value: str, child_path: Path) -> Path:
     ``extends: foo`` and have it resolve to the sibling ``config/presets/foo.yaml``.
     """
     candidate = Path(extends_value)
-    if candidate.suffix not in {".yaml", ".yml"}:
+    if candidate.suffix:
+        if candidate.suffix not in {".yaml", ".yml"}:
+            raise LicenseRestrictionError(
+                f"`extends: {extends_value}` declared in {child_path} must reference a .yaml or .yml preset file."
+            )
+    else:
         candidate = candidate.with_suffix(".yaml")
 
     child_resolved = child_path.resolve()
