@@ -149,7 +149,7 @@ _COMPAT_PROPAGATION = {
     "SAM2SegmentationBackend": (_segmentation_registry,),
     "SAM2_AUTO_TILING_MAX_AREA_PX": (_segmentation_cache, _sam2),
     "SAM2_AUTO_TILING_MAX_DIM_PX": (_segmentation_cache, _sam2),
-    "SAMCheckpointIntegrityError": (_sam_vit_h,),
+    "SAMCheckpointIntegrityError": (_segmentation_registry, _sam_vit_h),
     "SAMVitHBackend": (_segmentation_registry,),
     "SAM_AVAILABLE": (_sam_vit_h,),
     "SEGMENTATION_CACHE_SCHEMA_VERSION": (_segmentation_cache,),

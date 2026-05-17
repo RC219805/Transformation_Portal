@@ -59,13 +59,14 @@ def _get_sam_vit_h_instance(
     )
     try:
         backend.load(device=device, expected_sha256=expected_sha256)
-    except SAMCheckpointIntegrityError as e:
-        # Fail closed unconditionally: a tampered or corrupted checkpoint must
-        # be a hard integrity failure regardless of strict mode. Silently
-        # falling back to the stub backend here would hide the integrity
-        # breach and let the pipeline emit non-segmentation output as if SAM
-        # ViT-H had succeeded.
-        raise RuntimeError(f"Failed to load sam_vit_h backend: {e}") from e
+    except SAMCheckpointIntegrityError:
+        # Fail closed unconditionally and preserve the typed exception so
+        # downstream callers (and tests) can distinguish integrity failures
+        # from generic load failures. Wrapping into RuntimeError here would
+        # let segment_materials()'s catch-all degrade the breach to {} masks
+        # in non-strict mode — the very bypass this contract is meant to
+        # block.
+        raise
     except (FileNotFoundError, RuntimeError) as e:
         if strict:
             raise RuntimeError(f"Failed to load sam_vit_h backend: {e}") from e
@@ -442,6 +443,15 @@ def segment_materials(
         )
 
         return masks
+
+    except SAMCheckpointIntegrityError:
+        # Fail closed unconditionally — never degrade an integrity breach to
+        # empty masks. The integrity contract takes precedence over
+        # strict_backend's "graceful degradation" semantics, otherwise a
+        # tampered checkpoint silently produces {} and the pipeline continues
+        # as if no segmentation were requested.
+        logger.error("SAM ViT-H checkpoint integrity validation failed; refusing to degrade to empty masks.")
+        raise
 
     except Exception as e:
         if strict_backend:
