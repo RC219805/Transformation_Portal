@@ -236,6 +236,15 @@ jobs:
         run: |
           python scripts/security/pre_commit_security_check.py $(find . -name '*.py' -o -name '*.sh' -o -name '*.yaml' -o -name '*.yml' | grep -v '.venv' | grep -v 'deprecated' | head -100)
 
+      # CVE-2025-32434 defense-in-depth: scan for raw torch.load() calls that
+      # bypass weights_only=True. Soaking non-blocking for one quiet week from
+      # 2026-05-18 before promotion to a blocking gate. Tracking: I-1 in
+      # docs/governance/audit/PORTAL_AUDIT_2026-05-18_backlog.md.
+      - name: Check unsafe torch.load() usage (CVE-2025-32434)
+        continue-on-error: true
+        run: |
+          python scripts/validation/check_unsafe_torch_load.py --ci-mode --fix-suggestions
+
       - name: Validate .gitignore coverage
         run: |
           REQUIRED_PATTERNS=(
