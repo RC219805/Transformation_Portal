@@ -21,11 +21,23 @@ from .efficient_sam import EfficientSAMBackend
 
 logger = logging.getLogger(__name__)
 
+
+class SAM2CheckpointIntegrityError(RuntimeError):
+    """Raised when SAM2 checkpoint bytes do not match the expected digest."""
+
+
+_SPATIAL_SAM2_CHECKPOINT_INTEGRITY_ERROR: Optional[type[BaseException]] = None
+
+
 try:
     from transformation_portal.spatial_ai.segmentation.contracts import SegmentationInput as SpatialSegmentationInput
     from transformation_portal.spatial_ai.segmentation.sam2_backend import SAM2Backend as SpatialSAM2Backend
+    from transformation_portal.spatial_ai.segmentation.sam2_backend import (
+        SAM2CheckpointIntegrityError as _SpatialSAM2CheckpointIntegrityError,
+    )
     from transformation_portal.spatial_ai.segmentation.tiling.config import GlobalPassConfig, SegmentationTilingConfig
 
+    _SPATIAL_SAM2_CHECKPOINT_INTEGRITY_ERROR = _SpatialSAM2CheckpointIntegrityError
     SPATIAL_SAM2_AVAILABLE = True
 except ImportError:
     SPATIAL_SAM2_AVAILABLE = False
@@ -33,6 +45,11 @@ except ImportError:
     SpatialSAM2Backend = None  # type: ignore
     SpatialSegmentationInput = None  # type: ignore
     SegmentationTilingConfig = None  # type: ignore
+
+
+def _is_spatial_sam2_integrity_error(exc: BaseException) -> bool:
+    """Return True when an exception came from the spatial SAM2 integrity guard."""
+    return _SPATIAL_SAM2_CHECKPOINT_INTEGRITY_ERROR is not None and isinstance(exc, _SPATIAL_SAM2_CHECKPOINT_INTEGRITY_ERROR)
 
 
 class SAM2SegmentationBackend(EfficientSAMBackend):
@@ -73,6 +90,8 @@ class SAM2SegmentationBackend(EfficientSAMBackend):
         self,
         model_size: str = "base",
         checkpoint_path: Optional[str] = None,
+        model_config: Optional[str] = None,
+        expected_sha256: Optional[str] = None,
         enable_material_classification: bool = False,
         material_confidence_threshold: float = 0.3,
         tiling_enabled: bool = False,
@@ -96,6 +115,8 @@ class SAM2SegmentationBackend(EfficientSAMBackend):
         )
         self._model_size = model_size
         self._checkpoint_path = checkpoint_path
+        self._model_config = model_config
+        self._expected_sha256 = expected_sha256
         self._enable_material_classification = enable_material_classification
         self._material_confidence_threshold = material_confidence_threshold
         self._generator_kwargs = _build_sam2_generator_kwargs(
@@ -117,9 +138,12 @@ class SAM2SegmentationBackend(EfficientSAMBackend):
 
     @property
     def info(self) -> SegmentationBackendInfo:
+        model_id = f"facebook/sam2-hiera-{self._model_size}"
+        if self._model_size == "large":
+            model_id = "facebook/sam2.1-hiera-large"
         return SegmentationBackendInfo(
             name="SAM2",
-            model_id=f"facebook/sam2-hiera-{self._model_size}",
+            model_id=model_id,
             requires_gpu=False,
             requires_weights=True,
             approximate_memory_mb=850 if self._model_size == "large" else 400,
@@ -196,6 +220,8 @@ class SAM2SegmentationBackend(EfficientSAMBackend):
                 "model_size": self._model_size,
                 "device": self._device,
                 "checkpoint_path": self._checkpoint_path,
+                "model_config": getattr(self._sam2_backend, "model_config", self._model_config),
+                "expected_sha256": getattr(self._sam2_backend, "expected_sha256", self._expected_sha256),
                 "generator_kwargs": dict(self._generator_kwargs),
                 "tiling": {
                     "configured": _serialize_sam2_tiling_config(self._configured_tiling),
@@ -248,6 +274,8 @@ class SAM2SegmentationBackend(EfficientSAMBackend):
                 "model_size": cast(Literal["base", "large"], self._model_size),
                 "device": cast(Literal["auto", "cuda", "cpu", "mps"], resolved_device),
                 "checkpoint_path": checkpoint_override,
+                "model_config": self._model_config,
+                "expected_sha256": self._expected_sha256,
                 "generator_kwargs": dict(self._generator_kwargs),
                 "enable_material_classification": self._enable_material_classification,
                 "material_confidence_threshold": self._material_confidence_threshold,
@@ -262,8 +290,12 @@ class SAM2SegmentationBackend(EfficientSAMBackend):
                 legacy_kwargs = dict(sam2_kwargs)
                 legacy_kwargs.pop("generator_kwargs", None)
                 legacy_kwargs.pop("tiling", None)
+                legacy_kwargs.pop("model_config", None)
+                legacy_kwargs.pop("expected_sha256", None)
                 self._sam2_backend = SpatialSAM2Backend(**legacy_kwargs)
         except Exception as exc:
+            if _is_spatial_sam2_integrity_error(exc):
+                raise SAM2CheckpointIntegrityError(str(exc)) from exc
             raise RuntimeError(f"SAM2 backend loading failed: {exc}") from exc
 
         self._device = getattr(self._sam2_backend, "device", resolved_device)
@@ -295,6 +327,8 @@ class SAM2SegmentationBackend(EfficientSAMBackend):
             )
             seg_result = self._sam2_backend.segment(seg_input)
         except Exception as exc:
+            if _is_spatial_sam2_integrity_error(exc):
+                raise SAM2CheckpointIntegrityError(str(exc)) from exc
             raise RuntimeError(f"SAM2 inference failed: {exc}") from exc
         self._record_runtime_metadata(
             image,

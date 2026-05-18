@@ -41,7 +41,7 @@ extends: sam2_segmentation
 model:
   backend: "sam2"
   model_size: "large"  # Options: "base", "large"
-  checkpoint_path: "checkpoints/sam2_hiera_large.pt"
+  checkpoint_path: "checkpoints/sam2.1_hiera_large.pt"
   device: "auto"  # Options: "auto", "cuda", "cpu", "mps"
 
 # Segmentation Parameters

@@ -32,6 +32,7 @@ from transformation_portal.lux_depth_v3.config import EnhanceConfig
 from transformation_portal.lux_depth_v3.protocols.segmentation_backend import SegmentationBackend, SegmentationBackendInfo
 from transformation_portal.lux_depth_v3.segmentation_backend import (
     EfficientSAMBackend,
+    SAM2CheckpointIntegrityError,
     SAM2SegmentationBackend,
     StubBackend,
     _get_backend_instance,
@@ -177,7 +178,8 @@ def test_sam2_backend_implements_protocol():
     info = backend.info
     assert isinstance(info, SegmentationBackendInfo)
     assert info.name == "SAM2"
-    assert "sam2-hiera" in info.model_id
+    assert "sam2" in info.model_id
+    assert "hiera" in info.model_id
     assert info.requires_weights is True
 
 
@@ -552,9 +554,8 @@ def test_segment_materials_sam2_backend_with_mock(sample_image, config_sam2, mon
     import transformation_portal.lux_depth_v3.segmentation_backend as seg_module
 
     class FakeSpatialSAM2Backend:
-        def __init__(self, model_size, device, checkpoint_path, enable_material_classification, material_confidence_threshold):
-            del model_size, checkpoint_path, enable_material_classification, material_confidence_threshold
-            self.device = device
+        def __init__(self, **kwargs):
+            self.device = kwargs["device"]
 
         def segment(self, seg_input):
             h, w = seg_input.image.shape[:2]
@@ -599,25 +600,18 @@ def test_segment_materials_sam2_backend_forwards_generator_and_tiling_config(sam
     captured: dict[str, object] = {}
 
     class FakeSpatialSAM2Backend:
-        def __init__(
-            self,
-            model_size,
-            device,
-            checkpoint_path,
-            generator_kwargs,
-            enable_material_classification,
-            material_confidence_threshold,
-            tiling,
-        ):
-            captured["model_size"] = model_size
-            captured["device"] = device
-            captured["checkpoint_path"] = checkpoint_path
-            captured["generator_kwargs"] = dict(generator_kwargs)
-            captured["enable_material_classification"] = enable_material_classification
-            captured["material_confidence_threshold"] = material_confidence_threshold
-            captured["configured_tiling"] = tiling
-            self.device = device
-            self.tiling = tiling
+        def __init__(self, **kwargs):
+            captured["model_size"] = kwargs["model_size"]
+            captured["device"] = kwargs["device"]
+            captured["checkpoint_path"] = kwargs["checkpoint_path"]
+            captured["model_config"] = kwargs["model_config"]
+            captured["expected_sha256"] = kwargs["expected_sha256"]
+            captured["generator_kwargs"] = dict(kwargs["generator_kwargs"])
+            captured["enable_material_classification"] = kwargs["enable_material_classification"]
+            captured["material_confidence_threshold"] = kwargs["material_confidence_threshold"]
+            captured["configured_tiling"] = kwargs["tiling"]
+            self.device = kwargs["device"]
+            self.tiling = kwargs["tiling"]
 
         def segment(self, seg_input):
             captured["effective_tiling"] = self.tiling
@@ -665,6 +659,8 @@ def test_segment_materials_sam2_backend_forwards_generator_and_tiling_config(sam
     assert "glass" in masks
     assert captured["model_size"] == "large"
     assert captured["device"] == "cpu"
+    assert captured["model_config"] == "configs/sam2.1/sam2.1_hiera_l.yaml"
+    assert captured["expected_sha256"] == "2647878d5dfa5098f2f8649825738a9345572bae2d4350a2468587ece47dd318"
     assert captured["generator_kwargs"] == {
         "points_per_side": 16,
         "points_per_batch": 32,
@@ -694,20 +690,13 @@ def test_segment_materials_sam2_backend_auto_enables_tiling_for_large_images(mon
     captured: dict[str, object] = {}
 
     class FakeSpatialSAM2Backend:
-        def __init__(
-            self,
-            model_size,
-            device,
-            checkpoint_path,
-            generator_kwargs,
-            enable_material_classification,
-            material_confidence_threshold,
-            tiling,
-        ):
-            del model_size, checkpoint_path, generator_kwargs, enable_material_classification, material_confidence_threshold
-            captured["configured_tiling"] = tiling
-            self.device = device
-            self.tiling = tiling
+        def __init__(self, **kwargs):
+            del kwargs["model_size"], kwargs["checkpoint_path"], kwargs["generator_kwargs"]
+            del kwargs["enable_material_classification"], kwargs["material_confidence_threshold"]
+            del kwargs["model_config"], kwargs["expected_sha256"]
+            captured["configured_tiling"] = kwargs["tiling"]
+            self.device = kwargs["device"]
+            self.tiling = kwargs["tiling"]
 
         def segment(self, seg_input):
             captured["effective_tiling"] = self.tiling
@@ -1182,8 +1171,8 @@ def test_backend_caching_sam2(monkeypatch):
     import transformation_portal.lux_depth_v3.segmentation_backend as seg_module
 
     class FakeSpatialSAM2Backend:
-        def __init__(self, model_size, device, checkpoint_path, enable_material_classification, material_confidence_threshold):
-            del model_size, device, checkpoint_path, enable_material_classification, material_confidence_threshold
+        def __init__(self, **kwargs):
+            del kwargs
 
         def segment(self, seg_input):
             h, w = seg_input.image.shape[:2]
@@ -1325,10 +1314,47 @@ def test_segment_materials_sam2_strict_mps_missing_torch_reports_dependency_erro
 
     message = str(exc_info.value)
     assert "SAM2 requires sam2 and torch" in message
-    assert "'NoneType' object has no attribute 'backends'" not in message
-    assert "NoneType.backends" not in message
     assert "torch.backends" not in message
+    assert "'NoneType' object has no attribute 'backends'" not in message
     assert captured["device"] == "cpu"
+
+
+def test_segment_materials_sam2_integrity_error_fails_closed(sample_image, monkeypatch):
+    """SAM2 checksum mismatches must propagate instead of degrading to empty masks."""
+    import transformation_portal.lux_depth_v3.segmentation_backend as seg_module
+
+    class FakeSpatialSAM2Backend:
+        def __init__(self, **kwargs):
+            self.device = kwargs["device"]
+
+        def segment(self, seg_input):
+            del seg_input
+            raise AssertionError("segment() should not run after load() integrity failure")
+
+    original_load = SAM2SegmentationBackend.load
+
+    def fake_load(self, device="auto", weights_path=None):
+        del self, device, weights_path
+        raise SAM2CheckpointIntegrityError("SHA-256 mismatch for SAM2 checkpoint")
+
+    monkeypatch.setattr(seg_module, "SPATIAL_SAM2_AVAILABLE", True)
+    monkeypatch.setattr(seg_module, "SpatialSAM2Backend", FakeSpatialSAM2Backend)
+    monkeypatch.setattr(SAM2SegmentationBackend, "load", fake_load)
+    seg_module._get_backend_instance.cache_clear()
+
+    config = EnhanceConfig(
+        enable_material_segmentation=True,
+        material_segmentation_backend="sam2",
+        strict_backend=False,
+        depth_device="cpu",
+    )
+
+    try:
+        with pytest.raises(SAM2CheckpointIntegrityError, match="SHA-256 mismatch"):
+            segment_materials(sample_image, config)
+    finally:
+        monkeypatch.setattr(SAM2SegmentationBackend, "load", original_load)
+        seg_module._get_backend_instance.cache_clear()
 
 
 @pytest.mark.ml

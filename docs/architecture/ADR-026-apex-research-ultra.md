@@ -212,7 +212,7 @@ from transformation_portal.segmentation.sam2 import SAM2VideoSegmenter
 
 segmenter = SAM2VideoSegmenter(
     model_variant="sam2_hiera_large",
-    checkpoint_path="checkpoints/sam2_hiera_l.pt",
+    checkpoint_path="checkpoints/sam2.1_hiera_large.pt",
     device="auto"
 )
 
@@ -464,7 +464,8 @@ depth:
 # Segmentation: SAM2 Video
 segmentation:
   backend: sam2_hiera_large
-  checkpoint: checkpoints/sam2_hiera_l.pt
+  checkpoint: checkpoints/sam2.1_hiera_large.pt
+  config: configs/sam2.1/sam2.1_hiera_l.yaml
   temporal_propagation: true
   propagate_every_n_frames: 10
   confidence_threshold: 0.88

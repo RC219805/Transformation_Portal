@@ -2,7 +2,7 @@
 
 **Date:** 2026-02-18
 **Environment:** macOS, Python 3.11.14, torch 2.5.1, device=mps
-**Model:** SAM2 Hiera Large (sam2_hiera_large.pt, 856MB)
+**Model:** SAM2.1 Hiera Large (`sam2.1_hiera_large.pt`, size not yet re-verified for the 2.1 release; prior checkpoint was ~856MB)
 **Test Suite:** tests/spatial_ai/segmentation/test_sam2_backend_performance.py
 
 ## Baseline Metrics

@@ -415,6 +415,12 @@ class EnhanceConfig:
     sam2_model_size: str = "base"
     # Optional SAM2 checkpoint override path
     sam2_checkpoint_path: Optional[str] = None
+    # Optional SAM2 config override. None falls through to the pinned backend
+    # default for the selected model size.
+    sam2_model_config: Optional[str] = None
+    # Optional SAM2 checkpoint integrity override. None falls through to the
+    # pinned backend default for the selected model size.
+    sam2_expected_sha256: Optional[str] = None
     # Explicit SAM2 tiling controls for large-image segmentation
     sam2_tiling_enabled: bool = False
     sam2_tile_size_px: int = 1536

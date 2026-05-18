@@ -24,6 +24,9 @@ except ImportError:
 
 pytestmark = [pytest.mark.ml, pytest.mark.skipif(not HAS_TORCH, reason="torch not installed (optional dependency)")]
 
+PINNED_SAM21_LARGE_CONFIG = "configs/sam2.1/sam2.1_hiera_l.yaml"
+PINNED_SAM21_LARGE_SHA256 = "2647878d5dfa5098f2f8649825738a9345572bae2d4350a2468587ece47dd318"
+
 
 @pytest.fixture
 def mock_checkpoint(tmp_path):
@@ -78,8 +81,25 @@ class TestSAM2BackendInit:
 
         backend = SAM2Backend(model_size="large", device="cpu")
 
-        assert backend.checkpoint_path.name == "sam2_hiera_large.pt"
+        assert backend.checkpoint_path.name == "sam2.1_hiera_large.pt"
         assert "checkpoints" in str(backend.checkpoint_path)
+        assert backend.model_config == PINNED_SAM21_LARGE_CONFIG
+        assert backend.expected_sha256 == PINNED_SAM21_LARGE_SHA256
+
+    def test_init_large_model_allows_explicit_integrity_overrides(self, mock_checkpoint):
+        """Explicit SAM2 model config and checksum overrides must win over defaults."""
+        from transformation_portal.spatial_ai.segmentation.sam2_backend import SAM2Backend
+
+        backend = SAM2Backend(
+            model_size="large",
+            checkpoint_path=str(mock_checkpoint),
+            model_config="configs/custom/sam2_large.yaml",
+            expected_sha256="b" * 64,
+            device="cpu",
+        )
+
+        assert backend.model_config == "configs/custom/sam2_large.yaml"
+        assert backend.expected_sha256 == "b" * 64
 
 
 class TestSAM2BackendAutoMode:
@@ -320,3 +340,42 @@ class TestSAM2BackendEdgeCases:
         with patch.object(backend, "_load_model"):
             with pytest.raises(ValueError, match="Unsupported mode"):
                 backend.segment(seg_input)
+
+
+class TestSAM2BackendIntegrity:
+    """Checksum enforcement for the canonical SAM 2.1 large checkpoint."""
+
+    def test_load_raises_typed_integrity_error_on_sha_mismatch(self, mock_checkpoint, monkeypatch):
+        """A canonical-load checksum mismatch must fail closed with the typed error."""
+        import sys
+        from types import ModuleType
+
+        from transformation_portal.spatial_ai.segmentation.sam2_backend import (
+            SAM2Backend,
+            SAM2CheckpointIntegrityError,
+        )
+
+        backend = SAM2Backend(model_size="large", checkpoint_path=str(mock_checkpoint), device="cpu")
+
+        sam2_module = ModuleType("sam2")
+        build_module = ModuleType("sam2.build_sam")
+        predictor_module = ModuleType("sam2.sam2_image_predictor")
+        automask_module = ModuleType("sam2.automatic_mask_generator")
+
+        build_module.build_sam2 = lambda **kwargs: object()
+        predictor_module.SAM2ImagePredictor = lambda model: object()
+        automask_module.SAM2AutomaticMaskGenerator = lambda **kwargs: object()
+        sam2_module.build_sam = build_module
+        sam2_module.sam2_image_predictor = predictor_module
+        sam2_module.automatic_mask_generator = automask_module
+        monkeypatch.setitem(sys.modules, "sam2", sam2_module)
+        monkeypatch.setitem(sys.modules, "sam2.build_sam", build_module)
+        monkeypatch.setitem(sys.modules, "sam2.sam2_image_predictor", predictor_module)
+        monkeypatch.setitem(sys.modules, "sam2.automatic_mask_generator", automask_module)
+        monkeypatch.setattr(
+            "transformation_portal.spatial_ai.segmentation.sam2_backend._compute_file_sha256",
+            lambda path: "0" * 64,
+        )
+
+        with pytest.raises(SAM2CheckpointIntegrityError, match="SHA-256 mismatch"):
+            backend._load_model()

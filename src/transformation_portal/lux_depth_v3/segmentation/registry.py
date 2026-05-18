@@ -23,7 +23,7 @@ from ._cache import (
     _write_cached_material_masks,
 )
 from .efficient_sam import EfficientSAMBackend
-from .sam2 import SAM2SegmentationBackend
+from .sam2 import SAM2CheckpointIntegrityError, SAM2SegmentationBackend
 from .sam_vit_h import SAMCheckpointIntegrityError, SAMVitHBackend
 from .stub import StubBackend
 
@@ -88,6 +88,8 @@ def _get_backend_instance(
     strict: bool = False,
     sam2_model_size: str = "base",
     sam2_checkpoint_path: Optional[str] = None,
+    sam2_model_config: Optional[str] = None,
+    sam2_expected_sha256: Optional[str] = None,
     sam2_tiling_enabled: bool = False,
     sam2_tile_size_px: int = 1536,
     sam2_overlap_px: int = 256,
@@ -115,6 +117,8 @@ def _get_backend_instance(
         strict: If True, raise on errors instead of falling back
         sam2_model_size: SAM2 checkpoint family ("base" or "large")
         sam2_checkpoint_path: Optional SAM2 checkpoint override
+        sam2_model_config: Optional SAM2 config override
+        sam2_expected_sha256: Optional SAM2 checkpoint SHA-256 override
         sam_vit_h_checkpoint_path: Optional SAM ViT-H checkpoint path override
         sam_vit_h_points_per_side: Grid density for SAM ViT-H mask generation
         sam_vit_h_pred_iou_thresh: IoU quality threshold for SAM ViT-H masks
@@ -161,6 +165,8 @@ def _get_backend_instance(
         sam2_backend: SegmentationBackend = SAM2SegmentationBackend(
             model_size=sam2_model_size,
             checkpoint_path=sam2_checkpoint_path,
+            model_config=sam2_model_config,
+            expected_sha256=sam2_expected_sha256,
             tiling_enabled=sam2_tiling_enabled,
             tile_size_px=sam2_tile_size_px,
             overlap_px=sam2_overlap_px,
@@ -177,6 +183,8 @@ def _get_backend_instance(
         )
         try:
             sam2_backend.load(device=device)
+        except SAM2CheckpointIntegrityError:
+            raise
         except RuntimeError as e:
             if strict:
                 raise RuntimeError(f"Failed to load {backend_name} backend: {e}") from e
@@ -254,6 +262,8 @@ def segment_materials(
     strict_backend = getattr(config, "strict_backend", False)
     sam2_model_size = str(getattr(config, "sam2_model_size", "base")).lower()
     sam2_checkpoint_path = getattr(config, "sam2_checkpoint_path", None)
+    sam2_model_config = getattr(config, "sam2_model_config", None)
+    sam2_expected_sha256 = getattr(config, "sam2_expected_sha256", None)
     sam2_tiling_enabled = bool(getattr(config, "sam2_tiling_enabled", False))
     sam2_tile_size_px = int(getattr(config, "sam2_tile_size_px", 1536))
     sam2_overlap_px = int(getattr(config, "sam2_overlap_px", 256))
@@ -276,6 +286,13 @@ def segment_materials(
 
     # Get device for backend (if applicable)
     device = getattr(config, "depth_device", "cpu")  # Reuse depth_device setting
+    effective_sam2_model_config = sam2_model_config
+    effective_sam2_expected_sha256 = sam2_expected_sha256
+    if backend_name == "sam2":
+        from transformation_portal.spatial_ai.segmentation.sam2_backend import SAM2Backend as SpatialSAM2Backend
+
+        effective_sam2_model_config = sam2_model_config or SpatialSAM2Backend.MODEL_CONFIGS.get(sam2_model_size)
+        effective_sam2_expected_sha256 = sam2_expected_sha256 or SpatialSAM2Backend.CHECKPOINT_SHA256.get(sam2_model_size)
     cache_key: Optional[str] = None
     cache_payload: Optional[Dict[str, Any]] = None
     cache_enabled = bool(cache_dir) and cache_policy == "read_write" and backend_name != "stub"
@@ -300,6 +317,8 @@ def segment_materials(
                 strict_backend=strict_backend,
                 sam2_model_size=sam2_model_size,
                 sam2_checkpoint_path=sam2_checkpoint_path,
+                sam2_model_config=effective_sam2_model_config,
+                sam2_expected_sha256=effective_sam2_expected_sha256,
                 sam2_tiling_enabled=sam2_tiling_enabled,
                 sam2_tile_size_px=sam2_tile_size_px,
                 sam2_overlap_px=sam2_overlap_px,
@@ -363,6 +382,8 @@ def segment_materials(
             strict=strict_backend,
             sam2_model_size=sam2_model_size,
             sam2_checkpoint_path=sam2_checkpoint_path,
+            sam2_model_config=effective_sam2_model_config,
+            sam2_expected_sha256=effective_sam2_expected_sha256,
             sam2_tiling_enabled=sam2_tiling_enabled,
             sam2_tile_size_px=sam2_tile_size_px,
             sam2_overlap_px=sam2_overlap_px,
@@ -444,13 +465,13 @@ def segment_materials(
 
         return masks
 
-    except SAMCheckpointIntegrityError:
+    except (SAMCheckpointIntegrityError, SAM2CheckpointIntegrityError):
         # Fail closed unconditionally — never degrade an integrity breach to
         # empty masks. The integrity contract takes precedence over
         # strict_backend's "graceful degradation" semantics, otherwise a
         # tampered checkpoint silently produces {} and the pipeline continues
         # as if no segmentation were requested.
-        logger.error("SAM ViT-H checkpoint integrity validation failed; refusing to degrade to empty masks.")
+        logger.error("Segmentation checkpoint integrity validation failed; refusing to degrade to empty masks.")
         raise
 
     except Exception as e:

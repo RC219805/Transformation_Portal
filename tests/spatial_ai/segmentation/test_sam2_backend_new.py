@@ -40,7 +40,7 @@ def test_sam2_backend_init_with_checkpoint():
     """Test SAM2Backend initializes with valid checkpoint."""
     from transformation_portal.spatial_ai.segmentation.sam2_backend import SAM2Backend
 
-    checkpoint_path = "checkpoints/sam2_hiera_large.pt"
+    checkpoint_path = "checkpoints/sam2.1_hiera_large.pt"
     if not Path(checkpoint_path).exists():
         pytest.skip(f"Checkpoint not found: {checkpoint_path}")
 
@@ -63,7 +63,7 @@ def test_sam2_video_mode_not_implemented():
     from transformation_portal.spatial_ai.segmentation.contracts import SegmentationInput
     from transformation_portal.spatial_ai.segmentation.sam2_backend import SAM2Backend
 
-    checkpoint_path = "checkpoints/sam2_hiera_large.pt"
+    checkpoint_path = "checkpoints/sam2.1_hiera_large.pt"
     if not Path(checkpoint_path).exists():
         pytest.skip(f"Checkpoint not found: {checkpoint_path}")
 
@@ -83,7 +83,7 @@ def test_sam2_checkpoint_path_resolution():
     from transformation_portal.spatial_ai.segmentation.sam2_backend import SAM2Backend
 
     # Test default checkpoint path for large model
-    expected_default = Path("checkpoints/sam2_hiera_large.pt")
+    expected_default = Path("checkpoints/sam2.1_hiera_large.pt")
 
     # If checkpoint exists, test initialization
     if expected_default.exists():

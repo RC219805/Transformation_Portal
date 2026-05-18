@@ -68,7 +68,7 @@ if not HAS_TORCH:
 @pytest.fixture(scope="module")
 def benchmark_checkpoint():
     """Path to SAM2 checkpoint for benchmarks."""
-    checkpoint_path = Path("checkpoints/sam2_hiera_large.pt")
+    checkpoint_path = Path("checkpoints/sam2.1_hiera_large.pt")
     if not checkpoint_path.exists():
         pytest.skip(f"SAM2 checkpoint not found: {checkpoint_path}")
     return str(checkpoint_path)

@@ -80,6 +80,10 @@ def _validate_sha256_hex(expected_sha256: str) -> str:
     return normalized
 
 
+class SAM2CheckpointIntegrityError(RuntimeError):
+    """Raised when a SAM2 checkpoint hash does not match the expected digest."""
+
+
 class SAM2Backend:
     """SAM2 segmentation backend with direct checkpoint loading.
 
@@ -89,22 +93,31 @@ class SAM2Backend:
         checkpoint_path: Path to model checkpoint file.
     """
 
-    # Model configurations (Hydra config names - sam2 package handles paths)
+    # The upstream sam2 loader accepts both Hydra short names and config file
+    # paths via the shared build_sam2(config_file=...) surface. Base
+    # intentionally remains on the legacy July 2024 config until its own
+    # canonical SAM 2.1 pin is carried; large migrates to the SAM 2.1 config
+    # path now.
     MODEL_CONFIGS = {
-        "base": "sam2_hiera_b+",  # Hydra config name (no path, no extension)
-        "large": "sam2_hiera_l",
+        "base": "sam2_hiera_b+",
+        "large": "configs/sam2.1/sam2.1_hiera_l.yaml",
     }
 
     # Default checkpoint names
     DEFAULT_CHECKPOINTS = {
         "base": "sam2_hiera_base_plus.pt",
-        "large": "sam2_hiera_large.pt",
+        "large": "sam2.1_hiera_large.pt",
+    }
+
+    CHECKPOINT_URLS = {
+        "base": "https://dl.fbaipublicfiles.com/segment_anything_2/072824/sam2_hiera_base_plus.pt",
+        "large": "https://dl.fbaipublicfiles.com/segment_anything_2/092824/sam2.1_hiera_large.pt",
     }
 
     # Checkpoint SHA-256 digests (must match downloaded artifacts exactly)
     CHECKPOINT_SHA256 = {
         "base": "d0bb7f236400a49669ffdd1be617959a8b1d1065081789d7bbff88eded3a8071",
-        "large": "7442e4e9b732a508f80e141e7c2913437a3610ee0c77381a66658c3a445df87b",
+        "large": "2647878d5dfa5098f2f8649825738a9345572bae2d4350a2468587ece47dd318",
     }
 
     SUPPORTED_DEVICES = {"auto", "cuda", "cpu", "mps"}
@@ -115,6 +128,8 @@ class SAM2Backend:
         model_size: Literal["base", "large"] = "base",
         device: Literal["auto", "cuda", "cpu", "mps"] = "cuda",
         checkpoint_path: Optional[str] = None,
+        model_config: Optional[str] = None,
+        expected_sha256: Optional[str] = None,
         repo_id: Optional[str] = None,
         revision: Optional[str] = None,
         prefer_hf_pipeline: Optional[bool] = None,
@@ -135,9 +150,14 @@ class SAM2Backend:
             checkpoint_path: Path to local checkpoint file. If None and
                 ``prefer_hf_pipeline`` is False (the default), a model-size
                 specific default checkpoint name under ``checkpoints/`` is used
-                (for example, ``checkpoints/sam2_hiera_large.pt``). May be None
+                (for example, ``checkpoints/sam2.1_hiera_large.pt``). May be None
                 when repo-backed HuggingFace loading is enabled via
                 ``prefer_hf_pipeline=True``.
+            model_config: Optional SAM2 config override. When omitted, resolves
+                to the model-size default from ``MODEL_CONFIGS``.
+            expected_sha256: Optional checkpoint checksum override. When omitted,
+                resolves to the built-in digest in ``CHECKPOINT_SHA256`` for the
+                selected model size.
             repo_id: HuggingFace Hub repository ID for model weights
                 (e.g., "facebook/sam2-hiera-large"). Required when
                 ``prefer_hf_pipeline=True``.
@@ -174,6 +194,10 @@ class SAM2Backend:
 
         self.model_size = model_size
         self.device = self._resolve_device(device)
+        self.model_config = model_config or self.MODEL_CONFIGS[model_size]
+        self.expected_sha256 = (
+            _validate_sha256_hex(expected_sha256) if expected_sha256 is not None else self.CHECKPOINT_SHA256.get(model_size)
+        )
         self.repo_id = repo_id
         self.revision = revision
         self.prefer_hf_pipeline = False if prefer_hf_pipeline is None else bool(prefer_hf_pipeline)
@@ -237,12 +261,13 @@ class SAM2Backend:
 
         logger.info(
             "SAM2Backend initialized: model=%s device=%s checkpoint=%s repo_id=%s revision=%s "
-            "prefer_hf_pipeline=%s material_classification=%s",
+            "model_config=%s prefer_hf_pipeline=%s material_classification=%s",
             model_size,
             self.device,
             None if self.checkpoint_path is None else self.checkpoint_path.name,
             self.repo_id,
             self.revision,
+            self.model_config,
             self.prefer_hf_pipeline,
             enable_material_classification,
         )
@@ -289,6 +314,15 @@ class SAM2Backend:
 
         return requested_device
 
+    @staticmethod
+    def _validate_checkpoint_sha256(checkpoint_path: Path, expected_sha256: str) -> None:
+        """Validate checkpoint bytes against the trusted SHA-256 digest."""
+        actual_sha256 = _compute_file_sha256(checkpoint_path)
+        if actual_sha256 != expected_sha256:
+            raise SAM2CheckpointIntegrityError(
+                f"SHA-256 mismatch for SAM2 checkpoint {checkpoint_path}: " f"expected {expected_sha256}, got {actual_sha256}"
+            )
+
     def _load_model(self) -> None:
         """Lazy load SAM2 model and mask generator.
 
@@ -328,10 +362,12 @@ class SAM2Backend:
                 "Either provide checkpoint_path or enable the pinned Hugging Face path."
             )
 
-        config_name = self.MODEL_CONFIGS[self.model_size]
+        config_name = self.model_config
         logger.info(f"Loading SAM2 model: {config_name} @ {self.checkpoint_path.name}")
 
         try:
+            if self.expected_sha256:
+                self._validate_checkpoint_sha256(self.checkpoint_path, self.expected_sha256)
             # Build SAM2 model (uses Hydra config module initialized by sam2 package)
             self._model = build_sam2(
                 config_file=config_name,
@@ -357,6 +393,8 @@ class SAM2Backend:
 
             logger.info("SAM2 model loaded successfully")
 
+        except SAM2CheckpointIntegrityError:
+            raise
         except Exception as e:
             raise RuntimeError(f"Failed to load SAM2 model: {e}") from e
 
@@ -560,6 +598,8 @@ class SAM2Backend:
             model_size=self.model_size,
             device=cast(Literal["auto", "cuda", "cpu", "mps"], device),
             checkpoint_path=None if self.checkpoint_path is None else str(self.checkpoint_path),
+            model_config=self.model_config,
+            expected_sha256=self.expected_sha256,
             repo_id=self.repo_id,
             revision=self.revision,
             prefer_hf_pipeline=self.prefer_hf_pipeline,
@@ -691,6 +731,8 @@ class SAM2Backend:
         candidates = [default_name]
         if default_name.startswith("sam2_"):
             candidates.append(default_name.replace("sam2_", "sam2.1_", 1))
+        if default_name.startswith("sam2.1_"):
+            candidates.append(default_name.replace("sam2.1_", "sam2_", 1))
         return tuple(dict.fromkeys(candidates))
 
     def _resolve_hf_video_checkpoint_path(self) -> Path:
@@ -1112,7 +1154,7 @@ class SAM2Backend:
         # Build video predictor (lazy load)
         if not hasattr(self, "_video_predictor") or self._video_predictor is None:
             logger.info(f"Loading SAM2 video predictor: {self.model_size} on {self.device}")
-            config_name = self.MODEL_CONFIGS[self.model_size]
+            config_name = self.model_config
             checkpoint_path = (
                 self._resolve_hf_video_checkpoint_path()
                 if self.prefer_hf_pipeline and self.checkpoint_path is None
@@ -1122,6 +1164,8 @@ class SAM2Backend:
                 raise RuntimeError(
                     "SAM2 video tracking requires either a trusted checkpoint_path or a pinned repo_id/revision"
                 )
+            if self.expected_sha256:
+                self._validate_checkpoint_sha256(Path(checkpoint_path), self.expected_sha256)
 
             self._video_predictor = build_sam2_video_predictor(
                 config_file=config_name,
@@ -1273,12 +1317,7 @@ def download_sam2_checkpoint(
     import http.client
     from urllib.parse import urlparse
 
-    CHECKPOINT_URLS = {
-        "base": "https://dl.fbaipublicfiles.com/segment_anything_2/072824/sam2_hiera_base_plus.pt",
-        "large": "https://dl.fbaipublicfiles.com/segment_anything_2/072824/sam2_hiera_large.pt",
-    }
-
-    url = CHECKPOINT_URLS[model_size]
+    url = SAM2Backend.CHECKPOINT_URLS[model_size]
     filename = SAM2Backend.DEFAULT_CHECKPOINTS[model_size]
     output_path = Path(output_dir) / filename
     expected = expected_sha256 or SAM2Backend.CHECKPOINT_SHA256.get(model_size)

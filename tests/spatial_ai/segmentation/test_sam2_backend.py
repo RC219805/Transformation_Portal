@@ -16,6 +16,14 @@ except ImportError:
 pytestmark = [pytest.mark.ml, pytest.mark.skipif(not HAS_SAM2, reason="SAM2 package not installed (optional dependency)")]
 
 
+def _seed_local_checkpoint(tmp_path):
+    checkpoint_dir = tmp_path / "checkpoints"
+    checkpoint_dir.mkdir()
+    checkpoint_path = checkpoint_dir / "sam2.1_hiera_large.pt"
+    checkpoint_path.write_bytes(b"stub checkpoint")
+    return checkpoint_path
+
+
 @pytest.fixture
 def test_image():
     """Simple RGB test image."""
@@ -23,17 +31,21 @@ def test_image():
 
 
 @pytest.fixture
-def sam2_backend():
+def sam2_backend(tmp_path, monkeypatch):
     """SAM2 backend instance (CPU for CI)."""
     from transformation_portal.spatial_ai.segmentation.sam2_backend import SAM2Backend
 
-    return SAM2Backend(model_size="large", checkpoint_path="checkpoints/sam2_hiera_large.pt", device="cpu")
+    checkpoint_path = _seed_local_checkpoint(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    return SAM2Backend(model_size="large", checkpoint_path=str(checkpoint_path), device="cpu")
 
 
-def test_sam2_backend_init():
+def test_sam2_backend_init(tmp_path, monkeypatch):
     """Test SAM2Backend initialization."""
     from transformation_portal.spatial_ai.segmentation.sam2_backend import SAM2Backend
 
+    _seed_local_checkpoint(tmp_path)
+    monkeypatch.chdir(tmp_path)
     backend = SAM2Backend(model_size="large", device="cpu")
     assert backend.model_size == "large"
     assert backend.device == "cpu"
@@ -98,18 +110,20 @@ def test_sam2_video_mode_not_implemented(sam2_backend):
     # These are tested in test_sam2_video_integration.py
 
 
-def test_sam2_checkpoint_path():
+def test_sam2_checkpoint_path(tmp_path, monkeypatch):
     """Test checkpoint path resolution."""
     from pathlib import Path
 
     from transformation_portal.spatial_ai.segmentation.sam2_backend import SAM2Backend
 
+    _seed_local_checkpoint(tmp_path)
+    monkeypatch.chdir(tmp_path)
     backend = SAM2Backend(model_size="large", device="cpu")
     checkpoint = Path(backend.checkpoint_path)
 
     # Should resolve to checkpoints/ directory
     assert "checkpoints" in str(checkpoint)
-    assert checkpoint.name == "sam2_hiera_large.pt"
+    assert checkpoint.name == "sam2.1_hiera_large.pt"
 
 
 @pytest.mark.slow
@@ -120,7 +134,7 @@ def test_sam2_device_selection():
     from transformation_portal.spatial_ai.segmentation.sam2_backend import SAM2Backend
 
     # Skip if checkpoint not available
-    checkpoint_path = Path("checkpoints/sam2_hiera_large.pt")
+    checkpoint_path = Path("checkpoints/sam2.1_hiera_large.pt")
     if not checkpoint_path.exists():
         pytest.skip(f"Checkpoint not found: {checkpoint_path}")
 

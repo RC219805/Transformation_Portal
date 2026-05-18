@@ -129,6 +129,24 @@ def test_phase_2c_external_checkpoint_requires_trusted_digest(
     assert untrusted.reason == "untrusted_checkpoint_path"
 
 
+def test_phase_2c_default_managed_allowlist_trusts_canonical_sam21_large_digest(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    input_root = _realpath(tmp_path)
+    checkpoint_path = input_root / "sam2-canonical.pt"
+    checkpoint_path.write_bytes(b"canonical placeholder bytes")
+    canonical_digest = "2647878d5dfa5098f2f8649825738a9345572bae2d4350a2468587ece47dd318"
+    monkeypatch.setattr(orchestrator_app, "ALLOWED_INPUT_ROOTS", [input_root])
+    monkeypatch.setattr(orchestrator_app, "_hash_file_sha256", lambda path, chunk_size=1024 * 1024: canonical_digest)
+
+    validation = orchestrator_app._resolve_managed_sam2_checkpoint_validation(str(checkpoint_path))
+
+    assert canonical_digest in orchestrator_app.MANAGED_SAM2_TRUSTED_SHA256
+    assert validation.reason is None
+    assert validation.normalized_path == str(checkpoint_path)
+
+
 def test_phase_2c_oversized_checkpoint_reason_is_preserved(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
