@@ -26,22 +26,30 @@ class SAM2CheckpointIntegrityError(RuntimeError):
     """Raised when SAM2 checkpoint bytes do not match the expected digest."""
 
 
+_SPATIAL_SAM2_CHECKPOINT_INTEGRITY_ERROR: Optional[type[BaseException]] = None
+
+
 try:
     from transformation_portal.spatial_ai.segmentation.contracts import SegmentationInput as SpatialSegmentationInput
     from transformation_portal.spatial_ai.segmentation.sam2_backend import SAM2Backend as SpatialSAM2Backend
     from transformation_portal.spatial_ai.segmentation.sam2_backend import (
-        SAM2CheckpointIntegrityError as SpatialSAM2CheckpointIntegrityError,
+        SAM2CheckpointIntegrityError as _SpatialSAM2CheckpointIntegrityError,
     )
     from transformation_portal.spatial_ai.segmentation.tiling.config import GlobalPassConfig, SegmentationTilingConfig
 
+    _SPATIAL_SAM2_CHECKPOINT_INTEGRITY_ERROR = _SpatialSAM2CheckpointIntegrityError
     SPATIAL_SAM2_AVAILABLE = True
 except ImportError:
     SPATIAL_SAM2_AVAILABLE = False
     GlobalPassConfig = None  # type: ignore
-    SpatialSAM2CheckpointIntegrityError = SAM2CheckpointIntegrityError
     SpatialSAM2Backend = None  # type: ignore
     SpatialSegmentationInput = None  # type: ignore
     SegmentationTilingConfig = None  # type: ignore
+
+
+def _is_spatial_sam2_integrity_error(exc: BaseException) -> bool:
+    """Return True when an exception came from the spatial SAM2 integrity guard."""
+    return _SPATIAL_SAM2_CHECKPOINT_INTEGRITY_ERROR is not None and isinstance(exc, _SPATIAL_SAM2_CHECKPOINT_INTEGRITY_ERROR)
 
 
 class SAM2SegmentationBackend(EfficientSAMBackend):
@@ -285,9 +293,9 @@ class SAM2SegmentationBackend(EfficientSAMBackend):
                 legacy_kwargs.pop("model_config", None)
                 legacy_kwargs.pop("expected_sha256", None)
                 self._sam2_backend = SpatialSAM2Backend(**legacy_kwargs)
-        except SpatialSAM2CheckpointIntegrityError as exc:
-            raise SAM2CheckpointIntegrityError(str(exc)) from exc
         except Exception as exc:
+            if _is_spatial_sam2_integrity_error(exc):
+                raise SAM2CheckpointIntegrityError(str(exc)) from exc
             raise RuntimeError(f"SAM2 backend loading failed: {exc}") from exc
 
         self._device = getattr(self._sam2_backend, "device", resolved_device)
@@ -318,9 +326,9 @@ class SAM2SegmentationBackend(EfficientSAMBackend):
                 mode="auto",
             )
             seg_result = self._sam2_backend.segment(seg_input)
-        except SpatialSAM2CheckpointIntegrityError as exc:
-            raise SAM2CheckpointIntegrityError(str(exc)) from exc
         except Exception as exc:
+            if _is_spatial_sam2_integrity_error(exc):
+                raise SAM2CheckpointIntegrityError(str(exc)) from exc
             raise RuntimeError(f"SAM2 inference failed: {exc}") from exc
         self._record_runtime_metadata(
             image,
