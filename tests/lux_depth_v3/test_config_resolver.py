@@ -499,6 +499,45 @@ class TestBuildFingerprintPayloads:
         assert payload["sam_vit_h_expected_sha256"] == SAMVitHBackend.EXPECTED_SHA256
         assert payload["sam_vit_h_expected_sha256"] is not None
 
+    def test_materials_fingerprint_records_effective_sam2_defaults(self):
+        """SAM2 fingerprints must record the effective config/hash defaults even
+        when EnhanceConfig leaves the override fields unset."""
+        from transformation_portal.lux_depth_v3.config import EnhanceConfig
+        from transformation_portal.lux_depth_v3.config_resolver import (
+            build_materials_fingerprint_payload,
+        )
+
+        config = EnhanceConfig(
+            enable_material_segmentation=True,
+            material_segmentation_backend="sam2",
+            sam2_model_size="large",
+        )
+
+        payload = build_materials_fingerprint_payload(config)
+
+        assert payload["sam2_model_config"] == "configs/sam2.1/sam2.1_hiera_l.yaml"
+        assert payload["sam2_expected_sha256"] == "2647878d5dfa5098f2f8649825738a9345572bae2d4350a2468587ece47dd318"
+
+    def test_materials_fingerprint_preserves_explicit_sam2_integrity_overrides(self):
+        """Explicit SAM2 config/hash overrides must take precedence over defaults."""
+        from transformation_portal.lux_depth_v3.config import EnhanceConfig
+        from transformation_portal.lux_depth_v3.config_resolver import (
+            build_materials_fingerprint_payload,
+        )
+
+        config = EnhanceConfig(
+            enable_material_segmentation=True,
+            material_segmentation_backend="sam2",
+            sam2_model_size="large",
+            sam2_model_config="configs/custom/sam2_large.yaml",
+            sam2_expected_sha256="c" * 64,
+        )
+
+        payload = build_materials_fingerprint_payload(config)
+
+        assert payload["sam2_model_config"] == "configs/custom/sam2_large.yaml"
+        assert payload["sam2_expected_sha256"] == "c" * 64
+
     def test_materials_fingerprint_preserves_explicit_sam_vit_h_hash_override(self):
         """An explicit EnhanceConfig.sam_vit_h_expected_sha256 must take precedence
         over the class-level fallback (preserves the override path for fine-tuned

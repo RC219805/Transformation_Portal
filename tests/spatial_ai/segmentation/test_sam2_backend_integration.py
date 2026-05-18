@@ -34,7 +34,7 @@ pytestmark = [
 @pytest.fixture(scope="module")
 def checkpoint_path():
     """Get SAM2 checkpoint path, skip if not available."""
-    checkpoint = Path("checkpoints/sam2_hiera_large.pt")
+    checkpoint = Path("checkpoints/sam2.1_hiera_large.pt")
     if not checkpoint.exists():
         pytest.skip(f"Checkpoint not found: {checkpoint}. Run: python scripts/download_sam2_checkpoint.py")
     return str(checkpoint)

@@ -43,7 +43,7 @@ revision = "NEEDS_VERIFICATION_0000000000000000000000000000000000000000"
 2. **Select stable commit:**
    - Avoid commits labeled "experimental" or "wip"
    - Prefer commits with release tags
-   - Verify commit includes model weights (sam2_hiera_large.pt)
+   - Verify commit includes model weights (sam2.1_hiera_large.pt)
 
 3. **Verification steps:**
    ```bash
@@ -53,7 +53,7 @@ revision = "NEEDS_VERIFICATION_0000000000000000000000000000000000000000"
    git checkout <COMMIT_SHA>
 
    # Verify model file exists and has expected size
-   ls -lh sam2_hiera_large.pt
+   ls -lh sam2.1_hiera_large.pt
    # Expected: ~900MB
 
    # Verify config matches expectations

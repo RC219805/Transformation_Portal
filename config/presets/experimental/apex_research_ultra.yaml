@@ -121,12 +121,9 @@ segmentation:
   backend: sam2_hiera_large
 
   model:
-    checkpoint: checkpoints/sam2_hiera_l.pt
-    # SHA256 verification deferred — upstream URL
-    #   https://dl.fbaipublicfiles.com/segment_anything_2/072824/sam2_hiera_large.pt
-    # was blocked by the audit-sandbox network policy. Replace with the real
-    # 64-char hex hash when fetched from upstream.
-    expected_sha256: "PENDING_VERIFICATION"
+    checkpoint: checkpoints/sam2.1_hiera_large.pt
+    config: configs/sam2.1/sam2.1_hiera_l.yaml
+    expected_sha256: "2647878d5dfa5098f2f8649825738a9345572bae2d4350a2468587ece47dd318"
     device: auto
 
   # Temporal propagation (video)

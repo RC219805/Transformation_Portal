@@ -249,6 +249,8 @@ def _build_segmentation_cache_key(
     strict_backend: bool,
     sam2_model_size: str,
     sam2_checkpoint_path: Optional[str],
+    sam2_model_config: Optional[str],
+    sam2_expected_sha256: Optional[str],
     sam2_tiling_enabled: bool,
     sam2_tile_size_px: int,
     sam2_overlap_px: int,
@@ -278,6 +280,8 @@ def _build_segmentation_cache_key(
         "strict_backend": bool(strict_backend),
         "sam2_model_size": sam2_model_size,
         "sam2_checkpoint": _file_identity(sam2_checkpoint_path),
+        "sam2_model_config": sam2_model_config,
+        "sam2_expected_sha256": sam2_expected_sha256,
         "sam2_generator": {
             "points_per_side": int(sam2_points_per_side),
             "points_per_batch": int(sam2_points_per_batch),

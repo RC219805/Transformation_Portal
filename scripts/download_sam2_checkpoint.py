@@ -14,12 +14,17 @@ logger = logging.getLogger(__name__)
 
 CHECKPOINT_URLS = {
     "base": "https://dl.fbaipublicfiles.com/segment_anything_2/072824/sam2_hiera_base_plus.pt",
-    "large": "https://dl.fbaipublicfiles.com/segment_anything_2/072824/sam2_hiera_large.pt",
+    "large": "https://dl.fbaipublicfiles.com/segment_anything_2/092824/sam2.1_hiera_large.pt",
+}
+
+CHECKPOINT_FILENAMES = {
+    "base": "sam2_hiera_base_plus.pt",
+    "large": "sam2.1_hiera_large.pt",
 }
 
 CHECKPOINT_SHA256 = {
     "base": "d0bb7f236400a49669ffdd1be617959a8b1d1065081789d7bbff88eded3a8071",
-    "large": "7442e4e9b732a508f80e141e7c2913437a3610ee0c77381a66658c3a445df87b",
+    "large": "2647878d5dfa5098f2f8649825738a9345572bae2d4350a2468587ece47dd318",
 }
 
 _SHA256_HEX_RE = re.compile(r"^[a-fA-F0-9]{64}$")
@@ -44,7 +49,7 @@ def validate_sha256_hex(expected_sha256: str) -> str:
 
 def download_checkpoint(model_size: str, output_dir: Path, expected_sha256: str | None = None) -> Path:
     url = CHECKPOINT_URLS[model_size]
-    filename = f"sam2_hiera_{'base_plus' if model_size == 'base' else 'large'}.pt"
+    filename = CHECKPOINT_FILENAMES[model_size]
     output_path = output_dir / filename
     expected = expected_sha256 or CHECKPOINT_SHA256.get(model_size)
     if not expected:

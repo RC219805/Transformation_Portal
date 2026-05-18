@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import importlib
 import sys
+from pathlib import Path
 from types import ModuleType, SimpleNamespace
 from typing import Any
 
@@ -21,6 +22,8 @@ pytestmark = pytest.mark.unit
 
 PINNED_REVISION = "a" * 40
 SAM2_REPO_ID = "facebook/sam2.1-hiera-large"
+PINNED_SAM21_LARGE_CONFIG = "configs/sam2.1/sam2.1_hiera_l.yaml"
+PINNED_SAM21_LARGE_SHA256 = "2647878d5dfa5098f2f8649825738a9345572bae2d4350a2468587ece47dd318"
 
 
 @pytest.fixture
@@ -210,6 +213,10 @@ def test_video_mode_uses_cached_repo_checkpoint_without_loading_image_pipeline(
     sam2_module.build_sam = build_module
     monkeypatch.setitem(sys.modules, "sam2", sam2_module)
     monkeypatch.setitem(sys.modules, "sam2.build_sam", build_module)
+    monkeypatch.setattr(
+        "transformation_portal.spatial_ai.segmentation.sam2_backend._compute_file_sha256",
+        lambda path: PINNED_SAM21_LARGE_SHA256,
+    )
 
     backend = SAM2Backend(
         model_size="large",
@@ -271,6 +278,24 @@ def test_clone_for_device_preserves_loading_contract(segmentation_surface: tuple
     assert clone.revision == PINNED_REVISION
     assert clone.prefer_hf_pipeline is False
     assert clone.generator_kwargs == {"points_per_batch": 64, "pred_iou_thresh": 0.88}
+
+
+def test_large_defaults_match_apex_research_ultra_pin(segmentation_surface: tuple[Any, Any]) -> None:
+    """The canonical SAM 2.1 large defaults must stay aligned with the governed preset."""
+    import yaml
+
+    SAM2Backend, _ = segmentation_surface
+
+    preset_path = Path(__file__).resolve().parents[3] / "config" / "presets" / "experimental" / "apex_research_ultra.yaml"
+    preset = yaml.safe_load(preset_path.read_text(encoding="utf-8"))
+    model_block = preset["segmentation"]["model"]
+
+    assert SAM2Backend.DEFAULT_CHECKPOINTS["large"] == "sam2.1_hiera_large.pt"
+    assert SAM2Backend.MODEL_CONFIGS["large"] == PINNED_SAM21_LARGE_CONFIG
+    assert SAM2Backend.CHECKPOINT_SHA256["large"] == PINNED_SAM21_LARGE_SHA256
+    assert model_block["checkpoint"] == f"checkpoints/{SAM2Backend.DEFAULT_CHECKPOINTS['large']}"
+    assert model_block["config"] == SAM2Backend.MODEL_CONFIGS["large"]
+    assert model_block["expected_sha256"] == SAM2Backend.CHECKPOINT_SHA256["large"]
 
 
 def test_extract_predictions_normalizes_2d_masks_and_bad_score_shapes(

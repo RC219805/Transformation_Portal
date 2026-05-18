@@ -371,6 +371,17 @@ def build_materials_fingerprint_payload(config: EnhanceConfig) -> Dict[str, Any]
     # a current run — orchestrator.should_skip_depth() could replay the
     # cached run and skip segment_materials() entirely, bypassing
     # _validate_checkpoint_sha256() on the underlying checkpoint bytes.
+    raw_sam2_model_config = getattr(config, "sam2_model_config", None)
+    raw_sam2_expected_sha256 = getattr(config, "sam2_expected_sha256", None)
+    effective_sam2_model_config = raw_sam2_model_config
+    effective_sam2_expected_sha256 = raw_sam2_expected_sha256
+    if str(getattr(config, "material_segmentation_backend", "")) == "sam2":
+        from transformation_portal.spatial_ai.segmentation.sam2_backend import SAM2Backend as SpatialSAM2Backend
+
+        sam2_model_size = str(getattr(config, "sam2_model_size", "base")).lower()
+        effective_sam2_model_config = raw_sam2_model_config or SpatialSAM2Backend.MODEL_CONFIGS.get(sam2_model_size)
+        effective_sam2_expected_sha256 = raw_sam2_expected_sha256 or SpatialSAM2Backend.CHECKPOINT_SHA256.get(sam2_model_size)
+
     raw_sam_vit_h_expected_sha256 = getattr(config, "sam_vit_h_expected_sha256", None)
     effective_sam_vit_h_expected_sha256 = raw_sam_vit_h_expected_sha256
     if str(getattr(config, "material_segmentation_backend", "")) == "sam_vit_h":
@@ -412,6 +423,8 @@ def build_materials_fingerprint_payload(config: EnhanceConfig) -> Dict[str, Any]
         "sky_brightness_threshold": float(config.sky_brightness_threshold),
         "sam2_model_size": str(config.sam2_model_size),
         "sam2_checkpoint_path": config.sam2_checkpoint_path,
+        "sam2_model_config": effective_sam2_model_config,
+        "sam2_expected_sha256": effective_sam2_expected_sha256,
         "sam2_tiling_enabled": bool(config.sam2_tiling_enabled),
         "sam2_tile_size_px": int(config.sam2_tile_size_px),
         "sam2_overlap_px": int(config.sam2_overlap_px),

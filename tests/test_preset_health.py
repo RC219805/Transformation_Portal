@@ -549,7 +549,7 @@ class TestShippedExperimentalPresetsPlaceholderInventory:
     # Files explicitly allowed to ship with PENDING_VERIFICATION markers until
     # the corresponding upstream artifact is fetched and pinned.
     _ALLOWED_PLACEHOLDER_FILES = {
-        "apex_research_ultra.yaml",  # SAM2 + DepthCrafter + MaterialGAN
+        "apex_research_ultra.yaml",  # DepthCrafter + MaterialGAN
     }
 
     @staticmethod

@@ -87,7 +87,7 @@ import numpy as np
 # Initialize backend
 backend = SAM2Backend(
     model_size="large",
-    checkpoint_path="checkpoints/sam2_hiera_large.pt",
+    checkpoint_path="checkpoints/sam2.1_hiera_large.pt",
     device="cuda"  # or "cpu", "mps"
 )
 
@@ -122,7 +122,7 @@ from pathlib import Path
 # Initialize backend
 backend = SAM2Backend(
     model_size="large",
-    checkpoint_path="checkpoints/sam2_hiera_large.pt",
+    checkpoint_path="checkpoints/sam2.1_hiera_large.pt",
     device="cuda"  # or "mps" for Apple Silicon
 )
 
@@ -216,7 +216,7 @@ SAM2Backend uses **direct torch.load()** of official checkpoints from Meta AI Re
 | Variant | Checkpoint | Config | Size | Speed | Quality |
 |---------|-----------|--------|------|-------|---------|
 | base    | `sam2_hiera_base_plus.pt` | `sam2_hiera_b+.yaml` | ~200 MB | Fast | Good |
-| large   | `sam2_hiera_large.pt` | `sam2_hiera_l.yaml` | ~856 MB | Slow | Best |
+| large   | `sam2.1_hiera_large.pt` | `configs/sam2.1/sam2.1_hiera_l.yaml` | ~856 MB | Slow | Best |
 
 ### Device Selection
 
