@@ -12,19 +12,18 @@
 #   - worker service: one-shot batch process; no healthcheck.
 
 services:
-  # Bootstrap: ensure host bind-mount targets exist and are writable by
-  # the container's `tp` user (UID/GID 10001). Runs once per `compose up`
-  # and exits; cpu/gpu/worker services gate startup on its successful
-  # completion via `depends_on: condition: service_completed_successfully`.
+  # Bootstrap: ensure the writable host bind-mount target exists and is
+  # writable by the container's `tp` user (UID/GID 10001). Runs once per
+  # `compose up` and exits; cpu/gpu/worker services gate startup on its
+  # successful completion via `depends_on: condition: service_completed_successfully`.
   #
   # The init service is intentionally the ONLY service that runs as root;
   # app services keep the image-level `USER tp` for runtime hardening.
   #
-  # Ownership semantics on the host: after first run the three I/O dirs
-  # become owned by 10001:10001 (mode 0775). Operators who need to drop
-  # input files from the host can either be in supplementary group 10001
-  # or use `sudo install -o 10001 -g 10001 <file> ./input/`. This is a
-  # deliberate trade-off versus pre-#1808 root-everywhere behavior.
+  # Ownership semantics on the host: after first run ./output becomes owned
+  # by 10001:10001 (mode 0775). Input/config stay host-owned and are mounted
+  # read-only into the app containers, so tp-init does not mutate tracked
+  # repo content or developer-owned input directories.
   tp-init:
     image: alpine:3.19
     container_name: transformation-portal-init
@@ -34,14 +33,12 @@ services:
       - -c
       - |
         set -eu
-        mkdir -p /init/input /init/output /init/config
-        chown 10001:10001 /init/input /init/output /init/config
-        chmod 0775 /init/input /init/output /init/config
-        echo "tp-init: host bind-mount targets ready (owner=10001:10001 mode=0775)"
+        mkdir -p /init/output
+        chown 10001:10001 /init/output
+        chmod 0775 /init/output
+        echo "tp-init: output bind-mount target ready (owner=10001:10001 mode=0775)"
     volumes:
-      - ./input:/init/input
       - ./output:/init/output
-      - ./config:/init/config
     restart: "no"
 
   # CPU-only service (lightweight)
@@ -57,9 +54,9 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      - ./input:/app/input
+      - ./input:/app/input:ro
       - ./output:/app/output
-      - ./config:/app/config
+      - ./config:/app/config:ro
       # State persists in named volume `tp_state` — Docker-managed ownership
       # inherits the image's tp:tp chown on first use, avoiding bind-mount
       # UID friction on Linux. Use `docker compose cp` for host inspection.
@@ -86,9 +83,9 @@ services:
     ports:
       - "8001:8000"
     volumes:
-      - ./input:/app/input
+      - ./input:/app/input:ro
       - ./output:/app/output
-      - ./config:/app/config
+      - ./config:/app/config:ro
       # State persists in named volume `tp_state` — see cpu service for rationale.
       - tp_state:/home/tp/.transformation_portal
     env_file:
@@ -120,9 +117,9 @@ services:
       tp-init:
         condition: service_completed_successfully
     volumes:
-      - ./input:/app/input
+      - ./input:/app/input:ro
       - ./output:/app/output
-      - ./config:/app/config
+      - ./config:/app/config:ro
       # State persists in named volume `tp_state` — see cpu service for rationale.
       - tp_state:/home/tp/.transformation_portal
     env_file:
