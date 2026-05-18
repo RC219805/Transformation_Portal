@@ -90,6 +90,13 @@ repos:
         files: ^tests/.*\.py$
         types: [python]
 
+      - id: check-unsafe-torch-load
+        name: Check Unsafe torch.load() Usage (CVE-2025-32434)
+        entry: scripts/setup/run_repo_python.sh scripts/validation/check_unsafe_torch_load.py
+        language: system
+        files: \.py$
+        pass_filenames: false
+
       - id: ban-tautological-tests
         name: Ban Tautological Test Assertions
         entry: scripts/setup/run_repo_python.sh scripts/ci/check_no_tautological_tests.py
