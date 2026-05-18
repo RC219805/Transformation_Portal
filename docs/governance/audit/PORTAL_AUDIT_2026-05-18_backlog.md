@@ -33,7 +33,7 @@ Each item carries severity, effort, the files to touch, observable acceptance cr
 **Tracks finding:** [#3](../PORTAL_AUDIT_REPO_WIDE_2026-05-18.md#62-runtime-and-performance) — benchmark inconsistency
 **Files to touch:** `docs/performance/sam2_benchmarks.md`, `tests/spatial_ai/segmentation/test_sam2_backend_performance.py`
 **Acceptance criteria:**
-- Test docstring at `test_sam2_backend_performance.py:14` no longer claims "<2s on MPS"; it cites the measured baseline (~13.4s on MPS, ~? on CPU) recorded in `sam2_benchmarks.md`.
+- Test docstring at `test_sam2_backend_performance.py:14` no longer claims "<2s on MPS"; it cites the measured MPS baseline recorded in `sam2_benchmarks.md` (currently ~13.4 s for 512×512 auto mode) and a corresponding CPU baseline re-measured during this fix.
 - Assertion at `test_sam2_backend_performance.py:296` uses a threshold derived from the same recorded baseline (e.g., `1.5 × baseline`), not the legacy `< 20.0`.
 - `docs/performance/sam2_benchmarks.md` records when this baseline was last re-measured and the hardware target.
 
@@ -149,4 +149,4 @@ Each item carries severity, effort, the files to touch, observable acceptance cr
 
 - `make ci` — confirms governance checks remain green after each backlog item lands.
 - `python3 scripts/validation/check_unsafe_torch_load.py` — confirms I-1 wiring stays effective.
-- `make check-stale-docs` — confirms this backlog stays linked from the audit and the map after any title/path edits.
+- `make check-stale-docs` and `make check-doc-heading-links` — confirm this backlog stays linked from the audit and the map after any title/path edits, with all internal anchors resolving.

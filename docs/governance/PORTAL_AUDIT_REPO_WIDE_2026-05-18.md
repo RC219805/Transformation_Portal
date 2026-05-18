@@ -20,7 +20,7 @@ The overall conclusion is that the repo is **governance-heavy and unusually matu
 
 Static, read-only audit performed against the working tree at `origin/main` head plus the `claude/optimize-portal-audit-gYdHm` branch on 2026-05-18. No code execution, no container build, no test runs, no checkpoint downloads, no inspection of private CI logs, branch protection rules, or org-level secrets. Findings reflect repository state visible from the working tree and existing external documentation only.
 
-Every citation below is a real `path` or `path:line` reference verified during this audit. Where the verification did not record a specific line, only the path is cited. Absence claims (e.g., "no `USER` directive in Dockerfile") were checked with explicit greps and reads against the inspected file; they are conservative against `git blame` truth but they are not dynamic proof.
+Every citation below is a real `path` or `path:line` reference verified during this audit. Where the verification did not record a specific line, only the path is cited. Absence claims (e.g., "no `USER` directive in Dockerfile") were checked with explicit greps and reads against the inspected file; they reflect the state of the working tree at the audit commit, not dynamic proof that the surface cannot appear at runtime.
 
 ## 3. Inspected surface
 
