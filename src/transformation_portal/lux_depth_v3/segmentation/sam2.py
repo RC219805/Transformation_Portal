@@ -21,11 +21,16 @@ from .efficient_sam import EfficientSAMBackend
 
 logger = logging.getLogger(__name__)
 
+
+class SAM2CheckpointIntegrityError(RuntimeError):
+    """Raised when SAM2 checkpoint bytes do not match the expected digest."""
+
+
 try:
     from transformation_portal.spatial_ai.segmentation.contracts import SegmentationInput as SpatialSegmentationInput
     from transformation_portal.spatial_ai.segmentation.sam2_backend import SAM2Backend as SpatialSAM2Backend
     from transformation_portal.spatial_ai.segmentation.sam2_backend import (
-        SAM2CheckpointIntegrityError,
+        SAM2CheckpointIntegrityError as SpatialSAM2CheckpointIntegrityError,
     )
     from transformation_portal.spatial_ai.segmentation.tiling.config import GlobalPassConfig, SegmentationTilingConfig
 
@@ -33,7 +38,7 @@ try:
 except ImportError:
     SPATIAL_SAM2_AVAILABLE = False
     GlobalPassConfig = None  # type: ignore
-    SAM2CheckpointIntegrityError = None  # type: ignore
+    SpatialSAM2CheckpointIntegrityError = SAM2CheckpointIntegrityError
     SpatialSAM2Backend = None  # type: ignore
     SpatialSegmentationInput = None  # type: ignore
     SegmentationTilingConfig = None  # type: ignore
@@ -280,8 +285,8 @@ class SAM2SegmentationBackend(EfficientSAMBackend):
                 legacy_kwargs.pop("model_config", None)
                 legacy_kwargs.pop("expected_sha256", None)
                 self._sam2_backend = SpatialSAM2Backend(**legacy_kwargs)
-        except SAM2CheckpointIntegrityError:
-            raise
+        except SpatialSAM2CheckpointIntegrityError as exc:
+            raise SAM2CheckpointIntegrityError(str(exc)) from exc
         except Exception as exc:
             raise RuntimeError(f"SAM2 backend loading failed: {exc}") from exc
 
@@ -313,8 +318,8 @@ class SAM2SegmentationBackend(EfficientSAMBackend):
                 mode="auto",
             )
             seg_result = self._sam2_backend.segment(seg_input)
-        except SAM2CheckpointIntegrityError:
-            raise
+        except SpatialSAM2CheckpointIntegrityError as exc:
+            raise SAM2CheckpointIntegrityError(str(exc)) from exc
         except Exception as exc:
             raise RuntimeError(f"SAM2 inference failed: {exc}") from exc
         self._record_runtime_metadata(

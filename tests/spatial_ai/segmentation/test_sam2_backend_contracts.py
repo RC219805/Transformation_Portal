@@ -298,6 +298,14 @@ def test_large_defaults_match_apex_research_ultra_pin(segmentation_surface: tupl
     assert model_block["expected_sha256"] == SAM2Backend.CHECKPOINT_SHA256["large"]
 
 
+def test_model_configs_lock_the_intentional_base_vs_large_split(segmentation_surface: tuple[Any, Any]) -> None:
+    """Base stays on the legacy Hydra short name while large uses the SAM 2.1 path."""
+    SAM2Backend, _ = segmentation_surface
+
+    assert SAM2Backend.MODEL_CONFIGS["base"] == "sam2_hiera_b+"
+    assert SAM2Backend.MODEL_CONFIGS["large"] == PINNED_SAM21_LARGE_CONFIG
+
+
 def test_extract_predictions_normalizes_2d_masks_and_bad_score_shapes(
     segmentation_surface: tuple[Any, Any], checkpoint_path: str
 ) -> None:

@@ -1314,7 +1314,9 @@ def test_segment_materials_sam2_strict_mps_missing_torch_reports_dependency_erro
 
     message = str(exc_info.value)
     assert "SAM2 requires sam2 and torch" in message
+    assert "torch.backends" not in message
     assert "'NoneType' object has no attribute 'backends'" not in message
+    assert captured["device"] == "cpu"
 
 
 def test_segment_materials_sam2_integrity_error_fails_closed(sample_image, monkeypatch):

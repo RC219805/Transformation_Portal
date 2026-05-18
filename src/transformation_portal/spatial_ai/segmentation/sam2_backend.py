@@ -93,9 +93,11 @@ class SAM2Backend:
         checkpoint_path: Path to model checkpoint file.
     """
 
-    # Model configurations. Large defaults to the improved SAM 2.1 release while
-    # base remains on the legacy July 2024 family until a separate verified pin
-    # is carried for that checkpoint/config pair.
+    # The upstream sam2 loader accepts both Hydra short names and config file
+    # paths via the shared build_sam2(config_file=...) surface. Base
+    # intentionally remains on the legacy July 2024 config until its own
+    # canonical SAM 2.1 pin is carried; large migrates to the SAM 2.1 config
+    # path now.
     MODEL_CONFIGS = {
         "base": "sam2_hiera_b+",
         "large": "configs/sam2.1/sam2.1_hiera_l.yaml",
