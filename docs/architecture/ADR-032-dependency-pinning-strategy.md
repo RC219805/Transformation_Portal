@@ -167,9 +167,11 @@ Certain packages require minimum versions due to CVEs or security patches:
 
 **Security Monitoring Tools:**
 
-- `safety` (in `ci.in`): Automated CVE scanning in CI
-- `bandit` (in `ci.in`): Static security analysis
-- Dependabot: GitHub-native automated PR creation for security patches
+- `pip-audit` (in `requirements/security.in`): **Sole governed blocking dependency scanner.** Run in `.github/workflows/security-unified.yml` (`dependency-scan` job) on every PR and on the nightly + Tuesday-staggered schedules. **Block policy:** any HIGH or CRITICAL finding fails the job and blocks merge; LOW/MEDIUM are reported in the job summary only. **Exception process:** time-bound suppressions use `pip-audit --ignore-vuln <CVE-ID>` with an inline comment in the workflow naming the CVE, the upstream tracking link, and the removal trigger (e.g., the current `--ignore-vuln CVE-2026-4539` pending an upstream pygments fix). Suppressions are reviewed every quarter; un-removable ones escalate to the next Approved Exceptions table entry.
+- `bandit[toml]` (in `requirements/security.in`): Static security analysis for Python source.
+- Dependabot: GitHub-native automated PR creation for security patches.
+
+> `safety` was removed from this toolchain in March 2026 — see the Amendments section below for rationale. Re-introduction requires a fresh ADR amendment.
 
 ---
 
@@ -562,8 +564,8 @@ Track implementation progress:
 
 ### Security Resources
 
-- **PyPI Advisory Database**: https://github.com/pypa/advisory-database
-- **Safety DB**: https://github.com/pyupio/safety-db
+- **PyPI Advisory Database**: https://github.com/pypa/advisory-database (data source backing `pip-audit`)
+- **pip-audit**: https://github.com/pypa/pip-audit
 - **Snyk Vulnerability Database**: https://security.snyk.io/
 
 ---
@@ -613,7 +615,8 @@ Track implementation progress:
 Use this checklist every quarter (Feb, May, Aug, Nov):
 
 ### 1. Security Audit
-- [ ] Run `safety check` on all `.txt` files
+- [ ] Run `pip-audit -r requirements/<lockfile>.txt` on each governed `.txt` lockfile (mirrors the `security-unified.yml` invocation)
+- [ ] Review every active `--ignore-vuln` suppression in `.github/workflows/security-unified.yml`; remove any whose upstream fix has shipped
 - [ ] Check Dependabot alerts
 - [ ] Review NIST NVD for new CVEs
 - [ ] Update security minimums table in ADR-032
@@ -647,10 +650,33 @@ Use this checklist every quarter (Feb, May, Aug, Nov):
 
 ---
 
-**Document Version:** 1.0
-**Last Updated:** 2026-02-16
+**Document Version:** 1.1
+**Last Updated:** 2026-05-18 (Amendment A1)
 **Next Review:** 2026-05-16 (Q2 2026)
 **Approvers:** Platform Engineering Team
+
+---
+
+## Amendments
+
+### A1 — 2026-05-18: Safety removal, pip-audit promoted to sole blocking scanner
+
+**Scope:** §3 "Security Monitoring Tools", Appendix B Quarterly Review §1, References → Security Resources.
+
+**Change:**
+- Removed `safety` from the documented security-monitoring toolchain.
+- Promoted `pip-audit` to **sole governed blocking dependency scanner**, with explicit block policy (HIGH/CRITICAL → fail) and `--ignore-vuln` exception process.
+- Corrected `bandit`'s home file (`requirements/security.in`, not `ci.in`).
+- Replaced the dead Safety DB external link with the upstream `pip-audit` repo.
+- Updated quarterly review §1 to invoke `pip-audit` and to require a sweep of active `--ignore-vuln` suppressions.
+
+**Rationale:** Safety was removed from `requirements/security.in` in March 2026 because (a) it pulls `nltk` as a transitive dependency, which generated ungoverned advisory noise, and (b) `pip-audit` provides equivalent CVE coverage via the PyPI Advisory Database without the transitive baggage. The change shipped in the workflow and the `security.in` source-of-truth then, but ADR-032 still cited Safety as a live tool — finding #8 in `docs/governance/PORTAL_AUDIT_REPO_WIDE_2026-05-18.md` flagged the drift, and this amendment closes it (backlog item I-4 in `docs/governance/audit/PORTAL_AUDIT_2026-05-18_backlog.md`).
+
+**Sources of truth for the new posture:**
+- `requirements/security.in` — toolchain composition (pip-audit + bandit; Safety removal recorded inline).
+- `.github/workflows/security-unified.yml` — invocation, blocking semantics, current `--ignore-vuln` suppressions.
+
+**Re-introduction policy:** Re-adding Safety (or any additional dependency scanner) requires a follow-up ADR amendment that explains how the transitive-dependency noise problem is mitigated and why pip-audit alone is insufficient.
 
 ---
 
