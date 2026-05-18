@@ -71,6 +71,8 @@ operator guidance unless they are linked here as canonical documents.
 | Dependency pinning | [ADR-032 Dependency Pinning Strategy](../architecture/ADR-032-dependency-pinning-strategy.md) | Maintained |
 | Retired ML lock lanes | [Retired ML Lock Lanes - 2026-04-30](RETIRED_ML_LOCK_LANES_2026-04-30.md) | Maintained governance record for unsupported Linux/macOS Intel ML lanes |
 | Production hardening gap (paid pilot) | [Production Hardening Gap - 2026-05-13](PRODUCTION_HARDENING_GAP_2026-05-13.md) | Paid-pilot baseline: what is already done, what is partial, what is net-new across Phases 1 through 7, plus pinned pilot acceptance commands and Phase 5.A local validation status |
+| Repo-wide audit baseline | [Portal Repo-Wide Audit - 2026-05-18](PORTAL_AUDIT_REPO_WIDE_2026-05-18.md) | Static repo-wide audit baseline as of 2026-05-18 covering CI/typing/coverage enforcement, ML runtime hotspots (SAM2, Gaussian rasterizer, segmentation cache hashing), container and plugin isolation, dependency/security governance, and software/model licensing |
+| Repo-wide audit backlog | [Portal Audit Backlog - 2026-05-18](audit/PORTAL_AUDIT_2026-05-18_backlog.md) | Companion remediation backlog for the 2026-05-18 audit: 12 actionable items across immediate / near-term / medium-term / long-term tiers with file targets and acceptance criteria |
 | Test marker policy | [ADR-044 Test Marker Enforcement](../architecture/ADR-044-test-marker-enforcement.md) | Maintained |
 | Security hardening report | [security_best_practices_report.md](security_best_practices_report.md) | Maintained status record |
 
