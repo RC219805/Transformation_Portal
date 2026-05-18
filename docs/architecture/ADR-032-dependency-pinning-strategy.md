@@ -167,7 +167,7 @@ Certain packages require minimum versions due to CVEs or security patches:
 
 **Security Monitoring Tools:**
 
-- `pip-audit` (in `requirements/security.in`): **Sole governed blocking dependency scanner.** Run in `.github/workflows/security-unified.yml` (`dependency-scan` job) on every PR and on the nightly + Tuesday-staggered schedules. **Block policy:** any HIGH or CRITICAL finding fails the job and blocks merge; LOW/MEDIUM are reported in the job summary only. **Exception process:** time-bound suppressions use `pip-audit --ignore-vuln <CVE-ID>` with an inline comment in the workflow naming the CVE, the upstream tracking link, and the removal trigger (e.g., the current `--ignore-vuln CVE-2026-4539` pending an upstream pygments fix). Suppressions are reviewed every quarter; un-removable ones escalate to the next Approved Exceptions table entry.
+- `pip-audit` (in `requirements/security.in`): **Sole governed blocking dependency scanner.** Run in `.github/workflows/security-unified.yml` (`dependency-scan` job) on every PR and on the nightly + Tuesday-staggered schedules. **Scan target:** the installed Python 3.11 environment built from `requirements/constraints.txt` + `requirements-ci.txt` + editable project install + `requirements/security.txt` — the workflow invokes `pip-audit` with no `-r` flag, so it audits resolved packages rather than a single lockfile spec. **Block policy:** any HIGH or CRITICAL finding fails the job and blocks merge; LOW/MEDIUM findings are non-blocking. **Where to find LOW/MEDIUM details:** the full pip-audit JSON is printed to the job log and uploaded as the `security-reports-<sha>` `audit-report.json` artifact (30-day retention); the GitHub step summary records only the total vulnerability count. **Exception process:** time-bound suppressions use `pip-audit --ignore-vuln <CVE-ID>` with an inline comment in the workflow naming the CVE, the upstream tracking link, and the removal trigger (e.g., the current `--ignore-vuln CVE-2026-4539` pending an upstream pygments fix). Suppressions are reviewed every quarter; un-removable ones escalate to the next Approved Exceptions table entry.
 - `bandit[toml]` (in `requirements/security.in`): Static security analysis for Python source.
 - Dependabot: GitHub-native automated PR creation for security patches.
 
@@ -615,7 +615,8 @@ Track implementation progress:
 Use this checklist every quarter (Feb, May, Aug, Nov):
 
 ### 1. Security Audit
-- [ ] Run `pip-audit -r requirements/<lockfile>.txt` on each governed `.txt` lockfile (mirrors the `security-unified.yml` invocation)
+- [ ] Reproduce the `security-unified.yml` `dependency-scan` job locally so quarterly results are comparable to merge-gate results: in a clean Python 3.11 venv, `pip install -c requirements/constraints.txt -r requirements-ci.txt`, then `pip install -c requirements/constraints.txt -e .`, then `pip install -r requirements/security.txt`, then `pip-audit --ignore-vuln <each-currently-active-suppression> --format json --output audit-report.json` against the installed environment (no `-r`, matching the workflow's scan target)
+- [ ] Cross-check the local audit JSON against the latest scheduled run's `security-reports-<sha>` artifact (30-day retention) — any delta is itself an audit finding
 - [ ] Review every active `--ignore-vuln` suppression in `.github/workflows/security-unified.yml`; remove any whose upstream fix has shipped
 - [ ] Check Dependabot alerts
 - [ ] Review NIST NVD for new CVEs
@@ -652,7 +653,7 @@ Use this checklist every quarter (Feb, May, Aug, Nov):
 
 **Document Version:** 1.1
 **Last Updated:** 2026-05-18 (Amendment A1)
-**Next Review:** 2026-05-16 (Q2 2026)
+**Next Review:** 2026-08-16 (Q3 2026; quarterly cadence per Appendix B)
 **Approvers:** Platform Engineering Team
 
 ---
