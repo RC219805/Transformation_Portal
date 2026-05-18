@@ -25,7 +25,9 @@ services:
       - ./input:/app/input
       - ./output:/app/output
       - ./config:/app/config
-      - ~/.transformation_portal:/root/.transformation_portal
+      # Runtime user is `tp` (UID/GID 10001) defined in the Dockerfile;
+      # state directory lives under that user's HOME, not /root.
+      - ~/.transformation_portal:/home/tp/.transformation_portal
     env_file:
       - path: .env
         required: false
@@ -48,7 +50,9 @@ services:
       - ./input:/app/input
       - ./output:/app/output
       - ./config:/app/config
-      - ~/.transformation_portal:/root/.transformation_portal
+      # Runtime user is `tp` (UID/GID 10001) defined in the Dockerfile;
+      # state directory lives under that user's HOME, not /root.
+      - ~/.transformation_portal:/home/tp/.transformation_portal
     env_file:
       - path: .env
         required: false
@@ -78,7 +82,9 @@ services:
       - ./input:/app/input
       - ./output:/app/output
       - ./config:/app/config
-      - ~/.transformation_portal:/root/.transformation_portal
+      # Runtime user is `tp` (UID/GID 10001) defined in the Dockerfile;
+      # state directory lives under that user's HOME, not /root.
+      - ~/.transformation_portal:/home/tp/.transformation_portal
     env_file:
       - path: .env
         required: false
@@ -97,7 +103,9 @@ services:
     ports:
       - "8080:8080"
     volumes:
-      - ~/.transformation_portal:/root/.transformation_portal
+      # Runtime user is `tp` (UID/GID 10001) defined in the Dockerfile;
+      # state directory lives under that user's HOME, not /root.
+      - ~/.transformation_portal:/home/tp/.transformation_portal
     env_file:
       - path: .env
         required: false
