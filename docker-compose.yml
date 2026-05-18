@@ -12,20 +12,62 @@
 #   - worker service: one-shot batch process; no healthcheck.
 
 services:
+  # Bootstrap: ensure the writable host bind-mount target exists and is
+  # writable by the container's `tp` user (UID/GID 10001). Runs once per
+  # `compose up` and exits; cpu/gpu/worker services gate startup on its
+  # successful completion via `depends_on: condition: service_completed_successfully`.
+  #
+  # The init service is intentionally the ONLY service that runs as root;
+  # app services keep the image-level `USER tp` for runtime hardening.
+  #
+  # Ownership semantics on the host: after first run ./output becomes owned
+  # by the configured tp runtime UID/GID (defaults 10001:10001). Input/config
+  # stay host-owned and are mounted read-only into the app containers, so
+  # tp-init does not mutate tracked repo content or developer-owned input dirs.
+  tp-init:
+    image: alpine:3.19
+    container_name: transformation-portal-init
+    user: "0:0"
+    environment:
+      TP_UID: ${TP_UID:-10001}
+      TP_GID: ${TP_GID:-10001}
+    command:
+      - sh
+      - -c
+      - |
+        set -eu
+        mkdir -p /init/output
+        chown -R "$${TP_UID}:$${TP_GID}" /init/output
+        chmod 0775 /init/output
+        chmod -R u+rwX,g+rwX /init/output
+        echo "tp-init: output bind-mount target ready (owner=$${TP_UID}:$${TP_GID} mode=0775)"
+    volumes:
+      - ./output:/init/output
+    restart: "no"
+
   # CPU-only service (lightweight)
   transformation-portal-cpu:
     build:
       context: .
       target: cpu
+      args:
+        TP_UID: ${TP_UID:-10001}
+        TP_GID: ${TP_GID:-10001}
     image: transformation-portal:cpu
     container_name: transformation-portal-cpu
+    depends_on:
+      tp-init:
+        condition: service_completed_successfully
     ports:
       - "8000:8000"
     volumes:
-      - ./input:/app/input
+      - ./input:/app/input:ro
       - ./output:/app/output
-      - ./config:/app/config
-      - ~/.transformation_portal:/root/.transformation_portal
+      - ./config:/app/config:ro
+      # State persists in named volume `tp_state` — Docker-managed ownership
+      # inherits the image's tp:tp chown on first use, avoiding bind-mount
+      # UID friction on Linux. Use `docker compose cp` for host inspection.
+      - tp_state:/home/tp/.transformation_portal
     env_file:
       - path: .env
         required: false
@@ -39,16 +81,23 @@ services:
     build:
       context: .
       target: gpu
+      args:
+        TP_UID: ${TP_UID:-10001}
+        TP_GID: ${TP_GID:-10001}
     image: transformation-portal:gpu
     container_name: transformation-portal-gpu
     runtime: nvidia
+    depends_on:
+      tp-init:
+        condition: service_completed_successfully
     ports:
       - "8001:8000"
     volumes:
-      - ./input:/app/input
+      - ./input:/app/input:ro
       - ./output:/app/output
-      - ./config:/app/config
-      - ~/.transformation_portal:/root/.transformation_portal
+      - ./config:/app/config:ro
+      # State persists in named volume `tp_state` — see cpu service for rationale.
+      - tp_state:/home/tp/.transformation_portal
     env_file:
       - path: .env
         required: false
@@ -72,13 +121,20 @@ services:
     build:
       context: .
       target: cpu
+      args:
+        TP_UID: ${TP_UID:-10001}
+        TP_GID: ${TP_GID:-10001}
     image: transformation-portal:cpu
     container_name: transformation-portal-worker
+    depends_on:
+      tp-init:
+        condition: service_completed_successfully
     volumes:
-      - ./input:/app/input
+      - ./input:/app/input:ro
       - ./output:/app/output
-      - ./config:/app/config
-      - ~/.transformation_portal:/root/.transformation_portal
+      - ./config:/app/config:ro
+      # State persists in named volume `tp_state` — see cpu service for rationale.
+      - tp_state:/home/tp/.transformation_portal
     env_file:
       - path: .env
         required: false
@@ -87,17 +143,21 @@ services:
       - PYTHONUNBUFFERED=1
     command: python -m transformation_portal.cli batch-process /app/input /app/output --preset golden_hour
 
-  # Monitoring dashboard (optional)
+  # Monitoring dashboard (optional). No I/O bind mounts → no tp-init dependency.
   transformation-portal-monitor:
     build:
       context: .
       target: cpu
+      args:
+        TP_UID: ${TP_UID:-10001}
+        TP_GID: ${TP_GID:-10001}
     image: transformation-portal:cpu
     container_name: transformation-portal-monitor
     ports:
       - "8080:8080"
     volumes:
-      - ~/.transformation_portal:/root/.transformation_portal
+      # State persists in named volume `tp_state` — see cpu service for rationale.
+      - tp_state:/home/tp/.transformation_portal
     env_file:
       - path: .env
         required: false
@@ -223,6 +283,10 @@ volumes:
   input:
   output:
   config:
+  # tp_state holds the runtime user's state cache (plugins, model registry
+  # scratch, etc.). Named volume rather than bind so Docker preserves the
+  # image's tp:tp ownership and we don't fight host UIDs on Linux.
+  tp_state:
   postgres_data:
   redis_data:
   minio_data:

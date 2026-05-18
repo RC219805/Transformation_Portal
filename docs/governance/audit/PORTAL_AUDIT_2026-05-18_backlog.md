@@ -19,6 +19,8 @@ Each item carries severity, effort, the files to touch, observable acceptance cr
 
 ### I-1. Wire `check_unsafe_torch_load.py` into pre-commit and security-unified.yml
 
+**Status:** Done — merged in PR #1806 (`70d45dda074f6e2fa0a6c1b49a5cfb5bf0793c53`) on 2026-05-18. Follow-up: flip `continue-on-error: true` → blocking after one quiet week (~2026-05-25).
+
 **Severity / Effort:** Medium / S
 **Tracks finding:** [#10](../PORTAL_AUDIT_REPO_WIDE_2026-05-18.md#63-security) — orphaned torch-load scanner
 **Files to touch:** `.pre-commit-config.yaml`, `.github/workflows/security-unified.yml`
@@ -48,6 +50,8 @@ Each item carries severity, effort, the files to touch, observable acceptance cr
 - `docker-compose.yml` either inherits the image user or sets `user:` explicitly on each service; volumes are mounted with mode compatible with the new uid/gid.
 
 ### I-4. Update ADR-032 to remove `safety` reference and document pip-audit posture
+
+**Status:** Done — merged in PR #1807 (`a699c161f3943006df9ef3a952d6e12498428152`) on 2026-05-18.
 
 **Severity / Effort:** Low / S
 **Tracks finding:** [#8](../PORTAL_AUDIT_REPO_WIDE_2026-05-18.md#64-ci-governance-and-licensing) — ADR-032 drift
