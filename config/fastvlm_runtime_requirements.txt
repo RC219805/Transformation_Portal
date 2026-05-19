@@ -40,7 +40,7 @@ multiprocess==0.70.19
 networkx==3.6.1
 numpy==2.4.4
 opencv-python==4.10.0.84
-orjson==3.11.8
+orjson==3.11.9
 packaging==26.2
 pandas==3.0.2
 pillow==12.2.0
