@@ -11,8 +11,10 @@ Test Tiers:
 Success Criteria:
 - Runs with real SAM2 checkpoint (marked @ml @slow @benchmark)
 - Produces machine-readable metrics for regression tracking
-- Baseline: < 2s per 512x512 image on MPS (auto mode)
-- Memory: < 2GB peak RSS for single inference
+- Baseline: 512x512 auto mode uses the measured device baselines recorded in
+  docs/performance/sam2_benchmarks.md
+- Memory: device-specific peak RSS follows the recorded baselines in
+  docs/performance/sam2_benchmarks.md (MPS ~1.7GB, CPU fallback ~5.6GB)
 
 Quality Firewall Integration:
 - p95 latency: block if > 10% increase
@@ -58,6 +60,13 @@ pytestmark = [pytest.mark.benchmark, pytest.mark.ml, pytest.mark.slow]
 # Skip all tests if torch not available
 if not HAS_TORCH:
     pytest.skip("torch not available", allow_module_level=True)
+
+SAM2_AUTO_512_BASELINE_SEC = {
+    "mps": 13.38,
+    "cpu": 42.66,
+}
+SAM2_AUTO_512_THRESHOLD_MULTIPLIER = 1.5
+SAM2_BENCHMARK_DEVICE_ENV = "TP_SAM2_BENCHMARK_DEVICE"
 
 
 # ============================================================================
@@ -160,22 +169,63 @@ def benchmark_video_frames(tmp_path_factory):
 @pytest.fixture(scope="module")
 def sam2_backend(benchmark_checkpoint):
     """Create SAM2 backend for benchmarks (module-scoped to amortize load time)."""
-    # Determine best device
-    import torch
-
-    if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
-        device = "mps"
-    elif torch.cuda.is_available():
-        device = "cuda"
+    requested_device = os.environ.get(SAM2_BENCHMARK_DEVICE_ENV)
+    if requested_device:
+        device = _validate_requested_benchmark_device(requested_device)
     else:
-        device = "cpu"
+        device = _default_benchmark_device()
 
     backend = SAM2Backend(
         model_size="large",  # Match the checkpoint we have
         checkpoint_path=benchmark_checkpoint,
         device=device,
     )
+    if requested_device and backend.device != requested_device:
+        pytest.fail(
+            f"{SAM2_BENCHMARK_DEVICE_ENV}={requested_device!r} was requested, "
+            f"but SAM2Backend resolved device {backend.device!r}; refusing to "
+            "record a benchmark under a silent fallback"
+        )
     return backend
+
+
+def _default_benchmark_device() -> str:
+    """Resolve the default benchmark device without changing backend production policy."""
+    import torch
+
+    if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+        return "mps"
+    if torch.cuda.is_available():
+        return "cuda"
+    return "cpu"
+
+
+def _validate_requested_benchmark_device(requested_device: str) -> str:
+    """Validate benchmark-only device overrides before constructing the backend."""
+    import torch
+
+    concrete_devices = SAM2Backend.SUPPORTED_DEVICES - {"auto"}
+    if requested_device == "auto":
+        pytest.fail(
+            f"{SAM2_BENCHMARK_DEVICE_ENV}=auto is not a concrete benchmark target; "
+            "unset it for default selection or set one of "
+            f"{sorted(concrete_devices)}"
+        )
+    if requested_device not in concrete_devices:
+        pytest.fail(
+            f"{SAM2_BENCHMARK_DEVICE_ENV}={requested_device!r} is invalid; " f"expected one of {sorted(concrete_devices)}"
+        )
+    if requested_device == "cuda" and not torch.cuda.is_available():
+        pytest.fail(
+            f"{SAM2_BENCHMARK_DEVICE_ENV}=cuda was requested, but CUDA is not "
+            "available; refusing to benchmark a fallback device"
+        )
+    if requested_device == "mps" and not (hasattr(torch.backends, "mps") and torch.backends.mps.is_available()):
+        pytest.fail(
+            f"{SAM2_BENCHMARK_DEVICE_ENV}=mps was requested, but MPS is not "
+            "available; refusing to benchmark a fallback device"
+        )
+    return requested_device
 
 
 # ============================================================================
@@ -261,7 +311,9 @@ class TestSAM2AutoModePerformance:
     def test_auto_mode_latency_512x512(self, sam2_backend, benchmark_images):
         """Measure auto mode latency on 512x512 image.
 
-        Baseline: < 2s on MPS, < 5s on CPU
+        Baselines are measured means from docs/performance/sam2_benchmarks.md:
+        13.38s on MPS and 42.66s on CPU. The assertion allows 1.5x the
+        recorded baseline for the active device.
         """
         fixture = next(f for f in benchmark_images if f["width"] == 512)
         seg_input = SegmentationInput(
@@ -292,8 +344,16 @@ class TestSAM2AutoModePerformance:
         print(f"\n[AUTO 512x512] Mean: {metrics['mean_sec']:.3f}s, P95: {metrics['p95_sec']:.3f}s")
         print(f"[AUTO 512x512] Masks: {mask_count}, Peak memory: {peak_mem_mb:.1f}MB")
 
-        # Assertions (realistic limits based on MPS performance)
-        assert metrics["mean_sec"] < 20.0, "Auto mode should complete in < 20s (MPS baseline: ~13.5s)"
+        baseline_sec = SAM2_AUTO_512_BASELINE_SEC.get(sam2_backend.device)
+        if baseline_sec is None:
+            pytest.skip(f"No recorded 512x512 auto-mode baseline for device {sam2_backend.device!r}")
+        threshold_sec = baseline_sec * SAM2_AUTO_512_THRESHOLD_MULTIPLIER
+
+        assert metrics["mean_sec"] < threshold_sec, (
+            f"Auto mode mean latency should be < {threshold_sec:.2f}s "
+            f"({SAM2_AUTO_512_THRESHOLD_MULTIPLIER:.1f}x {sam2_backend.device} baseline {baseline_sec:.2f}s); "
+            f"got {metrics['mean_sec']:.3f}s"
+        )
         assert mask_count >= 0, "Should generate zero or more masks"
 
         # Store metrics for ledger (JSON format)
