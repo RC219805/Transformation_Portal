@@ -13,7 +13,8 @@ Success Criteria:
 - Produces machine-readable metrics for regression tracking
 - Baseline: 512x512 auto mode uses the measured device baselines recorded in
   docs/performance/sam2_benchmarks.md
-- Memory: < 2GB peak RSS for single inference
+- Memory: device-specific peak RSS follows the recorded baselines in
+  docs/performance/sam2_benchmarks.md (MPS ~1.7GB, CPU fallback ~5.6GB)
 
 Quality Firewall Integration:
 - p95 latency: block if > 10% increase
@@ -170,12 +171,7 @@ def sam2_backend(benchmark_checkpoint):
     """Create SAM2 backend for benchmarks (module-scoped to amortize load time)."""
     requested_device = os.environ.get(SAM2_BENCHMARK_DEVICE_ENV)
     if requested_device:
-        if requested_device not in SAM2Backend.SUPPORTED_DEVICES:
-            pytest.fail(
-                f"{SAM2_BENCHMARK_DEVICE_ENV}={requested_device!r} is invalid; "
-                f"expected one of {sorted(SAM2Backend.SUPPORTED_DEVICES)}"
-            )
-        device = requested_device
+        device = _validate_requested_benchmark_device(requested_device)
     else:
         device = _default_benchmark_device()
 
@@ -184,6 +180,12 @@ def sam2_backend(benchmark_checkpoint):
         checkpoint_path=benchmark_checkpoint,
         device=device,
     )
+    if requested_device and backend.device != requested_device:
+        pytest.fail(
+            f"{SAM2_BENCHMARK_DEVICE_ENV}={requested_device!r} was requested, "
+            f"but SAM2Backend resolved device {backend.device!r}; refusing to "
+            "record a benchmark under a silent fallback"
+        )
     return backend
 
 
@@ -196,6 +198,34 @@ def _default_benchmark_device() -> str:
     if torch.cuda.is_available():
         return "cuda"
     return "cpu"
+
+
+def _validate_requested_benchmark_device(requested_device: str) -> str:
+    """Validate benchmark-only device overrides before constructing the backend."""
+    import torch
+
+    concrete_devices = SAM2Backend.SUPPORTED_DEVICES - {"auto"}
+    if requested_device == "auto":
+        pytest.fail(
+            f"{SAM2_BENCHMARK_DEVICE_ENV}=auto is not a concrete benchmark target; "
+            "unset it for default selection or set one of "
+            f"{sorted(concrete_devices)}"
+        )
+    if requested_device not in concrete_devices:
+        pytest.fail(
+            f"{SAM2_BENCHMARK_DEVICE_ENV}={requested_device!r} is invalid; " f"expected one of {sorted(concrete_devices)}"
+        )
+    if requested_device == "cuda" and not torch.cuda.is_available():
+        pytest.fail(
+            f"{SAM2_BENCHMARK_DEVICE_ENV}=cuda was requested, but CUDA is not "
+            "available; refusing to benchmark a fallback device"
+        )
+    if requested_device == "mps" and not (hasattr(torch.backends, "mps") and torch.backends.mps.is_available()):
+        pytest.fail(
+            f"{SAM2_BENCHMARK_DEVICE_ENV}=mps was requested, but MPS is not "
+            "available; refusing to benchmark a fallback device"
+        )
+    return requested_device
 
 
 # ============================================================================

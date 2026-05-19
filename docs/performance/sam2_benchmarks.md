@@ -54,7 +54,8 @@
 - **Subsequent runs:** Cached model, only inference time counted
 - **MPS acceleration:** Tests run on Apple Silicon with MPS backend
 - **CPU baseline:** Re-measured on the local Apple Silicon CPU path to keep the documented fallback budget explicit
-- **Memory profile:** Peak RSS includes model weights (~1.6GB) + activations
+- **Memory profile:** Peak RSS includes model weights (~1.6GB) + activations; the recorded budget is device-specific
+  (MPS ~1.7GB, local CPU fallback ~5.6GB), not a single cross-device `<2GB` threshold
 
 ## Test Execution
 
