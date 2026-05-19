@@ -10,6 +10,17 @@
 requirements/.pip-tools-cache/
 requirements/.hash-pilot/
 
+# Local secrets / credentials
+.env
+.env.*
+!.env.example
+.npmrc
+.pypirc
+*.pem
+*.key
+*.p12
+*.pfx
+
 node_modules/
 web/secure-landing/node_modules/
 web/secure-landing/.next/
