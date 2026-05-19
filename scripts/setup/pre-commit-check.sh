@@ -48,6 +48,7 @@ ALLOWED_ROOT_FILES=(
     "docker-compose.yml"
     "docker-compose.yaml"
     ".gitignore"
+    ".dockerignore"
     ".gitattributes"
     ".gitmodules"
     ".git-blame-ignore-revs"
