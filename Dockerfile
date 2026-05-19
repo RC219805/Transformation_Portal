@@ -17,8 +17,9 @@ ARG TP_GID=10001
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
+    build-essential \
     ffmpeg \
-    libgl1-mesa-glx \
+    libgl1 \
     libglib2.0-0 \
     libsm6 \
     libxext6 \
@@ -41,6 +42,7 @@ WORKDIR /app
 FROM base as cpu
 
 COPY requirements.txt .
+COPY requirements/ requirements/
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
@@ -66,10 +68,12 @@ ARG TP_UID=10001
 ARG TP_GID=10001
 
 RUN apt-get update && apt-get install -y \
+    build-essential \
     python3.11 \
+    python3.11-dev \
     python3-pip \
     ffmpeg \
-    libgl1-mesa-glx \
+    libgl1 \
     && rm -rf /var/lib/apt/lists/*
 
 # Recreate the same unprivileged identity as `base`. The gpu stage does
@@ -85,6 +89,7 @@ ENV HOME=/home/tp
 WORKDIR /app
 
 COPY requirements.txt .
+COPY requirements/ requirements/
 RUN pip3 install --no-cache-dir -r requirements.txt torch torchvision --index-url https://download.pytorch.org/whl/cu121
 
 COPY . .
@@ -105,6 +110,7 @@ FROM base as apple-silicon
 
 # Install Apple Silicon optimized dependencies
 COPY requirements.txt .
+COPY requirements/ requirements/
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Install CoreML tools
