@@ -11,7 +11,8 @@ Test Tiers:
 Success Criteria:
 - Runs with real SAM2 checkpoint (marked @ml @slow @benchmark)
 - Produces machine-readable metrics for regression tracking
-- Baseline: < 2s per 512x512 image on MPS (auto mode)
+- Baseline: 512x512 auto mode uses the measured device baselines recorded in
+  docs/performance/sam2_benchmarks.md
 - Memory: < 2GB peak RSS for single inference
 
 Quality Firewall Integration:
@@ -58,6 +59,13 @@ pytestmark = [pytest.mark.benchmark, pytest.mark.ml, pytest.mark.slow]
 # Skip all tests if torch not available
 if not HAS_TORCH:
     pytest.skip("torch not available", allow_module_level=True)
+
+SAM2_AUTO_512_BASELINE_SEC = {
+    "mps": 13.38,
+    "cpu": 42.66,
+}
+SAM2_AUTO_512_THRESHOLD_MULTIPLIER = 1.5
+SAM2_BENCHMARK_DEVICE_ENV = "TP_SAM2_BENCHMARK_DEVICE"
 
 
 # ============================================================================
@@ -160,15 +168,16 @@ def benchmark_video_frames(tmp_path_factory):
 @pytest.fixture(scope="module")
 def sam2_backend(benchmark_checkpoint):
     """Create SAM2 backend for benchmarks (module-scoped to amortize load time)."""
-    # Determine best device
-    import torch
-
-    if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
-        device = "mps"
-    elif torch.cuda.is_available():
-        device = "cuda"
+    requested_device = os.environ.get(SAM2_BENCHMARK_DEVICE_ENV)
+    if requested_device:
+        if requested_device not in SAM2Backend.SUPPORTED_DEVICES:
+            pytest.fail(
+                f"{SAM2_BENCHMARK_DEVICE_ENV}={requested_device!r} is invalid; "
+                f"expected one of {sorted(SAM2Backend.SUPPORTED_DEVICES)}"
+            )
+        device = requested_device
     else:
-        device = "cpu"
+        device = _default_benchmark_device()
 
     backend = SAM2Backend(
         model_size="large",  # Match the checkpoint we have
@@ -176,6 +185,17 @@ def sam2_backend(benchmark_checkpoint):
         device=device,
     )
     return backend
+
+
+def _default_benchmark_device() -> str:
+    """Resolve the default benchmark device without changing backend production policy."""
+    import torch
+
+    if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+        return "mps"
+    if torch.cuda.is_available():
+        return "cuda"
+    return "cpu"
 
 
 # ============================================================================
@@ -261,7 +281,9 @@ class TestSAM2AutoModePerformance:
     def test_auto_mode_latency_512x512(self, sam2_backend, benchmark_images):
         """Measure auto mode latency on 512x512 image.
 
-        Baseline: < 2s on MPS, < 5s on CPU
+        Baselines are measured means from docs/performance/sam2_benchmarks.md:
+        13.38s on MPS and 42.66s on CPU. The assertion allows 1.5x the
+        recorded baseline for the active device.
         """
         fixture = next(f for f in benchmark_images if f["width"] == 512)
         seg_input = SegmentationInput(
@@ -292,8 +314,16 @@ class TestSAM2AutoModePerformance:
         print(f"\n[AUTO 512x512] Mean: {metrics['mean_sec']:.3f}s, P95: {metrics['p95_sec']:.3f}s")
         print(f"[AUTO 512x512] Masks: {mask_count}, Peak memory: {peak_mem_mb:.1f}MB")
 
-        # Assertions (realistic limits based on MPS performance)
-        assert metrics["mean_sec"] < 20.0, "Auto mode should complete in < 20s (MPS baseline: ~13.5s)"
+        baseline_sec = SAM2_AUTO_512_BASELINE_SEC.get(sam2_backend.device)
+        if baseline_sec is None:
+            pytest.skip(f"No recorded 512x512 auto-mode baseline for device {sam2_backend.device!r}")
+        threshold_sec = baseline_sec * SAM2_AUTO_512_THRESHOLD_MULTIPLIER
+
+        assert metrics["mean_sec"] < threshold_sec, (
+            f"Auto mode mean latency should be < {threshold_sec:.2f}s "
+            f"({SAM2_AUTO_512_THRESHOLD_MULTIPLIER:.1f}x {sam2_backend.device} baseline {baseline_sec:.2f}s); "
+            f"got {metrics['mean_sec']:.3f}s"
+        )
         assert mask_count >= 0, "Should generate zero or more masks"
 
         # Store metrics for ledger (JSON format)
