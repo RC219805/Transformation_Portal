@@ -112,9 +112,9 @@ services:
             - driver: nvidia
               count: 1
               capabilities: [gpu]
-    # GPU image installs python3 (no `python` shim). Use python3 here so the
-    # command line is consistent with the image's interpreter.
-    command: python3 -m transformation_portal.cli serve --host 0.0.0.0 --port 8000
+    # GPU image intentionally invokes Python 3.11 explicitly to avoid resolving
+    # Ubuntu 22.04's distro-default python3.
+    command: python3.11 -m transformation_portal.cli serve --host 0.0.0.0 --port 8000
 
   # Batch processing worker (one-shot; no healthcheck — process exits when batch completes)
   transformation-portal-worker:
