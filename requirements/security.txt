@@ -5,7 +5,9 @@
 #    pip-compile --constraint=all.txt --output-file=security.txt security.in
 #
 bandit[toml]==1.9.4
-    # via -r security.in
+    # via
+    #   -c all.txt
+    #   -r security.in
 boolean-py==5.0
     # via license-expression
 cachecontrol[filecache]==0.14.4
@@ -13,29 +15,42 @@ cachecontrol[filecache]==0.14.4
     #   cachecontrol
     #   pip-audit
 certifi==2026.2.25
-    # via requests
+    # via
+    #   -c all.txt
+    #   requests
 charset-normalizer==3.4.7
-    # via requests
+    # via
+    #   -c all.txt
+    #   requests
 cyclonedx-python-lib==11.7.0
     # via pip-audit
 defusedxml==0.7.1
     # via py-serializable
 filelock==3.25.2
-    # via cachecontrol
+    # via
+    #   -c all.txt
+    #   cachecontrol
 idna==3.15
-    # via requests
+    # via
+    #   -c all.txt
+    #   requests
 license-expression==30.4.4
     # via cyclonedx-python-lib
 markdown-it-py==4.0.0
-    # via rich
+    # via
+    #   -c all.txt
+    #   rich
 mdurl==0.1.2
-    # via markdown-it-py
+    # via
+    #   -c all.txt
+    #   markdown-it-py
 msgpack==1.1.2
     # via cachecontrol
 packageurl-python==0.17.6
     # via cyclonedx-python-lib
 packaging==26.0
     # via
+    #   -c all.txt
     #   pip-audit
     #   pip-requirements-parser
 pip-api==0.0.34
@@ -45,35 +60,53 @@ pip-audit==2.10.0
 pip-requirements-parser==32.0.1
     # via pip-audit
 platformdirs==4.9.6
-    # via pip-audit
+    # via
+    #   -c all.txt
+    #   pip-audit
 py-serializable==2.1.0
     # via cyclonedx-python-lib
 pygments==2.20.0
-    # via rich
+    # via
+    #   -c all.txt
+    #   rich
 pyparsing==3.3.2
     # via pip-requirements-parser
 pyyaml==6.0.3
-    # via bandit
+    # via
+    #   -c all.txt
+    #   bandit
 requests==2.33.1
     # via
+    #   -c all.txt
     #   cachecontrol
     #   pip-audit
 rich==15.0.0
     # via
+    #   -c all.txt
     #   bandit
     #   pip-audit
 sortedcontainers==2.4.0
-    # via cyclonedx-python-lib
+    # via
+    #   -c all.txt
+    #   cyclonedx-python-lib
 stevedore==5.7.0
-    # via bandit
+    # via
+    #   -c all.txt
+    #   bandit
 tomli==2.4.1
     # via pip-audit
 tomli-w==1.2.0
-    # via pip-audit
+    # via
+    #   -c all.txt
+    #   pip-audit
 typing-extensions==4.15.0
-    # via cyclonedx-python-lib
+    # via
+    #   -c all.txt
+    #   cyclonedx-python-lib
 urllib3==2.7.0
-    # via requests
+    # via
+    #   -c all.txt
+    #   requests
 
 # The following packages are considered to be unsafe in a requirements file:
 # pip
