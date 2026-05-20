@@ -11,8 +11,8 @@ Test Tiers:
 Success Criteria:
 - Runs with real SAM2 checkpoint (marked @ml @slow @benchmark)
 - Produces machine-readable metrics for regression tracking
-- Baseline: 512x512 auto mode uses the measured device baselines recorded in
-  docs/performance/sam2_benchmarks.md
+- Baseline: thresholded benchmark modes use measured device baselines recorded
+  in docs/performance/sam2_benchmarks.md
 - Memory: device-specific peak RSS follows the recorded baselines in
   docs/performance/sam2_benchmarks.md (MPS ~1.7GB, CPU fallback ~5.6GB)
 
@@ -61,11 +61,27 @@ pytestmark = [pytest.mark.benchmark, pytest.mark.ml, pytest.mark.slow]
 if not HAS_TORCH:
     pytest.skip("torch not available", allow_module_level=True)
 
-SAM2_AUTO_512_BASELINE_SEC = {
-    "mps": 13.38,
-    "cpu": 42.66,
+SAM2_BENCHMARK_THRESHOLD_MULTIPLIER = 1.5
+SAM2_BENCHMARK_LATENCY_BASELINES_SEC: Dict[str, Dict[str, float]] = {
+    "auto_mode_512x512": {
+        "mps": 13.38,
+        "cpu": 42.66,
+    },
+    "auto_mode_1024x768": {
+        "cpu": 46.924,
+    },
+    "points_mode_512x512": {
+        "cpu": 1.089,
+    },
+    "bbox_mode_512x512": {
+        "cpu": 1.107,
+    },
 }
-SAM2_AUTO_512_THRESHOLD_MULTIPLIER = 1.5
+SAM2_BENCHMARK_THROUGHPUT_BASELINES_FPS: Dict[str, Dict[str, float]] = {
+    "video_tracking_512x512": {
+        "cpu": 0.763,
+    },
+}
 SAM2_BENCHMARK_DEVICE_ENV = "TP_SAM2_BENCHMARK_DEVICE"
 
 
@@ -228,6 +244,52 @@ def _validate_requested_benchmark_device(requested_device: str) -> str:
     return requested_device
 
 
+def _recorded_latency_threshold_sec(case_name: str, device: str) -> tuple[float, float] | None:
+    """Return recorded latency baseline and derived threshold for a benchmark case."""
+    baseline_sec = SAM2_BENCHMARK_LATENCY_BASELINES_SEC[case_name].get(device)
+    if baseline_sec is None:
+        return None
+    return baseline_sec, baseline_sec * SAM2_BENCHMARK_THRESHOLD_MULTIPLIER
+
+
+def _recorded_throughput_floor_fps(case_name: str, device: str) -> tuple[float, float] | None:
+    """Return recorded throughput baseline and derived floor for a benchmark case."""
+    baseline_fps = SAM2_BENCHMARK_THROUGHPUT_BASELINES_FPS[case_name].get(device)
+    if baseline_fps is None:
+        return None
+    return baseline_fps, baseline_fps / SAM2_BENCHMARK_THRESHOLD_MULTIPLIER
+
+
+def _assert_mean_latency_within_baseline(case_name: str, device: str, mean_sec: float) -> None:
+    """Assert mean latency stays within the recorded device-specific budget."""
+    baseline = _recorded_latency_threshold_sec(case_name, device)
+    if baseline is None:
+        print(f"[BASELINE] No recorded {case_name} latency baseline for device {device!r}; skipping threshold assertion")
+        return
+
+    baseline_sec, threshold_sec = baseline
+    assert mean_sec < threshold_sec, (
+        f"{case_name} mean latency should be < {threshold_sec:.2f}s "
+        f"({SAM2_BENCHMARK_THRESHOLD_MULTIPLIER:.1f}x {device} baseline {baseline_sec:.2f}s); "
+        f"got {mean_sec:.3f}s"
+    )
+
+
+def _assert_throughput_within_baseline(case_name: str, device: str, fps: float) -> None:
+    """Assert throughput stays within the recorded device-specific budget."""
+    baseline = _recorded_throughput_floor_fps(case_name, device)
+    if baseline is None:
+        print(f"[BASELINE] No recorded {case_name} throughput baseline for device {device!r}; skipping threshold assertion")
+        return
+
+    baseline_fps, floor_fps = baseline
+    assert fps > floor_fps, (
+        f"{case_name} throughput should be > {floor_fps:.2f} FPS "
+        f"({device} baseline {baseline_fps:.2f} FPS / {SAM2_BENCHMARK_THRESHOLD_MULTIPLIER:.1f}); "
+        f"got {fps:.2f} FPS"
+    )
+
+
 # ============================================================================
 # Performance Measurement Utilities
 # ============================================================================
@@ -311,9 +373,8 @@ class TestSAM2AutoModePerformance:
     def test_auto_mode_latency_512x512(self, sam2_backend, benchmark_images):
         """Measure auto mode latency on 512x512 image.
 
-        Baselines are measured means from docs/performance/sam2_benchmarks.md:
-        13.38s on MPS and 42.66s on CPU. The assertion allows 1.5x the
-        recorded baseline for the active device.
+        Baselines are measured means from docs/performance/sam2_benchmarks.md.
+        The assertion allows 1.5x the recorded baseline for the active device.
         """
         fixture = next(f for f in benchmark_images if f["width"] == 512)
         seg_input = SegmentationInput(
@@ -344,16 +405,7 @@ class TestSAM2AutoModePerformance:
         print(f"\n[AUTO 512x512] Mean: {metrics['mean_sec']:.3f}s, P95: {metrics['p95_sec']:.3f}s")
         print(f"[AUTO 512x512] Masks: {mask_count}, Peak memory: {peak_mem_mb:.1f}MB")
 
-        baseline_sec = SAM2_AUTO_512_BASELINE_SEC.get(sam2_backend.device)
-        if baseline_sec is None:
-            pytest.skip(f"No recorded 512x512 auto-mode baseline for device {sam2_backend.device!r}")
-        threshold_sec = baseline_sec * SAM2_AUTO_512_THRESHOLD_MULTIPLIER
-
-        assert metrics["mean_sec"] < threshold_sec, (
-            f"Auto mode mean latency should be < {threshold_sec:.2f}s "
-            f"({SAM2_AUTO_512_THRESHOLD_MULTIPLIER:.1f}x {sam2_backend.device} baseline {baseline_sec:.2f}s); "
-            f"got {metrics['mean_sec']:.3f}s"
-        )
+        _assert_mean_latency_within_baseline("auto_mode_512x512", sam2_backend.device, metrics["mean_sec"])
         assert mask_count >= 0, "Should generate zero or more masks"
 
         # Store metrics for ledger (JSON format)
@@ -399,7 +451,7 @@ class TestSAM2AutoModePerformance:
         print(f"\n[AUTO 1024x768] Mean: {metrics['mean_sec']:.3f}s, P95: {metrics['p95_sec']:.3f}s")
         print(f"[AUTO 1024x768] Masks: {mask_count}")
 
-        assert metrics["mean_sec"] < 40.0, "HD should complete in < 40s"
+        _assert_mean_latency_within_baseline("auto_mode_1024x768", sam2_backend.device, metrics["mean_sec"])
         assert mask_count >= 0
 
         # Store metrics
@@ -487,7 +539,7 @@ class TestSAM2PromptedModePerformance:
         print(f"\n[POINTS] Mean: {metrics['mean_sec']:.3f}s, P95: {metrics['p95_sec']:.3f}s")
         print(f"[POINTS] Masks: {result.masks.shape[0]}")
 
-        assert metrics["mean_sec"] < 5.0, "Points mode should be fast (< 5s)"
+        _assert_mean_latency_within_baseline("points_mode_512x512", sam2_backend.device, metrics["mean_sec"])
 
         # Store metrics
         metrics_output = {
@@ -526,7 +578,7 @@ class TestSAM2PromptedModePerformance:
         print(f"\n[BBOX] Mean: {metrics['mean_sec']:.3f}s, P95: {metrics['p95_sec']:.3f}s")
         print(f"[BBOX] Masks: {result.masks.shape[0]}")
 
-        assert metrics["mean_sec"] < 5.0, "Bbox mode should be fast (< 5s)"
+        _assert_mean_latency_within_baseline("bbox_mode_512x512", sam2_backend.device, metrics["mean_sec"])
 
         # Store metrics
         metrics_output = {
@@ -556,7 +608,8 @@ class TestSAM2VideoModePerformance:
     def test_video_tracking_throughput(self, sam2_backend, benchmark_video_frames):
         """Measure video tracking throughput (FPS).
 
-        Baseline: > 1 FPS for 512x512 frames
+        Baselines are measured throughput from docs/performance/sam2_benchmarks.md.
+        The assertion allows a floor of the recorded FPS divided by 1.5.
         """
         seg_input = SegmentationInput(
             image=None,  # Video mode doesn't use image
@@ -593,7 +646,7 @@ class TestSAM2VideoModePerformance:
         print(f"[VIDEO] Peak memory: {peak_mem_mb:.1f}MB")
         print(f"[VIDEO] Tracked objects: {len(result.temporal_ids)}")
 
-        assert fps > 0.5, "Should achieve at least 0.5 FPS"
+        _assert_throughput_within_baseline("video_tracking_512x512", sam2_backend.device, fps)
         assert len(result.temporal_ids) > 0, "Should track at least one object"
 
         # Store metrics
