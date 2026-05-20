@@ -358,7 +358,7 @@ tomli-w==1.2.0
     # via tox
 tomlkit==0.14.0
     # via pylint
-tox==4.53.1
+tox==4.54.0
     # via -r ci.in
 tqdm==4.67.3
     # via -r base.in
