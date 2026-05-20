@@ -33,12 +33,12 @@
     "react-dom": "^19.2.6"
   },
   "overrides": {
-    "postcss": "8.5.14"
+    "postcss": "8.5.15"
   },
   "devDependencies": {
     "@playwright/test": "1.60.0",
     "esbuild": "^0.28.0",
-    "postcss": "8.5.14",
-    "stylelint": "^17.11.0"
+    "postcss": "8.5.15",
+    "stylelint": "^17.11.1"
   }
 }
