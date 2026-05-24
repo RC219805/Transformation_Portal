@@ -1,7 +1,7 @@
 # Portal Audit Backlog - 2026-05-18
 
 **Document Status:** Active backlog tracking [PORTAL_AUDIT_REPO_WIDE_2026-05-18.md](../PORTAL_AUDIT_REPO_WIDE_2026-05-18.md)
-**Last Updated:** 2026-05-18
+**Last Updated:** 2026-05-20
 **Maintainer:** Repository Architect
 **Tracks audit:** [PORTAL_AUDIT_REPO_WIDE_2026-05-18.md](../PORTAL_AUDIT_REPO_WIDE_2026-05-18.md)
 
@@ -17,6 +17,8 @@ Each item carries severity, effort, the files to touch, observable acceptance cr
 
 ## Tier 1 — Immediate (target window: 2026-05-19 → 2026-05-29)
 
+> **Tier 1 status (2026-05-20):** all four items merged. One open follow-up remains on I-1 — promote the torch-load CI step from `continue-on-error: true` to blocking after the soak window (~2026-05-25).
+
 ### I-1. Wire `check_unsafe_torch_load.py` into pre-commit and security-unified.yml
 
 **Status:** Done — merged in PR #1806 (`70d45dda074f6e2fa0a6c1b49a5cfb5bf0793c53`) on 2026-05-18. Follow-up: flip `continue-on-error: true` → blocking after one quiet week (~2026-05-25).
@@ -31,6 +33,8 @@ Each item carries severity, effort, the files to touch, observable acceptance cr
 
 ### I-2. Align SAM2 benchmark docs, docstring, and assertion to one baseline
 
+**Status:** Done — landed in PR #1815 (`eb7a0a80`) and refined in PR #1830 (`5b740cff`). Per-device Apple Silicon baselines recorded in `docs/performance/sam2_benchmarks.md`: MPS 13.38s (last re-measured 2026-02-18) and CPU 42.66s (newly re-measured 2026-05-19); the assertion now derives the threshold from the recorded per-device baseline (`1.5×`) instead of the legacy `< 20.0`.
+
 **Severity / Effort:** Medium / S
 **Tracks finding:** [#3](../PORTAL_AUDIT_REPO_WIDE_2026-05-18.md#62-runtime-and-performance) — benchmark inconsistency
 **Files to touch:** `docs/performance/sam2_benchmarks.md`, `tests/spatial_ai/segmentation/test_sam2_backend_performance.py`
@@ -40,6 +44,8 @@ Each item carries severity, effort, the files to touch, observable acceptance cr
 - `docs/performance/sam2_benchmarks.md` records when this baseline was last re-measured and the hardware target.
 
 ### I-3. Add non-root `USER` to Dockerfile and harden compose defaults
+
+**Status:** Done — landed in PR #1808 (`f54d3eea`), with follow-ups PR #1809 (`03b600f8`, restore non-root image smoke build) and PR #1813 (`24f9df88`, harden runtime image construction). Runtime stages (`cpu`/`gpu`/`apple-silicon`) end with `USER tp` via a multi-stage builder that drops compiler toolchains from runtime images; compose uses a `tp-init` bootstrap + `tp_state` named volume with read-only `./input`/`./config`. Contract enforced by `tests/validation/test_dockerfile_contract.py`.
 
 **Severity / Effort:** Medium / S
 **Tracks finding:** [#6](../PORTAL_AUDIT_REPO_WIDE_2026-05-18.md#63-security) — container default is root
