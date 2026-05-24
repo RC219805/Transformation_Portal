@@ -263,7 +263,7 @@ class JobEventStore(ABC):
         """Persist one event and return the assigned ``seq``."""
 
     @abstractmethod
-    async def events_since(
+    def events_since(
         self,
         job_id: str,
         *,
@@ -272,6 +272,12 @@ class JobEventStore(ABC):
         """Yield events for ``job_id`` ordered by ``seq``.
 
         ``after_seq`` is exclusive. ``None`` yields from the beginning.
+
+        Declared as a plain ``def`` returning ``AsyncIterator`` (not
+        ``async def``) because every implementation is an async generator
+        consumed via ``async for``; an ``async def`` signature would type
+        the method as a coroutine that *returns* an iterator, which no
+        backend or caller uses.
         """
 
     @abstractmethod

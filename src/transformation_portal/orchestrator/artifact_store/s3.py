@@ -289,7 +289,7 @@ class S3ArtifactStore(ArtifactStore):
         except Exception as exc:  # noqa: BLE001 - boto3 ClientError
             raise ArtifactStoreError(f"S3 put_object failed for {key}") from exc
 
-        size_bytes: Optional[int] = len(body)
+        size_bytes: int = len(body)
         if size_bytes > ARTIFACT_FINGERPRINT_MAX_BYTES:
             sha256_hex: Optional[str] = None
             status = "skipped_size"
