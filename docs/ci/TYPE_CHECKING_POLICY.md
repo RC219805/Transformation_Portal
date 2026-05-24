@@ -42,11 +42,18 @@ tightening one `Optional[int]` local that is always `len(body)` to `int`.
 The phased strategy below predates the whitelist mechanism and is retained
 for historical context; the list above is the live source of truth.
 
+> ⚠️ **Historical snapshot.** Everything from the "Current State" section
+> onward is a dated 2026-02-04 snapshot describing the original gradual-typing
+> plan. Several of its bullets (e.g. "no explicit mypy enforcement in CI")
+> are no longer accurate and are contradicted by the enforced whitelist
+> above. Treat the section above as current policy; read what follows as
+> background only.
+
 ---
 
 ## Current State
 
-**Type checking status as of 2026-02-04**:
+**Type checking status as of 2026-02-04** *(historical snapshot — see warning above; superseded by the enforced whitelist)*:
 - ✅ Type hints exist in many modules (gradual typing)
 - ⚠️ No explicit mypy or pyright enforcement in CI workflows
 - ⚠️ `mypy.ini` exists in repository root but unclear if actively enforced
