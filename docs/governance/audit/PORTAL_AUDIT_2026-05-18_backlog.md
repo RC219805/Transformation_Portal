@@ -33,7 +33,7 @@ Each item carries severity, effort, the files to touch, observable acceptance cr
 
 ### I-2. Align SAM2 benchmark docs, docstring, and assertion to one baseline
 
-**Status:** Done — landed in PR #1815 (`eb7a0a80`) and refined in PR #1830 (`5b740cff`). Baselines re-measured on Apple Silicon (MPS 13.38s, CPU 42.66s, recorded 2026-05-19); assertion now derives the threshold from the recorded per-device baseline (`1.5×`) instead of the legacy `< 20.0`.
+**Status:** Done — landed in PR #1815 (`eb7a0a80`) and refined in PR #1830 (`5b740cff`). Per-device Apple Silicon baselines recorded in `docs/performance/sam2_benchmarks.md`: MPS 13.38s (last re-measured 2026-02-18) and CPU 42.66s (newly re-measured 2026-05-19); the assertion now derives the threshold from the recorded per-device baseline (`1.5×`) instead of the legacy `< 20.0`.
 
 **Severity / Effort:** Medium / S
 **Tracks finding:** [#3](../PORTAL_AUDIT_REPO_WIDE_2026-05-18.md#62-runtime-and-performance) — benchmark inconsistency
