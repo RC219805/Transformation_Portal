@@ -164,6 +164,16 @@ jobs:
             echo "✅ No high/critical vulnerabilities found"
           fi
 
+      # CVE-2025-32434 defense-in-depth: scan for raw torch.load() calls that
+      # bypass weights_only=True. Blocking gate (no continue-on-error) since
+      # 2026-05-24, after the 2026-05-18 → 2026-05-25 soak window passed with
+      # no findings. Lives in this REQUIRED-FOR-PR-MERGE job (dependency-scan)
+      # so the gate actually blocks merge, alongside pip-audit above.
+      # Tracking: I-1 in docs/governance/audit/PORTAL_AUDIT_2026-05-18_backlog.md.
+      - name: Check unsafe torch.load() usage (CVE-2025-32434)
+        run: |
+          python scripts/validation/check_unsafe_torch_load.py --ci-mode --fix-suggestions
+
       # NOTE: Safety scanning removed per security toolchain governance cleanup
       # pip-audit (above) is the governed blocking dependency scanner
       # Safety was causing ungoverned NLTK transitive dependency alerts
@@ -235,14 +245,6 @@ jobs:
       - name: Check for bidirectional Unicode
         run: |
           python scripts/security/pre_commit_security_check.py $(find . -name '*.py' -o -name '*.sh' -o -name '*.yaml' -o -name '*.yml' | grep -v '.venv' | grep -v 'deprecated' | head -100)
-
-      # CVE-2025-32434 defense-in-depth: scan for raw torch.load() calls that
-      # bypass weights_only=True. Promoted to a blocking gate on 2026-05-24
-      # after the 2026-05-18 → 2026-05-25 soak window passed with no findings.
-      # Tracking: I-1 in docs/governance/audit/PORTAL_AUDIT_2026-05-18_backlog.md.
-      - name: Check unsafe torch.load() usage (CVE-2025-32434)
-        run: |
-          python scripts/validation/check_unsafe_torch_load.py --ci-mode --fix-suggestions
 
       - name: Validate .gitignore coverage
         run: |
