@@ -21,9 +21,10 @@ import asyncio
 import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Any, AsyncIterator, Dict, Iterable, List, Optional, Tuple
+from typing import Any, AsyncIterator, Dict, Iterable, List, Optional, Tuple, cast
 
 from sqlalchemy import delete, func, select, update
+from sqlalchemy.engine import CursorResult
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
@@ -279,7 +280,7 @@ class PostgresJobRepository(JobRepository):
                     )
                     .values(artifacts=dict(artifacts), version=current_version + 1)
                 )
-                result = await session.execute(stmt)
+                result = cast(CursorResult[Any], await session.execute(stmt))
                 if result.rowcount == 0:
                     await session.rollback()
                     if attempt + 1 < _OPTIMISTIC_LOCK_RETRIES:
