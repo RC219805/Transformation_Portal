@@ -105,7 +105,7 @@ def test_requirements_readme_records_current_curated_web_runtime_baseline() -> N
 
     assert "| FastAPI | `requirements/base.in` | `0.136.1` |" in readme
     assert "| Starlette | `requirements/base.in` + `pyproject.toml` bound | `1.0.1` |" in readme
-    assert "| Uvicorn | `requirements/base.in` | `0.46.0` |" in readme
+    assert "| Uvicorn | `requirements/base.in` | `0.48.0` |" in readme
     assert "Starlette `PYSEC-2026-161` patch" in readme
 
 

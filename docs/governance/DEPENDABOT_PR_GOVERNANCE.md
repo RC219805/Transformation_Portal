@@ -84,7 +84,7 @@ The following dependencies are **exact-pinned** in `requirements/base.in` for AP
 ```
 fastapi==0.136.1
 starlette==1.0.1
-uvicorn==0.46.0
+uvicorn==0.48.0
 aiofiles==25.1.0
 ```
 
@@ -229,6 +229,7 @@ Before merging any Dependabot PR:
 | 2026-04-23 | Synced the exact-pinned web stack block with the curated Uvicorn 0.45.0 baseline | Architect |
 | 2026-05-12 | Added npm Dependabot coverage and per-directory grouped minor/patch policy | Architect |
 | 2026-05-26 | Recorded the curated Starlette 1.0.1 patch for PYSEC-2026-161 and synced the current exact-pinned web stack baseline | Architect |
+| 2026-05-26 | Recorded the curated Python/runtime refresh for Uvicorn 0.48.0, SQLAlchemy 2.0.50, diff-cover 10.2.1, and FastVLM idna/fsspec pins | Architect |
 
 ---
 
