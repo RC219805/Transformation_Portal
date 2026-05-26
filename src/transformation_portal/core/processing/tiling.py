@@ -62,13 +62,13 @@ class TiledProcessor:
         Returns:
             Processed image in same format as input.
         """
-        is_numpy = isinstance(image, np.ndarray)
-
         # Normalize to (B, C, H, W) tensor
-        if is_numpy:
+        if isinstance(image, np.ndarray):
+            is_numpy = True
             # (H, W, C) -> (1, C, H, W)
             img_tensor = torch.from_numpy(image).permute(2, 0, 1).unsqueeze(0).float() / 255.0
         else:
+            is_numpy = False
             img_tensor = image
 
         img_tensor = img_tensor.to(device)
@@ -89,8 +89,8 @@ class TiledProcessor:
         padded_img = F.pad(img_tensor, (0, pad_w, 0, pad_h), mode="reflect")
 
         # 2. Extract Tiles
-        tiles = []
-        coords = []
+        tiles: List[torch.Tensor] = []
+        coords: List[Tuple[int, int]] = []
 
         for i in range(h_tiles):
             for j in range(w_tiles):
@@ -102,7 +102,7 @@ class TiledProcessor:
                 coords.append((y, x))
 
         # 3. Process Batch
-        processed_tiles = []
+        processed_tiles: List[torch.Tensor] = []
         for i in range(0, len(tiles), self.config.batch_size):
             batch = torch.cat(tiles[i : i + self.config.batch_size], dim=0)
 
@@ -132,14 +132,14 @@ class TiledProcessor:
         output /= weights + 1e-8
 
         # 5. Crop to original size
-        output = output[:, :, :h, :w]
+        output_tensor = output[:, :, :h, :w]
 
         # Return in original format
         if is_numpy:
-            output = output.squeeze(0).permute(1, 2, 0).cpu().numpy()
-            output = (output * 255).clip(0, 255).astype(np.uint8)
+            output_array = output_tensor.squeeze(0).permute(1, 2, 0).cpu().numpy()
+            return (output_array * 255).clip(0, 255).astype(np.uint8)
 
-        return output
+        return output_tensor
 
     def _create_tile_weight(self, size: int, overlap: int, device: torch.device) -> torch.Tensor:
         """Create a 2D weight map for blending."""

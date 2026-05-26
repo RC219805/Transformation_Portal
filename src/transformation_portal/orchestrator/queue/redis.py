@@ -40,7 +40,7 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import TYPE_CHECKING, Any, List, Optional
+from typing import TYPE_CHECKING, Any, Awaitable, List, Optional, cast
 
 from redis.asyncio import Redis
 
@@ -381,11 +381,11 @@ class RedisQueueBroker(QueueBroker):
         raise QueueBrokerError(f"unexpected cancel outcome from Redis: {outcome!r}")
 
     async def queued_job_ids(self) -> List[str]:
-        items = await self._client.lrange(self._ready_key, 0, -1)
+        items = await cast(Awaitable[List[Any]], self._client.lrange(self._ready_key, 0, -1))
         return [_decode(item) for item in items]
 
     async def leased_job_ids(self) -> List[str]:
-        items = await self._client.zrange(self._leases_key, 0, -1)
+        items = await cast(Awaitable[List[Any]], self._client.zrange(self._leases_key, 0, -1))
         return [_decode(item) for item in items]
 
     async def server_time(self) -> float:

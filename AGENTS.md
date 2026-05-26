@@ -24,6 +24,7 @@ Quick reference for common workflows and commands in this repo.
   - `docs/reference/AGENT_QUICK_REFERENCE.md`
 - Historical or milestone-style agent/RAG notes under `.github/agents/_archive/` or `.github/agents/rag_system/_archive/` are not live instructions.
 - Use the narrowest live profile for agent work: Architect for governance/contract/CI/security decisions, Steward for managed browser boundary work, and Specialist for backend/Lux Depth/archive/ingest/machine-mode execution.
+- Current blocking mypy whitelist authority is `docs/ci/TYPE_CHECKING_POLICY.md` plus `.github/workflows/build.yml`. As of 2026-05-24 it covers `api/`, `lux_depth_v3/`, `orchestrator/{queue,storage,artifact_store}/`, `core/geometry/`, `core/processing/`, `core/ml_dependency_health.py`, and `core/da3_runtime.py`; validate additions with `mypy --config-file=mypy.ini <path>` in the CI-pinned typecheck environment and update the policy doc in the same change.
 
 ## Common commands (Makefile)
 - `make venv` create local `.venv` with a Python 3.11+ interpreter, or fail closed if an existing `.venv` is unsupported.
@@ -59,7 +60,7 @@ Quick reference for common workflows and commands in this repo.
 - `make run-frontdoor-local` start the canonical local managed frontdoor on `http://localhost:3000` after verifying backend readiness, auth env, and no silent fallback to `:3001`; it auto-seeds the canonical local user fixture when no explicit frontdoor user source is configured.
 - `make run-backend-local` start the FastAPI backend on `127.0.0.1:8000` with reload boundaries that exclude `.runtime/`, `output/`, `tmp/`, `tests/`, `node_modules/`, and the frontdoor `.next/` build, so pipeline runtime writes do not trigger restarts mid-job. Requires `TP_API_KEY` (set by `./scripts/dev/write_local_env.sh`).
 - `make run-backend-local-noreload` start the same backend without `--reload` for full-stack smokes.
-- `TP_ORCHESTRATOR_USE_QUEUE_BROKER=1 make run-backend-local` start the backend with broker-mediated dispatch and an in-process WorkerRunner pool; the legacy in-band dispatch path remains the default until the Phase 2.D cut-over.
+- `TP_ORCHESTRATOR_QUEUE_BACKEND=redis TP_REDIS_URL=redis://127.0.0.1:6379/0 make run-backend-local` start the backend on the Redis QueueBroker; broker dispatch is now the only execution path, and the legacy `TP_ORCHESTRATOR_USE_QUEUE_BROKER` switch has been removed.
 - `make dev-write-env` invoke `./scripts/dev/write_local_env.sh` to (re)write `/tmp/tp-local-http-all-on.env` with `TP_API_KEY` and `TP_BACKEND_API_KEY` bound to the same value; pass `--rotate` to generate a new key.
 - `make dev-start` run the full local stack: write the canonical env, stop any leftover listeners, launch the backend with reload boundaries, wait for `/ready`, then launch the frontdoor. Logs go to `/tmp/tp-backend.log` and `/tmp/tp-frontdoor.log`.
 - `make dev-stop` kill any local listeners on dev ports (8000, 3000, 8001, 3002) plus any orphan uvicorn parent/child processes; verifies ports are free.
@@ -83,7 +84,7 @@ Quick reference for common workflows and commands in this repo.
 - `make clean-all` remove all build artifacts (Python + Node).
 - `make lint` run flake8 + pylint (non-blocking).
 - `make lint-parity` run the GitHub lint job locally with the CI-pinned Python 3.12 lint environment.
-- `make ci` run local CI checks (lint + check-json-serialization + check-python-headers + check-yaml-governance + check-piptools-cache + check-requirements-lock-contract + check-ci-sync + check-portal-asset-budgets + test-fast + test-orchestrator-contract + test-frontdoor-contract).
+- `make ci` run local CI checks (lint + check-json-serialization + check-python-headers + check-yaml-governance + check-piptools-cache + check-requirements-lock-contract + check-dependency-pinning + check-ci-sync + check-portal-asset-budgets + test-fast + test-orchestrator-contract + test-frontdoor-contract).
 - `make ci-full` run comprehensive local CI (`./scripts/local_ci_check.sh`).
 - `make ci-quick` run quick local CI (`./scripts/local_ci_check.sh --quick`).
 - `make pre-commit` run pre-commit hooks with CI-aligned Black/isort versions.
@@ -99,6 +100,7 @@ Quick reference for common workflows and commands in this repo.
 - `make check-yaml-governance` fail when raw `yaml.safe_load` usage appears outside the shared preset loader or explicitly exempt non-preset loaders.
 - `make check-piptools-cache` fail if `requirements/.pip-tools-cache` is tracked in git.
 - `make check-requirements-lock-contract` fail when layered lockfile headers, target-owned purity guards, or lane structure drift from contract.
+- `make check-dependency-pinning` fail if checked-in requirements lockfiles use non-exact version operators instead of `==` pins.
 - `make check` verify the generic layered requirements surface under `requirements/`.
 - `make check-test-markers` audit test marker coverage (ADR-044) - reports unmarked test functions.
 - `make check-ci-sync` verify CI dependency files are in sync (no drift between `requirements-ci.txt` and `requirements/ci.in`).
@@ -141,6 +143,9 @@ Quick reference for common workflows and commands in this repo.
 - `./.venv/bin/python scripts/validation/check_local_environment.py --check ports` check only validation port availability (`3000`, `8000`).
 - `./.venv/bin/python scripts/validation/check_local_environment.py --check dependency-health` run `pip check` for the active interpreter.
 - `./.venv/bin/python scripts/validation/check_local_environment.py --check validation-smoke` classify validation smoke failures as environment/tooling vs product regressions.
+- `./scripts/setup/run_repo_python.sh scripts/validation/check_unsafe_torch_load.py --fix-suggestions` scan Python code for raw `torch.load()` calls that bypass `weights_only=True`; this is the local form of the CVE-2025-32434 pre-commit hook and blocking `security-unified.yml` PR gate.
+- `./.venv/bin/mypy --config-file=mypy.ini src/transformation_portal/orchestrator/queue/ src/transformation_portal/orchestrator/storage/ src/transformation_portal/orchestrator/artifact_store/` verify the N-1 orchestrator mypy tranche now enforced by the blocking `build.yml` typecheck gate.
+- `mypy --config-file=mypy.ini <path>` verify any new candidate in the CI-pinned typecheck environment before adding it to the blocking mypy whitelist in `.github/workflows/build.yml`.
 - `./scripts/setup/ensure_node_version.sh` Node version enforcement wrapper with version manager detection.
 - `cd web/secure-landing && npm run build:portal` bundle the modularized portal sources back into the shipped `public/portal-assets/portal.js` asset and sync shared UI token primitives.
 - `cd web/secure-landing && npm run check:utility-ownership` validate the portal utility ownership manifest, generated usage report, and compat-hold/deprecated utility gates.
@@ -151,13 +156,16 @@ Quick reference for common workflows and commands in this repo.
 - `python3 scripts/ci/cold_zone_report.py coverage.xml --markdown-out docs/testing/cold_zone_baseline_YYYY-MM-DD.md --json-out /tmp/cold-zone-baseline.json` generate the cold-zone coverage baseline after `make coverage-report`.
 - `python3 scripts/ci/check_per_package_branch_coverage.py coverage.xml` enforce cold-zone per-package branch coverage floors after pytest-cov; add `--dry-run` only for local floor proposal/reporting runs.
 - `python3 scripts/ci/check_cold_zone_touched_files.py coverage.xml --compare-ref origin/main` report touched cold-zone file coverage evidence after pytest-cov; it fails only when touched cold-zone files are missing from `coverage.xml`.
+- `TP_RUN_BENCHMARKS=1 TP_SAM2_BENCHMARK_DEVICE=cpu ./.venv/bin/pytest tests/spatial_ai/segmentation/test_sam2_backend_performance.py::TestSAM2AutoModePerformance::test_auto_mode_latency_512x512 -v -s` re-measure the local SAM2.1 CPU fallback benchmark; requires `checkpoints/sam2.1_hiera_large.pt`.
 - `./scripts/validation/run_full_validation_suite.sh` all-in-one validation orchestrator.
 - `./scripts/validation/run_full_validation_suite.sh --quick` skip browser smokes for faster iteration.
 - `./scripts/validation/run_full_validation_suite.sh --skip-frontdoor` Python-only validation.
 - `./scripts/validation/check_worktree_clean.sh` verify git worktree is clean after builds.
 
 ## Docker workflows
+- `docker compose run --rm tp-init` bootstrap `./output` for the non-root container user (`TP_UID` / `TP_GID`, default `10001:10001`); CPU, GPU, and worker services already depend on this service during `compose up`.
 - `docker compose up --build transformation-portal-cpu` build/run the CPU FastAPI service on host port `8000`; Compose reads root `.env` with `required: false`, but set `TP_API_KEY` for non-throwaway runs.
+- `docker build --target cpu -t transformation-portal:cpu-nonroot-test .` run a direct CPU image build smoke; `.dockerignore` excludes local runtimes, generated outputs, input images, checkpoints, model weights, and frontend dependency/build artifacts from the build context.
 - `docker compose up --build transformation-portal-gpu` build/run the CUDA service on host port `8001` with the NVIDIA runtime.
 - `docker compose run --rm transformation-portal-worker` run the one-shot batch processor against mounted `./input`, `./output`, and `./config`.
 - `docker compose up --build transformation-portal-monitor` run the optional monitor dashboard on host port `8080`; this service has its own Compose healthcheck.
@@ -192,6 +200,7 @@ Quick reference for common workflows and commands in this repo.
 - `./scripts/pipelines/hdr_production_pipeline.sh` interactive HDR video mastering workflow that pairs source footage with a 3D LUT and writes web deliverables.
 - `depth-aware-dof --source <image.tiff> --depth-npy <depth.npy> --metadata <metadata.json> --out-dir <dir>` run single-image depth-aware DOF, preserving 16-bit TIFF output and writing preview, diagnostics, summary JSON, and a package ZIP; use `--depth-convention` when metadata does not provide one.
 - `./scripts/setup/install_da3_runtime.sh` install the repo-local DA3 subprocess runtime (validated `.runtime/Depth-Anything-3` ref + auto-discovered `./.runtime/Depth-Anything-3/.venv-da3/bin/python` contract + `.runtime/da3-pip-freeze.txt` snapshot).
+- `./.venv/bin/python scripts/download_sam2_checkpoint.py --model large` download and verify the SAM2.1 Hiera Large checkpoint at `checkpoints/sam2.1_hiera_large.pt`; pass `--model base` for the base checkpoint or `--sha256` only with a trusted digest override.
 - `./scripts/setup/install_fastvlm_runtime.sh` install the manifest-pinned optional FastVLM advisory captioning runtime; default model roles are `smoke,default`, with `review` available through `--models smoke,default,review` or `--all-models`.
 - FastVLM advisory captioning is optional and subprocess-only. Keep the runtime under `.runtime/fastvlm/.venv-fastvlm`, keep model checkpoints/vendor clones under `.runtime/fastvlm/`, and use `--vlm-captioning on` only when local advisory sidecars are desired. FastVLM output is never quality-gate evidence.
 - `./scripts/setup/install_depth_pro_runtime.sh` install the repo-local Depth Pro subprocess runtime (pinned `torch==2.7.1` / `torchvision==0.22.1` / `numpy==1.26.4` + pinned Apple `ml-depth-pro` ref + auto-discovered `./.venv-depth-pro/bin/python` contract + `.runtime/depth-pro-pip-freeze.txt` snapshot).
