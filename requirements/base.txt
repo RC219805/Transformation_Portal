@@ -177,7 +177,7 @@ six==1.17.0
     # via
     #   -c all.txt
     #   python-dateutil
-sqlalchemy[asyncio]==2.0.49
+sqlalchemy[asyncio]==2.0.50
     # via
     #   -c all.txt
     #   -r base.in
@@ -225,7 +225,7 @@ urllib3==2.7.0
     # via
     #   -c all.txt
     #   botocore
-uvicorn==0.46.0
+uvicorn==0.48.0
     # via
     #   -c all.txt
     #   -r base.in

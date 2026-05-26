@@ -19,7 +19,7 @@ tqdm>=4.66,<5              # progress bar utility
 # and PYSEC-2026-161.
 fastapi==0.136.1           # orchestrator API framework (validated against curated Starlette 1.x upgrade)
 starlette==1.0.1           # direct runtime import + curated Starlette 1.x validation target
-uvicorn==0.46.0            # ASGI server runtime pin
+uvicorn==0.48.0            # ASGI server runtime pin
 aiofiles==25.1.0           # async file I/O support for FastAPI file responses
 
 # Schema validation (required for ingest contract)
@@ -33,7 +33,7 @@ imagecodecs>=2023.9.18,<2027
 # Durable orchestrator state backend (Phase 1.B). The memory backend remains
 # default; Postgres only activates when TP_ORCHESTRATOR_STATE_BACKEND=postgres
 # and TP_DATABASE_URL is set. SQLAlchemy 2.x async API + asyncpg driver.
-SQLAlchemy[asyncio]>=2.0,<2.2  # async ORM for PostgresJobRepository / PostgresJobEventStore
+SQLAlchemy[asyncio]>=2.0.50,<2.2  # async ORM for PostgresJobRepository / PostgresJobEventStore
 asyncpg>=0.29,<1                # libpq-free async Postgres driver paired with SQLAlchemy[asyncio]
 alembic>=1.13,<2                # schema migration tool for the orchestrator job/event tables
 
