@@ -1,7 +1,7 @@
 # Portal Audit Backlog - 2026-05-18
 
 **Document Status:** Active backlog tracking [PORTAL_AUDIT_REPO_WIDE_2026-05-18.md](../PORTAL_AUDIT_REPO_WIDE_2026-05-18.md)
-**Last Updated:** 2026-05-20
+**Last Updated:** 2026-05-24
 **Maintainer:** Repository Architect
 **Tracks audit:** [PORTAL_AUDIT_REPO_WIDE_2026-05-18.md](../PORTAL_AUDIT_REPO_WIDE_2026-05-18.md)
 
@@ -17,11 +17,11 @@ Each item carries severity, effort, the files to touch, observable acceptance cr
 
 ## Tier 1 — Immediate (target window: 2026-05-19 → 2026-05-29)
 
-> **Tier 1 status (2026-05-20):** all four items merged. One open follow-up remains on I-1 — promote the torch-load CI step from `continue-on-error: true` to blocking after the soak window (~2026-05-25).
+> **Tier 1 status (2026-05-24):** complete. All four items merged; the I-1 soak→blocking follow-up landed on 2026-05-24 (torch-load CI step is now blocking).
 
 ### I-1. Wire `check_unsafe_torch_load.py` into pre-commit and security-unified.yml
 
-**Status:** Done — merged in PR #1806 (`70d45dda074f6e2fa0a6c1b49a5cfb5bf0793c53`) on 2026-05-18. Follow-up: flip `continue-on-error: true` → blocking after one quiet week (~2026-05-25).
+**Status:** Done — merged in PR #1806 (`70d45dda074f6e2fa0a6c1b49a5cfb5bf0793c53`) on 2026-05-18. Soak→blocking follow-up landed 2026-05-24: the `security-unified.yml` torch-load step is now blocking (`continue-on-error` removed) after the 2026-05-18 → 2026-05-25 quiet window passed with zero findings.
 
 **Severity / Effort:** Medium / S
 **Tracks finding:** [#10](../PORTAL_AUDIT_REPO_WIDE_2026-05-18.md#63-security) — orphaned torch-load scanner
