@@ -782,6 +782,42 @@ jobs:
 
           exit "$rc"
 
+      # N-2 (audit 2026-05-18 finding #2): ML sampled coverage on cold packages.
+      # The main ML test step runs with --no-cov for PR-feedback speed; this
+      # follow-up step re-runs a small, focused subset of ML tests with coverage
+      # tracing on src/transformation_portal/vlm and spatial_ai/segmentation,
+      # producing an advisory coverage-ml-sampled.xml artifact. Intentionally
+      # non-blocking (`continue-on-error: true`): the artifact is evidence for
+      # the cold-zone ratchet plan in docs/testing/COLD_ZONE_COVERAGE_PROGRAM.md,
+      # not a gate. Bypasses the marker-zero check by selecting both packages'
+      # ML-marked tests explicitly.
+      - name: ML sampled coverage (advisory, non-blocking)
+        if: matrix.test-type == 'ml'
+        continue-on-error: true
+        env:
+          PYTHONNOUSERSITE: "1"
+          HF_HOME: "/tmp/hf_home_cov"
+          TRANSFORMERS_CACHE: "/tmp/transformers_cache_cov"
+          TRANSFORMERS_OFFLINE: "1"
+          OMP_NUM_THREADS: "1"
+          MKL_NUM_THREADS: "1"
+          OPENBLAS_NUM_THREADS: "1"
+        run: |
+          set -euo pipefail
+          echo "Running ML sampled coverage on vlm + spatial_ai/segmentation..."
+          pytest -v tests/vlm tests/spatial_ai/segmentation \
+            -ra \
+            -m "ml and not slow and not integration and not benchmark" \
+            --cov=src/transformation_portal/vlm \
+            --cov=src/transformation_portal/spatial_ai/segmentation \
+            --cov-report=term \
+            --cov-report=xml:coverage-ml-sampled.xml \
+            || rc=$?
+          # Marker-zero (exit 5) is acceptable for sampled coverage — the
+          # artifact upload will surface an empty selection rather than a CI
+          # failure. Any other failure also tolerated; this step is advisory.
+          rm -rf /tmp/transformers_cache_cov /tmp/hf_home_cov || true
+
       # Only core legs generate coverage.xml/htmlcov; ML deliberately runs with --no-cov for fast PR feedback.
       - name: Upload coverage reports
         if: always() && matrix.test-type == 'core'
@@ -791,6 +827,17 @@ jobs:
           path: |
             coverage.xml
             htmlcov/
+          if-no-files-found: ignore
+          retention-days: 30
+
+      # N-2: companion artifact upload for the ML sampled coverage step above.
+      # Non-blocking and only meaningful when matrix.test-type == 'ml'.
+      - name: Upload ML sampled coverage artifact
+        if: always() && matrix.test-type == 'ml'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7
+        with:
+          name: coverage-ml-sampled-${{ matrix.python-version }}
+          path: coverage-ml-sampled.xml
           if-no-files-found: ignore
           retention-days: 30
 
