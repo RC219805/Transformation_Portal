@@ -2,13 +2,58 @@
 
 **Status**: DRAFT (requires architect approval)
 **Owner**: Transformation Portal Architect
-**Last Updated**: 2026-02-04
+**Last Updated**: 2026-05-24
+
+---
+
+## Actively Enforced mypy Whitelist (current)
+
+This is the authoritative list of paths that the **blocking** mypy gate in
+`.github/workflows/build.yml` (`Type check with mypy (critical modules)`)
+enforces. Each path passes `mypy --config-file=mypy.ini <path>` cleanly;
+additions must do the same before being appended to the workflow list.
+
+**Enforced as of 2026-05-24:**
+
+- `src/transformation_portal/api/`
+- `src/transformation_portal/lux_depth_v3/`
+- `src/transformation_portal/orchestrator/queue/` *(added by N-1, 2026-05-24)*
+- `src/transformation_portal/orchestrator/storage/` *(added by N-1, 2026-05-24)*
+- `src/transformation_portal/orchestrator/artifact_store/` *(added by N-1, 2026-05-24)*
+- `src/transformation_portal/core/geometry/`
+- `src/transformation_portal/core/processing/`
+- `src/transformation_portal/core/ml_dependency_health.py`
+- `src/transformation_portal/core/da3_runtime.py`
+
+**N-1 tranche notes (2026-05-24):** the three `orchestrator/` paid-pilot
+Protocol packages were added together. `queue/` was already clean;
+`storage/` required correcting the `JobEventStore.events_since` abstract
+signature from `async def` to a plain `def` returning `AsyncIterator`
+(every backend is an async generator consumed via `async for`, so the
+`async def` form mis-typed it as a coroutine); `artifact_store/` required
+tightening one `Optional[int]` local that is always `len(body)` to `int`.
+
+**Remaining backlog (not yet enforced — candidates for the next tranche):**
+
+- `src/transformation_portal/spatial_ai/segmentation/` (16 files; not yet triaged)
+- `src/transformation_portal/core/` as a whole — blocked on ~21 currently-failing files (see workflow comment); enable per-file or per-subpackage, not wholesale.
+- `src/transformation_portal/events/`, `storage/` (top-level), `hardening/`, `rendering/` — untriaged.
+
+The phased strategy below predates the whitelist mechanism and is retained
+for historical context; the list above is the live source of truth.
+
+> ⚠️ **Historical snapshot.** Everything from the "Current State" section
+> onward is a dated 2026-02-04 snapshot describing the original gradual-typing
+> plan. Several of its bullets (e.g. "no explicit mypy enforcement in CI")
+> are no longer accurate and are contradicted by the enforced whitelist
+> above. Treat the section above as current policy; read what follows as
+> background only.
 
 ---
 
 ## Current State
 
-**Type checking status as of 2026-02-04**:
+**Type checking status as of 2026-02-04** *(historical snapshot — see warning above; superseded by the enforced whitelist)*:
 - ✅ Type hints exist in many modules (gradual typing)
 - ⚠️ No explicit mypy or pyright enforcement in CI workflows
 - ⚠️ `mypy.ini` exists in repository root but unclear if actively enforced
@@ -300,6 +345,7 @@ type-check-core:
 |------|----------|-----------|
 | 2026-02-04 | Draft policy created | Gate 0 requires type checking strategy |
 | [TBD] | Phase 2 approved | After baseline formatting complete |
+| 2026-05-24 | N-1: added `orchestrator/{queue,storage,artifact_store}/` to the blocking whitelist | Audit finding #1 (whitelist-based type gating); paid-pilot Protocol packages were clean or needed only minor type fixes |
 
 ---
 

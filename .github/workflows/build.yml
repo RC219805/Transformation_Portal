@@ -559,6 +559,9 @@ jobs:
         # Phase 0.3 expansion: mypy now also enforces a vetted slice of core/.
         # Phase 1.2 PR A expansion: the new api/ package is fully typed and
         # mypy-strict from the start, so it joins the whitelist.
+        # N-1 expansion (2026-05-24): the orchestrator/ paid-pilot Protocol
+        # packages (queue/, storage/, artifact_store/) are clean and join the
+        # whitelist; see docs/ci/TYPE_CHECKING_POLICY.md.
         # Per docs/ci/TYPE_CHECKING_POLICY.md, additions to this whitelist must
         # pass `mypy --config-file=mypy.ini <path>` before being added here.
         # Expand the list as packages are cleaned up; do NOT enable
@@ -567,6 +570,9 @@ jobs:
           mypy --config-file=mypy.ini \
             src/transformation_portal/api/ \
             src/transformation_portal/lux_depth_v3/ \
+            src/transformation_portal/orchestrator/queue/ \
+            src/transformation_portal/orchestrator/storage/ \
+            src/transformation_portal/orchestrator/artifact_store/ \
             src/transformation_portal/core/geometry/ \
             src/transformation_portal/core/processing/ \
             src/transformation_portal/core/ml_dependency_health.py \

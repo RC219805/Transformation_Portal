@@ -263,7 +263,7 @@ class JobEventStore(ABC):
         """Persist one event and return the assigned ``seq``."""
 
     @abstractmethod
-    async def events_since(
+    def events_since(
         self,
         job_id: str,
         *,
@@ -272,6 +272,13 @@ class JobEventStore(ABC):
         """Yield events for ``job_id`` ordered by ``seq``.
 
         ``after_seq`` is exclusive. ``None`` yields from the beginning.
+
+        The abstract contract is a plain ``def`` returning
+        ``AsyncIterator`` so callers can consume ``events_since()``
+        directly with ``async for``. Concrete backends may implement that
+        contract as async-generator methods (``async def`` with
+        ``yield``); callers must not ``await`` this method before
+        iterating it.
         """
 
     @abstractmethod
