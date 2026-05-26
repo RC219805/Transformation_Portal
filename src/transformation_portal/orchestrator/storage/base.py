@@ -273,11 +273,12 @@ class JobEventStore(ABC):
 
         ``after_seq`` is exclusive. ``None`` yields from the beginning.
 
-        Declared as a plain ``def`` returning ``AsyncIterator`` (not
-        ``async def``) because every implementation is an async generator
-        consumed via ``async for``; an ``async def`` signature would type
-        the method as a coroutine that *returns* an iterator, which no
-        backend or caller uses.
+        The abstract contract is a plain ``def`` returning
+        ``AsyncIterator`` so callers can consume ``events_since()``
+        directly with ``async for``. Concrete backends may implement that
+        contract as async-generator methods (``async def`` with
+        ``yield``); callers must not ``await`` this method before
+        iterating it.
         """
 
     @abstractmethod
