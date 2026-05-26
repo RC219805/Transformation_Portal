@@ -33,7 +33,7 @@ imagecodecs>=2023.9.18,<2027
 # Durable orchestrator state backend (Phase 1.B). The memory backend remains
 # default; Postgres only activates when TP_ORCHESTRATOR_STATE_BACKEND=postgres
 # and TP_DATABASE_URL is set. SQLAlchemy 2.x async API + asyncpg driver.
-SQLAlchemy[asyncio]>=2.0,<2.2  # async ORM for PostgresJobRepository / PostgresJobEventStore
+SQLAlchemy[asyncio]>=2.0.50,<2.2  # async ORM for PostgresJobRepository / PostgresJobEventStore
 asyncpg>=0.29,<1                # libpq-free async Postgres driver paired with SQLAlchemy[asyncio]
 alembic>=1.13,<2                # schema migration tool for the orchestrator job/event tables
 
