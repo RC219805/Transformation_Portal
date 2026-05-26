@@ -81,7 +81,7 @@ Each item carries severity, effort, the files to touch, observable acceptance cr
 
 ### N-2. Add lightweight ML sampled coverage and raise the 25% core floor
 
-**Status:** Instrumentation landed 2026-05-25 (ML PR lane runs sampled `--cov` on `vlm` + `spatial_ai/segmentation`, uploaded as the `coverage-ml-sampled-*` artifact, non-blocking). The global `--cov-fail-under` ratchet from 25 → 30 is deferred until the trigger in `docs/testing/COLD_ZONE_COVERAGE_PROGRAM.md` §18.2 is met (two consecutive main-branch core runs ≥ 35% combined coverage + clean ML sampled artifact + no regressing PRs). A follow-up PR will flip the floor when evidence is in hand.
+**Status:** Instrumentation landed 2026-05-25 (ML PR lane runs sampled `--cov` on `vlm` + `spatial_ai/segmentation`, uploaded as the `coverage-ml-sampled-*` artifact, non-blocking). The global `--cov-fail-under` ratchet from 25 → 30 is deferred until the trigger in `docs/testing/COLD_ZONE_COVERAGE_PROGRAM.md` §17.2 is met (two consecutive main-branch core runs ≥ 35% combined coverage + clean ML sampled artifact + no regressing PRs). A follow-up PR will flip the floor when evidence is in hand.
 
 **Severity / Effort:** Medium / M
 **Tracks finding:** [#2](../PORTAL_AUDIT_REPO_WIDE_2026-05-18.md#61-code-quality-typing-and-test-enforcement) — fragmented coverage

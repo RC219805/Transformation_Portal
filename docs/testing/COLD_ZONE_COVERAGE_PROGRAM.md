@@ -620,7 +620,7 @@ adopt the same contract when their PR opens.
 
 ## 16. Out of scope
 
-- ~~Changing the global `--cov-fail-under` floor.~~ **Superseded 2026-05-25 by audit item N-2** — the 25 → 30 ratchet is now in scope (see §18 below). The original prohibition stood when this doc was self-contained; the audit places the floor inside the cold-zone program's responsibility.
+- ~~Changing the global `--cov-fail-under` floor.~~ **Superseded 2026-05-25 by audit item N-2** — the 25 → 30 ratchet is now in scope (see §17 below). The original prohibition stood when this doc was self-contained; the audit places the floor inside the cold-zone program's responsibility.
 - Touching `lux_depth_v3/` core seams beyond what existing per-package floors
   cover.
 - Rewriting `app.py` or `orchestrator.py` coverage strategy (covered by
@@ -630,26 +630,29 @@ adopt the same contract when their PR opens.
 
 ---
 
-## 18. N-2 — ML sampled coverage and global floor ratchet
+## 17. N-2 — ML sampled coverage and global floor ratchet
 
 Tracks backlog item N-2 (audit finding #2, fragmented coverage). Two
 deliverables, sequenced.
 
-### 18.1 ML sampled coverage on cold packages (landed)
+### 17.1 ML sampled coverage on cold packages (landed)
 
 The ML PR lane in `.github/workflows/build.yml` now runs an advisory,
 non-blocking `pytest --cov` over `src/transformation_portal/vlm` and
 `src/transformation_portal/spatial_ai/segmentation` after the main test
 step completes. The step is gated with `continue-on-error: true`; its
 output is uploaded as the `coverage-ml-sampled-<python-version>`
-artifact (30-day retention) for use as evidence in §18.2.
+artifact (30-day retention) for use as evidence in §17.2. The artifact
+also carries `coverage-ml-sampled-status.txt`, so marker-zero or other
+advisory pytest exits remain visible even when no coverage XML is
+produced.
 
 Selection: `pytest -m "ml and not slow and not integration and not
 benchmark"` over the two test trees only — keeps the sample focused on
 the cold packages without re-running the full ML suite under tracing
 overhead.
 
-### 18.2 Global `--cov-fail-under` ratchet (deferred)
+### 17.2 Global `--cov-fail-under` ratchet (deferred)
 
 The build.yml core lane currently sets `--cov-fail-under=25`. The
 audit's acceptance criterion is to ratchet that to `30` once the
@@ -667,17 +670,17 @@ cold-zone baseline shows stable margin on the affected packages.
 
 When all three hold, a follow-up PR flips
 `COV_FLAGS="... --cov-fail-under=30"` in build.yml and records the date
-the new floor took effect in §18.3 below.
+the new floor took effect in §17.3 below.
 
-### 18.3 Ratchet history
+### 17.3 Ratchet history
 
 | Date | Floor before | Floor after | Trigger evidence |
 |---|---:|---:|---|
-| 2026-05-25 | 25 | 25 | N-2 instrumentation landed; ratchet awaiting two consecutive ≥35% main runs (see §18.2). |
+| 2026-05-25 | 25 | 25 | N-2 instrumentation landed; ratchet awaiting two consecutive ≥35% main runs (see §17.2). |
 
 ---
 
-## 17. Open questions before PR 0
+## 18. Open questions before PR 0
 
 1. Should the cold-zone report be committed per run, or regenerated on demand?
    Recommendation: commit baseline once, regenerate on demand thereafter and

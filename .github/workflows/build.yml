@@ -786,11 +786,12 @@ jobs:
       # The main ML test step runs with --no-cov for PR-feedback speed; this
       # follow-up step re-runs a small, focused subset of ML tests with coverage
       # tracing on src/transformation_portal/vlm and spatial_ai/segmentation,
-      # producing an advisory coverage-ml-sampled.xml artifact. Intentionally
-      # non-blocking (`continue-on-error: true`): the artifact is evidence for
-      # the cold-zone ratchet plan in docs/testing/COLD_ZONE_COVERAGE_PROGRAM.md,
-      # not a gate. Bypasses the marker-zero check by selecting both packages'
-      # ML-marked tests explicitly.
+      # producing advisory coverage-ml-sampled.xml / status artifacts.
+      # Intentionally non-blocking (`continue-on-error: true`): artifacts are
+      # evidence for the cold-zone ratchet plan in
+      # docs/testing/COLD_ZONE_COVERAGE_PROGRAM.md, not a gate. Bypasses the
+      # marker-zero check by selecting both packages' ML-marked tests
+      # explicitly, and writes a sentinel when the selection is empty.
       - name: ML sampled coverage (advisory, non-blocking)
         if: matrix.test-type == 'ml'
         continue-on-error: true
@@ -805,17 +806,28 @@ jobs:
         run: |
           set -euo pipefail
           echo "Running ML sampled coverage on vlm + spatial_ai/segmentation..."
+          status_file="coverage-ml-sampled-status.txt"
+          rm -f coverage-ml-sampled.xml "$status_file"
+          set +e
           pytest -v tests/vlm tests/spatial_ai/segmentation \
             -ra \
             -m "ml and not slow and not integration and not benchmark" \
             --cov=src/transformation_portal/vlm \
             --cov=src/transformation_portal/spatial_ai/segmentation \
             --cov-report=term \
-            --cov-report=xml:coverage-ml-sampled.xml \
-            || rc=$?
-          # Marker-zero (exit 5) is acceptable for sampled coverage — the
-          # artifact upload will surface an empty selection rather than a CI
-          # failure. Any other failure also tolerated; this step is advisory.
+            --cov-report=xml:coverage-ml-sampled.xml
+          pytest_rc=$?
+          set -e
+          if [ "$pytest_rc" -eq 0 ]; then
+            echo "status=coverage-generated" > "$status_file"
+          elif [ "$pytest_rc" -eq 5 ]; then
+            echo "::warning::ML sampled coverage selected zero tests (exit=5); uploading sentinel evidence."
+            echo "status=marker-zero" > "$status_file"
+          else
+            echo "::warning::ML sampled coverage exited $pytest_rc; advisory artifact retained when available."
+            echo "status=pytest-failed" > "$status_file"
+          fi
+          echo "pytest_exit_code=$pytest_rc" >> "$status_file"
           rm -rf /tmp/transformers_cache_cov /tmp/hf_home_cov || true
 
       # Only core legs generate coverage.xml/htmlcov; ML deliberately runs with --no-cov for fast PR feedback.
@@ -834,11 +846,14 @@ jobs:
       # Non-blocking and only meaningful when matrix.test-type == 'ml'.
       - name: Upload ML sampled coverage artifact
         if: always() && matrix.test-type == 'ml'
+        continue-on-error: true
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7
         with:
           name: coverage-ml-sampled-${{ matrix.python-version }}
-          path: coverage-ml-sampled.xml
-          if-no-files-found: ignore
+          path: |
+            coverage-ml-sampled.xml
+            coverage-ml-sampled-status.txt
+          if-no-files-found: warn
           retention-days: 30
 
       - name: Final disk usage
