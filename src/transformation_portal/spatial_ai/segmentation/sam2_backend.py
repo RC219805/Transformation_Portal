@@ -64,12 +64,21 @@ _SHA256_HEX_RE = re.compile(r"^[a-fA-F0-9]{64}$")
 
 
 def _compute_file_sha256(file_path: Path, chunk_size: int = 1024 * 1024) -> str:
-    """Compute SHA-256 for a file using streaming reads."""
-    sha256 = hashlib.sha256()
-    with file_path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(chunk_size), b""):
-            sha256.update(chunk)
-    return sha256.hexdigest()
+    """Compute SHA-256 for a file using streaming reads.
+
+    Routes through ``_content_digest.compute_file_sha256``, which is
+    ``@lru_cache``-memoized by ``(path, size, mtime_ns)``. Same-file
+    re-calls become O(stat). ``_validate_checkpoint_sha256`` correctness
+    is unchanged: any stat-tuple change invalidates the cache entry, so
+    a tampered checkpoint forces a fresh digest. ``chunk_size`` is
+    accepted for backward compatibility but is no longer respected; the
+    shared helper uses a fixed 1 MiB chunk that matches the previous
+    default. (Tracks N-3, audit finding #4.)
+    """
+    del chunk_size  # preserved for callers; shared helper uses 1 MiB.
+    from transformation_portal.spatial_ai.segmentation._content_digest import compute_file_sha256_for_path
+
+    return compute_file_sha256_for_path(file_path)
 
 
 def _validate_sha256_hex(expected_sha256: str) -> str:
@@ -240,6 +249,13 @@ class SAM2Backend:
         self._hf_model: Any = None
         self._hf_processor: Any = None
         self._hf_video_checkpoint_path: Optional[Path] = None
+
+        # N-3 per-instance image-digest memo: lifetime-scoped to this
+        # backend so concurrent forward() calls on the same image reuse
+        # the digest instead of rehashing. Cleared by ``unload()``.
+        from transformation_portal.spatial_ai.segmentation._content_digest import ArrayDigestCache
+
+        self._image_digest_cache: ArrayDigestCache = ArrayDigestCache()
 
         # Material classification (optional)
         self.enable_material_classification = enable_material_classification
@@ -426,7 +442,14 @@ class SAM2Backend:
         if self.tiling.enabled and seg_input.mode in self.tiling.apply_to_modes:
             if self.tiled_engine is None:
                 self.tiled_engine = self._build_default_tiled_engine()
-            image_hash = self._stable_image_hash(seg_input.image)
+            # N-3: thread the upstream cache layer's precomputed digest
+            # (when set) so the image is hashed at most once per pipeline
+            # run; otherwise the per-instance cache memoizes the first
+            # computation for the duration of this backend.
+            image_hash = self._stable_image_hash(
+                seg_input.image,
+                precomputed=getattr(seg_input, "content_digest", None),
+            )
             return self.tiled_engine.run(
                 backend=self,
                 seg_input=seg_input,
@@ -553,21 +576,28 @@ class SAM2Backend:
             validator=SeamMergeValidator(),
         )
 
-    def _stable_image_hash(self, image: Optional[np.ndarray]) -> str:
-        """Compute a deterministic SHA-256 hash for image shape/dtype/content.
+    def _stable_image_hash(
+        self,
+        image: Optional[np.ndarray],
+        *,
+        precomputed: Optional[str] = None,
+    ) -> str:
+        """Compute (or reuse) a deterministic SHA-256 hash for an image.
 
-        This hashes the full contiguous image buffer and is O(H*W*C). The full
-        buffer hash is intentional to minimize collisions for equal shape/dtype
-        images with different pixel content.
+        Delegates to the per-instance ``_image_digest_cache``, which is
+        backed by ``_content_digest.ArrayDigestCache``. Repeat calls with
+        the same array object hit the cache in O(1); the first call
+        computes the full digest via the shared
+        ``compute_array_sha256`` helper (same formula previously
+        duplicated here).
+
+        If ``precomputed`` is provided (e.g. threaded down from
+        ``SegmentationInput.content_digest`` where the upstream cache
+        layer already hashed the image), the cache adopts it instead of
+        recomputing. Output is unchanged versus the legacy
+        implementation: shape repr + dtype repr + raw uint8 buffer view.
         """
-        if image is None:
-            return "none"
-        arr = image if image.flags.c_contiguous else np.ascontiguousarray(image)
-        h = hashlib.sha256()
-        h.update(str(arr.shape).encode("utf-8"))
-        h.update(str(arr.dtype).encode("utf-8"))
-        h.update(arr.tobytes())
-        return h.hexdigest()
+        return self._image_digest_cache.get_or_compute(image, override=precomputed)
 
     def unload(self) -> None:
         """Release loaded model/material references and best-effort device cache."""
@@ -583,6 +613,8 @@ class SAM2Backend:
         self._hf_model = None
         self._hf_processor = None
         self._material_classifier = None
+        # N-3: release any cached image digests with the model.
+        self._image_digest_cache.clear()
         try:
             import torch
         except (ImportError, OSError):

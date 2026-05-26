@@ -49,6 +49,15 @@ class SegmentationInput:
     video_path: Optional[str] = None
     prev_masks: Optional[np.ndarray] = None
     frame_idx: Optional[int] = None
+    # N-3 (audit finding #4 — duplicate hashing): optional SHA-256 hex
+    # digest of ``image``, threaded from an upstream layer that has
+    # already hashed the array (e.g. the lux_depth_v3 segmentation cache
+    # building its cache key). When set, the backend reuses this digest
+    # instead of recomputing one in ``_stable_image_hash``, ensuring a
+    # given image is hashed at most once per pipeline run. The digest is
+    # the same shape/dtype/raw-buffer formula returned by
+    # ``spatial_ai.segmentation._content_digest.compute_array_sha256``.
+    content_digest: Optional[str] = None
 
     def __post_init__(self):
         """Validate input contract."""

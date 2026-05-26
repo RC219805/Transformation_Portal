@@ -5,7 +5,6 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
-from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict, Mapping, Optional, Tuple, cast
 
@@ -181,13 +180,16 @@ def _serialize_sam2_tiling_config(tiling: Any) -> Optional[Dict[str, Any]]:
 
 
 def _stable_array_hash(array: np.ndarray) -> str:
-    arr = array if array.flags.c_contiguous else np.ascontiguousarray(array)
-    digest = hashlib.sha256()
-    digest.update(str(arr.shape).encode("utf-8"))
-    digest.update(str(arr.dtype).encode("utf-8"))
-    view = memoryview(cast(Any, arr.view(np.uint8).reshape(-1)))
-    digest.update(cast(Any, view))
-    return digest.hexdigest()
+    """Thin wrapper around the shared array-digest helper (N-3).
+
+    Preserved as a named symbol because tests import it directly. The
+    digest formula is unchanged versus the legacy in-module
+    implementation — shape repr + dtype repr + raw uint8 buffer view —
+    so existing segmentation cache keys remain bit-identical.
+    """
+    from transformation_portal.spatial_ai.segmentation._content_digest import compute_array_sha256
+
+    return compute_array_sha256(array)
 
 
 def _mask_checksum(mask: np.ndarray) -> str:
@@ -201,14 +203,19 @@ def _mask_checksum(mask: np.ndarray) -> str:
     return digest.hexdigest()
 
 
-@lru_cache(maxsize=8)
 def _cached_file_sha256(path: str, size: int, mtime_ns: int) -> str:
-    del size, mtime_ns
-    digest = hashlib.sha256()
-    with Path(path).open("rb") as handle:
-        for chunk in iter(lambda: handle.read(_CACHE_MASK_CHECKSUM_CHUNK_SIZE), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
+    """Thin wrapper around the shared file-digest LRU (N-3).
+
+    The LRU now lives in
+    ``transformation_portal.spatial_ai.segmentation._content_digest`` so
+    the segmentation cache and the SAM2 backend share a single
+    memoization table. Kept as a named symbol because callers in this
+    module use it via ``_file_identity``; tests can still patch this
+    name if needed.
+    """
+    from transformation_portal.spatial_ai.segmentation._content_digest import compute_file_sha256
+
+    return compute_file_sha256(path, size, mtime_ns)
 
 
 def _file_identity(path_value: Optional[str]) -> Optional[Dict[str, Any]]:
