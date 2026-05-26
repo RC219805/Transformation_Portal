@@ -103,10 +103,10 @@ def test_secure_install_pilot_readme_records_explicit_hash_policy() -> None:
 def test_requirements_readme_records_current_curated_web_runtime_baseline() -> None:
     readme = REQUIREMENTS_README_PATH.read_text(encoding="utf-8")
 
-    assert "| FastAPI | `requirements/base.in` | `0.136.0` |" in readme
-    assert "| Starlette | `requirements/base.in` + `pyproject.toml` bound | `1.0.0` |" in readme
-    assert "| Uvicorn | `requirements/base.in` | `0.42.0` |" in readme
-    assert "curated compatibility path on 2026-04-15" in readme
+    assert "| FastAPI | `requirements/base.in` | `0.136.1` |" in readme
+    assert "| Starlette | `requirements/base.in` + `pyproject.toml` bound | `1.0.1` |" in readme
+    assert "| Uvicorn | `requirements/base.in` | `0.46.0` |" in readme
+    assert "Starlette `PYSEC-2026-161` patch" in readme
 
 
 def test_dependabot_governance_doc_includes_dep_pin_changed_checklist() -> None:
