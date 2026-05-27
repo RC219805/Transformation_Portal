@@ -49,6 +49,15 @@ class SegmentationInput:
     video_path: Optional[str] = None
     prev_masks: Optional[np.ndarray] = None
     frame_idx: Optional[int] = None
+    # N-3 (audit finding #4 — duplicate hashing): optional SHA-256 hex
+    # digest of ``image``, threaded from an upstream layer that has
+    # already hashed the array (e.g. the lux_depth_v3 segmentation cache
+    # building its cache key). When set, the backend reuses this digest
+    # instead of recomputing one in ``_stable_image_hash``, ensuring a
+    # given image is hashed at most once per pipeline run. The digest is
+    # the same shape/dtype/raw-buffer formula returned by
+    # ``spatial_ai.segmentation._content_digest.compute_array_sha256``.
+    content_digest: Optional[str] = None
 
     def __post_init__(self):
         """Validate input contract."""
@@ -58,6 +67,17 @@ class SegmentationInput:
                 f"Segmentation requires gamma=1.0 (linear RGB), got {self.gamma}. "
                 "This violates the SpatialCaptureV1 contract."
             )
+
+        # N-3: content_digest, when provided, must be a 64-char lowercase
+        # SHA-256 hex string. Normalized in place so downstream cache-key
+        # consumers always see the same canonical form. Reject up-front to
+        # surface bad cache keys at the contract boundary rather than as a
+        # silent cache miss / spurious cache hit deep in the pipeline.
+        if self.content_digest is not None:
+            normalized = self.content_digest.strip().lower()
+            if len(normalized) != 64 or any(c not in "0123456789abcdef" for c in normalized):
+                raise ValueError(f"content_digest must be a 64-character SHA-256 hex string, got {self.content_digest!r}")
+            self.content_digest = normalized
 
         # Video mode has different validation
         if self.mode == "video":
