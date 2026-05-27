@@ -31,7 +31,6 @@ License: Apache 2.0 (commercial OK, no tier restrictions)
 
 from __future__ import annotations
 
-import hashlib
 import logging
 import os
 import re
@@ -66,19 +65,21 @@ _SHA256_HEX_RE = re.compile(r"^[a-fA-F0-9]{64}$")
 def _compute_file_sha256(file_path: Path, chunk_size: int = 1024 * 1024) -> str:
     """Compute SHA-256 for a file using streaming reads.
 
-    Routes through ``_content_digest.compute_file_sha256``, which is
-    ``@lru_cache``-memoized by ``(path, size, mtime_ns)``. Same-file
-    re-calls become O(stat). ``_validate_checkpoint_sha256`` correctness
-    is unchanged: any stat-tuple change invalidates the cache entry, so
-    a tampered checkpoint forces a fresh digest. ``chunk_size`` is
-    accepted for backward compatibility but is no longer respected; the
+    Routes through ``_content_digest.compute_file_sha256_uncached`` so
+    ``_validate_checkpoint_sha256`` reads fresh bytes on every call.
+    Stat-tuple memoization cannot detect a same-size, mtime-restored,
+    ctime-reset overwrite on operator-controllable filesystems, so the
+    integrity path opts out of memoization entirely. Cache-key uses
+    (e.g. in ``lux_depth_v3.segmentation._cache``) route through the
+    memoized ``compute_file_sha256`` helper instead. ``chunk_size`` is
+    accepted for backward compatibility but no longer respected; the
     shared helper uses a fixed 1 MiB chunk that matches the previous
     default. (Tracks N-3, audit finding #4.)
     """
     del chunk_size  # preserved for callers; shared helper uses 1 MiB.
-    from transformation_portal.spatial_ai.segmentation._content_digest import compute_file_sha256_for_path
+    from transformation_portal.spatial_ai.segmentation._content_digest import compute_file_sha256_uncached
 
-    return compute_file_sha256_for_path(file_path)
+    return compute_file_sha256_uncached(file_path)
 
 
 def _validate_sha256_hex(expected_sha256: str) -> str:

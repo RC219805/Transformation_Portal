@@ -68,6 +68,17 @@ class SegmentationInput:
                 "This violates the SpatialCaptureV1 contract."
             )
 
+        # N-3: content_digest, when provided, must be a 64-char lowercase
+        # SHA-256 hex string. Normalized in place so downstream cache-key
+        # consumers always see the same canonical form. Reject up-front to
+        # surface bad cache keys at the contract boundary rather than as a
+        # silent cache miss / spurious cache hit deep in the pipeline.
+        if self.content_digest is not None:
+            normalized = self.content_digest.strip().lower()
+            if len(normalized) != 64 or any(c not in "0123456789abcdef" for c in normalized):
+                raise ValueError(f"content_digest must be a 64-character SHA-256 hex string, got {self.content_digest!r}")
+            self.content_digest = normalized
+
         # Video mode has different validation
         if self.mode == "video":
             if not self.video_path:
