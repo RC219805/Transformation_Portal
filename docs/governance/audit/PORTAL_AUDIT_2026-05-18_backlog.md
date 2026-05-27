@@ -1,7 +1,7 @@
 # Portal Audit Backlog - 2026-05-18
 
 **Document Status:** Active backlog tracking [PORTAL_AUDIT_REPO_WIDE_2026-05-18.md](../PORTAL_AUDIT_REPO_WIDE_2026-05-18.md)
-**Last Updated:** 2026-05-24
+**Last Updated:** 2026-05-27
 **Maintainer:** Repository Architect
 **Tracks audit:** [PORTAL_AUDIT_REPO_WIDE_2026-05-18.md](../PORTAL_AUDIT_REPO_WIDE_2026-05-18.md)
 
@@ -69,7 +69,11 @@ Each item carries severity, effort, the files to touch, observable acceptance cr
 
 ## Tier 2 — Near term (target window: 2026-05-26 → 2026-06-16)
 
+> **Tier 2 status (2026-05-27):** all three items merged. One open follow-up remains on N-2 — flip `--cov-fail-under=25 → 30` once the cold-zone trigger in `docs/testing/COLD_ZONE_COVERAGE_PROGRAM.md` §17.2 is met (two consecutive main-branch core runs ≥ 35% combined coverage + clean `coverage-ml-sampled-*` artifact + no regressing PRs).
+
 ### N-1. Expand mypy whitelist by tranche
+
+**Status:** Done — merged in PR #1833 (`18e33f0a`) on 2026-05-25, with whitelist-stability follow-up PR #1834 (`7e8e9340`). Three orchestrator Protocol packages (`queue/`, `storage/`, `artifact_store/`) joined the blocking mypy whitelist; `JobEventStore.events_since` abstract signature corrected from `async def → def -> AsyncIterator` to match every concrete async-generator backend. `docs/ci/TYPE_CHECKING_POLICY.md` got an "Actively Enforced Whitelist (current)" section as the live source of truth.
 
 **Severity / Effort:** High / M
 **Tracks finding:** [#1](../PORTAL_AUDIT_REPO_WIDE_2026-05-18.md#61-code-quality-typing-and-test-enforcement) — whitelist-based type gating
@@ -81,7 +85,7 @@ Each item carries severity, effort, the files to touch, observable acceptance cr
 
 ### N-2. Add lightweight ML sampled coverage and raise the 25% core floor
 
-**Status:** Instrumentation landed 2026-05-25 (ML PR lane runs sampled `--cov` on `vlm` + `spatial_ai/segmentation`, uploaded as the `coverage-ml-sampled-*` artifact, non-blocking). The global `--cov-fail-under` ratchet from 25 → 30 is deferred until the trigger in `docs/testing/COLD_ZONE_COVERAGE_PROGRAM.md` §17.2 is met (two consecutive main-branch core runs ≥ 35% combined coverage + clean ML sampled artifact + no regressing PRs). A follow-up PR will flip the floor when evidence is in hand.
+**Status:** Instrumentation landed in PR #1835 (`37a73dc7`) on 2026-05-25 — ML PR lane runs sampled `--cov` on `vlm` + `spatial_ai/segmentation`, uploaded as the `coverage-ml-sampled-*` artifact, non-blocking. The global `--cov-fail-under` ratchet from 25 → 30 is deferred until the trigger in `docs/testing/COLD_ZONE_COVERAGE_PROGRAM.md` §17.2 is met (two consecutive main-branch core runs ≥ 35% combined coverage + clean ML sampled artifact + no regressing PRs). A follow-up PR will flip the floor when evidence is in hand.
 
 **Severity / Effort:** Medium / M
 **Tracks finding:** [#2](../PORTAL_AUDIT_REPO_WIDE_2026-05-18.md#61-code-quality-typing-and-test-enforcement) — fragmented coverage
@@ -92,6 +96,8 @@ Each item carries severity, effort, the files to touch, observable acceptance cr
 - The cold-zone program doc records the new floor and the date it took effect.
 
 ### N-3. Thread a single content digest through segmentation cache and integrity validation
+
+**Status:** Done — merged in PR #1848 (`341f1ad8`) on 2026-05-27. New shared `_content_digest` module splits the integrity path (`compute_file_sha256_uncached`, re-streams every call) from the cached informational path (`compute_file_sha256`, LRU keyed by full stat identity `path/dev/ino/size/mtime_ns/ctime_ns`). `_validate_checkpoint_sha256` routes through the uncached helper so checkpoint correctness survives a same-size, mtime-restored overwrite. Image hash duplication eliminated via a per-instance bounded `ArrayDigestCache` (LRU, default `maxsize=64`) + optional `SegmentationInput.content_digest` threading. 23 new tests in `tests/spatial_ai/segmentation/test_content_digest.py`; bit-identical digest formula preserved so cache keys do not drift.
 
 **Severity / Effort:** Medium / M
 **Tracks finding:** [#4](../PORTAL_AUDIT_REPO_WIDE_2026-05-18.md#62-runtime-and-performance) — duplicate hashing
