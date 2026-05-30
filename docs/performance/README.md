@@ -7,6 +7,8 @@ The Transformation Portal performance ledger provides regression detection for p
 **Status:** Phase 2 tooling (v2.0.1+)
 **Enforcement:** Manual workflow, not a CI gate
 
+Current gate authority: [Performance Gate Policy](GATE_POLICY.md).
+
 ---
 
 ## Quick Start

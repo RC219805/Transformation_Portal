@@ -13,11 +13,13 @@ def isolated_loader(
     search_path: Path,
     *,
     auto_resolve_dependencies: bool = True,
+    plugin_trust_store_path: Path | None = None,
 ) -> PluginLoader:
     """Return a loader whose discovery paths are limited to one temp path."""
     loader = PluginLoader(
         allow_external_plugins=True,
         auto_resolve_dependencies=auto_resolve_dependencies,
+        plugin_trust_store_path=plugin_trust_store_path,
     )
     loader._search_paths.clear()  # noqa: SLF001 - tests need hermetic paths.
     loader.add_search_path(search_path)

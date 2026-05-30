@@ -3,6 +3,7 @@
 ## Purpose
 
 Define nightly regression budgets for the reconstruction rasterizer hot paths.
+The enforcement tier is governed by [Performance Gate Policy](GATE_POLICY.md).
 These budgets are enforced by:
 
 - `tests/spatial_ai/reconstruction/test_performance_budgets.py`

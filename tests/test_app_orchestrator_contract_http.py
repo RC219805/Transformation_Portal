@@ -4597,6 +4597,24 @@ def test_invalid_job_payload_returns_typed_invalid_argument(client: TestClient) 
     assert body["error"]["code"] == "INVALID_ARGUMENT"
 
 
+def test_malformed_job_args_return_typed_invalid_argument(client: TestClient) -> None:
+    response = client.post("/v1/jobs", json={"pipeline": "lux-depth-v3", "args": "not-a-dict"})
+    body = response.json()
+    assert response.status_code == 400
+    assert body["schema"] == "tp.orchestrator.error.v1"
+    assert body["success"] is False
+    assert body["error"]["code"] == "INVALID_ARGUMENT"
+    assert body["error"]["details"] == {"field": "input_dir", "reason": "required"}
+
+
+def test_job_create_request_adapter_rejects_non_dict_args() -> None:
+    response = orchestrator_app._validated_job_create_request({"pipeline": "lux-depth-v3", "args": "not-a-dict"})
+    assert isinstance(response, orchestrator_app.JSONResponse)
+    body = json.loads(response.body.decode("utf-8"))
+    assert body["error"]["code"] == "INVALID_ARGUMENT"
+    assert body["error"]["details"] == {"field": "args", "reason": "invalid_request"}
+
+
 def test_archive_gate_pipeline_submission_returns_job_envelope(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
@@ -5480,6 +5498,64 @@ def test_job_events_stream_emits_state_log_progress_artifact_done(
     artifact_payload = next(payload for name, payload in events if name == "artifact")
     assert artifact_payload["artifact_type"] == "metadata"
     assert artifact_payload["relative_path"] == "report.json"
+
+
+def test_job_events_replays_persisted_events_from_last_event_id(client: TestClient) -> None:
+    now = orchestrator_app._now()
+    job = orchestrator_app.Job(
+        id="job_sse_replay",
+        created_at=now,
+        state="running",
+        progress=0,
+        request={"pipeline": "lux-depth-v3"},
+    )
+    _seed_job(job)
+
+    asyncio.run(orchestrator_app._publish_event(job.id, "state", {"id": job.id, "state": "running", "progress": 0}))
+    job.progress = 45
+    asyncio.run(orchestrator_app._publish_event(job.id, "progress", {"id": job.id, "progress": 45}))
+    job.state = "succeeded"
+    job.exit_code = 0
+    asyncio.run(
+        orchestrator_app._publish_event(
+            job.id,
+            "done",
+            {
+                "id": job.id,
+                "state": "succeeded",
+                "exit_code": 0,
+                "error": None,
+                "artifacts": {},
+            },
+        )
+    )
+    job.done_published_at = orchestrator_app._now()
+    job.finished_at = job.done_published_at
+
+    with client.stream("GET", f"/v1/jobs/{job.id}/events", headers={"Last-Event-ID": "1"}) as stream_response:
+        assert stream_response.status_code == 200
+        events = _collect_sse_events(stream_response)
+
+    assert [name for name, _payload in events] == ["progress", "done"]
+    assert events[0][1]["progress"] == 45
+
+
+def test_job_events_rejects_invalid_last_event_id(client: TestClient) -> None:
+    now = orchestrator_app._now()
+    job = orchestrator_app.Job(
+        id="job_sse_bad_last_event_id",
+        created_at=now,
+        state="running",
+        progress=0,
+        request={"pipeline": "lux-depth-v3"},
+    )
+    _seed_job(job)
+
+    response = client.get(f"/v1/jobs/{job.id}/events", headers={"Last-Event-ID": "not-a-seq"})
+    assert response.status_code == 400
+    body = response.json()
+    assert body["error"]["code"] == "INVALID_ARGUMENT"
+    assert body["error"]["details"] == {"field": "Last-Event-ID", "reason": "invalid_request"}
 
 
 def test_late_job_events_done_payload_includes_fastvlm_captioning_status(client: TestClient) -> None:

@@ -406,6 +406,8 @@ class TestPBRProcessorErrorHandling:
 class TestPBRProcessorPerformance:
     """Validate performance characteristics."""
 
+    pytestmark = pytest.mark.benchmark
+
     def test_memory_only_mode_faster_than_io(self, sample_depth, temp_workspace, standard_config):
         """Test that memory-only mode is faster than I/O mode."""
         import time

@@ -446,6 +446,7 @@ class CombinedManifest:
     start_time: Optional[str] = None
     end_time: Optional[str] = None
     backend_selection: Optional[BackendSelectionMetadata] = None
+    licensing: Optional[Dict[str, Any]] = None
 
     def save(self, path: Path) -> None:
         """Save manifest to JSON file.
@@ -467,10 +468,11 @@ class CombinedManifest:
             "config_fingerprint",
             "environment",
             "backend_selection",
+            "licensing",
         ]:
             field_value = getattr(self, field_name)
             if field_value is not None:
-                if field_name in ["pbr_assets", "environment"]:
+                if field_name in ["pbr_assets", "environment", "licensing"]:
                     # Already a dict, no need to convert
                     data[field_name] = field_value
                 else:
@@ -517,6 +519,8 @@ class CombinedManifest:
             manifest.environment = data["environment"]
         if "backend_selection" in data and data["backend_selection"] is not None:
             manifest.backend_selection = BackendSelectionMetadata.from_dict(data["backend_selection"])
+        if "licensing" in data and data["licensing"] is not None:
+            manifest.licensing = dict(data["licensing"])
         # Load timestamp fields
         if "start_time" in data:
             manifest.start_time = data["start_time"]
