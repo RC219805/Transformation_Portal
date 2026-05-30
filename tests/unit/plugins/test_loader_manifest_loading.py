@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -12,8 +13,23 @@ from tests.unit.plugins.loader_test_helpers import (
     write_plugin_module,
     write_pyproject_manifest,
 )
+from transformation_portal.plugins.signing import PLUGIN_SIGNATURE_ALGORITHM, sign_manifest
 
 pytestmark = [pytest.mark.unit]
+
+
+def _write_trust_store(tmp_path: Path, *, key_id: str = "local-dev", secret: str = "test-secret") -> Path:
+    trust_store_path = tmp_path / "plugin-trust.json"
+    trust_store_path.write_text(json.dumps({"keys": {key_id: secret}}, indent=2) + "\n", encoding="utf-8")
+    return trust_store_path
+
+
+def _sign_plugin_json(manifest_path: Path, *, key_id: str = "local-dev", secret: str = "test-secret") -> None:
+    payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+    payload["signature_algorithm"] = PLUGIN_SIGNATURE_ALGORITHM
+    payload["signature_key_id"] = key_id
+    payload["signature"] = sign_manifest(payload, secret=secret)
+    manifest_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
 
 
 def test_discovers_plugin_json_manifest(tmp_path: Path):
@@ -99,3 +115,91 @@ def test_manifest_without_entry_point_is_ignored(tmp_path: Path):
     )
 
     assert isolated_loader(tmp_path).discover_all() == []
+
+
+def test_signed_external_plugin_json_loads_with_configured_trust_store(tmp_path: Path):
+    package_dir = tmp_path / "signed_package"
+    write_plugin_module(
+        package_dir,
+        "signed_plugin",
+        class_name="SignedPlugin",
+        plugin_name="signed_plugin",
+        execute_result="signed-ok",
+    )
+    manifest_path = write_plugin_json(
+        package_dir,
+        name="signed_plugin",
+        module_name="signed_plugin",
+        class_name="SignedPlugin",
+    )
+    _sign_plugin_json(manifest_path)
+
+    discovered = isolated_loader(
+        tmp_path,
+        plugin_trust_store_path=_write_trust_store(tmp_path),
+    ).discover_all()
+
+    assert len(discovered) == 1
+    assert discovered[0].is_valid is True
+    assert discovered[0].manifest is not None
+    assert discovered[0].manifest.signature_key_id == "local-dev"
+    assert discovered[0].plugin.execute() == "signed-ok"
+
+
+def test_unsigned_external_plugin_json_is_rejected_when_trust_store_is_configured(tmp_path: Path):
+    package_dir = tmp_path / "unsigned_package"
+    write_plugin_module(package_dir, "unsigned_plugin", plugin_name="unsigned_plugin")
+    write_plugin_json(package_dir, name="unsigned_plugin", module_name="unsigned_plugin")
+
+    discovered = isolated_loader(
+        tmp_path,
+        plugin_trust_store_path=_write_trust_store(tmp_path),
+    ).discover_all()
+
+    assert len(discovered) == 1
+    assert discovered[0].plugin is None
+    assert discovered[0].is_valid is False
+    assert "signature verification failed" in discovered[0].load_errors[0]
+
+
+def test_tampered_external_plugin_json_is_rejected_before_load(tmp_path: Path):
+    package_dir = tmp_path / "tampered_package"
+    write_plugin_module(package_dir, "tampered_plugin", plugin_name="tampered_plugin")
+    manifest_path = write_plugin_json(package_dir, name="tampered_plugin", module_name="tampered_plugin")
+    _sign_plugin_json(manifest_path)
+
+    payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+    payload["version"] = "9.9.9"
+    manifest_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+
+    discovered = isolated_loader(
+        tmp_path,
+        plugin_trust_store_path=_write_trust_store(tmp_path),
+    ).discover_all()
+
+    assert len(discovered) == 1
+    assert discovered[0].plugin is None
+    assert discovered[0].is_valid is False
+    assert "does not match trusted key" in discovered[0].load_errors[0]
+
+
+def test_pyproject_only_external_plugin_is_rejected_when_trust_store_is_configured(tmp_path: Path):
+    package_dir = tmp_path / "pyproject_only_package"
+    write_plugin_module(package_dir, "pyproject_only_plugin", plugin_name="pyproject_only_plugin")
+    write_pyproject_manifest(
+        package_dir,
+        name="pyproject_only_plugin",
+        module_name="pyproject_only_plugin",
+    )
+
+    discovered = isolated_loader(
+        tmp_path,
+        plugin_trust_store_path=_write_trust_store(tmp_path),
+    ).discover_all()
+
+    assert len(discovered) == 1
+    assert discovered[0].plugin is None
+    assert discovered[0].is_valid is False
+    assert discovered[0].load_errors == [
+        "External plugin packages require a signed plugin.json manifest when plugin trust is configured"
+    ]

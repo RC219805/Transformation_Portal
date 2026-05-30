@@ -537,6 +537,69 @@
       ],
       "additionalProperties": false
     },
+    "licensing": {
+      "type": "object",
+      "required": [
+        "models",
+        "non_commercial_active",
+        "research_acknowledgement_required",
+        "schema_version",
+        "software_license_tier"
+      ],
+      "properties": {
+        "schema_version": {
+          "type": "string",
+          "const": "1.0"
+        },
+        "software_license_tier": {
+          "type": "string",
+          "minLength": 1
+        },
+        "models": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "license",
+              "runtime_role",
+              "requires_non_commercial_ok"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "license": {
+                "type": "string",
+                "minLength": 1
+              },
+              "runtime_role": {
+                "type": "string",
+                "minLength": 1
+              },
+              "usage_class": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "requires_non_commercial_ok": {
+                "type": "boolean"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "non_commercial_active": {
+          "type": "boolean"
+        },
+        "research_acknowledgement_required": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
     "environment": {
       "type": "object",
       "required": [

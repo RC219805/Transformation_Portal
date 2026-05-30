@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any, Dict
 from unittest.mock import Mock, patch
 
@@ -113,6 +114,8 @@ class TestResolutionReasonField:
         """
         manifest = _get_manifest_data(tmp_path, "reason_success.png")
         assert "resolution_reason" in manifest["backend_selection"]
+        assert manifest["licensing"]["schema_version"] == "1.0"
+        assert "non_commercial_active" in manifest["licensing"]
 
 
 class TestFallbackPropagation:
@@ -235,3 +238,82 @@ class TestSchemaVersionGate:
         assert restored.resolution_status == "fallback"
         assert restored.requested_backend == "da3"
         assert restored.resolved_backend == "synthetic"
+
+
+class TestRuntimeLicensingManifest:
+    """Runtime licensing evidence must be emitted and legacy tolerant."""
+
+    def test_runtime_licensing_manifest_marks_research_model_active(self) -> None:
+        from transformation_portal.lux_depth_v3.run_card_contract import build_runtime_licensing_manifest
+
+        licensing = build_runtime_licensing_manifest(
+            model_contract={
+                "resolved_repo_id": "depth-anything/DA3NESTED-GIANT-LARGE-1.1",
+                "license_id": "cc-by-nc-4.0",
+                "backend_kind": "da3",
+                "usage_class": "non_commercial_only",
+                "requires_non_commercial_ok": True,
+            },
+            config=SimpleNamespace(non_commercial_ok=True),
+        )
+
+        assert licensing["software_license_tier"] == "research_or_non_commercial"
+        assert licensing["non_commercial_active"] is True
+        assert licensing["research_acknowledgement_required"] is True
+        assert licensing["models"][0]["license"] == "cc-by-nc-4.0"
+
+    def test_runtime_licensing_manifest_marks_commercial_model(self) -> None:
+        from transformation_portal.lux_depth_v3.run_card_contract import build_runtime_licensing_manifest
+
+        licensing = build_runtime_licensing_manifest(
+            model_contract={
+                "resolved_repo_id": "commercial/depth-model",
+                "license_id": "commercial",
+                "backend_kind": "depth",
+                "usage_class": "commercial",
+                "requires_non_commercial_ok": False,
+            },
+            config=SimpleNamespace(non_commercial_ok=False),
+        )
+
+        assert licensing["software_license_tier"] == "commercial"
+        assert licensing["non_commercial_active"] is False
+        assert licensing["research_acknowledgement_required"] is False
+        assert licensing["models"][0]["id"] == "commercial/depth-model"
+
+    def test_combined_manifest_round_trips_licensing(self, tmp_path: Path) -> None:
+        from transformation_portal.lux_depth_v3.manifest import CombinedManifest
+
+        manifest_path = tmp_path / "licensing.manifest.json"
+        licensing = {
+            "schema_version": "1.0",
+            "software_license_tier": "commercial",
+            "models": [],
+            "non_commercial_active": False,
+            "research_acknowledgement_required": False,
+        }
+
+        CombinedManifest(licensing=licensing).save(manifest_path)
+
+        restored = CombinedManifest.load(manifest_path)
+        assert restored.licensing == licensing
+
+    def test_combined_msgpack_manifest_round_trips_licensing(self, tmp_path: Path) -> None:
+        from transformation_portal.lux_depth_v3.manifest import MSGPACK_AVAILABLE, CombinedManifest
+
+        if not MSGPACK_AVAILABLE:
+            pytest.skip("msgpack is optional")
+
+        manifest_path = tmp_path / "licensing.manifest.msgpack"
+        licensing = {
+            "schema_version": "1.0",
+            "software_license_tier": "commercial",
+            "models": [],
+            "non_commercial_active": False,
+            "research_acknowledgement_required": False,
+        }
+
+        CombinedManifest(licensing=licensing).save_msgpack(manifest_path)
+
+        restored = CombinedManifest.load_msgpack(manifest_path)
+        assert restored.licensing == licensing

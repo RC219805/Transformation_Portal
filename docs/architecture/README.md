@@ -74,6 +74,7 @@ These ADRs remain active support material. Keep them in this directory, and revi
 | [ADR-045-monolith-decomposition-residuals.md](ADR-045-monolith-decomposition-residuals.md) | current-support-adr |
 | [ADR-046-app-path-security-helper-extraction.md](ADR-046-app-path-security-helper-extraction.md) | current-support-adr |
 | [ADR-047-managed-sam2-checkpoint-security-extraction.md](ADR-047-managed-sam2-checkpoint-security-extraction.md) | current-support-adr |
+| [ADR-049-plugin-manifest-trust.md](ADR-049-plugin-manifest-trust.md) | current-support-adr |
 | [templates/ADR-vjepa2-separate-repo-TEMPLATE.md](templates/ADR-vjepa2-separate-repo-TEMPLATE.md) | template (relocated 2026-05-16 out of the numbered ADR series; not a real ADR) |
 
 ## Review-Required Planning Docs
@@ -98,6 +99,7 @@ These non-canonical planning, evidence, and support docs remain in `docs/archite
 | [DUAL_REQUEST_QUICK_REF.md](DUAL_REQUEST_QUICK_REF.md) | review-required-planning |
 | [ML_CI_OPTIMIZATION_QUICKREF.md](ML_CI_OPTIMIZATION_QUICKREF.md) | review-required-planning |
 | [ML_CI_OPTIMIZATION_STRATEGIC_REVIEW.md](ML_CI_OPTIMIZATION_STRATEGIC_REVIEW.md) | review-required-planning |
+| [ARCHITECTURE_CLEANUP_BOARD.md](ARCHITECTURE_CLEANUP_BOARD.md) | review-required-planning |
 | [MONOLITH_DECOMPOSITION_TARGETS.md](MONOLITH_DECOMPOSITION_TARGETS.md) | review-required-planning |
 | [NIGHTLY_CHECKS_POSTMORTEM_2026-02-02.md](NIGHTLY_CHECKS_POSTMORTEM_2026-02-02.md) | review-required-planning |
 | [PBR-Integration-Final-Review.md](PBR-Integration-Final-Review.md) | review-required-planning |

@@ -73,6 +73,7 @@ operator guidance unless they are linked here as canonical documents.
 | Production hardening gap (paid pilot) | [Production Hardening Gap - 2026-05-13](PRODUCTION_HARDENING_GAP_2026-05-13.md) | Paid-pilot baseline: what is already done, what is partial, what is net-new across Phases 1 through 7, plus pinned pilot acceptance commands and Phase 5.A local validation status |
 | Repo-wide audit baseline | [Portal Repo-Wide Audit - 2026-05-18](PORTAL_AUDIT_REPO_WIDE_2026-05-18.md) | Static repo-wide audit baseline as of 2026-05-18 covering CI/typing/coverage enforcement, ML runtime hotspots (SAM2, Gaussian rasterizer, segmentation cache hashing), container and plugin isolation, dependency/security governance, and software/model licensing |
 | Repo-wide audit backlog | [Portal Audit Backlog - 2026-05-18](audit/PORTAL_AUDIT_2026-05-18_backlog.md) | Companion remediation backlog for the 2026-05-18 audit: 12 actionable items across immediate / near-term / medium-term / long-term tiers with file targets and acceptance criteria |
+| Performance gate policy | [Performance Gate Policy](../performance/GATE_POLICY.md) | Maintained authority for PR-blocking, nightly-blocking, and advisory performance signals |
 | Test marker policy | [ADR-044 Test Marker Enforcement](../architecture/ADR-044-test-marker-enforcement.md) | Maintained |
 | Security hardening report | [security_best_practices_report.md](security_best_practices_report.md) | Maintained status record |
 
@@ -83,6 +84,7 @@ operator guidance unless they are linked here as canonical documents.
 | Architecture overview | [ARCHITECTURE.md](../architecture/ARCHITECTURE.md) | Maintained |
 | Architecture index | [architecture/README.md](../architecture/README.md) | Maintained; lists canonical, promoted, review-required, moved historical, and delete-candidate architecture dispositions |
 | Architecture triage ledger | [architecture-inventory-2026-05-12.csv](audit/architecture-inventory-2026-05-12.csv) | Current overlay for architecture-file disposition decisions |
+| Architecture cleanup board | [ARCHITECTURE_CLEANUP_BOARD.md](../architecture/ARCHITECTURE_CLEANUP_BOARD.md) | Active cleanup implementation ledger |
 | Depth backend unification | [ADR-019](../architecture/ADR-019-depth-backend-unification.md) | Maintained |
 | DA3 non-commercial research tier | [ADR-015](../architecture/ADR-015-da3-1-1-non-commercial-research-tier.md) | Maintained |
 | Portal orchestrator roadmap | [PORTAL_ORCHESTRATOR_ROADMAP.md](../architecture/PORTAL_ORCHESTRATOR_ROADMAP.md) | Maintained planning doc |
@@ -90,6 +92,7 @@ operator guidance unless they are linked here as canonical documents.
 | Portal UX/UI status snapshot | [Portal UX/UI Status Snapshot](../architecture/DNA_UX_UI_STRATEGY_REBASELINE_2026-04-08.md) | Current planning-context snapshot; does not choose the next implementation PR |
 | APEX workflow design | [APEX_WORKFLOW_DESIGN.md](../architecture/APEX_WORKFLOW_DESIGN.md) | Maintained |
 | Deterministic RAW ingest | [ADR-030](../architecture/ADR-030-phase2-deterministic-raw-ingest.md) | Maintained |
+| Plugin manifest trust | [ADR-049](../architecture/ADR-049-plugin-manifest-trust.md) | Maintained in-process external plugin trust boundary |
 | Determinism harness spec | [SPEC-DH-001](../architecture/specifications/SPEC-DH-001.md) | Locked |
 
 ## APEX And Archive Gates

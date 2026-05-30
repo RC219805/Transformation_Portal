@@ -33,15 +33,18 @@ from fastapi.exception_handlers import request_validation_exception_handler as f
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
+from pydantic import ValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 from starlette.responses import Response, StreamingResponse
 
+from transformation_portal.api.routes import JobRouteHandlers, create_jobs_router
 from transformation_portal.api.v1 import (
     ConfigMetadataEnvelope,
     ConfigPreviewEnvelope,
     HealthzResponse,
     JobBriefData,
+    JobCreateRequest,
     JobEnvelope,
     JobsListData,
     JobsListEnvelope,
@@ -69,6 +72,7 @@ from transformation_portal.orchestrator import (
     JobNotFoundError,
     JobRecord,
     JobRepository,
+    get_job_event_store,
     get_job_repository,
 )
 from transformation_portal.orchestrator.artifact_store import ArtifactNotFoundError as StoreArtifactNotFoundError
@@ -1135,6 +1139,10 @@ def _job_repository() -> JobRepository:
     return repo
 
 
+def _job_event_store():
+    return get_job_event_store()
+
+
 def _record_from_job(job: Job) -> JobRecord:
     return JobRecord(
         id=job.id,
@@ -1809,14 +1817,15 @@ def _now() -> float:
     return time.time()
 
 
-def _sse(event: str, data: Dict[str, Any]) -> str:
+def _sse(event: str, data: Dict[str, Any], *, event_id: Optional[int | str] = None) -> str:
     # SSE payload: event type + JSON data, double newline.
     payload = json.dumps(
         data,
         ensure_ascii=False,
         separators=(",", ":"),
     )
-    return f"event: {event}\ndata: {payload}\n\n"
+    event_id_line = "" if event_id is None else f"id: {event_id}\n"
+    return f"{event_id_line}event: {event}\ndata: {payload}\n\n"
 
 
 def _error_obj(
@@ -3558,6 +3567,29 @@ def _portal_issue_public_message(issue: Any, *, field: str = "payload") -> str:
     if "\n" in text or "\r" in text or "\x00" in text:
         return message
     return text
+
+
+def _job_create_validation_error_response(exc: ValidationError) -> JSONResponse:
+    errors = exc.errors()
+    first_error = errors[0] if errors else {}
+    location = first_error.get("loc") if isinstance(first_error, dict) else None
+    field = "payload"
+    if isinstance(location, (list, tuple)) and location:
+        field = ".".join(str(part) for part in location if part != "body") or "payload"
+    reason = "required" if first_error.get("type") == "missing" else "invalid_request"
+    return _error_response(
+        400,
+        code="INVALID_ARGUMENT",
+        message=_portal_safe_error_message(reason, field=field),
+        details={"field": field, "reason": reason},
+    )
+
+
+def _validated_job_create_request(payload: Dict[str, Any]) -> JobCreateRequest | JSONResponse:
+    try:
+        return JobCreateRequest.model_validate(payload)
+    except ValidationError as exc:
+        return _job_create_validation_error_response(exc)
 
 
 def _portal_next_best_action_label(field: Any, default: str) -> str:
@@ -6377,6 +6409,18 @@ async def _publish_event(
     data: Dict[str, Any],
 ) -> None:
     event_at = _now()
+    event_seq: Optional[int] = None
+    try:
+        stored_event = await _job_event_store().append(
+            job_id,
+            event,
+            dict(data),
+            created_at=event_at,
+        )
+        event_seq = stored_event.seq
+    except Exception:  # noqa: BLE001 - live fanout must not fail on replay persistence lag
+        LOGGER.debug("job event-store append skipped/failed for %s event=%s", job_id, event, exc_info=True)
+
     job = JOBS.get(job_id)
     if job is not None:
         job.last_event_at = event_at
@@ -6393,6 +6437,8 @@ async def _publish_event(
         return
 
     payload = {"event": event, "data": data}
+    if event_seq is not None:
+        payload["id"] = event_seq
     stale_subscribers: List[str] = []
     for subscriber_id, queue in list(subscribers.items()):
         if queue.full():
@@ -9379,12 +9425,10 @@ async def create_job_v2(
     )
 
 
-@app.post("/v1/jobs", response_model=JobEnvelope)
 async def create_job_http(request: Request, payload: Dict[str, Any]) -> JSONResponse:
     return await create_job(payload, portal_actor=_portal_actor_from_request(request))
 
 
-@app.post("/v2/jobs", response_model=JobEnvelope)
 async def create_job_v2_http(request: Request, payload: Dict[str, Any]) -> JSONResponse:
     return await create_job_v2(payload, portal_actor=_portal_actor_from_request(request))
 
@@ -9421,6 +9465,10 @@ async def _create_job(
             message=_portal_issue_public_message(first_error, field=field),
             details={"field": field, "reason": reason},
         )
+
+    validated_request = _validated_job_create_request(payload)
+    if isinstance(validated_request, JSONResponse):
+        return validated_request
 
     readiness_snapshot = preview.get("readiness")
     if not isinstance(readiness_snapshot, dict):
@@ -9604,12 +9652,10 @@ async def _create_job(
     )
 
 
-@app.get("/v1/jobs", response_model=JobsListEnvelope)
 async def list_jobs(limit: int = JOB_LIST_LIMIT) -> JSONResponse:
     return await _list_jobs(limit=limit, api_version="v1")
 
 
-@app.get("/v2/jobs", response_model=JobsListEnvelope)
 async def list_jobs_v2(limit: int = JOB_LIST_LIMIT) -> JSONResponse:
     return await _list_jobs(limit=limit, api_version="v2")
 
@@ -9644,12 +9690,10 @@ async def _list_jobs(*, limit: int = JOB_LIST_LIMIT, api_version: str = "v1") ->
     )
 
 
-@app.get("/v1/jobs/{job_id}", response_model=JobStatusEnvelope)
 async def get_job(job_id: str, include_logs: bool = True) -> JSONResponse:
     return await _get_job(job_id, include_logs=include_logs, api_version="v1")
 
 
-@app.get("/v2/jobs/{job_id}", response_model=JobStatusEnvelope)
 async def get_job_v2(job_id: str, include_logs: bool = True) -> JSONResponse:
     return await _get_job(job_id, include_logs=include_logs, api_version="v2")
 
@@ -9681,22 +9725,18 @@ async def _get_job(job_id: str, *, include_logs: bool = True, api_version: str =
     )
 
 
-@app.get("/v1/jobs/{job_id}/artifacts/{artifact_path:path}")
 async def get_job_artifact(job_id: str, artifact_path: str) -> Response:
     return await _get_job_artifact(job_id, artifact_path)
 
 
-@app.get("/v2/jobs/{job_id}/artifacts/{artifact_path:path}")
 async def get_job_artifact_v2(job_id: str, artifact_path: str) -> Response:
     return await _get_job_artifact(job_id, artifact_path)
 
 
-@app.delete("/v1/jobs/{job_id}/artifacts", response_model=JobStatusEnvelope)
 async def delete_job_artifacts(job_id: str) -> JSONResponse:
     return await _delete_job_artifacts(job_id, api_version="v1")
 
 
-@app.delete("/v2/jobs/{job_id}/artifacts", response_model=JobStatusEnvelope)
 async def delete_job_artifacts_v2(job_id: str) -> JSONResponse:
     return await _delete_job_artifacts(job_id, api_version="v2")
 
@@ -9939,12 +9979,10 @@ async def _delete_job_artifacts(job_id: str, *, api_version: str = "v1") -> JSON
     )
 
 
-@app.post("/v1/jobs/{job_id}/cancel", response_model=JobEnvelope)
 async def cancel_job(job_id: str) -> JSONResponse:
     return await _cancel_job(job_id)
 
 
-@app.post("/v2/jobs/{job_id}/cancel", response_model=JobEnvelope)
 async def cancel_job_v2(job_id: str) -> JSONResponse:
     return await _cancel_job(job_id)
 
@@ -9979,7 +10017,6 @@ async def _cancel_job(job_id: str) -> JSONResponse:
     )
 
 
-@app.get("/v1/jobs/{job_id}/events")
 async def job_events(
     request: Request,
     job_id: str,
@@ -9987,12 +10024,46 @@ async def job_events(
     return await _job_events(request, job_id)
 
 
-@app.get("/v2/jobs/{job_id}/events")
 async def job_events_v2(
     request: Request,
     job_id: str,
 ) -> Response:
     return await _job_events(request, job_id)
+
+
+def _last_event_id_from_request(request: Request) -> Optional[int]:
+    headers = getattr(request, "headers", None) or {}
+    raw_value = headers.get("last-event-id")
+    if raw_value is None or not str(raw_value).strip():
+        return None
+    try:
+        last_event_id = int(str(raw_value).strip())
+    except ValueError as exc:
+        raise ValueError("Last-Event-ID must be a non-negative integer") from exc
+    if last_event_id < 0:
+        raise ValueError("Last-Event-ID must be a non-negative integer")
+    return last_event_id
+
+
+def _event_queue_seq(event_payload: Mapping[str, Any]) -> Optional[int]:
+    raw_value = event_payload.get("id")
+    if raw_value is None:
+        return None
+    try:
+        return int(raw_value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _terminal_done_payload(job: Job) -> Dict[str, Any]:
+    return {
+        "id": job.id,
+        "state": job.state,
+        "exit_code": job.exit_code,
+        "error": job.error,
+        "artifacts": job.artifacts,
+        "run_summary": job.run_summary or None,
+    }
 
 
 async def _job_events(
@@ -10013,6 +10084,16 @@ async def _job_events(
     if job.state not in ACTIVE_JOB_STATES and job.state != "canceled":
         _refresh_job_run_summary(job)
 
+    try:
+        replay_after_seq = _last_event_id_from_request(request)
+    except ValueError:
+        return _error_response(
+            400,
+            code="INVALID_ARGUMENT",
+            message="Last-Event-ID must be a non-negative integer",
+            details={"field": "Last-Event-ID", "reason": "invalid_request"},
+        )
+
     subscribers = EVENT_SUBSCRIBERS.setdefault(job_id, {})
     subscriber_id = uuid.uuid4().hex
     q: asyncio.Queue[Dict[str, Any]] = asyncio.Queue(
@@ -10021,15 +10102,34 @@ async def _job_events(
     subscribers[subscriber_id] = q
 
     async def gen() -> AsyncGenerator[str, None]:
+        last_replayed_seq = replay_after_seq
+        replayed_any = False
         try:
-            yield _sse(
-                "state",
-                {
-                    "id": job_id,
-                    "state": job.state,
-                    "progress": job.progress,
-                },
-            )
+            if replay_after_seq is not None:
+                try:
+                    async for stored_event in _job_event_store().events_since(job_id, after_seq=replay_after_seq):
+                        replayed_any = True
+                        last_replayed_seq = stored_event.seq
+                        yield _sse(
+                            stored_event.event_type,
+                            stored_event.payload,
+                            event_id=stored_event.seq,
+                        )
+                        if stored_event.event_type == "done":
+                            return
+                except Exception:  # noqa: BLE001 - fall back to live stream/synthetic terminal event
+                    LOGGER.debug("job event-store replay skipped/failed for %s", job_id, exc_info=True)
+            if replay_after_seq is None or not replayed_any:
+                if replay_after_seq is not None:
+                    last_replayed_seq = None
+                yield _sse(
+                    "state",
+                    {
+                        "id": job_id,
+                        "state": job.state,
+                        "progress": job.progress,
+                    },
+                )
             if job.done_published_at is not None:
                 # The 'done' event has already been published to all subscribers.
                 # For a late-connecting client, we can safely drain any queued
@@ -10037,23 +10137,16 @@ async def _job_events(
                 while True:
                     try:
                         ev = q.get_nowait()
-                        yield _sse(ev["event"], ev["data"])
+                        ev_seq = _event_queue_seq(ev)
+                        if last_replayed_seq is not None and ev_seq is not None and ev_seq <= last_replayed_seq:
+                            continue
+                        yield _sse(ev["event"], ev["data"], event_id=ev_seq)
                         if ev["event"] == "done":
                             return
                     except asyncio.QueueEmpty:
                         break
                 # No 'done' event was queued; generate a synthetic one from job state.
-                yield _sse(
-                    "done",
-                    {
-                        "id": job.id,
-                        "state": job.state,
-                        "exit_code": job.exit_code,
-                        "error": job.error,
-                        "artifacts": job.artifacts,
-                        "run_summary": job.run_summary or None,
-                    },
-                )
+                yield _sse("done", _terminal_done_payload(job))
                 return
             elif job.finished_at is not None:
                 # Job processing finished (state is terminal) but done_published_at
@@ -10074,7 +10167,10 @@ async def _job_events(
 
                 try:
                     ev = await asyncio.wait_for(q.get(), timeout=1.0)
-                    yield _sse(ev["event"], ev["data"])
+                    ev_seq = _event_queue_seq(ev)
+                    if last_replayed_seq is not None and ev_seq is not None and ev_seq <= last_replayed_seq:
+                        continue
+                    yield _sse(ev["event"], ev["data"], event_id=ev_seq)
                     if ev["event"] == "done":
                         break
                 except asyncio.TimeoutError:
@@ -10103,6 +10199,29 @@ async def _job_events(
             "Connection": "keep-alive",
         },
     )
+
+
+app.include_router(
+    create_jobs_router(
+        JobRouteHandlers(
+            create_job_http=create_job_http,
+            create_job_v2_http=create_job_v2_http,
+            list_jobs=list_jobs,
+            list_jobs_v2=list_jobs_v2,
+            get_job=get_job,
+            get_job_v2=get_job_v2,
+            get_job_artifact=get_job_artifact,
+            get_job_artifact_v2=get_job_artifact_v2,
+            delete_job_artifacts=delete_job_artifacts,
+            delete_job_artifacts_v2=delete_job_artifacts_v2,
+            cancel_job=cancel_job,
+            cancel_job_v2=cancel_job_v2,
+            job_events=job_events,
+            job_events_v2=job_events_v2,
+        ),
+        job_list_limit=JOB_LIST_LIMIT,
+    )
+)
 
 
 # ---------------------------------------------------------------------------

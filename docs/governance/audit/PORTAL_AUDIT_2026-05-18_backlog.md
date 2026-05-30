@@ -111,6 +111,9 @@ Each item carries severity, effort, the files to touch, observable acceptance cr
 
 ### M-1. Sandbox or sign plugins before broader use
 
+**Status:** Done in the architecture cleanup implementation branch: external `plugin.json`
+manifests can be signature-verified against a configured trust store before
+import, and ADR-049 records the in-process trust boundary.
 **Severity / Effort:** Medium / M
 **Tracks finding:** [#7](../PORTAL_AUDIT_REPO_WIDE_2026-05-18.md#63-security) — plugin trust boundary
 **Files to touch:** `src/transformation_portal/plugins/loader.py`, possibly a new `src/transformation_portal/plugins/signing.py`, `docs/architecture/`
@@ -121,6 +124,10 @@ Each item carries severity, effort, the files to touch, observable acceptance cr
 
 ### M-2. Emit machine-readable runtime license manifest in run cards
 
+**Status:** Runtime licensing evidence v1 landed in the architecture cleanup
+implementation branch for emitted run cards and combined manifests.
+Multi-runtime aggregation across segmentation, VLM, materials, and
+reconstruction remains a follow-up.
 **Severity / Effort:** Medium / M
 **Tracks finding:** [#9](../PORTAL_AUDIT_REPO_WIDE_2026-05-18.md#64-ci-governance-and-licensing) — mixed licensing
 **Files to touch:** `src/transformation_portal/lux_depth_v3/run_card_contract.py`, `src/transformation_portal/lux_depth_v3/artifact_manager.py`, `src/transformation_portal/lux_depth_v3/manifest.py`, `docs/schemas/`
@@ -131,6 +138,10 @@ Each item carries severity, effort, the files to touch, observable acceptance cr
 
 ### M-3. Unify performance gate policy
 
+**Status:** Done in the architecture cleanup implementation branch:
+`docs/performance/GATE_POLICY.md` defines advisory, nightly-blocking, and
+PR-blocking signals, benchmark-sensitive tests are marker-owned, and the
+scheduled performance monitor now fails on regression status.
 **Severity / Effort:** Medium / M
 **Tracks finding:** [#2 / #5 boundary](../PORTAL_AUDIT_REPO_WIDE_2026-05-18.md#7-remediation-roadmap) — fragmented perf governance
 **Files to touch:** `docs/performance/README.md`, `docs/performance/PHASE6_BUDGETS.md`, possibly `.github/workflows/build.yml` and nightly perf workflows

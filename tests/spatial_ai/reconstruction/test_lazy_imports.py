@@ -192,6 +192,7 @@ class TestTorchLazyImportContract:
         assert scene_builder_cls is not None
         assert scene_builder_cls.__name__ == "SceneBuilder"
 
+    @pytest.mark.benchmark
     def test_lazy_import_performance_baseline(self):
         """Benchmark lazy import performance to detect regressions.
 

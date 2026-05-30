@@ -38,6 +38,7 @@ from .interface import (
 from .loader import LoadedPlugin, PluginLoader, PluginManifest, get_global_loader
 from .manager import ExecutionResult, PluginContext, PluginManager, PluginState, get_global_manager
 from .registry import PluginRegistry, get_global_registry
+from .signing import PluginSignatureError, sign_manifest, verify_manifest_signature
 from .validator import PluginValidator, ValidationIssue, ValidationResult, ValidationSeverity, quick_validate, validate_plugin
 
 __all__ = [
@@ -57,6 +58,9 @@ __all__ = [
     "PluginManifest",
     "LoadedPlugin",
     "get_global_loader",
+    "PluginSignatureError",
+    "sign_manifest",
+    "verify_manifest_signature",
     # Manager
     "PluginManager",
     "PluginState",

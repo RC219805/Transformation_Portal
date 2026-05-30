@@ -3,6 +3,7 @@
 # NOTE: This workflow does NOT run on PRs to avoid baseline comparison issues.
 # Benchmark baselines require cross-run persistence which workflow artifacts don't provide.
 # Baselines are stored in tools/benchmarks/baseline.json (if present).
+# Regression status is a nightly-blocking signal per docs/performance/GATE_POLICY.md.
 name: Performance Monitor
 
 on:
@@ -222,3 +223,10 @@ jobs:
                 labels: ['performance', 'regression', 'automated']
               });
             }
+
+      - name: Enforce nightly performance gate
+        # "failed" means the benchmark run itself was invalid, not product-green evidence.
+        if: steps.benchmark.outputs.status == 'regression' || steps.benchmark.outputs.status == 'failed'
+        run: |
+          echo "Performance regression exceeded the nightly-blocking threshold documented in docs/performance/GATE_POLICY.md."
+          exit 1

@@ -12,10 +12,12 @@ from threading import Lock
 from typing import Any, Dict, List, Optional
 
 from .interface import PluginInterface, PluginMetadata, PluginType
+from .signing import PluginSignatureError, verify_manifest_signature
 
 logger = logging.getLogger(__name__)
 
 _ENABLE_EXTERNAL_PLUGINS_ENV = "TRANSFORMATION_PORTAL_ENABLE_EXTERNAL_PLUGINS"
+_PLUGIN_TRUST_STORE_ENV = "TRANSFORMATION_PORTAL_PLUGIN_TRUST_STORE"
 _TRUTHY_VALUES = {"1", "true", "yes", "on"}
 
 
@@ -45,6 +47,10 @@ class PluginManifest:
     homepage: str = ""
     tags: List[str] = field(default_factory=list)
     config_schema: Dict[str, Any] = field(default_factory=dict)
+    signature: Optional[str] = None
+    signature_algorithm: Optional[str] = None
+    signature_key_id: Optional[str] = None
+    raw_data: Dict[str, Any] = field(default_factory=dict, repr=False)
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "PluginManifest":
@@ -63,6 +69,10 @@ class PluginManifest:
             homepage=data.get("homepage", ""),
             tags=data.get("tags", []),
             config_schema=data.get("config_schema", {}),
+            signature=data.get("signature"),
+            signature_algorithm=data.get("signature_algorithm"),
+            signature_key_id=data.get("signature_key_id"),
+            raw_data=dict(data),
         )
 
     @classmethod
@@ -133,6 +143,7 @@ class PluginLoader:
         search_paths: Optional[List[Path]] = None,
         auto_resolve_dependencies: bool = True,
         allow_external_plugins: Optional[bool] = None,
+        plugin_trust_store_path: Optional[Path] = None,
     ):
         """Initialize plugin loader.
 
@@ -141,6 +152,8 @@ class PluginLoader:
             auto_resolve_dependencies: Automatically check dependencies on load
             allow_external_plugins: Enable user/env plugin discovery paths.
                 If None, reads TRANSFORMATION_PORTAL_ENABLE_EXTERNAL_PLUGINS.
+            plugin_trust_store_path: Optional JSON trust store for verifying
+                external plugin.json manifests before importing plugin code.
         """
         self._search_paths: List[Path] = []
         self._loaded_plugins: Dict[str, LoadedPlugin] = {}
@@ -149,6 +162,12 @@ class PluginLoader:
         self._auto_resolve_deps = auto_resolve_dependencies
         self._allow_external_plugins = (
             allow_external_plugins if allow_external_plugins is not None else _external_plugins_enabled_from_env()
+        )
+        env_trust_store = os.environ.get(_PLUGIN_TRUST_STORE_ENV)
+        self._plugin_trust_store_path = (
+            Path(plugin_trust_store_path).expanduser().resolve()
+            if plugin_trust_store_path is not None
+            else Path(env_trust_store).expanduser().resolve() if env_trust_store else None
         )
 
         # Add default paths
@@ -287,6 +306,19 @@ class PluginLoader:
                         logger.warning(f"Failed to parse {pyproject}: {e}")
 
             if manifest and manifest.entry_point:
+                signature_error = self._verify_manifest_trust(item, manifest)
+                if signature_error:
+                    discovered.append(
+                        LoadedPlugin(
+                            plugin=None,  # type: ignore
+                            manifest=manifest,
+                            source_path=item,
+                            module_name="",
+                            load_errors=[signature_error],
+                        )
+                    )
+                    continue
+
                 # Load the plugin from manifest
                 loaded = self._load_from_manifest(item, manifest)
                 if loaded:
@@ -307,6 +339,14 @@ class PluginLoader:
 
         # Find all .py files (non-recursive for file plugins)
         for py_file in search_path.glob("*.py"):
+            if self._requires_manifest_signature(py_file):
+                logger.warning(
+                    "Skipping external single-file plugin %s because %s requires signed plugin.json manifests",
+                    py_file,
+                    _PLUGIN_TRUST_STORE_ENV,
+                )
+                continue
+
             # Skip private/special files
             if py_file.name.startswith("_"):
                 continue
@@ -315,6 +355,37 @@ class PluginLoader:
             discovered.extend(loaded)
 
         return discovered
+
+    def _builtin_plugins_root(self) -> Path:
+        """Return the resolved built-in plugin package root."""
+        return (Path(__file__).resolve().parent / "builtin").resolve()
+
+    def _is_builtin_path(self, path: Path) -> bool:
+        """Return True when a plugin path is under the built-in plugin root."""
+        try:
+            Path(path).resolve().relative_to(self._builtin_plugins_root())
+        except ValueError:
+            return False
+        return True
+
+    def _requires_manifest_signature(self, path: Path) -> bool:
+        """Return True when an external plugin must pass signed-manifest trust."""
+        return self._plugin_trust_store_path is not None and not self._is_builtin_path(path)
+
+    def _verify_manifest_trust(self, package_dir: Path, manifest: PluginManifest) -> Optional[str]:
+        """Validate external package manifest trust before importing code."""
+        if not self._requires_manifest_signature(package_dir):
+            return None
+        if not (package_dir / "plugin.json").exists() or not manifest.raw_data:
+            return "External plugin packages require a signed plugin.json manifest when plugin trust is configured"
+        try:
+            verify_manifest_signature(
+                manifest.raw_data,
+                trust_store_path=self._plugin_trust_store_path,  # type: ignore[arg-type]
+            )
+        except (OSError, PluginSignatureError, json.JSONDecodeError) as exc:
+            return f"Plugin manifest signature verification failed: {exc}"
+        return None
 
     def _load_from_manifest(self, package_dir: Path, manifest: PluginManifest) -> Optional[LoadedPlugin]:
         """Load a plugin from its manifest.

@@ -146,7 +146,7 @@ from .reconstruction_runner import (
     run_scene_reconstruction,
     write_scene_debug_bundle,
 )
-from .run_card_contract import render_run_card_output_relative_path
+from .run_card_contract import build_runtime_licensing_manifest, render_run_card_output_relative_path
 from .scene_context import SceneContext
 from .scene_groups import SceneGroup, build_scene_groups
 from .scene_integrity import (
@@ -3436,6 +3436,11 @@ class EnhanceOrchestrator:
             for_manifest_write=True,
         )
 
+        manifest_backend_selection = backend_selection_metadata or self._active_backend_metadata or self._backend_metadata
+        manifest_model_contract = self._build_run_card_model_contract(
+            backend_selection=manifest_backend_selection.to_dict() if manifest_backend_selection is not None else None,
+        )
+
         manifest = CombinedManifest(
             input=InputMetadata(
                 image_path=str(image_input.path),
@@ -3474,7 +3479,11 @@ class EnhanceOrchestrator:
                 time.gmtime(pipeline_end_time),
             ),
             # ADR-023 Phase 3: Backend selection
-            backend_selection=(backend_selection_metadata or self._active_backend_metadata or self._backend_metadata),
+            backend_selection=manifest_backend_selection,
+            licensing=build_runtime_licensing_manifest(
+                model_contract=manifest_model_contract,
+                config=self.config,
+            ),
         )
         manifest.write(manifest_path)
         return input_sha
@@ -6724,6 +6733,10 @@ class EnhanceOrchestrator:
         )
         if model_contract is not None:
             run_card["model_contract"] = model_contract
+        run_card["licensing"] = build_runtime_licensing_manifest(
+            model_contract=model_contract,
+            config=self.config,
+        )
 
         def _json_default(obj: Any) -> Any:
             # --- ConfigFingerprint ---
