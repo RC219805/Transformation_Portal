@@ -4615,6 +4615,14 @@ def test_job_create_request_adapter_rejects_non_dict_args() -> None:
     assert body["error"]["details"] == {"field": "args", "reason": "invalid_request"}
 
 
+def test_job_create_request_adapter_keeps_required_reason_vocabulary() -> None:
+    response = orchestrator_app._validated_job_create_request({"args": {}})
+    assert isinstance(response, orchestrator_app.JSONResponse)
+    body = json.loads(response.body.decode("utf-8"))
+    assert body["error"]["code"] == "INVALID_ARGUMENT"
+    assert body["error"]["details"] == {"field": "pipeline", "reason": "required"}
+
+
 def test_archive_gate_pipeline_submission_returns_job_envelope(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
@@ -5538,6 +5546,72 @@ def test_job_events_replays_persisted_events_from_last_event_id(client: TestClie
 
     assert [name for name, _payload in events] == ["progress", "done"]
     assert events[0][1]["progress"] == 45
+
+
+def test_job_events_replay_beyond_latest_seq_falls_back_to_state_first(client: TestClient) -> None:
+    now = orchestrator_app._now()
+    job = orchestrator_app.Job(
+        id="job_sse_replay_beyond_latest",
+        created_at=now,
+        state="running",
+        progress=12,
+        request={"pipeline": "lux-depth-v3"},
+    )
+    _seed_job(job)
+    asyncio.run(orchestrator_app._publish_event(job.id, "state", {"id": job.id, "state": "running", "progress": 12}))
+    job.state = "succeeded"
+    job.exit_code = 0
+    job.finished_at = orchestrator_app._now()
+    job.done_published_at = job.finished_at
+    _sync_seeded_job(job)
+
+    with client.stream("GET", f"/v1/jobs/{job.id}/events", headers={"Last-Event-ID": "999"}) as stream_response:
+        assert stream_response.status_code == 200
+        events = _collect_sse_events(stream_response)
+
+    assert [name for name, _payload in events] == ["state", "done"]
+    assert events[0][1]["state"] == "succeeded"
+    assert events[1][1]["state"] == "succeeded"
+
+
+def test_job_events_replay_failure_falls_back_to_state_first(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class FailingAsyncIterator:
+        def __aiter__(self):  # noqa: ANN204
+            return self
+
+        async def __anext__(self):  # noqa: ANN204
+            raise RuntimeError("event store unavailable")
+
+    class FailingEventStore:
+        def events_since(self, _job_id: str, *, after_seq: int) -> FailingAsyncIterator:
+            return FailingAsyncIterator()
+
+    def failing_event_store() -> FailingEventStore:
+        return FailingEventStore()
+
+    now = orchestrator_app._now()
+    job = orchestrator_app.Job(
+        id="job_sse_replay_failure",
+        created_at=now,
+        state="succeeded",
+        progress=100,
+        finished_at=now,
+        done_published_at=now,
+        exit_code=0,
+        request={"pipeline": "lux-depth-v3"},
+    )
+    _seed_job(job)
+    monkeypatch.setattr(orchestrator_app, "_job_event_store", failing_event_store)
+
+    with client.stream("GET", f"/v1/jobs/{job.id}/events", headers={"Last-Event-ID": "1"}) as stream_response:
+        assert stream_response.status_code == 200
+        events = _collect_sse_events(stream_response)
+
+    assert [name for name, _payload in events] == ["state", "done"]
+    assert events[0][1]["progress"] == 100
 
 
 def test_job_events_rejects_invalid_last_event_id(client: TestClient) -> None:

@@ -297,3 +297,23 @@ class TestRuntimeLicensingManifest:
 
         restored = CombinedManifest.load(manifest_path)
         assert restored.licensing == licensing
+
+    def test_combined_msgpack_manifest_round_trips_licensing(self, tmp_path: Path) -> None:
+        from transformation_portal.lux_depth_v3.manifest import MSGPACK_AVAILABLE, CombinedManifest
+
+        if not MSGPACK_AVAILABLE:
+            pytest.skip("msgpack is optional")
+
+        manifest_path = tmp_path / "licensing.manifest.msgpack"
+        licensing = {
+            "schema_version": "1.0",
+            "software_license_tier": "commercial",
+            "models": [],
+            "non_commercial_active": False,
+            "research_acknowledgement_required": False,
+        }
+
+        CombinedManifest(licensing=licensing).save_msgpack(manifest_path)
+
+        restored = CombinedManifest.load_msgpack(manifest_path)
+        assert restored.licensing == licensing

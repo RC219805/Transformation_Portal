@@ -376,7 +376,7 @@ class PluginLoader:
         """Validate external package manifest trust before importing code."""
         if not self._requires_manifest_signature(package_dir):
             return None
-        if not manifest.raw_data:
+        if not (package_dir / "plugin.json").exists() or not manifest.raw_data:
             return "External plugin packages require a signed plugin.json manifest when plugin trust is configured"
         try:
             verify_manifest_signature(

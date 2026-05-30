@@ -562,10 +562,11 @@ class CombinedManifest:
             "config_fingerprint",
             "environment",
             "backend_selection",
+            "licensing",
         ]:
             field_value = getattr(self, field_name)
             if field_value is not None:
-                if field_name in ["pbr_assets", "environment"]:
+                if field_name in ["pbr_assets", "environment", "licensing"]:
                     data[field_name] = field_value
                 else:
                     data[field_name] = asdict(field_value)
@@ -624,6 +625,8 @@ class CombinedManifest:
             manifest.pbr_assets = data["pbr_assets"]
         if "environment" in data:
             manifest.environment = data["environment"]
+        if "licensing" in data and data["licensing"] is not None:
+            manifest.licensing = dict(data["licensing"])
         if "start_time" in data:
             manifest.start_time = data["start_time"]
         if "end_time" in data:

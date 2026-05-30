@@ -3576,7 +3576,7 @@ def _job_create_validation_error_response(exc: ValidationError) -> JSONResponse:
     field = "payload"
     if isinstance(location, (list, tuple)) and location:
         field = ".".join(str(part) for part in location if part != "body") or "payload"
-    reason = "missing_required_field" if first_error.get("type") == "missing" else "invalid_request"
+    reason = "required" if first_error.get("type") == "missing" else "invalid_request"
     return _error_response(
         400,
         code="INVALID_ARGUMENT",
@@ -10103,10 +10103,12 @@ async def _job_events(
 
     async def gen() -> AsyncGenerator[str, None]:
         last_replayed_seq = replay_after_seq
+        replayed_any = False
         try:
             if replay_after_seq is not None:
                 try:
                     async for stored_event in _job_event_store().events_since(job_id, after_seq=replay_after_seq):
+                        replayed_any = True
                         last_replayed_seq = stored_event.seq
                         yield _sse(
                             stored_event.event_type,
@@ -10117,7 +10119,9 @@ async def _job_events(
                             return
                 except Exception:  # noqa: BLE001 - fall back to live stream/synthetic terminal event
                     LOGGER.debug("job event-store replay skipped/failed for %s", job_id, exc_info=True)
-            else:
+            if replay_after_seq is None or not replayed_any:
+                if replay_after_seq is not None:
+                    last_replayed_seq = None
                 yield _sse(
                     "state",
                     {

@@ -16,7 +16,7 @@ selectors, API envelopes, auth posture, and validation semantics.
 | P0 | Jobs route decorators | implemented | `app.py` jobs route family; `tests/test_app_route_inventory.py` | `make test-orchestrator-http-contract` |
 | P0 | `JobCreateRequest` adoption | implemented | `src/transformation_portal/api/v1/jobs.py` | malformed payload + unsupported pipeline contract tests |
 | P1 | Durable SSE replay | implemented | existing `JobEventStore` storage surface | event-store contract + HTTP SSE replay tests |
-| P1 | Runtime licensing evidence | implemented | audit item M-2 and run-card schemas | run-card schema + licensing gate tests |
+| P1 | Runtime licensing evidence v1 | implemented | audit item M-2 and run-card schemas | run-card schema + licensing gate tests |
 | P1 | Performance gate policy | implemented | audit item M-3 and ADR-034 benchmark policy | doc/workflow parity review |
 | P2 | Plugin trust model | implemented | audit item M-1 | plugin trust-boundary tests + ADR |
 | P2 | Next mypy tranche | measure | `docs/ci/TYPE_CHECKING_POLICY.md` | `mypy --config-file=mypy.ini <path>` |

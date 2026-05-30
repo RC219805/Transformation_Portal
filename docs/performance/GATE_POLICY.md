@@ -33,7 +33,8 @@ run as bounded smoke checks.
 - Performance ledger baseline comparisons with explicit backend, device, and
   quality-tier metadata.
 - `.github/workflows/performance-monitor.yml` is schedule/manual only and fails
-  when pytest-benchmark reports a regression beyond its documented threshold.
+  when pytest-benchmark reports a regression beyond its documented threshold
+  or when benchmark execution fails and the run is not valid evidence.
 
 ## Advisory Signals
 

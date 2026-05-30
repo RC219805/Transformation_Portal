@@ -181,3 +181,25 @@ def test_tampered_external_plugin_json_is_rejected_before_load(tmp_path: Path):
     assert discovered[0].plugin is None
     assert discovered[0].is_valid is False
     assert "does not match trusted key" in discovered[0].load_errors[0]
+
+
+def test_pyproject_only_external_plugin_is_rejected_when_trust_store_is_configured(tmp_path: Path):
+    package_dir = tmp_path / "pyproject_only_package"
+    write_plugin_module(package_dir, "pyproject_only_plugin", plugin_name="pyproject_only_plugin")
+    write_pyproject_manifest(
+        package_dir,
+        name="pyproject_only_plugin",
+        module_name="pyproject_only_plugin",
+    )
+
+    discovered = isolated_loader(
+        tmp_path,
+        plugin_trust_store_path=_write_trust_store(tmp_path),
+    ).discover_all()
+
+    assert len(discovered) == 1
+    assert discovered[0].plugin is None
+    assert discovered[0].is_valid is False
+    assert discovered[0].load_errors == [
+        "External plugin packages require a signed plugin.json manifest when plugin trust is configured"
+    ]

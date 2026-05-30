@@ -124,9 +124,10 @@ import, and ADR-049 records the in-process trust boundary.
 
 ### M-2. Emit machine-readable runtime license manifest in run cards
 
-**Status:** Done in the architecture cleanup implementation branch: newly
-emitted run cards and combined manifests carry an additive `licensing` block,
-with schema and legacy-reader tolerance coverage.
+**Status:** Runtime licensing evidence v1 landed in the architecture cleanup
+implementation branch for emitted run cards and combined manifests.
+Multi-runtime aggregation across segmentation, VLM, materials, and
+reconstruction remains a follow-up.
 **Severity / Effort:** Medium / M
 **Tracks finding:** [#9](../PORTAL_AUDIT_REPO_WIDE_2026-05-18.md#64-ci-governance-and-licensing) — mixed licensing
 **Files to touch:** `src/transformation_portal/lux_depth_v3/run_card_contract.py`, `src/transformation_portal/lux_depth_v3/artifact_manager.py`, `src/transformation_portal/lux_depth_v3/manifest.py`, `docs/schemas/`
