@@ -18,6 +18,7 @@ import time
 import uuid
 from collections import deque
 from contextlib import asynccontextmanager, contextmanager, suppress
+from copy import deepcopy
 from dataclasses import dataclass
 from dataclasses import field as dataclass_field
 from email.parser import BytesParser
@@ -6410,11 +6411,12 @@ async def _publish_event(
 ) -> None:
     event_at = _now()
     event_seq: Optional[int] = None
+    event_data = deepcopy(data)
     try:
         stored_event = await _job_event_store().append(
             job_id,
             event,
-            dict(data),
+            event_data,
             created_at=event_at,
         )
         event_seq = stored_event.seq
@@ -6436,7 +6438,7 @@ async def _publish_event(
     if not subscribers:
         return
 
-    payload = {"event": event, "data": data}
+    payload = {"event": event, "data": event_data}
     if event_seq is not None:
         payload["id"] = event_seq
     stale_subscribers: List[str] = []
@@ -6447,7 +6449,7 @@ async def _publish_event(
             except asyncio.QueueEmpty:
                 pass
         try:
-            queue.put_nowait(payload)
+            queue.put_nowait(deepcopy(payload))
         except asyncio.QueueFull:
             continue
         except RuntimeError:
@@ -10036,23 +10038,26 @@ def _last_event_id_from_request(request: Request) -> Optional[int]:
     raw_value = headers.get("last-event-id")
     if raw_value is None or not str(raw_value).strip():
         return None
-    try:
-        last_event_id = int(str(raw_value).strip())
-    except ValueError as exc:
-        raise ValueError("Last-Event-ID must be a non-negative integer") from exc
-    if last_event_id < 0:
+    normalized = str(raw_value).strip()
+    if not normalized.isascii() or not normalized.isdecimal():
         raise ValueError("Last-Event-ID must be a non-negative integer")
-    return last_event_id
+    return int(normalized)
 
 
 def _event_queue_seq(event_payload: Mapping[str, Any]) -> Optional[int]:
     raw_value = event_payload.get("id")
     if raw_value is None:
         return None
-    try:
-        return int(raw_value)
-    except (TypeError, ValueError):
+    if isinstance(raw_value, bool):
         return None
+    if isinstance(raw_value, int):
+        return raw_value if raw_value > 0 else None
+    if isinstance(raw_value, str):
+        normalized = raw_value.strip()
+        if normalized.isascii() and normalized.isdecimal():
+            seq = int(normalized)
+            return seq if seq > 0 else None
+    return None
 
 
 def _terminal_done_payload(job: Job) -> Dict[str, Any]:

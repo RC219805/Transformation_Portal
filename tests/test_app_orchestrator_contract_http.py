@@ -91,6 +91,28 @@ def _collect_sse_events(response) -> List[Tuple[str, Dict[str, Any]]]:
     return events
 
 
+def _collect_sse_frames(response) -> List[Tuple[str | None, str, Dict[str, Any]]]:
+    frames: List[Tuple[str | None, str, Dict[str, Any]]] = []
+    current_id: str | None = None
+    current_event = ""
+    for line in response.iter_lines():
+        if not line:
+            continue
+        if line.startswith("id: "):
+            current_id = line.split("id: ", 1)[1].strip()
+            continue
+        if line.startswith("event: "):
+            current_event = line.split("event: ", 1)[1].strip()
+            continue
+        if line.startswith("data: "):
+            payload = json.loads(line.split("data: ", 1)[1])
+            frames.append((current_id, current_event, payload))
+            current_id = None
+            if current_event == "done":
+                break
+    return frames
+
+
 def _flag_value(argv: list[str], flag: str) -> str:
     try:
         index = argv.index(flag)
@@ -4595,6 +4617,7 @@ def test_invalid_job_payload_returns_typed_invalid_argument(client: TestClient) 
     assert body["schema"] == "tp.orchestrator.error.v1"
     assert body["success"] is False
     assert body["error"]["code"] == "INVALID_ARGUMENT"
+    assert body["error"]["details"] == {"field": "payload", "reason": "unsupported_pipeline"}
 
 
 def test_malformed_job_args_return_typed_invalid_argument(client: TestClient) -> None:
@@ -4607,12 +4630,131 @@ def test_malformed_job_args_return_typed_invalid_argument(client: TestClient) ->
     assert body["error"]["details"] == {"field": "input_dir", "reason": "required"}
 
 
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"pipeline": "not-allowed", "args": {}},
+        {"pipeline": "lux-depth-v3", "args": "not-a-dict"},
+        {"args": {"input_dir": "./in"}},
+    ],
+)
+def test_v2_job_create_validation_errors_match_v1_envelopes(
+    client: TestClient,
+    payload: Dict[str, Any],
+) -> None:
+    v1_response = client.post("/v1/jobs", json=payload)
+    v2_response = client.post("/v2/jobs", json=payload)
+
+    assert v1_response.status_code == 400
+    assert v2_response.status_code == 400
+    assert v2_response.json() == v1_response.json()
+
+
+def test_job_create_missing_pipeline_preserves_pre_adapter_unsupported_pipeline_mapping(
+    client: TestClient,
+) -> None:
+    response = client.post("/v1/jobs", json={"args": {"input_dir": "./in"}})
+
+    assert response.status_code == 400
+    body = response.json()
+    assert body["schema"] == "tp.orchestrator.error.v1"
+    assert body["success"] is False
+    assert body["error"]["code"] == "INVALID_ARGUMENT"
+    assert body["error"]["details"] == {"field": "payload", "reason": "unsupported_pipeline"}
+
+
+@pytest.mark.parametrize("jobs_path", ["/v1/jobs", "/v2/jobs"])
+def test_job_create_non_object_body_uses_versioned_request_validation_envelope(
+    client: TestClient,
+    jobs_path: str,
+) -> None:
+    response = client.post(jobs_path, json=["not", "an", "object"])
+
+    assert response.status_code == 400
+    body = response.json()
+    assert body["schema"] == "tp.orchestrator.error.v1"
+    assert body["success"] is False
+    assert body["error"]["code"] == "INVALID_ARGUMENT"
+    assert body["error"]["message"] == "request validation failed"
+    assert body["error"]["details"] == {
+        "path": jobs_path,
+        "reason": "request_validation_failed",
+    }
+
+
+@pytest.mark.parametrize("jobs_path", ["/v1/jobs", "/v2/jobs"])
+def test_job_create_missing_body_uses_versioned_request_validation_envelope(
+    client: TestClient,
+    jobs_path: str,
+) -> None:
+    response = client.post(jobs_path)
+
+    assert response.status_code == 400
+    body = response.json()
+    assert body["schema"] == "tp.orchestrator.error.v1"
+    assert body["success"] is False
+    assert body["error"]["code"] == "INVALID_ARGUMENT"
+    assert body["error"]["message"] == "request validation failed"
+    assert body["error"]["details"] == {
+        "path": jobs_path,
+        "reason": "request_validation_failed",
+    }
+
+
+@pytest.mark.parametrize("jobs_path", ["/v1/jobs", "/v2/jobs"])
+def test_job_create_malformed_json_uses_versioned_request_validation_envelope(
+    client: TestClient,
+    jobs_path: str,
+) -> None:
+    response = client.post(
+        jobs_path,
+        content='{"pipeline": "lux-depth-v3", "args": ',
+        headers={"content-type": "application/json"},
+    )
+
+    assert response.status_code == 400
+    body = response.json()
+    assert body["schema"] == "tp.orchestrator.error.v1"
+    assert body["success"] is False
+    assert body["error"]["code"] == "INVALID_ARGUMENT"
+    assert body["error"]["message"] == "request validation failed"
+    assert body["error"]["details"] == {
+        "path": jobs_path,
+        "reason": "request_validation_failed",
+    }
+
+
 def test_job_create_request_adapter_rejects_non_dict_args() -> None:
     response = orchestrator_app._validated_job_create_request({"pipeline": "lux-depth-v3", "args": "not-a-dict"})
     assert isinstance(response, orchestrator_app.JSONResponse)
     body = json.loads(response.body.decode("utf-8"))
     assert body["error"]["code"] == "INVALID_ARGUMENT"
     assert body["error"]["details"] == {"field": "args", "reason": "invalid_request"}
+
+
+def test_job_create_request_adapter_preserves_extra_fields_on_success() -> None:
+    response = orchestrator_app._validated_job_create_request(
+        {
+            "pipeline": "lux-depth-v3",
+            "args": {"input_dir": "./in"},
+            "overrides": {"quality_tier": "premium"},
+        }
+    )
+
+    assert isinstance(response, orchestrator_app.JobCreateRequest)
+    dumped = response.model_dump(mode="json")
+    assert dumped["pipeline"] == "lux-depth-v3"
+    assert dumped["args"] == {"input_dir": "./in"}
+    assert dumped["overrides"] == {"quality_tier": "premium"}
+
+
+def test_job_create_request_adapter_maps_bad_pipeline_type_to_invalid_request() -> None:
+    response = orchestrator_app._validated_job_create_request({"pipeline": None, "args": {}})
+
+    assert isinstance(response, orchestrator_app.JSONResponse)
+    body = json.loads(response.body.decode("utf-8"))
+    assert body["error"]["code"] == "INVALID_ARGUMENT"
+    assert body["error"]["details"] == {"field": "pipeline", "reason": "invalid_request"}
 
 
 def test_job_create_request_adapter_keeps_required_reason_vocabulary() -> None:
@@ -5508,10 +5650,334 @@ def test_job_events_stream_emits_state_log_progress_artifact_done(
     assert artifact_payload["relative_path"] == "report.json"
 
 
-def test_job_events_replays_persisted_events_from_last_event_id(client: TestClient) -> None:
+def _seed_running_event_job(job_id: str) -> Any:
     now = orchestrator_app._now()
     job = orchestrator_app.Job(
-        id="job_sse_replay",
+        id=job_id,
+        created_at=now,
+        state="running",
+        progress=0,
+        request={"pipeline": "lux-depth-v3"},
+    )
+    _seed_job(job)
+    return job
+
+
+def test_should_flush_last_event_at_always_flushes_state_artifact_and_done() -> None:
+    orchestrator_app._LAST_EVENT_PERSISTED_AT["job-flush-always"] = 100.0
+
+    for event_name in ("state", "artifact", "artifact_deleted", "artifact_deletion_failed", "done"):
+        assert orchestrator_app._should_flush_last_event_at("job-flush-always", event_name, 100.1) is True
+
+
+def test_should_flush_last_event_at_throttles_progress_until_interval(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(orchestrator_app, "JOB_LAST_EVENT_FLUSH_INTERVAL_SECONDS", 5.0)
+    orchestrator_app._LAST_EVENT_PERSISTED_AT["job-flush-progress"] = 100.0
+
+    assert orchestrator_app._should_flush_last_event_at("job-flush-progress", "progress", 104.9) is False
+    assert orchestrator_app._should_flush_last_event_at("job-flush-progress", "progress", 105.0) is True
+    assert orchestrator_app._should_flush_last_event_at("job-flush-new-job", "progress", 101.0) is True
+
+
+def test_should_flush_last_event_at_can_disable_throttling(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(orchestrator_app, "JOB_LAST_EVENT_FLUSH_INTERVAL_SECONDS", 0.0)
+    orchestrator_app._LAST_EVENT_PERSISTED_AT["job-flush-disabled"] = 100.0
+
+    assert orchestrator_app._should_flush_last_event_at("job-flush-disabled", "progress", 100.1) is True
+
+
+def test_publish_event_persists_seq_and_fans_out_id_to_live_subscribers() -> None:
+    async def replay_events(job_id: str) -> list[Any]:
+        return [event async for event in orchestrator_app._job_event_store().events_since(job_id)]
+
+    job = _seed_running_event_job("job_publish_seq_fanout")
+    subscriber_queue: asyncio.Queue[Dict[str, Any]] = asyncio.Queue()
+    orchestrator_app.EVENT_SUBSCRIBERS[job.id]["test-subscriber"] = subscriber_queue
+
+    asyncio.run(orchestrator_app._publish_event(job.id, "progress", {"id": job.id, "progress": 20}))
+
+    queued = subscriber_queue.get_nowait()
+    replayed_events = asyncio.run(replay_events(job.id))
+    persisted_record = asyncio.run(orchestrator_app._job_repository().get(job.id))
+
+    assert queued == {
+        "id": 1,
+        "event": "progress",
+        "data": {"id": job.id, "progress": 20},
+    }
+    assert [(event.seq, event.event_type, event.payload) for event in replayed_events] == [
+        (1, "progress", {"id": job.id, "progress": 20})
+    ]
+    assert persisted_record is not None
+    assert persisted_record.last_event_at == job.last_event_at
+    assert orchestrator_app._LAST_EVENT_PERSISTED_AT[job.id] == job.last_event_at
+
+
+def test_publish_event_snapshots_payload_for_live_fanout_and_replay() -> None:
+    async def replay_events(job_id: str) -> list[Any]:
+        return [event async for event in orchestrator_app._job_event_store().events_since(job_id)]
+
+    job = _seed_running_event_job("job_publish_payload_snapshot")
+    subscriber_queue: asyncio.Queue[Dict[str, Any]] = asyncio.Queue()
+    orchestrator_app.EVENT_SUBSCRIBERS[job.id]["test-subscriber"] = subscriber_queue
+    event_data = {"id": job.id, "progress": 20, "nested": {"stage": "before"}}
+
+    asyncio.run(orchestrator_app._publish_event(job.id, "progress", event_data))
+    event_data["progress"] = 99
+    event_data["nested"]["stage"] = "after"  # type: ignore[index]
+
+    queued = subscriber_queue.get_nowait()
+    replayed_events = asyncio.run(replay_events(job.id))
+
+    assert queued == {
+        "id": 1,
+        "event": "progress",
+        "data": {"id": job.id, "progress": 20, "nested": {"stage": "before"}},
+    }
+    assert [(event.seq, event.event_type, event.payload) for event in replayed_events] == [
+        (1, "progress", {"id": job.id, "progress": 20, "nested": {"stage": "before"}})
+    ]
+
+
+def test_publish_event_fanout_payloads_are_isolated_per_subscriber() -> None:
+    job = _seed_running_event_job("job_publish_subscriber_payload_isolation")
+    first_queue: asyncio.Queue[Dict[str, Any]] = asyncio.Queue()
+    second_queue: asyncio.Queue[Dict[str, Any]] = asyncio.Queue()
+    orchestrator_app.EVENT_SUBSCRIBERS[job.id]["first"] = first_queue
+    orchestrator_app.EVENT_SUBSCRIBERS[job.id]["second"] = second_queue
+
+    asyncio.run(
+        orchestrator_app._publish_event(
+            job.id,
+            "progress",
+            {"id": job.id, "nested": {"stage": "before"}},
+        )
+    )
+
+    first_payload = first_queue.get_nowait()
+    first_data = first_payload["data"]
+    assert isinstance(first_data, dict)
+    first_nested = first_data["nested"]
+    assert isinstance(first_nested, dict)
+    first_nested["stage"] = "after"
+
+    assert second_queue.get_nowait() == {
+        "id": 1,
+        "event": "progress",
+        "data": {"id": job.id, "nested": {"stage": "before"}},
+    }
+
+
+def test_publish_event_without_cached_job_still_persists_and_fans_out() -> None:
+    async def replay_events(job_id: str) -> list[Any]:
+        return [event async for event in orchestrator_app._job_event_store().events_since(job_id)]
+
+    job = _seed_running_event_job("job_publish_repository_only")
+    subscriber_queue: asyncio.Queue[Dict[str, Any]] = asyncio.Queue()
+    orchestrator_app.EVENT_SUBSCRIBERS[job.id]["test-subscriber"] = subscriber_queue
+    orchestrator_app.JOBS.pop(job.id)
+
+    asyncio.run(orchestrator_app._publish_event(job.id, "progress", {"id": job.id, "progress": 28}))
+
+    queued = subscriber_queue.get_nowait()
+    replayed_events = asyncio.run(replay_events(job.id))
+    persisted_record = asyncio.run(orchestrator_app._job_repository().get(job.id))
+
+    assert job.id not in orchestrator_app.JOBS
+    assert job.last_event_at is None
+    assert queued == {
+        "id": 1,
+        "event": "progress",
+        "data": {"id": job.id, "progress": 28},
+    }
+    assert [(event.seq, event.event_type, event.payload) for event in replayed_events] == [
+        (1, "progress", {"id": job.id, "progress": 28})
+    ]
+    assert persisted_record is not None
+    assert persisted_record.last_event_at is not None
+    assert orchestrator_app._LAST_EVENT_PERSISTED_AT[job.id] == persisted_record.last_event_at
+
+
+def test_publish_event_live_fanout_survives_event_store_append_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class FailingEventStore:
+        async def append(self, *_args: object, **_kwargs: object) -> object:
+            raise RuntimeError("event store unavailable")
+
+    job = _seed_running_event_job("job_publish_append_failure")
+    subscriber_queue: asyncio.Queue[Dict[str, Any]] = asyncio.Queue()
+    orchestrator_app.EVENT_SUBSCRIBERS[job.id]["test-subscriber"] = subscriber_queue
+    monkeypatch.setattr(orchestrator_app, "_job_event_store", lambda: FailingEventStore())
+
+    asyncio.run(orchestrator_app._publish_event(job.id, "progress", {"id": job.id, "progress": 21}))
+
+    queued = subscriber_queue.get_nowait()
+    persisted_record = asyncio.run(orchestrator_app._job_repository().get(job.id))
+
+    assert queued == {
+        "event": "progress",
+        "data": {"id": job.id, "progress": 21},
+    }
+    assert persisted_record is not None
+    assert persisted_record.last_event_at == job.last_event_at
+    assert orchestrator_app._LAST_EVENT_PERSISTED_AT[job.id] == job.last_event_at
+
+
+def test_publish_event_live_fanout_survives_last_event_at_repository_update_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class FailingLastEventRepository:
+        def __init__(self) -> None:
+            self.calls: list[tuple[str, dict[str, Any]]] = []
+
+        async def update(self, job_id: str, **fields: Any) -> object:
+            self.calls.append((job_id, fields))
+            raise RuntimeError("repository unavailable")
+
+    job = _seed_running_event_job("job_publish_last_event_update_failure")
+    subscriber_queue: asyncio.Queue[Dict[str, Any]] = asyncio.Queue()
+    orchestrator_app.EVENT_SUBSCRIBERS[job.id]["test-subscriber"] = subscriber_queue
+    failing_repo = FailingLastEventRepository()
+    monkeypatch.setattr(orchestrator_app, "_job_repository", lambda: failing_repo)
+
+    asyncio.run(orchestrator_app._publish_event(job.id, "progress", {"id": job.id, "progress": 24}))
+
+    assert failing_repo.calls == [(job.id, {"last_event_at": job.last_event_at})]
+    assert job.id not in orchestrator_app._LAST_EVENT_PERSISTED_AT
+    assert subscriber_queue.get_nowait() == {
+        "id": 1,
+        "event": "progress",
+        "data": {"id": job.id, "progress": 24},
+    }
+
+
+def test_publish_event_throttled_progress_skips_last_event_at_repository_update(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class RecordingRepository:
+        def __init__(self) -> None:
+            self.calls: list[tuple[str, dict[str, Any]]] = []
+
+        async def update(self, job_id: str, **fields: Any) -> object:
+            self.calls.append((job_id, fields))
+            return object()
+
+    job = _seed_running_event_job("job_publish_throttled_progress")
+    subscriber_queue: asyncio.Queue[Dict[str, Any]] = asyncio.Queue()
+    orchestrator_app.EVENT_SUBSCRIBERS[job.id]["test-subscriber"] = subscriber_queue
+    orchestrator_app._LAST_EVENT_PERSISTED_AT[job.id] = 100.0
+    recording_repo = RecordingRepository()
+    monkeypatch.setattr(orchestrator_app, "JOB_LAST_EVENT_FLUSH_INTERVAL_SECONDS", 5.0)
+    monkeypatch.setattr(orchestrator_app, "_now", lambda: 101.0)
+    monkeypatch.setattr(orchestrator_app, "_job_repository", lambda: recording_repo)
+
+    asyncio.run(orchestrator_app._publish_event(job.id, "progress", {"id": job.id, "progress": 25}))
+
+    assert recording_repo.calls == []
+    assert job.last_event_at == 101.0
+    assert orchestrator_app._LAST_EVENT_PERSISTED_AT[job.id] == 100.0
+    assert subscriber_queue.get_nowait() == {
+        "id": 1,
+        "event": "progress",
+        "data": {"id": job.id, "progress": 25},
+    }
+
+
+def test_publish_event_replaces_stale_buffered_event_when_subscriber_queue_is_full() -> None:
+    job = _seed_running_event_job("job_publish_full_queue")
+    subscriber_queue: asyncio.Queue[Dict[str, Any]] = asyncio.Queue(maxsize=1)
+    subscriber_queue.put_nowait({"event": "progress", "data": {"id": job.id, "progress": 1}})
+    orchestrator_app.EVENT_SUBSCRIBERS[job.id]["test-subscriber"] = subscriber_queue
+
+    asyncio.run(orchestrator_app._publish_event(job.id, "progress", {"id": job.id, "progress": 22}))
+
+    assert subscriber_queue.qsize() == 1
+    assert subscriber_queue.get_nowait() == {
+        "id": 1,
+        "event": "progress",
+        "data": {"id": job.id, "progress": 22},
+    }
+
+
+def test_publish_event_prunes_broken_subscriber_queue_and_keeps_healthy_fanout() -> None:
+    class BrokenSubscriberQueue:
+        def full(self) -> bool:
+            return False
+
+        def put_nowait(self, _payload: Dict[str, Any]) -> None:
+            raise RuntimeError("subscriber queue closed")
+
+    job = _seed_running_event_job("job_publish_broken_subscriber")
+    healthy_queue: asyncio.Queue[Dict[str, Any]] = asyncio.Queue()
+    orchestrator_app.EVENT_SUBSCRIBERS[job.id]["healthy"] = healthy_queue
+    orchestrator_app.EVENT_SUBSCRIBERS[job.id]["broken"] = BrokenSubscriberQueue()  # type: ignore[assignment]
+
+    asyncio.run(orchestrator_app._publish_event(job.id, "progress", {"id": job.id, "progress": 23}))
+
+    assert set(orchestrator_app.EVENT_SUBSCRIBERS[job.id]) == {"healthy"}
+    assert healthy_queue.get_nowait() == {
+        "id": 1,
+        "event": "progress",
+        "data": {"id": job.id, "progress": 23},
+    }
+
+
+def test_publish_event_handles_full_queue_drain_race_and_still_fans_out() -> None:
+    class RacyFullQueue:
+        def __init__(self) -> None:
+            self.payload: Dict[str, Any] | None = None
+
+        def full(self) -> bool:
+            return True
+
+        def get_nowait(self) -> object:
+            raise asyncio.QueueEmpty
+
+        def put_nowait(self, payload: Dict[str, Any]) -> None:
+            self.payload = payload
+
+    job = _seed_running_event_job("job_publish_full_queue_race")
+    subscriber_queue = RacyFullQueue()
+    orchestrator_app.EVENT_SUBSCRIBERS[job.id]["racy"] = subscriber_queue  # type: ignore[assignment]
+
+    asyncio.run(orchestrator_app._publish_event(job.id, "progress", {"id": job.id, "progress": 26}))
+
+    assert subscriber_queue.payload == {
+        "id": 1,
+        "event": "progress",
+        "data": {"id": job.id, "progress": 26},
+    }
+    assert "racy" in orchestrator_app.EVENT_SUBSCRIBERS[job.id]
+
+
+def test_publish_event_tolerates_queue_full_backpressure_without_pruning_subscriber() -> None:
+    class BackpressuredQueue:
+        def full(self) -> bool:
+            return False
+
+        def put_nowait(self, _payload: Dict[str, Any]) -> None:
+            raise asyncio.QueueFull
+
+    job = _seed_running_event_job("job_publish_queue_full_backpressure")
+    healthy_queue: asyncio.Queue[Dict[str, Any]] = asyncio.Queue()
+    orchestrator_app.EVENT_SUBSCRIBERS[job.id]["full"] = BackpressuredQueue()  # type: ignore[assignment]
+    orchestrator_app.EVENT_SUBSCRIBERS[job.id]["healthy"] = healthy_queue
+
+    asyncio.run(orchestrator_app._publish_event(job.id, "progress", {"id": job.id, "progress": 27}))
+
+    assert set(orchestrator_app.EVENT_SUBSCRIBERS[job.id]) == {"full", "healthy"}
+    assert healthy_queue.get_nowait() == {
+        "id": 1,
+        "event": "progress",
+        "data": {"id": job.id, "progress": 27},
+    }
+
+
+def _seed_job_with_sse_replay_events(job_id: str) -> Any:
+    now = orchestrator_app._now()
+    job = orchestrator_app.Job(
+        id=job_id,
         created_at=now,
         state="running",
         progress=0,
@@ -5519,9 +5985,21 @@ def test_job_events_replays_persisted_events_from_last_event_id(client: TestClie
     )
     _seed_job(job)
 
-    asyncio.run(orchestrator_app._publish_event(job.id, "state", {"id": job.id, "state": "running", "progress": 0}))
+    asyncio.run(
+        orchestrator_app._publish_event(
+            job.id,
+            "state",
+            {"id": job.id, "state": "running", "progress": 0},
+        )
+    )
     job.progress = 45
-    asyncio.run(orchestrator_app._publish_event(job.id, "progress", {"id": job.id, "progress": 45}))
+    asyncio.run(
+        orchestrator_app._publish_event(
+            job.id,
+            "progress",
+            {"id": job.id, "progress": 45},
+        )
+    )
     job.state = "succeeded"
     job.exit_code = 0
     asyncio.run(
@@ -5539,19 +6017,384 @@ def test_job_events_replays_persisted_events_from_last_event_id(client: TestClie
     )
     job.done_published_at = orchestrator_app._now()
     job.finished_at = job.done_published_at
+    return job
 
-    with client.stream("GET", f"/v1/jobs/{job.id}/events", headers={"Last-Event-ID": "1"}) as stream_response:
+
+@pytest.mark.parametrize(
+    ("jobs_prefix", "job_id"),
+    [
+        ("/v1/jobs", "job_sse_replay_v1"),
+        ("/v2/jobs", "job_sse_replay_v2"),
+    ],
+)
+def test_job_events_replays_persisted_events_from_last_event_id(
+    client: TestClient,
+    jobs_prefix: str,
+    job_id: str,
+) -> None:
+    job = _seed_job_with_sse_replay_events(job_id)
+
+    with client.stream("GET", f"{jobs_prefix}/{job.id}/events", headers={"Last-Event-ID": "1"}) as stream_response:
         assert stream_response.status_code == 200
-        events = _collect_sse_events(stream_response)
+        frames = _collect_sse_frames(stream_response)
 
+    events = [(event_name, payload) for _event_id, event_name, payload in frames]
     assert [name for name, _payload in events] == ["progress", "done"]
+    assert [event_id for event_id, _name, _payload in frames] == ["2", "3"]
     assert events[0][1]["progress"] == 45
 
 
-def test_job_events_replay_beyond_latest_seq_falls_back_to_state_first(client: TestClient) -> None:
+def test_job_events_terminal_replay_cleans_repository_only_subscriber(
+    client: TestClient,
+) -> None:
+    job = _seed_job_with_sse_replay_events("job_sse_replay_repository_only_cleanup")
+    _sync_seeded_job(job)
+    orchestrator_app.JOBS.pop(job.id)
+
+    with client.stream("GET", f"/v1/jobs/{job.id}/events", headers={"Last-Event-ID": "2"}) as stream_response:
+        assert stream_response.status_code == 200
+        frames = _collect_sse_frames(stream_response)
+
+    assert [(event_id, event_name) for event_id, event_name, _payload in frames] == [("3", "done")]
+    assert job.id not in orchestrator_app.JOBS
+    assert job.id not in orchestrator_app.EVENT_SUBSCRIBERS
+
+
+def test_job_events_active_disconnect_removes_subscriber_but_keeps_job_bucket() -> None:
+    class DisconnectingRequest:
+        headers: Dict[str, str] = {}
+
+        async def is_disconnected(self) -> bool:
+            return True
+
+    async def consume_initial_state_and_disconnect(job_id: str) -> str:
+        response = await orchestrator_app._job_events(DisconnectingRequest(), job_id)  # type: ignore[arg-type]
+        body_iterator = response.body_iterator
+        initial_state = await anext(body_iterator)
+        with pytest.raises(StopAsyncIteration):
+            await anext(body_iterator)
+        return initial_state
+
+    job = _seed_running_event_job("job_sse_active_disconnect_cleanup")
+
+    initial_state = asyncio.run(consume_initial_state_and_disconnect(job.id))
+    initial_payload = json.loads(initial_state.split("data: ", 1)[1])
+
+    assert "event: state" in initial_state
+    assert initial_payload == {"id": job.id, "state": "running", "progress": 0}
+    assert job.id in orchestrator_app.EVENT_SUBSCRIBERS
+    assert orchestrator_app.EVENT_SUBSCRIBERS[job.id] == {}
+
+
+def test_job_events_active_stream_emits_heartbeat_and_cleans_up(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class ConnectedRequest:
+        headers: Dict[str, str] = {}
+
+        async def is_disconnected(self) -> bool:
+            return False
+
+    async def consume_state_and_heartbeat(job_id: str) -> tuple[str, str]:
+        response = await orchestrator_app._job_events(ConnectedRequest(), job_id)  # type: ignore[arg-type]
+        body_iterator = response.body_iterator
+        initial_state = await anext(body_iterator)
+        heartbeat = await anext(body_iterator)
+        await body_iterator.aclose()
+        return initial_state, heartbeat
+
+    job = _seed_running_event_job("job_sse_active_heartbeat")
+    heartbeat_at = 100.0 + orchestrator_app.HEARTBEAT_SECONDS + 1.0
+    now_values = [100.0, heartbeat_at]
+    monkeypatch.setattr(
+        orchestrator_app,
+        "_now",
+        lambda: now_values.pop(0) if now_values else heartbeat_at,
+    )
+
+    initial_state, heartbeat = asyncio.run(consume_state_and_heartbeat(job.id))
+
+    assert json.loads(initial_state.split("data: ", 1)[1]) == {
+        "id": job.id,
+        "state": "running",
+        "progress": 0,
+    }
+    assert heartbeat == ": heartbeat\n\n"
+    assert job.id in orchestrator_app.EVENT_SUBSCRIBERS
+    assert orchestrator_app.EVENT_SUBSCRIBERS[job.id] == {}
+
+
+def test_job_events_finished_pending_done_waits_for_real_done_and_cleans_up() -> None:
+    class ConnectedRequest:
+        headers: Dict[str, str] = {}
+
+        async def is_disconnected(self) -> bool:
+            return False
+
+    async def consume_state_then_real_done(job_id: str) -> tuple[str, str]:
+        response = await orchestrator_app._job_events(ConnectedRequest(), job_id)  # type: ignore[arg-type]
+        body_iterator = response.body_iterator
+        initial_state = await anext(body_iterator)
+        subscribers = orchestrator_app.EVENT_SUBSCRIBERS[job_id]
+        assert len(subscribers) == 1
+        queue = next(iter(subscribers.values()))
+        queue.put_nowait(
+            {
+                "id": 9,
+                "event": "done",
+                "data": {
+                    "id": job_id,
+                    "state": "succeeded",
+                    "exit_code": 0,
+                    "error": None,
+                    "artifacts": {"report": {"relative_path": "report.json"}},
+                },
+            }
+        )
+        done_frame = await anext(body_iterator)
+        with pytest.raises(StopAsyncIteration):
+            await anext(body_iterator)
+        return initial_state, done_frame
+
     now = orchestrator_app._now()
     job = orchestrator_app.Job(
-        id="job_sse_replay_beyond_latest",
+        id="job_sse_finished_waits_for_real_done",
+        created_at=now,
+        state="succeeded",
+        progress=100,
+        finished_at=now,
+        done_published_at=None,
+        exit_code=0,
+        request={"pipeline": "lux-depth-v3"},
+    )
+    _seed_job(job)
+
+    initial_state, done_frame = asyncio.run(consume_state_then_real_done(job.id))
+
+    assert json.loads(initial_state.split("data: ", 1)[1]) == {
+        "id": job.id,
+        "state": "succeeded",
+        "progress": 100,
+    }
+    assert "id: 9" in done_frame
+    assert json.loads(done_frame.split("data: ", 1)[1]) == {
+        "id": job.id,
+        "state": "succeeded",
+        "exit_code": 0,
+        "error": None,
+        "artifacts": {"report": {"relative_path": "report.json"}},
+    }
+    assert job.id not in orchestrator_app.EVENT_SUBSCRIBERS
+
+
+def test_job_events_live_stream_omits_invalid_queued_event_id() -> None:
+    class ConnectedRequest:
+        headers: Dict[str, str] = {}
+
+        async def is_disconnected(self) -> bool:
+            return False
+
+    async def consume_state_then_invalid_id_done(job_id: str) -> tuple[str, str]:
+        response = await orchestrator_app._job_events(ConnectedRequest(), job_id)  # type: ignore[arg-type]
+        body_iterator = response.body_iterator
+        initial_state = await anext(body_iterator)
+        subscribers = orchestrator_app.EVENT_SUBSCRIBERS[job_id]
+        assert len(subscribers) == 1
+        queue = next(iter(subscribers.values()))
+        queue.put_nowait(
+            {
+                "id": "\uff11",
+                "event": "done",
+                "data": {
+                    "id": job_id,
+                    "state": "succeeded",
+                    "exit_code": 0,
+                    "error": None,
+                    "artifacts": {},
+                },
+            }
+        )
+        done_frame = await anext(body_iterator)
+        with pytest.raises(StopAsyncIteration):
+            await anext(body_iterator)
+        return initial_state, done_frame
+
+    now = orchestrator_app._now()
+    job = orchestrator_app.Job(
+        id="job_sse_invalid_live_event_id",
+        created_at=now,
+        state="succeeded",
+        progress=100,
+        finished_at=now,
+        done_published_at=None,
+        exit_code=0,
+        request={"pipeline": "lux-depth-v3"},
+    )
+    _seed_job(job)
+
+    initial_state, done_frame = asyncio.run(consume_state_then_invalid_id_done(job.id))
+
+    assert json.loads(initial_state.split("data: ", 1)[1]) == {
+        "id": job.id,
+        "state": "succeeded",
+        "progress": 100,
+    }
+    assert "id: " not in done_frame
+    assert "event: done" in done_frame
+    assert json.loads(done_frame.split("data: ", 1)[1]) == {
+        "id": job.id,
+        "state": "succeeded",
+        "exit_code": 0,
+        "error": None,
+        "artifacts": {},
+    }
+    assert job.id not in orchestrator_app.EVENT_SUBSCRIBERS
+
+
+def test_job_events_late_terminal_drain_omits_invalid_queued_event_id() -> None:
+    class ConnectedRequest:
+        headers: Dict[str, str] = {}
+
+        async def is_disconnected(self) -> bool:
+            return False
+
+    async def consume_state_then_drained_done(job_id: str) -> tuple[str, str]:
+        response = await orchestrator_app._job_events(ConnectedRequest(), job_id)  # type: ignore[arg-type]
+        body_iterator = response.body_iterator
+        initial_state = await anext(body_iterator)
+        subscribers = orchestrator_app.EVENT_SUBSCRIBERS[job_id]
+        assert len(subscribers) == 1
+        queue = next(iter(subscribers.values()))
+        queue.put_nowait(
+            {
+                "id": "\uff11",
+                "event": "done",
+                "data": {
+                    "id": job_id,
+                    "state": "succeeded",
+                    "exit_code": 0,
+                    "error": None,
+                    "artifacts": {},
+                },
+            }
+        )
+        done_frame = await anext(body_iterator)
+        with pytest.raises(StopAsyncIteration):
+            await anext(body_iterator)
+        return initial_state, done_frame
+
+    now = orchestrator_app._now()
+    job = orchestrator_app.Job(
+        id="job_sse_invalid_late_terminal_event_id",
+        created_at=now,
+        state="succeeded",
+        progress=100,
+        finished_at=now,
+        done_published_at=now,
+        exit_code=0,
+        request={"pipeline": "lux-depth-v3"},
+    )
+    _seed_job(job)
+
+    initial_state, done_frame = asyncio.run(consume_state_then_drained_done(job.id))
+
+    assert json.loads(initial_state.split("data: ", 1)[1]) == {
+        "id": job.id,
+        "state": "succeeded",
+        "progress": 100,
+    }
+    assert "id: " not in done_frame
+    assert "event: done" in done_frame
+    assert json.loads(done_frame.split("data: ", 1)[1]) == {
+        "id": job.id,
+        "state": "succeeded",
+        "exit_code": 0,
+        "error": None,
+        "artifacts": {},
+    }
+    assert job.id not in orchestrator_app.EVENT_SUBSCRIBERS
+
+
+@pytest.mark.parametrize(
+    ("jobs_prefix", "job_id"),
+    [
+        ("/v1/jobs", "job_sse_replay_from_zero_v1"),
+        ("/v2/jobs", "job_sse_replay_from_zero_v2"),
+    ],
+)
+def test_job_events_last_event_id_zero_replays_full_persisted_stream(
+    client: TestClient,
+    jobs_prefix: str,
+    job_id: str,
+) -> None:
+    job = _seed_job_with_sse_replay_events(job_id)
+
+    with client.stream("GET", f"{jobs_prefix}/{job.id}/events", headers={"Last-Event-ID": "0"}) as stream_response:
+        assert stream_response.status_code == 200
+        frames = _collect_sse_frames(stream_response)
+
+    events = [(event_name, payload) for _event_id, event_name, payload in frames]
+    assert [name for name, _payload in events] == ["state", "progress", "done"]
+    assert [event_id for event_id, _name, _payload in frames] == ["1", "2", "3"]
+    assert events[0][1]["state"] == "running"
+    assert events[-1][1]["state"] == "succeeded"
+
+
+def test_job_events_strips_padded_last_event_id_before_replay(client: TestClient) -> None:
+    job = _seed_job_with_sse_replay_events("job_sse_replay_padded_last_event_id")
+
+    with client.stream("GET", f"/v1/jobs/{job.id}/events", headers={"Last-Event-ID": " 1 "}) as stream_response:
+        assert stream_response.status_code == 200
+        frames = _collect_sse_frames(stream_response)
+
+    assert [(event_id, event_name) for event_id, event_name, _payload in frames] == [
+        ("2", "progress"),
+        ("3", "done"),
+    ]
+
+
+def test_job_events_blank_last_event_id_is_treated_as_absent(client: TestClient) -> None:
+    job = _seed_job_with_sse_replay_events("job_sse_blank_last_event_id")
+
+    with client.stream("GET", f"/v1/jobs/{job.id}/events", headers={"Last-Event-ID": "   "}) as stream_response:
+        assert stream_response.status_code == 200
+        frames = _collect_sse_frames(stream_response)
+
+    events = [(event_name, payload) for _event_id, event_name, payload in frames]
+    assert [name for name, _payload in events] == ["state", "done"]
+    assert [event_id for event_id, _name, _payload in frames] == [None, None]
+    assert events[0][1]["state"] == "succeeded"
+    assert events[-1][1]["state"] == "succeeded"
+
+
+def test_job_events_missing_job_returns_not_found_without_subscriber(
+    client: TestClient,
+) -> None:
+    response = client.get("/v1/jobs/missing-sse-job/events")
+
+    assert response.status_code == 404
+    body = response.json()
+    assert body["error"]["code"] == "NOT_FOUND"
+    assert body["error"]["message"] == "job not found"
+    assert body["error"]["details"] == {"job_id": "missing-sse-job"}
+    assert "missing-sse-job" not in orchestrator_app.EVENT_SUBSCRIBERS
+
+
+@pytest.mark.parametrize(
+    ("jobs_prefix", "job_id"),
+    [
+        ("/v1/jobs", "job_sse_replay_beyond_latest_v1"),
+        ("/v2/jobs", "job_sse_replay_beyond_latest_v2"),
+    ],
+)
+def test_job_events_replay_beyond_latest_seq_falls_back_to_state_first(
+    client: TestClient,
+    jobs_prefix: str,
+    job_id: str,
+) -> None:
+    now = orchestrator_app._now()
+    job = orchestrator_app.Job(
+        id=job_id,
         created_at=now,
         state="running",
         progress=12,
@@ -5565,18 +6408,29 @@ def test_job_events_replay_beyond_latest_seq_falls_back_to_state_first(client: T
     job.done_published_at = job.finished_at
     _sync_seeded_job(job)
 
-    with client.stream("GET", f"/v1/jobs/{job.id}/events", headers={"Last-Event-ID": "999"}) as stream_response:
+    with client.stream("GET", f"{jobs_prefix}/{job.id}/events", headers={"Last-Event-ID": "999"}) as stream_response:
         assert stream_response.status_code == 200
-        events = _collect_sse_events(stream_response)
+        frames = _collect_sse_frames(stream_response)
 
+    events = [(event_name, payload) for _event_id, event_name, payload in frames]
     assert [name for name, _payload in events] == ["state", "done"]
+    assert [event_id for event_id, _name, _payload in frames] == [None, None]
     assert events[0][1]["state"] == "succeeded"
     assert events[1][1]["state"] == "succeeded"
 
 
+@pytest.mark.parametrize(
+    ("jobs_prefix", "job_id"),
+    [
+        ("/v1/jobs", "job_sse_replay_failure_v1"),
+        ("/v2/jobs", "job_sse_replay_failure_v2"),
+    ],
+)
 def test_job_events_replay_failure_falls_back_to_state_first(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
+    jobs_prefix: str,
+    job_id: str,
 ) -> None:
     class FailingAsyncIterator:
         def __aiter__(self):  # noqa: ANN204
@@ -5594,7 +6448,7 @@ def test_job_events_replay_failure_falls_back_to_state_first(
 
     now = orchestrator_app._now()
     job = orchestrator_app.Job(
-        id="job_sse_replay_failure",
+        id=job_id,
         created_at=now,
         state="succeeded",
         progress=100,
@@ -5606,18 +6460,305 @@ def test_job_events_replay_failure_falls_back_to_state_first(
     _seed_job(job)
     monkeypatch.setattr(orchestrator_app, "_job_event_store", failing_event_store)
 
-    with client.stream("GET", f"/v1/jobs/{job.id}/events", headers={"Last-Event-ID": "1"}) as stream_response:
+    with client.stream("GET", f"{jobs_prefix}/{job.id}/events", headers={"Last-Event-ID": "1"}) as stream_response:
         assert stream_response.status_code == 200
-        events = _collect_sse_events(stream_response)
+        frames = _collect_sse_frames(stream_response)
 
+    events = [(event_name, payload) for _event_id, event_name, payload in frames]
     assert [name for name, _payload in events] == ["state", "done"]
+    assert [event_id for event_id, _name, _payload in frames] == [None, None]
     assert events[0][1]["progress"] == 100
 
 
-def test_job_events_rejects_invalid_last_event_id(client: TestClient) -> None:
+def test_job_events_replay_failure_resets_seq_filter_for_live_events(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    job_id = "job_sse_replay_failure_live_lower_seq"
+
+    class ReplayFailureAfterQueuedLiveDone:
+        def events_since(self, observed_job_id: str, *, after_seq: int):
+            assert observed_job_id == job_id
+            assert after_seq == 9
+            return self._events()
+
+        async def _events(self):  # noqa: ANN202
+            subscribers = orchestrator_app.EVENT_SUBSCRIBERS[job_id]
+            assert len(subscribers) == 1
+            queue = next(iter(subscribers.values()))
+            queue.put_nowait(
+                {
+                    "id": 2,
+                    "event": "done",
+                    "data": {
+                        "id": job_id,
+                        "state": "succeeded",
+                        "exit_code": 0,
+                        "error": None,
+                        "artifacts": {},
+                    },
+                }
+            )
+            raise RuntimeError("event store unavailable")
+            yield  # pragma: no cover - keeps this method an async generator.
+
+    class NeverDisconnectedRequest:
+        headers = {"last-event-id": "9"}
+
+        async def is_disconnected(self) -> bool:
+            return False
+
+    async def consume_state_then_live_done() -> tuple[str, str]:
+        response = await orchestrator_app._job_events(NeverDisconnectedRequest(), job_id)
+        iterator = response.body_iterator
+        state_frame = await asyncio.wait_for(iterator.__anext__(), timeout=1.0)
+        done_frame = await asyncio.wait_for(iterator.__anext__(), timeout=1.0)
+        with pytest.raises(StopAsyncIteration):
+            await asyncio.wait_for(iterator.__anext__(), timeout=1.0)
+        return (
+            state_frame.decode("utf-8") if isinstance(state_frame, bytes) else state_frame,
+            done_frame.decode("utf-8") if isinstance(done_frame, bytes) else done_frame,
+        )
+
+    job = orchestrator_app.Job(
+        id=job_id,
+        created_at=orchestrator_app._now(),
+        state="running",
+        progress=42,
+        request={"pipeline": "lux-depth-v3"},
+    )
+    _seed_job(job)
+    monkeypatch.setattr(orchestrator_app, "_job_event_store", lambda: ReplayFailureAfterQueuedLiveDone())
+
+    state_frame, done_frame = asyncio.run(consume_state_then_live_done())
+
+    assert "event: state\n" in state_frame
+    assert '"progress":42' in state_frame
+    assert "id: " not in state_frame
+    assert "id: 2\n" in done_frame
+    assert "event: done\n" in done_frame
+
+
+def test_job_events_replay_skips_queued_duplicate_seq_before_live_done(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from transformation_portal.orchestrator.storage.base import JobEvent
+
+    job_id = "job_sse_replay_live_dedupe"
+
+    class ReplayStoreWithQueuedDuplicate:
+        def events_since(self, observed_job_id: str, *, after_seq: int):
+            assert observed_job_id == job_id
+            assert after_seq == 4
+            return self._events()
+
+        async def _events(self):  # noqa: ANN202
+            subscribers = orchestrator_app.EVENT_SUBSCRIBERS[job_id]
+            assert len(subscribers) == 1
+            queue = next(iter(subscribers.values()))
+            queue.put_nowait(
+                {
+                    "id": 5,
+                    "event": "progress",
+                    "data": {"id": job_id, "progress": 25},
+                }
+            )
+            queue.put_nowait(
+                {
+                    "id": 6,
+                    "event": "done",
+                    "data": {
+                        "id": job_id,
+                        "state": "succeeded",
+                        "exit_code": 0,
+                        "error": None,
+                        "artifacts": {},
+                    },
+                }
+            )
+            yield JobEvent(
+                job_id=job_id,
+                seq=5,
+                event_type="progress",
+                payload={"id": job_id, "progress": 25},
+                created_at=orchestrator_app._now(),
+            )
+
     now = orchestrator_app._now()
     job = orchestrator_app.Job(
-        id="job_sse_bad_last_event_id",
+        id=job_id,
+        created_at=now,
+        state="succeeded",
+        progress=100,
+        finished_at=now,
+        done_published_at=now,
+        exit_code=0,
+        request={"pipeline": "lux-depth-v3"},
+    )
+    _seed_job(job)
+    monkeypatch.setattr(orchestrator_app, "_job_event_store", lambda: ReplayStoreWithQueuedDuplicate())
+
+    with client.stream("GET", f"/v1/jobs/{job.id}/events", headers={"Last-Event-ID": "4"}) as stream_response:
+        assert stream_response.status_code == 200
+        frames = _collect_sse_frames(stream_response)
+
+    assert [(event_id, name) for event_id, name, _payload in frames] == [
+        ("5", "progress"),
+        ("6", "done"),
+    ]
+
+
+def test_job_events_replay_allows_live_done_without_persisted_seq(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from transformation_portal.orchestrator.storage.base import JobEvent
+
+    job_id = "job_sse_replay_live_done_without_seq"
+
+    class ReplayStoreWithUnpersistedLiveDone:
+        def events_since(self, observed_job_id: str, *, after_seq: int):
+            assert observed_job_id == job_id
+            assert after_seq == 4
+            return self._events()
+
+        async def _events(self):  # noqa: ANN202
+            yield JobEvent(
+                job_id=job_id,
+                seq=5,
+                event_type="progress",
+                payload={"id": job_id, "progress": 30},
+                created_at=orchestrator_app._now(),
+            )
+            subscribers = orchestrator_app.EVENT_SUBSCRIBERS[job_id]
+            assert len(subscribers) == 1
+            queue = next(iter(subscribers.values()))
+            queue.put_nowait(
+                {
+                    "event": "done",
+                    "data": {
+                        "id": job_id,
+                        "state": "succeeded",
+                        "exit_code": 0,
+                        "error": None,
+                        "artifacts": {},
+                    },
+                }
+            )
+
+    now = orchestrator_app._now()
+    job = orchestrator_app.Job(
+        id=job_id,
+        created_at=now,
+        state="succeeded",
+        progress=100,
+        finished_at=now,
+        done_published_at=now,
+        exit_code=0,
+        request={"pipeline": "lux-depth-v3"},
+    )
+    _seed_job(job)
+    monkeypatch.setattr(orchestrator_app, "_job_event_store", lambda: ReplayStoreWithUnpersistedLiveDone())
+
+    with client.stream("GET", f"/v1/jobs/{job.id}/events", headers={"Last-Event-ID": "4"}) as stream_response:
+        assert stream_response.status_code == 200
+        frames = _collect_sse_frames(stream_response)
+
+    assert [(event_id, name) for event_id, name, _payload in frames] == [
+        ("5", "progress"),
+        (None, "done"),
+    ]
+
+
+@pytest.mark.parametrize(
+    ("event_payload", "expected_seq"),
+    [
+        ({}, None),
+        ({"id": None}, None),
+        ({"id": 7}, 7),
+        ({"id": "8"}, 8),
+        ({"id": " 9 "}, 9),
+        ({"id": "0010"}, 10),
+        ({"id": 0}, None),
+        ({"id": "0"}, None),
+        ({"id": " 0 "}, None),
+        ({"id": -1}, None),
+        ({"id": "-1"}, None),
+        ({"id": True}, None),
+        ({"id": False}, None),
+        ({"id": 1.2}, None),
+        ({"id": "\uff11"}, None),
+        ({"id": "not-a-seq"}, None),
+        ({"id": object()}, None),
+    ],
+)
+def test_event_queue_seq_parses_only_valid_persisted_event_ids(
+    event_payload: Dict[str, Any],
+    expected_seq: int | None,
+) -> None:
+    assert orchestrator_app._event_queue_seq(event_payload) == expected_seq
+
+
+@pytest.mark.parametrize(
+    ("header_value", "expected_seq"),
+    [
+        ("0", 0),
+        (" 12 ", 12),
+        ("+1", None),
+        ("1.2", None),
+        ("\uff11", None),
+    ],
+)
+def test_last_event_id_parser_accepts_only_ascii_decimal_text(
+    header_value: str,
+    expected_seq: int | None,
+) -> None:
+    request = SimpleNamespace(headers={"last-event-id": header_value})
+
+    if expected_seq is None:
+        with pytest.raises(ValueError, match="Last-Event-ID"):
+            orchestrator_app._last_event_id_from_request(request)
+    else:
+        assert orchestrator_app._last_event_id_from_request(request) == expected_seq
+
+
+@pytest.mark.parametrize(
+    "request_obj",
+    [
+        SimpleNamespace(),
+        SimpleNamespace(headers={}),
+        SimpleNamespace(headers={"last-event-id": None}),
+        SimpleNamespace(headers={"last-event-id": "   "}),
+    ],
+)
+def test_last_event_id_parser_treats_absent_and_blank_values_as_no_replay(
+    request_obj: SimpleNamespace,
+) -> None:
+    assert orchestrator_app._last_event_id_from_request(request_obj) is None
+
+
+@pytest.mark.parametrize(
+    ("jobs_prefix", "job_id", "last_event_id"),
+    [
+        ("/v1/jobs", "job_sse_bad_last_event_id_text_v1", "not-a-seq"),
+        ("/v1/jobs", "job_sse_bad_last_event_id_negative_v1", "-1"),
+        ("/v1/jobs", "job_sse_bad_last_event_id_plus_v1", "+1"),
+        ("/v1/jobs", "job_sse_bad_last_event_id_float_v1", "1.2"),
+        ("/v2/jobs", "job_sse_bad_last_event_id_text_v2", "not-a-seq"),
+        ("/v2/jobs", "job_sse_bad_last_event_id_negative_v2", "-1"),
+        ("/v2/jobs", "job_sse_bad_last_event_id_plus_v2", "+1"),
+        ("/v2/jobs", "job_sse_bad_last_event_id_float_v2", "1.2"),
+    ],
+)
+def test_job_events_rejects_invalid_last_event_id(
+    client: TestClient,
+    jobs_prefix: str,
+    job_id: str,
+    last_event_id: str,
+) -> None:
+    now = orchestrator_app._now()
+    job = orchestrator_app.Job(
+        id=job_id,
         created_at=now,
         state="running",
         progress=0,
@@ -5625,7 +6766,7 @@ def test_job_events_rejects_invalid_last_event_id(client: TestClient) -> None:
     )
     _seed_job(job)
 
-    response = client.get(f"/v1/jobs/{job.id}/events", headers={"Last-Event-ID": "not-a-seq"})
+    response = client.get(f"{jobs_prefix}/{job.id}/events", headers={"Last-Event-ID": last_event_id})
     assert response.status_code == 400
     body = response.json()
     assert body["error"]["code"] == "INVALID_ARGUMENT"

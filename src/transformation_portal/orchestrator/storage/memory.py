@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 from collections import defaultdict, deque
+from copy import deepcopy
 from pathlib import Path
 from typing import Any, AsyncIterator, Deque, Dict, Iterable, List, Optional, Tuple
 
@@ -60,6 +61,10 @@ class MemoryJobRepository(JobRepository):
         return [r.copy() for r in ordered], total
 
     async def update(self, job_id: str, **fields: Any) -> JobRecord:
+        unknown = set(fields) - _UPDATABLE_FIELDS
+        if unknown:
+            raise RepositoryError(f"update received unknown fields: {sorted(unknown)}")
+        field_values = {key: deepcopy(value) for key, value in fields.items()}
         async with self._lock_for(job_id):
             existing = self._records.get(job_id)
             if existing is None:
@@ -69,10 +74,7 @@ class MemoryJobRepository(JobRepository):
             # backend persists it through a separate table). Forbidding
             # it here keeps both backends behavior-identical at the
             # ``update`` boundary.
-            unknown = set(fields) - _UPDATABLE_FIELDS
-            if unknown:
-                raise RepositoryError(f"update received unknown fields: {sorted(unknown)}")
-            for key, value in fields.items():
+            for key, value in field_values.items():
                 setattr(existing, key, value)
             return existing.copy()
 
@@ -107,12 +109,14 @@ class MemoryJobRepository(JobRepository):
         artifacts: Dict[str, Any],
         artifact_lookup: Dict[str, Path],
     ) -> None:
+        artifacts_snapshot = deepcopy(artifacts)
+        artifact_lookup_snapshot = dict(artifact_lookup)
         async with self._lock_for(job_id):
             existing = self._records.get(job_id)
             if existing is None:
                 raise JobNotFoundError(job_id)
-            existing.artifacts = dict(artifacts)
-            existing.artifact_lookup = dict(artifact_lookup)
+            existing.artifacts = artifacts_snapshot
+            existing.artifact_lookup = artifact_lookup_snapshot
 
     async def delete(self, job_id: str) -> None:
         self._records.pop(job_id, None)
@@ -182,6 +186,16 @@ class MemoryJobEventStore(JobEventStore):
         self._events: Dict[str, Deque[JobEvent]] = defaultdict(lambda: deque(maxlen=per_job_cap))
         self._next_seq: Dict[str, int] = defaultdict(lambda: 1)
 
+    @staticmethod
+    def _copy_event(event: JobEvent) -> JobEvent:
+        return JobEvent(
+            job_id=event.job_id,
+            seq=event.seq,
+            event_type=event.event_type,
+            payload=deepcopy(event.payload),
+            created_at=event.created_at,
+        )
+
     async def append(
         self,
         job_id: str,
@@ -196,11 +210,11 @@ class MemoryJobEventStore(JobEventStore):
             job_id=job_id,
             seq=seq,
             event_type=event_type,
-            payload=dict(payload),
+            payload=deepcopy(payload),
             created_at=created_at,
         )
         self._events[job_id].append(event)
-        return event
+        return self._copy_event(event)
 
     async def events_since(
         self,
@@ -211,7 +225,7 @@ class MemoryJobEventStore(JobEventStore):
         threshold = -1 if after_seq is None else after_seq
         for event in list(self._events.get(job_id, ())):
             if event.seq > threshold:
-                yield event
+                yield self._copy_event(event)
 
     async def reset(self) -> None:
         self._events.clear()

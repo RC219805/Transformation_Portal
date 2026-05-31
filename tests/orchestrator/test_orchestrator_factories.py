@@ -11,6 +11,7 @@ factory paths are exercised without live infrastructure.
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Generator
 
 import pytest
@@ -98,6 +99,98 @@ class TestStorageFactory:
 
         assert isinstance(storage_factory.get_job_repository(), PostgresJobRepository)
         assert isinstance(storage_factory.get_job_event_store(), PostgresJobEventStore)
+
+    @pytest.mark.parametrize(
+        ("factory_name", "class_name"),
+        [
+            ("get_job_repository", "PostgresJobRepository"),
+            ("get_job_event_store", "PostgresJobEventStore"),
+        ],
+    )
+    def test_postgres_backend_missing_sql_dependencies_reports_install_guidance(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        factory_name: str,
+        class_name: str,
+    ) -> None:
+        import builtins
+
+        monkeypatch.setenv("TP_ORCHESTRATOR_STATE_BACKEND", "postgres")
+        monkeypatch.setenv("TP_DATABASE_URL", "postgresql+asyncpg://user:pw@host:5432/db")
+        real_import = builtins.__import__
+
+        def guarded_import(name, globals=None, locals=None, fromlist=(), level=0):  # noqa: ANN001, ANN202
+            if name == "transformation_portal.orchestrator.storage.postgres" and class_name in fromlist:
+                raise ImportError("sqlalchemy unavailable")
+            return real_import(name, globals, locals, fromlist, level)
+
+        monkeypatch.setattr(builtins, "__import__", guarded_import)
+
+        with pytest.raises(RuntimeError) as exc_info:
+            getattr(storage_factory, factory_name)()
+
+        message = str(exc_info.value)
+        assert "requires sqlalchemy[asyncio] + asyncpg" in message
+        assert "make install-core" in message
+
+    def test_postgres_record_projection_isolates_nested_json_fields(self) -> None:
+        from transformation_portal.orchestrator.models import JobArtifactModel, JobModel
+        from transformation_portal.orchestrator.storage.postgres import _record_from_model
+
+        model = JobModel(
+            id="job-pg-projection",
+            created_at=1.0,
+            state="running",
+            progress=50,
+            request={"args": {"quality": "premium"}},
+            effective_request={"args": {"resolved_backend": "da3"}},
+            logs_tail=["line-1"],
+            artifacts={"items": [{"relative_path": "report.json"}]},
+            run_summary={"counts": {"succeeded": 1}},
+            error={"details": {"code": "original"}},
+            version=1,
+        )
+        model.artifact_index = [
+            JobArtifactModel(
+                job_id=model.id,
+                path="out/report.json",
+                absolute_path="/abs/out/report.json",
+            )
+        ]
+
+        record = _record_from_model(model)
+        record.request["args"]["quality"] = "record-mutated"
+        record.effective_request["args"]["resolved_backend"] = "record-mutated"
+        record.artifacts["items"][0]["relative_path"] = "record-mutated.json"
+        record.run_summary["counts"]["succeeded"] = 99
+        assert record.error is not None
+        record.error["details"]["code"] = "record-mutated"
+        record.logs_tail.append("record-mutated")
+
+        reprojected = _record_from_model(model)
+
+        assert reprojected.request == {"args": {"quality": "premium"}}
+        assert reprojected.effective_request == {"args": {"resolved_backend": "da3"}}
+        assert reprojected.artifacts == {"items": [{"relative_path": "report.json"}]}
+        assert reprojected.run_summary == {"counts": {"succeeded": 1}}
+        assert reprojected.error == {"details": {"code": "original"}}
+        assert reprojected.logs_tail == ["line-1"]
+        assert reprojected.artifact_lookup == {"out/report.json": Path("/abs/out/report.json")}
+
+        model.request["args"]["quality"] = "model-mutated"
+        model.effective_request["args"]["resolved_backend"] = "model-mutated"
+        model.artifacts["items"][0]["relative_path"] = "model-mutated.json"
+        model.run_summary["counts"]["succeeded"] = 100
+        assert model.error is not None
+        model.error["details"]["code"] = "model-mutated"
+        model.logs_tail.append("model-mutated")
+
+        assert reprojected.request == {"args": {"quality": "premium"}}
+        assert reprojected.effective_request == {"args": {"resolved_backend": "da3"}}
+        assert reprojected.artifacts == {"items": [{"relative_path": "report.json"}]}
+        assert reprojected.run_summary == {"counts": {"succeeded": 1}}
+        assert reprojected.error == {"details": {"code": "original"}}
+        assert reprojected.logs_tail == ["line-1"]
 
     def test_unsupported_backend_raises(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("TP_ORCHESTRATOR_STATE_BACKEND", "cassandra")

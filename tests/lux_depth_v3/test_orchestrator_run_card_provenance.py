@@ -281,6 +281,74 @@ class TestRuntimeLicensingManifest:
         assert licensing["research_acknowledgement_required"] is False
         assert licensing["models"][0]["id"] == "commercial/depth-model"
 
+    def test_runtime_licensing_manifest_marks_research_ack_without_active_noncommercial(self) -> None:
+        from transformation_portal.lux_depth_v3.run_card_contract import build_runtime_licensing_manifest
+
+        licensing = build_runtime_licensing_manifest(
+            model_contract=None,
+            config=SimpleNamespace(
+                non_commercial_ok=False,
+                accept_apple_depth_pro_research_license=True,
+            ),
+        )
+
+        assert licensing["models"] == []
+        assert licensing["software_license_tier"] == "research_or_non_commercial"
+        assert licensing["research_acknowledgement_required"] is True
+        assert licensing["non_commercial_active"] is False
+
+    def test_runtime_licensing_manifest_uses_selector_fallbacks_and_defaults(self) -> None:
+        from transformation_portal.lux_depth_v3.run_card_contract import build_runtime_licensing_manifest
+
+        licensing = build_runtime_licensing_manifest(
+            model_contract={
+                "canonical_model_key": "da3-research",
+                "requested_model_selector": "depth-anything/DA3",
+                "license_id": "",
+                "backend_kind": "",
+                "usage_class": "non_commercial_only",
+                "requires_non_commercial_ok": False,
+            },
+            config=SimpleNamespace(non_commercial_ok=True),
+        )
+
+        assert licensing["software_license_tier"] == "research_or_non_commercial"
+        assert licensing["non_commercial_active"] is True
+        assert licensing["research_acknowledgement_required"] is True
+        assert licensing["models"] == [
+            {
+                "id": "da3-research",
+                "license": "unknown",
+                "runtime_role": "depth",
+                "usage_class": "non_commercial_only",
+                "requires_non_commercial_ok": False,
+            }
+        ]
+
+    def test_runtime_licensing_manifest_omits_empty_model_ids_but_keeps_research_ack(self) -> None:
+        from transformation_portal.lux_depth_v3.run_card_contract import build_runtime_licensing_manifest
+
+        licensing = build_runtime_licensing_manifest(
+            model_contract={
+                "resolved_repo_id": "",
+                "canonical_model_key": "",
+                "requested_model_selector": "   ",
+                "license_id": "cc-by-nc-4.0",
+                "backend_kind": "da3",
+                "usage_class": "non_commercial_only",
+                "requires_non_commercial_ok": True,
+            },
+            config=SimpleNamespace(
+                non_commercial_ok=True,
+                accept_research_tools_license=True,
+            ),
+        )
+
+        assert licensing["models"] == []
+        assert licensing["software_license_tier"] == "research_or_non_commercial"
+        assert licensing["research_acknowledgement_required"] is True
+        assert licensing["non_commercial_active"] is True
+
     def test_combined_manifest_round_trips_licensing(self, tmp_path: Path) -> None:
         from transformation_portal.lux_depth_v3.manifest import CombinedManifest
 
@@ -317,3 +385,262 @@ class TestRuntimeLicensingManifest:
 
         restored = CombinedManifest.load_msgpack(manifest_path)
         assert restored.licensing == licensing
+
+    def test_combined_msgpack_manifest_fallback_json_preserves_licensing(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        from transformation_portal.lux_depth_v3 import manifest as manifest_module
+        from transformation_portal.lux_depth_v3.manifest import CombinedManifest
+
+        manifest_path = tmp_path / "licensing-fallback.manifest.msgpack"
+        licensing = {
+            "schema_version": "1.0",
+            "software_license_tier": "research_or_non_commercial",
+            "models": [{"id": "depth-anything/DA3", "license": "cc-by-nc-4.0"}],
+            "non_commercial_active": True,
+            "research_acknowledgement_required": True,
+        }
+        monkeypatch.setattr(manifest_module, "MSGPACK_AVAILABLE", False)
+
+        CombinedManifest(licensing=licensing).save_msgpack(manifest_path)
+
+        fallback_path = tmp_path / "licensing-fallback.manifest.json"
+        assert not manifest_path.exists()
+        assert CombinedManifest.load(fallback_path).licensing == licensing
+
+    def test_combined_msgpack_manifest_cleans_temp_file_when_pack_fails(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        from transformation_portal.lux_depth_v3 import manifest as manifest_module
+        from transformation_portal.lux_depth_v3.manifest import MSGPACK_AVAILABLE, CombinedManifest
+
+        if not MSGPACK_AVAILABLE:
+            pytest.skip("msgpack is optional")
+
+        manifest_path = tmp_path / "pack-failure.manifest.msgpack"
+        temp_path = tmp_path / "pack-failure.manifest.msgpack.tmp"
+
+        def fail_pack(*_args: object, **_kwargs: object) -> None:
+            raise RuntimeError("pack failed")
+
+        monkeypatch.setattr(manifest_module.msgpack, "pack", fail_pack)
+
+        with pytest.raises(RuntimeError, match="pack failed"):
+            CombinedManifest(
+                licensing={
+                    "schema_version": "1.0",
+                    "software_license_tier": "commercial",
+                    "models": [],
+                    "non_commercial_active": False,
+                    "research_acknowledgement_required": False,
+                }
+            ).save_msgpack(manifest_path)
+
+        assert not manifest_path.exists()
+        assert not temp_path.exists()
+
+    def test_combined_msgpack_manifest_round_trips_stage_metadata_with_licensing(self, tmp_path: Path) -> None:
+        from transformation_portal.lux_depth_v3.manifest import (
+            MSGPACK_AVAILABLE,
+            BackendSelectionMetadata,
+            CombinedManifest,
+            MaterialsV3Metadata,
+        )
+
+        if not MSGPACK_AVAILABLE:
+            pytest.skip("msgpack is optional")
+
+        manifest_path = tmp_path / "stage-metadata-licensing.manifest.msgpack"
+        licensing = {
+            "schema_version": "1.0",
+            "software_license_tier": "research_or_non_commercial",
+            "models": [{"id": "depth-anything/DA3", "license": "cc-by-nc-4.0"}],
+            "non_commercial_active": True,
+            "research_acknowledgement_required": True,
+        }
+        backend_selection = BackendSelectionMetadata(
+            requested_backend="da3",
+            resolved_backend="da3",
+            resolution_status="success",
+            resolution_reason=None,
+            model_id="depth-anything/DA3",
+            device="cpu",
+        )
+        materials_v3 = MaterialsV3Metadata(
+            enabled=True,
+            response_plan={"finish": "premium"},
+            segmentation_metadata={"source": "fixture"},
+            output_bit_depth=16,
+        )
+
+        CombinedManifest(
+            backend_selection=backend_selection,
+            materials_v3=materials_v3,
+            licensing=licensing,
+        ).save_msgpack(manifest_path)
+
+        restored = CombinedManifest.load_msgpack(manifest_path)
+
+        assert restored.licensing == licensing
+        assert restored.backend_selection is not None
+        assert restored.backend_selection.resolved_backend == "da3"
+        assert restored.backend_selection.model_id == "depth-anything/DA3"
+        assert restored.materials_v3 is not None
+        assert restored.materials_v3.response_plan == {"finish": "premium"}
+        assert restored.materials_v3.segmentation_metadata == {"source": "fixture"}
+        assert restored.materials_v3.output_bit_depth == 16
+
+    def test_combined_msgpack_manifest_round_trips_full_serialized_metadata_surface(self, tmp_path: Path) -> None:
+        from transformation_portal.lux_depth_v3.manifest import (
+            MSGPACK_AVAILABLE,
+            CombinedManifest,
+            ConfigFingerprint,
+            DepthMetadata,
+            InputMetadata,
+            ReproMetadata,
+            TimingMetadata,
+            V2Metadata,
+        )
+
+        if not MSGPACK_AVAILABLE:
+            pytest.skip("msgpack is optional")
+
+        manifest_path = tmp_path / "full-surface.manifest.msgpack"
+        CombinedManifest(
+            input=InputMetadata(
+                image_path="input/source.tif",
+                image_sha256="a" * 64,
+                image_size_bytes=12345,
+                image_dimensions=(64, 32),
+            ),
+            depth=DepthMetadata(
+                model="depth-anything/DA3",
+                depth_path="depth/source_depth.npy",
+                runtime_seconds=1.25,
+                scaling={"min": 0.0, "max": 1.0},
+                stats={"mean": 0.42},
+            ),
+            v2=V2Metadata(
+                preset="premium",
+                status="ok",
+                runtime_seconds=2.5,
+                output_paths=["v2/source_enhanced.tif"],
+                strict_depth=True,
+                output_dir="v2",
+                report_path="v2/source_report.json",
+                input_bit_depth=16,
+                output_bit_depth=16,
+            ),
+            timing=TimingMetadata(
+                depth_seconds=1.25,
+                v2_seconds=2.5,
+                total_seconds=3.75,
+                timestamp_utc="2026-05-30T00:00:03Z",
+            ),
+            pbr_assets={"maps": [{"kind": "roughness", "path": "pbr/source_roughness.png"}]},
+            repro=ReproMetadata(
+                v3_git_revision="v3-rev",
+                v2_git_revision="v2-rev",
+                environment={"python": "3.12"},
+            ),
+            config_fingerprint=ConfigFingerprint(
+                model_variant="METRIC_LARGE",
+                depth_quantization="u16",
+                depth_device="cpu",
+                preset="premium",
+                depth_backend="da3",
+                quality_tier="premium",
+                materials_config={"enabled": True},
+                enable_v2=True,
+            ),
+            environment={"platform": "test"},
+            start_time="2026-05-30T00:00:00Z",
+            end_time="2026-05-30T00:00:04Z",
+        ).save_msgpack(manifest_path)
+
+        restored = CombinedManifest.load_msgpack(manifest_path)
+
+        assert restored.input is not None
+        assert restored.input.image_dimensions == (64, 32)
+        assert restored.depth is not None
+        assert restored.depth.scaling == {"min": 0.0, "max": 1.0}
+        assert restored.depth.stats == {"mean": 0.42}
+        assert restored.v2 is not None
+        assert restored.v2.output_paths == ["v2/source_enhanced.tif"]
+        assert restored.v2.strict_depth is True
+        assert restored.timing is not None
+        assert restored.timing.total_seconds == 3.75
+        assert restored.pbr_assets == {"maps": [{"kind": "roughness", "path": "pbr/source_roughness.png"}]}
+        assert restored.repro is not None
+        assert restored.repro.environment == {"python": "3.12"}
+        assert restored.config_fingerprint is not None
+        assert restored.config_fingerprint.materials_config == {"enabled": True}
+        assert restored.environment == {"platform": "test"}
+        assert restored.start_time == "2026-05-30T00:00:00Z"
+        assert restored.end_time == "2026-05-30T00:00:04Z"
+
+    def test_combined_manifest_load_auto_preserves_json_licensing(self, tmp_path: Path) -> None:
+        from transformation_portal.lux_depth_v3.manifest import CombinedManifest
+
+        manifest_path = tmp_path / "licensing-auto.manifest.json"
+        licensing = {
+            "schema_version": "1.0",
+            "software_license_tier": "commercial",
+            "models": [{"id": "commercial/depth-model", "license": "commercial"}],
+            "non_commercial_active": False,
+            "research_acknowledgement_required": False,
+        }
+
+        CombinedManifest(licensing=licensing).save(manifest_path)
+
+        restored = CombinedManifest.load_auto(manifest_path)
+        assert restored.licensing == licensing
+
+    def test_combined_manifest_load_auto_preserves_msgpack_licensing(self, tmp_path: Path) -> None:
+        from transformation_portal.lux_depth_v3.manifest import MSGPACK_AVAILABLE, CombinedManifest
+
+        if not MSGPACK_AVAILABLE:
+            pytest.skip("msgpack is optional")
+
+        manifest_path = tmp_path / "licensing-auto.manifest.msgpack"
+        licensing = {
+            "schema_version": "1.0",
+            "software_license_tier": "research_or_non_commercial",
+            "models": [{"id": "depth-anything/DA3", "license": "cc-by-nc-4.0"}],
+            "non_commercial_active": True,
+            "research_acknowledgement_required": True,
+        }
+
+        CombinedManifest(licensing=licensing).save_msgpack(manifest_path)
+
+        restored = CombinedManifest.load_auto(manifest_path)
+        assert restored.licensing == licensing
+
+    def test_combined_manifest_load_auto_tolerates_legacy_json_without_licensing(self, tmp_path: Path) -> None:
+        from transformation_portal.lux_depth_v3.manifest import CombinedManifest
+
+        manifest_path = tmp_path / "legacy-no-licensing.manifest.json"
+        manifest_path.write_text(json.dumps({"start_time": "2026-05-30T00:00:00Z"}), encoding="utf-8")
+
+        restored = CombinedManifest.load_auto(manifest_path)
+
+        assert restored.start_time == "2026-05-30T00:00:00Z"
+        assert restored.licensing is None
+
+    def test_combined_manifest_load_auto_tolerates_legacy_msgpack_without_licensing(self, tmp_path: Path) -> None:
+        from transformation_portal.lux_depth_v3.manifest import MSGPACK_AVAILABLE, CombinedManifest
+
+        if not MSGPACK_AVAILABLE:
+            pytest.skip("msgpack is optional")
+
+        manifest_path = tmp_path / "legacy-no-licensing.manifest.msgpack"
+        CombinedManifest(start_time="2026-05-30T00:00:00Z").save_msgpack(manifest_path)
+
+        restored = CombinedManifest.load_auto(manifest_path)
+
+        assert restored.start_time == "2026-05-30T00:00:00Z"
+        assert restored.licensing is None

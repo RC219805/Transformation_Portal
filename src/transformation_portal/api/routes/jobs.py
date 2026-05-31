@@ -20,6 +20,8 @@ from transformation_portal.api.v1 import (
     JobStatusEnvelope,
 )
 
+DEFAULT_JOB_LIST_LIMIT = 200
+
 
 @dataclass(frozen=True)
 class JobRouteHandlers:
@@ -41,7 +43,7 @@ class JobRouteHandlers:
     job_events_v2: Callable[[Request, str], Awaitable[Response]]
 
 
-def create_jobs_router(handlers: JobRouteHandlers, *, job_list_limit: int) -> APIRouter:
+def create_jobs_router(handlers: JobRouteHandlers, *, job_list_limit: int = DEFAULT_JOB_LIST_LIMIT) -> APIRouter:
     """Create the dual-version jobs router without owning route behavior."""
     router = APIRouter()
 

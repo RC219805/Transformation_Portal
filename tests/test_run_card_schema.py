@@ -36,11 +36,31 @@ from transformation_portal.lux_depth_v3.orchestrator import (
     _validate_run_card_payload,
 )
 from transformation_portal.lux_depth_v3.run_card_contract import (
+    RunCardPathValidationError,
     build_runtime_licensing_manifest,
+    get_run_card_schema_uri_for_payload,
+    infer_run_card_version,
+    normalize_run_card_relative_path,
     render_run_card_output_relative_path,
+    with_inferred_run_card_version,
 )
 from transformation_portal.lux_depth_v3.security import HashMode
-from transformation_portal.schemas.run_card import load_run_card_schema
+from transformation_portal.schemas.run_card import get_run_card_schema_uri, load_run_card_schema
+
+
+def _payload_for_run_card_schema_version(version: str) -> dict:
+    payload = _valid_run_card_payload()
+    payload["run_card_version"] = version
+    if version == "v2":
+        payload.pop("artifact_merkle_root", None)
+        payload["artifact_tree"] = {
+            "algorithm": "ct-sha256-v1",
+            "leaf_format": "tp.run_card.artifact_leaf.v1",
+            "leaf_count": 0,
+            "root_sha256": "e" * 64,
+            "artifacts": [],
+        }
+    return payload
 
 
 def test_apex_segmentation_dominance_warning_code_is_centralized() -> None:
@@ -180,6 +200,25 @@ def test_packaged_run_card_schemas_match_documented_copies() -> None:
         assert load_run_card_schema(version) == documented_schema
 
 
+@pytest.mark.parametrize("version", ["v3", "legacy", 2])
+def test_run_card_schema_loader_rejects_unsupported_versions(version: object) -> None:
+    with pytest.raises(ValueError, match="Unsupported run card schema version"):
+        load_run_card_schema(version)
+
+
+def test_run_card_contract_infers_version_and_schema_uri_without_mutating_payload() -> None:
+    v1_payload = {"run_card_version": "V1", "artifact_index": []}
+    v2_payload = {"artifact_tree": {"artifacts": []}}
+
+    assert infer_run_card_version(v1_payload) == "v1"
+    assert infer_run_card_version(v2_payload) == "v2"
+    assert get_run_card_schema_uri_for_payload(v2_payload) == get_run_card_schema_uri("v2")
+
+    hydrated = with_inferred_run_card_version(v2_payload)
+    assert hydrated["run_card_version"] == "v2"
+    assert "run_card_version" not in v2_payload
+
+
 def test_run_card_schema_accepts_runtime_licensing_block() -> None:
     pytest.importorskip("jsonschema")
     payload = _valid_run_card_payload()
@@ -197,6 +236,108 @@ def test_run_card_schema_accepts_runtime_licensing_block() -> None:
 
     _validate_run_card_payload(payload, _run_card_schema_path())
     assert payload["licensing"]["non_commercial_active"] is True
+
+
+@pytest.mark.parametrize("version", ["v1", "v2"])
+def test_run_card_schema_accepts_legacy_payload_without_runtime_licensing(version: str) -> None:
+    pytest.importorskip("jsonschema")
+    payload = _payload_for_run_card_schema_version(version)
+
+    _validate_run_card_payload(payload, _run_card_schema_path(version))
+
+    assert "licensing" not in payload
+
+
+@pytest.mark.parametrize("version", ["v1", "v2"])
+def test_run_card_schema_rejects_incomplete_runtime_licensing_block(version: str) -> None:
+    pytest.importorskip("jsonschema")
+    payload = _payload_for_run_card_schema_version(version)
+    payload["licensing"] = {
+        "schema_version": "1.0",
+        "software_license_tier": "commercial",
+        "models": [],
+        "non_commercial_active": False,
+    }
+
+    with pytest.raises(RuntimeError, match="licensing"):
+        _validate_run_card_payload(payload, _run_card_schema_path(version))
+
+
+@pytest.mark.parametrize("version", ["v1", "v2"])
+def test_run_card_schema_rejects_unknown_runtime_license_tier(version: str) -> None:
+    pytest.importorskip("jsonschema")
+    payload = _payload_for_run_card_schema_version(version)
+    payload["licensing"] = {
+        "schema_version": "1.0",
+        "software_license_tier": "multi_runtime_aggregate",
+        "models": [],
+        "non_commercial_active": False,
+        "research_acknowledgement_required": False,
+    }
+
+    with pytest.raises(RuntimeError, match="software_license_tier"):
+        _validate_run_card_payload(payload, _run_card_schema_path(version))
+
+
+@pytest.mark.parametrize("version", ["v1", "v2"])
+@pytest.mark.parametrize(
+    ("licensing_patch", "message"),
+    [
+        ({"approval_note": "signed off out of band"}, "approval_note"),
+        (
+            {
+                "models": [
+                    {
+                        "id": "commercial/depth-model",
+                        "license": "commercial",
+                        "runtime_role": "depth",
+                        "requires_non_commercial_ok": False,
+                        "approval_note": "signed off out of band",
+                    }
+                ]
+            },
+            "approval_note",
+        ),
+        (
+            {
+                "models": [
+                    {
+                        "id": "commercial/depth-model",
+                        "license": "commercial",
+                        "requires_non_commercial_ok": False,
+                    }
+                ]
+            },
+            "runtime_role",
+        ),
+    ],
+)
+def test_run_card_schema_rejects_ambiguous_runtime_licensing_evidence(
+    version: str,
+    licensing_patch: dict,
+    message: str,
+) -> None:
+    pytest.importorskip("jsonschema")
+    payload = _payload_for_run_card_schema_version(version)
+    licensing = {
+        "schema_version": "1.0",
+        "software_license_tier": "commercial",
+        "models": [
+            {
+                "id": "commercial/depth-model",
+                "license": "commercial",
+                "runtime_role": "depth",
+                "requires_non_commercial_ok": False,
+            }
+        ],
+        "non_commercial_active": False,
+        "research_acknowledgement_required": False,
+    }
+    licensing.update(licensing_patch)
+    payload["licensing"] = licensing
+
+    with pytest.raises(RuntimeError, match=message):
+        _validate_run_card_payload(payload, _run_card_schema_path(version))
 
 
 def test_run_card_schema_enforces_datetime_format() -> None:
@@ -284,6 +425,41 @@ def test_run_card_output_relative_path_handles_alias_equivalent_roots(tmp_path: 
     relative_path = render_run_card_output_relative_path(str(actual_manifest), alias_root)
 
     assert relative_path == "manifests/alpha.json"
+
+
+@pytest.mark.parametrize(
+    ("path_value", "message"),
+    [
+        (None, "invalid"),
+        ("", "invalid"),
+        (" ", "invalid"),
+        ("~/secret.txt", "invalid"),
+        ("nested\\secret.txt", "invalid"),
+        ("/absolute/secret.txt", "must not be absolute"),
+        (".", "invalid"),
+        ("../secret.txt", "must not contain traversal"),
+        ("nested/../secret.txt", "must not contain traversal"),
+    ],
+)
+def test_run_card_relative_path_rejects_empty_absolute_and_traversal_segments(
+    path_value: object,
+    message: str,
+) -> None:
+    with pytest.raises(RunCardPathValidationError, match=message):
+        normalize_run_card_relative_path(path_value)
+
+
+def test_run_card_relative_path_normalizes_valid_posix_path() -> None:
+    assert normalize_run_card_relative_path(" manifests/alpha.json ") == "manifests/alpha.json"
+
+
+def test_run_card_output_relative_path_falls_back_to_filename_for_external_paths(tmp_path: Path):
+    external_path = tmp_path / "outside" / "manifest.json"
+    output_root = tmp_path / "output"
+
+    assert render_run_card_output_relative_path(str(external_path), output_root) == "manifest.json"
+    assert render_run_card_output_relative_path("", output_root) is None
+    assert render_run_card_output_relative_path(None, output_root) is None
 
 
 def test_build_artifact_index_is_deterministic(tmp_path: Path):
