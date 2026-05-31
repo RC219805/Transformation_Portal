@@ -62,7 +62,7 @@ operator guidance unless they are linked here as canonical documents.
 | Agent governance | [agent_governance.md](../architecture/agent_governance.md) | Maintained |
 | Copilot instructions | [.github/copilot-instructions.md](../../.github/copilot-instructions.md) | Maintained repo-wide Copilot guidance |
 | Claude Code instructions | [CLAUDE.md](../../CLAUDE.md) | Maintained repo-root guide for Claude Code; summarizes contracts, decomposition, marker discipline, and live agent profiles |
-| Maintainer workflow reference | [AGENTS.md](../../AGENTS.md) | Maintained operator command reference (Make targets, validation scripts, AI skill policy) |
+| Maintainer workflow reference | [AGENTS.md](../../AGENTS.md) | Maintained coding-agent guide for operating contracts, worktree/PR hygiene, validation ladders, and closeout discipline |
 | Skill progression tracks | [SKILL_PROGRESS_TRACKS.md](../guides/SKILL_PROGRESS_TRACKS.md) | Maintained; maps recurring PR review themes to training drills |
 | TODO governance | [TODO Inventory](../analysis/TODO_INVENTORY.md), [TODO Action Plan](../analysis/TODO_ACTION_PLAN.md), [TODO Inventory Quick Reference](../architecture/TODO_INVENTORY_QUICK_REF.md), [TODO Priority Schema](todo_priority_schema.yaml) | Maintained; scanner-governed baseline refreshed May 11, 2026 |
 | CI workflow inventory | [WORKFLOW_MATRIX.md](../ci/WORKFLOW_MATRIX.md) | Maintained; current 30-workflow inventory |
