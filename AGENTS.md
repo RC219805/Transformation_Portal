@@ -5,9 +5,10 @@ actionable; use the linked docs and `Makefile` for exhaustive inventories.
 
 ## Operating Contract
 
-- Preserve public contracts unless the user explicitly asks to change them:
-  route paths and names, response envelopes, selectors, auth behavior, CLI
-  flags, Make targets, schema semantics, and test meaning.
+- Preserve public contracts: route paths and names, response envelopes,
+  selectors, auth behavior, CLI flags, Make targets, schema semantics, and
+  test meaning. Contract changes require explicit scope plus matching
+  tests/docs/schemas/version handling in the same change.
 - Make the smallest safe patch that solves the observed problem. Do not turn a
   narrow fix into adjacent refactors, governance rewrites, or cleanup work
   without evidence.
