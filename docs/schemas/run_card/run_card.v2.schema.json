@@ -553,7 +553,10 @@
         },
         "software_license_tier": {
           "type": "string",
-          "minLength": 1
+          "enum": [
+            "commercial",
+            "research_or_non_commercial"
+          ]
         },
         "models": {
           "type": "array",

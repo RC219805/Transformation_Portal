@@ -12,7 +12,7 @@ from threading import Lock
 from typing import Any, Dict, List, Optional
 
 from .interface import PluginInterface, PluginMetadata, PluginType
-from .signing import PluginSignatureError, verify_manifest_signature
+from .signing import verify_manifest_signature
 
 logger = logging.getLogger(__name__)
 
@@ -383,7 +383,7 @@ class PluginLoader:
                 manifest.raw_data,
                 trust_store_path=self._plugin_trust_store_path,  # type: ignore[arg-type]
             )
-        except (OSError, PluginSignatureError, json.JSONDecodeError) as exc:
+        except (OSError, ValueError) as exc:
             return f"Plugin manifest signature verification failed: {exc}"
         return None
 

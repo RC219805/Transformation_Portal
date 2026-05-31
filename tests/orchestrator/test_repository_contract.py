@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import asyncio
 from pathlib import Path
-from typing import Tuple
+from typing import Any, Tuple
 
 import pytest
 
@@ -31,6 +31,57 @@ def _new_record(job_id: str = "job-1", *, created_at: float = 1.0) -> JobRecord:
     return JobRecord(id=job_id, created_at=created_at)
 
 
+class _AppendLogOnlyRepository(JobRepository):
+    """Minimal concrete repository used to exercise the base append_logs default."""
+
+    def __init__(self) -> None:
+        self.appended: list[tuple[str, str, int]] = []
+
+    async def create(self, record: JobRecord) -> None:
+        return None
+
+    async def get(self, job_id: str) -> JobRecord | None:
+        return None
+
+    async def list(self, *, limit: int | None = None) -> tuple[list[JobRecord], int]:
+        return [], 0
+
+    async def update(self, job_id: str, **fields: Any) -> JobRecord:
+        raise JobNotFoundError(job_id)
+
+    async def append_log(self, job_id: str, line: str, *, tail_limit: int) -> None:
+        self.appended.append((job_id, line, tail_limit))
+
+    async def set_artifacts(
+        self,
+        job_id: str,
+        artifacts: dict[str, Any],
+        artifact_lookup: dict[str, Path],
+    ) -> None:
+        return None
+
+    async def delete(self, job_id: str) -> None:
+        return None
+
+    async def cleanup_expired(self, now: float, retention_seconds: float) -> list[str]:
+        return []
+
+    async def count_active(self) -> int:
+        return 0
+
+    async def sweep_orphaned(
+        self,
+        *,
+        live_job_ids: list[str] | None = None,
+        reason_code: str = "worker_lost_on_restart",
+        now: float | None = None,
+    ) -> list[str]:
+        return []
+
+    async def reset(self) -> None:
+        self.appended.clear()
+
+
 # ---------------------------------------------------------------------------
 # Lifecycle
 # ---------------------------------------------------------------------------
@@ -48,6 +99,48 @@ async def test_create_then_get_round_trip(repository_and_events: RepoAndEvents) 
     assert fetched.created_at == 1.0
     assert fetched.state == "queued"
     assert fetched.request == {"pipeline": "demo"}
+
+
+async def test_repository_isolates_nested_mutable_record_fields(
+    repository_and_events: RepoAndEvents,
+) -> None:
+    repo, _ = repository_and_events
+    record = _new_record("job-nested-copy")
+    record.request = {"args": {"quality": "premium"}}
+    record.effective_request = {"args": {"resolved_backend": "da3"}}
+    record.artifacts = {"items": [{"relative_path": "report.json"}]}
+    record.run_summary = {"counts": {"succeeded": 1}}
+    record.error = {"details": {"code": "original"}}
+
+    await repo.create(record)
+    record.request["args"]["quality"] = "mutated"
+    record.effective_request["args"]["resolved_backend"] = "mutated"
+    record.artifacts["items"][0]["relative_path"] = "mutated.json"
+    record.run_summary["counts"]["succeeded"] = 99
+    record.error["details"]["code"] = "mutated"
+
+    fetched = await repo.get("job-nested-copy")
+    assert fetched is not None
+    assert fetched.request == {"args": {"quality": "premium"}}
+    assert fetched.effective_request == {"args": {"resolved_backend": "da3"}}
+    assert fetched.artifacts == {"items": [{"relative_path": "report.json"}]}
+    assert fetched.run_summary == {"counts": {"succeeded": 1}}
+    assert fetched.error == {"details": {"code": "original"}}
+
+    fetched.request["args"]["quality"] = "fetched-mutated"
+    fetched.effective_request["args"]["resolved_backend"] = "fetched-mutated"
+    fetched.artifacts["items"][0]["relative_path"] = "fetched-mutated.json"
+    fetched.run_summary["counts"]["succeeded"] = 100
+    assert fetched.error is not None
+    fetched.error["details"]["code"] = "fetched-mutated"
+
+    refetched = await repo.get("job-nested-copy")
+    assert refetched is not None
+    assert refetched.request == {"args": {"quality": "premium"}}
+    assert refetched.effective_request == {"args": {"resolved_backend": "da3"}}
+    assert refetched.artifacts == {"items": [{"relative_path": "report.json"}]}
+    assert refetched.run_summary == {"counts": {"succeeded": 1}}
+    assert refetched.error == {"details": {"code": "original"}}
 
 
 async def test_get_missing_returns_none(repository_and_events: RepoAndEvents) -> None:
@@ -100,12 +193,89 @@ async def test_update_patches_named_fields(repository_and_events: RepoAndEvents)
     assert fetched.state == "running"
 
 
+async def test_update_without_fields_returns_isolated_current_record(
+    repository_and_events: RepoAndEvents,
+) -> None:
+    repo, _ = repository_and_events
+    record = _new_record("job-update-noop-copy")
+    record.request = {"args": {"quality": "premium"}}
+    record.run_summary = {"counts": {"succeeded": 1}}
+    await repo.create(record)
+
+    refreshed = await repo.update("job-update-noop-copy")
+
+    assert refreshed.request == {"args": {"quality": "premium"}}
+    assert refreshed.run_summary == {"counts": {"succeeded": 1}}
+
+    refreshed.request["args"]["quality"] = "mutated"
+    refreshed.run_summary["counts"]["succeeded"] = 99
+
+    refetched = await repo.get("job-update-noop-copy")
+    assert refetched is not None
+    assert refetched.request == {"args": {"quality": "premium"}}
+    assert refetched.run_summary == {"counts": {"succeeded": 1}}
+
+
+async def test_update_isolates_nested_mutable_fields(
+    repository_and_events: RepoAndEvents,
+) -> None:
+    repo, _ = repository_and_events
+    await repo.create(_new_record("job-update-nested-copy"))
+    request = {"args": {"quality": "premium"}}
+    effective_request = {"args": {"resolved_backend": "da3"}}
+    artifacts = {"items": [{"relative_path": "report.json"}]}
+    run_summary = {"counts": {"succeeded": 1}}
+    error = {"details": {"code": "original"}}
+    logs_tail = ["line-1"]
+
+    refreshed = await repo.update(
+        "job-update-nested-copy",
+        request=request,
+        effective_request=effective_request,
+        artifacts=artifacts,
+        run_summary=run_summary,
+        error=error,
+        logs_tail=logs_tail,
+    )
+    request["args"]["quality"] = "mutated"
+    effective_request["args"]["resolved_backend"] = "mutated"
+    artifacts["items"][0]["relative_path"] = "mutated.json"
+    run_summary["counts"]["succeeded"] = 99
+    error["details"]["code"] = "mutated"
+    logs_tail.append("mutated")
+    refreshed.request["args"]["quality"] = "refreshed-mutated"
+    refreshed.effective_request["args"]["resolved_backend"] = "refreshed-mutated"
+    refreshed.artifacts["items"][0]["relative_path"] = "refreshed-mutated.json"
+    refreshed.run_summary["counts"]["succeeded"] = 100
+    assert refreshed.error is not None
+    refreshed.error["details"]["code"] = "refreshed-mutated"
+    refreshed.logs_tail.append("refreshed-mutated")
+
+    refetched = await repo.get("job-update-nested-copy")
+
+    assert refetched is not None
+    assert refetched.request == {"args": {"quality": "premium"}}
+    assert refetched.effective_request == {"args": {"resolved_backend": "da3"}}
+    assert refetched.artifacts == {"items": [{"relative_path": "report.json"}]}
+    assert refetched.run_summary == {"counts": {"succeeded": 1}}
+    assert refetched.error == {"details": {"code": "original"}}
+    assert refetched.logs_tail == ["line-1"]
+
+
 async def test_update_missing_raises_job_not_found(
     repository_and_events: RepoAndEvents,
 ) -> None:
     repo, _ = repository_and_events
     with pytest.raises(JobNotFoundError):
         await repo.update("ghost", state="running")
+
+
+async def test_update_without_fields_missing_raises_job_not_found(
+    repository_and_events: RepoAndEvents,
+) -> None:
+    repo, _ = repository_and_events
+    with pytest.raises(JobNotFoundError):
+        await repo.update("ghost-noop")
 
 
 async def test_update_rejects_unknown_field(
@@ -126,6 +296,19 @@ async def test_update_rejects_id_and_created_at(
         await repo.update("job-locked", id="other")
     with pytest.raises(RepositoryError):
         await repo.update("job-locked", created_at=999.0)
+
+
+async def test_update_rejects_artifact_lookup_mutation(
+    repository_and_events: RepoAndEvents,
+) -> None:
+    repo, _ = repository_and_events
+    await repo.create(_new_record("job-artifact-lookup-locked"))
+
+    with pytest.raises(RepositoryError):
+        await repo.update(
+            "job-artifact-lookup-locked",
+            artifact_lookup={"out/report.json": Path("/abs/out/report.json")},
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -152,13 +335,95 @@ async def test_append_logs_rotates_tail(repository_and_events: RepoAndEvents) ->
     assert fetched.logs_tail == ["line-6", "line-7", "line-8", "line-9"]
 
 
+async def test_default_append_logs_delegates_to_append_log_for_compatibility() -> None:
+    repo = _AppendLogOnlyRepository()
+
+    await repo.append_logs("job-default-append", ["line-1", "line-2"], tail_limit=4)
+
+    assert repo.appended == [
+        ("job-default-append", "line-1", 4),
+        ("job-default-append", "line-2", 4),
+    ]
+
+
+@pytest.mark.parametrize("bad_tail_limit", [0, -1])
+async def test_default_append_logs_rejects_non_positive_tail_limit_before_delegation(
+    bad_tail_limit: int,
+) -> None:
+    repo = _AppendLogOnlyRepository()
+
+    with pytest.raises(RepositoryError):
+        await repo.append_logs("job-default-append", ["line"], tail_limit=bad_tail_limit)
+
+    assert repo.appended == []
+
+
+async def test_append_logs_under_limit_preserves_all_lines(
+    repository_and_events: RepoAndEvents,
+) -> None:
+    repo, _ = repository_and_events
+    await repo.create(_new_record("job-log-batch-under-limit"))
+
+    await repo.append_logs("job-log-batch-under-limit", ["line-1", "line-2"], tail_limit=4)
+
+    fetched = await repo.get("job-log-batch-under-limit")
+    assert fetched is not None
+    assert fetched.logs_tail == ["line-1", "line-2"]
+
+
+async def test_append_logs_rejects_zero_or_negative_limit(
+    repository_and_events: RepoAndEvents,
+) -> None:
+    repo, _ = repository_and_events
+    await repo.create(_new_record("job-log-batch-limit"))
+
+    with pytest.raises(RepositoryError):
+        await repo.append_logs("job-log-batch-limit", ["x"], tail_limit=0)
+    with pytest.raises(RepositoryError):
+        await repo.append_logs("job-log-batch-limit", ["x"], tail_limit=-1)
+
+
+async def test_append_logs_empty_batch_is_noop(
+    repository_and_events: RepoAndEvents,
+) -> None:
+    repo, _ = repository_and_events
+    await repo.create(_new_record("job-log-empty-batch"))
+    await repo.append_log("job-log-empty-batch", "existing", tail_limit=4)
+
+    await repo.append_logs("job-log-empty-batch", [], tail_limit=4)
+
+    fetched = await repo.get("job-log-empty-batch")
+    assert fetched is not None
+    assert fetched.logs_tail == ["existing"]
+
+
+async def test_append_logs_missing_job_raises_job_not_found(
+    repository_and_events: RepoAndEvents,
+) -> None:
+    repo, _ = repository_and_events
+
+    with pytest.raises(JobNotFoundError):
+        await repo.append_logs("missing-log-batch", ["line"], tail_limit=4)
+
+
+@pytest.mark.parametrize("bad_tail_limit", [0, -1])
 async def test_append_log_rejects_zero_or_negative_limit(
     repository_and_events: RepoAndEvents,
+    bad_tail_limit: int,
 ) -> None:
     repo, _ = repository_and_events
     await repo.create(_new_record("job-log0"))
     with pytest.raises(RepositoryError):
-        await repo.append_log("job-log0", "x", tail_limit=0)
+        await repo.append_log("job-log0", "x", tail_limit=bad_tail_limit)
+
+
+async def test_append_log_missing_job_raises_job_not_found(
+    repository_and_events: RepoAndEvents,
+) -> None:
+    repo, _ = repository_and_events
+
+    with pytest.raises(JobNotFoundError):
+        await repo.append_log("missing-log", "line", tail_limit=4)
 
 
 # ---------------------------------------------------------------------------
@@ -180,6 +445,43 @@ async def test_set_artifacts_replaces_index_and_lookup(
     assert fetched is not None
     assert fetched.artifacts == {"items": [{"path": "out/x.png"}]}
     assert fetched.artifact_lookup == {"out/x.png": Path("/abs/out/x.png")}
+
+
+async def test_set_artifacts_isolates_nested_mutable_artifacts(
+    repository_and_events: RepoAndEvents,
+) -> None:
+    repo, _ = repository_and_events
+    await repo.create(_new_record("job-artifact-nested-copy"))
+    artifacts = {"items": [{"path": "out/x.png", "metadata": {"kind": "preview"}}]}
+
+    await repo.set_artifacts(
+        "job-artifact-nested-copy",
+        artifacts=artifacts,
+        artifact_lookup={"out/x.png": Path("/abs/out/x.png")},
+    )
+    artifacts["items"][0]["metadata"]["kind"] = "mutated"
+
+    fetched = await repo.get("job-artifact-nested-copy")
+    assert fetched is not None
+    fetched.artifacts["items"][0]["metadata"]["kind"] = "fetched-mutated"
+
+    refetched = await repo.get("job-artifact-nested-copy")
+    assert refetched is not None
+    assert refetched.artifacts == {"items": [{"path": "out/x.png", "metadata": {"kind": "preview"}}]}
+    assert refetched.artifact_lookup == {"out/x.png": Path("/abs/out/x.png")}
+
+
+async def test_set_artifacts_missing_job_raises_job_not_found(
+    repository_and_events: RepoAndEvents,
+) -> None:
+    repo, _ = repository_and_events
+
+    with pytest.raises(JobNotFoundError):
+        await repo.set_artifacts(
+            "missing-artifacts",
+            artifacts={"items": []},
+            artifact_lookup={},
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -353,6 +655,46 @@ async def test_event_store_events_since_filters_by_seq(
     assert [e.payload["i"] for e in collected] == [1, 2]
 
 
+async def test_event_store_payload_is_stable_after_append(
+    repository_and_events: RepoAndEvents,
+) -> None:
+    _, events = repository_and_events
+    payload = {"state": "running", "nested": {"progress": 10}}
+
+    appended = await events.append("job-payload-copy", "state", payload, created_at=1.0)
+    payload["nested"]["progress"] = 88
+    payload["state"] = "mutated"
+    payload["nested"] = {"progress": 99}
+
+    replay = [event async for event in events.events_since("job-payload-copy")]
+
+    assert appended.payload == {"state": "running", "nested": {"progress": 10}}
+    assert [event.payload for event in replay] == [{"state": "running", "nested": {"progress": 10}}]
+
+    appended.payload["nested"]["progress"] = 77
+    replay[0].payload["nested"]["progress"] = 66
+    replay_again = [event async for event in events.events_since("job-payload-copy")]
+
+    assert [event.payload for event in replay_again] == [{"state": "running", "nested": {"progress": 10}}]
+
+
+async def test_event_store_replay_orders_by_assigned_seq_not_timestamp(
+    repository_and_events: RepoAndEvents,
+) -> None:
+    _, events = repository_and_events
+    await events.append("job-event-order", "latest-time", {"order": 1}, created_at=30.0)
+    await events.append("job-event-order", "earliest-time", {"order": 2}, created_at=10.0)
+    await events.append("job-event-order", "middle-time", {"order": 3}, created_at=20.0)
+
+    replay = [event async for event in events.events_since("job-event-order")]
+
+    assert [(event.seq, event.event_type, event.created_at) for event in replay] == [
+        (1, "latest-time", 30.0),
+        (2, "earliest-time", 10.0),
+        (3, "middle-time", 20.0),
+    ]
+
+
 async def test_event_store_isolates_jobs(
     repository_and_events: RepoAndEvents,
 ) -> None:
@@ -462,3 +804,40 @@ def test_memory_event_store_rejects_non_positive_per_job_cap(bad_cap: int) -> No
 
     with pytest.raises(RepositoryError):
         MemoryJobEventStore(per_job_cap=bad_cap)
+
+
+async def test_memory_event_store_cap_retains_latest_events_with_monotonic_seq() -> None:
+    """Bounded replay keeps newest events without resetting durable seq ids."""
+    from transformation_portal.orchestrator.storage.memory import MemoryJobEventStore
+
+    events = MemoryJobEventStore(per_job_cap=2)
+
+    first = await events.append("job-cap", "state", {"step": "queued"}, created_at=1.0)
+    second = await events.append("job-cap", "progress", {"step": "running"}, created_at=2.0)
+    third = await events.append("job-cap", "done", {"step": "succeeded"}, created_at=3.0)
+
+    assert [first.seq, second.seq, third.seq] == [1, 2, 3]
+
+    replay_all = [event async for event in events.events_since("job-cap")]
+    assert [(event.seq, event.event_type, event.payload["step"]) for event in replay_all] == [
+        (2, "progress", "running"),
+        (3, "done", "succeeded"),
+    ]
+
+    replay_after_oldest_retained = [event async for event in events.events_since("job-cap", after_seq=2)]
+    assert [(event.seq, event.event_type) for event in replay_after_oldest_retained] == [(3, "done")]
+
+
+async def test_memory_event_store_reset_clears_events_and_restarts_seq() -> None:
+    """Reset must fully clear event history for hermetic test/runtime restarts."""
+    from transformation_portal.orchestrator.storage.memory import MemoryJobEventStore
+
+    events = MemoryJobEventStore()
+    await events.append("job-reset", "state", {"state": "queued"}, created_at=1.0)
+
+    await events.reset()
+    replay_after_reset = [event async for event in events.events_since("job-reset")]
+    next_event = await events.append("job-reset", "state", {"state": "queued-again"}, created_at=2.0)
+
+    assert replay_after_reset == []
+    assert next_event.seq == 1

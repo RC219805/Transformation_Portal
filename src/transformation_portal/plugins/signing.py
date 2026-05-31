@@ -48,9 +48,11 @@ def load_plugin_trust_store(path: Path) -> dict[str, str]:
 
     trust_store: dict[str, str] = {}
     for key_id, secret in keys.items():
-        if not isinstance(key_id, str) or not key_id:
+        if not isinstance(key_id, str) or not key_id.strip():
             raise PluginSignatureError("Plugin trust store key ids must be non-empty strings")
-        if not isinstance(secret, str) or not secret:
+        if key_id != key_id.strip():
+            raise PluginSignatureError("Plugin trust store key ids must not contain leading or trailing whitespace")
+        if not isinstance(secret, str) or not secret.strip():
             raise PluginSignatureError(f"Plugin trust store secret for {key_id!r} must be a non-empty string")
         trust_store[key_id] = secret
     return trust_store
@@ -72,11 +74,13 @@ def verify_manifest_signature(manifest_data: Mapping[str, Any], *, trust_store_p
         raise PluginSignatureError("Plugin manifest signature_algorithm must be 'hmac-sha256'")
 
     key_id = manifest_data.get("signature_key_id")
-    if not isinstance(key_id, str) or not key_id:
+    if not isinstance(key_id, str) or not key_id.strip():
         raise PluginSignatureError("Plugin manifest signature_key_id is required")
+    if key_id != key_id.strip():
+        raise PluginSignatureError("Plugin manifest signature_key_id must not contain leading or trailing whitespace")
 
     signature = manifest_data.get("signature")
-    if not isinstance(signature, str) or not signature:
+    if not isinstance(signature, str) or not signature.strip():
         raise PluginSignatureError("Plugin manifest signature is required")
 
     trust_store = load_plugin_trust_store(trust_store_path)

@@ -556,6 +556,7 @@ class CombinedManifest:
             "input",
             "depth",
             "v2",
+            "materials_v3",
             "timing",
             "pbr_assets",
             "repro",
@@ -615,6 +616,8 @@ class CombinedManifest:
             manifest.depth = DepthMetadata(**data["depth"])
         if "v2" in data:
             manifest.v2 = V2Metadata(**data["v2"])
+        if "materials_v3" in data:
+            manifest.materials_v3 = MaterialsV3Metadata.from_dict(data["materials_v3"])
         if "timing" in data:
             manifest.timing = TimingMetadata(**data["timing"])
         if "repro" in data:
@@ -625,6 +628,8 @@ class CombinedManifest:
             manifest.pbr_assets = data["pbr_assets"]
         if "environment" in data:
             manifest.environment = data["environment"]
+        if "backend_selection" in data and data["backend_selection"] is not None:
+            manifest.backend_selection = BackendSelectionMetadata.from_dict(data["backend_selection"])
         if "licensing" in data and data["licensing"] is not None:
             manifest.licensing = dict(data["licensing"])
         if "start_time" in data:

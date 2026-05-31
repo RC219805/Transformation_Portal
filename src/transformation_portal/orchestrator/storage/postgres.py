@@ -20,6 +20,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from contextlib import asynccontextmanager
+from copy import deepcopy
 from pathlib import Path
 from typing import Any, AsyncIterator, Dict, Iterable, List, Optional, Tuple, cast
 
@@ -108,13 +109,13 @@ def _record_from_model(model: JobModel) -> JobRecord:
         last_event_at=model.last_event_at,
         exit_code=model.exit_code,
         cancel_requested=model.cancel_requested,
-        request=dict(model.request or {}),
-        effective_request=dict(model.effective_request or {}),
+        request=deepcopy(model.request or {}),
+        effective_request=deepcopy(model.effective_request or {}),
         logs_tail=list(model.logs_tail or []),
-        artifacts=dict(model.artifacts or {}),
+        artifacts=deepcopy(model.artifacts or {}),
         artifact_lookup=artifact_lookup,
-        run_summary=dict(model.run_summary or {}),
-        error=None if model.error is None else dict(model.error),
+        run_summary=deepcopy(model.run_summary or {}),
+        error=None if model.error is None else deepcopy(model.error),
     )
 
 
@@ -140,32 +141,33 @@ class PostgresJobRepository(JobRepository):
             yield session
 
     async def create(self, record: JobRecord) -> None:
+        record_snapshot = record.copy()
         async with self._session() as session:
             session.add(
                 JobModel(
-                    id=record.id,
-                    created_at=record.created_at,
-                    state=record.state,
-                    progress=record.progress,
-                    started_at=record.started_at,
-                    finished_at=record.finished_at,
-                    done_published_at=record.done_published_at,
-                    last_event_at=record.last_event_at,
-                    exit_code=record.exit_code,
-                    cancel_requested=record.cancel_requested,
-                    request=dict(record.request),
-                    effective_request=dict(record.effective_request),
-                    logs_tail=list(record.logs_tail),
-                    artifacts=dict(record.artifacts),
-                    run_summary=dict(record.run_summary),
-                    error=None if record.error is None else dict(record.error),
+                    id=record_snapshot.id,
+                    created_at=record_snapshot.created_at,
+                    state=record_snapshot.state,
+                    progress=record_snapshot.progress,
+                    started_at=record_snapshot.started_at,
+                    finished_at=record_snapshot.finished_at,
+                    done_published_at=record_snapshot.done_published_at,
+                    last_event_at=record_snapshot.last_event_at,
+                    exit_code=record_snapshot.exit_code,
+                    cancel_requested=record_snapshot.cancel_requested,
+                    request=record_snapshot.request,
+                    effective_request=record_snapshot.effective_request,
+                    logs_tail=record_snapshot.logs_tail,
+                    artifacts=record_snapshot.artifacts,
+                    run_summary=record_snapshot.run_summary,
+                    error=record_snapshot.error,
                     version=1,
                 )
             )
-            for path_str, absolute in record.artifact_lookup.items():
+            for path_str, absolute in record_snapshot.artifact_lookup.items():
                 session.add(
                     JobArtifactModel(
-                        job_id=record.id,
+                        job_id=record_snapshot.id,
                         path=path_str,
                         absolute_path=str(absolute),
                     )
@@ -174,7 +176,7 @@ class PostgresJobRepository(JobRepository):
                 await session.commit()
             except IntegrityError as exc:
                 await session.rollback()
-                raise RepositoryError(f"job id already exists: {record.id}") from exc
+                raise RepositoryError(f"job id already exists: {record_snapshot.id}") from exc
 
     async def get(self, job_id: str) -> Optional[JobRecord]:
         async with self._session() as session:
@@ -207,13 +209,13 @@ class PostgresJobRepository(JobRepository):
             if existing is None:
                 raise JobNotFoundError(job_id)
             return existing
+        payload: Dict[str, Any] = {key: deepcopy(value) for key, value in fields.items()}
 
         async with self._session() as session:
             stmt = select(JobModel).where(JobModel.id == job_id).with_for_update()
             model = (await session.execute(stmt)).scalar_one_or_none()
             if model is None:
                 raise JobNotFoundError(job_id)
-            payload: Dict[str, Any] = dict(fields)
             # Normalize JSON-stored containers so SQLAlchemy detects the
             # mutation (asyncpg JSONB column).
             for key in (
@@ -223,11 +225,11 @@ class PostgresJobRepository(JobRepository):
                 "run_summary",
             ):
                 if key in payload and payload[key] is not None:
-                    payload[key] = dict(payload[key])
+                    payload[key] = deepcopy(payload[key])
             if "logs_tail" in payload and payload["logs_tail"] is not None:
                 payload["logs_tail"] = list(payload["logs_tail"])
             if "error" in payload and payload["error"] is not None:
-                payload["error"] = dict(payload["error"])
+                payload["error"] = deepcopy(payload["error"])
 
             for key, value in payload.items():
                 setattr(model, key, value)
@@ -266,6 +268,8 @@ class PostgresJobRepository(JobRepository):
         artifacts: Dict[str, Any],
         artifact_lookup: Dict[str, Path],
     ) -> None:
+        artifacts_snapshot = deepcopy(artifacts)
+        artifact_lookup_snapshot = dict(artifact_lookup)
         for attempt in range(_OPTIMISTIC_LOCK_RETRIES):
             async with self._session() as session:
                 model = await session.get(JobModel, job_id)
@@ -278,7 +282,7 @@ class PostgresJobRepository(JobRepository):
                         JobModel.id == job_id,
                         JobModel.version == current_version,
                     )
-                    .values(artifacts=dict(artifacts), version=current_version + 1)
+                    .values(artifacts=artifacts_snapshot, version=current_version + 1)
                 )
                 result = cast(CursorResult[Any], await session.execute(stmt))
                 if result.rowcount == 0:
@@ -288,7 +292,7 @@ class PostgresJobRepository(JobRepository):
                         continue
                     raise RepositoryError(f"optimistic-lock conflict on job {job_id} set_artifacts")
                 await session.execute(delete(JobArtifactModel).where(JobArtifactModel.job_id == job_id))
-                for path_str, absolute in artifact_lookup.items():
+                for path_str, absolute in artifact_lookup_snapshot.items():
                     session.add(
                         JobArtifactModel(
                             job_id=job_id,
@@ -426,6 +430,7 @@ class PostgresJobEventStore(JobEventStore):
         out-of-order overwrite. We retry on conflict so callers see the same
         monotonic-seq contract as the memory backend.
         """
+        payload_snapshot = deepcopy(payload)
         for attempt in range(_OPTIMISTIC_LOCK_RETRIES):
             try:
                 async with self._session() as session:
@@ -439,7 +444,7 @@ class PostgresJobEventStore(JobEventStore):
                             job_id=job_id,
                             seq=seq,
                             event_type=event_type,
-                            payload=dict(payload),
+                            payload=deepcopy(payload_snapshot),
                             created_at=created_at,
                         )
                     )
@@ -448,7 +453,7 @@ class PostgresJobEventStore(JobEventStore):
                         job_id=job_id,
                         seq=seq,
                         event_type=event_type,
-                        payload=dict(payload),
+                        payload=deepcopy(payload_snapshot),
                         created_at=created_at,
                     )
             except IntegrityError:
@@ -493,7 +498,7 @@ class PostgresJobEventStore(JobEventStore):
                     job_id=row.job_id,
                     seq=row.seq,
                     event_type=row.event_type,
-                    payload=dict(row.payload or {}),
+                    payload=deepcopy(row.payload or {}),
                     created_at=row.created_at,
                 )
 
