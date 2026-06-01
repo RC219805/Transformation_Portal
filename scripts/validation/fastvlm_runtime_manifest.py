@@ -311,19 +311,33 @@ def verify_python_imports(manifest: Mapping[str, Any], *, root: Path | None = No
         python_path = python_runtime_path(manifest, root=root)
     except ManifestError as exc:
         return [str(exc)]
+    python_errors = verify_python_runtime(manifest, root=root)
+    if python_errors:
+        return python_errors
     import_lines = (
-        "import importlib.util, sys; "
-        f"missing = [name for name in {FASTVLM_RUNTIME_IMPORTS!r} if importlib.util.find_spec(name) is None]; "
-        "print(','.join(missing), file=sys.stderr); "
+        "import importlib, sys; "
+        f"modules = {FASTVLM_RUNTIME_IMPORTS!r}; "
+        "missing = []; "
+        "\nfor name in modules:\n"
+        "    try:\n"
+        "        importlib.import_module(name)\n"
+        "    except Exception as exc:\n"
+        "        missing.append(f'{name}: {type(exc).__name__}: {exc}')\n"
+        "print('\\n'.join(missing), file=sys.stderr); "
         "sys.exit(1 if missing else 0)"
     )
-    completed = subprocess.run(
-        [str(python_path), "-c", import_lines],
-        check=False,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-    )
+    try:
+        completed = subprocess.run(
+            [str(python_path), "-c", import_lines],
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=30,
+        )
+    except subprocess.TimeoutExpired as exc:
+        output = (exc.stderr if isinstance(exc.stderr, str) else "") or (exc.stdout if isinstance(exc.stdout, str) else "")
+        return ["FastVLM Python import smoke timed out after 30s: " + (output.strip() or str(python_path))]
     if completed.returncode == 0:
         return []
     return [

@@ -410,6 +410,16 @@ class TestRuntimeBackendStateHelpers:
         assert infer_operational_error_code(FileNotFoundError("missing")) == "BACKEND_RESOURCE_MISSING"
         assert infer_operational_error_code(RuntimeError("cuda not available")) == "CUDA_UNAVAILABLE"
         assert infer_operational_error_code(RuntimeError("mps not available")) == "MPS_UNAVAILABLE"
+        assert (
+            infer_operational_error_code(
+                RuntimeError(
+                    '{"cuda_available": false, "device": "mps", '
+                    '"mps_available": false, '
+                    '"reason": "PyTorch MPS backend is not available in this runtime."}'
+                )
+            )
+            == "MPS_UNAVAILABLE"
+        )
 
     def test_seed_depth_attempts_from_selection_fallback_records_depth_pro_failure(self):
         """Test startup fallback is materialized into per-image attempt history."""

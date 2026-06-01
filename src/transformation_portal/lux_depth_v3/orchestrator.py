@@ -5083,6 +5083,10 @@ class EnhanceOrchestrator:
 
         self._enforce_apex_depth_png_uniqueness(results)
         batch_backend_summary = self._compute_backend_summary(results)
+        batch_requested_backend_defect = self._requested_backend_fulfillment_defect(
+            results,
+            batch_backend_summary,
+        )
         batch_backend_selection = self._build_backend_selection_payload(
             results,
             batch_backend_summary,
@@ -5122,7 +5126,11 @@ class EnhanceOrchestrator:
                 runtime_stats,
                 outliers,
                 batch_manifest_path=batch_manifest_path,
+                requested_backend_defect=batch_requested_backend_defect,
             )
+
+        if batch_requested_backend_defect is not None:
+            raise RuntimeError(batch_requested_backend_defect)
 
         return results
 
@@ -6633,6 +6641,7 @@ class EnhanceOrchestrator:
         runtime_stats: Dict[str, Any],
         outliers: List[Dict[str, Any]],
         batch_manifest_path: Optional[Path] = None,
+        requested_backend_defect: Optional[str] = None,
     ) -> None:
         """Emit run card for batch reproducibility.
 
@@ -6677,12 +6686,18 @@ class EnhanceOrchestrator:
         else:
             artifact_merkle_root = _compute_artifact_merkle_root(artifact_index)
         backend_summary = self._compute_backend_summary(results)
-        requested_backend_defect = self._requested_backend_fulfillment_defect(
-            results,
-            backend_summary,
-        )
+        if requested_backend_defect is None:
+            requested_backend_defect = self._requested_backend_fulfillment_defect(
+                results,
+                backend_summary,
+            )
         if requested_backend_defect is not None:
             logger.error(requested_backend_defect)
+            backend_summary = {
+                **backend_summary,
+                "requested_backend_status": "not_honored",
+                "requested_backend_defect": requested_backend_defect,
+            }
         backend_selection = self._build_backend_selection_payload(
             results,
             backend_summary,

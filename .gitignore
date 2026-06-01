@@ -119,6 +119,7 @@ web/secure-landing/.next/
 web/secure-landing/.next-build-verify/
 web/secure-landing/.next-smoke-*/
 web/secure-landing/.next-codex-*/
+web/secure-landing/tmp/
 web/secure-landing/node_modules/
 web/secure-landing/test-results/
 web/secure-landing/playwright-report/

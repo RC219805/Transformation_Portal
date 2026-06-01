@@ -2020,6 +2020,76 @@ def test_emit_run_card_respects_run_card_include_proofs_flag(tmp_path: Path):
     assert build_tree.call_args.kwargs["include_proofs"] is False
 
 
+def test_emit_run_card_preserves_requested_backend_defect(tmp_path: Path):
+    config = EnhanceConfig(
+        model_variant=ModelVariant.METRIC_LARGE,
+        model_key="da3-metric",
+        run_card_version="v1",
+    )
+    orch = EnhanceOrchestrator(config, tmp_path)
+
+    artifact_path = tmp_path / "depth" / "image_01_depth.png"
+    source_path = tmp_path / "inputs" / "image_01.png"
+    artifact_path.parent.mkdir(parents=True, exist_ok=True)
+    source_path.parent.mkdir(parents=True, exist_ok=True)
+    artifact_path.write_bytes(b"depth")
+    source_path.write_bytes(b"image")
+    defect = "Requested backend 'depth_pro' was not honored."
+
+    with (
+        patch.object(orch, "_collect_run_card_artifact_paths", return_value=[artifact_path]),
+        patch.object(
+            orch,
+            "_compute_backend_summary",
+            return_value={
+                "requested_backend": "depth_pro",
+                "primary_backend": "da3",
+                "final_backends_used": ["da3"],
+                "fallback_images": 1,
+                "semantic_fallback_images": 0,
+                "operational_fallback_images": 1,
+            },
+        ),
+        patch.object(
+            orch,
+            "_resolve_run_card_backend_model_artifact",
+            return_value={"model_artifact_filename": None, "model_artifact_sha256": None},
+        ),
+        patch.object(orch, "_resolve_run_card_backend_model_id", return_value="depth-anything/DA3"),
+    ):
+        orch._emit_run_card(
+            batch_id="2026-04-10_120000",
+            start_time="2026-04-10T12:00:00Z",
+            end_time="2026-04-10T12:05:00Z",
+            results=[
+                {
+                    "status": "ok",
+                    "image": str(source_path),
+                    "backend": "da3",
+                    "runtime_s": 1.0,
+                    "attempts": [
+                        {"backend": "depth_pro", "status": "failed", "failure_kind": "operational"},
+                        {"backend": "da3", "status": "success"},
+                    ],
+                }
+            ],
+            runtime_stats={
+                "count": 1,
+                "min": 1.0,
+                "max": 1.0,
+                "mean": 1.0,
+                "median": 1.0,
+                "total": 1.0,
+            },
+            outliers=[],
+            requested_backend_defect=defect,
+        )
+
+    run_card = json.loads((tmp_path / "run_card_2026-04-10_120000.json").read_text(encoding="utf-8"))
+    assert run_card["backend_summary"]["requested_backend_status"] == "not_honored"
+    assert run_card["backend_summary"]["requested_backend_defect"] == defect
+
+
 def test_emit_run_card_skips_legacy_merkle_root_for_v2(tmp_path: Path):
     config = EnhanceConfig(
         model_variant=ModelVariant.METRIC_LARGE,

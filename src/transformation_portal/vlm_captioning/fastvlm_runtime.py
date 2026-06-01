@@ -268,6 +268,14 @@ def _failure_result(
     )
 
 
+def _classify_nonzero_fastvlm_status(stdout: str, stderr: str) -> str:
+    """Classify non-zero FastVLM exits that represent unavailable runtime state."""
+    text = f"{stdout}\n{stderr}".lower()
+    if "no metal device available" in text or "metal::load_device" in text:
+        return "missing_runtime"
+    return "error"
+
+
 def run_fastvlm_caption(
     config: FastVLMRuntimeConfig,
     image_path: Path,
@@ -361,7 +369,7 @@ def run_fastvlm_caption(
     runtime_seconds = time.monotonic() - start
     parsed = parse_fastvlm_caption(completed.stdout)
     success = completed.returncode == 0
-    status = "ok" if success else "error"
+    status = "ok" if success else _classify_nonzero_fastvlm_status(completed.stdout, completed.stderr)
     error = None if success else f"FastVLM subprocess exited with code {completed.returncode}."
     result = FastVLMRuntimeResult(
         success=success,

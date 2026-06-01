@@ -248,7 +248,7 @@ install-fastvlm-runtime:
 
 check-fastvlm-runtime:
 	@echo "Verifying governed FastVLM advisory captioning runtime..."
-	@"$(PY)" scripts/validation/validate_fastvlm_runtime.py --verify-only --models "$${TP_FASTVLM_VALIDATE_MODELS:-smoke,default}"
+	@"$(PY)" scripts/validation/validate_fastvlm_runtime.py --models "$${TP_FASTVLM_VALIDATE_MODELS:-smoke,default}"
 
 test-fast:
 	@"$(PY)" -m pytest -q $(FAST_TESTS) $(PHASE6_SMOKE_TESTS)

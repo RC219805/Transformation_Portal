@@ -49,6 +49,13 @@ def collect_run_card_backend_semantic_errors(payload: dict[str, Any]) -> list[st
 
     requested_backend = backend_selection.get("requested") or backend_summary.get("requested_backend")
     fallback_images = backend_summary.get("fallback_images")
+    requested_backend_defect = backend_summary.get("requested_backend_defect")
+    requested_backend_status = backend_summary.get("requested_backend_status")
+    explicit_requested_backend_defect = (
+        requested_backend_status == "not_honored"
+        and isinstance(requested_backend_defect, str)
+        and bool(requested_backend_defect.strip())
+    )
     total_images = payload.get("total_images")
     error_count = payload.get("error_count")
     run_failed = (
@@ -61,6 +68,7 @@ def collect_run_card_backend_semantic_errors(payload: dict[str, Any]) -> list[st
         and fallback_images == success_count
         and primary_backend != requested_backend
         and not run_failed
+        and not explicit_requested_backend_defect
     ):
         errors.append(
             "requested backend 'depth_pro' was not honored: "

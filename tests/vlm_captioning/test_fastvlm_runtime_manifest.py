@@ -213,6 +213,59 @@ def test_validate_fastvlm_runtime_verify_only_skips_import_smoke(
     assert not import_smoke_calls
 
 
+def test_fastvlm_import_smoke_imports_modules_and_reports_metal_failures(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = _load_script_module(
+        "fastvlm_runtime_manifest_import_smoke_test",
+        "scripts/validation/fastvlm_runtime_manifest.py",
+    )
+    runtime_root = tmp_path / "fastvlm"
+    manifest = _manifest(tmp_path)
+    _write_fixture_runtime(runtime_root)
+
+    def fake_run(args, **kwargs):  # noqa: ANN001
+        assert "importlib.import_module(name)" in args[-1]
+        return module.subprocess.CompletedProcess(
+            args,
+            returncode=1,
+            stdout="",
+            stderr="mlx_vlm: RuntimeError: [metal::load_device] No Metal device available.",
+        )
+
+    monkeypatch.setattr(module.subprocess, "run", fake_run)
+
+    errors = module.verify_python_imports(manifest, root=runtime_root)
+
+    assert len(errors) == 1
+    assert "No Metal device available" in errors[0]
+
+
+def test_fastvlm_import_smoke_reports_missing_python_without_spawning(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = _load_script_module(
+        "fastvlm_runtime_manifest_import_smoke_missing_python_test",
+        "scripts/validation/fastvlm_runtime_manifest.py",
+    )
+    runtime_root = tmp_path / "fastvlm"
+    manifest = _manifest(tmp_path)
+    _write_fixture_runtime(runtime_root)
+    (runtime_root / ".venv-fastvlm" / "bin" / "python").unlink()
+
+    def fail_run(*_args, **_kwargs):  # noqa: ANN001
+        raise AssertionError("missing Python must be reported before subprocess.run")
+
+    monkeypatch.setattr(module.subprocess, "run", fail_run)
+
+    errors = module.verify_python_imports(manifest, root=runtime_root)
+
+    assert len(errors) == 1
+    assert "FastVLM Python executable missing" in errors[0]
+
+
 def test_validate_fastvlm_runtime_json_reports_static_and_import_checks(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],

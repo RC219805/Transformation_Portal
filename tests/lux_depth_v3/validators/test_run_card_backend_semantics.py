@@ -133,6 +133,19 @@ class TestDepthProFallbackPolicy:
         errors = collect_run_card_backend_semantic_errors(payload)
         assert any("'depth_pro' was not honored" in e for e in errors)
 
+    def test_full_fallback_with_explicit_defect_is_auditable(self):
+        payload = _base_payload(success_count=2, total_images=2, error_count=0)
+        payload["backend_selection"]["requested"] = "depth_pro"
+        payload["backend_selection"]["resolved"] = "da3"
+        payload["backend_summary"]["requested_backend"] = "depth_pro"
+        payload["backend_summary"]["primary_backend"] = "da3"
+        payload["backend_summary"]["final_backends_used"] = ["da3"]
+        payload["backend_summary"]["fallback_images"] = 2
+        payload["backend_summary"]["requested_backend_status"] = "not_honored"
+        payload["backend_summary"]["requested_backend_defect"] = "Depth Pro MPS runtime unavailable."
+
+        assert collect_run_card_backend_semantic_errors(payload) == []
+
     def test_partial_fallback_is_tolerated(self):
         payload = _base_payload(success_count=4, total_images=4, error_count=0)
         payload["backend_selection"]["requested"] = "depth_pro"

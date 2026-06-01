@@ -546,10 +546,10 @@ def infer_operational_error_code(
     message = str(error).lower()
     if "torch not compiled with cuda enabled" in message:
         return "CUDA_HARDCODED_IN_BACKEND"
-    if "cuda" in message and "not available" in message:
-        return "CUDA_UNAVAILABLE"
     if "mps" in message and "not available" in message:
         return "MPS_UNAVAILABLE"
+    if "cuda" in message and "not available" in message:
+        return "CUDA_UNAVAILABLE"
     return "BACKEND_RUNTIME_ERROR"
 
 
