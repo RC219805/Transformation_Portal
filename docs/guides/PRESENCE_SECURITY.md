@@ -40,6 +40,8 @@ watermarking, and anchor payload generation.
 
 - Parameter derivation is deterministic per session key and locale fallback is
   fail-closed to `US_EN`.
+- Anchor payload hashes use SHA3-256 for the manifest, each supplied asset, and
+  the combined hero+web asset bundle.
 - Watermark helpers preserve the original LSB and DCT embedding behavior.
 - The Solidity contract is a reference skeleton with an owner-gated license
   setter; production deployment still requires the target auth and treasury

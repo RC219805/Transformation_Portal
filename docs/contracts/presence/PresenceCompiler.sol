@@ -8,8 +8,8 @@ contract PresenceCompiler {
 
     struct ManifestProof {
         address submitter;
-        bytes32 manifestHash; // keccak256(manifest JSON)
-        bytes32 assetsHash;   // keccak256(hero||web||disruption)
+        bytes32 manifestHash; // sha3_256(manifest JSON), supplied by the off-chain anchor payload
+        bytes32 assetsHash;   // sha3_256(hero||web), supplied by the off-chain anchor payload
         uint64  timestamp;
         Level   level;
     }

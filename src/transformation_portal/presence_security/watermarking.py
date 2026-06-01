@@ -88,6 +88,8 @@ def embed_dct_luma(img: Image.Image, manifest_hash_hex: str, session_id: str, st
 def extract_lsb_rgb(img: Image.Image, bitlen: int = 256) -> bytes:
     arr = np.array(img.convert("RGB"))
     flat = arr.reshape(-1)
+    if flat.size < bitlen:
+        raise ValueError("Image too small for requested LSB payload")
     bits = flat[:bitlen] & 1
     b = np.packbits(bits).tobytes()
     return b[: bitlen // 8]

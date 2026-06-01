@@ -18,6 +18,7 @@ from transformation_portal.presence_security import (
     PresenceParameters,
     add_dither,
     embed_lsb_rgb,
+    extract_lsb_rgb,
     manifest_session_from_lsb,
     randomized_eye_line,
     randomized_prompts,
@@ -84,6 +85,16 @@ def test_prompt_order_is_sessionized_and_stable() -> None:
     assert sorted(randomized_prompts(prompts, "demo-session")) == sorted(prompts)
 
 
+def test_prompt_order_is_independent_of_blend_weight_calls() -> None:
+    prompts = ["Silent yes", "What would you do?", "Stay with me"]
+    baseline = PresenceParameters("demo-session")
+    after_blend = PresenceParameters("demo-session")
+
+    after_blend.blend_weights()
+
+    assert after_blend.prompt_order(prompts) == baseline.prompt_order(prompts)
+
+
 def test_add_dither_preserves_image_shape() -> None:
     source = Image.fromarray(np.full((4, 5, 3), 128, dtype=np.uint8), mode="RGB")
 
@@ -103,6 +114,13 @@ def test_lsb_watermark_roundtrip_extracts_manifest_and_session_ids() -> None:
 
     assert manifest_hash16 == bytes.fromhex(manifest_hash)[:16]
     assert session_id16 == hashlib.sha256(b"demo-session").digest()[:16]
+
+
+def test_lsb_extract_rejects_undersized_payloads() -> None:
+    source = Image.fromarray(np.full((4, 4, 3), 128, dtype=np.uint8), mode="RGB")
+
+    with pytest.raises(ValueError, match="Image too small"):
+        extract_lsb_rgb(source, bitlen=256)
 
 
 @pytest.mark.parametrize(
@@ -131,13 +149,22 @@ def test_presence_yaml_config_shapes_are_structured() -> None:
     assert "US_EN" in locales["profiles"]
 
 
-def test_presence_cli_params_outputs_json() -> None:
-    result = _run_module("params", "--session", "demo-session", "--locale", "US_EN")
+def test_presence_cli_params_outputs_json_and_strips_prompts() -> None:
+    result = _run_module(
+        "params",
+        "--session",
+        "demo-session",
+        "--locale",
+        "US_EN",
+        "--prompts",
+        "Silent yes, What would you do?, , Stay with me",
+    )
 
     assert result.returncode == 0, result.stderr
     payload = json.loads(result.stdout)
     assert 0.26 <= payload["eye_line"] <= 0.28
     assert payload["blend_weights"][0] == payload["blend_weights"][2]
+    assert sorted(payload["prompt_order"]) == ["Silent yes", "Stay with me", "What would you do?"]
 
 
 def test_presence_cli_anchor_writes_hash_payload(tmp_path: Path) -> None:
@@ -161,6 +188,7 @@ def test_presence_cli_anchor_writes_hash_payload(tmp_path: Path) -> None:
 
     assert result.returncode == 0, result.stderr
     payload = json.loads(out.read_text(encoding="utf-8"))
+    assert payload["assets_sha3"] == hashlib.sha3_256(b"heroweb").hexdigest()
     assert payload["manifest_sha3"] == hashlib.sha3_256(MANIFEST_EXAMPLE_PATH.read_bytes()).hexdigest()
     assert payload["hero_sha3"] == hashlib.sha3_256(b"hero").hexdigest()
     assert payload["web_sha3"] == hashlib.sha3_256(b"web").hexdigest()

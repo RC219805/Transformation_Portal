@@ -91,7 +91,8 @@ The Presence Security CLI is maintained under
 Current commands:
 
 - `params`: emit deterministic sessionized parameters.
-- `anchor`: emit SHA3 anchor payload hashes for manifest, hero, and web assets.
+- `anchor`: emit SHA3 anchor payload hashes for manifest, hero, web, and the
+  combined hero+web asset bundle.
 - `watermark`: embed LSB or DCT manifest/session watermarks in an image.
 
 Schemas and examples live under `docs/schemas/presence/` and
