@@ -4,10 +4,12 @@ pragma solidity ^0.8.20;
 contract PresenceCompiler {
     enum Level { None, Concept, Practitioner, Studio, Enterprise }
 
+    address public owner;
+
     struct ManifestProof {
         address submitter;
-        bytes32 manifestHash; // keccak256(manifest JSON)
-        bytes32 assetsHash;   // keccak256(hero||web||disruption)
+        bytes32 manifestHash; // sha3_256(manifest JSON), supplied by the off-chain anchor payload
+        bytes32 assetsHash;   // sha3_256(hero||web), supplied by the off-chain anchor payload
         uint64  timestamp;
         Level   level;
     }
@@ -18,12 +20,21 @@ contract PresenceCompiler {
     event Licensed(address indexed who, Level level);
     event Compiled(bytes32 indexed manifestId, address indexed who, Level level);
 
+    constructor() {
+        owner = msg.sender;
+    }
+
+    modifier onlyOwner() {
+        require(msg.sender == owner, "Only owner");
+        _;
+    }
+
     modifier requiresLicense(Level minLevel) {
         require(uint(licenses[msg.sender]) >= uint(minLevel), "License level too low");
         _;
     }
 
-    function setLicense(address who, Level level) external /* onlyOwner */ {
+    function setLicense(address who, Level level) external onlyOwner {
         licenses[who] = level;
         emit Licensed(who, level);
     }

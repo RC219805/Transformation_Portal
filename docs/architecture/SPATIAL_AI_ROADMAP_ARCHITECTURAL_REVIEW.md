@@ -785,9 +785,9 @@ Add ADR:
 - Choose redaction method (recommend: depth-aware semantic inpainting)
 - Document provenance action: `redacted` with bounding boxes logged
 
-Add to `presence_security_v1_2/` (existing PII module):
+Add to `src/transformation_portal/presence_security/`:
 ```python
-# presence_security_v1_2/spatial_redactor.py
+# src/transformation_portal/presence_security/spatial_redactor.py
 def redact_spatial_capture(
     capture: SpatialCaptureV1,
     redaction_policy: RedactionPolicy

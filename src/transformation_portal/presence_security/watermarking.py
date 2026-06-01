@@ -1,5 +1,6 @@
-# watermarking.py — LSB and DCT-based watermarking (production-ready, v1.3)
-# Notes: Uses scipy for efficient DCT/IDCT operations. Tune thresholds for production.
+"""Presence manifest watermark helpers."""
+
+from __future__ import annotations
 
 import hashlib
 
@@ -8,7 +9,7 @@ from PIL import Image
 from scipy.fft import dct, idct
 
 
-def _bytes_from_ids(manifest_hash_hex: str, session_id: str):
+def _bytes_from_ids(manifest_hash_hex: str, session_id: str) -> bytes:
     mh = bytes.fromhex(manifest_hash_hex)[:16]  # 16 bytes
     sid = hashlib.sha256(session_id.encode("utf-8")).digest()[:16]
     return mh + sid  # 32 bytes payload
@@ -55,7 +56,7 @@ def _idct2(block: np.ndarray) -> np.ndarray:
     return idct(idct(block.T, type=2, norm="ortho").T, type=2, norm="ortho")  # pylint: disable=no-member
 
 
-def embed_dct_luma(img: Image.Image, manifest_hash_hex: str, session_id: str, strength=2.0) -> Image.Image:
+def embed_dct_luma(img: Image.Image, manifest_hash_hex: str, session_id: str, strength: float = 2.0) -> Image.Image:
     X = np.array(img.convert("YCbCr"), dtype=np.float32)
     Y = X[:, :, 0]
     payload = _bytes_from_ids(manifest_hash_hex, session_id)
@@ -84,15 +85,17 @@ def embed_dct_luma(img: Image.Image, manifest_hash_hex: str, session_id: str, st
     return Image.fromarray(X.astype(np.uint8), mode="YCbCr").convert("RGB")
 
 
-def extract_lsb_rgb(img: Image.Image, bitlen=256) -> bytes:
+def extract_lsb_rgb(img: Image.Image, bitlen: int = 256) -> bytes:
     arr = np.array(img.convert("RGB"))
     flat = arr.reshape(-1)
+    if flat.size < bitlen:
+        raise ValueError("Image too small for requested LSB payload")
     bits = flat[:bitlen] & 1
     b = np.packbits(bits).tobytes()
     return b[: bitlen // 8]
 
 
-def manifest_session_from_lsb(img: Image.Image):
+def manifest_session_from_lsb(img: Image.Image) -> tuple[bytes, bytes]:
     b = extract_lsb_rgb(img, bitlen=256)  # 32 bytes
     return b[:16], b[16:32]  # (manifest_hash16, session_id16)
 

@@ -1,6 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "Carolwood Trust Registry Entry",
+  "$id": "https://schemas.transformation-portal.dev/presence/tp.presence.trust_registry.v1_2/trust_registry.schema.json",
+  "title": "tp.presence.trust_registry.v1_2",
   "type": "object",
   "required": [
     "manifest_id",
