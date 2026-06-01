@@ -8,7 +8,9 @@ export function defaultPortalBootstrapPayload() {
       directDebug: false,
       artifactViewerModal: false,
       reviewSurfaceDeferred: false,
-      rumTelemetry: false
+      stagedUploads: false,
+      rumTelemetry: false,
+      fastVlmCaptioning: false
     }
   };
 }

@@ -181,7 +181,7 @@ function renderLoginPage({ csrfToken, accessEmail, errorCode, bypass = false, re
             <p class="eyebrow" data-ui="login-eyebrow">Managed operator access</p>
             <h1 data-ui="login-title">Continue to the operator console.</h1>
             <p class="lede" data-ui="login-lede">
-              Confirm the managed access state, then complete operator credential handoff into the governed console.
+              Confirm managed access, then complete credential handoff into the governed dispatch, operation, and review console.
             </p>
             <div class="login-entry-state" data-ui="login-entry-state">
               <article class="login-status-card" data-ui="login-access-status" data-state="${escapeHtml(entryState.accessState)}">
@@ -194,6 +194,14 @@ function renderLoginPage({ csrfToken, accessEmail, errorCode, bypass = false, re
                 <p class="login-status-card-title">${entryState.credentialLabel}</p>
                 <p class="login-status-card-detail">${entryState.credentialDetail}</p>
               </article>
+            </div>
+            <div class="login-capability-summary" data-ui="login-capability-summary">
+              <p class="login-status-card-kicker">Portal capabilities</p>
+              <ul>
+                <li>Managed dispatch, queue operation, artifact review, provenance, and run-card proof surfaces.</li>
+                <li>Archive gates, staged uploads, Lux Depth, SAM2, reconstruction, RAW ingest, and FastVLM controls surface only from existing portal contracts.</li>
+                <li>Gated or missing runtimes stay disabled until rollout, license, configuration, or recovery prerequisites clear.</li>
+              </ul>
             </div>
             <div class="login-next-step" data-state="${escapeHtml(entryState.credentialState)}">
               <p class="login-next-step-kicker">Next step</p>

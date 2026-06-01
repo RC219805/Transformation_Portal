@@ -308,6 +308,26 @@ h1 {
   color: var(--frontdoor-muted-soft);
 }
 
+.login-capability-summary {
+  display: grid;
+  gap: 0.6rem;
+  margin-bottom: 1.2rem;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 0.75rem;
+  background: rgba(7, 13, 26, 0.44);
+  padding: 0.95rem 1rem;
+}
+
+.login-capability-summary ul {
+  display: grid;
+  gap: 0.45rem;
+  margin: 0;
+  padding-left: 1.1rem;
+  color: var(--frontdoor-muted-soft);
+  font-size: 0.88rem;
+  line-height: 1.55;
+}
+
 .login-status-stack {
   display: grid;
   gap: 0.85rem;

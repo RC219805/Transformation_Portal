@@ -309,8 +309,15 @@ Contract notes:
             </div>
 
             <div id="overviewCapabilityRow" class="portal-overview-capability lg:col-span-12">
-                <p class="stat-label">Capability Stack</p>
+                <div class="capability-stack-header">
+                    <div>
+                        <p class="stat-label">Capability Stack</p>
+                        <p id="capabilitySummaryDetail" class="capability-stack-summary">Capability status will align to bootstrap, readiness, preview, and review state.</p>
+                    </div>
+                    <span id="capabilitySummaryBadge" class="capability-summary-badge" data-capability-status="available">0/0 enabled</span>
+                </div>
                 <div id="capabilityChips" class="mt-3 flex flex-wrap gap-2"></div>
+                <div id="capabilityMatrix" class="capability-matrix" data-ui="capability-matrix" role="list" aria-label="Portal capability status matrix"></div>
             </div>
         </section>
 

@@ -690,6 +690,8 @@ test("login GET serves a minimal branded sign-in shell and boots an anonymous se
     assert.match(html, /data-ui="login-entry-state"/);
     assert.match(html, /data-ui="login-access-status"/);
     assert.match(html, /data-ui="login-credential-status"/);
+    assert.match(html, /data-ui="login-capability-summary"/);
+    assert.match(html, /Archive gates, staged uploads, Lux Depth, SAM2, reconstruction, RAW ingest, and FastVLM controls/);
     assert.match(html, /data-ui="login-sequence"/);
     assert.match(html, /data-ui="login-form"/);
     assert.match(html, /form method="post" action="\/login"/);
@@ -834,6 +836,8 @@ test("homepage GET serves the public DNA landing page instead of redirecting", a
     assert.match(html, /data-ui="homepage-hero-lockup"/);
     assert.match(html, /data-ui="homepage-hero-title"/);
     assert.match(html, /data-ui="homepage-entry-rail"/);
+    assert.match(html, /Managed access opens a governed console for dispatch, queue operation, artifact review, archive gates, and optional runtimes/);
+    assert.match(html, /Lux Depth, SAM2, reconstruction, RAW ingest, and FastVLM stay visible only as real controls/);
     assert.match(html, /(?:data-ui="homepage-learn-link"[^>]*href="#workflow"|href="#workflow"[^>]*data-ui="homepage-learn-link")/);
     assert.match(html, /(?:data-ui="homepage-primary-cta"[^>]*href="\/login"|href="\/login"[^>]*data-ui="homepage-primary-cta")/);
     assert.match(html, /(?:data-ui="homepage-secondary-cta"[^>]*href="#proof-report"|href="#proof-report"[^>]*data-ui="homepage-secondary-cta")/);
@@ -2077,6 +2081,8 @@ test("portal returns 503 with no-store when the FastAPI UI origin is unavailable
       const html = await response.text();
       assert.match(html, /data-ui="managed-recovery-shell"/);
       assert.match(html, /data-reason="upstream_unavailable"/);
+      assert.match(html, /data-ui="managed-recovery-capabilities"/);
+      assert.match(html, /Queue, artifact viewer, staged uploads, FastVLM sidecars, archive gates, and run-card proof controls/);
       assert.match(html, /Portal upstream unavailable/);
       assert.match(html, /href="\/login\?returnTo=%2Fportal%3Fview%3Dbuild"/);
     } finally {
@@ -2173,6 +2179,7 @@ test("portal returns configuration guidance when managed access config is incomp
       assert.match(html, /data-ui="managed-recovery-shell"/);
       assert.match(html, /data-reason="config_failure"/);
       assert.match(html, /Managed front door configuration unavailable/);
+      assert.match(html, /data-ui="managed-recovery-capabilities"/);
       assert.match(html, /Managed boundary stays fail-closed/);
       assert.match(html, /href="\/login\?returnTo=%2Fportal"/);
       assert.equal(events.length, 1);

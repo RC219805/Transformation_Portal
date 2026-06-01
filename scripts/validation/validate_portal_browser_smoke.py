@@ -1007,6 +1007,10 @@ def _state_probe_expression() -> str:
       const el = document.getElementById('enableFastVlmCaptioning');
       return !!(el && el.checked);
     })(),
+    captioningToggleDisabled: (() => {
+      const el = document.getElementById('enableFastVlmCaptioning');
+      return !!(el && el.disabled);
+    })(),
     captioningFieldsVisible: (() => {
       const el = document.getElementById('fastVlmCaptioningFields');
       return !!(el && !el.classList.contains('hidden'));
@@ -2146,7 +2150,22 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
             bool(lux_context_state.get("advancedFlagsOpen")),
             f"Advanced disclosure should auto-open once advanced controls need operator attention: {lux_context_state}",
         )
-        if bool(lux_context_state.get("captioningDetailsVisible")):
+        if bool(lux_context_state.get("captioningDetailsVisible")) and bool(
+            lux_context_state.get("captioningToggleDisabled")
+        ):
+            _expect(
+                not bool(lux_context_state.get("captioningEnabledChecked")),
+                f"Feature-gated FastVLM captioning must stay disabled when visible: {lux_context_state}",
+            )
+            _expect(
+                not bool(lux_context_state.get("captioningCliHasFlag")),
+                f"Feature-gated FastVLM captioning args must stay out of CLI preview: {lux_context_state}",
+            )
+            _expect(
+                "rollout-gated" in str(lux_context_state.get("captioningStatusText") or "").lower(),
+                f"Feature-gated FastVLM captioning should explain the disabled state: {lux_context_state}",
+            )
+        elif bool(lux_context_state.get("captioningDetailsVisible")):
             _expect(
                 bool(lux_context_state.get("captioningEnabledChecked")),
                 f"FastVLM captioning should toggle on when the enabled feature gate exposes controls: {lux_context_state}",

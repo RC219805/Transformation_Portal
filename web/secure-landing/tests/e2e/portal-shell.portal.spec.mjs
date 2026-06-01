@@ -33,6 +33,9 @@ test.describe(
       // Top-level shell anchors served via the front-door's upstream proxy.
       await expect(page.locator('[data-ui="portal-topbar"]')).toBeVisible();
       await expect(page.locator('[data-ui="view-switcher"]')).toBeVisible();
+      await expect(page.locator('[data-ui="capability-matrix"]')).toBeAttached();
+      await expect(page.locator('[data-ui="staged-upload-shell"]')).toBeAttached();
+      await expect(page.locator('[data-ui="captioning-controls"]')).toBeAttached();
 
       // All four workspace sections are rendered with stable
       // data-view-link hooks and ?view=… hrefs. The portal JS is not
