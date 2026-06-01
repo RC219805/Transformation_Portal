@@ -311,6 +311,9 @@ def verify_python_imports(manifest: Mapping[str, Any], *, root: Path | None = No
         python_path = python_runtime_path(manifest, root=root)
     except ManifestError as exc:
         return [str(exc)]
+    python_errors = verify_python_runtime(manifest, root=root)
+    if python_errors:
+        return python_errors
     import_lines = (
         "import importlib, sys; "
         f"modules = {FASTVLM_RUNTIME_IMPORTS!r}; "

@@ -697,6 +697,31 @@ def test_portal_fastvlm_captioning_runtime_check_is_local_backend_scoped():
     )
 
 
+def test_portal_fastvlm_captioning_runtime_ready_skips_import_when_static_runtime_fails(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    module = _load_portal_fastvlm_captioning_module("tests_validate_portal_fastvlm_captioning_runtime_missing_python")
+    manifest = {"schema_version": "fastvlm-runtime.v1"}
+    runtime_root = Path("/tmp/fastvlm")
+    static_errors = [f"FastVLM Python executable missing: {runtime_root}/.venv-fastvlm/bin/python"]
+
+    monkeypatch.setattr(module, "load_manifest", lambda: manifest)
+    monkeypatch.setattr(module, "runtime_root", lambda _manifest: runtime_root)
+    monkeypatch.setattr(module, "selected_model_roles", lambda _manifest, *, models: [models])
+    monkeypatch.setattr(module, "verify_runtime", lambda *_args, **_kwargs: list(static_errors))
+
+    def fail_import_smoke(*_args, **_kwargs):  # noqa: ANN001
+        raise AssertionError("import smoke must be skipped when static runtime checks already failed")
+
+    monkeypatch.setattr(module, "verify_python_imports", fail_import_smoke)
+
+    with pytest.raises(module.SmokeFailure) as exc_info:
+        module._validate_runtime_ready("smoke")
+
+    assert exc_info.value.kind == "environment"
+    assert static_errors[0] in str(exc_info.value)
+
+
 def test_portal_lux_materials_sam2_prerequisite_reports_missing_checkpoint(tmp_path: Path):
     module = _load_module(PORTAL_LUX_MATERIALS_SCRIPT_PATH, "tests_validate_portal_lux_materials_sam2_prereq")
 
