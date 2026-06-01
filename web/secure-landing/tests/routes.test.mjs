@@ -199,10 +199,17 @@ test("next config honors TP_NEXT_DIST_DIR for isolated local frontdoor runs", as
 
   try {
     const configModule = await importFresh("../next.config.js");
-    assert.equal(configModule.default.distDir, ".next-smoke-test");
-    assert.equal(configModule.default.turbopack, undefined);
+    const productionConfig = configModule.default("phase-production-build");
+    const developmentConfig = configModule.default("phase-development-server");
+
+    assert.equal(productionConfig.distDir, ".next-smoke-test");
+    assert.equal(developmentConfig.distDir, ".next-smoke-test");
+    assert.equal(path.resolve(productionConfig.turbopack.root), REPO_ROOT);
+    assert.equal(path.resolve(developmentConfig.turbopack.root), REPO_ROOT);
+    assert.equal(developmentConfig.output, undefined);
+    assert.equal(developmentConfig.outputFileTracingRoot, undefined);
     assert.equal(
-      path.resolve(configModule.default.outputFileTracingRoot),
+      path.resolve(productionConfig.outputFileTracingRoot),
       REPO_ROOT,
       "standalone tracing must still include repo-root files such as the portal asset manifest"
     );
@@ -269,12 +276,13 @@ test("playwright frontdoor smoke config uses local preflight-safe fixtures", asy
     const env = frontdoor.env;
     const users = JSON.parse(env.TP_FRONTDOOR_USERS_JSON);
 
-    assert.equal(frontdoor.command, "npm run dev -- --port 3000");
+    assert.equal(frontdoor.command, "npm run dev -- --webpack --port 3000");
     assert.equal(env.NODE_ENV, "development");
     assert.equal(env.TP_ALLOW_LOCAL_ACCESS_BYPASS, "1");
     assert.equal(env.TP_FASTAPI_ORIGIN, "http://127.0.0.1:9999");
     assert.equal(env.TP_BACKEND_API_KEY, "frontdoor-browser-smoke");
     assert.equal(env.WATCHPACK_POLLING, "true");
+    assert.equal(env.CHOKIDAR_USEPOLLING, "true");
     assert.equal(users.length, 1);
     assert.equal(users[0].username, "smoke-admin");
     assert.equal(users[0].access_email, "smoke-admin@local.invalid");
@@ -304,7 +312,7 @@ test("playwright frontdoor smoke config derives webServer port from PLAYWRIGHT_B
 
     assert.equal(configModule.default.use.baseURL, "http://127.0.0.1:3017");
     assert.equal(frontdoor.url, "http://127.0.0.1:3017");
-    assert.equal(frontdoor.command, "npm run dev -- --port 3017");
+    assert.equal(frontdoor.command, "npm run dev -- --webpack --port 3017");
   } finally {
     restorePlaywrightConfigEnv(snapshot);
   }
@@ -335,6 +343,11 @@ test("run_frontdoor_local launcher supports isolated port, distdir, and local us
   assert.match(script, /TP_FRONTDOOR_PORT/);
   assert.match(script, /TP_FRONTDOOR_DIST_DIR/);
   assert.match(script, /TP_NEXT_DIST_DIR/);
+  assert.match(script, /TP_FRONTDOOR_NEXT_DEV_ENGINE:-webpack/);
+  assert.match(script, /TP_FRONTDOOR_WATCH_POLLING:-1/);
+  assert.match(script, /WATCHPACK_POLLING:-true/);
+  assert.match(script, /CHOKIDAR_USEPOLLING:-true/);
+  assert.match(script, /npm run dev -- "\$\{NEXT_DEV_ARGS\[@\]\}"/);
   assert.match(script, /TP_FRONTDOOR_USERS_FILE:-\/tmp\/tp-frontdoor-users\.json/);
   assert.match(script, /TP_FRONTDOOR_USERNAME:-smoke-admin/);
   assert.match(script, /TP_FRONTDOOR_PASSWORD:-correct horse battery staple/);

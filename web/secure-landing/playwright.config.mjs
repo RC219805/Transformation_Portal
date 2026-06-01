@@ -130,7 +130,7 @@ export default defineConfig({
       // mock FastAPI origin above. Auth bypass for Cloudflare Access is
       // enabled via TP_ALLOW_LOCAL_ACCESS_BYPASS=1 +
       // NODE_ENV=development (lib/config.js:10-12).
-      command: `npm run dev -- --port ${webServerPort}`,
+      command: `npm run dev -- --webpack --port ${webServerPort}`,
       url: baseURL,
       reuseExistingServer: !isCi,
       timeout: 120_000,
@@ -141,6 +141,7 @@ export default defineConfig({
         TP_FRONTDOOR_USERS_JSON: frontdoorSmokeUsersJson,
         TP_ALLOW_LOCAL_ACCESS_BYPASS: "1",
         WATCHPACK_POLLING: "true",
+        CHOKIDAR_USEPOLLING: "true",
       },
     },
   ],

@@ -16,6 +16,7 @@ from fastvlm_runtime_manifest import (
     load_manifest,
     runtime_root,
     selected_model_roles,
+    verify_python_imports,
     verify_runtime,
 )
 from validate_portal_lux_materials_live import (
@@ -69,6 +70,7 @@ def _validate_runtime_ready(model_role: str) -> None:
     root = runtime_root(manifest)
     roles = selected_model_roles(manifest, models=model_role)
     errors = verify_runtime(manifest, roles=roles, root=root)
+    errors.extend(verify_python_imports(manifest, root=root))
     if errors:
         raise SmokeFailure(
             "FastVLM runtime prerequisites are not ready:\n" + "\n".join(f"- {error}" for error in errors),

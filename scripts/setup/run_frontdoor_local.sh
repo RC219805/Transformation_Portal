@@ -9,6 +9,7 @@ FASTAPI_ORIGIN="${TP_FASTAPI_ORIGIN:-http://127.0.0.1:8000}"
 SESSION_DB="${TP_FRONTDOOR_SESSION_DB:-/tmp/transformation-portal-frontdoor-sessions.db}"
 BACKEND_API_KEY="${TP_BACKEND_API_KEY:-${TP_API_KEY:-}}"
 FRONTDOOR_DIST_DIR="${TP_FRONTDOOR_DIST_DIR:-}"
+FRONTDOOR_NEXT_DEV_ENGINE="${TP_FRONTDOOR_NEXT_DEV_ENGINE:-webpack}"
 DEFAULT_USERS_FILE="${TP_FRONTDOOR_USERS_FILE:-/tmp/tp-frontdoor-users.json}"
 DEFAULT_FRONTDOOR_USERNAME="${TP_FRONTDOOR_USERNAME:-smoke-admin}"
 DEFAULT_FRONTDOOR_PASSWORD="${TP_FRONTDOOR_PASSWORD:-correct horse battery staple}"
@@ -115,11 +116,34 @@ if [[ -n "${FRONTDOOR_DIST_DIR}" ]]; then
   export TP_NEXT_DIST_DIR="${FRONTDOOR_DIST_DIR}"
 fi
 
+NEXT_DEV_ARGS=(--hostname "${FRONTDOOR_HOST}" --port "${FRONTDOOR_PORT}")
+case "${FRONTDOOR_NEXT_DEV_ENGINE}" in
+  webpack)
+    NEXT_DEV_ARGS=(--webpack "${NEXT_DEV_ARGS[@]}")
+    ;;
+  turbopack|turbo)
+    NEXT_DEV_ARGS=(--turbo "${NEXT_DEV_ARGS[@]}")
+    ;;
+  auto|default|"")
+    FRONTDOOR_NEXT_DEV_ENGINE="auto"
+    ;;
+  *)
+    echo "TP_FRONTDOOR_NEXT_DEV_ENGINE must be one of: webpack, turbopack, auto."
+    exit 1
+    ;;
+esac
+
+if [[ "${TP_FRONTDOOR_WATCH_POLLING:-1}" != "0" ]]; then
+  export WATCHPACK_POLLING="${WATCHPACK_POLLING:-true}"
+  export CHOKIDAR_USEPOLLING="${CHOKIDAR_USEPOLLING:-true}"
+fi
+
 echo "Starting managed front door on http://${FRONTDOOR_HOST}:${FRONTDOOR_PORT}"
 echo "Using FastAPI origin ${TP_FASTAPI_ORIGIN}"
+echo "Using Next dev engine ${FRONTDOOR_NEXT_DEV_ENGINE}"
 if [[ -n "${FRONTDOOR_DIST_DIR}" ]]; then
   echo "Using isolated Next distDir ${TP_FRONTDOOR_DIST_DIR}"
 fi
 
 cd "${FRONTDOOR_ROOT}"
-npm run dev -- --hostname "${FRONTDOOR_HOST}" --port "${FRONTDOOR_PORT}"
+npm run dev -- "${NEXT_DEV_ARGS[@]}"

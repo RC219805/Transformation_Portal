@@ -360,6 +360,24 @@
         "operational_fallback_images": {
           "type": "integer",
           "minimum": 0
+        },
+        "requested_backend_status": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "honored",
+            "not_honored",
+            null
+          ]
+        },
+        "requested_backend_defect": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
         }
       },
       "additionalProperties": false

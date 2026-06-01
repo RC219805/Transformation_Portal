@@ -197,6 +197,13 @@ TP_PORTAL_FASTVLM_CAPTIONING_ROLLOUT_PERCENT=100 \
 make validate-portal-fastvlm-captioning-live
 ```
 
+`make check-fastvlm-runtime` runs the import-smoke check and requires the local
+MLX/Metal runtime to be usable. In headless or sandboxed macOS sessions without
+a Metal device, use
+`./scripts/validation/validate_fastvlm_runtime.py --verify-only --models smoke,default`
+only for static manifest, source, Python,
+and checksum evidence; it is not enough to prove caption generation can run.
+
 ## Standalone Smoke Test
 
 Run the local command against one source image:

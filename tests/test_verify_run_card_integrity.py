@@ -512,6 +512,29 @@ def test_verify_run_card_integrity_rejects_requested_depth_pro_full_fallback(tmp
     assert any("requested backend 'depth_pro' was not honored" in error for error in errors)
 
 
+def test_verify_run_card_integrity_accepts_explicit_requested_backend_defect(tmp_path: Path):
+    module = _load_script_module(
+        "verify_run_card_integrity_script_depth_pro_fallback_audited",
+        "scripts/verify_run_card_integrity.py",
+    )
+    run_card_path = tmp_path / "run_card_depth_pro_fallback_audited.json"
+    payload = _valid_run_card_payload(module)
+    payload["backend_selection"]["requested"] = "depth_pro"
+    payload["backend_selection"]["resolved"] = "da3"
+    payload["backend_summary"]["requested_backend"] = "depth_pro"
+    payload["backend_summary"]["primary_backend"] = "da3"
+    payload["backend_summary"]["final_backends_used"] = ["da3"]
+    payload["backend_summary"]["fallback_images"] = 2
+    payload["backend_summary"]["requested_backend_status"] = "not_honored"
+    payload["backend_summary"]["requested_backend_defect"] = "Depth Pro MPS runtime unavailable."
+    payload["total_images"] = 2
+    payload["success_count"] = 2
+    payload["error_count"] = 0
+    _write_json(run_card_path, payload)
+
+    assert module.verify_run_card_integrity(run_card_path) == []
+
+
 def test_verify_run_card_integrity_and_validator_share_depth_pro_fallback_semantics(tmp_path: Path):
     module = _load_script_module("verify_run_card_integrity_script_depth_pro_shared", "scripts/verify_run_card_integrity.py")
     from transformation_portal.lux_depth_v3.validators import validate_run_card_backend_semantics

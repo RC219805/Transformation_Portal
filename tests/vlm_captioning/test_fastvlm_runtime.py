@@ -264,6 +264,23 @@ def test_runtime_nonzero_exit(tmp_path: Path) -> None:
     assert "boom" in result.raw_stderr
 
 
+def test_runtime_classifies_headless_metal_failure_as_missing_runtime(tmp_path: Path) -> None:
+    runtime_dir = tmp_path / "runtime"
+    _write_fake_mlx_module(
+        runtime_dir,
+        "import sys\n"
+        "print('RuntimeError: [metal::load_device] No Metal device available.', file=sys.stderr)\n"
+        "sys.exit(1)\n",
+    )
+    config, image = _config(tmp_path, runtime_dir)
+
+    result = run_fastvlm_caption(config, image)
+
+    assert result.success is False
+    assert result.status == "missing_runtime"
+    assert "No Metal device available" in result.raw_stderr
+
+
 def test_runtime_malformed_output_returns_partial_parse(tmp_path: Path) -> None:
     runtime_dir = tmp_path / "runtime"
     _write_fake_mlx_module(runtime_dir, "print('SCENE=Patio; MATERIALS=stone.')\n")
