@@ -3,7 +3,7 @@
 **Purpose:** Current source of truth for finding maintained Transformation
 Portal documentation.
 
-**Last Updated:** 2026-05-15
+**Last Updated:** 2026-06-01
 **Maintainer:** Repository Architect
 **Current baseline:** repo-wide refresh audit dated May 11, 2026, building on
 `main` through PR #1721, with the May 12 architecture triage overlay for
@@ -93,6 +93,7 @@ operator guidance unless they are linked here as canonical documents.
 | Portal UX/UI status snapshot | [Portal UX/UI Status Snapshot](../architecture/DNA_UX_UI_STRATEGY_REBASELINE_2026-04-08.md) | Current planning-context snapshot; does not choose the next implementation PR |
 | APEX workflow design | [APEX_WORKFLOW_DESIGN.md](../architecture/APEX_WORKFLOW_DESIGN.md) | Maintained |
 | Deterministic RAW ingest | [ADR-030](../architecture/ADR-030-phase2-deterministic-raw-ingest.md) | Maintained |
+| Schema contracts and topology | [Schema Contracts](../../schemas/README.md), [docs/schemas](../schemas/) | Maintained boundary for root runtime schema/profile contracts versus published schema contracts under docs |
 | Plugin manifest trust | [ADR-049](../architecture/ADR-049-plugin-manifest-trust.md) | Maintained in-process external plugin trust boundary |
 | Determinism harness spec | [SPEC-DH-001](../architecture/specifications/SPEC-DH-001.md) | Locked |
 
