@@ -83,9 +83,9 @@ Represented an ambitious attempt at "ultimate context-aware rendering". Demonstr
 Valuable as reference for future premium/tiered workflow designs.
 
 **Referenced In:**
-- `docs/CONTEXT_SYSTEM_COMPLETE.md`
-- `docs/STATUS.md`
-- `docs/NEXT_STEPS.md`
+- `docs/historical/CONTEXT_SYSTEM_COMPLETE.md`
+- `docs/historical/STATUS.md`
+- `docs/status/NEXT_STEPS.md`
 
 **Last Modified:** 2026-02-07
 
@@ -173,7 +173,7 @@ If you need functionality from archived code:
    - Update to current code standards
 
 3. **Consult Documentation:**
-   - Check `docs/CONTEXT_SYSTEM_COMPLETE.md` for context system evolution
+   - Check `docs/historical/CONTEXT_SYSTEM_COMPLETE.md` for context system evolution
    - Check `docs/architecture/` for ADRs related to superseding decisions
    - Check `CHANGELOG.md` for version history
 
