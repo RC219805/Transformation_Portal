@@ -322,7 +322,7 @@ $ pytest tests/test_luxury_tiff_batch_processor.py -v
 4. `tests/test_parse_workflows.py` - Created comprehensive test suite
 5. `parse_workflows_README.md` - Created documentation
 6. `board_material_aerial_enhancer.py` - Fixed pylint false positive (numpy reshape)
-7. `presence_security_v1_2/watermarking.py` - Fixed pylint false positive (numpy array assignment)
+7. `src/transformation_portal/presence_security/watermarking.py` - Fixed pylint false positive (numpy array assignment)
 8. `tests/test_luxury_tiff_batch_processor.py` - Fixed pylint false positive (package import no-member)
 
 ---

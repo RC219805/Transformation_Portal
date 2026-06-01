@@ -3,7 +3,7 @@
      3
      4	ANNEX A · LOCALE ADAPTATION FRAMEWORK
      5	- Purpose: adjust expression and lighting primitives for cultural perception without breaking core geometry gates.
-     6	- Locale profiles: reference `presence_compiler_locales.yml` for declared or default locales; never infer sensitive traits.
+     6	- Locale profiles: reference `config/presence_security/v1_2/locales.yml` for declared or default locales; never infer sensitive traits.
      7	- Overrides permitted:
      8	  * `mouth_corners_delta_deg`
      9	  * `lower_lid_tension`

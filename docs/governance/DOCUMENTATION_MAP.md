@@ -40,6 +40,7 @@ operator guidance unless they are linked here as canonical documents.
 | Lux Depth V3 CLI | [Lux Depth V3 CLI Guide](../cli/LUX_DEPTH_V3_CLI_GUIDE.md) | Maintained |
 | CLI entrypoints | [CLI Reference](../cli/CLI_REFERENCE.md) | Maintained |
 | PBR CLI testing | [PBR CLI Testing Guide](../cli/PBR_CLI_TESTING_GUIDE.md) | Maintained |
+| Presence Security | [Presence Security](../guides/PRESENCE_SECURITY.md) | Maintained |
 | FastVLM advisory captioning runtime | [FastVLM Runtime](../runtimes/fastvlm.md) | Maintained |
 | Orchestrator Postgres runtime (Phase 1.B/1.E) | [Orchestrator Postgres Runtime](../runtimes/orchestrator-postgres.md) | Maintained; durable `JobRepository` backend wired through `app.py`, opt-in via `TP_ORCHESTRATOR_STATE_BACKEND=postgres`; durable SSE replay remains separate |
 | Lux Depth V3 troubleshooting | [Lux Depth V3 Troubleshooting](../guides/LUX_DEPTH_V3_TROUBLESHOOTING.md) | Maintained |

@@ -1,9 +1,13 @@
-# countermeasures.py — detection countermeasures & controlled randomness (v1.2)
+"""Presence Compiler countermeasure helpers."""
+
+from __future__ import annotations
+
+from collections.abc import Sequence
 
 import numpy as np
 from PIL import Image
 
-from presence_security_v1_2.presence_params import PresenceParameters
+from transformation_portal.presence_security.parameters import PresenceParameters
 
 
 def add_dither(img: Image.Image, sigma: float, seed: int = 42) -> Image.Image:
@@ -18,9 +22,9 @@ def randomized_eye_line(session_key: str, locale: str = "US_EN") -> float:
     return PresenceParameters(session_key, locale).eye_line()
 
 
-def randomized_blend_weights(session_key: str) -> list:
+def randomized_blend_weights(session_key: str) -> list[float]:
     return PresenceParameters(session_key).blend_weights()
 
 
-def randomized_prompts(prompts: list, session_key: str) -> list:
+def randomized_prompts(prompts: Sequence[str], session_key: str) -> list[str]:
     return PresenceParameters(session_key).prompt_order(prompts)

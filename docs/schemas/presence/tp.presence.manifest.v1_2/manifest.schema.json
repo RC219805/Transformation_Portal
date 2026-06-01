@@ -1,6 +1,7 @@
 {
-  "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "Presence Compiler Manifest",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.transformation-portal.dev/presence/tp.presence.manifest.v1_2/manifest.schema.json",
+  "title": "tp.presence.manifest.v1_2",
   "type": "object",
   "required": [
     "version",

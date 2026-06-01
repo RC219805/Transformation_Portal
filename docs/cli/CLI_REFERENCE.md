@@ -25,6 +25,7 @@ Use these quick checks before relying on a CLI surface:
 .venv/bin/python -m transformation_portal --help
 .venv/bin/lux-depth-v3 --help
 .venv/bin/depth-aware-dof --help
+.venv/bin/presence-security --help
 ```
 
 `python -m transformation_portal info` imports optional runtime probes and may
@@ -39,6 +40,7 @@ environment signals, not as proof that the core CLI is broken.
 | Lux Depth V3 | Canonical image/depth/APEX pipeline | `.venv/bin/lux-depth-v3 ...` |
 | PBR helper CLI | Generate PBR maps from depth assets | `.venv/bin/python -m transformation_portal.lux_depth_v3.pbr_cli ...` |
 | Depth-aware DOF | Apply depth-aware focus rendering from an image and `.npy` depth | `.venv/bin/depth-aware-dof ...` |
+| Presence Security | Sessionized Presence Compiler parameters, manifest anchor payloads, and watermark helpers | `.venv/bin/presence-security ...` |
 | TIFF batch processor | Batch 16-bit TIFF finishing | `.venv/bin/luxury-tiff-batch ...` |
 | Compatibility Typer CLIs | Legacy direct command groups for render/process/analyze helpers | `.venv/bin/transform-render`, `.venv/bin/transform-process`, `.venv/bin/transform-analyze` |
 
@@ -75,6 +77,25 @@ Recipe helpers:
 .venv/bin/python -m transformation_portal list-recipes --dir config/recipes
 .venv/bin/python -m transformation_portal validate-recipe config/recipes/signature_estate.yaml --verbose
 ```
+
+## Presence Security
+
+The Presence Security CLI is maintained under
+`transformation_portal.presence_security`:
+
+```bash
+.venv/bin/presence-security params --session "demo-session" --locale US_EN
+.venv/bin/python -m transformation_portal.presence_security --help
+```
+
+Current commands:
+
+- `params`: emit deterministic sessionized parameters.
+- `anchor`: emit SHA3 anchor payload hashes for manifest, hero, and web assets.
+- `watermark`: embed LSB or DCT manifest/session watermarks in an image.
+
+Schemas and examples live under `docs/schemas/presence/` and
+`docs/contracts/examples/tp.presence.*.example.json`.
 
 ## Lux Depth V3
 
