@@ -1223,7 +1223,10 @@ def test_portal_staged_upload_ui_contract_is_present_in_markup_and_source() -> N
     assert 'id="stagedUploadFilesInput"' in html
     assert 'id="stagedUploadFolderInput"' in html
     assert "const STAGED_UPLOAD_SUPPORTED_PIPELINES = new Set(['lux-depth-v3', 'archive-gate-a']);" in content
+    assert "function _stagedUploadsSupportedForState() {" in content
+    assert "function _stagedUploadsEnabledForState() {" in content
     assert "function _stagedUploadsVisibleForState() {" in content
+    assert "Staged upload controls are visible for this pipeline but gated for this portal cohort." in content
     assert "_buildAuthHeaders({}, 'POST', { traceparent: requestTraceparent });" in content
     assert "xhr.open('POST', `${API_BASE}/v1/uploads/staging`);" in content
     assert "formData.append('files', file, relativePath);" in content
@@ -1325,8 +1328,13 @@ def test_portal_fastvlm_captioning_controls_are_feature_gated_and_advisory_only(
     )
     assert 'status: "succeeded",' in review_content
     assert "state.auth?.features?.fastVlmCaptioning" in content
-    assert "const captioningFeatureVisible = isLuxPipeline && _fastVlmCaptioningFeatureEnabled();" in applicability_body
+    assert "const captioningFeatureVisible = isLuxPipeline;" in applicability_body
+    assert (
+        "const captioningFeatureEnabled = captioningFeatureVisible && _fastVlmCaptioningFeatureEnabled();"
+        in applicability_body
+    )
     assert "_setContextVisibility(els.captioningDetails, captioningFeatureVisible);" in applicability_body
+    assert "FastVLM caption controls are visible but gated for this portal cohort." in applicability_body
     assert "state.config.captioning.enableFastVlm = false;" in applicability_body
     assert "runtimeStatus === 'missing_runtime'" in applicability_body
     assert "runtimeStatus === 'invalid_config'" in applicability_body
@@ -2440,6 +2448,11 @@ def test_portal_overview_and_build_surfaces_sync_bootstrap_skeletons_and_preview
     assert 'id="intelligenceShellSkeletonState"' in content
     assert 'id="overviewStatsSkeletonState"' in content
     assert 'id="overviewCapabilitySkeletonState"' in content
+    assert 'id="capabilityMatrix"' in content
+    assert 'data-ui="capability-matrix"' in content
+    assert "row.dataset.ui = 'capability-row';" in content
+    assert "dataset.capabilityId" in content
+    assert "dataset.capabilityStatus" in content
     assert 'id="profileShellSkeletonState"' in content
     assert 'id="buildStepperSkeletonState"' in content
     assert 'id="parametersShellSkeletonState"' in content

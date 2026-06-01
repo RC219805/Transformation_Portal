@@ -121,6 +121,14 @@ def test_portal_html_buttons_all_have_type_attribute() -> None:
     assert missing_type == [], f"buttons without type attribute: {missing_type}"
 
 
+def test_portal_html_exposes_capability_matrix_contract_hooks() -> None:
+    markup = _read_portal_markup()
+    assert 'id="capabilityMatrix"' in markup
+    assert 'data-ui="capability-matrix"' in markup
+    assert 'id="capabilitySummaryBadge"' in markup
+    assert 'id="capabilitySummaryDetail"' in markup
+
+
 class _WorkspaceRailParser(HTMLParser):
     """Scan the element tagged ``data-ui="view-switcher"`` and its subtree.
 

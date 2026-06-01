@@ -206,6 +206,9 @@ const els = {
     overviewCapabilityRow: _domId('overviewCapabilityRow'),
     overviewCapabilitySkeletonState: _domId('overviewCapabilitySkeletonState'),
     capabilityChips: _domId('capabilityChips'),
+    capabilitySummaryBadge: _domId('capabilitySummaryBadge'),
+    capabilitySummaryDetail: _domId('capabilitySummaryDetail'),
+    capabilityMatrix: _domId('capabilityMatrix'),
     presetHeadline: _domId('presetHeadline'),
     presetStabilityBadge: _domId('presetStabilityBadge'),
     backendModeBadge: _domId('backendModeBadge'),
@@ -3636,6 +3639,84 @@ function renderCapabilityChips(payload) {
     });
 }
 
+function renderCapabilityMatrix(payload) {
+    if (!els.capabilityMatrix) return;
+    const currentPayload = payload || generatePayload();
+    const preview = _currentPreviewForPayload(currentPayload) || _effectivePreviewSnapshot(currentPayload);
+    const captioningReadiness = _captioningRuntimeReadiness(preview?.captioning_summary || {});
+    const catalog = portalInternals.buildPortalCapabilityCatalog({
+        pipeline: currentPayload.pipeline,
+        args: currentPayload.args || {},
+        backendOk: state.backendOk,
+        bootstrapReady: _isBootstrapReady(),
+        authMode: state.auth?.mode,
+        features: state.auth?.features || {},
+        readiness: currentPipelineReadiness(currentPayload),
+        readinessIssues: currentPipelineReadinessIssues(currentPayload),
+        preview,
+        jobs: state.jobs,
+        activeJob: _latestActiveJob(),
+        reviewJob: _latestReviewableJob(),
+        captioningRuntimeReadiness: captioningReadiness,
+        stagedUploadSupported: STAGED_UPLOAD_SUPPORTED_PIPELINES.has(String(currentPayload.pipeline || '').trim())
+    });
+    if (els.capabilitySummaryBadge) {
+        const enabledCount = Number(catalog.summary?.enabled) || 0;
+        const totalCount = Number(catalog.summary?.total) || 0;
+        const nextStatus = portalInternals.normalizeCapabilityStatus(catalog.summary?.nextActionStatus, 'available');
+        els.capabilitySummaryBadge.textContent = `${enabledCount}/${totalCount} enabled`;
+        els.capabilitySummaryBadge.dataset.capabilityStatus = nextStatus;
+    }
+    if (els.capabilitySummaryDetail) {
+        els.capabilitySummaryDetail.textContent = catalog.summary?.nextActionLabel || 'Capability catalog is ready.';
+    }
+
+    const fragment = document.createDocumentFragment();
+    catalog.rows.forEach((capability) => {
+        const row = document.createElement('article');
+        row.className = 'capability-row';
+        row.dataset.ui = 'capability-row';
+        row.dataset.capabilityId = String(capability.id || '');
+        row.dataset.capabilityStatus = portalInternals.normalizeCapabilityStatus(capability.status, 'available');
+        row.setAttribute('role', 'listitem');
+
+        const header = document.createElement('div');
+        header.className = 'capability-row__header';
+
+        const copy = document.createElement('div');
+        copy.className = 'capability-row__copy';
+
+        const group = document.createElement('p');
+        group.className = 'capability-row__group';
+        group.textContent = capability.group || 'Portal';
+
+        const label = document.createElement('p');
+        label.className = 'capability-row__label';
+        label.textContent = capability.label || capability.id || 'Capability';
+
+        copy.append(group, label);
+
+        const badge = document.createElement('span');
+        badge.className = 'capability-row__status';
+        badge.textContent = capability.statusLabel || titleCaseToken(capability.status, 'Available');
+
+        header.append(copy, badge);
+
+        const summary = document.createElement('p');
+        summary.className = 'capability-row__summary';
+        summary.textContent = capability.summary || '';
+
+        const detail = document.createElement('p');
+        detail.className = 'capability-row__detail';
+        detail.textContent = capability.detail || '';
+
+        row.append(header, summary, detail);
+        fragment.appendChild(row);
+    });
+
+    els.capabilityMatrix.replaceChildren(fragment);
+}
+
 function syncBuildSurfaceApplicability(payload = null) {
     const args = payload?.args || generatePayload().args || {};
     const preset = currentPresetDescriptor();
@@ -3646,8 +3727,9 @@ function syncBuildSurfaceApplicability(payload = null) {
     const sam2TilingEnabled = parseBoolLike(args.sam2_tiling_enabled, false);
     const enableV2 = parseBoolLike(args.enable_v2, false);
     const reconstructionEnabled = parseBoolLike(args.enable_reconstruction, false);
-    const captioningFeatureVisible = isLuxPipeline && _fastVlmCaptioningFeatureEnabled();
-    const captioningEnabled = captioningFeatureVisible && parseBoolLike(args.vlm_captioning_enabled, false);
+    const captioningFeatureVisible = isLuxPipeline;
+    const captioningFeatureEnabled = captioningFeatureVisible && _fastVlmCaptioningFeatureEnabled();
+    const captioningEnabled = captioningFeatureEnabled && parseBoolLike(args.vlm_captioning_enabled, false);
     const researchPreset = _presetRequiresResearchAcknowledgments(preset, args);
     const depthBackend = String(args.depth_backend || '').trim().toLowerCase();
     const nonCommercialChecked = parseBoolLike(args.non_commercial_ok, false);
@@ -3733,9 +3815,9 @@ function syncBuildSurfaceApplicability(payload = null) {
         els.captioning.mlxVlmDir,
     ].filter(Boolean);
     captioningControls.forEach((control) => {
-        control.disabled = !captioningFeatureVisible || (control !== els.captioning.enableFastVlm && !captioningEnabled);
+        control.disabled = !captioningFeatureEnabled || (control !== els.captioning.enableFastVlm && !captioningEnabled);
     });
-    if (!captioningFeatureVisible && els.captioning.enableFastVlm) {
+    if (!captioningFeatureEnabled && els.captioning.enableFastVlm) {
         els.captioning.enableFastVlm.checked = false;
         els.captioning.enableFastVlm.setAttribute('aria-checked', 'false');
         state.config.captioning = state.config.captioning || {};
@@ -3743,7 +3825,9 @@ function syncBuildSurfaceApplicability(payload = null) {
     }
     if (els.captioningDetailsHint) {
         els.captioningDetailsHint.textContent = !captioningFeatureVisible
-            ? 'FastVLM captioning is disabled for this portal cohort.'
+            ? 'FastVLM captioning is available only for Lux Depth runs.'
+            : !captioningFeatureEnabled
+                ? 'FastVLM caption controls are visible but gated for this portal cohort.'
             : captioningEnabled
                 ? 'FastVLM captions will emit advisory review sidecars only.'
                 : 'Open to enable optional FastVLM caption sidecars for review context.';
@@ -3755,7 +3839,9 @@ function syncBuildSurfaceApplicability(payload = null) {
         const runtimeStatus = String(readiness.status || '').trim();
         let captioningStatusText = 'FastVLM captions are off and no captioning args will be emitted.';
         if (!captioningFeatureVisible) {
-            captioningStatusText = 'FastVLM caption controls are feature gated for this cohort.';
+            captioningStatusText = 'FastVLM caption controls are shown only for Lux Depth runs.';
+        } else if (!captioningFeatureEnabled) {
+            captioningStatusText = 'FastVLM caption controls are rollout-gated for this cohort.';
         } else if (captioningEnabled && runtimeStatus === 'invalid_config') {
             captioningStatusText = 'FastVLM captioning config has invalid runtime paths; preview validation must be repaired before dispatch.';
         } else if (captioningEnabled && runtimeStatus === 'missing_runtime') {
@@ -4284,6 +4370,7 @@ function renderMissionControl(payload = null) {
     }
 
     renderCapabilityChips(currentPayload);
+    renderCapabilityMatrix(currentPayload);
     renderPresetIntelligence(currentPayload);
     renderGovernanceBanner(currentPayload);
     syncDisclosurePanels(currentPayload);
@@ -4906,12 +4993,22 @@ function _clearStoredApiKeyState(clearPersisted = true) {
     if (els.apiKeyInput) els.apiKeyInput.value = '';
 }
 
-function _stagedUploadsVisibleForState() {
+function _stagedUploadsSupportedForState() {
     return Boolean(
         _isBootstrapReady()
-        && state.auth?.features?.stagedUploads
         && STAGED_UPLOAD_SUPPORTED_PIPELINES.has(String(state.pipeline || '').trim())
     );
+}
+
+function _stagedUploadsEnabledForState() {
+    return Boolean(
+        _stagedUploadsSupportedForState()
+        && state.auth?.features?.stagedUploads
+    );
+}
+
+function _stagedUploadsVisibleForState() {
+    return _stagedUploadsSupportedForState();
 }
 
 function _stagedUploadErrorMessage(payload, fallback = 'Failed to stage uploads.') {
@@ -4928,16 +5025,20 @@ function _setStagedUploadState(patch = {}) {
 
 function _syncStagedUploadUi() {
     const visible = _stagedUploadsVisibleForState();
+    const enabled = _stagedUploadsEnabledForState();
     const uploadState = state.portalUi.stagedUpload || {};
     const busy = Boolean(uploadState.busy);
     const progressPercent = Math.max(0, Math.min(100, Number(uploadState.progressPercent) || 0));
     if (els.stagedUploadShell) {
         els.stagedUploadShell.classList.toggle('hidden', !visible);
         els.stagedUploadShell.dataset.busy = busy ? 'true' : 'false';
+        els.stagedUploadShell.dataset.capabilityStatus = enabled ? 'available' : 'gated';
     }
     if (els.stagedUploadStatus) {
         if (!visible) {
             els.stagedUploadStatus.textContent = 'Upload a file set and the staged input directory will replace the current source path.';
+        } else if (!enabled) {
+            els.stagedUploadStatus.textContent = 'Staged upload controls are visible for this pipeline but gated for this portal cohort.';
         } else if (uploadState.error) {
             els.stagedUploadStatus.textContent = 'The last staged upload attempt failed. Fix the payload and try again.';
         } else if (busy) {
@@ -4949,22 +5050,22 @@ function _syncStagedUploadUi() {
         }
     }
     if (els.stagedUploadDropzone) {
-        els.stagedUploadDropzone.dataset.disabled = !visible || busy ? 'true' : 'false';
-        els.stagedUploadDropzone.classList.toggle('opacity-60', !visible || busy);
-        els.stagedUploadDropzone.classList.toggle('cursor-not-allowed', !visible || busy);
-        els.stagedUploadDropzone.setAttribute('aria-disabled', !visible || busy ? 'true' : 'false');
+        els.stagedUploadDropzone.dataset.disabled = !enabled || busy ? 'true' : 'false';
+        els.stagedUploadDropzone.classList.toggle('opacity-60', !enabled || busy);
+        els.stagedUploadDropzone.classList.toggle('cursor-not-allowed', !enabled || busy);
+        els.stagedUploadDropzone.setAttribute('aria-disabled', !enabled || busy ? 'true' : 'false');
     }
     if (els.stagedUploadPickFilesBtn) {
-        els.stagedUploadPickFilesBtn.disabled = !visible || busy;
+        els.stagedUploadPickFilesBtn.disabled = !enabled || busy;
     }
     if (els.stagedUploadPickFolderBtn) {
-        els.stagedUploadPickFolderBtn.disabled = !visible || busy;
+        els.stagedUploadPickFolderBtn.disabled = !enabled || busy;
     }
     if (els.stagedUploadFilesInput) {
-        els.stagedUploadFilesInput.disabled = !visible || busy;
+        els.stagedUploadFilesInput.disabled = !enabled || busy;
     }
     if (els.stagedUploadFolderInput) {
-        els.stagedUploadFolderInput.disabled = !visible || busy;
+        els.stagedUploadFolderInput.disabled = !enabled || busy;
     }
     if (els.stagedUploadProgressBar) {
         els.stagedUploadProgressBar.style.width = `${progressPercent}%`;
@@ -5602,7 +5703,7 @@ function _applyStagedUploadResult(result) {
 
 function _submitStagedUploadSelection(fileList) {
     if (_blockManagedUnavailableAction('stage uploads')) return;
-    if (!_stagedUploadsVisibleForState()) return;
+    if (!_stagedUploadsEnabledForState()) return;
     if (_isProtectedFamilySuppressed('uploads_staging')) {
         createToast('Staged uploads are paused until frontdoor configuration is repaired.', 'error');
         return;
@@ -11079,14 +11180,14 @@ if (els.heroExportBtn) {
 
 if (els.stagedUploadPickFilesBtn && els.stagedUploadFilesInput) {
     els.stagedUploadPickFilesBtn.addEventListener('click', () => {
-        if (_stagedUploadsVisibleForState() && !state.portalUi?.stagedUpload?.busy) {
+        if (_stagedUploadsEnabledForState() && !state.portalUi?.stagedUpload?.busy) {
             els.stagedUploadFilesInput.click();
         }
     });
 }
 if (els.stagedUploadPickFolderBtn && els.stagedUploadFolderInput) {
     els.stagedUploadPickFolderBtn.addEventListener('click', () => {
-        if (_stagedUploadsVisibleForState() && !state.portalUi?.stagedUpload?.busy) {
+        if (_stagedUploadsEnabledForState() && !state.portalUi?.stagedUpload?.busy) {
             els.stagedUploadFolderInput.click();
         }
     });
@@ -11105,17 +11206,17 @@ if (els.stagedUploadFolderInput) {
 }
 if (els.stagedUploadDropzone) {
     els.stagedUploadDropzone.addEventListener('dragover', (event) => {
-        if (!_stagedUploadsVisibleForState() || state.portalUi?.stagedUpload?.busy) return;
+        if (!_stagedUploadsEnabledForState() || state.portalUi?.stagedUpload?.busy) return;
         event.preventDefault();
     });
     els.stagedUploadDropzone.addEventListener('drop', (event) => {
-        if (!_stagedUploadsVisibleForState() || state.portalUi?.stagedUpload?.busy) return;
+        if (!_stagedUploadsEnabledForState() || state.portalUi?.stagedUpload?.busy) return;
         event.preventDefault();
         _submitStagedUploadSelection(event.dataTransfer?.files);
     });
     els.stagedUploadDropzone.addEventListener('keydown', (event) => {
         if (event.key !== 'Enter' && event.key !== ' ') return;
-        if (!_stagedUploadsVisibleForState() || state.portalUi?.stagedUpload?.busy) return;
+        if (!_stagedUploadsEnabledForState() || state.portalUi?.stagedUpload?.busy) return;
         event.preventDefault();
         if (els.stagedUploadFilesInput) {
             els.stagedUploadFilesInput.click();

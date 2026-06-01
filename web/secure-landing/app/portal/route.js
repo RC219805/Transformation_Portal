@@ -95,7 +95,7 @@ function renderManagedPortalRecoveryPage({ reason, message, loginHref }) {
           <div class="card card--login" data-ui="managed-recovery-card">
             <p class="eyebrow">Managed portal entry</p>
             <h1>${safeTitle}</h1>
-            <p class="lede">The managed boundary stays closed until the blocking condition is resolved.</p>
+            <p class="lede">The managed boundary stays closed until the blocking condition is resolved; dispatch, artifacts, archive gates, and optional runtime controls remain fail-closed.</p>
             <div class="login-entry-state">
               <article class="login-status-card login-status-card--full" data-state="${recoveryTone}">
                 <p class="login-status-card-kicker">Current state</p>
@@ -109,6 +109,10 @@ function renderManagedPortalRecoveryPage({ reason, message, loginHref }) {
               <p class="login-next-step-detail">${safeNextStep}</p>
             </div>
             <div class="login-status-stack">
+              <div class="login-recovery-card" data-ui="managed-recovery-capabilities" data-state="${safeReason}">
+                <p class="login-recovery-card-title">Capability posture</p>
+                <p class="login-recovery-card-detail">Queue, artifact viewer, staged uploads, FastVLM sidecars, archive gates, and run-card proof controls stay read-only or unavailable until managed recovery succeeds.</p>
+              </div>
               <div class="login-recovery-card" data-ui="managed-recovery-guidance" data-state="${safeReason}">
                 <p class="login-recovery-card-title">Managed boundary stays fail-closed</p>
                 <p class="login-recovery-card-detail">Browser-side API key entry remains unavailable in managed mode while portal recovery is pending.</p>

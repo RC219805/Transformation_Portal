@@ -9,9 +9,9 @@ const NAV_LINKS = Object.freeze([
 ]);
 
 const HERO_SIGNALS = Object.freeze([
-  "Offline verification report included",
-  "Rights-aware approval gates",
-  "Content Credentials-compatible export when enabled"
+  "Governed dispatch and review",
+  "Archive gates and run-card proof",
+  "Optional runtimes surfaced when enabled"
 ]);
 
 const HERO_HIGHLIGHTS = Object.freeze([
@@ -50,7 +50,7 @@ const HERO_PATHS = Object.freeze([
   {
     kicker: "Operator Access",
     title: "Enter the managed console",
-    detail: "Resume build, operate, and review work inside the governed operator shell.",
+    detail: "Resume governed dispatch, queue operation, artifact review, archive gates, and optional runtime work inside the operator shell.",
     href: "/login",
     dataUi: "homepage-access-link"
   }
@@ -499,7 +499,7 @@ export function renderHomepage({ rumScript = "", scriptNonce = null } = {}) {
           <p class="section-kicker">Dynamic Neural Access</p>
           <h1 id="hero-title" data-ui="homepage-hero-title">Make premium media verifiable before it ships.</h1>
           <p class="hero-lede" data-ui="homepage-hero-lede">
-            Verifier-backed release proof for premium media. Keep provenance, rights posture, and operator history attached before anything leaves the workflow.
+            Verifier-backed release proof for premium media. Managed access opens a governed console for dispatch, queue operation, artifact review, archive gates, and optional runtimes when the current codebase enables them.
           </p>
           <div class="hero-actions" data-ui="homepage-hero-actions">
             <a class="site-cta" href="/login" data-ui="homepage-primary-cta">Operator Access</a>
@@ -507,7 +507,7 @@ export function renderHomepage({ rumScript = "", scriptNonce = null } = {}) {
             <a class="hero-inline-link" href="#workflow" data-ui="homepage-learn-link">Explore workflow</a>
           </div>
           <p class="hero-access-note" data-ui="homepage-hero-note">
-            Public proof stays visible. Managed entry opens only when operator work needs to continue.
+            Public proof stays visible. Managed entry opens only for code-backed operator work and keeps gated runtimes disabled until their rollout, license, or runtime prerequisites are satisfied.
           </p>
           <div class="entry-rail" data-ui="homepage-entry-rail">
             <article class="entry-card entry-card--proofband" data-state="public-proof">
@@ -527,7 +527,11 @@ export function renderHomepage({ rumScript = "", scriptNonce = null } = {}) {
                 </div>
                 <div class="entry-card__meta-item">
                   <p class="entry-card__meta-label">Operator console</p>
-                  <p class="entry-card__meta-value">Build, operate, and review continue inside the governed shell.</p>
+                  <p class="entry-card__meta-value">Build, operate, review, and archive-gate work continue inside the governed shell.</p>
+                </div>
+                <div class="entry-card__meta-item">
+                  <p class="entry-card__meta-label">Optional runtimes</p>
+                  <p class="entry-card__meta-value">Lux Depth, SAM2, reconstruction, RAW ingest, and FastVLM stay visible only as real controls and remain gated when unavailable.</p>
                 </div>
               </div>
             </article>
