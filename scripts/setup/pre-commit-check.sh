@@ -70,6 +70,10 @@ ALLOWED_ROOT_PATTERNS=(
     '^\..*rc$'
 )
 
+BLOCKED_PATH_PREFIXES=(
+    "productivity/"
+)
+
 usage() {
     cat <<EOF
 Usage: $0 [--staged|--all] [--legacy-allowlist PATH]
@@ -134,6 +138,19 @@ is_allowed_in_root() {
     return 1
 }
 
+is_blocked_repo_path() {
+    local file="$1"
+    local prefix
+
+    for prefix in "${BLOCKED_PATH_PREFIXES[@]}"; do
+        if [[ "$file" == "$prefix"* ]]; then
+            return 0
+        fi
+    done
+
+    return 1
+}
+
 is_legacy_root_file() {
     local file="$1"
     local legacy_file
@@ -157,6 +174,10 @@ suggest_destination() {
     ext="${basename##*.}"
 
     if [[ "$basename" =~ \.md$ ]]; then
+        if [[ "$file" == productivity/* ]]; then
+            echo "docs/historical/ or another approved docs archive"
+            return
+        fi
         if [[ "$basename" =~ ^(PR_|PUSH_|MERGE_|REVIEW_|BRANCH_) ]]; then
             echo "docs/pr_archive/"
         elif [[ "$basename" =~ (POLICY|GOVERNANCE|ORGANIZATION|STANDARD|README|GUIDE|REFERENCE|CHECKLIST|QUICK_REF|QUICKSTART|BEST_PRACTICES) ]]; then
@@ -173,6 +194,10 @@ suggest_destination() {
     fi
 
     if [[ "$basename" =~ \.(sh|py)$ ]]; then
+        if [[ "$file" == productivity/* ]]; then
+            echo "archive/scripts/ or scripts/"
+            return
+        fi
         echo "scripts/"
         return
     fi
@@ -202,6 +227,10 @@ collect_candidates() {
 
     if [[ "$MODE" == "all" ]]; then
         while IFS= read -r -d '' file; do
+            if is_blocked_repo_path "$file"; then
+                CANDIDATES+=("$file")
+                continue
+            fi
             if [[ "$file" == */* ]]; then
                 continue
             fi
@@ -211,6 +240,10 @@ collect_candidates() {
     fi
 
     while IFS= read -r -d '' file; do
+        if is_blocked_repo_path "$file"; then
+            CANDIDATES+=("$file")
+            continue
+        fi
         if [[ "$file" == */* ]]; then
             continue
         fi
@@ -235,6 +268,10 @@ main() {
     fi
 
     for file in "${CANDIDATES[@]}"; do
+        if is_blocked_repo_path "$file"; then
+            misplaced_files+=("$file")
+            continue
+        fi
         if is_allowed_in_root "$file"; then
             continue
         fi

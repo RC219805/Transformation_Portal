@@ -129,6 +129,33 @@ Valuable reference for understanding PBR fundamentals, but production code uses 
 
 ---
 
+### 4. `productivity/ci_monitor.py`
+
+**Archive Date:** 2026-06-01
+**Original Location:** `productivity/scripts/ci_monitor.py`
+**Status:** Retired placeholder tooling
+**Replacement:** Current CI status is documented in
+`docs/ci/WORKFLOW_MATRIX.md` and `.github/workflows/README.md`
+
+#### What It Did
+Generated a local text dashboard from hard-coded example metrics for workflow
+status, cache hit rate, test counts, and build time.
+
+#### Why Archived
+- **Placeholder Data:** The script did not query GitHub Actions or any live CI
+  source.
+- **Misleading Root Bundle:** It lived under the retired root `productivity/`
+  bundle, which is now historical evidence rather than current tooling.
+- **No Active Usage:** No maintained Make target, workflow, or validation lane
+  depends on it.
+
+#### Historical Context
+Part of a November 2025 productivity-suite documentation bundle. The Markdown
+evidence for that bundle is preserved under
+`docs/historical/productivity-suite-2025/`.
+
+---
+
 ## Migration Path
 
 If you need functionality from archived code:

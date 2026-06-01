@@ -1,5 +1,12 @@
 # 🚀 Transformation Portal - Productivity Suite
 
+> Historical note: This document is preserved as point-in-time November 2025
+> productivity-suite evidence. It is not current operator guidance. Start from
+> the [Documentation Map](../../governance/DOCUMENTATION_MAP.md), the
+> [CI Workflow Matrix](../../ci/WORKFLOW_MATRIX.md), and the
+> [GitHub workflow guide](../../../.github/workflows/README.md) for maintained
+> instructions.
+
 **Phases 1 & 2 Complete** | November 11, 2025
 
 ---
@@ -7,7 +14,8 @@
 ## 📦 What's Included
 
 ### Phase 1: Developer Experience Quick Wins ✅
-**Location:** `/Users/rc/` (home directory)
+**Historical source location:** `/Users/rc/` (home directory in the original
+2025 notes; not current repository guidance)
 - Pre-commit hooks (Black, Ruff, Prettier, security)
 - Quick start script (15-minute onboarding)
 - IDE configuration (VS Code)
@@ -17,52 +25,24 @@
 **Impact:** 87% faster onboarding, 90% issues caught pre-commit
 
 ### Phase 2: Enhanced CI/CD Pipeline ✅
-**Location:** This repository (`/Users/rc/Projects/Transformation_Portal`)
+**Historical source location:** This repository (`/Users/rc/Projects/Transformation_Portal`
+in the original 2025 notes)
 - Enhanced CI workflow (40-60% faster builds)
 - Automated dependency updates (weekly)
 - Performance monitoring (regression detection)
 - CI metrics dashboard
 
-**Status:** Ready to deploy
+**Historical status:** Ready to deploy in the original 2025 bundle
 **Impact:** 40-60% faster builds, 80%+ cache hit rate
 
 ---
 
-## 🚀 Quick Start
+## Historical Quick Start
 
-### Phase 1 (Already Deployed)
-Phase 1 was deployed to your home directory (`/Users/rc/`). To use in this project:
-
-```bash
-# Copy Phase 1 files to this repository
-cp ~/.pre-commit-config.yaml .
-cp ~/.secrets.baseline .
-
-# Install pre-commit
-pip install pre-commit
-pre-commit install
-
-# Test it
-git add .
-git commit -m "test: verify pre-commit hooks"
-```
-
-### Phase 2 (Deploy Now)
-```bash
-# Review what will be deployed
-ls -la .github/workflows/
-python3 productivity/scripts/ci_monitor.py
-
-# Deploy to GitHub
-git add .github/workflows/ productivity/
-git commit -m "feat: Phase 2 CI/CD enhancements - 40-60% faster builds"
-git push origin main
-
-# Monitor first run
-# Go to: https://github.com/RC219805/Transformation_Portal/actions
-# Watch for 6+ parallel jobs
-# Cache hit rate should be 80%+ on 2nd run
-```
+The original quick-start section instructed copying home-directory files from
+`/Users/rc`, staging `productivity/`, and pushing directly to `main`. Those
+steps are intentionally not repeated as current commands. Use the maintained
+setup, contribution, and workflow guidance linked in the historical note above.
 
 ---
 
@@ -107,19 +87,19 @@ git push origin main
 ```
 Transformation_Portal/
 ├── .github/workflows/
-│   ├── ci-enhanced.yml          # Phase 2: Main CI pipeline
+│   ├── ci-enhanced.yml          # Historical note: not present in the current checkout
 │   ├── dependency-update.yml    # Phase 2: Auto dependency updates
 │   ├── performance-monitor.yml  # Phase 2: Performance regression
 │   ├── build.yml                # Original (can keep for comparison)
 │   └── quality-gate.yml         # Original quality checks
 │
-├── productivity/
-│   ├── PHASE2_SUMMARY.md        # Phase 2 implementation guide
-│   ├── scripts/
-│   │   └── ci_monitor.py        # Real-time CI/CD dashboard
-│   └── docs/                    # Additional documentation
+├── docs/historical/productivity-suite-2025/
+│   ├── PHASE2_SUMMARY.md        # Historical Phase 2 implementation guide
+│   └── PRODUCTIVITY_SUITE_OVERVIEW.md
+├── archive/scripts/productivity/
+│   └── ci_monitor.py            # Retired placeholder dashboard script
 │
-└── (Phase 1 files in /Users/rc/)
+└── (Phase 1 files in /Users/rc/ per original 2025 notes)
     ├── .pre-commit-config.yaml   # Pre-commit hook config
     ├── .secrets.baseline         # Security baseline
     └── productivity/             # Phase 1 tools & docs
@@ -142,12 +122,9 @@ OPENAI_API_KEY      # For Phase 3 AI features
 
 ### Workflow Customization
 
-**Adjust cache version** (bust all caches):
-```yaml
-# .github/workflows/ci-enhanced.yml
-env:
-  CACHE_VERSION: v3  # Increment to reset
-```
+**Historical cache note:** The original notes referenced
+`.github/workflows/ci-enhanced.yml`, which is not present in the current
+checkout. Use the maintained workflow inventory before changing CI behavior.
 
 **Change dependency update schedule**:
 ```yaml
@@ -168,25 +145,18 @@ on:
 ## 📚 Documentation
 
 ### Phase 2 Guides
-- **Implementation:** `productivity/PHASE2_SUMMARY.md`
+- **Implementation:** `docs/historical/productivity-suite-2025/PHASE2_SUMMARY.md`
 - **Masterplan:** `~/Desktop/29e99de2b75a4699815d7671e2f3dab1_TRANSFORMATION_PORTAL_PRODUCTIVITY_MASTERPLAN.md`
 
-### Phase 1 Guides (in `/Users/rc/`)
+### Phase 1 Guides (historical home-directory notes)
 - **Quick Start:** `~/productivity/QUICK_START_GUIDE.md`
 - **Summary:** `~/productivity/PHASE1_SUMMARY.md`
 - **Setup:** `~/productivity/setup/README.md`
 
 ### Tools & Scripts
-```bash
-# View CI metrics
-python3 productivity/scripts/ci_monitor.py
-
-# Save metrics to file
-python3 productivity/scripts/ci_monitor.py --save
-
-# Run pre-commit manually
-pre-commit run --all-files
-```
+The old CI monitor script was moved to
+`archive/scripts/productivity/ci_monitor.py`. It reports placeholder metrics and
+is not active CI tooling.
 
 ---
 
@@ -235,7 +205,7 @@ SKIP=mypy git commit -m "message"
 
 ## 🎉 Success Criteria
 
-After deployment, verify:
+The original bundle listed these post-deployment checks:
 
 ✅ **Workflows Running**
 - Go to Actions tab
@@ -253,8 +223,8 @@ After deployment, verify:
 - Security scans on every PR
 
 ✅ **Metrics Available**
-- Run `python3 productivity/scripts/ci_monitor.py`
-- See dashboard with current stats
+- Historical note: the former `productivity/scripts/ci_monitor.py` script now
+  lives under `archive/scripts/productivity/` and does not provide live metrics.
 
 ---
 
@@ -300,14 +270,11 @@ Following: Transformation Portal Productivity Masterplan
 - ✅ CI/CD pipeline enhancement (Phase 2)
 - 🔜 AI-powered automation (Phase 3)
 
-**Your repository is now equipped with world-class productivity tooling!** 🚀
+**Historical status claim from the 2025 bundle.** Current workflow status is
+owned by the maintained CI docs linked at the top of this archive.
 
 ---
 
-**Ready to deploy Phase 2? Run:**
-```bash
-cd /Users/rc/Projects/Transformation_Portal
-git add .github/workflows/ productivity/
-git commit -m "feat: Phase 2 CI/CD enhancements - 40-60% faster builds"
-git push origin main
-```
+**Historical deployment note:** The original direct-push deployment commands
+are intentionally omitted. Follow the current contribution and CI governance
+docs before changing workflows.

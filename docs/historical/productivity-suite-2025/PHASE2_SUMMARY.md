@@ -1,5 +1,12 @@
 # Phase 2: Enhanced CI/CD Pipeline - Implementation Summary
 
+> Historical note: This document is preserved as point-in-time November 2025
+> productivity-suite evidence. It is not current operator guidance. The
+> referenced `ci-enhanced.yml` workflow is not present in the current checkout.
+> Use the [CI Workflow Matrix](../../ci/WORKFLOW_MATRIX.md) and
+> [GitHub workflow guide](../../../.github/workflows/README.md) for maintained
+> CI guidance.
+
 **Status:** ✅ Complete and Ready to Deploy
 **Implementation Date:** November 11, 2025
 **Expected Impact:** 40-60% faster builds, 80%+ cache hit rate
@@ -8,7 +15,7 @@
 
 ## 🎯 What Was Delivered
 
-### 1. **Enhanced CI Workflow** (`.github/workflows/ci-enhanced.yml`)
+### 1. **Enhanced CI Workflow** (`.github/workflows/ci-enhanced.yml`, historical only)
 Complete rewrite of CI pipeline with advanced optimizations:
 
 **Key Features:**
@@ -56,7 +63,7 @@ Automated performance regression testing:
 - Memory leaks
 - Performance regressions
 
-### 4. **CI Monitoring Dashboard** (`productivity/scripts/ci_monitor.py`)
+### 4. **CI Monitoring Dashboard** (`archive/scripts/productivity/ci_monitor.py`, retired)
 Real-time CI/CD metrics and reporting:
 
 **Metrics Tracked:**
@@ -67,10 +74,8 @@ Real-time CI/CD metrics and reporting:
 - Coverage trends
 
 **Usage:**
-```bash
-python productivity/scripts/ci_monitor.py
-python productivity/scripts/ci_monitor.py --save
-```
+The retired script reports placeholder metrics only and is not active CI
+tooling.
 
 ---
 
@@ -90,45 +95,20 @@ python productivity/scripts/ci_monitor.py --save
 ## 🚀 Deployment Instructions
 
 ### Step 1: Review New Workflows
-```bash
-cd /Users/rc/Projects/Transformation_Portal
-ls -la .github/workflows/
-```
 
-**New files:**
-- `ci-enhanced.yml` - Main CI pipeline
-- `dependency-update.yml` - Auto dependency updates
-- `performance-monitor.yml` - Performance regression testing
+Historical note: the original notes used `/Users/rc/Projects/Transformation_Portal`
+and listed `ci-enhanced.yml`. That workflow is not present in the current
+checkout. Use the maintained workflow inventory before changing CI behavior.
 
 ### Step 2: Test Locally (Optional)
-```bash
-# Install act (GitHub Actions local runner)
-brew install act
-
-# Test the workflow
-act -l  # List all jobs
-act push -W .github/workflows/ci-enhanced.yml  # Run locally
-```
+The original local-testing example targeted `ci-enhanced.yml`. It is omitted
+because that workflow is not present in the current checkout.
 
 ### Step 3: Deploy to GitHub
-```bash
-git add .github/workflows/ productivity/
-git commit -m "feat: Phase 2 CI/CD enhancements - 40-60% faster builds
 
-- Add parallel execution for lint, test, security
-- Implement smart caching for pip, models, dependencies
-- Add automated dependency updates (weekly)
-- Add performance regression monitoring
-- Add CI monitoring dashboard
-
-Expected impact:
-- 40-60% faster build times
-- 80%+ cache hit rate
-- Automated security scanning
-- Proactive performance monitoring
-"
-git push origin main
-```
+The original direct-push deployment commands are intentionally omitted here.
+Follow current contribution, branch, and CI governance guidance for workflow
+changes.
 
 ### Step 4: Configure GitHub Secrets (Optional)
 For enhanced features, add these secrets in GitHub Settings > Secrets:
@@ -141,13 +121,9 @@ For enhanced features, add these secrets in GitHub Settings > Secrets:
 ## 🎓 Usage Guide
 
 ### Monitor CI/CD Performance
-```bash
-# View real-time dashboard
-python productivity/scripts/ci_monitor.py
-
-# Save metrics to file
-python productivity/scripts/ci_monitor.py --save
-```
+The former `productivity/scripts/ci_monitor.py` script now lives at
+`archive/scripts/productivity/ci_monitor.py` and is retained only as historical
+placeholder tooling.
 
 ### Trigger Manual Workflows
 ```bash
@@ -159,7 +135,8 @@ gh workflow run performance-monitor.yml
 ```
 
 ### View Workflow Insights
-Navigate to: **Actions > CI Enhanced > View Insights**
+Historical note: the original `CI Enhanced` workflow is not present in the
+current checkout.
 
 See:
 - Average build times
@@ -172,11 +149,8 @@ See:
 ## 🔧 Customization
 
 ### Adjust Cache Strategy
-Edit `.github/workflows/ci-enhanced.yml`:
-```yaml
-env:
-  CACHE_VERSION: v3  # Increment to bust all caches
-```
+The original notes referenced `.github/workflows/ci-enhanced.yml`; use the
+maintained workflow inventory before changing cache strategy.
 
 ### Change Test Parallelism
 ```yaml
@@ -232,10 +206,8 @@ def test_image_processing_speed(benchmark):
 ```
 
 ### Tests Timing Out
-```yaml
-# Increase timeout in ci-enhanced.yml
-timeout-minutes: 45  # Default is 30
-```
+Historical note: timeout advice for `ci-enhanced.yml` does not apply to the
+current checkout unless that workflow is intentionally reintroduced.
 
 ### Performance Tests Failing
 ```bash
@@ -269,15 +241,15 @@ timeout-minutes: 45  # Default is 30
 
 ## 📞 Support
 
-- **Phase 1 Guide**: `productivity/QUICK_START_GUIDE.md`
+- **Phase 1 Guide**: historical home-directory notes, not present in this checkout
 - **Masterplan**: `Desktop/29e99de2b75a4699815d7671e2f3dab1_TRANSFORMATION_PORTAL_PRODUCTIVITY_MASTERPLAN.md`
-- **CI Monitor**: `python productivity/scripts/ci_monitor.py`
+- **CI Monitor**: `archive/scripts/productivity/ci_monitor.py` (retired placeholder)
 
 ---
 
 ## 🎉 Success Metrics
 
-After deployment, monitor these KPIs:
+The original bundle listed these post-deployment KPIs:
 
 ✅ **Build Time** - Should be 12-15 minutes (down from 20-25)
 ✅ **Cache Hit Rate** - Should be 80%+ after 2nd run
@@ -285,4 +257,5 @@ After deployment, monitor these KPIs:
 ✅ **Weekly Updates** - Should create PRs every Monday
 ✅ **Performance Alerts** - Should catch >10% regressions
 
-**Phase 2 is production-ready. Deploy and enjoy 40-60% faster builds!** 🚀
+**Historical status claim from the 2025 bundle.** Current CI status is owned by
+the maintained workflow docs linked at the top of this archive.
