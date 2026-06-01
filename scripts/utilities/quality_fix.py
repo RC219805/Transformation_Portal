@@ -41,8 +41,6 @@ def main():
         "ultimate_quality_pipeline.py",
         "verify_tiff_implementation.py",
         "convert_all_tiffs_to_16bit.py",
-        "projects/750_picacho_lane/batch_process_all.py",
-        "projects/750_picacho_lane/process_pool.py",
         "tests/test_unified_luxury_pipeline.py",
         "examples/unified_luxury_pipeline_examples.py",
         ".backup_local/conservative_enhance_greatroom_final.py",
