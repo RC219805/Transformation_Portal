@@ -1,5 +1,11 @@
 # Smart Issue Management
 
+> Historical note: This document is preserved as point-in-time November 2025
+> productivity-suite evidence. It is not current operator guidance. Use the
+> [CI Workflow Matrix](../../ci/WORKFLOW_MATRIX.md) and
+> [GitHub workflow guide](../../../.github/workflows/README.md) for maintained
+> workflow status.
+
 **Status:** ✅ DEPLOYED
 **Date:** November 11, 2025
 **Model:** GPT-4o-mini (cost-optimized)

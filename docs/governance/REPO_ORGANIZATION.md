@@ -164,6 +164,9 @@ Only these files should remain in the repository root:
 ### Root Directory Limits
 
 The repository root should remain minimal and operational. Documentation files that are not canonical root documents must live under `docs/` in approved subdirectories.
+Retired root-level bundles must not be recreated. The former `productivity/`
+bundle is archived under `docs/historical/productivity-suite-2025/`, with its
+retired placeholder script under `archive/scripts/productivity/`.
 
 ## Organization Steps
 
@@ -327,6 +330,7 @@ The organization system uses these rules to classify files:
 - Automation: → `scripts/automation/`
 - Utilities: → `scripts/utilities/`
 - Pipeline scripts: keep in project root or dedicated `scripts/pipelines/` if applicable
+- Retired or superseded scripts: → `archive/scripts/`
 
 ### Data Files
 

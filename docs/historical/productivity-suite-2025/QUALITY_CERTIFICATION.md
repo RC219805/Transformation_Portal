@@ -1,5 +1,10 @@
 # ✅ PHASE 2 QUALITY CERTIFICATION
 
+> Historical note: This document is preserved as point-in-time November 2025
+> productivity-suite evidence. It is not current operator guidance. Several
+> referenced files, including `ci-enhanced.yml`, are historical claims from the
+> original bundle rather than maintained workflow inventory.
+
 **Project:** Transformation Portal Productivity Suite - Phase 2
 **Validation Date:** November 11, 2025, 06:22 UTC
 **Quality Score:** 100%

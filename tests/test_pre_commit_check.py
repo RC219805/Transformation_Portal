@@ -87,3 +87,32 @@ def test_cloudflare_workers_build_root_shim_files_are_allowed(tmp_path: Path) ->
     result = _run(["bash", "scripts/setup/pre-commit-check.sh", "--staged"], repo_root)
 
     assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_productivity_root_bundle_paths_are_rejected(tmp_path: Path) -> None:
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+    _init_repo(repo_root)
+    _copy_repo_script(repo_root)
+
+    _write(repo_root / "productivity" / "README.md", "# old bundle\n")
+    _write(repo_root / "productivity" / "scripts" / "ci_monitor.py", "print('placeholder')\n")
+    add_result = _run(
+        [
+            "git",
+            "add",
+            "productivity/README.md",
+            "productivity/scripts/ci_monitor.py",
+            "scripts/setup/pre-commit-check.sh",
+        ],
+        repo_root,
+    )
+    assert add_result.returncode == 0, add_result.stdout + add_result.stderr
+
+    result = _run(["bash", "scripts/setup/pre-commit-check.sh", "--staged"], repo_root)
+
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "productivity/README.md" in result.stdout
+    assert "productivity/scripts/ci_monitor.py" in result.stdout
+    assert "docs/historical/ or another approved docs archive" in result.stdout
+    assert "archive/scripts/ or scripts/" in result.stdout
