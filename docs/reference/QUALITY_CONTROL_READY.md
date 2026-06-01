@@ -1,5 +1,12 @@
 # Quality Control System - Ready for Main Branch
 
+> **Historical quality-control snapshot**
+>
+> This November 2025 snapshot is retained as point-in-time evidence. Historical
+> `docs/projects/750_picacho_lane/` references are not current operator
+> guidance; current navigation starts at
+> [Documentation Map](../governance/DOCUMENTATION_MAP.md).
+
 ## Summary
 Comprehensive quality control system implemented to prevent CI/CD failures and improve code quality.
 

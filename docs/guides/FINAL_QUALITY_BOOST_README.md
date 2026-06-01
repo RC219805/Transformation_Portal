@@ -1,5 +1,12 @@
 # Final Quality Boost System - 750 Picacho Lane
 
+> **Historical 750 Picacho project record**
+>
+> This November 2025 finishing-pass note is retained as point-in-time evidence.
+> Paths under `projects/750_picacho_lane/` are historical references only;
+> current operator guidance starts at
+> [Documentation Map](../governance/DOCUMENTATION_MAP.md).
+
 ## Overview
 
 Ultra-precision finishing pass designed to maximize image quality scores through targeted saturation, dynamic range, and brightness corrections. Specifically engineered for luxury architectural rendering post-production.

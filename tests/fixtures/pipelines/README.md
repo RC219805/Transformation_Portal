@@ -19,6 +19,9 @@ tests/fixtures/pipelines/
         └── 750Picacho_GreatRoom_UltraQuality.tif
 ```
 
+The `750_picacho_lane` fixture directory is a legacy test path retained for
+stable fixture references. Use `750_picacho` for new repository paths.
+
 ## Fixture Characteristics
 
 ### Technical Specifications

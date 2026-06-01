@@ -1,5 +1,12 @@
 # Architectural Context Integration - Complete Implementation
 
+> **Historical 750 Picacho project record**
+>
+> This November 2025 integration note is retained as point-in-time evidence.
+> `750_picacho_lane` identifiers in this document are historical project
+> metadata, not current repository path guidance. Current architecture
+> navigation starts at [Documentation Map](../governance/DOCUMENTATION_MAP.md).
+
 **Date**: November 7, 2025
 **Project**: 750 Picacho Lane - Context-Aware Rendering System
 **Status**: ✅ PRODUCTION READY

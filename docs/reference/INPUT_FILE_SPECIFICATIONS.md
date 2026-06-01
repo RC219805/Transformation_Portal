@@ -1,5 +1,11 @@
 # Transformation Portal - Input File Quality Specifications
 
+> **Historical 750 Picacho project record**
+>
+> This November 2025 analysis is retained as point-in-time evidence. Paths under
+> `projects/750_picacho_lane/` are historical references only; current operator
+> guidance starts at [Documentation Map](../governance/DOCUMENTATION_MAP.md).
+
 ## Executive Summary
 
 Based on comprehensive testing of 6 different source files for the 750 Picacho Lane project, we have determined the optimal input file specifications for the Transformation Portal pipeline.

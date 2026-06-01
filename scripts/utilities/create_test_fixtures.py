@@ -54,7 +54,7 @@ def create_synthetic_tiff(output_path: Path, width: int = 800, height: int = 600
 
 
 def main():
-    """Create test fixtures for 750_picacho_lane pipeline tests."""
+    """Create synthetic fixtures in the legacy 750_picacho_lane fixture path."""
     fixtures_dir = Path(__file__).parent.parent.parent / "tests" / "fixtures" / "pipelines" / "750_picacho_lane" / "input"
 
     # Create small fixtures (800x600 ~ 1MB each)
