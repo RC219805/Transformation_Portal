@@ -43,6 +43,7 @@ for `docs/cli`.
 | TODO governance | [TODO Inventory](analysis/TODO_INVENTORY.md), [TODO Action Plan](analysis/TODO_ACTION_PLAN.md), [TODO Quick Reference](architecture/TODO_INVENTORY_QUICK_REF.md), [TODO Priority Schema](governance/todo_priority_schema.yaml) | Current scanner-governed baseline: 24 governed `NotImplementedError` items, 0 ungoverned TODOs, snapshot refreshed May 11, 2026. |
 | Archive gates | [Archive Machine Contract](api/ARCHIVE_MACHINE_MODE_CONTRACT.md), [2026-04-27 Archive Gates Audit](governance/audit/archive-gates-2026-04-27.md) | Gates A/B/C are documented with the April 27 readiness audit and normalized JSON evidence. |
 | APEX / Materials | [APEX Governance Status](apex/GOVERNANCE_STATUS.md), [APEX Workflow Design](architecture/APEX_WORKFLOW_DESIGN.md), [APEX Model Family Characterization](validation/APEX_MODEL_FAMILY_CHARACTERIZATION_PROTOCOL.md) | Recent merges added offline model-family characterization, failure-code surfacing, confidence-only pixel-op passthrough, V2 fallback, and SAM2 tile-merge regression coverage. |
+| Schema contracts | [Schema Contracts](../schemas/README.md), [Metadata Schema](schemas/METADATA_SCHEMA.md) | Root `schemas/` holds live machine-readable runtime contracts/profiles; `docs/schemas/` holds published schema contracts and schema documentation. |
 | CLI references | [CLI Index](cli/README.md), [CLI Reference](cli/CLI_REFERENCE.md), [Lux Depth V3 CLI Guide](cli/LUX_DEPTH_V3_CLI_GUIDE.md), [PBR CLI Testing Guide](cli/PBR_CLI_TESTING_GUIDE.md) | Maintained CLI docs use repo-governed `.venv` and Make targets; old PBR coverage/checklist and CLI v1.3 notes are historical evidence. |
 | Advisory captioning | [FastVLM Runtime](runtimes/fastvlm.md) | Optional subprocess-isolated sidecars only; captions are advisory and never satisfy APEX or Materials V3 gates. |
 | Portal UX/UI planning | [Portal UX/UI Status Snapshot](architecture/DNA_UX_UI_STRATEGY_REBASELINE_2026-04-08.md) | Current planning context through #1721; status snapshot only, not a next-PR selector. |
@@ -95,4 +96,4 @@ make check-doc-heading-links
 python3 scripts/governance/check_docs_structure.py --all
 ```
 
-**Last Updated:** 2026-05-15
+**Last Updated:** 2026-06-01

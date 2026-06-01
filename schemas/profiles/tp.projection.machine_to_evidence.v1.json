@@ -1,5 +1,4 @@
 {
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
   "schema": "tp.projection.machine_to_evidence.v1",
   "description": "Projection profile for deriving reproducible evidence hashes from tp.meta.machine.v1 envelopes.",
   "source_schema": "tp.meta.machine.v1",
