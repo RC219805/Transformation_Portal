@@ -1,10 +1,10 @@
 [MASTER]
 ignore=build,dist,.venv,.eggs
 ignore-paths=
-    ^tools/deprecated/.*$,
-    ^src/transformation_portal/.*$,
-    ^src/luxury_tiff_batch_processor/.*$,
-    ^scripts/.*$
+    ^tools/deprecated(?:/.*)?$,
+    ^src/transformation_portal(?:/.*)?$,
+    ^src/luxury_tiff_batch_processor(?:/.*)?$,
+    ^scripts(?:/.*)?$
 jobs=1
 persistent=no
 

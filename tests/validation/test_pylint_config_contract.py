@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import configparser
+import re
 import tomllib
 from pathlib import Path
 
@@ -44,11 +45,28 @@ def test_pylintrc_path_exclusions_use_ignore_paths() -> None:
 
     assert all("/" not in ignored_name for ignored_name in ignored_names)
     assert ignored_paths == {
-        "^tools/deprecated/.*$",
-        "^src/transformation_portal/.*$",
-        "^src/luxury_tiff_batch_processor/.*$",
-        "^scripts/.*$",
+        "^tools/deprecated(?:/.*)?$",
+        "^src/transformation_portal(?:/.*)?$",
+        "^src/luxury_tiff_batch_processor(?:/.*)?$",
+        "^scripts(?:/.*)?$",
     }
+
+    expected_matches = {
+        "^tools/deprecated(?:/.*)?$": ("tools/deprecated", "tools/deprecated/legacy.py"),
+        "^src/transformation_portal(?:/.*)?$": (
+            "src/transformation_portal",
+            "src/transformation_portal/__init__.py",
+        ),
+        "^src/luxury_tiff_batch_processor(?:/.*)?$": (
+            "src/luxury_tiff_batch_processor",
+            "src/luxury_tiff_batch_processor/__init__.py",
+        ),
+        "^scripts(?:/.*)?$": ("scripts", "scripts/lint_runner.sh"),
+    }
+    for pattern, excluded_targets in expected_matches.items():
+        compiled = re.compile(pattern)
+        for excluded_target in excluded_targets:
+            assert compiled.match(excluded_target)
 
 
 def test_pylintrc_keeps_unused_import_signal_enabled() -> None:
