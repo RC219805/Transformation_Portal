@@ -166,7 +166,7 @@ Place work in the right zone.
 | `docs/` | Architecture, contracts, governance, troubleshooting, guides | Update whenever behavior or workflow changes |
 | `.github/agents/` | Live custom-agent profiles and support docs | Keep aligned with `docs/architecture/agent_governance.md`, `docs/guides/CUSTOM_AGENT_GUIDE.md`, and `tests/test_custom_agent_config.py` |
 
-Additional repo areas such as `assets/`, `textures/`, `archive/`, `artifacts/`, `data/`, `dashboard/`, and project-specific directories are first-class parts of the repository. Do not treat them as disposable clutter.
+Additional repo areas such as `assets/`, `archive/`, `artifacts/`, `data/`, `public/`, and project-specific records under `assets/projects/` or `docs/projects/` are first-class parts of the repository. Root `textures/`, `dashboard/`, `projects/`, `linear_ingest_demo/`, `test_sky_fix/`, and `data/luts/` are retired roots; do not recreate them.
 
 Custom-agent surface:
 

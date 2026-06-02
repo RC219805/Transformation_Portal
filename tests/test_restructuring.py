@@ -45,6 +45,10 @@ def test_asset_paths_exist():
     # Check brand assets
     assert (repo_root / "assets" / "brand" / "lantern_logo").is_dir()
 
+    # Check material texture assets
+    assert (repo_root / "assets" / "textures" / "board_materials").is_dir()
+    assert not (repo_root / "textures").exists()
+
     # Check projects
     assert (repo_root / "assets" / "projects").is_dir()
 

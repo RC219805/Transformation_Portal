@@ -56,11 +56,12 @@ Transformation_Portal/
 │   │   ├── film_emulation/     # Film stock emulations
 │   │   ├── location_aesthetic/ # Location-specific profiles
 │   │   └── material_response/  # Material Response LUTs
+│   ├── textures/               # Material texture maps
+│   │   └── board_materials/    # MBAR board-material texture plates
 │   ├── images/                 # Sample and reference images
 │   ├── videos/                 # Sample videos
 │   ├── renders/                # Sample renders
-│   ├── models/                 # 3D models and textures
-│   └── textures/               # Texture maps
+│   └── models/                 # 3D models
 ├── config/                     # Configuration files
 │   ├── presets/                # Processing presets (YAML)
 │   └── profiles/               # User profiles
@@ -168,6 +169,15 @@ Retired root-level bundles must not be recreated. The former `productivity/`
 bundle is archived under `docs/historical/productivity-suite-2025/`, with its
 retired placeholder script under `archive/scripts/productivity/`.
 
+Approved tracked top-level directories are enforced by
+`scripts/setup/pre-commit-check.sh`. Contract-sensitive roots such as
+`public/portal-assets`, `public/video`, `schemas`, `config`, `input_images`,
+and `web/secure-landing` remain stable. Retired roots such as `dashboard/`,
+`data/luts/`, `linear_ingest_demo/`, `projects/`, `test_sky_fix/`, and
+`textures/` must not be recreated; use `assets/luts/`,
+`assets/textures/board_materials/`, `assets/projects/`, `docs/projects/`, or
+ignored `output/...` paths instead.
+
 ## Organization Steps
 
 `.auto-organize.sh` executes these validation and organization steps in sequence:
@@ -178,7 +188,7 @@ retired placeholder script under `archive/scripts/productivity/`.
    - Supports both report-only (`--dry-run`) and mutating (`--apply`) modes
 
 2. **Root File Placement Validation** (`scripts/setup/pre-commit-check.sh`)
-   - Ensures only approved files live in the repository root
+   - Ensures only approved files and top-level directories live in the repository root
    - Flags violations with suggested destinations
 
 3. **Misplaced Python Scripts Detection**

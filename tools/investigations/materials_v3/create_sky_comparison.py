@@ -10,7 +10,7 @@ from PIL import Image
 
 def create_comparison(before_path, after_path, output_path, crop_sky_region=True):
     """Create side-by-side comparison focusing on sky region."""
-    print(f"Loading images...")
+    print("Loading images...")
     before = Image.open(before_path)
     after = Image.open(after_path)
 
@@ -97,51 +97,29 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Use default hardcoded paths (original investigation)
-  python create_sky_comparison.py
-
-  # Compare custom before/after images
-  python create_sky_comparison.py \\
-    --input input_images/test_sky.jpg \\
-    --output comparison_sky.png \\
-    --amplify 10
-
-  # Process specific before/after pair
   python create_sky_comparison.py \\
     --before output_old/aerial.tiff \\
     --after output_new/aerial.tiff \\
-    --output comparison.jpg
+    --output output/materials_v3/sky_fix_comparison.jpg
         """,
-    )
-    parser.add_argument(
-        "--input",
-        type=Path,
-        default=None,
-        help="Single input image (will be used as 'before', requires processing logic)",
     )
     parser.add_argument(
         "--before",
         type=Path,
-        default=Path("output_apex_v2_luxury/V2_750Picacho_Aerial.tiff"),
-        help="Before image path (default: original investigation image)",
+        required=True,
+        help="Before image path",
     )
     parser.add_argument(
         "--after",
         type=Path,
-        default=Path("test_sky_fix/V2_750Picacho_Aerial_FIXED.tiff"),
-        help="After image path (default: original investigation fixed image)",
+        required=True,
+        help="After image path",
     )
     parser.add_argument(
         "--output",
         type=Path,
-        default=Path("test_sky_fix/sky_fix_comparison.jpg"),
-        help="Output comparison image path (default: test_sky_fix/sky_fix_comparison.jpg)",
-    )
-    parser.add_argument(
-        "--amplify",
-        type=int,
-        default=10,
-        help="Amplification factor for difference visualization (default: 10)",
+        default=Path("output/materials_v3/sky_fix_comparison.jpg"),
+        help="Output comparison image path",
     )
     parser.add_argument(
         "--no-crop",
@@ -150,12 +128,6 @@ Examples:
     )
 
     args = parser.parse_args()
-
-    # Handle --input mode (single image, not yet implemented - would need processing)
-    if args.input:
-        print("⚠️  --input mode requires processing logic (not yet implemented)")
-        print("    Use --before and --after to compare existing images")
-        return
 
     before = args.before
     after = args.after

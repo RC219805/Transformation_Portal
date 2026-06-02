@@ -89,6 +89,64 @@ def test_cloudflare_workers_build_root_shim_files_are_allowed(tmp_path: Path) ->
     assert result.returncode == 0, result.stdout + result.stderr
 
 
+def test_allowed_top_level_directories_are_accepted(tmp_path: Path) -> None:
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+    _init_repo(repo_root)
+    _copy_repo_script(repo_root)
+
+    _write(repo_root / "assets" / "textures" / "board_materials" / "plaster.png")
+    _write(repo_root / "public" / "portal-assets" / "portal.js")
+    _write(repo_root / "src" / "transformation_portal" / "__init__.py")
+    add_result = _run(
+        [
+            "git",
+            "add",
+            "assets/textures/board_materials/plaster.png",
+            "public/portal-assets/portal.js",
+            "src/transformation_portal/__init__.py",
+            "scripts/setup/pre-commit-check.sh",
+        ],
+        repo_root,
+    )
+    assert add_result.returncode == 0, add_result.stdout + add_result.stderr
+
+    result = _run(["bash", "scripts/setup/pre-commit-check.sh", "--all"], repo_root)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_retired_root_directories_are_rejected(tmp_path: Path) -> None:
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+    _init_repo(repo_root)
+    _copy_repo_script(repo_root)
+
+    retired_paths = [
+        "dashboard/.gitkeep",
+        "data/luts/location/_location_notes.md",
+        "linear_ingest_demo/manifest.json",
+        "projects/.gitkeep",
+        "test_sky_fix/sky_fix_comparison.jpg",
+        "textures/board_materials/plaster.png",
+    ]
+    for path in retired_paths:
+        _write(repo_root / path)
+
+    add_result = _run(["git", "add", *retired_paths, "scripts/setup/pre-commit-check.sh"], repo_root)
+    assert add_result.returncode == 0, add_result.stdout + add_result.stderr
+
+    result = _run(["bash", "scripts/setup/pre-commit-check.sh", "--staged"], repo_root)
+
+    assert result.returncode == 1, result.stdout + result.stderr
+    for path in retired_paths:
+        assert path in result.stdout
+    assert "assets/luts/" in result.stdout
+    assert "assets/textures/" in result.stdout
+    assert "output/examples/linear_ingest_demo/" in result.stdout
+    assert "output/materials_v3/" in result.stdout
+
+
 def test_productivity_root_bundle_paths_are_rejected(tmp_path: Path) -> None:
     repo_root = tmp_path / "repo"
     repo_root.mkdir()

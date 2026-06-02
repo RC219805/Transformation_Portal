@@ -74,20 +74,16 @@ python tools/investigations/materials_v3/diagnose_sky_issue.py \
 
 **Usage**:
 ```bash
-# Use default paths (original investigation)
-python tools/investigations/materials_v3/create_sky_comparison.py
-
-# Compare custom before/after images
 python tools/investigations/materials_v3/create_sky_comparison.py \
   --before output_old/aerial.tiff \
   --after output_new/aerial.tiff \
-  --output comparison_sky.png \
-  --amplify 10
+  --output output/materials_v3/comparison_sky.png
 
 # Disable sky region cropping (show full image)
 python tools/investigations/materials_v3/create_sky_comparison.py \
   --before before.jpg \
   --after after.jpg \
+  --output output/materials_v3/comparison_sky.png \
   --no-crop
 
 # Output: comparison image with 3 panels (before, after, difference visualization)

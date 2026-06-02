@@ -208,7 +208,7 @@ git status
 
 # ✅ 2. Check tracked binary files
 git ls-files | grep -E '\.(png|tiff?|jpg|jpeg)$'
-# Expected: Only assets/brand/ and textures/board_materials/ (if kept)
+# Expected: Only assets/brand/ and assets/textures/board_materials/ (if kept)
 
 # ✅ 3. Verify local files still exist
 ls -lh input_images/*.png

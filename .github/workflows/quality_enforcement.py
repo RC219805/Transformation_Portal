@@ -52,7 +52,7 @@ def check_critical_errors():
         "--select=E9,F63,F7,F82",  # Critical errors only
         "--show-source",
         "--statistics",
-        "--exclude=deprecated/,src/transformation_portal/,.venv/,.backup_local/,projects/",
+        "--exclude=deprecated/,src/transformation_portal/,.venv/,.backup_local/",
     ]
     result = subprocess.run(cmd, capture_output=True, text=True, check=False)
 
@@ -70,7 +70,7 @@ def check_imports():
         "flake8",
         ".",
         "--select=F401,F811",  # Unused imports, redefined names
-        "--exclude=deprecated/,src/transformation_portal/,.venv/,.backup_local/,projects/,tests/",
+        "--exclude=deprecated/,src/transformation_portal/,.venv/,.backup_local/,tests/",
     ]
     result = subprocess.run(cmd, capture_output=True, text=True, check=False)
 

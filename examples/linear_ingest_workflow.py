@@ -59,7 +59,7 @@ def main():
     print()
 
     # Setup directories
-    workspace = Path("./linear_ingest_demo")
+    workspace = Path("./output/examples/linear_ingest_demo")
     input_dir = workspace / "input"
     output_dir = workspace / "processed"
     output_dir.mkdir(parents=True, exist_ok=True)

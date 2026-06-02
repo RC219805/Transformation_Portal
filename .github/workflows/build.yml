@@ -252,7 +252,7 @@ jobs:
           PY
           }
 
-          DEFAULT_TEXTURE_FILE="${COPY_ROOT}/textures/board_materials/plaster_marmorino_westwood_beige.png"
+          DEFAULT_TEXTURE_FILE="${COPY_ROOT}/assets/textures/board_materials/plaster_marmorino_westwood_beige.png"
           DEFAULT_TEXTURE_STATE_BEFORE="$(texture_state "${DEFAULT_TEXTURE_FILE}")"
 
           python3 scripts/create_board_textures.py \

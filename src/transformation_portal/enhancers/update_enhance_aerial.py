@@ -452,8 +452,8 @@ def main():
 
     # example textures
     textures = {
-        "plaster": Path("textures/plaster.jpg"),
-        "stone": Path("textures/stone.jpg"),
+        "plaster": Path("assets/textures/board_materials/plaster_marmorino_westwood_beige.png"),
+        "stone": Path("assets/textures/board_materials/stone_bokara_coastal.png"),
     }
     rules = build_material_rules(textures)
     assignments = assign_materials(stats, rules)

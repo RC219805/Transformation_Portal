@@ -109,7 +109,7 @@ docs/
 |-- README.md                  # Only allowed docs root file
 |-- governance/                # Policy and repo organization docs
 |-- guides/                    # How-to guides
-|-- projects/                  # Project-specific docs
+|-- projects/                  # Historical project docs
 `-- quick_references/          # Quick reference material
 ```
 
