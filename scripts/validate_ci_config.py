@@ -35,6 +35,7 @@ class CIValidator:
     """Validate GitHub Actions workflow configurations."""
 
     MIN_CHECKOUT_MAJOR = 4
+    MYPY_POLICY_WORKFLOWS = frozenset({"build.yml", "ci.yml", "ci-quality-firewall.yml"})
     REQUIRED_FLAKE8_FATAL_CODES = {"E9", "F63", "F7", "F82"}
     ML_NO_COV_BLOCK_PATTERN = re.compile(
         r'if\s+\[\s*"\$\{\{\s*matrix\.test-type\s*\}\}"\s*=\s*"ml"\s*\]\s*;\s*then\s*\n\s*' r'COV_FLAGS="--no-cov"'
@@ -305,6 +306,47 @@ class CIValidator:
 
         return valid
 
+    def validate_mypy_policy_contract(self, workflow_path: Path, config: Dict) -> bool:
+        """Validate mypy workflow whitelists against the current policy doc."""
+        if workflow_path.name not in self.MYPY_POLICY_WORKFLOWS:
+            return True
+
+        valid = True
+        expected_paths = self._mypy_policy_doc_paths()
+        if not expected_paths:
+            self.log_error("docs/ci/TYPE_CHECKING_POLICY.md: Missing actively enforced mypy whitelist paths")
+            return False
+
+        jobs = config.get("jobs", {})
+        typecheck_job = jobs.get("typecheck") if isinstance(jobs, dict) else None
+        if not isinstance(typecheck_job, dict):
+            self.log_error(f"{workflow_path.name}:typecheck: Missing typecheck job for mypy policy contract")
+            return False
+
+        steps = typecheck_job.get("steps", [])
+        if not isinstance(steps, list):
+            self.log_error(f"{workflow_path.name}:typecheck: Steps must be a list for mypy policy contract")
+            return False
+
+        typecheck_step = self._find_step_by_name(steps, "Type check with mypy (critical modules)")
+        if typecheck_step is None:
+            self.log_error(f"{workflow_path.name}:typecheck: Missing mypy typecheck step")
+            return False
+
+        actual_paths, has_config = self._mypy_step_paths(typecheck_step.get("run"))
+        if not has_config:
+            self.log_error(f"{workflow_path.name}:typecheck: mypy command must use --config-file=mypy.ini")
+            valid = False
+
+        if actual_paths != expected_paths:
+            self.log_error(
+                f"{workflow_path.name}:typecheck: mypy whitelist must match docs/ci/TYPE_CHECKING_POLICY.md "
+                f"(expected {expected_paths}, found {actual_paths})"
+            )
+            valid = False
+
+        return valid
+
     def _validate_run_tests_coverage_contract(self, run_script: object) -> bool:
         """Validate coverage flag scoping in the build.yml Run tests shell script."""
         valid = True
@@ -365,6 +407,45 @@ class CIValidator:
             valid = False
 
         return valid
+
+    def _mypy_policy_doc_paths(self) -> List[str]:
+        """Return the live mypy whitelist from docs/ci/TYPE_CHECKING_POLICY.md."""
+        policy_path = self.repo_root / "docs" / "ci" / "TYPE_CHECKING_POLICY.md"
+        try:
+            text = policy_path.read_text(encoding="utf-8")
+        except FileNotFoundError:
+            return []
+
+        try:
+            start = text.index("**Enforced as of")
+            end = text.index("**N-1 tranche notes", start)
+        except ValueError:
+            return []
+
+        return re.findall(r"^- `([^`]+)`", text[start:end], flags=re.MULTILINE)
+
+    @staticmethod
+    def _mypy_step_paths(run_script: object) -> Tuple[List[str], bool]:
+        """Return src paths and config-file usage from a mypy workflow step."""
+        if not isinstance(run_script, str):
+            return [], False
+
+        logical_script = run_script.replace("\\\n", " ")
+        try:
+            tokens = shlex.split(logical_script, comments=True, posix=True)
+        except ValueError:
+            tokens = logical_script.split()
+
+        if "mypy" not in tokens:
+            return [], False
+
+        has_inline_config = "--config-file=mypy.ini" in tokens
+        has_split_config = any(
+            token == "--config-file" and index + 1 < len(tokens) and tokens[index + 1] == "mypy.ini"
+            for index, token in enumerate(tokens)
+        )
+        paths = [token for token in tokens if token.startswith("src/")]
+        return paths, has_inline_config or has_split_config
 
     @classmethod
     def _branch_coverage_checker_commands(cls, run_script: str) -> List[List[str]]:
@@ -448,6 +529,7 @@ class CIValidator:
             self.validate_common_issues(workflow_path, config),
             self.validate_flake8_config(workflow_path, config),
             self.validate_build_coverage_contract(workflow_path, config),
+            self.validate_mypy_policy_contract(workflow_path, config),
         ]
 
         return all(validations)

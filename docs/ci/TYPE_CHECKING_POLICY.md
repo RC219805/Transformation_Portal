@@ -2,16 +2,18 @@
 
 **Status**: DRAFT (requires architect approval)
 **Owner**: Transformation Portal Architect
-**Last Updated**: 2026-05-24
+**Last Updated**: 2026-06-02
 
 ---
 
 ## Actively Enforced mypy Whitelist (current)
 
-This is the authoritative list of paths that the **blocking** mypy gate in
-`.github/workflows/build.yml` (`Type check with mypy (critical modules)`)
-enforces. Each path passes `mypy --config-file=mypy.ini <path>` cleanly;
-additions must do the same before being appended to the workflow list.
+This is the authoritative list of paths enforced by the **blocking** mypy gate
+in `.github/workflows/build.yml` (`Type check with mypy (critical modules)`).
+The post-merge hard-fail workflow (`.github/workflows/ci.yml`) and the
+post-CI soft-fail firewall (`.github/workflows/ci-quality-firewall.yml`) mirror
+the same whitelist. Each path passes `mypy --config-file=mypy.ini <path>`
+cleanly; additions must do the same before being appended to workflow lists.
 
 **Enforced as of 2026-05-24:**
 

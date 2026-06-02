@@ -153,9 +153,20 @@ jobs:
           pip install -e . --no-deps
 
       - name: Type check with mypy (critical modules)
+        # Advisory mirror of the canonical PR gate whitelist in build.yml.
+        # Keep this list in sync with docs/ci/TYPE_CHECKING_POLICY.md.
         continue-on-error: true
         run: |
-          mypy src/transformation_portal/lux_depth_v3/ --config-file=mypy.ini
+          mypy --config-file=mypy.ini \
+            src/transformation_portal/api/ \
+            src/transformation_portal/lux_depth_v3/ \
+            src/transformation_portal/orchestrator/queue/ \
+            src/transformation_portal/orchestrator/storage/ \
+            src/transformation_portal/orchestrator/artifact_store/ \
+            src/transformation_portal/core/geometry/ \
+            src/transformation_portal/core/processing/ \
+            src/transformation_portal/core/ml_dependency_health.py \
+            src/transformation_portal/core/da3_runtime.py
 
   security:
     name: Security Scans

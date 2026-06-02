@@ -10,6 +10,8 @@ pytestmark = pytest.mark.unit
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 TOOL_PATH = PROJECT_ROOT / "scripts" / "validate_ci_config.py"
 BUILD_WORKFLOW_PATH = PROJECT_ROOT / ".github" / "workflows" / "build.yml"
+CI_WORKFLOW_PATH = PROJECT_ROOT / ".github" / "workflows" / "ci.yml"
+FIREWALL_WORKFLOW_PATH = PROJECT_ROOT / ".github" / "workflows" / "ci-quality-firewall.yml"
 SPEC = importlib.util.spec_from_file_location("validate_ci_config", TOOL_PATH)
 assert SPEC is not None and SPEC.loader is not None
 validate_ci_config = importlib.util.module_from_spec(SPEC)
@@ -24,9 +26,13 @@ def _load_config(path: Path) -> tuple[object, dict]:
 
 
 def _mutated_build_workflow(tmp_path: Path, old: str, new: str) -> Path:
-    source = BUILD_WORKFLOW_PATH.read_text(encoding="utf-8")
+    return _mutated_workflow(BUILD_WORKFLOW_PATH, tmp_path, old, new)
+
+
+def _mutated_workflow(source_path: Path, tmp_path: Path, old: str, new: str) -> Path:
+    source = source_path.read_text(encoding="utf-8")
     assert old in source
-    path = tmp_path / "build.yml"
+    path = tmp_path / source_path.name
     path.write_text(source.replace(old, new, 1), encoding="utf-8")
     return path
 
@@ -46,6 +52,58 @@ def test_build_workflow_coverage_contract_passes_repo_config() -> None:
 
     assert validator.validate_build_coverage_contract(BUILD_WORKFLOW_PATH, config) is True
     assert validator.errors == []
+
+
+def test_mypy_config_remains_root_linting_config() -> None:
+    mypy_config = PROJECT_ROOT / "mypy.ini"
+    assert mypy_config.exists()
+    assert not (PROJECT_ROOT / "src" / "mypy.ini").exists()
+
+    mypy_config_text = mypy_config.read_text(encoding="utf-8")
+    for required_option in (
+        "show_error_codes = True",
+        "warn_redundant_casts = True",
+        "no_implicit_optional = True",
+        "strict_equality = True",
+    ):
+        assert required_option in mypy_config_text
+
+    organization_doc = (PROJECT_ROOT / "docs" / "governance" / "REPO_ORGANIZATION.md").read_text(encoding="utf-8")
+    assert "- **Linting configuration**: `.pylintrc`, `.flake8`, `mypy.ini`" in organization_doc
+
+
+def test_mypy_policy_contract_passes_repo_workflows() -> None:
+    for workflow_path in (BUILD_WORKFLOW_PATH, CI_WORKFLOW_PATH, FIREWALL_WORKFLOW_PATH):
+        validator, config = _load_config(workflow_path)
+
+        assert validator.validate_mypy_policy_contract(workflow_path, config) is True
+        assert validator.errors == []
+
+
+def test_mypy_policy_contract_rejects_workflow_whitelist_drift(tmp_path: Path) -> None:
+    workflow_path = _mutated_workflow(
+        CI_WORKFLOW_PATH,
+        tmp_path,
+        "            src/transformation_portal/api/ \\\n",
+        "",
+    )
+    validator, config = _load_config(workflow_path)
+
+    assert validator.validate_mypy_policy_contract(workflow_path, config) is False
+    assert any("mypy whitelist must match" in error for error in validator.errors)
+
+
+def test_mypy_policy_contract_requires_root_mypy_ini_config(tmp_path: Path) -> None:
+    workflow_path = _mutated_workflow(
+        BUILD_WORKFLOW_PATH,
+        tmp_path,
+        "          mypy --config-file=mypy.ini \\\n",
+        "          mypy --config-file=pyproject.toml \\\n",
+    )
+    validator, config = _load_config(workflow_path)
+
+    assert validator.validate_mypy_policy_contract(workflow_path, config) is False
+    assert any("must use --config-file=mypy.ini" in error for error in validator.errors)
 
 
 def test_build_workflow_coverage_upload_must_be_core_only(tmp_path: Path) -> None:
