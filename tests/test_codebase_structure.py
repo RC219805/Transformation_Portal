@@ -288,10 +288,37 @@ class TestNoOrphanedFiles:
         )
 
         assert result.returncode == 0, result.stdout + result.stderr
+        assert "--input INPUT" in result.stdout
         assert "--before BEFORE" in result.stdout
         assert "--after AFTER" in result.stdout
+        assert "--amplify AMPLIFY" in result.stdout
         assert "output/materials_v3/sky_fix_comparison.jpg" in result.stdout
         assert "test_sky_fix" not in result.stdout
+
+    def test_sky_comparison_preserves_deprecated_input_mode(self):
+        """Historical --input/--amplify flags still parse without restoring root defaults."""
+        script = _repo_root / "tools" / "investigations" / "materials_v3" / "create_sky_comparison.py"
+
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(script),
+                "--input",
+                "input_images/test_sky.jpg",
+                "--output",
+                "output/materials_v3/sky_fix_comparison.jpg",
+                "--amplify",
+                "10",
+            ],
+            cwd=_repo_root,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+        assert result.returncode == 0, result.stdout + result.stderr
+        assert "--input is deprecated" in result.stdout
+        assert "Use --before and --after" in result.stdout
 
     def test_no_duplicate_material_response(self):
         """Test that material_response isn't duplicated unnecessarily."""

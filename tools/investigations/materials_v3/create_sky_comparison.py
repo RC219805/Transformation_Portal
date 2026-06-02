@@ -101,18 +101,30 @@ Examples:
     --before output_old/aerial.tiff \\
     --after output_new/aerial.tiff \\
     --output output/materials_v3/sky_fix_comparison.jpg
+
+  # Deprecated compatibility flags parse but do not process single-image input
+  python create_sky_comparison.py \\
+    --input input_images/test_sky.jpg \\
+    --output output/materials_v3/sky_fix_comparison.jpg \\
+    --amplify 10
         """,
+    )
+    parser.add_argument(
+        "--input",
+        type=Path,
+        default=None,
+        help="Deprecated compatibility flag for historical single-image mode; use --before and --after",
     )
     parser.add_argument(
         "--before",
         type=Path,
-        required=True,
+        default=None,
         help="Before image path",
     )
     parser.add_argument(
         "--after",
         type=Path,
-        required=True,
+        default=None,
         help="After image path",
     )
     parser.add_argument(
@@ -122,12 +134,26 @@ Examples:
         help="Output comparison image path",
     )
     parser.add_argument(
+        "--amplify",
+        type=int,
+        default=10,
+        help="Deprecated compatibility flag; difference amplification is not used by side-by-side comparisons",
+    )
+    parser.add_argument(
         "--no-crop",
         action="store_true",
         help="Disable cropping to sky region (show full image)",
     )
 
     args = parser.parse_args()
+
+    if args.input:
+        print("--input is deprecated and single-image processing is not implemented.")
+        print("Use --before and --after to compare existing images.")
+        return
+
+    if not args.before or not args.after:
+        parser.error("--before and --after are required unless using deprecated --input")
 
     before = args.before
     after = args.after

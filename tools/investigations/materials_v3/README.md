@@ -67,10 +67,9 @@ python tools/investigations/materials_v3/diagnose_sky_issue.py \
 **Original Use Case**: Used to validate that sky pixel operations were actually applying (diagnosed NumPy view aliasing bug when all diffs showed zero).
 
 **What It Does**:
-- Processes an image with and without sky operations
-- Creates a 3-panel comparison grid (before, after, diff)
-- Amplifies diff for visibility
-- Saves high-resolution comparison for inspection
+- Compares existing before/after images
+- Optionally crops to the sky region for focused inspection
+- Saves a high-resolution side-by-side comparison for review
 
 **Usage**:
 ```bash
@@ -86,8 +85,13 @@ python tools/investigations/materials_v3/create_sky_comparison.py \
   --output output/materials_v3/comparison_sky.png \
   --no-crop
 
-# Output: comparison image with 3 panels (before, after, difference visualization)
+# Output: side-by-side comparison image
 ```
+
+Deprecated `--input` and `--amplify` flags are still accepted so historical
+automation reaches the compatibility message instead of failing in argument
+parsing. Single-image processing remains unsupported; use explicit
+`--before`/`--after` inputs for comparisons.
 
 **Key Findings** (from original investigation):
 - Detected zero delta across all sky operations (NumPy view aliasing bug)

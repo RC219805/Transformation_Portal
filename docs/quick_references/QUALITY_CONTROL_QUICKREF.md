@@ -74,7 +74,7 @@ make pre-commit
 **Quick Fix**:
 ```bash
 # Example: move a quick reference into an approved docs subtree
-mv docs/MY_NOTE.md docs/quick_references/MY_NOTE.md
+mv MY_NOTE.md docs/quick_references/MY_NOTE.md
 ```
 
 ## Quality Gates
@@ -157,7 +157,7 @@ pytest tests/test_FILE.py -v
 ### Quick Doc Cleanup
 ```bash
 # Move a root-level docs file into an approved subtree
-mv docs/DOCUMENTATION.md docs/quick_references/DOCUMENTATION.md
+mv DOCUMENTATION.md docs/quick_references/DOCUMENTATION.md
 ```
 
 ## Resources
