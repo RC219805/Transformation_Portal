@@ -93,6 +93,19 @@ def test_mypy_policy_contract_rejects_workflow_whitelist_drift(tmp_path: Path) -
     assert any("mypy whitelist must match" in error for error in validator.errors)
 
 
+def test_mypy_policy_contract_requires_api_runtime_dependency(tmp_path: Path) -> None:
+    workflow_path = _mutated_workflow(
+        CI_WORKFLOW_PATH,
+        tmp_path,
+        ' types-PyYAML "pydantic==2.13.3"',
+        " types-PyYAML",
+    )
+    validator, config = _load_config(workflow_path)
+
+    assert validator.validate_mypy_policy_contract(workflow_path, config) is False
+    assert any("API mypy whitelist requires 'pydantic==2.13.3'" in error for error in validator.errors)
+
+
 def test_mypy_policy_contract_requires_root_mypy_ini_config(tmp_path: Path) -> None:
     workflow_path = _mutated_workflow(
         BUILD_WORKFLOW_PATH,

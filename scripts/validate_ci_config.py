@@ -36,6 +36,7 @@ class CIValidator:
 
     MIN_CHECKOUT_MAJOR = 4
     MYPY_POLICY_WORKFLOWS = frozenset({"build.yml", "ci.yml", "ci-quality-firewall.yml"})
+    REQUIRED_MYPY_PYDANTIC_DEPENDENCY = "pydantic==2.13.3"
     REQUIRED_FLAKE8_FATAL_CODES = {"E9", "F63", "F7", "F82"}
     ML_NO_COV_BLOCK_PATTERN = re.compile(
         r'if\s+\[\s*"\$\{\{\s*matrix\.test-type\s*\}\}"\s*=\s*"ml"\s*\]\s*;\s*then\s*\n\s*' r'COV_FLAGS="--no-cov"'
@@ -328,6 +329,17 @@ class CIValidator:
             self.log_error(f"{workflow_path.name}:typecheck: Steps must be a list for mypy policy contract")
             return False
 
+        if "src/transformation_portal/api/" in expected_paths:
+            install_step = self._find_step_by_name(steps, "Install dependencies")
+            install_tokens = self._shell_tokens(install_step.get("run") if isinstance(install_step, dict) else None)
+            if self.REQUIRED_MYPY_PYDANTIC_DEPENDENCY not in install_tokens:
+                self.log_error(
+                    f"{workflow_path.name}:typecheck: API mypy whitelist requires "
+                    f"{self.REQUIRED_MYPY_PYDANTIC_DEPENDENCY!r} in the Install dependencies step because "
+                    "editable install uses --no-deps"
+                )
+                valid = False
+
         typecheck_step = self._find_step_by_name(steps, "Type check with mypy (critical modules)")
         if typecheck_step is None:
             self.log_error(f"{workflow_path.name}:typecheck: Missing mypy typecheck step")
@@ -427,14 +439,7 @@ class CIValidator:
     @staticmethod
     def _mypy_step_paths(run_script: object) -> Tuple[List[str], bool]:
         """Return src paths and config-file usage from a mypy workflow step."""
-        if not isinstance(run_script, str):
-            return [], False
-
-        logical_script = run_script.replace("\\\n", " ")
-        try:
-            tokens = shlex.split(logical_script, comments=True, posix=True)
-        except ValueError:
-            tokens = logical_script.split()
+        tokens = CIValidator._shell_tokens(run_script)
 
         if "mypy" not in tokens:
             return [], False
@@ -446,6 +451,18 @@ class CIValidator:
         )
         paths = [token for token in tokens if token.startswith("src/")]
         return paths, has_inline_config or has_split_config
+
+    @staticmethod
+    def _shell_tokens(run_script: object) -> List[str]:
+        """Return shell tokens from a workflow run script."""
+        if not isinstance(run_script, str):
+            return []
+
+        logical_script = run_script.replace("\\\n", " ")
+        try:
+            return shlex.split(logical_script, comments=True, posix=True)
+        except ValueError:
+            return logical_script.split()
 
     @classmethod
     def _branch_coverage_checker_commands(cls, run_script: str) -> List[List[str]]:

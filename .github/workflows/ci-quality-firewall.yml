@@ -149,7 +149,9 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install mypy types-PyYAML
+          # The API whitelist imports pydantic; editable install uses --no-deps,
+          # so install the same pinned runtime dependency as build.yml.
+          pip install mypy types-PyYAML "pydantic==2.13.3"
           pip install -e . --no-deps
 
       - name: Type check with mypy (critical modules)
