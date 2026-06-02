@@ -1,6 +1,11 @@
 [MASTER]
-ignore=build,dist,.venv,.eggs,tools/deprecated,src/transformation_portal,src/luxury_tiff_batch_processor,scripts
-jobs=0
+ignore=build,dist,.venv,.eggs
+ignore-paths=
+    ^tools/deprecated/.*$,
+    ^src/transformation_portal/.*$,
+    ^src/luxury_tiff_batch_processor/.*$,
+    ^scripts/.*$
+jobs=1
 persistent=no
 
 [MESSAGES CONTROL]
@@ -21,7 +26,6 @@ disable=
     C0411, C0412,         # wrong-import-order, ungrouped-imports (not critical)
     C0325,                # superfluous-parens (readability preference)
     R1735, R1705,         # use-dict-literal, no-else-return (style preference)
-    W0611,                # unused-import (managed by flake8)
     C0209,                # consider-using-f-string (not critical)
     W1514,                # unspecified-encoding (acceptable for most cases)
     E1123,                # unexpected-keyword-arg (false positives with optional deps)

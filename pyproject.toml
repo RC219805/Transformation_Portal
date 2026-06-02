@@ -175,26 +175,6 @@ exclude = ["tests*", "data*", "docs*", "scripts"]
 [tool.setuptools.package-data]
 "transformation_portal.schemas.run_card" = ["*.json"]
 
-[tool.pylint.main]
-# Increase limits for complex image/video processing functions
-max-args = 8
-max-locals = 20
-max-branches = 15
-max-statements = 60
-max-line-length = 127
-max-module-lines = 1500
-
-[tool.pylint.messages_control]
-# Disable specific checks that are overly strict for this codebase
-disable = [
-    "too-few-public-methods",
-    "missing-module-docstring",
-    "missing-function-docstring",
-    "missing-class-docstring",
-    "duplicate-code",
-    "fixme",
-]
-
 [tool.pytest.ini_options]
 minversion = "8.0"
 addopts = "--strict-markers --tb=short -p no:warnings"
