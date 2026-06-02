@@ -1,87 +1,142 @@
 # .gitattributes
-# Git attributes for Transformation Portal repository
-# Ensures consistent file handling and line endings across platforms
+# Git attributes for deterministic checkout, diff, and archive behavior.
 
-# Auto detect text files and normalize line endings to LF
+# Normalize text unless a more specific rule marks the path binary.
 * text=auto eol=lf
 
-# Explicitly declare text files
+# Source, scripts, and repository text
 *.py text eol=lf
+*.pyi text eol=lf
 *.sh text eol=lf
+*.bash text eol=lf
 *.md text eol=lf
+*.rst text eol=lf
 *.txt text eol=lf
+*.csv text eol=lf
+*.tsv text eol=lf
+*.in text eol=lf
+*.example text eol=lf
+*.sha256 text eol=lf
+*.asc text eol=lf
+*.c text eol=lf
+*.h text eol=lf
+*.sol text eol=lf
+*.mako text eol=lf
+
+# Config and structured data
+*.json text eol=lf
+*.jsonc text eol=lf
+*.jsonl text eol=lf
+*.ndjson text eol=lf
 *.yml text eol=lf
 *.yaml text eol=lf
-*.json text eol=lf
 *.toml text eol=lf
 *.ini text eol=lf
 *.cfg text eol=lf
 *.conf text eol=lf
+*.lock text eol=lf
+*.sql text eol=lf
+
+# Web assets that are still text
 *.xml text eol=lf
 *.html text eol=lf
 *.css text eol=lf
 *.js text eol=lf
+*.mjs text eol=lf
+*.cjs text eol=lf
 *.ts text eol=lf
 *.jsx text eol=lf
 *.tsx text eol=lf
+*.svg text eol=lf
 *.cube text eol=lf
 
-# Scripts should always use LF
-*.sh text eol=lf
+# Root and dotfile contracts without reliable extensions
+Makefile text eol=lf
+Dockerfile text eol=lf
+LICENSE text eol=lf
+CODEOWNERS text eol=lf
+.dockerignore text eol=lf
+.env.example text eol=lf
+.git-blame-ignore-revs text eol=lf
+.nvmrc text eol=lf
+.pylintrc text eol=lf
 
-# Windows scripts use CRLF
+# Windows command scripts keep Windows-native endings.
 *.bat text eol=crlf
 *.cmd text eol=crlf
 *.ps1 text eol=crlf
 
-# Binary files
+# Raster, raw, HDR, and icon assets
 *.jpg binary
+*.JPG binary
 *.jpeg binary
+*.JPEG binary
 *.png binary
 *.gif binary
 *.ico binary
-*.mov binary
-*.mp4 binary
-*.mp3 binary
-*.flv binary
-*.fla binary
-*.swf binary
-*.gz binary
-*.zip binary
-*.7z binary
-*.ttf binary
-*.eot binary
-*.woff binary
-*.woff2 binary
-*.pyc binary
-*.pyd binary
-*.so binary
-*.dll binary
-*.exe binary
-*.o binary
-*.a binary
-*.lib binary
-*.dylib binary
-
-# Image formats (high-end processing)
+*.bmp binary
+*.webp binary
+*.avif binary
+*.heic binary
+*.heif binary
 *.tif binary
+*.TIF binary
 *.tiff binary
+*.TIFF binary
 *.exr binary
 *.hdr binary
 *.dng binary
+*.DNG binary
 *.cr2 binary
+*.CR2 binary
+*.cr3 binary
+*.CR3 binary
 *.nef binary
+*.NEF binary
 *.arw binary
+*.ARW binary
+*.raf binary
+*.RAF binary
+*.rw2 binary
+*.RW2 binary
+*.orf binary
+*.ORF binary
 
-# Video formats
+# Audio and video
 *.avi binary
 *.mov binary
+*.MOV binary
 *.mp4 binary
 *.mkv binary
 *.webm binary
 *.prores binary
+*.mp3 binary
+*.wav binary
+*.flac binary
+*.flv binary
+*.fla binary
+*.swf binary
 
-# Model files
+# Fonts
+*.ttf binary
+*.otf binary
+*.eot binary
+*.woff binary
+*.woff2 binary
+
+# Python/native build outputs and shared libraries
+*.pyc binary
+*.pyo binary
+*.pyd binary
+*.so binary
+*.dll binary
+*.dylib binary
+*.exe binary
+*.o binary
+*.a binary
+*.lib binary
+
+# Model, numeric, and local database artifacts
 *.pth binary
 *.pt binary
 *.ckpt binary
@@ -92,14 +147,25 @@
 *.mlpackage binary
 *.tflite binary
 *.bin binary
+*.npy binary
+*.npz binary
+*.pkl binary
+*.pickle binary
+*.parquet binary
+*.db binary
+*.sqlite binary
+*.sqlite3 binary
 
-# Archives
+# Archives and compressed fixtures
 *.tar binary
 *.tar.gz binary
 *.tgz binary
+*.gz binary
 *.zip binary
 *.7z binary
 *.rar binary
+*.bz2 binary
+*.xz binary
 
 # Documents
 *.pdf binary
@@ -110,14 +176,10 @@
 *.ppt binary
 *.pptx binary
 
-# Git attributes for specific files
-.gitattributes export-ignore
-.gitignore export-ignore
+# Exclude repository-only metadata from source archives.
+.gitattributes text eol=lf export-ignore
+.gitignore text eol=lf export-ignore
 .github/ export-ignore
 
-# LFS tracking for large files (if Git LFS is enabled)
-# Uncomment if using Git LFS:
-# *.pth filter=lfs diff=lfs merge=lfs -text
-# *.safetensors filter=lfs diff=lfs merge=lfs -text
-# *.onnx filter=lfs diff=lfs merge=lfs -text
-# *.mlpackage filter=lfs diff=lfs merge=lfs -text
+# Large model and media files are binary only. Do not enable Git LFS here
+# without updating checkout workflows that currently use lfs: false.
