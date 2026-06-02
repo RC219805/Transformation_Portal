@@ -339,13 +339,6 @@ archive/*.png
 !archive/**/.gitkeep
 
 # -----------------------------------------------------------------------------
-# Projects directory (client-specific production files - not for version control)
-# Ignore contents but keep directory structure
-# -----------------------------------------------------------------------------
-projects/*
-!projects/.gitkeep
-
-# -----------------------------------------------------------------------------
 # Client construction documents and architectural PDFs (sensitive)
 # -----------------------------------------------------------------------------
 Architectural_Plans/**/*.pdf

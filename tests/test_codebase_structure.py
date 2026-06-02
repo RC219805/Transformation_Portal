@@ -8,6 +8,7 @@ prevents accumulation of clutter or structural issues.
 
 import hashlib
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -101,7 +102,7 @@ class TestDocumentationOrganization:
         assert readme.exists(), "README.md should exist in root"
 
     def test_no_excessive_root_markdown_files(self):
-        """Test that tracked root files conform to the canonical root placement policy."""
+        """Test that tracked root paths conform to the canonical placement policy."""
         result = subprocess.run(
             ["./scripts/setup/pre-commit-check.sh", "--all"],
             cwd=_repo_root,
@@ -153,6 +154,29 @@ class TestAssetOrganization:
                 category_path = luts_path / category
                 if not category_path.exists():
                     print(f"Note: {category} not found in assets/luts/")
+
+    def test_duplicate_data_luts_removed(self):
+        """LUTs have one canonical repo location."""
+        assert not (_repo_root / "data" / "luts").exists(), "data/luts duplicates assets/luts and must stay removed"
+
+    def test_board_material_textures_are_under_assets(self):
+        """Board material textures live with other repo assets."""
+        texture_path = _repo_root / "assets" / "textures" / "board_materials"
+        assert texture_path.is_dir(), "assets/textures/board_materials/ should exist"
+        assert not (_repo_root / "textures").exists(), "root textures/ should not be recreated"
+
+        expected_textures = {
+            "plaster_marmorino_westwood_beige.png",
+            "stone_bokara_coastal.png",
+            "cladding_sculptform_warm.png",
+            "screens_grey_gum.png",
+            "equitone_lt85.png",
+            "bison_weathered_ipe.png",
+            "dark_bronze_anodized.png",
+            "louvretec_powder_white.png",
+        }
+        actual_textures = {path.name for path in texture_path.glob("*.png")}
+        assert expected_textures <= actual_textures
 
 
 class TestWrapperFiles:
@@ -228,6 +252,73 @@ class TestGitignore:
 
 class TestNoOrphanedFiles:
     """Tests to prevent orphaned or redundant files."""
+
+    def test_retired_generated_root_directories_absent(self):
+        """Generated/demo roots should not be committed as top-level directories."""
+        retired_roots = [
+            "dashboard",
+            "linear_ingest_demo",
+            "projects",
+            "test_sky_fix",
+        ]
+        present_roots = [path for path in retired_roots if (_repo_root / path).exists()]
+        assert not present_roots, f"Retired root directories should stay removed: {present_roots}"
+
+    def test_board_texture_generator_has_canonical_utility_module(self):
+        """Root board-texture script delegates to the canonical utility module."""
+        wrapper = _repo_root / "scripts" / "create_board_textures.py"
+        canonical = _repo_root / "scripts" / "utilities" / "create_board_textures.py"
+
+        wrapper_text = wrapper.read_text(encoding="utf-8")
+        canonical_text = canonical.read_text(encoding="utf-8")
+
+        assert "from scripts.utilities.create_board_textures import main" in wrapper_text
+        assert 'DEFAULT_OUTPUT_DIR = REPO_ROOT / "assets" / "textures" / "board_materials"' in canonical_text
+
+    def test_sky_comparison_requires_explicit_inputs_and_ignored_default_output(self):
+        """The sky comparison tool no longer depends on removed root investigation files."""
+        script = _repo_root / "tools" / "investigations" / "materials_v3" / "create_sky_comparison.py"
+
+        result = subprocess.run(
+            [sys.executable, str(script), "--help"],
+            cwd=_repo_root,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+        assert result.returncode == 0, result.stdout + result.stderr
+        assert "--input INPUT" in result.stdout
+        assert "--before BEFORE" in result.stdout
+        assert "--after AFTER" in result.stdout
+        assert "--amplify AMPLIFY" in result.stdout
+        assert "output/materials_v3/sky_fix_comparison.jpg" in result.stdout
+        assert "test_sky_fix" not in result.stdout
+
+    def test_sky_comparison_preserves_deprecated_input_mode(self):
+        """Historical --input/--amplify flags still parse without restoring root defaults."""
+        script = _repo_root / "tools" / "investigations" / "materials_v3" / "create_sky_comparison.py"
+
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(script),
+                "--input",
+                "input_images/test_sky.jpg",
+                "--output",
+                "output/materials_v3/sky_fix_comparison.jpg",
+                "--amplify",
+                "10",
+            ],
+            cwd=_repo_root,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+        assert result.returncode == 0, result.stdout + result.stderr
+        assert "--input is deprecated" in result.stdout
+        assert "Use --before and --after" in result.stdout
 
     def test_no_duplicate_material_response(self):
         """Test that material_response isn't duplicated unnecessarily."""

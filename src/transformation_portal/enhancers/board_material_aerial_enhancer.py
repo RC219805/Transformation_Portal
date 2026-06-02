@@ -9,9 +9,9 @@ from sklearn.cluster import KMeans
 # Default Textures (placeholder)
 # ==========================
 DEFAULT_TEXTURES = {
-    "plaster": "textures/plaster.png",
-    "stone": "textures/stone.png",
-    "concrete": "textures/concrete.png",
+    "plaster": "assets/textures/board_materials/plaster_marmorino_westwood_beige.png",
+    "stone": "assets/textures/board_materials/stone_bokara_coastal.png",
+    "concrete": "assets/textures/board_materials/equitone_lt85.png",
 }
 
 # ==========================

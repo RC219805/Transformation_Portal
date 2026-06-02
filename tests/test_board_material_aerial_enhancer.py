@@ -71,7 +71,7 @@ def test_relabel_and_relabel_safe_behavior():
 
 
 def test_build_material_rules_and_assign_alias():
-    textures = {"plaster": "textures/plaster.png"}
+    textures = {"plaster": "assets/textures/board_materials/plaster_marmorino_westwood_beige.png"}
     rules = build_material_rules(textures)
     assert isinstance(rules, list)
     assert all(isinstance(r, MaterialRule) for r in rules)

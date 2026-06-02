@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # pre-commit-check.sh
-# Canonical root-file placement validator for staged changes and full-repo scans.
+# Canonical root placement validator for staged changes and full-repo scans.
 #
 
 set -euo pipefail
@@ -70,8 +70,39 @@ ALLOWED_ROOT_PATTERNS=(
     '^\..*rc$'
 )
 
+ALLOWED_ROOT_DIRECTORIES=(
+    ".github"
+    "archive"
+    "artifacts"
+    "assets"
+    "cloudflare"
+    "config"
+    "data"
+    "docs"
+    "evalsets"
+    "examples"
+    "input_images"
+    "migrations"
+    "policy"
+    "public"
+    "requirements"
+    "schemas"
+    "scripts"
+    "src"
+    "tests"
+    "tools"
+    "web"
+    "workflows"
+)
+
 BLOCKED_PATH_PREFIXES=(
+    "dashboard/"
+    "data/luts/"
+    "linear_ingest_demo/"
+    "projects/"
     "productivity/"
+    "test_sky_fix/"
+    "textures/"
 )
 
 usage() {
@@ -79,9 +110,9 @@ usage() {
 Usage: $0 [--staged|--all] [--legacy-allowlist PATH]
 
 Options:
-  --staged               Validate only staged root files (default).
-  --all                  Validate all tracked root files in the repository.
-  --legacy-allowlist     Newline-delimited baseline of grandfathered root files for --all scans.
+  --staged               Validate only staged root paths (default).
+  --all                  Validate all tracked root paths in the repository.
+  --legacy-allowlist     Newline-delimited baseline of grandfathered root paths for --all scans.
   -h, --help             Show this help text.
 EOF
 }
@@ -138,6 +169,20 @@ is_allowed_in_root() {
     return 1
 }
 
+is_allowed_top_level_directory() {
+    local file="$1"
+    local directory="${file%%/*}"
+    local allowed
+
+    for allowed in "${ALLOWED_ROOT_DIRECTORIES[@]}"; do
+        if [[ "$directory" == "$allowed" ]]; then
+            return 0
+        fi
+    done
+
+    return 1
+}
+
 is_blocked_repo_path() {
     local file="$1"
     local prefix
@@ -172,6 +217,36 @@ suggest_destination() {
 
     basename="$(basename "$file")"
     ext="${basename##*.}"
+
+    if [[ "$file" == data/luts/* ]]; then
+        echo "assets/luts/"
+        return
+    fi
+
+    if [[ "$file" == textures/* ]]; then
+        echo "assets/textures/"
+        return
+    fi
+
+    if [[ "$file" == linear_ingest_demo/* ]]; then
+        echo "output/examples/linear_ingest_demo/ or tests/fixtures/ if intentionally committed"
+        return
+    fi
+
+    if [[ "$file" == test_sky_fix/* ]]; then
+        echo "output/materials_v3/ or docs/historical/ if retained as evidence"
+        return
+    fi
+
+    if [[ "$file" == dashboard/* ]]; then
+        echo "explicit generated dashboard --output-dir; dashboard code belongs under src/transformation_portal/dashboard/"
+        return
+    fi
+
+    if [[ "$file" == projects/* ]]; then
+        echo "assets/projects/ for project assets or docs/projects/ for project records"
+        return
+    fi
 
     if [[ "$basename" =~ \.md$ ]]; then
         if [[ "$file" == productivity/* ]]; then
@@ -227,26 +302,14 @@ collect_candidates() {
 
     if [[ "$MODE" == "all" ]]; then
         while IFS= read -r -d '' file; do
-            if is_blocked_repo_path "$file"; then
+            if [[ -e "$REPO_ROOT/$file" ]]; then
                 CANDIDATES+=("$file")
-                continue
             fi
-            if [[ "$file" == */* ]]; then
-                continue
-            fi
-            CANDIDATES+=("$file")
         done < <(git -C "$REPO_ROOT" ls-files -z)
         return
     fi
 
     while IFS= read -r -d '' file; do
-        if is_blocked_repo_path "$file"; then
-            CANDIDATES+=("$file")
-            continue
-        fi
-        if [[ "$file" == */* ]]; then
-            continue
-        fi
         CANDIDATES+=("$file")
     done < <(git -C "$REPO_ROOT" diff --cached --name-only --diff-filter=ACMR -z)
 }
@@ -263,12 +326,19 @@ main() {
     collect_candidates
 
     if [[ ${#CANDIDATES[@]} -eq 0 ]]; then
-        echo "No root files to validate."
+        echo "No root paths to validate."
         return 0
     fi
 
     for file in "${CANDIDATES[@]}"; do
         if is_blocked_repo_path "$file"; then
+            misplaced_files+=("$file")
+            continue
+        fi
+        if [[ "$file" == */* ]]; then
+            if is_allowed_top_level_directory "$file"; then
+                continue
+            fi
             misplaced_files+=("$file")
             continue
         fi
@@ -300,12 +370,12 @@ main() {
     fi
 
     if [[ ${#misplaced_files[@]} -gt 0 ]]; then
-        echo -e "${RED}✗ Root file placement check failed${NC}"
+        echo -e "${RED}✗ Root placement check failed${NC}"
         echo
         if [[ "$MODE" == "all" ]]; then
-            echo "The following tracked root files are outside the current repository contract:"
+            echo "The following tracked root paths are outside the current repository contract:"
         else
-            echo "The following staged root files are outside the current repository contract:"
+            echo "The following staged root paths are outside the current repository contract:"
         fi
         echo
         for file in "${misplaced_files[@]}"; do
@@ -313,12 +383,12 @@ main() {
             echo -e "    → Suggested: ${GREEN}$(suggest_destination "$file")${NC}"
         done
         echo
-        echo "Move these files to approved locations or update the root policy intentionally."
+        echo "Move these paths to approved locations or update the root policy intentionally."
         return 1
     fi
 
     if [[ ${#known_legacy_files[@]} -gt 0 ]]; then
-        echo "Root file placement check passed with grandfathered legacy root files:"
+        echo "Root placement check passed with grandfathered legacy root paths:"
         for file in "${known_legacy_files[@]}"; do
             echo "  - $file"
         done
@@ -326,7 +396,7 @@ main() {
         return 0
     fi
 
-    echo "Root file placement check passed."
+    echo "Root placement check passed."
     return 0
 }
 

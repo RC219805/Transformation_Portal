@@ -32,7 +32,7 @@
 ✅ TRACK IN GIT:
   assets/brand/               # Logo SVG (< 100KB)
   assets/luts/                # Color grading LUTs (< 500KB)
-  textures/board_materials/   # Essential materials (< 500KB each)
+  assets/textures/board_materials/   # Essential materials (< 500KB each)
   tests/fixtures/             # Tiny synthetic images (< 50KB)
   docs/examples/              # Screenshots (< 200KB)
 
@@ -71,7 +71,7 @@ git push origin feat/rag-integration-complete
 input_images/*.png              356MB  ⚠️ REMOVE (privacy + size)
 processed_images/*.jpg           15MB  ⚠️ Consider removing
 processed_images/*.tiff          80MB  ⚠️ Consider removing
-textures/board_materials/*.png    4MB  ✅ KEEP (essential assets)
+assets/textures/board_materials/*.png    4MB  KEEP (essential assets)
 assets/brand/lantern_logo.svg   50KB  ✅ KEEP (brand asset)
 ```
 

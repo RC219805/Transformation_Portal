@@ -61,12 +61,12 @@ git push origin feat/rag-integration-complete
 
 #### ✅ **Configuration Data** (< 1MB each)
 - **LUT files**: `.cube` color grading files (typically 10-100KB)
-- **Material textures** (small): Current `textures/board_materials/*.png` are 150-500KB - **borderline acceptable**
+- **Material textures** (small): Current `assets/textures/board_materials/*.png` are 150-500KB - **borderline acceptable**
 
 **Current Status:**
 ```
 ✅ assets/brand/lantern_logo/lantern_logo.svg (SVG, likely < 50KB)
-✅ textures/board_materials/*.png (8 files, ~500KB each = 4MB total) - ACCEPTABLE
+✅ assets/textures/board_materials/*.png (8 files, ~500KB each = 4MB total) - ACCEPTABLE
 ✅ processed_images/*.jpg (4 files, enhancement examples) - BORDERLINE (should move to docs/)
 ```
 
@@ -193,10 +193,10 @@ processed_images/**/*.tiff
 !processed_images/*.md
 
 # Large texture files (keep small board materials < 500KB)
-textures/**/*.jpg
-textures/**/*.png
-textures/**/*.tiff
-!textures/board_materials/*.png  # Exception for essential materials
+assets/textures/**/*.jpg
+assets/textures/**/*.png
+assets/textures/**/*.tiff
+!assets/textures/board_materials/*.png  # Exception for essential materials
 
 # Sample data (download via scripts)
 data/**/*.jpg
@@ -316,7 +316,7 @@ if __name__ == "__main__":
 input_images/*.png               356MB  (8 PNG previews, 40-55MB each)
 processed_images/*.jpg            15MB  (4 enhancement examples)
 processed_images/IMG_4069_lux.tiff 80MB (1 processed TIFF)
-textures/board_materials/*.png     4MB  (8 material textures)
+assets/textures/board_materials/*.png     4MB  (8 material textures)
 assets/brand/lantern_logo/*.svg   50KB  (Logo asset)
 ─────────────────────────────────────
 TOTAL BINARY:                    ~455MB
@@ -471,7 +471,7 @@ After implementing these changes, verify:
 ```bash
 # 1. Check .gitignore is working
 git status | grep -E '\.(png|tiff?|jpg|jpeg)$'
-# Expected: Only assets/brand/ and textures/board_materials/
+# Expected: Only assets/brand/ and assets/textures/board_materials/
 
 # 2. Verify binary file sizes
 git ls-files | xargs -I {} sh -c 'du -h "{}" 2>/dev/null' | sort -rh | head -20
@@ -558,7 +558,7 @@ Add to "Repository-Specific Notes":
 - **Use download scripts** for ML models (`download_depth_models.py`) and samples (`download_samples.py`)
 - **Test fixtures** must be < 50KB (synthetic images only)
 - **Brand assets** in `assets/brand/` are version controlled (SVG < 100KB)
-- **Material textures** in `textures/board_materials/` are acceptable (< 500KB each)
+- **Material textures** in `assets/textures/board_materials/` are acceptable (< 500KB each)
 - **Client files** go in `input_images/` (local dev only, never tracked)
 ```
 

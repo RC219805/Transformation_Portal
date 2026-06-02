@@ -27,7 +27,7 @@ else
 fi
 
 readonly PYTHON_BIN
-readonly PYLINT_EXCLUDE_REGEX='^(external/|depth-anything-3/|deprecated/|src/transformation_portal/|src/luxury_tiff_batch_processor/|scripts/|examples/|\.github/|projects/|\.backup_local/)'
+readonly PYLINT_EXCLUDE_REGEX='^(external/|depth-anything-3/|deprecated/|src/transformation_portal/|src/luxury_tiff_batch_processor/|scripts/|examples/|\.github/|\.backup_local/)'
 
 # Fallback lint surface used when no changed Python files match the lint filter.
 # Ensures deterministic pylint execution during local/advisory runs.
