@@ -237,6 +237,21 @@ class TestRootGovernanceMetadata:
         assert "Pygments==2.20.0" in security_policy
         assert "None active. New exceptions require an explicit expiry condition" in security_policy
 
+    def test_security_baseline_versions_match_current_locks(self):
+        """Root security guidance should describe the current governed lock baselines."""
+        security_policy = (_repo_root / "SECURITY.md").read_text()
+        requirements_lint = (_repo_root / "requirements-lint.txt").read_text()
+
+        assert "cryptography==47.0.0" in (_repo_root / "requirements/ci.txt").read_text()
+        assert "cryptography==47.0.0" in (_repo_root / "requirements/dev.txt").read_text()
+        assert "cryptography==47.0.0" in (_repo_root / "requirements/all.txt").read_text()
+        assert "pillow==12.2.0" in (_repo_root / "requirements/base.txt").read_text()
+
+        assert "**cryptography==47.0.0**" in security_policy
+        assert "**cryptography==46.0.5**" not in security_policy
+        assert "current governed lock baseline is pillow==12.2.0" in requirements_lint
+        assert "allows pillow==12.1.1 in lockfiles" not in requirements_lint
+
     def test_contributing_dependency_audit_schedule_is_current(self):
         """Canonical contribution guidance should not point to a past audit date."""
         contributing = (_repo_root / "CONTRIBUTING.md").read_text()

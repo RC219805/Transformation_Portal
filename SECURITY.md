@@ -111,7 +111,7 @@ Given our image/video processing nature, special attention is required for:
     - **Disposition**: Managed inference paths do not use `transformers.Trainer`, `Seq2SeqTrainer`, `TrainingArguments`, `_load_rng_state`, or training-resume flows
     - **Action**: Dependabot alerts are dismissed as `not_used` with repo search evidence instead of forcing a `transformers` 5.x pre-release upgrade into inference stacks
   - **Pillow>=10.3.0** - Fixed CVE-2024-28219 (buffer overflow vulnerability)
-  - **cryptography==46.0.5** - Fixed GHSA subgroup attack vulnerability (SECT curves)
+  - **cryptography==47.0.0** - Current governed lock; includes the CVE-2026-26007 / GHSA-r6ph-v2qm-q3c2 SECT subgroup validation fix from 46.0.5
   - **black==26.3.1** - Fixed arbitrary file writes from unsanitized cache names
   - **Pygments==2.20.0** - Fixed CVE-2026-4539; the temporary pip-audit exception is retired
 
