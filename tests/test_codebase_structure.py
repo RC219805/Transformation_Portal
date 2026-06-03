@@ -174,11 +174,13 @@ class TestRootGovernanceMetadata:
             "## [3.4.0] - 2026-02-24",
             "Canonical evidence-bundle root anchoring",
             "Optional notarization validation support",
+            "## [2.0.0] - 2026-01-02",
             "[Unreleased]: https://github.com/RC219805/Transformation_Portal/compare/v3.4.0...HEAD",
             "[3.4.0]: https://github.com/RC219805/Transformation_Portal/releases/tag/v3.4.0",
         ]
         for phrase in required_current_context:
             assert phrase in changelog
+        assert "## [2.0.0] - 2025-11-14" not in changelog
         assert "compare/v2.0.0...HEAD" not in changelog
 
     def test_root_readme_performance_links_use_current_authorities(self):

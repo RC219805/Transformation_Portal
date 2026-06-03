@@ -200,7 +200,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Phase 3.3 manifests without bundle-root fields remain valid.
 - Phase 3.4 manifests with bundle-root fields and optional notarization blocks are supported.
 
-## [2.0.0] - 2025-11-14
+## [2.0.0] - 2026-01-02
 
 ### Added
 - First stable release with production-ready contracts
