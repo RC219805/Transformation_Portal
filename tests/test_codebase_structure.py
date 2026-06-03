@@ -258,6 +258,8 @@ class TestRootGovernanceMetadata:
         assert "cryptography>=46.0,<48" not in requirements_ci
         assert "cryptography>=46.0,<48" not in requirements_dev
         assert "`cryptography`          | >=46.0.5" in contributing
+        assert "`starlette`             | >=1.0.1" in contributing
+        assert "Starlette==1.0.1" in security_policy
         assert "current governed lock baseline is pillow==12.2.0" in requirements_lint
         assert "allows pillow==12.1.1 in lockfiles" not in requirements_lint
 
@@ -270,6 +272,10 @@ class TestRootGovernanceMetadata:
         required_dependency_ranges = {
             "Pillow>=10.3.0,<13",
             "scikit-learn>=1.8.0,<2",
+            "fastapi>=0.136.1,<0.137",
+            "starlette>=1.0.1,<1.1",
+            "uvicorn>=0.48.0,<0.49",
+            "aiofiles>=25.1.0,<26",
             "SQLAlchemy[asyncio]>=2.0.50,<2.2",
             "asyncpg>=0.29,<1",
             "alembic>=1.13,<2",
@@ -281,6 +287,10 @@ class TestRootGovernanceMetadata:
         stale_dependency_ranges = {
             "Pillow>=10.0.0,<13",
             "scikit-learn>=1.0,<2",
+            "fastapi>=0.121.0,<0.137",
+            "starlette>=0.49.1,<1.1",
+            "uvicorn>=0.29.0,<0.49",
+            "aiofiles>=23.2.1,<26",
         }
         for dependency in stale_dependency_ranges:
             assert dependency not in dependencies

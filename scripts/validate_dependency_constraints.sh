@@ -117,11 +117,11 @@ get_security_minimum() {
             return 0
             ;;
         "Pillow")
-            echo "10.0.0|Multiple CVEs in 9.x series"
+            echo "10.3.0|CVE-2024-28219 and multiple 9.x CVEs"
             return 0
             ;;
         "starlette")
-            echo "0.49.1|CVE-2025-62727 (FileResponse Range-header DoS)"
+            echo "1.0.1|CVE-2026-48710 / PYSEC-2026-161 (BadHost request URL construction weakness)"
             return 0
             ;;
     esac
