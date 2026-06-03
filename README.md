@@ -41,7 +41,7 @@ Quick discovery:
 lux-depth-v3 --help
 
 # If console scripts aren't on PATH, run as module:
-python -m transformation_portal.lux_depth_v3 --help
+.venv/bin/python -m transformation_portal.lux_depth_v3 --help
 
 # Portal/orchestrator contract gate:
 make test-orchestrator-contract
@@ -49,7 +49,7 @@ make test-orchestrator-contract
 
 Install a pinned release:
 ```bash
-pip install "git+https://github.com/RC219805/Transformation_Portal.git@<release-tag>"
+.venv/bin/python -m pip install "git+https://github.com/RC219805/Transformation_Portal.git@<release-tag>"
 ```
 
 Replace `<release-tag>` with a tag from [GitHub Releases](https://github.com/RC219805/Transformation_Portal/releases).
@@ -119,7 +119,7 @@ Transformation Portal supports depth models across two tiers with different lice
 ### Production Path
 - **DA3 (`da3` backend):** Primary production backend for Lux Depth V3
 - **Use for:** The governed depth workflow surface. Select `model_key="da3-metric"` for the Apache-2.0 DA3 path, or `model_key="da3"` / `model_key="da3-research"` for the research-default selector.
-- **Requirement:** Install a trusted ML core profile for actual DA3 inference. The checked-in ML core lock is currently target-owned for macOS Apple Silicon (`darwin-arm64`) only; Linux and macOS Intel ML lanes are retired unsupported lanes that fail closed until a governed lane is re-established. For example: `make install-ml-core` or, on Apple Silicon, `./scripts/bootstrap/install_ml_stack.sh --profile core-cpu`.
+- **Requirement:** Install a trusted ML core profile for actual DA3 inference. The checked-in ML core lock is currently target-owned for macOS Apple Silicon (`darwin-arm64`) only; Linux and macOS Intel ML lanes are retired unsupported lanes that fail closed until a governed lane is re-established. Use `make install-ml-core` for current operator setup; advanced Apple Silicon bootstrap-profile work can run `./scripts/bootstrap/install_ml_stack.sh --profile core-cpu` directly.
 - **Default:** Standard CLI flows resolve here unless a research-only backend is explicitly requested
 
 ### Research & Non-Commercial
@@ -162,7 +162,7 @@ The orchestrator also contains an internal `synthetic` fallback path used for ex
 
 **Default (DA3):**
 ```bash
-lux-depth-v3 --input-dir ./input --output-dir ./output
+lux-depth-v3 --input-dir ./input_images --output-dir ./output
 ```
 
 If `./.runtime/Depth-Anything-3/.venv-da3/bin/python` exists, Lux Depth V3
@@ -181,7 +181,7 @@ gate. Install or verify the manifest-pinned local runtime with
 ```bash
 ./scripts/setup/install_da3_runtime.sh
 
-lux-depth-v3 --input-dir ./input --output-dir ./output
+lux-depth-v3 --input-dir ./input_images --output-dir ./output
 ```
 
 The repo-local DA3 setup script pins the upstream checkout to a validated ref under
@@ -201,7 +201,7 @@ instead of silently downgrading to DA2.
 **Depth Pro (requires license acceptance):**
 ```bash
 lux-depth-v3 \
-  --input-dir ./input \
+  --input-dir ./input_images \
   --output-dir ./output \
   --depth-backend depth_pro \
   --depth-pro-python ./.venv-depth-pro/bin/python \
@@ -258,7 +258,7 @@ Enable direct ingestion of professional camera RAW formats such as CR2, NEF, ARW
 ```bash
 ./scripts/setup/install_raw_runtime.sh
 
-lux-depth-v3 --input-dir ./input --output-dir ./output
+lux-depth-v3 --input-dir ./input_images --output-dir ./output
 ```
 
 RAW inputs are auto-detected and converted into pipeline-ready RGB using LibRaw via `rawpy`. If `./.venv-raw/bin/python` exists, Lux Depth V3 auto-discovers that repo-local RAW runtime before falling back to the main repo environment.
@@ -270,7 +270,7 @@ main repo environment for operator workflows.
 Use `--raw-python` only when you want to override that repo-local runtime explicitly:
 
 ```bash
-lux-depth-v3 --input-dir ./input --output-dir ./output --raw-python ~/venvs/raw/bin/python
+lux-depth-v3 --input-dir ./input_images --output-dir ./output --raw-python ~/venvs/raw/bin/python
 ```
 
 See [SETUP_GUIDE.md](docs/guides/SETUP_GUIDE.md) for environment details.
@@ -296,7 +296,7 @@ hosts.
 Required CLI wiring:
 ```bash
 lux-depth-v3 \
-  --input-dir ./input \
+  --input-dir ./input_images \
   --output-dir ./output \
   --depth-backend depth_pro \
   --depth-pro-python ./.venv-depth-pro/bin/python \
@@ -318,7 +318,7 @@ Lux Depth V3 can generate physically based rendering maps directly from the full
 Fast PBR-only run:
 ```bash
 lux-depth-v3 \
-  --input-dir ./input \
+  --input-dir ./input_images \
   --output-dir ./output/pbr \
   --quality-tier apex \
   --pbr "on" \
@@ -355,7 +355,7 @@ Add a trusted ML profile when you need DA3 depth inference, research backends, s
 
 ```bash
 make install-ml-core
-# or use the target-specific bootstrap flow on macOS Apple Silicon:
+# advanced Apple Silicon bootstrap-profile work only:
 ./scripts/bootstrap/install_ml_stack.sh --profile core-cpu
 make test-fast
 ```
@@ -371,7 +371,7 @@ For a more guided environment bring-up, see [SETUP_GUIDE.md](docs/guides/SETUP_G
 The metadata extraction tooling supports deterministic machine-mode JSON for CI/CD and automation.
 
 ```bash
-python scripts/test_metadata_extraction.py --json extract /input/image.CR2
+.venv/bin/python scripts/test_metadata_extraction.py --json extract input_images/image.CR2
 ```
 
 Key properties:

@@ -20,20 +20,20 @@ Features:
 - Dry-run mode
 
 Usage:
-    python scripts/setup/install_models.py [--all] [--dry-run] [--force]
+    .venv/bin/python scripts/setup/install_models.py [--all] [--dry-run] [--force]
 
 Examples:
     # Install essential models only (Depth, Real-ESRGAN-compatible weights)
-    python scripts/setup/install_models.py
+    .venv/bin/python scripts/setup/install_models.py
 
     # Install all models including Stable Diffusion
-    python scripts/setup/install_models.py --all
+    .venv/bin/python scripts/setup/install_models.py --all
 
     # Check what would be downloaded without downloading
-    python scripts/setup/install_models.py --all --dry-run
+    .venv/bin/python scripts/setup/install_models.py --all --dry-run
 
     # Force re-download even if files exist
-    python scripts/setup/install_models.py --force
+    .venv/bin/python scripts/setup/install_models.py --force
 
 Author: Transformation Portal Team
 License: Attribution (see LICENSE)
@@ -330,7 +330,7 @@ def install_depth_models(install_all: bool = False, dry_run: bool = False) -> in
 
     except ImportError:
         print("\n✗ transformers not installed")
-        print("  Install with: pip install transformers torch")
+        print("  Install the governed ML baseline with: make install-ml-core")
         return 0
 
     return installed
@@ -493,16 +493,16 @@ def main():
         epilog="""
 Examples:
   # Install essential models (Depth, Real-ESRGAN-compatible weights)
-  python scripts/setup/install_models.py
+  .venv/bin/python scripts/setup/install_models.py
 
   # Install all models including Stable Diffusion
-  python scripts/setup/install_models.py --all
+  .venv/bin/python scripts/setup/install_models.py --all
 
   # Preview what would be downloaded
-  python scripts/setup/install_models.py --all --dry-run
+  .venv/bin/python scripts/setup/install_models.py --all --dry-run
 
   # Force re-download existing models
-  python scripts/setup/install_models.py --force
+  .venv/bin/python scripts/setup/install_models.py --force
         """,
     )
 

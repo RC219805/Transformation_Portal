@@ -193,5 +193,5 @@ cat <<EOF
 [INFO] Stable executable: ./.venv-depth-pro/bin/python
 [INFO] Pinned refs: torch==2.7.1 torchvision==0.22.1 numpy==1.26.4 depth_pro@${REF}
 [INFO] Example:
-lux-depth-v3 --input-dir ./input --output-dir ./output --depth-pro-python ./.venv-depth-pro/bin/python
+lux-depth-v3 --input-dir ./input_images --output-dir ./output --depth-pro-python ./.venv-depth-pro/bin/python
 EOF

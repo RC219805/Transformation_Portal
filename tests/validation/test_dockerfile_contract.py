@@ -55,20 +55,53 @@ def test_runtime_stages_do_not_install_compiler_tooling() -> None:
     assert "build-essential" in stages["gpu-build"]
 
 
-def test_gpu_image_invokes_python_311_explicitly() -> None:
+def test_runtime_images_invoke_python_311_explicitly() -> None:
     stages = _dockerfile_stages()
+    cpu_runtime = stages["cpu"]
     gpu_build = stages["gpu-build"]
     gpu_runtime = stages["gpu"]
     compose = COMPOSE_PATH.read_text(encoding="utf-8")
 
     assert "pip3" not in gpu_build
     assert "python3.11 -m pip install" in gpu_build
+    assert "CMD python3.11 -c" in cpu_runtime
+    assert 'CMD ["python3.11", "-m", "transformation_portal.cli"]' in cpu_runtime
     assert "CMD python3.11 -c" in gpu_runtime
     assert 'CMD ["python3.11", "-m", "transformation_portal.cli"]' in gpu_runtime
+    assert 'CMD ["python", "-m", "transformation_portal.cli"]' not in cpu_runtime
     assert re.search(r"(?<![\w.])python3(?!\.11|\w)", gpu_runtime) is None
 
     assert "command: python3.11 -m transformation_portal.cli serve --host 0.0.0.0 --port 8000" in compose
+    assert (
+        "command: python3.11 -m transformation_portal.cli batch-process " "/app/input /app/output --preset golden_hour"
+    ) in compose
+    assert "command: python3.11 -m transformation_portal.monitoring.dashboard --port 8080" in compose
+    assert "        - python3.11" in compose
+    assert "command: python -m transformation_portal" not in compose
     assert "command: python3 -m transformation_portal.cli serve --host 0.0.0.0 --port 8000" not in compose
+
+
+def test_compose_mounts_governed_local_input_surface() -> None:
+    """Compose should not create untracked root input directories."""
+    compose = COMPOSE_PATH.read_text(encoding="utf-8")
+
+    assert "./input_images:/app/input:ro" in compose
+    assert "./input:/app/input:ro" not in compose
+
+
+def test_docker_targets_do_not_bypass_governed_ml_lock_contract() -> None:
+    """Docker targets must not install broad or platform-wrong ML extras."""
+    dockerfile = _dockerfile_text()
+    stages = _dockerfile_stages()
+    apple_silicon_stage = stages["apple-silicon"]
+
+    assert 'pip install --no-cache-dir -e ".[ml]"' not in dockerfile
+    assert "pip install --no-cache-dir coremltools" not in dockerfile
+    assert re.search(r"^FROM cpu AS apple-silicon$", dockerfile, flags=re.MULTILINE)
+    assert "Docker on Apple Silicon still runs a Linux container" in dockerfile
+    assert "make install-ml-core" in dockerfile
+    assert "ENV DEVICE=cpu" in apple_silicon_stage
+    assert "ENV DEVICE=mps" not in apple_silicon_stage
 
 
 def test_dockerignore_excludes_heavy_local_context() -> None:
@@ -82,21 +115,50 @@ def test_dockerignore_excludes_heavy_local_context() -> None:
         ".git",
         ".venv",
         ".runtime",
+        ".pyre",
         ".coverage",
         ".coverage.*",
         "node_modules",
         "coverage.xml",
         "coverage.json",
         "htmlcov",
+        ".rag_cache",
+        "build",
+        "dist",
+        "downloads",
+        "docs/api/_build",
         "output",
+        "outputs",
+        "processed_images",
+        "processed_output",
+        "extracted_context",
+        "artifacts",
+        "archive_reports",
+        "local_artifacts",
+        "depth_maps_apex",
+        "artifact_store",
+        "archive/experiments",
+        "archive/deprecated",
+        "archive/legacy",
         "input_images",
+        "data/sample_images",
+        "Architectural_Plans",
         "checkpoints",
+        "models",
+        "weights",
+        "pretrained",
         ".env",
         ".env.*",
         "!.env.example",
+        "external",
+        ".cas",
+        ".local_backup",
+        ".backup_local",
+        ".branch_cleanup_backup",
         ".npmrc",
         ".pypirc",
         "web/secure-landing/.metafiles",
+        "web/secure-landing/tmp",
         "*.pem",
         "*.key",
         "*.p12",
@@ -104,4 +166,8 @@ def test_dockerignore_excludes_heavy_local_context() -> None:
         "*.safetensors",
         "*.pt",
         "*.pth",
+        "*.xlsx",
+        "*.xls",
+        "tmp_tensor.npy",
+        "uv.lock",
     } <= ignored_entries

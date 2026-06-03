@@ -7,7 +7,7 @@ useDefault = true
 # gitleaks v8.21.x and does not support global allowlist targetRules.
 [allowlist]
 description = "Ignore generated local artifact directories already excluded from version control"
-paths = ['''(^|/)(output|output_[^/]*|test_output|test_artifacts|processed_images|processed_output|extracted_context|docs/api/_build|__pycache__|\.pytest_cache|\.mypy_cache|\.ruff_cache|\.pyre|\.rag_cache|web/secure-landing/(?:\.next|\.next-build-verify|\.next-smoke-[^/]*|\.next-codex-[^/]*|\.metafiles))(/|$)''']
+paths = ['''(^|/)(\.venv(?:-[^/]*)?|\.runtime|\.cache|\.pytest_cache|\.mypy_cache|\.ruff_cache|\.hypothesis|\.pyre|\.rag_cache|\.coverage(?:\..*)?|coverage\.(?:xml|json)|htmlcov|node_modules|build|dist|downloads|docs/api/_build|output|output_[^/]*|outputs|test_output|test_artifacts|processed_images|processed_output|extracted_context|logs|artifacts|trial_runs|archive_reports|local_artifacts|depth_maps_apex|artifact_store|archive/(?:experiments|deprecated|legacy)|__pycache__|web/secure-landing/(?:node_modules|\.next|\.next-build-verify|\.next-smoke-[^/]*|\.next-codex-[^/]*|\.metafiles|tmp|test-results|playwright-report|blob-report|\.playwright)|cloudflare/transformationportal-worker/(?:node_modules|\.wrangler))(/|$)''']
 
 [[rules]]
 id = "generic-api-key"

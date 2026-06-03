@@ -45,7 +45,7 @@ Each item carries severity, effort, the files to touch, observable acceptance cr
 
 ### I-3. Add non-root `USER` to Dockerfile and harden compose defaults
 
-**Status:** Done — landed in PR #1808 (`f54d3eea`), with follow-ups PR #1809 (`03b600f8`, restore non-root image smoke build) and PR #1813 (`24f9df88`, harden runtime image construction). Runtime stages (`cpu`/`gpu`/`apple-silicon`) end with `USER tp` via a multi-stage builder that drops compiler toolchains from runtime images; compose uses a `tp-init` bootstrap + `tp_state` named volume with read-only `./input`/`./config`. Contract enforced by `tests/validation/test_dockerfile_contract.py`.
+**Status:** Done — landed in PR #1808 (`f54d3eea`), with follow-ups PR #1809 (`03b600f8`, restore non-root image smoke build) and PR #1813 (`24f9df88`, harden runtime image construction). Runtime stages (`cpu`/`gpu`/`apple-silicon`) end with `USER tp` via a multi-stage builder that drops compiler toolchains from runtime images; compose uses a `tp-init` bootstrap + `tp_state` named volume with read-only `./input_images`/`./config`. Contract enforced by `tests/validation/test_dockerfile_contract.py`.
 
 **Severity / Effort:** Medium / S
 **Tracks finding:** [#6](../PORTAL_AUDIT_REPO_WIDE_2026-05-18.md#63-security) — container default is root

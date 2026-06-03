@@ -107,18 +107,19 @@ ml = [
 # NVDiffRec requires manual install of nvdiffrast compiled CUDA extensions:
 #   ./scripts/bootstrap/install_ml_stack.sh --profile nvdiffrec
 # 3DGS (graphdeco-inria/gaussian-splatting) requires SHA verification:
-#   python scripts/validation/verify_3dgs_artifacts.py
+#   .venv/bin/python scripts/validation/verify_3dgs_artifacts.py
 spatial-ai = [
     "transformation-portal[ml-core]",
     "huggingface-hub>=0.19",
     # SAM2: pip install sam2 (requires scripted bootstrap for weights)
     "sam2>=1.0; python_version >= '3.11'",
     # nvdiffrast (compiled CUDA extension) must be installed separately:
-    # git clone https://github.com/NVlabs/nvdiffrast && pip install -e .
+    # git clone https://github.com/NVlabs/nvdiffrast external/nvdiffrast
+    # .venv/bin/python -m pip install -e external/nvdiffrast
 ]
 # Optional detached signing support for archive attestation CLIs
 archive-signing = [
-    "cryptography>=46.0,<48",
+    "cryptography>=47.0.0,<48",
 ]
 # Development tools - see requirements/dev.in for pinned versions
 dev = [
@@ -132,12 +133,12 @@ dev = [
     "httpx>=0.28,<1",  # required for FastAPI/Starlette TestClient in HTTP contract tests
     "hypothesis>=6.0,<7",
     "jsonschema>=4.21.0,<5",  # required for machine-mode contract schema validation tests
-    "cryptography>=46.0,<48",  # required for Phase 3.1 signing CLI tests
+    "cryptography>=47.0.0,<48",  # required for Phase 3.1 signing CLI tests
     "moto[s3]>=5.0,<6",  # required for moto-backed S3 ArtifactStore contract tests
     "mypy>=1.10",
     "flake8>=7.0",
     "pylint>=3.0",
-    "black>=24.8",
+    "black>=26.3.1",
     "isort>=5.13,<9",
     "autopep8>=2.0,<3",
     "libcst>=1.2,<2",

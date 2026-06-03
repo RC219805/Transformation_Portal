@@ -8,13 +8,13 @@
 
 ```bash
 # Emit JSON to stdout
-python scripts/test_metadata_extraction.py --json extract /input/image.CR2
+.venv/bin/python scripts/test_metadata_extraction.py --json extract input_images/image.CR2
 
 # Write JSON to file
-python scripts/test_metadata_extraction.py --json --json-output result.json extract /input/image.CR2
+.venv/bin/python scripts/test_metadata_extraction.py --json --json-output result.json extract input_images/image.CR2
 
 # Pretty-printed JSON
-python scripts/test_metadata_extraction.py --json --json-pretty extract /input/image.CR2
+.venv/bin/python scripts/test_metadata_extraction.py --json --json-pretty extract input_images/image.CR2
 ```
 
 ---
@@ -56,15 +56,15 @@ python scripts/test_metadata_extraction.py --json --json-pretty extract /input/i
 ### `extract` - Single Image
 
 ```bash
-python scripts/test_metadata_extraction.py --json extract /input/IMG_1234.CR2
+.venv/bin/python scripts/test_metadata_extraction.py --json extract input_images/IMG_1234.CR2
 ```
 
 **Success:**
 ```json
 {
   "data": {
-    "input_path": "/input/IMG_1234.CR2",
-    "output_path": "/output/IMG_1234.provenance.json",
+    "input_path": "input_images/IMG_1234.CR2",
+    "output_path": "output/IMG_1234.provenance.json",
     "elapsed_seconds": 1.234,
     "preset": "luxury",
     "success": true,
@@ -77,7 +77,7 @@ python scripts/test_metadata_extraction.py --json extract /input/IMG_1234.CR2
 ```json
 {
   "data": {
-    "input_path": "/input/missing.CR2",
+    "input_path": "input_images/missing.CR2",
     "success": false,
     "error": {
       "type": "OtherIngestFailure",
@@ -90,14 +90,14 @@ python scripts/test_metadata_extraction.py --json extract /input/IMG_1234.CR2
 ### `validate` - Schema Check
 
 ```bash
-python scripts/test_metadata_extraction.py --json validate /output/sidecar.json
+.venv/bin/python scripts/test_metadata_extraction.py --json validate output/sidecar.json
 ```
 
 **Success:**
 ```json
 {
   "data": {
-    "sidecar_path": "/output/sidecar.json",
+    "sidecar_path": "output/sidecar.json",
     "strict": true,
     "success": true,
     "errors": [],
@@ -122,19 +122,19 @@ python scripts/test_metadata_extraction.py --json validate /output/sidecar.json
 ### `extract-batch` - Multiple Images
 
 ```bash
-python scripts/test_metadata_extraction.py --json extract-batch /input --output /output
+.venv/bin/python scripts/test_metadata_extraction.py --json extract-batch input_images --output output
 ```
 
 **Result:**
 ```json
 {
   "data": {
-    "input_root": "/input",
-    "output_dir": "/output",
+    "input_root": "input_images",
+    "output_dir": "output",
     "success": false,
     "items": [
-      {"path": "/input/a.CR2", "success": true, ...},
-      {"path": "/input/b.CR2", "success": false, "error": {...}}
+      {"path": "input_images/a.CR2", "success": true, ...},
+      {"path": "input_images/b.CR2", "success": false, "error": {...}}
     ],
     "summary_counts": {
       "total": 2,
@@ -150,7 +150,7 @@ python scripts/test_metadata_extraction.py --json extract-batch /input --output 
 ### `check-system` - Readiness
 
 ```bash
-python scripts/test_metadata_extraction.py --json check-system
+.venv/bin/python scripts/test_metadata_extraction.py --json check-system
 ```
 
 **Result:**
@@ -172,8 +172,8 @@ python scripts/test_metadata_extraction.py --json check-system
 
 ```bash
 # Parse from file or stdin
-python tools/parse_machine_json.py result.json
-python scripts/test_metadata_extraction.py --json extract /input/image.CR2 | python tools/parse_machine_json.py
+.venv/bin/python tools/parse_machine_json.py result.json
+.venv/bin/python scripts/test_metadata_extraction.py --json extract input_images/image.CR2 | .venv/bin/python tools/parse_machine_json.py
 
 # Exit code forwarded
 echo $?
@@ -185,7 +185,7 @@ echo $?
 
 ```bash
 # Extract with exit code routing
-result=$(python scripts/test_metadata_extraction.py --json extract /input/image.CR2)
+result=$(.venv/bin/python scripts/test_metadata_extraction.py --json extract input_images/image.CR2)
 exit_code=$?
 
 if [[ $exit_code -eq 0 ]]; then
@@ -200,7 +200,7 @@ fi
 
 ```bash
 # Validate with error details
-result=$(python scripts/test_metadata_extraction.py --json validate /output/sidecar.json)
+result=$(.venv/bin/python scripts/test_metadata_extraction.py --json validate output/sidecar.json)
 
 if [[ $(echo "$result" | jq -r '.success') == "true" ]]; then
   echo "✅ Valid"
@@ -212,7 +212,7 @@ fi
 
 ```bash
 # Batch summary
-result=$(python scripts/test_metadata_extraction.py --json extract-batch /input --output /output)
+result=$(.venv/bin/python scripts/test_metadata_extraction.py --json extract-batch input_images --output output)
 
 total=$(echo "$result" | jq '.data.summary_counts.total')
 success=$(echo "$result" | jq '.data.summary_counts.success')
@@ -257,7 +257,7 @@ echo "Result: $success/$total succeeded"
 **Problem:** Exit code always 0
 **Fix:** Don't use `set -e` before capturing JSON; capture exit code explicitly:
 ```bash
-result=$(python scripts/test_metadata_extraction.py --json ...)
+result=$(.venv/bin/python scripts/test_metadata_extraction.py --json ...)
 exit_code=$?  # Capture before any other commands
 ```
 

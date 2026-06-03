@@ -5,6 +5,7 @@ SHELL := /bin/sh
 BOOTSTRAP_PY = $$(./scripts/setup/resolve_python_311.sh)
 PY = $$(./scripts/setup/resolve_python_311.sh)
 PRE_COMMIT_BIN := $(shell if [ -x .venv/bin/pre-commit ]; then printf '%s' .venv/bin/pre-commit; elif [ -x .venv/Scripts/pre-commit.exe ]; then printf '%s' .venv/Scripts/pre-commit.exe; fi)
+DOCS_TOOL_REQUIREMENTS := "sphinx>=7.2,<9" "sphinx-rtd-theme>=2.0,<3" "sphinx-autodoc-typehints>=2.0,<4"
 
 # Common subsets (fast tests avoid heavy/optional paths)
 FAST_TESTS := \
@@ -37,7 +38,7 @@ PHASE6_SMOKE_TESTS := \
 
 help:
 	@echo "Targets:"
-	@echo "  setup              Install package in editable mode (pip install -e .)"
+	@echo "  setup              Install package in editable mode into the repo .venv"
 	@echo "  install-core       Install pinned core runtime + dev tooling dependencies into .venv"
 	@echo "  repair-core-venv   Recreate .venv and reinstall the pinned core environment"
 	@echo "  install-ml         Disabled: no trusted umbrella ML lockfile contract"
@@ -567,7 +568,7 @@ coverage-report:
 coverage-diff:
 	@echo "Running diff coverage comparison against main branch..."
 	@if ! "$(PY)" -m pip show diff-cover >/dev/null 2>&1; then \
-		echo "Error: diff-cover not installed. Run 'make install-core' or 'pip install diff-cover'"; \
+		echo "Error: diff-cover not installed. Run 'make install-core' to install the repo-managed tooling"; \
 		exit 1; \
 	fi
 	@if [ ! -f coverage.xml ]; then \
@@ -809,7 +810,7 @@ check-ml-darwin-x86_64:
 
 docs:
 	@echo "Building API documentation with Sphinx..."
-	@"$(PY)" -m pip install -q sphinx sphinx-rtd-theme sphinx-autodoc-typehints
+	@"$(PY)" -m pip install -q $(DOCS_TOOL_REQUIREMENTS)
 	@"$(PY)" -m sphinx -b html -W --keep-going docs/api docs/api/_build/html
 	@echo "✓ Documentation built in docs/api/_build/html"
 

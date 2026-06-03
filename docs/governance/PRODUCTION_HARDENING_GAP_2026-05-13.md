@@ -150,8 +150,10 @@ Still net-new after Phase 4 closeout:
 
 **Updated 2026-05-15: Phase 5.A local Compose validation has landed.**
 
-- `Dockerfile` provides `base`, `cpu`, `gpu`, and `apple-silicon` stages with
-  health probes.
+- `Dockerfile` provides `base`, `cpu`, and `gpu` runtime stages with health
+  probes. The `apple-silicon` target remains as a CPU-image compatibility alias;
+  native Apple Silicon ML installs are governed by the Darwin arm64 ML lock, not
+  by ad hoc Docker `.[ml]` installs.
 - `docker-compose.yml` provides CPU, GPU, worker, and monitor services.
 - `make test-paid-pilot-services-contract` exists as the opt-in managed
   services smoke gate.

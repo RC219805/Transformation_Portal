@@ -8,18 +8,14 @@
 #
 # Install:
 #   make install-hooks
-#   # or
-#   pre-commit install -f
 #
 # Manual run:
 #   make pre-commit
-#   # or
-#   pre-commit run --all-files
 #
 # For the unified quality gate without the pre-commit framework:
 #   ./scripts/pre_commit_hook.sh
 
-# `pre-commit install -f` (invoked by `make install-hooks`) installs exactly
+# `make install-hooks` invokes the repo-managed `.venv` pre-commit and installs exactly
 # the hook types listed here. The gitleaks hook below declares a `pre-push`
 # stage, so pre-push must be installed by default — otherwise `git push` would
 # bypass the secrets check when a caller used `git commit --no-verify`.
@@ -67,6 +63,13 @@ repos:
         name: Check Root File Placement
         entry: scripts/setup/pre-commit-check.sh
         language: system
+        pass_filenames: false
+
+      - id: check-script-topology
+        name: Check Script Topology
+        entry: scripts/setup/run_repo_python.sh scripts/governance/check_script_topology.py
+        language: system
+        files: ^(scripts/.*|src/transformation_portal/(perceptual|pipelines)/.*|archive/scripts/legacy-organization/.*)$
         pass_filenames: false
 
       - id: check-ml-test-isolation

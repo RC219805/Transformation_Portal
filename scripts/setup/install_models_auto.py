@@ -17,7 +17,7 @@ Features (upgraded from basic version):
 - Graceful error handling
 
 Usage:
-    python scripts/setup/install_models_auto.py [--skip-optional] [--force]
+    .venv/bin/python scripts/setup/install_models_auto.py [--skip-optional] [--force]
 
 Performance: ~5-10 minutes total for required models (depends on connection)
 

@@ -66,7 +66,7 @@ For AI-powered features such as DA3 depth inference, use a trusted target-specif
 # Supported checked-in Apple Silicon baseline
 make install-ml-core
 
-# Or use the Apple Silicon bootstrap profiles directly:
+# Advanced Apple Silicon bootstrap-profile work only:
 ./scripts/bootstrap/install_ml_stack.sh --profile core-cpu
 ./scripts/bootstrap/install_ml_stack.sh --profile core-mps    # macOS Apple Silicon only
 ```
@@ -77,7 +77,7 @@ The `core-cuda` profile and all Linux ML lock lanes are retired unsupported lane
 
 **Platform-specific notes:**
 
-- **Apple Silicon macOS (M1/M2/M3/M4):** use `make install-ml-core` or `./scripts/bootstrap/install_ml_stack.sh --profile core-mps`
+- **Apple Silicon macOS (M1/M2/M3/M4):** use `make install-ml-core`; reserve `./scripts/bootstrap/install_ml_stack.sh --profile core-mps` for bootstrap-profile work
 - **Linux with NVIDIA GPU:** retired unsupported ML lane; `core-cuda` fails closed until a governed Linux lockfile contract exists
 - **CPU only:** supported through the checked-in Apple Silicon baseline; Linux/macOS Intel ML lanes are retired unsupported lanes
 
@@ -102,7 +102,7 @@ For depth-aware processing, use the governed isolated runtime installers instead
 Use the provided script to print Depth Anything CoreML setup instructions and verify local artifact status:
 
 ```bash
-python scripts/setup/download_depth_models.py --model depth
+.venv/bin/python scripts/setup/download_depth_models.py --model depth
 ```
 
 Options:
@@ -168,7 +168,7 @@ ZoeD_M12_N.pt: 0% | 703k/1.44G [00:30<10:48:36, 37.1kB/s]
 
 **Solutions:**
 - Use a faster internet connection
-- Use `python scripts/setup/download_depth_models.py --verify-only` to verify local artifacts
+- Use `.venv/bin/python scripts/setup/download_depth_models.py --verify-only` to verify local artifacts
 - HuggingFace models are still downloaded automatically on first model use
 - Use cached models: Set `TRANSFORMERS_CACHE` environment variable
   ```bash
@@ -204,7 +204,7 @@ FileNotFoundError: [Errno 2] No such file or directory: 'depth_pipeline/pipeline
 **Current usage:**
 ```bash
 # Use the lux-depth-v3 CLI
-lux-depth-v3 --input-dir ./input --output-dir ./output
+lux-depth-v3 --input-dir ./input_images --output-dir ./output
 ```
 
 ```python
@@ -222,13 +222,13 @@ See [Lux Depth V3 CLI Guide](../cli/LUX_DEPTH_V3_CLI_GUIDE.md) for detailed usag
 ### Run Verification Script
 
 ```bash
-python scripts/verification/verify_core.py
+.venv/bin/python scripts/verification/verify_core.py
 ```
 
 Or for ML dependencies:
 
 ```bash
-python scripts/verification/verify_ml_deps.py
+.venv/bin/python scripts/verification/verify_ml_deps.py
 ```
 
 **Example Output:**
@@ -305,7 +305,7 @@ lux-depth-v3 --list-stable
 ### Apple Silicon (M1/M2/M3/M4)
 
 1. **Use the checked-in Apple Silicon ML baseline**: `make install-ml-core`
-2. **Use MPS bootstrap only on native arm64 macOS**: `./scripts/bootstrap/install_ml_stack.sh --profile core-mps`
+2. **Reserve MPS bootstrap for native arm64 macOS bootstrap-profile work**: `./scripts/bootstrap/install_ml_stack.sh --profile core-mps`
 3. **Enable Metal**: Ensure macOS 13+ for best performance
 
 **Expected performance**:

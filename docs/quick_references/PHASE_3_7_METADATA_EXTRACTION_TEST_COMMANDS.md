@@ -15,7 +15,7 @@ brew install exiftool        # macOS
 apt-get install libimage-exiftool-perl  # Linux
 
 # Check system readiness
-python scripts/test_metadata_extraction.py check-system
+.venv/bin/python scripts/test_metadata_extraction.py check-system
 ```
 
 ## Test Commands for `<project_root>/input_images`
@@ -26,13 +26,13 @@ Use these flags before the subcommand when you need deterministic machine output
 
 ```bash
 # Emit machine JSON to stdout
-python scripts/test_metadata_extraction.py --json <command> ...
+.venv/bin/python scripts/test_metadata_extraction.py --json <command> ...
 
 # Pretty-print machine JSON
-python scripts/test_metadata_extraction.py --json --json-pretty <command> ...
+.venv/bin/python scripts/test_metadata_extraction.py --json --json-pretty <command> ...
 
 # Write machine JSON to file (stdout remains clean)
-python scripts/test_metadata_extraction.py --json --json-output /tmp/metadata_result.json <command> ...
+.venv/bin/python scripts/test_metadata_extraction.py --json --json-output /tmp/metadata_result.json <command> ...
 ```
 
 ### Machine JSON Envelope Structure
@@ -78,10 +78,10 @@ This envelope structure is versioned and stable. Any breaking change to the enve
 ### 1. Check System Readiness
 
 ```bash
-python scripts/test_metadata_extraction.py check-system
+.venv/bin/python scripts/test_metadata_extraction.py check-system
 
 # Machine JSON output
-python scripts/test_metadata_extraction.py --json check-system
+.venv/bin/python scripts/test_metadata_extraction.py --json check-system
 ```
 
 Expected output includes:
@@ -95,19 +95,19 @@ Extract metadata from a single image:
 
 ```bash
 # Basic extraction (output to <image>.provenance.json)
-python scripts/test_metadata_extraction.py extract /path/to/input_images/your_image.tif
+.venv/bin/python scripts/test_metadata_extraction.py extract /path/to/input_images/your_image.tif
 
 # Custom output path
-python scripts/test_metadata_extraction.py extract /path/to/input_images/your_image.tif -o /tmp/test_provenance.json
+.venv/bin/python scripts/test_metadata_extraction.py extract /path/to/input_images/your_image.tif -o /tmp/test_provenance.json
 
 # With durable write (fsync)
-python scripts/test_metadata_extraction.py extract /path/to/input_images/your_image.tif --fsync
+.venv/bin/python scripts/test_metadata_extraction.py extract /path/to/input_images/your_image.tif --fsync
 
 # Debug mode (full tracebacks on errors)
-python scripts/test_metadata_extraction.py --debug extract /path/to/input_images/your_image.tif
+.venv/bin/python scripts/test_metadata_extraction.py --debug extract /path/to/input_images/your_image.tif
 
 # Machine JSON output
-python scripts/test_metadata_extraction.py --json extract /path/to/input_images/your_image.tif
+.venv/bin/python scripts/test_metadata_extraction.py --json extract /path/to/input_images/your_image.tif
 ```
 
 ### 3. Batch Extraction (Entire Directory)
@@ -116,22 +116,22 @@ Extract metadata from all images in the input_images directory:
 
 ```bash
 # Default: sidecars saved to input_images/provenance_sidecars/
-python scripts/test_metadata_extraction.py extract-batch /path/to/input_images/
+.venv/bin/python scripts/test_metadata_extraction.py extract-batch /path/to/input_images/
 
 # Custom output directory
-python scripts/test_metadata_extraction.py extract-batch /path/to/input_images/ -o /tmp/metadata_sidecars/
+.venv/bin/python scripts/test_metadata_extraction.py extract-batch /path/to/input_images/ -o /tmp/metadata_sidecars/
 
 # Non-recursive (only top-level images)
-python scripts/test_metadata_extraction.py extract-batch /path/to/input_images/ --no-recursive
+.venv/bin/python scripts/test_metadata_extraction.py extract-batch /path/to/input_images/ --no-recursive
 
 # Stop on first error
-python scripts/test_metadata_extraction.py extract-batch /path/to/input_images/ --fail-fast
+.venv/bin/python scripts/test_metadata_extraction.py extract-batch /path/to/input_images/ --fail-fast
 
 # Verbose output (show per-file status)
-python scripts/test_metadata_extraction.py extract-batch /path/to/input_images/ -v
+.venv/bin/python scripts/test_metadata_extraction.py extract-batch /path/to/input_images/ -v
 
 # Machine JSON output
-python scripts/test_metadata_extraction.py --json extract-batch /path/to/input_images/
+.venv/bin/python scripts/test_metadata_extraction.py --json extract-batch /path/to/input_images/
 ```
 
 ### 4. Validate Sidecar Files
@@ -140,16 +140,16 @@ Validate provenance sidecars for schema compliance:
 
 ```bash
 # Basic validation
-python scripts/test_metadata_extraction.py validate /path/to/input_images/provenance_sidecars/your_image_provenance.json
+.venv/bin/python scripts/test_metadata_extraction.py validate /path/to/input_images/provenance_sidecars/your_image_provenance.json
 
 # Verbose output (show sidecar summary)
-python scripts/test_metadata_extraction.py validate /path/to/input_images/provenance_sidecars/your_image_provenance.json -v
+.venv/bin/python scripts/test_metadata_extraction.py validate /path/to/input_images/provenance_sidecars/your_image_provenance.json -v
 
 # Non-strict mode (legacy compatibility)
-python scripts/test_metadata_extraction.py validate /path/to/input_images/provenance_sidecars/your_image_provenance.json --no-strict
+.venv/bin/python scripts/test_metadata_extraction.py validate /path/to/input_images/provenance_sidecars/your_image_provenance.json --no-strict
 
 # Machine JSON output
-python scripts/test_metadata_extraction.py --json validate /path/to/input_images/provenance_sidecars/your_image_provenance.json
+.venv/bin/python scripts/test_metadata_extraction.py --json validate /path/to/input_images/provenance_sidecars/your_image_provenance.json
 ```
 
 ### 5. Summarize Extraction Results
@@ -157,10 +157,10 @@ python scripts/test_metadata_extraction.py --json validate /path/to/input_images
 Get aggregate statistics from extracted sidecars:
 
 ```bash
-python scripts/test_metadata_extraction.py summarize /path/to/input_images/provenance_sidecars/
+.venv/bin/python scripts/test_metadata_extraction.py summarize /path/to/input_images/provenance_sidecars/
 
 # Machine JSON output
-python scripts/test_metadata_extraction.py --json summarize /path/to/input_images/provenance_sidecars/
+.venv/bin/python scripts/test_metadata_extraction.py --json summarize /path/to/input_images/provenance_sidecars/
 ```
 
 Output includes:

@@ -34,7 +34,7 @@ TypeError: expected str, bytes or os.PathLike object, not OptionInfo
 
 **Verification**:
 ```bash
-python lux_render_pipeline.py --help
+.venv/bin/python scripts/pipelines/lux_render_pipeline.py --help
 # Should display help without errors
 ```
 
@@ -83,7 +83,7 @@ validate_sd_dimensions(1024, 770, auto_correct=False)
 **Manual fix**:
 Always use dimensions that are multiples of 64:
 ```bash
-python lux_render_pipeline.py \
+.venv/bin/python scripts/pipelines/lux_render_pipeline.py \
   --width 768 \    # ✓ 768 = 64 × 12
   --height 512 \   # ✓ 512 = 64 × 8
   --input 'images/*.png'
@@ -105,19 +105,21 @@ FileNotFoundError: [Errno 2] No such file or directory:
 
 **Option 1: Use PyTorch Depth Model** (Recommended for cross-platform)
 ```bash
-# Install transformers
-pip install transformers torch
+# Install the governed ML dependency lane
+make install-ml-core
 
 # Model downloads automatically on first use
+.venv/bin/python - <<'PY'
 from transformers import pipeline
 depth_estimator = pipeline("depth-estimation",
                           model="depth-anything/Depth-Anything-V2-Small")
+PY
 ```
 
 **Option 2: Convert to CoreML** (Apple Silicon only)
 ```bash
 # Install CoreML tools (macOS only)
-pip install coremltools
+make install-ml-coreml
 
 # Follow CoreML conversion guide
 # See: https://apple.github.io/coremltools/docs-guides/source/convert-pytorch.html
@@ -126,7 +128,7 @@ pip install coremltools
 **Option 3: Skip Depth Processing**
 ```bash
 # Use --no-depth flag to skip depth guidance
-python lux_render_pipeline.py \
+.venv/bin/python scripts/pipelines/lux_render_pipeline.py \
   --no-depth \
   --input 'images/*.png'
 ```
@@ -148,15 +150,18 @@ python lux_render_pipeline.py \
 
 **Solution** (now with helpful error messages):
 
-**Step 1: Install package**
+**Step 1: Confirm optional upscaling policy**
 ```bash
-pip install realesrgan basicsr facexlib gfpgan
+# External realesrgan packages are intentionally not part of the default setup.
+# Keep using the built-in Lanczos fallback unless a project-specific optional
+# runtime policy explicitly permits external upscaling dependencies.
+make install-ml-core
 ```
 
 **Step 2: Download model weights**
 ```bash
 # Automatic download (recommended)
-python scripts/setup/download_depth_models.py --model depth
+.venv/bin/python scripts/setup/download_depth_models.py --model depth
 
 # Or manual download
 mkdir -p weights
@@ -166,7 +171,7 @@ mv RealESRGAN_x4plus.pth weights/
 
 **Step 3: Verify installation**
 ```bash
-python scripts/verify_setup.py
+.venv/bin/python scripts/verify_setup.py
 ```
 
 **Fallback**: If Real-ESRGAN is unavailable, the pipeline automatically uses Pillow's Lanczos resampling (lower quality but functional).
@@ -192,7 +197,7 @@ ZoeD_M12_N.pt: 0% | 703k/1.44G [00:30<10:48:36, 37.1kB/s]
 **Option 1: Pre-download models**
 ```bash
 # Use download script with progress bar
-python scripts/setup/download_depth_models.py
+.venv/bin/python scripts/setup/download_depth_models.py
 ```
 
 **Option 2: Use model cache**
@@ -201,8 +206,8 @@ python scripts/setup/download_depth_models.py
 export TRANSFORMERS_CACHE=/path/to/fast/storage
 export HF_HOME=/path/to/fast/storage
 
-# Models download to this location
-python your_script.py
+# Models download to this location from repo-managed commands
+.venv/bin/python your_script.py
 ```
 
 **Option 3: Use smaller models**
@@ -216,7 +221,7 @@ depth_estimator = pipeline("depth-estimation",
 
 **Option 4: Skip depth processing**
 ```bash
-python lux_render_pipeline.py --no-depth --input 'images/*.png'
+.venv/bin/python scripts/pipelines/lux_render_pipeline.py --no-depth --input 'images/*.png'
 ```
 
 ---
@@ -231,11 +236,11 @@ Cannot initialize model with low cpu memory usage because `accelerate`
 was not found in the environment.
 ```
 
-**Solution**: Now included in requirements.txt (as of November 2025)
+**Solution**: Install the governed ML dependency lane.
 
 **Install manually** (if needed):
 ```bash
-pip install accelerate
+make install-ml-core
 ```
 
 **Benefits**:
@@ -264,30 +269,26 @@ ImportError: cannot import name 'pipeline' from 'transformers'
 
 **Step 1: Verify Python version**
 ```bash
-python --version  # Must be 3.10+
+.venv/bin/python --version  # Must be 3.11 or 3.12
 ```
 
-**Step 2: Install all dependencies**
+**Step 2: Install core dependencies**
 ```bash
-# Core dependencies
-pip install -r requirements.txt
-
-# Development dependencies (optional)
-pip install -r requirements-dev.txt
+make install-core
 ```
 
-**Step 3: Install package in editable mode**
+**Step 3: Install development hooks when needed**
 ```bash
-pip install -e .
+make install-hooks
 ```
 
 **Step 4: Verify installation**
 ```bash
-python scripts/verify_setup.py
+.venv/bin/python scripts/verify_setup.py
 ```
 
 **Common fixes**:
-- **Wrong Python version**: Use Python 3.10+
+- **Wrong Python version**: Use Python 3.11 or 3.12
 - **Wrong virtual environment**: Activate correct venv
 - **Cached packages**: Clear pip cache: `pip cache purge`
 - **Conflicting packages**: Create fresh venv
@@ -336,7 +337,7 @@ python -c "import torch; print(torch.backends.mps.is_available())"
 
 **Check installation status**:
 ```bash
-python scripts/verify_setup.py --verbose
+.venv/bin/python scripts/verify_setup.py --verbose
 ```
 
 **Test dimension validation**:
@@ -399,7 +400,7 @@ top -l 1 | grep PhysMem  # macOS
 
 2. **Run diagnostics**:
    ```bash
-   python scripts/verify_setup.py --verbose
+   .venv/bin/python scripts/verify_setup.py --verbose
    ```
 
 3. **Check existing issues**:
@@ -419,10 +420,10 @@ top -l 1 | grep PhysMem  # macOS
 | Problem | Quick Fix |
 |---------|-----------|
 | Tensor dimension mismatch | Use dimensions that are multiples of 64 (auto-corrected) |
-| Real-ESRGAN not found | `pip install realesrgan && python scripts/setup/install_models.py --dry-run` |
-| Slow model downloads | `python scripts/setup/download_depth_models.py` |
-| Missing accelerate | `pip install accelerate` (now in requirements.txt) |
-| Import errors | `pip install -r requirements.txt && pip install -e .` |
+| Real-ESRGAN not found | Use the built-in Lanczos fallback, or validate an approved optional upscaler with `.venv/bin/python scripts/setup/install_models.py --dry-run` |
+| Slow model downloads | `.venv/bin/python scripts/setup/download_depth_models.py` |
+| Missing accelerate | `make install-ml-core` |
+| Import errors | `make install-core && .venv/bin/python scripts/verify_setup.py --verbose` |
 | GPU not detected | Install CUDA or MPS-enabled PyTorch |
 | Out of memory | Reduce dimensions or use --no-depth flag |
 | CoreML model missing | Use PyTorch models (cross-platform) |

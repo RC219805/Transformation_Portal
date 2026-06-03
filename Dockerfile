@@ -75,10 +75,10 @@ EXPOSE 8000
 # Uses Python stdlib so we don't have to install curl in the slim base.
 # start-period gives uvicorn time to bind before failures count.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=3).read()" || exit 1
+    CMD python3.11 -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=3).read()" || exit 1
 
 USER tp
-CMD ["python", "-m", "transformation_portal.cli"]
+CMD ["python3.11", "-m", "transformation_portal.cli"]
 
 # Stage 4: GPU runtime base (CUDA support)
 FROM nvidia/cuda:12.1.0-runtime-ubuntu22.04 AS gpu-runtime-base
@@ -146,27 +146,13 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
 USER tp
 CMD ["python3.11", "-m", "transformation_portal.cli"]
 
-# Stage 7: Apple Silicon builder (M-series chips)
-FROM python-build AS apple-silicon-build
+# Stage 7: Apple Silicon compatibility target.
+#
+# Docker on Apple Silicon still runs a Linux container, so this target cannot
+# consume the governed native Darwin arm64 ML lock or provide MPS/CoreML
+# acceleration. Keep the historical target name as a CPU image alias and route
+# native Apple Silicon ML installs through `make install-ml-core` or
+# `scripts/bootstrap/install_ml_stack.sh --profile core-mps`.
+FROM cpu AS apple-silicon
 
-# Install Apple Silicon optimized dependencies
-RUN python -m pip install --no-cache-dir coremltools
-RUN python -m pip install --no-cache-dir -e ".[ml]"
-
-# Stage 8: Apple Silicon optimized (M-series chips)
-FROM python-runtime-base AS apple-silicon
-
-ENV VIRTUAL_ENV=/opt/venv
-ENV PATH="${VIRTUAL_ENV}/bin:${PATH}"
-
-COPY --from=apple-silicon-build --chown=tp:tp /opt/venv /opt/venv
-COPY --from=apple-silicon-build --chown=tp:tp /app /app
-
-ENV DEVICE=mps
-EXPOSE 8000
-
-HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=3).read()" || exit 1
-
-USER tp
-CMD ["python", "-m", "transformation_portal.cli"]
+ENV DEVICE=cpu

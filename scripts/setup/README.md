@@ -50,12 +50,12 @@ contract and by explicit `--da3-python` overrides.
 
 **Stable contract:**
 ```bash
-lux-depth-v3 --input-dir ./input --output-dir ./output
+lux-depth-v3 --input-dir ./input_images --output-dir ./output
 ```
 
 If you need a non-default interpreter, override it explicitly:
 ```bash
-lux-depth-v3 --input-dir ./input --output-dir ./output --da3-python ~/venvs/da3/bin/python
+lux-depth-v3 --input-dir ./input_images --output-dir ./output --da3-python ~/venvs/da3/bin/python
 ```
 
 **Requirements:**
@@ -86,7 +86,7 @@ curl -L https://ml-site.cdn-apple.com/models/depth-pro/depth_pro.pt -o checkpoin
 
 **Stable contract:**
 ```bash
-lux-depth-v3 --input-dir ./input --output-dir ./output --depth-pro-python ./.venv-depth-pro/bin/python
+lux-depth-v3 --input-dir ./input_images --output-dir ./output --depth-pro-python ./.venv-depth-pro/bin/python
 ```
 
 Use `--verify-device cpu` when you only need a CPU-safe contract. The default
@@ -112,7 +112,7 @@ auto-discovered `./.venv-raw/bin/python` contract and by explicit
 
 **Stable contract:**
 ```bash
-lux-depth-v3 --input-dir ./input --output-dir ./output --raw-python ./.venv-raw/bin/python
+lux-depth-v3 --input-dir ./input_images --output-dir ./output --raw-python ./.venv-raw/bin/python
 ```
 
 If you want the repo-local runtime to be used automatically for RAW batches,
@@ -170,7 +170,7 @@ Downloads and installs AI/ML models required by the Transformation Portal pipeli
 
 **Usage:**
 ```bash
-python scripts/setup/install_models.py [--all] [--dry-run] [--force]
+.venv/bin/python scripts/setup/install_models.py [--all] [--dry-run] [--force]
 ```
 
 **Options:**
@@ -180,17 +180,19 @@ python scripts/setup/install_models.py [--all] [--dry-run] [--force]
 
 **Models:**
 - Depth Anything V2 (depth estimation)
-- Real-ESRGAN (upscaling)
+- Governed upscaling model assets where configured; the external `realesrgan`
+  package remains unsupported
 - Stable Diffusion XL (AI enhancement)
 - ControlNet models (edge-preserving processing)
 
 ### `download_depth_models.py`
 
-Downloads depth estimation models for the Depth Pipeline.
+Prints Depth Anything CoreML setup instructions and verifies local Lux Depth V3
+artifact status.
 
 **Usage:**
 ```bash
-python scripts/setup/download_depth_models.py
+.venv/bin/python scripts/setup/download_depth_models.py
 ```
 
 **What it does:**
@@ -207,14 +209,15 @@ python scripts/setup/download_depth_models.py
 git clone https://github.com/RC219805/Transformation_Portal.git
 cd Transformation_Portal
 
-# 2. Install Python dependencies
-pip install -r requirements.txt
+# 2. Install pinned core runtime and dev tooling
+make venv
+make install-core
 
 # 3. Install organization system
 ./scripts/setup/auto-organize-install.sh
 
 # 4. (Optional) Install ML models
-python scripts/setup/install_models.py --all
+.venv/bin/python scripts/setup/install_models.py --all
 ```
 
 ### Organization System Only
@@ -296,7 +299,7 @@ sed -i 's/\r$//' .auto-organize.sh
 **Solution:**
 ```bash
 # Try downloading specific models one at a time
-python scripts/setup/install_models.py --model depth_anything_v2
+.venv/bin/python scripts/setup/install_models.py --model depth_anything_v2
 
 # Check disk space
 df -h

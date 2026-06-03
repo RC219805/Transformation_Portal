@@ -15,9 +15,14 @@ FIREWALL_WORKFLOW_PATH = REPO_ROOT / ".github" / "workflows" / "ci-quality-firew
 EXPECTED_RULE_ID = "generic-api-key"
 EXPECTED_PATH_REGEX = r"(^|/)public/portal-assets/portal\.js$"
 EXPECTED_ARTIFACT_PATH_REGEX = (
-    r"(^|/)(output|output_[^/]*|test_output|test_artifacts|processed_images|processed_output|"
-    r"extracted_context|docs/api/_build|__pycache__|\.pytest_cache|\.mypy_cache|\.ruff_cache|\.pyre|"
-    r"\.rag_cache|web/secure-landing/(?:\.next|\.next-build-verify|\.next-smoke-[^/]*|\.next-codex-[^/]*|\.metafiles))(/|$)"
+    r"(^|/)(\.venv(?:-[^/]*)?|\.runtime|\.cache|\.pytest_cache|\.mypy_cache|\.ruff_cache|\.hypothesis|"
+    r"\.pyre|\.rag_cache|\.coverage(?:\..*)?|coverage\.(?:xml|json)|htmlcov|node_modules|build|dist|"
+    r"downloads|docs/api/_build|output|output_[^/]*|outputs|test_output|test_artifacts|processed_images|"
+    r"processed_output|extracted_context|logs|artifacts|trial_runs|archive_reports|local_artifacts|"
+    r"depth_maps_apex|artifact_store|archive/(?:experiments|deprecated|legacy)|"
+    r"__pycache__|web/secure-landing/(?:node_modules|\.next|\.next-build-verify|\.next-smoke-[^/]*|"
+    r"\.next-codex-[^/]*|\.metafiles|tmp|test-results|playwright-report|blob-report|\.playwright)|"
+    r"cloudflare/transformationportal-worker/(?:node_modules|\.wrangler))(/|$)"
 )
 EXPECTED_REGEX_TARGET = "line"
 EXPECTED_MATCH_REGEX = r'return normalizedReason==="auth_failure"\|\|normalizedReason==="auth"\|\|normalizedStatus===401\|\|normalizedStatus===403\?\{reason:"auth_failure"'

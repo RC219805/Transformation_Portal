@@ -208,9 +208,9 @@ Single-image metadata extraction with provenance sidecar generation.
   "success": true,
   "exit_code": 0,
   "data": {
-    "input_path": "/input/IMG_1234.CR2",
+    "input_path": "input_images/IMG_1234.CR2",
     "success": true,
-    "output_path": "/output/IMG_1234.provenance.json",
+    "output_path": "output/IMG_1234.provenance.json",
     "elapsed_seconds": 1.234,
     "preset": "luxury",
     "error": null
@@ -228,14 +228,14 @@ Single-image metadata extraction with provenance sidecar generation.
   "success": false,
   "exit_code": 5,
   "data": {
-    "input_path": "/input/missing.CR2",
+    "input_path": "input_images/missing.CR2",
     "success": false,
     "output_path": null,
     "elapsed_seconds": 0.001,
     "preset": "luxury",
     "error": {
       "type": "OtherIngestFailure",
-      "message": "Input file does not exist: /input/missing.CR2",
+      "message": "Input file does not exist: input_images/missing.CR2",
       "exit_code": {"name": "OTHER_FAILURE", "value": 5},
       "priority": 10
     }
@@ -272,7 +272,7 @@ Schema validation of an existing provenance sidecar.
   "success": true,
   "exit_code": 0,
   "data": {
-    "sidecar_path": "/output/IMG_1234.provenance.json",
+    "sidecar_path": "output/IMG_1234.provenance.json",
     "strict": true,
     "success": true,
     "errors": [],
@@ -291,7 +291,7 @@ Schema validation of an existing provenance sidecar.
   "success": false,
   "exit_code": 4,
   "data": {
-    "sidecar_path": "/output/IMG_1234.provenance.json",
+    "sidecar_path": "output/IMG_1234.provenance.json",
     "strict": true,
     "success": false,
     "errors": [
@@ -340,16 +340,16 @@ Batch metadata extraction for multiple images.
   "success": false,
   "exit_code": 5,
   "data": {
-    "input_root": "/input",
-    "output_dir": "/output",
+    "input_root": "input_images",
+    "output_dir": "output",
     "fail_fast": false,
     "preserve_structure": false,
     "success": false,
     "items": [
       {
-        "path": "/input/IMG_1234.CR2",
+        "path": "input_images/IMG_1234.CR2",
         "success": true,
-        "output_path": "/output/IMG_1234.provenance.json",
+        "output_path": "output/IMG_1234.provenance.json",
         "elapsed_seconds": 1.234,
         "error": null
       },
@@ -497,27 +497,27 @@ Aggregate summary of sidecar validation results in a directory.
 
 ```bash
 # Emit machine JSON to stdout
-python scripts/test_metadata_extraction.py --json extract /input/image.CR2
+.venv/bin/python scripts/test_metadata_extraction.py --json extract input_images/image.CR2
 
 # Pretty-printed JSON to stdout
-python scripts/test_metadata_extraction.py --json --json-pretty extract /input/image.CR2
+.venv/bin/python scripts/test_metadata_extraction.py --json --json-pretty extract input_images/image.CR2
 
 # Write JSON to file, keep stdout clean
-python scripts/test_metadata_extraction.py --json --json-output result.json extract /input/image.CR2
+.venv/bin/python scripts/test_metadata_extraction.py --json --json-output result.json extract input_images/image.CR2
 
 # Pretty JSON to file
-python scripts/test_metadata_extraction.py --json --json-pretty --json-output result.json extract /input/image.CR2
+.venv/bin/python scripts/test_metadata_extraction.py --json --json-pretty --json-output result.json extract input_images/image.CR2
 ```
 
 ### Exit Code Handling
 
 ```bash
 # Exit code reflects operation status
-python scripts/test_metadata_extraction.py --json extract /input/image.CR2
+.venv/bin/python scripts/test_metadata_extraction.py --json extract input_images/image.CR2
 echo $?  # 0 = success, 1-5 = specific failure modes
 
 # Route by exit code in CI
-if python scripts/test_metadata_extraction.py --json validate sidecar.json; then
+if .venv/bin/python scripts/test_metadata_extraction.py --json validate sidecar.json; then
   echo "Validation passed"
 else
   exit_code=$?
@@ -640,13 +640,13 @@ if __name__ == "__main__":
 
 ```bash
 # Parse from file
-python parse_machine_json.py result.json
+.venv/bin/python tools/parse_machine_json.py result.json
 
 # Parse from stdin
-python scripts/test_metadata_extraction.py --json extract /input/image.CR2 | python parse_machine_json.py
+.venv/bin/python scripts/test_metadata_extraction.py --json extract input_images/image.CR2 | .venv/bin/python tools/parse_machine_json.py
 
 # Exit code forwarding
-python scripts/test_metadata_extraction.py --json validate sidecar.json | python parse_machine_json.py
+.venv/bin/python scripts/test_metadata_extraction.py --json validate sidecar.json | .venv/bin/python tools/parse_machine_json.py
 echo $?  # Parser exits with same code as CLI
 ```
 
@@ -662,7 +662,7 @@ For bash automation without Python:
 #!/bin/bash
 set -euo pipefail
 
-result=$(python scripts/test_metadata_extraction.py --json extract "$1")
+result=$(.venv/bin/python scripts/test_metadata_extraction.py --json extract "$1")
 exit_code=$?
 
 # Validate schema
@@ -692,7 +692,7 @@ fi
 #!/bin/bash
 set -euo pipefail
 
-result=$(python scripts/test_metadata_extraction.py --json validate "$1")
+result=$(.venv/bin/python scripts/test_metadata_extraction.py --json validate "$1")
 exit_code=$?
 
 success=$(echo "$result" | jq -r '.success')
@@ -718,7 +718,7 @@ fi
 #!/bin/bash
 set -euo pipefail
 
-result=$(python scripts/test_metadata_extraction.py --json extract-batch "$1")
+result=$(.venv/bin/python scripts/test_metadata_extraction.py --json extract-batch "$1")
 exit_code=$?
 
 total=$(echo "$result" | jq '.data.summary_counts.total')
@@ -757,10 +757,10 @@ exit $exit_code
 
 ```bash
 # Separate JSON (stdout) from diagnostics (stderr)
-python scripts/test_metadata_extraction.py --json extract /input/image.CR2 > result.json 2> diagnostics.log
+.venv/bin/python scripts/test_metadata_extraction.py --json extract input_images/image.CR2 > result.json 2> diagnostics.log
 
 # Interactive debugging: see diagnostics, capture JSON
-python scripts/test_metadata_extraction.py --json extract /input/image.CR2 2>&1 | tee full_output.log | jq .
+.venv/bin/python scripts/test_metadata_extraction.py --json extract input_images/image.CR2 2>&1 | tee full_output.log | jq .
 ```
 
 **DO NOT parse stderr in automation.** It may contain:

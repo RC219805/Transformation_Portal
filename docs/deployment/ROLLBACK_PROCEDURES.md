@@ -87,7 +87,7 @@ python -c "import transformation_portal; print(transformation_portal.__version__
 pytest tests/test_core_functionality.py -v --maxfail=1
 
 # Verify PBR processing (if applicable)
-python -m transformation_portal.lux_depth_v3.pbr_cli --help
+.venv/bin/python -m transformation_portal.lux_depth_v3.pbr_cli --help
 ```
 
 **Step 5: Restart services** (if applicable)
@@ -100,7 +100,7 @@ docker-compose down
 docker-compose up -d
 
 # Verify service is healthy
-curl http://localhost:8000/health || python scripts/verification/verify_core.py
+curl http://localhost:8000/health || .venv/bin/python scripts/verification/verify_core.py
 ```
 
 **Step 6: Monitor and communicate**
@@ -351,7 +351,7 @@ echo "## [2.2.1] - $(date +%Y-%m-%d)
 " >> CHANGELOG.md
 
 # Build distribution packages
-python -m build
+.venv/bin/python -m build
 ls -lh dist/  # Verify wheel and sdist created
 
 # Verify package contents
@@ -478,15 +478,14 @@ pip freeze >> rollback-report.md
 If dependency conflicts occur during rollback:
 
 ```bash
-# Option 1: Use pip's dependency resolver (default in pip >=20.3)
-pip install -r requirements.txt --use-feature=2020-resolver
+# Option 1: Rebuild the governed core environment
+make repair-core-venv
 
-# Option 2: Use constraints file to force specific versions
-pip install -r requirements.txt --constraint requirements-rollback-YYYYMMDD.txt
+# Option 2: Use a rollback constraints file for the editable package install
+.venv/bin/python -m pip install --constraint requirements-rollback-YYYYMMDD.txt -e .
 
-# Option 3: Install packages individually if conflicts persist
-# (Use this as last resort)
-cat requirements/core.txt | grep -v '^#' | xargs -n1 pip install
+# Option 3: Regenerate and reinstall the governed core lane
+make install-core
 ```
 
 **Known Compatibility Issues**:
@@ -542,7 +541,7 @@ mkdir -p archive/output-v2.2.0-$(date +%Y%m%d)/
 mv output_*/ archive/output-v2.2.0-$(date +%Y%m%d)/
 
 # Verify older version can process fresh inputs
-python -m transformation_portal.cli depth-estimation \
+.venv/bin/python -m transformation_portal.cli depth-estimation \
   --input tests/fixtures/test_image.jpg \
   --output /tmp/verify-rollback/
 ```

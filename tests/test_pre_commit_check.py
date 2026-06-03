@@ -89,6 +89,121 @@ def test_cloudflare_workers_build_root_shim_files_are_allowed(tmp_path: Path) ->
     assert result.returncode == 0, result.stdout + result.stderr
 
 
+def test_known_root_requirement_shims_are_allowed(tmp_path: Path) -> None:
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+    _init_repo(repo_root)
+    _copy_repo_script(repo_root)
+
+    for path in ("requirements.txt", "requirements-ci.txt", "requirements-dev.txt", "requirements-lint.txt"):
+        _write(repo_root / path, "# governed root requirement shim\n")
+
+    add_result = _run(
+        [
+            "git",
+            "add",
+            "requirements.txt",
+            "requirements-ci.txt",
+            "requirements-dev.txt",
+            "requirements-lint.txt",
+            "scripts/setup/pre-commit-check.sh",
+        ],
+        repo_root,
+    )
+    assert add_result.returncode == 0, add_result.stdout + add_result.stderr
+
+    result = _run(["bash", "scripts/setup/pre-commit-check.sh", "--staged"], repo_root)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_governed_root_dotfile_configs_are_allowed(tmp_path: Path) -> None:
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+    _init_repo(repo_root)
+    _copy_repo_script(repo_root)
+
+    governed_dotfiles = [
+        ".dockerignore",
+        ".env.example",
+        ".gitattributes",
+        ".git-blame-ignore-revs",
+        ".gitignore",
+        ".gitleaks.toml",
+        ".pre-commit-config.yaml",
+        ".pylintrc",
+    ]
+    for path in governed_dotfiles:
+        _write(repo_root / path)
+
+    add_result = _run(["git", "add", *governed_dotfiles, "scripts/setup/pre-commit-check.sh"], repo_root)
+    assert add_result.returncode == 0, add_result.stdout + add_result.stderr
+
+    result = _run(["bash", "scripts/setup/pre-commit-check.sh", "--staged"], repo_root)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_broad_root_allowlist_patterns_do_not_allow_new_clutter(tmp_path: Path) -> None:
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+    _init_repo(repo_root)
+    _copy_repo_script(repo_root)
+
+    unexpected_root_files = [
+        ".envrc",
+        ".gitlab-ci.yml",
+        "requirements-local.txt",
+    ]
+    for path in unexpected_root_files:
+        _write(repo_root / path)
+
+    add_result = _run(["git", "add", *unexpected_root_files, "scripts/setup/pre-commit-check.sh"], repo_root)
+    assert add_result.returncode == 0, add_result.stdout + add_result.stderr
+
+    result = _run(["bash", "scripts/setup/pre-commit-check.sh", "--staged"], repo_root)
+
+    assert result.returncode == 1, result.stdout + result.stderr
+    for path in unexpected_root_files:
+        assert path in result.stdout
+    assert "an approved project subdirectory" in result.stdout
+
+
+def test_retired_root_config_files_are_rejected(tmp_path: Path) -> None:
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+    _init_repo(repo_root)
+    _copy_repo_script(repo_root)
+
+    retired_root_configs = [
+        "setup.py",
+        "setup.cfg",
+        "requirements-test.txt",
+        "Pipfile",
+        "Pipfile.lock",
+        "poetry.lock",
+        "pytest.ini",
+        "tox.ini",
+        ".coveragerc",
+        ".flake8",
+        "docker-compose.yaml",
+        "PKG-INFO",
+        "MANIFEST.in",
+        "__init__.py",
+    ]
+    for path in retired_root_configs:
+        _write(repo_root / path)
+
+    add_result = _run(["git", "add", *retired_root_configs, "scripts/setup/pre-commit-check.sh"], repo_root)
+    assert add_result.returncode == 0, add_result.stdout + add_result.stderr
+
+    result = _run(["bash", "scripts/setup/pre-commit-check.sh", "--staged"], repo_root)
+
+    assert result.returncode == 1, result.stdout + result.stderr
+    for path in retired_root_configs:
+        assert path in result.stdout
+
+
 def test_allowed_top_level_directories_are_accepted(tmp_path: Path) -> None:
     repo_root = tmp_path / "repo"
     repo_root.mkdir()

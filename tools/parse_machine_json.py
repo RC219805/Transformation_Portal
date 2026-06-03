@@ -9,13 +9,13 @@ contract itself (schema + field semantics), not this parser's stdout text.
 
 Usage:
     # Parse from file
-    python tools/parse_machine_json.py result.json
+    .venv/bin/python tools/parse_machine_json.py result.json
 
     # Parse from stdin
-    python scripts/test_metadata_extraction.py --json extract /input/image.CR2 | python tools/parse_machine_json.py
+    .venv/bin/python scripts/test_metadata_extraction.py --json extract input_images/image.CR2 | .venv/bin/python tools/parse_machine_json.py
 
     # Exit code forwarding
-    python scripts/test_metadata_extraction.py --json validate sidecar.json | python tools/parse_machine_json.py
+    .venv/bin/python scripts/test_metadata_extraction.py --json validate sidecar.json | .venv/bin/python tools/parse_machine_json.py
     echo $?  # Parser exits with same code as CLI
 
 See docs/api/MACHINE_MODE_CONTRACT.md for full contract specification.

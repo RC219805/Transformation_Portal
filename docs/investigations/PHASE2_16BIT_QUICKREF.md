@@ -50,7 +50,7 @@ Materials V3 Output:
 
 ```bash
 python -m transformation_portal.lux_depth_v3 \
-  --input-dir ./input \
+  --input-dir ./input_images \
   --output-dir ./output_16bit \
   --materials-v3 on \
   --enable-v2 on \
@@ -67,7 +67,7 @@ python -m transformation_portal.lux_depth_v3 \
 
 ```bash
 python -m transformation_portal.lux_depth_v3 \
-  --input-dir ./input \
+  --input-dir ./input_images \
   --output-dir ./output_8bit \
   --materials-v3 on \
   --enable-v2 on

@@ -8,14 +8,14 @@ This script downloads required models for depth-aware processing:
 - Alternative depth models for non-Apple platforms
 
 Usage:
-    python scripts/setup/download_depth_models.py [--model depth] [--output-dir DIR] [--verify-only]
+    .venv/bin/python scripts/setup/download_depth_models.py [--model depth] [--output-dir DIR] [--verify-only]
 
 Examples:
     # Download default Depth Anything V2 Small model
-    python scripts/setup/download_depth_models.py
+    .venv/bin/python scripts/setup/download_depth_models.py
 
     # Download to custom location
-    python scripts/setup/download_depth_models.py --output-dir ./models/depth
+    .venv/bin/python scripts/setup/download_depth_models.py --output-dir ./models/depth
 """
 
 import argparse
@@ -172,8 +172,8 @@ def download_depth_anything_v2_coreml(output_dir: Path) -> bool:
 
     print("\nOption 2: Use PyTorch model directly")
     print("-" * 70)
-    print("The repository can use Depth Anything V2 via transformers library:")
-    print("  pip install transformers torch")
+    print("The repository can use Depth Anything V2 through the governed ML baseline:")
+    print("  make install-ml-core")
     print("The model will download automatically on first use.")
     print("Note: PyTorch is slower than CoreML on Apple Silicon but works cross-platform.")
 
@@ -276,12 +276,12 @@ def main():
     print("\n" + "=" * 70)
     print("NEXT STEPS")
     print("=" * 70)
-    print("1. Install required packages:")
-    print("   pip install -r requirements.txt")
-    print("\n2. For depth processing, install transformers:")
-    print("   pip install transformers torch")
+    print("1. Install pinned core runtime and dev tooling:")
+    print("   make install-core")
+    print("\n2. Install the supported ML baseline when you need live model execution:")
+    print("   make install-ml-core")
     print("\n3. Test your installation:")
-    print("   python scripts/verification/verify_core.py")
+    print("   .venv/bin/python scripts/verification/verify_core.py")
 
     return 0 if success else 1
 

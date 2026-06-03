@@ -139,6 +139,42 @@ class TestRootGovernanceMetadata:
     def _make_targets(makefile: Path) -> set[str]:
         return {match.group(1) for match in re.finditer(r"(?m)^([A-Za-z0-9_.%/+@-]+):", makefile.read_text())}
 
+    @staticmethod
+    def _relative_markdown_links(markdown_path: Path) -> list[tuple[int, str, Path]]:
+        links: list[tuple[int, str, Path]] = []
+        text = markdown_path.read_text(encoding="utf-8")
+        for match in re.finditer(r"\[[^\]]+\]\(([^)]+)\)", text):
+            raw_target = match.group(1).strip()
+            link_target = raw_target.split("#", 1)[0].split("?", 1)[0].strip("<>")
+            if not link_target or link_target.startswith("#") or re.match(r"^[A-Za-z][A-Za-z0-9+.-]*:", link_target):
+                continue
+            line_number = text.count("\n", 0, match.start()) + 1
+            links.append((line_number, raw_target, markdown_path.parent / link_target))
+        return links
+
+    def test_root_operator_markdown_links_resolve_to_tracked_targets(self):
+        """Root-facing operator docs should not carry broken relative links."""
+        relative_docs = [
+            "README.md",
+            "AGENTS.md",
+            "CLAUDE.md",
+            "CONTRIBUTING.md",
+            "SECURITY.md",
+            "CHANGELOG.md",
+            "docs/ci/BRANCH_PROTECTION_SETUP.md",
+            "docs/ci/BRANCH_PROTECTION_COMMANDS.md",
+            "docs/deployment/PRODUCTION_READINESS.md",
+        ]
+        broken_links = []
+
+        for relative_path in relative_docs:
+            markdown_path = _repo_root / relative_path
+            for line_number, raw_target, target_path in self._relative_markdown_links(markdown_path):
+                if not target_path.exists():
+                    broken_links.append(f"{relative_path}:{line_number}: {raw_target}")
+
+        assert not broken_links, "Broken root-facing Markdown links:\n" + "\n".join(sorted(broken_links))
+
     def test_root_readme_status_points_to_current_documentation_navigation(self):
         """Root status prose should not depend on stale PR-specific snapshots."""
         readme = (_repo_root / "README.md").read_text()
@@ -153,6 +189,232 @@ class TestRootGovernanceMetadata:
         for expected in required_navigation:
             assert expected in readme
         assert "Last Updated: 2026-05-11" not in readme
+
+    def test_operator_guides_use_governed_local_input_surface(self):
+        """Current CLI examples should not create untracked input directories."""
+        readme = (_repo_root / "README.md").read_text()
+        setup_readme = (_repo_root / "scripts" / "setup" / "README.md").read_text()
+        setup_guide = (_repo_root / "docs" / "guides" / "SETUP_GUIDE.md").read_text()
+        current_workflow_guides = [
+            (_repo_root / "docs" / "decisions" / "ADR_019_INTEGRATION_COMPLETE.md").read_text(),
+            (_repo_root / "docs" / "investigations" / "PHASE2_16BIT_QUICKREF.md").read_text(),
+            (_repo_root / "docs" / "workflows" / "PBR_ONLY_WORKFLOW.md").read_text(),
+        ]
+        runtime_installers = [
+            (_repo_root / "scripts" / "setup" / "install_da3_runtime.sh").read_text(),
+            (_repo_root / "scripts" / "setup" / "install_depth_pro_runtime.sh").read_text(),
+            (_repo_root / "scripts" / "setup" / "install_raw_runtime.sh").read_text(),
+        ]
+        compose = (_repo_root / "docker-compose.yml").read_text()
+        active_input_guidance = {
+            "docs/decisions/ADR_019_INTEGRATION_COMPLETE.md": (
+                _repo_root / "docs" / "decisions" / "ADR_019_INTEGRATION_COMPLETE.md"
+            ).read_text(),
+            "docs/guides/AI_ENHANCEMENT_GUIDE.md": (_repo_root / "docs" / "guides" / "AI_ENHANCEMENT_GUIDE.md").read_text(),
+            "docs/guides/FLUX_INTEGRATION.md": (_repo_root / "docs" / "guides" / "FLUX_INTEGRATION.md").read_text(),
+            "docs/guides/LUX_DEPTH_V3_TROUBLESHOOTING.md": (
+                _repo_root / "docs" / "guides" / "LUX_DEPTH_V3_TROUBLESHOOTING.md"
+            ).read_text(),
+            "docs/guides/PBR_ENHANCE_CONFIG_GUIDE.md": (
+                _repo_root / "docs" / "guides" / "PBR_ENHANCE_CONFIG_GUIDE.md"
+            ).read_text(),
+            "docs/reference/PBR_PRESETS_QUICK_REFERENCE.md": (
+                _repo_root / "docs" / "reference" / "PBR_PRESETS_QUICK_REFERENCE.md"
+            ).read_text(),
+        }
+
+        for guide in (readme, setup_readme, setup_guide, *current_workflow_guides, *runtime_installers):
+            assert "--input-dir ./input_images" in guide
+            assert "--input-dir ./input " not in guide
+            assert "--input-dir ./input\n" not in guide
+        stale_input_snippets = [
+            '--input-dir "./input"',
+            'Path("./input/',
+            "Path('./input/",
+            'Path("./input")',
+            "Path('./input')",
+            'input_root=Path("./input")',
+            "input_root=Path('./input')",
+            'glob.glob("input/*.jpg")',
+            "glob.glob('input/*.jpg')",
+        ]
+        for guide_name, guide in active_input_guidance.items():
+            assert "input_images" in guide, guide_name
+            for stale_snippet in stale_input_snippets:
+                assert stale_snippet not in guide, f"{guide_name} contains {stale_snippet}"
+        assert "./input_images:/app/input:ro" in compose
+        assert "./input:/app/input" not in compose
+
+    def test_root_ml_setup_guidance_prefers_make_targets(self):
+        """Root/current setup guidance should not present bootstrap profiles as the primary install path."""
+        guides = {
+            "README.md": (_repo_root / "README.md").read_text(),
+            "CLAUDE.md": (_repo_root / "CLAUDE.md").read_text(),
+            "docs/guides/SETUP_GUIDE.md": (_repo_root / "docs" / "guides" / "SETUP_GUIDE.md").read_text(),
+        }
+
+        for guide_name, guide in guides.items():
+            assert "make install-ml-core" in guide, guide_name
+            assert "Advanced Apple Silicon" in guide or "bootstrap-profile work" in guide, guide_name
+
+        stale_primary_guidance = [
+            "For example: `make install-ml-core` or, on Apple Silicon,",
+            "or use the target-specific bootstrap flow on macOS Apple Silicon",
+            "Or use the Apple Silicon bootstrap profiles directly",
+            "use `make install-ml-core` or `./scripts/bootstrap/install_ml_stack.sh --profile core-mps`",
+        ]
+        combined = "\n".join(guides.values())
+        for stale_fragment in stale_primary_guidance:
+            assert stale_fragment not in combined
+
+    def test_active_setup_guidance_uses_repo_managed_python(self):
+        """Active setup docs should not depend on ambient Python or raw requirements installs."""
+        guidance = {
+            "README.md": (_repo_root / "README.md").read_text(),
+            "CONTRIBUTING.md": (_repo_root / "CONTRIBUTING.md").read_text(),
+            "SECURITY.md": (_repo_root / "SECURITY.md").read_text(),
+            "docs/architecture/ADR-033-test-flake-management.md": (
+                _repo_root / "docs" / "architecture" / "ADR-033-test-flake-management.md"
+            ).read_text(),
+            "docs/deployment/ROLLBACK_PROCEDURES.md": (
+                _repo_root / "docs" / "deployment" / "ROLLBACK_PROCEDURES.md"
+            ).read_text(),
+            "docs/deployment/STAGING_VALIDATION.md": (
+                _repo_root / "docs" / "deployment" / "STAGING_VALIDATION.md"
+            ).read_text(),
+            "docs/guides/SETUP_GUIDE.md": (_repo_root / "docs" / "guides" / "SETUP_GUIDE.md").read_text(),
+            "docs/guides/TROUBLESHOOTING.md": (_repo_root / "docs" / "guides" / "TROUBLESHOOTING.md").read_text(),
+            "docs/status/READY_TO_PROCESS.md": (_repo_root / "docs" / "status" / "READY_TO_PROCESS.md").read_text(),
+            "pyproject.toml": (_repo_root / "pyproject.toml").read_text(),
+            "requirements.txt": (_repo_root / "requirements.txt").read_text(),
+            "Makefile": (_repo_root / "Makefile").read_text(),
+            "scripts/analyze_flakes.py": (_repo_root / "scripts" / "analyze_flakes.py").read_text(),
+            "scripts/README.md": (_repo_root / "scripts" / "README.md").read_text(),
+            "scripts/setup/download_depth_models.py": (
+                _repo_root / "scripts" / "setup" / "download_depth_models.py"
+            ).read_text(),
+            "scripts/setup/install_models.py": (_repo_root / "scripts" / "setup" / "install_models.py").read_text(),
+            "scripts/setup/install_models_auto.py": (_repo_root / "scripts" / "setup" / "install_models_auto.py").read_text(),
+            "scripts/setup/README.md": (_repo_root / "scripts" / "setup" / "README.md").read_text(),
+        }
+        combined = "\n".join(guidance.values())
+
+        forbidden_fragments = [
+            "pip install -r requirements.txt",
+            "pip install transformers torch",
+            "Real-ESRGAN (upscaling)",
+            "git clone https://github.com/NVlabs/nvdiffrast && pip install -e .",
+        ]
+        for forbidden_fragment in forbidden_fragments:
+            assert forbidden_fragment not in combined
+
+        forbidden_ambient_python = [
+            r"(?<![/\w.-])python scripts/analyze_flakes\.py",
+            r"(?<![/\w.-])python scripts/setup/download_depth_models\.py",
+            r"(?<![/\w.-])python scripts/setup/install_models\.py",
+            r"(?<![/\w.-])python scripts/setup/install_models_auto\.py",
+            r"(?<![/\w.-])python scripts/test_metadata_extraction\.py",
+            r"(?<![/\w.-])python scripts/verification/verify_core\.py",
+            r"(?<![/\w.-])python scripts/verification/verify_ml_deps\.py",
+            r"(?<![/\w.-])python scripts/check_image_processing_readiness\.py",
+            r"(?<![/\w.-])python scripts/simple_image_processor\.py",
+            r"(?<![/\w.-])python scripts/validation/verify_3dgs_artifacts\.py",
+            r"(?<![/\w.-])python -m transformation_portal\.",
+            r"(?m)^python -m build$",
+            r"(?m)^twine check dist/\*$",
+            r"(?m)^pip install dist/\*\.whl --force-reinstall$",
+            r"(?<!python -m )(?<![/\w.-])pip install -r requirements/security\.txt",
+            r"(?<!python -m )(?<![/\w.-])pip install diff-cover",
+            r"pylint --enable=security",
+            r"(?m)^black --(?:check --)?line-length=127 src/ tests/$",
+            r"(?m)^isort --(?:check-only --)?profile=black --line-length=127 src/ tests/$",
+            r"(?m)^flake8 src/ tests/ --max-line-length=127$",
+        ]
+        for forbidden_pattern in forbidden_ambient_python:
+            assert re.search(forbidden_pattern, combined) is None
+
+        required_fragments = [
+            "make install-core",
+            "make repair-core-venv",
+            ".venv/bin/python scripts/analyze_flakes.py",
+            ".venv/bin/python scripts/setup/download_depth_models.py",
+            ".venv/bin/python scripts/setup/install_models.py",
+            ".venv/bin/python scripts/setup/install_models_auto.py",
+            ".venv/bin/python scripts/test_metadata_extraction.py",
+            ".venv/bin/python scripts/verification/verify_core.py",
+            ".venv/bin/python scripts/verification/verify_ml_deps.py",
+            ".venv/bin/python scripts/check_image_processing_readiness.py",
+            ".venv/bin/python scripts/simple_image_processor.py",
+            ".venv/bin/python scripts/validation/verify_3dgs_artifacts.py",
+            ".venv/bin/python -m transformation_portal.lux_depth_v3 --help",
+            ".venv/bin/python -m transformation_portal.lux_depth_v3.pbr_cli --help",
+            ".venv/bin/python -m transformation_portal.cli depth-estimation",
+            '.venv/bin/python -m pip install "git+https://github.com/RC219805/Transformation_Portal.git@<release-tag>"',
+            ".venv/bin/python -m build",
+            ".venv/bin/twine check dist/*",
+            ".venv/bin/python -m pip install dist/*.whl --force-reinstall",
+            ".venv/bin/python -m pip install -r requirements/security.txt",
+            ".venv/bin/bandit -r src/ -ll",
+            ".venv/bin/pip-audit",
+            ".venv/bin/bandit -r src/",
+            "make lint-parity",
+            "make test-fast",
+            "./scripts/setup/run_lint_tool.sh black src/ tests/",
+            "./scripts/setup/run_lint_tool.sh isort src/ tests/",
+            "Run 'make install-core' to install the repo-managed tooling",
+            "git clone https://github.com/NVlabs/nvdiffrast external/nvdiffrast",
+            ".venv/bin/python -m pip install -e external/nvdiffrast",
+            "input_images/image.CR2",
+            "external `realesrgan`",
+        ]
+        for required_fragment in required_fragments:
+            assert required_fragment in combined
+
+        assert "/input/image.CR2" not in combined
+
+    def test_machine_mode_guidance_uses_repo_managed_python_and_local_paths(self):
+        """Machine-mode examples should mirror the repo-managed local execution contract."""
+        guidance = {
+            "README.md": (_repo_root / "README.md").read_text(),
+            "docs/api/MACHINE_MODE_CONTRACT.md": (_repo_root / "docs" / "api" / "MACHINE_MODE_CONTRACT.md").read_text(),
+            "docs/quick_references/MACHINE_MODE_JSON.md": (
+                _repo_root / "docs" / "quick_references" / "MACHINE_MODE_JSON.md"
+            ).read_text(),
+            "tools/parse_machine_json.py": (_repo_root / "tools" / "parse_machine_json.py").read_text(),
+            "tools/parse_machine_json_examples.sh": (_repo_root / "tools" / "parse_machine_json_examples.sh").read_text(),
+        }
+        combined = "\n".join(guidance.values())
+
+        forbidden_patterns = [
+            r"(?<![/\w.-])python scripts/test_metadata_extraction\.py",
+            r"(?<![/\w.-])python tools/parse_machine_json\.py",
+            r"(?<![/\w.-])python parse_machine_json\.py",
+        ]
+        for pattern in forbidden_patterns:
+            assert re.search(pattern, combined) is None
+
+        forbidden_fragments = [
+            "/input/image.CR2",
+            "/input/IMG_1234.CR2",
+            "/input/missing.CR2",
+            '"/input"',
+            '"/output"',
+            "extract-batch /input",
+            "validate /output/sidecar.json",
+        ]
+        for fragment in forbidden_fragments:
+            assert fragment not in combined
+
+        required_fragments = [
+            ".venv/bin/python scripts/test_metadata_extraction.py",
+            ".venv/bin/python tools/parse_machine_json.py",
+            "input_images/image.CR2",
+            "input_images/IMG_1234.CR2",
+            "extract-batch input_images --output output",
+            "validate output/sidecar.json",
+        ]
+        for fragment in required_fragments:
+            assert fragment in combined
 
     def test_root_changelog_keeps_pr1562_snapshot_historical(self):
         """Root changelog should not present the PR #1562 snapshot as current state."""
@@ -266,6 +528,26 @@ class TestRootGovernanceMetadata:
             assert relative_path in security_policy
             assert (_repo_root / relative_path).exists()
 
+    def test_security_policy_deployment_guidance_uses_repo_runtime_contract(self):
+        """Root security deployment guidance should not advertise stale runtime commands."""
+        security_policy = (_repo_root / "SECURITY.md").read_text()
+
+        stale_fragments = [
+            "sudo -u nobody python -m transformation_portal.cli",
+            "# User=nobody",
+            "# Group=nogroup",
+        ]
+        for stale_fragment in stale_fragments:
+            assert stale_fragment not in security_policy
+
+        required_fragments = [
+            "sudo -u tp .venv/bin/python -m transformation_portal.cli serve --host 127.0.0.1 --port 8000",
+            "# User=tp",
+            "# Group=tp",
+        ]
+        for required_fragment in required_fragments:
+            assert required_fragment in security_policy
+
     def test_retired_pygments_exception_stays_removed_from_security_scans(self):
         """The root security policy and CI scanners should agree on retired CVE exceptions."""
         security_policy = (_repo_root / "SECURITY.md").read_text()
@@ -316,11 +598,27 @@ class TestRootGovernanceMetadata:
         assert "cryptography>=47.0.0,<48" in requirements_dev
         assert "cryptography>=46.0,<48" not in requirements_ci
         assert "cryptography>=46.0,<48" not in requirements_dev
-        assert "`cryptography`          | >=46.0.5" in contributing
+        assert "`cryptography`          | >=47.0.0" in contributing
+        assert "`cryptography`          | >=46.0.5" not in contributing
         assert "`starlette`             | >=1.0.1" in contributing
         assert "Starlette==1.0.1" in security_policy
         assert "current governed lock baseline is pillow==12.2.0" in requirements_lint
         assert "allows pillow==12.1.1 in lockfiles" not in requirements_lint
+
+    def test_pyproject_security_extras_track_current_cryptography_floor(self):
+        """Public optional metadata should not expose retired cryptography floors."""
+        pyproject = tomllib.loads((_repo_root / "pyproject.toml").read_text())
+        optional_dependencies = pyproject["project"]["optional-dependencies"]
+        tools_archive_in = (_repo_root / "requirements" / "tools-archive.in").read_text()
+        tools_archive_lock = (_repo_root / "requirements" / "tools-archive.txt").read_text()
+
+        for extra_name in ("archive-signing", "dev"):
+            assert "cryptography>=47.0.0,<48" in optional_dependencies[extra_name]
+            assert "cryptography>=46.0,<48" not in optional_dependencies[extra_name]
+
+        assert "cryptography>=47.0.0,<48" in tools_archive_in
+        assert "cryptography>=46.0,<48" not in tools_archive_in
+        assert "cryptography==47.0.0" in tools_archive_lock
 
     def test_pyproject_core_dependencies_track_governed_base_requirements(self):
         """Installable package metadata should not trail the governed core dependency surface."""
@@ -362,6 +660,8 @@ class TestRootGovernanceMetadata:
         pyproject = tomllib.loads((_repo_root / "pyproject.toml").read_text())
         dev_extra = pyproject["project"]["optional-dependencies"]["dev"]
         requirements_dev_in = (_repo_root / "requirements" / "dev.in").read_text().splitlines()
+        requirements_dev = (_repo_root / "requirements-dev.txt").read_text()
+        contributing = (_repo_root / "CONTRIBUTING.md").read_text()
 
         def package_names(lines: list[str]) -> set[str]:
             names: set[str] = set()
@@ -378,6 +678,17 @@ class TestRootGovernanceMetadata:
         metadata_dev_packages = package_names(dev_extra)
 
         assert governed_dev_packages <= metadata_dev_packages
+        assert "black>=26.3.1" in dev_extra
+        assert "black>=24.8" not in dev_extra
+        assert "black>=26.3.1" in requirements_dev
+        assert "black>=24.8" not in contributing
+        assert "mypy>=1.10  # Type checker" in contributing
+
+        adr_032 = (_repo_root / "docs" / "architecture" / "ADR-032-dependency-pinning-strategy.md").read_text()
+        assert "black>=24.8" not in adr_032
+        assert "| `black`       | dev.in  | `>=24.8`" not in adr_032
+        assert "| `black`       | dev.in  | `>=26.3.1`" in adr_032
+        assert "pylint>=3.0" in adr_032
 
     def test_contributing_dependency_audit_schedule_is_current(self):
         """Canonical contribution guidance should not point to a past audit date."""
@@ -531,6 +842,71 @@ class TestRootGovernanceMetadata:
             assert relative_path in content
             assert (_repo_root / relative_path).exists()
 
+    def test_root_branch_protection_guidance_matches_current_contract(self):
+        """Root branch-protection prose should not preserve stale setup snapshots."""
+        contributing = (_repo_root / "CONTRIBUTING.md").read_text()
+        setup_doc = (_repo_root / "docs" / "ci" / "BRANCH_PROTECTION_SETUP.md").read_text()
+        historical_commands_doc = (_repo_root / "docs" / "ci" / "BRANCH_PROTECTION_COMMANDS.md").read_text()
+
+        required_current_claims = [
+            "Current Branch Protection Rules (Verified 2026-06-03)",
+            '"enforce_admins": true',
+            '"required_linear_history": false',
+            '"required_conversation_resolution": true',
+            "Linear history**: Not required by branch protection",
+            "Require conversation resolution**: ✅ Enabled",
+            "**Resolve all review conversations** (required)",
+        ]
+        for claim in required_current_claims:
+            assert claim in contributing
+
+        stale_claims = [
+            "Verified 2026-02-10",
+            '"enforce_admins": false',
+            '"required_linear_history": true',
+            "Require conversation resolution**: ❌ Not enabled",
+            "Linear history**: ✅ Required",
+            "**Resolve all review conversations** (recommended)",
+        ]
+        for stale_claim in stale_claims:
+            assert stale_claim not in contributing
+
+        assert "Last verified: 2026-06-03." in setup_doc
+        assert "CI Gate" in setup_doc
+        assert "lint (3.12)" not in setup_doc
+        assert "test-core (3.10)" not in setup_doc
+        assert "quality-summary" not in setup_doc
+        assert "Admin enforcement is currently enabled" in setup_doc
+        assert "[CONTRIBUTING.md](../../CONTRIBUTING.md)" in setup_doc
+        assert "[Production Readiness](../deployment/PRODUCTION_READINESS.md)" in setup_doc
+        assert "[CONTRIBUTING.md](../CONTRIBUTING.md)" not in setup_doc
+        assert "[Production Readiness](./PRODUCTION_READINESS.md)" not in setup_doc
+
+        assert "Historical record. Do not run these commands as current configuration." in historical_commands_doc
+        assert "[BRANCH_PROTECTION_SETUP.md](./BRANCH_PROTECTION_SETUP.md)" in historical_commands_doc
+        assert "[CI Workflow](../../.github/workflows/build.yml)" in historical_commands_doc
+        assert "[CONTRIBUTING.md](../../CONTRIBUTING.md)" in historical_commands_doc
+        assert "[CODE_QUALITY_SYSTEM.md](../guides/CODE_QUALITY_SYSTEM.md)" in historical_commands_doc
+        assert "[CI Workflow](../.github/workflows/ci.yml)" not in historical_commands_doc
+        assert "[CONTRIBUTING.md](../CONTRIBUTING.md)" not in historical_commands_doc
+        assert "[CODE_QUALITY_SYSTEM.md](./CODE_QUALITY_SYSTEM.md)" not in historical_commands_doc
+
+    def test_production_readiness_guidance_tracks_current_runtime_and_gate_contract(self):
+        """Deployment readiness guidance should not advertise retired runtime or branch-protection state."""
+        readiness_doc = (_repo_root / "docs" / "deployment" / "PRODUCTION_READINESS.md").read_text()
+
+        assert "Python 3.11 and 3.12; Python 3.10 is retired" in readiness_doc
+        assert "Python 3.11+; the supported CI matrix covers Python 3.11 and 3.12" in readiness_doc
+        assert "CI Gate" in readiness_doc
+        assert "Branch protection: ✅" in readiness_doc
+        assert "Branch protection: 📝 Needs configuration" not in readiness_doc
+        assert "Python 3.10, 3.11, 3.12" not in readiness_doc
+        assert "Python 3.10+" not in readiness_doc
+        assert "make test-fast" in readiness_doc
+        assert "make ci-quick" in readiness_doc
+        assert "[CONTRIBUTING.md](../../CONTRIBUTING.md)" in readiness_doc
+        assert "[SECURITY.md](../../SECURITY.md)" in readiness_doc
+
     def test_ci_hygiene_checks_cover_split_coverage_artifacts(self):
         """CI hygiene checks should track every ignored root coverage artifact."""
         gitignore = (_repo_root / ".gitignore").read_text()
@@ -613,6 +989,40 @@ class TestRootGovernanceMetadata:
         assert "check-quality" in self._make_targets(_repo_root / "Makefile")
         assert "fix-quality check-quality validate-ci" in makefile
         assert "check-quality      Dry-run common quality issue fixes" in makefile
+
+    def test_docs_build_tooling_uses_bounded_repo_contract(self):
+        """Local and hosted docs builds should share the same bounded Sphinx lane."""
+        makefile = (_repo_root / "Makefile").read_text()
+        requirements_dev = (_repo_root / "requirements-dev.txt").read_text()
+        docs_workflow = (_repo_root / ".github" / "workflows" / "docs.yml").read_text()
+
+        docs_specs = [
+            "sphinx>=7.2,<9",
+            "sphinx-rtd-theme>=2.0,<3",
+            "sphinx-autodoc-typehints>=2.0,<4",
+        ]
+        expected_make_var = (
+            'DOCS_TOOL_REQUIREMENTS := "sphinx>=7.2,<9" ' '"sphinx-rtd-theme>=2.0,<3" "sphinx-autodoc-typehints>=2.0,<4"'
+        )
+
+        assert expected_make_var in makefile
+        assert '"$(PY)" -m pip install -q $(DOCS_TOOL_REQUIREMENTS)' in makefile
+        assert "pip install -q sphinx sphinx-rtd-theme sphinx-autodoc-typehints" not in makefile
+
+        for spec in docs_specs:
+            assert spec in requirements_dev
+            assert f'"{spec}"' in docs_workflow
+
+        stale_specs = [
+            "sphinx>=7.2,<10",
+            "sphinx-rtd-theme>=3.1.0,<4",
+            "sphinx-autodoc-typehints>=3.6.1,<4",
+        ]
+        for spec in stale_specs:
+            assert spec not in requirements_dev
+            assert spec not in docs_workflow
+
+        assert re.search(r"(?m)^\s+pip install ", docs_workflow) is None
 
 
 class TestReferenceQuickstartGuidance:
@@ -858,6 +1268,33 @@ class TestRootEnvironmentTemplate:
 
         expected_variables = [
             "TP_API_KEY",
+            "TP_ALLOWED_ORIGINS",
+            "TP_TRUSTED_HOSTS",
+            "TP_ENABLE_TRUSTED_HOSTS",
+            "TP_TRUST_X_FORWARDED_FOR",
+            "TP_TRUSTED_PROXY_IPS",
+            "TP_MAX_REQUEST_BYTES",
+            "TP_PORTAL_MAX_UPLOAD_REQUEST_BYTES",
+            "TP_PORTAL_UPLOAD_MAX_FILES",
+            "TP_PORTAL_UPLOAD_MAX_FIELDS",
+            "TP_PORTAL_UPLOAD_MAX_PART_BYTES",
+            "TP_RATE_LIMIT_PER_MINUTE",
+            "TP_MAX_CONCURRENT_JOBS",
+            "TP_ALLOWED_INPUT_ROOTS",
+            "TP_ALLOWED_OUTPUT_ROOTS",
+            "TP_JOB_RETENTION_SECONDS",
+            "TP_CLEANUP_INTERVAL_SECONDS",
+            "TP_JOB_CLEANUP_SCAN_LIMIT",
+            "TP_CANCEL_GRACE_SECONDS",
+            "TP_JOB_LIST_LIMIT",
+            "TP_MAX_INDEXED_ARTIFACTS",
+            "TP_WORKER_LEASE_SECONDS",
+            "TP_WORKER_HEARTBEAT_SECONDS",
+            "TP_WORKER_POLL_SECONDS",
+            "TP_ORCHESTRATOR_WORKER_SHUTDOWN_GRACE_SECONDS",
+            "TP_ORCHESTRATOR_RECLAIM_SWEEP_INTERVAL_SECONDS",
+            "TP_ENABLE_API_DOCS",
+            "TP_READY_VERBOSE",
             "TP_UID",
             "TP_GID",
             "DEVICE",
@@ -883,9 +1320,25 @@ class TestRootEnvironmentTemplate:
             "TP_TEST_REDIS_URL",
             "TP_TEST_S3_URL",
             "TP_TEST_S3_BUCKET",
+            "TRANSFORMATION_PORTAL_DA3_PYTHON",
+            "TRANSFORMATION_PORTAL_DEPTH_PRO_PYTHON",
+            "TRANSFORMATION_PORTAL_RAW_PYTHON",
         ]
         for variable in expected_variables:
             assert variable in content
+
+        expected_runtime_claims = [
+            "Lux Depth V3 auto-discover the repo-local runtime contract paths",
+            '.venv/bin/python -c "import secrets; print(secrets.token_urlsafe(32))"',
+            "./.runtime/Depth-Anything-3/.venv-da3/bin/python",
+            "./.venv-depth-pro/bin/python",
+            "./.venv-raw/bin/python",
+            "keep TP_ENABLE_TRUSTED_HOSTS=true outside exceptional local",
+            "Keep TP_PORTAL_UPLOAD_ROOT inside",
+            "Canonical worker names are TP_WORKER_*",
+        ]
+        for claim in expected_runtime_claims:
+            assert claim in content
 
         expected_authorities = [
             "web/secure-landing/.env.example",
@@ -899,6 +1352,9 @@ class TestRootEnvironmentTemplate:
             "Inventory below covers Python-orchestrator env vars sourced from",
             "grep -oE",
             "app.py. Run this",
+            "orchestrator picks `python3` from PATH",
+            '#   python -c "import secrets; print(secrets.token_urlsafe(32))"',
+            "TP_ORCHESTRATOR_USE_QUEUE_BROKER",
         ]
         for stale_claim in stale_claims:
             assert stale_claim not in content
@@ -1019,6 +1475,7 @@ class TestGitignore:
             "web/secure-landing/.next-smoke-*/",
             "web/secure-landing/.next-codex-*/",
             "web/secure-landing/.metafiles/",
+            "web/secure-landing/tmp/",
         ]
 
         for pattern in temp_dir_patterns:

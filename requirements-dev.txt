@@ -33,6 +33,6 @@ libcst>=1.2,<2
 pre-commit>=4.0,<5
 
 # Documentation generation
-sphinx>=7.2,<10
-sphinx-rtd-theme>=3.1.0,<4
-sphinx-autodoc-typehints>=3.6.1,<4
+sphinx>=7.2,<9
+sphinx-rtd-theme>=2.0,<3
+sphinx-autodoc-typehints>=2.0,<4

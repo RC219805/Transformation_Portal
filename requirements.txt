@@ -1,13 +1,13 @@
 # Transformation Portal - Core Runtime Dependencies
 # ==================================================
-# This is the main requirements file for production installations.
-# For a complete development environment, see requirements/ directory.
+# This is the root aggregate requirements file for core runtime dependencies.
+# Local repository setup should use the Make targets below so the pinned
+# dependency lanes, editable package install, and pip check stay in sync.
 #
 # Installation options:
-#   pip install -r requirements.txt           # Core functionality only (lightweight)
-#   pip install -r requirements/all.txt       # Development aggregate (generic locks)
+#   make install-core                         # Repo-managed core .venv (recommended)
 #   make install-ml-core                      # Supported target-owned ML core install
-#   pip install -e ".[ml]"                    # Editable metadata extras, not pinned locks
+#   make repair-core-venv                     # Recreate and validate the core .venv
 #
 # For CI/CD environments, use requirements-ci.txt
 # For development, use requirements-dev.txt

@@ -59,7 +59,7 @@ ERROR: V2 enhancement script not found: scripts/enhance_image.py
 **Example - Simple Commercial Workflow (Recommended):**
 ```bash
 lux-depth-v3 \
-  --input-dir "./input" \
+  --input-dir "./input_images" \
   --output-dir "./output" \
   --quality-tier "apex" \
   --depth-device "mps" \
@@ -70,7 +70,7 @@ lux-depth-v3 \
 **Example - Research Workflow (Advanced):**
 ```bash
 lux-depth-v3 \
-  --input-dir "./input" \
+  --input-dir "./input_images" \
   --output-dir "./output" \
   --quality-tier "apex" \
   --preset "depth-anything-v3.1-research-m4" \
@@ -544,7 +544,7 @@ The CLI **enforces license compliance** at startup:
 
 ```bash
 lux-depth-v3 \
-  --input-dir "./input" \
+  --input-dir "./input_images" \
   --output-dir "./output/commercial" \
   --quality-tier "apex" \
   --depth-device "mps" \
@@ -569,7 +569,7 @@ lux-depth-v3 \
 
 ```bash
 lux-depth-v3 \
-  --input-dir "./input" \
+  --input-dir "./input_images" \
   --output-dir "./output/research" \
   --preset "depth-anything-v3.1-research-m4" \
   --non-commercial-ok "true" \
@@ -591,7 +591,7 @@ lux-depth-v3 \
 
 ```bash
 lux-depth-v3 \
-  --input-dir "./input" \
+  --input-dir "./input_images" \
   --output-dir "./output/dev" \
   --quality-tier "standard" \
   --depth-device "cpu" \

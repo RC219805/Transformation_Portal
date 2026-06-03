@@ -36,14 +36,14 @@ This document provides a comprehensive validation checklist for staging environm
 cd /opt/transformation-portal-staging
 git fetch --tags
 git checkout v2.0.0  # Or target version
-pip install --force-reinstall -e .
+make install-core
 
 # Verify version
-python -c "import transformation_portal; print(transformation_portal.__version__)"
+.venv/bin/python -c "import transformation_portal; print(transformation_portal.__version__)"
 # Expected output: 2.0.0
 
 # Verify environment
-python scripts/verification/verify_core.py
+.venv/bin/python scripts/verification/verify_core.py
 ```
 
 ---
@@ -56,16 +56,12 @@ python scripts/verification/verify_core.py
 
 #### 1.1 Installation Verification
 ```bash
-# Fresh install in isolated environment
-python3 -m venv staging_test_venv
-source staging_test_venv/bin/activate
-
-pip install --upgrade pip
-pip install -r requirements.txt
-pip install -e .
+# Fresh repo-managed install
+make venv
+make install-core
 
 # Verify imports
-python -c "
+.venv/bin/python -c "
 from transformation_portal.lux_depth_v3 import PBRProcessor, EnhanceConfig
 from transformation_portal.lux_depth_v3.pbr_presets import get_preset
 print('✅ All imports successful')
@@ -98,7 +94,7 @@ print('✅ Configuration valid')
 which transform-process || echo "Warning: transform-process not in PATH"
 
 # Test CLI help
-python -m transformation_portal.lux_depth_v3.pbr_cli --help
+.venv/bin/python -m transformation_portal.lux_depth_v3.pbr_cli --help
 
 # Expected output: Usage information, no errors
 ```
@@ -176,7 +172,7 @@ for name in ['default', 'premium', 'balanced', 'performance']:
 #### 2.4 Batch Processing
 ```bash
 # Test batch processing with 5 images
-python -m transformation_portal.lux_depth_v3.pbr_cli \
+.venv/bin/python -m transformation_portal.lux_depth_v3.pbr_cli \
   --input-dir data/sample_images/ \
   --output-dir /tmp/staging_batch_test \
   --preset balanced \
@@ -343,7 +339,7 @@ assert mem_increase < 1000, f'Memory leak suspected: {mem_increase} MB'
 # Test with 4 concurrent processes (if supported)
 # (Skip if single-process only)
 for i in {1..4}; do
-  python -m transformation_portal.lux_depth_v3.pbr_cli \
+  .venv/bin/python -m transformation_portal.lux_depth_v3.pbr_cli \
     --input data/sample_$i.jpg \
     --output /tmp/staging_concurrent_$i \
     --preset balanced &
@@ -459,9 +455,8 @@ except KeyError:
 # (Manual or automated with doctest)
 
 # Example: Quick Start
-pip install -r requirements.txt
-pip install -e .
-python scripts/verification/verify_core.py
+make install-core
+.venv/bin/python scripts/verification/verify_core.py
 
 # Expected: All commands execute successfully
 ```
@@ -515,7 +510,7 @@ make html
 
 # run_smoke_tests.sh:
 #!/bin/bash
-python -m transformation_portal.lux_depth_v3.pbr_cli \
+.venv/bin/python -m transformation_portal.lux_depth_v3.pbr_cli \
   --input data/smoke_test_image.jpg \
   --output /tmp/smoke_test_$(date +%s) \
   --preset balanced

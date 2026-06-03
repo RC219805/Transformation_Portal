@@ -1,4 +1,5 @@
 import importlib.util
+import re
 from pathlib import Path
 
 import pytest
@@ -140,6 +141,32 @@ def test_broad_generated_artifact_allowlist_is_reported() -> None:
         firewall_workflow_text=valid_firewall_workflow_text(),
     )
     assert "gitleaks global allowlist must be scoped only to ignored generated artifact directories" in errors
+
+
+def test_generated_artifact_allowlist_matches_frontdoor_tmp_output() -> None:
+    pattern = re.compile(gitleaks_contract.EXPECTED_ARTIFACT_PATH_REGEX)
+
+    assert pattern.search("web/secure-landing/tmp/dev-auth-state.json")
+    assert pattern.search("/repo/web/secure-landing/tmp/preview-keys.json")
+    assert pattern.search(".runtime/fastvlm/runtime.json")
+    assert pattern.search(".venv/lib/python3.11/site-packages/generated.py")
+    assert pattern.search(".venv-da3/lib/python3.11/site-packages/generated.py")
+    assert pattern.search(".coverage")
+    assert pattern.search(".coverage.core-py3.12")
+    assert pattern.search("coverage.xml")
+    assert pattern.search("coverage.json")
+    assert pattern.search("htmlcov/index.html")
+    assert pattern.search("node_modules/example/index.js")
+    assert pattern.search("web/secure-landing/node_modules/example/index.js")
+    assert pattern.search("cloudflare/transformationportal-worker/.wrangler/state/v3/cache")
+    assert pattern.search("archive_reports/fixity/hash_manifest.csv.gz")
+    assert pattern.search("archive/experiments/local-run/report.json")
+    assert pattern.search("artifact_store/local/blob.bin")
+    assert not pattern.search("web/secure-landing/portal-src/tmp/dev-auth-state.json")
+    assert not pattern.search("input_images/client/secret.txt")
+    assert not pattern.search("data/sample_images/README.md")
+    assert not pattern.search("Architectural_Plans/client.pdf")
+    assert not pattern.search("external/vendor/secret.txt")
 
 
 def test_broad_rule_path_allowlist_is_reported() -> None:

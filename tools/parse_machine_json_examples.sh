@@ -11,7 +11,7 @@ set -euo pipefail
 extract_with_routing() {
     local input_path="$1"
 
-    if result=$(python scripts/test_metadata_extraction.py --json extract "$input_path"); then
+    if result=$(.venv/bin/python scripts/test_metadata_extraction.py --json extract "$input_path"); then
         exit_code=0
     else
         exit_code=$?
@@ -46,7 +46,7 @@ extract_with_routing() {
 validate_with_error_handling() {
     local sidecar_path="$1"
 
-    if result=$(python scripts/test_metadata_extraction.py --json validate "$sidecar_path"); then
+    if result=$(.venv/bin/python scripts/test_metadata_extraction.py --json validate "$sidecar_path"); then
         exit_code=0
     else
         exit_code=$?
@@ -83,7 +83,7 @@ batch_extract_with_summary() {
     local input_root="$1"
     local output_dir="$2"
 
-    if result=$(python scripts/test_metadata_extraction.py --json extract-batch "$input_root" --output "$output_dir"); then
+    if result=$(.venv/bin/python scripts/test_metadata_extraction.py --json extract-batch "$input_root" --output "$output_dir"); then
         exit_code=0
     else
         exit_code=$?
@@ -112,7 +112,7 @@ batch_extract_with_summary() {
 # ==============================================================================
 
 check_system_readiness() {
-    if result=$(python scripts/test_metadata_extraction.py --json check-system); then
+    if result=$(.venv/bin/python scripts/test_metadata_extraction.py --json check-system); then
         exit_code=0
     else
         exit_code=$?
@@ -147,7 +147,7 @@ check_system_readiness() {
 ci_safe_validate() {
     local sidecar_path="$1"
 
-    if result=$(python scripts/test_metadata_extraction.py --json validate "$sidecar_path"); then
+    if result=$(.venv/bin/python scripts/test_metadata_extraction.py --json validate "$sidecar_path"); then
         exit_code=0
     else
         exit_code=$?
@@ -196,7 +196,7 @@ ci_safe_validate() {
 compact_status_check() {
     local sidecar_path="$1"
 
-    python scripts/test_metadata_extraction.py --json validate "$sidecar_path" | \
+    .venv/bin/python scripts/test_metadata_extraction.py --json validate "$sidecar_path" | \
         jq -r 'if .success then "✅ \(.data.sidecar_path)" else "❌ \(.data.sidecar_path): \(.data.dominant_error.type)" end'
 }
 
@@ -213,7 +213,7 @@ extract_multiple_with_error_collection() {
     local successes=0
 
     for file in "${files[@]}"; do
-        if result=$(python scripts/test_metadata_extraction.py --json extract "$file" --output "$output_dir"); then
+        if result=$(.venv/bin/python scripts/test_metadata_extraction.py --json extract "$file" --output "$output_dir"); then
             exit_code=0
         else
             exit_code=$?

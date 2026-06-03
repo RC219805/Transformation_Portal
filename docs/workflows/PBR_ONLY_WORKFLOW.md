@@ -179,7 +179,7 @@ FileNotFoundError: V2 enhancement script not found: scripts/enhance_image.py
 
 1. **Disable V2 via CLI** (easiest):
 ```bash
-lux-depth-v3 --input-dir ./input --output-dir ./output --enable-v2 "off" --pbr "on"
+lux-depth-v3 --input-dir ./input_images --output-dir ./output --enable-v2 "off" --pbr "on"
 ```
 
 2. **Disable V2 via Python API**:
