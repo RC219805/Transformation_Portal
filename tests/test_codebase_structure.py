@@ -696,6 +696,43 @@ class TestReferenceQuickstartGuidance:
         for required_fragment in required_fragments:
             assert required_fragment in operations_guide
 
+    def test_scripts_reference_describes_governed_script_topology(self):
+        """Script reference guidance should describe current topology instead of stale root scripts."""
+        scripts_reference = (_repo_root / "docs" / "reference" / "SCRIPTS_REFERENCE.md").read_text()
+
+        for stale_fragment in self.STALE_OPERATOR_GUIDANCE_FRAGMENTS:
+            assert stale_fragment not in scripts_reference
+
+        stale_inventory_claims = [
+            "Complete Script Inventory",
+            "Total Scripts",
+            "Real-ESRGAN 4x upscaling",
+            "python script.py",
+            "scripts/install_modules.py",
+        ]
+        for stale_fragment in stale_inventory_claims:
+            assert stale_fragment not in scripts_reference
+
+        required_fragments = [
+            "scripts/setup/",
+            "scripts/pipelines/",
+            "scripts/utilities/",
+            "scripts/validation/",
+            "scripts/governance/",
+            "src/transformation_portal/",
+            "archive/scripts/legacy-organization/",
+            ".venv/bin/lux-depth-v3",
+            ".venv/bin/luxury-tiff-batch",
+            ".venv/bin/lux_render",
+            ".venv/bin/luxury_video_grader",
+            "python3 scripts/governance/check_script_topology.py --verbose",
+            "./.auto-organize.sh --check --verbose",
+            "raise SystemExit(main())",
+            "../governance/DOCUMENTATION_MAP.md",
+        ]
+        for required_fragment in required_fragments:
+            assert required_fragment in scripts_reference
+
 
 class TestRootEnvironmentTemplate:
     """Tests for the root Docker/FastAPI environment template."""
