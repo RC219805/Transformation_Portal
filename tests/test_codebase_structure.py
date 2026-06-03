@@ -142,9 +142,11 @@ class TestRootGovernanceMetadata:
             "docs/README.md",
             "docs/governance/DOCUMENTATION_MAP.md",
             "May 11, 2026 repo-wide refresh audit",
+            "Last Updated: 2026-06-03",
         ]
         for expected in required_navigation:
             assert expected in readme
+        assert "Last Updated: 2026-05-11" not in readme
 
     def test_security_policy_footer_tracks_current_root_policy_update(self):
         """Root security policy metadata should track current policy edits."""
