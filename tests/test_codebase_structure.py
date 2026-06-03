@@ -206,6 +206,37 @@ class TestRootGovernanceMetadata:
             assert relative_path in security_policy
             assert (_repo_root / relative_path).exists()
 
+    def test_retired_pygments_exception_stays_removed_from_security_scans(self):
+        """The root security policy and CI scanners should agree on retired CVE exceptions."""
+        security_policy = (_repo_root / "SECURITY.md").read_text()
+        lockfiles = [
+            "requirements/base.txt",
+            "requirements/ci.txt",
+            "requirements/security.txt",
+        ]
+        workflows = [
+            ".github/workflows/ci.yml",
+            ".github/workflows/ci-quality-firewall.yml",
+            ".github/workflows/security-unified.yml",
+            ".github/workflows/dependency-update.yml",
+            ".github/workflows/nightly.yml",
+        ]
+
+        for relative_path in lockfiles:
+            assert "pygments==2.20.0" in (_repo_root / relative_path).read_text()
+
+        forbidden_fragments = [
+            "--ignore-vuln CVE-2026-4539",
+            "CVE-2026-4539 (pygments): No fix available yet",
+            "No upstream fix available as of March 2026",
+        ]
+        scanned_text = security_policy + "\n" + "\n".join((_repo_root / path).read_text() for path in workflows)
+        for fragment in forbidden_fragments:
+            assert fragment not in scanned_text
+
+        assert "Pygments==2.20.0" in security_policy
+        assert "None active. New exceptions require an explicit expiry condition" in security_policy
+
     def test_contributing_dependency_audit_schedule_is_current(self):
         """Canonical contribution guidance should not point to a past audit date."""
         contributing = (_repo_root / "CONTRIBUTING.md").read_text()

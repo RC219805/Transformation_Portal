@@ -156,6 +156,21 @@ def test_repo_local_audit_reports_usage_is_reported() -> None:
     assert "dependency-update workflow must not include snippet 'path: audit-reports/'" in errors
 
 
+def test_retired_pygments_exception_is_reported() -> None:
+    broken = (
+        valid_workflow_text()
+        + "\n        # CVE-2026-4539 (pygments): No fix available yet - temporary exception\n"
+        + "        pip-audit --ignore-vuln CVE-2026-4539 -r requirements/security.txt\n"
+    )
+
+    errors = workflow_contract.validate_dependency_update_workflow(broken)
+
+    assert "dependency-update workflow must not include snippet '--ignore-vuln CVE-2026-4539'" in errors
+    assert (
+        "dependency-update workflow must not include snippet " "'CVE-2026-4539 (pygments): No fix available yet'"
+    ) in errors
+
+
 def test_missing_audit_targets_block_is_reported_independently_of_pr_body_references() -> None:
     broken = remove_audit_targets_block(valid_workflow_text())
     errors = workflow_contract.validate_dependency_update_workflow(broken)

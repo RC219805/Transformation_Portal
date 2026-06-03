@@ -204,10 +204,7 @@ jobs:
       - name: Run pip-audit (dependency vulnerabilities)
         run: |
           # Fail on known vulnerabilities (exit non-zero)
-          # CVE-2026-4539 (pygments): No fix available yet - temporary exception
-          # See: https://github.com/pygments/pygments/issues/3058
-          # Remove --ignore-vuln when fixed pygments version is released
-          pip-audit --desc -r requirements-ci.txt --ignore-vuln CVE-2026-4539
+          pip-audit --desc -r requirements-ci.txt
 
       - name: Check for secrets with gitleaks
         run: |

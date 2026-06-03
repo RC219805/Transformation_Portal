@@ -139,12 +139,8 @@ jobs:
           set -euo pipefail
           echo "🔍 Running pip-audit for dependency vulnerabilities..."
 
-          # CVE-2026-4539 (pygments): No fix available yet - temporary exception
-          # See: https://github.com/pygments/pygments/issues/3058
-          # Remove --ignore-vuln when fixed pygments version is released
-
           # Run pip-audit and capture output
-          pip-audit --ignore-vuln CVE-2026-4539 --format json --output audit-report.json || AUDIT_EXIT=$?
+          pip-audit --format json --output audit-report.json || AUDIT_EXIT=$?
 
           # Display full report
           if [ -f audit-report.json ]; then

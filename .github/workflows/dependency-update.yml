@@ -111,12 +111,10 @@ jobs:
             requirements/tools-archive.txt
           )
 
-          # CVE-2026-4539 (pygments): No fix available yet - temporary exception
           for requirement_file in "${audit_targets[@]}"; do
             report_path="${audit_reports_dir}/$(basename "${requirement_file%.txt}").json"
             echo "Auditing ${requirement_file} -> ${report_path}"
             pip-audit \
-              --ignore-vuln CVE-2026-4539 \
               -r "${requirement_file}" \
               --format json \
               --output "${report_path}" || true

@@ -113,6 +113,7 @@ Given our image/video processing nature, special attention is required for:
   - **Pillow>=10.3.0** - Fixed CVE-2024-28219 (buffer overflow vulnerability)
   - **cryptography==46.0.5** - Fixed GHSA subgroup attack vulnerability (SECT curves)
   - **black==26.3.1** - Fixed arbitrary file writes from unsanitized cache names
+  - **Pygments==2.20.0** - Fixed CVE-2026-4539; the temporary pip-audit exception is retired
 
   **January 2026**:
   - **protobuf 6.34.0** - Fixed CVE-2026-0994 / GHSA-7gcm-g887-7qv7 (Dependabot #69)
@@ -130,17 +131,12 @@ Given our image/video processing nature, special attention is required for:
   - Linux and macOS Intel ML lanes are retired unsupported lanes and are absent from installable `requirements/*.in` / `requirements/*.txt` manifests
   - Historical retired-lane details live in `docs/governance/RETIRED_ML_LOCK_LANES_2026-04-30.md` and must not drive supported-lane remediation
   - All model loading uses safe_load() wrapper or explicit weights_only=True
+  - Pygments CVE-2026-4539 is remediated by the governed `pygments==2.20.0` lock baseline; CI must not keep stale scanner exceptions for this CVE
   - Pillow: Critical for image parsing vulnerabilities
   - NumPy: Monitor for numerical computation exploits
 
-- **Temporary CVE Exceptions** (Awaiting Upstream Fix):
-  - **CVE-2026-4539 (Pygments <=2.19.2)**: DoS via inefficient regex in AdlLexer
-    - **Status**: No upstream fix available as of March 2026
-    - **Impact**: Low - affects syntax highlighting only (typer → rich → pygments)
-    - **Exposure**: CLI help text rendering, not production image processing
-    - **Mitigation**: CI pip-audit configured with `--ignore-vuln CVE-2026-4539`
-    - **Tracking**: https://github.com/pygments/pygments/issues/3058
-    - **Action Required**: Remove exception when fixed Pygments is released
+- **Temporary CVE Exceptions**:
+  - None active. New exceptions require an explicit expiry condition, tracked upstream issue, and matching CI/test coverage.
 
 ### API Security
 
