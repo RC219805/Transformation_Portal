@@ -381,7 +381,6 @@ Key properties:
 - schema-versioned payloads for automation
 
 Docs:
-- [Machine Mode JSON Quick Reference](docs/quick_references/MACHINE_MODE_JSON.md)
 - [Machine Mode Contract](docs/api/MACHINE_MODE_CONTRACT.md)
 
 ---
@@ -478,7 +477,7 @@ Performance is treated as a first-class signal in CI.
 
 For deeper performance workflows, see:
 - [Performance Monitoring Guide](docs/performance/README.md)
-- [APEX Real Pipeline Integration Guide](docs/guides/APEX_REAL_PIPELINE_INTEGRATION.md)
+- [APEX Contract](docs/apex/APEX_CONTRACT.md)
 - [Performance Gate Policy](docs/performance/GATE_POLICY.md)
 
 ---

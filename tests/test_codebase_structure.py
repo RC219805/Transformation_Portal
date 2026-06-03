@@ -153,14 +153,23 @@ class TestRootGovernanceMetadata:
         readme = (_repo_root / "README.md").read_text()
 
         assert "docs/decisions/ADR-024-performance-regression-authority-canonicalization.md" not in readme
+        assert "docs/guides/APEX_REAL_PIPELINE_INTEGRATION.md" not in readme
         required_links = [
             "docs/performance/README.md",
-            "docs/guides/APEX_REAL_PIPELINE_INTEGRATION.md",
+            "docs/apex/APEX_CONTRACT.md",
             "docs/performance/GATE_POLICY.md",
         ]
         for relative_path in required_links:
             assert relative_path in readme
             assert (_repo_root / relative_path).exists()
+
+    def test_root_readme_machine_mode_links_use_current_contracts(self):
+        """README machine-mode navigation should avoid mixed quick-reference docs."""
+        readme = (_repo_root / "README.md").read_text()
+
+        assert "docs/quick_references/MACHINE_MODE_JSON.md" not in readme
+        assert "docs/api/MACHINE_MODE_CONTRACT.md" in readme
+        assert (_repo_root / "docs/api/MACHINE_MODE_CONTRACT.md").exists()
 
     def test_security_policy_footer_tracks_current_root_policy_update(self):
         """Root security policy metadata should track current policy edits."""
@@ -198,6 +207,14 @@ class TestRootGovernanceMetadata:
 
         assert "Next audit: **2026-05-16 (Q2 2026)**" not in contributing
         assert "Next audit: **2026-08-16 (Q3 2026)**" in contributing
+
+    def test_contributing_branch_protection_links_use_current_setup_doc(self):
+        """Contribution guidance should not route to historical verification reports."""
+        contributing = (_repo_root / "CONTRIBUTING.md").read_text()
+
+        assert "docs/governance/BRANCH_PROTECTION_VERIFICATION.md" not in contributing
+        assert "docs/ci/BRANCH_PROTECTION_SETUP.md" in contributing
+        assert (_repo_root / "docs/ci/BRANCH_PROTECTION_SETUP.md").exists()
 
     def test_architect_directive_status_points_to_current_authorities(self):
         """Root architect metadata should not masquerade as live PR/CI status."""

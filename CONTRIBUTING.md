@@ -371,7 +371,7 @@ The `main` branch is protected to ensure code quality and stability. All changes
 5. **Keep branch up to date**
    - Strict status checks enabled: must be up-to-date with main before merge
 
-**For detailed branch protection verification procedures, troubleshooting, and governance:** See [Branch Protection Verification](docs/governance/BRANCH_PROTECTION_VERIFICATION.md)
+**For branch protection setup, required checks, and troubleshooting:** See [Branch Protection Setup](docs/ci/BRANCH_PROTECTION_SETUP.md)
 
 ---
 
