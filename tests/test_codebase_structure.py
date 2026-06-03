@@ -412,6 +412,11 @@ class TestRootGovernanceMetadata:
 
         assert "compile           Compile generic checked-in lockfiles only" in requirements_readme
         assert "compile-ml-darwin-arm64    Compile the Darwin arm64 ML lock" in requirements_readme
+        assert "No checked-in umbrella ML lock is generated from this file" in requirements_ml
+        assert "make install-ml-raw     # disabled: no trusted RAW lock contract" in requirements_ml
+        assert "make install-ml         # disabled: no trusted umbrella lock contract" in requirements_ml
+        assert "Run `make compile` in this directory to generate pinned ml.txt" not in requirements_ml
+        assert "make install-ml         # ml-core + ml-raw (this umbrella)" not in requirements_ml
         assert "torch==2.8.0, torchvision==0.23.0, open-clip-torch==3.3.0" in requirements_ml
         assert "target-owned locks are install support promises" in requirements_ml
         assert "torch==2.10.0, torchvision==0.25.0" not in requirements_ml
