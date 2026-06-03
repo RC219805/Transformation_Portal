@@ -7,7 +7,7 @@ Thank you for considering contributing to the Transformation Portal! This docume
 1. Fork the repository
 2. Create a feature branch: `git checkout -b feature/your-feature-name`
 3. Make your changes following the coding standards below
-4. Run local tests: `pytest -v tests/ -m "(unit or security or regression or golden or integration) and not slow"`
+4. Run local checks: `make ci-quick`
 5. Commit with clear messages
 6. Push and open a Pull Request
 
@@ -18,17 +18,17 @@ Thank you for considering contributing to the Transformation Portal! This docume
 git clone https://github.com/YOUR_USERNAME/Transformation_Portal.git
 cd Transformation_Portal
 
-# Create virtual environment
-python3.11 -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+# Create/validate the repo-managed .venv with Python 3.11+
+make venv
 
-# Install dependencies
-pip install -r requirements-dev.txt
-pip install -e .
+# Install pinned core runtime + development tooling, then editable package metadata
+make install-core
 
-# Verify installation
-pytest --version
-python -c "import transformation_portal; print('OK')"
+# Install pre-commit and pre-push hooks
+make install-hooks
+
+# Verify the local fast gate
+make ci-quick
 ```
 
 ## Quality Standards

@@ -374,6 +374,29 @@ class TestRootGovernanceMetadata:
         assert "compile           Compile generic checked-in lockfiles only" in requirements_readme
         assert "compile-ml-darwin-arm64    Compile the Darwin arm64 ML lock" in requirements_readme
 
+    def test_contributing_setup_uses_repo_managed_environment(self):
+        """Root contribution setup should use the current Makefile-managed .venv contract."""
+        contributing = (_repo_root / "CONTRIBUTING.md").read_text()
+
+        stale_fragments = [
+            "python3.11 -m venv venv",
+            "source venv/bin/activate",
+            "pip install -r requirements-dev.txt\npip install -e .",
+            "pytest --version\npython -c",
+        ]
+        for stale_fragment in stale_fragments:
+            assert stale_fragment not in contributing
+
+        required_fragments = [
+            "make venv",
+            "make install-core",
+            "make install-hooks",
+            "make ci-quick",
+            "repo-managed .venv with Python 3.11+",
+        ]
+        for required_fragment in required_fragments:
+            assert required_fragment in contributing
+
     def test_contributing_branch_protection_links_use_current_setup_doc(self):
         """Contribution guidance should not route to historical verification reports."""
         contributing = (_repo_root / "CONTRIBUTING.md").read_text()
