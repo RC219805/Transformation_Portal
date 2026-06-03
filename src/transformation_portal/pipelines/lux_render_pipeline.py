@@ -9,8 +9,8 @@ upscaling, and photo finishing. Branding overlays and a batch-friendly CLI
 complete the workflow.
 
 Example:
-    python lux_render_pipeline.py \
-        --input './drafts/*.png' --out ./final \
+    lux_render \
+        --input-glob './drafts/*.png' --out ./final \
         --prompt "luxury interior, natural daylight, oak wood floor" \
         --neg "low detail, cartoon, blurry" \
         --width 1024 --height 768 --steps 30 --strength 0.45 --gs 7.5 \
@@ -41,6 +41,7 @@ from typing import List, Optional, Tuple
 import numpy as np
 import typer
 from PIL import Image, ImageDraw, ImageFont
+from typer.models import OptionInfo
 
 from transformation_portal.core.security.model_lock import is_model_lock_strict_enabled, resolve_model_lock_revision
 
@@ -1406,6 +1407,10 @@ def main(  # pylint: disable=too-many-arguments,too-many-positional-arguments,to
     ),
 ):
     """Batch CLI entry point for the luxury render pipeline."""
+
+    if isinstance(input_glob, OptionInfo):
+        app()
+        return None
 
     try:
         _require_lux_render_runtime_dependencies()

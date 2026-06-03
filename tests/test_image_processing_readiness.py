@@ -111,6 +111,66 @@ class TestReadinessCheck:
         assert "pip install torch diffusers transformers realesrgan" not in output
         assert "pip install -r requirements.txt" not in output
 
+    def test_missing_core_guidance_uses_repo_managed_install(self, capsys):
+        """Missing core readiness guidance should route through repo-managed setup."""
+        capabilities = {
+            "core_packages": {"numpy": False, "Pillow": False, "scipy": False, "PyYAML": False, "typer": False, "tqdm": False},
+            "ml_packages": {"torch": False, "diffusers": False, "transformers": False, "controlnet_aux": False},
+            "image_packages": {"tifffile": False, "imagecodecs": False, "scikit-image": False, "opencv": False},
+            "minimal_ready": False,
+            "standard_ready": False,
+            "full_ready": False,
+        }
+        images = {
+            "sample_dir_exists": False,
+            "input_dir_exists": False,
+            "sample_count": 0,
+            "input_count": 0,
+            "total_count": 0,
+            "has_images": False,
+        }
+
+        readiness.print_tier_status(capabilities)
+        readiness.print_quick_start_guide(capabilities, images)
+        readiness.print_recommendations({"free_gb": 10.0, "sufficient": True}, capabilities)
+
+        output = capsys.readouterr().out
+        assert "make install-core" in output
+        assert "make check-environment" in output
+        assert "pip install numpy Pillow" not in output
+        assert "pip install scipy" not in output
+
+    def test_full_tier_quick_start_uses_current_cli_entrypoints(self, capsys):
+        """Full-tier readiness guidance should advertise maintained console scripts."""
+        capabilities = {
+            "core_packages": {"numpy": True, "Pillow": True, "scipy": True, "PyYAML": True, "typer": True, "tqdm": True},
+            "ml_packages": {"torch": True, "diffusers": True, "transformers": True, "controlnet_aux": True},
+            "image_packages": {"tifffile": True, "imagecodecs": True, "scikit-image": True, "opencv": True},
+            "minimal_ready": True,
+            "standard_ready": True,
+            "full_ready": True,
+        }
+        images = {
+            "sample_dir_exists": False,
+            "input_dir_exists": True,
+            "sample_count": 0,
+            "input_count": 1,
+            "total_count": 1,
+            "has_images": True,
+        }
+
+        readiness.print_quick_start_guide(capabilities, images)
+
+        output = capsys.readouterr().out
+        assert ".venv/bin/lux_render" in output
+        assert "--input-glob" in output
+        assert ".venv/bin/lux-depth-v3" in output
+        assert "--model-key da3-metric" in output
+        assert ".venv/bin/luxury-tiff-batch" in output
+        assert "python scripts/pipelines/lux_render_pipeline.py" not in output
+        assert "python scripts/context_aware_rendering.py" not in output
+        assert "python scripts/utilities/luxury_tiff_batch_processor.py" not in output
+
     def test_check_sample_images(self):
         """Test sample image checking."""
         images = readiness.check_sample_images()

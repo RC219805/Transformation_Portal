@@ -53,7 +53,7 @@ def _load_lux_render_pipeline_with_missing_ml(monkeypatch):
     )
 
 
-def test_lux_render_pipeline_import_is_graceful_without_ml_extras(monkeypatch) -> None:
+def test_lux_render_pipeline_import_is_graceful_without_ml_extras(monkeypatch, capsys) -> None:
     (
         portal_module,
         pipelines_package,
@@ -74,6 +74,14 @@ def test_lux_render_pipeline_import_is_graceful_without_ml_extras(monkeypatch) -
         assert help_result.exit_code == 0
         assert "Batch CLI entry point for the luxury render pipeline." in help_result.output
         assert "Positive prompt" in help_result.output
+
+        monkeypatch.setattr(sys, "argv", ["lux_render", "--help"])
+        with pytest.raises(SystemExit) as console_exit:
+            pipeline_module.main()
+        assert console_exit.value.code == 0
+        console_output = capsys.readouterr().out
+        assert "Batch CLI entry point for the luxury render pipeline." in console_output
+        assert "--input-glob" in console_output
 
         run_result = runner.invoke(
             pipeline_module.app,

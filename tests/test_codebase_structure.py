@@ -615,6 +615,48 @@ class TestRootGovernanceMetadata:
         assert "check-quality      Dry-run common quality issue fixes" in makefile
 
 
+class TestReferenceQuickstartGuidance:
+    """Tests for active quick-start reference guidance."""
+
+    def test_quickstart_cheatsheet_uses_current_repo_managed_entrypoints(self):
+        """Reference quick-start guidance should not route operators to retired root CLIs."""
+        cheat_sheet = (_repo_root / "docs" / "reference" / "QUICKSTART_CHEATSHEET.md").read_text()
+
+        stale_fragments = [
+            "pip install -r requirements.txt",
+            'pip install -e ".[all]"',
+            'pip install -e ".[ml]"',
+            'pip install -e ".[tiff]"',
+            "from depth_pipeline import ArchitecturalDepthPipeline",
+            "python examples/simple_process.py",
+            "python luxury_tiff_batch_processor_cli.py",
+            "python lux_render_pipeline.py",
+            "python luxury_video_master_grader.py",
+            "[README.md](../README.md)",
+            "[DEPTH_PIPELINE_README.md](../DEPTH_PIPELINE_README.md)",
+        ]
+        for stale_fragment in stale_fragments:
+            assert stale_fragment not in cheat_sheet
+
+        required_fragments = [
+            "make venv",
+            "make install-core",
+            "make check-environment",
+            ".venv/bin/lux-depth-v3",
+            ".venv/bin/luxury-tiff-batch",
+            ".venv/bin/lux_render",
+            "--input-glob",
+            ".venv/bin/luxury_video_grader",
+            "scripts/check_image_processing_readiness.py",
+            "scripts/simple_image_processor.py",
+            "../guides/SETUP_GUIDE.md",
+            "../cli/LUX_DEPTH_V3_CLI_GUIDE.md",
+            "Linux and macOS Intel ML lanes are retired unsupported lanes",
+        ]
+        for required_fragment in required_fragments:
+            assert required_fragment in cheat_sheet
+
+
 class TestRootEnvironmentTemplate:
     """Tests for the root Docker/FastAPI environment template."""
 

@@ -1,355 +1,184 @@
-# Transformation Portal - Quick Start Cheat Sheet
+# Transformation Portal Quick Start Cheat Sheet
 
-**Get started in 5 minutes**
+Use this page as a compact operator reference. For complete setup details, use
+[SETUP_GUIDE.md](../guides/SETUP_GUIDE.md); for Lux Depth V3 commands, use
+[LUX_DEPTH_V3_CLI_GUIDE.md](../cli/LUX_DEPTH_V3_CLI_GUIDE.md).
 
-## Setup (One-Time)
+## Setup
 
 ```bash
-# 1. Clone and navigate
 git clone https://github.com/RC219805/Transformation_Portal.git
 cd Transformation_Portal
 
-# 2. Create virtual environment
-python -m venv .venv
-source .venv/bin/activate  # Windows: .venv\Scripts\activate
+make venv
+make install-core
+make check-environment
 
-# 3. Install (choose one)
-pip install -r requirements.txt        # Core features
-pip install -e ".[all]"                # Everything
-pip install -e ".[ml]"                 # AI features only
-pip install -e ".[tiff]"               # TIFF processing only
-
-# 4. Verify
-python -c "from depth_pipeline import ArchitecturalDepthPipeline; print('✓ Ready')"
+.venv/bin/python -c "import transformation_portal; print('Ready')"
 ```
 
----
-
-## Most Common Tasks
-
-### 1. Enhance Interior Render
+Optional model runtimes are installed through governed Make targets and setup
+scripts. The checked-in ML core lock is target-owned for native macOS Apple
+Silicon; Linux and macOS Intel ML lanes are retired unsupported lanes that fail
+closed until a governed lock is re-established.
 
 ```bash
-python examples/simple_process.py interior.jpg output/
+make install-ml-core
+make install-ml-sam2
+./scripts/setup/install_da3_runtime.sh --profile baseline
+./scripts/setup/install_depth_pro_runtime.sh
+./scripts/setup/install_raw_runtime.sh
+./scripts/setup/install_fastvlm_runtime.sh
+make check-fastvlm-runtime
 ```
 
-**Output:** `output/interior_enhanced.png` with depth-aware enhancement
+Do not install ML, CUDA, RAW, or umbrella extras ad hoc into the repo `.venv`.
+Use the current lock-backed targets and runtime scripts above.
 
----
+## Common Tasks
 
-### 2. Batch Process Photos
+### Check Image Processing Readiness
 
 ```bash
-python luxury_tiff_batch_processor_cli.py raw_photos/ enhanced/ --preset signature
+.venv/bin/python scripts/check_image_processing_readiness.py
+.venv/bin/python scripts/check_image_processing_readiness.py --quick-start
 ```
 
-**Output:** Entire folder processed with consistent look
-
----
-
-### 3. AI Render Refinement
+### Minimal Image Adjustment
 
 ```bash
-python lux_render_pipeline.py \
-  --input render.jpg \
-  --out ./enhanced \
+.venv/bin/python scripts/simple_image_processor.py input_images/render.jpg \
+  --brightness 1.1 \
+  --contrast 1.05 \
+  --saturation 1.1 \
+  --output output/render_basic.jpg
+```
+
+### Lux Depth V3 APEX Run
+
+```bash
+.venv/bin/lux-depth-v3 \
+  --input-dir ./input_images \
+  --output-dir ./output/lux_depth_v3_apex \
+  --preset premium \
+  --quality-tier apex \
+  --depth-backend da3 \
+  --model-key da3-metric \
+  --materials-v3 on \
+  --pbr on \
+  --cache-depth on \
+  --emit-master16 on \
+  --emit-upscaled16 on \
+  --emit-marketing on \
+  --emit-report on \
+  --emit-run-card on \
+  --run-card-version v2 \
+  --overwrite
+```
+
+### Luxury TIFF Batch
+
+```bash
+.venv/bin/luxury-tiff-batch input_images/tiff output/tiff_lux \
+  --preset signature \
+  --profile balanced \
+  --recursive
+```
+
+### AI Render Refinement
+
+```bash
+.venv/bin/lux_render \
+  --input-glob "input_images/renders/*.png" \
+  --out output/lux_render \
   --prompt "luxury bedroom interior, natural light, hardwood floor" \
-  --material-response
+  --material-response \
+  --texture-boost 0.28
 ```
 
-**Output:** Photorealistic AI-enhanced render
-
----
-
-### 4. Color Grade Video
+### Video Tour Grading
 
 ```bash
-python luxury_video_master_grader.py input.mp4 output.mp4 --preset signature_estate
-```
-
-**Output:** Professionally color-graded video
-
----
-
-## Command Quick Reference
-
-### Depth Pipeline
-
-```bash
-# Single image (default)
-python examples/simple_process.py input.jpg output/
-
-# Batch interior
-python examples/batch_process.py input_folder/ output/ --preset interior
-
-# Batch exterior (with atmospheric effects)
-python examples/batch_process.py input_folder/ output/ --preset exterior
-
-# Custom pattern
-python examples/batch_process.py renders/ out/ --pattern "*.png"
-```
-
-### Lux Render Pipeline
-
-```bash
-# Basic
-python lux_render_pipeline.py --input img.jpg --out ./out \
-  --prompt "luxury interior"
-
-# With Material Response
-python lux_render_pipeline.py --input img.jpg --out ./out \
-  --prompt "luxury interior" --material-response --texture-boost 0.28
-
-# With branding
-python lux_render_pipeline.py --input img.jpg --out ./out \
-  --prompt "luxury interior" --brand_text "Property Name" --logo logo.png
-
-# Batch
-python lux_render_pipeline.py --input 'folder/*.png' --out ./final \
-  --prompt "description" --material-response
-```
-
-### TIFF Batch Processor
-
-```bash
-# Default (Signature preset)
-python luxury_tiff_batch_processor_cli.py input/ output/
-
-# Vivid (high saturation)
-python luxury_tiff_batch_processor_cli.py input/ output/ --preset vivid
-
-# Natural (subtle)
-python luxury_tiff_batch_processor_cli.py input/ output/ --preset natural
-
-# Moody (dramatic)
-python luxury_tiff_batch_processor_cli.py input/ output/ --preset moody
-```
-
-### Video Master Grader
-
-```bash
-# Apply LUT
-python luxury_video_master_grader.py input.mp4 output.mp4 \
-  --lut assets/luts/film_emulation/Kodak_2393.cube
-
-# Apply preset
-python luxury_video_master_grader.py input.mp4 output.mp4 \
+.venv/bin/luxury_video_grader input/tour.mp4 output/tour_graded.mp4 \
   --preset signature_estate
-
-# HDR to SDR
-python luxury_video_master_grader.py hdr.mp4 sdr.mp4 --tone-map hable
-
-# Custom frame rate
-python luxury_video_master_grader.py input.mp4 output.mp4 --fps 24
-
-# Batch directory
-python luxury_video_master_grader.py --batch \
-  --input-dir ./raw/ --output-dir ./graded/ --preset signature_estate
 ```
 
----
+## CLI Quick Reference
 
-## Python API Quick Reference
+| Surface | Current entrypoint | Notes |
+|---------|--------------------|-------|
+| Environment | `make venv`, `make install-core`, `make check-environment` | Repo-managed `.venv` contract |
+| Image readiness | `.venv/bin/python scripts/check_image_processing_readiness.py` | Shows available tiers and missing optional runtimes |
+| Minimal image edits | `.venv/bin/python scripts/simple_image_processor.py` | Core Pillow/numpy path |
+| Lux Depth V3 | `.venv/bin/lux-depth-v3` | Main APEX/Lux Depth V3 CLI |
+| TIFF batch | `.venv/bin/luxury-tiff-batch` | 16-bit TIFF batch processing |
+| Lux render | `.venv/bin/lux_render` | Uses `--input-glob`, not the retired `--input` flag |
+| Video grading | `.venv/bin/luxury_video_grader` | Preset-driven FFmpeg grader |
 
-### Depth Pipeline
+## Capability Tiers
 
-```python
-from depth_pipeline import ArchitecturalDepthPipeline
+| Tier | Install path | Typical use |
+|------|--------------|-------------|
+| Core | `make install-core` | Basic processing, CLI contracts, validation, docs |
+| ML core | `make install-ml-core` | Native macOS Apple Silicon ML baseline |
+| SAM2 | `make install-ml-sam2` | Native macOS Apple Silicon SAM2 support |
+| DA3 | `./scripts/setup/install_da3_runtime.sh --profile baseline` | Lux V3 relative-depth runtime |
+| Depth Pro | `./scripts/setup/install_depth_pro_runtime.sh` | Apple Depth Pro runtime |
+| RAW | `./scripts/setup/install_raw_runtime.sh` | RAW image loader runtime |
+| FastVLM | `./scripts/setup/install_fastvlm_runtime.sh` | Optional advisory captioning runtime |
 
-# Load and process
-pipeline = ArchitecturalDepthPipeline.from_config('config/interior_preset.yaml')
-result = pipeline.process_render('image.jpg')
-pipeline.save_result(result, 'output/')
+## Output Expectations
 
-# Batch process
-from pathlib import Path
-images = list(Path('input/').glob('*.jpg'))
-results = pipeline.batch_process(images, 'output/')
-```
+| Workflow | Output shape |
+|----------|--------------|
+| Minimal image adjustment | Single adjusted image at the requested `--output` path |
+| Lux Depth V3 | Depth artifacts, material/PBR outputs, marketing exports, report, and run card when enabled |
+| TIFF batch | Processed TIFF files under the output directory, preserving high-fidelity metadata where supported |
+| Lux render | AI-refined render outputs under `--out` |
+| Video grading | Graded MP4/MOV master at the requested output path |
 
-### Material Response
+## Troubleshooting
 
-```python
-from material_response import MaterialResponse, SurfaceType
-from PIL import Image
+### Module Import Fails
 
-mr = MaterialResponse()
-image = Image.open('render.jpg')
-result = mr.enhance(
-    image,
-    surfaces=[SurfaceType.WOOD, SurfaceType.GLASS],
-    strength=0.7
-)
-result.save('enhanced.jpg', quality=95)
-```
-
-### TIFF Processor
-
-```python
-from luxury_tiff_batch_processor import TIFFBatchProcessor
-
-processor = TIFFBatchProcessor()
-processor.batch_process('input/', 'output/', preset='signature')
-```
-
----
-
-## Configuration Files
-
-**Depth Pipeline:**
-- `config/interior_preset.yaml` - Interior spaces (4 zones, no haze)
-- `config/exterior_preset.yaml` - Exterior views (6 zones, atmospheric)
-- `config/default_config.yaml` - Balanced defaults
-
-**LUT Collections:**
-- `assets/luts/film_emulation/` - Film stock looks (Kodak, FilmConvert)
-- `assets/luts/location_aesthetic/` - Location-specific (Montecito, etc.)
-- `assets/luts/material_response/` - Material enhancement LUTs
-
----
-
-## Presets at a Glance
-
-### TIFF Processing Presets
-
-| Preset | Best For | Look |
-|--------|----------|------|
-| `signature` | Luxury real estate | Warm, inviting |
-| `vivid` | Marketing materials | Bold, saturated |
-| `natural` | Editorial | Subtle, authentic |
-| `moody` | Dramatic interiors | Deep shadows |
-
-### Video Grading Presets
-
-| Preset | Best For | Look |
-|--------|----------|------|
-| `signature_estate` | Property videos | Warm, professional |
-| `golden_hour_courtyard` | Exteriors | Golden, cinematic |
-
----
-
-## Common Parameters
-
-### Lux Render Pipeline
-
-| Parameter | Typical Range | Description |
-|-----------|---------------|-------------|
-| `--steps` | 20-50 | Quality vs speed (30 = good balance) |
-| `--strength` | 0.3-0.6 | How much to change (0.45 = moderate) |
-| `--gs` | 7-12 | Guidance scale (7.5 = balanced) |
-| `--texture-boost` | 0.2-0.4 | Material detail (0.28 = good default) |
-
-### Depth Pipeline (YAML)
-
-| Parameter | Range | Description |
-|-----------|-------|-------------|
-| `sigma_spatial` | 1.0-5.0 | Denoising strength (3.0 = balanced) |
-| `num_zones` | 3-8 | Depth stratification (4-6 typical) |
-| `clarity_strength` | 0.0-1.0 | Micro-contrast (0.5 = moderate) |
-
----
-
-## Troubleshooting Quick Fixes
-
-**"ModuleNotFoundError"**
 ```bash
-pip install -r requirements.txt
+make install-core
+make check-environment
 ```
 
-**"Out of memory"**
+### Optional Runtime Missing
+
 ```bash
-# Reduce resolution
---width 768 --height 512
+.venv/bin/python scripts/check_image_processing_readiness.py
 ```
 
-**"FFmpeg not found"**
+Install only the reported governed runtime. Do not substitute ad hoc package
+installs for a failing Make target or setup script.
+
+### Lux Render Flag Error
+
+Use `--input-glob`:
+
 ```bash
-# macOS
+.venv/bin/lux_render --input-glob "input_images/*.png" \
+  --out output/lux_render \
+  --prompt "luxury interior"
+```
+
+### FFmpeg Missing For Video Grading
+
+```bash
 brew install ffmpeg
-# Ubuntu
-sudo apt install ffmpeg
 ```
 
-**Slow depth processing**
-```yaml
-# config/my_config.yaml
-depth_model:
-  backend: "coreml"  # Apple Silicon
-  # or
-  backend: "pytorch_cuda"  # NVIDIA GPU
-```
+Linux package names vary by distribution; install FFmpeg through the platform's
+package manager before running `.venv/bin/luxury_video_grader`.
 
----
+## Current References
 
-## File Outputs
-
-**Depth Pipeline:**
-- `image_enhanced.png` - Enhanced image
-- `image_depth.npy` - Raw depth data
-- `image_depth_viz.png` - Depth visualization
-
-**Lux Render:**
-- `image_enhanced.png` - AI-refined render
-
-**TIFF Processor:**
-- `image.tif` - Enhanced TIFF (preserves 16-bit + metadata)
-
-**Video Grader:**
-- `video.mp4` or `.mov` - Graded video (default: ProRes 422 HQ)
-
----
-
-## Performance Expectations
-
-| Operation | Resolution | Time | Throughput |
-|-----------|------------|------|------------|
-| Depth Pipeline | 4K | 0.9-1.0s | 400-600/hr |
-| Lux Render | 1024×768 | 45-90s | 40-80/hr |
-| TIFF Processing | 4K | 2-5s | 720-1800/hr |
-| Video Grading | 1080p | ~1-2x realtime | - |
-
-*Apple M4 Max / NVIDIA RTX 4090 benchmarks*
-
----
-
-## Essential Workflows
-
-### 1. Quick Interior Enhancement
-```bash
-python examples/simple_process.py render.jpg output/
-```
-
-### 2. Batch Property Photos
-```bash
-python luxury_tiff_batch_processor_cli.py photos/ enhanced/ --preset signature
-```
-
-### 3. AI Marketing Render
-```bash
-python lux_render_pipeline.py --input draft.jpg --out ./final \
-  --prompt "luxury penthouse interior" --material-response \
-  --brand_text "Property Name"
-```
-
-### 4. Video Tour Grading
-```bash
-python luxury_video_master_grader.py tour.mp4 graded.mp4 --preset signature_estate
-```
-
----
-
-## Getting Help
-
-**Full Guide:** [PIPELINE_OPERATIONS_GUIDE.md](PIPELINE_OPERATIONS_GUIDE.md)
-
-**Documentation:**
-- [README.md](../README.md) - Project overview
-- [DEPTH_PIPELINE_README.md](../DEPTH_PIPELINE_README.md) - Depth pipeline details
-
-**Examples:** [examples/](../examples/) - Code samples
-
-**Issues:** [GitHub Issues](https://github.com/RC219805/Transformation_Portal/issues)
-
----
-
-**Quick Tip:** Start with example scripts, then customize configurations as needed!
+- [Project README](../../README.md)
+- [Documentation Map](../governance/DOCUMENTATION_MAP.md)
+- [Setup Guide](../guides/SETUP_GUIDE.md)
+- [Image Processing Readiness](../guides/IMAGE_PROCESSING_READINESS.md)
+- [Lux Depth V3 CLI Guide](../cli/LUX_DEPTH_V3_CLI_GUIDE.md)
+- [Pipeline Operations Guide](../pipeline_docs/PIPELINE_OPERATIONS_GUIDE.md)
