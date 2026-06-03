@@ -2,13 +2,13 @@
 
 ## Supported Versions
 
-The following versions of Transformation Portal are currently supported with security updates:
+The following Transformation Portal release channels are currently supported with security updates:
 
 | Version | Supported          | Notes |
 | ------- | ------------------ | ----- |
-| main    | :white_check_mark: | Development branch - security fixes prioritized |
-| 0.1.x   | :white_check_mark: | Current stable release |
-| < 0.1   | :x:                | Unsupported |
+| main    | :white_check_mark: | Active development branch; security fixes prioritized |
+| Latest tagged release | :white_check_mark: | Supported for security updates until superseded by a newer tagged release |
+| Older release tags | :x: | Unsupported unless an explicit security advisory or maintenance branch says otherwise |
 
 ## Reporting a Vulnerability
 

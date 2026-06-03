@@ -208,6 +208,27 @@ class TestRootGovernanceMetadata:
         assert "*Next Review: 2026-09-03*" in security_policy
         assert "*Security Policy Version: 1.2*" in security_policy
 
+    def test_security_policy_supported_versions_track_release_channels(self):
+        """Root security policy should not name retired 0.x lines as current stable."""
+        security_policy = (_repo_root / "SECURITY.md").read_text()
+
+        stale_version_claims = [
+            "| 0.1.x",
+            "| < 0.1",
+            "Current stable release",
+        ]
+        for stale_claim in stale_version_claims:
+            assert stale_claim not in security_policy
+
+        required_policy_fragments = [
+            "release channels are currently supported with security updates",
+            "| main    | :white_check_mark: | Active development branch; security fixes prioritized |",
+            "| Latest tagged release | :white_check_mark: | Supported for security updates until superseded by a newer tagged release |",
+            "| Older release tags | :x: | Unsupported unless an explicit security advisory or maintenance branch says otherwise |",
+        ]
+        for policy_fragment in required_policy_fragments:
+            assert policy_fragment in security_policy
+
     def test_security_policy_resources_point_to_current_authorities(self):
         """Root security resources should avoid historical or mixed guidance."""
         security_policy = (_repo_root / "SECURITY.md").read_text()
