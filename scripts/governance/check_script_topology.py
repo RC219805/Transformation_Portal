@@ -47,6 +47,11 @@ CLI_COMPATIBILITY_WRAPPERS = set(COMPATIBILITY_WRAPPERS) - {"scripts/synthetic_v
 SCRIPT_PACKAGE_COMPATIBILITY_WRAPPERS = {
     wrapper for wrapper, (_canonical, marker) in COMPATIBILITY_WRAPPERS.items() if marker.startswith("from scripts.")
 }
+SOURCE_PACKAGE_COMPATIBILITY_WRAPPERS = {
+    wrapper
+    for wrapper, (_canonical, marker) in COMPATIBILITY_WRAPPERS.items()
+    if marker.startswith("from transformation_portal.")
+}
 
 RETIRED_ORGANIZER_PATHS = {
     "archive/.organize_docs.sh": "archive/scripts/legacy-organization/organize_docs_root_legacy.sh",
@@ -179,6 +184,17 @@ def validate_script_topology(
                     path=wrapper,
                     reason="script-package compatibility wrapper does not bootstrap repository root",
                     suggestion="insert the repository root into sys.path before importing scripts.*",
+                )
+            )
+        if (
+            wrapper in SOURCE_PACKAGE_COMPATIBILITY_WRAPPERS
+            and 'Path(__file__).resolve().parents[1] / "src"' not in wrapper_text
+        ):
+            violations.append(
+                TopologyViolation(
+                    path=wrapper,
+                    reason="source-package compatibility wrapper does not bootstrap src package root",
+                    suggestion="insert the src root into sys.path before importing transformation_portal.*",
                 )
             )
 
