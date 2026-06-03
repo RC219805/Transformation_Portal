@@ -164,6 +164,62 @@ class TestRootGovernanceMetadata:
             assert (_repo_root / relative_path).exists()
 
 
+class TestRootEnvironmentTemplate:
+    """Tests for the root Docker/FastAPI environment template."""
+
+    def test_env_example_covers_current_backend_and_compose_contracts(self):
+        """The root env template should describe the current local stack seams."""
+        env_example = _repo_root / ".env.example"
+        content = env_example.read_text()
+
+        expected_variables = [
+            "TP_API_KEY",
+            "TP_UID",
+            "TP_GID",
+            "DEVICE",
+            "TP_ORCHESTRATOR_STATE_BACKEND",
+            "TP_DATABASE_URL",
+            "TP_ORCHESTRATOR_QUEUE_BACKEND",
+            "TP_REDIS_URL",
+            "TP_REDIS_KEY_PREFIX",
+            "TP_ARTIFACT_STORE",
+            "TP_ARTIFACT_LOCAL_ROOT",
+            "TP_ARTIFACT_BUCKET",
+            "TP_ARTIFACT_ENDPOINT_URL",
+            "POSTGRES_DB",
+            "POSTGRES_USER",
+            "POSTGRES_PASSWORD",
+            "TP_POSTGRES_PUBLIC_PORT",
+            "TP_REDIS_PUBLIC_PORT",
+            "MINIO_ROOT_USER",
+            "MINIO_ROOT_PASSWORD",
+            "TP_MINIO_API_PUBLIC_PORT",
+            "TP_MINIO_CONSOLE_PUBLIC_PORT",
+            "TP_TEST_POSTGRES_URL",
+            "TP_TEST_REDIS_URL",
+            "TP_TEST_S3_URL",
+            "TP_TEST_S3_BUCKET",
+        ]
+        for variable in expected_variables:
+            assert variable in content
+
+        expected_authorities = [
+            "web/secure-landing/.env.example",
+            "docs/deployment/managed_paid_pilot_staging_runbook.md",
+        ]
+        for relative_path in expected_authorities:
+            assert relative_path in content
+            assert (_repo_root / relative_path).exists()
+
+        stale_claims = [
+            "Inventory below covers Python-orchestrator env vars sourced from",
+            "grep -oE",
+            "app.py. Run this",
+        ]
+        for stale_claim in stale_claims:
+            assert stale_claim not in content
+
+
 class TestAssetOrganization:
     """Tests for asset organization."""
 

@@ -7,7 +7,7 @@ useDefault = true
 # gitleaks v8.21.x and does not support global allowlist targetRules.
 [allowlist]
 description = "Ignore generated local artifact directories already excluded from version control"
-paths = ['''(^|/)(output|output_[^/]*|test_output|test_artifacts|processed_images|processed_output|extracted_context|docs/api/_build|__pycache__|\.pytest_cache|\.mypy_cache|\.ruff_cache|\.pyre|\.rag_cache|web/secure-landing/(?:\.next|\.next-build-verify|\.next-smoke-[^/]*|\.next-codex-[^/]*))(/|$)''']
+paths = ['''(^|/)(output|output_[^/]*|test_output|test_artifacts|processed_images|processed_output|extracted_context|docs/api/_build|__pycache__|\.pytest_cache|\.mypy_cache|\.ruff_cache|\.pyre|\.rag_cache|web/secure-landing/(?:\.next|\.next-build-verify|\.next-smoke-[^/]*|\.next-codex-[^/]*|\.metafiles))(/|$)''']
 
 [[rules]]
 id = "generic-api-key"
