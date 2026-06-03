@@ -391,6 +391,8 @@ class TestRootGovernanceMetadata:
         contributing = (_repo_root / "CONTRIBUTING.md").read_text()
         requirements_readme = (_repo_root / "requirements" / "README.md").read_text()
         requirements_ml = (_repo_root / "requirements" / "ml.in").read_text()
+        requirements_ml_cpu = (_repo_root / "requirements" / "ml-cpu.in").read_text()
+        requirements_ml_cuda = (_repo_root / "requirements" / "ml-cuda.in").read_text()
 
         stale_fragments = [
             "vim requirements/ml.in         # Optional ML/AI deps",
@@ -412,6 +414,10 @@ class TestRootGovernanceMetadata:
 
         assert "compile           Compile generic checked-in lockfiles only" in requirements_readme
         assert "compile-ml-darwin-arm64    Compile the Darwin arm64 ML lock" in requirements_readme
+        assert "ml-cuda.in              # Retired unsupported CUDA lane stub" in requirements_readme
+        assert "linux-x86_64-cuda` (retired unsupported CUDA lane; `core-cuda` fails closed)" in requirements_readme
+        assert "Do not install CUDA PyTorch packages ad hoc into the repo .venv" in requirements_readme
+        assert "PYTORCH_INDEX=https://download.pytorch.org/whl/cu121" not in requirements_readme
         assert "No checked-in umbrella ML lock is generated from this file" in requirements_ml
         assert "make install-ml-raw     # disabled: no trusted RAW lock contract" in requirements_ml
         assert "make install-ml         # disabled: no trusted umbrella lock contract" in requirements_ml
@@ -420,6 +426,12 @@ class TestRootGovernanceMetadata:
         assert "torch==2.8.0, torchvision==0.23.0, open-clip-torch==3.3.0" in requirements_ml
         assert "target-owned locks are install support promises" in requirements_ml
         assert "torch==2.10.0, torchvision==0.25.0" not in requirements_ml
+        assert "CUDA is a retired unsupported lane" in requirements_ml_cpu
+        assert "GPU-specific packages are in ml-cuda.in" not in requirements_ml_cpu
+        assert "Retired unsupported CUDA ML lane" in requirements_ml_cuda
+        assert "core-cuda` in scripts/bootstrap/install_ml_stack.sh fails closed" in requirements_ml_cuda
+        assert "nvidia-cublas-cu12" not in requirements_ml_cuda
+        assert "triton ;" not in requirements_ml_cuda
 
     def test_contributing_setup_uses_repo_managed_environment(self):
         """Root contribution setup should use the current Makefile-managed .venv contract."""

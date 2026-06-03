@@ -19,8 +19,8 @@ requirements/
 ├── ml-cpu.txt              # Deprecated optional ML lock (not checked in)
 ├── ml-mps.in               # ML MPS acceleration layer (Apple Silicon)
 ├── ml-mps.txt              # Deprecated optional ML lock (not checked in)
-├── ml-cuda.in              # ML CUDA acceleration layer (Linux + NVIDIA)
-├── ml-cuda.txt             # Deprecated optional ML lock (not checked in)
+├── ml-cuda.in              # Retired unsupported CUDA lane stub (fails closed)
+├── ml-cuda.txt             # Retired unsupported CUDA lock (not checked in)
 ├── ml-raw.in               # ML RAW ingest layer - rawpy
 ├── ml-raw.txt              # Deprecated optional ML lock (not checked in)
 ├── ml-sam2.in              # ML SAM2 layer - Meta Segment Anything 2
@@ -51,13 +51,13 @@ ML dependencies use an explicit platform matrix with three orthogonal axes:
 | ISA    | arm64 / x86_64   | `platform_machine`  |
 | Accel  | cpu / mps / cuda | **Explicit profile** |
 
-**Canonical platform targets:**
-- `darwin-x86_64-cpu` (macOS Intel)
-- `darwin-arm64-cpu` (macOS Apple Silicon, CPU-only)
+**Platform target taxonomy (not install support):**
+- `darwin-x86_64-cpu` (retired unsupported ML lane)
+- `darwin-arm64-cpu` (macOS Apple Silicon, CPU fallback)
 - `darwin-arm64-mps` (macOS Apple Silicon, Metal)
-- `linux-x86_64-cpu` (Linux Intel/AMD, CPU baseline)
-- `linux-x86_64-cuda` (Linux Intel/AMD, NVIDIA GPU)
-- `linux-arm64-cpu` (Linux ARM)
+- `linux-x86_64-cpu` (retired unsupported ML lane)
+- `linux-x86_64-cuda` (retired unsupported CUDA lane; `core-cuda` fails closed)
+- `linux-arm64-cpu` (retired unsupported ML lane)
 
 ### Target-Owned Lockfiles
 
@@ -87,7 +87,7 @@ Dependencies are organized into logical layers:
 - **ml-core**: Supported ML metadata baseline (torch, diffusers, transformers, etc.; no checked-in lock artifact)
 - **ml-cpu**: CPU acceleration layer (cross-platform capability, not a checked-in lock artifact)
 - **ml-mps**: MPS acceleration layer (Apple Silicon, Metal Performance Shaders; installed via bootstrap/profile flow)
-- **ml-cuda**: CUDA acceleration layer (Linux + NVIDIA GPU; installed via bootstrap/profile flow)
+- **ml-cuda**: Retired unsupported CUDA lane stub; `core-cuda` fails closed until a governed Linux lockfile contract exists
 - **ml-raw**: RAW camera file ingest (rawpy) - no trusted checked-in lockfile contract
 - **ml-sam2**: SAM2 segmentation backend - scripted-only (non-standard install)
 - **ml-coreml**: Apple CoreML acceleration - macOS only
@@ -256,7 +256,7 @@ The bootstrap script provides profile-based installation with platform validatio
 ./scripts/bootstrap/install_ml_stack.sh --profile core-mps
 
 # Linux and macOS Intel ML lanes are retired unsupported lanes and fail closed.
-PYTORCH_INDEX=https://download.pytorch.org/whl/cu121 ./scripts/bootstrap/install_ml_stack.sh --profile core-cuda
+# Do not install CUDA PyTorch packages ad hoc into the repo .venv.
 
 # Install with SAM2 segmentation
 ./scripts/bootstrap/install_ml_stack.sh --profile core-mps,sam2

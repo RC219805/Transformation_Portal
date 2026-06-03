@@ -21,4 +21,5 @@
 -r ml-core.in
 
 # CPU-only: no additional packages needed
-# GPU-specific packages are in ml-cuda.in and ml-mps.in
+# CUDA is a retired unsupported lane; MPS/CoreML are handled by their own
+# Apple Silicon-specific layers.
