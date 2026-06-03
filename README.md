@@ -479,7 +479,7 @@ Performance is treated as a first-class signal in CI.
 For deeper performance workflows, see:
 - [Performance Monitoring Guide](docs/performance/README.md)
 - [APEX Real Pipeline Integration Guide](docs/guides/APEX_REAL_PIPELINE_INTEGRATION.md)
-- [ADR-024](docs/decisions/ADR-024-performance-regression-authority-canonicalization.md)
+- [Performance Gate Policy](docs/performance/GATE_POLICY.md)
 
 ---
 

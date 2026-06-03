@@ -148,6 +148,20 @@ class TestRootGovernanceMetadata:
             assert expected in readme
         assert "Last Updated: 2026-05-11" not in readme
 
+    def test_root_readme_performance_links_use_current_authorities(self):
+        """README performance navigation should point to maintained policy docs."""
+        readme = (_repo_root / "README.md").read_text()
+
+        assert "docs/decisions/ADR-024-performance-regression-authority-canonicalization.md" not in readme
+        required_links = [
+            "docs/performance/README.md",
+            "docs/guides/APEX_REAL_PIPELINE_INTEGRATION.md",
+            "docs/performance/GATE_POLICY.md",
+        ]
+        for relative_path in required_links:
+            assert relative_path in readme
+            assert (_repo_root / relative_path).exists()
+
     def test_security_policy_footer_tracks_current_root_policy_update(self):
         """Root security policy metadata should track current policy edits."""
         security_policy = (_repo_root / "SECURITY.md").read_text()
