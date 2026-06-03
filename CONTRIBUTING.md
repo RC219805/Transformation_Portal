@@ -704,6 +704,7 @@ Certain packages require minimum versions due to CVEs:
 
 | Package                 | Minimum Version | Reason                              |
 |-------------------------|-----------------|-------------------------------------|
+| `cryptography`          | >=46.0.5        | CVE-2026-26007 / GHSA-r6ph-v2qm-q3c2 |
 | `sentence-transformers` | >=3.1.0         | CVE-73169 (arbitrary code execution) |
 | `Pillow`                | >=10.3.0        | CVE-2024-28219 and multiple 9.x CVEs |
 

@@ -241,7 +241,10 @@ class TestRootGovernanceMetadata:
     def test_security_baseline_versions_match_current_locks(self):
         """Root security guidance should describe the current governed lock baselines."""
         security_policy = (_repo_root / "SECURITY.md").read_text()
+        requirements_ci = (_repo_root / "requirements-ci.txt").read_text()
+        requirements_dev = (_repo_root / "requirements-dev.txt").read_text()
         requirements_lint = (_repo_root / "requirements-lint.txt").read_text()
+        contributing = (_repo_root / "CONTRIBUTING.md").read_text()
 
         assert "cryptography==47.0.0" in (_repo_root / "requirements/ci.txt").read_text()
         assert "cryptography==47.0.0" in (_repo_root / "requirements/dev.txt").read_text()
@@ -250,6 +253,11 @@ class TestRootGovernanceMetadata:
 
         assert "**cryptography==47.0.0**" in security_policy
         assert "**cryptography==46.0.5**" not in security_policy
+        assert "cryptography>=47.0.0,<48" in requirements_ci
+        assert "cryptography>=47.0.0,<48" in requirements_dev
+        assert "cryptography>=46.0,<48" not in requirements_ci
+        assert "cryptography>=46.0,<48" not in requirements_dev
+        assert "`cryptography`          | >=46.0.5" in contributing
         assert "current governed lock baseline is pillow==12.2.0" in requirements_lint
         assert "allows pillow==12.1.1 in lockfiles" not in requirements_lint
 
