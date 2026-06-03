@@ -1,14 +1,29 @@
 from __future__ import annotations
 
+import importlib.util
+import sys
 from pathlib import Path
 
 import pytest
 
-from scripts.governance.check_script_topology import COMPATIBILITY_WRAPPERS, validate_script_topology
-
 pytestmark = pytest.mark.unit
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+CHECKER_PATH = REPO_ROOT / "scripts/governance/check_script_topology.py"
+
+
+def _load_checker():
+    spec = importlib.util.spec_from_file_location("check_script_topology_under_test", CHECKER_PATH)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+CHECKER = _load_checker()
+COMPATIBILITY_WRAPPERS = CHECKER.COMPATIBILITY_WRAPPERS
+validate_script_topology = CHECKER.validate_script_topology
 
 
 def _reader(contents: dict[str, str]):
