@@ -277,7 +277,7 @@ In case of a security breach:
 
 ### System Requirements
 
-- Python 3.10+ (older versions have known vulnerabilities)
+- Python 3.11+ (matches the package `requires-python` floor and CI support matrix)
 - FFmpeg 6+ (addresses multiple CVEs from earlier versions)
 - Operating System with DEP/ASLR support
 - Minimum 8GB RAM to prevent swap file exposure

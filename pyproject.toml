@@ -41,20 +41,24 @@ classifiers = [
 ]
 
 [project.optional-dependencies]
-# ML and deep learning - see requirements/ml-*.in for layered pinned versions
+# ML and deep learning - see requirements/README.md for lock ownership policy
 # ML dependencies. Note: `realesrgan` is BANNED (unmaintained).
 # Enforcement: requirements/constraints.txt hard-block pins + scripts/security/verify_banned_dependencies.py
 #
 # LAYERED ML DEPENDENCY STRATEGY
 # ==============================
 # ML dependencies are organized into capability layers.
-# The lockfile system (requirements/*.txt) is the operational source of truth.
-# pyproject.toml extras are minimal capability pointers for editable installs.
+# The checked-in requirements contract is the operational source of truth.
+# pyproject.toml extras are metadata/convenience pointers, not install support
+# promises for retired or untrusted ML lanes.
 #
-# Standard Layers (lockfile-compiled):
-#   ml-core   Cross-platform ML baseline
+# Supported checked-in ML lock:
+#   ml-core-darwin-arm64.txt   Apple Silicon ML baseline
+#
+# Metadata Layers (not checked-in lock artifacts):
+#   ml-core   Supported ML metadata baseline
 #   ml-raw    RAW camera file ingest
-#   ml.txt    Standard umbrella (ml-core + ml-raw)
+#   ml        Metadata umbrella (ml-core + raw)
 #
 # Scripted-Only Layers (use bootstrap script):
 #   sam2      SAM2 segmentation - requires non-standard install semantics
@@ -63,7 +67,7 @@ classifiers = [
 # Platform-Specific Layers:
 #   coreml    Apple CoreML acceleration (macOS only)
 
-# ML Core - supported ML baseline (minimal spec, see ml-core.in for pins)
+# ML Core - supported metadata baseline (minimal spec; see ml-core.in for pins)
 ml-core = [
     "torch>=2.8.0",
     "torchvision>=0.23.0",
@@ -80,12 +84,12 @@ coreml = [
 raw = [
     "rawpy>=0.18.0",
 ]
-# Standard ML umbrella - supported metadata layers only (ml-core + ml-raw)
+# Standard ML umbrella - supported metadata layers only (ml-core + raw)
 # Does NOT include: sam2 (scripted-only), coreml (platform-specific), research (experimental)
 # For additional capabilities:
 #   SAM2:   ./scripts/bootstrap/install_ml_stack.sh --profile core-cpu,sam2
 #   CoreML: ./scripts/bootstrap/install_ml_stack.sh --profile core-cpu,coreml (macOS only)
-#   Full:   ./scripts/bootstrap/install_ml_stack.sh --profile full (same as ml.txt)
+#   Full:   reserved until a trusted umbrella contract exists again
 ml = [
     "torch>=2.8.0",
     "torchvision>=0.23.0",
@@ -104,7 +108,7 @@ spatial-ai = [
     "transformation-portal[ml-core]",
     "huggingface-hub>=0.19",
     # SAM2: pip install sam2 (requires scripted bootstrap for weights)
-    "sam2>=1.0; python_version >= '3.10'",
+    "sam2>=1.0; python_version >= '3.11'",
     # nvdiffrast (compiled CUDA extension) must be installed separately:
     # git clone https://github.com/NVlabs/nvdiffrast && pip install -e .
 ]
