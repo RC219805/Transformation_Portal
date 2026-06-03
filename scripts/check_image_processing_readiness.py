@@ -8,7 +8,7 @@ readiness for image processing operations. It categorizes functionality into
 tiers and provides actionable next steps.
 
 Usage:
-    python scripts/check_image_processing_readiness.py [--verbose] [--quick-start]
+    .venv/bin/python scripts/check_image_processing_readiness.py [--verbose] [--quick-start]
 
 Features:
     - Tiered capability assessment (Minimal, Standard, Full)
@@ -161,13 +161,14 @@ def assess_capabilities() -> Dict[str, any]:
         "tqdm": check_package("tqdm", "tqdm")[0],
     }
 
-    # Check ML packages
+    # Check supported ML packages. The external ``realesrgan`` package is
+    # hard-blocked by dependency policy; upscaling must use governed/local
+    # backends or Pillow fallback instead of ad hoc package installation.
     ml_packages = {
         "torch": check_package("torch", "torch")[0],
         "diffusers": check_package("diffusers", "diffusers")[0],
         "transformers": check_package("transformers", "transformers")[0],
         "controlnet_aux": check_package("controlnet-aux", "controlnet_aux")[0],
-        "realesrgan": check_package("realesrgan", "realesrgan")[0],
     }
 
     # Check image processing packages
@@ -207,7 +208,7 @@ def print_tier_status(capabilities: Dict) -> None:
         print("   → Can process images with basic operations")
     else:
         print(colored("   ✗ NOT READY", Colors.FAIL))
-        print("   → Install: pip install numpy Pillow")
+        print("   → Install: make install-core")
 
     # Standard Tier
     print("\n" + colored("📦 STANDARD TIER", Colors.OKBLUE))
@@ -222,7 +223,8 @@ def print_tier_status(capabilities: Dict) -> None:
             missing.append("scipy")
         if not capabilities["image_packages"]["tifffile"]:
             missing.append("tifffile")
-        print(f"   → Install: pip install {' '.join(missing)}")
+        print(f"   → Missing standard packages: {', '.join(missing)}")
+        print("   → Install: make install-core")
 
     # Full Tier
     print("\n" + colored("📦 FULL TIER", Colors.OKBLUE))
@@ -233,8 +235,9 @@ def print_tier_status(capabilities: Dict) -> None:
     else:
         print(colored("   ✗ NOT READY", Colors.WARNING))
         ml_count = sum(capabilities["ml_packages"].values())
-        print(f"   → {ml_count}/5 ML packages installed")
-        print("   → Install: pip install -r requirements.txt")
+        print(f"   → {ml_count}/{len(capabilities['ml_packages'])} supported ML packages installed")
+        print("   → Install: make install-ml-core")
+        print("   → Apple Silicon bootstrap: ./scripts/bootstrap/install_ml_stack.sh --profile core-cpu")
         print("   → Note: Requires ~5GB disk space")
 
 
@@ -273,7 +276,7 @@ def print_available_operations(capabilities: Dict) -> None:
             [
                 ("✓", "AI-powered depth estimation", Colors.OKGREEN),
                 ("✓", "Stable Diffusion enhancement", Colors.OKGREEN),
-                ("✓", "Real-ESRGAN 4x upscaling", Colors.OKGREEN),
+                ("✓", "Governed AI upscaling backends and Pillow fallback", Colors.OKGREEN),
                 ("✓", "ControlNet refinement", Colors.OKGREEN),
                 ("✓", "Material Response processing", Colors.OKGREEN),
             ]
@@ -283,7 +286,7 @@ def print_available_operations(capabilities: Dict) -> None:
             [
                 ("○", "AI-powered depth estimation (requires torch)", Colors.WARNING),
                 ("○", "Stable Diffusion enhancement (requires ML packages)", Colors.WARNING),
-                ("○", "Real-ESRGAN upscaling (requires ML packages)", Colors.WARNING),
+                ("○", "Governed AI upscaling (external Real-ESRGAN package unsupported)", Colors.WARNING),
             ]
         )
 
@@ -299,7 +302,8 @@ def print_quick_start_guide(capabilities: Dict, images: Dict) -> None:
 
     if not capabilities["minimal_ready"]:
         print("\n" + colored("⚠ Install core packages first:", Colors.WARNING))
-        print("   pip install numpy Pillow PyYAML typer tqdm")
+        print("   make install-core")
+        print("   make check-environment")
         print("\n   Then run this script again to see available operations.")
         return
 
@@ -309,7 +313,7 @@ def print_quick_start_guide(capabilities: Dict, images: Dict) -> None:
         print("   No images found. Choose one:")
         print("   ")
         print("   a) Download samples:")
-        print("      python scripts/download_samples.py")
+        print("      .venv/bin/python scripts/download_samples.py")
         print("   ")
         print("   b) Use your own images:")
         print("      cp ~/Downloads/my_image.jpg input_images/")
@@ -332,7 +336,8 @@ def print_quick_start_guide(capabilities: Dict, images: Dict) -> None:
         )
         print("   ")
         print("   Upgrade to Standard tier for professional workflows:")
-        print("   pip install scipy tifffile imagecodecs scikit-image")
+        print("   make install-core")
+        print("   # If packages are still missing, inspect requirements/README.md before installing ad hoc.")
 
     elif capabilities["standard_ready"] and not capabilities["full_ready"]:
         print("   With current setup (Standard), try:")
@@ -341,25 +346,32 @@ def print_quick_start_guide(capabilities: Dict, images: Dict) -> None:
         print("   # Create a simple processing script using Pillow + scipy")
         print("   ")
         print("   Upgrade to Full tier for AI-powered processing:")
-        print("   pip install torch diffusers transformers realesrgan")
+        print("   make install-ml-core")
+        print("   # Apple Silicon CPU fallback: ./scripts/bootstrap/install_ml_stack.sh --profile core-cpu")
 
     elif capabilities["full_ready"]:
         print("   With current setup (Full), you can use all pipelines:")
         print("   ")
         print("   # AI-powered render enhancement")
-        print("   python scripts/pipelines/lux_render_pipeline.py input_images/render.tiff")
+        print(
+            "   .venv/bin/lux_render --input-glob \"input_images/*.tiff\" "
+            "--out output/lux_render --prompt \"luxury interior\""
+        )
         print("   ")
-        print("   # Depth-aware processing")
-        print("   python scripts/context_aware_rendering.py input_images/interior.jpg")
+        print("   # Lux Depth V3 APEX processing")
+        print(
+            "   .venv/bin/lux-depth-v3 --input-dir input_images --output-dir output/lux_depth_v3 "
+            "--quality-tier apex --model-key da3-metric"
+        )
         print("   ")
         print("   # Batch TIFF processing")
-        print("   python scripts/utilities/luxury_tiff_batch_processor.py input_images/ output/")
+        print("   .venv/bin/luxury-tiff-batch input_images/ output/tiff_lux --preset signature")
 
     print("\n" + colored("📖 Step 3: Explore Documentation", Colors.OKBLUE))
     print("   README.md - Feature overview and examples")
-    print("   docs/depth_pipeline/DEPTH_PIPELINE_README.md - Depth pipeline documentation")
-    print("   docs/architecture/ARCHITECTURE.md - System architecture and pipeline overview")
-    print("   docs/performance/PERFORMANCE_OPTIMIZATION.md - Performance tuning and best practices")
+    print("   docs/guides/IMAGE_PROCESSING_READINESS.md - Capability tiers and install paths")
+    print("   docs/cli/LUX_DEPTH_V3_CLI_GUIDE.md - Lux Depth V3 CLI examples")
+    print("   docs/governance/DOCUMENTATION_MAP.md - Current documentation navigation")
 
 
 def print_recommendations(disk: Dict, capabilities: Dict) -> None:
@@ -382,19 +394,28 @@ def print_recommendations(disk: Dict, capabilities: Dict) -> None:
 
     # Package recommendations
     if not capabilities["minimal_ready"]:
-        recommendations.append(("🔧", "Install core packages: pip install numpy Pillow PyYAML typer tqdm", Colors.WARNING))
+        recommendations.append(("🔧", "Install core packages: make install-core", Colors.WARNING))
     elif not capabilities["standard_ready"]:
-        recommendations.append(("🔧", "Upgrade to Standard: pip install scipy tifffile imagecodecs", Colors.OKCYAN))
+        recommendations.append(("🔧", "Upgrade to Standard: make install-core", Colors.OKCYAN))
     elif not capabilities["full_ready"]:
         if disk.get("sufficient", False):
-            recommendations.append(("🔧", "Upgrade to Full: pip install -r requirements.txt", Colors.OKCYAN))
+            recommendations.append(("🔧", "Upgrade to Full: make install-ml-core", Colors.OKCYAN))
+            recommendations.append(
+                (
+                    "→",
+                    "Apple Silicon ML bootstrap: ./scripts/bootstrap/install_ml_stack.sh --profile core-cpu",
+                    Colors.OKCYAN,
+                )
+            )
         else:
             recommendations.append(("⚠", "Full tier requires more disk space. Free up space first.", Colors.WARNING))
 
     # Model downloads
     repo_root = Path(__file__).parent.parent
     if (repo_root / "scripts" / "setup" / "download_depth_models.py").exists():
-        recommendations.append(("📦", "Download ML models: python scripts/setup/download_depth_models.py", Colors.OKCYAN))
+        recommendations.append(
+            ("📦", "Download ML models: .venv/bin/python scripts/setup/download_depth_models.py", Colors.OKCYAN)
+        )
 
     # Print all recommendations
     for symbol, message, color in recommendations:
@@ -475,7 +496,8 @@ Examples:
     else:
         print(colored("✗ NOT READY", Colors.FAIL))
         print("  Install core packages to get started:")
-        print("  pip install numpy Pillow PyYAML typer tqdm")
+        print("  make install-core")
+        print("  make check-environment")
         return 1
 
 

@@ -7,6 +7,11 @@
 .mypy_cache/
 .ruff_cache/
 .hypothesis/
+.coverage
+.coverage.*
+coverage.xml
+coverage.json
+htmlcov/
 requirements/.pip-tools-cache/
 requirements/.hash-pilot/
 
@@ -25,6 +30,7 @@ node_modules/
 web/secure-landing/node_modules/
 web/secure-landing/.next/
 web/secure-landing/.next-*/
+web/secure-landing/.metafiles/
 web/secure-landing/test-results/
 web/secure-landing/playwright-report/
 web/secure-landing/blob-report/

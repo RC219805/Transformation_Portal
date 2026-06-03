@@ -2,13 +2,13 @@
 
 ## Supported Versions
 
-The following versions of Transformation Portal are currently supported with security updates:
+The following Transformation Portal release channels are currently supported with security updates:
 
 | Version | Supported          | Notes |
 | ------- | ------------------ | ----- |
-| main    | :white_check_mark: | Development branch - security fixes prioritized |
-| 0.1.x   | :white_check_mark: | Current stable release |
-| < 0.1   | :x:                | Unsupported |
+| main    | :white_check_mark: | Active development branch; security fixes prioritized |
+| Latest semantic product release tag | :white_check_mark: | Supported for security updates until superseded by a newer semantic product release tag |
+| Older release tags | :x: | Unsupported unless an explicit security advisory or maintenance branch says otherwise |
 
 ## Reporting a Vulnerability
 
@@ -104,15 +104,17 @@ Given our image/video processing nature, special attention is required for:
   **March 2026**:
   - **PyTorch CVE-2025-32434** - Critical RCE vulnerability via torch.load()
     - **Supported-lane remediation**: macOS Apple Silicon ML core lock rotates to `torch==2.8.0` / `torchvision==0.23.0`
-    - **Frozen-lane posture**: Linux and macOS Intel remain unsupported/frozen historical ML lanes
+    - **Retired-lane posture**: Linux and macOS Intel ML lanes are retired unsupported lanes and absent from installable requirements manifests
     - **Defense in depth**: Runtime enforcement of `weights_only=True` remains mandatory for all torch.load() calls
     - **Implementation**: Use `transformation_portal.core.security.torch_security.safe_load()`
   - **Hugging Face `Trainer` advisory GHSA-69w3-r845-3855**
     - **Disposition**: Managed inference paths do not use `transformers.Trainer`, `Seq2SeqTrainer`, `TrainingArguments`, `_load_rng_state`, or training-resume flows
     - **Action**: Dependabot alerts are dismissed as `not_used` with repo search evidence instead of forcing a `transformers` 5.x pre-release upgrade into inference stacks
   - **Pillow>=10.3.0** - Fixed CVE-2024-28219 (buffer overflow vulnerability)
-  - **cryptography==46.0.5** - Fixed GHSA subgroup attack vulnerability (SECT curves)
+  - **cryptography==47.0.0** - Current governed lock; includes the CVE-2026-26007 / GHSA-r6ph-v2qm-q3c2 SECT subgroup validation fix from 46.0.5
   - **black==26.3.1** - Fixed arbitrary file writes from unsanitized cache names
+  - **Pygments==2.20.0** - Fixed CVE-2026-4539; the temporary pip-audit exception is retired
+  - **Starlette==1.0.1** - Fixed CVE-2026-48710 / PYSEC-2026-161 BadHost request URL construction weakness
 
   **January 2026**:
   - **protobuf 6.34.0** - Fixed CVE-2026-0994 / GHSA-7gcm-g887-7qv7 (Dependabot #69)
@@ -127,20 +129,15 @@ Given our image/video processing nature, special attention is required for:
 
 - **Known Vulnerabilities** (Mitigated):
   - Supported Apple Silicon lane runs on torch `2.8.0` / torchvision `0.23.0`
-  - Frozen macOS Intel ML lane remains unsupported and gated behind `TP_ALLOW_MACOS_INTEL_ML=1`
-  - `requirements/ml-core-linux.txt` is a frozen unsupported historical lane and must not drive supported-lane remediation
+  - Linux and macOS Intel ML lanes are retired unsupported lanes and are absent from installable `requirements/*.in` / `requirements/*.txt` manifests
+  - Historical retired-lane details live in `docs/governance/RETIRED_ML_LOCK_LANES_2026-04-30.md` and must not drive supported-lane remediation
   - All model loading uses safe_load() wrapper or explicit weights_only=True
+  - Pygments CVE-2026-4539 is remediated by the governed `pygments==2.20.0` lock baseline; CI must not keep stale scanner exceptions for this CVE
   - Pillow: Critical for image parsing vulnerabilities
   - NumPy: Monitor for numerical computation exploits
 
-- **Temporary CVE Exceptions** (Awaiting Upstream Fix):
-  - **CVE-2026-4539 (Pygments <=2.19.2)**: DoS via inefficient regex in AdlLexer
-    - **Status**: No upstream fix available as of March 2026
-    - **Impact**: Low - affects syntax highlighting only (typer → rich → pygments)
-    - **Exposure**: CLI help text rendering, not production image processing
-    - **Mitigation**: CI pip-audit configured with `--ignore-vuln CVE-2026-4539`
-    - **Tracking**: https://github.com/pygments/pygments/issues/3058
-    - **Action Required**: Remove exception when fixed Pygments is released
+- **Temporary CVE Exceptions**:
+  - None active. New exceptions require an explicit expiry condition, tracked upstream issue, and matching CI/test coverage.
 
 ### API Security
 
@@ -277,7 +274,7 @@ In case of a security breach:
 
 ### System Requirements
 
-- Python 3.10+ (older versions have known vulnerabilities)
+- Python 3.11+ (matches the package `requires-python` floor and CI support matrix)
 - FFmpeg 6+ (addresses multiple CVEs from earlier versions)
 - Operating System with DEP/ASLR support
 - Minimum 8GB RAM to prevent swap file exposure
@@ -350,12 +347,12 @@ We support responsible disclosure and will:
 
 ## Additional Resources
 
-- [docs/guides/BEST_PRACTICES.md](docs/guides/BEST_PRACTICES.md) - General best practices for contributors
-- [docs/version_history/changelog.md](docs/version_history/changelog.md) - Version history and security updates
+- [CONTRIBUTING.md](CONTRIBUTING.md) - Current contributor workflow and validation expectations
+- [CHANGELOG.md](CHANGELOG.md) - Root change history with security-relevant entries
 - [docs/architecture/ARCHITECTURE.md](docs/architecture/ARCHITECTURE.md) - System architecture and security considerations
 
 ---
 
-*Last Updated: March 2026*
-*Next Review: June 2026*
-*Security Policy Version: 1.1*
+*Last Updated: 2026-06-03*
+*Next Review: 2026-09-03*
+*Security Policy Version: 1.2*

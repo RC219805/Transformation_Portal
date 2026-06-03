@@ -100,7 +100,9 @@ def run(
         except ModuleNotFoundError as e:
             raise RuntimeError(
                 "camera_native_linear contract requires optional ML ingest dependencies "
-                "(e.g., rawpy). Install with `make install-ml`."
+                "(e.g., rawpy). Use `./scripts/setup/install_raw_runtime.sh` for the "
+                "isolated RAW runtime, or see `requirements/README.md` for the governed "
+                "RAW lock contract."
             ) from e
         tensor, fingerprint = ingest_phase2_xyz_d50_linear_fp32(input_path, wb_mode=wb_mode, demosaic=demosaic)
     else:

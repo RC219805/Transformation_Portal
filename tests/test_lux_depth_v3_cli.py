@@ -270,8 +270,9 @@ class TestCLIValidation:
 
         assert result.exit_code == 1
         assert "raw inputs detected but canonical raw ingest is unavailable" in result.stdout.lower()
-        assert 'install with: pip install -e ".[raw]" or pip install rawpy' in result.stdout.lower()
-        assert "--raw-python" not in result.stdout
+        assert "./scripts/setup/install_raw_runtime.sh" in result.stdout
+        assert "--raw-python" in result.stdout
+        assert "pip install rawpy" not in result.stdout.lower()
 
     def test_non_raw_inputs_do_not_trigger_rawpy_preflight(self, monkeypatch, tmp_path):
         """Non-RAW batches should not be blocked by the optional RAW dependency."""
@@ -369,9 +370,10 @@ class TestCLIValidation:
         assert result.exit_code == 1
         assert "rawpy is unavailable in this environment" in result.stdout.lower()
         assert "not installed" not in result.stdout.lower()
-        assert 'install with: pip install -e ".[raw]" or pip install rawpy' in result.stdout.lower()
+        assert "./scripts/setup/install_raw_runtime.sh" in result.stdout
         assert "inspect the import/runtime error in the logs" in result.stdout.lower()
-        assert "working interpreter" not in result.stdout.lower()
+        assert "working interpreter" in result.stdout.lower()
+        assert "pip install rawpy" not in result.stdout.lower()
 
     def test_apex_materials_v3_requires_segmentation_enabled(self, tmp_path):
         """APEX strict gate should require explicit segmentation when Materials V3 is on."""

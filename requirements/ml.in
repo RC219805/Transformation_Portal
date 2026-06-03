@@ -2,12 +2,14 @@
 # This is a convenience umbrella file that aggregates ML capability layers.
 # For fine-grained control, install individual layers from ml-*.in files.
 #
-# Run `make compile` in this directory to generate pinned ml.txt
+# No checked-in umbrella ML lock is generated from this file. Use explicit
+# target-owned ML commands for supported lock artifacts.
 #
 # LAYERED ML DEPENDENCY STRATEGY
 # ==============================
-# This file aggregates CROSS-PLATFORM ML layers for backward-compatible installs.
-# Platform-specific and scripted-only layers are NOT included.
+# This file documents the historical umbrella composition, but root
+# `make install-ml` is fail-closed until a trusted umbrella lock contract
+# exists again. Platform-specific and scripted-only layers are NOT included.
 #
 #   ml-core.in     Cross-platform ML baseline (torch, diffusers, transformers)
 #   ml-raw.in      RAW camera file ingest (rawpy) - platform-scoped markers
@@ -17,17 +19,19 @@
 #   ml-coreml.in   Apple CoreML acceleration - macOS only
 #   ml-research.in Research/experimental extras - reserved for future use
 #
-# Install profiles:
-#   make install-ml-core    # Cross-platform baseline
-#   make install-ml-raw     # + RAW ingest capability
-#   make install-ml         # ml-core + ml-raw (this umbrella)
+# Install targets:
+#   make install-ml-core    # supported Apple Silicon baseline
+#   make install-ml-raw     # disabled: no trusted RAW lock contract
+#   make install-ml         # disabled: no trusted umbrella lock contract
 #
 # For SAM2 or CoreML, use bootstrap script:
 #   ./scripts/bootstrap/install_ml_stack.sh --profile core-cpu,sam2
 #   ./scripts/bootstrap/install_ml_stack.sh --profile core-cpu,coreml
 #
-# Known-good pinned inference stack for determinism:
-#   torch==2.10.0, torchvision==0.25.0, open-clip-torch==3.3.0
+# Current supported Apple Silicon lock baseline for determinism:
+#   torch==2.8.0, torchvision==0.23.0, open-clip-torch==3.3.0
+# Cross-platform metadata in ml-core.in uses compatible lower bounds; only
+# target-owned locks are install support promises.
 #
 # See requirements/README.md for full layering documentation.
 

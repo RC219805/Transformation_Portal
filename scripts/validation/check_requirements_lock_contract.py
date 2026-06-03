@@ -223,12 +223,13 @@ def validate_platform_lock_markers() -> list[str]:
 def validate_ml_layer_structure() -> list[str]:
     """Validate that ML layer .in files exist for the layered strategy.
 
-    Both standard and scripted-only .in files should exist for documentation,
-    but only standard layers follow the lockfile contract.
+    Standard, retired-stub, and scripted-only .in files should exist for
+    documentation, but only supported checked-in locks follow the install
+    support contract.
 
     Platform matrix (ADR-032):
     - Platform-specific core: ml-core-darwin-arm64.in
-    - Acceleration layers: ml-cpu.in, ml-mps.in, ml-cuda.in
+    - Acceleration/stub layers: ml-cpu.in, ml-mps.in, ml-cuda.in
     - Capability layers: ml-raw.in, ml-coreml.in, ml-research.in
     """
     errors: list[str] = []
@@ -236,7 +237,7 @@ def validate_ml_layer_structure() -> list[str]:
     platform_in_files = [
         "ml-core-darwin-arm64.in",
     ]
-    # Standard lockfile layers (must exist)
+    # Standard/stub layer inputs (must exist; not all produce supported locks)
     standard_in_files = [
         "ml-core.in",
         "ml-cpu.in",

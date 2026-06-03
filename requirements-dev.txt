@@ -7,6 +7,9 @@ types-PyYAML>=6.0.12
 # Property-based testing (v1.7 requirement)
 hypothesis>=6.100,<7
 
+# Flaky-test quarantine support (ADR-033)
+pytest-rerunfailures>=14.0,<17
+
 # JSON Schema validation (machine-mode contract tests)
 jsonschema>=4.21.0,<5
 
@@ -14,7 +17,7 @@ jsonschema>=4.21.0,<5
 httpx>=0.28,<1
 
 # Optional Phase 3.1 detached signing support (tools + tests)
-cryptography>=46.0,<48
+cryptography>=47.0.0,<48
 
 # S3 mock for the Phase 4.A ArtifactStore contract tests
 moto[s3]>=5.0,<6

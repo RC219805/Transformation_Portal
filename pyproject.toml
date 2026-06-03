@@ -14,24 +14,28 @@ dependencies = [
     # Keep broad runtime ranges in pyproject and enforce tested combos via lockfiles/CI.
     # Keep ranges compatible with requirements/base.in lockfile policy (ADR-032).
     "numpy>=1.24,<2.5.0",
-    "Pillow>=10.0.0,<13",
+    "Pillow>=10.3.0,<13",
     "scipy>=1.15,<2",
-    "scikit-learn>=1.0,<2",
+    "scikit-learn>=1.8.0,<2",
     "opencv-python-headless>=4.8.0,<5 ; platform_system == 'Linux'",  # required for depth_writer (core pipeline)
     "opencv-python>=4.8.0,<5 ; platform_system != 'Linux'",  # required for depth_writer (core pipeline)
     "typer>=0.10.0,<1",
     "tqdm>=4.66,<5",
-    # Web stack ranges are intentionally bounded here.
-    # Exact versions are enforced in requirements/base.in and compiled lockfiles.
-    "fastapi>=0.121.0,<0.137",
-    "starlette>=0.49.1,<1.1",  # direct runtime import + curated Starlette 1.x validation window
-    "uvicorn>=0.29.0,<0.49",
-    "aiofiles>=23.2.1,<26",
+    # Web stack ranges track the patched baseline in requirements/base.in.
+    # Exact versions are enforced in compiled lockfiles.
+    "fastapi>=0.136.1,<0.137",
+    "starlette>=1.0.1,<1.1",  # direct runtime import + BadHost/PYSEC patched Starlette 1.x baseline
+    "uvicorn>=0.48.0,<0.49",
+    "aiofiles>=25.1.0,<26",
     "tifffile>=2023.7.18,<2027",
     "imagecodecs>=2023.9.18,<2027",
     "PyYAML>=6.0,<7",  # required for APEX pipeline config parsing
     "pydantic>=2.0,<3",  # required for ingest contract schema validation
     "jsonschema>=4.21.0,<5",  # required for deterministic contract surface validation
+    "SQLAlchemy[asyncio]>=2.0.50,<2.2",  # required for PostgresJobRepository / PostgresJobEventStore
+    "asyncpg>=0.29,<1",  # async Postgres driver paired with SQLAlchemy[asyncio]
+    "alembic>=1.13,<2",  # schema migrations for orchestrator job/event tables
+    "redis>=5.0,<7",  # asyncio Redis client for RedisQueueBroker
     "boto3>=1.34,<2",  # required for TP_ARTIFACT_STORE=s3 ArtifactStore runtime
 ]
 classifiers = [
@@ -41,20 +45,24 @@ classifiers = [
 ]
 
 [project.optional-dependencies]
-# ML and deep learning - see requirements/ml-*.in for layered pinned versions
+# ML and deep learning - see requirements/README.md for lock ownership policy
 # ML dependencies. Note: `realesrgan` is BANNED (unmaintained).
 # Enforcement: requirements/constraints.txt hard-block pins + scripts/security/verify_banned_dependencies.py
 #
 # LAYERED ML DEPENDENCY STRATEGY
 # ==============================
 # ML dependencies are organized into capability layers.
-# The lockfile system (requirements/*.txt) is the operational source of truth.
-# pyproject.toml extras are minimal capability pointers for editable installs.
+# The checked-in requirements contract is the operational source of truth.
+# pyproject.toml extras are metadata/convenience pointers, not install support
+# promises for retired or untrusted ML lanes.
 #
-# Standard Layers (lockfile-compiled):
-#   ml-core   Cross-platform ML baseline
+# Supported checked-in ML lock:
+#   ml-core-darwin-arm64.txt   Apple Silicon ML baseline
+#
+# Metadata Layers (not checked-in lock artifacts):
+#   ml-core   Supported ML metadata baseline
 #   ml-raw    RAW camera file ingest
-#   ml.txt    Standard umbrella (ml-core + ml-raw)
+#   ml        Metadata umbrella (ml-core + raw)
 #
 # Scripted-Only Layers (use bootstrap script):
 #   sam2      SAM2 segmentation - requires non-standard install semantics
@@ -63,7 +71,7 @@ classifiers = [
 # Platform-Specific Layers:
 #   coreml    Apple CoreML acceleration (macOS only)
 
-# ML Core - supported ML baseline (minimal spec, see ml-core.in for pins)
+# ML Core - supported metadata baseline (minimal spec; see ml-core.in for pins)
 ml-core = [
     "torch>=2.8.0",
     "torchvision>=0.23.0",
@@ -80,12 +88,12 @@ coreml = [
 raw = [
     "rawpy>=0.18.0",
 ]
-# Standard ML umbrella - supported metadata layers only (ml-core + ml-raw)
+# Standard ML umbrella - supported metadata layers only (ml-core + raw)
 # Does NOT include: sam2 (scripted-only), coreml (platform-specific), research (experimental)
 # For additional capabilities:
 #   SAM2:   ./scripts/bootstrap/install_ml_stack.sh --profile core-cpu,sam2
 #   CoreML: ./scripts/bootstrap/install_ml_stack.sh --profile core-cpu,coreml (macOS only)
-#   Full:   ./scripts/bootstrap/install_ml_stack.sh --profile full (same as ml.txt)
+#   Full:   reserved until a trusted umbrella contract exists again
 ml = [
     "torch>=2.8.0",
     "torchvision>=0.23.0",
@@ -104,7 +112,7 @@ spatial-ai = [
     "transformation-portal[ml-core]",
     "huggingface-hub>=0.19",
     # SAM2: pip install sam2 (requires scripted bootstrap for weights)
-    "sam2>=1.0; python_version >= '3.10'",
+    "sam2>=1.0; python_version >= '3.11'",
     # nvdiffrast (compiled CUDA extension) must be installed separately:
     # git clone https://github.com/NVlabs/nvdiffrast && pip install -e .
 ]
@@ -116,6 +124,11 @@ archive-signing = [
 dev = [
     "pytest>=8.0,<10",
     "pytest-cov>=4.0,<8",
+    "pytest-asyncio>=1.3.0,<2",
+    "pytest-json-report>=1.5,<2",
+    "pytest-rerunfailures>=14.0,<17",
+    "pytest-xdist>=3.5,<4",
+    "diff-cover>=10.2.1,<11",
     "httpx>=0.28,<1",  # required for FastAPI/Starlette TestClient in HTTP contract tests
     "hypothesis>=6.0,<7",
     "jsonschema>=4.21.0,<5",  # required for machine-mode contract schema validation tests

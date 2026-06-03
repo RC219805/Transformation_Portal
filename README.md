@@ -18,8 +18,10 @@ It combines orchestrated depth estimation, PBR map generation, material-aware fi
 
 `main` tracks the active development branch for the repository.
 
-Current documentation baseline: repo-wide refresh audit dated May 11, 2026,
-building on `main` through PR #1721.
+Current documentation navigation starts at [docs/README.md](docs/README.md)
+and [docs/governance/DOCUMENTATION_MAP.md](docs/governance/DOCUMENTATION_MAP.md).
+The May 11, 2026 repo-wide refresh audit remains the inventory baseline for
+historical classification decisions.
 Recent merged work added typed API v1 envelopes, typed health/readiness and job
 lifecycle response models, Docker health/env wiring, CI workflow hardening and
 a 30-workflow matrix, archive-gate readiness evidence, APEX fallback /
@@ -117,7 +119,7 @@ Transformation Portal supports depth models across two tiers with different lice
 ### Production Path
 - **DA3 (`da3` backend):** Primary production backend for Lux Depth V3
 - **Use for:** The governed depth workflow surface. Select `model_key="da3-metric"` for the Apache-2.0 DA3 path, or `model_key="da3"` / `model_key="da3-research"` for the research-default selector.
-- **Requirement:** Install a trusted ML core profile for actual DA3 inference. These trusted ML install flows are currently supported on macOS and Linux only; Windows users should use WSL2 or another Unix-like environment. For example: `make install-ml-core` or `./scripts/bootstrap/install_ml_stack.sh --profile core-cpu`. CUDA-accelerated profiles are Linux-only.
+- **Requirement:** Install a trusted ML core profile for actual DA3 inference. The checked-in ML core lock is currently target-owned for macOS Apple Silicon (`darwin-arm64`) only; Linux and macOS Intel ML lanes are retired unsupported lanes that fail closed until a governed lane is re-established. For example: `make install-ml-core` or, on Apple Silicon, `./scripts/bootstrap/install_ml_stack.sh --profile core-cpu`.
 - **Default:** Standard CLI flows resolve here unless a research-only backend is explicitly requested
 
 ### Research & Non-Commercial
@@ -252,19 +254,18 @@ See [ADR-019: Depth Backend Unification](docs/architecture/ADR-019-depth-backend
 
 Enable direct ingestion of professional camera RAW formats such as CR2, NEF, ARW, and DNG.
 
-```bash
-pip install -e ".[raw]"
-# or: pip install rawpy
-```
-
-RAW inputs are auto-detected and converted into pipeline-ready RGB using LibRaw via `rawpy`. If `./.venv-raw/bin/python` exists, Lux Depth V3 auto-discovers that repo-local RAW runtime before falling back to the main repo environment.
-
 **Recommended (RAW via isolated runtime):**
 ```bash
 ./scripts/setup/install_raw_runtime.sh
 
 lux-depth-v3 --input-dir ./input --output-dir ./output
 ```
+
+RAW inputs are auto-detected and converted into pipeline-ready RGB using LibRaw via `rawpy`. If `./.venv-raw/bin/python` exists, Lux Depth V3 auto-discovers that repo-local RAW runtime before falling back to the main repo environment.
+
+The `make install-ml-raw` lock lane is intentionally disabled until a trusted
+target-owned RAW lock contract exists. Avoid ad hoc `rawpy` installs in the
+main repo environment for operator workflows.
 
 Use `--raw-python` only when you want to override that repo-local runtime explicitly:
 
@@ -354,12 +355,12 @@ Add a trusted ML profile when you need DA3 depth inference, research backends, s
 
 ```bash
 make install-ml-core
-# or use the target-specific bootstrap flow:
+# or use the target-specific bootstrap flow on macOS Apple Silicon:
 ./scripts/bootstrap/install_ml_stack.sh --profile core-cpu
 make test-fast
 ```
 
-The umbrella ML install path is intentionally disabled until a trusted checked-in umbrella lockfile contract exists again.
+The umbrella ML install path is intentionally disabled until a trusted checked-in umbrella lockfile contract exists again. Linux and macOS Intel ML install lanes are retired unsupported lanes and fail closed by design.
 
 For a more guided environment bring-up, see [SETUP_GUIDE.md](docs/guides/SETUP_GUIDE.md).
 
@@ -379,7 +380,6 @@ Key properties:
 - schema-versioned payloads for automation
 
 Docs:
-- [Machine Mode JSON Quick Reference](docs/quick_references/MACHINE_MODE_JSON.md)
 - [Machine Mode Contract](docs/api/MACHINE_MODE_CONTRACT.md)
 
 ---
@@ -476,8 +476,8 @@ Performance is treated as a first-class signal in CI.
 
 For deeper performance workflows, see:
 - [Performance Monitoring Guide](docs/performance/README.md)
-- [APEX Real Pipeline Integration Guide](docs/guides/APEX_REAL_PIPELINE_INTEGRATION.md)
-- [ADR-024](docs/decisions/ADR-024-performance-regression-authority-canonicalization.md)
+- [APEX Contract](docs/apex/APEX_CONTRACT.md)
+- [Performance Gate Policy](docs/performance/GATE_POLICY.md)
 
 ---
 
@@ -529,4 +529,4 @@ Resources:
 
 ---
 
-Last Updated: 2026-05-11
+Last Updated: 2026-06-03

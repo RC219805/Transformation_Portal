@@ -16,6 +16,9 @@ from types import ModuleType
 
 import pytest
 
+# The fixture is intentionally named for readability at call sites.
+# pylint: disable=redefined-outer-name
+
 # Mark all tests in this module as unit tests (ADR-044)
 pytestmark = [
     pytest.mark.unit,
@@ -291,6 +294,10 @@ class TestPatternMatching:
         }
         assert sync_module.CORE_TEST_DEPS == expected
 
+    def test_dev_only_deps_contains_expected_packages(self, sync_module: ModuleType) -> None:
+        """DEV_ONLY_DEPS frozenset contains expected development-only test tooling."""
+        assert sync_module.DEV_ONLY_DEPS == {"pytest-rerunfailures"}
+
 
 # ============================================================================
 # TEST: Symmetric Drift Detection (Reviewer Point 1)
@@ -482,6 +489,89 @@ class TestSymmetricDriftDetection:
         missing_in_dev = root_test_deps - dev_test_deps
         assert missing_in_dev == set()
 
+    def test_detects_missing_dev_only_deps_in_root_dev(self, fake_repo: Path, sync_module: ModuleType) -> None:
+        """Detects dev-only tooling present in requirements/dev.in but absent from root dev entry point."""
+        root_ci = fake_repo / "requirements-ci.txt"
+        root_ci.write_text(dedent("""
+            pytest>=8.0
+            pytest-cov>=4.0
+            pytest-asyncio>=0.21
+            pytest-json-report>=1.5
+            pytest-xdist>=3.5
+            httpx>=0.28
+            hypothesis>=6.0
+            moto[s3]>=5.0
+        """).strip())
+
+        root_dev = fake_repo / "requirements-dev.txt"
+        root_dev.write_text(dedent("""
+            -r requirements-ci.txt
+            black>=24.0
+        """).strip())
+
+        nested_ci = fake_repo / "requirements" / "ci.in"
+        nested_ci.write_text("bandit>=1.7\n")
+
+        nested_dev = fake_repo / "requirements" / "dev.in"
+        nested_dev.write_text(dedent("""
+            pytest>=8.0
+            pytest-cov>=4.0
+            pytest-asyncio>=0.21
+            pytest-json-report>=1.5
+            pytest-xdist>=3.5
+            pytest-rerunfailures>=14.0
+            httpx>=0.28
+            hypothesis>=6.0
+            moto[s3]>=5.0
+        """).strip())
+
+        errors = sync_module.validate_dependency_sync(fake_repo)
+
+        assert any("Dev-only deps missing from requirements-dev.txt" in error for error in errors)
+        assert any("pytest-rerunfailures" in error for error in errors)
+
+    def test_detects_dev_only_deps_in_root_ci(self, fake_repo: Path, sync_module: ModuleType) -> None:
+        """Detects dev-only tooling added to lean CI requirements."""
+        root_ci = fake_repo / "requirements-ci.txt"
+        root_ci.write_text(dedent("""
+            pytest>=8.0
+            pytest-cov>=4.0
+            pytest-asyncio>=0.21
+            pytest-json-report>=1.5
+            pytest-xdist>=3.5
+            pytest-rerunfailures>=14.0
+            httpx>=0.28
+            hypothesis>=6.0
+            moto[s3]>=5.0
+        """).strip())
+
+        root_dev = fake_repo / "requirements-dev.txt"
+        root_dev.write_text(dedent("""
+            -r requirements-ci.txt
+            pytest-rerunfailures>=14.0
+        """).strip())
+
+        nested_ci = fake_repo / "requirements" / "ci.in"
+        nested_ci.write_text("bandit>=1.7\n")
+
+        nested_dev = fake_repo / "requirements" / "dev.in"
+        nested_dev.write_text(dedent("""
+            pytest>=8.0
+            pytest-cov>=4.0
+            pytest-asyncio>=0.21
+            pytest-json-report>=1.5
+            pytest-xdist>=3.5
+            pytest-rerunfailures>=14.0
+            httpx>=0.28
+            hypothesis>=6.0
+            moto[s3]>=5.0
+        """).strip())
+
+        errors = sync_module.validate_dependency_sync(fake_repo)
+
+        assert any("Dev-only deps found in requirements-ci.txt" in error for error in errors)
+        assert any("pytest-rerunfailures" in error for error in errors)
+
 
 # ============================================================================
 # TEST: Edge Cases
@@ -591,37 +681,19 @@ class TestMainIntegration:
             httpx>=0.28
             hypothesis>=6.0
             moto[s3]>=5.0
+            pytest-rerunfailures>=14.0
             black>=24.0
         """).strip())
 
-        # Run checks manually using sync_module
-        errors: list[str] = []
-        root_ci_packages = sync_module.extract_packages(root_ci)
-        nested_ci_packages = sync_module.extract_packages(nested_ci)
-        nested_dev_packages = sync_module.extract_packages(nested_dev)
+        root_dev = repo / "requirements-dev.txt"
+        root_dev.write_text(dedent("""
+            -r requirements-ci.txt
+            pytest-rerunfailures>=14.0
+            black>=24.0
+        """).strip())
 
-        # Run the same checks
-        test_deps_in_nested_ci = {p for p in nested_ci_packages if sync_module.TEST_RUNNER_PATTERN.match(p)}
-        test_deps_in_nested_ci |= nested_ci_packages & sync_module.CORE_TEST_DEPS
-        if test_deps_in_nested_ci:
-            errors.append(f"ERROR: test deps in ci.in: {test_deps_in_nested_ci}")
-
-        ci_tools_in_root = root_ci_packages & sync_module.CI_TOOLS
-        if ci_tools_in_root:
-            errors.append(f"ERROR: CI tools in root: {ci_tools_in_root}")
-
-        missing_in_root = sync_module.CORE_TEST_DEPS - root_ci_packages
-        if missing_in_root:
-            errors.append(f"ERROR: missing in root CI: {missing_in_root}")
-
-        root_test_deps = root_ci_packages & sync_module.CORE_TEST_DEPS
-        dev_test_deps = nested_dev_packages & sync_module.CORE_TEST_DEPS
-        missing_in_dev = root_test_deps - dev_test_deps
-        if missing_in_dev:
-            errors.append(f"ERROR: missing in dev: {missing_in_dev}")
-
-        result = 1 if errors else 0
-        assert result == 0, "Expected main() to return 0 when synced"
+        errors = sync_module.validate_dependency_sync(repo)
+        assert errors == []
 
     def test_main_returns_one_when_drift_detected(self, tmp_path: Path, sync_module: ModuleType) -> None:
         """main() returns 1 when drift is detected."""
@@ -708,3 +780,13 @@ class TestMainIntegration:
         result = 1 if missing_in_dev else 0
         assert result == 1, "Expected main() to return 1 when deps missing from dev.in"
         assert missing_in_dev == {"pytest-asyncio", "httpx"}
+
+
+class TestRepositoryContract:
+    """Tests for this repository's actual dependency-sync contract."""
+
+    def test_repository_requirements_are_in_sync(self, sync_module: ModuleType) -> None:
+        """The checked-in root and layered requirements files satisfy the sync gate."""
+        repo_root = Path(__file__).resolve().parents[2]
+
+        assert sync_module.validate_dependency_sync(repo_root) == []

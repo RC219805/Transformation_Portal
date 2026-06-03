@@ -28,7 +28,7 @@ PHASE6_SMOKE_TESTS := \
 	tests/lux_depth_v3/test_orchestrator_smoke.py
 
 .PHONY: help test-fast test-novideo test-full test-integration test-structure test-utils test-orchestrator-contract test-orchestrator-http-contract test-artifact-s3-contract test-orchestrator-postgres-contract test-orchestrator-postgres-app-contract test-worker-redis-contract test-frontdoor-redis-contract test-paid-pilot-services-contract run-managed-paid-pilot-gate test-portal-contract test-frontdoor-contract test-archive-gate-contract db-upgrade db-revision seed-frontdoor-user run-frontdoor-local run-backend-local run-backend-local-noreload dev-write-env dev-start dev-stop check-vercel-env validate-orchestrator-http validate-portal-lux-materials-live validate-portal-fastvlm-captioning-live validate-portal-css-layer-parity validate-portal-browser validate-frontdoor-browser validate-frontdoor-deployment-gate audit-pipeline-readiness coverage-fast-scope coverage-report coverage-diff coverage-package venv repair-core-venv setup clean \
-        lint lint-parity ci ci-full pre-commit install-hooks quality-check fix-quality validate-ci organize-docs check-json-serialization check-piptools-cache \
+        lint lint-parity ci ci-full pre-commit install-hooks quality-check fix-quality check-quality validate-ci organize-docs check-json-serialization check-piptools-cache \
         check-python-headers check-yaml-governance check-stale-docs check-doc-heading-links lock lock-prod lock-ci lock-dev install-core install-ml install-ml-core install-ml-raw install-ml-sam2 install-ml-coreml install-fastvlm-runtime check-fastvlm-runtime docs docs-clean \
         check check-test-markers check-ci-sync check-todo-governance check-environment check-portal-asset-budgets check-dependency-pinning validate-full validate-quick clean-frontdoor clean-all check-worktree \
         compile-ml-darwin-arm64 update-ml-darwin-arm64 check-ml-darwin-arm64 \
@@ -89,8 +89,8 @@ help:
 	@echo "  ci                 Run local CI checks (lint + hygiene + fast tests)"
 	@echo "  ci-full            Run comprehensive CI simulation (all checks)"
 	@echo "  pre-commit         Run pre-commit hooks manually with CI-aligned formatter versions"
-	@echo "  install-hooks      Install git pre-commit hook"
-	@echo "  quality-check      Run all quality checks (lint + structure + tests)"
+	@echo "  install-hooks      Install git pre-commit and pre-push hooks"
+	@echo "  quality-check      Run lint, workflow validation, and root placement checks"
 	@echo "  check-environment  Run pre-flight environment validation"
 	@echo "  check             Verify generic layered requirements under requirements/"
 	@echo "  check-worktree     Check if git worktree is clean"
@@ -115,6 +115,7 @@ help:
 	@echo "  check-todo-governance  Verify TODO governance compliance (tracking refs)"
 	@echo "  check-portal-asset-budgets  Validate raw/gzipped portal asset size budgets"
 	@echo "  fix-quality        Auto-fix common quality issues"
+	@echo "  check-quality      Dry-run common quality issue fixes"
 	@echo "  validate-ci        Validate GitHub Actions workflow configs"
 	@echo "  organize-docs      Organize markdown files to docs/ subdirectories"
 	@echo ""
@@ -221,9 +222,12 @@ install-ml-sam2: venv
 		aarch64) py_arch="arm64" ;; \
 		amd64) py_arch="x86_64" ;; \
 	esac; \
-	profile="core-cpu,sam2"; \
 	if [ "$$py_os" = "Darwin" ] && [ "$$py_arch" = "arm64" ]; then \
 		profile="core-mps,sam2"; \
+	else \
+		echo "Error: install-ml-sam2 is currently supported only on native macOS Apple Silicon."; \
+		echo "Error: Linux and macOS Intel ML lockfiles are retired from installable requirements."; \
+		exit 1; \
 	fi; \
 	echo "Using ML SAM2 profile $$profile"; \
 	./scripts/bootstrap/install_ml_stack.sh --profile "$$profile"
@@ -653,10 +657,10 @@ pre-commit:
 
 # Install git hooks
 install-hooks:
-	@echo "Installing git pre-commit hook..."
+	@echo "Installing git pre-commit and pre-push hooks..."
 	@test -n "$(PRE_COMMIT_BIN)" || { echo "pre-commit is not installed in .venv; run 'make install-core' first"; exit 1; }
 	@"$(PRE_COMMIT_BIN)" install -f
-	@echo "✓ Pre-commit hook installed via pre-commit"
+	@echo "✓ Git hooks installed via pre-commit"
 
 # Quality check (all validations)
 quality-check: lint validate-ci

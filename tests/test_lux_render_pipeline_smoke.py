@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib
+import inspect
 import sys
 
 import pytest
@@ -19,6 +20,7 @@ PIPELINE_MODULE = "transformation_portal.pipelines.lux_render_pipeline"
 TORCH_MODULE = "torch"
 DIFFUSERS_MODULE = "diffusers"
 CONTROLNET_AUX_MODULE = "controlnet_aux"
+REALESRGAN_MODULE = "realesrgan"
 
 
 def _load_lux_render_pipeline_with_missing_ml(monkeypatch):
@@ -27,6 +29,7 @@ def _load_lux_render_pipeline_with_missing_ml(monkeypatch):
     monkeypatch.setitem(sys.modules, TORCH_MODULE, None)
     monkeypatch.setitem(sys.modules, DIFFUSERS_MODULE, None)
     monkeypatch.setitem(sys.modules, CONTROLNET_AUX_MODULE, None)
+    monkeypatch.setitem(sys.modules, REALESRGAN_MODULE, None)
 
     original_pipeline_module = sys.modules.get(PIPELINE_MODULE)
     portal_module = importlib.import_module(PORTAL_MODULE)
@@ -51,7 +54,13 @@ def _load_lux_render_pipeline_with_missing_ml(monkeypatch):
     )
 
 
-def test_lux_render_pipeline_import_is_graceful_without_ml_extras(monkeypatch) -> None:
+def _command_option_help(pipeline_module, parameter_name: str) -> str:
+    command_info = pipeline_module.app.registered_commands[0]
+    option_info = inspect.signature(command_info.callback).parameters[parameter_name].default
+    return option_info.help
+
+
+def test_lux_render_pipeline_import_is_graceful_without_ml_extras(monkeypatch, capsys) -> None:
     (
         portal_module,
         pipelines_package,
@@ -71,7 +80,15 @@ def test_lux_render_pipeline_import_is_graceful_without_ml_extras(monkeypatch) -
         help_result = runner.invoke(pipeline_module.app, ["--help"])
         assert help_result.exit_code == 0
         assert "Batch CLI entry point for the luxury render pipeline." in help_result.output
-        assert "Positive prompt" in help_result.output
+        assert "Glob of input images" in _command_option_help(pipeline_module, "input_glob")
+        assert "Positive prompt" in _command_option_help(pipeline_module, "prompt")
+
+        monkeypatch.setattr(sys, "argv", ["lux_render", "--help"])
+        with pytest.raises(SystemExit) as console_exit:
+            pipeline_module.main()
+        assert console_exit.value.code == 0
+        console_output = capsys.readouterr().out
+        assert "Batch CLI entry point for the luxury render pipeline." in console_output
 
         run_result = runner.invoke(
             pipeline_module.app,
@@ -87,6 +104,16 @@ def test_lux_render_pipeline_import_is_graceful_without_ml_extras(monkeypatch) -
         assert "lux_render requires optional ML dependencies" in combined_output
         assert "controlnet-aux" in combined_output
         assert "diffusers" in combined_output
+        assert "make install-ml-core" in combined_output
+        assert "requirements/README.md" in combined_output
+        assert "make install-ml`" not in combined_output
+
+        with pytest.raises(RuntimeError) as excinfo:
+            pipeline_module.RealESRGANer()
+        error_message = str(excinfo.value)
+        assert "intentionally unsupported" in error_message
+        assert "Pillow Lanczos fallback" in error_message
+        assert "pip install realesrgan" not in error_message
     finally:
         if original_pipeline_module is not None:
             sys.modules[PIPELINE_MODULE] = original_pipeline_module

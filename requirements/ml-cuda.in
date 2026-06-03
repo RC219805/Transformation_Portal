@@ -1,52 +1,12 @@
-# CUDA acceleration layer (Linux only)
-# NVIDIA GPU acceleration for deep learning workloads.
+# Retired unsupported CUDA ML lane (Linux x86_64)
 #
-# This layer includes CUDA runtime and helper libraries.
-# Requires Linux x86_64 with NVIDIA GPU and drivers.
+# This path remains only as a documentation/stub marker for the historical
+# `linux-x86_64-cuda` lane. It is intentionally comments-only:
 #
-# Run `make compile` in this directory to generate pinned ml-cuda.txt
+# - `core-cuda` in scripts/bootstrap/install_ml_stack.sh fails closed.
+# - No checked-in CUDA lockfile is part of the supported requirements contract.
+# - Do not install CUDA PyTorch packages ad hoc into the repo `.venv`.
+# - Re-establishing CUDA support requires a governed target-owned lock lane.
 #
-# Platform target:
-#   - linux-x86_64-cuda   (Linux Intel/AMD with NVIDIA GPU)
-#
-# WARNING:
-#   - Only available on Linux x86_64 with NVIDIA GPU
-#   - Requires NVIDIA drivers installed on host
-#   - These packages MUST NOT appear in CPU-only lockfiles
-#   - Uses platform markers for conditional installation
-#
-# Capability contract:
-#   - Enables CUDA device selection in PyTorch
-#   - Includes ml-core.in as baseline
-#   - Install via: ./scripts/bootstrap/install_ml_stack.sh --profile core-cuda
-#
-# IMPORTANT: Package installation notes
-# -------------------------------------
-# The CUDA packages listed below are installed via pip when using the CUDA PyTorch index.
-# When compiling with pip-compile, these packages are included with platform markers
-# to document CUDA dependencies. At install time, the bootstrap script uses
-# PYTORCH_INDEX=https://download.pytorch.org/whl/cu121 (or similar) to get CUDA wheels.
-#
-# These explicit package listings serve as:
-# 1. Documentation of CUDA dependencies
-# 2. Platform-marked constraints for pip-compile
-# 3. Reference for manual CUDA environment setup
-
-# Include cross-platform ML baseline
--r ml-core.in
-
-# CUDA-specific packages (Linux x86_64 only)
-# These packages provide CUDA runtime bindings for PyTorch
-nvidia-cublas-cu12 ; platform_system == "Linux" and platform_machine == "x86_64"
-nvidia-cuda-cupti-cu12 ; platform_system == "Linux" and platform_machine == "x86_64"
-nvidia-cuda-nvrtc-cu12 ; platform_system == "Linux" and platform_machine == "x86_64"
-nvidia-cuda-runtime-cu12 ; platform_system == "Linux" and platform_machine == "x86_64"
-nvidia-cudnn-cu12 ; platform_system == "Linux" and platform_machine == "x86_64"
-nvidia-cufft-cu12 ; platform_system == "Linux" and platform_machine == "x86_64"
-nvidia-curand-cu12 ; platform_system == "Linux" and platform_machine == "x86_64"
-nvidia-cusolver-cu12 ; platform_system == "Linux" and platform_machine == "x86_64"
-nvidia-cusparse-cu12 ; platform_system == "Linux" and platform_machine == "x86_64"
-nvidia-nccl-cu12 ; platform_system == "Linux" and platform_machine == "x86_64"
-nvidia-nvjitlink-cu12 ; platform_system == "Linux" and platform_machine == "x86_64"
-nvidia-nvtx-cu12 ; platform_system == "Linux" and platform_machine == "x86_64"
-triton ; platform_system == "Linux" and platform_machine == "x86_64"
+# Historical CUDA lane rationale belongs in governance documentation rather
+# than scan-visible pip requirement entries.

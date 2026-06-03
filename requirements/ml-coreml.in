@@ -1,6 +1,7 @@
 # Optional Apple CoreML acceleration extras
 # macOS-only due to platform requirements.
-# Run `make compile` in this directory to generate pinned ml-coreml.txt
+# No checked-in standalone CoreML lock is generated from this file. Use the
+# supported Apple Silicon ML core lock when it already includes CoreML tooling.
 #
 # WARNING:
 # - coremltools is only available on macOS
@@ -9,7 +10,8 @@
 #
 # Capability contract:
 # - This is an OPTIONAL layer. Absence uses standard PyTorch backends.
-# - Install via: make install-ml-coreml or pip install -r requirements/ml-coreml.txt
+# - `make install-ml-coreml` fails closed unless a trusted CoreML lock exists.
+# - Do not install from a missing ml-coreml.txt host lock artifact.
 
 # Apple Silicon acceleration and CoreML conversion tools
 coremltools>=7.0 ; platform_system == "Darwin"

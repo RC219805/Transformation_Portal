@@ -7,7 +7,7 @@ Thank you for considering contributing to the Transformation Portal! This docume
 1. Fork the repository
 2. Create a feature branch: `git checkout -b feature/your-feature-name`
 3. Make your changes following the coding standards below
-4. Run local tests: `pytest -v tests/ -m "(unit or security or regression or golden or integration) and not slow"`
+4. Run local checks: `make ci-quick`
 5. Commit with clear messages
 6. Push and open a Pull Request
 
@@ -18,17 +18,17 @@ Thank you for considering contributing to the Transformation Portal! This docume
 git clone https://github.com/YOUR_USERNAME/Transformation_Portal.git
 cd Transformation_Portal
 
-# Create virtual environment
-python3.11 -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+# Create/validate the repo-managed .venv with Python 3.11+
+make venv
 
-# Install dependencies
-pip install -r requirements-dev.txt
-pip install -e .
+# Install pinned core runtime + development tooling, then editable package metadata
+make install-core
 
-# Verify installation
-pytest --version
-python -c "import transformation_portal; print('OK')"
+# Install pre-commit and pre-push hooks
+make install-hooks
+
+# Verify the local fast gate
+make ci-quick
 ```
 
 ## Quality Standards
@@ -371,7 +371,7 @@ The `main` branch is protected to ensure code quality and stability. All changes
 5. **Keep branch up to date**
    - Strict status checks enabled: must be up-to-date with main before merge
 
-**For detailed branch protection verification procedures, troubleshooting, and governance:** See [Branch Protection Verification](docs/governance/BRANCH_PROTECTION_VERIFICATION.md)
+**For branch protection setup, required checks, and troubleshooting:** See [Branch Protection Setup](docs/ci/BRANCH_PROTECTION_SETUP.md)
 
 ---
 
@@ -569,14 +569,14 @@ Transformation Portal uses `pip-compile` for dependency management. All dependen
 
 | Style              | Format          | Use Case                                          | Example                                  |
 |--------------------|-----------------|---------------------------------------------------|------------------------------------------|
-| **Range Pin**      | `>=X.Y,<Z`      | Production dependencies (base.in, ml.in)          | `numpy>=1.24,<2.5.0`                     |
+| **Range Pin**      | `>=X.Y,<Z`      | Production dependencies (`base.in`, ML layer `.in` files) | `numpy>=1.24,<2.5.0`                     |
 | **Strict Pin**     | `==X.Y.Z`       | Deterministic builds, known incompatibilities     | `rawpy==0.26.0  # RAW demosaic`          |
 | **Lower-bound**    | `>=X.Y`         | Dev tools with stable CLI (dev.in, ci.in only)    | `black>=24.8  # Formatter`               |
 | **Unpinned**       | (none)          | **NEVER ALLOWED** (causes non-deterministic builds) | ❌                                       |
 
 **Decision tree:**
 
-1. Is this a production dependency (`base.in` or `ml.in`)?
+1. Is this a production dependency (`base.in` or an ML layer `.in` file)?
    - **Yes**: Use **range pin** (`>=X.Y,<Z`) unless determinism is critical
    - **No**: Continue to step 2
 
@@ -593,22 +593,26 @@ Transformation Portal uses `pip-compile` for dependency management. All dependen
 
 ```bash
 # 1. Edit the appropriate .in file
-vim requirements/base.in       # Production runtime deps
-vim requirements/ml.in         # Optional ML/AI deps
-vim requirements/dev.in        # Testing and linting tools
-vim requirements/ci.in         # CI-only tools
+vim requirements/base.in                    # Production runtime deps
+vim requirements/ml-core.in                 # Shared ML capability inputs
+vim requirements/ml-core-darwin-arm64.in    # Target-owned Apple Silicon ML lock input
+vim requirements/dev.in                     # Testing and linting tools
+vim requirements/ci.in                      # CI-only tools
 
 # 2. Add dependency with correct constraint style
 echo "new-package>=1.0.0,<2    # Brief description" >> requirements/base.in
 
-# 3. Recompile all .txt files
-cd requirements && make compile
+# 3. Recompile generic checked-in lockfiles
+make -C requirements compile
+
+# 3b. If changing a target-owned ML lock input, regenerate on the authoritative lane
+make -C requirements compile-ml-darwin-arm64
 
 # 4. Validate constraints
-cd .. && ./scripts/validate_dependency_constraints.sh
+./scripts/validate_dependency_constraints.sh
 
-# 5. Commit both .in and .txt files
-git add requirements/*.in requirements/*.txt
+# 5. Commit edited inputs and generated .txt files that are part of the checked-in contract
+git add requirements/base.in requirements/base.txt
 git commit -m "deps: add new-package for feature XYZ"
 ```
 
@@ -620,27 +624,20 @@ git commit -m "deps: add new-package for feature XYZ"
 
 | Target Platform | Lockfile | Authoritative Host | Status |
 |-----------------|----------|-------------------|--------|
-| Linux x86_64 | `ml-core-linux.txt` | Native Linux x86_64 | **Active** |
 | macOS Apple Silicon | `ml-core-darwin-arm64.txt` | Native Darwin arm64 | **Active** |
-| macOS Intel | `ml-core-darwin-x86_64.txt` | *(none)* | **Frozen** |
+| Linux x86_64 | *(none)* | *(none)* | **Retired unsupported; fails closed** |
+| macOS Intel | *(none)* | *(none)* | **Retired unsupported; fails closed** |
 
-**Never generate Linux locks from macOS or vice versa** — pip-compile resolves host-specific wheels that will fail on the target platform.
+**Never generate target-owned ML locks from a non-authoritative host** — pip-compile resolves host-specific wheels that will fail on the target platform. New Linux or macOS Intel ML support requires a separate governed lane before any installable lockfile is checked in.
 
 #### When to Regenerate ML Lockfiles
 
 Regenerate when:
-- Adding/updating packages in `ml-core-darwin-arm64.in`, `ml-core-linux.in`, or shared ML `.in` files
+- Adding/updating packages in `ml-core-darwin-arm64.in` or shared ML `.in` files
 - Updating `base.txt` (ML locks constrain against it)
 - Security patches require ML package updates
 
 #### Regeneration Workflow
-
-**For Linux x86_64 ML lock** (on native Linux x86_64 host):
-```bash
-cd requirements
-make compile-ml-linux-x86_64   # Compile from native Linux
-make check-ml-linux-x86_64     # Verify lock is current
-```
 
 **For macOS Apple Silicon ML lock** (on native Darwin arm64 host):
 ```bash
@@ -649,20 +646,40 @@ make compile-ml-darwin-arm64   # Compile from native M1/M2/M3 Mac
 make check-ml-darwin-arm64     # Verify lock is current
 ```
 
+**For Linux x86_64 ML lock**:
+```bash
+cd requirements
+# RETIRED - unsupported lane; do not regenerate without a new governed lane
+make compile-ml-linux-x86_64   # Fails closed
+make check-ml-linux-x86_64     # Fails closed
+```
+
 **For macOS Intel ML lock**:
 ```bash
 cd requirements
-# FROZEN - do not regenerate without Architect approval
-make compile-ml-darwin-x86_64  # Will fail closed
+# RETIRED - unsupported lane; do not regenerate without a new governed lane
+make compile-ml-darwin-x86_64  # Fails closed
+make check-ml-darwin-x86_64    # Fails closed
+```
+
+#### Retired Lane Handling
+
+Linux x86_64 and macOS Intel ML lanes are historical governance records only.
+Their top-level Make targets remain as fail-closed stubs so stale automation and
+operator commands cannot silently recreate unsupported lockfiles.
+
+```bash
+cd requirements
+make compile-ml-linux-x86_64   # Fails closed
+make compile-ml-darwin-x86_64  # Fails closed
 ```
 
 #### Automated CI Validation
 
 CI automatically validates:
-- **No Darwin markers in Linux locks** (rejects `platform_system == "Darwin"`)
-- **No Linux markers in Darwin locks** (rejects `platform_system == "Linux"`)
+- **No Linux/CUDA markers in Darwin locks** (rejects unsupported target contamination)
 - **Lock ownership authority** (prevents off-lane modifications)
-- **Lock divergence** (target-owned locks must not collapse to identical graphs)
+- **Retired lane absence** (Linux/macOS Intel ML manifests must not reappear as installable checked-in locks)
 
 See `scripts/validation/check_requirements_lock_contract.py` for enforcement details.
 
@@ -671,11 +688,11 @@ See `scripts/validation/check_requirements_lock_contract.py` for enforcement det
 **Error: "Darwin arm64 ML lock generation is authoritative only on native Darwin arm64"**
 → You're trying to compile macOS locks from Linux. Run on a Mac.
 
-**Error: "Linux x86_64 ML lock generation is authoritative only on native Linux x86_64"**
-→ You're trying to compile Linux locks from macOS. Run on Linux.
+**Error: "Linux x86_64 ML lock lane is retired unsupported"**
+→ The Linux ML lock lane is not part of the current installable checked-in contract. Open a governed lane decision before regenerating it.
 
-**Error: "ERROR: ml-core-darwin-x86_64.txt is frozen pending an authoritative Darwin x86_64 lane decision."**
-→ The Intel Mac lockfile is frozen pending lane decision. Do not regenerate.
+**Error: "Darwin x86_64 ML lock lane is retired unsupported"**
+→ The Intel Mac ML lock lane is not part of the current installable checked-in contract. Do not regenerate it without a governed lane decision.
 
 ### Banned Packages
 
@@ -683,7 +700,7 @@ The following packages are **banned** and must not be added:
 
 | Package      | Reason                                      | Alternative                                      |
 |--------------|---------------------------------------------|--------------------------------------------------|
-| `realesrgan` | Unmaintained (no updates since 2022)        | Use local implementation in `src/spatial_ai/reconstruction/` |
+| `realesrgan` | Unmaintained (no updates since 2022)        | Use local implementation in `src/transformation_portal/spatial_ai/reconstruction/` |
 
 ### Security Minimums
 
@@ -691,8 +708,10 @@ Certain packages require minimum versions due to CVEs:
 
 | Package                 | Minimum Version | Reason                              |
 |-------------------------|-----------------|-------------------------------------|
+| `cryptography`          | >=46.0.5        | CVE-2026-26007 / GHSA-r6ph-v2qm-q3c2 |
 | `sentence-transformers` | >=3.1.0         | CVE-73169 (arbitrary code execution) |
-| `Pillow`                | >=10.0.0        | Multiple CVEs in 9.x series         |
+| `Pillow`                | >=10.3.0        | CVE-2024-28219 and multiple 9.x CVEs |
+| `starlette`             | >=1.0.1         | CVE-2026-48710 / PYSEC-2026-161      |
 
 ### Approved Exceptions
 
@@ -749,7 +768,7 @@ Transformation Portal conducts quarterly dependency audits:
 - **Banned packages**: New unmaintained packages identified
 - **Exception review**: Approved exceptions re-validated
 
-Next audit: **2026-05-16 (Q2 2026)**
+Next audit: **2026-08-16 (Q3 2026)**
 
 ## Release Process
 

@@ -13,11 +13,6 @@ import numpy as np
 import pytest
 from PIL import Image
 
-# Pytest markers
-pytestmark = [
-    pytest.mark.unit,
-]
-
 from transformation_portal.lux_depth_v3.raw_loader import (
     RAW_EXTENSIONS,
     is_raw_file,
@@ -26,6 +21,11 @@ from transformation_portal.lux_depth_v3.raw_loader import (
     load_raw_as_rgb,
     resolve_demosaic_algorithm,
 )
+
+# Pytest markers
+pytestmark = [
+    pytest.mark.unit,
+]
 
 
 class TestRawExtensions:
@@ -128,7 +128,9 @@ class TestRawpyNotInstalled:
 
             # Verify error message is helpful
             error_msg = str(exc_info.value)
-            assert "rawpy required" in error_msg or "pip install rawpy" in error_msg
+            assert "rawpy required" in error_msg
+            assert "./scripts/setup/install_raw_runtime.sh" in error_msg
+            assert "pip install rawpy" not in error_msg
 
     def test_load_raw_as_rgb_uses_dedicated_runtime_when_configured(self, tmp_path, monkeypatch):
         """Configured RAW runtime should dispatch through the subprocess worker."""
@@ -209,7 +211,6 @@ class TestDemosaicAlgorithm:
     def test_resolve_demosaic_algorithm_unknown_raises(self):
         """Unknown demosaic names must fail closed with a clear ValueError that
         lists the actual installed members (not raw dir() noise)."""
-        import sys
         import types
 
         # Use a real Enum so __members__ works as it would in production.
@@ -240,10 +241,7 @@ class TestDemosaicAlgorithm:
 
     def test_load_raw_as_rgb_passes_demosaic_to_postprocess(self, tmp_path):
         """load_raw_as_rgb must forward the demosaic name into rawpy.postprocess."""
-        try:
-            import rawpy  # noqa: F401
-        except ImportError:
-            pytest.skip("rawpy not installed")
+        pytest.importorskip("rawpy", reason="rawpy not installed")
 
         raw_file = tmp_path / "test.cr2"
         raw_file.write_bytes(b"fake raw data")
@@ -283,7 +281,9 @@ class TestDemosaicAlgorithm:
 
             # Verify error message is helpful
             error_msg = str(exc_info.value)
-            assert "rawpy required" in error_msg or "pip install rawpy" in error_msg
+            assert "rawpy required" in error_msg
+            assert "./scripts/setup/install_raw_runtime.sh" in error_msg
+            assert "pip install rawpy" not in error_msg
 
 
 class TestTiffStillWorksWithoutRawpy:
@@ -324,17 +324,11 @@ class TestRawToRgbConversion:
 
     def test_rawpy_not_available_skip(self):
         """Skip if rawpy not available."""
-        try:
-            import rawpy  # noqa: F401
-        except ImportError:
-            pytest.skip("rawpy not installed")
+        pytest.importorskip("rawpy", reason="rawpy not installed")
 
     def test_raw_to_rgb_conversion_linear_output(self, tmp_path):
         """Test linear output (default, APEX compliant)."""
-        try:
-            import rawpy  # noqa: F401
-        except ImportError:
-            pytest.skip("rawpy not installed")
+        pytest.importorskip("rawpy", reason="rawpy not installed")
 
         raw_file = tmp_path / "test.cr2"
         raw_file.write_bytes(b"fake raw data")
@@ -369,10 +363,7 @@ class TestRawToRgbConversion:
 
     def test_raw_to_rgb_gamma_output_allowed(self, tmp_path):
         """Gamma-encoded output is allowed for legacy compatibility."""
-        try:
-            import rawpy  # noqa: F401
-        except ImportError:
-            pytest.skip("rawpy not installed")
+        pytest.importorskip("rawpy", reason="rawpy not installed")
 
         raw_file = tmp_path / "test.cr2"
         raw_file.write_bytes(b"fake raw data")
@@ -394,10 +385,7 @@ class TestRawToRgbConversion:
 
     def test_raw_to_rgb_conversion_mocked(self, tmp_path):
         """Mock rawpy conversion to test interface (legacy test)."""
-        try:
-            import rawpy  # noqa: F401
-        except ImportError:
-            pytest.skip("rawpy not installed")
+        pytest.importorskip("rawpy", reason="rawpy not installed")
 
         raw_file = tmp_path / "test.cr2"
         raw_file.write_bytes(b"fake raw data")
@@ -426,10 +414,7 @@ class TestRawToRgbConversion:
 
     def test_load_raw_as_pil_returns_pil_image(self, tmp_path):
         """load_raw_as_pil should return PIL Image."""
-        try:
-            import rawpy  # noqa: F401
-        except ImportError:
-            pytest.skip("rawpy not installed")
+        pytest.importorskip("rawpy", reason="rawpy not installed")
 
         raw_file = tmp_path / "test.nef"
         raw_file.write_bytes(b"fake raw data")
@@ -455,10 +440,7 @@ class TestRawToRgbConversion:
 
     def test_file_not_found_error(self):
         """FileNotFoundError for missing RAW file."""
-        try:
-            import rawpy  # noqa: F401
-        except ImportError:
-            pytest.skip("rawpy not installed")
+        pytest.importorskip("rawpy", reason="rawpy not installed")
 
         with pytest.raises(FileNotFoundError):
             load_raw_as_rgb(Path("/nonexistent/file.cr2"))
@@ -474,10 +456,7 @@ class TestRawLoaderIntegration:
 
     def test_rawpy_available(self):
         """Check if rawpy is available for integration tests."""
-        try:
-            import rawpy
-        except ImportError:
-            pytest.skip("rawpy not installed - integration tests skipped")
+        rawpy = pytest.importorskip("rawpy", reason="rawpy not installed - integration tests skipped")
         # Verify the imported module is actually rawpy (defends against a
         # stub/shim being injected ahead of the real package).
         assert hasattr(rawpy, "imread"), "rawpy is importable but missing imread()"

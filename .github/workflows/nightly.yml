@@ -329,9 +329,7 @@ jobs:
 
       - name: Audit all dependencies
         run: |
-          # CVE-2026-4539 (pygments): No fix available yet - temporary exception
-          # See: https://github.com/pygments/pygments/issues/3058
-          pip-audit --desc -r requirements.txt --ignore-vuln CVE-2026-4539 --format json --output audit-report.json || true
+          pip-audit --desc -r requirements.txt --format json --output audit-report.json || true
 
       - name: Check for banned dependencies
         run: |

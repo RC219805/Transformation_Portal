@@ -252,7 +252,11 @@ def _preflight_raw_ingest_requirements(
             " Rebuild that dedicated RAW runtime or point --raw-python / " f"{RAW_RUNTIME_ENV_VAR} at a working interpreter."
         )
     else:
-        message += ' Install with: pip install -e ".[raw]" or pip install rawpy'
+        message += (
+            " Bootstrap the isolated RAW runtime with ./scripts/setup/install_raw_runtime.sh "
+            "or point --raw-python / "
+            f"{RAW_RUNTIME_ENV_VAR} at a working interpreter."
+        )
         if unavailable_reason != "rawpy is not installed":
             message += " If rawpy is already installed, inspect the import/runtime error in the logs."
     logger.error(message)

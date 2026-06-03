@@ -88,6 +88,8 @@ FORBIDDEN_WORKFLOW_SNIPPETS = (
     "mkdir -p audit-reports",
     'report_path="audit-reports/$(basename "${requirement_file%.txt}").json"',
     "path: audit-reports/",
+    "--ignore-vuln CVE-2026-4539",
+    "CVE-2026-4539 (pygments): No fix available yet",
 )
 
 FORBIDDEN_PR_BODY_REFERENCES = (

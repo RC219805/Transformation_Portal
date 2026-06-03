@@ -9,52 +9,25 @@ upscaling, and photo finishing. Branding overlays and a batch-friendly CLI
 complete the workflow.
 
 Example:
-    python lux_render_pipeline.py \
-        --input './drafts/*.png' --out ./final \
+    lux_render \
+        --input-glob './drafts/*.png' --out ./final \
         --prompt "luxury interior, natural daylight, oak wood floor" \
         --neg "low detail, cartoon, blurry" \
         --width 1024 --height 768 --steps 30 --strength 0.45 --gs 7.5 \
         --brand_text "The Veridian | Penthouse 21B" --logo ./brand/logo.png
 """
 
-try:
-    from realesrgan import RealESRGANer  # type: ignore
+_HAS_REALESRGAN_IMPORT = False
 
-    _HAS_REALESRGAN_IMPORT = True
-except ImportError:  # pragma: no cover - package not installed
-    _HAS_REALESRGAN_IMPORT = False
-    # Provide helpful installation instructions if user tries to use Real-ESRGAN
-    # The actual fallback to Pillow happens in the pipeline code that checks _HAS_REALESRGAN_IMPORT
 
-    class RealESRGANer:  # minimal CI stub for type compatibility
-        def __init__(self, *_, **__):
-            raise RuntimeError(
-                "Real-ESRGAN not installed. To enable 4x upscaling:\n"
-                "  1. Install package: pip install realesrgan\n"
-                "  2. Download model weights:\n"
-                "     python scripts/setup/install_models.py --dry-run\n"
-                "     OR manually:\n"
-                "     wget https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5.0/realesrgan-x4plus.pth\n"
-                "     mkdir -p weights && mv realesrgan-x4plus.pth weights/RealESRGAN_x4plus.pth\n"
-                "  3. Ensure GPU support (CUDA) is available for best performance\n"
-                "\n"
-                "Note: Pipeline will automatically fall back to Pillow's Lanczos resampling."
-            )
-
-except Exception as e:  # pragma: no cover - other import errors (e.g., missing dependencies of realesrgan)
-    # This catches cases where realesrgan is installed but its dependencies are missing
-    _HAS_REALESRGAN_IMPORT = False
-    # Capture the exception message for use in the class definition
-    _REALESRGAN_IMPORT_ERROR = str(e)
-    # Warning is now included in the RuntimeError below, not printed at import time.
-
-    class RealESRGANer:  # minimal CI stub for type compatibility
-        def __init__(self, *_, **__):
-            raise RuntimeError(
-                f"RealESRGANer unavailable due to import error: {_REALESRGAN_IMPORT_ERROR}\n"
-                "This usually means realesrgan dependencies are missing.\n"
-                "Try reinstalling: pip install --force-reinstall realesrgan"
-            )
+class RealESRGANer:  # minimal CI stub for type compatibility
+    def __init__(self, *_, **__):
+        raise RuntimeError(
+            "The legacy external Real-ESRGAN package is intentionally unsupported by "
+            "this repository's dependency policy. Use the built-in Pillow Lanczos "
+            "fallback or a governed local upscaling backend; do not install the "
+            "external `realesrgan` package into the repo environment."
+        )
 
 
 import glob
@@ -68,6 +41,7 @@ from typing import List, Optional, Tuple
 import numpy as np
 import typer
 from PIL import Image, ImageDraw, ImageFont
+from typer.models import OptionInfo
 
 from transformation_portal.core.security.model_lock import is_model_lock_strict_enabled, resolve_model_lock_revision
 
@@ -111,7 +85,9 @@ def _raise_missing_lux_render_dependencies() -> None:
     root_cause = next(iter(_LUX_RENDER_IMPORT_ERRORS.values()))
     raise ImportError(
         "lux_render requires optional ML dependencies that are not installed: "
-        f"{missing}. Install them with `make install-ml` or `pip install -e '.[ml]'`."
+        f"{missing}. Install supported runtime dependencies with `make install-ml-core` "
+        "or, on Apple Silicon, `./scripts/bootstrap/install_ml_stack.sh --profile core-cpu`; "
+        "see `requirements/README.md` for the governed ML lock contract."
     ) from root_cause
 
 
@@ -1019,30 +995,14 @@ class LuxuryRenderPipeline:
         # Real-ESRGAN (optional)
         self._use_realesrgan = use_realesrgan and _HAS_REALESRGAN
         if use_realesrgan and not _HAS_REALESRGAN:
-            print("[Warn] Real-ESRGAN requested but not installed. Run: pip install realesrgan basicsr")
-        if self._use_realesrgan:
-            print("[Load] Real-ESRGAN x4...")
-            # RealESRGANer expects model_path parameter
-            # If weights don't exist locally, the package will download them
-            from realesrgan.archs.srvgg_arch import SRVGGNetCompact
-
-            model = SRVGGNetCompact(
-                num_in_ch=3,
-                num_out_ch=3,
-                num_feat=64,
-                num_conv=32,
-                upscale=4,
-                act_type="prelu",
+            print(
+                "[Warn] Real-ESRGAN requested, but the external package is unsupported "
+                "by dependency policy. Using Pillow Lanczos fallback."
             )
-            self.realesrgan = RealESRGANer(
-                scale=4,
-                model_path="https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5.0/realesr-general-x4v3.pth",
-                model=model,
-                tile=0,
-                tile_pad=10,
-                pre_pad=0,
-                half=(self.dtype == torch.float16),
-                device=self.device,
+        if self._use_realesrgan:
+            raise RuntimeError(
+                "External Real-ESRGAN is disabled by dependency policy. "
+                "Use the Pillow Lanczos fallback or a governed local upscaling backend."
             )
 
         # Preprocessor
@@ -1447,6 +1407,10 @@ def main(  # pylint: disable=too-many-arguments,too-many-positional-arguments,to
     ),
 ):
     """Batch CLI entry point for the luxury render pipeline."""
+
+    if isinstance(input_glob, OptionInfo):
+        app()
+        return None
 
     try:
         _require_lux_render_runtime_dependencies()

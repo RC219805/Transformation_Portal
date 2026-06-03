@@ -14,13 +14,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - **Lock-path safety in `CASDAGExecutor._get_lock`:** Sanitize `stage_name` before interpolation so `..` or `/` characters can no longer carve a path outside `locks_dir`. Internal callers all pass simple identifiers, but the defensive scrub blocks accidental traversal regressions.
 
-- **Repository State Through PR #1562:** Current documentation and operator surfaces have been refreshed to match the April 27, 2026 `main` baseline.
+- **Documentation checkpoint through PR #1562:** The April 27, 2026 documentation-state audit is retained as point-in-time evidence, not current navigation. Current documentation navigation is governed by `docs/README.md` and `docs/governance/DOCUMENTATION_MAP.md`, whose live baseline is the May 11, 2026 repo-wide refresh through PR #1721 plus the May 12 architecture and CLI overlays.
   - **Typed API v1 foundation:** PRs #1561 and #1562 added the `transformation_portal.api.v1` envelope/schema foundation and wired typed response models onto health/readiness routes without changing the established `/healthz`, `/ready`, or `/v1/readiness` wire contracts.
   - **Docker and environment wiring:** PR #1559 added container `HEALTHCHECK` coverage plus root `.env.example` / Compose `env_file` wiring for safer local and deployment defaults.
   - **CI hardening:** PRs #1553, #1558, and #1560 hardened workflow behavior and refreshed `docs/ci/WORKFLOW_MATRIX.md` with the current 30-workflow inventory and consolidation roadmap.
   - **Archive gates:** PRs #1555 and #1557 stabilized archive-gate fixity preflight behavior and captured the April 27, 2026 Gates A/B/C readiness audit evidence.
   - **APEX / Materials V3:** PRs #1552, #1554, and #1556 added offline model-family characterization, SAM2 tile-merge regression coverage, real failure-code surfacing, confidence-only pixel-op passthrough, and V2 fallback behavior.
-  - **Agent and Copilot guidance:** Live custom-agent, Copilot, and RAG-template instructions now align with the PR #1562 documentation map, Python 3.11+ baseline, Node 22 frontdoor contract, current Architect/Steward/Specialist roles, and typed API health/readiness state.
+  - **Agent and Copilot guidance:** At that checkpoint, custom-agent, Copilot, and RAG-template instructions aligned with the PR #1562 documentation map, Python 3.11+ baseline, Node 22 frontdoor contract, Architect/Steward/Specialist roles, and typed API health/readiness state.
 - **APEX Materials V3 — Soft Passthrough on Confidence-Only Blocks:** When every implemented Materials V3 pixel op is blocked solely by `below_confidence_threshold`, the strict gate now emits the output without pixel ops and surfaces a non-fatal `APEX_MATERIALS_PASSTHROUGH_LOW_CONFIDENCE` warning instead of failing the batch. Mixed blocker sets (missing material confidence, missing implementation, etc.) still fail closed with `APEX_MATERIALS_PIXEL_OPS_EMPTY`.
   - **Run-card visibility:** the warning surfaces under `result_summary[].segmentation_status.pixel_ops_passthrough` and `.warnings`.
   - **Promotion-eligibility:** evidence producers may mirror the orchestrator's `materials_v3_pixel_ops.passthrough_status` into the per-candidate evidence file as `passthrough_status: {code: "APEX_MATERIALS_PASSTHROUGH_LOW_CONFIDENCE"}`. When that signal is present `_materials_status` keeps `failure_code = None` so promotion is no longer blocked.
@@ -126,7 +126,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Enhanced Statistics:** Added std_sec and bootstrap CI to baseline schema
   - **Performance:** NumPy mode maintains v1.0 speed, pure Python ~50x slower (acceptable for small datasets)
   - **Tests:** 50+ new tests (CLI integration, property-based math validation, benchmarks)
-  - **Migration Guide:** `docs/performance_ledger_v1.7_migration.md`
+  - **Migration Guide:** `docs/performance/performance_ledger_v1.7_migration.md`
   - See: [Performance Ledger v1.7 Verdict](docs/performance/PERFORMANCE_LEDGER_V1.7_VERDICT.md)
 
 - **Backend Registry Integration (ADR-019):** Depth backend orchestration with fallback
@@ -175,18 +175,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Baseline gate now prevents regression while allowing incremental improvement
 
 ### Changed
-- **ML Stack Upgrades:** Major ML framework and dependency updates
-  - torch: 2.4.1 → 2.10.0
-  - torchvision: 0.19.1 → 0.25.0
-  - scikit-learn: 1.7.2 → 1.8.0
-  - timm: 0.6.7 → 1.0.24
-  - diffusers: 0.31.0 → 0.36.0
-  - transformers: 4.53.0 → 4.57.6
-  - Benefits: Latest features, performance improvements, security fixes
-  - Dependencies: Requires Python >=3.11 (see PR #794)
-  - Validation: Comprehensive smoke tests added for ML stack compatibility
+- **Governed ML Baseline Alignment:** Root release notes now track the supported Apple Silicon ML lock and package metadata instead of retired/untrusted ML lane targets.
+  - torch: supported lock baseline `2.8.0`
+  - torchvision: paired supported lock baseline `0.23.0`
+  - scikit-learn: governed base lock baseline `1.8.0`
+  - timm: locked transitive vision-helper baseline `1.0.26`
+  - diffusers: metadata floor `0.38.0`; supported lock baseline `0.38.0`
+  - transformers: metadata floor `5.0.0`; supported lock baseline `5.0.0`
+  - Dependencies require Python >=3.11 and follow controlled baseline rotations rather than ad hoc upgrades.
+  - Linux and macOS Intel ML lanes remain retired unsupported lanes until a governed target-owned lock is re-established.
 
-## [2.0.0] - 2025-11-14
+## [3.4.0] - 2026-02-24
+
+### Added
+- Canonical evidence-bundle root anchoring with governed root algorithm, root preimage version, and root SHA-256 co-presence.
+- Optional notarization validation support for evidence bundle manifests.
+
+### Changed
+- Canonical root preimage serialization now uses UTF-8, sorted compact JSON, and a trailing line feed.
+- Bundle-root preimages exclude path-derived fields and optional notarization fields so manifests remain portable across storage locations.
+
+### Compatibility
+- Phase 3.3 manifests without bundle-root fields remain valid.
+- Phase 3.4 manifests with bundle-root fields and optional notarization blocks are supported.
+
+## [2.0.0] - 2026-01-02
 
 ### Added
 - First stable release with production-ready contracts
@@ -204,5 +217,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Various stability and correctness improvements
 
-[Unreleased]: https://github.com/RC219805/Transformation_Portal/compare/v2.0.0...HEAD
+[Unreleased]: https://github.com/RC219805/Transformation_Portal/compare/v3.4.0...HEAD
+[3.4.0]: https://github.com/RC219805/Transformation_Portal/releases/tag/v3.4.0
 [2.0.0]: https://github.com/RC219805/Transformation_Portal/releases/tag/v2.0.0

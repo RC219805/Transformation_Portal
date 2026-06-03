@@ -66,7 +66,8 @@ make ci-quick              # ./scripts/local_ci_check.sh --quick
 make lint                  # flake8 + pylint (advisory)
 make lint-parity           # GitHub lint job locally with CI-pinned Python 3.12 env
 make pre-commit            # pre-commit hooks with CI-aligned Black/isort
-make install-hooks         # install git pre-commit hook
+make install-hooks         # install git pre-commit and pre-push hooks
+make quality-check         # lint + validate-ci + root placement check
 make fix-quality / make check-quality   # auto-fix wrappers (scripts/auto_fix_quality.py)
 ```
 `make ci` includes governance gates that often fail edits: `check-json-serialization` (no raw `json.dump(s)` outside approved modules), `check-yaml-governance` (no raw `yaml.safe_load` outside the preset loader), `check-python-headers` (PEP 263 cookies only), `check-piptools-cache`, `check-requirements-lock-contract`, `check-dependency-pinning`, `check-ci-sync`, `check-portal-asset-budgets`. Adjacent enforcement (outside `make ci`):

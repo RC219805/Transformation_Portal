@@ -26,7 +26,7 @@ TARGET_OWNED_LANE_CASES = (
         "Darwin",
         "arm64",
         "check-ml-darwin-arm64",
-        "Run 'cd requirements && make compile-ml-darwin-arm64' on native Darwin arm64.",
+        "Run 'make -C requirements compile-ml-darwin-arm64' on native Darwin arm64.",
     ),
 )
 
@@ -151,8 +151,36 @@ def test_generic_stale_warning_preserves_make_compile_guidance(tmp_path: Path) -
 
     assert result.returncode == 2, result.stdout + result.stderr
     assert "base.in: Compiled .txt file is stale" in result.stdout
-    assert "Run 'cd requirements && make compile' to regenerate" in result.stdout
+    assert "Run 'make -C requirements compile' to regenerate" in result.stdout
     assert "Consider addressing warnings for best practices." in result.stdout
+
+
+@pytest.mark.parametrize(
+    ("constraint", "minimum", "reason"),
+    (
+        ("Pillow>=10.0.0,<13  # stale security floor", "10.3.0", "CVE-2024-28219"),
+        ("starlette==1.0.0  # stale Starlette pin", "1.0.1", "CVE-2026-48710"),
+    ),
+)
+def test_security_minimums_reject_stale_constraints(
+    tmp_path: Path,
+    constraint: str,
+    minimum: str,
+    reason: str,
+) -> None:
+    repo_root = tmp_path / "repo"
+    _prepare_validator_repo(repo_root)
+
+    requirements_dir = repo_root / "requirements"
+    requirements_dir.mkdir(parents=True, exist_ok=True)
+    (requirements_dir / "base.in").write_text(constraint + "\n", encoding="utf-8")
+
+    result = _run_validator(repo_root)
+
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "Security minimum not met" in result.stdout
+    assert f"need >={minimum}" in result.stdout
+    assert reason in result.stdout
 
 
 def test_retired_darwin_x86_64_input_no_longer_gets_target_owned_skip(tmp_path: Path) -> None:
@@ -347,7 +375,14 @@ def test_validator_uses_repo_resolved_python_instead_of_path_python3(tmp_path: P
     fakebin = tmp_path / "fakebin"
     _write_executable(
         fakebin / "python3",
-        "#!/bin/sh\n" "echo 'broken python3 should not be used' >&2\n" "exit 99\n",
+        "\n".join(
+            [
+                "#!/bin/sh",
+                "echo 'broken python3 should not be used' >&2",
+                "exit 99",
+            ]
+        )
+        + "\n",
     )
     requirements_dir = repo_root / "requirements"
     requirements_dir.mkdir(parents=True, exist_ok=True)
@@ -355,7 +390,7 @@ def test_validator_uses_repo_resolved_python_instead_of_path_python3(tmp_path: P
         "\n".join(
             [
                 "Pillow>=10.3.0,<13  # Security regression coverage",
-                "starlette==1.0.0  # direct runtime import + curated Starlette 1.x validation target",
+                "starlette==1.0.1  # direct runtime import + curated Starlette 1.x validation target",
             ]
         )
         + "\n",

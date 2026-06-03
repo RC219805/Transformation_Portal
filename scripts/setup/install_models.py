@@ -4,9 +4,9 @@
 Install Missing Pipeline Models
 Transformation Portal - Model Setup Script
 
-Downloads and configures machine learning models for:
+Downloads and configures machine learning models and governed model weights for:
 1. Depth Anything V2 (HuggingFace) - Monocular depth estimation
-2. Real-ESRGAN weights - 4x upscaling
+2. Real-ESRGAN-compatible weights - legacy/local upscaling research artifacts
 3. ControlNet models - Image conditioning for Stable Diffusion
 4. Stable Diffusion XL - Base generation model
 
@@ -23,7 +23,7 @@ Usage:
     python scripts/setup/install_models.py [--all] [--dry-run] [--force]
 
 Examples:
-    # Install essential models only (Depth, Real-ESRGAN)
+    # Install essential models only (Depth, Real-ESRGAN-compatible weights)
     python scripts/setup/install_models.py
 
     # Install all models including Stable Diffusion
@@ -70,14 +70,14 @@ REALESRGAN_MODELS = {
         "url": "https://github.com/xinntao/Real-ESRGAN/releases/download/v0.1.0/RealESRGAN_x4plus.pth",
         "size_mb": 64,
         "sha256": "4fa0d38905f75ac06eb49a7951b426670021be3018265fd191d2125df9d682f1",
-        "description": "Real-ESRGAN 4x upscaling (general images)",
+        "description": "Real-ESRGAN-compatible 4x upscaling weights (general images)",
         "required": True,
     },
     "RealESRGAN_x4plus_anime_6B.pth": {
         "url": "https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.2.4/RealESRGAN_x4plus_anime_6B.pth",
         "size_mb": 17,
         "sha256": None,
-        "description": "Real-ESRGAN 4x upscaling (anime/illustration)",
+        "description": "Real-ESRGAN-compatible 4x upscaling weights (anime/illustration)",
         "required": False,
     },
 }
@@ -337,9 +337,9 @@ def install_depth_models(install_all: bool = False, dry_run: bool = False) -> in
 
 
 def install_realesrgan_weights(force: bool = False, dry_run: bool = False) -> int:
-    """Install Real-ESRGAN model weights."""
+    """Install Real-ESRGAN-compatible model weights."""
     print("\n" + "=" * 70)
-    print("2. REAL-ESRGAN WEIGHTS")
+    print("2. REAL-ESRGAN-COMPATIBLE WEIGHTS")
     print("=" * 70)
 
     print(f"\nWeights directory: {WEIGHTS_DIR}")
@@ -492,7 +492,7 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Install essential models (Depth, Real-ESRGAN)
+  # Install essential models (Depth, Real-ESRGAN-compatible weights)
   python scripts/setup/install_models.py
 
   # Install all models including Stable Diffusion
@@ -539,14 +539,14 @@ Examples:
 
     print("\n✓ Models Ready:")
     print(f"  • Depth Anything V2:  {depth_installed} models")
-    print(f"  • Real-ESRGAN:        {realesrgan_installed} models")
+    print(f"  • Real-ESRGAN-compatible weights: {realesrgan_installed} models")
     if args.all:
         print(f"  • ControlNet:         {controlnet_installed} models")
         print(f"  • Stable Diffusion:   {sd_installed} models")
 
     print("\n📦 Model Locations:")
     print("  • HuggingFace cache: ~/.cache/huggingface/")
-    print(f"  • Real-ESRGAN:       {WEIGHTS_DIR}")
+    print(f"  • Real-ESRGAN-compatible weights: {WEIGHTS_DIR}")
 
     print("\n💡 Notes:")
     print("  • HuggingFace models auto-download on first use")
@@ -555,7 +555,7 @@ Examples:
 
     print("\n🔧 Optional Dependencies:")
     print("  • pip install accelerate      (faster loading)")
-    print("  • pip install realesrgan       (4x upscaling)")
+    print("  • External `realesrgan` package is unsupported by dependency policy")
     print("  • pip install torch            (GPU acceleration)")
 
     if not args.dry_run:

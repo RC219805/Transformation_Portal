@@ -260,15 +260,8 @@ ERROR: V2 enhancement script not found: scripts/enhance_image.py
 RAW inputs detected but canonical RAW ingest is unavailable because rawpy is not installed.
 ```
 
-**Fix:** Install the optional RAW dependency before dispatching RAW stills:
-```bash
-pip install -e ".[raw]"
-# or
-pip install rawpy
-```
-
-For deterministic isolation, bootstrap the repo-local RAW runtime and let the
-pipeline auto-discover `./.venv-raw/bin/python` for RAW batches:
+**Fix:** Bootstrap the repo-local RAW runtime and let the pipeline auto-discover
+`./.venv-raw/bin/python` for RAW batches:
 ```bash
 ./scripts/setup/install_raw_runtime.sh
 ```
