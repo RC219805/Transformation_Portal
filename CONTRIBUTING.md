@@ -620,27 +620,20 @@ git commit -m "deps: add new-package for feature XYZ"
 
 | Target Platform | Lockfile | Authoritative Host | Status |
 |-----------------|----------|-------------------|--------|
-| Linux x86_64 | `ml-core-linux.txt` | Native Linux x86_64 | **Active** |
 | macOS Apple Silicon | `ml-core-darwin-arm64.txt` | Native Darwin arm64 | **Active** |
-| macOS Intel | `ml-core-darwin-x86_64.txt` | *(none)* | **Frozen** |
+| Linux x86_64 | *(none)* | *(none)* | **Retired unsupported; fails closed** |
+| macOS Intel | *(none)* | *(none)* | **Retired unsupported; fails closed** |
 
-**Never generate Linux locks from macOS or vice versa** — pip-compile resolves host-specific wheels that will fail on the target platform.
+**Never generate target-owned ML locks from a non-authoritative host** — pip-compile resolves host-specific wheels that will fail on the target platform. New Linux or macOS Intel ML support requires a separate governed lane before any installable lockfile is checked in.
 
 #### When to Regenerate ML Lockfiles
 
 Regenerate when:
-- Adding/updating packages in `ml-core-darwin-arm64.in`, `ml-core-linux.in`, or shared ML `.in` files
+- Adding/updating packages in `ml-core-darwin-arm64.in` or shared ML `.in` files
 - Updating `base.txt` (ML locks constrain against it)
 - Security patches require ML package updates
 
 #### Regeneration Workflow
-
-**For Linux x86_64 ML lock** (on native Linux x86_64 host):
-```bash
-cd requirements
-make compile-ml-linux-x86_64   # Compile from native Linux
-make check-ml-linux-x86_64     # Verify lock is current
-```
 
 **For macOS Apple Silicon ML lock** (on native Darwin arm64 host):
 ```bash
@@ -649,20 +642,40 @@ make compile-ml-darwin-arm64   # Compile from native M1/M2/M3 Mac
 make check-ml-darwin-arm64     # Verify lock is current
 ```
 
+**For Linux x86_64 ML lock**:
+```bash
+cd requirements
+# RETIRED - unsupported lane; do not regenerate without a new governed lane
+make compile-ml-linux-x86_64   # Fails closed
+make check-ml-linux-x86_64     # Fails closed
+```
+
 **For macOS Intel ML lock**:
 ```bash
 cd requirements
-# FROZEN - do not regenerate without Architect approval
-make compile-ml-darwin-x86_64  # Will fail closed
+# RETIRED - unsupported lane; do not regenerate without a new governed lane
+make compile-ml-darwin-x86_64  # Fails closed
+make check-ml-darwin-x86_64    # Fails closed
+```
+
+#### Retired Lane Handling
+
+Linux x86_64 and macOS Intel ML lanes are historical governance records only.
+Their top-level Make targets remain as fail-closed stubs so stale automation and
+operator commands cannot silently recreate unsupported lockfiles.
+
+```bash
+cd requirements
+make compile-ml-linux-x86_64   # Fails closed
+make compile-ml-darwin-x86_64  # Fails closed
 ```
 
 #### Automated CI Validation
 
 CI automatically validates:
-- **No Darwin markers in Linux locks** (rejects `platform_system == "Darwin"`)
-- **No Linux markers in Darwin locks** (rejects `platform_system == "Linux"`)
+- **No Linux/CUDA markers in Darwin locks** (rejects unsupported target contamination)
 - **Lock ownership authority** (prevents off-lane modifications)
-- **Lock divergence** (target-owned locks must not collapse to identical graphs)
+- **Retired lane absence** (Linux/macOS Intel ML manifests must not reappear as installable checked-in locks)
 
 See `scripts/validation/check_requirements_lock_contract.py` for enforcement details.
 
@@ -671,11 +684,11 @@ See `scripts/validation/check_requirements_lock_contract.py` for enforcement det
 **Error: "Darwin arm64 ML lock generation is authoritative only on native Darwin arm64"**
 → You're trying to compile macOS locks from Linux. Run on a Mac.
 
-**Error: "Linux x86_64 ML lock generation is authoritative only on native Linux x86_64"**
-→ You're trying to compile Linux locks from macOS. Run on Linux.
+**Error: "Linux x86_64 ML lock lane is retired unsupported"**
+→ The Linux ML lock lane is not part of the current installable checked-in contract. Open a governed lane decision before regenerating it.
 
-**Error: "ERROR: ml-core-darwin-x86_64.txt is frozen pending an authoritative Darwin x86_64 lane decision."**
-→ The Intel Mac lockfile is frozen pending lane decision. Do not regenerate.
+**Error: "Darwin x86_64 ML lock lane is retired unsupported"**
+→ The Intel Mac ML lock lane is not part of the current installable checked-in contract. Do not regenerate it without a governed lane decision.
 
 ### Banned Packages
 

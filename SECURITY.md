@@ -127,8 +127,8 @@ Given our image/video processing nature, special attention is required for:
 
 - **Known Vulnerabilities** (Mitigated):
   - Supported Apple Silicon lane runs on torch `2.8.0` / torchvision `0.23.0`
-  - Frozen macOS Intel ML lane remains unsupported and gated behind `TP_ALLOW_MACOS_INTEL_ML=1`
-  - `requirements/ml-core-linux.txt` is a frozen unsupported historical lane and must not drive supported-lane remediation
+  - Linux and macOS Intel ML lanes are retired unsupported lanes and are absent from installable `requirements/*.in` / `requirements/*.txt` manifests
+  - Historical retired-lane details live in `docs/governance/RETIRED_ML_LOCK_LANES_2026-04-30.md` and must not drive supported-lane remediation
   - All model loading uses safe_load() wrapper or explicit weights_only=True
   - Pillow: Critical for image parsing vulnerabilities
   - NumPy: Monitor for numerical computation exploits
