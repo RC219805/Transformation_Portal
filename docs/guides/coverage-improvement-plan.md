@@ -87,7 +87,8 @@ Low-priority modules (can defer):
 
 ### CI Integration
 - **Baseline gate** (`--fail-under=25`): Prevents regression
-- **Diff coverage gate** (`diff-cover --fail-under=85`): New code must be well-tested
+- **Diff coverage target** (`make coverage-diff`): Local PR-review signal for new code;
+  not a required PR CI gate until `build.yml` wires in `diff-cover`
 - **Ratchet mechanism**: As coverage improves, baseline gate increases
 
 ### Ownership
@@ -113,7 +114,9 @@ Update this document quarterly with:
 A: This is a legacy codebase with ~25K statements. Reaching 80% would require ~12,000 new test assertions. We're taking an incremental, pragmatic approach.
 
 **Q: Can I merge code with <85% diff coverage?**
-A: No. The diff-cover gate ensures all *new* code is well-tested, even if legacy code has gaps.
+A: Required PR CI may still pass today, but expect review scrutiny. Target 85%
+diff coverage locally with `make coverage-diff`; wiring this into `build.yml`
+is the tracked step that would make it a blocking PR gate.
 
 **Q: What if coverage drops unexpectedly?**
 A: The CI gate will fail. Investigate whether:
@@ -127,7 +130,7 @@ A: The CI gate will fail. Investigate whether:
 make coverage-report
 open htmlcov/index.html
 
-# Diff coverage check against main branch (≥85% required for new code)
+# Diff coverage check against main branch (85% local target for new code)
 make coverage-diff
 
 # Package-level baseline report for ratcheting
@@ -138,8 +141,8 @@ make coverage-fast-scope
 ```
 
 **Q: What are the coverage targets?**
-- **Diff coverage**: 85% on new/changed lines (required for PRs)
-- **Global floor**: 25% (prevents regression)
+- **Diff coverage**: 85% on new/changed lines (local target / future PR gate)
+- **Global floor**: 25% (required PR gate; prevents regression)
 - **Long-horizon target**: 70% overall
 
 See `docs/testing/test_coverage_improvement_plan.md` for the full phased plan.

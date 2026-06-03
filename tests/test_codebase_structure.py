@@ -704,9 +704,20 @@ class TestRootGovernanceMetadata:
     def test_contributing_coverage_guidance_matches_active_gates(self):
         """Root contribution guidance should match current coverage gate policy."""
         contributing = (_repo_root / "CONTRIBUTING.md").read_text()
+        testing_plan = (_repo_root / "docs" / "testing" / "test_coverage_improvement_plan.md").read_text()
+        guide_plan = (_repo_root / "docs" / "guides" / "coverage-improvement-plan.md").read_text()
 
         assert "coverage report --fail-under=25" in contributing
-        assert "**New/changed lines must be 85%+ covered**" in contributing
+        assert "**New/changed lines should target 85%+ covered**" in contributing
+        assert "required PR CI currently enforces the" in contributing
+        assert "`build.yml`, not `diff-cover`" in contributing
+        assert "Coverage Gates (ENFORCED)" not in contributing
+        assert "Enforced via `diff-cover` tool" not in contributing
+        assert "| **Diff coverage** | diff-cover | ≥85% |" not in testing_plan
+        assert "### Local / Review Targets (non-blocking today)" in testing_plan
+        assert "Wire diff coverage into the required `build.yml` PR gate" in testing_plan
+        assert "Required PR CI may still pass today" in guide_plan
+        assert "local target / future PR gate" in guide_plan
         assert "docs/testing/test_coverage_improvement_plan.md" in contributing
         assert "docs/testing/COLD_ZONE_COVERAGE_PROGRAM.md" in contributing
         assert "**New/changed lines must be 80%+ covered**" not in contributing

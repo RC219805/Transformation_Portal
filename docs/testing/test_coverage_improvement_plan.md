@@ -25,8 +25,18 @@ The repository has substantial test volume, but high-risk areas remain under-cov
 | Offline integration tests | pytest | Pass |
 | Contract tests | pytest | Pass |
 | Security boundary tests | pytest | Pass |
-| **Diff coverage** | diff-cover | ≥85% |
 | **Global floor** | coverage | ≥25% |
+
+### Local / Review Targets (non-blocking today)
+
+| Check | Tool | Threshold |
+|-------|------|-----------|
+| **Diff coverage** | `make coverage-diff` / diff-cover | Target ≥85% |
+
+The diff-coverage target is a local quality ratchet and PR-review signal today.
+The required PR test job in `build.yml` does not invoke `diff-cover`; the
+push-only `ci.yml` workflow keeps an intended gate stub that must be wired into
+`build.yml` before this becomes a blocking PR check.
 
 ### Optional / Nightly Lane (non-blocking)
 
@@ -55,9 +65,11 @@ its `app.py` milestone targets below are actually enforced, not aspirational.
 ### Immediate Gate (Active)
 
 ```bash
-# Enforced in CI today
-diff-cover coverage.xml --compare-branch=origin/main --fail-under=85
+# Enforced in required PR CI today
 coverage report --fail-under=25
+
+# Local target / intended future PR gate
+make coverage-diff
 ```
 
 ### Ratcheted Package Gates (Future Milestones)
@@ -98,10 +110,10 @@ coverage report --fail-under=25
 
 - [x] `pytest-cov` HTML, XML, terminal, and branch reports configured
 - [x] `make coverage-report` — comprehensive local coverage
-- [x] `make coverage-diff` — diff coverage vs main branch
+- [x] `make coverage-diff` — local diff coverage vs main branch
 - [x] `make coverage-package` — package-level baseline report
 - [x] CI artifact upload for coverage outputs
-- [x] Diff coverage reporting in CI (85% threshold)
+- [ ] Wire diff coverage into the required `build.yml` PR gate (85% threshold)
 - [x] `diff-cover` added to dev dependencies
 
 ### Phase 1 — Highest-Gap, Highest-Yield Coverage
