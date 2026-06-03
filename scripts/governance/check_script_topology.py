@@ -43,6 +43,11 @@ COMPATIBILITY_WRAPPERS = {
     ),
 }
 
+CLI_COMPATIBILITY_WRAPPERS = set(COMPATIBILITY_WRAPPERS) - {"scripts/synthetic_viewer.py"}
+SCRIPT_PACKAGE_COMPATIBILITY_WRAPPERS = {
+    wrapper for wrapper, (_canonical, marker) in COMPATIBILITY_WRAPPERS.items() if marker.startswith("from scripts.")
+}
+
 RETIRED_ORGANIZER_PATHS = {
     "archive/.organize_docs.sh": "archive/scripts/legacy-organization/organize_docs_root_legacy.sh",
     "scripts/install_models_old_backup.py": "archive/scripts/legacy-organization/install_models_old_backup.py",
@@ -158,6 +163,22 @@ def validate_script_topology(
                     path=wrapper,
                     reason="compatibility wrapper does not delegate to canonical implementation",
                     suggestion=f"import and delegate to {canonical}",
+                )
+            )
+        if wrapper in CLI_COMPATIBILITY_WRAPPERS and "raise SystemExit(" not in wrapper_text:
+            violations.append(
+                TopologyViolation(
+                    path=wrapper,
+                    reason="CLI compatibility wrapper does not propagate canonical exit status",
+                    suggestion="call the canonical main through raise SystemExit(...)",
+                )
+            )
+        if wrapper in SCRIPT_PACKAGE_COMPATIBILITY_WRAPPERS and "Path(__file__).resolve().parents[1]" not in wrapper_text:
+            violations.append(
+                TopologyViolation(
+                    path=wrapper,
+                    reason="script-package compatibility wrapper does not bootstrap repository root",
+                    suggestion="insert the repository root into sys.path before importing scripts.*",
                 )
             )
 
