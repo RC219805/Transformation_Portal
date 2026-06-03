@@ -19,8 +19,10 @@ from tp.phase4.hash_capture_metadata import (
 from tp.phase4.provenance_capture import (
     PROVENANCE_CONTRACT_VERSION,
     ProvenanceInputError,
+    ProvenanceSchemaValidationError,
     build_provenance_manifest_payload,
     compute_provenance_entry_sha256,
+    serialize_provenance_manifest,
 )
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -107,6 +109,26 @@ def _build_two_record_artifacts() -> tuple[list[dict[str, Any]], dict[str, Any]]
     return [record_a, record_b], manifest_payload
 
 
+def test_phase4e_build_manifest_direct_success_with_fingerprint() -> None:
+    pytest.importorskip("jsonschema")
+    records, manifest_payload = _build_two_record_artifacts()
+    fingerprint = records[0]["extractor"]["config_fingerprint_sha256"]
+
+    payload = build_provenance_manifest_payload(
+        records,
+        manifest_payload,
+        metadata_schema={},
+        metadata_manifest_schema={},
+        provenance_manifest_schema={},
+        required_config_fingerprint_sha256=fingerprint,
+    )
+
+    assert payload["provenance_contract_version"] == PROVENANCE_CONTRACT_VERSION
+    assert payload["metadata_contract_version"] == METADATA_CONTRACT_VERSION
+    assert [entry["relative_path"] for entry in payload["entries"]] == ["a/sample_01.dng", "b/sample_01.dng"]
+    assert serialize_provenance_manifest(payload).endswith(b"\n")
+
+
 def test_phase4e_golden_provenance_manifest_matches_expected(tmp_path: Path) -> None:
     pytest.importorskip("jsonschema")
     out_path = tmp_path / "provenance_manifest.tp.meta.provenance.v1.json"
@@ -191,6 +213,141 @@ def test_phase4e_build_manifest_reports_missing_relative_path_without_keyerror()
         build_provenance_manifest_payload(
             capture_records,
             metadata_manifest_payload,
+            metadata_schema={},
+            metadata_manifest_schema={},
+            provenance_manifest_schema={},
+        )
+
+
+def test_phase4e_build_manifest_rejects_non_object_metadata_manifest() -> None:
+    pytest.importorskip("jsonschema")
+    records, _manifest_payload = _build_two_record_artifacts()
+
+    with pytest.raises(ProvenanceInputError, match="metadata manifest payload must be a JSON object"):
+        build_provenance_manifest_payload(
+            records,
+            [],
+            metadata_schema={},
+            metadata_manifest_schema={},
+            provenance_manifest_schema={},
+        )
+
+
+def test_phase4e_build_manifest_rejects_capture_contract_mismatch() -> None:
+    pytest.importorskip("jsonschema")
+    records, manifest_payload = _build_two_record_artifacts()
+    records[0]["metadata_contract_version"] = "tp.meta.capture.v999"
+
+    with pytest.raises(ProvenanceInputError, match="capture record\\[0\\] contract mismatch"):
+        build_provenance_manifest_payload(
+            records,
+            manifest_payload,
+            metadata_schema={},
+            metadata_manifest_schema={},
+            provenance_manifest_schema={},
+        )
+
+
+def test_phase4e_build_manifest_rejects_metadata_manifest_contract_mismatch() -> None:
+    pytest.importorskip("jsonschema")
+    records, manifest_payload = _build_two_record_artifacts()
+    manifest_payload["metadata_manifest_contract_version"] = "tp.meta.capture_manifest.v999"
+
+    with pytest.raises(ProvenanceInputError, match="metadata manifest contract mismatch"):
+        build_provenance_manifest_payload(
+            records,
+            manifest_payload,
+            metadata_schema={},
+            metadata_manifest_schema={},
+            provenance_manifest_schema={},
+        )
+
+
+def test_phase4e_build_manifest_rejects_metadata_manifest_entries_that_are_not_array() -> None:
+    pytest.importorskip("jsonschema")
+    records, manifest_payload = _build_two_record_artifacts()
+    manifest_payload["entries"] = {"not": "an array"}
+
+    with pytest.raises(ProvenanceInputError, match="metadata manifest entries must be an array"):
+        build_provenance_manifest_payload(
+            records,
+            manifest_payload,
+            metadata_schema={},
+            metadata_manifest_schema={},
+            provenance_manifest_schema={},
+        )
+
+
+def test_phase4e_build_manifest_rejects_missing_extractor_when_fingerprint_required() -> None:
+    pytest.importorskip("jsonschema")
+    records, manifest_payload = _build_two_record_artifacts()
+    del records[0]["extractor"]
+
+    with pytest.raises(ProvenanceInputError, match="missing extractor object"):
+        build_provenance_manifest_payload(
+            records,
+            manifest_payload,
+            metadata_schema={},
+            metadata_manifest_schema={},
+            provenance_manifest_schema={},
+            required_config_fingerprint_sha256="0" * 64,
+        )
+
+
+def test_phase4e_build_manifest_rejects_alignment_mismatch_directly() -> None:
+    pytest.importorskip("jsonschema")
+    records, manifest_payload = _build_two_record_artifacts()
+    manifest_payload["entries"] = manifest_payload["entries"][:1]
+
+    with pytest.raises(ProvenanceInputError, match="relative_path alignment mismatch"):
+        build_provenance_manifest_payload(
+            records,
+            manifest_payload,
+            metadata_schema={},
+            metadata_manifest_schema={},
+            provenance_manifest_schema={},
+        )
+
+
+def test_phase4e_build_manifest_rejects_file_sha256_mismatch_directly() -> None:
+    pytest.importorskip("jsonschema")
+    records, manifest_payload = _build_two_record_artifacts()
+    manifest_payload["entries"][0]["file_sha256"] = "f" * 64
+
+    with pytest.raises(ProvenanceInputError, match="file_sha256 mismatch"):
+        build_provenance_manifest_payload(
+            records,
+            manifest_payload,
+            metadata_schema={},
+            metadata_manifest_schema={},
+            provenance_manifest_schema={},
+        )
+
+
+def test_phase4e_build_manifest_rejects_metadata_sha256_mismatch_directly() -> None:
+    pytest.importorskip("jsonschema")
+    records, manifest_payload = _build_two_record_artifacts()
+    manifest_payload["entries"][0]["metadata_sha256"] = "f" * 64
+
+    with pytest.raises(ProvenanceInputError, match="metadata_sha256 mismatch"):
+        build_provenance_manifest_payload(
+            records,
+            manifest_payload,
+            metadata_schema={},
+            metadata_manifest_schema={},
+            provenance_manifest_schema={},
+        )
+
+
+def test_phase4e_build_manifest_wraps_canonical_serialization_errors() -> None:
+    pytest.importorskip("jsonschema")
+    records, manifest_payload = _build_two_record_artifacts()
+    records[0]["non_jsonable"] = object()
+
+    with pytest.raises(ProvenanceSchemaValidationError, match="canonical metadata serialization failed"):
+        build_provenance_manifest_payload(
+            records,
+            manifest_payload,
             metadata_schema={},
             metadata_manifest_schema={},
             provenance_manifest_schema={},

@@ -12,6 +12,7 @@ import pytest
 
 from tp.phase4.canonicalize_capture_metadata import (
     EXIFTOOL_TIMEOUT_SECONDS,
+    ConfigValidationError,
     ExtractionFailure,
     PathNormalizationError,
     _run_exiftool,
@@ -231,6 +232,38 @@ def test_phase4c_records_embed_config_fingerprint() -> None:
     assert payload
     for record in payload:
         assert record["extractor"]["config_fingerprint_sha256"] == expected_fingerprint
+
+
+def _write_config(tmp_path: Path, payload: dict) -> Path:
+    config_path = tmp_path / "capture_metadata_config.json"
+    config_path.write_text(json.dumps(payload), encoding="utf-8")
+    return config_path
+
+
+@pytest.mark.parametrize(
+    ("mutate", "message"),
+    [
+        (lambda payload: payload.pop("tag_whitelist"), "config missing required key"),
+        (lambda payload: payload.update({"unexpected": True}), "config contains unknown key"),
+        (lambda payload: payload.update({"metadata_contract_version": "tp.meta.capture.v999"}), "metadata_contract_version"),
+        (lambda payload: payload.update({"tag_whitelist": ["Make", "Make"]}), "tag_whitelist must not contain duplicates"),
+        (
+            lambda payload: payload.update({"datetime_precedence": ["UnsupportedDateSource"]}),
+            "datetime_precedence contains unsupported source",
+        ),
+        (lambda payload: payload["rounding_rules"].update({"gps_decimal_places": True}), "gps_decimal_places"),
+        (lambda payload: payload["rounding_rules"].update({"rounding_mode": "half_up"}), "rounding_mode"),
+        (lambda payload: payload["orientation_mapping"].pop("8"), "orientation_mapping keys must be 1..8"),
+        (lambda payload: payload.update({"warning_codes": ["WARN_DATETIME_NO_TZ"]}), "warning_codes missing"),
+        (lambda payload: payload["path_normalization"].update({"forbid_dotdot": "yes"}), "forbid_dotdot"),
+    ],
+)
+def test_phase4c_config_validation_rejects_common_shape_errors(tmp_path: Path, mutate, message: str) -> None:
+    payload = json.loads(CAPTURE_CONFIG_PATH.read_text(encoding="utf-8"))
+    mutate(payload)
+
+    with pytest.raises(ConfigValidationError, match=message):
+        load_capture_metadata_config(_write_config(tmp_path, payload))
 
 
 def test_phase4c_path_normalization_rejects_unsafe_inputs() -> None:
