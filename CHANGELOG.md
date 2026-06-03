@@ -126,7 +126,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Enhanced Statistics:** Added std_sec and bootstrap CI to baseline schema
   - **Performance:** NumPy mode maintains v1.0 speed, pure Python ~50x slower (acceptable for small datasets)
   - **Tests:** 50+ new tests (CLI integration, property-based math validation, benchmarks)
-  - **Migration Guide:** `docs/performance_ledger_v1.7_migration.md`
+  - **Migration Guide:** `docs/performance/performance_ledger_v1.7_migration.md`
   - See: [Performance Ledger v1.7 Verdict](docs/performance/PERFORMANCE_LEDGER_V1.7_VERDICT.md)
 
 - **Backend Registry Integration (ADR-019):** Depth backend orchestration with fallback

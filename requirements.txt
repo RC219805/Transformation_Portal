@@ -5,8 +5,9 @@
 #
 # Installation options:
 #   pip install -r requirements.txt           # Core functionality only (lightweight)
-#   pip install -r requirements/all.txt       # Full install with ML features (heavy)
-#   pip install -e ".[ml]"                    # Editable install with ML extras
+#   pip install -r requirements/all.txt       # Development aggregate (generic locks)
+#   make install-ml-core                      # Supported target-owned ML core install
+#   pip install -e ".[ml]"                    # Editable metadata extras, not pinned locks
 #
 # For CI/CD environments, use requirements-ci.txt
 # For development, use requirements-dev.txt
@@ -14,19 +15,19 @@
 # Core runtime essentials (base package)
 -r requirements/base.txt
 
-# Optional ML dependencies (comment out for lightweight install)
-# Uncomment the line below for full ML capabilities (adds ~10GB of packages)
-# -r requirements/ml.txt
+# Optional ML dependencies are intentionally target-owned.
+# Do not add removed umbrella locks such as requirements/ml.txt here.
+# Use `make install-ml-core` or see requirements/README.md for supported flows.
 
 # Installation notes:
 # 1. Base install (core features): ~500MB
 #    - Image processing, batch operations, basic color grading
 #    - No AI/ML features (depth estimation, upscaling, etc.)
 #
-# 2. Full install with ML (all features): ~10GB
-#    - Includes PyTorch, Diffusers, ControlNet, Real-ESRGAN
-#    - Enables: depth-aware processing, AI upscaling, ControlNet
-#    - To enable: uncomment the ml.txt line above OR use pyproject.toml extras
+# 2. Supported ML core install:
+#    - Uses the checked-in target-owned Apple Silicon ML lock when available
+#    - Enables governed depth/ML workflows on supported runtimes
+#    - To enable: run `make install-ml-core` or use pyproject.toml extras
 #
 # 3. For development: use requirements-dev.txt or requirements/all.txt
 #

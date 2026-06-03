@@ -696,7 +696,7 @@ The following packages are **banned** and must not be added:
 
 | Package      | Reason                                      | Alternative                                      |
 |--------------|---------------------------------------------|--------------------------------------------------|
-| `realesrgan` | Unmaintained (no updates since 2022)        | Use local implementation in `src/spatial_ai/reconstruction/` |
+| `realesrgan` | Unmaintained (no updates since 2022)        | Use local implementation in `src/transformation_portal/spatial_ai/reconstruction/` |
 
 ### Security Minimums
 
