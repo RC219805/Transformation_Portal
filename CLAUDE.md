@@ -22,7 +22,7 @@ make install-fastvlm-runtime    # optional FastVLM advisory captioning subproces
 make check-fastvlm-runtime      # verify FastVLM runtime + selected model roles (TP_FASTVLM_VALIDATE_MODELS=smoke,default by default)
 make check-environment          # pre-flight (Python/Node/Chrome/ports/dep-health)
 ```
-The umbrella `make install-ml` is **disabled** until a trusted umbrella ML lockfile exists. `install-ml-raw` is also fail-closed pending a trusted target-correct lockfile. Use the layered targets (`install-ml-core`, `install-ml-sam2`, `install-ml-coreml`) or `./scripts/bootstrap/install_ml_stack.sh --profile <core-cpu|core-mps|...>`. All current core profiles (`core-cpu`, `core-mps`) are Apple Silicon (`darwin-arm64`) only; `core-cuda` and the Linux/Intel macOS lanes are retired and fail closed.
+The umbrella `make install-ml` is **disabled** until a trusted umbrella ML lockfile exists. `install-ml-raw` is also fail-closed pending a trusted target-correct lockfile. Use the layered Make targets (`install-ml-core`, `install-ml-sam2`, `install-ml-coreml`) for current operator setup. Advanced Apple Silicon bootstrap-profile work can call `./scripts/bootstrap/install_ml_stack.sh --profile <core-cpu|core-mps|...>` directly. All current core profiles (`core-cpu`, `core-mps`) are Apple Silicon (`darwin-arm64`) only; `core-cuda` and the Linux/Intel macOS lanes are retired and fail closed.
 
 ### Tests
 ```bash

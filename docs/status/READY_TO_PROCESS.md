@@ -1,163 +1,97 @@
-# Quick Answer: Are We Ready to Process Images? ✅
+# Image Processing Readiness Status
 
-## YES! The Transformation Portal is ready to process images right now.
+This status note is a quick pointer for local image-processing readiness. The
+authoritative setup and tier details live in
+[Image Processing Readiness Guide](../guides/IMAGE_PROCESSING_READINESS.md).
 
-### Current Status: **MINIMAL TIER READY** ✓
+## Current Status
 
-```
-✓ Python 3.12.3
-✓ Core packages installed (numpy, Pillow, typer)
-✓ 14.9GB disk space available
-✓ Test images created and processed
-✓ All tests passing
-```
+The repository supports a minimal local image-processing tier through the
+repo-managed Python environment. Do not rely on a fixed historical machine
+snapshot here; verify the current checkout before processing client images.
 
-## What You Can Do Right Now
-
-### 1. Check Your Setup
 ```bash
-python scripts/check_image_processing_readiness.py
+make venv
+make install-core
+.venv/bin/python scripts/check_image_processing_readiness.py
+.venv/bin/python scripts/check_image_processing_readiness.py --quick-start
 ```
 
-### 2. Process Images Immediately
+The readiness checker reports installed packages, disk capacity, FFmpeg
+availability, sample-image availability, available operations, and the next
+governed setup command for missing optional tiers.
+
+## Immediate Minimal Processing
+
+Use the minimal processor for basic local adjustments:
+
 ```bash
-# Basic processing with simple adjustments
-python scripts/simple_image_processor.py input_images/test_render.jpg \
-  --brightness 1.1 --contrast 1.05 --saturation 1.1 --verbose
-
-# Resize for web
-python scripts/simple_image_processor.py input_images/test_render.jpg \
-  --width 1280 --height 720 --output web_preview.jpg
-
-# Format conversion
-python scripts/simple_image_processor.py input_images/image.png \
-  --output converted.jpg --quality 95
+.venv/bin/python scripts/simple_image_processor.py input_images/test_render.jpg \
+  --brightness 1.1 \
+  --contrast 1.05 \
+  --saturation 1.1 \
+  --output output/test_render_processed.jpg \
+  --verbose
 ```
 
-### 3. Explore Available Tools
+Resize or convert formats with the same entrypoint:
 
-**New Tools Added:**
-- ✅ `scripts/check_image_processing_readiness.py` - Comprehensive setup checker
-- ✅ `scripts/simple_image_processor.py` - Minimal-dependency processor
-- ✅ `docs/guides/IMAGE_PROCESSING_READINESS.md` - Complete readiness guide
-
-**Example Output:**
-```
-Processing: test_render.jpg
-Loading: input_images/test_render.jpg
-  Original: 1920x1080 RGB
-  Adjusting brightness: 1.10
-  Adjusting contrast: 1.05
-  Adjusting saturation: 1.10
-  Saved: input_images/test_render_processed.jpg
-  Final: 1920x1080
-✓ Successfully processed: input_images/test_render_processed.jpg
-```
-
-## Three Capability Tiers
-
-### 📦 Tier 1: MINIMAL (✓ Current Status)
-**What's included:**
-- Image format conversion
-- Resize and crop
-- Brightness, contrast, saturation
-- Basic metadata reading
-
-**Requirements:** numpy, Pillow ✅ Installed
-
-### 📦 Tier 2: STANDARD
-**What's added:**
-- LUT-based color grading
-- 16-bit TIFF workflows
-- Professional metadata preservation
-- Advanced filters
-
-**To upgrade:**
 ```bash
-pip install scipy tifffile imagecodecs scikit-image
+.venv/bin/python scripts/simple_image_processor.py input_images/test_render.jpg \
+  --width 1280 \
+  --height 720 \
+  --output output/web_preview.jpg
+
+.venv/bin/python scripts/simple_image_processor.py input_images/image.png \
+  --output output/converted.jpg \
+  --quality 95
 ```
 
-### 📦 Tier 3: FULL (AI-Powered)
-**What's added:**
-- Depth Anything V2 depth estimation
-- Stable Diffusion enhancement
-- Real-ESRGAN upscaling
-- ControlNet refinement
-- Material Response processing
+## Capability Tiers
 
-**To upgrade:**
+| Tier | Setup command | Typical workflows |
+|------|---------------|-------------------|
+| Minimal | `make install-core` | Format conversion, resize/crop, brightness, contrast, saturation, basic metadata |
+| Standard | `make install-core` | Minimal tier plus TIFF/LUT-oriented workflows when optional image packages are present |
+| Full ML | `make install-ml-core` plus target runtime installers | Governed ML, depth, segmentation, and rendering workflows |
+
+Optional runtimes are explicit and isolated:
+
 ```bash
-pip install -r requirements.txt
-python scripts/download_depth_models.py
+make install-ml-core
+make install-ml-sam2
+./scripts/setup/install_raw_runtime.sh
+./scripts/setup/install_da3_runtime.sh --profile baseline
+./scripts/setup/install_depth_pro_runtime.sh
+./scripts/setup/install_fastvlm_runtime.sh
+.venv/bin/python scripts/setup/download_depth_models.py
 ```
 
-## Next Steps
+## Maintained Processing Entrypoints
 
-### Option 1: Start Processing Now (Recommended)
-Use the minimal tier tools to process images immediately:
+Use the maintained console scripts after the relevant setup tier is installed:
+
 ```bash
-# Process your images
-python scripts/simple_image_processor.py input_images/my_image.jpg \
-  --brightness 1.1 --contrast 1.08 --output enhanced.jpg
+.venv/bin/luxury-tiff-batch input_images/tiff output/tiff_lux \
+  --preset signature \
+  --profile balanced \
+  --recursive
+
+.venv/bin/lux-depth-v3 \
+  --input-dir ./input_images \
+  --output-dir ./output/lux_depth_v3 \
+  --model-key da3-metric \
+  --quality-tier standard
+
+.venv/bin/lux_render \
+  --input-glob 'input_images/*.png' \
+  --out output/lux_render \
+  --prompt 'luxury interior, natural light'
 ```
 
-### Option 2: Upgrade to Standard Tier
-Add professional features:
-```bash
-pip install scipy tifffile imagecodecs
-```
+## Related Documentation
 
-### Option 3: Upgrade to Full Tier (when disk space permits)
-Get all AI features:
-```bash
-pip install -r requirements.txt
-```
-
-## Documentation
-
-- **Quick Reference:** This file
-- **Complete Guide:** `docs/guides/IMAGE_PROCESSING_READINESS.md`
-- **Main README:** `README.md`
-- **Pipeline Guide:** `docs/pipeline_docs/PIPELINE_OPERATIONS_GUIDE.md`
-
-## Test Results ✅
-
-All tests passing:
-```
-✓ All readiness check tests passed!
-✓ All processor tests passed!
-✓ Image processing verified working
-```
-
-## Examples of What's Possible
-
-**Current Minimal Tier:**
-```python
-from PIL import Image, ImageEnhance
-
-# Load and enhance
-img = Image.open('input_images/test_render.jpg')
-enhancer = ImageEnhance.Brightness(img)
-bright_img = enhancer.enhance(1.1)
-bright_img.save('enhanced.jpg', quality=95)
-```
-
-**With Standard Tier:**
-```bash
-# Professional TIFF batch processing
-python scripts/utilities/luxury_tiff_batch_processor.py \
-  input_images/ output/ --preset golden_hour
-```
-
-**With Full Tier:**
-```bash
-# AI-powered enhancement
-python scripts/pipelines/lux_render_pipeline.py \
-  input_images/render.tiff --ai-enhance --upscale
-```
-
----
-
-**Bottom Line:** Yes, we're ready! The system can process images right now, and you can upgrade to more advanced features as needed.
-
-**Get Started:** `python scripts/check_image_processing_readiness.py`
+- [Image Processing Readiness Guide](../guides/IMAGE_PROCESSING_READINESS.md)
+- [Supported File Formats](../guides/SUPPORTED_FILE_FORMATS.md)
+- [Pipeline Operations Guide](../pipeline_docs/PIPELINE_OPERATIONS_GUIDE.md)
+- [Repository README](../../README.md)

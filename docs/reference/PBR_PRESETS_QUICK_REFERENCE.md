@@ -46,8 +46,8 @@ from pathlib import Path
 output_root = Path("./pbr_output")
 orchestrator = EnhanceOrchestrator(STANDARD_QUALITY, output_root)
 
-for img_path in Path("./input").glob("*.jpg"):
-    result = orchestrator.enhance_image(img_path, input_root=Path("./input"))
+for img_path in Path("./input_images").glob("*.jpg"):
+    result = orchestrator.enhance_image(img_path, input_root=Path("./input_images"))
     print(f"✓ {img_path.name}")
 ```
 

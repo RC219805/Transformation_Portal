@@ -216,7 +216,7 @@ flux = FLUXPipeline(variant="schnell")  # Fast variant for batch
 prompt_builder = ArchitecturalPromptBuilder()
 
 # Process all images
-input_images = glob.glob("input/*.jpg")
+input_images = glob.glob("input_images/*.jpg")
 
 for img_path in input_images:
     print(f"Processing {img_path}...")

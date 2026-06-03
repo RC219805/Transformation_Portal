@@ -26,6 +26,8 @@ def test_root_worker_build_package_is_minimal_deploy_shim() -> None:
         "worker:dry-run": worker_package["scripts"]["dry-run"],
         "worker:deploy": worker_package["scripts"]["deploy"],
     }
+    assert root_package["engines"] == worker_package["engines"]
+    assert root_package["packageManager"] == worker_package["packageManager"]
     assert root_package["devDependencies"] == {
         "wrangler": worker_package["devDependencies"]["wrangler"],
     }
@@ -44,6 +46,7 @@ def test_root_worker_build_lock_matches_package_contract() -> None:
     assert root_lock["requires"] is True
     assert root_lock_package["name"] == root_package["name"]
     assert root_lock_package["devDependencies"] == root_package["devDependencies"]
+    assert root_lock_package["engines"] == root_package["engines"]
     assert "dependencies" not in root_lock_package
     assert root_lock["packages"]["node_modules/wrangler"]["version"] == wrangler_spec
     assert root_lock["packages"]["node_modules/wrangler"]["bin"] == {

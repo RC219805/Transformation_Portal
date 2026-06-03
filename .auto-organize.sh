@@ -504,7 +504,7 @@ main() {
             failed_steps=$((failed_steps + 1))
         fi
 
-        # Step 5: Validate documentation structure
+        # Step 5: Validate script topology
         total_steps=$((total_steps + 1))
         if validate_script_topology; then
             passed_steps=$((passed_steps + 1))

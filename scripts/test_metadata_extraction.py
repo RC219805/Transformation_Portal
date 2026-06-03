@@ -9,24 +9,24 @@ capabilities, including:
 - Batch processing (multiple images)
 
 Requirements:
-- Package must be installed: pip install -e .
+- Package must be installed through the repo-managed setup path (`make install-core`)
 - exiftool must be installed (brew install exiftool / apt-get install libimage-exiftool-perl)
 
 Usage:
     # Single image extraction
-    python scripts/test_metadata_extraction.py extract /path/to/image.tif
+    .venv/bin/python scripts/test_metadata_extraction.py extract /path/to/image.tif
 
     # Batch extraction (entire directory)
-    python scripts/test_metadata_extraction.py extract-batch /path/to/images/ --output ./output_sidecars/
+    .venv/bin/python scripts/test_metadata_extraction.py extract-batch /path/to/images/ --output ./output_sidecars/
 
     # Validate existing sidecar
-    python scripts/test_metadata_extraction.py validate /path/to/provenance.json
+    .venv/bin/python scripts/test_metadata_extraction.py validate /path/to/provenance.json
 
     # Check system readiness
-    python scripts/test_metadata_extraction.py check-system
+    .venv/bin/python scripts/test_metadata_extraction.py check-system
 
     # Summary of extraction results
-    python scripts/test_metadata_extraction.py summarize /path/to/sidecars/
+    .venv/bin/python scripts/test_metadata_extraction.py summarize /path/to/sidecars/
 
 Exit Codes:
     0: Success

@@ -20,14 +20,14 @@ Transformation Portal v2.0.0 has achieved "**conditional go**" status with produ
   - Linting: ✅ Enforced
   - Security scans: ✅ Active
   - Test gates: ✅ Running
-  - Coverage ratcheting: 🟡 Diff coverage being enforced
-  - Branch protection: 📝 Needs configuration
+  - Coverage ratcheting: 🟡 Diff and cold-zone gates active where scoped
+  - Branch protection: ✅ Current required check is `CI Gate` with admin enforcement and conversation resolution enabled
 
 ### Production Readiness Checklist
 
 Before deploying to production, verify:
 
-- [ ] **Tests passing** on clean environment (Python 3.10, 3.11, 3.12)
+- [ ] **Tests passing** on clean environment (Python 3.11 and 3.12; Python 3.10 is retired)
 - [ ] **Coverage gates** met (global minimum + diff coverage)
 - [ ] **Security scans** clean (bandit, gitleaks, pip-audit)
 - [ ] **Build verification** (wheel builds and installs successfully)
@@ -49,11 +49,11 @@ We use a **ratcheting quality approach**:
 
 Our CI pipeline enforces quality gates on every PR:
 
-```
-PR → Lint → Type Check → Security Scan → Tests → Coverage Gate → Build Check → Repo Hygiene → Merge
+```text
+PR → Lint → Type Check → Security Scan → Tests → Coverage Gate → Build Check → Repo Hygiene → CI Gate → Merge
 ```
 
-All checks must pass before merge to `main`. See [CONTRIBUTING.md](CONTRIBUTING.md) for details.
+All required checks must pass before merge to `main`. See [CONTRIBUTING.md](../../CONTRIBUTING.md) and [Branch Protection Setup](../ci/BRANCH_PROTECTION_SETUP.md) for details.
 
 ### Nightly Deep Checks
 
@@ -71,16 +71,16 @@ Check current quality metrics:
 
 ```bash
 # Run core test suite
-pytest -v tests/ -m "not ml and not slow"
+make test-fast
 
 # Check coverage
-pytest --cov=src/transformation_portal --cov-report=term
+make coverage-report
 
 # Security scan
-bandit -r src/ -ll
+make validate-ci
 
 # Build verification
-python -m build && twine check dist/*
+make ci-quick
 ```
 
 ---
@@ -92,16 +92,16 @@ If upgrading from earlier versions:
 1. **Contracts**: API payloads are now versioned. Update client code to use schema-aligned requests.
 2. **Presets**: Use `--list-stable` to discover production-ready presets. Experimental presets are clearly marked.
 3. **Dependencies**: Check `requirements/constraints.txt` for banned dependencies (e.g., `realesrgan`).
-4. **Environment**: Validate on Python 3.10+ (3.11 recommended for ML workloads).
+4. **Environment**: Validate on Python 3.11+; the supported CI matrix covers Python 3.11 and 3.12.
 
 ---
 
 ## Support & Escalation
 
 - **Issues**: Report bugs via GitHub Issues
-- **Security**: See [SECURITY.md](SECURITY.md) for vulnerability reporting
-- **Contribution**: See [CONTRIBUTING.md](CONTRIBUTING.md) for development guidelines
-- **Architecture**: See `docs/architecture/` for design decisions (ADRs)
+- **Security**: See [SECURITY.md](../../SECURITY.md) for vulnerability reporting
+- **Contribution**: See [CONTRIBUTING.md](../../CONTRIBUTING.md) for development guidelines
+- **Architecture**: See [Architecture docs](../architecture/) for design decisions (ADRs)
 
 ---
 

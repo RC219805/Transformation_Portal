@@ -7,18 +7,18 @@ module imports. The real implementation now lives in
 ``src/transformation_portal/pipelines/lux_render_pipeline.py``.
 
 For module imports, all functions are re-exported from the new location.
-For CLI usage, run: python lux_render_pipeline.py [options]
+For CLI usage, run:
+    .venv/bin/python scripts/pipelines/lux_render_pipeline.py [options]
 
-NOTE: Requires package installation (pip install -e .) or running from
-repository root with src/ in Python path.
+The wrapper bootstraps the repo-local ``src/`` package root for raw checkouts.
 """
 import sys
 from pathlib import Path
 
 # Add src/ to path if package not installed (for development/testing)
-_repo_root = Path(__file__).parent
-if (_repo_root / "src").exists():
-    _src_path = str(_repo_root / "src")
+_src_root = Path(__file__).resolve().parents[2] / "src"
+if _src_root.exists():
+    _src_path = str(_src_root)
     if _src_path not in sys.path:
         sys.path.insert(0, _src_path)
 

@@ -237,7 +237,7 @@ def print_tier_status(capabilities: Dict) -> None:
         ml_count = sum(capabilities["ml_packages"].values())
         print(f"   → {ml_count}/{len(capabilities['ml_packages'])} supported ML packages installed")
         print("   → Install: make install-ml-core")
-        print("   → Apple Silicon bootstrap: ./scripts/bootstrap/install_ml_stack.sh --profile core-cpu")
+        print("   → Advanced Apple Silicon bootstrap: ./scripts/bootstrap/install_ml_stack.sh --profile core-cpu")
         print("   → Note: Requires ~5GB disk space")
 
 
@@ -347,7 +347,7 @@ def print_quick_start_guide(capabilities: Dict, images: Dict) -> None:
         print("   ")
         print("   Upgrade to Full tier for AI-powered processing:")
         print("   make install-ml-core")
-        print("   # Apple Silicon CPU fallback: ./scripts/bootstrap/install_ml_stack.sh --profile core-cpu")
+        print("   # Advanced Apple Silicon bootstrap: ./scripts/bootstrap/install_ml_stack.sh --profile core-cpu")
 
     elif capabilities["full_ready"]:
         print("   With current setup (Full), you can use all pipelines:")
@@ -403,7 +403,7 @@ def print_recommendations(disk: Dict, capabilities: Dict) -> None:
             recommendations.append(
                 (
                     "→",
-                    "Apple Silicon ML bootstrap: ./scripts/bootstrap/install_ml_stack.sh --profile core-cpu",
+                    "Advanced Apple Silicon ML bootstrap: ./scripts/bootstrap/install_ml_stack.sh --profile core-cpu",
                     Colors.OKCYAN,
                 )
             )

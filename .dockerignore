@@ -7,6 +7,7 @@
 .mypy_cache/
 .ruff_cache/
 .hypothesis/
+.pyre/
 .coverage
 .coverage.*
 coverage.xml
@@ -14,6 +15,7 @@ coverage.json
 htmlcov/
 requirements/.pip-tools-cache/
 requirements/.hash-pilot/
+.rag_cache/
 
 # Local secrets / credentials
 .env
@@ -31,6 +33,7 @@ web/secure-landing/node_modules/
 web/secure-landing/.next/
 web/secure-landing/.next-*/
 web/secure-landing/.metafiles/
+web/secure-landing/tmp/
 web/secure-landing/test-results/
 web/secure-landing/playwright-report/
 web/secure-landing/blob-report/
@@ -38,6 +41,10 @@ web/secure-landing/.playwright/
 cloudflare/transformationportal-worker/node_modules/
 cloudflare/transformationportal-worker/.wrangler/
 
+build/
+dist/
+downloads/
+docs/api/_build/
 output/
 output_*/
 outputs/
@@ -45,17 +52,30 @@ processed_images/
 processed_output/
 test_output/
 test_artifacts/
+extracted_context/
 logs/
 artifacts/
 trial_runs/
 archive_reports/
 local_artifacts/
+depth_maps_apex/
+artifact_store/
+archive/experiments/
+archive/deprecated/
+archive/legacy/
 
 input_images/
+data/sample_images/
+Architectural_Plans/
 checkpoints/
 models/
 weights/
 pretrained/
+external/
+.cas/
+.local_backup/
+.backup_local/
+.branch_cleanup_backup/
 
 *.log
 *.tmp
@@ -78,3 +98,7 @@ __pycache__/
 *.mlpackage
 *.tif
 *.tiff
+*.xlsx
+*.xls
+tmp_tensor.npy
+uv.lock

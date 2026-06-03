@@ -106,7 +106,7 @@ class TestReadinessCheck:
 
         output = capsys.readouterr().out
         assert "make install-ml-core" in output
-        assert "Apple Silicon" in output
+        assert "Advanced Apple Silicon" in output
         assert "./scripts/bootstrap/install_ml_stack.sh --profile core-cpu" in output
         assert ".venv/bin/python scripts/setup/download_depth_models.py" in output
         assert "Linux/CPU" not in output

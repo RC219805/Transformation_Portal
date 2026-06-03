@@ -203,8 +203,8 @@ output_root = Path("./output")
 orchestrator = EnhanceOrchestrator(config, output_root)
 
 # Process image
-image_input = ImageInput(path=Path("./input/luxury_interior.jpg"))
-result = orchestrator.enhance_image(image_input, input_root=Path("./input"))
+image_input = ImageInput(path=Path("./input_images/luxury_interior.jpg"))
+result = orchestrator.enhance_image(image_input, input_root=Path("./input_images"))
 
 # Expected outputs in output_root:
 # - luxury_interior_depth.png (16-bit depth visualization)

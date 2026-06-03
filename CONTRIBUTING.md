@@ -166,7 +166,7 @@ Tests must be **deterministic** and **reliable**. Flaky tests (intermittent fail
 - Tests with >3% flake rate are quarantined
 
 **If you encounter a flaky test:**
-1. Check ledger: `python scripts/analyze_flakes.py`
+1. Check ledger: `.venv/bin/python scripts/analyze_flakes.py`
 2. Reproduce locally (run 20+ times)
 3. Fix root cause (see ADR-033 for common patterns)
 4. **Do not** just re-run CI hoping it passes
@@ -278,20 +278,18 @@ The following checks run after merge and do not block PRs:
 
 ### Quick Check (before committing)
 ```bash
-# Lint and format
-black --check --line-length=127 src/ tests/
-isort --check-only --profile=black --line-length=127 src/ tests/
-flake8 src/ tests/ --max-line-length=127
+# CI-pinned lint parity (Black, isort, flake8, and pylint)
+make lint-parity
 
 # Core tests
-pytest -v tests/ -m "(unit or security or regression or golden or integration) and not slow" --maxfail=3
+make test-fast
 ```
 
 ### Full Pre-PR Check
 ```bash
-# Format code
-black --line-length=127 src/ tests/
-isort --profile=black --line-length=127 src/ tests/
+# Format code with the CI-pinned lint toolchain
+./scripts/setup/run_lint_tool.sh black src/ tests/
+./scripts/setup/run_lint_tool.sh isort src/ tests/
 
 # Run security scans
 ./scripts/security_scan.sh  # Uses CI-aligned flags: -ll -ii
@@ -306,8 +304,8 @@ pytest -v tests/ -m "not slow" \
 coverage report --fail-under=25
 
 # Build package
-python -m build
-twine check dist/*
+.venv/bin/python -m build
+.venv/bin/twine check dist/*
 ```
 
 ## CI/CD Control Plane
@@ -361,12 +359,13 @@ The `main` branch is protected to ensure code quality and stability. All changes
    - `CI Quality Firewall (post-CI) / Flake Rate Analysis`
    - `Nightly Deep Checks / Nightly Summary`
 
-3. **Resolve all review conversations** (recommended)
+3. **Resolve all review conversations** (required)
+   - Branch protection requires conversation resolution before merge
    - Address all reviewer comments before merge
 
-4. **Maintain linear history**
-   - Use "Squash and merge" or "Rebase and merge"
-   - Merge commits are allowed but squash is preferred
+4. **Maintain reviewable history**
+   - Use exact-head "Squash and merge" by default
+   - Merge commits are allowed by repository settings, but squash remains the preferred project convention
 
 5. **Keep branch up to date**
    - Strict status checks enabled: must be up-to-date with main before merge
@@ -375,7 +374,7 @@ The `main` branch is protected to ensure code quality and stability. All changes
 
 ---
 
-### Current Branch Protection Rules (Verified 2026-02-10)
+### Current Branch Protection Rules (Verified 2026-06-03)
 
 ### Required Status Checks (✅ ENFORCED)
 - **CI Gate** (GitHub App ID: 15368) must pass
@@ -388,15 +387,15 @@ The `main` branch is protected to ensure code quality and stability. All changes
 - **Code owner reviews**: Not required
 - **Last push approval**: Not required
 
-### History and Force Push Protection (✅ ENFORCED)
+### History and Force Push Protection
 - **Force pushes**: ❌ Disabled (history is immutable)
 - **Branch deletions**: ❌ Disabled (main cannot be deleted)
-- **Linear history**: ✅ Required (merge commits or squash merges only)
+- **Linear history**: Not required by branch protection; use exact-head squash by project convention
 
-### Additional Protections (NOT ENABLED)
-- **Enforce for admins**: ❌ Not enabled (admins can bypass)
+### Additional Protections
+- **Enforce for admins**: ✅ Enabled
 - **Require signed commits**: ❌ Not enabled
-- **Require conversation resolution**: ❌ Not enabled
+- **Require conversation resolution**: ✅ Enabled
 - **Lock branch**: ❌ Not enabled
 
 ### Recommended Improvements
@@ -408,15 +407,12 @@ Based on governance best practices, consider enabling:
      -f required_approving_review_count=1
    ```
 
-2. **Enforce for admins**: Prevent accidental bypasses
-   ```bash
-   gh api -X POST repos/RC219805/Transformation_Portal/branches/main/protection/enforce_admins
-   ```
-
-3. **Require signed commits**: For supply chain security (optional)
+2. **Require signed commits**: For supply chain security (optional)
    ```bash
    gh api -X POST repos/RC219805/Transformation_Portal/branches/main/protection/required_signatures
    ```
+
+3. **Require linear history**: Optional only if merge-commit workflows are intentionally retired
 
 ### Current Configuration Summary
 ```json
@@ -429,10 +425,11 @@ Based on governance best practices, consider enabling:
     "required_approving_review_count": 0,
     "dismiss_stale_reviews": true
   },
-  "enforce_admins": false,
-  "required_linear_history": true,
+  "enforce_admins": true,
+  "required_linear_history": false,
   "allow_force_pushes": false,
   "allow_deletions": false,
+  "required_conversation_resolution": true,
   "required_signatures": false
 }
 ```
@@ -517,11 +514,11 @@ We use a **ratcheting coverage strategy**:
 ### Lint Failures
 ```bash
 # Auto-fix most issues
-black --line-length=127 src/ tests/
-isort --profile=black --line-length=127 src/ tests/
+./scripts/setup/run_lint_tool.sh black src/ tests/
+./scripts/setup/run_lint_tool.sh isort src/ tests/
 
 # Check remaining issues
-flake8 src/ tests/ --max-line-length=127
+make lint-parity
 ```
 
 ### Test Failures
@@ -553,10 +550,10 @@ diff-cover coverage.xml --compare-branch=origin/main --fail-under=85
 rm -rf dist/ build/ *.egg-info
 
 # Build fresh
-python -m build
+.venv/bin/python -m build
 
 # Test wheel
-pip install dist/*.whl --force-reinstall
+.venv/bin/python -m pip install dist/*.whl --force-reinstall
 ```
 
 ## Dependency Management
@@ -571,7 +568,7 @@ Transformation Portal uses `pip-compile` for dependency management. All dependen
 |--------------------|-----------------|---------------------------------------------------|------------------------------------------|
 | **Range Pin**      | `>=X.Y,<Z`      | Production dependencies (`base.in`, ML layer `.in` files) | `numpy>=1.24,<2.5.0`                     |
 | **Strict Pin**     | `==X.Y.Z`       | Deterministic builds, known incompatibilities     | `rawpy==0.26.0  # RAW demosaic`          |
-| **Lower-bound**    | `>=X.Y`         | Dev tools with stable CLI (dev.in, ci.in only)    | `black>=24.8  # Formatter`               |
+| **Lower-bound**    | `>=X.Y`         | Dev tools with stable CLI (dev.in, ci.in only)    | `mypy>=1.10  # Type checker`             |
 | **Unpinned**       | (none)          | **NEVER ALLOWED** (causes non-deterministic builds) | ❌                                       |
 
 **Decision tree:**
@@ -708,7 +705,7 @@ Certain packages require minimum versions due to CVEs:
 
 | Package                 | Minimum Version | Reason                              |
 |-------------------------|-----------------|-------------------------------------|
-| `cryptography`          | >=46.0.5        | CVE-2026-26007 / GHSA-r6ph-v2qm-q3c2 |
+| `cryptography`          | >=47.0.0        | Governed lock baseline includes the CVE-2026-26007 / GHSA-r6ph-v2qm-q3c2 fix |
 | `sentence-transformers` | >=3.1.0         | CVE-73169 (arbitrary code execution) |
 | `Pillow`                | >=10.3.0        | CVE-2024-28219 and multiple 9.x CVEs |
 | `starlette`             | >=1.0.1         | CVE-2026-48710 / PYSEC-2026-161      |

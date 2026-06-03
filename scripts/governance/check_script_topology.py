@@ -37,6 +37,10 @@ COMPATIBILITY_WRAPPERS = {
         "src/transformation_portal/perceptual/synthetic_viewer.py",
         "from transformation_portal.perceptual.synthetic_viewer import",
     ),
+    "scripts/pipelines/lux_render_pipeline.py": (
+        "src/transformation_portal/pipelines/lux_render_pipeline.py",
+        "from transformation_portal.pipelines.lux_render_pipeline import",
+    ),
     "scripts/visualize_material_assignments.py": (
         "scripts/utilities/visualize_material_assignments.py",
         "from scripts.utilities.visualize_material_assignments import",
@@ -94,6 +98,15 @@ def _git_ls_files() -> list[str]:
 
 def _read_repo_text(path: str) -> str:
     return (REPO_ROOT / path).read_text(encoding="utf-8")
+
+
+def _repo_root_parent_expression(wrapper_path: str) -> str:
+    wrapper_parent_depth = len(Path(wrapper_path).parent.parts)
+    return f"Path(__file__).resolve().parents[{wrapper_parent_depth}]"
+
+
+def _src_root_bootstrap_expression(wrapper_path: str) -> str:
+    return f'{_repo_root_parent_expression(wrapper_path)} / "src"'
 
 
 def validate_script_topology(
@@ -178,23 +191,32 @@ def validate_script_topology(
                     suggestion="call the canonical main through raise SystemExit(...)",
                 )
             )
-        if wrapper in SCRIPT_PACKAGE_COMPATIBILITY_WRAPPERS and "Path(__file__).resolve().parents[1]" not in wrapper_text:
+        if (
+            wrapper in SCRIPT_PACKAGE_COMPATIBILITY_WRAPPERS
+            and _repo_root_parent_expression(wrapper) not in wrapper_text
+        ):
             violations.append(
                 TopologyViolation(
                     path=wrapper,
                     reason="script-package compatibility wrapper does not bootstrap repository root",
-                    suggestion="insert the repository root into sys.path before importing scripts.*",
+                    suggestion=(
+                        f"insert the repository root ({_repo_root_parent_expression(wrapper)}) into sys.path "
+                        "before importing scripts.*"
+                    ),
                 )
             )
         if (
             wrapper in SOURCE_PACKAGE_COMPATIBILITY_WRAPPERS
-            and 'Path(__file__).resolve().parents[1] / "src"' not in wrapper_text
+            and _src_root_bootstrap_expression(wrapper) not in wrapper_text
         ):
             violations.append(
                 TopologyViolation(
                     path=wrapper,
                     reason="source-package compatibility wrapper does not bootstrap src package root",
-                    suggestion="insert the src root into sys.path before importing transformation_portal.*",
+                    suggestion=(
+                        f"insert the src root ({_src_root_bootstrap_expression(wrapper)}) into sys.path "
+                        "before importing transformation_portal.*"
+                    ),
                 )
             )
 

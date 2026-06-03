@@ -48,6 +48,8 @@ actionable; use the linked docs and `Makefile` for exhaustive inventories.
 - Branch hygiene closeout: confirm PR state, local `main...origin/main`, no
   stale local branch for the PR, and no stale remote-tracking branch after
   prune.
+- Hook setup is `make install-hooks`; it installs both pre-commit and pre-push
+  hooks through the repo-managed `.venv` pre-commit binary.
 
 ## Authority And Navigation
 
@@ -108,12 +110,19 @@ actionable; use the linked docs and `Makefile` for exhaustive inventories.
   `make test-paid-pilot-services-contract`. Start only the services required by
   the lane and report missing services as environment blockers.
 - Governance/docs gates:
+  `make validate-ci`,
   `make check-stale-docs`, `make check-doc-heading-links`,
   `make check-todo-governance`, `make check-ci-sync`,
   `make check-requirements-lock-contract`, `make check-dependency-pinning`,
   `make check-json-serialization`, `make check-yaml-governance`,
   `make check-python-headers`, and
-  `python3 scripts/governance/check_docs_structure.py --all`.
+  `python3 scripts/governance/check_docs_structure.py --all`. For direct
+  source-contract checks use
+  `./scripts/setup/run_repo_python.sh scripts/governance/check_script_topology.py`
+  and
+  `./scripts/setup/run_repo_python.sh scripts/validation/check_gitleaks_workflow_contract.py`.
+- Root metadata contract tests:
+  `./.venv/bin/pytest tests/validation/test_cloudflare_worker_root_shim_contract.py tests/validation/test_git_blame_ignore_revs_contract.py tests/validation/test_gitattributes_contract.py tests/validation/test_pylint_config_contract.py -v`.
 - Coverage/cold-zone:
   `make coverage-report`, `make coverage-diff`, `make coverage-package`,
   `python3 scripts/ci/check_per_package_coverage.py coverage.xml`,
@@ -158,8 +167,8 @@ actionable; use the linked docs and `Makefile` for exhaustive inventories.
 - `make install-ml` and `make install-ml-raw` are intentionally disabled until
   trusted umbrella/raw lock contracts exist.
 - Supported ML installs:
-  `make install-ml-core`, `make install-ml-sam2`, and
-  `make install-ml-coreml` on macOS when the trusted lock exists.
+  `make install-ml-core`, `make install-ml-sam2` on native macOS Apple
+  Silicon, and `make install-ml-coreml` on macOS when the trusted lock exists.
 - Target-owned lock lanes:
   `make compile-ml-darwin-arm64`, `make update-ml-darwin-arm64`, and
   `make check-ml-darwin-arm64`. Linux x86_64 and Darwin x86_64 ML lock lanes
@@ -188,6 +197,21 @@ actionable; use the linked docs and `Makefile` for exhaustive inventories.
   `./scripts/validate_dependency_constraints.sh`,
   `./scripts/setup/ensure_node_version.sh`, and
   `./scripts/setup/run_repo_python.sh scripts/validation/check_unsafe_torch_load.py --fix-suggestions`.
+- Script topology:
+  canonical implementations live under governed `scripts/setup`,
+  `scripts/pipelines`, `scripts/utilities`, or `src/transformation_portal`
+  paths. Public compatibility wrappers in `scripts/` must delegate to the
+  canonical module, bootstrap the right import root, and propagate exit status.
+  Validate with
+  `./scripts/setup/run_repo_python.sh scripts/governance/check_script_topology.py`.
+- Cloudflare Worker root shim:
+  root `package.json` is only a Workers Builds deploy shim. Use
+  `npm run worker:dry-run` or `npm run worker:deploy`; keep versions and
+  scripts aligned with `cloudflare/transformationportal-worker`.
+- Presence Security CLI:
+  `.venv/bin/presence-security params`, `anchor`, and `watermark` are the
+  current helpers for sessionized Presence Compiler parameters, SHA3 anchor
+  payloads, and manifest/session watermarks.
 - Frontdoor source bundle:
   from `web/secure-landing`, use `npm run build:portal`,
   `npm run check:utility-ownership`, and `npm run check:css-layer-parity`.

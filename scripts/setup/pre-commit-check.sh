@@ -28,26 +28,16 @@ ALLOWED_ROOT_FILES=(
     "package.json"
     "package-lock.json"
     "pyproject.toml"
-    "setup.py"
-    "setup.cfg"
     "requirements.txt"
     "requirements-dev.txt"
     "requirements-ci.txt"
-    "requirements-test.txt"
     "requirements-lint.txt"
-    "Pipfile"
-    "Pipfile.lock"
-    "poetry.lock"
-    "pytest.ini"
-    "tox.ini"
-    ".coveragerc"
     ".pylintrc"
-    ".flake8"
     "mypy.ini"
     "Dockerfile"
     "docker-compose.yml"
-    "docker-compose.yaml"
     ".gitignore"
+    ".gitleaks.toml"
     ".dockerignore"
     ".gitattributes"
     ".gitmodules"
@@ -57,18 +47,11 @@ ALLOWED_ROOT_FILES=(
     ".auto-organize.sh"
     ".architect_directive_status.yml"
     ".env.example"
-    "PKG-INFO"
-    "MANIFEST.in"
-    "__init__.py"
     "app.py"
     "portal.html"
 )
 
-ALLOWED_ROOT_PATTERNS=(
-    '^requirements.*\.txt$'
-    '^\.git.*$'
-    '^\..*rc$'
-)
+ALLOWED_ROOT_PATTERNS=()
 
 ALLOWED_ROOT_DIRECTORIES=(
     ".github"

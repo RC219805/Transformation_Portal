@@ -239,13 +239,13 @@ None. Implementation follows ADR-019 specification exactly.
 
 ### Default (DA3)
 ```bash
-lux-depth-v3 --input-dir ./input --output-dir ./output
+lux-depth-v3 --input-dir ./input_images --output-dir ./output
 ```
 
 ### Explicit DA3
 ```bash
 lux-depth-v3 \
-  --input-dir ./input \
+  --input-dir ./input_images \
   --output-dir ./output \
   --depth-backend da3
 ```
@@ -253,7 +253,7 @@ lux-depth-v3 \
 ### Depth Pro (Research)
 ```bash
 lux-depth-v3 \
-  --input-dir ./input \
+  --input-dir ./input_images \
   --output-dir ./output \
   --depth-backend depth_pro \
   --accept-apple-depth-pro-research-license true \
@@ -277,7 +277,7 @@ config = EnhanceConfig(
 )
 
 orchestrator = EnhanceOrchestrator(config, Path("./output"))
-results = orchestrator.enhance_batch(Path("./input"))
+results = orchestrator.enhance_batch(Path("./input_images"))
 ```
 
 ---

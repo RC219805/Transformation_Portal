@@ -593,7 +593,7 @@ validator = QualityValidator()
 lpips_metric = LPIPSMetric()
 
 # Process batch
-input_images = glob.glob("input/*.jpg")
+input_images = glob.glob("input_images/*.jpg")
 results = []
 
 for img_path in input_images:

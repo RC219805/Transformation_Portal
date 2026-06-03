@@ -111,7 +111,7 @@ pydantic>=2.0,<3           # Major version boundary
 **Examples:**
 ```
 mypy>=1.10                 # Type checker: CLI stable, benefits from latest rules
-black>=24.8                # Formatter: deterministic output, auto-updates OK
+pylint>=3.0                # Linter: CLI stable, benefits from latest diagnostics
 flake8>=7.0                # Linter: new rules are improvements
 ```
 
@@ -197,7 +197,7 @@ Exceptions to pinning rules require explicit approval via one of:
 | Package       | File    | Constraint      | Rationale                                  |
 |---------------|---------|-----------------|------------------------------------------- |
 | `mypy`        | dev.in  | `>=1.10`        | Type checker: benefits from latest rules   |
-| `black`       | dev.in  | `>=24.8`        | Formatter: deterministic, auto-updates OK  |
+| `black`       | dev.in  | `>=26.3.1`      | Formatter: deterministic, auto-updates OK  |
 | `flake8`      | dev.in  | `>=7.0`         | Linter: new rules are improvements         |
 | `pylint`      | dev.in  | `>=3.0`         | Linter: CLI stable across minor versions   |
 | `PyYAML`      | ml.in   | `>=6.0`         | Config parser: strong backward compat      |

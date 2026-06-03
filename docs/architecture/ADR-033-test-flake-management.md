@@ -277,7 +277,7 @@ def test_foo(value):
 ### For Developers
 
 **When you see a flaky test:**
-1. Check flake ledger: `python scripts/analyze_flakes.py`
+1. Check flake ledger: `.venv/bin/python scripts/analyze_flakes.py`
 2. Reproduce locally: Run test 20+ times
 3. Identify root cause (use debugger, add logging)
 4. Fix or quarantine (with issue tracking)

@@ -46,7 +46,7 @@ Most scripts can be run directly:
 ./scripts/setup/install_da3_runtime.sh
 
 # Python scripts
-python scripts/setup/install_models.py --dry-run
+.venv/bin/python scripts/setup/install_models.py --dry-run
 ```
 
 ## Contributing

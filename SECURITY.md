@@ -179,13 +179,13 @@ Security features may impact performance:
 ### Deployment
 
 ```bash
-# Run with minimal privileges (recommended)
-sudo -u nobody python -m transformation_portal.cli
+# Run with minimal privileges from the repo-managed environment (recommended)
+sudo -u tp .venv/bin/python -m transformation_portal.cli serve --host 127.0.0.1 --port 8000
 
 # Or use systemd service with User directive:
 # [Service]
-# User=nobody
-# Group=nogroup
+# User=tp
+# Group=tp
 
 # Use read-only filesystem where possible
 docker run --read-only --tmpfs /tmp transformation_portal:latest
@@ -234,13 +234,13 @@ make quality-check
 make test-full
 
 # Install governed security tools from requirements/security.txt
-pip install -r requirements/security.txt
+.venv/bin/python -m pip install -r requirements/security.txt
 
 # Run static security analysis
-bandit -r src/ -ll
+.venv/bin/bandit -r src/ -ll
 
 # Run dependency vulnerability scan
-pip-audit
+.venv/bin/pip-audit
 ```
 
 ## Incident Response
@@ -307,20 +307,20 @@ Security scanning tools are governed in CI via `requirements/security.txt`:
 
 ```bash
 # Install governed security tools (bandit, pip-audit)
-pip install -r requirements/security.txt
+.venv/bin/python -m pip install -r requirements/security.txt
 
 # Run dependency vulnerability scan
-pip-audit
+.venv/bin/pip-audit
 
 # Run static security analysis
-bandit -r src/
+.venv/bin/bandit -r src/
 
-# Additional optional tools (not governed)
-pip install semgrep
-semgrep --config=auto
+# Additional optional tools (install into an isolated security tooling env)
+# python -m pip install semgrep
+# semgrep --config=auto
 
 # Existing project tools
-pylint --enable=security
+make lint-parity
 
 # Container scanning (if using Docker)
 # Install trivy: https://github.com/aquasecurity/trivy

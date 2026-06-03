@@ -69,7 +69,8 @@ def test_mypy_config_remains_root_linting_config() -> None:
         assert required_option in mypy_config_text
 
     organization_doc = (PROJECT_ROOT / "docs" / "governance" / "REPO_ORGANIZATION.md").read_text(encoding="utf-8")
-    assert "- **Linting configuration**: `.pylintrc`, `.flake8`, `mypy.ini`" in organization_doc
+    assert "- **Testing and linting configuration**: `pyproject.toml`, `.pylintrc`, `mypy.ini`" in organization_doc
+    assert ".flake8" not in organization_doc
 
 
 def test_mypy_policy_contract_passes_repo_workflows() -> None:

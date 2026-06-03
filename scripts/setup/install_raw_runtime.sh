@@ -132,5 +132,5 @@ cat <<EOF
 [INFO] RAW runtime ready.
 [INFO] Stable executable: ./.venv-raw/bin/python
 [INFO] Example:
-lux-depth-v3 --input-dir ./input --output-dir ./output --raw-python ./.venv-raw/bin/python
+lux-depth-v3 --input-dir ./input_images --output-dir ./output --raw-python ./.venv-raw/bin/python
 EOF

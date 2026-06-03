@@ -27,6 +27,8 @@ COMPATIBILITY_WRAPPERS = CHECKER.COMPATIBILITY_WRAPPERS
 CLI_COMPATIBILITY_WRAPPERS = CHECKER.CLI_COMPATIBILITY_WRAPPERS
 SCRIPT_PACKAGE_COMPATIBILITY_WRAPPERS = CHECKER.SCRIPT_PACKAGE_COMPATIBILITY_WRAPPERS
 SOURCE_PACKAGE_COMPATIBILITY_WRAPPERS = CHECKER.SOURCE_PACKAGE_COMPATIBILITY_WRAPPERS
+src_root_bootstrap_expression = CHECKER._src_root_bootstrap_expression
+repo_root_parent_expression = CHECKER._repo_root_parent_expression
 validate_script_topology = CHECKER.validate_script_topology
 
 
@@ -44,7 +46,7 @@ def _valid_wrapper_text(wrapper: str, marker: str) -> str:
             [
                 "import sys",
                 "from pathlib import Path",
-                "REPO_ROOT = Path(__file__).resolve().parents[1]",
+                f"REPO_ROOT = {repo_root_parent_expression(wrapper)}",
                 "sys.path.insert(0, str(REPO_ROOT))",
             ]
         )
@@ -53,7 +55,7 @@ def _valid_wrapper_text(wrapper: str, marker: str) -> str:
             [
                 "import sys",
                 "from pathlib import Path",
-                'SRC_ROOT = Path(__file__).resolve().parents[1] / "src"',
+                f"SRC_ROOT = {src_root_bootstrap_expression(wrapper)}",
                 "sys.path.insert(0, str(SRC_ROOT))",
             ]
         )
@@ -182,6 +184,31 @@ def test_script_topology_requires_source_package_wrappers_to_bootstrap_src_root(
     assert "does not bootstrap src package root" in violations[0].reason
 
 
+def test_script_topology_requires_nested_source_package_wrappers_to_bootstrap_repo_src_root() -> None:
+    violations = validate_script_topology(
+        {
+            "scripts/pipelines/lux_render_pipeline.py",
+            "src/transformation_portal/pipelines/lux_render_pipeline.py",
+        },
+        read_text=_reader(
+            {
+                "scripts/pipelines/lux_render_pipeline.py": (
+                    "from pathlib import Path\n"
+                    'SRC_ROOT = Path(__file__).resolve().parents[1] / "src"\n'
+                    "from transformation_portal.pipelines.lux_render_pipeline import main\n"
+                    "if __name__ == '__main__':\n"
+                    "    raise SystemExit(main())\n"
+                )
+            }
+        ),
+    )
+
+    assert len(violations) == 1
+    assert violations[0].path == "scripts/pipelines/lux_render_pipeline.py"
+    assert "does not bootstrap src package root" in violations[0].reason
+    assert 'parents[2] / "src"' in violations[0].suggestion
+
+
 def test_repository_compatibility_wrappers_reference_canonical_modules() -> None:
     for wrapper, (_canonical, marker) in COMPATIBILITY_WRAPPERS.items():
         wrapper_path = REPO_ROOT / wrapper
@@ -198,13 +225,15 @@ def test_repository_cli_wrappers_propagate_exit_status() -> None:
 def test_repository_script_package_wrappers_bootstrap_repo_root() -> None:
     for wrapper in SCRIPT_PACKAGE_COMPATIBILITY_WRAPPERS:
         wrapper_text = (REPO_ROOT / wrapper).read_text(encoding="utf-8")
-        assert "Path(__file__).resolve().parents[1]" in wrapper_text, f"Wrapper must bootstrap repo root: {wrapper}"
+        expected = repo_root_parent_expression(wrapper)
+        assert expected in wrapper_text, f"Wrapper must bootstrap repo root via {expected}: {wrapper}"
 
 
 def test_repository_source_package_wrappers_bootstrap_src_root() -> None:
     for wrapper in SOURCE_PACKAGE_COMPATIBILITY_WRAPPERS:
         wrapper_text = (REPO_ROOT / wrapper).read_text(encoding="utf-8")
-        assert 'Path(__file__).resolve().parents[1] / "src"' in wrapper_text, f"Wrapper must bootstrap src root: {wrapper}"
+        expected = src_root_bootstrap_expression(wrapper)
+        assert expected in wrapper_text, f"Wrapper must bootstrap src root via {expected}: {wrapper}"
 
 
 def test_synthetic_viewer_wrapper_imports_from_raw_checkout() -> None:

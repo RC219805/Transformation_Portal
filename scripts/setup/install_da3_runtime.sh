@@ -220,7 +220,7 @@ BASE_DEPS=(
     "torch==2.11.0"
     "torchvision==0.26.0"
     "transformers==5.5.0"
-    "cryptography==46.0.6"
+    "cryptography==47.0.0"
     "moviepy==1.0.3"
     "einops==0.8.2"
     "huggingface_hub==1.9.0"
@@ -293,5 +293,5 @@ cat <<EOF
 [INFO] DA3 runtime ready.
 [INFO] Stable executable: ./.runtime/Depth-Anything-3/.venv-da3/bin/python
 [INFO] Example:
-lux-depth-v3 --input-dir ./input --output-dir ./output --da3-python ./.runtime/Depth-Anything-3/.venv-da3/bin/python
+lux-depth-v3 --input-dir ./input_images --output-dir ./output --da3-python ./.runtime/Depth-Anything-3/.venv-da3/bin/python
 EOF

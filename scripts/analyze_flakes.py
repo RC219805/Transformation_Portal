@@ -3,7 +3,7 @@
 Analyze flake ledger and generate reports.
 
 Usage:
-    python scripts/analyze_flakes.py [--format=text|json|markdown]
+    .venv/bin/python scripts/analyze_flakes.py [--format=text|json|markdown]
 """
 
 from __future__ import annotations

@@ -20,6 +20,7 @@ DA3_RUNTIME_INSTALLER_PATH = PROJECT_ROOT / "scripts" / "setup" / "install_da3_r
 RAW_RUNTIME_INSTALLER_PATH = PROJECT_ROOT / "scripts" / "setup" / "install_raw_runtime.sh"
 VALIDATION_SUITE_PATH = PROJECT_ROOT / "scripts" / "validation" / "run_full_validation_suite.sh"
 ML_STACK_INSTALLER_PATH = PROJECT_ROOT / "scripts" / "bootstrap" / "install_ml_stack.sh"
+SECURITY_SCAN_PATH = PROJECT_ROOT / "scripts" / "security_scan.sh"
 
 
 def _write_executable(path: Path, content: str) -> Path:
@@ -237,6 +238,14 @@ def test_make_venv_accepts_supported_windows_repo_venv_layout(tmp_path: Path) ->
 
     assert result.returncode == 0, result.stdout + result.stderr
     assert ".venv already present" in result.stdout
+
+
+def test_security_scan_uses_repo_python_resolver() -> None:
+    script = SECURITY_SCAN_PATH.read_text(encoding="utf-8")
+
+    assert 'PYTHON_BIN="$("$SCRIPT_DIR/setup/resolve_python_311.sh")"' in script
+    assert '"$PYTHON_BIN" -m bandit -r src/ -ll -ii' in script
+    assert "python -m bandit" not in script
 
 
 def test_make_install_ml_core_selects_darwin_arm64_lockfile(tmp_path: Path) -> None:
@@ -551,6 +560,8 @@ def test_install_da3_runtime_baseline_profile_omits_optional_deps(tmp_path: Path
     assert result.returncode == 0, result.stdout + result.stderr
     pip_install_lines = "\n".join(_dry_run_pip_install_lines(result.stdout))
     assert "DA3 NumPy spec: numpy>=2.0,<3" in result.stdout
+    assert "cryptography==47.0.0" in pip_install_lines
+    assert "cryptography==46.0.6" not in pip_install_lines
     assert "numpy==1.26.4" not in pip_install_lines
     assert "pycolmap==" not in pip_install_lines
     assert "xformers" not in pip_install_lines

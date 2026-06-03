@@ -1,6 +1,15 @@
 # Branch Protection Setup Guide
 
-This guide documents the required branch protection rules for the `main` branch to enforce CI quality gates.
+This guide documents the current and recommended branch protection rules for the
+`main` branch to enforce CI quality gates.
+
+Current live settings were verified with:
+
+```bash
+gh api repos/RC219805/Transformation_Portal/branches/main/protection
+```
+
+Last verified: 2026-06-03.
 
 ## Required Branch Protection Rules
 
@@ -17,40 +26,40 @@ main
 
 #### ✅ Require Pull Request Reviews
 - **Enable**: ✓ Require a pull request before merging
-- **Required approving reviews**: 1
-- **Dismiss stale pull request approvals**: ✓ (recommended)
-- **Require review from Code Owners**: Optional (if using CODEOWNERS)
+- **Required approving reviews**: 0 currently, 1+ recommended for governance-sensitive work
+- **Dismiss stale pull request approvals**: ✓ enabled
+- **Require review from Code Owners**: Disabled
 
 #### ✅ Require Status Checks to Pass
 - **Enable**: ✓ Require status checks to pass before merging
-- **Require branches to be up to date**: ✓ (recommended)
+- **Require branches to be up to date**: ✓ enabled
 
-**Required Status Checks** (add these):
+**Required Status Checks**:
 ```
-lint (3.12)
-security
-test-core (3.10)
-test-core (3.12)
-test-ml (3.11)
-coverage-gate
-build
-repo-hygiene
-quality-summary
+CI Gate
 ```
 
-**Note**: GitHub will auto-discover these check names after the first CI run. You may need to type them manually if they haven't run yet.
+**Note**: `CI Gate` is the stable branch-protection aggregator from
+`.github/workflows/build.yml`. Do not add individual matrix jobs such as
+`lint`, `test (3.11, cpu, core)`, or `generate-manifest` as separate required
+checks unless the CI gate contract is intentionally changed.
 
 #### ✅ Require Conversation Resolution
-- **Enable**: ✓ Require conversation resolution before merging
+- **Enable**: ✓ enabled
 - Ensures all review comments are addressed
 
 #### ✅ Restrict Force Pushes
-- **Enable**: ✓ Do not allow force pushes
+- **Enable**: ✓ force pushes are disabled
 - Preserves commit history integrity
 
-#### ✅ Require Linear History (Optional but Recommended)
-- **Enable**: ✓ Require linear history
-- Enforces clean, linear commit history via rebase or squash merges
+#### ⚠️ Require Linear History (Optional)
+- **Current**: Disabled
+- Exact-head squash merges remain the preferred project convention, but branch
+  protection does not currently require linear history.
+
+#### ✅ Enforce for Administrators
+- **Current**: Enabled
+- Admins are subject to the same branch protection rules.
 
 #### ⚠️ Do Not Require Signed Commits (Optional)
 - **Leave disabled** unless you have organizational policy
@@ -123,19 +132,21 @@ Create `.github/CODEOWNERS` for automated review assignment:
 
 ## Enforcement in CI
 
-The CI workflow (`.github/workflows/ci.yml`) enforces quality gates automatically. The `quality-summary` job aggregates all results and blocks merge if critical gates fail.
+The canonical PR workflow (`.github/workflows/build.yml`) enforces quality
+gates automatically. Its `CI Gate` job aggregates the blocking upstream jobs and
+is the only status check currently required by branch protection.
 
 ### Critical Gates (BLOCKING)
+- Lightweight checks
 - Lint
-- Security scans
-- Core tests
-- Build verification
-- Repo hygiene
+- Test matrix
+- Montecito manifest build
+- CI contract validation
 
 ### Advisory Gates (NON-BLOCKING but reported)
-- Type checking
-- Coverage warnings (diff coverage is enforced)
-- ML tests (informational)
+- Post-merge quality firewall signals
+- Nightly and scheduled deep checks
+- Advisory security/dependency reports not aggregated into `CI Gate`
 
 ## Troubleshooting
 
@@ -156,17 +167,21 @@ git checkout -b safety/backup-main
 ```
 
 ### Need to bypass protection (emergency)
-**Admin override**: Repository admins can bypass protection rules if absolutely necessary. This is logged and should be rare. Document the reason in an issue or post-incident review.
+**Admin override**: Admin enforcement is currently enabled, so emergency bypasses
+require an explicit repository-settings change or an approved alternative
+recovery path. Document the reason in an issue or post-incident review.
 
 ## Enforcement Checklist
 
 Before considering this complete:
 
 - [ ] Branch protection rule created for `main`
-- [ ] All required status checks added
-- [ ] Pull request reviews required (1+ approver)
+- [ ] `CI Gate` is the only required status check
+- [ ] Pull request review policy intentionally set (currently 0 approvers; 1+ recommended)
+- [ ] Conversation resolution required
+- [ ] Admin enforcement enabled
 - [ ] Force push disabled
-- [ ] Linear history enabled (optional but recommended)
+- [ ] Linear history setting intentionally chosen (currently disabled; exact-head squash remains preferred)
 - [ ] Verified by attempting to merge failing PR (blocks correctly)
 - [ ] Verified by attempting force push (blocks correctly)
 - [ ] CODEOWNERS file created (optional)
@@ -174,9 +189,9 @@ Before considering this complete:
 
 ## Related Documentation
 
-- [CONTRIBUTING.md](../CONTRIBUTING.md) - Developer workflow
-- [CI Workflow](../.github/workflows/ci.yml) - Quality gates implementation
-- [Production Readiness](./PRODUCTION_READINESS.md) - Overall quality status
+- [CONTRIBUTING.md](../../CONTRIBUTING.md) - Developer workflow
+- [CI Workflow](../../.github/workflows/build.yml) - Quality gates implementation
+- [Production Readiness](../deployment/PRODUCTION_READINESS.md) - Overall quality status
 
 ---
 

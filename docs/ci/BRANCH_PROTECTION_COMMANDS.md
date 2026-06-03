@@ -1,5 +1,11 @@
 # Branch Protection Configuration Commands
 
+> **Historical record. Do not run these commands as current configuration.**
+> The required branch-protection check is now the stable `CI Gate` aggregator,
+> and live settings must be verified from GitHub before any change. Use
+> [BRANCH_PROTECTION_SETUP.md](./BRANCH_PROTECTION_SETUP.md) for maintained
+> setup and troubleshooting guidance.
+
 **Generated**: 2026-02-01
 **Purpose**: Complete quality firewall implementation with automated branch protection
 
@@ -298,9 +304,9 @@ gh auth status
 ## 📚 Related Documentation
 
 - [BRANCH_PROTECTION_SETUP.md](./BRANCH_PROTECTION_SETUP.md) - Original setup guide
-- [CI Workflow](../.github/workflows/ci.yml) - Quality gates implementation
-- [CONTRIBUTING.md](../CONTRIBUTING.md) - Developer workflow
-- [CODE_QUALITY_SYSTEM.md](./CODE_QUALITY_SYSTEM.md) - Quality standards
+- [CI Workflow](../../.github/workflows/build.yml) - Quality gates implementation
+- [CONTRIBUTING.md](../../CONTRIBUTING.md) - Developer workflow
+- [CODE_QUALITY_SYSTEM.md](../guides/CODE_QUALITY_SYSTEM.md) - Quality standards
 
 ---
 
