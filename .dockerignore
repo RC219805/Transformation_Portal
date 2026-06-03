@@ -7,6 +7,9 @@
 .mypy_cache/
 .ruff_cache/
 .hypothesis/
+.coverage
+coverage.xml
+htmlcov/
 requirements/.pip-tools-cache/
 requirements/.hash-pilot/
 
