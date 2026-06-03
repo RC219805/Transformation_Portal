@@ -6,7 +6,8 @@ This directory contains installation and setup scripts for the Transformation Po
 
 ### `auto-organize-install.sh`
 
-Installs the automated repository organization system, including the standard repository pre-commit hook.
+Installs the automated repository organization system, including the
+repo-managed pre-commit and pre-push hook set.
 
 **Usage:**
 ```bash
@@ -14,9 +15,9 @@ Installs the automated repository organization system, including the standard re
 ```
 
 **What it does:**
-- Installs the standard repository pre-commit hook at `.git/hooks/pre-commit`
+- Delegates to `make install-hooks` so `.git/hooks/pre-commit` and
+  `.git/hooks/pre-push` match `.pre-commit-config.yaml`
 - Makes the `.auto-organize.sh` script executable
-- Validates the repository structure
 
 ### `install_da3_runtime.sh`
 
@@ -267,9 +268,10 @@ make install-hooks
 
 # Verify installation
 ls -la .git/hooks/pre-commit
+ls -la .git/hooks/pre-push
 
-# Make sure it's executable
-chmod +x .git/hooks/pre-commit
+# Run the root-placement check directly
+./scripts/setup/pre-commit-check.sh --all
 ```
 
 ### Line Ending Issues (Windows)

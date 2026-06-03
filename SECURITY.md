@@ -62,7 +62,13 @@ This repository uses:
 Given our image/video processing nature, special attention is required for:
 
 - **File Upload Security**:
-  - Maximum file size limits (default: 500MB for images, 5GB for videos)
+  - Bounded request and upload sizes. Current backend defaults are
+    `TP_MAX_REQUEST_BYTES=1048576` and
+    `TP_PORTAL_MAX_UPLOAD_REQUEST_BYTES=1048576`; raise them deliberately per
+    deployment instead of assuming large media uploads are accepted by default.
+  - Multipart guardrails: `TP_PORTAL_UPLOAD_MAX_FILES=256`,
+    `TP_PORTAL_UPLOAD_MAX_FIELDS=32`, and
+    `TP_PORTAL_UPLOAD_MAX_PART_BYTES=1048576` by default.
   - Strict MIME type validation
   - Magic number verification for file formats
   - Filename sanitization to prevent path traversal
@@ -143,10 +149,12 @@ Given our image/video processing nature, special attention is required for:
 
 If exposing Transformation Portal as a service:
 
-- **Authentication**: Implement API key or OAuth 2.0
+- **Authentication**: Protected `/v1` endpoints enforce API-key auth by
+  default. Set `TP_API_KEY`, keep `TP_ENFORCE_JOB_API_KEY=true`, and only
+  override `TP_API_KEY_HEADER` when the proxy/client contract requires it.
 - **Rate Limiting**:
-  - Default: 100 requests/minute per IP
-  - Heavy operations: 10 requests/hour
+  - Default: 60 requests/minute per client via `TP_RATE_LIMIT_PER_MINUTE`
+  - Admission cap: 4 concurrent jobs via `TP_MAX_CONCURRENT_JOBS`
 - **Input Sanitization**: All user inputs must be validated
 - **Output Filtering**: Ensure no metadata leakage in processed files
 
@@ -198,21 +206,20 @@ Content-Security-Policy: default-src 'self'
 
 ### Configuration
 
-**Note**: The project currently uses `config/default_config.yaml` for depth pipeline settings (see actual structure with `depth_model.variant`, `processing.zone_tone_mapping`, `optimization.memory_limit_gb`, etc.). The following represents recommended security-related configuration fields that should be implemented for production deployments:
+Security-sensitive runtime controls are environment-backed and documented in
+the root [`.env.example`](.env.example). Depth-pipeline defaults still live in
+`config/default_config.yaml`, but API protection, request limits, filesystem
+boundaries, and artifact-store controls are backend environment contracts:
 
-```yaml
-# Recommended security configuration (not currently implemented)
-# These settings should be added to application configuration for production use
-security:
-  max_file_size: 524288000  # 500 MiB (500 * 1024 * 1024 bytes)
-  allowed_extensions: ['.jpg', '.png', '.tiff', '.mp4', '.mov']
-  temp_directory: '/tmp/transformation_portal'
-  cleanup_interval: 3600  # seconds
-
-  depth_processing:
-    max_input_dimension: 4096
-    max_vertices: 10000000
-    memory_limit_gb: 8  # GB (see: optimization.memory_limit_gb in default_config.yaml)
+```bash
+TP_API_KEY=<strong-token>
+TP_ENFORCE_JOB_API_KEY=true
+TP_MAX_REQUEST_BYTES=1048576
+TP_PORTAL_MAX_UPLOAD_REQUEST_BYTES=1048576
+TP_RATE_LIMIT_PER_MINUTE=60
+TP_MAX_CONCURRENT_JOBS=4
+TP_ALLOWED_INPUT_ROOTS=.
+TP_ALLOWED_OUTPUT_ROOTS=.
 ```
 
 ### Sensitive Data

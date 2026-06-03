@@ -99,17 +99,20 @@ Dependencies are organized into logical layers:
 
 ### Relationship to Root Requirements Files
 
-The repository has **root-level** requirements files that reference this layered system:
+The repository has **root-level** requirements files that reference or complement
+this layered system:
 
 | Root File | Purpose | Structure |
 |-----------|---------|-----------|
 | `requirements.txt` | Core runtime | References `requirements/base.txt` |
 | `requirements-ci.txt` | CI test runs | References `requirements.txt` + inline test deps |
 | `requirements-dev.txt` | Development | References `requirements-ci.txt` + dev tools |
+| `requirements-lint.txt` | CI/local lint parity | Hand-authored lean lint toolchain consumed by `scripts/setup/run_lint_tool.sh` |
 
 **Important distinctions:**
 - `requirements-ci.txt` (root) contains **test runner and test-support** deps (pytest, hypothesis, moto, etc.)
 - `requirements/ci.in` contains **CI pipeline tools** (bandit, safety, build, twine, etc.)
+- `requirements-lint.txt` is a separate root lint-tool parity surface, not a generated layered lock
 - Core test deps in root `requirements-ci.txt` must match `requirements/dev.in`. The enforced set is defined as `CORE_TEST_DEPS` in `scripts/validation/check_ci_dep_sync.py` (currently: pytest, pytest-cov, pytest-asyncio, pytest-json-report, pytest-xdist, hypothesis, httpx, moto)
 - Dev-only test tools in `requirements/dev.in` must also be available from root `requirements-dev.txt` without entering lean CI installs. The enforced set is defined as `DEV_ONLY_DEPS` in `scripts/validation/check_ci_dep_sync.py` (currently: pytest-rerunfailures for ADR-033 flaky-test quarantine support)
 - Run `make check-ci-sync` to verify no drift for the enforced core-test and dev-only dependency sets across the root and layered files
@@ -156,8 +159,9 @@ pinned-without-hashes unless a later policy decision promotes broader
   and are treated as evidence, not as the default install surface.
 - The checked-in layered locks remain the primary deployment contract and
   continue to be consumed without mandatory hash enforcement.
-- Root wrapper files such as `requirements.txt`, `requirements-ci.txt`, and
-  `requirements-dev.txt` remain outside this hash-enforced policy decision.
+- Root wrapper files such as `requirements.txt`, `requirements-ci.txt`,
+  `requirements-dev.txt`, and `requirements-lint.txt` remain outside this
+  hash-enforced policy decision.
 - ML platform locks remain outside this policy decision until the simpler
   non-ML layered surface has a reason to absorb broader enforcement cost.
 - Promotion to mandatory `--require-hashes` enforcement requires a separate
@@ -184,11 +188,11 @@ These files are emitted into `HASH_PILOT_OUT_DIR` (default:
 
 ### Why the policy excludes root wrappers
 
-Root wrapper files such as `requirements.txt`, `requirements-ci.txt`, and
-`requirements-dev.txt` remain hand-authored convenience entry points and are
-used broadly across CI and local setup flows. The pilot deliberately avoids
-changing those interfaces until the team decides whether hash enforcement is
-worth the operational cost.
+Root wrapper files such as `requirements.txt`, `requirements-ci.txt`,
+`requirements-dev.txt`, and `requirements-lint.txt` remain hand-authored
+convenience entry points and are used broadly across CI and local setup flows.
+The pilot deliberately avoids changing those interfaces until the team decides
+whether hash enforcement is worth the operational cost.
 
 ### Why ML platform locks remain deferred
 

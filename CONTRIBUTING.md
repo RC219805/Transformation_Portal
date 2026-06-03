@@ -220,10 +220,12 @@ All pull requests must pass these automated gates before merge:
 
 #### Global Minimum
 - Combined coverage must stay **≥25%** (enforced via `coverage report --fail-under=25`)
-- Current baseline: **25.44%** (Q2 2026 target: 28%)
+- Coverage ratchet targets and current baseline evidence live in
+  [`docs/testing/test_coverage_improvement_plan.md`](docs/testing/test_coverage_improvement_plan.md)
+  and [`docs/testing/COLD_ZONE_COVERAGE_PROGRAM.md`](docs/testing/COLD_ZONE_COVERAGE_PROGRAM.md).
 
 #### Diff Coverage (KEY METRIC)
-- **New/changed lines must be 80%+ covered**
+- **New/changed lines must be 85%+ covered**
 - This is the primary quality ratchet mechanism
 - Enforced via `diff-cover` tool
 
@@ -491,7 +493,7 @@ Use draft PRs for:
 We use a **ratcheting coverage strategy**:
 
 1. **Never decrease global coverage** (enforced in CI)
-2. **New code must be well-tested** (80% diff coverage)
+2. **New code must be well-tested** (85% diff coverage)
 3. **Critical modules** have floor thresholds (coming soon)
 4. **Incremental improvement** over time
 

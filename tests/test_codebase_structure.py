@@ -453,6 +453,10 @@ class TestRootGovernanceMetadata:
         assert "torchvision: 0.19.1" not in changelog
         assert "diffusers: 0.31.0" not in changelog
         assert "transformers: 4.53.0" not in changelog
+        assert "docs/guides/coverage-improvement-plan.md" not in changelog
+        assert "33% by Q2 2026" not in changelog
+        assert "docs/testing/test_coverage_improvement_plan.md" in changelog
+        assert "docs/testing/COLD_ZONE_COVERAGE_PROGRAM.md" in changelog
 
     def test_root_readme_performance_links_use_current_authorities(self):
         """README performance navigation should point to maintained policy docs."""
@@ -697,6 +701,18 @@ class TestRootGovernanceMetadata:
         assert "Next audit: **2026-05-16 (Q2 2026)**" not in contributing
         assert "Next audit: **2026-08-16 (Q3 2026)**" in contributing
 
+    def test_contributing_coverage_guidance_matches_active_gates(self):
+        """Root contribution guidance should match current coverage gate policy."""
+        contributing = (_repo_root / "CONTRIBUTING.md").read_text()
+
+        assert "coverage report --fail-under=25" in contributing
+        assert "**New/changed lines must be 85%+ covered**" in contributing
+        assert "docs/testing/test_coverage_improvement_plan.md" in contributing
+        assert "docs/testing/COLD_ZONE_COVERAGE_PROGRAM.md" in contributing
+        assert "**New/changed lines must be 80%+ covered**" not in contributing
+        assert "80% diff coverage" not in contributing
+        assert "Q2 2026 target: 28%" not in contributing
+
     def test_contributing_dependency_workflow_matches_requirements_contract(self):
         """Root contribution guidance should not route dependency edits through retired ML flows."""
         contributing = (_repo_root / "CONTRIBUTING.md").read_text()
@@ -752,6 +768,18 @@ class TestRootGovernanceMetadata:
         assert "Install via: make install-ml-coreml" not in requirements_ml_coreml
         assert "Reserved metadata only" in requirements_ml_research
         assert "make install-ml-research" not in requirements_ml_research
+
+    def test_root_requirements_guidance_preserves_target_owned_ml_install_contract(self):
+        """Root requirements entrypoint should not advertise metadata extras as ML install support."""
+        root_requirements = (_repo_root / "requirements.txt").read_text()
+        pyproject = (_repo_root / "pyproject.toml").read_text()
+
+        assert "make install-ml-core" in root_requirements
+        assert "requirements/README.md" in root_requirements
+        assert "pyproject.toml extras are metadata pointers" in root_requirements
+        assert "not the governed operator install surface" in root_requirements
+        assert "or use pyproject.toml extras" not in root_requirements
+        assert "pyproject.toml extras are metadata/convenience pointers, not install support" in pyproject
 
     def test_contributing_setup_uses_repo_managed_environment(self):
         """Root contribution setup should use the current Makefile-managed .venv contract."""
@@ -1268,6 +1296,8 @@ class TestRootEnvironmentTemplate:
 
         expected_variables = [
             "TP_API_KEY",
+            "TP_ENFORCE_JOB_API_KEY",
+            "TP_API_KEY_HEADER",
             "TP_ALLOWED_ORIGINS",
             "TP_TRUSTED_HOSTS",
             "TP_ENABLE_TRUSTED_HOSTS",
@@ -1288,9 +1318,12 @@ class TestRootEnvironmentTemplate:
             "TP_CANCEL_GRACE_SECONDS",
             "TP_JOB_LIST_LIMIT",
             "TP_MAX_INDEXED_ARTIFACTS",
+            "TP_WORKER_ID",
             "TP_WORKER_LEASE_SECONDS",
             "TP_WORKER_HEARTBEAT_SECONDS",
             "TP_WORKER_POLL_SECONDS",
+            "TP_WORKER_MAX_BACKOFF_SECONDS",
+            "TP_WORKER_LOG_LEVEL",
             "TP_ORCHESTRATOR_WORKER_SHUTDOWN_GRACE_SECONDS",
             "TP_ORCHESTRATOR_RECLAIM_SWEEP_INTERVAL_SECONDS",
             "TP_ENABLE_API_DOCS",
@@ -1305,8 +1338,12 @@ class TestRootEnvironmentTemplate:
             "TP_REDIS_KEY_PREFIX",
             "TP_ARTIFACT_STORE",
             "TP_ARTIFACT_LOCAL_ROOT",
+            "TP_ARTIFACT_PREFIX",
+            "TP_ARTIFACT_PRESIGN_EXPIRES_SECONDS",
+            "TP_ARTIFACT_RETENTION_SECONDS",
             "TP_ARTIFACT_BUCKET",
             "TP_ARTIFACT_ENDPOINT_URL",
+            "TP_ARTIFACT_REGION",
             "POSTGRES_DB",
             "POSTGRES_USER",
             "POSTGRES_PASSWORD",
@@ -1316,6 +1353,8 @@ class TestRootEnvironmentTemplate:
             "MINIO_ROOT_PASSWORD",
             "TP_MINIO_API_PUBLIC_PORT",
             "TP_MINIO_CONSOLE_PUBLIC_PORT",
+            "TP_MINIO_IMAGE",
+            "TP_MINIO_MC_IMAGE",
             "TP_TEST_POSTGRES_URL",
             "TP_TEST_REDIS_URL",
             "TP_TEST_S3_URL",
@@ -1336,6 +1375,7 @@ class TestRootEnvironmentTemplate:
             "keep TP_ENABLE_TRUSTED_HOSTS=true outside exceptional local",
             "Keep TP_PORTAL_UPLOAD_ROOT inside",
             "Canonical worker names are TP_WORKER_*",
+            "standalone `python -m transformation_portal.orchestrator.worker`",
         ]
         for claim in expected_runtime_claims:
             assert claim in content
@@ -1355,6 +1395,44 @@ class TestRootEnvironmentTemplate:
             "orchestrator picks `python3` from PATH",
             '#   python -c "import secrets; print(secrets.token_urlsafe(32))"',
             "TP_ORCHESTRATOR_USE_QUEUE_BROKER",
+        ]
+        for stale_claim in stale_claims:
+            assert stale_claim not in content
+
+
+class TestRootSecurityPolicy:
+    """Tests for the root security policy's live runtime claims."""
+
+    def test_security_policy_matches_current_backend_runtime_defaults(self):
+        """Root security guidance should describe current backend controls."""
+        security_policy = _repo_root / "SECURITY.md"
+        content = security_policy.read_text()
+
+        expected_claims = [
+            "TP_MAX_REQUEST_BYTES=1048576",
+            "TP_PORTAL_MAX_UPLOAD_REQUEST_BYTES=1048576",
+            "TP_PORTAL_UPLOAD_MAX_FILES=256",
+            "TP_PORTAL_UPLOAD_MAX_FIELDS=32",
+            "TP_PORTAL_UPLOAD_MAX_PART_BYTES=1048576",
+            "Protected `/v1` endpoints enforce API-key auth by",
+            "TP_ENFORCE_JOB_API_KEY=true",
+            "Default: 60 requests/minute per client via `TP_RATE_LIMIT_PER_MINUTE`",
+            "Admission cap: 4 concurrent jobs via `TP_MAX_CONCURRENT_JOBS`",
+            "[`.env.example`](.env.example)",
+            "TP_ALLOWED_INPUT_ROOTS=.",
+            "TP_ALLOWED_OUTPUT_ROOTS=.",
+        ]
+        for claim in expected_claims:
+            assert claim in content
+
+        stale_claims = [
+            "Maximum file size limits (default: 500MB for images, 5GB for videos)",
+            "Implement API key or OAuth 2.0",
+            "Default: 100 requests/minute per IP",
+            "Heavy operations: 10 requests/hour",
+            "Recommended security configuration (not currently implemented)",
+            "These settings should be added to application configuration for production use",
+            "max_file_size: 524288000",
         ]
         for stale_claim in stale_claims:
             assert stale_claim not in content
@@ -1489,6 +1567,23 @@ class TestGitignore:
         assert ".env" in content
         assert ".env.*" in content
         assert "!.env.example" in content
+
+    def test_gitignore_covers_local_credential_files(self):
+        """Test that local package-manager credentials and certificate bundles stay ignored."""
+        gitignore = _repo_root / ".gitignore"
+        content = gitignore.read_text()
+
+        sensitive_patterns = [
+            ".npmrc",
+            ".pypirc",
+            "*.pem",
+            "*.key",
+            "*.p12",
+            "*.pfx",
+        ]
+
+        for pattern in sensitive_patterns:
+            assert pattern in content, f".gitignore should include local credential pattern: {pattern}"
 
     def test_gitignore_does_not_hide_tracked_files(self):
         """Tracked governance docs and fixtures should not be masked by ignore rules."""

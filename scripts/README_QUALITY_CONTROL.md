@@ -38,8 +38,8 @@ make pre-commit
 
 ### 1. Pre-commit Hooks
 
-The default git hook is installed with `make install-hooks`, which runs
-`pre-commit install -f` against this repository's `.pre-commit-config.yaml`.
+The default git hooks are installed with `make install-hooks`, which uses the
+repo-managed pre-commit binary and `.pre-commit-config.yaml` default hook types.
 The legacy `scripts/pre_commit_hook.sh` entrypoint remains available as a
 compatibility wrapper for running `scripts/utilities/pre-commit-quality-check.py`
 directly.
@@ -252,7 +252,7 @@ make fix-quality       # Auto-fix all issues
 make check-quality     # Dry-run (show what would be fixed)
 
 # Tools
-make install-hooks     # Install git pre-commit hook
+make install-hooks     # Install git pre-commit and pre-push hooks
 make validate-ci       # Validate GitHub Actions configs
 make organize-docs     # Organize markdown files
 make check-docs        # Preview documentation organization
