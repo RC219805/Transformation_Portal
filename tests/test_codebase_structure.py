@@ -769,6 +769,44 @@ class TestReferenceQuickstartGuidance:
         for required_fragment in required_fragments:
             assert required_fragment in supported_formats
 
+    def test_format_sidecar_guides_use_current_entrypoints(self):
+        """Format overview and quick reference should align with the maintained format authority."""
+        guide_paths = [
+            _repo_root / "docs" / "guides" / "FORMAT_SUPPORT_OVERVIEW.md",
+            _repo_root / "docs" / "guides" / "FILE_FORMAT_QUICK_REFERENCE.md",
+        ]
+
+        for guide_path in guide_paths:
+            content = guide_path.read_text()
+            stale_fragments = [
+                *self.STALE_OPERATOR_GUIDANCE_FRAGMENTS,
+                "python depth_pipeline/pipeline.py",
+                "python material_response.py",
+                "pip install Pillow",
+                "pip install tifffile",
+                "pip install -e .",
+                "requirements.txt",
+                "from format_utils import",
+                "[README.md](../README.md)",
+                "[DEPTH_PIPELINE_README.md]",
+            ]
+            for stale_fragment in stale_fragments:
+                assert stale_fragment not in content, f"{guide_path.name}: {stale_fragment}"
+
+            required_fragments = [
+                "make install-core",
+                ".venv/bin/python examples/validate_file_formats.py",
+                ".venv/bin/lux-depth-v3",
+                ".venv/bin/luxury-tiff-batch",
+                ".venv/bin/lux_render",
+                "--input-glob",
+                ".venv/bin/luxury_video_grader",
+                "transformation_portal.utils.format_utils",
+                "../governance/DOCUMENTATION_MAP.md",
+            ]
+            for required_fragment in required_fragments:
+                assert required_fragment in content, f"{guide_path.name}: {required_fragment}"
+
 
 class TestRootEnvironmentTemplate:
     """Tests for the root Docker/FastAPI environment template."""

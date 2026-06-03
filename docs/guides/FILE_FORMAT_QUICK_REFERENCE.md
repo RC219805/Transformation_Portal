@@ -1,200 +1,122 @@
 # File Format Quick Reference
 
-**Transformation Portal** | Image & Video Format Support
+Compact current reference for common image and video format workflows. For full
+policy, see [SUPPORTED_FILE_FORMATS.md](SUPPORTED_FILE_FORMATS.md).
 
----
+## Supported Formats
 
-## 📸 Image Formats
+| Category | Formats |
+|----------|---------|
+| Core images | PNG, JPEG, TIFF, WebP, BMP, GIF, ICO, Netpbm, TGA |
+| Luxury stills | TIFF and PNG |
+| Video | MP4, MOV, AVI, MKV, WebM, M4V, FLV |
+| RAW | Optional isolated RAW runtime, then Lux Depth V3 or TIFF workflow |
 
-| Format | Extension | Use Case | Quality | Notes |
-|--------|-----------|----------|---------|-------|
-| **TIFF** | `.tif`, `.tiff` | Professional/Print | 16-bit | Requires `tifffile` for full precision |
-| **PNG** | `.png` | Web/Lossless | 8-bit | Supports transparency, good for renders |
-| **JPEG** | `.jpg`, `.jpeg` | Web/Delivery | 8-bit | Lossy, use quality ≥95 |
-| **WebP** | `.webp` | Modern Web | 8-bit | Good compression, lossy/lossless modes |
-| **BMP** | `.bmp` | Uncompressed | 8-bit | Large files, rarely used |
-| **GIF** | `.gif` | Animation | 8-bit | Limited colors, first frame used |
+Extensions are case-insensitive.
 
-**All formats are case-insensitive** (`.PNG` = `.png`)
+## Setup
 
----
-
-## 🎬 Video Formats
-
-| Format | Extension | Use Case | Notes |
-|--------|-----------|----------|-------|
-| **MP4** | `.mp4` | Universal/Streaming | H.264, H.265/HEVC codecs |
-| **MOV** | `.mov` | Professional/Editing | ProRes, QuickTime codecs |
-| **AVI** | `.avi` | Legacy | Various codecs |
-| **MKV** | `.mkv` | High-quality/Archive | Matroska container |
-| **WebM** | `.webm` | Web Streaming | VP8/VP9 codecs |
-
-**HDR Support**: PQ (HDR10), HLG (Hybrid Log-Gamma)
-
----
-
-## 🔧 Pipeline Quick Match
-
-| Need to... | Use This Pipeline | Best Format |
-|------------|-------------------|-------------|
-| Process 16-bit TIFFs | `luxury_tiff_batch_processor.py` | `.tiff` |
-| Enhance architectural renders | `depth_pipeline/pipeline.py` | `.png`, `.tiff` |
-| AI-powered enhancement | `lux_render_pipeline.py` | `.png`, `.tiff` |
-| Material surface enhancement | `material_response.py` | `.tiff`, `.png` |
-| Video color grading | `luxury_video_master_grader.py` | `.mov`, `.mp4` |
-
----
-
-## ⚡ Quick Commands
-
-### Validate File Format
 ```bash
-python examples/validate_file_formats.py image.jpg
-python examples/validate_file_formats.py --scan directory/
-python examples/validate_file_formats.py --formats
+make venv
+make install-core
+make check-environment
 ```
 
-### Process Images
+Optional format and ML runtimes:
+
 ```bash
-# TIFF batch processing
-python luxury_tiff_batch_processor_cli.py input/ output/ --preset signature
-
-# Depth-aware enhancement
-python depth_pipeline/pipeline.py --input render.jpg --output enhanced.jpg
-
-# AI enhancement
-python lux_render_pipeline.py --input bedroom.jpg --out ./final --prompt "luxury interior"
+./scripts/setup/install_raw_runtime.sh
+make install-ml-core
+./scripts/setup/install_da3_runtime.sh --profile baseline
+./scripts/setup/install_depth_pro_runtime.sh
 ```
 
-### Process Videos
+## Validate Formats
+
 ```bash
-python luxury_video_master_grader.py --input tour.mp4 --output graded.mov --preset golden_hour
+.venv/bin/python examples/validate_file_formats.py image.jpg
+.venv/bin/python examples/validate_file_formats.py --scan ./input_images
+.venv/bin/python examples/validate_file_formats.py --formats
 ```
 
----
+## Process Images
 
-## 💎 Luxury Formats (Recommended)
+```bash
+# Minimal adjustment
+.venv/bin/python scripts/simple_image_processor.py input_images/render.jpg \
+  --brightness 1.1 \
+  --contrast 1.05 \
+  --output output/render_basic.jpg
 
-Best for professional/commercial work:
-- **TIFF** (`.tif`, `.tiff`) - 16-bit precision, metadata preservation
-- **PNG** (`.png`) - Lossless, good for web and renders
+# Lux Depth V3
+.venv/bin/lux-depth-v3 \
+  --input-dir ./input_images \
+  --output-dir ./output/lux_depth_v3 \
+  --quality-tier apex \
+  --model-key da3-metric \
+  --emit-report on \
+  --emit-run-card on \
+  --overwrite
 
----
+# TIFF batch
+.venv/bin/luxury-tiff-batch input_images/tiff output/tiff_lux \
+  --preset signature \
+  --profile balanced \
+  --recursive
 
-## 🚨 Common Issues
+# Lux render
+.venv/bin/lux_render \
+  --input-glob "input_images/renders/*.png" \
+  --out output/lux_render \
+  --prompt "luxury interior, natural light"
+```
 
-### "16-bit support requires tifffile"
-**Solution**: `pip install -e ".[tiff]"`
+## Process Video
 
-### "FFmpeg not found"
-**Solution**:
-- Linux: `sudo apt install ffmpeg`
-- macOS: `brew install ffmpeg`
-- Windows: Download from ffmpeg.org
+```bash
+.venv/bin/luxury_video_grader input/tour.mp4 output/tour_graded.mov \
+  --preset signature_estate \
+  --overwrite
+```
 
-### "Unsupported format"
-**Solution**: Convert to supported format or check file extension
+## Recommended Workflow Formats
 
-### RAW files (.cr2, .nef, .arw)
-**Solution**: Convert to 16-bit TIFF using Lightroom, Darktable, or RawTherapee
+| Use case | Input | Processing | Delivery |
+|----------|-------|------------|----------|
+| Architectural render | PNG or TIFF | Lux Depth V3, Lux Render | PNG or TIFF |
+| Real estate photography | RAW or TIFF | RAW runtime, TIFF batch | JPEG for web, TIFF for print |
+| Video tour | MP4 or MOV | Video grader | MOV master, MP4 delivery |
+| Quick preview | JPEG or PNG | Simple image processor | JPEG or PNG |
 
----
+## Common Issues
 
-## 📊 Format Comparison
+| Symptom | Current fix |
+|---------|-------------|
+| Unsupported extension | Validate with `examples/validate_file_formats.py` and convert to PNG, JPEG, TIFF, WebP, BMP, or a supported video format |
+| TIFF path unavailable | Run `make install-core` and `.venv/bin/python scripts/check_image_processing_readiness.py` |
+| RAW decode unavailable | Run `./scripts/setup/install_raw_runtime.sh` |
+| Lux Render flag error | Use `--input-glob` |
+| FFmpeg missing | Install FFmpeg through the host package manager |
 
-### File Size (1920×1080 image)
-
-| Format | Approx. Size | Speed | Use When |
-|--------|-------------|-------|----------|
-| JPEG (95%) | 1-2 MB | ⚡⚡⚡ | Web, fast preview |
-| PNG | 3-5 MB | ⚡⚡ | Web, transparency needed |
-| TIFF (8-bit) | 6-8 MB | ⚡⚡ | Editing workflow |
-| TIFF (16-bit) | 12-16 MB | ⚡ | Print, archival |
-| WebP | 0.5-1.5 MB | ⚡⚡ | Modern web |
-
-### Processing Speed (4K image)
-
-| Operation | Time (M4 Max) | Memory |
-|-----------|---------------|--------|
-| Format validation | <1ms | <1 MB |
-| TIFF load (8-bit) | 50-100ms | 32 MB |
-| TIFF load (16-bit) | 100-200ms | 64 MB |
-| Depth estimation | 24-65ms | 2 GB |
-| AI enhancement | 5-30s | 8-16 GB |
-
----
-
-## 🎯 Workflow Recommendations
-
-### Architectural Rendering
-1. **Raw Render** → 16-bit TIFF (from render engine)
-2. **Depth Maps** → 16-bit PNG (smaller than TIFF)
-3. **AI Enhancement** → PNG or TIFF
-4. **Final Delivery** → PNG (web) or TIFF (print)
-
-### Real Estate Photography
-1. **Camera RAW** → 16-bit TIFF (via Lightroom)
-2. **Batch Processing** → TIFF (preserve metadata)
-3. **Web Gallery** → JPEG (95% quality)
-4. **Print Files** → 16-bit TIFF (ProPhoto RGB)
-
-### Video Production
-1. **Editing Proxies** → MP4 H.264 (fast)
-2. **Master Grading** → ProRes 422 HQ MOV
-3. **Web Delivery** → MP4 H.265 (4K)
-4. **Archive** → ProRes 4444 XQ (lossless)
-
----
-
-## 📖 More Information
-
-- **Detailed Docs**: [SUPPORTED_FILE_FORMATS.md](SUPPORTED_FILE_FORMATS.md)
-- **Main README**: [README.md](README.md)
-- **Depth Pipeline**: [DEPTH_PIPELINE_README.md](DEPTH_PIPELINE_README.md)
-- **Detailed Depth Pipeline Docs**: [docs/depth_pipeline/DEPTH_PIPELINE_README.md](docs/depth_pipeline/DEPTH_PIPELINE_README.md)
-
----
-
-## 🔍 Format Detection (Python)
+## Python API
 
 ```python
-from format_utils import (
-    is_supported_image_format,
+from transformation_portal.utils.format_utils import (
     get_format_info,
+    is_supported_image_format,
+    is_supported_video_format,
     validate_format,
-    UnsupportedFormatError,
 )
 
-# Check if supported
-if is_supported_image_format('photo.jpg'):
-    print("✅ Supported")
-
-# Get detailed info
-info = get_format_info('render.tiff')
-print(info['recommendations'])
-
-# Validate with error handling
-try:
-    validate_format('document.pdf', 'image')
-except UnsupportedFormatError as e:
-    print(f"❌ {e}")
+validate_format("photo.jpg", "image")
+assert is_supported_image_format("photo.jpg")
+assert is_supported_video_format("tour.mp4")
+print(get_format_info("render.tiff")["recommendations"])
 ```
 
----
+## References
 
-## 📞 Quick Help
-
-| Question | Answer |
-|----------|--------|
-| What formats work? | PNG, JPEG, TIFF, WebP, BMP + more (see above) |
-| Do I need 16-bit? | Recommended for print/professional work |
-| What about RAW? | Convert to TIFF first |
-| Video formats? | MP4, MOV, AVI, MKV (FFmpeg required) |
-| Case-sensitive? | No, `.PNG` = `.png` |
-| File size limit? | No hard limit (system memory dependent) |
-
----
-
-**Print this page** for quick reference while working! 🖨️
-
-**Version**: 1.0 | **Updated**: October 2025
+- [Supported File Formats](SUPPORTED_FILE_FORMATS.md)
+- [Format Support Overview](FORMAT_SUPPORT_OVERVIEW.md)
+- [Pipeline Operations Guide](../pipeline_docs/PIPELINE_OPERATIONS_GUIDE.md)
+- [Documentation Map](../governance/DOCUMENTATION_MAP.md)
