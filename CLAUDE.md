@@ -147,7 +147,7 @@ Use `--da3-python`, `--depth-pro-python`, `--raw-python` flags only to override 
 - Materials/PBR: `materials_v3*.py`, `pbr*.py`
 - I/O & provenance: `io_atomic.py`, `manifest.py`, `provenance.py`, `reconstruction_manifest.py`, `run_card_contract.py`
 
-Sibling subpackages under `src/transformation_portal/` worth knowing about: `api/v1/` (typed envelope foundation), `core/` (CAS DAG executor + security helpers), `events/`, `storage/`, `hardening/`, `rendering/` (4k pipeline stages and types), `spatial_ai/` (graph execution bridge, pipeline result models, segmentation cache), `attestation/`, `vlm_captioning/`. Recent refactors have been extracting helpers from these areas — follow the same decomposition discipline rather than expanding existing modules.
+Sibling subpackages under `src/transformation_portal/` worth knowing about: `api/v1/` (typed envelope foundation) and `api/routes/` (extracted FastAPI route seams such as `jobs.py`), `core/` (CAS DAG executor + security helpers), `events/`, `storage/`, `hardening/`, `rendering/` (4k pipeline stages and types), `spatial_ai/` (graph execution bridge, pipeline result models, segmentation cache), `attestation/`, `vlm_captioning/`, and `presence_security/` (governed presence/watermarking countermeasures with its own `presence-security` console-script CLI). Recent refactors have been extracting helpers from these areas — follow the same decomposition discipline rather than expanding existing modules.
 
 Quality tier (`standard|premium|apex`) and `--preset` are **distinct** concepts. V2 enhancement is optional; backward-compat defaults and fail-fast validation must stay intact. Input discovery deliberately excludes derived artifacts and output dirs to prevent "depth-of-depth" loops — do not weaken this filter.
 
@@ -167,14 +167,14 @@ Mirror surface on the managed frontdoor: `web/secure-landing/lib/session-store/`
 
 ### Portal HTTP surfaces
 
-`app.py` (~10.6k lines) is the FastAPI origin. `portal.html` is the direct-debug HTML. `web/secure-landing/` is the **Node 22.x only** managed front door (Next.js) that splits the browser experience into `/`, `/login`, `/portal`. Authoritative routes:
+`app.py` (~10.8k lines) is the FastAPI origin. `portal.html` is the direct-debug HTML. `web/secure-landing/` is the **Node 22.x only** managed front door (Next.js) that splits the browser experience into `/`, `/login`, `/portal`. Authoritative routes:
 - `GET /healthz` — managed front-door liveness
 - `GET /ready` — backend liveness
 - `GET /v1/readiness` — execution-readiness matrix for the four governed pipelines
 - `/v1/*` and `/v2/*` — typed envelope contracts (`ApiEnvelope[T]` from `src/transformation_portal/api/v1/envelopes.py`). The route inventory contract requires `/v2/jobs/...` to mirror `/v1/jobs/...` method coverage; response schema names remain the existing `tp.orchestrator.*.v1` envelopes unless intentionally changed.
 - Job lifecycle persists through `JobRepository` first; `JOBS` only carries runtime handles. Repository failures return redacted `503 JOB_REPOSITORY_UNAVAILABLE` rather than falling back to stale process cache.
 
-Hardening that must remain intact when editing `app.py`: allowed-root path validation, API key + trusted-host enforcement, request size / concurrency / rate limits, pipeline allowlists, typed validation for archive-gate flows. **Fail closed, not open.** Recent decomposition has extracted helpers (`path_security`, `sam2_checkpoint_security`, `asset_bundle`) under the ADR-045 / ADR-046 / ADR-047 monolith-decomposition pattern — keep extracting along seams rather than re-monolithizing.
+Hardening that must remain intact when editing `app.py`: allowed-root path validation, API key + trusted-host enforcement, request size / concurrency / rate limits, pipeline allowlists, typed validation for archive-gate flows. **Fail closed, not open.** Recent decomposition has extracted helpers (`path_security`, `sam2_checkpoint_security`, `asset_bundle`) and route seams (`api/routes/jobs.py`) under the ADR-045 / ADR-046 / ADR-047 monolith-decomposition pattern — keep extracting along seams rather than re-monolithizing.
 
 ### Contract families (treat as binding)
 
@@ -280,8 +280,8 @@ Use `pathlib.Path`, normalize/validate untrusted paths, enforce allowlisted root
 - `docs/architecture/PORTAL_ORCHESTRATOR_ROADMAP.md` — FastAPI orchestrator + portal HTTP surface roadmap.
 - `docs/architecture/PORTAL_FRONTDOOR_ROADMAP.md` — managed Next.js frontdoor roadmap.
 
-Recent ADRs that materially affect routine edits:
-- ADR-043 (orchestrator decomposition pattern), ADR-044 (test marker enforcement), ADR-045 (monolith-decomposition residuals governance), ADR-046 (`path_security` extraction), ADR-047 (SAM2 checkpoint security extraction).
+Recent ADRs that materially affect routine edits (under `docs/architecture/`):
+- ADR-043 (orchestrator decomposition pattern), ADR-044 (test marker enforcement), ADR-045 (monolith-decomposition residuals governance), ADR-046 (`path_security` extraction), ADR-047 (SAM2 checkpoint security extraction), ADR-048 (Materials V3 production integration), ADR-049 (plugin manifest trust).
 
 Older project reports under `docs/` are retained for audit context but are **not** live guidance unless the map promotes them.
 
