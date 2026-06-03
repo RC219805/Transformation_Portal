@@ -618,20 +618,30 @@ class TestRootGovernanceMetadata:
 class TestReferenceQuickstartGuidance:
     """Tests for active quick-start reference guidance."""
 
+    STALE_OPERATOR_GUIDANCE_FRAGMENTS = [
+        "pip install -r requirements.txt",
+        'pip install -e ".[all]"',
+        'pip install -e ".[ml]"',
+        'pip install -e ".[tiff]"',
+        "pip install realesrgan",
+        "from depth_pipeline import ArchitecturalDepthPipeline",
+        "from lux_render_pipeline import",
+        "python examples/simple_process.py",
+        "python luxury_tiff_batch_processor_cli.py",
+        "python lux_render_pipeline.py",
+        "python luxury_video_master_grader.py",
+        "python pro_pipeline.py",
+        "python scripts/pipelines/lux_render_pipeline.py",
+        "python scripts/context_aware_rendering.py",
+        "python scripts/utilities/luxury_tiff_batch_processor.py",
+    ]
+
     def test_quickstart_cheatsheet_uses_current_repo_managed_entrypoints(self):
         """Reference quick-start guidance should not route operators to retired root CLIs."""
         cheat_sheet = (_repo_root / "docs" / "reference" / "QUICKSTART_CHEATSHEET.md").read_text()
 
         stale_fragments = [
-            "pip install -r requirements.txt",
-            'pip install -e ".[all]"',
-            'pip install -e ".[ml]"',
-            'pip install -e ".[tiff]"',
-            "from depth_pipeline import ArchitecturalDepthPipeline",
-            "python examples/simple_process.py",
-            "python luxury_tiff_batch_processor_cli.py",
-            "python lux_render_pipeline.py",
-            "python luxury_video_master_grader.py",
+            *self.STALE_OPERATOR_GUIDANCE_FRAGMENTS,
             "[README.md](../README.md)",
             "[DEPTH_PIPELINE_README.md](../DEPTH_PIPELINE_README.md)",
         ]
@@ -655,6 +665,36 @@ class TestReferenceQuickstartGuidance:
         ]
         for required_fragment in required_fragments:
             assert required_fragment in cheat_sheet
+
+    def test_pipeline_operations_guide_uses_current_repo_managed_entrypoints(self):
+        """Active operations guidance should use maintained CLI and setup contracts."""
+        operations_guide = (_repo_root / "docs" / "pipeline_docs" / "PIPELINE_OPERATIONS_GUIDE.md").read_text()
+
+        for stale_fragment in self.STALE_OPERATOR_GUIDANCE_FRAGMENTS:
+            assert stale_fragment not in operations_guide
+
+        required_fragments = [
+            "make venv",
+            "make install-core",
+            "make check-environment",
+            ".venv/bin/python scripts/check_image_processing_readiness.py",
+            ".venv/bin/python scripts/simple_image_processor.py",
+            ".venv/bin/lux-depth-v3",
+            "--model-key da3-metric",
+            ".venv/bin/luxury-tiff-batch",
+            ".venv/bin/lux_render",
+            "--input-glob",
+            ".venv/bin/luxury_video_grader",
+            "./scripts/setup/install_da3_runtime.sh --profile baseline",
+            "./scripts/setup/install_depth_pro_runtime.sh",
+            "./scripts/setup/install_raw_runtime.sh",
+            "./scripts/setup/install_fastvlm_runtime.sh",
+            "Linux and macOS Intel ML lanes are retired unsupported lanes",
+            "../cli/LUX_DEPTH_V3_CLI_GUIDE.md",
+            "../governance/DOCUMENTATION_MAP.md",
+        ]
+        for required_fragment in required_fragments:
+            assert required_fragment in operations_guide
 
 
 class TestRootEnvironmentTemplate:
