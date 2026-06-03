@@ -62,7 +62,7 @@ python scripts/utilities/luxury_tiff_batch_processor.py \
 **Installation:**
 ```bash
 pip install -r requirements.txt
-python scripts/download_depth_models.py
+python scripts/setup/download_depth_models.py
 ```
 
 **Quick Start:**
@@ -199,7 +199,7 @@ df -h /
 pip install -r requirements.txt
 
 # Download models
-python scripts/download_depth_models.py
+python scripts/setup/download_depth_models.py
 ```
 **Processing:**
 ```bash

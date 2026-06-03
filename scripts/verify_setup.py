@@ -215,7 +215,7 @@ def main():
     models = check_model_files()
     for model_name, exists in models.items():
         symbol = "✓" if exists else "○"
-        status = "Found" if exists else "Not found (run scripts/download_depth_models.py)"
+        status = "Found" if exists else "Not found (run scripts/setup/download_depth_models.py)"
         print(f"{symbol} {model_name:30s} {status}")
 
     # Test dimension validation

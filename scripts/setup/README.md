@@ -170,12 +170,13 @@ Downloads and installs AI/ML models required by the Transformation Portal pipeli
 
 **Usage:**
 ```bash
-python scripts/setup/install_models.py [--model MODEL_NAME] [--all]
+python scripts/setup/install_models.py [--all] [--dry-run] [--force]
 ```
 
 **Options:**
-- `--model MODEL_NAME`: Install a specific model
-- `--all`: Install all required models
+- `--all`: Check/install optional model families in addition to required models
+- `--dry-run`: Show what would be checked or downloaded without downloading artifacts
+- `--force`: Re-download verified local weights when supported
 
 **Models:**
 - Depth Anything V2 (depth estimation)

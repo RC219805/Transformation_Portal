@@ -24,6 +24,7 @@ def test_organization_scripts_exist():
 
     scripts = [
         ".auto-organize.sh",
+        "scripts/governance/check_script_topology.py",
         "scripts/setup/auto-organize-install.sh",
         "scripts/setup/pre-commit-check.sh",
     ]

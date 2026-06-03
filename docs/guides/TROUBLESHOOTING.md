@@ -156,7 +156,7 @@ pip install realesrgan basicsr facexlib gfpgan
 **Step 2: Download model weights**
 ```bash
 # Automatic download (recommended)
-python scripts/download_depth_models.py --model realesrgan
+python scripts/setup/download_depth_models.py --model depth
 
 # Or manual download
 mkdir -p weights
@@ -192,7 +192,7 @@ ZoeD_M12_N.pt: 0% | 703k/1.44G [00:30<10:48:36, 37.1kB/s]
 **Option 1: Pre-download models**
 ```bash
 # Use download script with progress bar
-python scripts/download_depth_models.py
+python scripts/setup/download_depth_models.py
 ```
 
 **Option 2: Use model cache**
@@ -419,8 +419,8 @@ top -l 1 | grep PhysMem  # macOS
 | Problem | Quick Fix |
 |---------|-----------|
 | Tensor dimension mismatch | Use dimensions that are multiples of 64 (auto-corrected) |
-| Real-ESRGAN not found | `pip install realesrgan && python scripts/download_depth_models.py` |
-| Slow model downloads | `python scripts/download_depth_models.py` |
+| Real-ESRGAN not found | `pip install realesrgan && python scripts/setup/install_models.py --dry-run` |
+| Slow model downloads | `python scripts/setup/download_depth_models.py` |
 | Missing accelerate | `pip install accelerate` (now in requirements.txt) |
 | Import errors | `pip install -r requirements.txt && pip install -e .` |
 | GPU not detected | Install CUDA or MPS-enabled PyTorch |

@@ -184,10 +184,10 @@ python agx_batch_processor.py \
 
 **Usage:**
 ```bash
-python run_aerial_enhancement.py \
+python scripts/pipelines/run_aerial_enhancement.py \
   --input aerial.jpg \
   --output enhanced.jpg \
-  --dehaze 0.6
+  --resolution 2048
 ```
 
 ---
@@ -343,10 +343,10 @@ python evolutionary_checkpoint.py \
 
 **Usage:**
 ```bash
-python visualize_material_assignments.py \
-  --input render.jpg \
+python scripts/utilities/visualize_material_assignments.py \
+  render.jpg \
   --output viz.png \
-  --materials all
+  --clusters 8
 ```
 
 ---
@@ -364,7 +364,7 @@ python visualize_material_assignments.py \
 
 **Usage:**
 ```bash
-python install_models.py
+python scripts/setup/install_models.py --dry-run
 ```
 
 ---
@@ -380,7 +380,7 @@ python install_models.py
 
 **Usage:**
 ```bash
-python install_models_auto.py --all
+python scripts/setup/install_models_auto.py --skip-optional
 ```
 
 ---
@@ -395,9 +395,9 @@ python install_models_auto.py --all
 
 **Usage:**
 ```bash
-python download_depth_models.py \
-  --model small \
-  --format coreml
+python scripts/setup/download_depth_models.py \
+  --model depth \
+  --verify-only
 ```
 
 ---
@@ -473,9 +473,7 @@ python create_board_textures.py \
 
 **Usage:**
 ```bash
-python synthetic_viewer.py \
-  --dataset data/synthetic/ \
-  --filter "kitchen"
+python -c "from transformation_portal.perceptual.synthetic_viewer import SyntheticViewer; print(SyntheticViewer())"
 ```
 
 ---
@@ -606,8 +604,8 @@ python script.py --device cpu
 
 **Model Download Fails:**
 ```bash
-python install_models.py  # Interactive
-python install_models_auto.py --retry
+python scripts/setup/install_models.py --dry-run
+python scripts/setup/install_models_auto.py --skip-optional
 ```
 
 ---
@@ -620,12 +618,12 @@ python install_models_auto.py --retry
 | Grade video | `luxury_video_master_grader.py` | `--preset signature_estate` |
 | Batch TIFF | `luxury_tiff_batch_processor.py` | `--input dir/ --workers 4` |
 | Depth map | `depth_anything_v2.py` | `--model small --device mps` |
-| Material viz | `visualize_material_assignments.py` | `--materials all` |
-| Install models | `install_models.py` | Interactive setup |
+| Material viz | `scripts/utilities/visualize_material_assignments.py` | `--clusters 8` |
+| Install models | `scripts/setup/install_models.py` | `--dry-run` |
 | Code audit | `codebase_philosophy_auditor.py` | `--target src/` |
 
 ---
 
-**Last Updated**: 2025-11-07
+**Last Updated**: 2026-06-03
 **Version**: 2.0.0
 **Total Scripts**: 24+

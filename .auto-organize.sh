@@ -24,6 +24,7 @@
 # Helper Scripts (executed in sequence when running full organization):
 #   1. scripts/organize_docs.sh         - Classify docs into approved locations
 #   2. scripts/setup/pre-commit-check.sh - Validate root file placement
+#   3. scripts/governance/check_script_topology.py - Validate script placement
 #
 # Documentation:
 #   See docs/governance/REPO_ORGANIZATION.md for organization rules.
@@ -360,7 +361,38 @@ check_root_shell_scripts() {
     return 0
 }
 
-# Step 5: Validate documentation structure
+# Step 5: Validate script topology
+validate_script_topology() {
+    log_section "Validating Script Topology"
+
+    local helper="scripts/governance/check_script_topology.py"
+
+    if [[ ! -f "$REPO_ROOT/$helper" ]]; then
+        log_verbose "Script topology validator not found, skipping"
+        return 0
+    fi
+
+    local args=()
+    if [[ "$VERBOSE" == "true" ]]; then
+        args+=("--verbose")
+    fi
+
+    log_info "Running: python3 $helper ${args[*]}"
+    if ! python3 "$REPO_ROOT/$helper" "${args[@]}"; then
+        if [[ "$CHECK_MODE" == "true" ]]; then
+            log_error "Script topology violations detected"
+            return 1
+        else
+            log_warn "Script topology issues found"
+        fi
+    else
+        log_success "Script topology validated"
+    fi
+
+    return 0
+}
+
+# Step 6: Validate documentation structure
 validate_docs_structure() {
     log_section "Validating Documentation Structure"
 
@@ -473,6 +505,14 @@ main() {
         fi
 
         # Step 5: Validate documentation structure
+        total_steps=$((total_steps + 1))
+        if validate_script_topology; then
+            passed_steps=$((passed_steps + 1))
+        else
+            failed_steps=$((failed_steps + 1))
+        fi
+
+        # Step 6: Validate documentation structure
         total_steps=$((total_steps + 1))
         if validate_docs_structure; then
             passed_steps=$((passed_steps + 1))

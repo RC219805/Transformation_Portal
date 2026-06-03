@@ -32,7 +32,7 @@ except ImportError:  # pragma: no cover - package not installed
                 "Real-ESRGAN not installed. To enable 4x upscaling:\n"
                 "  1. Install package: pip install realesrgan\n"
                 "  2. Download model weights:\n"
-                "     python scripts/download_depth_models.py --model realesrgan\n"
+                "     python scripts/setup/install_models.py --dry-run\n"
                 "     OR manually:\n"
                 "     wget https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5.0/realesrgan-x4plus.pth\n"
                 "     mkdir -p weights && mv realesrgan-x4plus.pth weights/RealESRGAN_x4plus.pth\n"

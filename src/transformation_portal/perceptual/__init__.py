@@ -41,6 +41,7 @@ from .metrics import (
     compute_psnr,
     compute_ssim,
 )
+from .synthetic_viewer import ACUScore, JourneyMoment, SyntheticViewer
 from .tracker import EnhancementTracker, TrajectoryPoint
 
 __all__ = [
@@ -53,6 +54,9 @@ __all__ = [
     "ImageMetadata",
     "PerceptualAnalyzer",
     "AnalysisResult",
+    "SyntheticViewer",
+    "ACUScore",
+    "JourneyMoment",
     "EnhancementTracker",
     "TrajectoryPoint",
     "compute_lpips",

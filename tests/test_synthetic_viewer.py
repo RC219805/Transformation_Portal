@@ -2,12 +2,9 @@ from __future__ import annotations
 
 import pytest
 
-pytestmark = [pytest.mark.unit, pytest.mark.skip(reason="synthetic_viewer module in scripts, not yet migrated")]
+from transformation_portal.perceptual.synthetic_viewer import ACUScore, JourneyMoment, SyntheticViewer
 
-try:
-    from scripts.synthetic_viewer import ACUScore, JourneyMoment, SyntheticViewer
-except ImportError:
-    pass
+pytestmark = [pytest.mark.unit]
 
 
 def build_demo_stream() -> list[dict[str, float]]:

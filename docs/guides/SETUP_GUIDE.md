@@ -103,7 +103,7 @@ pip install coremltools  # macOS only
 Use the provided script to print Depth Anything CoreML setup instructions and verify local artifact status:
 
 ```bash
-python scripts/download_depth_models.py --model depth
+python scripts/setup/download_depth_models.py --model depth
 ```
 
 Options:
@@ -178,7 +178,7 @@ ZoeD_M12_N.pt: 0% | 703k/1.44G [00:30<10:48:36, 37.1kB/s]
 
 **Solutions:**
 - Use a faster internet connection
-- Use `python scripts/download_depth_models.py --verify-only` to verify local artifacts
+- Use `python scripts/setup/download_depth_models.py --verify-only` to verify local artifacts
 - HuggingFace models are still downloaded automatically on first model use
 - Use cached models: Set `TRANSFORMERS_CACHE` environment variable
   ```bash
