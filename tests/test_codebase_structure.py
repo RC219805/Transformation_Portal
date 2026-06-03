@@ -733,6 +733,42 @@ class TestReferenceQuickstartGuidance:
         for required_fragment in required_fragments:
             assert required_fragment in scripts_reference
 
+    def test_supported_file_formats_guide_uses_current_entrypoints(self):
+        """Maintained format guidance should route through current processing surfaces."""
+        supported_formats = (_repo_root / "docs" / "guides" / "SUPPORTED_FILE_FORMATS.md").read_text()
+
+        stale_fragments = [
+            *self.STALE_OPERATOR_GUIDANCE_FRAGMENTS,
+            "python depth_pipeline/pipeline.py",
+            "python material_response.py",
+            "board_material_aerial_enhancer.py",
+            "pip install Pillow",
+            "pip install tifffile",
+            "Included in requirements.txt",
+            "[README.md](README.md)",
+            "[DEPTH_PIPELINE_README.md](DEPTH_PIPELINE_README.md)",
+        ]
+        for stale_fragment in stale_fragments:
+            assert stale_fragment not in supported_formats
+
+        required_fragments = [
+            ".venv/bin/python scripts/simple_image_processor.py",
+            ".venv/bin/lux-depth-v3",
+            "--model-key da3-metric",
+            ".venv/bin/luxury-tiff-batch",
+            ".venv/bin/lux_render",
+            "--input-glob",
+            ".venv/bin/luxury_video_grader",
+            "./scripts/setup/install_raw_runtime.sh",
+            "transformation_portal.utils.format_utils",
+            "make install-core",
+            "python3 scripts/governance/check_docs_structure.py --all",
+            "../pipeline_docs/PIPELINE_OPERATIONS_GUIDE.md",
+            "../governance/DOCUMENTATION_MAP.md",
+        ]
+        for required_fragment in required_fragments:
+            assert required_fragment in supported_formats
+
 
 class TestRootEnvironmentTemplate:
     """Tests for the root Docker/FastAPI environment template."""
