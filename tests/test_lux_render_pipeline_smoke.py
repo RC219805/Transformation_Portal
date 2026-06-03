@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib
+import inspect
 import sys
 
 import pytest
@@ -53,6 +54,12 @@ def _load_lux_render_pipeline_with_missing_ml(monkeypatch):
     )
 
 
+def _command_option_help(pipeline_module, parameter_name: str) -> str:
+    command_info = pipeline_module.app.registered_commands[0]
+    option_info = inspect.signature(command_info.callback).parameters[parameter_name].default
+    return option_info.help
+
+
 def test_lux_render_pipeline_import_is_graceful_without_ml_extras(monkeypatch, capsys) -> None:
     (
         portal_module,
@@ -73,8 +80,8 @@ def test_lux_render_pipeline_import_is_graceful_without_ml_extras(monkeypatch, c
         help_result = runner.invoke(pipeline_module.app, ["--help"])
         assert help_result.exit_code == 0
         assert "Batch CLI entry point for the luxury render pipeline." in help_result.output
-        assert "--input-glob" in help_result.output
-        assert "Positive prompt" in help_result.output
+        assert "Glob of input images" in _command_option_help(pipeline_module, "input_glob")
+        assert "Positive prompt" in _command_option_help(pipeline_module, "prompt")
 
         monkeypatch.setattr(sys, "argv", ["lux_render", "--help"])
         with pytest.raises(SystemExit) as console_exit:
