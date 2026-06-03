@@ -130,6 +130,40 @@ class TestDocumentationOrganization:
                 print(f"Note: {subdir} directory not found in docs/")
 
 
+class TestRootGovernanceMetadata:
+    """Tests for root governance metadata that is allowed to stay in root."""
+
+    def test_architect_directive_status_points_to_current_authorities(self):
+        """Root architect metadata should not masquerade as live PR/CI status."""
+        status_path = _repo_root / ".architect_directive_status.yml"
+        content = status_path.read_text()
+
+        assert 'status: "SUPERSEDED"' in content
+        assert "binding: false" in content
+
+        stale_live_claims = [
+            "PR #822",
+            "PR #823",
+            "ARCHITECT_RESPONSE_SUMMARY.md",
+            "ci_status:",
+            "open_prs:",
+            "projected_completion:",
+        ]
+        for stale_claim in stale_live_claims:
+            assert stale_claim not in content
+
+        required_authorities = [
+            "AGENTS.md",
+            "docs/governance/DOCUMENTATION_MAP.md",
+            "docs/architecture/ARCHITECTURE_CLEANUP_BOARD.md",
+            "docs/architecture/agent_governance.md",
+            "docs/ci/TYPE_CHECKING_POLICY.md",
+        ]
+        for relative_path in required_authorities:
+            assert relative_path in content
+            assert (_repo_root / relative_path).exists()
+
+
 class TestAssetOrganization:
     """Tests for asset organization."""
 
