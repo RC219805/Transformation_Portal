@@ -18,8 +18,10 @@ It combines orchestrated depth estimation, PBR map generation, material-aware fi
 
 `main` tracks the active development branch for the repository.
 
-Current documentation baseline: repo-wide refresh audit dated May 11, 2026,
-building on `main` through PR #1721.
+Current documentation navigation starts at [docs/README.md](docs/README.md)
+and [docs/governance/DOCUMENTATION_MAP.md](docs/governance/DOCUMENTATION_MAP.md).
+The May 11, 2026 repo-wide refresh audit remains the inventory baseline for
+historical classification decisions.
 Recent merged work added typed API v1 envelopes, typed health/readiness and job
 lifecycle response models, Docker health/env wiring, CI workflow hardening and
 a 30-workflow matrix, archive-gate readiness evidence, APEX fallback /

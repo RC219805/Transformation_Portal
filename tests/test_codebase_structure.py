@@ -133,6 +133,19 @@ class TestDocumentationOrganization:
 class TestRootGovernanceMetadata:
     """Tests for root governance metadata that is allowed to stay in root."""
 
+    def test_root_readme_status_points_to_current_documentation_navigation(self):
+        """Root status prose should not depend on stale PR-specific snapshots."""
+        readme = (_repo_root / "README.md").read_text()
+
+        assert "building on `main` through PR #" not in readme
+        required_navigation = [
+            "docs/README.md",
+            "docs/governance/DOCUMENTATION_MAP.md",
+            "May 11, 2026 repo-wide refresh audit",
+        ]
+        for expected in required_navigation:
+            assert expected in readme
+
     def test_architect_directive_status_points_to_current_authorities(self):
         """Root architect metadata should not masquerade as live PR/CI status."""
         status_path = _repo_root / ".architect_directive_status.yml"
