@@ -171,9 +171,15 @@ class TestRootGovernanceMetadata:
             "Current documentation navigation is governed by `docs/README.md` and `docs/governance/DOCUMENTATION_MAP.md`",
             "May 11, 2026 repo-wide refresh through PR #1721",
             "May 12 architecture and CLI overlays",
+            "## [3.4.0] - 2026-02-24",
+            "Canonical evidence-bundle root anchoring",
+            "Optional notarization validation support",
+            "[Unreleased]: https://github.com/RC219805/Transformation_Portal/compare/v3.4.0...HEAD",
+            "[3.4.0]: https://github.com/RC219805/Transformation_Portal/releases/tag/v3.4.0",
         ]
         for phrase in required_current_context:
             assert phrase in changelog
+        assert "compare/v2.0.0...HEAD" not in changelog
 
     def test_root_readme_performance_links_use_current_authorities(self):
         """README performance navigation should point to maintained policy docs."""
@@ -223,7 +229,7 @@ class TestRootGovernanceMetadata:
         required_policy_fragments = [
             "release channels are currently supported with security updates",
             "| main    | :white_check_mark: | Active development branch; security fixes prioritized |",
-            "| Latest tagged release | :white_check_mark: | Supported for security updates until superseded by a newer tagged release |",
+            "| Latest semantic product release tag | :white_check_mark: | Supported for security updates until superseded by a newer semantic product release tag |",
             "| Older release tags | :x: | Unsupported unless an explicit security advisory or maintenance branch says otherwise |",
         ]
         for policy_fragment in required_policy_fragments:

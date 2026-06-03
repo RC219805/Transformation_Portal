@@ -7,7 +7,7 @@ The following Transformation Portal release channels are currently supported wit
 | Version | Supported          | Notes |
 | ------- | ------------------ | ----- |
 | main    | :white_check_mark: | Active development branch; security fixes prioritized |
-| Latest tagged release | :white_check_mark: | Supported for security updates until superseded by a newer tagged release |
+| Latest semantic product release tag | :white_check_mark: | Supported for security updates until superseded by a newer semantic product release tag |
 | Older release tags | :x: | Unsupported unless an explicit security advisory or maintenance branch says otherwise |
 
 ## Reporting a Vulnerability

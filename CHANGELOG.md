@@ -186,6 +186,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Dependencies: Requires Python >=3.11 (see PR #794)
   - Validation: Comprehensive smoke tests added for ML stack compatibility
 
+## [3.4.0] - 2026-02-24
+
+### Added
+- Canonical evidence-bundle root anchoring with governed root algorithm, root preimage version, and root SHA-256 co-presence.
+- Optional notarization validation support for evidence bundle manifests.
+
+### Changed
+- Canonical root preimage serialization now uses UTF-8, sorted compact JSON, and a trailing line feed.
+- Bundle-root preimages exclude path-derived fields and optional notarization fields so manifests remain portable across storage locations.
+
+### Compatibility
+- Phase 3.3 manifests without bundle-root fields remain valid.
+- Phase 3.4 manifests with bundle-root fields and optional notarization blocks are supported.
+
 ## [2.0.0] - 2025-11-14
 
 ### Added
@@ -204,5 +218,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Various stability and correctness improvements
 
-[Unreleased]: https://github.com/RC219805/Transformation_Portal/compare/v2.0.0...HEAD
+[Unreleased]: https://github.com/RC219805/Transformation_Portal/compare/v3.4.0...HEAD
+[3.4.0]: https://github.com/RC219805/Transformation_Portal/releases/tag/v3.4.0
 [2.0.0]: https://github.com/RC219805/Transformation_Portal/releases/tag/v2.0.0
