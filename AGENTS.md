@@ -14,6 +14,10 @@ actionable; use the linked docs and `Makefile` for exhaustive inventories.
   without evidence.
 - Pair behavior changes with focused tests in the same pass. Prefer tests that
   prove a real contract or regression risk over tests that only raise counts.
+- Keep `src/tp` as the separate public import surface for contract, fixity, and
+  Phase 4 tooling (`tp.crypto`, `tp.merkle`, `tp.phase4`). Do not collapse it
+  into `transformation_portal`; tracked file and package names stay lowercase
+  snake_case Python source.
 - Treat Postgres, Redis, Docker, browser, and external-model failures as
   environment/tooling blockers until evidence shows a product regression. Do
   not weaken product contracts to hide missing services.
