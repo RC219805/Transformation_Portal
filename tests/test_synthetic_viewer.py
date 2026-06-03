@@ -1,13 +1,17 @@
 from __future__ import annotations
 
+import os
+import subprocess
+import sys
+from pathlib import Path
+
 import pytest
 
-pytestmark = [pytest.mark.unit, pytest.mark.skip(reason="synthetic_viewer module in scripts, not yet migrated")]
+from transformation_portal.perceptual.synthetic_viewer import ACUScore, JourneyMoment, SyntheticViewer
 
-try:
-    from scripts.synthetic_viewer import ACUScore, JourneyMoment, SyntheticViewer
-except ImportError:
-    pass
+pytestmark = [pytest.mark.unit]
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
 def build_demo_stream() -> list[dict[str, float]]:
@@ -16,6 +20,39 @@ def build_demo_stream() -> list[dict[str, float]]:
         {"technical": 0.95, "emotional": 0.9, "memorability": 0.86, "desire": 0.94},
         {"technical": 0.9, "emotional": 0.87, "memorability": 0.84, "desire": 0.93},
     ]
+
+
+def test_synthetic_viewer_import_does_not_require_torch() -> None:
+    code = """
+import importlib.abc
+import sys
+
+
+class BlockTorch(importlib.abc.MetaPathFinder):
+    def find_spec(self, fullname, path=None, target=None):
+        if fullname == "torch" or fullname.startswith("torch."):
+            raise ModuleNotFoundError("blocked torch")
+        return None
+
+
+sys.meta_path.insert(0, BlockTorch())
+from transformation_portal.perceptual.synthetic_viewer import SyntheticViewer
+
+print(SyntheticViewer().__class__.__name__)
+"""
+    env = {
+        **os.environ,
+        "PYTHONPATH": f"{REPO_ROOT / 'src'}{os.pathsep}{os.environ.get('PYTHONPATH', '')}",
+    }
+    result = subprocess.run(
+        [sys.executable, "-c", code],
+        cwd=REPO_ROOT,
+        env=env,
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+    assert result.stdout.strip() == "SyntheticViewer"
 
 
 def test_experience_content_returns_consensus_score() -> None:

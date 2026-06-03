@@ -29,7 +29,6 @@
         "scripts.governance",
         "scripts.lib.repo_root",
         "scripts.pipelines.pro_pipeline",
-        "scripts.synthetic_viewer",
         "scripts.temporal_evolution",
         "scripts.utilities.format_utils_enhancements",
         "scripts.utilities.material_response",

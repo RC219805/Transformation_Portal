@@ -393,8 +393,8 @@ def print_recommendations(disk: Dict, capabilities: Dict) -> None:
 
     # Model downloads
     repo_root = Path(__file__).parent.parent
-    if (repo_root / "scripts" / "download_depth_models.py").exists():
-        recommendations.append(("📦", "Download ML models: python scripts/download_depth_models.py", Colors.OKCYAN))
+    if (repo_root / "scripts" / "setup" / "download_depth_models.py").exists():
+        recommendations.append(("📦", "Download ML models: python scripts/setup/download_depth_models.py", Colors.OKCYAN))
 
     # Print all recommendations
     for symbol, message, color in recommendations:

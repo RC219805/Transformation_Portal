@@ -12,4 +12,4 @@ from scripts.utilities.create_board_textures import main
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

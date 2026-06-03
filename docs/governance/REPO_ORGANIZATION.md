@@ -198,7 +198,12 @@ ignored `output/...` paths instead.
 4. **Misplaced Shell Scripts Detection**
    - Detects shell scripts in root that should be under `scripts/`
 
-5. **Documentation Structure Validation** (`scripts/governance/check_docs_structure.py`)
+5. **Script Topology Validation** (`scripts/governance/check_script_topology.py`)
+   - Verifies governed canonical locations for setup, pipeline, utility, and reusable package code
+   - Ensures compatibility wrappers delegate to canonical implementations
+   - Prevents retired broad-mutating organization helpers and historical reports from returning to active script paths
+
+6. **Documentation Structure Validation** (`scripts/governance/check_docs_structure.py`)
    - Validates that documentation follows the approved directory structure
 
 ### Running in CI
@@ -339,8 +344,10 @@ The organization system uses these rules to classify files:
 - Setup/Installation: → `scripts/setup/`
 - Automation: → `scripts/automation/`
 - Utilities: → `scripts/utilities/`
-- Pipeline scripts: keep in project root or dedicated `scripts/pipelines/` if applicable
-- Retired or superseded scripts: → `archive/scripts/`
+- Pipeline scripts: → `scripts/pipelines/`
+- Reusable runtime/domain code: → `src/transformation_portal/`
+- Public compatibility paths in `scripts/`: wrappers only, delegating to canonical implementations
+- Retired or superseded scripts: → `archive/scripts/legacy-organization/` or another `archive/scripts/` subdirectory
 
 ### Data Files
 
@@ -371,7 +378,7 @@ The organization system uses these rules to classify files:
 1. Ask yourself: “Does this file need to be in the root?”.
 2. If no: place it in the appropriate subdirectory.
 3. If yes: ensure it fits one of the allowed root file categories.
-4. Add to `.auto-organize.sh`: if creating a new file type, add rules to the script.
+4. Add to the relevant validator: root placement belongs in `scripts/setup/pre-commit-check.sh`, script placement belongs in `scripts/governance/check_script_topology.py`, and docs topology belongs in `scripts/governance/check_docs_structure.py`.
 
 ### For CI/CD
 
@@ -462,6 +469,10 @@ For questions or issues with the organization system:
 
 ## Version History
 
+- **v1.2.0** (June 2026): Script topology governance refresh
+  - Added script-placement validation through `scripts/governance/check_script_topology.py`
+  - Promoted active setup/pipeline/utility implementations into governed subdirectories with public compatibility wrappers
+  - Archived retired broad-mutating organization helpers under `archive/scripts/legacy-organization/`
 - **v1.1.0** (April 2026): Documentation governance refresh
   - Re-established `docs/README.md` and `DOCUMENTATION_MAP.md` as current navigation
   - Classified old project reports, depth-model notes, and pipeline v1.1.0 material as historical unless explicitly promoted
@@ -474,6 +485,6 @@ For questions or issues with the organization system:
 
 ---
 
-**Last Updated**: 2026-04-27
+**Last Updated**: 2026-06-03
 **Maintained By**: Transformation Portal Team
 **License**: Same as main repository
