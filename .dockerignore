@@ -8,7 +8,9 @@
 .ruff_cache/
 .hypothesis/
 .coverage
+.coverage.*
 coverage.xml
+coverage.json
 htmlcov/
 requirements/.pip-tools-cache/
 requirements/.hash-pilot/
