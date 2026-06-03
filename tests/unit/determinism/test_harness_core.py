@@ -116,10 +116,10 @@ def test_camera_native_linear_missing_optional_deps_points_to_raw_runtime(monkey
     original_import = builtins.__import__
     target_module = "transformation_portal.spatial_ai.ingest.phase2_camera_native_linear"
 
-    def fake_import(name, globals=None, locals=None, fromlist=(), level=0):  # noqa: ANN001
+    def fake_import(name, globals_=None, locals_=None, fromlist=(), level=0):  # noqa: ANN001
         if name == target_module:
             raise ModuleNotFoundError("No module named 'rawpy'")
-        return original_import(name, globals, locals, fromlist, level)
+        return original_import(name, globals_, locals_, fromlist, level)
 
     monkeypatch.setattr(builtins, "__import__", fake_import)
 

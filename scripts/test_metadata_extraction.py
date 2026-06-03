@@ -552,7 +552,7 @@ def render_check_system(result: SystemCheckResult) -> None:
             print(f"      libraw version: {result.libraw_version}")
     else:
         print("  ⚠️  rawpy not found (RAW file reading may be limited)")
-        print("     Install with: pip install rawpy")
+        print("     Bootstrap RAW runtime with: ./scripts/setup/install_raw_runtime.sh")
 
     # ingest module
     print("\nChecking transformation_portal.ingest module...")

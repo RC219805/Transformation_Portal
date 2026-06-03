@@ -137,7 +137,9 @@ def load_raw_as_rgb(
         import rawpy
     except ImportError as e:
         raise ImportError(
-            "rawpy required for RAW file support.\n" "Install with: pip install rawpy\n" "Or: pip install -e '.[raw]'"
+            "rawpy required for RAW file support.\n"
+            "Use ./scripts/setup/install_raw_runtime.sh for the isolated RAW runtime, "
+            "or deliberately install the RAW extra into this active interpreter for development."
         ) from e
 
     if not raw_path.exists():

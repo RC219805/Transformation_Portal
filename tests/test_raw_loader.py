@@ -128,7 +128,9 @@ class TestRawpyNotInstalled:
 
             # Verify error message is helpful
             error_msg = str(exc_info.value)
-            assert "rawpy required" in error_msg or "pip install rawpy" in error_msg
+            assert "rawpy required" in error_msg
+            assert "./scripts/setup/install_raw_runtime.sh" in error_msg
+            assert "pip install rawpy" not in error_msg
 
     def test_load_raw_as_rgb_uses_dedicated_runtime_when_configured(self, tmp_path, monkeypatch):
         """Configured RAW runtime should dispatch through the subprocess worker."""
@@ -283,7 +285,9 @@ class TestDemosaicAlgorithm:
 
             # Verify error message is helpful
             error_msg = str(exc_info.value)
-            assert "rawpy required" in error_msg or "pip install rawpy" in error_msg
+            assert "rawpy required" in error_msg
+            assert "./scripts/setup/install_raw_runtime.sh" in error_msg
+            assert "pip install rawpy" not in error_msg
 
 
 class TestTiffStillWorksWithoutRawpy:

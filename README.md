@@ -254,19 +254,18 @@ See [ADR-019: Depth Backend Unification](docs/architecture/ADR-019-depth-backend
 
 Enable direct ingestion of professional camera RAW formats such as CR2, NEF, ARW, and DNG.
 
-```bash
-pip install -e ".[raw]"
-# or: pip install rawpy
-```
-
-RAW inputs are auto-detected and converted into pipeline-ready RGB using LibRaw via `rawpy`. If `./.venv-raw/bin/python` exists, Lux Depth V3 auto-discovers that repo-local RAW runtime before falling back to the main repo environment.
-
 **Recommended (RAW via isolated runtime):**
 ```bash
 ./scripts/setup/install_raw_runtime.sh
 
 lux-depth-v3 --input-dir ./input --output-dir ./output
 ```
+
+RAW inputs are auto-detected and converted into pipeline-ready RGB using LibRaw via `rawpy`. If `./.venv-raw/bin/python` exists, Lux Depth V3 auto-discovers that repo-local RAW runtime before falling back to the main repo environment.
+
+The `make install-ml-raw` lock lane is intentionally disabled until a trusted
+target-owned RAW lock contract exists. Avoid ad hoc `rawpy` installs in the
+main repo environment for operator workflows.
 
 Use `--raw-python` only when you want to override that repo-local runtime explicitly:
 

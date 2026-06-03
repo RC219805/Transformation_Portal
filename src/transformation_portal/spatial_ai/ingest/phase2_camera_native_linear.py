@@ -111,7 +111,9 @@ def ingest_phase2_xyz_d50_linear_fp32(
         import rawpy  # type: ignore
     except Exception as e:
         raise RuntimeError(
-            "rawpy is required for contract camera_native_linear. " "Install with the project's raw extra."
+            "rawpy is required for contract camera_native_linear. "
+            "Use `./scripts/setup/install_raw_runtime.sh` for the isolated RAW runtime, "
+            "or deliberately install the RAW extra into this active interpreter for development."
         ) from e
 
     wb_mode_n = wb_mode.strip().lower()

@@ -557,8 +557,8 @@ class LinearDecoder:
         except ImportError as e:
             raise ImportError(
                 f"RAW format {format_str} requires rawpy package. "
-                f"Install with: pip install rawpy\n"
-                f"Or install spatial_ai with RAW support: pip install -e .[raw]"
+                "Use `./scripts/setup/install_raw_runtime.sh` for the isolated RAW runtime, "
+                "or deliberately install the RAW extra into this active interpreter for development."
             ) from e
 
         try:
@@ -672,7 +672,11 @@ class LinearDecoder:
         try:
             import rawpy
         except ImportError as e:
-            raise ImportError("RAW color space detection requires rawpy package. " "Install with: pip install rawpy") from e
+            raise ImportError(
+                "RAW color space detection requires rawpy package. "
+                "Use `./scripts/setup/install_raw_runtime.sh` for the isolated RAW runtime, "
+                "or deliberately install the RAW extra into this active interpreter for development."
+            ) from e
 
         try:
             with rawpy.imread(str(path)) as raw:
