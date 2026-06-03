@@ -1,8 +1,5 @@
 # Formatting-only commits to ignore in git blame
 # Configure locally with: git config blame.ignoreRevsFile .git-blame-ignore-revs
 
-# chore(format): black+isort baseline (no logic changes)
-d35d12479ee23f7af99da964d55f684e5e4108aa
-
-# chore(gate-0): black reformat of app.py — Gate 0 closure (no logic changes)
-1073d409fafecb36af0c89f6daebcbc3aee8814d
+# Gate 0: black+isort baseline + enforce in build.yml (#824)
+9af004eeb960249ca1f387fd8f5871a4bb958cbe
