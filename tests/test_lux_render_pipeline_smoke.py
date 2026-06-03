@@ -73,6 +73,7 @@ def test_lux_render_pipeline_import_is_graceful_without_ml_extras(monkeypatch, c
         help_result = runner.invoke(pipeline_module.app, ["--help"])
         assert help_result.exit_code == 0
         assert "Batch CLI entry point for the luxury render pipeline." in help_result.output
+        assert "--input-glob" in help_result.output
         assert "Positive prompt" in help_result.output
 
         monkeypatch.setattr(sys, "argv", ["lux_render", "--help"])
@@ -81,7 +82,6 @@ def test_lux_render_pipeline_import_is_graceful_without_ml_extras(monkeypatch, c
         assert console_exit.value.code == 0
         console_output = capsys.readouterr().out
         assert "Batch CLI entry point for the luxury render pipeline." in console_output
-        assert "--input-glob" in console_output
 
         run_result = runner.invoke(
             pipeline_module.app,
