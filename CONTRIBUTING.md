@@ -569,14 +569,14 @@ Transformation Portal uses `pip-compile` for dependency management. All dependen
 
 | Style              | Format          | Use Case                                          | Example                                  |
 |--------------------|-----------------|---------------------------------------------------|------------------------------------------|
-| **Range Pin**      | `>=X.Y,<Z`      | Production dependencies (base.in, ml.in)          | `numpy>=1.24,<2.5.0`                     |
+| **Range Pin**      | `>=X.Y,<Z`      | Production dependencies (`base.in`, ML layer `.in` files) | `numpy>=1.24,<2.5.0`                     |
 | **Strict Pin**     | `==X.Y.Z`       | Deterministic builds, known incompatibilities     | `rawpy==0.26.0  # RAW demosaic`          |
 | **Lower-bound**    | `>=X.Y`         | Dev tools with stable CLI (dev.in, ci.in only)    | `black>=24.8  # Formatter`               |
 | **Unpinned**       | (none)          | **NEVER ALLOWED** (causes non-deterministic builds) | ❌                                       |
 
 **Decision tree:**
 
-1. Is this a production dependency (`base.in` or `ml.in`)?
+1. Is this a production dependency (`base.in` or an ML layer `.in` file)?
    - **Yes**: Use **range pin** (`>=X.Y,<Z`) unless determinism is critical
    - **No**: Continue to step 2
 
@@ -593,22 +593,26 @@ Transformation Portal uses `pip-compile` for dependency management. All dependen
 
 ```bash
 # 1. Edit the appropriate .in file
-vim requirements/base.in       # Production runtime deps
-vim requirements/ml.in         # Optional ML/AI deps
-vim requirements/dev.in        # Testing and linting tools
-vim requirements/ci.in         # CI-only tools
+vim requirements/base.in                    # Production runtime deps
+vim requirements/ml-core.in                 # Shared ML capability inputs
+vim requirements/ml-core-darwin-arm64.in    # Target-owned Apple Silicon ML lock input
+vim requirements/dev.in                     # Testing and linting tools
+vim requirements/ci.in                      # CI-only tools
 
 # 2. Add dependency with correct constraint style
 echo "new-package>=1.0.0,<2    # Brief description" >> requirements/base.in
 
-# 3. Recompile all .txt files
-cd requirements && make compile
+# 3. Recompile generic checked-in lockfiles
+make -C requirements compile
+
+# 3b. If changing a target-owned ML lock input, regenerate on the authoritative lane
+make -C requirements compile-ml-darwin-arm64
 
 # 4. Validate constraints
-cd .. && ./scripts/validate_dependency_constraints.sh
+./scripts/validate_dependency_constraints.sh
 
-# 5. Commit both .in and .txt files
-git add requirements/*.in requirements/*.txt
+# 5. Commit edited inputs and generated .txt files that are part of the checked-in contract
+git add requirements/base.in requirements/base.txt
 git commit -m "deps: add new-package for feature XYZ"
 ```
 

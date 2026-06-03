@@ -26,7 +26,7 @@ TARGET_OWNED_LANE_CASES = (
         "Darwin",
         "arm64",
         "check-ml-darwin-arm64",
-        "Run 'cd requirements && make compile-ml-darwin-arm64' on native Darwin arm64.",
+        "Run 'make -C requirements compile-ml-darwin-arm64' on native Darwin arm64.",
     ),
 )
 
@@ -151,7 +151,7 @@ def test_generic_stale_warning_preserves_make_compile_guidance(tmp_path: Path) -
 
     assert result.returncode == 2, result.stdout + result.stderr
     assert "base.in: Compiled .txt file is stale" in result.stdout
-    assert "Run 'cd requirements && make compile' to regenerate" in result.stdout
+    assert "Run 'make -C requirements compile' to regenerate" in result.stdout
     assert "Consider addressing warnings for best practices." in result.stdout
 
 

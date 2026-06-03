@@ -326,6 +326,32 @@ class TestRootGovernanceMetadata:
         assert "Next audit: **2026-05-16 (Q2 2026)**" not in contributing
         assert "Next audit: **2026-08-16 (Q3 2026)**" in contributing
 
+    def test_contributing_dependency_workflow_matches_requirements_contract(self):
+        """Root contribution guidance should not route dependency edits through retired ML flows."""
+        contributing = (_repo_root / "CONTRIBUTING.md").read_text()
+        requirements_readme = (_repo_root / "requirements" / "README.md").read_text()
+
+        stale_fragments = [
+            "vim requirements/ml.in         # Optional ML/AI deps",
+            "# 3. Recompile all .txt files",
+            "git add requirements/*.in requirements/*.txt",
+        ]
+        for stale_fragment in stale_fragments:
+            assert stale_fragment not in contributing
+
+        required_fragments = [
+            "vim requirements/ml-core.in",
+            "vim requirements/ml-core-darwin-arm64.in",
+            "make -C requirements compile",
+            "make -C requirements compile-ml-darwin-arm64",
+            "./scripts/validate_dependency_constraints.sh",
+        ]
+        for required_fragment in required_fragments:
+            assert required_fragment in contributing
+
+        assert "compile           Compile generic checked-in lockfiles only" in requirements_readme
+        assert "compile-ml-darwin-arm64    Compile the Darwin arm64 ML lock" in requirements_readme
+
     def test_contributing_branch_protection_links_use_current_setup_doc(self):
         """Contribution guidance should not route to historical verification reports."""
         contributing = (_repo_root / "CONTRIBUTING.md").read_text()
@@ -423,9 +449,14 @@ class TestRootGovernanceMetadata:
                 if not command_context:
                     continue
 
-                target_source = requirements_targets if "cd requirements" in line else root_targets
-                for match in re.finditer(r"(?<![A-Za-z0-9_.-])make\s+([A-Za-z0-9_.%/+@-]+)", line):
-                    target = match.group(1)
+                for match in re.finditer(
+                    r"(?<![A-Za-z0-9_.-])make(?:\s+-C\s+([A-Za-z0-9_./-]+))?\s+([A-Za-z0-9_.%/+@-]+)",
+                    line,
+                ):
+                    make_directory = match.group(1)
+                    target = match.group(2)
+                    uses_requirements_makefile = make_directory == "requirements" or "cd requirements" in line
+                    target_source = requirements_targets if uses_requirements_makefile else root_targets
                     if target not in target_source:
                         missing_targets.append(f"{relative_path}:{line_number}: make {target}")
 

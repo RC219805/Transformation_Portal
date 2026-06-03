@@ -192,7 +192,7 @@ check_lockfile() {
     local lockfile="$1"
     if [[ ! -f "${REQUIREMENTS_DIR}/${lockfile}" ]]; then
         log_error "Lockfile not found: ${REQUIREMENTS_DIR}/${lockfile}"
-        log_error "Run 'cd requirements && make compile' to generate lockfiles."
+        log_error "Run 'make -C requirements compile-ml-darwin-arm64' on native Darwin arm64 to generate the target-owned ML lockfile."
         exit 1
     fi
 }

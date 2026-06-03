@@ -350,6 +350,38 @@ def test_install_ml_stack_rejects_retired_linux_lane(tmp_path: Path) -> None:
     assert "Linux ML lockfiles are retired unsupported manifests" in (result.stdout + result.stderr)
 
 
+def test_install_ml_stack_missing_lockfile_reports_target_owned_compile_command(tmp_path: Path) -> None:
+    repo_root = tmp_path / "repo"
+    script_path = _copy_repo_file(ML_STACK_INSTALLER_PATH, repo_root / "scripts" / "bootstrap" / "install_ml_stack.sh")
+    resolver_path = repo_root / "scripts" / "setup" / "resolve_python_311.sh"
+    pip_log_path = repo_root / "pip-install.log"
+    fake_python = _write_fake_ml_core_python(
+        repo_root / ".venv" / "bin" / "python",
+        version="3.11.15",
+        platform_system="Darwin",
+        platform_machine="arm64",
+        pip_log_path=pip_log_path,
+    )
+    _write_executable(resolver_path, f"#!/bin/sh\nprintf '%s\\n' {shlex.quote(str(fake_python))}\n")
+    (repo_root / "requirements").mkdir(parents=True, exist_ok=True)
+
+    env = {**os.environ, "PATH": "/usr/bin:/bin"}
+    result = subprocess.run(
+        ["bash", str(script_path), "--profile", "core-cpu"],
+        cwd=repo_root,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    output = result.stdout + result.stderr
+    assert result.returncode != 0
+    assert "Lockfile not found:" in output
+    assert "make -C requirements compile-ml-darwin-arm64" in output
+    assert "cd requirements && make compile" not in output
+
+
 def test_validation_suite_uses_resolved_python_for_preflight(tmp_path: Path) -> None:
     repo_root = tmp_path / "repo"
     _copy_repo_file(VALIDATION_SUITE_PATH, repo_root / "scripts" / "validation" / "run_full_validation_suite.sh")
