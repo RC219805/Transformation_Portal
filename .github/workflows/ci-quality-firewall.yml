@@ -763,7 +763,7 @@ jobs:
 
       - name: Check .gitignore coverage
         run: |
-          patterns=(".coverage" "coverage.json" "htmlcov/" "*.pyc" "__pycache__/" "dist/" "*.egg-info")
+          patterns=(".coverage" ".coverage.*" "coverage.json" "htmlcov/" "*.pyc" "__pycache__/" "dist/" "*.egg-info")
           for pattern in "${patterns[@]}"; do
             if ! grep -q "$pattern" .gitignore; then
               echo "WARNING: Pattern '$pattern' not in .gitignore"

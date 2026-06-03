@@ -364,6 +364,31 @@ class TestRootGovernanceMetadata:
             assert relative_path in content
             assert (_repo_root / relative_path).exists()
 
+    def test_ci_hygiene_checks_cover_split_coverage_artifacts(self):
+        """CI hygiene checks should track every ignored root coverage artifact."""
+        gitignore = (_repo_root / ".gitignore").read_text()
+        workflows = [
+            ".github/workflows/ci.yml",
+            ".github/workflows/ci-quality-firewall.yml",
+        ]
+        required_patterns = [
+            ".coverage",
+            ".coverage.*",
+            "coverage.json",
+            "htmlcov/",
+        ]
+
+        for pattern in required_patterns:
+            assert pattern in gitignore
+
+        for relative_path in workflows:
+            workflow_text = (_repo_root / relative_path).read_text()
+            match = re.search(r'patterns=\("(?P<patterns>[^"]+(?:" "[^"]+)*)"\)', workflow_text)
+            assert match is not None, f"{relative_path} must define root hygiene .gitignore coverage patterns"
+            workflow_patterns = set(re.findall(r'"([^"]+)"', match.group(0)))
+            for pattern in required_patterns:
+                assert pattern in workflow_patterns, f"{relative_path} must check .gitignore coverage for {pattern}"
+
     def test_root_guidance_make_commands_are_defined(self):
         """Root guidance should not route operators to nonexistent Make targets."""
         root_targets = self._make_targets(_repo_root / "Makefile")
