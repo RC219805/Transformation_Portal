@@ -60,38 +60,37 @@ This installs:
 
 ### Step 2: ML Dependencies (Optional)
 
-For AI-powered features such as DA3 depth inference, use a trusted target-specific ML profile rather than the disabled umbrella install path:
+For AI-powered features such as DA3 depth inference, use a trusted target-specific ML profile rather than the disabled umbrella install path. The currently checked-in ML core lock is target-owned for macOS Apple Silicon (`darwin-arm64`) only; Linux and macOS Intel ML lanes are retired unsupported lanes and fail closed until a governed lane is re-established.
 
 ```bash
-# Cross-platform baseline
+# Supported checked-in Apple Silicon baseline
 make install-ml-core
 
-# Or use the bootstrap profiles directly:
+# Or use the Apple Silicon bootstrap profiles directly:
 ./scripts/bootstrap/install_ml_stack.sh --profile core-cpu
 ./scripts/bootstrap/install_ml_stack.sh --profile core-mps    # macOS Apple Silicon only
-PYTORCH_INDEX=https://download.pytorch.org/whl/cu121 ./scripts/bootstrap/install_ml_stack.sh --profile core-cuda  # Linux + NVIDIA only
 ```
 
 Optional profiles for `raw`, `coreml`, `research`, and `full` are currently fail-closed until trusted target-correct lockfile contracts exist again.
 
-These trusted ML profile flows are currently supported on macOS and Linux only. They are not Windows-native; on Windows, use WSL2 or another Unix-like environment. The `core-cuda` profile is Linux + NVIDIA only.
+The `core-cuda` profile and all Linux ML lock lanes are retired unsupported lanes and fail closed. On Windows, use WSL2 only for non-ML/core workflows unless a governed Windows ML lane is established.
 
 **Platform-specific notes:**
 
 - **Apple Silicon macOS (M1/M2/M3/M4):** use `make install-ml-core` or `./scripts/bootstrap/install_ml_stack.sh --profile core-mps`
-- **Linux with NVIDIA GPU:** use `PYTORCH_INDEX=https://download.pytorch.org/whl/cu121 ./scripts/bootstrap/install_ml_stack.sh --profile core-cuda`
-- **CPU only (macOS/Linux):** use `make install-ml-core` or `./scripts/bootstrap/install_ml_stack.sh --profile core-cpu`
+- **Linux with NVIDIA GPU:** retired unsupported ML lane; `core-cuda` fails closed until a governed Linux lockfile contract exists
+- **CPU only:** supported through the checked-in Apple Silicon baseline; Linux/macOS Intel ML lanes are retired unsupported lanes
 
 ### Step 3: Depth Processing (Optional)
 
-For depth-aware processing with the Depth Anything backend:
+For depth-aware processing, use the governed isolated runtime installers instead of installing model packages directly into the repo `.venv`:
 
 ```bash
-# Install transformers for model loading
-pip install transformers huggingface-hub
+# Default DA3 runtime used by Lux Depth V3
+./scripts/setup/install_da3_runtime.sh
 
-# For Apple Silicon - CoreML support
-pip install coremltools  # macOS only
+# Research-only Apple Depth Pro runtime
+./scripts/setup/install_depth_pro_runtime.sh
 ```
 
 ---
@@ -130,18 +129,9 @@ fallback to V2 metric `*-hf` IDs when the V3 variant is unavailable.
 
 ### Depth Anything (CoreML - Apple Silicon)
 
-For optimal performance on M-series chips, convert the model to CoreML:
+The checked-in Apple Silicon ML core lock includes `coremltools` for governed macOS arm64 workflows. Use `make install-ml-core` or `./scripts/bootstrap/install_ml_stack.sh --profile core-mps` on native Apple Silicon rather than installing CoreML tooling ad hoc into the repo `.venv`.
 
-```python
-# Convert PyTorch to CoreML (requires coremltools)
-import coremltools as ct
-from transformers import AutoModel
-
-model = AutoModel.from_pretrained("depth-anything/Depth-Anything-V2-Small-hf")
-# ... conversion code (see CoreML documentation)
-```
-
-**Note**: CoreML conversion requires macOS and additional steps. PyTorch models work cross-platform.
+**Note**: CoreML conversion remains a macOS-specific workflow and is not the default DA3 runtime path. Use `./scripts/setup/install_da3_runtime.sh` for the governed DA3 subprocess runtime.
 
 ---
 
@@ -314,8 +304,8 @@ lux-depth-v3 --list-stable
 
 ### Apple Silicon (M1/M2/M3/M4)
 
-1. **Use MPS backend** (automatic with PyTorch 2.0+)
-2. **Install CoreML tools**: `pip install coremltools`
+1. **Use the checked-in Apple Silicon ML baseline**: `make install-ml-core`
+2. **Use MPS bootstrap only on native arm64 macOS**: `./scripts/bootstrap/install_ml_stack.sh --profile core-mps`
 3. **Enable Metal**: Ensure macOS 13+ for best performance
 
 **Expected performance**:
@@ -324,10 +314,7 @@ lux-depth-v3 --list-stable
 
 ### NVIDIA GPU
 
-1. **Install CUDA-enabled PyTorch**
-2. **Use mixed precision**: `--fp16` or `torch.cuda.amp`
-3. **Batch processing**: Process multiple images simultaneously
-4. **Monitor VRAM**: Use `nvidia-smi` to track usage
+The Linux CUDA ML lane is retired unsupported and fails closed until a governed Linux lockfile contract is re-established. Do not install CUDA PyTorch packages ad hoc into the repo `.venv`; track any future CUDA enablement through `requirements/README.md` and the target-owned ML lock workflow.
 
 ### CPU Only
 

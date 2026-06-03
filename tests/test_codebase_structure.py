@@ -397,6 +397,34 @@ class TestRootGovernanceMetadata:
         for required_fragment in required_fragments:
             assert required_fragment in contributing
 
+    def test_setup_guide_tracks_current_ml_runtime_contract(self):
+        """Root-linked setup guidance should not advertise retired ML lanes."""
+        setup_guide = (_repo_root / "docs" / "guides" / "SETUP_GUIDE.md").read_text()
+
+        stale_fragments = [
+            "Linux + NVIDIA only",
+            "Linux with NVIDIA GPU:** use",
+            "CPU only (macOS/Linux)",
+            "currently supported on macOS and Linux only",
+            "pip install transformers huggingface-hub",
+            "pip install coremltools",
+            "Install CUDA-enabled PyTorch",
+            "Use mixed precision",
+        ]
+        for stale_fragment in stale_fragments:
+            assert stale_fragment not in setup_guide
+
+        required_fragments = [
+            "checked-in ML core lock is target-owned for macOS Apple Silicon",
+            "Linux and macOS Intel ML lanes are retired unsupported lanes",
+            "core-cuda` fails closed",
+            "Do not install CUDA PyTorch packages ad hoc into the repo `.venv`",
+            "./scripts/setup/install_da3_runtime.sh",
+            "./scripts/setup/install_depth_pro_runtime.sh",
+        ]
+        for required_fragment in required_fragments:
+            assert required_fragment in setup_guide
+
     def test_contributing_branch_protection_links_use_current_setup_doc(self):
         """Contribution guidance should not route to historical verification reports."""
         contributing = (_repo_root / "CONTRIBUTING.md").read_text()
