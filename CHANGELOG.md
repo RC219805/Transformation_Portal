@@ -175,16 +175,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Baseline gate now prevents regression while allowing incremental improvement
 
 ### Changed
-- **ML Stack Upgrades:** Major ML framework and dependency updates
-  - torch: 2.4.1 → 2.10.0
-  - torchvision: 0.19.1 → 0.25.0
-  - scikit-learn: 1.7.2 → 1.8.0
-  - timm: 0.6.7 → 1.0.24
-  - diffusers: 0.31.0 → 0.36.0
-  - transformers: 4.53.0 → 4.57.6
-  - Benefits: Latest features, performance improvements, security fixes
-  - Dependencies: Requires Python >=3.11 (see PR #794)
-  - Validation: Comprehensive smoke tests added for ML stack compatibility
+- **Governed ML Baseline Alignment:** Root release notes now track the supported Apple Silicon ML lock and package metadata instead of retired/untrusted ML lane targets.
+  - torch: supported lock baseline `2.8.0`
+  - torchvision: paired supported lock baseline `0.23.0`
+  - scikit-learn: governed base lock baseline `1.8.0`
+  - timm: locked transitive vision-helper baseline `1.0.26`
+  - diffusers: metadata floor `0.38.0`; supported lock baseline `0.38.0`
+  - transformers: metadata floor `5.0.0`; supported lock baseline `5.0.0`
+  - Dependencies require Python >=3.11 and follow controlled baseline rotations rather than ad hoc upgrades.
+  - Linux and macOS Intel ML lanes remain retired unsupported lanes until a governed target-owned lock is re-established.
 
 ## [3.4.0] - 2026-02-24
 

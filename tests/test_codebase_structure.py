@@ -174,6 +174,11 @@ class TestRootGovernanceMetadata:
             "## [3.4.0] - 2026-02-24",
             "Canonical evidence-bundle root anchoring",
             "Optional notarization validation support",
+            "Governed ML Baseline Alignment",
+            "torch: supported lock baseline `2.8.0`",
+            "torchvision: paired supported lock baseline `0.23.0`",
+            "diffusers: metadata floor `0.38.0`; supported lock baseline `0.38.0`",
+            "transformers: metadata floor `5.0.0`; supported lock baseline `5.0.0`",
             "## [2.0.0] - 2026-01-02",
             "[Unreleased]: https://github.com/RC219805/Transformation_Portal/compare/v3.4.0...HEAD",
             "[3.4.0]: https://github.com/RC219805/Transformation_Portal/releases/tag/v3.4.0",
@@ -182,6 +187,10 @@ class TestRootGovernanceMetadata:
             assert phrase in changelog
         assert "## [2.0.0] - 2025-11-14" not in changelog
         assert "compare/v2.0.0...HEAD" not in changelog
+        assert "torch: 2.4.1" not in changelog
+        assert "torchvision: 0.19.1" not in changelog
+        assert "diffusers: 0.31.0" not in changelog
+        assert "transformers: 4.53.0" not in changelog
 
     def test_root_readme_performance_links_use_current_authorities(self):
         """README performance navigation should point to maintained policy docs."""
@@ -381,6 +390,7 @@ class TestRootGovernanceMetadata:
         """Root contribution guidance should not route dependency edits through retired ML flows."""
         contributing = (_repo_root / "CONTRIBUTING.md").read_text()
         requirements_readme = (_repo_root / "requirements" / "README.md").read_text()
+        requirements_ml = (_repo_root / "requirements" / "ml.in").read_text()
 
         stale_fragments = [
             "vim requirements/ml.in         # Optional ML/AI deps",
@@ -402,6 +412,9 @@ class TestRootGovernanceMetadata:
 
         assert "compile           Compile generic checked-in lockfiles only" in requirements_readme
         assert "compile-ml-darwin-arm64    Compile the Darwin arm64 ML lock" in requirements_readme
+        assert "torch==2.8.0, torchvision==0.23.0, open-clip-torch==3.3.0" in requirements_ml
+        assert "target-owned locks are install support promises" in requirements_ml
+        assert "torch==2.10.0, torchvision==0.25.0" not in requirements_ml
 
     def test_contributing_setup_uses_repo_managed_environment(self):
         """Root contribution setup should use the current Makefile-managed .venv contract."""

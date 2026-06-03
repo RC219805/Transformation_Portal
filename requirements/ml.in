@@ -26,8 +26,10 @@
 #   ./scripts/bootstrap/install_ml_stack.sh --profile core-cpu,sam2
 #   ./scripts/bootstrap/install_ml_stack.sh --profile core-cpu,coreml
 #
-# Known-good pinned inference stack for determinism:
-#   torch==2.10.0, torchvision==0.25.0, open-clip-torch==3.3.0
+# Current supported Apple Silicon lock baseline for determinism:
+#   torch==2.8.0, torchvision==0.23.0, open-clip-torch==3.3.0
+# Cross-platform metadata in ml-core.in uses compatible lower bounds; only
+# target-owned locks are install support promises.
 #
 # See requirements/README.md for full layering documentation.
 
