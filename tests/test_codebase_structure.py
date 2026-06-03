@@ -146,6 +146,16 @@ class TestRootGovernanceMetadata:
         for expected in required_navigation:
             assert expected in readme
 
+    def test_security_policy_footer_tracks_current_root_policy_update(self):
+        """Root security policy metadata should track current policy edits."""
+        security_policy = (_repo_root / "SECURITY.md").read_text()
+
+        assert "*Last Updated: March 2026*" not in security_policy
+        assert "*Next Review: June 2026*" not in security_policy
+        assert "*Last Updated: 2026-06-03*" in security_policy
+        assert "*Next Review: 2026-09-03*" in security_policy
+        assert "*Security Policy Version: 1.2*" in security_policy
+
     def test_architect_directive_status_points_to_current_authorities(self):
         """Root architect metadata should not masquerade as live PR/CI status."""
         status_path = _repo_root / ".architect_directive_status.yml"

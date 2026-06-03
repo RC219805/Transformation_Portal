@@ -356,6 +356,6 @@ We support responsible disclosure and will:
 
 ---
 
-*Last Updated: March 2026*
-*Next Review: June 2026*
-*Security Policy Version: 1.1*
+*Last Updated: 2026-06-03*
+*Next Review: 2026-09-03*
+*Security Policy Version: 1.2*
