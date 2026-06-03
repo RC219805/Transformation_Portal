@@ -7,6 +7,7 @@ prevents accumulation of clutter or structural issues.
 """
 
 import hashlib
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -133,6 +134,10 @@ class TestDocumentationOrganization:
 class TestRootGovernanceMetadata:
     """Tests for root governance metadata that is allowed to stay in root."""
 
+    @staticmethod
+    def _make_targets(makefile: Path) -> set[str]:
+        return {match.group(1) for match in re.finditer(r"(?m)^([A-Za-z0-9_.%/+@-]+):", makefile.read_text())}
+
     def test_root_readme_status_points_to_current_documentation_navigation(self):
         """Root status prose should not depend on stale PR-specific snapshots."""
         readme = (_repo_root / "README.md").read_text()
@@ -245,6 +250,48 @@ class TestRootGovernanceMetadata:
         for relative_path in required_authorities:
             assert relative_path in content
             assert (_repo_root / relative_path).exists()
+
+    def test_root_guidance_make_commands_are_defined(self):
+        """Root guidance should not route operators to nonexistent Make targets."""
+        root_targets = self._make_targets(_repo_root / "Makefile")
+        requirements_targets = self._make_targets(_repo_root / "requirements" / "Makefile")
+
+        root_guides = [
+            "AGENTS.md",
+            "CLAUDE.md",
+            "README.md",
+            "CONTRIBUTING.md",
+            "SECURITY.md",
+        ]
+        missing_targets = []
+
+        for relative_path in root_guides:
+            guide_path = _repo_root / relative_path
+            in_fenced_block = False
+
+            for line_number, line in enumerate(guide_path.read_text().splitlines(), 1):
+                stripped = line.strip()
+                if stripped.startswith("```"):
+                    in_fenced_block = not in_fenced_block
+                    continue
+
+                command_context = (
+                    in_fenced_block
+                    or "`make " in line
+                    or stripped.startswith("make ")
+                    or "&& make " in line
+                    or "/ make " in line
+                )
+                if not command_context:
+                    continue
+
+                target_source = requirements_targets if "cd requirements" in line else root_targets
+                for match in re.finditer(r"(?<![A-Za-z0-9_.-])make\s+([A-Za-z0-9_.%/+@-]+)", line):
+                    target = match.group(1)
+                    if target not in target_source:
+                        missing_targets.append(f"{relative_path}:{line_number}: make {target}")
+
+        assert not missing_targets, "Root guidance references undefined Make targets:\n" + "\n".join(sorted(missing_targets))
 
 
 class TestRootEnvironmentTemplate:
