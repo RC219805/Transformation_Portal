@@ -76,7 +76,7 @@ def check_model_files() -> Dict[str, bool]:
 
     models = {
         "Depth Anything V2 (CoreML)": repo_root / "DepthAnythingV2SmallF16.mlpackage",
-        "Real-ESRGAN weights": repo_root / "weights" / "RealESRGAN_x4plus.pth",
+        "Real-ESRGAN-compatible weights": repo_root / "weights" / "RealESRGAN_x4plus.pth",
     }
 
     return {name: path.exists() for name, path in models.items()}
@@ -100,7 +100,7 @@ def verify_dimension_validation():
     except ImportError as e:
         print("✗ Could not import dimension validation constants from main module.")
         print("  Please ensure all dependencies are installed and the source tree is complete.")
-        print("  Install dependencies with: pip install -r requirements.txt")
+        print("  Install core dependencies with: make install-core")
         print(f"  Import error: {e}")
         print("  Aborting dimension validation test to avoid using potentially outdated fallback values.")
         return False
@@ -179,7 +179,6 @@ def main():
         ("diffusers", "diffusers"),
         ("transformers", "transformers"),
         ("controlnet-aux", "controlnet_aux"),
-        ("realesrgan", "realesrgan"),
         ("accelerate", "accelerate"),
     ]
 
@@ -230,7 +229,7 @@ def main():
         print("✓ All required packages are installed")
     else:
         print("✗ Some required packages are missing")
-        print("  Run: pip install -r requirements.txt")
+        print("  Run: make install-core")
 
     ml_installed = sum(1 for pkg_name, import_name in ml_packages if check_package(pkg_name, import_name)[0])
     print(f"○ {ml_installed}/{len(ml_packages)} optional ML packages installed")

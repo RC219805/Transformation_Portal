@@ -161,13 +161,14 @@ def assess_capabilities() -> Dict[str, any]:
         "tqdm": check_package("tqdm", "tqdm")[0],
     }
 
-    # Check ML packages
+    # Check supported ML packages. The external ``realesrgan`` package is
+    # hard-blocked by dependency policy; upscaling must use governed/local
+    # backends or Pillow fallback instead of ad hoc package installation.
     ml_packages = {
         "torch": check_package("torch", "torch")[0],
         "diffusers": check_package("diffusers", "diffusers")[0],
         "transformers": check_package("transformers", "transformers")[0],
         "controlnet_aux": check_package("controlnet-aux", "controlnet_aux")[0],
-        "realesrgan": check_package("realesrgan", "realesrgan")[0],
     }
 
     # Check image processing packages
@@ -233,8 +234,9 @@ def print_tier_status(capabilities: Dict) -> None:
     else:
         print(colored("   ✗ NOT READY", Colors.WARNING))
         ml_count = sum(capabilities["ml_packages"].values())
-        print(f"   → {ml_count}/5 ML packages installed")
-        print("   → Install: pip install -r requirements.txt")
+        print(f"   → {ml_count}/{len(capabilities['ml_packages'])} supported ML packages installed")
+        print("   → Install: make install-ml-core")
+        print("   → Linux/CPU bootstrap: ./scripts/bootstrap/install_ml_stack.sh --profile core-cpu")
         print("   → Note: Requires ~5GB disk space")
 
 
@@ -273,7 +275,7 @@ def print_available_operations(capabilities: Dict) -> None:
             [
                 ("✓", "AI-powered depth estimation", Colors.OKGREEN),
                 ("✓", "Stable Diffusion enhancement", Colors.OKGREEN),
-                ("✓", "Real-ESRGAN 4x upscaling", Colors.OKGREEN),
+                ("✓", "Governed AI upscaling backends and Pillow fallback", Colors.OKGREEN),
                 ("✓", "ControlNet refinement", Colors.OKGREEN),
                 ("✓", "Material Response processing", Colors.OKGREEN),
             ]
@@ -283,7 +285,7 @@ def print_available_operations(capabilities: Dict) -> None:
             [
                 ("○", "AI-powered depth estimation (requires torch)", Colors.WARNING),
                 ("○", "Stable Diffusion enhancement (requires ML packages)", Colors.WARNING),
-                ("○", "Real-ESRGAN upscaling (requires ML packages)", Colors.WARNING),
+                ("○", "Governed AI upscaling (external Real-ESRGAN package unsupported)", Colors.WARNING),
             ]
         )
 
@@ -341,7 +343,8 @@ def print_quick_start_guide(capabilities: Dict, images: Dict) -> None:
         print("   # Create a simple processing script using Pillow + scipy")
         print("   ")
         print("   Upgrade to Full tier for AI-powered processing:")
-        print("   pip install torch diffusers transformers realesrgan")
+        print("   make install-ml-core")
+        print("   # Linux/CPU: ./scripts/bootstrap/install_ml_stack.sh --profile core-cpu")
 
     elif capabilities["full_ready"]:
         print("   With current setup (Full), you can use all pipelines:")
@@ -387,7 +390,10 @@ def print_recommendations(disk: Dict, capabilities: Dict) -> None:
         recommendations.append(("🔧", "Upgrade to Standard: pip install scipy tifffile imagecodecs", Colors.OKCYAN))
     elif not capabilities["full_ready"]:
         if disk.get("sufficient", False):
-            recommendations.append(("🔧", "Upgrade to Full: pip install -r requirements.txt", Colors.OKCYAN))
+            recommendations.append(("🔧", "Upgrade to Full: make install-ml-core", Colors.OKCYAN))
+            recommendations.append(
+                ("→", "Linux/CPU ML bootstrap: ./scripts/bootstrap/install_ml_stack.sh --profile core-cpu", Colors.OKCYAN)
+            )
         else:
             recommendations.append(("⚠", "Full tier requires more disk space. Free up space first.", Colors.WARNING))
 

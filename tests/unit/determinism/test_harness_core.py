@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import builtins
 import json
 from pathlib import Path
 
 import numpy as np
 import pytest
 
+from transformation_portal.determinism import cli as determinism_cli
 from transformation_portal.determinism.cas import (
     atomic_commit_dir,
     build_artifact_manifest,
@@ -106,6 +108,28 @@ def test_load_tensor_from_cas_reports_missing_shape_with_context(tmp_path: Path)
 
     with pytest.raises(KeyError, match="Missing 'shape' in tensor metadata"):
         _load_tensor_from_cas(cas_root, artifact_id)
+
+
+def test_camera_native_linear_missing_optional_deps_points_to_raw_runtime(monkeypatch, tmp_path: Path):
+    input_path = tmp_path / "input.dng"
+    input_path.write_bytes(b"raw")
+    original_import = builtins.__import__
+    target_module = "transformation_portal.spatial_ai.ingest.phase2_camera_native_linear"
+
+    def fake_import(name, globals=None, locals=None, fromlist=(), level=0):  # noqa: ANN001
+        if name == target_module:
+            raise ModuleNotFoundError("No module named 'rawpy'")
+        return original_import(name, globals, locals, fromlist, level)
+
+    monkeypatch.setattr(builtins, "__import__", fake_import)
+
+    with pytest.raises(RuntimeError) as excinfo:
+        determinism_cli.run(input_path=input_path, contract="camera_native_linear", json_out=False)
+
+    message = str(excinfo.value)
+    assert "./scripts/setup/install_raw_runtime.sh" in message
+    assert "requirements/README.md" in message
+    assert "make install-ml" not in message
 
 
 def test_compute_metrics_known_values():

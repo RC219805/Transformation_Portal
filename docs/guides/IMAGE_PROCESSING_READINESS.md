@@ -49,20 +49,26 @@ python scripts/utilities/luxury_tiff_batch_processor.py \
 ```
 
 ### 📦 Tier 3: Full Setup (AI-Powered)
-**Requirements:** + torch, diffusers, transformers, realesrgan
+**Requirements:** + torch, diffusers, transformers, controlnet-aux
 **What you can do:**
 - ✅ All Standard tier features
 - ✅ AI-powered depth estimation (Depth Anything V2)
 - ✅ Stable Diffusion XL enhancement
-- ✅ Real-ESRGAN 4x upscaling
+- ✅ Governed AI upscaling backends and Pillow fallback
 - ✅ ControlNet refinement
 - ✅ Material Response processing
 - ✅ Context-aware rendering
 
 **Installation:**
 ```bash
-pip install -r requirements.txt
+make install-ml-core
 python scripts/setup/download_depth_models.py
+```
+
+For Linux/CPU bootstrap flows, use:
+
+```bash
+./scripts/bootstrap/install_ml_stack.sh --profile core-cpu
 ```
 
 **Quick Start:**
@@ -195,8 +201,11 @@ python scripts/utilities/luxury_tiff_batch_processor.py \
 # Check disk space first
 df -h /
 
-# Install packages
-pip install -r requirements.txt
+# Install supported ML packages
+make install-ml-core
+
+# Linux/CPU bootstrap alternative
+./scripts/bootstrap/install_ml_stack.sh --profile core-cpu
 
 # Download models
 python scripts/setup/download_depth_models.py

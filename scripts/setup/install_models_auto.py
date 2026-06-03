@@ -2,9 +2,9 @@
 # -*- coding: utf-8 -*-
 """Automated Model Installation - No prompts, with reliability features.
 
-Downloads and configures machine learning models for Transformation Portal:
+Downloads and configures machine learning models and governed model weights for Transformation Portal:
 1. Depth Anything V2 (HuggingFace) - Monocular depth estimation
-2. Real-ESRGAN weights - 4x upscaling
+2. Real-ESRGAN-compatible weights - legacy/local upscaling research artifacts
 3. ControlNet models - Image conditioning for Stable Diffusion
 4. Stable Diffusion - Base generation model
 
@@ -63,7 +63,8 @@ except Exception as exc:  # pragma: no cover - defensive import guard for bootst
     MODEL_LOCK_AVAILABLE = False
     MODEL_LOCK_IMPORT_ERROR = exc
 
-# Real-ESRGAN model with checksum
+# Real-ESRGAN-compatible model weights with checksum. The external Python
+# package remains unsupported by dependency policy.
 REALESRGAN_MODEL = {
     "name": "RealESRGAN_x4plus.pth",
     "url": "https://github.com/xinntao/Real-ESRGAN/releases/download/v0.1.0/RealESRGAN_x4plus.pth",
@@ -250,7 +251,7 @@ def check_depth_anything() -> bool:
 
 
 def install_realesrgan(force: bool = False) -> bool:
-    """Install Real-ESRGAN weights.
+    """Install Real-ESRGAN-compatible weights.
 
     Args:
         force: Force re-download even if file exists
@@ -258,7 +259,7 @@ def install_realesrgan(force: bool = False) -> bool:
     Returns:
         True if installation successful
     """
-    print("\n[2/4] Installing Real-ESRGAN weights...")
+    print("\n[2/4] Installing Real-ESRGAN-compatible weights...")
     WEIGHTS_DIR.mkdir(parents=True, exist_ok=True)
     model_path = WEIGHTS_DIR / REALESRGAN_MODEL["name"]
 

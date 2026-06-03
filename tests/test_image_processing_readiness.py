@@ -77,6 +77,37 @@ class TestReadinessCheck:
         assert "numpy" in capabilities["core_packages"]
         assert "Pillow" in capabilities["core_packages"]
         assert "torch" in capabilities["ml_packages"]
+        assert "realesrgan" not in capabilities["ml_packages"]
+
+    def test_full_tier_guidance_uses_governed_ml_install(self, capsys):
+        """Readiness guidance should not suggest banned external ML packages."""
+        capabilities = {
+            "core_packages": {"numpy": True, "Pillow": True, "scipy": True, "PyYAML": True, "typer": True, "tqdm": True},
+            "ml_packages": {"torch": False, "diffusers": False, "transformers": False, "controlnet_aux": False},
+            "image_packages": {"tifffile": True, "imagecodecs": True, "scikit-image": True, "opencv": True},
+            "minimal_ready": True,
+            "standard_ready": True,
+            "full_ready": False,
+        }
+        images = {
+            "sample_dir_exists": False,
+            "input_dir_exists": True,
+            "sample_count": 0,
+            "input_count": 1,
+            "total_count": 1,
+            "has_images": True,
+        }
+
+        readiness.print_tier_status(capabilities)
+        readiness.print_available_operations(capabilities)
+        readiness.print_quick_start_guide(capabilities, images)
+        readiness.print_recommendations({"free_gb": 10.0, "sufficient": True}, capabilities)
+
+        output = capsys.readouterr().out
+        assert "make install-ml-core" in output
+        assert "./scripts/bootstrap/install_ml_stack.sh --profile core-cpu" in output
+        assert "pip install torch diffusers transformers realesrgan" not in output
+        assert "pip install -r requirements.txt" not in output
 
     def test_check_sample_images(self):
         """Test sample image checking."""

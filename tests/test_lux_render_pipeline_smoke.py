@@ -19,6 +19,7 @@ PIPELINE_MODULE = "transformation_portal.pipelines.lux_render_pipeline"
 TORCH_MODULE = "torch"
 DIFFUSERS_MODULE = "diffusers"
 CONTROLNET_AUX_MODULE = "controlnet_aux"
+REALESRGAN_MODULE = "realesrgan"
 
 
 def _load_lux_render_pipeline_with_missing_ml(monkeypatch):
@@ -27,6 +28,7 @@ def _load_lux_render_pipeline_with_missing_ml(monkeypatch):
     monkeypatch.setitem(sys.modules, TORCH_MODULE, None)
     monkeypatch.setitem(sys.modules, DIFFUSERS_MODULE, None)
     monkeypatch.setitem(sys.modules, CONTROLNET_AUX_MODULE, None)
+    monkeypatch.setitem(sys.modules, REALESRGAN_MODULE, None)
 
     original_pipeline_module = sys.modules.get(PIPELINE_MODULE)
     portal_module = importlib.import_module(PORTAL_MODULE)
@@ -87,6 +89,16 @@ def test_lux_render_pipeline_import_is_graceful_without_ml_extras(monkeypatch) -
         assert "lux_render requires optional ML dependencies" in combined_output
         assert "controlnet-aux" in combined_output
         assert "diffusers" in combined_output
+        assert "make install-ml-core" in combined_output
+        assert "requirements/README.md" in combined_output
+        assert "make install-ml`" not in combined_output
+
+        with pytest.raises(RuntimeError) as excinfo:
+            pipeline_module.RealESRGANer()
+        error_message = str(excinfo.value)
+        assert "intentionally unsupported" in error_message
+        assert "Pillow Lanczos fallback" in error_message
+        assert "pip install realesrgan" not in error_message
     finally:
         if original_pipeline_module is not None:
             sys.modules[PIPELINE_MODULE] = original_pipeline_module
