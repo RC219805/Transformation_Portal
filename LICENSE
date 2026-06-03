@@ -1,133 +1,217 @@
 TRANSFORMATION PORTAL
-
 PROPRIETARY SOFTWARE AND DATA LICENSE
+SPDX-License-Identifier: LicenseRef-Transformation-Portal-Proprietary
 
-Copyright © 2026
-Richard Cheetham
-All Rights Reserved.
+Copyright (c) 2026 Richard Cheetham.
+All rights reserved.
 
-⸻
+IMPORTANT NOTICE
 
-1. Ownership
+This repository is made available for limited evaluation only. It is not open source, and it is not released under any open-source, source-available, public-domain, or permissive license. No rights are granted except those expressly stated in this License.
 
-All source code, object code, configuration files, scripts, workflows, manifests, datasets, governance telemetry, cryptographic artifacts (including hashes and Merkle trees), documentation, and all related materials contained in this repository (collectively, the “Materials”) are proprietary and confidential intellectual property of Richard Cheetham.
+By accessing, viewing, cloning, downloading, copying, executing, or otherwise using any Materials, you accept and agree to be bound by this License. If you do not agree to this License, do not access or use the Materials.
 
-Access to this repository does not grant ownership rights. All rights not expressly granted herein are reserved.
+1. Definitions
 
-⸻
+1.1 "Licensor" means Richard Cheetham.
 
-2. Limited License Grant
+1.2 "You" or "Licensee" means any individual or entity that accesses, views, clones, downloads, copies, executes, or otherwise uses the Materials.
 
-Subject to strict compliance with this License, you are granted a limited, revocable, non-exclusive, non-transferable, non-sublicensable license to:
-	•	View the Materials for informational purposes only; and
-	•	Clone or download the repository solely for personal, non-commercial evaluation.
+1.3 "Repository" means the Transformation Portal repository and any related repository location, archive, mirror, branch, release, package, artifact, or distribution controlled by or originating from the Licensor.
+
+1.4 "Materials" means all source code, object code, binaries, configuration files, scripts, workflows, prompts, manifests, schemas, datasets, governance telemetry, cryptographic artifacts, hashes, Merkle trees, documentation, diagrams, specifications, examples, tests, issues, discussions, metadata, repository structure, commit history, and all other materials contained in or derived from the Repository.
+
+1.5 "Evaluation Use" means private, personal, non-commercial review of the Materials solely to understand their functionality, architecture, security model, governance model, or licensing requirements. Evaluation Use excludes Commercial Use, Machine Learning Use, production use, deployment, redistribution, publication, public display, hosted access, benchmarking, competitive analysis for commercial purposes, and incorporation into any other product, service, dataset, model, system, or workflow.
+
+1.6 "Commercial Use" means any use, access, review, testing, copying, execution, distribution, or exploitation of the Materials that is for, on behalf of, in support of, or reasonably related to any business, trade, profession, revenue-generating activity, paid service, commercial product, commercial research, consulting engagement, internal business operation, or competitive analysis.
+
+1.7 "Machine Learning Use" means any use of the Materials, directly or indirectly, to train, fine-tune, retrain, improve, align, validate, test, benchmark, evaluate, prompt, ground, augment, index, embed, vectorize, classify, label, synthesize, or otherwise support any artificial intelligence, machine learning, statistical, automated decision, generative, retrieval, coding-assistant, agentic, or similar system.
+
+1.8 "Automated Extraction" means scraping, crawling, harvesting, mining, indexing, mirroring, bulk downloading, bulk copying, automated querying, automated analysis, reconstruction, dataset creation, feature extraction, embedding generation, or other programmatic collection or transformation of the Materials.
+
+1.9 "Contribution" means any code, documentation, data, issue text, pull request, patch, suggestion, comment, or other material submitted to the Licensor or Repository by any person other than the Licensor.
+
+1.10 "Derivative Work" means any modification, adaptation, translation, port, compilation, transformation, rearrangement, extraction, summary, abstraction, annotation, interface, wrapper, model, dataset, embedding, vector representation, or other work based upon, incorporating, generated from, or derived from any Materials.
+
+2. Ownership and Reservation of Rights
+
+2.1 The Materials are proprietary intellectual property of the Licensor. The Licensor and its licensors retain all right, title, and interest in and to the Materials, including all copyrights, trade secrets, database rights, patent rights, trademark rights, contractual rights, and other intellectual property and proprietary rights.
+
+2.2 Access to or public visibility of the Repository does not transfer ownership, waive rights, dedicate any Materials to the public domain, or constitute an open-source release.
+
+2.3 All rights not expressly granted in Section 3 are reserved by the Licensor. No rights are granted by implication, exhaustion, waiver, estoppel, industry practice, GitHub functionality, or otherwise.
+
+2.4 To the extent any non-public Materials, credentials, security details, governance details, telemetry, or other confidential information are made available to You, they remain confidential and may be used only as expressly permitted by this License or a separate written agreement signed by the Licensor.
+
+3. Limited License Grant
+
+Subject to Your strict and continuing compliance with this License, the Licensor grants You a limited, personal, revocable, non-exclusive, non-transferable, non-sublicensable license to:
+
+(a) view and inspect the Materials for informational purposes only;
+
+(b) clone or download a single copy of the Repository solely as technically necessary for Evaluation Use; and
+
+(c) execute code locally in a private, non-production environment solely as technically necessary for Evaluation Use, provided that You do not deploy, host, expose, publish, provide access to, or otherwise make the Materials available to any third party.
 
 No other rights are granted.
 
-⸻
+4. Restrictions
 
-3. Restrictions
+Without the Licensor's prior express written authorization, You may not, and may not assist, enable, or permit any third party to:
 
-Without prior express written authorization from the Licensor, you may not:
-	1.	Use the Materials for any commercial purpose;
-	2.	Distribute, publish, sublicense, sell, or transfer the Materials;
-	3.	Modify, adapt, translate, reverse engineer, decompile, or create derivative works;
-	4.	Incorporate the Materials into any product or service;
-	5.	Remove or alter copyright or attribution notices;
-	6.	Circumvent any governance, cryptographic, integrity, or enforcement mechanisms contained in the Materials;
-	7.	Use the Materials for Machine Learning Use (defined below);
-	8.	Scrape, harvest, extract, or programmatically collect repository contents beyond permitted evaluation use.
+4.1 use the Materials for any Commercial Use;
 
-⸻
+4.2 distribute, publish, disclose, sublicense, sell, rent, lease, lend, transfer, assign, mirror, host, upload, transmit, or otherwise make available the Materials;
 
-4. Machine Learning and AI Prohibition
+4.3 create, publish, distribute, or exploit any Derivative Work;
 
-The Materials may not be used, directly or indirectly, for:
-	•	Training, fine-tuning, or improving machine learning models;
-	•	Reinforcement learning, alignment training, or evaluation;
-	•	Model benchmarking or performance testing;
-	•	Embedding generation, feature extraction, or representation learning;
-	•	Synthetic dataset generation;
-	•	Any other use intended to enhance artificial intelligence or automated decision systems.
+4.4 modify, adapt, translate, port, rearrange, transform, summarize, annotate, or prepare the Materials for reuse, except for temporary technical changes strictly necessary to execute the Materials locally for Evaluation Use;
 
-This restriction applies regardless of:
-	•	Transformation, anonymization, tokenization, summarization, or embedding;
-	•	Partial extraction or derivative transformation;
-	•	Use of telemetry, manifests, hashes, or structural metadata.
+4.5 incorporate, combine, link, package, integrate, or use the Materials with or in any product, service, platform, application, workflow, dataset, model, repository, package, or hosted environment;
 
-⸻
+4.6 use the Materials in production or for any hosted, public-facing, multi-user, enterprise, governmental, educational, or institutional system;
 
-5. Anti-Extraction and Anti-Scraping
+4.7 remove, obscure, alter, or misrepresent any copyright, attribution, license, provenance, integrity, security, or ownership notice;
+
+4.8 reverse engineer, decompile, disassemble, derive source code from, or attempt to discover the internal structure of any object code, binary, compiled artifact, or protected component, except solely to the extent a restriction is prohibited by applicable law;
+
+4.9 circumvent, disable, bypass, weaken, tamper with, or misrepresent any governance, cryptographic, integrity, provenance, telemetry, audit, authorization, access-control, or enforcement mechanism contained in or associated with the Materials;
+
+4.10 perform Automated Extraction or use bots, crawlers, scrapers, indexers, agents, bulk-download tools, or other automated systems against the Materials, except for a single ordinary git clone or download expressly permitted under Section 3;
+
+4.11 use the Materials for Machine Learning Use;
+
+4.12 use the Materials to develop, train, improve, evaluate, or compete with the Repository, the Licensor, or any Licensor-controlled product, service, dataset, model, workflow, or system;
+
+4.13 publicly fork, mirror, archive, cache, republish, or preserve the Repository or Materials outside the Licensor-controlled Repository;
+
+4.14 perform security testing, penetration testing, vulnerability scanning, load testing, denial-of-service testing, fuzzing against hosted infrastructure, or exploit development using the Materials without the Licensor's prior written authorization; or
+
+4.15 use the Materials in any manner that violates applicable law, regulation, contractual obligation, privacy obligation, export-control obligation, or third-party right.
+
+5. Machine Learning, AI, and Text/Data Mining Prohibition
+
+5.1 The Materials may not be used, directly or indirectly, for Machine Learning Use. For clarity, prohibited uses include using any Materials as:
+
+(a) training, fine-tuning, reinforcement-learning, alignment, evaluation, benchmark, validation, test, or calibration data;
+
+(b) prompts, prompt context, retrieval-augmented generation context, agent context, tool context, code-completion context, or grounding material;
+
+(c) embeddings, vector representations, semantic indexes, feature sets, labels, annotations, synthetic datasets, summaries, abstractions, or transformed corpora;
+
+(d) inputs to or outputs from any system intended to generate, transform, analyze, classify, explain, summarize, translate, refactor, complete, or synthesize code, text, data, models, decisions, or workflows; or
+
+(e) material for evaluating, comparing, ranking, red-teaming, safety-testing, performance-testing, or improving any AI, ML, automated decision, coding-assistant, retrieval, or agentic system.
+
+5.2 This prohibition applies regardless of whether the Materials are transformed, anonymized, tokenized, summarized, embedded, vectorized, sampled, partially extracted, paraphrased, or combined with other materials.
+
+5.3 This prohibition applies to all Materials, including source code, documentation, telemetry, manifests, schemas, hashes, Merkle roots, commit history, repository structure, issues, discussions, metadata, and any Derivative Work.
+
+5.4 The Licensor expressly reserves all rights for text and data mining, machine learning, model training, model evaluation, automated analysis, scraping, and indexing. No consent is granted for any such activity.
+
+5.5 Nothing in this Section restricts the Licensor's own use of the Materials.
+
+6. Anti-Extraction, Anti-Scraping, and Anti-Reconstruction
 
 You may not:
-	•	Extract structured or unstructured data from the Materials for reuse;
-	•	Reconstruct datasets from manifests or governance artifacts;
-	•	Replicate repository structure using cryptographic hashes or Merkle roots;
-	•	Perform automated scraping, harvesting, indexing, or bulk downloading beyond minimal evaluation use.
 
-⸻
+(a) extract structured or unstructured data from the Materials for reuse, resale, analysis, indexing, dataset creation, or redistribution;
 
-6. No Implied Rights
+(b) reconstruct, infer, regenerate, or approximate datasets, schemas, repository structure, governance artifacts, or implementation details from manifests, metadata, hashes, Merkle trees, telemetry, or other artifacts;
 
-This License does not grant:
-	•	Any patent rights;
-	•	Any trademark rights;
-	•	Any database rights;
-	•	Any rights by implication, estoppel, or otherwise.
+(c) create a substitute, competing, functionally equivalent, or interoperable dataset, system, service, model, repository, or workflow from the Materials;
 
-Public visibility of this repository does not constitute an open-source release.
+(d) bulk download, mirror, cache, archive, scrape, crawl, index, or preserve the Materials beyond the single local copy permitted for Evaluation Use; or
 
-⸻
+(e) use automated tools to evade technical, contractual, access-control, rate-limit, provenance, governance, or integrity restrictions.
 
-7. Contributor Submissions
+7. Third-Party Materials
 
-Any contribution submitted to this repository is subject to explicit acceptance by the Licensor.
+The Materials may reference or include third-party software, data, services, packages, dependencies, or documentation. Third-party materials are governed by their own applicable terms. This License does not grant You any rights in third-party materials, and it does not expand any rights granted by third-party terms. You are solely responsible for identifying and complying with all applicable third-party terms.
 
-Unless otherwise agreed in writing:
-	•	The Licensor retains full control over licensing and distribution of accepted contributions;
-	•	Contributors grant the Licensor a perpetual, irrevocable, worldwide license to use, modify, and distribute submitted materials under this License;
-	•	No contributor acquires rights to redistribute the Materials independently.
+8. Contributor Submissions
 
-⸻
+8.1 The Licensor has no obligation to accept, review, merge, maintain, use, return, credit, compensate, or respond to any Contribution.
 
-8. Termination
+8.2 By submitting a Contribution, You represent and warrant that You have all rights necessary to submit it and to grant the rights in this Section.
 
-This License terminates automatically upon violation of any provision.
+8.3 Unless the Licensor agrees otherwise in a separate written agreement, You grant the Licensor a perpetual, irrevocable, worldwide, royalty-free, fully paid-up, transferable, sublicensable license to use, reproduce, modify, adapt, translate, distribute, publicly display, publicly perform, create Derivative Works from, commercialize, enforce, and otherwise exploit the Contribution in any form, medium, product, service, repository, dataset, model, or license, including under this License or any separate proprietary, commercial, open-source, or other license selected by the Licensor.
 
-Upon termination, you must:
-	•	Immediately cease use of the Materials;
-	•	Destroy all copies in your possession or control;
-	•	Certify destruction upon written request.
+8.4 To the maximum extent permitted by law, You waive and agree not to assert any moral rights, attribution rights, integrity rights, approval rights, or similar rights in any Contribution against the Licensor or any person authorized by the Licensor.
 
-⸻
+8.5 Submission of a Contribution does not grant You any ownership interest in the Repository or Materials and does not grant You any right to redistribute, sublicense, commercialize, or otherwise exploit the Materials.
 
-9. Disclaimer of Warranty
+9. No Implied Patent, Trademark, or Other Rights
 
-THE MATERIALS ARE PROVIDED “AS IS” WITHOUT WARRANTY OF ANY KIND.
+This License does not grant any patent license, trademark license, service-mark license, trade-name license, database license, publicity right, privacy right, or other intellectual property or proprietary right except the limited copyright license expressly stated in Section 3.
 
-To the maximum extent permitted by law, the Licensor disclaims all warranties, express or implied, including but not limited to merchantability, fitness for a particular purpose, and non-infringement.
+Use of the Licensor's name, trademarks, service marks, logos, project names, domain names, or branding is prohibited without prior written authorization.
 
-⸻
+10. Termination
 
-10. Limitation of Liability
+10.1 This License terminates automatically and immediately if You violate any provision of this License.
 
-In no event shall the Licensor be liable for any indirect, incidental, consequential, special, or exemplary damages arising from use of the Materials.
+10.2 Upon termination, all rights granted to You immediately cease, and You must:
 
-⸻
+(a) stop accessing and using the Materials;
 
-11. Governing Law and Dispute Resolution
+(b) delete and destroy all copies of the Materials and all Derivative Works in Your possession, custody, or control;
 
-This License shall be governed by the laws of the State of California, without regard to conflict-of-law principles.
+(c) cease all distribution, publication, hosting, indexing, caching, extraction, and use of the Materials; and
 
-Any dispute arising under this License shall be resolved by binding arbitration in California under the rules of JAMS. Judgment on the award may be entered in any court of competent jurisdiction.
+(d) certify destruction in writing upon the Licensor's request.
 
-⸻
+10.3 Termination does not limit any right or remedy available to the Licensor for any breach. Sections 1, 2, 4 through 6, and 8 through 17 survive termination.
 
-12. Commercial Licensing
+11. Remedies and Indemnity
 
-Commercial use, redistribution rights, or machine learning rights may be obtained only through a separate written agreement with the Licensor.
+11.1 You acknowledge that unauthorized use, disclosure, distribution, extraction, Machine Learning Use, or misuse of the Materials may cause irreparable harm for which monetary damages may be inadequate. The Licensor may seek injunctive, equitable, or other relief without posting bond, in addition to all other available remedies.
 
-For licensing inquiries, contact:
+11.2 You agree to defend, indemnify, and hold harmless the Licensor from and against any claims, damages, losses, liabilities, costs, and expenses, including reasonable attorneys' fees, arising from or related to Your access to or use of the Materials, Your Contributions, Your breach of this License, or Your violation of any law or third-party right.
+
+12. Disclaimer of Warranty
+
+THE MATERIALS ARE PROVIDED "AS IS," "AS AVAILABLE," AND WITH ALL FAULTS. TO THE MAXIMUM EXTENT PERMITTED BY LAW, THE LICENSOR DISCLAIMS ALL WARRANTIES, WHETHER EXPRESS, IMPLIED, STATUTORY, OR OTHERWISE, INCLUDING WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, TITLE, NON-INFRINGEMENT, ACCURACY, AVAILABILITY, SECURITY, PERFORMANCE, QUIET ENJOYMENT, AND COURSE OF DEALING.
+
+The Licensor has no obligation to provide maintenance, support, updates, patches, security fixes, documentation, hosting, access, or notices.
+
+13. Limitation of Liability
+
+TO THE MAXIMUM EXTENT PERMITTED BY LAW, IN NO EVENT WILL THE LICENSOR BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, CONSEQUENTIAL, SPECIAL, EXEMPLARY, PUNITIVE, ENHANCED, OR OTHER DAMAGES; LOSS OF PROFITS; LOSS OF REVENUE; LOSS OF DATA; LOSS OF GOODWILL; BUSINESS INTERRUPTION; SECURITY INCIDENTS; PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; OR ANY DAMAGES ARISING FROM OR RELATED TO THE MATERIALS, THIS LICENSE, OR ANY USE OR INABILITY TO USE THE MATERIALS, WHETHER BASED ON CONTRACT, TORT, NEGLIGENCE, STRICT LIABILITY, STATUTE, OR ANY OTHER THEORY, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGES.
+
+To the maximum extent permitted by law, the Licensor's aggregate liability arising from or related to the Materials or this License will not exceed USD $100.
+
+14. Governing Law; Arbitration; Venue
+
+14.1 This License is governed by the laws of the State of California, without regard to conflict-of-law principles.
+
+14.2 Except for claims seeking injunctive or equitable relief for intellectual property misuse, confidentiality misuse, unauthorized distribution, unauthorized extraction, Machine Learning Use, or other misuse of the Materials, any dispute arising out of or relating to this License or the Materials will be resolved by binding arbitration administered by JAMS in California under the JAMS rules then in effect. Judgment on the award may be entered in any court of competent jurisdiction.
+
+14.3 Any arbitration will be conducted only on an individual basis. Class, collective, consolidated, representative, and private-attorney-general proceedings are not permitted to the maximum extent permitted by law.
+
+14.4 For claims not subject to arbitration, You consent to the exclusive jurisdiction and venue of the state and federal courts located in California.
+
+15. Commercial Licensing
+
+Commercial Use, redistribution rights, hosted-use rights, sublicensing rights, production-use rights, integration rights, Machine Learning Use rights, data-mining rights, or any other rights not expressly granted in Section 3 may be obtained only through a separate written agreement signed by the Licensor.
+
+Licensing inquiries:
 
 Richard Cheetham
 rcsir.805@proton.me
+
+16. Updates to this License
+
+The Licensor may publish updated versions of this License for future access to or use of the Materials. Continued access to or use of the Materials after an updated License is published constitutes acceptance of the updated License to the maximum extent permitted by law. No prior version grants rights beyond those expressly stated in that version.
+
+17. Miscellaneous
+
+17.1 If any provision of this License is held unenforceable, that provision will be enforced to the maximum extent permitted, and the remaining provisions will remain in full force and effect.
+
+17.2 The Licensor's failure to enforce any provision is not a waiver of any right. Any waiver must be in writing and signed by the Licensor.
+
+17.3 You may not assign, delegate, or transfer this License or any rights or obligations under it without the Licensor's prior written consent. Any attempted assignment in violation of this Section is void.
+
+17.4 This License is the entire agreement between You and the Licensor regarding the Materials unless superseded by a separate written agreement signed by the Licensor.
+
+17.5 Section headings are for convenience only and do not affect interpretation.
