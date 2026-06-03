@@ -154,6 +154,27 @@ class TestRootGovernanceMetadata:
             assert expected in readme
         assert "Last Updated: 2026-05-11" not in readme
 
+    def test_root_changelog_keeps_pr1562_snapshot_historical(self):
+        """Root changelog should not present the PR #1562 snapshot as current state."""
+        changelog = (_repo_root / "CHANGELOG.md").read_text()
+
+        stale_current_phrases = [
+            "Repository State Through PR #1562",
+            "Current documentation and operator surfaces have been refreshed to match the April 27, 2026",
+            "Live custom-agent, Copilot, and RAG-template instructions now align with the PR #1562",
+        ]
+        for phrase in stale_current_phrases:
+            assert phrase not in changelog
+
+        required_current_context = [
+            "Documentation checkpoint through PR #1562",
+            "Current documentation navigation is governed by `docs/README.md` and `docs/governance/DOCUMENTATION_MAP.md`",
+            "May 11, 2026 repo-wide refresh through PR #1721",
+            "May 12 architecture and CLI overlays",
+        ]
+        for phrase in required_current_context:
+            assert phrase in changelog
+
     def test_root_readme_performance_links_use_current_authorities(self):
         """README performance navigation should point to maintained policy docs."""
         readme = (_repo_root / "README.md").read_text()
