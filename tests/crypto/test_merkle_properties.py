@@ -253,6 +253,32 @@ _JSON_VALUES = st.recursive(
 )
 
 
+def _json_structural_bytes(encoded: bytes) -> bytes:
+    """Return encoded JSON with string literal contents removed."""
+    structural = bytearray()
+    in_string = False
+    escaped = False
+
+    for byte in encoded:
+        if in_string:
+            if escaped:
+                escaped = False
+                continue
+            if byte == ord("\\"):
+                escaped = True
+                continue
+            if byte == ord('"'):
+                in_string = False
+                structural.append(byte)
+            continue
+
+        structural.append(byte)
+        if byte == ord('"'):
+            in_string = True
+
+    return bytes(structural)
+
+
 class TestCanonicalJsonProperties:
     """Canonical-JSON invariants: round-trip, key-order independence, determinism."""
 
@@ -291,10 +317,11 @@ class TestCanonicalJsonProperties:
         # incidental whitespace. Pinning this prevents a careless
         # ``indent=2`` from sneaking in and silently changing every hash.
         encoded = canonicalize_json(payload)
-        # The encoded bytes must not contain ``", "`` or ``": "``
-        # separator pairs (with the space) anywhere.
-        assert b", " not in encoded
-        assert b": " not in encoded
+        # Separator whitespace is structural. User-provided string content
+        # may legitimately contain comma-space or colon-space bytes.
+        structural = _json_structural_bytes(encoded)
+        assert b", " not in structural
+        assert b": " not in structural
 
     def test_canonicalize_rejects_nan_and_infinity(self):
         # Both NaN and Infinity break JSON-strict consumers and would

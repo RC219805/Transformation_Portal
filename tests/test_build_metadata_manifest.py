@@ -17,6 +17,7 @@ from tp.phase4.hash_capture_metadata import (
     MetadataSchemaValidationError,
     build_metadata_manifest_payload,
     compute_metadata_sha256,
+    serialize_metadata_manifest,
 )
 from tp.phase4.validation_helpers import validate_records_with_schema
 
@@ -129,6 +130,22 @@ def _deepcopy_record(record: dict[str, Any]) -> dict[str, Any]:
     return json.loads(json.dumps(record))
 
 
+def test_phase4d_build_payload_direct_success_with_fingerprint() -> None:
+    pytest.importorskip("jsonschema")
+    records = _load_golden_capture_records()
+    fingerprint = records[0]["extractor"]["config_fingerprint_sha256"]
+
+    payload = build_metadata_manifest_payload(
+        records,
+        metadata_schema={},
+        manifest_schema={},
+        required_config_fingerprint_sha256=fingerprint,
+    )
+
+    assert payload == json.loads(GOLDEN_MANIFEST.read_text(encoding="utf-8"))
+    assert serialize_metadata_manifest(payload).endswith(b"\n")
+
+
 def test_phase4d_metadata_hash_is_whitespace_and_key_order_independent() -> None:
     record = _load_golden_capture_records()[0]
     reordered = {key: record[key] for key in reversed(list(record.keys()))}
@@ -166,6 +183,51 @@ def test_phase4d_build_payload_reports_missing_relative_path_without_keyerror() 
     ]
 
     with pytest.raises(MetadataManifestInputError, match=r"input metadata array record\[0\] missing relative_path"):
+        build_metadata_manifest_payload(records, metadata_schema={}, manifest_schema={})
+
+
+def test_phase4d_build_payload_rejects_contract_version_mismatch() -> None:
+    pytest.importorskip("jsonschema")
+    records = _load_golden_capture_records()
+    records[0]["metadata_contract_version"] = "tp.meta.capture.v999"
+
+    with pytest.raises(MetadataManifestInputError, match="contract mismatch"):
+        build_metadata_manifest_payload(records, metadata_schema={}, manifest_schema={})
+
+
+def test_phase4d_build_payload_rejects_fingerprint_mismatch() -> None:
+    pytest.importorskip("jsonschema")
+    records = _load_golden_capture_records()
+
+    with pytest.raises(MetadataManifestInputError, match="fingerprint mismatch"):
+        build_metadata_manifest_payload(
+            records,
+            metadata_schema={},
+            manifest_schema={},
+            required_config_fingerprint_sha256="0" * 64,
+        )
+
+
+def test_phase4d_build_payload_rejects_missing_extractor_when_fingerprint_required() -> None:
+    pytest.importorskip("jsonschema")
+    records = _load_golden_capture_records()
+    del records[0]["extractor"]
+
+    with pytest.raises(MetadataManifestInputError, match="missing extractor object"):
+        build_metadata_manifest_payload(
+            records,
+            metadata_schema={},
+            manifest_schema={},
+            required_config_fingerprint_sha256="0" * 64,
+        )
+
+
+def test_phase4d_build_payload_wraps_canonical_serialization_errors() -> None:
+    pytest.importorskip("jsonschema")
+    records = _load_golden_capture_records()
+    records[0]["non_jsonable"] = object()
+
+    with pytest.raises(MetadataSchemaValidationError, match="canonical serialization failed"):
         build_metadata_manifest_payload(records, metadata_schema={}, manifest_schema={})
 
 

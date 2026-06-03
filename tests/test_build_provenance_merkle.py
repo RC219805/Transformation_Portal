@@ -12,7 +12,14 @@ from typing import Any
 import pytest
 
 from tp.phase4.hash_capture_metadata import METADATA_CONTRACT_VERSION, compute_metadata_sha256
-from tp.phase4.provenance_capture import PROVENANCE_CONTRACT_VERSION, compute_provenance_entry_sha256
+from tp.phase4.provenance_capture import (
+    PROVENANCE_CONTRACT_VERSION,
+    PROVENANCE_MERKLE_CONTRACT_VERSION,
+    ProvenanceInputError,
+    build_provenance_merkle_payload,
+    compute_provenance_entry_sha256,
+    serialize_provenance_merkle,
+)
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 EXTRACT_TOOL = PROJECT_ROOT / "tools" / "extract_capture_metadata.py"
@@ -150,6 +157,131 @@ def _build_two_entry_provenance_manifest() -> dict[str, Any]:
             },
         ],
     }
+
+
+def test_phase4e_build_merkle_payload_direct_success() -> None:
+    pytest.importorskip("jsonschema")
+    provenance_manifest = _build_two_entry_provenance_manifest()
+
+    payload = build_provenance_merkle_payload(
+        provenance_manifest,
+        provenance_manifest_schema={},
+        provenance_merkle_schema={},
+    )
+
+    assert payload["provenance_merkle_contract_version"] == PROVENANCE_MERKLE_CONTRACT_VERSION
+    assert payload["provenance_contract_version"] == PROVENANCE_CONTRACT_VERSION
+    assert payload["leaf_count"] == 2
+    assert serialize_provenance_merkle(payload).endswith(b"\n")
+
+
+def test_phase4e_build_merkle_payload_rejects_non_object_manifest() -> None:
+    pytest.importorskip("jsonschema")
+
+    with pytest.raises(ProvenanceInputError, match="provenance manifest payload must be a JSON object"):
+        build_provenance_merkle_payload(
+            [],
+            provenance_manifest_schema={},
+            provenance_merkle_schema={},
+        )
+
+
+def test_phase4e_build_merkle_payload_rejects_contract_mismatch() -> None:
+    pytest.importorskip("jsonschema")
+    provenance_manifest = _build_two_entry_provenance_manifest()
+    provenance_manifest["provenance_contract_version"] = "tp.meta.provenance.v999"
+
+    with pytest.raises(ProvenanceInputError, match="provenance manifest contract mismatch"):
+        build_provenance_merkle_payload(
+            provenance_manifest,
+            provenance_manifest_schema={},
+            provenance_merkle_schema={},
+        )
+
+
+def test_phase4e_build_merkle_payload_rejects_entries_that_are_not_array() -> None:
+    pytest.importorskip("jsonschema")
+    provenance_manifest = _build_two_entry_provenance_manifest()
+    provenance_manifest["entries"] = {"not": "an array"}
+
+    with pytest.raises(ProvenanceInputError, match="provenance manifest entries must be an array"):
+        build_provenance_merkle_payload(
+            provenance_manifest,
+            provenance_manifest_schema={},
+            provenance_merkle_schema={},
+        )
+
+
+def test_phase4e_build_merkle_payload_rejects_duplicate_relative_path_directly() -> None:
+    pytest.importorskip("jsonschema")
+    provenance_manifest = _build_two_entry_provenance_manifest()
+    provenance_manifest["entries"] = [provenance_manifest["entries"][0], _deepcopy(provenance_manifest["entries"][0])]
+
+    with pytest.raises(ProvenanceInputError, match="duplicate relative_path"):
+        build_provenance_merkle_payload(
+            provenance_manifest,
+            provenance_manifest_schema={},
+            provenance_merkle_schema={},
+        )
+
+
+def test_phase4e_build_merkle_payload_rejects_unsorted_entries_directly() -> None:
+    pytest.importorskip("jsonschema")
+    provenance_manifest = _build_two_entry_provenance_manifest()
+    provenance_manifest["entries"] = list(reversed(provenance_manifest["entries"]))
+
+    with pytest.raises(ProvenanceInputError, match="must be sorted by relative_path"):
+        build_provenance_merkle_payload(
+            provenance_manifest,
+            provenance_manifest_schema={},
+            provenance_merkle_schema={},
+        )
+
+
+def test_phase4e_build_merkle_payload_can_sort_when_strict_order_disabled() -> None:
+    pytest.importorskip("jsonschema")
+    provenance_manifest = _build_two_entry_provenance_manifest()
+    expected = build_provenance_merkle_payload(
+        provenance_manifest,
+        provenance_manifest_schema={},
+        provenance_merkle_schema={},
+    )
+    provenance_manifest["entries"] = list(reversed(provenance_manifest["entries"]))
+
+    relaxed = build_provenance_merkle_payload(
+        provenance_manifest,
+        provenance_manifest_schema={},
+        provenance_merkle_schema={},
+        strict_input_order=False,
+    )
+
+    assert relaxed == expected
+
+
+def test_phase4e_build_merkle_payload_rejects_invalid_leaf_digest_directly() -> None:
+    pytest.importorskip("jsonschema")
+    provenance_manifest = _build_two_entry_provenance_manifest()
+    provenance_manifest["entries"][0]["provenance_entry_sha256"] = "not-a-sha256"
+
+    with pytest.raises(ProvenanceInputError, match="provenance_entry_sha256"):
+        build_provenance_merkle_payload(
+            provenance_manifest,
+            provenance_manifest_schema={},
+            provenance_merkle_schema={},
+        )
+
+
+def test_phase4e_build_merkle_payload_rejects_empty_entries_directly() -> None:
+    pytest.importorskip("jsonschema")
+    provenance_manifest = _build_two_entry_provenance_manifest()
+    provenance_manifest["entries"] = []
+
+    with pytest.raises(ProvenanceInputError, match="entries must be non-empty"):
+        build_provenance_merkle_payload(
+            provenance_manifest,
+            provenance_manifest_schema={},
+            provenance_merkle_schema={},
+        )
 
 
 def test_phase4e_golden_provenance_merkle_matches_expected(tmp_path: Path) -> None:

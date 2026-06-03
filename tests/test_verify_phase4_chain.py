@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import subprocess
@@ -23,10 +24,17 @@ from tp.phase4.provenance_capture import (
     compute_provenance_entry_sha256,
 )
 from tp.phase4.verify_phase4_chain import (
+    FAILURE_CODE_LABEL_MAX_LENGTH,
     FAILURE_MESSAGE_MAX_LENGTH,
     Phase4AlignmentError,
+    Phase4SchemaValidationError,
+    Phase4VerificationInputError,
     build_verification_report_payload,
+    collect_report_inputs_from_paths,
     default_failure_computed_block,
+    serialize_verification_report_payload,
+    validate_verification_report_payload,
+    verify_phase4_chain_from_paths,
     verify_phase4_chain_payloads,
 )
 
@@ -216,6 +224,86 @@ def test_phase4f_report_validates_against_schema(tmp_path: Path) -> None:
     schema = _load_json(REPORT_SCHEMA_PATH)
     payload = _load_json(report_path)
     jsonschema.Draft202012Validator(schema).validate(payload)
+
+
+def test_phase4f_verify_from_paths_returns_inputs_and_computed_blocks() -> None:
+    verification = verify_phase4_chain_from_paths(
+        capture_metadata_path=GOLDEN_CAPTURE,
+        metadata_manifest_path=GOLDEN_METADATA_MANIFEST,
+        provenance_manifest_path=GOLDEN_PROVENANCE_MANIFEST,
+        provenance_merkle_path=GOLDEN_PROVENANCE_MERKLE,
+        metadata_schema_path=METADATA_SCHEMA_PATH,
+        metadata_manifest_schema_path=METADATA_MANIFEST_SCHEMA_PATH,
+        provenance_manifest_schema_path=PROVENANCE_MANIFEST_SCHEMA_PATH,
+        provenance_merkle_schema_path=PROVENANCE_MERKLE_SCHEMA_PATH,
+    )
+    golden_report = _load_json(GOLDEN_VERIFICATION_REPORT)
+
+    assert verification["inputs"] == golden_report["inputs"]
+    assert verification["computed"] == golden_report["computed"]
+
+
+def test_phase4f_verify_from_paths_rejects_malformed_input_json(tmp_path: Path) -> None:
+    bad_capture = tmp_path / "capture_bad.json"
+    bad_capture.write_text("{bad-json", encoding="utf-8")
+
+    with pytest.raises(Phase4VerificationInputError, match="unable to parse capture metadata artifact"):
+        verify_phase4_chain_from_paths(
+            capture_metadata_path=bad_capture,
+            metadata_manifest_path=GOLDEN_METADATA_MANIFEST,
+            provenance_manifest_path=GOLDEN_PROVENANCE_MANIFEST,
+            provenance_merkle_path=GOLDEN_PROVENANCE_MERKLE,
+            metadata_schema_path=METADATA_SCHEMA_PATH,
+            metadata_manifest_schema_path=METADATA_MANIFEST_SCHEMA_PATH,
+            provenance_manifest_schema_path=PROVENANCE_MANIFEST_SCHEMA_PATH,
+            provenance_merkle_schema_path=PROVENANCE_MERKLE_SCHEMA_PATH,
+        )
+
+
+def test_phase4f_verify_from_paths_rejects_non_object_schema(tmp_path: Path) -> None:
+    bad_schema = tmp_path / "metadata_schema_array.json"
+    bad_schema.write_text("[]", encoding="utf-8")
+
+    with pytest.raises(Phase4SchemaValidationError, match="metadata schema must be a JSON object"):
+        verify_phase4_chain_from_paths(
+            capture_metadata_path=GOLDEN_CAPTURE,
+            metadata_manifest_path=GOLDEN_METADATA_MANIFEST,
+            provenance_manifest_path=GOLDEN_PROVENANCE_MANIFEST,
+            provenance_merkle_path=GOLDEN_PROVENANCE_MERKLE,
+            metadata_schema_path=bad_schema,
+            metadata_manifest_schema_path=METADATA_MANIFEST_SCHEMA_PATH,
+            provenance_manifest_schema_path=PROVENANCE_MANIFEST_SCHEMA_PATH,
+            provenance_merkle_schema_path=PROVENANCE_MERKLE_SCHEMA_PATH,
+        )
+
+
+def test_phase4f_collect_report_inputs_handles_missing_and_malformed_files(tmp_path: Path) -> None:
+    bad_capture = tmp_path / "capture_bad.json"
+    bad_capture.write_text("{bad-json", encoding="utf-8")
+    provenance_manifest = tmp_path / "provenance_manifest.json"
+    _write_json(
+        provenance_manifest,
+        {
+            "provenance_contract_version": PROVENANCE_CONTRACT_VERSION,
+            "metadata_contract_version": METADATA_CONTRACT_VERSION,
+        },
+    )
+    merkle_array = tmp_path / "provenance_merkle_array.json"
+    _write_json(merkle_array, [])
+
+    inputs = collect_report_inputs_from_paths(
+        capture_metadata_path=bad_capture,
+        metadata_manifest_path=tmp_path / "missing_metadata_manifest.json",
+        provenance_manifest_path=provenance_manifest,
+        provenance_merkle_path=merkle_array,
+    )
+
+    assert inputs["capture_metadata"]["file_sha256"] == hashlib.sha256(b"{bad-json").hexdigest()
+    assert inputs["capture_metadata"]["metadata_contract_version"] is None
+    assert inputs["metadata_manifest"]["file_sha256"] is None
+    assert inputs["provenance_manifest"]["provenance_contract_version"] == PROVENANCE_CONTRACT_VERSION
+    assert inputs["provenance_merkle"]["file_sha256"] == hashlib.sha256(b"[]").hexdigest()
+    assert inputs["provenance_merkle"]["provenance_merkle_contract_version"] is None
 
 
 def test_phase4f_report_has_no_nondeterministic_fields(tmp_path: Path) -> None:
@@ -632,6 +720,55 @@ def test_phase4f_failure_report_truncates_long_failure_messages() -> None:
 
     schema = _load_json(REPORT_SCHEMA_PATH)
     jsonschema.Draft202012Validator(schema).validate(payload)
+
+
+def test_phase4f_failure_report_defaults_and_truncates_labels() -> None:
+    jsonschema = pytest.importorskip("jsonschema")
+    golden_report_payload = _load_json(GOLDEN_VERIFICATION_REPORT)
+    payload = build_verification_report_payload(
+        inputs=dict(golden_report_payload["inputs"]),
+        computed=default_failure_computed_block(),
+        passed=False,
+        failure_code_label="",
+        failure_message="",
+    )
+    assert payload["verification_status"]["failure_code_label"] == "UNSPECIFIED_FAILURE"
+    assert payload["verification_status"]["failure_message"] == "verification failed"
+
+    long_label = "LABEL_" + ("x" * (FAILURE_CODE_LABEL_MAX_LENGTH + 32))
+    payload = build_verification_report_payload(
+        inputs=dict(golden_report_payload["inputs"]),
+        computed=default_failure_computed_block(),
+        passed=False,
+        failure_code_label=long_label,
+        failure_message="failure",
+    )
+    failure_code_label = payload["verification_status"]["failure_code_label"]
+    assert isinstance(failure_code_label, str)
+    assert len(failure_code_label) == FAILURE_CODE_LABEL_MAX_LENGTH
+    assert failure_code_label.endswith("... [truncated]")
+
+    schema = _load_json(REPORT_SCHEMA_PATH)
+    jsonschema.Draft202012Validator(schema).validate(payload)
+
+
+def test_phase4f_report_validation_rejects_non_object_payload() -> None:
+    with pytest.raises(Phase4SchemaValidationError, match="verification report payload must be a JSON object"):
+        validate_verification_report_payload([], report_schema={})
+
+
+def test_phase4f_report_validation_rejects_schema_mismatch() -> None:
+    with pytest.raises(Phase4SchemaValidationError, match="verification_report schema validation failed"):
+        validate_verification_report_payload({}, report_schema={"type": "array"})
+
+
+def test_phase4f_report_serialization_is_canonical_with_trailing_newline() -> None:
+    payload = _load_json(GOLDEN_VERIFICATION_REPORT)
+    serialized = serialize_verification_report_payload(payload)
+
+    assert serialized.endswith(b"\n")
+    assert not serialized.endswith(b"\n\n")
+    assert json.loads(serialized) == payload
 
 
 def test_phase4f_report_schema_rejects_inconsistent_pass_fail_fields() -> None:
