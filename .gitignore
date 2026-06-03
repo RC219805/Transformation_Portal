@@ -171,6 +171,7 @@ input_images/Richard-Raw-Test/
 *.tflite
 *.mlmodel
 *.mlpackage
+!tests/fixtures/**/*.bin
 
 # Model weights/checkpoints stored at repo root (not Python packages)
 #/models is a data dir; allow src/**/models as python packages below
@@ -200,6 +201,7 @@ material_response_report.json
 !*metadata*.json
 !*comparison*.json
 !depth_model_comparison.json
+!tests/fixtures/**/*.json
 
 # -----------------------------------------------------------------------------
 # Large image files (exclude binary outputs)
@@ -260,18 +262,20 @@ input_images/**/*.[sS][rR][fF]
 # -----------------------------------------------------------------------------
 logs/
 artifacts/
+!artifacts/
+!artifacts/README.md
 trial_runs/
 
 # -----------------------------------------------------------------------------
 # Temporary markdown files (keep permanent docs only)
 # -----------------------------------------------------------------------------
-*_TEMP.md
-*_WIP.md
-SESSION_*.md
-Analysis_Complete.md
-IMPLEMENTATION_COMPLETE.md
-*_SUMMARY.md
-COMMIT_SUMMARY_OLD.md
+/*_TEMP.md
+/*_WIP.md
+/SESSION_*.md
+/Analysis_Complete.md
+/IMPLEMENTATION_COMPLETE.md
+/*_SUMMARY.md
+/COMMIT_SUMMARY_OLD.md
 
 # Keep production documentation
 !750_PICACHO_*.md

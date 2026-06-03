@@ -648,6 +648,19 @@ class TestGitignore:
         assert ".env.*" in content
         assert "!.env.example" in content
 
+    def test_gitignore_does_not_hide_tracked_files(self):
+        """Tracked governance docs and fixtures should not be masked by ignore rules."""
+        result = subprocess.run(
+            ["git", "ls-files", "-c", "-i", "--exclude-standard"],
+            cwd=_repo_root,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+        assert result.returncode == 0, result.stderr
+        assert result.stdout.strip() == ""
+
 
 class TestNoOrphanedFiles:
     """Tests to prevent orphaned or redundant files."""

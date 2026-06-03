@@ -408,7 +408,7 @@ def test_validation_suite_uses_resolved_python_for_preflight(tmp_path: Path) -> 
     _write_fake_python(fakebin / "python", version="3.9.6", real_python=sys.executable)
     _write_executable(
         fakebin / "make",
-        "#!/bin/sh\n" "exit 0\n",
+        "#!/bin/sh\nexit 0\n",
     )
 
     # fakebin first so our fake pythons are found; /usr/bin for bash and other utilities
@@ -431,7 +431,7 @@ def test_validation_suite_help_skips_python_resolution(tmp_path: Path) -> None:
     _copy_repo_file(VALIDATION_SUITE_PATH, repo_root / "scripts" / "validation" / "run_full_validation_suite.sh")
     _write_executable(
         repo_root / "scripts" / "setup" / "resolve_python_311.sh",
-        "#!/bin/sh\n" "echo missing-python >&2\n" "exit 1\n",
+        "#!/bin/sh\necho missing-python >&2\nexit 1\n",
     )
 
     env = {**os.environ, "PATH": "/usr/bin:/bin"}
