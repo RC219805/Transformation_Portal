@@ -535,6 +535,17 @@ class TestRootGovernanceMetadata:
 
         assert not missing_targets, "Root guidance references undefined Make targets:\n" + "\n".join(sorted(missing_targets))
 
+    def test_makefile_help_matches_quality_targets(self):
+        """Makefile help should describe the actual quality target boundaries."""
+        makefile = (_repo_root / "Makefile").read_text()
+
+        assert "quality-check: lint validate-ci" in makefile
+        assert "Run all quality checks (lint + structure + tests)" not in makefile
+        assert "quality-check      Run lint, workflow validation, and root placement checks" in makefile
+        assert "check-quality" in self._make_targets(_repo_root / "Makefile")
+        assert "fix-quality check-quality validate-ci" in makefile
+        assert "check-quality      Dry-run common quality issue fixes" in makefile
+
 
 class TestRootEnvironmentTemplate:
     """Tests for the root Docker/FastAPI environment template."""
