@@ -65,7 +65,7 @@ make install-ml-core
 python scripts/setup/download_depth_models.py
 ```
 
-For Linux/CPU bootstrap flows, use:
+For Apple Silicon CPU fallback bootstrap flows, use:
 
 ```bash
 ./scripts/bootstrap/install_ml_stack.sh --profile core-cpu
@@ -204,7 +204,7 @@ df -h /
 # Install supported ML packages
 make install-ml-core
 
-# Linux/CPU bootstrap alternative
+# Apple Silicon CPU fallback bootstrap alternative
 ./scripts/bootstrap/install_ml_stack.sh --profile core-cpu
 
 # Download models

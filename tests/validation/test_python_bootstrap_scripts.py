@@ -321,6 +321,37 @@ def test_make_install_ml_sam2_uses_core_mps_profile_on_darwin_arm64(tmp_path: Pa
     assert str(fake_python) not in (result.stdout + result.stderr)
 
 
+def test_make_install_ml_sam2_fails_closed_outside_apple_silicon(tmp_path: Path) -> None:
+    repo_root = tmp_path / "repo"
+    profile_log_path = repo_root / "sam2-profile.log"
+    pip_log_path = repo_root / "pip-install.log"
+    _copy_repo_file(MAKEFILE_PATH, repo_root / "Makefile")
+    _copy_repo_file(RESOLVER_PATH, repo_root / "scripts" / "setup" / "resolve_python_311.sh")
+    fake_python = _write_fake_ml_core_python(
+        repo_root / ".venv" / "bin" / "python",
+        version="3.11.15",
+        platform_system="Linux",
+        platform_machine="x86_64",
+        pip_log_path=pip_log_path,
+    )
+    _write_executable(
+        repo_root / "scripts" / "bootstrap" / "install_ml_stack.sh",
+        ("#!/bin/sh\n" f"printf '%s\\n' \"$*\" >> {shlex.quote(str(profile_log_path))}\n" "exit 0\n"),
+    )
+
+    env = {**os.environ, "PATH": "/usr/bin:/bin"}
+    result = subprocess.run(["make", "install-ml-sam2"], cwd=repo_root, env=env, capture_output=True, text=True, check=False)
+
+    output = result.stdout + result.stderr
+    assert result.returncode != 0
+    assert "install-ml-sam2 is currently supported only on native macOS Apple Silicon" in output
+    assert "Linux and macOS Intel ML lockfiles are retired" in output
+    assert "Using ML SAM2 profile core-cpu,sam2" not in output
+    assert not profile_log_path.exists()
+    assert not pip_log_path.exists()
+    assert str(fake_python) not in output
+
+
 def test_install_ml_stack_rejects_retired_linux_lane(tmp_path: Path) -> None:
     repo_root = tmp_path / "repo"
     script_path = _copy_repo_file(ML_STACK_INSTALLER_PATH, repo_root / "scripts" / "bootstrap" / "install_ml_stack.sh")

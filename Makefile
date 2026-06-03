@@ -222,9 +222,12 @@ install-ml-sam2: venv
 		aarch64) py_arch="arm64" ;; \
 		amd64) py_arch="x86_64" ;; \
 	esac; \
-	profile="core-cpu,sam2"; \
 	if [ "$$py_os" = "Darwin" ] && [ "$$py_arch" = "arm64" ]; then \
 		profile="core-mps,sam2"; \
+	else \
+		echo "Error: install-ml-sam2 is currently supported only on native macOS Apple Silicon."; \
+		echo "Error: Linux and macOS Intel ML lockfiles are retired from installable requirements."; \
+		exit 1; \
 	fi; \
 	echo "Using ML SAM2 profile $$profile"; \
 	./scripts/bootstrap/install_ml_stack.sh --profile "$$profile"

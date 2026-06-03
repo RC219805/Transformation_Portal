@@ -298,7 +298,7 @@ make install-ml-core
 make install-ml-raw
 
 # Install ML SAM2 layer
-# Uses the MPS profile on native Apple Silicon and the CPU profile elsewhere
+# Uses the MPS profile on native Apple Silicon; fails closed elsewhere
 make install-ml-sam2
 
 # Install ML CoreML layer (macOS only)

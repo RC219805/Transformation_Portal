@@ -85,7 +85,7 @@ def _raise_missing_lux_render_dependencies() -> None:
     raise ImportError(
         "lux_render requires optional ML dependencies that are not installed: "
         f"{missing}. Install supported runtime dependencies with `make install-ml-core` "
-        "on Apple Silicon or `./scripts/bootstrap/install_ml_stack.sh --profile core-cpu`; "
+        "or, on Apple Silicon, `./scripts/bootstrap/install_ml_stack.sh --profile core-cpu`; "
         "see `requirements/README.md` for the governed ML lock contract."
     ) from root_cause
 

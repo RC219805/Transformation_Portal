@@ -119,7 +119,7 @@ Transformation Portal supports depth models across two tiers with different lice
 ### Production Path
 - **DA3 (`da3` backend):** Primary production backend for Lux Depth V3
 - **Use for:** The governed depth workflow surface. Select `model_key="da3-metric"` for the Apache-2.0 DA3 path, or `model_key="da3"` / `model_key="da3-research"` for the research-default selector.
-- **Requirement:** Install a trusted ML core profile for actual DA3 inference. The checked-in ML core lock is currently target-owned for macOS Apple Silicon (`darwin-arm64`) only; Linux and macOS Intel ML lanes are retired unsupported lanes that fail closed until a governed lane is re-established. For example: `make install-ml-core` or `./scripts/bootstrap/install_ml_stack.sh --profile core-cpu`.
+- **Requirement:** Install a trusted ML core profile for actual DA3 inference. The checked-in ML core lock is currently target-owned for macOS Apple Silicon (`darwin-arm64`) only; Linux and macOS Intel ML lanes are retired unsupported lanes that fail closed until a governed lane is re-established. For example: `make install-ml-core` or, on Apple Silicon, `./scripts/bootstrap/install_ml_stack.sh --profile core-cpu`.
 - **Default:** Standard CLI flows resolve here unless a research-only backend is explicitly requested
 
 ### Research & Non-Commercial
