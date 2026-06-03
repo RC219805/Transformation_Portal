@@ -16,6 +16,9 @@ from types import ModuleType
 
 import pytest
 
+# The fixture is intentionally named for readability at call sites.
+# pylint: disable=redefined-outer-name
+
 # Mark all tests in this module as unit tests (ADR-044)
 pytestmark = [
     pytest.mark.unit,

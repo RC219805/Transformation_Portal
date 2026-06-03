@@ -319,6 +319,28 @@ class TestRootGovernanceMetadata:
         assert "`Pillow`                | >=10.3.0" in contributing
         assert "`Pillow`                | >=10.0.0" not in contributing
 
+    def test_pyproject_dev_extra_tracks_governed_dev_requirements(self):
+        """The public dev extra should not silently trail requirements/dev.in."""
+        pyproject = tomllib.loads((_repo_root / "pyproject.toml").read_text())
+        dev_extra = pyproject["project"]["optional-dependencies"]["dev"]
+        requirements_dev_in = (_repo_root / "requirements" / "dev.in").read_text().splitlines()
+
+        def package_names(lines: list[str]) -> set[str]:
+            names: set[str] = set()
+            for line in lines:
+                normalized_line = line.strip()
+                if not normalized_line or normalized_line.startswith(("#", "-r")):
+                    continue
+                match = re.match(r"^([a-zA-Z0-9._-]+)", normalized_line)
+                if match:
+                    names.add(match.group(1).lower().replace("_", "-").replace(".", "-"))
+            return names
+
+        governed_dev_packages = package_names(requirements_dev_in)
+        metadata_dev_packages = package_names(dev_extra)
+
+        assert governed_dev_packages <= metadata_dev_packages
+
     def test_contributing_dependency_audit_schedule_is_current(self):
         """Canonical contribution guidance should not point to a past audit date."""
         contributing = (_repo_root / "CONTRIBUTING.md").read_text()
