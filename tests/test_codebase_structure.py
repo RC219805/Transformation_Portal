@@ -158,6 +158,26 @@ class TestRootGovernanceMetadata:
         assert "*Next Review: 2026-09-03*" in security_policy
         assert "*Security Policy Version: 1.2*" in security_policy
 
+    def test_security_policy_resources_point_to_current_authorities(self):
+        """Root security resources should avoid historical or mixed guidance."""
+        security_policy = (_repo_root / "SECURITY.md").read_text()
+
+        stale_links = [
+            "docs/guides/BEST_PRACTICES.md",
+            "docs/version_history/changelog.md",
+        ]
+        for stale_link in stale_links:
+            assert stale_link not in security_policy
+
+        required_links = [
+            "CONTRIBUTING.md",
+            "CHANGELOG.md",
+            "docs/architecture/ARCHITECTURE.md",
+        ]
+        for relative_path in required_links:
+            assert relative_path in security_policy
+            assert (_repo_root / relative_path).exists()
+
     def test_contributing_dependency_audit_schedule_is_current(self):
         """Canonical contribution guidance should not point to a past audit date."""
         contributing = (_repo_root / "CONTRIBUTING.md").read_text()
