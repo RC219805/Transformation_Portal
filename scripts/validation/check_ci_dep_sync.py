@@ -7,6 +7,7 @@ This script ensures:
    - requirements-ci.txt (root) and requirements/ci.in
 2. Test deps in requirements-ci.txt align with requirements/dev.in
 3. requirements/ci.in contains ONLY CI pipeline tools (bandit, safety, build, twine, etc.)
+4. Dev-only tools in requirements/dev.in are exposed through root requirements-dev.txt
 
 Run via:
     python scripts/validation/check_ci_dep_sync.py
@@ -48,6 +49,12 @@ CORE_TEST_DEPS = frozenset({
     "moto",
 })
 
+# Developer-only test tooling that should be available from the documented
+# root development entry point, but should not be pulled into lean CI installs.
+DEV_ONLY_DEPS = frozenset({
+    "pytest-rerunfailures",
+})
+
 
 def extract_packages(filepath: Path) -> set[str]:
     """Extract package names from a requirements file, ignoring comments and -r lines.
@@ -75,10 +82,10 @@ def extract_packages(filepath: Path) -> set[str]:
     return packages
 
 
-def main() -> int:
-    """Main entry point."""
-    repo_root = Path(__file__).resolve().parents[2]
+def validate_dependency_sync(repo_root: Path) -> list[str]:
+    """Return dependency sync errors for the configured requirements files."""
     root_ci = repo_root / "requirements-ci.txt"
+    root_dev = repo_root / "requirements-dev.txt"
     nested_ci_in = repo_root / "requirements" / "ci.in"
     nested_dev_in = repo_root / "requirements" / "dev.in"
 
@@ -86,6 +93,7 @@ def main() -> int:
 
     # Extract packages
     root_ci_packages = extract_packages(root_ci)
+    root_dev_packages = extract_packages(root_dev)
     nested_ci_packages = extract_packages(nested_ci_in)
     nested_dev_packages = extract_packages(nested_dev_in)
 
@@ -125,8 +133,41 @@ def main() -> int:
             f"       Add these to requirements/dev.in to maintain sync."
         )
 
-    # Note: Check 4 (pytest-* detection) was removed because TEST_RUNNER_PATTERN in Check 1
+    # Check 4: Developer-only tools must be present in both the governed
+    # layered dev input and the documented root development entry point.
+    missing_dev_only_in_root_dev = DEV_ONLY_DEPS - root_dev_packages
+    if missing_dev_only_in_root_dev:
+        errors.append(
+            f"ERROR: Dev-only deps missing from requirements-dev.txt:\n"
+            f"       {sorted(missing_dev_only_in_root_dev)}\n"
+            f"       Add these to requirements-dev.txt so documented dev installs match requirements/dev.in."
+        )
+
+    missing_dev_only_in_nested_dev = DEV_ONLY_DEPS - nested_dev_packages
+    if missing_dev_only_in_nested_dev:
+        errors.append(
+            f"ERROR: Dev-only deps missing from requirements/dev.in:\n"
+            f"       {sorted(missing_dev_only_in_nested_dev)}\n"
+            f"       Add these to requirements/dev.in to maintain the governed layered dev contract."
+        )
+
+    dev_only_in_root_ci = root_ci_packages & DEV_ONLY_DEPS
+    if dev_only_in_root_ci:
+        errors.append(
+            f"ERROR: Dev-only deps found in requirements-ci.txt:\n"
+            f"       {sorted(dev_only_in_root_ci)}\n"
+            f"       Move these to requirements-dev.txt so lean CI installs stay minimal."
+        )
+
+    # Note: Check 5 (pytest-* detection) was removed because TEST_RUNNER_PATTERN in Check 1
     # already matches pytest-* plugins, so violations would be reported twice.
+    return errors
+
+
+def main() -> int:
+    """Main entry point."""
+    repo_root = Path(__file__).resolve().parents[2]
+    errors = validate_dependency_sync(repo_root)
 
     # Report results
     if errors:
@@ -140,6 +181,7 @@ def main() -> int:
         print("  1. Move test deps to requirements/dev.in (NOT requirements/ci.in)")
         print("  2. Keep CI pipeline tools (bandit, safety, etc.) in requirements/ci.in")
         print("  3. Root requirements-ci.txt is the source for lean CI test runs")
+        print("  4. Keep dev-only tools in requirements/dev.in and requirements-dev.txt")
         print("=" * 70)
         return 1
 

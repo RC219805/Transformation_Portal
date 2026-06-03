@@ -7,6 +7,9 @@ types-PyYAML>=6.0.12
 # Property-based testing (v1.7 requirement)
 hypothesis>=6.100,<7
 
+# Flaky-test quarantine support (ADR-033)
+pytest-rerunfailures>=14.0,<17
+
 # JSON Schema validation (machine-mode contract tests)
 jsonschema>=4.21.0,<5
 

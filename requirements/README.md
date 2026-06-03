@@ -111,7 +111,8 @@ The repository has **root-level** requirements files that reference this layered
 - `requirements-ci.txt` (root) contains **test runner and test-support** deps (pytest, hypothesis, moto, etc.)
 - `requirements/ci.in` contains **CI pipeline tools** (bandit, safety, build, twine, etc.)
 - Core test deps in root `requirements-ci.txt` must match `requirements/dev.in`. The enforced set is defined as `CORE_TEST_DEPS` in `scripts/validation/check_ci_dep_sync.py` (currently: pytest, pytest-cov, pytest-asyncio, pytest-json-report, pytest-xdist, hypothesis, httpx, moto)
-- Run `make check-ci-sync` to verify no drift for this core test dependency set between the root files
+- Dev-only test tools in `requirements/dev.in` must also be available from root `requirements-dev.txt` without entering lean CI installs. The enforced set is defined as `DEV_ONLY_DEPS` in `scripts/validation/check_ci_dep_sync.py` (currently: pytest-rerunfailures for ADR-033 flaky-test quarantine support)
+- Run `make check-ci-sync` to verify no drift for the enforced core-test and dev-only dependency sets across the root and layered files
 
 ### Current Web Runtime Baseline
 
