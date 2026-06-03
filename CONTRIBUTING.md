@@ -762,7 +762,7 @@ Transformation Portal conducts quarterly dependency audits:
 - **Banned packages**: New unmaintained packages identified
 - **Exception review**: Approved exceptions re-validated
 
-Next audit: **2026-05-16 (Q2 2026)**
+Next audit: **2026-08-16 (Q3 2026)**
 
 ## Release Process
 

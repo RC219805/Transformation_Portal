@@ -158,6 +158,13 @@ class TestRootGovernanceMetadata:
         assert "*Next Review: 2026-09-03*" in security_policy
         assert "*Security Policy Version: 1.2*" in security_policy
 
+    def test_contributing_dependency_audit_schedule_is_current(self):
+        """Canonical contribution guidance should not point to a past audit date."""
+        contributing = (_repo_root / "CONTRIBUTING.md").read_text()
+
+        assert "Next audit: **2026-05-16 (Q2 2026)**" not in contributing
+        assert "Next audit: **2026-08-16 (Q3 2026)**" in contributing
+
     def test_architect_directive_status_points_to_current_authorities(self):
         """Root architect metadata should not masquerade as live PR/CI status."""
         status_path = _repo_root / ".architect_directive_status.yml"
