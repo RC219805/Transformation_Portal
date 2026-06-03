@@ -5,6 +5,7 @@ Tests for Image Processing Readiness Check and Simple Image Processor.
 """
 
 import importlib.util
+import re
 import sys
 import tempfile
 from pathlib import Path
@@ -107,9 +108,11 @@ class TestReadinessCheck:
         assert "make install-ml-core" in output
         assert "Apple Silicon" in output
         assert "./scripts/bootstrap/install_ml_stack.sh --profile core-cpu" in output
+        assert ".venv/bin/python scripts/setup/download_depth_models.py" in output
         assert "Linux/CPU" not in output
         assert "pip install torch diffusers transformers realesrgan" not in output
         assert "pip install -r requirements.txt" not in output
+        assert "Download ML models: python scripts/setup/download_depth_models.py" not in output
 
     def test_missing_core_guidance_uses_repo_managed_install(self, capsys):
         """Missing core readiness guidance should route through repo-managed setup."""
@@ -139,6 +142,31 @@ class TestReadinessCheck:
         assert "make check-environment" in output
         assert "pip install numpy Pillow" not in output
         assert "pip install scipy" not in output
+
+    def test_sample_download_guidance_uses_repo_python(self, capsys):
+        """Sample download guidance should run through the repo-managed Python."""
+        capabilities = {
+            "core_packages": {"numpy": True, "Pillow": True, "scipy": False, "PyYAML": True, "typer": True, "tqdm": True},
+            "ml_packages": {"torch": False, "diffusers": False, "transformers": False, "controlnet_aux": False},
+            "image_packages": {"tifffile": False, "imagecodecs": False, "scikit-image": False, "opencv": False},
+            "minimal_ready": True,
+            "standard_ready": False,
+            "full_ready": False,
+        }
+        images = {
+            "sample_dir_exists": False,
+            "input_dir_exists": False,
+            "sample_count": 0,
+            "input_count": 0,
+            "total_count": 0,
+            "has_images": False,
+        }
+
+        readiness.print_quick_start_guide(capabilities, images)
+
+        output = capsys.readouterr().out
+        assert ".venv/bin/python scripts/download_samples.py" in output
+        assert re.search(r"(?m)^\s*python scripts/download_samples.py\b", output) is None
 
     def test_full_tier_quick_start_uses_current_cli_entrypoints(self, capsys):
         """Full-tier readiness guidance should advertise maintained console scripts."""

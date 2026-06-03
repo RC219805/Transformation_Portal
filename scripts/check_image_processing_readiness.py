@@ -8,7 +8,7 @@ readiness for image processing operations. It categorizes functionality into
 tiers and provides actionable next steps.
 
 Usage:
-    python scripts/check_image_processing_readiness.py [--verbose] [--quick-start]
+    .venv/bin/python scripts/check_image_processing_readiness.py [--verbose] [--quick-start]
 
 Features:
     - Tiered capability assessment (Minimal, Standard, Full)
@@ -313,7 +313,7 @@ def print_quick_start_guide(capabilities: Dict, images: Dict) -> None:
         print("   No images found. Choose one:")
         print("   ")
         print("   a) Download samples:")
-        print("      python scripts/download_samples.py")
+        print("      .venv/bin/python scripts/download_samples.py")
         print("   ")
         print("   b) Use your own images:")
         print("      cp ~/Downloads/my_image.jpg input_images/")
@@ -413,7 +413,9 @@ def print_recommendations(disk: Dict, capabilities: Dict) -> None:
     # Model downloads
     repo_root = Path(__file__).parent.parent
     if (repo_root / "scripts" / "setup" / "download_depth_models.py").exists():
-        recommendations.append(("📦", "Download ML models: python scripts/setup/download_depth_models.py", Colors.OKCYAN))
+        recommendations.append(
+            ("📦", "Download ML models: .venv/bin/python scripts/setup/download_depth_models.py", Colors.OKCYAN)
+        )
 
     # Print all recommendations
     for symbol, message, color in recommendations:

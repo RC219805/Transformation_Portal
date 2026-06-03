@@ -807,6 +807,46 @@ class TestReferenceQuickstartGuidance:
             for required_fragment in required_fragments:
                 assert required_fragment in content, f"{guide_path.name}: {required_fragment}"
 
+    def test_image_processing_readiness_guide_uses_current_entrypoints(self):
+        """Image-readiness guidance should mirror maintained processing and setup surfaces."""
+        readiness_guide = (_repo_root / "docs" / "guides" / "IMAGE_PROCESSING_READINESS.md").read_text()
+
+        stale_fragments = [
+            *self.STALE_OPERATOR_GUIDANCE_FRAGMENTS,
+            "pip install numpy Pillow",
+            "pip install scipy",
+            "pip install tifffile",
+            "pip install torch",
+        ]
+        for stale_fragment in stale_fragments:
+            assert stale_fragment not in readiness_guide
+
+        raw_python_script_commands = re.findall(r"(?m)^python scripts/.*$", readiness_guide)
+        assert raw_python_script_commands == []
+
+        required_fragments = [
+            "make venv",
+            "make install-core",
+            "make check-environment",
+            ".venv/bin/python scripts/check_image_processing_readiness.py",
+            ".venv/bin/python scripts/simple_image_processor.py",
+            ".venv/bin/python scripts/setup/download_depth_models.py",
+            ".venv/bin/python scripts/download_samples.py",
+            ".venv/bin/lux-depth-v3",
+            "--model-key da3-metric",
+            ".venv/bin/luxury-tiff-batch",
+            ".venv/bin/lux_render",
+            "--input-glob",
+            ".venv/bin/luxury_video_grader",
+            "./scripts/setup/install_da3_runtime.sh --profile baseline",
+            "./scripts/setup/install_depth_pro_runtime.sh",
+            "./scripts/setup/install_raw_runtime.sh",
+            "./scripts/setup/install_fastvlm_runtime.sh",
+            "../governance/DOCUMENTATION_MAP.md",
+        ]
+        for required_fragment in required_fragments:
+            assert required_fragment in readiness_guide
+
 
 class TestRootEnvironmentTemplate:
     """Tests for the root Docker/FastAPI environment template."""
