@@ -216,16 +216,19 @@ All pull requests must pass these automated gates before merge:
 - **All tests must pass**
 - **No skipped tests without justification**
 
-### 4. Coverage Gates (ENFORCED)
+### 4. Coverage Gates and Targets
 
 #### Global Minimum
 - Combined coverage must stay **≥25%** (enforced via `coverage report --fail-under=25`)
-- Current baseline: **25.44%** (Q2 2026 target: 28%)
+- Coverage ratchet targets and current baseline evidence live in
+  [`docs/testing/test_coverage_improvement_plan.md`](docs/testing/test_coverage_improvement_plan.md)
+  and [`docs/testing/COLD_ZONE_COVERAGE_PROGRAM.md`](docs/testing/COLD_ZONE_COVERAGE_PROGRAM.md).
 
-#### Diff Coverage (KEY METRIC)
-- **New/changed lines must be 80%+ covered**
-- This is the primary quality ratchet mechanism
-- Enforced via `diff-cover` tool
+#### Diff Coverage (LOCAL TARGET / PR REVIEW SIGNAL)
+- **New/changed lines should target 85%+ covered**
+- This is the primary local quality ratchet and PR-review signal.
+- Check it with `make coverage-diff`; required PR CI currently enforces the
+  global 25% floor and package/cold-zone checks in `build.yml`, not `diff-cover`.
 
 #### Critical Module Floors
 Future enforcement (not yet active):
@@ -491,7 +494,7 @@ Use draft PRs for:
 We use a **ratcheting coverage strategy**:
 
 1. **Never decrease global coverage** (enforced in CI)
-2. **New code must be well-tested** (80% diff coverage)
+2. **New code should be well-tested** (85% diff coverage target)
 3. **Critical modules** have floor thresholds (coming soon)
 4. **Incremental improvement** over time
 

@@ -17,14 +17,15 @@
 #   --dry-run       Show what would be done without making changes
 #   --check         Validate current organization (exit 1 if violations found)
 #   --verbose       Show detailed output including skipped files
-#   --docs-only     Only organize documentation files
+#   --docs-only     Only run documentation organization and docs topology validation
 #   --skip-root     Skip root file placement validation
 #   -h, --help      Show this help message
 #
-# Helper Scripts (executed in sequence when running full organization):
-#   1. scripts/organize_docs.sh         - Classify docs into approved locations
+# Helper scripts and validators:
+#   1. scripts/organize_docs.sh - Classify docs into approved locations
 #   2. scripts/setup/pre-commit-check.sh - Validate root file placement
 #   3. scripts/governance/check_script_topology.py - Validate script placement
+#   4. scripts/governance/check_docs_structure.py - Validate docs topology
 #
 # Documentation:
 #   See docs/governance/REPO_ORGANIZATION.md for organization rules.
@@ -72,7 +73,7 @@ Options:
   --dry-run       Show what would be done without making changes
   --check         Validate current organization (exit 1 if violations)
   --verbose       Show detailed output including skipped files
-  --docs-only     Only organize documentation files
+  --docs-only     Only run documentation organization and docs topology validation
   --skip-root     Skip root file placement validation
   -h, --help      Show this help message
 
@@ -80,7 +81,7 @@ Examples:
   $0 --dry-run              # Preview organization changes
   $0                        # Apply organization changes
   $0 --check                # CI validation mode (fail if violations)
-  $0 --docs-only --dry-run  # Preview documentation moves only
+  $0 --docs-only --dry-run  # Preview docs moves and validate docs topology
 
 Documentation:
   docs/governance/REPO_ORGANIZATION.md - Organization rules and guidelines
@@ -270,9 +271,11 @@ check_root_scripts() {
 
         local basename="$file"
 
-        # Skip allowed root Python files
+        # Skip allowed root Python files. Root placement policy allows app.py as
+        # the FastAPI origin; package/build/test config files belong in governed
+        # package, tool, or test locations instead of the repository root.
         case "$basename" in
-            app.py|__init__.py|setup.py|conftest.py)
+            app.py)
                 continue
                 ;;
         esac
@@ -298,11 +301,15 @@ check_root_scripts() {
             example_*.py|*_example*.py)
                 dest="examples/"
                 ;;
+            setup.py|conftest.py|__init__.py)
+                dest="governed package, tool, or test location"
+                ;;
+            *)
+                dest="scripts/ or src/transformation_portal/"
+                ;;
         esac
 
-        if [[ -n "$dest" ]]; then
-            misplaced+=("$basename → $dest")
-        fi
+        misplaced+=("$basename → $dest")
 
     done < <(git -C "$REPO_ROOT" ls-files -z)
 
@@ -512,13 +519,15 @@ main() {
             failed_steps=$((failed_steps + 1))
         fi
 
-        # Step 6: Validate documentation structure
-        total_steps=$((total_steps + 1))
-        if validate_docs_structure; then
-            passed_steps=$((passed_steps + 1))
-        else
-            failed_steps=$((failed_steps + 1))
-        fi
+    fi
+
+    # Final documentation topology validation always runs. In --docs-only mode
+    # this is the second docs-specific gate; in full mode it remains step 6.
+    total_steps=$((total_steps + 1))
+    if validate_docs_structure; then
+        passed_steps=$((passed_steps + 1))
+    else
+        failed_steps=$((failed_steps + 1))
     fi
 
     # Summary
@@ -547,7 +556,12 @@ main() {
             echo ""
         fi
     else
-        if [[ "$DRY_RUN" == "true" ]]; then
+        if [[ "$CHECK_MODE" == "true" ]]; then
+            log_success "Organization validation completed successfully"
+            echo ""
+            echo "No organization changes are required."
+            echo ""
+        elif [[ "$DRY_RUN" == "true" ]]; then
             log_success "Dry run completed successfully"
             echo ""
             echo "To apply changes, run without --dry-run:"

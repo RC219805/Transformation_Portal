@@ -27,7 +27,9 @@
 # 2. Supported ML core install:
 #    - Uses the checked-in target-owned Apple Silicon ML lock when available
 #    - Enables governed depth/ML workflows on supported runtimes
-#    - To enable: run `make install-ml-core` or use pyproject.toml extras
+#    - To enable: run `make install-ml-core` or see requirements/README.md
+#      for target-owned flows; pyproject.toml extras are metadata pointers,
+#      not the governed operator install surface
 #
 # 3. For development: use requirements-dev.txt or requirements/all.txt
 #

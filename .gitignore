@@ -81,8 +81,12 @@ venv_py311/
 .sh_history
 *.pem
 *.key
+*.p12
+*.pfx
 id_rsa
 id_dsa
+.npmrc
+.pypirc
 PKG-INFO
 
 # -----------------------------------------------------------------------------

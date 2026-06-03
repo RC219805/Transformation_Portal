@@ -3,7 +3,8 @@
 # auto-organize-install.sh
 # Installation script for the automated repository organization system
 #
-# This script installs the pre-commit hook and configures the organization system.
+# This script installs the repo-managed pre-commit framework hook set and
+# configures the organization system.
 #
 
 set -euo pipefail
@@ -24,16 +25,12 @@ fi
 echo "Repository root: $REPO_ROOT"
 echo ""
 
-# Install pre-commit hook
-echo "Installing pre-commit hook..."
-if ! command -v pre-commit >/dev/null 2>&1; then
-    echo "ERROR: 'pre-commit' is required but not installed."
-    echo "Install it with: python3 -m pip install pre-commit"
-    exit 1
-fi
-
-(cd "$REPO_ROOT" && pre-commit install -f)
-echo "  ✓ Pre-commit hook installed"
+# Install the configured pre-commit framework hook set. The Make target uses
+# the repo-managed .venv pre-commit binary and .pre-commit-config.yaml's
+# default_install_hook_types, so pre-commit and pre-push stay in sync.
+echo "Installing pre-commit and pre-push hooks..."
+(cd "$REPO_ROOT" && make install-hooks)
+echo "  ✓ Pre-commit and pre-push hooks installed"
 
 # Make organization script executable
 ORGANIZE_SCRIPT="$REPO_ROOT/.auto-organize.sh"
@@ -58,7 +55,8 @@ echo ""
 echo "3. View organization documentation:"
 echo "   cat docs/governance/REPO_ORGANIZATION.md"
 echo ""
-echo "The pre-commit hook will now run the repository hook set before each commit."
-echo "That includes misplaced-file detection as one of its checks. To bypass (not recommended):"
+echo "The repository hook set now runs before each commit and push."
+echo "That includes misplaced-file detection and push-time secrets checks. To bypass (not recommended):"
 echo "   git commit --no-verify"
+echo "   git push --no-verify"
 echo ""

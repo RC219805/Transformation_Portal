@@ -50,26 +50,12 @@ Transformation_Portal/
 ├── .github/                    # GitHub workflows and actions
 │   ├── workflows/              # CI/CD workflow definitions
 │   └── agents/                 # Custom GitHub Copilot agents
-├── assets/                     # Media and static resources
-│   ├── brand/                  # Brand assets (logos, colors)
-│   ├── luts/                   # Color grading LUTs
-│   │   ├── film_emulation/     # Film stock emulations
-│   │   ├── location_aesthetic/ # Location-specific profiles
-│   │   └── material_response/  # Material Response LUTs
-│   ├── textures/               # Material texture maps
-│   │   └── board_materials/    # MBAR board-material texture plates
-│   ├── images/                 # Sample and reference images
-│   ├── videos/                 # Sample videos
-│   ├── renders/                # Sample renders
-│   └── models/                 # 3D models
-├── config/                     # Configuration files
-│   ├── presets/                # Processing presets (YAML)
-│   └── profiles/               # User profiles
-├── data/                       # Data files
-│   ├── input/                  # Input data
-│   ├── output/                 # Output data
-│   ├── cache/                  # Cached results
-│   └── sample_images/          # Sample images for testing
+├── archive/                    # Retired code, legacy scripts, historical bundles
+├── artifacts/                  # Tracked artifact metadata and governed evidence
+├── assets/                     # Brand assets, LUTs, project assets, texture plates
+├── cloudflare/                 # Cloudflare Worker source owned by the root shim
+├── config/                     # Runtime config, presets, manifests, feature gates
+├── data/                       # Tracked sample images and fixture-like data
 ├── docs/                       # Maintained docs plus historical records
 │   ├── README.md               # Current documentation entry point
 │   ├── governance/             # Documentation map, policy, organization
@@ -79,21 +65,30 @@ Transformation_Portal/
 │   ├── ci/                     # CI governance and workflow matrix
 │   ├── historical/             # Point-in-time records
 │   └── _archive/               # Retired or consolidated documentation
+├── evalsets/                   # Evaluation fixtures and governed benchmark inputs
+├── examples/                   # Example inputs, configs, and demos
+├── input_images/               # Local/sample input image root
+├── migrations/                 # Alembic migrations for durable orchestrator state
+├── policy/                     # Policy-as-data and governance policy assets
+├── public/                     # FastAPI-served portal assets, shared assets, video
+├── requirements/               # Layered .in/.txt lock sources and lock governance
+├── schemas/                    # Contract schemas
 ├── scripts/                    # All scripts
 │   ├── setup/                  # Installation and setup scripts
-│   ├── automation/             # Automation scripts
-│   └── utilities/              # Utility scripts
+│   ├── pipelines/              # Pipeline runners/processors
+│   ├── governance/             # Organization and policy validators
+│   ├── validation/             # Runtime/contract validation checks
+│   └── utilities/              # Focused utility scripts
 ├── src/                        # Source code (installable package)
 │   ├── transformation_portal/  # Main package
+│   ├── tp/                     # Separate public contract/fixity import surface
 │   └── luxury_tiff_batch_processor/  # TIFF processing module
-├── tests/                      # Test suite
-│   ├── unit/                   # Unit tests
-│   ├── integration/            # Integration tests
-│   └── fixtures/               # Test fixtures
-├── archive/                    # Historical and temporary files
-│   ├── deprecated/             # Deprecated code
-│   ├── experiments/            # Experimental features
-│   └── legacy/                 # Legacy code
+├── tests/                      # Contract, unit, integration, fixture, and smoke tests
+├── tools/                      # Governed CLIs for archive/performance/evidence
+├── web/                        # Managed Next.js frontdoor and shared web assets
+│   ├── secure-landing/         # Node 22 managed browser entry point
+│   └── shared/                 # Shared web tokens/assets
+├── workflows/                  # Repo-level workflow metadata and supporting files
 └── [root files]                # Configuration and build files only
     ├── README.md
     ├── Makefile
@@ -121,7 +116,7 @@ The `.auto-organize.sh` script is the canonical entry point for repository organ
 | `--dry-run` | Show what would be done without making changes |
 | `--check` | CI validation mode - exit 1 if violations found |
 | `--verbose` | Show detailed output including skipped files |
-| `--docs-only` | Only organize documentation files |
+| `--docs-only` | Only run documentation organization and docs topology validation |
 | `--skip-root` | Skip root file placement validation |
 | `-h, --help` | Show help message |
 
@@ -131,7 +126,7 @@ The `.auto-organize.sh` script is the canonical entry point for repository organ
 ./.auto-organize.sh --dry-run              # Preview organization changes
 ./.auto-organize.sh                        # Apply organization changes
 ./.auto-organize.sh --check                # CI validation mode (fail if violations)
-./.auto-organize.sh --docs-only --dry-run  # Preview documentation moves only
+./.auto-organize.sh --docs-only --dry-run  # Preview docs moves and validate docs topology
 ```
 
 ### What Gets Organized
@@ -155,11 +150,29 @@ Only these files should remain in the repository root:
 - **Build configuration**: `Makefile`, `pyproject.toml`, root Cloudflare Workers Builds shim files (`package.json`, `package-lock.json`, `wrangler.jsonc`)
 - **Dependency management**: `requirements.txt`, `requirements-dev.txt`, `requirements-ci.txt`, `requirements-lint.txt`
 - **Testing and linting configuration**: `pyproject.toml`, `.pylintrc`, `mypy.ini`
-- **Docker**: `Dockerfile`, `docker-compose.yml`
-- **Git**: `.gitignore`, `.gitattributes`, `.git-blame-ignore-revs`, `.pre-commit-config.yaml`
+- **Docker and local environment templates**: `Dockerfile`, `docker-compose.yml`, `.dockerignore`, `.env.example`
+- **Git and security metadata**: `.gitignore`, `.gitattributes`, `.gitmodules`, `.git-blame-ignore-revs`, `.gitleaks.toml`, `.pre-commit-config.yaml`
 - **Governance metadata**: `.architect_directive_status.yml`, `AGENTS.md`, `CLAUDE.md`
 - **Runtime entrypoints**: `app.py`, `portal.html`
 - **Organization system**: `.auto-organize.sh`
+
+Current allowed root files are:
+`README.md`, `LICENSE`, `CONTRIBUTING.md`, `SECURITY.md`, `CHANGELOG.md`,
+`AGENTS.md`, `CLAUDE.md`, `Makefile`, `package.json`, `package-lock.json`,
+`pyproject.toml`, `requirements.txt`, `requirements-dev.txt`,
+`requirements-ci.txt`, `requirements-lint.txt`, `.pylintrc`, `mypy.ini`,
+`Dockerfile`, `docker-compose.yml`, `.gitignore`, `.gitleaks.toml`,
+`.dockerignore`, `.gitattributes`, `.gitmodules`, `.git-blame-ignore-revs`,
+`.pre-commit-config.yaml`, `wrangler.jsonc`, `.auto-organize.sh`,
+`.architect_directive_status.yml`, `.env.example`, `app.py`, and
+`portal.html`.
+
+The root Cloudflare Workers files are not a general JavaScript application
+root. They are a minimal Workers Builds deploy shim for
+`cloudflare/transformationportal-worker`; keep scripts, Node engine metadata,
+Wrangler version, and the delegated entrypoint aligned with that governed
+worker package. The contract is enforced by
+`tests/validation/test_cloudflare_worker_root_shim_contract.py`.
 
 ### Root Directory Limits
 
@@ -169,11 +182,18 @@ bundle is archived under `docs/historical/productivity-suite-2025/`, with its
 retired placeholder script under `archive/scripts/productivity/`.
 
 Approved tracked top-level directories are enforced by
-`scripts/setup/pre-commit-check.sh`. Contract-sensitive roots such as
-`public/portal-assets`, `public/video`, `schemas`, `config`, `input_images`,
-and `web/secure-landing` remain stable. Retired roots such as `dashboard/`,
-`data/luts/`, `linear_ingest_demo/`, `projects/`, `test_sky_fix/`, and
-`textures/` must not be recreated; use `assets/luts/`,
+`scripts/setup/pre-commit-check.sh`.
+
+Current allowed top-level directories are:
+`.github/`, `archive/`, `artifacts/`, `assets/`, `cloudflare/`, `config/`,
+`data/`, `docs/`, `evalsets/`, `examples/`, `input_images/`, `migrations/`,
+`policy/`, `public/`, `requirements/`, `schemas/`, `scripts/`, `src/`,
+`tests/`, `tools/`, `web/`, and `workflows/`.
+
+Contract-sensitive nested roots such as `public/portal-assets`,
+`public/video`, and `web/secure-landing` remain stable. Retired roots such as
+`dashboard/`, `data/luts/`, `linear_ingest_demo/`, `projects/`,
+`test_sky_fix/`, and `textures/` must not be recreated; use `assets/luts/`,
 `assets/textures/board_materials/`, `assets/projects/`, `docs/projects/`, or
 ignored `output/...` paths instead.
 
@@ -205,6 +225,9 @@ ignored `output/...` paths instead.
 6. **Documentation Structure Validation** (`scripts/governance/check_docs_structure.py`)
    - Validates that documentation follows the approved directory structure
 
+`--docs-only` runs steps 1 and 6 only. It skips root placement and script
+topology checks, but still validates documentation topology.
+
 ### Running in CI
 
 Use `--check` mode for CI validation:
@@ -231,16 +254,20 @@ This guarantees a consistent ordering of operations and a single point of contro
 
 ## Pre-Commit Hook
 
-The pre-commit hook (`scripts/setup/pre-commit-check.sh`) prevents commits with misplaced files.
+The repository hook set is installed through the pre-commit framework. Its
+root-placement hook calls `scripts/setup/pre-commit-check.sh` to prevent commits
+with misplaced files, and `.pre-commit-config.yaml` installs both `pre-commit`
+and `pre-push` hook types so push-time checks such as gitleaks are active too.
 
 Repo-wide audits use the same checker in `--all` mode with no grandfathered root-file baseline.
 
 ### How It Works
 
-1. Runs automatically before each commit
-2. Checks for files in the root directory that should be elsewhere
-3. Provides helpful error messages with suggested destinations
-4. Allows bypass with `git commit --no-verify` (not recommended)
+1. Runs automatically before each commit through the configured pre-commit hook set
+2. Runs configured push-time checks before `git push`
+3. Checks for files in the root directory that should be elsewhere
+4. Provides helpful error messages with suggested destinations
+5. Allows bypass with `git commit --no-verify` or `git push --no-verify` (not recommended)
 
 ## Installation
 
@@ -251,7 +278,8 @@ Repo-wide audits use the same checker in `--all` mode with no grandfathered root
 git clone https://github.com/RC219805/Transformation_Portal.git
 cd Transformation_Portal
 
-# 2. Install the organization system
+# 2. Install the repo-managed hook tooling and organization system
+make install-core
 ./scripts/setup/auto-organize-install.sh
 
 # 3. Run initial organization (dry-run first)
@@ -266,13 +294,12 @@ cd Transformation_Portal
 If you prefer manual setup:
 
 ```bash
-# Make scripts executable
-chmod +x .auto-organize.sh
-chmod +x scripts/setup/pre-commit-check.sh
-chmod +x scripts/setup/auto-organize-install.sh
+# Install the repo-managed pre-commit and pre-push hooks
+make install-core
+make install-hooks
 
-# Create symbolic link for pre-commit hook
-ln -sf ../../scripts/setup/pre-commit-check.sh .git/hooks/pre-commit
+# Verify root placement directly when needed
+./scripts/setup/pre-commit-check.sh --all
 ```
 
 ## Usage
@@ -381,7 +408,7 @@ The organization system uses these rules to classify files:
 
 ### For CI/CD
 
-1. Validate organization: add a CI check that runs `.auto-organize.sh --dry-run`.
+1. Validate organization: add a CI check that runs `.auto-organize.sh --check`.
 2. Fail on violations: fail the build if organization is needed.
 3. Report violations: provide clear error messages about misplaced files.
 
@@ -401,15 +428,15 @@ sed -i 's/\r$//' .auto-organize.sh
 ### Pre-Commit Hook Not Working
 
 ```bash
-# Check if hook exists
+# Check if hooks exist
 ls -la .git/hooks/pre-commit
+ls -la .git/hooks/pre-push
 
-# Reinstall hook
-./scripts/setup/auto-organize-install.sh
+# Reinstall hooks through the repo-managed target
+make install-hooks
 
-# Check hook is executable
-chmod +x .git/hooks/pre-commit
-chmod +x scripts/setup/pre-commit-check.sh
+# Run the root-placement check directly
+./scripts/setup/pre-commit-check.sh --all
 ```
 
 ### Files Not Being Moved

@@ -171,7 +171,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Coverage Quality Gate:** Adjusted baseline threshold from 33% to 25% to reflect actual combined coverage
   - PR #832 fixed coverage artifact consolidation, revealing accurate combined coverage of 25.44%
   - Previous 33% threshold was aspirational, not historical
-  - Added [Coverage Improvement Plan](docs/guides/coverage-improvement-plan.md) with roadmap to 33% by Q2 2026
+  - Maintained coverage ratchet guidance now lives in
+    [Test Coverage Improvement Plan](docs/testing/test_coverage_improvement_plan.md)
+    and [Cold-Zone Coverage Program](docs/testing/COLD_ZONE_COVERAGE_PROGRAM.md).
   - Baseline gate now prevents regression while allowing incremental improvement
 
 ### Changed
