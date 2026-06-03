@@ -91,6 +91,7 @@ def test_dockerignore_excludes_heavy_local_context() -> None:
         "!.env.example",
         ".npmrc",
         ".pypirc",
+        "web/secure-landing/.metafiles",
         "*.pem",
         "*.key",
         "*.p12",

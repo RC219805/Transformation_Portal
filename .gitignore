@@ -56,6 +56,8 @@ requirements/.hash-pilot/
 # Environments
 # -----------------------------------------------------------------------------
 .env
+.env.*
+!.env.example
 .venv/
 .venv-da3/
 .venv-raw/
@@ -119,6 +121,7 @@ web/secure-landing/.next/
 web/secure-landing/.next-build-verify/
 web/secure-landing/.next-smoke-*/
 web/secure-landing/.next-codex-*/
+web/secure-landing/.metafiles/
 web/secure-landing/tmp/
 web/secure-landing/node_modules/
 web/secure-landing/test-results/
@@ -353,12 +356,5 @@ archive_reports/
 # Local scratch/artifacts
 local_artifacts/
 *.numbers
-# secure-landing isolated Next build outputs
-web/secure-landing/.next-build-verify/
-web/secure-landing/.next-smoke-*/
-
-# secure-landing on-demand bundle analysis (esbuild metafiles)
-web/secure-landing/.metafiles/
-
 # uv lockfile — auto-generated on every uv run; not tracked
 uv.lock

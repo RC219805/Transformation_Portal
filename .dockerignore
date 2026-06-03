@@ -25,6 +25,7 @@ node_modules/
 web/secure-landing/node_modules/
 web/secure-landing/.next/
 web/secure-landing/.next-*/
+web/secure-landing/.metafiles/
 web/secure-landing/test-results/
 web/secure-landing/playwright-report/
 web/secure-landing/blob-report/

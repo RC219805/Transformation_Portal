@@ -244,10 +244,20 @@ class TestGitignore:
             "web/secure-landing/.next-build-verify/",
             "web/secure-landing/.next-smoke-*/",
             "web/secure-landing/.next-codex-*/",
+            "web/secure-landing/.metafiles/",
         ]
 
         for pattern in temp_dir_patterns:
             assert pattern in content, f".gitignore should include frontdoor temp dir pattern: {pattern}"
+
+    def test_gitignore_covers_local_env_variants(self):
+        """Test that .gitignore excludes local env files without hiding templates."""
+        gitignore = _repo_root / ".gitignore"
+        content = gitignore.read_text()
+
+        assert ".env" in content
+        assert ".env.*" in content
+        assert "!.env.example" in content
 
 
 class TestNoOrphanedFiles:
