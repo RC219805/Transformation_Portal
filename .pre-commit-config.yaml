@@ -80,7 +80,7 @@ repos:
         name: Validate Dependency Constraints (ADR-032)
         entry: scripts/validate_dependency_constraints.sh
         language: script
-        files: ^requirements/.*\.in$|^requirements/.*\.txt$
+        files: ^(requirements/.*\.(in|txt)|pyproject\.toml|scripts/validate_dependency_constraints\.sh)$
         pass_filenames: false
 
       - id: check-test-markers

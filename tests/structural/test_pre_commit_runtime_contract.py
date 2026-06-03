@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 from pathlib import Path
 
 import pytest
@@ -60,3 +61,24 @@ def test_install_hooks_target_documents_all_installed_hook_types() -> None:
     claude_guide = CLAUDE_GUIDE.read_text(encoding="utf-8")
     assert "make install-hooks         # install git pre-commit and pre-push hooks" in claude_guide
     assert "make install-hooks         # install git pre-commit hook" not in claude_guide
+
+
+def test_dependency_constraints_hook_runs_for_root_dependency_metadata() -> None:
+    config = _load_pre_commit_config()
+    hooks = {str(hook.get("id")): hook for repo in config.get("repos", []) for hook in repo.get("hooks", [])}
+    hook = hooks["validate-dependency-constraints"]
+    pattern = re.compile(str(hook["files"]))
+
+    expected_matches = {
+        "requirements/base.in",
+        "requirements/base.txt",
+        "requirements/dev.in",
+        "requirements/dev.txt",
+        "pyproject.toml",
+        "scripts/validate_dependency_constraints.sh",
+    }
+    for path in expected_matches:
+        assert pattern.fullmatch(path), f"dependency constraints hook must run for {path}"
+
+    for path in ("README.md", "CONTRIBUTING.md", "scripts/validation/other_check.py"):
+        assert not pattern.fullmatch(path), f"dependency constraints hook should not run for {path}"

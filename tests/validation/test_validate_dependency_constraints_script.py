@@ -375,7 +375,14 @@ def test_validator_uses_repo_resolved_python_instead_of_path_python3(tmp_path: P
     fakebin = tmp_path / "fakebin"
     _write_executable(
         fakebin / "python3",
-        "#!/bin/sh\n" "echo 'broken python3 should not be used' >&2\n" "exit 99\n",
+        "\n".join(
+            [
+                "#!/bin/sh",
+                "echo 'broken python3 should not be used' >&2",
+                "exit 99",
+            ]
+        )
+        + "\n",
     )
     requirements_dir = repo_root / "requirements"
     requirements_dir.mkdir(parents=True, exist_ok=True)
