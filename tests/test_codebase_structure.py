@@ -10,6 +10,7 @@ import hashlib
 import re
 import subprocess
 import sys
+import tomllib
 from pathlib import Path
 
 import pytest
@@ -251,6 +252,33 @@ class TestRootGovernanceMetadata:
         assert "**cryptography==46.0.5**" not in security_policy
         assert "current governed lock baseline is pillow==12.2.0" in requirements_lint
         assert "allows pillow==12.1.1 in lockfiles" not in requirements_lint
+
+    def test_pyproject_core_dependencies_track_governed_base_requirements(self):
+        """Installable package metadata should not trail the governed core dependency surface."""
+        pyproject = tomllib.loads((_repo_root / "pyproject.toml").read_text())
+        dependencies = set(pyproject["project"]["dependencies"])
+        contributing = (_repo_root / "CONTRIBUTING.md").read_text()
+
+        required_dependency_ranges = {
+            "Pillow>=10.3.0,<13",
+            "scikit-learn>=1.8.0,<2",
+            "SQLAlchemy[asyncio]>=2.0.50,<2.2",
+            "asyncpg>=0.29,<1",
+            "alembic>=1.13,<2",
+            "redis>=5.0,<7",
+        }
+        for dependency in required_dependency_ranges:
+            assert dependency in dependencies
+
+        stale_dependency_ranges = {
+            "Pillow>=10.0.0,<13",
+            "scikit-learn>=1.0,<2",
+        }
+        for dependency in stale_dependency_ranges:
+            assert dependency not in dependencies
+
+        assert "`Pillow`                | >=10.3.0" in contributing
+        assert "`Pillow`                | >=10.0.0" not in contributing
 
     def test_contributing_dependency_audit_schedule_is_current(self):
         """Canonical contribution guidance should not point to a past audit date."""

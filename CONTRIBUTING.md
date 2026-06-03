@@ -705,7 +705,7 @@ Certain packages require minimum versions due to CVEs:
 | Package                 | Minimum Version | Reason                              |
 |-------------------------|-----------------|-------------------------------------|
 | `sentence-transformers` | >=3.1.0         | CVE-73169 (arbitrary code execution) |
-| `Pillow`                | >=10.0.0        | Multiple CVEs in 9.x series         |
+| `Pillow`                | >=10.3.0        | CVE-2024-28219 and multiple 9.x CVEs |
 
 ### Approved Exceptions
 
