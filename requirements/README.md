@@ -159,9 +159,9 @@ pinned-without-hashes unless a later policy decision promotes broader
   and are treated as evidence, not as the default install surface.
 - The checked-in layered locks remain the primary deployment contract and
   continue to be consumed without mandatory hash enforcement.
-- Root wrapper files such as `requirements.txt`, `requirements-ci.txt`,
-  `requirements-dev.txt`, and `requirements-lint.txt` remain outside this
-  hash-enforced policy decision.
+- `requirements.txt`, `requirements-ci.txt`, and
+  `requirements-dev.txt` remain outside this hash-enforced policy decision.
+  `requirements-lint.txt` is also outside the hash-enforced pilot scope.
 - ML platform locks remain outside this policy decision until the simpler
   non-ML layered surface has a reason to absorb broader enforcement cost.
 - Promotion to mandatory `--require-hashes` enforcement requires a separate
@@ -188,11 +188,11 @@ These files are emitted into `HASH_PILOT_OUT_DIR` (default:
 
 ### Why the policy excludes root wrappers
 
-Root wrapper files such as `requirements.txt`, `requirements-ci.txt`,
-`requirements-dev.txt`, and `requirements-lint.txt` remain hand-authored
-convenience entry points and are used broadly across CI and local setup flows.
-The pilot deliberately avoids changing those interfaces until the team decides
-whether hash enforcement is worth the operational cost.
+`requirements.txt`, `requirements-ci.txt`, and `requirements-dev.txt` remain
+outside this hash-enforced policy decision. `requirements-lint.txt` is also a
+hand-authored convenience entry point outside the pilot scope. The pilot
+deliberately avoids changing those interfaces until the team decides whether
+hash enforcement is worth the operational cost.
 
 ### Why ML platform locks remain deferred
 
