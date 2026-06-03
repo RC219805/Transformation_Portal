@@ -13,6 +13,8 @@ pytestmark = pytest.mark.unit
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 PRE_COMMIT_CONFIG = REPO_ROOT / ".pre-commit-config.yaml"
+MAKEFILE = REPO_ROOT / "Makefile"
+CLAUDE_GUIDE = REPO_ROOT / "CLAUDE.md"
 REPO_PYTHON_RUNNER = "scripts/setup/run_repo_python.sh"
 PYTHON_HOOK_IDS = {"auto-format-staged", "check-test-markers", "ban-tautological-tests"}
 
@@ -42,3 +44,19 @@ def test_repo_python_runner_is_executable() -> None:
     runner = REPO_ROOT / REPO_PYTHON_RUNNER
     assert runner.exists(), f"missing repo Python runner at {runner}"
     assert os.access(runner, os.X_OK), f"{runner} must be executable for pre-commit system hooks"
+
+
+def test_install_hooks_target_documents_all_installed_hook_types() -> None:
+    config = _load_pre_commit_config()
+    installed_hook_types = set(config.get("default_install_hook_types") or [])
+    makefile = MAKEFILE.read_text(encoding="utf-8")
+
+    assert installed_hook_types == {"pre-commit", "pre-push"}
+    assert "Install git pre-commit and pre-push hooks" in makefile
+    assert "Installing git pre-commit and pre-push hooks" in makefile
+    assert "Install git pre-commit hook" not in makefile
+    assert "Installing git pre-commit hook" not in makefile
+
+    claude_guide = CLAUDE_GUIDE.read_text(encoding="utf-8")
+    assert "make install-hooks         # install git pre-commit and pre-push hooks" in claude_guide
+    assert "make install-hooks         # install git pre-commit hook" not in claude_guide

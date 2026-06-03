@@ -89,7 +89,7 @@ help:
 	@echo "  ci                 Run local CI checks (lint + hygiene + fast tests)"
 	@echo "  ci-full            Run comprehensive CI simulation (all checks)"
 	@echo "  pre-commit         Run pre-commit hooks manually with CI-aligned formatter versions"
-	@echo "  install-hooks      Install git pre-commit hook"
+	@echo "  install-hooks      Install git pre-commit and pre-push hooks"
 	@echo "  quality-check      Run all quality checks (lint + structure + tests)"
 	@echo "  check-environment  Run pre-flight environment validation"
 	@echo "  check             Verify generic layered requirements under requirements/"
@@ -653,10 +653,10 @@ pre-commit:
 
 # Install git hooks
 install-hooks:
-	@echo "Installing git pre-commit hook..."
+	@echo "Installing git pre-commit and pre-push hooks..."
 	@test -n "$(PRE_COMMIT_BIN)" || { echo "pre-commit is not installed in .venv; run 'make install-core' first"; exit 1; }
 	@"$(PRE_COMMIT_BIN)" install -f
-	@echo "✓ Pre-commit hook installed via pre-commit"
+	@echo "✓ Git hooks installed via pre-commit"
 
 # Quality check (all validations)
 quality-check: lint validate-ci
