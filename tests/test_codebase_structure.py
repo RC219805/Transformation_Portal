@@ -391,8 +391,11 @@ class TestRootGovernanceMetadata:
         contributing = (_repo_root / "CONTRIBUTING.md").read_text()
         requirements_readme = (_repo_root / "requirements" / "README.md").read_text()
         requirements_ml = (_repo_root / "requirements" / "ml.in").read_text()
+        requirements_ml_coreml = (_repo_root / "requirements" / "ml-coreml.in").read_text()
         requirements_ml_cpu = (_repo_root / "requirements" / "ml-cpu.in").read_text()
         requirements_ml_cuda = (_repo_root / "requirements" / "ml-cuda.in").read_text()
+        requirements_ml_raw = (_repo_root / "requirements" / "ml-raw.in").read_text()
+        requirements_ml_research = (_repo_root / "requirements" / "ml-research.in").read_text()
 
         stale_fragments = [
             "vim requirements/ml.in         # Optional ML/AI deps",
@@ -432,6 +435,12 @@ class TestRootGovernanceMetadata:
         assert "core-cuda` in scripts/bootstrap/install_ml_stack.sh fails closed" in requirements_ml_cuda
         assert "nvidia-cublas-cu12" not in requirements_ml_cuda
         assert "triton ;" not in requirements_ml_cuda
+        assert "`make install-ml-raw` target fails closed" in requirements_ml_raw
+        assert "Install via: make install-ml-raw" not in requirements_ml_raw
+        assert "`make install-ml-coreml` fails closed unless a trusted CoreML lock exists" in requirements_ml_coreml
+        assert "Install via: make install-ml-coreml" not in requirements_ml_coreml
+        assert "Reserved metadata only" in requirements_ml_research
+        assert "make install-ml-research" not in requirements_ml_research
 
     def test_contributing_setup_uses_repo_managed_environment(self):
         """Root contribution setup should use the current Makefile-managed .venv contract."""

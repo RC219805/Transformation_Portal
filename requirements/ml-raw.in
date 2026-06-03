@@ -1,6 +1,8 @@
 # Optional RAW ingest extras
 # Platform-scoped due to wheel availability differences.
-# Run `make compile` in this directory to generate pinned ml-raw.txt
+# No checked-in RAW lock is generated from this file. The root
+# `make install-ml-raw` target fails closed until a trusted target-correct
+# RAW lock contract exists again.
 #
 # WARNING:
 # - rawpy wheel availability varies by platform/architecture
@@ -8,8 +10,9 @@
 # - All other platforms use 0.26.1 for latest LibRaw features
 #
 # Capability contract:
-# - This is an OPTIONAL layer. Absence downgrades ingest to non-RAW paths.
-# - Install via: make install-ml-raw or pip install -r requirements/ml-raw.txt
+# - This is an OPTIONAL metadata layer. Absence downgrades ingest to non-RAW paths.
+# - Do not install from a missing ml-raw.txt host lock artifact.
+# - Re-enabling RAW install support requires a governed checked-in lock.
 
 # RAW file processing (LibRaw wrapper for CR2, NEF, ARW, DNG, etc.)
 # Platform-specific version pins due to wheel availability:
