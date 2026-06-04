@@ -9,6 +9,9 @@ The Transformation Portal performance ledger provides regression detection for p
 
 Current gate authority: [Performance Gate Policy](GATE_POLICY.md).
 
+Unified Luxury batch I/O scheduling has a dedicated advisory harness:
+[Unified Luxury Batch I/O Benchmark](unified_luxury_batch_io_benchmark.md).
+
 ---
 
 ## Quick Start
