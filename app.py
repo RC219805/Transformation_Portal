@@ -58,7 +58,13 @@ from transformation_portal.api.v1 import (
     ReadyResponse,
     UploadStagingEnvelope,
 )
-from transformation_portal.core.security.tenant import TenantContext, TenantError, TenantManager, TenantPolicy
+from transformation_portal.core.security.tenant import (
+    TenantAwareFSGuard,
+    TenantContext,
+    TenantError,
+    TenantManager,
+    TenantPolicy,
+)
 from transformation_portal.determinism.trace import get_or_create_trace_context
 from transformation_portal.ingest.upload_staging import (
     DEFAULT_CAPTURE_METADATA_CONFIG_PATH,
@@ -1375,13 +1381,42 @@ async def _pilot_enforce_job_tenant(
     )
 
 
+def _pilot_tenant_fs_guard(tenant: TenantContext) -> TenantAwareFSGuard:
+    guard = TenantAwareFSGuard(_pilot_tenant_manager())
+    guard.set_tenant(tenant)
+    return guard
+
+
+def _pilot_enforce_dispatch_filesystem_tenant(
+    tenant: Optional[TenantContext],
+    filesystem: DispatchFilesystemPreflight,
+    *,
+    pipeline: str,
+) -> None:
+    if tenant is None or not PILOT_CONTROL_PLANE_ENABLED:
+        return
+    guard = _pilot_tenant_fs_guard(tenant)
+    for field, path in (
+        ("input_dir", filesystem.input_dir),
+        ("output_dir", filesystem.output_dir),
+    ):
+        if path is None:
+            continue
+        try:
+            guard.enforce_path(path)
+        except TenantError:
+            raise JobPreflightError(
+                "tenant_path_outside_workspace",
+                field=field,
+                message="Tenant dispatch paths must stay within the tenant workspace or CAS root.",
+                status_code=403,
+                extra={"pipeline": pipeline, "tenant_id": tenant.tenant_id},
+            ) from None
+
+
 async def _pilot_active_job_count_for_tenant(repo: JobRepository, tenant_id: str) -> int:
     records, _total = await repo.list(limit=None)
-    return sum(
-        1
-        for record in records
-        if record.state in ACTIVE_JOB_STATES and _record_tenant_id(record) == tenant_id
-    )
+    return sum(1 for record in records if record.state in ACTIVE_JOB_STATES and _record_tenant_id(record) == tenant_id)
 
 
 def _record_from_job(job: Job) -> JobRecord:
@@ -1755,6 +1790,7 @@ PORTAL_SAFE_ERROR_MESSAGES = {
     "bag_dir_required": "A bag directory is required before dispatch.",
     "input_dir_required": "An existing input directory is required before dispatch.",
     "output_dir_unwritable": "The output directory or its parent is not writable.",
+    "tenant_path_outside_workspace": "Tenant dispatch paths must stay within the tenant workspace or CAS root.",
     "invalid_depth_device": "The selected compute device is not supported.",
     "invalid_preset": "The selected preset is not supported.",
     "invalid_run_card_version": "The selected run card version is not supported.",
@@ -2052,6 +2088,12 @@ class JobPreflightError(RuntimeError):
             details["field"] = self.field
         details.update(self.extra)
         return details
+
+
+@dataclass(frozen=True)
+class DispatchFilesystemPreflight:
+    input_dir: Optional[Path] = None
+    output_dir: Optional[Path] = None
 
 
 def _now() -> float:
@@ -2868,13 +2910,14 @@ def _enforce_dispatch_value_preflight(
 def _enforce_dispatch_filesystem_preflight(
     pipeline: str,
     execution_args: Dict[str, Any],
-) -> Optional[Path]:
+) -> DispatchFilesystemPreflight:
     """Read-only validation of dispatch filesystem inputs.
 
-    Verifies that ``input_dir`` exists inside an allowed root and returns the
-    trusted ``output_dir`` Path that the caller should ``mkdir`` *after* the
-    job admission gate succeeds (so a 429 reject does not leave behind empty
-    directories under load). Each path component is walked via
+    Verifies that ``input_dir`` exists inside an allowed root, validates the
+    requested ``output_dir`` root, and returns trusted paths. The caller should
+    ``mkdir`` ``output_dir`` *after* the job admission gate succeeds (so a 429
+    reject does not leave behind empty directories under load). Each path
+    component is walked via
     :func:`_trusted_existing_dir` / :func:`_trusted_creatable_dir`, which
     iterate ``Path.iterdir()`` rather than passing user-controlled strings to
     filesystem APIs — this also satisfies the CodeQL ``py/path-injection``
@@ -2883,6 +2926,7 @@ def _enforce_dispatch_filesystem_preflight(
     Raises :class:`JobPreflightError` with a portal-safe reason on failure.
     """
 
+    input_dir_trusted: Optional[Path] = None
     input_dir_raw = str(_pick(execution_args, "input_dir", "inputDir", default="")).strip()
     if input_dir_raw:
         input_dir_trusted = _trusted_existing_dir(input_dir_raw, ALLOWED_INPUT_ROOTS)
@@ -2897,7 +2941,7 @@ def _enforce_dispatch_filesystem_preflight(
 
     output_dir_raw = str(_pick(execution_args, "output_dir", "outputDir", default="")).strip()
     if not output_dir_raw:
-        return None
+        return DispatchFilesystemPreflight(input_dir=input_dir_trusted, output_dir=None)
 
     output_dir_trusted = _trusted_creatable_dir(output_dir_raw, ALLOWED_OUTPUT_ROOTS)
     if output_dir_trusted is None:
@@ -2924,7 +2968,7 @@ def _enforce_dispatch_filesystem_preflight(
             status_code=400,
             extra={"pipeline": pipeline},
         )
-    return output_dir_trusted
+    return DispatchFilesystemPreflight(input_dir=input_dir_trusted, output_dir=output_dir_trusted)
 
 
 def _materialize_dispatch_output_dir(
@@ -9832,8 +9876,15 @@ async def _create_job(
 
     try:
         # Read-only filesystem preflight: validates paths and returns the
-        # trusted output_dir to materialise *after* admission succeeds.
-        trusted_output_dir = _enforce_dispatch_filesystem_preflight(pipeline, execution_args)
+        # trusted dispatch paths. Materialise output_dir *after* admission
+        # succeeds so tenant/admission rejects never leave empty directories.
+        filesystem_preflight = _enforce_dispatch_filesystem_preflight(pipeline, execution_args)
+        _pilot_enforce_dispatch_filesystem_tenant(
+            pilot_tenant,
+            filesystem_preflight,
+            pipeline=pipeline,
+        )
+        trusted_output_dir = filesystem_preflight.output_dir
     except JobPreflightError as exc:
         status_code = int(exc.status_code)
         field = str(exc.field or "payload")

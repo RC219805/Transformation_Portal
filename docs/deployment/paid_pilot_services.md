@@ -142,7 +142,9 @@ TP_PILOT_MAX_ACTIVE_JOBS_PER_TENANT=2
 When enabled, job admission and config preview require the tenant header. Job
 list/detail/events/artifact/cancel surfaces are tenant-filtered, artifact store
 keys are prefixed with the tenant id, active-job quota is enforced per tenant,
-and pipeline entitlement uses `TenantPolicy.allowed_node_types`.
+pipeline entitlement uses `TenantPolicy.allowed_node_types`, and dispatch
+`input_dir` / `output_dir` paths must remain inside the tenant workspace or
+tenant CAS roots.
 
 Audit v1 writes append-only operational events to the same Postgres database as
 job state. Run `make db-upgrade` before enabling tenant/audit mode so the

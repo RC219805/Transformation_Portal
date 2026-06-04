@@ -123,10 +123,14 @@ def test_tenant_aware_fs_guard_enforces_current_tenant(monkeypatch: pytest.Monke
     )
     monkeypatch.setattr(FSGuard, "delete", lambda self, path, missing_ok=True: calls.append(("delete", path)) or True)
 
+    guard.enforce_path(inside)
     assert guard.read_text(inside) == "payload"
     guard.write_text(inside, "data")
     assert guard.delete(inside) is True
     assert calls == [("read", inside), ("write", inside), ("delete", inside)]
+
+    with pytest.raises(TenantError, match="Cross-tenant access denied"):
+        guard.enforce_path(outside)
 
     with pytest.raises(TenantError, match="Cross-tenant access denied"):
         guard.read_text(outside)
