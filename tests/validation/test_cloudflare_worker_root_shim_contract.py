@@ -26,6 +26,7 @@ def test_root_worker_build_package_is_minimal_deploy_shim() -> None:
         "worker:dry-run": worker_package["scripts"]["dry-run"],
         "worker:deploy": worker_package["scripts"]["deploy"],
     }
+    assert root_package["scripts"]["worker:deploy"].endswith(" --keep-vars")
     assert root_package["engines"] == worker_package["engines"]
     assert root_package["packageManager"] == worker_package["packageManager"]
     assert root_package["devDependencies"] == {

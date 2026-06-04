@@ -171,7 +171,9 @@ The root Cloudflare Workers files are not a general JavaScript application
 root. They are a minimal Workers Builds deploy shim for
 `cloudflare/transformationportal-worker`; keep scripts, Node engine metadata,
 Wrangler version, and the delegated entrypoint aligned with that governed
-worker package. The contract is enforced by
+worker package. Production deploy scripts must preserve dashboard-managed
+provider vars such as `FRONTDOOR_ORIGIN` with `--keep-vars`. The contract is
+enforced by
 `tests/validation/test_cloudflare_worker_root_shim_contract.py`.
 
 ### Root Directory Limits
