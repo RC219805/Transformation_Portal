@@ -66,6 +66,8 @@ import numpy as np
 from PIL import Image
 from tqdm import tqdm
 
+from transformation_portal.pipelines.parallel_io import ParallelIOPipeline
+
 # Optional imports with graceful fallback
 try:
     import tifffile
@@ -137,6 +139,9 @@ class UnifiedPipelineConfig:
         device: Processing device (auto/cpu/cuda/mps)
         preserve_metadata: Preserve EXIF/IPTC/XMP metadata
         parallel_outputs: Generate output formats in parallel
+        parallel_io: Overlap batch input loading and output writing
+        io_prefetch_size: Number of input images to prefetch during batch work
+        io_saver_workers: Number of background workers for batch output writes
         save_intermediates: Save intermediate processing stages
     """
 
@@ -171,6 +176,9 @@ class UnifiedPipelineConfig:
     # Advanced options
     preserve_metadata: bool = True
     parallel_outputs: bool = True
+    parallel_io: bool = False
+    io_prefetch_size: int = 2
+    io_saver_workers: int = 2
     save_intermediates: bool = False
 
     def __post_init__(self):
@@ -193,6 +201,8 @@ class UnifiedPipelineConfig:
         self.saturation = max(0.0, min(2.0, self.saturation))
         self.clarity = max(0.0, min(1.0, self.clarity))
         self.lut_strength = max(0.0, min(1.0, self.lut_strength))
+        self.io_prefetch_size = max(1, int(self.io_prefetch_size))
+        self.io_saver_workers = max(1, int(self.io_saver_workers))
 
 
 @dataclass
@@ -257,6 +267,30 @@ class PipelineStatistics:
 
         lines.append("=" * 70)
         return "\n".join(lines)
+
+
+@dataclass(frozen=True)
+class _LoadedBatchImage:
+    image: Image.Image
+    metadata: Dict[str, Any]
+    elapsed_time: float
+
+
+@dataclass(frozen=True)
+class _OutputGenerationWork:
+    image: Image.Image
+    input_path: Path
+    metadata: Dict[str, Any]
+    config: UnifiedPipelineConfig
+    started_at: float
+    stage_times: Dict[str, float]
+
+
+@dataclass(frozen=True)
+class _SavedBatchOutputs:
+    outputs: Dict[str, Path]
+    total_time: float
+    stage_times: Dict[str, float]
 
 
 class UnifiedLuxuryPipeline:
@@ -469,6 +503,9 @@ class UnifiedLuxuryPipeline:
         """
         log.info(f"Batch processing {len(input_paths)} images")
 
+        if self.config.parallel_io and len(input_paths) > 1:
+            return self._batch_process_parallel_io(input_paths, show_progress=show_progress)
+
         results = {}
         iterator = tqdm(input_paths, desc="Processing") if show_progress else input_paths
 
@@ -483,6 +520,145 @@ class UnifiedLuxuryPipeline:
         log.info(self.stats.summary())
 
         return results
+
+    def _batch_process_parallel_io(
+        self,
+        input_paths: List[Path],
+        *,
+        show_progress: bool = True,
+    ) -> Dict[Path, Dict[str, Path]]:
+        """Process a batch with overlapped input prefetching and output writes."""
+
+        log.info(
+            "Parallel I/O enabled: prefetch=%s, savers=%s",
+            self.config.io_prefetch_size,
+            self.config.io_saver_workers,
+        )
+
+        started = time.time()
+        aggregate_stage_times: Dict[str, float] = {}
+
+        io_pipeline: ParallelIOPipeline[_LoadedBatchImage, _OutputGenerationWork, _SavedBatchOutputs] = ParallelIOPipeline(
+            loader=self._load_batch_image,
+            saver=self._save_batch_outputs,
+            prefetch_size=self.config.io_prefetch_size,
+            num_savers=self.config.io_saver_workers,
+            thread_name_prefix="unified_luxury_io",
+        )
+
+        io_results = io_pipeline.process_batch(input_paths, self._prepare_batch_output_work)
+
+        results: Dict[Path, Dict[str, Path]] = {}
+        result_iterator = tqdm(io_results, desc="Processing") if show_progress else io_results
+        for item in result_iterator:
+            if item.succeeded and item.output is not None:
+                saved = item.output
+                results[item.input_path] = saved.outputs
+                self.stats.images_processed += 1
+                self.stats.total_time += saved.total_time
+                self.stats.output_files[str(item.input_path)] = list(saved.outputs.values())
+                for stage_name, elapsed in saved.stage_times.items():
+                    aggregate_stage_times[stage_name] = aggregate_stage_times.get(stage_name, 0.0) + elapsed
+                continue
+
+            error = item.error or RuntimeError("unknown parallel I/O failure")
+            stage = item.stage or "unknown"
+            log.error("Failed to process %s during %s stage: %s", item.input_path.name, stage, error)
+            results[item.input_path] = {}
+            self.stats.images_failed += 1
+
+        self.stats.stage_times = aggregate_stage_times
+        log.info("Parallel I/O batch wall time: %.2fs", time.time() - started)
+        log.info(self.stats.summary())
+
+        return results
+
+    def _load_batch_image(self, input_path: Path) -> _LoadedBatchImage:
+        """Load an image for a parallel-I/O batch item."""
+
+        start = time.time()
+        image, metadata = self._load_image(input_path)
+        return _LoadedBatchImage(
+            image=image,
+            metadata=metadata,
+            elapsed_time=time.time() - start,
+        )
+
+    def _prepare_batch_output_work(
+        self,
+        input_path: Path,
+        loaded: _LoadedBatchImage,
+    ) -> _OutputGenerationWork:
+        """Run compute stages for a loaded batch item and defer output I/O."""
+
+        started_at = time.time() - loaded.elapsed_time
+        temp_config = self._apply_overrides({})
+        temp_config.output_dir.mkdir(parents=True, exist_ok=True)
+        self._configure_stage_state(temp_config)
+        self.stats.stage_times["Load & Validate"] = loaded.elapsed_time
+        self.stages["load"].success = True
+        self.stages["load"].elapsed_time = loaded.elapsed_time
+
+        image = loaded.image
+        metadata = loaded.metadata
+
+        if self.stages["scene_detect"].enabled:
+            scene_type = self._execute_stage("scene_detect", self._detect_scene_type, image)
+            temp_config.scene_type = scene_type
+            log.info(f"  Detected scene type: {scene_type.value}")
+
+        params = self._optimize_parameters(temp_config)
+
+        if self.stages["depth"].enabled:
+            image = self._execute_stage("depth", self._apply_depth_processing, image, params, temp_config)
+
+        if self.stages["material"].enabled:
+            image = self._execute_stage(
+                "material",
+                self._apply_material_response,
+                image,
+                params,
+                temp_config.scene_type,
+            )
+
+        if self.stages["vfx"].enabled:
+            image = self._execute_stage("vfx", self._apply_vfx_effects, image, params)
+
+        if self.stages["color_grade"].enabled:
+            image = self._execute_stage(
+                "color_grade",
+                self._apply_color_grading,
+                image,
+                params,
+                temp_config,
+            )
+
+        return _OutputGenerationWork(
+            image=image,
+            input_path=input_path,
+            metadata=metadata,
+            config=temp_config,
+            started_at=started_at,
+            stage_times=self.stats.stage_times.copy(),
+        )
+
+    def _save_batch_outputs(
+        self,
+        input_path: Path,
+        work: _OutputGenerationWork,
+    ) -> _SavedBatchOutputs:
+        """Write outputs for a prepared batch item."""
+
+        start = time.time()
+        outputs = self._generate_outputs(work.image, input_path, work.metadata, work.config)
+        elapsed = time.time() - start
+        stage_times = work.stage_times.copy()
+        stage_times["Output Generation"] = elapsed
+        return _SavedBatchOutputs(
+            outputs=outputs,
+            total_time=time.time() - work.started_at,
+            stage_times=stage_times,
+        )
 
     def get_statistics(self) -> Dict[str, Any]:
         """
@@ -507,6 +683,9 @@ class UnifiedLuxuryPipeline:
                 "scene_type": self.config.scene_type.value,
                 "device": self.device,
                 "output_formats": [fmt.value for fmt in self.config.output_formats],
+                "parallel_io": self.config.parallel_io,
+                "io_prefetch_size": self.config.io_prefetch_size,
+                "io_saver_workers": self.config.io_saver_workers,
             },
         }
 
@@ -598,26 +777,126 @@ class UnifiedLuxuryPipeline:
 
         log.info(f"Loading: {input_path.name}")
 
-        # Load image
         image = Image.open(input_path)
+        metadata = self._extract_image_metadata(image)
 
-        # Extract metadata
-        metadata = {
-            "format": image.format,
-            "mode": image.mode,
-            "size": image.size,
-            "info": image.info.copy() if hasattr(image, "info") else {},
-        }
+        if self._is_tiff_path(input_path) and HAS_TIFFFILE:
+            tiff_image = self._load_tiff_with_tifffile(input_path, metadata)
+            if tiff_image is not None:
+                image.close()
+                image = tiff_image
 
-        # Convert to RGB if needed
         if image.mode != "RGB":
             log.info(f"  Converting {image.mode} → RGB")
             image = image.convert("RGB")
+
+        image.load()
 
         log.info(f"  Size: {image.size[0]}x{image.size[1]}")
         log.info(f"  Format: {metadata['format']}")
 
         return image, metadata
+
+    @staticmethod
+    def _is_tiff_path(input_path: Path) -> bool:
+        """Return True for TIFF extensions supported by the fast loader."""
+
+        return input_path.suffix.lower() in {".tif", ".tiff"}
+
+    @staticmethod
+    def _extract_image_metadata(image: Image.Image) -> Dict[str, Any]:
+        """Extract the metadata contract used by downstream output generation."""
+
+        return {
+            "format": image.format,
+            "mode": image.mode,
+            "size": image.size,
+            "info": image.info.copy() if hasattr(image, "info") else {},
+            "load_backend": "PIL",
+        }
+
+    def _load_tiff_with_tifffile(
+        self,
+        input_path: Path,
+        metadata: Dict[str, Any],
+    ) -> Optional[Image.Image]:
+        """Load TIFF pixel data through tifffile with PIL fallback on failure."""
+
+        try:
+            with tifffile.TiffFile(input_path) as tiff:
+                page = tiff.pages[0]
+                photometric = self._tiff_photometric_name(page)
+                metadata["tiff_photometric"] = photometric
+                if photometric not in {"MINISBLACK", "RGB"}:
+                    metadata["tifffile_skip_reason"] = "unsupported_photometric"
+                    log.info(
+                        "  TIFF photometric %s requires PIL interpretation; skipping tifffile fast path",
+                        photometric,
+                    )
+                    return None
+                array = page.asarray()
+        except Exception as exc:  # noqa: BLE001 - fallback is deliberate
+            log.warning("  tifffile load failed for %s, falling back to PIL: %s", input_path.name, exc)
+            return None
+
+        try:
+            image = self._array_to_rgb_image(array)
+        except Exception as exc:  # noqa: BLE001 - fallback is deliberate
+            log.warning("  tifffile array conversion failed for %s, falling back to PIL: %s", input_path.name, exc)
+            return None
+
+        metadata["load_backend"] = "tifffile"
+        metadata["source_dtype"] = str(getattr(array, "dtype", "unknown"))
+        return image
+
+    @staticmethod
+    def _tiff_photometric_name(page: Any) -> str:
+        """Return a stable TIFF photometric label for fast-path allowlisting."""
+
+        photometric = getattr(page, "photometric", None)
+        name = getattr(photometric, "name", None)
+        if name:
+            return str(name).upper()
+        return str(photometric).upper()
+
+    @staticmethod
+    def _array_to_rgb_image(array: np.ndarray) -> Image.Image:
+        """Convert TIFF array data to an RGB PIL image for compatibility stages."""
+
+        arr = np.asarray(array)
+        if arr.ndim == 3 and arr.shape[0] in {3, 4} and arr.shape[-1] not in {3, 4}:
+            arr = np.moveaxis(arr, 0, -1)
+
+        if arr.dtype == np.uint8:
+            arr8 = arr
+        elif arr.dtype == np.uint16:
+            arr8 = (arr.astype(np.float32) / 65535.0 * 255.0).round().astype(np.uint8)
+        elif np.issubdtype(arr.dtype, np.floating):
+            arr8 = (np.clip(arr.astype(np.float32), 0.0, 1.0) * 255.0).round().astype(np.uint8)
+        else:
+            arr_min = float(np.min(arr))
+            arr_max = float(np.max(arr))
+            if arr_max <= arr_min:
+                arr8 = np.zeros_like(arr, dtype=np.uint8)
+            else:
+                arr8 = ((arr.astype(np.float32) - arr_min) / (arr_max - arr_min) * 255.0).round().astype(np.uint8)
+
+        if arr8.ndim == 2:
+            return Image.fromarray(arr8, mode="L").convert("RGB")
+
+        if arr8.ndim != 3:
+            raise ValueError(f"Unsupported TIFF array shape: {arr8.shape}")
+
+        channels = arr8.shape[-1]
+        if channels == 1:
+            return Image.fromarray(arr8[:, :, 0], mode="L").convert("RGB")
+        if channels in {3, 4}:
+            mode = "RGBA" if channels == 4 else "RGB"
+            return Image.fromarray(arr8, mode=mode).convert("RGB")
+        if channels > 4:
+            return Image.fromarray(arr8[:, :, :3], mode="RGB")
+
+        raise ValueError(f"Unsupported TIFF channel count: {channels}")
 
     def _detect_scene_type(self, image: Image.Image) -> SceneType:
         """
@@ -1462,6 +1741,9 @@ class UnifiedLuxuryPipeline:
                 "scene_type": self.config.scene_type.value,
                 "device": self.device,
                 "output_formats": [fmt.value for fmt in self.config.output_formats],
+                "parallel_io": self.config.parallel_io,
+                "io_prefetch_size": self.config.io_prefetch_size,
+                "io_saver_workers": self.config.io_saver_workers,
             },
         }
 
@@ -1546,6 +1828,9 @@ def batch_process_luxury_renders(
     output_dir: Path = Path("output"),
     profile: ProcessingProfile = ProcessingProfile.BALANCED,
     pattern: str = DEFAULT_BATCH_PATTERN,
+    parallel_io: bool = False,
+    io_prefetch_size: int = 2,
+    io_saver_workers: int = 2,
 ) -> Dict[Path, Dict[str, Path]]:
     """
     Convenience function for batch processing luxury renders.
@@ -1555,6 +1840,9 @@ def batch_process_luxury_renders(
         output_dir: Output directory
         profile: Processing quality profile
         pattern: Glob pattern for input files
+        parallel_io: Overlap image loading and output writing during batch processing
+        io_prefetch_size: Number of input images to prefetch when parallel_io is enabled
+        io_saver_workers: Number of background output workers when parallel_io is enabled
 
     Returns:
         Dictionary mapping input paths to output dictionaries
@@ -1582,6 +1870,9 @@ def batch_process_luxury_renders(
         enable_depth=True,
         enable_material_response=True,
         enable_color_grading=True,
+        parallel_io=parallel_io,
+        io_prefetch_size=io_prefetch_size,
+        io_saver_workers=io_saver_workers,
     )
 
     pipeline = UnifiedLuxuryPipeline(config)

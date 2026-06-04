@@ -106,11 +106,19 @@ from transformation_portal.pipelines import batch_process_luxury_renders
 results = batch_process_luxury_renders(
     input_dir=Path("renders"),
     output_dir=Path("output"),
-    profile=ProcessingProfile.BALANCED
+    profile=ProcessingProfile.BALANCED,
+    parallel_io=True,
+    io_prefetch_size=2,
+    io_saver_workers=2,
 )
 
 print(f"Processed {len(results)} images")
 ```
+
+`parallel_io` is opt-in for compatibility. It overlaps input loading and output
+writing for batch runs while preserving result ordering and per-image failure
+isolation. Keep it disabled when comparing against older timing baselines or
+when debugging per-stage behavior.
 
 ## Configuration Guide
 
@@ -170,6 +178,10 @@ config = UnifiedPipelineConfig(
 config = UnifiedPipelineConfig(
     device="auto",              # auto, cpu, cuda, mps
     preserve_metadata=True,     # Preserve EXIF/IPTC/XMP
+    parallel_outputs=True,      # Generate requested output formats in parallel
+    parallel_io=False,          # Opt in to overlapped batch load/save I/O
+    io_prefetch_size=2,         # Images to prefetch when parallel_io=True
+    io_saver_workers=2,         # Background output workers when parallel_io=True
     save_intermediates=False    # Save depth maps, etc.
 )
 ```

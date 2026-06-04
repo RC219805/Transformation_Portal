@@ -100,6 +100,9 @@ class TestUnifiedPipelineConfig:
         assert config.enable_depth is True
         assert config.enable_material_response is True
         assert config.device == "auto"
+        assert config.parallel_io is False
+        assert config.io_prefetch_size == 2
+        assert config.io_saver_workers == 2
 
     def test_custom_config(self, temp_dir):
         """Test custom configuration."""
@@ -454,6 +457,47 @@ class TestMetadataPreservation:
         assert "size" in metadata
         assert metadata["mode"] == "RGB"
 
+    @pytest.mark.skipif(not HAS_TIFFFILE, reason="tifffile fast TIFF path requires tifffile")
+    def test_tiff_loading_uses_tifffile_fast_path_for_16bit_rgb(self, temp_dir):
+        """Test 16-bit TIFF inputs use the tifffile loader path."""
+        import tifffile
+
+        arr = np.zeros((4, 5, 3), dtype=np.uint16)
+        arr[..., 0] = 65535
+        arr[..., 1] = 32768
+        tiff_path = temp_dir / "sixteen_bit.tif"
+        tifffile.imwrite(tiff_path, arr, photometric="rgb")
+
+        config = UnifiedPipelineConfig(output_dir=temp_dir, output_formats=[OutputFormat.MASTER_TIFF])
+        pipeline = UnifiedLuxuryPipeline(config)
+
+        image, metadata = pipeline._load_image(tiff_path)
+
+        assert image.mode == "RGB"
+        assert image.size == (5, 4)
+        assert metadata["load_backend"] == "tifffile"
+        assert metadata["source_dtype"] == "uint16"
+
+    @pytest.mark.skipif(not HAS_TIFFFILE, reason="CMYK TIFF regression requires tifffile")
+    def test_tiff_loading_preserves_cmyk_interpretation(self, temp_dir):
+        """Test CMYK TIFF inputs keep PIL color interpretation."""
+
+        tiff_path = temp_dir / "cmyk.tif"
+        source = Image.new("CMYK", (2, 1), (255, 0, 0, 0))
+        source.save(tiff_path)
+        expected_pixel = source.convert("RGB").getpixel((0, 0))
+
+        config = UnifiedPipelineConfig(output_dir=temp_dir, output_formats=[OutputFormat.MASTER_TIFF])
+        pipeline = UnifiedLuxuryPipeline(config)
+
+        image, metadata = pipeline._load_image(tiff_path)
+
+        assert image.mode == "RGB"
+        assert image.getpixel((0, 0)) == expected_pixel
+        assert metadata["load_backend"] == "PIL"
+        assert metadata["tiff_photometric"] == "SEPARATED"
+        assert metadata["tifffile_skip_reason"] == "unsupported_photometric"
+
 
 class TestGracefulDegradation:
     """Test graceful failure handling for optional stages."""
@@ -664,6 +708,61 @@ class TestBatchProcessing:
         # Invalid image should have empty results
         assert len(results[invalid_path]) == 0
 
+    def test_batch_process_parallel_io_multiple_images(self, temp_dir, sample_image):
+        """Test explicit parallel I/O batch processing of multiple images."""
+        image_paths = []
+        for i in range(3):
+            image_path = temp_dir / f"parallel_input_{i}.jpg"
+            sample_image.save(image_path)
+            image_paths.append(image_path)
+
+        config = UnifiedPipelineConfig(
+            scene_type=SceneType.INTERIOR,
+            output_dir=temp_dir / "parallel_output",
+            output_formats=[OutputFormat.MASTER_TIFF],
+            enable_depth=False,
+            enable_material_response=False,
+            enable_color_grading=False,
+            parallel_io=True,
+            io_prefetch_size=2,
+            io_saver_workers=2,
+        )
+        pipeline = UnifiedLuxuryPipeline(config)
+
+        results = pipeline.batch_process(image_paths, show_progress=False)
+
+        assert list(results) == image_paths
+        assert all("master" in outputs for outputs in results.values())
+        assert all(outputs["master"].exists() for outputs in results.values())
+        assert pipeline.stats.images_processed == 3
+        assert pipeline.stats.images_failed == 0
+        assert "Load & Validate" in pipeline.stats.stage_times
+        assert "Output Generation" in pipeline.stats.stage_times
+
+    def test_batch_process_parallel_io_continues_on_load_failure(self, temp_dir, sample_image):
+        """Test parallel I/O batch failures retain existing empty-result semantics."""
+        valid_path = temp_dir / "valid_parallel.jpg"
+        sample_image.save(valid_path)
+        invalid_path = temp_dir / "missing_parallel.jpg"
+
+        config = UnifiedPipelineConfig(
+            scene_type=SceneType.INTERIOR,
+            output_dir=temp_dir / "parallel_failure_output",
+            output_formats=[OutputFormat.MASTER_TIFF],
+            enable_depth=False,
+            enable_material_response=False,
+            enable_color_grading=False,
+            parallel_io=True,
+        )
+        pipeline = UnifiedLuxuryPipeline(config)
+
+        results = pipeline.batch_process([valid_path, invalid_path], show_progress=False)
+
+        assert results[valid_path]["master"].exists()
+        assert results[invalid_path] == {}
+        assert pipeline.stats.images_processed == 1
+        assert pipeline.stats.images_failed == 1
+
 
 class TestStatisticsSaving:
     """Test statistics tracking and saving."""
@@ -758,6 +857,30 @@ class TestConvenienceFunctions:
 
         input_paths = mock_instance.batch_process.call_args.args[0]
         assert input_paths == [input_dir / "keep.png"]
+
+    @patch("transformation_portal.pipelines.unified_luxury_pipeline.UnifiedLuxuryPipeline")
+    def test_batch_process_luxury_renders_accepts_parallel_io_options(self, mock_pipeline_class, sample_image, temp_dir):
+        """Test batch convenience function forwards parallel I/O configuration."""
+        input_dir = temp_dir / "inputs"
+        input_dir.mkdir()
+        sample_image.save(input_dir / "keep.jpg")
+
+        mock_instance = MagicMock()
+        mock_instance.batch_process.return_value = {}
+        mock_pipeline_class.return_value = mock_instance
+
+        batch_process_luxury_renders(
+            input_dir,
+            output_dir=temp_dir / "output",
+            parallel_io=True,
+            io_prefetch_size=3,
+            io_saver_workers=4,
+        )
+
+        config = mock_pipeline_class.call_args.args[0]
+        assert config.parallel_io is True
+        assert config.io_prefetch_size == 3
+        assert config.io_saver_workers == 4
 
     @pytest.mark.parametrize("pattern", ["*.{jpg,png", "*.}jpg{", "*.{jpg,}", "*.{}"])
     @patch("transformation_portal.pipelines.unified_luxury_pipeline.UnifiedLuxuryPipeline")

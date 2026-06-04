@@ -13,6 +13,8 @@ __all__ = [
     "OutputFormat",
     "PipelineStage",
     "PipelineStatistics",
+    "ParallelIOItemResult",
+    "ParallelIOPipeline",
     "process_luxury_render",
     "batch_process_luxury_renders",
     # 4K Rendering Pipeline
@@ -53,9 +55,16 @@ def __getattr__(name: str):
         "OutputFormat",
         "PipelineStage",
         "PipelineStatistics",
+        "ParallelIOItemResult",
+        "ParallelIOPipeline",
         "process_luxury_render",
         "batch_process_luxury_renders",
     ):
+        if name in ("ParallelIOItemResult", "ParallelIOPipeline"):
+            from .parallel_io import ParallelIOItemResult, ParallelIOPipeline
+
+            return locals()[name]
+
         from .unified_luxury_pipeline import (
             OutputFormat,
             PipelineStage,
