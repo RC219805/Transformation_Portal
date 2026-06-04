@@ -34,7 +34,7 @@ bucket names. Use provider/environment labels instead.
 - `make test-worker-redis-contract`:
 - `make test-artifact-s3-contract`:
 - `make test-frontdoor-redis-contract`:
-- `make test-paid-pilot-services-contract`:
+- Integrated paid-pilot smoke:
 
 The integrated gate must prove `/v1/jobs` creation through Redis broker
 enqueue, worker completion, terminal state from Postgres after
