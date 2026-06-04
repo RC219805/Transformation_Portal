@@ -3,7 +3,9 @@
 ## Status
 
 Phase 1 is partially implemented as a bounded parallel I/O primitive and an
-explicit opt-in path for the compatibility Unified Luxury Pipeline.
+explicit opt-in path for the compatibility Unified Luxury Pipeline. Phase 1.B
+adds the dedicated advisory benchmark harness needed to evaluate whether that
+opt-in path should ever become the default.
 
 Implemented:
 
@@ -18,12 +20,16 @@ Implemented:
   - `io_saver_workers`
 - focused unit coverage for ordering, failure isolation, and background-save
   overlap
+- `tools/benchmark_unified_luxury_batch_io.py`
+- `make benchmark-unified-luxury-batch-io`
+- advisory benchmark documentation at
+  `docs/performance/unified_luxury_batch_io_benchmark.md`
 
 Not implemented:
 
 - a new public `--parallel-io` CLI flag
 - default-on behavior for existing batch callers
-- benchmark gate changes
+- benchmark gate changes or committed performance baselines
 - GPU/backend acceleration changes
 - memory-mapped TIFF loading
 
@@ -151,28 +157,66 @@ Any future performance claim should include:
 - peak RSS
 - output quality/hash comparison when deterministic output is expected
 - benchmark artifact path and schema verification
+- whether the benchmark input set was explicitly marked representative with
+  `--representative-input-set`
 
 Minimum local measurement command shape:
 
 ```bash
-.venv/bin/python -m pytest tests/test_parallel_io.py tests/test_unified_luxury_pipeline.py -q
+.venv/bin/python -m pytest tests/test_parallel_io.py tests/test_unified_luxury_pipeline.py tests/test_unified_luxury_batch_io_benchmark.py -q
 ```
 
-For real throughput measurement, add or reuse a benchmark that writes a non-empty
-artifact with a schema that the consuming workflow validates. Do not treat a
-green workflow as performance evidence unless the artifact contains real
-measurements.
+For real throughput measurement, use the dedicated harness:
 
-## Remaining Work
+```bash
+UNIFIED_LUXURY_BATCH_IO_BENCHMARK_ARGS="\
+  --input-dir /path/to/representative/tiffs \
+  --output-json /tmp/unified-luxury-batch-io.json \
+  --runs 5 \
+  --warmup-runs 1 \
+  --output-formats master \
+  --memory-limit-mib 4096 \
+  --representative-input-set" \
+make benchmark-unified-luxury-batch-io
+```
 
-1. Add a dedicated benchmark harness for Unified Luxury Pipeline batch I/O.
-2. Evaluate whether `parallel_io=True` should become the default after measured
-   evidence and memory limits are understood.
-3. Reassess the recipe pipeline and TIFF batch processor for shared reuse of
-   `ParallelIOPipeline`; both already have existing parallel execution controls,
-   so changes should be evidence-driven.
-4. Keep GPU/backend acceleration work separate from I/O scheduling; it has
-   different dependencies, hardware assumptions, and failure modes.
+Do not treat a green workflow as performance evidence unless the artifact
+contains real measurements under schema
+`tp.unified_luxury.batch_io_benchmark.v1`.
+
+## Current Evaluation
+
+The default remains `parallel_io=False`.
+
+Local fixture evidence from
+`tests/fixtures/pipelines/750_picacho_lane/input` exercises two 800x600 TIFF
+files, `output_formats=master`, `runs=3`, `warmup_runs=1`, and
+`--memory-limit-mib 4096`. That run produced a non-empty
+`tp.unified_luxury.batch_io_benchmark.v1` artifact with:
+
+- serial mean wall time: 0.0209056663s
+- `parallel_io=True` mean wall time: 0.0132810000s
+- measured mean speedup: 1.5741033222x
+- `parallel_io=True` peak RSS: 92.703125 MiB
+- failures: 0
+
+This is useful smoke evidence, but it is not enough to change the default
+because the input set is only two small fixtures and was not marked
+representative. A default flip still requires a larger production-sized batch,
+an operator-approved memory limit for the target host class, and review of the
+resulting benchmark artifact.
+
+The recipe pipeline and TIFF batch processor should not be switched to
+`ParallelIOPipeline` by default. The recipe pipeline already exposes
+`parallel=True` through isolated `ThreadPoolExecutor` worker pipeline instances,
+and the TIFF batch processor already exposes `--workers` through
+`ProcessPoolExecutor`. Shared reuse should be revisited only after separate
+benchmarks prove load/save overlap beats those existing execution controls
+without changing recipe/RAG semantics or TIFF processing isolation.
+
+GPU/backend acceleration remains out of scope for this I/O scheduling lane. It
+belongs in backend-specific benchmark work because dependencies, hardware
+assumptions, memory pressure, and failure modes differ from load/save overlap.
 
 ## Validation
 
@@ -180,6 +224,8 @@ Focused validation for this phase:
 
 ```bash
 .venv/bin/pytest tests/test_parallel_io.py tests/test_unified_luxury_pipeline.py -q
+.venv/bin/pytest tests/test_unified_luxury_batch_io_benchmark.py -q
+make benchmark-unified-luxury-batch-io
 git diff --check
 ```
 

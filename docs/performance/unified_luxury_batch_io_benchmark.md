@@ -28,7 +28,8 @@ UNIFIED_LUXURY_BATCH_IO_BENCHMARK_ARGS="\
   --output-formats master \
   --io-prefetch-size 2 \
   --io-saver-workers 2 \
-  --memory-limit-mib 4096" \
+  --memory-limit-mib 4096 \
+  --representative-input-set" \
 make benchmark-unified-luxury-batch-io
 ```
 
@@ -54,12 +55,14 @@ Minimum evidence for a default flip:
 - mean speedup is at least the configured `--min-speedup` threshold
 - p95 wall time does not regress materially
 - `--memory-limit-mib` is set to the operator limit for the target host class
+- `--representative-input-set` is passed only after the input set is large and
+  varied enough to represent the target production workload
 - peak RSS with `parallel_io=True` stays below that memory limit
 - no per-image failures, ordering changes, or output-count changes occur
 
-If any item is missing, the report should keep the decision at `keep_false`.
-If all items pass, treat `candidate_after_representative_runs` as review
-evidence, not an automatic code change.
+If any item is missing, the report keeps the decision at `keep_false`. If all
+items pass, treat `candidate_after_representative_runs` as review evidence, not
+an automatic code change.
 
 ## Adjacent Pipelines
 

@@ -11,7 +11,6 @@ hardware, and failure profiles.
 from __future__ import annotations
 
 import argparse
-import contextlib
 import tempfile
 import threading
 import time
@@ -65,6 +64,7 @@ class BenchmarkOptions:
     io_saver_workers: int
     min_speedup: float
     memory_limit_mib: float | None
+    representative_input_set: bool
 
 
 class PeakRSSMonitor:
@@ -258,6 +258,7 @@ def evaluate_parallel_io_default(
     parallel_summary: dict[str, Any],
     min_speedup: float,
     memory_limit_mib: float | None,
+    representative_input_set: bool,
 ) -> dict[str, Any]:
     """Evaluate whether results are strong enough to consider a default flip."""
 
@@ -270,6 +271,8 @@ def evaluate_parallel_io_default(
     reasons: list[str] = []
     if failures:
         reasons.append("one or more benchmark images failed")
+    if not representative_input_set:
+        reasons.append("input set was not marked representative")
     if speedup < min_speedup:
         reasons.append(f"mean speedup {speedup:.3f}x is below required {min_speedup:.3f}x")
     if memory_limit_mib is None:
@@ -469,6 +472,7 @@ def build_report(
             parallel_summary=parallel_summary,
             min_speedup=options.min_speedup,
             memory_limit_mib=options.memory_limit_mib,
+            representative_input_set=options.representative_input_set,
         ),
         "reuse_assessment": reuse_assessment(),
     }
@@ -517,6 +521,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--io-saver-workers", type=_positive_int, default=2)
     parser.add_argument("--min-speedup", type=float, default=1.10)
     parser.add_argument("--memory-limit-mib", type=float, default=None)
+    parser.add_argument(
+        "--representative-input-set",
+        action="store_true",
+        help="Assert the input set is representative enough for default-candidate review evidence.",
+    )
     parser.add_argument("--keep-work-dir", action="store_true", help="Keep generated fixtures and outputs after the run.")
     return parser
 
@@ -532,60 +541,58 @@ def _input_paths_from_dir(input_dir: Path) -> list[Path]:
     return deduped
 
 
+def _run_with_work_dir(args: argparse.Namespace, work_dir: Path) -> Path:
+    """Execute the benchmark with an already-created work directory."""
+
+    work_dir.mkdir(parents=True, exist_ok=True)
+    if args.input_dir is None:
+        input_paths = generate_synthetic_inputs(
+            work_dir / "inputs",
+            count=args.image_count,
+            width=args.width,
+            height=args.height,
+            image_format=args.input_format,
+        )
+        image_count = args.image_count
+    else:
+        input_paths = _input_paths_from_dir(args.input_dir)
+        image_count = len(input_paths)
+
+    output_formats = tuple(args.output_formats)
+    options = BenchmarkOptions(
+        runs=args.runs,
+        warmup_runs=args.warmup_runs,
+        image_count=image_count,
+        width=args.width,
+        height=args.height,
+        input_format=args.input_format,
+        output_formats=tuple(fmt.value for fmt in output_formats),
+        io_prefetch_size=args.io_prefetch_size,
+        io_saver_workers=args.io_saver_workers,
+        min_speedup=args.min_speedup,
+        memory_limit_mib=args.memory_limit_mib,
+        representative_input_set=args.representative_input_set,
+    )
+    report = build_report(
+        input_paths=input_paths,
+        work_dir=work_dir / "runs",
+        options=options,
+        output_formats=output_formats,
+    )
+    output_json = args.output_json or (Path(tempfile.gettempdir()) / "tp-unified-luxury-batch-io-benchmark.json")
+    write_report(output_json, report)
+    return output_json
+
+
 def run_from_args(args: argparse.Namespace) -> Path:
     """Execute the benchmark from parsed CLI args and return the report path."""
 
-    temp_ctx: contextlib.AbstractContextManager[str] | None = None
-    if args.work_dir is None:
-        if args.keep_work_dir:
-            work_dir = Path(tempfile.mkdtemp(prefix="tp-unified-luxury-batch-io-"))
-        else:
-            temp_ctx = tempfile.TemporaryDirectory(prefix="tp-unified-luxury-batch-io-")
-            work_dir = Path(temp_ctx.__enter__())
-    else:
-        work_dir = args.work_dir
-        work_dir.mkdir(parents=True, exist_ok=True)
-
-    try:
-        if args.input_dir is None:
-            input_paths = generate_synthetic_inputs(
-                work_dir / "inputs",
-                count=args.image_count,
-                width=args.width,
-                height=args.height,
-                image_format=args.input_format,
-            )
-            image_count = args.image_count
-        else:
-            input_paths = _input_paths_from_dir(args.input_dir)
-            image_count = len(input_paths)
-
-        output_formats = tuple(args.output_formats)
-        options = BenchmarkOptions(
-            runs=args.runs,
-            warmup_runs=args.warmup_runs,
-            image_count=image_count,
-            width=args.width,
-            height=args.height,
-            input_format=args.input_format,
-            output_formats=tuple(fmt.value for fmt in output_formats),
-            io_prefetch_size=args.io_prefetch_size,
-            io_saver_workers=args.io_saver_workers,
-            min_speedup=args.min_speedup,
-            memory_limit_mib=args.memory_limit_mib,
-        )
-        report = build_report(
-            input_paths=input_paths,
-            work_dir=work_dir / "runs",
-            options=options,
-            output_formats=output_formats,
-        )
-        output_json = args.output_json or (Path(tempfile.gettempdir()) / "tp-unified-luxury-batch-io-benchmark.json")
-        write_report(output_json, report)
-        return output_json
-    finally:
-        if temp_ctx is not None and not args.keep_work_dir:
-            temp_ctx.__exit__(None, None, None)
+    if args.work_dir is not None:
+        return _run_with_work_dir(args, args.work_dir)
+    if args.keep_work_dir:
+        return _run_with_work_dir(args, Path(tempfile.mkdtemp(prefix="tp-unified-luxury-batch-io-")))
+    with tempfile.TemporaryDirectory(prefix="tp-unified-luxury-batch-io-") as temp_dir:
+        return _run_with_work_dir(args, Path(temp_dir))
 
 
 def main(argv: Iterable[str] | None = None) -> int:

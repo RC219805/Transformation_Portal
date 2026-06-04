@@ -54,16 +54,27 @@ def test_default_candidate_requires_memory_limit_and_speedup() -> None:
         parallel_summary=parallel,
         min_speedup=1.10,
         memory_limit_mib=None,
+        representative_input_set=True,
+    )
+    not_representative = harness.evaluate_parallel_io_default(
+        serial_summary=serial,
+        parallel_summary=parallel,
+        min_speedup=1.10,
+        memory_limit_mib=256.0,
+        representative_input_set=False,
     )
     accepted = harness.evaluate_parallel_io_default(
         serial_summary=serial,
         parallel_summary=parallel,
         min_speedup=1.10,
         memory_limit_mib=256.0,
+        representative_input_set=True,
     )
 
     assert missing_limit["decision"] == "keep_false"
     assert "no memory limit supplied" in missing_limit["reason"]
+    assert not_representative["decision"] == "keep_false"
+    assert "not marked representative" in not_representative["reason"]
     assert accepted["decision"] == "candidate_after_representative_runs"
     assert accepted["parallel_io_default_candidate"] is True
 
