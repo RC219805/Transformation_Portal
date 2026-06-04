@@ -54,4 +54,4 @@ memory-profiler>=0.61.0,<1
 sentence-transformers>=3.1.0,<6
 
 # 3D support (cross-platform, commercial-safe)
-plyfile>=1.0.0,<2
+plyfile>=1.1.4,<2

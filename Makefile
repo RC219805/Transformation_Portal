@@ -5,7 +5,7 @@ SHELL := /bin/sh
 BOOTSTRAP_PY = $$(./scripts/setup/resolve_python_311.sh)
 PY = $$(./scripts/setup/resolve_python_311.sh)
 PRE_COMMIT_BIN := $(shell if [ -x .venv/bin/pre-commit ]; then printf '%s' .venv/bin/pre-commit; elif [ -x .venv/Scripts/pre-commit.exe ]; then printf '%s' .venv/Scripts/pre-commit.exe; fi)
-DOCS_TOOL_REQUIREMENTS := "sphinx>=7.2,<9" "sphinx-rtd-theme>=2.0,<3" "sphinx-autodoc-typehints>=2.0,<4"
+DOCS_TOOL_REQUIREMENTS := "sphinx>=7.2,<9" "sphinx-rtd-theme>=2.0,<3" "sphinx-autodoc-typehints>=3.6.1,<4"
 
 # Common subsets (fast tests avoid heavy/optional paths)
 FAST_TESTS := \

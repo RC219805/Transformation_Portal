@@ -1038,10 +1038,10 @@ class TestRootGovernanceMetadata:
         docs_specs = [
             "sphinx>=7.2,<9",
             "sphinx-rtd-theme>=2.0,<3",
-            "sphinx-autodoc-typehints>=2.0,<4",
+            "sphinx-autodoc-typehints>=3.6.1,<4",
         ]
         expected_make_var = (
-            'DOCS_TOOL_REQUIREMENTS := "sphinx>=7.2,<9" ' '"sphinx-rtd-theme>=2.0,<3" "sphinx-autodoc-typehints>=2.0,<4"'
+            'DOCS_TOOL_REQUIREMENTS := "sphinx>=7.2,<9" ' '"sphinx-rtd-theme>=2.0,<3" "sphinx-autodoc-typehints>=3.6.1,<4"'
         )
 
         assert expected_make_var in makefile
@@ -1055,7 +1055,7 @@ class TestRootGovernanceMetadata:
         stale_specs = [
             "sphinx>=7.2,<10",
             "sphinx-rtd-theme>=3.1.0,<4",
-            "sphinx-autodoc-typehints>=3.6.1,<4",
+            "sphinx-autodoc-typehints>=2.0,<4",
         ]
         for spec in stale_specs:
             assert spec not in requirements_dev

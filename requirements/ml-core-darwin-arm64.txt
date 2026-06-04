@@ -107,7 +107,9 @@ markdown-it-py==4.0.0
     #   -c base.txt
     #   rich
 markupsafe==3.0.3
-    # via jinja2
+    # via
+    #   -c base.txt
+    #   jinja2
 mdurl==0.1.2
     # via
     #   -c base.txt
@@ -159,7 +161,7 @@ pillow==12.2.0
     #   imageio
     #   scikit-image
     #   torchvision
-plyfile==1.1.3
+plyfile==1.1.4
     # via -r ml-core-darwin-arm64.in
 protobuf==7.34.1
     # via coremltools
@@ -284,7 +286,9 @@ typing-extensions==4.15.0
     #   sentence-transformers
     #   torch
 urllib3==2.7.0
-    # via requests
+    # via
+    #   -c base.txt
+    #   requests
 wcwidth==0.6.0
     # via ftfy
 zipp==3.23.1

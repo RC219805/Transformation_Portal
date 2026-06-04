@@ -70,7 +70,7 @@ cryptography==47.0.0
     #   -c all.txt
     #   -r dev.in
     #   moto
-diff-cover==10.2.1
+diff-cover==10.3.0
     # via
     #   -c all.txt
     #   -r dev.in

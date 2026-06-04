@@ -74,7 +74,7 @@ cryptography==47.0.0
     #   -r dev.in
     #   moto
     #   secretstorage
-diff-cover==10.2.1
+diff-cover==10.3.0
     # via -r dev.in
 dill==0.4.1
     # via pylint
@@ -252,7 +252,7 @@ pygments==2.20.0
     #   rich
 pylint==4.0.5
     # via -r dev.in
-pypdf==6.11.0
+pypdf==6.12.2
     # via -r ci.in
 pyproject-api==1.10.0
     # via tox

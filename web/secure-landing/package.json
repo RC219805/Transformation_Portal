@@ -28,9 +28,9 @@
     "argon2": "^0.44.0",
     "better-sqlite3": "^12.10.0",
     "ioredis": "^5.11.0",
-    "next": "16.2.6",
-    "react": "^19.2.6",
-    "react-dom": "^19.2.6"
+    "next": "16.2.7",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7"
   },
   "overrides": {
     "postcss": "8.5.15"

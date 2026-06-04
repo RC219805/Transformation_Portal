@@ -33,7 +33,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6
 
       - name: Set up Python 3.12
         uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
@@ -48,7 +48,7 @@ jobs:
           python -m pip install -r requirements.txt
           # sphinx-autodoc-typehints currently fails under Sphinx 9.x in this workflow;
           # keep docs build on the stable Sphinx 8 line until upstream compatibility lands.
-          python -m pip install "sphinx>=7.2,<9" "sphinx-rtd-theme>=2.0,<3" "sphinx-autodoc-typehints>=2.0,<4"
+          python -m pip install "sphinx>=7.2,<9" "sphinx-rtd-theme>=2.0,<3" "sphinx-autodoc-typehints>=3.6.1,<4"
           python -m pip install -e .
 
       - name: Build documentation
@@ -80,7 +80,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6
 
       - name: Check markdown files exist
         run: |
@@ -104,7 +104,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6
 
       - name: Check README links
         run: |
