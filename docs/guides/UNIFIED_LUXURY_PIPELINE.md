@@ -118,7 +118,10 @@ print(f"Processed {len(results)} images")
 `parallel_io` is opt-in for compatibility. It overlaps input loading and output
 writing for batch runs while preserving result ordering and per-image failure
 isolation. Keep it disabled when comparing against older timing baselines or
-when debugging per-stage behavior.
+when debugging per-stage behavior. Use
+[Unified Luxury Batch I/O Benchmark](../performance/unified_luxury_batch_io_benchmark.md)
+to collect measured serial vs `parallel_io=True` evidence before considering a
+default change.
 
 ## Configuration Guide
 

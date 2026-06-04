@@ -75,6 +75,7 @@ operator guidance unless they are linked here as canonical documents.
 | Repo-wide audit baseline | [Portal Repo-Wide Audit - 2026-05-18](PORTAL_AUDIT_REPO_WIDE_2026-05-18.md) | Static repo-wide audit baseline as of 2026-05-18 covering CI/typing/coverage enforcement, ML runtime hotspots (SAM2, Gaussian rasterizer, segmentation cache hashing), container and plugin isolation, dependency/security governance, and software/model licensing |
 | Repo-wide audit backlog | [Portal Audit Backlog - 2026-05-18](audit/PORTAL_AUDIT_2026-05-18_backlog.md) | Companion remediation backlog for the 2026-05-18 audit: 12 actionable items across immediate / near-term / medium-term / long-term tiers with file targets and acceptance criteria |
 | Performance gate policy | [Performance Gate Policy](../performance/GATE_POLICY.md) | Maintained authority for PR-blocking, nightly-blocking, and advisory performance signals |
+| Unified Luxury batch I/O benchmark | [Unified Luxury Batch I/O Benchmark](../performance/unified_luxury_batch_io_benchmark.md) | Maintained advisory harness for measuring serial versus `parallel_io=True` batch I/O before any default or reuse decision |
 | Test marker policy | [ADR-044 Test Marker Enforcement](../architecture/ADR-044-test-marker-enforcement.md) | Maintained |
 | Security hardening report | [security_best_practices_report.md](security_best_practices_report.md) | Maintained status record |
 

@@ -28,7 +28,7 @@ PHASE6_SMOKE_TESTS := \
 	tests/test_lux_render_pipeline_smoke.py \
 	tests/lux_depth_v3/test_orchestrator_smoke.py
 
-.PHONY: help test-fast test-novideo test-full test-integration test-structure test-utils test-orchestrator-contract test-orchestrator-http-contract test-artifact-s3-contract test-orchestrator-postgres-contract test-orchestrator-postgres-app-contract test-worker-redis-contract test-frontdoor-redis-contract test-paid-pilot-services-contract run-managed-paid-pilot-gate run-orchestrator-worker test-portal-contract test-frontdoor-contract test-archive-gate-contract db-upgrade db-revision seed-frontdoor-user run-frontdoor-local run-backend-local run-backend-local-noreload dev-write-env dev-start dev-stop check-vercel-env validate-orchestrator-http validate-portal-lux-materials-live validate-portal-fastvlm-captioning-live validate-portal-css-layer-parity validate-portal-browser validate-frontdoor-browser validate-frontdoor-deployment-gate audit-pipeline-readiness coverage-fast-scope coverage-report coverage-diff coverage-package venv repair-core-venv setup clean \
+.PHONY: help test-fast test-novideo test-full test-integration test-structure test-utils test-orchestrator-contract test-orchestrator-http-contract test-artifact-s3-contract test-orchestrator-postgres-contract test-orchestrator-postgres-app-contract test-worker-redis-contract test-frontdoor-redis-contract test-paid-pilot-services-contract run-managed-paid-pilot-gate run-orchestrator-worker test-portal-contract test-frontdoor-contract test-archive-gate-contract db-upgrade db-revision seed-frontdoor-user run-frontdoor-local run-backend-local run-backend-local-noreload dev-write-env dev-start dev-stop check-vercel-env validate-orchestrator-http validate-portal-lux-materials-live validate-portal-fastvlm-captioning-live validate-portal-css-layer-parity validate-portal-browser validate-frontdoor-browser validate-frontdoor-deployment-gate audit-pipeline-readiness benchmark-unified-luxury-batch-io coverage-fast-scope coverage-report coverage-diff coverage-package venv repair-core-venv setup clean \
         lint lint-parity ci ci-full pre-commit install-hooks quality-check fix-quality check-quality validate-ci organize-docs check-json-serialization check-piptools-cache \
         check-python-headers check-yaml-governance check-stale-docs check-doc-heading-links lock lock-prod lock-ci lock-dev install-core install-ml install-ml-core install-ml-raw install-ml-sam2 install-ml-coreml install-fastvlm-runtime check-fastvlm-runtime docs docs-clean \
         check check-test-markers check-ci-sync check-todo-governance check-environment check-portal-asset-budgets check-dependency-pinning validate-full validate-quick clean-frontdoor clean-all check-worktree \
@@ -77,6 +77,7 @@ help:
 	@echo "  validate-portal-browser  Run the live browser smoke audit with an isolated local backend"
 	@echo "  validate-frontdoor-browser  Run the live browser smoke audit with isolated local backend/frontdoor runtimes"
 	@echo "  validate-frontdoor-deployment-gate  Run the manual shared-deployment frontdoor posture gate"
+	@echo "  benchmark-unified-luxury-batch-io  Compare Unified Luxury serial vs parallel batch I/O"
 	@echo "  validate-full      Run the full validation suite (all checks + browser smokes)"
 	@echo "  validate-quick     Run quick validation (skip browser smokes)"
 	@echo "  audit-pipeline-readiness  Run the local four-pipeline readiness audit"
@@ -280,6 +281,10 @@ test-structure:
 test-utils:
 	@echo "Running utility tests..."
 	@"$(PY)" -m pytest -v tests/test_performance_utils.py tests/test_error_handling.py
+
+benchmark-unified-luxury-batch-io:
+	@echo "Benchmarking Unified Luxury Pipeline batch I/O..."
+	@"$(PY)" tools/benchmark_unified_luxury_batch_io.py $(UNIFIED_LUXURY_BATCH_IO_BENCHMARK_ARGS)
 
 test-orchestrator-contract:
 	@echo "Running portal orchestrator contract suite..."
