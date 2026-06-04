@@ -44,6 +44,7 @@ PIP_COMPILE_BASE := $(PIP_COMPILE_BIN) -q --resolver=backtracking
 PIP_COMPILE_PY_FLAG := $(shell $(PIP_COMPILE_BIN) --help 2>/dev/null | grep -q -- '--python-version' && echo "--python-version=$(LOCK_PYTHON_VERSION)" || true)
 PIP_COMPILE := mkdir -p "$(PIP_TOOLS_CACHE_DIR)" && PIP_TOOLS_CACHE_DIR="$(PIP_TOOLS_CACHE_DIR)" $(PIP_COMPILE_BASE) $(PIP_COMPILE_PY_FLAG)
 PIP_COMPILE_HASHED := mkdir -p "$(PIP_TOOLS_CACHE_DIR)" && PIP_TOOLS_CACHE_DIR="$(PIP_TOOLS_CACHE_DIR)" $(PIP_COMPILE_BASE) $(PIP_COMPILE_PY_FLAG) --generate-hashes
+RESTORE_MARKER_PINS := python3 ../scripts/utilities/restore_requirement_marker_pins.py
 
 # PyTorch CPU index for CI/cross-platform lockfiles
 PYTORCH_CPU_INDEX := --extra-index-url https://download.pytorch.org/whl/cpu
@@ -271,8 +272,15 @@ update: update-generic
 
 update-generic: require-pip-compile
 	@echo "Updating generic checked-in lockfiles to latest allowed versions..."
-	@$(PIP_COMPILE) --upgrade all.in -o all.txt
-	@$(PIP_COMPILE) --upgrade -c all.txt base.in -o base.txt
+	@set -euo pipefail; \
+	tmp_dir="$$(mktemp -d)"; \
+	trap 'rm -rf "$$tmp_dir"' EXIT; \
+	cp all.txt "$$tmp_dir/all.txt"; \
+	cp base.txt "$$tmp_dir/base.txt"; \
+	$(PIP_COMPILE) --upgrade all.in -o all.txt; \
+	$(RESTORE_MARKER_PINS) --previous "$$tmp_dir/all.txt" --lockfile all.txt; \
+	$(PIP_COMPILE) --upgrade -c all.txt base.in -o base.txt; \
+	$(RESTORE_MARKER_PINS) --previous "$$tmp_dir/base.txt" --lockfile base.txt
 	@$(PIP_COMPILE) --upgrade -c all.txt dev.in -o dev.txt
 	@$(PIP_COMPILE) --upgrade -c all.txt ci.in -o ci.txt
 	@$(PIP_COMPILE) --upgrade security.in -o security.txt
