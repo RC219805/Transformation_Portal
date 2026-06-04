@@ -90,7 +90,7 @@ header = [
 if path.name in {"all.txt", "base.txt"}:
     body = [
         "numpy==9.9.9",
-        "opencv-python-headless==5.0.0",
+        "opencv-python-headless==4.14.0.92",
         "    # via -r base.in",
         "packaging==99.0",
     ]
@@ -126,7 +126,7 @@ def _write_lock_with_opencv_marker_pins(path: Path) -> None:
     )
 
 
-def test_update_generic_preserves_governed_opencv_marker_pins(tmp_path: Path) -> None:
+def test_update_generic_preserves_governed_opencv_marker_pins_and_fresh_versions(tmp_path: Path) -> None:
     repo_root = tmp_path / "repo"
     requirements_dir = repo_root / "requirements"
     utilities_dir = repo_root / "scripts" / "utilities"
@@ -158,9 +158,10 @@ def test_update_generic_preserves_governed_opencv_marker_pins(tmp_path: Path) ->
     assert result.returncode == 0, result.stdout + result.stderr
     for name in ("all.txt", "base.txt"):
         text = (requirements_dir / name).read_text(encoding="utf-8")
-        assert 'opencv-python==4.13.0.92 ; platform_system != "Linux"' in text
-        assert 'opencv-python-headless==4.13.0.92 ; platform_system == "Linux"' in text
-        assert "opencv-python-headless==5.0.0" not in text
+        assert 'opencv-python==4.14.0.92 ; platform_system != "Linux"' in text
+        assert 'opencv-python-headless==4.14.0.92 ; platform_system == "Linux"' in text
+        assert "opencv-python==4.13.0.92" not in text
+        assert "opencv-python-headless==4.13.0.92" not in text
 
 
 def test_compile_ml_layers_refuses_broad_target_owned_regeneration() -> None:

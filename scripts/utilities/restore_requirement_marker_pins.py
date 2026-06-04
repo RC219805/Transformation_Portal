@@ -70,6 +70,56 @@ def _validated_previous_blocks(previous_lines: Sequence[str]) -> dict[str, list[
     return restored_blocks
 
 
+def _block_version(package_name: str, block: Sequence[str]) -> str:
+    match = PACKAGE_LINE_RE.match(block[0].strip())
+    if match is None:
+        raise ValueError(f"lockfile block for {package_name!r} does not start with a pinned requirement")
+    return match.group("version")
+
+
+def _resolved_current_versions(current_blocks: dict[str, tuple[int, int, list[str]]]) -> dict[str, str]:
+    resolved_versions: dict[str, str] = {}
+
+    for pin in GOVERNED_MARKER_PINS:
+        package_name = _normalize_package_name(pin.package_name)
+        block = current_blocks.get(package_name)
+        if block is not None:
+            resolved_versions[package_name] = _block_version(package_name, block[2])
+
+    if not resolved_versions:
+        governed_names = ", ".join(pin.package_name for pin in GOVERNED_MARKER_PINS)
+        raise ValueError(f"current lockfile is missing newly resolved governed marker pins: {governed_names}")
+
+    fallback_version = next(iter(resolved_versions.values()))
+    return {
+        _normalize_package_name(pin.package_name): resolved_versions.get(
+            _normalize_package_name(pin.package_name),
+            fallback_version,
+        )
+        for pin in GOVERNED_MARKER_PINS
+    }
+
+
+def _governed_marker_blocks(
+    previous_blocks: dict[str, list[str]],
+    current_lines: Sequence[str],
+) -> dict[str, list[str]]:
+    current_blocks = _requirement_blocks(current_lines)
+    resolved_versions = _resolved_current_versions(current_blocks)
+    marker_blocks: dict[str, list[str]] = {}
+
+    for pin in GOVERNED_MARKER_PINS:
+        package_name = _normalize_package_name(pin.package_name)
+        current_block = current_blocks.get(package_name)
+        continuation_lines = current_block[2][1:] if current_block is not None else previous_blocks[package_name][1:]
+        marker_blocks[package_name] = [
+            f"{pin.package_name}=={resolved_versions[package_name]} ; {pin.marker}",
+            *continuation_lines,
+        ]
+
+    return marker_blocks
+
+
 def _without_governed_blocks(lines: Sequence[str]) -> list[str]:
     governed_packages = {_normalize_package_name(pin.package_name) for pin in GOVERNED_MARKER_PINS}
     target_blocks = _requirement_blocks(lines)
@@ -111,14 +161,15 @@ def restore_marker_pins(previous_lockfile: Path, lockfile: Path) -> bool:
     """
     previous_lines = previous_lockfile.read_text(encoding="utf-8").splitlines()
     current_lines = lockfile.read_text(encoding="utf-8").splitlines()
-    restored_blocks = _validated_previous_blocks(previous_lines)
+    previous_blocks = _validated_previous_blocks(previous_lines)
+    marker_blocks = _governed_marker_blocks(previous_blocks, current_lines)
 
     filtered_lines = _without_governed_blocks(current_lines)
     insertion_index = _insertion_index(filtered_lines)
     restored_lines: list[str] = []
     for pin in GOVERNED_MARKER_PINS:
         package_name = _normalize_package_name(pin.package_name)
-        restored_lines.extend(restored_blocks[package_name])
+        restored_lines.extend(marker_blocks[package_name])
 
     next_lines = filtered_lines[:insertion_index] + restored_lines + filtered_lines[insertion_index:]
     if next_lines == current_lines:
