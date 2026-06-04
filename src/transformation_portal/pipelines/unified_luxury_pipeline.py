@@ -823,7 +823,18 @@ class UnifiedLuxuryPipeline:
         """Load TIFF pixel data through tifffile with PIL fallback on failure."""
 
         try:
-            array = tifffile.imread(input_path)
+            with tifffile.TiffFile(input_path) as tiff:
+                page = tiff.pages[0]
+                photometric = self._tiff_photometric_name(page)
+                metadata["tiff_photometric"] = photometric
+                if photometric not in {"MINISBLACK", "RGB"}:
+                    metadata["tifffile_skip_reason"] = "unsupported_photometric"
+                    log.info(
+                        "  TIFF photometric %s requires PIL interpretation; skipping tifffile fast path",
+                        photometric,
+                    )
+                    return None
+                array = page.asarray()
         except Exception as exc:  # noqa: BLE001 - fallback is deliberate
             log.warning("  tifffile load failed for %s, falling back to PIL: %s", input_path.name, exc)
             return None
@@ -837,6 +848,16 @@ class UnifiedLuxuryPipeline:
         metadata["load_backend"] = "tifffile"
         metadata["source_dtype"] = str(getattr(array, "dtype", "unknown"))
         return image
+
+    @staticmethod
+    def _tiff_photometric_name(page: Any) -> str:
+        """Return a stable TIFF photometric label for fast-path allowlisting."""
+
+        photometric = getattr(page, "photometric", None)
+        name = getattr(photometric, "name", None)
+        if name:
+            return str(name).upper()
+        return str(photometric).upper()
 
     @staticmethod
     def _array_to_rgb_image(array: np.ndarray) -> Image.Image:

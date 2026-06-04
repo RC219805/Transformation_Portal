@@ -478,6 +478,26 @@ class TestMetadataPreservation:
         assert metadata["load_backend"] == "tifffile"
         assert metadata["source_dtype"] == "uint16"
 
+    @pytest.mark.skipif(not HAS_TIFFFILE, reason="CMYK TIFF regression requires tifffile")
+    def test_tiff_loading_preserves_cmyk_interpretation(self, temp_dir):
+        """Test CMYK TIFF inputs keep PIL color interpretation."""
+
+        tiff_path = temp_dir / "cmyk.tif"
+        source = Image.new("CMYK", (2, 1), (255, 0, 0, 0))
+        source.save(tiff_path)
+        expected_pixel = source.convert("RGB").getpixel((0, 0))
+
+        config = UnifiedPipelineConfig(output_dir=temp_dir, output_formats=[OutputFormat.MASTER_TIFF])
+        pipeline = UnifiedLuxuryPipeline(config)
+
+        image, metadata = pipeline._load_image(tiff_path)
+
+        assert image.mode == "RGB"
+        assert image.getpixel((0, 0)) == expected_pixel
+        assert metadata["load_backend"] == "PIL"
+        assert metadata["tiff_photometric"] == "SEPARATED"
+        assert metadata["tifffile_skip_reason"] == "unsupported_photometric"
+
 
 class TestGracefulDegradation:
     """Test graceful failure handling for optional stages."""
