@@ -264,6 +264,10 @@ def evaluate_parallel_io_default(
 
     serial_mean = float(serial_summary["wall_time_s"]["mean"])
     parallel_mean = float(parallel_summary["wall_time_s"]["mean"])
+    serial_p95 = float(serial_summary["wall_time_s"]["p95"])
+    parallel_p95 = float(parallel_summary["wall_time_s"]["p95"])
+    serial_outputs = int(serial_summary["output_files"])
+    parallel_outputs = int(parallel_summary["output_files"])
     speedup = serial_mean / parallel_mean if parallel_mean > 0 else 0.0
     parallel_peak = parallel_summary["peak_rss_mib"]["max"]
     failures = int(serial_summary["images_failed"]) + int(parallel_summary["images_failed"])
@@ -271,6 +275,10 @@ def evaluate_parallel_io_default(
     reasons: list[str] = []
     if failures:
         reasons.append("one or more benchmark images failed")
+    if serial_outputs != parallel_outputs:
+        reasons.append(f"output file count changed: serial={serial_outputs}, parallel_io={parallel_outputs}")
+    if parallel_p95 > serial_p95:
+        reasons.append(f"parallel_io p95 {parallel_p95:.3f}s regressed versus serial p95 {serial_p95:.3f}s")
     if not representative_input_set:
         reasons.append("input set was not marked representative")
     if speedup < min_speedup:

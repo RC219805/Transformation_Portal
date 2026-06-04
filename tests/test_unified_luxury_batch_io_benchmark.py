@@ -39,14 +39,16 @@ def test_generate_synthetic_inputs_are_deterministic_tiffs(tmp_path: Path) -> No
 def test_default_candidate_requires_memory_limit_and_speedup() -> None:
     harness = _load_harness()
     serial = {
-        "wall_time_s": {"mean": 10.0},
+        "wall_time_s": {"mean": 10.0, "p95": 10.5},
         "peak_rss_mib": {"max": 100.0},
         "images_failed": 0,
+        "output_files": 12,
     }
     parallel = {
-        "wall_time_s": {"mean": 5.0},
+        "wall_time_s": {"mean": 5.0, "p95": 8.0},
         "peak_rss_mib": {"max": 120.0},
         "images_failed": 0,
+        "output_files": 12,
     }
 
     missing_limit = harness.evaluate_parallel_io_default(
@@ -77,6 +79,60 @@ def test_default_candidate_requires_memory_limit_and_speedup() -> None:
     assert "not marked representative" in not_representative["reason"]
     assert accepted["decision"] == "candidate_after_representative_runs"
     assert accepted["parallel_io_default_candidate"] is True
+
+
+def test_default_candidate_rejects_output_count_changes() -> None:
+    harness = _load_harness()
+    serial = {
+        "wall_time_s": {"mean": 10.0, "p95": 10.5},
+        "peak_rss_mib": {"max": 100.0},
+        "images_failed": 0,
+        "output_files": 12,
+    }
+    parallel = {
+        "wall_time_s": {"mean": 5.0, "p95": 8.0},
+        "peak_rss_mib": {"max": 120.0},
+        "images_failed": 0,
+        "output_files": 10,
+    }
+
+    result = harness.evaluate_parallel_io_default(
+        serial_summary=serial,
+        parallel_summary=parallel,
+        min_speedup=1.10,
+        memory_limit_mib=256.0,
+        representative_input_set=True,
+    )
+
+    assert result["decision"] == "keep_false"
+    assert "output file count changed: serial=12, parallel_io=10" in result["reason"]
+
+
+def test_default_candidate_rejects_p95_regression() -> None:
+    harness = _load_harness()
+    serial = {
+        "wall_time_s": {"mean": 10.0, "p95": 10.5},
+        "peak_rss_mib": {"max": 100.0},
+        "images_failed": 0,
+        "output_files": 12,
+    }
+    parallel = {
+        "wall_time_s": {"mean": 5.0, "p95": 11.0},
+        "peak_rss_mib": {"max": 120.0},
+        "images_failed": 0,
+        "output_files": 12,
+    }
+
+    result = harness.evaluate_parallel_io_default(
+        serial_summary=serial,
+        parallel_summary=parallel,
+        min_speedup=1.10,
+        memory_limit_mib=256.0,
+        representative_input_set=True,
+    )
+
+    assert result["decision"] == "keep_false"
+    assert "parallel_io p95 11.000s regressed versus serial p95 10.500s" in result["reason"]
 
 
 def test_reuse_assessment_keeps_adjacent_pipeline_changes_evidence_driven() -> None:
