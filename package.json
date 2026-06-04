@@ -3,7 +3,7 @@
   "private": true,
   "scripts": {
     "worker:dry-run": "wrangler deploy --dry-run",
-    "worker:deploy": "wrangler deploy"
+    "worker:deploy": "wrangler deploy --keep-vars"
   },
   "engines": {
     "node": ">=22 <23"
