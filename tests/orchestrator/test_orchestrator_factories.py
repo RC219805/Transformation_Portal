@@ -64,6 +64,10 @@ class TestStorageFactory:
         events = storage_factory.get_job_event_store()
         assert isinstance(events, MemoryJobEventStore)
 
+    def test_operational_audit_requires_postgres_backend(self) -> None:
+        with pytest.raises(RuntimeError, match="operational audit requires"):
+            storage_factory.get_operational_audit_store()
+
     def test_explicit_memory_backend(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("TP_ORCHESTRATOR_STATE_BACKEND", "MEMORY")  # case-insensitive
         from transformation_portal.orchestrator.storage.memory import MemoryJobRepository
@@ -95,16 +99,19 @@ class TestStorageFactory:
         from transformation_portal.orchestrator.storage.postgres import (
             PostgresJobEventStore,
             PostgresJobRepository,
+            PostgresOperationalAuditStore,
         )
 
         assert isinstance(storage_factory.get_job_repository(), PostgresJobRepository)
         assert isinstance(storage_factory.get_job_event_store(), PostgresJobEventStore)
+        assert isinstance(storage_factory.get_operational_audit_store(), PostgresOperationalAuditStore)
 
     @pytest.mark.parametrize(
         ("factory_name", "class_name"),
         [
             ("get_job_repository", "PostgresJobRepository"),
             ("get_job_event_store", "PostgresJobEventStore"),
+            ("get_operational_audit_store", "PostgresOperationalAuditStore"),
         ],
     )
     def test_postgres_backend_missing_sql_dependencies_reports_install_guidance(

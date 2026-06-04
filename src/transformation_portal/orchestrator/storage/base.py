@@ -288,3 +288,37 @@ class JobEventStore(ABC):
     async def close(self) -> None:
         """Optional shutdown hook for backends that hold connections."""
         return None
+
+
+@dataclass
+class OperationalAuditRecord:
+    """One append-only pilot control-plane audit event."""
+
+    created_at: float
+    action: str
+    decision: str
+    tenant_id: Optional[str] = None
+    job_id: Optional[str] = None
+    actor: Dict[str, Any] = field(default_factory=dict)
+    request_context: Dict[str, Any] = field(default_factory=dict)
+    details: Dict[str, Any] = field(default_factory=dict)
+
+    def copy(self) -> "OperationalAuditRecord":
+        return replace(
+            self,
+            actor=deepcopy(self.actor),
+            request_context=deepcopy(self.request_context),
+            details=deepcopy(self.details),
+        )
+
+
+class OperationalAuditStore(ABC):
+    """Append-only operational audit surface for managed pilot mode."""
+
+    @abstractmethod
+    async def append(self, record: OperationalAuditRecord) -> None:
+        """Persist one audit event."""
+
+    async def close(self) -> None:
+        """Optional shutdown hook for backends that hold connections."""
+        return None

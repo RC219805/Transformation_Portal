@@ -1,17 +1,14 @@
 """Worker runner that consumes jobs from the ``QueueBroker``.
 
-Phase 2.A ships the consumer skeleton. The worker is **not yet
-wired** as the actual job executor: ``app.py``'s
-``asyncio.create_subprocess_exec`` call still happens in-band
-(orchestrator process) and the real cut-over to "orchestrator
-enqueues, worker consumes" is the Phase 2.C deliverable.
+The FastAPI lifespan uses ``WorkerRunner`` with the app-owned
+``_orchestrator_job_executor`` for the default in-process worker pool.
+Multi-host deployments can run the same executor through
+``python -m transformation_portal.orchestrator.worker_process`` while
+the backend keeps broker admission as the single execution seam.
 
-This module exists in 2.A so the contract is reviewable end-to-end:
-the worker loop, the heartbeat cadence, the cancellation handling,
-and the lease release are all in one place. Phase 2.C will replace
-the ``_default_executor`` placeholder with the real subprocess
-dispatch (the same code path ``_run_job`` uses today, factored out
-of ``app.py``).
+The ``_default_executor`` remains a lightweight test/CLI fallback for
+this module's generic ``python -m transformation_portal.orchestrator.worker``
+entrypoint; production execution should use the app-wired executor.
 
 Layout:
 
@@ -22,9 +19,9 @@ Layout:
   the executor.
 - ``run_worker_forever`` — the supervisor loop. Runs ``WorkerRunner
   .step`` repeatedly with backoff when the queue is empty.
-- ``main`` — the CLI entry point (``python -m
-  transformation_portal.orchestrator.worker``); reads
-  ``TP_WORKER_*`` env vars and spawns ``run_worker_forever``.
+- ``main`` — the generic CLI entry point (``python -m
+  transformation_portal.orchestrator.worker``); reads ``TP_WORKER_*``
+  env vars and spawns ``run_worker_forever`` with the default executor.
 """
 
 from __future__ import annotations
@@ -104,11 +101,9 @@ async def _default_executor(
     request: JobEnqueueRequest,
     cancellation_event: asyncio.Event,
 ) -> int:
-    """Phase 2.A placeholder executor.
+    """Lightweight fallback executor for this generic runner module.
 
-    Logs that a job was received, sleeps briefly to simulate work,
-    and exits 0. Phase 2.C replaces this with the real subprocess
-    dispatch carved out of ``app.py:_run_job``.
+    Production workers pass the app-owned orchestrator executor instead.
     """
     logger.info(
         "phase2a placeholder executor processing job_id=%s argv=%s",

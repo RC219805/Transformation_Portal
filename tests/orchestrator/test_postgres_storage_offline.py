@@ -15,9 +15,13 @@ from typing import Any, AsyncIterator, Iterable
 
 import pytest
 
-from transformation_portal.orchestrator import JobRecord
-from transformation_portal.orchestrator.models import JobEventModel, JobModel
-from transformation_portal.orchestrator.storage.postgres import PostgresJobEventStore, PostgresJobRepository
+from transformation_portal.orchestrator import JobRecord, OperationalAuditRecord
+from transformation_portal.orchestrator.models import JobEventModel, JobModel, OperationalAuditEventModel
+from transformation_portal.orchestrator.storage.postgres import (
+    PostgresJobEventStore,
+    PostgresJobRepository,
+    PostgresOperationalAuditStore,
+)
 
 pytestmark = [pytest.mark.unit, pytest.mark.asyncio]
 
@@ -155,3 +159,35 @@ async def test_postgres_events_since_yields_payload_copies() -> None:
     assert events[0].payload == {"nested": {"percent": 50}}
     events[0].payload["nested"]["percent"] = 99
     assert row.payload == {"nested": {"percent": 50}}
+
+
+async def test_postgres_operational_audit_append_snapshots_record_fields() -> None:
+    store = PostgresOperationalAuditStore(database_url="postgresql+asyncpg://user:pw@host/db")
+    session = _FakePostgresSession()
+    _install_fake_session(store, session)
+    record = OperationalAuditRecord(
+        created_at=300.0,
+        action="job_create",
+        decision="accepted",
+        tenant_id="tenant_a",
+        job_id="job_audit",
+        actor={"username": "operator"},
+        request_context={"path": "/v1/jobs"},
+        details={"nested": {"pipeline": "lux-depth-v3"}},
+    )
+
+    await store.append(record)
+    record.actor["username"] = "mutated"
+    record.request_context["path"] = "/mutated"
+    record.details["nested"]["pipeline"] = "mutated"
+
+    audit_model = next(model for model in session.added if isinstance(model, OperationalAuditEventModel))
+    assert session.commits == 1
+    assert audit_model.created_at == 300.0
+    assert audit_model.action == "job_create"
+    assert audit_model.decision == "accepted"
+    assert audit_model.tenant_id == "tenant_a"
+    assert audit_model.job_id == "job_audit"
+    assert audit_model.actor == {"username": "operator"}
+    assert audit_model.request_context == {"path": "/v1/jobs"}
+    assert audit_model.details == {"nested": {"pipeline": "lux-depth-v3"}}

@@ -28,7 +28,7 @@ PHASE6_SMOKE_TESTS := \
 	tests/test_lux_render_pipeline_smoke.py \
 	tests/lux_depth_v3/test_orchestrator_smoke.py
 
-.PHONY: help test-fast test-novideo test-full test-integration test-structure test-utils test-orchestrator-contract test-orchestrator-http-contract test-artifact-s3-contract test-orchestrator-postgres-contract test-orchestrator-postgres-app-contract test-worker-redis-contract test-frontdoor-redis-contract test-paid-pilot-services-contract run-managed-paid-pilot-gate test-portal-contract test-frontdoor-contract test-archive-gate-contract db-upgrade db-revision seed-frontdoor-user run-frontdoor-local run-backend-local run-backend-local-noreload dev-write-env dev-start dev-stop check-vercel-env validate-orchestrator-http validate-portal-lux-materials-live validate-portal-fastvlm-captioning-live validate-portal-css-layer-parity validate-portal-browser validate-frontdoor-browser validate-frontdoor-deployment-gate audit-pipeline-readiness coverage-fast-scope coverage-report coverage-diff coverage-package venv repair-core-venv setup clean \
+.PHONY: help test-fast test-novideo test-full test-integration test-structure test-utils test-orchestrator-contract test-orchestrator-http-contract test-artifact-s3-contract test-orchestrator-postgres-contract test-orchestrator-postgres-app-contract test-worker-redis-contract test-frontdoor-redis-contract test-paid-pilot-services-contract run-managed-paid-pilot-gate run-orchestrator-worker test-portal-contract test-frontdoor-contract test-archive-gate-contract db-upgrade db-revision seed-frontdoor-user run-frontdoor-local run-backend-local run-backend-local-noreload dev-write-env dev-start dev-stop check-vercel-env validate-orchestrator-http validate-portal-lux-materials-live validate-portal-fastvlm-captioning-live validate-portal-css-layer-parity validate-portal-browser validate-frontdoor-browser validate-frontdoor-deployment-gate audit-pipeline-readiness coverage-fast-scope coverage-report coverage-diff coverage-package venv repair-core-venv setup clean \
         lint lint-parity ci ci-full pre-commit install-hooks quality-check fix-quality check-quality validate-ci organize-docs check-json-serialization check-piptools-cache \
         check-python-headers check-yaml-governance check-stale-docs check-doc-heading-links lock lock-prod lock-ci lock-dev install-core install-ml install-ml-core install-ml-raw install-ml-sam2 install-ml-coreml install-fastvlm-runtime check-fastvlm-runtime docs docs-clean \
         check check-test-markers check-ci-sync check-todo-governance check-environment check-portal-asset-budgets check-dependency-pinning validate-full validate-quick clean-frontdoor clean-all check-worktree \
@@ -57,6 +57,7 @@ help:
 	@echo "  test-frontdoor-redis-contract  Run managed frontdoor Redis SessionStore contract"
 	@echo "  test-paid-pilot-services-contract  Run opt-in Postgres + Redis + S3 pilot service gate"
 	@echo "  run-managed-paid-pilot-gate  Run provider paid-pilot gate from a clean env file"
+	@echo "  run-orchestrator-worker  Run an external Redis/Postgres orchestrator worker"
 	@echo "  test-portal-contract  Run portal runtime/browser contract tests"
 	@echo "  test-frontdoor-contract  Run managed frontdoor Node contract/build checks"
 	@echo "  test-archive-gate-contract  Run archive gate readiness + HTTP contract tests (Gates A, B, C)"
@@ -393,6 +394,22 @@ test-paid-pilot-services-contract:
 
 run-managed-paid-pilot-gate:
 	@./scripts/validation/run_managed_paid_pilot_gate.sh --env-file "$${TP_MANAGED_PAID_PILOT_ENV_FILE:-/tmp/tp-managed-staging.env}" $(MANAGED_PAID_PILOT_GATE_ARGS)
+
+run-orchestrator-worker:
+	@echo "Starting external orchestrator worker..."
+	@if [ "$(TP_ORCHESTRATOR_STATE_BACKEND)" != "postgres" ]; then \
+		echo "ERROR: TP_ORCHESTRATOR_STATE_BACKEND must be postgres."; \
+		exit 1; \
+	fi
+	@if [ "$(TP_ORCHESTRATOR_QUEUE_BACKEND)" != "redis" ]; then \
+		echo "ERROR: TP_ORCHESTRATOR_QUEUE_BACKEND must be redis."; \
+		exit 1; \
+	fi
+	@if [ -z "$(TP_DATABASE_URL)" ] || [ -z "$(TP_REDIS_URL)" ]; then \
+		echo "ERROR: TP_DATABASE_URL and TP_REDIS_URL must be set."; \
+		exit 1; \
+	fi
+	@"$(PY)" -m transformation_portal.orchestrator.worker_process
 
 # Apply orchestrator schema migrations against TP_DATABASE_URL.
 db-upgrade:

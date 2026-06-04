@@ -39,6 +39,7 @@ from transformation_portal.orchestrator.models import (
     JobArtifactModel,
     JobEventModel,
     JobModel,
+    OperationalAuditEventModel,
 )
 from transformation_portal.orchestrator.storage.base import UPDATABLE_FIELDS as _UPDATABLE_FIELDS
 from transformation_portal.orchestrator.storage.base import (
@@ -47,6 +48,8 @@ from transformation_portal.orchestrator.storage.base import (
     JobNotFoundError,
     JobRecord,
     JobRepository,
+    OperationalAuditRecord,
+    OperationalAuditStore,
     RepositoryError,
 )
 
@@ -513,4 +516,46 @@ class PostgresJobEventStore(JobEventStore):
         self._session_factory = None
 
 
-__all__ = ["PostgresJobEventStore", "PostgresJobRepository"]
+class PostgresOperationalAuditStore(OperationalAuditStore):
+    """Append-only operational audit log backed by the orchestrator database."""
+
+    def __init__(self, *, database_url: str) -> None:
+        if not database_url:
+            raise RepositoryError("database_url must be a non-empty string")
+        self._database_url = database_url
+        self._session_factory: Optional[async_sessionmaker[AsyncSession]] = None
+
+    async def _ensure_session_factory(self) -> async_sessionmaker[AsyncSession]:
+        if self._session_factory is None:
+            _, self._session_factory = await _SharedEngine.get(self._database_url)
+        return self._session_factory
+
+    @asynccontextmanager
+    async def _session(self) -> AsyncIterator[AsyncSession]:
+        factory = await self._ensure_session_factory()
+        async with factory() as session:
+            yield session
+
+    async def append(self, record: OperationalAuditRecord) -> None:
+        snapshot = record.copy()
+        async with self._session() as session:
+            session.add(
+                OperationalAuditEventModel(
+                    created_at=snapshot.created_at,
+                    action=snapshot.action,
+                    decision=snapshot.decision,
+                    tenant_id=snapshot.tenant_id,
+                    job_id=snapshot.job_id,
+                    actor=snapshot.actor,
+                    request_context=snapshot.request_context,
+                    details=snapshot.details,
+                )
+            )
+            await session.commit()
+
+    async def close(self) -> None:
+        # The shared engine is disposed by ``PostgresJobRepository.close``.
+        self._session_factory = None
+
+
+__all__ = ["PostgresJobEventStore", "PostgresJobRepository", "PostgresOperationalAuditStore"]
