@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import importlib
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -110,3 +111,42 @@ def test_pilot_artifact_storage_job_id_uses_tenant_prefix() -> None:
     )
 
     assert orchestrator_app._artifact_storage_job_id(job) == "tenant_a__job_artifacts"
+
+
+def test_pilot_dispatch_filesystem_preflight_requires_tenant_scoped_paths(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(orchestrator_app, "PILOT_CONTROL_PLANE_ENABLED", True)
+    monkeypatch.setattr(orchestrator_app, "PILOT_TENANT_WORKSPACE_ROOT", tmp_path / "workspaces")
+    monkeypatch.setattr(orchestrator_app, "PILOT_TENANT_CAS_ROOT", tmp_path / "cas")
+    monkeypatch.setattr(orchestrator_app, "_PILOT_TENANT_MANAGER", None)
+
+    tenant = orchestrator_app._pilot_tenant_manager().create_tenant(
+        "tenant_a",
+        policy=orchestrator_app._pilot_tenant_policy(),
+    )
+    input_dir = tenant.tenant_workspace / "input"
+    input_dir.mkdir(parents=True)
+    output_dir = tenant.tenant_workspace / "output"
+    outside = tmp_path / "outside"
+    outside.mkdir()
+
+    orchestrator_app._pilot_enforce_dispatch_filesystem_tenant(
+        tenant,
+        orchestrator_app.DispatchFilesystemPreflight(input_dir=input_dir, output_dir=output_dir),
+        pipeline="lux-depth-v3",
+    )
+
+    with pytest.raises(orchestrator_app.JobPreflightError) as exc_info:
+        orchestrator_app._pilot_enforce_dispatch_filesystem_tenant(
+            tenant,
+            orchestrator_app.DispatchFilesystemPreflight(input_dir=outside, output_dir=output_dir),
+            pipeline="lux-depth-v3",
+        )
+
+    exc = exc_info.value
+    assert exc.reason == "tenant_path_outside_workspace"
+    assert exc.field == "input_dir"
+    assert exc.status_code == 403
+    assert exc.extra == {"pipeline": "lux-depth-v3", "tenant_id": "tenant_a"}

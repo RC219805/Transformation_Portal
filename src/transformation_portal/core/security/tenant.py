@@ -344,6 +344,10 @@ class TenantAwareFSGuard(FSGuard):
                 path,
             )
 
+    def enforce_path(self, path: Path) -> None:
+        """Validate that a path stays within the current tenant's scope."""
+        self._enforce_tenant(path)
+
     def read_text(self, path: Path, encoding: str = "utf-8") -> str:
         """Read with tenant check."""
         self._enforce_tenant(path)
