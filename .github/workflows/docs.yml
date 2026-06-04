@@ -48,7 +48,7 @@ jobs:
           python -m pip install -r requirements.txt
           # sphinx-autodoc-typehints currently fails under Sphinx 9.x in this workflow;
           # keep docs build on the stable Sphinx 8 line until upstream compatibility lands.
-          python -m pip install "sphinx>=7.2,<9" "sphinx-rtd-theme>=2.0,<3" "sphinx-autodoc-typehints>=3.6.1,<4"
+          python -m pip install "sphinx>=7.2,<9" "sphinx-rtd-theme>=2.0,<3" "sphinx-autodoc-typehints>=2.0,<4"
           python -m pip install -e .
 
       - name: Build documentation
