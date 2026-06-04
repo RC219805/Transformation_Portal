@@ -16,6 +16,7 @@ ENV_FILE="${DEFAULT_ENV_FILE}"
 EVIDENCE_OUT=""
 PREFLIGHT_ONLY=0
 CLEAN_PROCESS=0
+STEP_LOG=""
 
 usage() {
     cat <<'EOF'
@@ -36,6 +37,22 @@ EOF
 die() {
     printf 'ERROR: %s\n' "$*" >&2
     exit 1
+}
+
+cleanup_step_log() {
+    [[ -z "${STEP_LOG}" ]] || rm -f "${STEP_LOG}"
+}
+
+init_step_log() {
+    if [[ -z "${STEP_LOG}" ]]; then
+        STEP_LOG="$(mktemp "${TMPDIR:-/tmp}/tp-managed-paid-pilot-steps.XXXXXX")"
+        trap cleanup_step_log EXIT
+    fi
+}
+
+record_step() {
+    init_step_log
+    printf '%s\t%s\t%s\t%s\n' "$1" "$2" "$3" "$4" >>"${STEP_LOG}"
 }
 
 while (($#)); do
@@ -148,11 +165,36 @@ set -a
 . "${ENV_FILE}"
 set +a
 
-write_evidence_note() {
+validate_evidence_out() {
     [[ -n "${EVIDENCE_OUT}" ]] || return 0
-    "${PYTHON_BIN}" - "${EVIDENCE_OUT}" "$1" <<'PY'
+    "${PYTHON_BIN}" - "${EVIDENCE_OUT}" <<'PY'
 from __future__ import annotations
 
+import sys
+from pathlib import Path
+
+evidence_path = Path(sys.argv[1])
+repo_root = Path.cwd().resolve()
+
+resolved = evidence_path.expanduser().resolve()
+try:
+    resolved.relative_to(repo_root)
+except ValueError:
+    pass
+else:
+    print("ERROR: managed paid-pilot evidence output must live outside the repository", file=sys.stderr)
+    raise SystemExit(1)
+
+resolved.parent.mkdir(parents=True, exist_ok=True)
+PY
+}
+
+write_evidence_note() {
+    [[ -n "${EVIDENCE_OUT}" ]] || return 0
+    "${PYTHON_BIN}" - "${EVIDENCE_OUT}" "$1" "${STEP_LOG}" <<'PY'
+from __future__ import annotations
+
+from collections import OrderedDict
 import datetime as _dt
 import os
 import subprocess
@@ -162,6 +204,7 @@ from urllib.parse import urlsplit
 
 evidence_path = Path(sys.argv[1])
 gate_status = sys.argv[2]
+step_log_path = Path(sys.argv[3]) if len(sys.argv) > 3 and sys.argv[3] else None
 repo_root = Path.cwd().resolve()
 
 resolved = evidence_path.expanduser().resolve()
@@ -195,12 +238,45 @@ def _url_summary(name: str) -> str:
 def _set_summary(name: str) -> str:
     return "set" if os.getenv(name, "").strip() else "unset"
 
+def _markdown_cell(value: str) -> str:
+    return value.replace("|", "\\|").replace("\n", " ")
+
+def _load_steps(path: Path | None) -> list[dict[str, str]]:
+    if path is None or not path.exists():
+        return []
+
+    steps: OrderedDict[str, dict[str, str]] = OrderedDict()
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        if not raw_line.strip():
+            continue
+        try:
+            label, command, status, exit_code = raw_line.split("\t", 3)
+        except ValueError:
+            continue
+        if label not in steps:
+            steps[label] = {
+                "label": label,
+                "command": command,
+                "status": status,
+                "exit_code": exit_code,
+            }
+        else:
+            steps[label].update(
+                {
+                    "command": command,
+                    "status": status,
+                    "exit_code": exit_code,
+                }
+            )
+    return list(steps.values())
+
 try:
     commit = subprocess.check_output(["git", "rev-parse", "--verify", "HEAD"], text=True).strip()
 except Exception:
     commit = "unknown"
 
 generated_at = _dt.datetime.now(_dt.timezone.utc).replace(microsecond=0).isoformat()
+steps = _load_steps(step_log_path)
 lines = [
     "# Managed Provider Paid-Pilot Acceptance Note",
     "",
@@ -230,12 +306,35 @@ lines.extend(
         f"- `TP_TEST_S3_BUCKET`: `{_set_summary('TP_TEST_S3_BUCKET')}`",
         f"- `TP_ARTIFACT_REGION`: `{_set_summary('TP_ARTIFACT_REGION')}`",
         "",
+        "## Gate Step Results",
+        "",
+    ]
+)
+if steps:
+    lines.extend(
+        [
+            "| Step | Command | Result | Exit code |",
+            "| --- | --- | --- | --- |",
+        ]
+    )
+    for step in steps:
+        exit_code = step["exit_code"] or "-"
+        lines.append(
+            "| "
+            f"{_markdown_cell(step['label'])} | "
+            f"`{_markdown_cell(step['command'])}` | "
+            f"`{_markdown_cell(step['status'])}` | "
+            f"`{_markdown_cell(exit_code)}` |"
+        )
+else:
+    lines.append("- No gate steps recorded.")
+
+lines.extend(
+    [
+        "",
         "## Evidence Checklist",
         "",
-        "- Clean env preflight: captured by this note status.",
-        "- `make db-upgrade`: record exact result for full gate runs.",
-        "- Component gates: record exact result for full gate runs.",
-        "- `make test-paid-pilot-services-contract`: record exact result for full gate runs.",
+        "- Confirm every gate step above passed before opening paid-pilot admission.",
         "- Cleanup result: record validation Postgres/Redis/S3 cleanup confirmation.",
         "",
         "Do not add secrets, private hostnames, customer identifiers, real usernames, or bucket names to this note.",
@@ -337,12 +436,52 @@ print("unsafe managed/test overlap:", unsafe_overlap)
 raise SystemExit(1 if missing or placeholder or wrong or leaked or unsafe_overlap else 0)
 PY
 
+validate_evidence_out
+record_step "Clean env preflight" "managed provider env validation" "passed" "0"
+
 if [[ "${PREFLIGHT_ONLY}" == "1" ]]; then
     write_evidence_note "preflight_passed"
     printf '%s\n' "Managed paid-pilot clean-env preflight passed."
     exit 0
 fi
 
-make db-upgrade
-make test-paid-pilot-services-contract
+initialize_gate_plan() {
+    record_step "Database migrations" "make db-upgrade" "not_run" ""
+    record_step "Orchestrator Postgres contract" "TP_ORCHESTRATOR_STATE_BACKEND=memory TP_ORCHESTRATOR_QUEUE_BACKEND=memory TP_ARTIFACT_STORE=local make test-orchestrator-postgres-contract" "not_run" ""
+    record_step "Orchestrator Postgres app contract" "TP_ORCHESTRATOR_STATE_BACKEND=memory TP_ORCHESTRATOR_QUEUE_BACKEND=memory TP_ARTIFACT_STORE=local make test-orchestrator-postgres-app-contract" "not_run" ""
+    record_step "Worker Redis contract" "TP_ORCHESTRATOR_STATE_BACKEND=memory TP_ORCHESTRATOR_QUEUE_BACKEND=memory TP_ARTIFACT_STORE=local make test-worker-redis-contract" "not_run" ""
+    record_step "Artifact S3 contract" "make test-artifact-s3-contract" "not_run" ""
+    record_step "Frontdoor Redis contract" "make test-frontdoor-redis-contract" "not_run" ""
+    record_step "Integrated paid-pilot smoke" "TP_RUN_PAID_PILOT_SERVICES_CONTRACT=1 python -m pytest -q tests/orchestrator/test_paid_pilot_services_contract.py -m unit" "not_run" ""
+}
+
+run_gate_step() {
+    local label="$1"
+    local command_display="$2"
+    shift 2
+
+    printf 'Running managed paid-pilot gate step: %s\n' "${label}"
+    set +e
+    "$@"
+    local exit_code=$?
+    set -e
+
+    if [[ "${exit_code}" == "0" ]]; then
+        record_step "${label}" "${command_display}" "passed" "${exit_code}"
+        return 0
+    fi
+
+    record_step "${label}" "${command_display}" "failed" "${exit_code}"
+    write_evidence_note "gate_failed" || true
+    exit "${exit_code}"
+}
+
+initialize_gate_plan
+run_gate_step "Database migrations" "make db-upgrade" make db-upgrade
+run_gate_step "Orchestrator Postgres contract" "TP_ORCHESTRATOR_STATE_BACKEND=memory TP_ORCHESTRATOR_QUEUE_BACKEND=memory TP_ARTIFACT_STORE=local make test-orchestrator-postgres-contract" env TP_ORCHESTRATOR_STATE_BACKEND=memory TP_ORCHESTRATOR_QUEUE_BACKEND=memory TP_ARTIFACT_STORE=local make test-orchestrator-postgres-contract
+run_gate_step "Orchestrator Postgres app contract" "TP_ORCHESTRATOR_STATE_BACKEND=memory TP_ORCHESTRATOR_QUEUE_BACKEND=memory TP_ARTIFACT_STORE=local make test-orchestrator-postgres-app-contract" env TP_ORCHESTRATOR_STATE_BACKEND=memory TP_ORCHESTRATOR_QUEUE_BACKEND=memory TP_ARTIFACT_STORE=local make test-orchestrator-postgres-app-contract
+run_gate_step "Worker Redis contract" "TP_ORCHESTRATOR_STATE_BACKEND=memory TP_ORCHESTRATOR_QUEUE_BACKEND=memory TP_ARTIFACT_STORE=local make test-worker-redis-contract" env TP_ORCHESTRATOR_STATE_BACKEND=memory TP_ORCHESTRATOR_QUEUE_BACKEND=memory TP_ARTIFACT_STORE=local make test-worker-redis-contract
+run_gate_step "Artifact S3 contract" "make test-artifact-s3-contract" make test-artifact-s3-contract
+run_gate_step "Frontdoor Redis contract" "make test-frontdoor-redis-contract" make test-frontdoor-redis-contract
+run_gate_step "Integrated paid-pilot smoke" "TP_RUN_PAID_PILOT_SERVICES_CONTRACT=1 python -m pytest -q tests/orchestrator/test_paid_pilot_services_contract.py -m unit" env TP_RUN_PAID_PILOT_SERVICES_CONTRACT=1 "${PYTHON_BIN}" -m pytest -q tests/orchestrator/test_paid_pilot_services_contract.py -m unit
 write_evidence_note "gate_passed"

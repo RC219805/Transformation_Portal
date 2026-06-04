@@ -98,6 +98,11 @@ TP_MANAGED_PAID_PILOT_ENV_FILE=/tmp/tp-managed-staging.env \
 make run-managed-paid-pilot-gate
 ```
 
+The clean launcher runs `make db-upgrade`, the component gates above, and then
+the integrated paid-pilot smoke. When `--evidence-out` is supplied through
+`MANAGED_PAID_PILOT_GATE_ARGS`, the generated redacted note records each step,
+result, and exit code.
+
 The integrated smoke submits a real `/v1/jobs` request, enqueues through
 Redis, executes through the in-process worker pool with a tiny generated
 subprocess, persists terminal state in Postgres, mirrors artifacts to

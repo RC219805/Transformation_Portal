@@ -219,12 +219,14 @@ make run-managed-paid-pilot-gate
 ```
 
 The launcher runs `make db-upgrade` against staging `TP_DATABASE_URL`, not
-`TP_TEST_POSTGRES_URL`, before invoking `make test-paid-pilot-services-contract`.
-Do not point `TP_DATABASE_URL` at the disposable test database.
+`TP_TEST_POSTGRES_URL`, then runs each component gate before the integrated
+paid-pilot smoke. Do not point `TP_DATABASE_URL` at the disposable test
+database.
 
 Add `--evidence-out /tmp/tp-managed-paid-pilot-acceptance.md` through
 `MANAGED_PAID_PILOT_GATE_ARGS` when a redacted acceptance note is needed. The
-output must live outside the repository. Use
+output must live outside the repository and records each launcher step with a
+redacted command, result, and exit code. Use
 [`managed_provider_acceptance_note_template.md`](managed_provider_acceptance_note_template.md)
 as the manual review template before promoting evidence into docs.
 
@@ -244,7 +246,7 @@ Record the following in the staging acceptance note or release record:
 - Clean env preflight result.
 - `make db-upgrade` result.
 - Each component gate result.
-- `make test-paid-pilot-services-contract` result.
+- Integrated paid-pilot smoke result.
 - Any skipped lane and the reason.
 - Artifact bucket, Redis, and Postgres validation resource cleanup result.
 
