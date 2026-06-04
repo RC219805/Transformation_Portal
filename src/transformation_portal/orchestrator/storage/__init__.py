@@ -19,6 +19,7 @@ from typing import Optional
 from transformation_portal.orchestrator.storage.base import (
     JobEventStore,
     JobRepository,
+    OperationalAuditStore,
 )
 
 _BACKEND_ENV = "TP_ORCHESTRATOR_STATE_BACKEND"
@@ -26,6 +27,7 @@ _DATABASE_URL_ENV = "TP_DATABASE_URL"
 
 _repository: Optional[JobRepository] = None
 _event_store: Optional[JobEventStore] = None
+_audit_store: Optional[OperationalAuditStore] = None
 
 
 def _selected_backend() -> str:
@@ -114,11 +116,48 @@ def get_job_event_store() -> JobEventStore:
     raise RuntimeError(f"Unsupported {_BACKEND_ENV}={backend!r}; expected 'memory' or 'postgres'.")
 
 
+def get_operational_audit_store() -> OperationalAuditStore:
+    """Return the singleton pilot audit store.
+
+    Audit v1 is intentionally Postgres-only so operational history lives in
+    the same managed database as durable job state.
+    """
+    global _audit_store
+    if _audit_store is not None:
+        return _audit_store
+
+    backend = _selected_backend()
+    if backend != "postgres":
+        raise RuntimeError(f"operational audit requires {_BACKEND_ENV}=postgres; got {backend!r}.")
+
+    try:
+        from transformation_portal.orchestrator.storage.postgres import (
+            PostgresOperationalAuditStore,
+        )
+    except ImportError as exc:
+        raise RuntimeError(
+            f"{_BACKEND_ENV}=postgres requires sqlalchemy[asyncio] + "
+            "asyncpg from requirements/base.txt. Install the pinned "
+            "base requirements (make install-core) and retry. (Alembic "
+            "is only needed for `make db-upgrade` / `make db-revision`.)"
+        ) from exc
+
+    database_url = os.getenv(_DATABASE_URL_ENV, "").strip()
+    if not database_url:
+        raise RuntimeError(
+            f"operational audit requires {_DATABASE_URL_ENV} to " "be set (e.g. postgresql+asyncpg://user:pw@host:5432/db)."
+        )
+
+    _audit_store = PostgresOperationalAuditStore(database_url=database_url)
+    return _audit_store
+
+
 def reset_singletons() -> None:
     """Drop the cached singletons. Tests call this between cases."""
-    global _repository, _event_store
+    global _repository, _event_store, _audit_store
     _repository = None
     _event_store = None
+    _audit_store = None
 
 
-__all__ = ["get_job_event_store", "get_job_repository", "reset_singletons"]
+__all__ = ["get_job_event_store", "get_job_repository", "get_operational_audit_store", "reset_singletons"]

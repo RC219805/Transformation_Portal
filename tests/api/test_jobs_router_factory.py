@@ -30,34 +30,34 @@ class _RecordingHandlers:
     async def create_job_v2_http(self, request: Request, payload: dict[str, Any]) -> Response:
         return self._record("create_job_v2_http", path=request.url.path, payload=payload)
 
-    async def list_jobs(self, limit: int) -> Response:
+    async def list_jobs(self, request: Request, limit: int) -> Response:  # noqa: ARG002
         return self._record("list_jobs", limit=limit)
 
-    async def list_jobs_v2(self, limit: int) -> Response:
+    async def list_jobs_v2(self, request: Request, limit: int) -> Response:  # noqa: ARG002
         return self._record("list_jobs_v2", limit=limit)
 
-    async def get_job(self, job_id: str, include_logs: bool) -> Response:
+    async def get_job(self, request: Request, job_id: str, include_logs: bool) -> Response:  # noqa: ARG002
         return self._record("get_job", job_id=job_id, include_logs=include_logs)
 
-    async def get_job_v2(self, job_id: str, include_logs: bool) -> Response:
+    async def get_job_v2(self, request: Request, job_id: str, include_logs: bool) -> Response:  # noqa: ARG002
         return self._record("get_job_v2", job_id=job_id, include_logs=include_logs)
 
-    async def get_job_artifact(self, job_id: str, artifact_path: str) -> Response:
+    async def get_job_artifact(self, request: Request, job_id: str, artifact_path: str) -> Response:  # noqa: ARG002
         return self._record("get_job_artifact", job_id=job_id, artifact_path=artifact_path)
 
-    async def get_job_artifact_v2(self, job_id: str, artifact_path: str) -> Response:
+    async def get_job_artifact_v2(self, request: Request, job_id: str, artifact_path: str) -> Response:  # noqa: ARG002
         return self._record("get_job_artifact_v2", job_id=job_id, artifact_path=artifact_path)
 
-    async def delete_job_artifacts(self, job_id: str) -> Response:
+    async def delete_job_artifacts(self, request: Request, job_id: str) -> Response:  # noqa: ARG002
         return self._record("delete_job_artifacts", job_id=job_id)
 
-    async def delete_job_artifacts_v2(self, job_id: str) -> Response:
+    async def delete_job_artifacts_v2(self, request: Request, job_id: str) -> Response:  # noqa: ARG002
         return self._record("delete_job_artifacts_v2", job_id=job_id)
 
-    async def cancel_job(self, job_id: str) -> Response:
+    async def cancel_job(self, request: Request, job_id: str) -> Response:  # noqa: ARG002
         return self._record("cancel_job", job_id=job_id)
 
-    async def cancel_job_v2(self, job_id: str) -> Response:
+    async def cancel_job_v2(self, request: Request, job_id: str) -> Response:  # noqa: ARG002
         return self._record("cancel_job_v2", job_id=job_id)
 
     async def job_events(self, request: Request, job_id: str) -> Response:

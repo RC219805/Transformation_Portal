@@ -35,9 +35,10 @@ This runbook validates the currently landed paid-pilot service composition:
 ## Non-Goals
 
 This runbook does not add or validate Terraform, Helm, Kubernetes manifests,
-durable SSE replay, globally atomic multi-instance admission, tenancy, billing,
-metrics, audit events, or a separate multi-host worker deployment. Those remain
-separate follow-up phases.
+globally atomic multi-instance admission, billing, metrics dashboards, or
+provider-specific worker deployment manifests. Durable job-event replay is part
+of the landed orchestrator surface and is covered by the integrated gate.
+Multi-host workers and tenant/audit mode are opt-in runtime surfaces.
 
 ## Managed-Service Topology
 
@@ -221,11 +222,17 @@ The launcher runs `make db-upgrade` against staging `TP_DATABASE_URL`, not
 `TP_TEST_POSTGRES_URL`, before invoking `make test-paid-pilot-services-contract`.
 Do not point `TP_DATABASE_URL` at the disposable test database.
 
+Add `--evidence-out /tmp/tp-managed-paid-pilot-acceptance.md` through
+`MANAGED_PAID_PILOT_GATE_ARGS` when a redacted acceptance note is needed. The
+output must live outside the repository. Use
+[`managed_provider_acceptance_note_template.md`](managed_provider_acceptance_note_template.md)
+as the manual review template before promoting evidence into docs.
+
 The integrated gate must prove `/v1/jobs` creation through Redis broker
 enqueue, worker subprocess completion, Postgres-backed terminal state after
-`app.JOBS.clear()`, S3-compatible artifact redirect, artifact delete lifecycle,
-`410 ARTIFACT_DELETED` after delete, and abandoned active-row recovery to
-`worker_lost`.
+`app.JOBS.clear()`, durable SSE replay with `Last-Event-ID`, S3-compatible
+artifact redirect, artifact delete lifecycle, `410 ARTIFACT_DELETED` after
+delete, and abandoned active-row recovery to `worker_lost`.
 
 ## Evidence Capture
 
@@ -305,10 +312,13 @@ or its environment configuration.
 - Local Phase 5.A validation is complete; provider validation is pending.
 - No Terraform, Helm, Kubernetes manifests, or deployment pipeline are added by
   this runbook.
-- Durable SSE replay remains a separate event-store cutover.
-- Separate multi-host worker deployment remains a Phase 5.C follow-up.
-- Observability, audit events, tenancy, billing, and entitlement models remain
-  future phases.
+- Durable SSE replay is landed and must remain covered by the integrated gate.
+- Multi-host worker execution is available as an opt-in worker process;
+  provider deployment manifests remain follow-up work.
+- Tenant admission, artifact-prefix isolation, per-tenant quota, and Postgres
+  audit logging are opt-in pilot runtime surfaces.
+- Observability dashboards, billing, and provider-specific IaC remain future
+  phases.
 
 ## Follow-Up Gates
 

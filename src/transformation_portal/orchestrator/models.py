@@ -11,6 +11,7 @@ Schema notes:
 - ``job_events``: append-only, per-job monotonic ``seq`` for SSE replay.
 - ``job_artifacts``: keyed by ``(job_id, artifact_path)`` to match the
   legacy ``Job.artifact_lookup`` semantic.
+- ``operational_audit_events``: append-only pilot control-plane audit log.
 
 All complex fields (``request``, ``effective_request``, ``run_summary``,
 ``error``, the artifact item dict) use JSONB so they can be queried in
@@ -122,4 +123,29 @@ class JobEventModel(Base):
     created_at: Mapped[float] = mapped_column(Float, nullable=False)
 
 
-__all__ = ["Base", "JobArtifactModel", "JobEventModel", "JobModel"]
+class OperationalAuditEventModel(Base):
+    """Append-only pilot control-plane audit event.
+
+    ``job_id`` deliberately has no SQL-level foreign key so job retention and
+    artifact deletion cannot erase the operational audit history.
+    """
+
+    __tablename__ = "operational_audit_events"
+    __table_args__ = (
+        Index("ix_operational_audit_events_created_at", "created_at"),
+        Index("ix_operational_audit_events_tenant_created", "tenant_id", "created_at"),
+        Index("ix_operational_audit_events_job_id", "job_id"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    created_at: Mapped[float] = mapped_column(Float, nullable=False)
+    action: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    decision: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    tenant_id: Mapped[Optional[str]] = mapped_column(String(64), nullable=True, index=True)
+    job_id: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    actor: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    request_context: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    details: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+
+
+__all__ = ["Base", "JobArtifactModel", "JobEventModel", "JobModel", "OperationalAuditEventModel"]

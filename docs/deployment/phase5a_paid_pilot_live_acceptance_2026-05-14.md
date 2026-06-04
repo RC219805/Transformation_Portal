@@ -95,7 +95,7 @@ Phase 5.A is locally validated on the follow-up fix branch. The gate proves the 
 
 ## Known Limits
 
-This is local Compose validation only. Managed-service validation must rerun the same gate with provider Postgres, Redis, and S3-compatible endpoints. The gate is still manual and opt-in; it does not add Terraform, Helm, durable SSE replay, globally atomic multi-instance admission, broad observability, operational audit events, tenancy, billing, or production secret management.
+This is local Compose validation only. Managed-service validation must rerun the same gate with provider Postgres, Redis, and S3-compatible endpoints. The gate is still manual and opt-in; durable SSE replay is now a supported `Last-Event-ID` job-events contract and must remain covered by the integrated gate. Provider-specific Terraform, Helm, globally atomic multi-instance admission, broad observability, billing, and production secret management remain follow-up work. Multi-host workers and tenant/audit mode are opt-in runtime surfaces.
 
 ## Merged Baseline
 

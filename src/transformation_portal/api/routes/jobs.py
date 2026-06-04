@@ -29,16 +29,16 @@ class JobRouteHandlers:
 
     create_job_http: Callable[[Request, dict[str, Any]], Awaitable[Response]]
     create_job_v2_http: Callable[[Request, dict[str, Any]], Awaitable[Response]]
-    list_jobs: Callable[[int], Awaitable[Response]]
-    list_jobs_v2: Callable[[int], Awaitable[Response]]
-    get_job: Callable[[str, bool], Awaitable[Response]]
-    get_job_v2: Callable[[str, bool], Awaitable[Response]]
-    get_job_artifact: Callable[[str, str], Awaitable[Response]]
-    get_job_artifact_v2: Callable[[str, str], Awaitable[Response]]
-    delete_job_artifacts: Callable[[str], Awaitable[Response]]
-    delete_job_artifacts_v2: Callable[[str], Awaitable[Response]]
-    cancel_job: Callable[[str], Awaitable[Response]]
-    cancel_job_v2: Callable[[str], Awaitable[Response]]
+    list_jobs: Callable[[Request, int], Awaitable[Response]]
+    list_jobs_v2: Callable[[Request, int], Awaitable[Response]]
+    get_job: Callable[[Request, str, bool], Awaitable[Response]]
+    get_job_v2: Callable[[Request, str, bool], Awaitable[Response]]
+    get_job_artifact: Callable[[Request, str, str], Awaitable[Response]]
+    get_job_artifact_v2: Callable[[Request, str, str], Awaitable[Response]]
+    delete_job_artifacts: Callable[[Request, str], Awaitable[Response]]
+    delete_job_artifacts_v2: Callable[[Request, str], Awaitable[Response]]
+    cancel_job: Callable[[Request, str], Awaitable[Response]]
+    cancel_job_v2: Callable[[Request, str], Awaitable[Response]]
     job_events: Callable[[Request, str], Awaitable[Response]]
     job_events_v2: Callable[[Request, str], Awaitable[Response]]
 
@@ -56,44 +56,44 @@ def create_jobs_router(handlers: JobRouteHandlers, *, job_list_limit: int = DEFA
         return await handlers.create_job_v2_http(request, payload)
 
     @router.get("/v1/jobs", response_model=JobsListEnvelope)
-    async def list_jobs(limit: int = job_list_limit) -> Response:
-        return await handlers.list_jobs(limit)
+    async def list_jobs(request: Request, limit: int = job_list_limit) -> Response:
+        return await handlers.list_jobs(request, limit)
 
     @router.get("/v2/jobs", response_model=JobsListEnvelope)
-    async def list_jobs_v2(limit: int = job_list_limit) -> Response:
-        return await handlers.list_jobs_v2(limit)
+    async def list_jobs_v2(request: Request, limit: int = job_list_limit) -> Response:
+        return await handlers.list_jobs_v2(request, limit)
 
     @router.get("/v1/jobs/{job_id}", response_model=JobStatusEnvelope)
-    async def get_job(job_id: str, include_logs: bool = True) -> Response:
-        return await handlers.get_job(job_id, include_logs)
+    async def get_job(request: Request, job_id: str, include_logs: bool = True) -> Response:
+        return await handlers.get_job(request, job_id, include_logs)
 
     @router.get("/v2/jobs/{job_id}", response_model=JobStatusEnvelope)
-    async def get_job_v2(job_id: str, include_logs: bool = True) -> Response:
-        return await handlers.get_job_v2(job_id, include_logs)
+    async def get_job_v2(request: Request, job_id: str, include_logs: bool = True) -> Response:
+        return await handlers.get_job_v2(request, job_id, include_logs)
 
     @router.get("/v1/jobs/{job_id}/artifacts/{artifact_path:path}")
-    async def get_job_artifact(job_id: str, artifact_path: str) -> Response:
-        return await handlers.get_job_artifact(job_id, artifact_path)
+    async def get_job_artifact(request: Request, job_id: str, artifact_path: str) -> Response:
+        return await handlers.get_job_artifact(request, job_id, artifact_path)
 
     @router.get("/v2/jobs/{job_id}/artifacts/{artifact_path:path}")
-    async def get_job_artifact_v2(job_id: str, artifact_path: str) -> Response:
-        return await handlers.get_job_artifact_v2(job_id, artifact_path)
+    async def get_job_artifact_v2(request: Request, job_id: str, artifact_path: str) -> Response:
+        return await handlers.get_job_artifact_v2(request, job_id, artifact_path)
 
     @router.delete("/v1/jobs/{job_id}/artifacts", response_model=JobStatusEnvelope)
-    async def delete_job_artifacts(job_id: str) -> Response:
-        return await handlers.delete_job_artifacts(job_id)
+    async def delete_job_artifacts(request: Request, job_id: str) -> Response:
+        return await handlers.delete_job_artifacts(request, job_id)
 
     @router.delete("/v2/jobs/{job_id}/artifacts", response_model=JobStatusEnvelope)
-    async def delete_job_artifacts_v2(job_id: str) -> Response:
-        return await handlers.delete_job_artifacts_v2(job_id)
+    async def delete_job_artifacts_v2(request: Request, job_id: str) -> Response:
+        return await handlers.delete_job_artifacts_v2(request, job_id)
 
     @router.post("/v1/jobs/{job_id}/cancel", response_model=JobEnvelope)
-    async def cancel_job(job_id: str) -> Response:
-        return await handlers.cancel_job(job_id)
+    async def cancel_job(request: Request, job_id: str) -> Response:
+        return await handlers.cancel_job(request, job_id)
 
     @router.post("/v2/jobs/{job_id}/cancel", response_model=JobEnvelope)
-    async def cancel_job_v2(job_id: str) -> Response:
-        return await handlers.cancel_job_v2(job_id)
+    async def cancel_job_v2(request: Request, job_id: str) -> Response:
+        return await handlers.cancel_job_v2(request, job_id)
 
     @router.get("/v1/jobs/{job_id}/events")
     async def job_events(request: Request, job_id: str) -> Response:

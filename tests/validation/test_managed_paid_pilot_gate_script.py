@@ -42,7 +42,12 @@ def _write_env_file(path: Path, *, extra: str = "") -> Path:
     return path
 
 
-def _run_preflight(env_file: Path, *, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
+def _run_preflight(
+    env_file: Path,
+    *,
+    env: dict[str, str] | None = None,
+    evidence_out: Path | None = None,
+) -> subprocess.CompletedProcess[str]:
     fake_bin = env_file.parent / "fake-bin"
     fake_bin.mkdir(exist_ok=True)
     fake_node = fake_bin / "node"
@@ -52,8 +57,12 @@ def _run_preflight(env_file: Path, *, env: dict[str, str] | None = None) -> subp
     run_env = dict(os.environ) if env is None else dict(env)
     run_env["PATH"] = f"{fake_bin}{os.pathsep}{run_env.get('PATH', '')}"
 
+    args = ["bash", str(SCRIPT_PATH), "--env-file", str(env_file), "--preflight-only"]
+    if evidence_out is not None:
+        args.extend(["--evidence-out", str(evidence_out)])
+
     return subprocess.run(
-        ["bash", str(SCRIPT_PATH), "--env-file", str(env_file), "--preflight-only"],
+        args,
         cwd=REPO_ROOT,
         env=run_env,
         text=True,
@@ -82,6 +91,33 @@ def test_managed_paid_pilot_preflight_runs_from_clean_env(tmp_path: Path) -> Non
     assert "leaked local-dev vars: []" in result.stdout
     assert "unsafe managed/test overlap: {}" in result.stdout
     assert "Managed paid-pilot clean-env preflight passed." in result.stdout
+
+
+def test_managed_paid_pilot_preflight_writes_redacted_evidence_note(tmp_path: Path) -> None:
+    env_file = _write_env_file(tmp_path / "managed.env")
+    evidence_out = tmp_path / "acceptance-note.md"
+
+    result = _run_preflight(env_file, evidence_out=evidence_out)
+
+    assert result.returncode == 0, result.stderr + result.stdout
+    note = evidence_out.read_text(encoding="utf-8")
+    assert "# Managed Provider Paid-Pilot Acceptance Note" in note
+    assert "gate_status: `preflight_passed`" in note
+    assert "`TP_ORCHESTRATOR_STATE_BACKEND`: `postgres`" in note
+    assert "`TP_DATABASE_URL`: `scheme=postgresql+asyncpg; tls=no; path=set`" in note
+    assert "staging_user" not in note
+    assert "staging-db.example.test" not in note
+    assert "tp-staging-artifacts" not in note
+    assert "test-secret-value" not in note
+
+
+def test_managed_paid_pilot_preflight_rejects_repo_local_evidence_note(tmp_path: Path) -> None:
+    env_file = _write_env_file(tmp_path / "managed.env")
+
+    result = _run_preflight(env_file, evidence_out=REPO_ROOT / "managed-acceptance.md")
+
+    assert result.returncode == 1
+    assert "evidence output must live outside the repository" in result.stderr
 
 
 def test_managed_paid_pilot_preflight_rejects_local_dev_vars_in_env_file(tmp_path: Path) -> None:

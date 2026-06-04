@@ -10,6 +10,7 @@ performs the fail-closed environment validation before invoking it.
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 import sys
 import time
@@ -262,6 +263,28 @@ def _wait_for_durable_artifacts(client: TestClient, job_id: str, *, timeout: flo
     raise AssertionError(f"job {job_id} did not persist terminal artifacts; last body={last_body!r}")
 
 
+def _collect_sse_frames(response: Any) -> list[tuple[str | None, str, dict[str, Any]]]:
+    frames: list[tuple[str | None, str, dict[str, Any]]] = []
+    current_id: str | None = None
+    current_event = ""
+    for line in response.iter_lines():
+        if not line:
+            continue
+        if line.startswith("id: "):
+            current_id = line.split("id: ", 1)[1].strip()
+            continue
+        if line.startswith("event: "):
+            current_event = line.split("event: ", 1)[1].strip()
+            continue
+        if line.startswith("data: "):
+            payload = json.loads(line.split("data: ", 1)[1])
+            frames.append((current_id, current_event, payload))
+            current_id = None
+            if current_event == "done":
+                break
+    return frames
+
+
 def test_paid_pilot_backend_services_compose_end_to_end(
     paid_pilot_stack: dict[str, Any],
     monkeypatch: pytest.MonkeyPatch,
@@ -307,6 +330,15 @@ def test_paid_pilot_backend_services_compose_end_to_end(
         orchestrator_app.JOBS.clear()
         durable_body = _wait_for_durable_artifacts(client, job_id)
         assert durable_body["artifacts"]["items"], "terminal artifact metadata should persist in Postgres"
+
+        orchestrator_app.JOBS.clear()
+        with client.stream("GET", f"/v1/jobs/{job_id}/events", headers={"Last-Event-ID": "0"}) as stream_response:
+            assert stream_response.status_code == 200
+            replayed_frames = _collect_sse_frames(stream_response)
+        replayed_events = [(event_id, event_name, payload.get("id")) for event_id, event_name, payload in replayed_frames]
+        assert replayed_events[-1][1:] == ("done", job_id)
+        assert [event_name for _event_id, event_name, _payload_id in replayed_events][:2] == ["state", "log"]
+        assert all(event_id is not None for event_id, _event_name, _payload_id in replayed_events)
 
         artifact_response = client.get(
             f"/v1/jobs/{job_id}/artifacts/result.txt",

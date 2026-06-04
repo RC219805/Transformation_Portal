@@ -58,6 +58,7 @@ from transformation_portal.api.v1 import (
     ReadyResponse,
     UploadStagingEnvelope,
 )
+from transformation_portal.core.security.tenant import TenantContext, TenantError, TenantManager, TenantPolicy
 from transformation_portal.determinism.trace import get_or_create_trace_context
 from transformation_portal.ingest.upload_staging import (
     DEFAULT_CAPTURE_METADATA_CONFIG_PATH,
@@ -73,8 +74,10 @@ from transformation_portal.orchestrator import (
     JobNotFoundError,
     JobRecord,
     JobRepository,
+    OperationalAuditRecord,
     get_job_event_store,
     get_job_repository,
+    get_operational_audit_store,
 )
 from transformation_portal.orchestrator.artifact_store import ArtifactNotFoundError as StoreArtifactNotFoundError
 from transformation_portal.orchestrator.artifact_store import ArtifactPathValidationError as StoreArtifactPathValidationError
@@ -140,6 +143,7 @@ from transformation_portal.vlm_captioning.fastvlm_runtime import (
 LOGGER = logging.getLogger(__name__)
 _PORTAL_EVENT_LOG_WRITE_LOCK = threading.Lock()
 _MANAGED_SAM2_CHECKSUM_CACHE_LOCK = threading.Lock()
+_PILOT_TENANT_MANAGER: Optional[TenantManager] = None
 
 # Optionally suppress successful /healthz and /ready access-log lines so
 # operator log streams stay focused on actionable failures. Errors are never
@@ -663,6 +667,17 @@ PORTAL_UPLOAD_MAX_FIELDS = _env_int("TP_PORTAL_UPLOAD_MAX_FIELDS", 32, minimum=1
 PORTAL_UPLOAD_MAX_PART_BYTES = _env_int("TP_PORTAL_UPLOAD_MAX_PART_BYTES", MAX_UPLOAD_REQUEST_BYTES, minimum=1024)
 RATE_LIMIT_PER_MINUTE = _env_int("TP_RATE_LIMIT_PER_MINUTE", 60, minimum=0)
 MAX_CONCURRENT_JOBS = _env_int("TP_MAX_CONCURRENT_JOBS", 4, minimum=1)
+PILOT_CONTROL_PLANE_ENABLED = _env_bool("TP_PILOT_CONTROL_PLANE_ENABLED", False)
+PILOT_TENANT_HEADER = os.getenv("TP_PILOT_TENANT_HEADER", "x-tp-tenant-id").strip().lower() or "x-tp-tenant-id"
+PILOT_ALLOWED_TENANTS = set(_env_csv("TP_PILOT_ALLOWED_TENANTS", []))
+PILOT_ALLOWED_PIPELINES = set(_env_csv("TP_PILOT_ALLOWED_PIPELINES", ["lux-depth-v3"]))
+PILOT_MAX_ACTIVE_JOBS_PER_TENANT = _env_int("TP_PILOT_MAX_ACTIVE_JOBS_PER_TENANT", 0, minimum=0)
+PILOT_TENANT_WORKSPACE_ROOT = Path(
+    os.getenv("TP_PILOT_TENANT_WORKSPACE_ROOT", str(Path(tempfile.gettempdir()) / "tp-pilot-tenants" / "workspaces"))
+)
+PILOT_TENANT_CAS_ROOT = Path(
+    os.getenv("TP_PILOT_TENANT_CAS_ROOT", str(Path(tempfile.gettempdir()) / "tp-pilot-tenants" / "cas"))
+)
 RATE_LIMIT_WINDOW_SECONDS = 60.0
 # Default Retry-After (seconds) returned when the job-admission concurrency cap
 # (MAX_CONCURRENT_JOBS) rejects a request. Not tied to a deterministic schedule
@@ -704,6 +719,7 @@ WORKER_HEARTBEAT_INTERVAL_SECONDS = _worker_env_float(
 WORKER_POLL_INTERVAL_SECONDS = _worker_env_float(
     "TP_WORKER_POLL_SECONDS", "TP_ORCHESTRATOR_WORKER_POLL_SECONDS", 0.05, minimum=0.001
 )
+ORCHESTRATOR_IN_PROCESS_WORKERS_ENABLED = _env_bool("TP_ORCHESTRATOR_IN_PROCESS_WORKERS_ENABLED", True)
 # Grace period the lifespan shutdown waits for the worker pool to drain
 # cleanly before escalating to ``task.cancel()``. Bounded so a stuck
 # executor cannot block the broker / repository close paths.
@@ -1142,6 +1158,230 @@ def _job_repository() -> JobRepository:
 
 def _job_event_store():
     return get_job_event_store()
+
+
+def _pilot_tenant_policy() -> TenantPolicy:
+    return TenantPolicy(allowed_node_types=set(PILOT_ALLOWED_PIPELINES))
+
+
+def _pilot_tenant_manager() -> TenantManager:
+    global _PILOT_TENANT_MANAGER
+    if _PILOT_TENANT_MANAGER is None:
+        _PILOT_TENANT_MANAGER = TenantManager(
+            workspace_root=PILOT_TENANT_WORKSPACE_ROOT,
+            cas_root=PILOT_TENANT_CAS_ROOT,
+            default_policy=_pilot_tenant_policy(),
+        )
+    return _PILOT_TENANT_MANAGER
+
+
+def _job_tenant_id(job: Job) -> Optional[str]:
+    effective_request = job.effective_request if isinstance(job.effective_request, dict) else {}
+    tenant_id = effective_request.get("tenant_id")
+    if isinstance(tenant_id, str) and tenant_id.strip():
+        return tenant_id.strip()
+    return None
+
+
+def _record_tenant_id(record: JobRecord) -> Optional[str]:
+    effective_request = record.effective_request if isinstance(record.effective_request, dict) else {}
+    tenant_id = effective_request.get("tenant_id")
+    if isinstance(tenant_id, str) and tenant_id.strip():
+        return tenant_id.strip()
+    return None
+
+
+def _artifact_storage_job_id(job: Job) -> str:
+    tenant_id = _job_tenant_id(job)
+    if tenant_id:
+        return f"{tenant_id}__{job.id}"
+    return job.id
+
+
+def _pilot_actor_summary(actor: Optional[Mapping[str, Any]] = None) -> Dict[str, Any]:
+    if not isinstance(actor, Mapping):
+        return {}
+    summary: Dict[str, Any] = {}
+    for key in ("username", "role", "accessEmail"):
+        value = actor.get(key)
+        if isinstance(value, str) and value.strip():
+            summary[key] = value.strip().lower()
+    return summary
+
+
+def _pilot_request_context(request: Optional[Request] = None) -> Dict[str, Any]:
+    if request is None:
+        return {}
+    trace_context = getattr(request.state, "trace_context", None)
+    context: Dict[str, Any] = {
+        "method": request.method,
+        "path": request.url.path,
+    }
+    if trace_context is not None:
+        context["trace_id"] = trace_context.trace_id
+    return context
+
+
+async def _record_pilot_audit(
+    *,
+    action: str,
+    decision: str,
+    tenant_id: Optional[str] = None,
+    job_id: Optional[str] = None,
+    actor: Optional[Mapping[str, Any]] = None,
+    request: Optional[Request] = None,
+    details: Optional[Mapping[str, Any]] = None,
+) -> Optional[JSONResponse]:
+    if not PILOT_CONTROL_PLANE_ENABLED:
+        return None
+    try:
+        store = get_operational_audit_store()
+        await store.append(
+            OperationalAuditRecord(
+                created_at=_now(),
+                action=action,
+                decision=decision,
+                tenant_id=tenant_id,
+                job_id=job_id,
+                actor=_pilot_actor_summary(actor),
+                request_context=_pilot_request_context(request),
+                details=dict(details or {}),
+            )
+        )
+    except Exception:  # noqa: BLE001 - pilot mode must not mutate without audit
+        LOGGER.exception("pilot operational audit unavailable for action=%s", action)
+        return _error_response(
+            503,
+            code="AUDIT_UNAVAILABLE",
+            message="operational audit log unavailable",
+            details={"action": action},
+            retriable=True,
+        )
+    return None
+
+
+async def _pilot_tenant_error(
+    *,
+    action: str,
+    reason: str,
+    request: Optional[Request],
+    tenant_id: Optional[str] = None,
+    status_code: int = 400,
+) -> JSONResponse:
+    audit_response = await _record_pilot_audit(
+        action="tenant_admission",
+        decision="rejected",
+        tenant_id=tenant_id,
+        request=request,
+        details={"action": action, "reason": reason},
+    )
+    if audit_response is not None:
+        return audit_response
+    return _error_response(
+        status_code,
+        code=_http_status_error_code(status_code),
+        message="tenant admission failed",
+        details={"field": PILOT_TENANT_HEADER, "reason": reason},
+    )
+
+
+async def _pilot_tenant_from_request(
+    request: Optional[Request],
+    *,
+    action: str,
+) -> Tuple[Optional[TenantContext], Optional[JSONResponse]]:
+    if not PILOT_CONTROL_PLANE_ENABLED:
+        return None, None
+    if request is None:
+        return None, await _pilot_tenant_error(action=action, reason="tenant_required", request=request)
+
+    tenant_id = str(request.headers.get(PILOT_TENANT_HEADER) or "").strip()
+    if not tenant_id:
+        return None, await _pilot_tenant_error(action=action, reason="tenant_required", request=request)
+
+    try:
+        manager = _pilot_tenant_manager()
+        tenant = manager.get_tenant(tenant_id)
+        if tenant is None:
+            tenant = manager.create_tenant(tenant_id, policy=_pilot_tenant_policy())
+    except TenantError:
+        return None, await _pilot_tenant_error(
+            action=action,
+            reason="invalid_tenant_id",
+            request=request,
+            tenant_id=None,
+        )
+
+    if PILOT_ALLOWED_TENANTS and tenant.tenant_id not in PILOT_ALLOWED_TENANTS:
+        return None, await _pilot_tenant_error(
+            action=action,
+            reason="tenant_not_allowed",
+            request=request,
+            tenant_id=tenant.tenant_id,
+            status_code=403,
+        )
+
+    return tenant, None
+
+
+async def _pilot_enforce_pipeline(
+    tenant: Optional[TenantContext],
+    *,
+    pipeline: str,
+    action: str,
+    request: Optional[Request],
+) -> Optional[JSONResponse]:
+    if tenant is None or not PILOT_CONTROL_PLANE_ENABLED:
+        return None
+    try:
+        _pilot_tenant_manager().enforce_node_type(tenant.tenant_id, pipeline)
+    except TenantError:
+        return await _pilot_tenant_error(
+            action=action,
+            reason="pipeline_not_allowed",
+            request=request,
+            tenant_id=tenant.tenant_id,
+            status_code=403,
+        )
+    return None
+
+
+async def _pilot_enforce_job_tenant(
+    tenant: Optional[TenantContext],
+    job: Job,
+    *,
+    action: str,
+    request: Optional[Request] = None,
+) -> Optional[JSONResponse]:
+    if tenant is None or not PILOT_CONTROL_PLANE_ENABLED:
+        return None
+    if _job_tenant_id(job) == tenant.tenant_id:
+        return None
+    audit_response = await _record_pilot_audit(
+        action="tenant_admission",
+        decision="rejected",
+        tenant_id=tenant.tenant_id,
+        job_id=job.id,
+        request=request,
+        details={"action": action, "reason": "tenant_job_mismatch"},
+    )
+    if audit_response is not None:
+        return audit_response
+    return _error_response(
+        404,
+        code="NOT_FOUND",
+        message="job not found",
+        details={"job_id": job.id},
+    )
+
+
+async def _pilot_active_job_count_for_tenant(repo: JobRepository, tenant_id: str) -> int:
+    records, _total = await repo.list(limit=None)
+    return sum(
+        1
+        for record in records
+        if record.state in ACTIVE_JOB_STATES and _record_tenant_id(record) == tenant_id
+    )
 
 
 def _record_from_job(job: Job) -> JobRecord:
@@ -3180,7 +3420,7 @@ async def _delete_job_artifacts_for_job(
 
     lifecycle = _ensure_artifact_lifecycle(job, backend=store.backend)
     try:
-        store_deleted_count = await store.delete(job.id)
+        store_deleted_count = await store.delete(_artifact_storage_job_id(job))
         legacy_deleted_count = await asyncio.to_thread(_delete_legacy_job_artifact_files, job)
     except Exception as exc:  # noqa: BLE001 - cleanup/deletion must be observable and non-fatal
         lifecycle.update(
@@ -7197,13 +7437,14 @@ async def _mirror_job_artifacts_to_store(job: Job, *, fail_closed_on_repository:
 
     mirrored = 0
     failures: List[str] = []
+    storage_job_id = _artifact_storage_job_id(job)
     for relative_path, source_path in sorted(job.artifact_lookup.items()):
         try:
             _, resolved_artifact, normalized_relative_path = _validate_resolved_job_artifact_path(job, source_path)
             if not resolved_artifact.is_file():
                 continue
             await store.write_file(
-                job.id,
+                storage_job_id,
                 normalized_relative_path,
                 resolved_artifact,
                 content_type=_artifact_content_type(resolved_artifact),
@@ -8722,23 +8963,26 @@ async def _orchestrator_lifespan(app: "FastAPI") -> "AsyncGenerator[None, None]"
         app.state.queue_broker = broker
         stop_event = asyncio.Event()
         app.state.worker_stop_event = stop_event
-        for slot in range(MAX_CONCURRENT_JOBS):
-            worker_config = WorkerConfig(
-                worker_id=f"inproc-worker-{slot}",
-                lease_seconds=WORKER_LEASE_SECONDS,
-                heartbeat_interval_seconds=WORKER_HEARTBEAT_INTERVAL_SECONDS,
-                poll_interval_seconds=WORKER_POLL_INTERVAL_SECONDS,
-            )
-            app.state.worker_tasks.append(
-                asyncio.create_task(
-                    run_worker_forever(
-                        broker=broker,
-                        config=worker_config,
-                        executor=_orchestrator_job_executor,
-                        stop_event=stop_event,
+        if ORCHESTRATOR_IN_PROCESS_WORKERS_ENABLED:
+            for slot in range(MAX_CONCURRENT_JOBS):
+                worker_config = WorkerConfig(
+                    worker_id=f"inproc-worker-{slot}",
+                    lease_seconds=WORKER_LEASE_SECONDS,
+                    heartbeat_interval_seconds=WORKER_HEARTBEAT_INTERVAL_SECONDS,
+                    poll_interval_seconds=WORKER_POLL_INTERVAL_SECONDS,
+                )
+                app.state.worker_tasks.append(
+                    asyncio.create_task(
+                        run_worker_forever(
+                            broker=broker,
+                            config=worker_config,
+                            executor=_orchestrator_job_executor,
+                            stop_event=stop_event,
+                        )
                     )
                 )
-            )
+        else:
+            LOGGER.info("in-process worker pool disabled; expecting external orchestrator worker process")
         # Phase 2.D — periodic broker-reclaim reconciler. Shares
         # ``stop_event`` with the worker pool so a single signal
         # winds down the whole broker-dispatch substrate.
@@ -8853,6 +9097,7 @@ app.add_middleware(
         "Accept",
         "Authorization",
         API_KEY_HEADER,
+        PILOT_TENANT_HEADER,
     ],
 )
 
@@ -9170,10 +9415,19 @@ async def ready() -> Dict[str, Any]:
 
 
 @app.get("/v1/readiness", response_model=ReadinessEnvelope)
-async def readiness() -> JSONResponse:
+async def readiness(request: Request) -> JSONResponse:
     pipeline_data: Dict[str, Any] = {}
     for pipeline_name in ("lux-depth-v3", "archive-gate-a", "archive-gate-b", "archive-gate-c"):
         pipeline_data[pipeline_name] = _evaluate_pipeline_readiness(pipeline_name)
+
+    audit_response = await _record_pilot_audit(
+        action="readiness",
+        decision="accepted",
+        request=request,
+        details={"pipelines": sorted(pipeline_data)},
+    )
+    if audit_response is not None:
+        return audit_response
 
     return JSONResponse(
         _api_envelope(
@@ -9256,18 +9510,49 @@ async def config_metadata(pipeline: str) -> JSONResponse:
 
 @app.post("/v1/config-preview", response_model=ConfigPreviewEnvelope)
 async def config_preview(request: Request, payload: Dict[str, Any]) -> JSONResponse:
+    tenant, tenant_error = await _pilot_tenant_from_request(request, action="config_preview")
+    if tenant_error is not None:
+        return tenant_error
     try:
         preview = await _build_config_preview_threaded(
             payload,
             portal_actor=_portal_actor_from_request(request),
         )
     except ValueError:
+        audit_response = await _record_pilot_audit(
+            action="config_preview",
+            decision="rejected",
+            tenant_id=tenant.tenant_id if tenant is not None else None,
+            request=request,
+            details={"reason": "unsupported_pipeline"},
+        )
+        if audit_response is not None:
+            return audit_response
         return _error_response(
             400,
             code="INVALID_ARGUMENT",
             message="invalid config preview request",
             details={"field": "payload", "reason": "unsupported_pipeline"},
         )
+
+    pipeline = str(preview.get("pipeline") or payload.get("pipeline") or "").strip()
+    pipeline_error = await _pilot_enforce_pipeline(
+        tenant,
+        pipeline=pipeline,
+        action="config_preview",
+        request=request,
+    )
+    if pipeline_error is not None:
+        return pipeline_error
+    audit_response = await _record_pilot_audit(
+        action="config_preview",
+        decision="accepted",
+        tenant_id=tenant.tenant_id if tenant is not None else None,
+        request=request,
+        details={"pipeline": pipeline},
+    )
+    if audit_response is not None:
+        return audit_response
 
     return JSONResponse(
         _api_envelope(
@@ -9407,11 +9692,15 @@ async def create_job(
     payload: Dict[str, Any],
     *,
     portal_actor: Optional[Mapping[str, Any]] = None,
+    pilot_tenant: Optional[TenantContext] = None,
+    request: Optional[Request] = None,
 ) -> JSONResponse:
     return await _create_job(
         payload,
         api_version="v1",
         portal_actor=portal_actor,
+        pilot_tenant=pilot_tenant,
+        request=request,
     )
 
 
@@ -9419,20 +9708,40 @@ async def create_job_v2(
     payload: Dict[str, Any],
     *,
     portal_actor: Optional[Mapping[str, Any]] = None,
+    pilot_tenant: Optional[TenantContext] = None,
+    request: Optional[Request] = None,
 ) -> JSONResponse:
     return await _create_job(
         payload,
         api_version="v2",
         portal_actor=portal_actor,
+        pilot_tenant=pilot_tenant,
+        request=request,
     )
 
 
 async def create_job_http(request: Request, payload: Dict[str, Any]) -> JSONResponse:
-    return await create_job(payload, portal_actor=_portal_actor_from_request(request))
+    tenant, tenant_error = await _pilot_tenant_from_request(request, action="job_create")
+    if tenant_error is not None:
+        return tenant_error
+    return await create_job(
+        payload,
+        portal_actor=_portal_actor_from_request(request),
+        pilot_tenant=tenant,
+        request=request,
+    )
 
 
 async def create_job_v2_http(request: Request, payload: Dict[str, Any]) -> JSONResponse:
-    return await create_job_v2(payload, portal_actor=_portal_actor_from_request(request))
+    tenant, tenant_error = await _pilot_tenant_from_request(request, action="job_create")
+    if tenant_error is not None:
+        return tenant_error
+    return await create_job_v2(
+        payload,
+        portal_actor=_portal_actor_from_request(request),
+        pilot_tenant=tenant,
+        request=request,
+    )
 
 
 async def _create_job(
@@ -9440,6 +9749,8 @@ async def _create_job(
     *,
     api_version: str = "v1",
     portal_actor: Optional[Mapping[str, Any]] = None,
+    pilot_tenant: Optional[TenantContext] = None,
+    request: Optional[Request] = None,
 ) -> JSONResponse:
     try:
         preview_kwargs: Dict[str, Any] = {"archive_index_scan_mode": "full"}
@@ -9455,6 +9766,14 @@ async def _create_job(
         )
 
     pipeline = str(preview.get("pipeline") or payload.get("pipeline") or "").strip()
+    pipeline_error = await _pilot_enforce_pipeline(
+        pilot_tenant,
+        pipeline=pipeline,
+        action="job_create",
+        request=request,
+    )
+    if pipeline_error is not None:
+        return pipeline_error
 
     preview_errors = preview.get("field_errors") or []
     if preview_errors:
@@ -9570,6 +9889,44 @@ async def _create_job(
                 },
                 headers=job_admission_headers,
             )
+        if pilot_tenant is not None and PILOT_MAX_ACTIVE_JOBS_PER_TENANT > 0:
+            try:
+                tenant_active_jobs = await _pilot_active_job_count_for_tenant(repo, pilot_tenant.tenant_id)
+            except Exception:  # noqa: BLE001 - admission must not fall back to stale tenant counts
+                LOGGER.exception("tenant active-count check failed for %s", pilot_tenant.tenant_id)
+                return _repository_unavailable_response()
+            if tenant_active_jobs >= PILOT_MAX_ACTIVE_JOBS_PER_TENANT:
+                audit_response = await _record_pilot_audit(
+                    action="tenant_admission",
+                    decision="rejected",
+                    tenant_id=pilot_tenant.tenant_id,
+                    actor=portal_actor,
+                    request=request,
+                    details={
+                        "action": "job_create",
+                        "reason": "tenant_active_job_quota_exceeded",
+                        "active_jobs": tenant_active_jobs,
+                        "max_active_jobs": PILOT_MAX_ACTIVE_JOBS_PER_TENANT,
+                    },
+                )
+                if audit_response is not None:
+                    return audit_response
+                tenant_admission_headers = _rate_limit_response_headers(
+                    limit=PILOT_MAX_ACTIVE_JOBS_PER_TENANT,
+                    remaining=0,
+                    retry_after=JOB_ADMISSION_RETRY_AFTER_SECONDS,
+                    reset_epoch=int(_now()) + JOB_ADMISSION_RETRY_AFTER_SECONDS,
+                )
+                return _error_response(
+                    429,
+                    code="RATE_LIMITED",
+                    message="too many active jobs for tenant; try again later",
+                    details={
+                        "active_jobs": tenant_active_jobs,
+                        "max_active_jobs": PILOT_MAX_ACTIVE_JOBS_PER_TENANT,
+                    },
+                    headers=tenant_admission_headers,
+                )
         # Materialise output_dir only after admission succeeds so 429-rejected
         # requests never leave behind directories on disk. Track whether the
         # directory existed before we materialised it so the dispatch
@@ -9591,6 +9948,22 @@ async def _create_job(
             )
         jid = "job_" + uuid.uuid4().hex[:8]
         effective_request = {"pipeline": pipeline, "args": dict(execution_args)}
+        if pilot_tenant is not None:
+            effective_request["tenant_id"] = pilot_tenant.tenant_id
+        audit_response = await _record_pilot_audit(
+            action="job_create",
+            decision="accepted",
+            tenant_id=pilot_tenant.tenant_id if pilot_tenant is not None else None,
+            job_id=jid,
+            actor=portal_actor,
+            request=request,
+            details={"pipeline": pipeline},
+        )
+        if audit_response is not None:
+            if trusted_output_dir is not None and not output_dir_existed_pre_dispatch:
+                with suppress(OSError):
+                    trusted_output_dir.rmdir()
+            return audit_response
         job = Job(id=jid, created_at=_now(), request=payload, effective_request=effective_request)
         try:
             await repo.create(_record_from_job(job))
@@ -9662,14 +10035,34 @@ async def list_jobs_v2(limit: int = JOB_LIST_LIMIT) -> JSONResponse:
     return await _list_jobs(limit=limit, api_version="v2")
 
 
-async def _list_jobs(*, limit: int = JOB_LIST_LIMIT, api_version: str = "v1") -> JSONResponse:
+async def list_jobs_http(request: Request, limit: int = JOB_LIST_LIMIT) -> JSONResponse:
+    return await _list_jobs(request=request, limit=limit, api_version="v1")
+
+
+async def list_jobs_v2_http(request: Request, limit: int = JOB_LIST_LIMIT) -> JSONResponse:
+    return await _list_jobs(request=request, limit=limit, api_version="v2")
+
+
+async def _list_jobs(
+    *,
+    request: Optional[Request] = None,
+    limit: int = JOB_LIST_LIMIT,
+    api_version: str = "v1",
+) -> JSONResponse:
     await _cleanup_expired_jobs(_now(), force=False)
     bounded_limit = max(1, min(limit, JOB_LIST_LIMIT))
+    tenant, tenant_error = await _pilot_tenant_from_request(request, action="job_list")
+    if tenant_error is not None:
+        return tenant_error
     try:
-        records, total = await _job_repository().list(limit=bounded_limit)
+        records, total = await _job_repository().list(limit=None if tenant is not None else bounded_limit)
     except Exception:  # noqa: BLE001 - never fall back to stale runtime cache
         LOGGER.exception("job repository list failed")
         return _repository_unavailable_response()
+    if tenant is not None:
+        records = [record for record in records if _record_tenant_id(record) == tenant.tenant_id]
+        total = len(records)
+        records = records[:bounded_limit]
 
     jobs = [_overlay_runtime_state(_job_from_record(record), JOBS.get(record.id)) for record in records]
     serialized = [_serialize_job(job, include_logs=False, api_version=api_version) for job in jobs]
@@ -9700,8 +10093,25 @@ async def get_job_v2(job_id: str, include_logs: bool = True) -> JSONResponse:
     return await _get_job(job_id, include_logs=include_logs, api_version="v2")
 
 
-async def _get_job(job_id: str, *, include_logs: bool = True, api_version: str = "v1") -> JSONResponse:
+async def get_job_http(request: Request, job_id: str, include_logs: bool = True) -> JSONResponse:
+    return await _get_job(job_id, request=request, include_logs=include_logs, api_version="v1")
+
+
+async def get_job_v2_http(request: Request, job_id: str, include_logs: bool = True) -> JSONResponse:
+    return await _get_job(job_id, request=request, include_logs=include_logs, api_version="v2")
+
+
+async def _get_job(
+    job_id: str,
+    *,
+    request: Optional[Request] = None,
+    include_logs: bool = True,
+    api_version: str = "v1",
+) -> JSONResponse:
     await _cleanup_expired_jobs(_now(), force=False)
+    tenant, tenant_error = await _pilot_tenant_from_request(request, action="job_read")
+    if tenant_error is not None:
+        return tenant_error
     try:
         job = await _load_job_view(job_id)
     except _JobRepositoryUnavailable:
@@ -9713,6 +10123,9 @@ async def _get_job(job_id: str, *, include_logs: bool = True, api_version: str =
             message="job not found",
             details={"job_id": job_id},
         )
+    tenant_access_error = await _pilot_enforce_job_tenant(tenant, job, action="job_read", request=request)
+    if tenant_access_error is not None:
+        return tenant_access_error
     # Phase 1.D: construct via Pydantic for runtime validation, then
     # serialize with ``exclude_unset=True`` so the optional
     # ``logs_tail`` default (None) is omitted when the legacy
@@ -9735,6 +10148,14 @@ async def get_job_artifact_v2(job_id: str, artifact_path: str) -> Response:
     return await _get_job_artifact(job_id, artifact_path)
 
 
+async def get_job_artifact_http(request: Request, job_id: str, artifact_path: str) -> Response:
+    return await _get_job_artifact(job_id, artifact_path, request=request)
+
+
+async def get_job_artifact_v2_http(request: Request, job_id: str, artifact_path: str) -> Response:
+    return await _get_job_artifact(job_id, artifact_path, request=request)
+
+
 async def delete_job_artifacts(job_id: str) -> JSONResponse:
     return await _delete_job_artifacts(job_id, api_version="v1")
 
@@ -9743,8 +10164,24 @@ async def delete_job_artifacts_v2(job_id: str) -> JSONResponse:
     return await _delete_job_artifacts(job_id, api_version="v2")
 
 
-async def _get_job_artifact(job_id: str, artifact_path: str) -> Response:
+async def delete_job_artifacts_http(request: Request, job_id: str) -> JSONResponse:
+    return await _delete_job_artifacts(job_id, request=request, api_version="v1")
+
+
+async def delete_job_artifacts_v2_http(request: Request, job_id: str) -> JSONResponse:
+    return await _delete_job_artifacts(job_id, request=request, api_version="v2")
+
+
+async def _get_job_artifact(
+    job_id: str,
+    artifact_path: str,
+    *,
+    request: Optional[Request] = None,
+) -> Response:
     await _cleanup_expired_jobs(_now(), force=False)
+    tenant, tenant_error = await _pilot_tenant_from_request(request, action="artifact_fetch")
+    if tenant_error is not None:
+        return tenant_error
     try:
         job = await _load_job_view(job_id)
     except _JobRepositoryUnavailable:
@@ -9756,6 +10193,9 @@ async def _get_job_artifact(job_id: str, artifact_path: str) -> Response:
             message="job not found",
             details={"job_id": job_id},
         )
+    tenant_access_error = await _pilot_enforce_job_tenant(tenant, job, action="artifact_fetch", request=request)
+    if tenant_access_error is not None:
+        return tenant_access_error
 
     try:
         requested_relative_path = _normalize_artifact_relative_path(artifact_path)
@@ -9810,6 +10250,18 @@ async def _get_job_artifact(job_id: str, artifact_path: str) -> Response:
             details={"job_id": job_id, "path": requested_relative_path},
         )
 
+    storage_job_id = _artifact_storage_job_id(job)
+    audit_response = await _record_pilot_audit(
+        action="artifact_fetch",
+        decision="accepted",
+        tenant_id=tenant.tenant_id if tenant is not None else _job_tenant_id(job),
+        job_id=job.id,
+        request=request,
+        details={"path": requested_relative_path},
+    )
+    if audit_response is not None:
+        return audit_response
+
     if not job.artifact_store_mirrored:
         try:
             await _mirror_job_artifacts_to_store(job, fail_closed_on_repository=True)
@@ -9830,10 +10282,10 @@ async def _get_job_artifact(job_id: str, artifact_path: str) -> Response:
 
     if store.backend == "s3":
         try:
-            metadata = await store.head(job.id, requested_relative_path)
+            metadata = await store.head(storage_job_id, requested_relative_path)
             response_headers = _artifact_response_headers_for_relative_path(requested_relative_path)
             presigned_url = await store.presign_get(
-                job.id,
+                storage_job_id,
                 requested_relative_path,
                 expires_seconds=ARTIFACT_PRESIGN_EXPIRES_SECONDS,
                 content_type=metadata.content_type,
@@ -9889,8 +10341,8 @@ async def _get_job_artifact(job_id: str, artifact_path: str) -> Response:
         )
 
     try:
-        metadata = await store.head(job.id, requested_relative_path)
-        stream = await store.open_bytes(job.id, requested_relative_path)
+        metadata = await store.head(storage_job_id, requested_relative_path)
+        stream = await store.open_bytes(storage_job_id, requested_relative_path)
         return StreamingResponse(
             stream,
             media_type=metadata.content_type,
@@ -9933,8 +10385,16 @@ async def _get_job_artifact(job_id: str, artifact_path: str) -> Response:
     )
 
 
-async def _delete_job_artifacts(job_id: str, *, api_version: str = "v1") -> JSONResponse:
+async def _delete_job_artifacts(
+    job_id: str,
+    *,
+    request: Optional[Request] = None,
+    api_version: str = "v1",
+) -> JSONResponse:
     await _cleanup_expired_jobs(_now(), force=False)
+    tenant, tenant_error = await _pilot_tenant_from_request(request, action="artifact_delete")
+    if tenant_error is not None:
+        return tenant_error
     try:
         job = await _load_job_view(job_id)
     except _JobRepositoryUnavailable:
@@ -9946,6 +10406,9 @@ async def _delete_job_artifacts(job_id: str, *, api_version: str = "v1") -> JSON
             message="job not found",
             details={"job_id": job_id},
         )
+    tenant_access_error = await _pilot_enforce_job_tenant(tenant, job, action="artifact_delete", request=request)
+    if tenant_access_error is not None:
+        return tenant_access_error
     if job.state not in _TERMINAL_JOB_STATES:
         return _error_response(
             409,
@@ -9954,6 +10417,16 @@ async def _delete_job_artifacts(job_id: str, *, api_version: str = "v1") -> JSON
             details={"job_id": job_id, "state": job.state},
         )
     if not _artifacts_deleted(job):
+        audit_response = await _record_pilot_audit(
+            action="artifact_delete",
+            decision="accepted",
+            tenant_id=tenant.tenant_id if tenant is not None else _job_tenant_id(job),
+            job_id=job.id,
+            request=request,
+            details={"reason": "explicit_delete"},
+        )
+        if audit_response is not None:
+            return audit_response
         try:
             await _persist_job_artifact_metadata(job, fail_closed=True)
             deleted = await _delete_job_artifacts_for_job(
@@ -9989,7 +10462,18 @@ async def cancel_job_v2(job_id: str) -> JSONResponse:
     return await _cancel_job(job_id)
 
 
-async def _cancel_job(job_id: str) -> JSONResponse:
+async def cancel_job_http(request: Request, job_id: str) -> JSONResponse:
+    return await _cancel_job(job_id, request=request)
+
+
+async def cancel_job_v2_http(request: Request, job_id: str) -> JSONResponse:
+    return await _cancel_job(job_id, request=request)
+
+
+async def _cancel_job(job_id: str, *, request: Optional[Request] = None) -> JSONResponse:
+    tenant, tenant_error = await _pilot_tenant_from_request(request, action="job_cancel")
+    if tenant_error is not None:
+        return tenant_error
     try:
         job = await _load_job_view(job_id)
     except _JobRepositoryUnavailable:
@@ -10001,6 +10485,19 @@ async def _cancel_job(job_id: str) -> JSONResponse:
             message="job not found",
             details={"job_id": job_id},
         )
+    tenant_access_error = await _pilot_enforce_job_tenant(tenant, job, action="job_cancel", request=request)
+    if tenant_access_error is not None:
+        return tenant_access_error
+    audit_response = await _record_pilot_audit(
+        action="job_cancel",
+        decision="accepted",
+        tenant_id=tenant.tenant_id if tenant is not None else _job_tenant_id(job),
+        job_id=job.id,
+        request=request,
+        details={"state": job.state},
+    )
+    if audit_response is not None:
+        return audit_response
     try:
         await _request_cancel(job)
     except _JobRepositoryUnavailable:
@@ -10075,6 +10572,9 @@ async def _job_events(
     request: Request,
     job_id: str,
 ) -> Response:
+    tenant, tenant_error = await _pilot_tenant_from_request(request, action="job_events")
+    if tenant_error is not None:
+        return tenant_error
     try:
         job = await _load_job_view(job_id)
     except _JobRepositoryUnavailable:
@@ -10086,6 +10586,9 @@ async def _job_events(
             message="job not found",
             details={"job_id": job_id},
         )
+    tenant_access_error = await _pilot_enforce_job_tenant(tenant, job, action="job_events", request=request)
+    if tenant_access_error is not None:
+        return tenant_access_error
     if job.state not in ACTIVE_JOB_STATES and job.state != "canceled":
         _refresh_job_run_summary(job)
 
@@ -10211,16 +10714,16 @@ app.include_router(
         JobRouteHandlers(
             create_job_http=create_job_http,
             create_job_v2_http=create_job_v2_http,
-            list_jobs=list_jobs,
-            list_jobs_v2=list_jobs_v2,
-            get_job=get_job,
-            get_job_v2=get_job_v2,
-            get_job_artifact=get_job_artifact,
-            get_job_artifact_v2=get_job_artifact_v2,
-            delete_job_artifacts=delete_job_artifacts,
-            delete_job_artifacts_v2=delete_job_artifacts_v2,
-            cancel_job=cancel_job,
-            cancel_job_v2=cancel_job_v2,
+            list_jobs=list_jobs_http,
+            list_jobs_v2=list_jobs_v2_http,
+            get_job=get_job_http,
+            get_job_v2=get_job_v2_http,
+            get_job_artifact=get_job_artifact_http,
+            get_job_artifact_v2=get_job_artifact_v2_http,
+            delete_job_artifacts=delete_job_artifacts_http,
+            delete_job_artifacts_v2=delete_job_artifacts_v2_http,
+            cancel_job=cancel_job_http,
+            cancel_job_v2=cancel_job_v2_http,
             job_events=job_events,
             job_events_v2=job_events_v2,
         ),

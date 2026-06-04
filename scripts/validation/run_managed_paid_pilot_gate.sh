@@ -13,6 +13,7 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 DEFAULT_ENV_FILE="/tmp/tp-managed-staging.env"
 
 ENV_FILE="${DEFAULT_ENV_FILE}"
+EVIDENCE_OUT=""
 PREFLIGHT_ONLY=0
 CLEAN_PROCESS=0
 
@@ -22,11 +23,13 @@ Usage: scripts/validation/run_managed_paid_pilot_gate.sh [options]
 
 Options:
   --env-file PATH      Provider env file to source (default: /tmp/tp-managed-staging.env)
+  --evidence-out PATH  Write a redacted managed-provider acceptance note outside the repository
   --preflight-only     Validate the clean env and stop before migrations/tests
   -h, --help           Show this help
 
 The env file must be outside the repository, mode 0600 or stricter, and contain
 real provider-managed Postgres, Redis, frontdoor Redis, and S3-compatible values.
+The evidence output is optional and must also live outside the repository.
 EOF
 }
 
@@ -41,6 +44,11 @@ while (($#)); do
             shift
             [[ $# -gt 0 ]] || die "--env-file requires a path"
             ENV_FILE="$1"
+            ;;
+        --evidence-out)
+            shift
+            [[ $# -gt 0 ]] || die "--evidence-out requires a path"
+            EVIDENCE_OUT="$1"
             ;;
         --preflight-only)
             PREFLIGHT_ONLY=1
@@ -72,6 +80,9 @@ if [[ "${CLEAN_PROCESS}" != "1" ]]; then
         CLEAN_PATH="${PYTHON_DIR}:${CLEAN_PATH}"
     fi
     REEXEC_ARGS=(--env-file "${ENV_FILE}")
+    if [[ -n "${EVIDENCE_OUT}" ]]; then
+        REEXEC_ARGS+=(--evidence-out "${EVIDENCE_OUT}")
+    fi
     if [[ "${PREFLIGHT_ONLY}" == "1" ]]; then
         REEXEC_ARGS+=(--preflight-only)
     fi
@@ -136,6 +147,105 @@ set -a
 # shellcheck disable=SC1090
 . "${ENV_FILE}"
 set +a
+
+write_evidence_note() {
+    [[ -n "${EVIDENCE_OUT}" ]] || return 0
+    "${PYTHON_BIN}" - "${EVIDENCE_OUT}" "$1" <<'PY'
+from __future__ import annotations
+
+import datetime as _dt
+import os
+import subprocess
+import sys
+from pathlib import Path
+from urllib.parse import urlsplit
+
+evidence_path = Path(sys.argv[1])
+gate_status = sys.argv[2]
+repo_root = Path.cwd().resolve()
+
+resolved = evidence_path.expanduser().resolve()
+try:
+    resolved.relative_to(repo_root)
+except ValueError:
+    pass
+else:
+    print("ERROR: managed paid-pilot evidence output must live outside the repository", file=sys.stderr)
+    raise SystemExit(1)
+
+resolved.parent.mkdir(parents=True, exist_ok=True)
+
+selectors = {
+    "TP_ORCHESTRATOR_STATE_BACKEND": os.getenv("TP_ORCHESTRATOR_STATE_BACKEND", ""),
+    "TP_ORCHESTRATOR_QUEUE_BACKEND": os.getenv("TP_ORCHESTRATOR_QUEUE_BACKEND", ""),
+    "TP_FRONTDOOR_SESSION_STORE": os.getenv("TP_FRONTDOOR_SESSION_STORE", ""),
+    "TP_ARTIFACT_STORE": os.getenv("TP_ARTIFACT_STORE", ""),
+}
+
+def _url_summary(name: str) -> str:
+    raw = os.getenv(name, "").strip()
+    if not raw:
+        return "unset"
+    parsed = urlsplit(raw)
+    scheme = parsed.scheme or "unknown"
+    database_or_path = "set" if parsed.path.strip("/") else "unset"
+    tls = "yes" if scheme.endswith("s") or scheme in {"https", "rediss"} else "no"
+    return f"scheme={scheme}; tls={tls}; path={database_or_path}"
+
+def _set_summary(name: str) -> str:
+    return "set" if os.getenv(name, "").strip() else "unset"
+
+try:
+    commit = subprocess.check_output(["git", "rev-parse", "--verify", "HEAD"], text=True).strip()
+except Exception:
+    commit = "unknown"
+
+generated_at = _dt.datetime.now(_dt.timezone.utc).replace(microsecond=0).isoformat()
+lines = [
+    "# Managed Provider Paid-Pilot Acceptance Note",
+    "",
+    f"- generated_at_utc: `{generated_at}`",
+    f"- git_commit: `{commit}`",
+    f"- gate_status: `{gate_status}`",
+    "",
+    "## Redacted Selector Summary",
+    "",
+]
+for name, value in selectors.items():
+    lines.append(f"- `{name}`: `{value or 'unset'}`")
+
+lines.extend(
+    [
+        "",
+        "## Redacted Endpoint Summary",
+        "",
+        f"- `TP_DATABASE_URL`: `{_url_summary('TP_DATABASE_URL')}`",
+        f"- `TP_TEST_POSTGRES_URL`: `{_url_summary('TP_TEST_POSTGRES_URL')}`",
+        f"- `TP_REDIS_URL`: `{_url_summary('TP_REDIS_URL')}`",
+        f"- `TP_TEST_REDIS_URL`: `{_url_summary('TP_TEST_REDIS_URL')}`",
+        f"- `TP_FRONTDOOR_REDIS_URL`: `{_url_summary('TP_FRONTDOOR_REDIS_URL')}`",
+        f"- `TP_ARTIFACT_ENDPOINT_URL`: `{_url_summary('TP_ARTIFACT_ENDPOINT_URL')}`",
+        f"- `TP_TEST_S3_URL`: `{_url_summary('TP_TEST_S3_URL')}`",
+        f"- `TP_ARTIFACT_BUCKET`: `{_set_summary('TP_ARTIFACT_BUCKET')}`",
+        f"- `TP_TEST_S3_BUCKET`: `{_set_summary('TP_TEST_S3_BUCKET')}`",
+        f"- `TP_ARTIFACT_REGION`: `{_set_summary('TP_ARTIFACT_REGION')}`",
+        "",
+        "## Evidence Checklist",
+        "",
+        "- Clean env preflight: captured by this note status.",
+        "- `make db-upgrade`: record exact result for full gate runs.",
+        "- Component gates: record exact result for full gate runs.",
+        "- `make test-paid-pilot-services-contract`: record exact result for full gate runs.",
+        "- Cleanup result: record validation Postgres/Redis/S3 cleanup confirmation.",
+        "",
+        "Do not add secrets, private hostnames, customer identifiers, real usernames, or bucket names to this note.",
+        "",
+    ]
+)
+resolved.write_text("\n".join(lines), encoding="utf-8")
+print(f"Managed paid-pilot evidence note written: {resolved}")
+PY
+}
 
 "${PYTHON_BIN}" - <<'PY'
 from __future__ import annotations
@@ -228,9 +338,11 @@ raise SystemExit(1 if missing or placeholder or wrong or leaked or unsafe_overla
 PY
 
 if [[ "${PREFLIGHT_ONLY}" == "1" ]]; then
+    write_evidence_note "preflight_passed"
     printf '%s\n' "Managed paid-pilot clean-env preflight passed."
     exit 0
 fi
 
 make db-upgrade
 make test-paid-pilot-services-contract
+write_evidence_note "gate_passed"

@@ -98,7 +98,57 @@ TP_MANAGED_PAID_PILOT_ENV_FILE=/tmp/tp-managed-staging.env \
 make run-managed-paid-pilot-gate
 ```
 
-The integrated smoke submits a real `/v1/jobs` request, enqueues through Redis, executes through the in-process worker pool with a tiny generated subprocess, persists terminal state in Postgres, mirrors artifacts to S3-compatible storage, verifies repository-backed artifact fetch/delete semantics after `app.JOBS.clear()`, and proves a separate abandoned active row sweeps to `worker_lost`.
+The integrated smoke submits a real `/v1/jobs` request, enqueues through
+Redis, executes through the in-process worker pool with a tiny generated
+subprocess, persists terminal state in Postgres, mirrors artifacts to
+S3-compatible storage, verifies repository-backed artifact fetch/delete
+semantics after `app.JOBS.clear()`, and proves a separate abandoned active row
+sweeps to `worker_lost`.
+It also proves persisted SSE replay with `Last-Event-ID: 0` after the runtime
+job cache is cleared.
+
+## Multi-Host Worker Mode
+
+Local/default backend operation keeps the in-process worker pool enabled.
+Managed pilot deployments that run workers on separate hosts can disable that
+pool on backend hosts and start explicit worker processes:
+
+```bash
+TP_ORCHESTRATOR_IN_PROCESS_WORKERS_ENABLED=0 make run-backend-local-noreload
+TP_ORCHESTRATOR_STATE_BACKEND=postgres \
+TP_ORCHESTRATOR_QUEUE_BACKEND=redis \
+TP_DATABASE_URL=postgresql+asyncpg://... \
+TP_REDIS_URL=redis://... \
+make run-orchestrator-worker
+```
+
+The worker process consumes the existing Redis broker, uses the existing
+Postgres job repository and event store, finalizes artifacts through the
+configured artifact store, and drains on `SIGINT`/`SIGTERM`.
+
+## Pilot Tenant, Admission, And Audit Mode
+
+Tenant mode is opt-in and preserves the single-tenant compatibility path when
+disabled:
+
+```text
+TP_PILOT_CONTROL_PLANE_ENABLED=1
+TP_PILOT_TENANT_HEADER=x-tp-tenant-id
+TP_PILOT_ALLOWED_TENANTS=pilot_acme,pilot_beta
+TP_PILOT_ALLOWED_PIPELINES=lux-depth-v3
+TP_PILOT_MAX_ACTIVE_JOBS_PER_TENANT=2
+```
+
+When enabled, job admission and config preview require the tenant header. Job
+list/detail/events/artifact/cancel surfaces are tenant-filtered, artifact store
+keys are prefixed with the tenant id, active-job quota is enforced per tenant,
+and pipeline entitlement uses `TenantPolicy.allowed_node_types`.
+
+Audit v1 writes append-only operational events to the same Postgres database as
+job state. Run `make db-upgrade` before enabling tenant/audit mode so the
+`operational_audit_events` table exists. Audited actions currently include
+tenant admission decisions, job create/cancel, artifact fetch/delete, and config
+preview, plus the protected `/v1/readiness` operator readiness surface.
 
 ## Startup Order
 
@@ -147,4 +197,8 @@ Rotate in this order:
 
 ## Non-Goals
 
-This gate does not add Terraform, Helm, durable SSE replay, globally atomic multi-instance admission, metrics, audit events, tenancy, billing, or production secret management. Those remain separate follow-up phases.
+This gate does not add Terraform, Helm, globally atomic multi-instance
+admission, metrics dashboards, billing, or production secret management.
+Durable SSE replay is a supported `Last-Event-ID` job-events contract.
+Multi-host workers and tenant/audit mode are opt-in runtime surfaces;
+provider-specific deployment manifests remain separate follow-up work.
