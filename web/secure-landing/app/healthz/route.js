@@ -3,9 +3,26 @@ import { NextResponse } from "next/server.js";
 import { getConfig } from "../../lib/config.js";
 import { getDb } from "../../lib/db.js";
 import { applySecurityHeaders } from "../../lib/http.js";
-import { evaluateSessionScaling } from "../../lib/session-scaling.js";
+import { getSessionStore } from "../../lib/session-store/index.js";
+import { evaluateSessionScaling, SESSION_STORE_BACKEND } from "../../lib/session-scaling.js";
 
 export const runtime = "nodejs";
+
+const SESSION_STORE_HEALTH_TIMEOUT_MS = 1000;
+
+async function withTimeout(promise, timeoutMs) {
+  let timeoutHandle;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise((_, reject) => {
+        timeoutHandle = setTimeout(() => reject(new Error("timeout")), timeoutMs);
+      })
+    ]);
+  } finally {
+    clearTimeout(timeoutHandle);
+  }
+}
 
 function evaluateAccessConfig(config) {
   const required = !config.allowLocalAccessBypass;
@@ -37,7 +54,56 @@ function evaluateUserSource(config) {
   };
 }
 
-function evaluateSessionStore(config) {
+function normalizeSessionStoreBackend(config) {
+  return String(config.sessionStoreBackend || SESSION_STORE_BACKEND.SQLITE).trim().toLowerCase();
+}
+
+async function evaluateSessionStore(config) {
+  const backend = normalizeSessionStoreBackend(config);
+  if (backend === SESSION_STORE_BACKEND.REDIS) {
+    if (!config.sessionStoreRedisUrl) {
+      return {
+        ok: false,
+        required: true,
+        configured: false,
+        backend,
+        reason: "missing_frontdoor_redis_url"
+      };
+    }
+    try {
+      const store = getSessionStore();
+      if (typeof store.ping !== "function") {
+        throw new Error("Redis session store does not expose a health check");
+      }
+      await withTimeout(store.ping(), SESSION_STORE_HEALTH_TIMEOUT_MS);
+      return {
+        ok: true,
+        required: true,
+        configured: true,
+        backend,
+        reason: null
+      };
+    } catch {
+      return {
+        ok: false,
+        required: true,
+        configured: true,
+        backend,
+        reason: "session_store_unavailable"
+      };
+    }
+  }
+
+  if (backend !== SESSION_STORE_BACKEND.SQLITE) {
+    return {
+      ok: false,
+      required: true,
+      configured: false,
+      backend,
+      reason: "invalid_session_store_backend"
+    };
+  }
+
   try {
     const db = getDb(config.sessionDbPath);
     db.prepare("SELECT 1 AS ok").get();
@@ -45,6 +111,7 @@ function evaluateSessionStore(config) {
       ok: true,
       required: true,
       configured: Boolean(config.sessionDbPath),
+      backend,
       reason: null
     };
   } catch {
@@ -52,6 +119,7 @@ function evaluateSessionStore(config) {
       ok: false,
       required: true,
       configured: Boolean(config.sessionDbPath),
+      backend,
       reason: "session_store_unavailable"
     };
   }
@@ -171,11 +239,12 @@ async function evaluateBackend(config) {
 export async function GET() {
   const config = getConfig();
   const backend = await evaluateBackend(config);
+  const sessionStore = await evaluateSessionStore(config);
   const checks = {
     backend,
     access_config: evaluateAccessConfig(config),
     user_source: evaluateUserSource(config),
-    session_store: evaluateSessionStore(config),
+    session_store: sessionStore,
     session_scaling: evaluateSessionScaling(config)
   };
   const ok = Object.values(checks).every((check) => !check.required || check.ok);

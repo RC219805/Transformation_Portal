@@ -19,6 +19,7 @@ DEFAULT_USER_AGENT = "TransformationPortalFrontdoorDeploymentGate/1.0"
 MAX_BODY_BYTES = 64 * 1024
 HTML_ACCEPT = "text/html,application/xhtml+xml"
 JSON_ACCEPT = "application/json"
+DEPLOYMENT_TARGETS = ("cloudflare-worker", "vercel")
 FRONTDOOR_PATHS = ("/", "/login")
 FASTAPI_PATHS = ("/ready", "/healthz")
 
@@ -102,7 +103,16 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--environment", choices=("staging", "production"), required=True)
     parser.add_argument("--frontdoor-url", required=True)
     parser.add_argument("--cf-access-team-domain", required=True)
-    parser.add_argument("--vercel-deployment-url", required=True)
+    parser.add_argument(
+        "--deployment-target",
+        choices=DEPLOYMENT_TARGETS + ("cloudflare_worker",),
+        help="Deployment surface to validate. Use cloudflare-worker for the current Worker frontdoor rollout.",
+    )
+    parser.add_argument("--deployment-url", help="Cloudflare Worker or Vercel deployment base URL.")
+    parser.add_argument(
+        "--vercel-deployment-url",
+        help="Deprecated alias for --deployment-url with --deployment-target=vercel.",
+    )
     parser.add_argument("--fastapi-public-url")
     parser.add_argument("--confirm-fastapi-non-public", action="store_true")
     parser.add_argument("--timeout-seconds", type=float, default=DEFAULT_TIMEOUT_SECONDS)
@@ -470,6 +480,58 @@ def _probe_vercel_deployment(
     )
 
 
+def _probe_worker_deployment(
+    *,
+    worker_url: str,
+    access_team_domain: str,
+    timeout_seconds: float,
+    user_agent: str,
+) -> SurfaceVerdict:
+    outcomes = [
+        _classify_frontdoor_probe(
+            _perform_request(
+                base_url=worker_url,
+                path=path,
+                accept=HTML_ACCEPT,
+                timeout_seconds=timeout_seconds,
+                user_agent=user_agent,
+            ),
+            access_team_domain=access_team_domain,
+        )
+        for path in FRONTDOOR_PATHS
+    ]
+    return _surface_verdict_from_path_outcomes(
+        surface="worker_deployment",
+        outcomes=outcomes,
+        preferred_success_code="cf_access_redirect",
+        fallback_success_code="cf_access_interstitial",
+    )
+
+
+def _probe_deployment_target(
+    *,
+    deployment_target: str,
+    deployment_url: str,
+    access_team_domain: str,
+    timeout_seconds: float,
+    user_agent: str,
+) -> SurfaceVerdict:
+    if deployment_target == "vercel":
+        return _probe_vercel_deployment(
+            vercel_url=deployment_url,
+            timeout_seconds=timeout_seconds,
+            user_agent=user_agent,
+        )
+    if deployment_target == "cloudflare-worker":
+        return _probe_worker_deployment(
+            worker_url=deployment_url,
+            access_team_domain=access_team_domain,
+            timeout_seconds=timeout_seconds,
+            user_agent=user_agent,
+        )
+    raise ValueError(f"Unsupported deployment target: {deployment_target}")
+
+
 def _healthy_json_payload(probe: ProbeResponse) -> bool:
     if probe.status is None or not (200 <= probe.status < 300):
         return False
@@ -553,12 +615,25 @@ def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
     args = parser.parse_args(argv)
     if args.confirm_fastapi_non_public and args.fastapi_public_url:
         parser.error("Use either --fastapi-public-url or --confirm-fastapi-non-public, not both.")
+    if args.deployment_target:
+        args.deployment_target = args.deployment_target.replace("_", "-")
+    if args.deployment_url and args.vercel_deployment_url:
+        parser.error("Use either --deployment-url or --vercel-deployment-url, not both.")
+    if args.vercel_deployment_url:
+        if args.deployment_target and args.deployment_target != "vercel":
+            parser.error("--vercel-deployment-url requires --deployment-target=vercel.")
+        args.deployment_target = "vercel"
+        args.deployment_url = args.vercel_deployment_url
+    if not args.deployment_url:
+        parser.error("Supply --deployment-url, or the legacy --vercel-deployment-url alias.")
+    if not args.deployment_target:
+        parser.error("--deployment-target is required when --deployment-url is used.")
     try:
         args.frontdoor_url = _normalize_base_url(args.frontdoor_url, require_https=True, label="frontdoor URL")
-        args.vercel_deployment_url = _normalize_base_url(
-            args.vercel_deployment_url,
+        args.deployment_url = _normalize_base_url(
+            args.deployment_url,
             require_https=True,
-            label="Vercel deployment URL",
+            label=f"{args.deployment_target} deployment URL",
         )
         if args.fastapi_public_url:
             args.fastapi_public_url = _normalize_base_url(
@@ -583,8 +658,10 @@ def run_validation(argv: Sequence[str] | None = None) -> list[SurfaceVerdict]:
             timeout_seconds=args.timeout_seconds,
             user_agent=args.user_agent,
         ),
-        _probe_vercel_deployment(
-            vercel_url=args.vercel_deployment_url,
+        _probe_deployment_target(
+            deployment_target=args.deployment_target,
+            deployment_url=args.deployment_url,
+            access_team_domain=args.cf_access_team_domain,
             timeout_seconds=args.timeout_seconds,
             user_agent=args.user_agent,
         ),

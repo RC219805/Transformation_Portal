@@ -10,11 +10,10 @@
  * with the timestamp as score, so the throttle-window count is a
  * ``ZCOUNT`` against ``(now - window, now)``.
  *
- * The module uses ``ioredis`` lazily so the bundle still ships when the
- * dependency is not yet installed in a given environment — single-instance
- * sqlite deployments do not need redis on disk. If the import fails the
- * factory in ``./index.js`` falls back to sqlite with a warning so the
- * frontdoor still serves traffic.
+ * The module uses ``ioredis`` lazily so the bundle still ships before a Redis
+ * connection is needed. When Redis is explicitly selected, a missing package or
+ * unreachable Redis endpoint fails the session path instead of silently
+ * downgrading a hosted deployment to local SQLite.
  *
  * Schema invariants:
  *
@@ -29,6 +28,7 @@
  */
 
 let _Redis = null;
+const DEFAULT_REDIS_CONNECT_TIMEOUT_MS = 1000;
 
 async function loadRedisClient() {
   if (_Redis !== null) return _Redis;
@@ -47,7 +47,14 @@ async function loadRedisClient() {
 }
 
 export class RedisSessionStore {
-  constructor({ redisUrl, keyPrefix, idleTimeoutMs, absoluteTimeoutMs, client = null } = {}) {
+  constructor({
+    redisUrl,
+    keyPrefix,
+    idleTimeoutMs,
+    absoluteTimeoutMs,
+    client = null,
+    connectTimeoutMs = DEFAULT_REDIS_CONNECT_TIMEOUT_MS
+  } = {}) {
     if (!redisUrl) {
       throw new Error("RedisSessionStore requires a non-empty redisUrl (TP_FRONTDOOR_REDIS_URL).");
     }
@@ -55,6 +62,7 @@ export class RedisSessionStore {
     this._keyPrefix = keyPrefix || "tp:frontdoor:";
     this._idleTimeoutMs = idleTimeoutMs;
     this._absoluteTimeoutMs = absoluteTimeoutMs;
+    this._connectTimeoutMs = connectTimeoutMs;
     this._client = client;
     this._clientPromise = null;
   }
@@ -68,11 +76,20 @@ export class RedisSessionStore {
     if (!this._clientPromise) {
       this._clientPromise = (async () => {
         const Redis = await loadRedisClient();
-        this._client = new Redis(this._redisUrl, { lazyConnect: false });
+        this._client = new Redis(this._redisUrl, {
+          lazyConnect: false,
+          connectTimeout: this._connectTimeoutMs,
+          maxRetriesPerRequest: 1
+        });
         return this._client;
       })();
     }
     return this._clientPromise;
+  }
+
+  async ping() {
+    const client = await this._client_();
+    return client.ping();
   }
 
   _sessionKey(sessionId) {
@@ -179,6 +196,7 @@ export class RedisSessionStore {
   }
 
   async close() {
+    this._clientPromise = null;
     if (this._client) {
       await this._client.quit().catch(() => undefined);
       this._client = null;

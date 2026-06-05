@@ -669,3 +669,123 @@ def test_ambiguous_fastapi_2xx_non_health_response_fails(monkeypatch: pytest.Mon
     output = capsys.readouterr().out
     assert exit_code == 1
     assert "surface=fastapi_public_probe verdict=FAIL code=fastapi_probe_unclassified" in output
+
+
+def test_cloudflare_worker_deployment_url_passes_when_access_protected(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+):
+    module = _load_module("tests_frontdoor_gate_worker_protected")
+    mapping = {
+        ("https://portal.example.com", "/"): _probe(
+            module, path="/", status=403, headers={"Server": "cloudflare"}, body="cloudflare access"
+        ),
+        ("https://portal.example.com", "/login"): _probe(
+            module, path="/login", status=403, headers={"Server": "cloudflare"}, body="cloudflare access"
+        ),
+        ("https://transformationportal.example.workers.dev", "/"): _probe(
+            module,
+            path="/",
+            status=302,
+            headers={"Location": "https://team.cloudflareaccess.com/cdn-cgi/access/login/worker"},
+            location="https://team.cloudflareaccess.com/cdn-cgi/access/login/worker",
+        ),
+        ("https://transformationportal.example.workers.dev", "/login"): _probe(
+            module,
+            path="/login",
+            status=302,
+            headers={"Location": "https://team.cloudflareaccess.com/cdn-cgi/access/login/worker"},
+            location="https://team.cloudflareaccess.com/cdn-cgi/access/login/worker",
+        ),
+    }
+    monkeypatch.setattr(module, "_perform_request", _fake_request_factory(module, mapping))
+
+    exit_code = module.main(
+        [
+            "--environment",
+            "production",
+            "--frontdoor-url",
+            "https://portal.example.com",
+            "--cf-access-team-domain",
+            "https://team.cloudflareaccess.com",
+            "--deployment-target",
+            "cloudflare-worker",
+            "--deployment-url",
+            "https://transformationportal.example.workers.dev",
+            "--confirm-fastapi-non-public",
+        ]
+    )
+
+    output = capsys.readouterr().out
+    assert exit_code == 0
+    assert "surface=worker_deployment verdict=PASS code=cf_access_redirect" in output
+    assert "overall=PASS" in output
+
+
+def test_cloudflare_worker_deployment_serving_real_shell_fails(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+):
+    module = _load_module("tests_frontdoor_gate_worker_shell_exposed")
+    mapping = {
+        ("https://portal.example.com", "/"): _probe(
+            module, path="/", status=403, headers={"Server": "cloudflare"}, body="cloudflare access"
+        ),
+        ("https://portal.example.com", "/login"): _probe(
+            module, path="/login", status=403, headers={"Server": "cloudflare"}, body="cloudflare access"
+        ),
+        ("https://transformationportal.example.workers.dev", "/"): _probe(
+            module,
+            path="/",
+            status=200,
+            headers={"Server": "cloudflare"},
+            body='<title>Dynamic Neural Access</title><body data-ui="homepage-shell"><h1 data-ui="homepage-hero-title"></h1>',
+        ),
+        ("https://transformationportal.example.workers.dev", "/login"): _probe(
+            module,
+            path="/login",
+            status=302,
+            headers={"Location": "https://team.cloudflareaccess.com/cdn-cgi/access/login/worker"},
+            location="https://team.cloudflareaccess.com/cdn-cgi/access/login/worker",
+        ),
+    }
+    monkeypatch.setattr(module, "_perform_request", _fake_request_factory(module, mapping))
+
+    exit_code = module.main(
+        [
+            "--environment",
+            "production",
+            "--frontdoor-url",
+            "https://portal.example.com",
+            "--cf-access-team-domain",
+            "https://team.cloudflareaccess.com",
+            "--deployment-target",
+            "cloudflare_worker",
+            "--deployment-url",
+            "https://transformationportal.example.workers.dev",
+            "--confirm-fastapi-non-public",
+        ]
+    )
+
+    output = capsys.readouterr().out
+    assert exit_code == 1
+    assert "surface=worker_deployment verdict=FAIL code=frontdoor_app_shell_exposed" in output
+
+
+def test_generic_deployment_url_requires_explicit_target(capsys: pytest.CaptureFixture[str]):
+    module = _load_module("tests_frontdoor_gate_generic_deployment_target_required")
+
+    with pytest.raises(SystemExit):
+        module._parse_args(
+            [
+                "--environment",
+                "staging",
+                "--frontdoor-url",
+                "https://portal.example.com",
+                "--cf-access-team-domain",
+                "https://team.cloudflareaccess.com",
+                "--deployment-url",
+                "https://transformationportal.example.workers.dev",
+                "--confirm-fastapi-non-public",
+            ]
+        )
+
+    assert "--deployment-target is required" in capsys.readouterr().err

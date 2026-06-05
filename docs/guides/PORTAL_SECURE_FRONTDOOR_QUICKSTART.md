@@ -14,7 +14,11 @@ The secure front door is a separate Node app in `web/secure-landing/`.
 - The front door serves `GET /` directly; FastAPI remains the backend system of record for `GET /ready` and `/v1/*`.
 - `GET /healthz` is the managed front-door health contract; FastAPI `GET /ready` remains the backend readiness contract and is not mirrored under `/api/*` by default.
 
-In production, place the front door behind Cloudflare Tunnel + Access and keep the FastAPI origin off the public browser path.
+In production, place the front door behind Cloudflare Access and keep the
+FastAPI origin off the public browser path. The current hosted rollout can use
+the frontdoor-only Cloudflare Worker as the public edge proxy; its
+`FRONTDOOR_ORIGIN` points at the managed Next frontdoor origin and must stay out
+of normal browser traffic.
 
 ## Required Environment
 
@@ -39,7 +43,8 @@ Notes:
 - `TP_FRONTDOOR_USERS_JSON` remains available only as a local-dev and test fallback when a file is not supplied.
 - `TP_CF_ACCESS_TEAM_DOMAIN` must point at the Cloudflare Access team domain used to mint `Cf-Access-Jwt-Assertion`.
 - `TP_CF_ACCESS_AUD` must match the Access application audience tag for this front door.
-- `TP_FRONTDOOR_SESSION_SCALING_MODE` should stay `single_instance` for the current SQLite-backed front door. Declaring `multi_instance` or `ephemeral_runtime` intentionally fails readiness until a real external session store exists.
+- `TP_FRONTDOOR_SESSION_SCALING_MODE=single_instance` uses SQLite and is only appropriate for single-instance runtime posture.
+- Hosted multi-instance or ephemeral runtime posture requires `TP_FRONTDOOR_SESSION_STORE=redis` plus `TP_FRONTDOOR_REDIS_URL=redis://...` or `rediss://...`; unsupported store selectors and unsupported scaling modes intentionally fail readiness.
 - `TP_ALLOW_LOCAL_ACCESS_BYPASS=1` is for local development only and is honored only when `NODE_ENV=development`.
 - Production login expects a valid `Cf-Access-Jwt-Assertion`, a matching username/password pair, and issuer/audience validation against the configured Access team domain and audience tag.
 - Development uses an HTTP-safe `tp_session` cookie. Production uses `__Host-tp_session` with `Secure`.
@@ -255,10 +260,12 @@ originRequest:
 - Keep app-side JWT verification enabled even when Tunnel origin enforcement is active.
 - Do not route normal browser traffic directly to FastAPI.
 - If the front door is hosted on Vercel, Cloudflare must still front the user-facing hostname, the app must continue to verify the Access JWT, and deployment or preview URLs must be protected with equivalent controls such as Vercel Deployment Protection.
-- Vercel deployment or preview-URL protection is distinct from production-domain coverage. Configure the appropriate Vercel Deployment Protection scope for the environment you are validating; protecting only preview URLs is not sufficient for a production-domain rollout.
+- If the front door is published through the Cloudflare Worker edge proxy, the Worker deployment URL must also be Access-protected and must not serve the real homepage or login shell unauthenticated.
+- Deployment URL protection is distinct from production-domain coverage. Configure the appropriate Cloudflare Access or Vercel Deployment Protection scope for the environment you are validating; protecting only one URL is not sufficient for a production-domain rollout.
 - Treat this posture as a predeploy requirement before any internet-reachable staging or production environment, not as a post-launch hardening task.
-- The v1 session store remains SQLite-backed and currently supports only `TP_FRONTDOOR_SESSION_SCALING_MODE=single_instance`.
-- If your deployment target requires `multi_instance` or `ephemeral_runtime`, treat that as a blocked requirement until a dedicated external session store is introduced; the front door now fails `/healthz` under those modes on purpose.
+- SQLite sessions support only `TP_FRONTDOOR_SESSION_SCALING_MODE=single_instance`.
+- Redis-backed frontdoor sessions support `single_instance`, `multi_instance`, and `ephemeral_runtime` when `TP_FRONTDOOR_SESSION_STORE=redis` and `TP_FRONTDOOR_REDIS_URL` are configured.
+- Unsupported session store selectors, missing Redis URLs, and invalid scaling modes still fail `/healthz` on purpose.
 
 ## Validation
 
@@ -323,7 +330,8 @@ Manual shared-deployment posture gate:
 TP_FRONTDOOR_GATE_ENVIRONMENT="staging" \
 TP_FRONTDOOR_GATE_FRONTDOOR_URL="https://portal.example.com" \
 TP_FRONTDOOR_GATE_CF_ACCESS_TEAM_DOMAIN="https://your-team.cloudflareaccess.com" \
-TP_FRONTDOOR_GATE_VERCEL_DEPLOYMENT_URL="https://portal-preview.vercel.app" \
+TP_FRONTDOOR_GATE_DEPLOYMENT_TARGET="cloudflare-worker" \
+TP_FRONTDOOR_GATE_DEPLOYMENT_URL="https://transformationportal.<account>.workers.dev" \
 TP_FRONTDOOR_GATE_CONFIRM_FASTAPI_NON_PUBLIC=1 \
 make validate-frontdoor-deployment-gate
 ```
@@ -331,8 +339,9 @@ make validate-frontdoor-deployment-gate
 Notes:
 - This gate is a manual predeploy control. It does not reconfigure Cloudflare or Vercel for you.
 - The gate validates edge posture at rollout time. It does not replace app-side Cloudflare Access JWT verification.
+- Use `TP_FRONTDOOR_GATE_DEPLOYMENT_TARGET=vercel` with `TP_FRONTDOOR_GATE_DEPLOYMENT_URL=https://<deployment>.vercel.app` for Vercel deployment protection checks. The legacy `TP_FRONTDOOR_GATE_VERCEL_DEPLOYMENT_URL` variable still maps to the Vercel target.
 - If FastAPI has a public URL, set `TP_FRONTDOOR_GATE_FASTAPI_PUBLIC_URL` instead of `TP_FRONTDOOR_GATE_CONFIRM_FASTAPI_NON_PUBLIC=1`.
-- The gate fails closed for ambiguous frontdoor or Vercel responses; only clearly protected responses pass.
+- The gate fails closed for ambiguous frontdoor, Worker, or Vercel responses; only clearly protected responses pass.
 
 Browser smoke with isolated local backend + managed front door:
 

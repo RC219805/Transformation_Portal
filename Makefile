@@ -532,11 +532,20 @@ validate-frontdoor-browser:
 validate-frontdoor-deployment-gate:
 	@echo "Running shared-deployment frontdoor posture gate..."
 	@set -eu; \
+	deployment_url="$${TP_FRONTDOOR_GATE_DEPLOYMENT_URL:-$${TP_FRONTDOOR_GATE_VERCEL_DEPLOYMENT_URL:-}}"; \
+	deployment_target="$${TP_FRONTDOOR_GATE_DEPLOYMENT_TARGET:-}"; \
+	if [ -n "$${TP_FRONTDOOR_GATE_VERCEL_DEPLOYMENT_URL:-}" ] && [ -z "$${TP_FRONTDOOR_GATE_DEPLOYMENT_URL:-}" ]; then \
+		deployment_target="vercel"; \
+	fi; \
+	if [ -z "$${deployment_target}" ]; then \
+		deployment_target="cloudflare-worker"; \
+	fi; \
 	set -- "$(PY)" scripts/validation/check_frontdoor_deployment_gate.py \
 		--environment "$${TP_FRONTDOOR_GATE_ENVIRONMENT:-}" \
 		--frontdoor-url "$${TP_FRONTDOOR_GATE_FRONTDOOR_URL:-}" \
 		--cf-access-team-domain "$${TP_FRONTDOOR_GATE_CF_ACCESS_TEAM_DOMAIN:-}" \
-		--vercel-deployment-url "$${TP_FRONTDOOR_GATE_VERCEL_DEPLOYMENT_URL:-}"; \
+		--deployment-target "$${deployment_target}" \
+		--deployment-url "$${deployment_url}"; \
 	if [ -n "$${TP_FRONTDOOR_GATE_FASTAPI_PUBLIC_URL:-}" ]; then \
 		set -- "$$@" --fastapi-public-url "$${TP_FRONTDOOR_GATE_FASTAPI_PUBLIC_URL}"; \
 	fi; \

@@ -17,6 +17,7 @@ import argparse
 import json
 import os
 import sys
+import urllib.parse
 from dataclasses import dataclass
 from typing import Iterable, List, Literal, Optional
 
@@ -36,6 +37,8 @@ VARIABLES: tuple[Variable, ...] = (
     Variable("TP_BACKEND_API_KEY", "all", "Frontdoor-presented API key (must equal backend TP_API_KEY)"),
     Variable("TP_FRONTDOOR_USERS_JSON|TP_FRONTDOOR_USERS_FILE", "all", "User source (JSON array or file path)"),
     Variable("TP_FRONTDOOR_SESSION_SCALING_MODE", "all", "single_instance or external-store-backed mode"),
+    Variable("TP_FRONTDOOR_SESSION_STORE", "optional", "sqlite default or redis for external session storage"),
+    Variable("TP_FRONTDOOR_REDIS_URL", "optional", "Redis URL required when TP_FRONTDOOR_SESSION_STORE=redis"),
     Variable("TP_CF_ACCESS_TEAM_DOMAIN", "production", "Cloudflare Access team domain"),
     Variable("TP_CF_ACCESS_AUD", "production", "Cloudflare Access JWT audience"),
     Variable("TP_PORTAL_RUM_ENABLED", "optional", "Shared portal/frontdoor RUM kill switch"),
@@ -45,6 +48,9 @@ VARIABLES: tuple[Variable, ...] = (
 )
 
 SUPPORTED_SESSION_SCALING_MODES = frozenset({"single_instance"})
+EXTERNAL_SESSION_SCALING_MODES = frozenset({"multi_instance", "ephemeral_runtime"})
+SUPPORTED_SESSION_STORE_BACKENDS = frozenset({"sqlite", "redis"})
+SUPPORTED_REDIS_URL_SCHEMES = frozenset({"redis", "rediss"})
 
 
 def _resolve(value_or_alias: str, env: dict[str, str]) -> Optional[str]:
@@ -101,6 +107,49 @@ def _normalize_session_scaling_mode(value: str) -> str:
     return value.strip().lower().replace("-", "_")
 
 
+def _normalize_session_store_backend(value: str) -> str:
+    return value.strip().lower() if value.strip() else "sqlite"
+
+
+def _validate_redis_url(value: str) -> tuple[bool, str]:
+    raw = value.strip()
+    if not raw:
+        return False, "TP_FRONTDOOR_REDIS_URL is required for Redis-backed sessions"
+    parsed = urllib.parse.urlparse(raw)
+    if parsed.scheme.lower() not in SUPPORTED_REDIS_URL_SCHEMES or not parsed.netloc:
+        return False, "TP_FRONTDOOR_REDIS_URL must be an absolute redis:// or rediss:// URL"
+    return True, "set via TP_FRONTDOOR_REDIS_URL"
+
+
+def _evaluate_session_store_backend(env: dict[str, str]) -> tuple[bool, str]:
+    raw = env.get("TP_FRONTDOOR_SESSION_STORE", "").strip()
+    backend = _normalize_session_store_backend(raw)
+    if backend not in SUPPORTED_SESSION_STORE_BACKENDS:
+        return False, f"unsupported session store backend: {backend}"
+    if backend == "redis":
+        redis_url = env.get("TP_FRONTDOOR_REDIS_URL", "")
+        redis_ok, redis_detail = _validate_redis_url(redis_url)
+        if not redis_ok:
+            if not redis_url.strip():
+                return False, "TP_FRONTDOOR_SESSION_STORE=redis requires TP_FRONTDOOR_REDIS_URL"
+            return False, redis_detail
+        return True, "set via TP_FRONTDOOR_SESSION_STORE (redis)"
+    if raw:
+        return True, "set via TP_FRONTDOOR_SESSION_STORE (sqlite)"
+    return True, "default sqlite session store"
+
+
+def _evaluate_redis_url(env: dict[str, str]) -> tuple[bool, str, bool]:
+    scaling_mode = _normalize_session_scaling_mode(env.get("TP_FRONTDOOR_SESSION_SCALING_MODE", ""))
+    backend = _normalize_session_store_backend(env.get("TP_FRONTDOOR_SESSION_STORE", ""))
+    required = backend == "redis" or scaling_mode in EXTERNAL_SESSION_SCALING_MODES
+    raw = env.get("TP_FRONTDOOR_REDIS_URL", "").strip()
+    if not raw and not required:
+        return True, "only required when TP_FRONTDOOR_SESSION_STORE=redis", False
+    valid, detail = _validate_redis_url(raw)
+    return valid, detail, bool(raw)
+
+
 def _evaluate_session_scaling_mode(env: dict[str, str]) -> tuple[bool, str]:
     raw = env.get("TP_FRONTDOOR_SESSION_SCALING_MODE", "").strip()
     if not raw:
@@ -108,8 +157,17 @@ def _evaluate_session_scaling_mode(env: dict[str, str]) -> tuple[bool, str]:
     mode = _normalize_session_scaling_mode(raw)
     if mode in SUPPORTED_SESSION_SCALING_MODES:
         return True, f"set via TP_FRONTDOOR_SESSION_SCALING_MODE ({mode})"
-    if mode in {"multi_instance", "ephemeral_runtime"}:
-        return False, f"{mode} requires an external session-store implementation"
+    if mode in EXTERNAL_SESSION_SCALING_MODES:
+        backend = _normalize_session_store_backend(env.get("TP_FRONTDOOR_SESSION_STORE", ""))
+        if backend != "redis":
+            return False, f"{mode} requires TP_FRONTDOOR_SESSION_STORE=redis"
+        redis_url = env.get("TP_FRONTDOOR_REDIS_URL", "")
+        redis_ok, redis_detail = _validate_redis_url(redis_url)
+        if not redis_ok:
+            if not redis_url.strip():
+                return False, f"{mode} requires TP_FRONTDOOR_REDIS_URL"
+            return False, f"{mode} requires {redis_detail}"
+        return True, f"set via TP_FRONTDOOR_SESSION_SCALING_MODE ({mode}) with Redis session store"
     return False, f"unsupported session scaling mode: {mode}"
 
 
@@ -166,6 +224,24 @@ def _evaluate(
                 rows.append(("missing", var.name, detail))
             else:
                 rows.append(("optional", var.name, detail))
+            continue
+        if var.name == "TP_FRONTDOOR_SESSION_STORE":
+            valid, detail = _evaluate_session_store_backend(env)
+            if valid:
+                rows.append(("ok", var.name, detail))
+            else:
+                ok = False
+                rows.append(("missing", var.name, detail))
+            continue
+        if var.name == "TP_FRONTDOOR_REDIS_URL":
+            valid, detail, configured = _evaluate_redis_url(env)
+            if valid and configured:
+                rows.append(("ok", var.name, detail))
+            elif valid:
+                rows.append(("optional", var.name, detail))
+            else:
+                ok = False
+                rows.append(("missing", var.name, detail))
             continue
         resolved = _resolve(var.name, env)
         if resolved:
