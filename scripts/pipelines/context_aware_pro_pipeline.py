@@ -21,7 +21,10 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 # Import architectural context engine
-from architectural_context_engine import ArchitecturalContext, ContextAwareRenderingPipeline, SpaceType
+REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+from scripts.utilities.architectural_context_engine import ArchitecturalContext, ContextAwareRenderingPipeline, SpaceType
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
@@ -30,7 +33,11 @@ logger = logging.getLogger(__name__)
 class ContextAwareProPipeline:
     """Professional pipeline with architectural context awareness."""
 
-    def __init__(self, output_dir: Path = Path("output_context_aware_pro"), context_dir: Path = Path("extracted_context")):
+    def __init__(
+        self,
+        output_dir: Path = Path("/tmp/tp-context-aware-pro"),
+        context_dir: Path = Path("/tmp/tp-context-aware-pro-context"),
+    ):
         """
         Initialize context-aware pipeline.
 
@@ -314,14 +321,19 @@ def main():
     parser.add_argument("image", type=Path, help="Input image path")
 
     parser.add_argument(
-        "--pd", type=Path, action="append", help="Architectural PDF document(s) for context extraction (can specify multiple)"
+        "--pdf",
+        "--pd",
+        dest="pdf",
+        type=Path,
+        action="append",
+        help="Architectural PDF document(s) for context extraction (can specify multiple)",
     )
 
     parser.add_argument(
         "--output-dir",
         type=Path,
-        default=Path("output_context_aware_pro"),
-        help="Output directory (default: output_context_aware_pro)",
+        default=Path("/tmp/tp-context-aware-pro"),
+        help="Output directory (default: /tmp/tp-context-aware-pro)",
     )
 
     parser.add_argument(

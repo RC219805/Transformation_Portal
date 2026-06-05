@@ -57,7 +57,7 @@ Create a YAML like:
 
     selects:
       use_csv: true
-      csv_path: "DOCS/selects.csv"  # will be created on first run
+      csv_path: "/path/to/project/DOCS/selects.csv"  # created on first run
 
     icc:
       prophoto_path: "/Library/ColorSync/Profiles/ProPhoto.icc"
@@ -117,7 +117,7 @@ Create a YAML like:
       sharpen_print_amount: 0.10
 
     metadata:
-      csv_path: "DOCS/metadata.csv"
+      csv_path: "/path/to/project/DOCS/metadata.csv"
       # columns: filename,title,description,keywords,creator,copyright,credit,location
 
     deliver:
@@ -127,7 +127,7 @@ Usage
 -----
 1) Create config YAML. Ensure ICC paths exist.
 2) Run:
-       python ad_editorial_post_pipeline.py run --config /path/to/config.yml
+       python tools/ad_editorial_post_pipeline.py run --config /path/to/config.yml
 3) Check outputs under EXPORT/ and DOCS/.
 
 Notes
@@ -192,6 +192,8 @@ except Exception:  # pragma: no cover
 # ----------------------------- logging ------------------------------------- #
 
 LOG = logging.getLogger("ad_post")
+TIFF_SUFFIX = ".tif"
+PDF_SUFFIX = ".pdf"
 
 
 def setup_logging(verbosity: int) -> None:
@@ -265,6 +267,23 @@ def load_icc_bytes(icc_path: Optional[Path]) -> Optional[bytes]:
 
 def safe_name(s: str) -> str:
     return "".join(ch if ch.isalnum() or ch in "-_." else "_" for ch in s)
+
+
+def tiff_filename(stem: str, marker: str = "") -> str:
+    return f"{stem}{marker}{TIFF_SUFFIX}"
+
+
+def contact_sheet_filename(style: str) -> str:
+    return f"contact_{style}{PDF_SUFFIX}"
+
+
+def project_relative_path(project_root: Path, configured_path: object, default: Path) -> Path:
+    """Resolve tool config paths relative to the configured project root."""
+    raw_path = default if configured_path in (None, "") else Path(configured_path)
+    expanded = raw_path.expanduser()
+    if expanded.is_absolute():
+        return expanded
+    return project_root / expanded
 
 
 # FIXED: Proper hash verification logic
@@ -637,7 +656,11 @@ def guess_room_for_file(f: Path, lay: Layout, rooms_by_folder: Dict[str, str]) -
 
 
 def ensure_selects_csv(cfg: PipelineConfig, lay: Layout, raws: List[Path]) -> Path:
-    csv_path = Path(cfg.selects.get("csv_path", lay.DOCS / "selects.csv"))
+    csv_path = project_relative_path(
+        cfg.project_root,
+        cfg.selects.get("csv_path"),
+        lay.DOCS / "selects.csv",
+    )
     if csv_path.exists():
         return csv_path
 
@@ -655,7 +678,11 @@ def filter_selects(cfg: PipelineConfig, files: List[Path]) -> List[Path]:
     if not cfg.selects.get("use_csv", False):
         return files
 
-    csv_path = Path(cfg.selects.get("csv_path", "DOCS/selects.csv"))
+    csv_path = project_relative_path(
+        cfg.project_root,
+        cfg.selects.get("csv_path"),
+        cfg.project_root / "DOCS" / "selects.csv",
+    )
     if not csv_path.exists():
         return files
 
@@ -738,6 +765,23 @@ def raw_to_prophoto_tiff(raw_path: Path) -> np.ndarray:
 
     arr = rgb16.astype(np.float32) / 65535.0
     return np.clip(arr, 0.0, 1.0)
+
+
+def load_image_float(path: Path) -> np.ndarray:
+    """Load an image as a clipped 0..1 float array while preserving bit depth."""
+    image = Image.open(path)
+    try:
+        arr = np.asarray(image)
+    finally:
+        close = getattr(image, "close", None)
+        if callable(close):
+            close()
+
+    if np.issubdtype(arr.dtype, np.integer):
+        scale = float(np.iinfo(arr.dtype).max)
+        return np.clip(arr.astype(np.float32) / scale, 0.0, 1.0)
+
+    return np.clip(arr.astype(np.float32), 0.0, 1.0)
 
 
 # FIXED: Properly save 16-bit TIFFs
@@ -1220,7 +1264,7 @@ def run_pipeline(config_path: Path, verbosity: int = 1) -> None:
     for rp in tqdm(raws, desc="RAW→TIFF"):
         try:
             img = raw_to_prophoto_tiff(rp)
-            out = lay.WORK_BASE / (rp.stem + ".ti")
+            out = lay.WORK_BASE / tiff_filename(rp.stem)
             save_tiff16_prophoto(img, out, icc_prophoto)
             base_outputs.append(out)
         except Exception as e:
@@ -1234,7 +1278,7 @@ def run_pipeline(config_path: Path, verbosity: int = 1) -> None:
         for g in tqdm(groups, desc="HDR groups"):
             try:
                 hdr = hdr_merge_debvec(g)
-                out = lay.WORK_HDR / (g[0].stem + "_HDR.ti")
+                out = lay.WORK_HDR / tiff_filename(g[0].stem, "_HDR")
                 save_tiff16_prophoto(hdr, out, icc_prophoto)
                 hdr_paths.append(out)
             except Exception as e:
@@ -1252,7 +1296,7 @@ def run_pipeline(config_path: Path, verbosity: int = 1) -> None:
                     continue
 
                 pano = stitch_pano(files)
-                out = lay.WORK_PANO / (files[0].stem + "_PANO.ti")
+                out = lay.WORK_PANO / tiff_filename(files[0].stem, "_PANO")
                 save_tiff16_prophoto(pano, out, icc_prophoto)
                 pano_paths.append(out)
             except Exception as e:
@@ -1267,7 +1311,7 @@ def run_pipeline(config_path: Path, verbosity: int = 1) -> None:
         LOG.info("Auto-upright small-angle correction")
         for p in tqdm(sources, desc="Upright"):
             try:
-                img = np.array(Image.open(p)).astype(np.float32) / 255.0
+                img = load_image_float(p)
                 img = auto_upright_small(img, float(cfg.processing.get("upright_max_deg", 3.0)))
                 out = lay.WORK_ALIGN / p.name
                 save_tiff16_prophoto(img, out, icc_prophoto)
@@ -1283,7 +1327,7 @@ def run_pipeline(config_path: Path, verbosity: int = 1) -> None:
 
     for p in tqdm(aligned_paths, desc="Variants"):
         try:
-            base = np.array(Image.open(p)).astype(np.float32) / 255.0
+            base = load_image_float(p)
 
             for style, style_path in lay.WORK_VARIANTS.items():
                 graded = style_grade(base, style, cfg.styles)
@@ -1303,7 +1347,7 @@ def run_pipeline(config_path: Path, verbosity: int = 1) -> None:
     target = float(cfg.consistency.get("target_median", 0.42))
 
     for style, paths in variant_map.items():
-        imgs = [np.array(Image.open(pt)).astype(np.float32) / 255.0 for pt in paths]
+        imgs = [load_image_float(pt) for pt in paths]
         norm = normalize_exposure(imgs, target_median=target)
         for im, pt in zip(norm, paths):
             save_tiff16_prophoto(im, pt, icc_prophoto)
@@ -1313,7 +1357,7 @@ def run_pipeline(config_path: Path, verbosity: int = 1) -> None:
         LOG.info("Applying lightweight automated retouch")
         for style, paths in variant_map.items():
             for pt in tqdm(paths, desc=f"Retouch {style}"):
-                im = np.array(Image.open(pt)).astype(np.float32) / 255.0
+                im = load_image_float(pt)
 
                 if cfg.retouch.get("dust_remove", False):
                     im = remove_dust_spots(im)
@@ -1330,7 +1374,7 @@ def run_pipeline(config_path: Path, verbosity: int = 1) -> None:
 
     for style, paths in variant_map.items():
         for pt in tqdm(paths, desc=f"Export {style}"):
-            im = np.array(Image.open(pt)).astype(np.float32) / 255.0
+            im = load_image_float(pt)
 
             print_out = lay.EXPORT_PRINT[style] / pt.name  # TIFF
             web_out = lay.EXPORT_WEB[style] / (pt.stem + ".jpg")
@@ -1361,11 +1405,17 @@ def run_pipeline(config_path: Path, verbosity: int = 1) -> None:
         if not imgs:
             continue
 
-        out_pdf = lay.DOCS_CONTACTS / f"contact_{style}.pd"
+        out_pdf = lay.DOCS_CONTACTS / contact_sheet_filename(style)
         build_contact_sheet(imgs, out_pdf, caption=f"{cfg.project_name} — {style}")
 
     # IPTC/XMP embedding
-    meta_map = read_metadata_csv(Path(cfg.metadata.get("csv_path", "")))
+    meta_map = read_metadata_csv(
+        project_relative_path(
+            cfg.project_root,
+            cfg.metadata.get("csv_path"),
+            cfg.project_root / "DOCS" / "metadata.csv",
+        )
+    )
     if meta_map:
         LOG.info("Embedding IPTC/XMP metadata")
         ef = has_exiftool()
@@ -1375,7 +1425,7 @@ def run_pipeline(config_path: Path, verbosity: int = 1) -> None:
                 sorted(list(lay.EXPORT_WEB[style].glob("*.jpg")), key=human_sort_key),
                 desc=f"Metadata {style}",
             ):
-                row = meta_map.get(img.name) or meta_map.get(img.stem + ".ti") or meta_map.get(img.stem + ".jpg")
+                row = meta_map.get(img.name) or meta_map.get(tiff_filename(img.stem)) or meta_map.get(img.stem + ".jpg")
                 if not row:
                     continue
 
@@ -1386,10 +1436,10 @@ def run_pipeline(config_path: Path, verbosity: int = 1) -> None:
 
         for style in lay.EXPORT_PRINT:
             for img in tqdm(
-                sorted(list(lay.EXPORT_PRINT[style].glob("*.ti")), key=human_sort_key),
+                sorted(list(lay.EXPORT_PRINT[style].glob(f"*{TIFF_SUFFIX}")), key=human_sort_key),
                 desc=f"Metadata {style}",
             ):
-                row = meta_map.get(img.name) or meta_map.get(img.stem + ".ti")
+                row = meta_map.get(img.name) or meta_map.get(tiff_filename(img.stem))
                 if not row:
                     continue
 

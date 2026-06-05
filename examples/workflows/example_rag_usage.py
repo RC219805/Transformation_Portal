@@ -15,22 +15,18 @@ This script demonstrates:
 import sys
 from pathlib import Path
 
-# Add RAG system to path
-rag_system_path = Path(__file__).parent / ".github" / "agents" / "rag_system"
-if rag_system_path.exists():
-    sys.path.insert(0, str(rag_system_path))
-else:
-    # Try relative path if running from repo root
-    sys.path.insert(0, ".github/agents/rag_system")
+REPO_ROOT = Path(__file__).resolve().parents[2]
+RAG_AGENTS_PATH = REPO_ROOT / ".github" / "agents"
+sys.path.insert(0, str(RAG_AGENTS_PATH))
 
 try:
-    from citation import CitationGenerator
-    from classifier import ArtifactClassifier
-    from indexer import RepositoryIndexer
-    from knowledge_engine import KnowledgeIntegrationEngine
-    from reranker import ResultReranker
-    from retriever import HybridRetriever
-    from templates import CodeModificationResponse, FileModification, PromptTemplates
+    from rag_system.citation import CitationGenerator
+    from rag_system.classifier import ArtifactClassifier
+    from rag_system.indexer import RepositoryIndexer
+    from rag_system.knowledge_engine import KnowledgeIntegrationEngine
+    from rag_system.reranker import ResultReranker
+    from rag_system.retriever import HybridRetriever
+    from rag_system.templates import CodeModificationResponse, FileModification, PromptTemplates
 except ImportError as e:
     print(f"Error: Could not import RAG components: {e}")
     print("Make sure you're running from the repository root directory")
@@ -43,10 +39,7 @@ def example_basic_search():
     print("Example 1: Basic Search Workflow")
     print("=" * 80)
 
-    # Get repository root (current directory or parent)
-    repo_root = Path.cwd()
-    if not (repo_root / ".git").exists():
-        repo_root = repo_root.parent
+    repo_root = REPO_ROOT
 
     print(f"\n1. Indexing repository: {repo_root}")
     indexer = RepositoryIndexer(str(repo_root))
@@ -76,9 +69,7 @@ def example_with_reranking():
     print("Example 2: Search with Reranking")
     print("=" * 80)
 
-    repo_root = Path.cwd()
-    if not (repo_root / ".git").exists():
-        repo_root = repo_root.parent
+    repo_root = REPO_ROOT
 
     # Index and retrieve
     indexer = RepositoryIndexer(str(repo_root))
@@ -111,9 +102,7 @@ def example_with_citations():
     print("Example 3: Generate Citations")
     print("=" * 80)
 
-    repo_root = Path.cwd()
-    if not (repo_root / ".git").exists():
-        repo_root = repo_root.parent
+    repo_root = REPO_ROOT
 
     # Index, retrieve, and rerank
     indexer = RepositoryIndexer(str(repo_root))
@@ -145,9 +134,7 @@ def example_prompt_template():
     print("Example 4: Prompt Template with Context")
     print("=" * 80)
 
-    repo_root = Path.cwd()
-    if not (repo_root / ".git").exists():
-        repo_root = repo_root.parent
+    repo_root = REPO_ROOT
 
     # Get context from repository
     indexer = RepositoryIndexer(str(repo_root))
@@ -244,7 +231,7 @@ def example_artifact_classification():
     print("=" * 80)
 
     # Note: This requires an actual output directory with artifacts
-    output_dir = Path.cwd() / "output"
+    output_dir = REPO_ROOT / "output"
 
     if not output_dir.exists():
         print(f"\nSkipping: {output_dir} does not exist")

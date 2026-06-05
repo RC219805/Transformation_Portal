@@ -29,6 +29,7 @@ Date: 2025-11-10
 import argparse
 import json
 import logging
+import os
 import time
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -84,11 +85,15 @@ except ImportError:
 
 from tonemapper_agx_filmic import apply_agx_ocio, apply_filmic_hable, linear_to_srgb
 
+LOG_PATH = Path(os.environ.get("TP_LUXURY_ESTATE_PIPELINE_LOG", "luxury_estate_pipeline.log"))
+if LOG_PATH.parent != Path("."):
+    LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    handlers=[logging.FileHandler("luxury_estate_pipeline.log"), logging.StreamHandler()],
+    handlers=[logging.FileHandler(LOG_PATH), logging.StreamHandler()],
 )
 logger = logging.getLogger(__name__)
 

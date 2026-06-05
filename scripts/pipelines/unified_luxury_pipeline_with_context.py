@@ -16,9 +16,12 @@ from typing import Any, Dict, Optional
 import numpy as np
 
 # Import pipeline and context engine
-sys.path.insert(0, str(Path(__file__).parent))
-from architectural_context_engine_enhanced import ArchitecturalContextEngine
-from unified_luxury_pipeline import process_single_view
+REPO_ROOT = Path(__file__).resolve().parents[2]
+DEFAULT_750_BASE_DIR = Path.home() / "Desktop" / "Cache" / "750_LightFiction_Final_Views"
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+from scripts.pipelines.unified_luxury_pipeline import process_single_view
+from scripts.utilities.architectural_context_engine_enhanced import ArchitecturalContextEngine
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
@@ -222,13 +225,13 @@ def main():
     parser.add_argument(
         "--source-dir",
         type=Path,
-        default=Path("/Users/rc/Desktop/Cache/750_LightFiction_Final_Views/JPEGs"),
+        default=DEFAULT_750_BASE_DIR / "JPEGs",
         help="Source directory with JPEG files",
     )
     parser.add_argument(
         "--output-dir",
         type=Path,
-        default=Path("/Users/rc/Desktop/Cache/750_LightFiction_Final_Views/Final_Production"),
+        default=DEFAULT_750_BASE_DIR / "Final_Production",
         help="Output directory",
     )
     parser.add_argument("--metadata", type=Path, default=Path("750_picacho_metadata.json"), help="Architectural metadata JSON")

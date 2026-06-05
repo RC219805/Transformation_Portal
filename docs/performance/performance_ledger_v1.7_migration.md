@@ -438,7 +438,7 @@ If v1.7 causes issues:
 
 1. **Restore v1.0:**
    ```bash
-   cp tools/performance_ledger_v1.0_backup.py tools/performance_ledger.py
+   cp archive/scripts/performance_ledger_v1_0_backup.py tools/performance_ledger.py
    ```
 
 2. **Revert CI scripts:** Remove `--strict`, restore `--version` flag

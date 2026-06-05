@@ -3,12 +3,9 @@ from __future__ import annotations
 
 import pytest
 
-pytestmark = [pytest.mark.unit, pytest.mark.skip(reason="temporal_evolution module in scripts, not yet migrated")]
+from transformation_portal.analyzers.temporal_evolution import TemporalEvolutionRoadmap
 
-try:
-    from scripts.temporal_evolution import TemporalEvolutionRoadmap
-except ImportError as e:
-    pytest.skip(f"temporal_evolution unavailable: {e}", allow_module_level=True)
+pytestmark = pytest.mark.unit
 
 
 def _sample_payload() -> dict[str, object]:

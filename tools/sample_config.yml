@@ -33,7 +33,7 @@ rename:
 # ============================================================================
 selects:
   use_csv: true
-  csv_path: "DOCS/selects.csv"  # Will be auto-generated on first run
+  csv_path: "~/Photography/SmithResidence_2025-10-18/DOCS/selects.csv"  # Auto-generated on first run
 
 # ============================================================================
 # COLOR PROFILES (ICC Profiles)
@@ -144,7 +144,7 @@ export:
 # METADATA (IPTC/XMP)
 # ============================================================================
 metadata:
-  csv_path: "DOCS/metadata.csv"
+  csv_path: "~/Photography/SmithResidence_2025-10-18/DOCS/metadata.csv"
   # CSV should have columns: filename, title, description, keywords, creator, copyright, credit, location
   # Example:
   # filename,title,description,keywords,creator,copyright,credit,location

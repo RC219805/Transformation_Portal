@@ -23,7 +23,7 @@ def fix_imports_order(file_path):
 
 def main():
     """Fix common issues in Python files."""
-    repo_root = Path("/Users/rc/Transformation_Portal")
+    repo_root = Path(__file__).resolve().parents[2]
 
     # Files with trailing whitespace issues
     files_to_fix = [

@@ -91,7 +91,7 @@ def fix_float_tiff(input_path: Path, output_path: Path = None, dry_run: bool = F
 
 def main():
     """Fix all float TIFFs in TIFFs/_TIFFs directory."""
-    tiff_dir = Path("/Users/rc/Desktop/Cache/750_LightFiction_Final_Views/TIFFs/_TIFFs")
+    tiff_dir = Path.home() / "Desktop" / "Cache" / "750_LightFiction_Final_Views" / "TIFFs" / "_TIFFs"
 
     if not tiff_dir.exists():
         print(f"Error: Directory not found: {tiff_dir}")

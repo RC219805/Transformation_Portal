@@ -4,8 +4,9 @@ This package contains utility scripts for codebase maintenance,
 analysis, and auxiliary processing tasks.
 
 Modules:
-    - codebase_philosophy_auditor: Audit code quality and decision annotations
-    - decision_decay_dashboard: Monitor temporal contract decay
+    - codebase_philosophy_auditor: Compatibility wrapper for canonical analyzer
+    - decision_decay_dashboard: Compatibility wrapper for canonical dashboard
+    - temporal_evolution: Compatibility wrapper for canonical roadmap helpers
     - download_depth_models: Download Depth Anything V2 models
     - download_samples: Download sample images for testing
     - install_models: Interactive model installation (Grade A+)
@@ -39,6 +40,7 @@ __author__ = "Transformation Portal Team"
 __all__ = [
     "codebase_philosophy_auditor",
     "decision_decay_dashboard",
+    "temporal_evolution",
     "download_depth_models",
     "download_samples",
     "install_models",

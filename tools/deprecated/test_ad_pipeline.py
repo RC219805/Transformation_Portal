@@ -4,38 +4,46 @@
 Unit tests for AD Editorial Post-Production Pipeline
 
 Run with:
-    pytest test_ad_pipeline.py -v
-    pytest test_ad_pipeline.py --cov=ad_editorial_post_pipeline_v2 --cov-report=html
+    pytest tools/deprecated/test_ad_pipeline.py -v
+    pytest tools/deprecated/test_ad_pipeline.py --cov=ad_editorial_post_pipeline_v2 --cov-report=html
 
 Install dependencies:
-    pip install pytest pytest-cov
+    pip install pytest pytest-cov rawpy
 """
 
+import importlib.util
 import tempfile
 from pathlib import Path
 
 import numpy as np
 import pytest
 
-# Import from v2
-from ad_editorial_post_pipeline_v2 import (
-    PipelineConfig,
-    ProgressTracker,
-    adjust_contrast,
-    adjust_exposure,
-    atomic_write,
-    copy_and_verify,
-    human_sort_key,
-    linear_to_srgb,
-    median_luma,
-    normalize_exposure_inplace,
-    safe_name,
-    sha256sum,
-    split_tokens,
-    srgb_to_linear,
-    unsharp_mask,
-    vignette,
+RAWPY_AVAILABLE = importlib.util.find_spec("rawpy") is not None
+pytestmark = pytest.mark.skipif(
+    not RAWPY_AVAILABLE,
+    reason="deprecated AD editorial v2 tests require rawpy",
 )
+
+# Import from v2
+if RAWPY_AVAILABLE:
+    from ad_editorial_post_pipeline_v2 import (
+        PipelineConfig,
+        ProgressTracker,
+        adjust_contrast,
+        adjust_exposure,
+        atomic_write,
+        copy_and_verify,
+        human_sort_key,
+        linear_to_srgb,
+        median_luma,
+        normalize_exposure_inplace,
+        safe_name,
+        sha256sum,
+        split_tokens,
+        srgb_to_linear,
+        unsharp_mask,
+        vignette,
+    )
 
 # ============================================================================
 # Helpers & Fixtures

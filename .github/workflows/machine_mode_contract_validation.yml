@@ -15,6 +15,7 @@ on:
     paths:
       - 'src/transformation_portal/ingest/**'
       - 'scripts/test_metadata_extraction.py'
+      - 'scripts/validation/validate_metadata_extraction.py'
       - 'tests/ingest/**'
       - 'docs/schemas/machine_mode/**'
       - 'docs/api/MACHINE_MODE_CONTRACT.md'
@@ -25,6 +26,7 @@ on:
     paths:
       - 'src/transformation_portal/ingest/**'
       - 'scripts/test_metadata_extraction.py'
+      - 'scripts/validation/validate_metadata_extraction.py'
       - 'tests/ingest/**'
       - 'docs/schemas/machine_mode/**'
       - 'docs/api/MACHINE_MODE_CONTRACT.md'

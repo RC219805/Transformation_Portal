@@ -205,7 +205,7 @@ def main():
     """Demo: Context-aware rendering of 750 Picacho kitchen."""
 
     # Load knowledge base
-    kb_file = Path("/Users/rc/750_picacho_context/rendering_knowledge_base.json")
+    kb_file = Path.home() / "750_picacho_context" / "rendering_knowledge_base.json"
 
     if not kb_file.exists():
         print(f"❌ Knowledge base not found: {kb_file}")

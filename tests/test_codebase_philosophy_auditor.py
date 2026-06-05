@@ -3,7 +3,7 @@ from textwrap import dedent
 
 import pytest
 
-from scripts.codebase_philosophy_auditor import CodebasePhilosophyAuditor, Violation
+from transformation_portal.analyzers.codebase_philosophy_auditor import CodebasePhilosophyAuditor, Violation
 
 pytestmark = pytest.mark.unit
 
@@ -92,7 +92,7 @@ def test_audit_module_respects_documented_decisions(tmp_path: Path, auditor: Cod
 
 def test_custom_rules_can_be_supplied(tmp_path: Path) -> None:
     def always_fail_rule(*_args, **_kwargs) -> list[Violation]:
-        return [Violation(principle="custom", message="forced failure")]
+        return [Violation(code="CUSTOM001", principle="custom", message="forced failure")]
 
     auditor = CodebasePhilosophyAuditor(rules=[always_fail_rule])
     module_path = _write_module(
@@ -105,4 +105,4 @@ def test_custom_rules_can_be_supplied(tmp_path: Path) -> None:
 
     violations = auditor.audit_module(module_path)
 
-    assert violations == [Violation(principle="custom", message="forced failure")]
+    assert violations == [Violation(code="CUSTOM001", principle="custom", message="forced failure")]

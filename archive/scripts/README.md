@@ -21,6 +21,13 @@ This directory contains scripts that were part of the Transformation Portal deve
 
 ## Archived Files
 
+### Performance ledger rollback snapshot
+
+- `performance_ledger_v1_0_backup.py`: v1.0 rollback snapshot retained for
+  the v1.7 performance ledger migration. If rollback is required, copy this
+  archived file over `tools/performance_ledger.py`; do not restore the backup
+  into the active `tools/` root as a second maintained tool.
+
 ### 1. `context_aware_rendering.py`
 
 **Archive Date:** 2026-02-10

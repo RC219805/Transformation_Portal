@@ -125,6 +125,34 @@ maps = processor.from_depth(depth, save=True, base_name="scene1")
 
 ## Production Examples
 
+### RAG Workflows
+
+**rag/run_rag_workflow.py** - End-to-end RAG workflow runner for the repository.
+
+Run:
+```bash
+python examples/rag/run_rag_workflow.py
+```
+
+### Luxury Estate Pipeline Usage
+
+**pipelines/elite_architectural_pipeline_examples.py** - Interactive usage
+examples for the elite architectural pipeline implementation under
+`scripts/pipelines/`.
+
+Run:
+```bash
+python examples/pipelines/elite_architectural_pipeline_examples.py
+```
+
+**pipelines/luxury_estate_pipeline_examples.py** - Usage examples for the
+legacy luxury-estate master pipeline implementation under `scripts/pipelines/`.
+
+Run:
+```bash
+python examples/pipelines/luxury_estate_pipeline_examples.py
+```
+
 ### PBR Map Generation
 
 **process_750_picacho_pbr.py** - Production-ready example for luxury real estate PBR processing

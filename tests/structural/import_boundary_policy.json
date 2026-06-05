@@ -24,12 +24,9 @@
       "allow_import_globs": [
         "scripts.apex_dashboard_generator",
         "scripts.apex_matrix_runner",
-        "scripts.codebase_philosophy_auditor",
-        "scripts.decision_decay_dashboard",
         "scripts.governance",
         "scripts.lib.repo_root",
         "scripts.pipelines.pro_pipeline",
-        "scripts.temporal_evolution",
         "scripts.utilities.format_utils_enhancements",
         "scripts.utilities.material_response",
         "scripts.utilities.material_response_optimizer",

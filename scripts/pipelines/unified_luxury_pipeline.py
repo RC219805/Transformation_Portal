@@ -13,8 +13,10 @@ import tifffile
 from PIL import Image
 
 # Import existing utilities
-sys.path.insert(0, str(Path(__file__).parent))
-from fix_tiff_16bit import save_16bit_tiff_tifffile
+REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+from scripts.utilities.fix_tiff_16bit import save_16bit_tiff_tifffile
 
 from transformation_portal.utils.format_utils import normalize_extension
 
@@ -207,8 +209,8 @@ def main():
     """Process all 750 Picacho Lane views."""
 
     # Setup paths
-    source_dir = Path("/Users/rc/Desktop/Cache/750_LightFiction_Final_Views/16-Bit_EXRs")
-    output_dir = Path("/Users/rc/Desktop/Cache/750_LightFiction_Final_Views/Ultimate_Quality")
+    source_dir = Path.home() / "Desktop" / "Cache" / "750_LightFiction_Final_Views" / "16-Bit_EXRs"
+    output_dir = Path.home() / "Desktop" / "Cache" / "750_LightFiction_Final_Views" / "Ultimate_Quality"
 
     if not source_dir.exists():
         print(f"❌ Source directory not found: {source_dir}")

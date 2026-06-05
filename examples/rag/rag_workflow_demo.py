@@ -9,16 +9,18 @@ import json
 import sys
 from pathlib import Path
 
-# Add RAG system to path
-sys.path.insert(0, ".github/agents/rag_system")
+REPO_ROOT = Path(__file__).resolve().parents[2]
+RAG_AGENTS_PATH = REPO_ROOT / ".github" / "agents"
+OUTPUT_ROOT = Path("/tmp/tp-rag-workflow-demo")
+sys.path.insert(0, str(RAG_AGENTS_PATH))
 
-from citation import CitationGenerator
-from classifier import ArtifactClassifier
-from indexer import RepositoryIndexer
-from knowledge_engine import KnowledgeIntegrationEngine
-from reranker import ResultReranker
-from retriever import HybridRetriever
-from templates import CodeModificationResponse, FileModification, PromptTemplates
+from rag_system.citation import CitationGenerator
+from rag_system.classifier import ArtifactClassifier
+from rag_system.indexer import RepositoryIndexer
+from rag_system.knowledge_engine import KnowledgeIntegrationEngine
+from rag_system.reranker import ResultReranker
+from rag_system.retriever import HybridRetriever
+from rag_system.templates import CodeModificationResponse, FileModification, PromptTemplates
 
 
 def print_section(title):
@@ -34,7 +36,7 @@ def step1_basic_workflow():
 
     # 1. Index repository
     print("1. Indexing repository...")
-    indexer = RepositoryIndexer(str(Path.cwd()))
+    indexer = RepositoryIndexer(str(REPO_ROOT))
     chunks = indexer.index_repository()
     print(f"   ✓ Indexed {len(chunks)} chunks")
 
@@ -85,7 +87,8 @@ def step1_basic_workflow():
     print(formatted)
 
     # Save to file
-    output_file = "step1_citations.md"
+    OUTPUT_ROOT.mkdir(exist_ok=True)
+    output_file = OUTPUT_ROOT / "step1_citations.md"
     with open(output_file, "w") as f:
         f.write(formatted)
     print(f"\n   ✓ Saved citations to {output_file}")
@@ -107,7 +110,8 @@ def step2_prompt_templates():
     print("   " + template[:500].replace("\n", "\n   "))
 
     # Save template
-    template_file = "step2_feature_template.md"
+    OUTPUT_ROOT.mkdir(exist_ok=True)
+    template_file = OUTPUT_ROOT / "step2_feature_template.md"
     with open(template_file, "w") as f:
         f.write(template)
     print(f"\n   ✓ Saved template to {template_file}")
@@ -150,7 +154,8 @@ def step2_prompt_templates():
     print("   " + json_str[:800].replace("\n", "\n   "))
 
     # Save JSON
-    json_file = "step2_code_modification.json"
+    OUTPUT_ROOT.mkdir(exist_ok=True)
+    json_file = OUTPUT_ROOT / "step2_code_modification.json"
     with open(json_file, "w") as f:
         f.write(json_str)
     print(f"\n   ✓ Saved JSON to {json_file}")
@@ -161,17 +166,17 @@ def step3_artifact_classification():
     print_section("STEP 3: Artifact Classification - Organize Pipeline Outputs")
 
     # Create sample output directory if it doesn't exist
-    output_dir = Path("output")
+    output_dir = OUTPUT_ROOT / "output"
     output_dir.mkdir(exist_ok=True)
 
     # Create some sample artifacts for demonstration
     print("1. Creating sample artifacts in output/ directory...")
     sample_files = [
-        ("output/render_enhanced.jpg", None),
-        ("output/depth_map.png", None),
-        ("output/graded_video.mp4", None),
-        ("output/test_result.log", "ERROR: Processing failed\nException: ValueError"),
-        ("output/metrics.json", '{"processing_time": 2.5, "success": true, "memory_usage": 1024}'),
+        (output_dir / "render_enhanced.jpg", None),
+        (output_dir / "depth_map.png", None),
+        (output_dir / "graded_video.mp4", None),
+        (output_dir / "test_result.log", "ERROR: Processing failed\nException: ValueError"),
+        (output_dir / "metrics.json", '{"processing_time": 2.5, "success": true, "memory_usage": 1024}'),
     ]
 
     for file_path, content in sample_files:
@@ -213,8 +218,8 @@ def step3_artifact_classification():
 
     # Export to JSON
     print("\n4. Exporting to JSON...")
-    catalog_file = "artifacts_catalog.json"
-    classifier.export_to_json(catalog_file)
+    catalog_file = OUTPUT_ROOT / "artifacts_catalog.json"
+    classifier.export_to_json(str(catalog_file))
     print(f"   ✓ Saved catalog to {catalog_file}")
 
     # Show JSON preview
@@ -334,7 +339,9 @@ def step5_example_workflows(chunks, retriever):
         print(f"   Preview: {preview}...")
 
     # Save to file
-    with open("step5_lut_examples.txt", "w") as f:
+    OUTPUT_ROOT.mkdir(exist_ok=True)
+    lut_examples_path = OUTPUT_ROOT / "step5_lut_examples.txt"
+    with open(lut_examples_path, "w") as f:
         f.write("LUT Processing Code Examples\n")
         f.write(f"Query: {query1}\n\n")
         for i, result in enumerate(results1, 1):
@@ -343,7 +350,7 @@ def step5_example_workflows(chunks, retriever):
             f.write(f"Lines: {result.start_line}-{result.end_line}\n")
             f.write(f"Score: {result.score:.3f}\n")
             f.write(f"\n{result.content}\n")
-    print("\n✓ Saved examples to step5_lut_examples.txt")
+    print(f"\n✓ Saved examples to {lut_examples_path}")
 
     # Scenario 2: Documentation lookup for depth estimation
     print("\n\nScenario 2: Documentation Lookup for Depth Estimation")
@@ -372,11 +379,12 @@ def step5_example_workflows(chunks, retriever):
     print(formatted2)
 
     # Save citations
-    with open("step5_depth_docs.md", "w") as f:
+    depth_docs_path = OUTPUT_ROOT / "step5_depth_docs.md"
+    with open(depth_docs_path, "w") as f:
         f.write("# Depth Estimation Documentation\n\n")
         f.write(f"Query: {query2}\n\n")
         f.write(formatted2)
-    print("✓ Saved documentation citations to step5_depth_docs.md")
+    print(f"✓ Saved documentation citations to {depth_docs_path}")
 
     # Scenario 3: Feature implementation with context
     print("\n\nScenario 3: Feature Implementation with Context")
@@ -399,9 +407,10 @@ def step5_example_workflows(chunks, retriever):
     )
 
     # Save feature plan
-    with open("step5_feature_plan.md", "w") as f:
+    feature_plan_path = OUTPUT_ROOT / "step5_feature_plan.md"
+    with open(feature_plan_path, "w") as f:
         f.write(feature_template)
-    print("   ✓ Saved feature plan to step5_feature_plan.md")
+    print(f"   ✓ Saved feature plan to {feature_plan_path}")
 
     print("\n   Feature plan preview (first 600 chars):")
     print("   " + feature_template[:600].replace("\n", "\n   "))
@@ -411,7 +420,7 @@ def main():
     """Run complete RAG workflow demonstration"""
     print("\n" + "🎯" * 40)
     print("  RAG System Workflow Demonstration")
-    print("  Following: /Users/rc/Downloads/RAG_INTEGRATION_GUIDE.md")
+    print("  Following the repository RAG integration guide")
     print("🎯" * 40)
 
     try:
@@ -435,13 +444,13 @@ def main():
         print("All steps executed successfully!\n")
         print("Generated files:")
         output_files = [
-            "step1_citations.md",
-            "step2_feature_template.md",
-            "step2_code_modification.json",
-            "artifacts_catalog.json",
-            "step5_lut_examples.txt",
-            "step5_depth_docs.md",
-            "step5_feature_plan.md",
+            OUTPUT_ROOT / "step1_citations.md",
+            OUTPUT_ROOT / "step2_feature_template.md",
+            OUTPUT_ROOT / "step2_code_modification.json",
+            OUTPUT_ROOT / "artifacts_catalog.json",
+            OUTPUT_ROOT / "step5_lut_examples.txt",
+            OUTPUT_ROOT / "step5_depth_docs.md",
+            OUTPUT_ROOT / "step5_feature_plan.md",
         ]
         for f in output_files:
             if Path(f).exists():

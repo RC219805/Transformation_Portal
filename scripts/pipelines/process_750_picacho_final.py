@@ -141,8 +141,8 @@ def main():
     """Main processing pipeline for 750 Picacho Lane."""
 
     # Configuration
-    input_dir = Path("/Users/rc/Desktop/Cache/750_LightFiction_Final_Views/JPEGs")
-    output_dir = Path("/Users/rc/Desktop/Cache/750_LightFiction_Final_Views/Final_Production")
+    input_dir = Path.home() / "Desktop" / "Cache" / "750_LightFiction_Final_Views" / "JPEGs"
+    output_dir = Path.home() / "Desktop" / "Cache" / "750_LightFiction_Final_Views" / "Final_Production"
 
     # Verify input directory
     if not input_dir.exists():

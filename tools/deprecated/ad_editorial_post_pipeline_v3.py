@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-File: tools/ad_editorial_post_pipeline_v3.py
+File: tools/deprecated/ad_editorial_post_pipeline_v3.py
 Architectural Digest–grade Interior Post-Production Pipeline (Ultimate Edition)
 
 VERSION 3.0 - Best of Both Worlds
@@ -43,13 +43,13 @@ python -m pip install pytest pytest-cov
 Usage
 -----
 # Full run
-python ad_editorial_post_pipeline_v3.py run --config config.yml -vv
+python tools/deprecated/ad_editorial_post_pipeline_v3.py run --config config.yml -vv
 
 # Resume after interruption
-python ad_editorial_post_pipeline_v3.py run --config config.yml --resume
+python tools/deprecated/ad_editorial_post_pipeline_v3.py run --config config.yml --resume
 
 # Dry-run (show what would be done)
-python ad_editorial_post_pipeline_v3.py run --config config.yml --dry-run
+python tools/deprecated/ad_editorial_post_pipeline_v3.py run --config config.yml --dry-run
 
 License
 -------

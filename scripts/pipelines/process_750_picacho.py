@@ -285,8 +285,8 @@ def process_single_exr(exr_path: Path, output_dir: Path, create_preview: bool = 
 def main():
     """Main processing function."""
     # Setup paths
-    exr_dir = Path("/Users/rc/Desktop/Cache/750_LightFiction_Final_Views/16-Bit_EXRs")
-    output_dir = Path("/Users/rc/Desktop/Cache/750_LightFiction_Final_Views/Processed_Output")
+    exr_dir = Path.home() / "Desktop" / "Cache" / "750_LightFiction_Final_Views" / "16-Bit_EXRs"
+    output_dir = Path.home() / "Desktop" / "Cache" / "750_LightFiction_Final_Views" / "Processed_Output"
 
     print("=" * 80)
     print("750 Picacho Lane - Luxury Estate Rendering Pipeline")

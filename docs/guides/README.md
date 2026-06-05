@@ -13,3 +13,4 @@ Use these current entry points first:
 - [Lux Depth V3 Troubleshooting](LUX_DEPTH_V3_TROUBLESHOOTING.md)
 - [Context-Aware Rendering](CONTEXT_AWARE_RENDERING.md)
 - [Skill Progress Tracks](SKILL_PROGRESS_TRACKS.md)
+- [AD Editorial Post-Production Pipeline](AD_EDITORIAL_POST_PIPELINE.md)

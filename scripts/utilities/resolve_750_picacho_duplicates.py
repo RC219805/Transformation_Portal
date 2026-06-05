@@ -14,14 +14,9 @@ Date: 2025-11-08
 """
 
 import json
-import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Tuple
-
-# Add project root to path
-project_root = Path(__file__).parent
-sys.path.insert(0, str(project_root))
 
 
 class DuplicateResolver:
