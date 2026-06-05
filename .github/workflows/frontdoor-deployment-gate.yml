@@ -18,9 +18,21 @@ on:
         description: Cloudflare Access team domain
         required: true
         type: string
+      deployment_target:
+        description: Deployment surface to validate
+        required: false
+        default: cloudflare-worker
+        type: choice
+        options:
+          - cloudflare-worker
+          - vercel
+      deployment_url:
+        description: Cloudflare Worker or Vercel deployment URL
+        required: false
+        type: string
       vercel_deployment_url:
-        description: Vercel deployment or preview URL
-        required: true
+        description: Legacy Vercel deployment or preview URL alias
+        required: false
         type: string
       fastapi_public_url:
         description: Public FastAPI base URL (leave blank when none exists)
@@ -107,6 +119,8 @@ jobs:
           TP_FRONTDOOR_GATE_ENVIRONMENT: ${{ github.event.inputs.environment }}
           TP_FRONTDOOR_GATE_FRONTDOOR_URL: ${{ github.event.inputs.frontdoor_url }}
           TP_FRONTDOOR_GATE_CF_ACCESS_TEAM_DOMAIN: ${{ github.event.inputs.cf_access_team_domain }}
+          TP_FRONTDOOR_GATE_DEPLOYMENT_TARGET: ${{ github.event.inputs.deployment_target }}
+          TP_FRONTDOOR_GATE_DEPLOYMENT_URL: ${{ github.event.inputs.deployment_url }}
           TP_FRONTDOOR_GATE_VERCEL_DEPLOYMENT_URL: ${{ github.event.inputs.vercel_deployment_url }}
           TP_FRONTDOOR_GATE_FASTAPI_PUBLIC_URL: ${{ github.event.inputs.fastapi_public_url }}
           TP_FRONTDOOR_GATE_CONFIRM_FASTAPI_NON_PUBLIC: ${{ github.event.inputs.confirm_fastapi_non_public && '1' || '' }}

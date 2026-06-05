@@ -70,9 +70,9 @@ checked-in layered dependency contract.
 **Purpose:** Manual predeploy validation for any shared frontdoor rollout that is about to become internet-reachable.
 **Triggers:** `workflow_dispatch` only.
 **Features:**
-- Targets the Cloudflare-in-front-of-Vercel posture for the managed front door.
+- Targets Cloudflare Worker frontdoor rollouts and the legacy Cloudflare-in-front-of-Vercel posture for the managed front door.
 - Verifies the public hostname is Cloudflare Access protected and not serving the real DNA shell unauthenticated.
-- Verifies the Vercel deployment or preview URL is protected and not serving the real DNA shell unauthenticated.
+- Verifies the Cloudflare Worker or Vercel deployment URL is protected and not serving the real DNA shell unauthenticated.
 - Verifies FastAPI is either non-public by explicit operator attestation or does not expose healthy unauthenticated `/ready` or `/healthz`.
 - Runs `make test-frontdoor-contract`, `tests/validation/test_frontdoor_deployment_gate.py`, and `make test-orchestrator-contract` before the live posture probe.
 - Uses GitHub environments `frontdoor-staging` and `frontdoor-production` for reviewer-gated rollout approval.

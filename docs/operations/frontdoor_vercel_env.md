@@ -1,6 +1,6 @@
-# Vercel Frontdoor Environment Checklist
+# Frontdoor Environment Checklist
 
-The managed frontdoor (`web/secure-landing/`) deployed on Vercel reads its
+The managed frontdoor (`web/secure-landing/`) in hosted rollout environments reads its
 configuration entirely from environment variables. When any of the variables
 below are missing or stale, `/healthz` returns `503` with a structured `reason`
 field that names the offender. This checklist enumerates every variable, how to
@@ -18,8 +18,10 @@ two values as one secret, set them together, rotate them together.
 | `TP_FASTAPI_ORIGIN` | all envs | URL of the FastAPI origin used by `/healthz` and the v1 proxy. This is the runtime source of truth; `TP_BACKEND_ORIGIN` is not consumed by the managed frontdoor. | `backend_unreachable` |
 | `TP_BACKEND_API_KEY` | all envs | API key the frontdoor presents to the backend. **Must equal backend `TP_API_KEY`.** | `missing_backend_api_key` (when empty) / `backend_auth_mismatch` (when wrong) |
 | `TP_FRONTDOOR_USERS_JSON` *or* `TP_FRONTDOOR_USERS_FILE` | all envs | At least one configured user. JSON form is `[{"username":"…","password_hash":"…","access_email":"…","role":"admin"}]`. | `no_configured_users` |
-| `TP_FRONTDOOR_SESSION_SCALING_MODE` | all envs | Must be `single_instance` for the current SQLite-backed frontdoor. Multi-instance declarations intentionally fail until an external session-store implementation exists. | `multi_instance_requires_external_session_store` / `invalid_session_scaling_mode` |
-| `TP_FRONTDOOR_SESSION_DB` | when `single_instance` | Path to the SQLite session DB. On Vercel, prefer an external store. | `session_store_unavailable` |
+| `TP_FRONTDOOR_SESSION_SCALING_MODE` | all envs | `single_instance` for SQLite. `multi_instance` or `ephemeral_runtime` only passes when Redis-backed sessions are explicitly configured. | `multi_instance_requires_external_session_store` / `ephemeral_runtime_requires_external_session_store` / `invalid_session_scaling_mode` |
+| `TP_FRONTDOOR_SESSION_STORE` | when using Redis-backed sessions | `redis` for external session storage. Omit or set `sqlite` only for single-instance SQLite sessions. Unsupported values fail readiness. | `invalid_session_store_backend` |
+| `TP_FRONTDOOR_REDIS_URL` | when `TP_FRONTDOOR_SESSION_STORE=redis` | `redis://` or `rediss://` URL for the frontdoor session Redis. Required for `multi_instance` and `ephemeral_runtime` rollout modes. | `missing_frontdoor_redis_url` / `session_store_unavailable` |
+| `TP_FRONTDOOR_SESSION_DB` | when using SQLite sessions | Path to the SQLite session DB. Do not use SQLite for multi-instance hosted deployments. | `session_store_unavailable` |
 | `TP_CF_ACCESS_TEAM_DOMAIN` | production | Cloudflare Access team domain (`https://<team>.cloudflareaccess.com`). Validated by the preflight; required when `TP_ALLOW_LOCAL_ACCESS_BYPASS` is unset. | `missing_access_team_domain` |
 | `TP_CF_ACCESS_AUD` | production | Cloudflare Access JWT audience for the protected application. | `missing_access_audience` |
 
@@ -56,6 +58,12 @@ deployment-local path to exist on the reviewer's machine. Add
 `--validate-user-file` when checking a local runtime env where the file should
 be readable and contain at least one valid user.
 
+For Redis-backed hosted sessions, the checker requires
+`TP_FRONTDOOR_SESSION_STORE=redis` and an absolute `redis://` or `rediss://`
+`TP_FRONTDOOR_REDIS_URL` before accepting `multi_instance` or
+`ephemeral_runtime` scaling. Unsupported session store selectors and unsupported
+scaling modes remain fail-closed.
+
 Expected shape when healthy:
 
 ```
@@ -73,8 +81,8 @@ Expected shape when healthy:
     },
     "access_config": { "ok": true, "mode": "cloudflare_access", "teamDomainConfigured": true, "audienceConfigured": true },
     "user_source":   { "ok": true, "userCount": <n> },
-    "session_store": { "ok": true, "configured": true },
-    "session_scaling": { "ok": true }
+    "session_store": { "ok": true, "configured": true, "backend": "redis" },
+    "session_scaling": { "ok": true, "backend": "redis", "mode": "multi_instance" }
   }
 }
 ```

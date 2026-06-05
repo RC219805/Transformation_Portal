@@ -21,6 +21,9 @@ const ENV_KEYS = [
   "TP_FRONTDOOR_USERS_JSON",
   "TP_FRONTDOOR_SESSION_DB",
   "TP_FRONTDOOR_SESSION_SCALING_MODE",
+  "TP_FRONTDOOR_SESSION_STORE",
+  "TP_FRONTDOOR_REDIS_URL",
+  "TP_FRONTDOOR_REDIS_KEY_PREFIX",
   "TP_CF_ACCESS_TEAM_DOMAIN",
   "TP_CF_ACCESS_AUD",
   "TP_ALLOW_LOCAL_ACCESS_BYPASS",
@@ -106,6 +109,24 @@ function withTempEnvironment(overrides = {}) {
     process.env.TP_FRONTDOOR_SESSION_SCALING_MODE = overrides.TP_FRONTDOOR_SESSION_SCALING_MODE;
   } else {
     delete process.env.TP_FRONTDOOR_SESSION_SCALING_MODE;
+  }
+
+  if (typeof overrides.TP_FRONTDOOR_SESSION_STORE === "string") {
+    process.env.TP_FRONTDOOR_SESSION_STORE = overrides.TP_FRONTDOOR_SESSION_STORE;
+  } else {
+    delete process.env.TP_FRONTDOOR_SESSION_STORE;
+  }
+
+  if (typeof overrides.TP_FRONTDOOR_REDIS_URL === "string") {
+    process.env.TP_FRONTDOOR_REDIS_URL = overrides.TP_FRONTDOOR_REDIS_URL;
+  } else {
+    delete process.env.TP_FRONTDOOR_REDIS_URL;
+  }
+
+  if (typeof overrides.TP_FRONTDOOR_REDIS_KEY_PREFIX === "string") {
+    process.env.TP_FRONTDOOR_REDIS_KEY_PREFIX = overrides.TP_FRONTDOOR_REDIS_KEY_PREFIX;
+  } else {
+    delete process.env.TP_FRONTDOOR_REDIS_KEY_PREFIX;
   }
 
   if (typeof overrides.TP_ALLOW_LOCAL_ACCESS_BYPASS === "string") {
@@ -3687,6 +3708,196 @@ test("healthz rejects multi-instance session scaling until an external session s
         body.checks.session_scaling.reason,
         "multi_instance_requires_external_session_store"
       );
+    } finally {
+      global.fetch = originalFetch;
+    }
+  } finally {
+    env.cleanup();
+  }
+});
+
+test("healthz accepts Redis-backed multi-instance session readiness", async () => {
+  const env = withTempEnvironment({
+    TP_FRONTDOOR_SESSION_SCALING_MODE: "multi_instance",
+    TP_FRONTDOOR_SESSION_STORE: "redis",
+    TP_FRONTDOOR_REDIS_URL: "rediss://redis.example.com:6380/0",
+    usersFileEntries: [
+      {
+        username: "admin",
+        password_hash: "hash",
+        access_email: "admin@example.com",
+        role: "admin"
+      }
+    ]
+  });
+  const sessionStoreModule = await import("../lib/session-store/index.js");
+
+  try {
+    sessionStoreModule.__setSessionStoreForTesting(
+      {
+        backend: "redis",
+        ping: async () => "PONG"
+      },
+      "redis"
+    );
+    const { GET } = await importFresh("../app/healthz/route.js");
+    const originalFetch = global.fetch;
+    global.fetch = async () =>
+      new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: {
+          "content-type": "application/json"
+        }
+      });
+
+    try {
+      const response = await GET();
+      const body = await response.json();
+
+      assert.equal(response.status, 200);
+      assert.equal(body.ok, true);
+      assert.equal(body.checks.session_store.ok, true);
+      assert.equal(body.checks.session_store.backend, "redis");
+      assert.equal(body.checks.session_scaling.ok, true);
+      assert.equal(body.checks.session_scaling.backend, "redis");
+      assert.equal(body.checks.session_scaling.mode, "multi_instance");
+    } finally {
+      global.fetch = originalFetch;
+    }
+  } finally {
+    sessionStoreModule.resetSessionStoreSingleton();
+    env.cleanup();
+  }
+});
+
+test("healthz bounds Redis session readiness probes", async () => {
+  const env = withTempEnvironment({
+    TP_FRONTDOOR_SESSION_SCALING_MODE: "multi_instance",
+    TP_FRONTDOOR_SESSION_STORE: "redis",
+    TP_FRONTDOOR_REDIS_URL: "rediss://redis.example.com:6380/0",
+    usersFileEntries: [
+      {
+        username: "admin",
+        password_hash: "hash",
+        access_email: "admin@example.com",
+        role: "admin"
+      }
+    ]
+  });
+  const sessionStoreModule = await import("../lib/session-store/index.js");
+
+  try {
+    sessionStoreModule.__setSessionStoreForTesting(
+      {
+        backend: "redis",
+        ping: async () => new Promise(() => {})
+      },
+      "redis"
+    );
+    const { GET } = await importFresh("../app/healthz/route.js");
+    const originalFetch = global.fetch;
+    global.fetch = async () =>
+      new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: {
+          "content-type": "application/json"
+        }
+      });
+
+    try {
+      const startedAt = Date.now();
+      const response = await GET();
+      const elapsedMs = Date.now() - startedAt;
+      const body = await response.json();
+
+      assert.equal(response.status, 503);
+      assert.equal(body.checks.session_store.ok, false);
+      assert.equal(body.checks.session_store.backend, "redis");
+      assert.equal(body.checks.session_store.reason, "session_store_unavailable");
+      assert.ok(elapsedMs < 1800, `Redis health probe should be timeout-bounded, took ${elapsedMs}ms`);
+    } finally {
+      global.fetch = originalFetch;
+    }
+  } finally {
+    sessionStoreModule.resetSessionStoreSingleton();
+    env.cleanup();
+  }
+});
+
+test("healthz fails closed when Redis session store lacks a URL", async () => {
+  const env = withTempEnvironment({
+    TP_FRONTDOOR_SESSION_SCALING_MODE: "multi_instance",
+    TP_FRONTDOOR_SESSION_STORE: "redis",
+    TP_FRONTDOOR_REDIS_URL: "",
+    usersFileEntries: [
+      {
+        username: "admin",
+        password_hash: "hash",
+        access_email: "admin@example.com",
+        role: "admin"
+      }
+    ]
+  });
+
+  try {
+    const { GET } = await importFresh("../app/healthz/route.js");
+    const originalFetch = global.fetch;
+    global.fetch = async () =>
+      new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: {
+          "content-type": "application/json"
+        }
+      });
+
+    try {
+      const response = await GET();
+      const body = await response.json();
+
+      assert.equal(response.status, 503);
+      assert.equal(body.checks.session_store.ok, false);
+      assert.equal(body.checks.session_store.backend, "redis");
+      assert.equal(body.checks.session_store.reason, "missing_frontdoor_redis_url");
+    } finally {
+      global.fetch = originalFetch;
+    }
+  } finally {
+    env.cleanup();
+  }
+});
+
+test("healthz fails closed for unsupported session store backends", async () => {
+  const env = withTempEnvironment({
+    TP_FRONTDOOR_SESSION_STORE: "memcached",
+    usersFileEntries: [
+      {
+        username: "admin",
+        password_hash: "hash",
+        access_email: "admin@example.com",
+        role: "admin"
+      }
+    ]
+  });
+
+  try {
+    const { GET } = await importFresh("../app/healthz/route.js");
+    const originalFetch = global.fetch;
+    global.fetch = async () =>
+      new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: {
+          "content-type": "application/json"
+        }
+      });
+
+    try {
+      const response = await GET();
+      const body = await response.json();
+
+      assert.equal(response.status, 503);
+      assert.equal(body.checks.session_store.ok, false);
+      assert.equal(body.checks.session_store.backend, "memcached");
+      assert.equal(body.checks.session_store.reason, "invalid_session_store_backend");
     } finally {
       global.fetch = originalFetch;
     }

@@ -124,8 +124,9 @@ Current-state auth is unchanged:
   the explicit local development bypass is active.
 - Authenticated managed surfaces: `/portal`, `/portal/bootstrap`, and `/v1/*`
   require a current verified Access context and fail closed on auth failure.
-- Browser session: SQLite-backed frontdoor session with CSRF-bound unsafe
-  requests.
+- Browser session: server-side frontdoor session with CSRF-bound unsafe
+  requests. SQLite is the single-instance local/default store; Redis is the
+  supported hosted external store.
 - API proxy: the frontdoor injects the backend secret server-to-server; browser
   code does not receive the backend API key in managed mode.
 - Local bypass: allowed only in explicit development flows described below.
@@ -160,7 +161,7 @@ Local development exception:
 
 ### Session And Cookie Contract
 
-The browser session is SQLite-backed and server-side. The cookie and timeout
+The browser session is server-side. The cookie, store, scaling, and timeout
 contract is environment-aware.
 
 Cookie naming and transport:
@@ -205,8 +206,9 @@ deployment documentation in the same change.
   build, and start.
 - FastAPI request limits and path or root allowlists remain enforced in
   `app.py`.
-- Do not weaken the current session-scaling guardrails: the shipped posture is
-  still single-instance SQLite unless an external session store is introduced.
+- Do not weaken the current session-scaling guardrails: SQLite is limited to
+  single-instance posture, while hosted `multi_instance` and
+  `ephemeral_runtime` posture require the Redis session store.
 
 ### Direct-Origin Denial
 
@@ -218,7 +220,8 @@ Required posture:
 - Treat direct FastAPI exposure as an exception that requires compensating
   controls and explicit documentation.
 - Preserve the deployment gate that checks protected frontdoor posture,
-  protected deployment URL posture, and the non-public FastAPI assumption.
+  protected Worker or Vercel deployment URL posture, and the non-public FastAPI
+  assumption.
 
 ## SSRF And Outbound Fetch Policy
 
