@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from scripts.ci.apex import matrix_runner as apex_matrix_runner
+import scripts.apex_matrix_runner as apex_matrix_runner  # pylint: disable=consider-using-from-import
 
 pytestmark = pytest.mark.unit
 
@@ -26,8 +26,10 @@ def test_real_da3_run_uses_governed_metric_model_key(monkeypatch, tmp_path, back
     input_dir = tmp_path / "inputs"
     input_dir.mkdir()
 
-    monkeypatch.setattr(
-        apex_matrix_runner,
+    # The public wrapper re-exports functions defined in the canonical module,
+    # so patch the delegated function's globals rather than the wrapper module.
+    monkeypatch.setitem(
+        apex_matrix_runner.run_apex_for_config.__globals__,
         "check_ml_dependencies",
         lambda backend_id: (True, []),
     )
