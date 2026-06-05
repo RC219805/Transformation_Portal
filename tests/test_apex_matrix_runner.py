@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-import scripts.apex_matrix_runner as apex_matrix_runner  # pylint: disable=consider-using-from-import
+from scripts.ci.apex import matrix_runner as apex_matrix_runner
 
 pytestmark = pytest.mark.unit
 
