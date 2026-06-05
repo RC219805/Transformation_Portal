@@ -27,6 +27,7 @@ COMPATIBILITY_WRAPPERS = CHECKER.COMPATIBILITY_WRAPPERS
 CLI_COMPATIBILITY_WRAPPERS = CHECKER.CLI_COMPATIBILITY_WRAPPERS
 SCRIPT_PACKAGE_COMPATIBILITY_WRAPPERS = CHECKER.SCRIPT_PACKAGE_COMPATIBILITY_WRAPPERS
 SOURCE_PACKAGE_COMPATIBILITY_WRAPPERS = CHECKER.SOURCE_PACKAGE_COMPATIBILITY_WRAPPERS
+SHELL_COMPATIBILITY_WRAPPERS = CHECKER.SHELL_COMPATIBILITY_WRAPPERS
 src_root_bootstrap_expression = CHECKER._src_root_bootstrap_expression
 repo_root_parent_expression = CHECKER._repo_root_parent_expression
 validate_script_topology = CHECKER.validate_script_topology
@@ -66,6 +67,16 @@ def _valid_wrapper_text(wrapper: str, marker: str) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _valid_shell_wrapper_text(canonical: str) -> str:
+    return (
+        "#!/usr/bin/env bash\n"
+        "set -euo pipefail\n"
+        'SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"\n'
+        'REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"\n'
+        f'exec "${{REPO_ROOT}}/{canonical}" "$@"\n'
+    )
+
+
 def test_script_topology_accepts_compatibility_wrappers() -> None:
     tracked_paths = set()
     contents = {}
@@ -74,6 +85,18 @@ def test_script_topology_accepts_compatibility_wrappers() -> None:
         tracked_paths.add(wrapper)
         tracked_paths.add(canonical)
         contents[wrapper] = _valid_wrapper_text(wrapper, marker)
+
+    assert validate_script_topology(tracked_paths, read_text=_reader(contents)) == []
+
+
+def test_script_topology_accepts_shell_compatibility_wrappers() -> None:
+    tracked_paths = set()
+    contents = {}
+
+    for wrapper, canonical in SHELL_COMPATIBILITY_WRAPPERS.items():
+        tracked_paths.add(wrapper)
+        tracked_paths.add(canonical)
+        contents[wrapper] = _valid_shell_wrapper_text(canonical)
 
     assert validate_script_topology(tracked_paths, read_text=_reader(contents)) == []
 
@@ -89,6 +112,102 @@ def test_script_topology_rejects_retired_organizer_paths() -> None:
     assert "retired broad-mutating" in violations[0].reason
 
 
+def test_script_topology_rejects_retired_branch_cleanup_paths() -> None:
+    violations = validate_script_topology(
+        {"scripts/FIX_CRITICAL_ISSUES.sh"},
+        read_text=_reader({}),
+    )
+
+    assert len(violations) == 1
+    assert violations[0].path == "scripts/FIX_CRITICAL_ISSUES.sh"
+    assert "retired broad-mutating" in violations[0].reason
+    assert violations[0].suggestion == ("move to archive/scripts/legacy-organization/fix_critical_issues_legacy.sh")
+
+
+def test_script_topology_rejects_retired_pr_specific_verifier() -> None:
+    violations = validate_script_topology(
+        {"scripts/verify_pr98.sh"},
+        read_text=_reader({}),
+    )
+
+    assert len(violations) == 1
+    assert violations[0].path == "scripts/verify_pr98.sh"
+    assert "retired broad-mutating" in violations[0].reason
+    assert violations[0].suggestion == "move to archive/scripts/legacy-organization/verify_pr98_legacy.sh"
+
+
+def test_script_topology_rejects_retired_context_quickstart() -> None:
+    violations = validate_script_topology(
+        {"scripts/context_aware_quickstart.sh"},
+        read_text=_reader({}),
+    )
+
+    assert len(violations) == 1
+    assert violations[0].path == "scripts/context_aware_quickstart.sh"
+    assert "retired broad-mutating" in violations[0].reason
+    assert violations[0].suggestion == "move to archive/scripts/legacy-organization/context_aware_quickstart_legacy.sh"
+
+
+def test_script_topology_rejects_retired_tool_backups() -> None:
+    violations = validate_script_topology(
+        {"tools/performance_ledger_v1.0_backup.py"},
+        read_text=_reader({}),
+    )
+
+    assert len(violations) == 1
+    assert violations[0].path == "tools/performance_ledger_v1.0_backup.py"
+    assert "retired or relocated tool path" in violations[0].reason
+    assert violations[0].suggestion == "move to archive/scripts/performance_ledger_v1_0_backup.py"
+
+
+def test_script_topology_rejects_promoted_validation_tools() -> None:
+    violations = validate_script_topology(
+        {"tools/test_16bit_implementation.py"},
+        read_text=_reader({}),
+    )
+
+    assert len(violations) == 1
+    assert violations[0].path == "tools/test_16bit_implementation.py"
+    assert "retired or relocated tool path" in violations[0].reason
+    assert violations[0].suggestion == ("move to scripts/validation/validate_lux_depth_v3_16bit_output.py")
+
+
+def test_script_topology_rejects_relocated_unicode_checker() -> None:
+    violations = validate_script_topology(
+        {"tools/check_unicode.py"},
+        read_text=_reader({}),
+    )
+
+    assert len(violations) == 1
+    assert violations[0].path == "tools/check_unicode.py"
+    assert "retired or relocated tool path" in violations[0].reason
+    assert violations[0].suggestion == "move to scripts/validation/check_unicode_controls.py"
+
+
+def test_script_topology_rejects_relocated_rag_workflow_runner() -> None:
+    violations = validate_script_topology(
+        {"scripts/pipelines/run_rag_workflow.py"},
+        read_text=_reader({}),
+    )
+
+    assert len(violations) == 1
+    assert violations[0].path == "scripts/pipelines/run_rag_workflow.py"
+    assert "architecture-inconsistent location" in violations[0].reason
+    assert violations[0].suggestion == "move to examples/rag/run_rag_workflow.py"
+
+
+def test_script_topology_rejects_retired_picacho_batch_wrapper() -> None:
+    violations = validate_script_topology(
+        {"scripts/pipelines/process_750_picacho_batch.py"},
+        read_text=_reader({}),
+    )
+
+    assert len(violations) == 1
+    assert violations[0].path == "scripts/pipelines/process_750_picacho_batch.py"
+    assert "architecture-inconsistent location" in violations[0].reason
+    assert violations[0].suggestion == "move to archive/scripts/legacy-organization/process_750_picacho_batch_legacy.py"
+
+
 def test_script_topology_rejects_script_root_historical_reports() -> None:
     violations = validate_script_topology(
         {"scripts/PIPELINE_OPTIMIZATION_REPORT.md"},
@@ -99,15 +218,77 @@ def test_script_topology_rejects_script_root_historical_reports() -> None:
     assert violations[0].suggestion == "move historical evidence to docs/historical/script-audits/"
 
 
+def test_script_topology_rejects_new_root_shell_implementations() -> None:
+    violations = validate_script_topology(
+        {"scripts/new_quality_gate.sh"},
+        read_text=_reader({}),
+    )
+
+    assert len(violations) == 1
+    assert violations[0].path == "scripts/new_quality_gate.sh"
+    assert "root shell script is not a governed compatibility wrapper" in violations[0].reason
+
+
+def test_script_topology_rejects_new_root_python_implementations() -> None:
+    violations = validate_script_topology(
+        {"scripts/new_quality_gate.py"},
+        read_text=_reader({}),
+    )
+
+    assert len(violations) == 1
+    assert violations[0].path == "scripts/new_quality_gate.py"
+    assert "root Python script is not a governed compatibility wrapper" in violations[0].reason
+
+
+def test_script_topology_rejects_pipeline_local_validation_test_names() -> None:
+    violations = validate_script_topology(
+        {"scripts/pipelines/test_luxury_estate_pipeline.py"},
+        read_text=_reader({}),
+    )
+
+    assert len(violations) == 1
+    assert violations[0].path == "scripts/pipelines/test_luxury_estate_pipeline.py"
+    assert "test/example helper naming pattern" in violations[0].reason
+    assert violations[0].suggestion == "move validation or diagnostic helpers to scripts/validation or scripts/analysis"
+
+
+def test_script_topology_rejects_pipeline_local_examples_prefix() -> None:
+    violations = validate_script_topology(
+        {"scripts/pipelines/examples_luxury_estate_pipeline.py"},
+        read_text=_reader({}),
+    )
+
+    assert len(violations) == 1
+    assert violations[0].path == "scripts/pipelines/examples_luxury_estate_pipeline.py"
+    assert "test/example helper naming pattern" in violations[0].reason
+    assert violations[0].suggestion == "move usage examples to examples/pipelines/ and name by subject"
+
+
+def test_script_topology_rejects_pipeline_local_examples_suffix() -> None:
+    violations = validate_script_topology(
+        {"scripts/pipelines/elite_pipeline_examples.py"},
+        read_text=_reader({}),
+    )
+
+    assert len(violations) == 1
+    assert violations[0].path == "scripts/pipelines/elite_pipeline_examples.py"
+    assert "test/example helper naming pattern" in violations[0].reason
+    assert violations[0].suggestion == "move usage examples to examples/pipelines/ and name by subject"
+
+
+def test_script_topology_allows_contract_bound_enhance_image_entrypoint() -> None:
+    assert validate_script_topology({"scripts/enhance_image.py"}, read_text=_reader({})) == []
+
+
 def test_script_topology_requires_wrapper_to_delegate_to_canonical_path() -> None:
     violations = validate_script_topology(
         {
-            "scripts/install_models.py",
-            "scripts/setup/install_models.py",
+            "scripts/test_metadata_extraction.py",
+            "scripts/validation/validate_metadata_extraction.py",
         },
         read_text=_reader(
             {
-                "scripts/install_models.py": (
+                "scripts/test_metadata_extraction.py": (
                     "from pathlib import Path\n"
                     "REPO_ROOT = Path(__file__).resolve().parents[1]\n"
                     "if __name__ == '__main__':\n"
@@ -118,8 +299,38 @@ def test_script_topology_requires_wrapper_to_delegate_to_canonical_path() -> Non
     )
 
     assert len(violations) == 1
-    assert violations[0].path == "scripts/install_models.py"
+    assert violations[0].path == "scripts/test_metadata_extraction.py"
     assert "does not delegate" in violations[0].reason
+
+
+def test_script_topology_requires_shell_wrappers_to_delegate_to_canonical_path() -> None:
+    violations = validate_script_topology(
+        {
+            "scripts/lint_runner.sh",
+            "scripts/ci/lint_runner.sh",
+        },
+        read_text=_reader({"scripts/lint_runner.sh": '#!/usr/bin/env bash\nexec ./elsewhere.sh "$@"\n'}),
+    )
+
+    assert len(violations) == 1
+    assert violations[0].path == "scripts/lint_runner.sh"
+    assert "does not delegate" in violations[0].reason
+
+
+def test_script_topology_requires_shell_wrappers_to_exec_canonical_command() -> None:
+    violations = validate_script_topology(
+        {
+            "scripts/lint_runner.sh",
+            "scripts/ci/lint_runner.sh",
+        },
+        read_text=_reader(
+            {"scripts/lint_runner.sh": ("#!/usr/bin/env bash\n" 'bash "${REPO_ROOT}/scripts/ci/lint_runner.sh" "$@"\n')}
+        ),
+    )
+
+    assert len(violations) == 1
+    assert violations[0].path == "scripts/lint_runner.sh"
+    assert "does not replace itself" in violations[0].reason
 
 
 def test_script_topology_requires_cli_wrappers_to_propagate_exit_status() -> None:
@@ -214,6 +425,14 @@ def test_repository_compatibility_wrappers_reference_canonical_modules() -> None
         wrapper_path = REPO_ROOT / wrapper
         assert wrapper_path.exists(), f"Missing compatibility wrapper: {wrapper}"
         assert marker in wrapper_path.read_text(encoding="utf-8")
+
+
+def test_repository_shell_wrappers_reference_canonical_scripts() -> None:
+    for wrapper, canonical in SHELL_COMPATIBILITY_WRAPPERS.items():
+        wrapper_path = REPO_ROOT / wrapper
+        wrapper_text = wrapper_path.read_text(encoding="utf-8")
+        assert canonical in wrapper_text, f"Shell wrapper must reference {canonical}: {wrapper}"
+        assert "exec " in wrapper_text, f"Shell wrapper must preserve signals and exit status: {wrapper}"
 
 
 def test_repository_cli_wrappers_propagate_exit_status() -> None:

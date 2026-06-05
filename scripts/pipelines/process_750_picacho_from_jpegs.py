@@ -117,8 +117,8 @@ def main():
     """Process the 6 canonical 750 Picacho Lane JPEG sources."""
 
     # Define the 6 canonical source files
-    source_dir = Path("/Users/rc/Desktop/Cache/750_LightFiction_Final_Views/JPEGs")
-    output_dir = Path("/Users/rc/Desktop/Cache/750_LightFiction_Final_Views/Final_Production")
+    source_dir = Path.home() / "Desktop" / "Cache" / "750_LightFiction_Final_Views" / "JPEGs"
+    output_dir = Path.home() / "Desktop" / "Cache" / "750_LightFiction_Final_Views" / "Final_Production"
 
     canonical_files = [
         "750Picacho_Aerial.jpg",

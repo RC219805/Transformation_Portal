@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from scripts.codebase_philosophy_auditor import Violation
-from scripts.decision_decay_dashboard import (
+from transformation_portal.analyzers.codebase_philosophy_auditor import Violation
+from transformation_portal.analyzers.decision_decay_dashboard import (
     collect_color_token_report,
     collect_outdated_valid_until_records,
     collect_philosophy_violations,
@@ -72,9 +72,9 @@ def test_collect_philosophy_violations_aggregates(tmp_path):
     module.write_text("def sample():\n    pass\n")
 
     violations = [
-        Violation(principle="module_docstring", message="Missing", line=1),
-        Violation(principle="module_docstring", message="Missing", line=1),
-        Violation(principle="public_api_documentation", message="Doc", line=2),
+        Violation(code="TPA001", principle="module_docstring", message="Missing", line=1),
+        Violation(code="TPA001", principle="module_docstring", message="Missing", line=1),
+        Violation(code="TPA010", principle="public_api_documentation", message="Doc", line=2),
     ]
 
     auditor = DummyAuditor(violations)

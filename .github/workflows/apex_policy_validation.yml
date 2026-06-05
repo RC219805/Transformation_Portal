@@ -5,12 +5,14 @@ on:
     paths:
       - 'docs/apex/policy/**'
       - 'scripts/apex_validate_policy.py'
+      - 'scripts/ci/apex/validate_policy.py'
       - 'src/transformation_portal/metrics/performance_capsule.py'
   push:
     branches: [main]
     paths:
       - 'docs/apex/policy/**'
       - 'scripts/apex_validate_policy.py'
+      - 'scripts/ci/apex/validate_policy.py'
 
 concurrency:
   group: apex-policy-${{ github.event.pull_request.number || github.ref }}

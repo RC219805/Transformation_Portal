@@ -22,6 +22,10 @@ from transformation_portal.metrics.contracts import BucketStats
 from transformation_portal.metrics.gate import evaluate_gate
 from transformation_portal.metrics.performance_capsule import PerformanceCapsule
 
+APEX_MATRIX_RUNNER = Path("scripts/ci/apex/matrix_runner.py")
+APEX_PR_COMMENT = Path("scripts/ci/apex/pr_comment.py")
+APEX_AGGREGATE_LEDGER = Path("scripts/ci/apex/aggregate_ledger.py")
+
 
 class TestExecutionModeEnforcement:
     """Test that dry-run is enforced correctly."""
@@ -65,7 +69,7 @@ class TestSyntheticDataLabeling:
 
     def test_synthetic_label_in_pr_comment(self):
         """Verify PR comment generator includes synthetic marker."""
-        comment_gen = Path("scripts/apex_pr_comment.py")
+        comment_gen = APEX_PR_COMMENT
         assert comment_gen.exists(), "PR comment generator not found"
 
         content = comment_gen.read_text()
@@ -100,7 +104,7 @@ class TestAggregationScoping:
 
     def test_aggregation_script_has_scoping_filters(self):
         """Verify aggregation script filters by run_id and commit_sha."""
-        agg_script = Path("scripts/apex_aggregate_ledger.py")
+        agg_script = APEX_AGGREGATE_LEDGER
         assert agg_script.exists(), "Aggregation script not found"
 
         content = agg_script.read_text()

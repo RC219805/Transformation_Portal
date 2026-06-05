@@ -227,8 +227,8 @@ def main():
         print("✓ Apple M4 Max GPU acceleration enabled")
 
     # Input/output directories
-    input_dir = Path("/Users/rc/Desktop/Cache/750_LightFiction_Final_Views/16-Bit_EXRs")
-    output_dir = Path("/Users/rc/Desktop/Cache/750_LightFiction_Final_Views/Ultimate_Quality")
+    input_dir = Path.home() / "Desktop" / "Cache" / "750_LightFiction_Final_Views" / "16-Bit_EXRs"
+    output_dir = Path.home() / "Desktop" / "Cache" / "750_LightFiction_Final_Views" / "Ultimate_Quality"
     output_dir.mkdir(exist_ok=True, parents=True)
 
     # Find TIFF files
@@ -237,7 +237,7 @@ def main():
     if not tiff_files:
         print(f"No TIFF files found in {input_dir}")
         # Try alternate location
-        alt_dir = Path("/Users/rc/Desktop/Cache/750_LightFiction_Final_Views/TIFFs/_TIFFs")
+        alt_dir = Path.home() / "Desktop" / "Cache" / "750_LightFiction_Final_Views" / "TIFFs" / "_TIFFs"
         tiff_files = list(alt_dir.glob("*.ti")) + list(alt_dir.glob("*.tif"))
 
         if tiff_files:

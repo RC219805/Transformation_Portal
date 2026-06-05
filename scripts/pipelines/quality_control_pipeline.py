@@ -176,8 +176,8 @@ class QualityControlPipeline:
 def main():
     """Run quality-controlled pipeline for 750 Picacho Lane"""
 
-    input_dir = Path("/Users/rc/Desktop/Cache/750_LightFiction_Final_Views/JPEGs")
-    output_dir = Path("/Users/rc/Desktop/Cache/750_LightFiction_Final_Views/Final_Production")
+    input_dir = Path.home() / "Desktop" / "Cache" / "750_LightFiction_Final_Views" / "JPEGs"
+    output_dir = Path.home() / "Desktop" / "Cache" / "750_LightFiction_Final_Views" / "Final_Production"
 
     qc = QualityControlPipeline("750_Picacho_Lane")
     success = qc.run_pipeline(input_dir=input_dir, output_dir=output_dir, formats=["jpeg", "png", "tif"])

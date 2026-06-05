@@ -138,6 +138,7 @@ def test_pre_commit_hook_uses_python_for_non_executable_quality_gate(tmp_path: P
     repo_root.mkdir()
     _init_repo(repo_root)
     hook = _copy_repo_file("scripts/pre_commit_hook.sh", repo_root, executable=True)
+    _copy_repo_file("scripts/maintenance/pre_commit_hook.sh", repo_root, executable=True)
 
     quality_gate = repo_root / "scripts" / "utilities" / "pre-commit-quality-check.py"
     _write(

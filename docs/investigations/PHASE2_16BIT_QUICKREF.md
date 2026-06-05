@@ -34,8 +34,8 @@ Materials V3 Output:
 ### 3. Test Coverage
 
 **New Tests:**
-- `test_16bit_implementation.py` - End-to-end validation
-- `verify_16bit_handoff.py` - TIFF format verification
+- `scripts/validation/validate_lux_depth_v3_16bit_output.py` - End-to-end validation
+- `scripts/validation/verify_lux_depth_v3_16bit_handoff.py` - TIFF format verification
 
 **Updated Tests:**
 - `test_materials_v3_orchestrator_integration.py` - Schema version 1.1
@@ -52,7 +52,10 @@ Materials V3 Output:
 python -m transformation_portal.lux_depth_v3 \
   --input-dir ./input_images \
   --output-dir ./output_16bit \
+  --quality-tier premium \
   --materials-v3 on \
+  --enable-segmentation on \
+  --segmentation-backend stub \
   --enable-v2 on \
   --emit-master16 on \
   --emit-upscaled16 on
@@ -69,7 +72,10 @@ python -m transformation_portal.lux_depth_v3 \
 python -m transformation_portal.lux_depth_v3 \
   --input-dir ./input_images \
   --output-dir ./output_8bit \
+  --quality-tier premium \
   --materials-v3 on \
+  --enable-segmentation on \
+  --segmentation-backend stub \
   --enable-v2 on
   # No --emit-master16 or --emit-upscaled16
 ```
@@ -86,11 +92,11 @@ python -m transformation_portal.lux_depth_v3 \
 ### Test Suite
 
 ```bash
-# Run all Phase 2 tests
-python tools/test_16bit_implementation.py
+# Run all 16-bit output validations
+python scripts/validation/validate_lux_depth_v3_16bit_output.py
 
 # Verify TIFF format
-python tools/verify_16bit_handoff.py
+python scripts/validation/verify_lux_depth_v3_16bit_handoff.py
 
 # Run regression tests
 pytest tests/materials/ -v
@@ -201,6 +207,8 @@ print(f"max: {tiff_data.max()}")          # Expected: up to 65535
 ```bash
 # Verify Materials V3 is enabled
 --materials-v3 on
+--enable-segmentation on
+--segmentation-backend stub
 
 # Check manifest schema version
 cat manifest.json | jq '.materials_v3.schema_version'
@@ -223,4 +231,5 @@ cat manifest.json | jq '.materials_v3.schema_version'
 
 **Documentation:**
 - Full Report: `PHASE2_16BIT_IMPLEMENTATION_REPORT.md`
-- Test Scripts: `test_16bit_implementation.py`, `verify_16bit_handoff.py`
+- Validation Scripts: `scripts/validation/validate_lux_depth_v3_16bit_output.py`,
+  `scripts/validation/verify_lux_depth_v3_16bit_handoff.py`

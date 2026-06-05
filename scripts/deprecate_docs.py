@@ -1,84 +1,22 @@
 #!/usr/bin/env python3
-"""Add deprecation notices to duplicate documentation files.
+"""Compatibility wrapper for scripts.maintenance.deprecate_docs."""
 
-Part of DOC-001: Documentation consolidation.
-"""
+from __future__ import annotations
 
-import os
-from datetime import datetime, timedelta
+import sys
 from pathlib import Path
 
-# Deprecation date: 30 days from now
-deprecation_date = (datetime.now() + timedelta(days=30)).strftime("%Y-%m-%d")
+REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
-# Duplicates to deprecate: (file, canonical_replacement)
-DUPLICATES = [
-    (
-        "docs/guides/CODEBASE_QUALITY_STANDARDS.md",
-        "docs/guides/CODE_QUALITY_STANDARDS.md",
-    ),
-    (
-        "docs/guides/CODE_QUALITY_BASELINE.md",
-        "docs/guides/CODE_QUALITY_STANDARDS.md",
-    ),
-    (
-        "docs/guides/CODE_QUALITY_SYSTEM.md",
-        "docs/guides/CODE_QUALITY_STANDARDS.md",
-    ),
-    (
-        "docs/guides/QUALITY_CONTROL_SYSTEM.md",
-        "docs/guides/CODE_QUALITY_STANDARDS.md",
-    ),
-    (
-        "docs/architecture/ARCHITECTURE_PHILOSOPHY.md",
-        "docs/architecture/ARCHITECTURE.md",
-    ),
-]
-
-DEPRECATION_TEMPLATE = """> ⚠️ **DEPRECATED**
->
-> This document has been superseded by [{canonical_name}]({relative_link}).
-> Please use that document instead. This file will be removed on {date}.
-
-"""
+from scripts.maintenance import deprecate_docs as _impl
+from scripts.maintenance.deprecate_docs import *  # noqa: F403
 
 
-def add_deprecation_notice(filepath: str, canonical: str):
-    """Add deprecation notice to top of file with correct relative link."""
-    path = Path(filepath)
-    if not path.exists():
-        print(f"Skip {filepath} (not found)")
-        return
-
-    content = path.read_text(encoding="utf-8")
-
-    # Check if already deprecated
-    if "DEPRECATED" in content[:200]:
-        print(f"Skip {filepath} (already deprecated)")
-        return
-
-    # Compute relative path from deprecated doc to canonical
-    deprecated_dir = path.parent
-    canonical_path = Path(canonical)
-    relative_path = os.path.relpath(canonical_path, start=deprecated_dir)
-    # Normalize to forward slashes for markdown
-    relative_link = relative_path.replace(os.sep, "/")
-    canonical_name = canonical_path.name
-
-    # Add notice
-    notice = DEPRECATION_TEMPLATE.format(
-        canonical_name=canonical_name,
-        relative_link=relative_link,
-        date=deprecation_date,
-    )
-    new_content = notice + content
-    path.write_text(new_content, encoding="utf-8")
-    print(f"✓ Deprecated {filepath} → {relative_link}")
+def __getattr__(name: str):
+    return getattr(_impl, name)
 
 
 if __name__ == "__main__":
-    for filepath, canonical in DUPLICATES:
-        add_deprecation_notice(filepath, canonical)
-
-    print(f"\nDeprecated {len(DUPLICATES)} files")
-    print(f"Removal scheduled for: {deprecation_date}")
+    raise SystemExit(_impl.main())

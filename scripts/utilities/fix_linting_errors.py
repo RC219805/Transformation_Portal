@@ -61,7 +61,7 @@ def process_file(filepath: Path) -> bool:
 
 def main():
     """Main function to process all Python files."""
-    repo_root = Path("/Users/rc/Transformation_Portal")
+    repo_root = Path(__file__).resolve().parents[2]
 
     # Directories to exclude
     exclude_dirs = {"deprecated", "src/transformation_portal", ".venv", "__pycache__", ".git", ".github"}

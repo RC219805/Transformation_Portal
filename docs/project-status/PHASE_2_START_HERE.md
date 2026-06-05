@@ -9,8 +9,8 @@
 ## Quick Start (30 seconds)
 
 ```bash
-# Option 1: Run automated script (recommended)
-./scripts/execute_phase_2_extraction.sh
+# Option 1: Archived automation, retained for historical reference only
+archive/scripts/legacy-organization/execute_phase_2_extraction_legacy.sh
 
 # Option 2: Manual execution
 # Follow: docs/project-status/PHASE_2_QUICK_REFERENCE.md
@@ -39,9 +39,11 @@
 ### 🏃 Fast Track (2-2.5 hours)
 **For**: Quick execution with automated help
 
-```bash
-./scripts/execute_phase_2_extraction.sh
-```
+The historical automation now lives at
+`archive/scripts/legacy-organization/execute_phase_2_extraction_legacy.sh` and
+is retained only as evidence. It performs branch checkout, pull, stash, commit,
+and push operations from 2024 guidance. Prefer the manual execution path for any
+current investigation recovery.
 
 The script will:
 - ✅ Handle steps 1-3 automatically (prep, search, reorganize)
@@ -87,7 +89,7 @@ The script will:
 | **QUICK_REFERENCE.md** | One-page cheat sheet | During execution |
 | **EXECUTION_PLAN.md** | Comprehensive plan | Detailed instructions needed |
 | **PR_TEMPLATE.md** | PR description | When creating PR |
-| **execute_phase_2_extraction.sh** | Automated script | Fast execution |
+| **execute_phase_2_extraction_legacy.sh** | Archived automation evidence | Historical reference only |
 
 ---
 
@@ -269,7 +271,7 @@ When Phase 2 is complete:
 
 **🏃 Fast Track (Recommended)**:
 ```bash
-./scripts/execute_phase_2_extraction.sh
+archive/scripts/legacy-organization/execute_phase_2_extraction_legacy.sh
 ```
 
 **🎯 Guided Track**:

@@ -86,8 +86,8 @@ def main():
 
     # Check multiple possible locations
     search_paths = [
-        Path("/Users/rc/Desktop/Cache/750_LightFiction_Final_Views/Ultimate_Quality"),
-        Path("/Users/rc/Desktop/Cache/750_LightFiction_Final_Views/TIFFs/_TIFFs"),
+        Path.home() / "Desktop" / "Cache" / "750_LightFiction_Final_Views" / "Ultimate_Quality",
+        Path.home() / "Desktop" / "Cache" / "750_LightFiction_Final_Views" / "TIFFs" / "_TIFFs",
     ]
 
     tiff_files = []

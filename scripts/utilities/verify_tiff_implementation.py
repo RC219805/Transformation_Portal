@@ -6,11 +6,16 @@ Confirms that all pipelines use the optimal tifffile.imwrite() method
 for 16-bit RGB TIFF saving.
 """
 
+import sys
 from pathlib import Path
 
 import numpy as np
 import tifffile
 from PIL import Image
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
 
 def test_tiff_quality():
@@ -23,10 +28,12 @@ def test_tiff_quality():
     # Create test image with full 16-bit range
     test_array = np.random.randint(0, 65536, (100, 100, 3), dtype=np.uint16)
 
-    test_path = Path("test_16bit.ti")
+    output_dir = Path("/tmp/tp-tiff-implementation-verification")
+    output_dir.mkdir(exist_ok=True)
+    test_path = output_dir / "test_16bit.ti"
 
     # Save with tifffile
-    from fix_tiff_16bit import save_16bit_tiff_tifffile
+    from scripts.utilities.fix_tiff_16bit import save_16bit_tiff_tifffile
 
     print("\n1. Testing save_16bit_tiff_tifffile()...")
     save_16bit_tiff_tifffile(test_array, test_path, compression="lzw")
@@ -46,13 +53,13 @@ def test_tiff_quality():
         return False
 
     print("\n3. Testing MaximumQualityPipeline integration...")
-    from maximum_quality_pipeline import MaximumQualityPipeline
+    from scripts.pipelines.maximum_quality_pipeline import MaximumQualityPipeline
 
     pipeline = MaximumQualityPipeline()
 
     # Test with float array [0, 1]
     test_float = np.random.rand(100, 100, 3).astype(np.float32)
-    test_path_2 = Path("test_pipeline.ti")
+    test_path_2 = output_dir / "test_pipeline.ti"
 
     pipeline.save_16bit_tiff(test_float, test_path_2)
 

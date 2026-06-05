@@ -1087,7 +1087,12 @@ See [Extraction Strategy](docs/project-status/PR934_EXTRACTION_STRATEGY.md) for 
 
 ### Complete Phase 2 Execution Script
 
-**File**: `scripts/execute_phase_2_extraction.sh`
+**Archived file**:
+`archive/scripts/legacy-organization/execute_phase_2_extraction_legacy.sh`
+
+This script is retained as historical evidence only. It performs branch
+checkout, pull, stash, commit, and push operations from 2024 guidance. Prefer
+manual execution for any current recovery work.
 
 ```bash
 #!/usr/bin/env bash
@@ -1301,7 +1306,7 @@ echo "=== Phase 2 Extraction Complete ==="
 
 Make this script executable:
 ```bash
-chmod +x scripts/execute_phase_2_extraction.sh
+chmod +x archive/scripts/legacy-organization/execute_phase_2_extraction_legacy.sh
 ```
 
 ---

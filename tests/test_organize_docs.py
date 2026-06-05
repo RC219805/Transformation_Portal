@@ -18,12 +18,13 @@ PROPOSAL_PATTERN = re.compile(r"^(MOVE (?P<src>.+) -> (?P<dest>.+)|REMOVE (?P<re
 
 
 def _copy_repo_script(repo_root: Path) -> Path:
-    source = REPO_ROOT / "scripts" / "organize_docs.sh"
-    destination = repo_root / "scripts" / "organize_docs.sh"
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(source, destination)
-    destination.chmod(destination.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
-    return destination
+    for relative in ("scripts/organize_docs.sh", "scripts/maintenance/organize_docs.sh"):
+        source = REPO_ROOT / relative
+        destination = repo_root / relative
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source, destination)
+        destination.chmod(destination.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+    return repo_root / "scripts" / "organize_docs.sh"
 
 
 def _run(cmd: list[str], cwd: Path) -> subprocess.CompletedProcess[str]:

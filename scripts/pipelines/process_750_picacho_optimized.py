@@ -20,9 +20,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional
 
-# Add project root to path
-project_root = Path(__file__).parent
-sys.path.insert(0, str(project_root))
+PIPELINES_DIR = Path(__file__).resolve().parent
+DEFAULT_750_BASE_DIR = Path.home() / "Desktop" / "Cache" / "750_LightFiction_Final_Views"
+if str(PIPELINES_DIR) not in sys.path:
+    sys.path.insert(0, str(PIPELINES_DIR))
 
 
 def load_canonical_manifest(manifest_path: Path) -> Dict:
@@ -272,13 +273,13 @@ def main():
     parser.add_argument(
         "--manifest",
         type=Path,
-        default=Path("/Users/rc/Desktop/Cache/750_LightFiction_Final_Views/canonical_sources_manifest.json"),
+        default=DEFAULT_750_BASE_DIR / "canonical_sources_manifest.json",
         help="Path to canonical sources manifest",
     )
     parser.add_argument(
         "--output-dir",
         type=Path,
-        default=Path("/Users/rc/Desktop/Cache/750_LightFiction_Final_Views"),
+        default=DEFAULT_750_BASE_DIR,
         help="Base output directory",
     )
     parser.add_argument("--scenes", nargs="+", default=None, help="Specific scenes to process (space-separated)")

@@ -32,7 +32,7 @@ def run_command(cmd, description):
 
 def main():
     """Fix quality issues."""
-    repo_root = Path(__file__).parent
+    repo_root = Path(__file__).resolve().parents[2]
 
     # 1. Fix trailing whitespace
     print("\n🔧 Fixing trailing whitespace...")

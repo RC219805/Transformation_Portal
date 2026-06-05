@@ -155,7 +155,7 @@ tifffile>=2023.7.18,<2027
 
 ### End-to-End Tests (100% Pass Rate)
 
-**Test Suite:** `tools/test_16bit_implementation.py`
+**Validation Suite:** `scripts/validation/validate_lux_depth_v3_16bit_output.py`
 
 ```
 ======================================================================
@@ -172,9 +172,12 @@ TEST SUMMARY
 ```bash
 # Command
 python -m transformation_portal.lux_depth_v3 \
+  --quality-tier premium \
   --emit-master16 on \
   --emit-upscaled16 on \
-  --materials-v3 on
+  --materials-v3 on \
+  --enable-segmentation on \
+  --segmentation-backend stub
 
 # Results
 ✓ Materials V3 output_bit_depth = 16 (correct)
@@ -186,7 +189,10 @@ python -m transformation_portal.lux_depth_v3 \
 ```bash
 # Command (no emit flags)
 python -m transformation_portal.lux_depth_v3 \
-  --materials-v3 on
+  --quality-tier premium \
+  --materials-v3 on \
+  --enable-segmentation on \
+  --segmentation-backend stub
 
 # Results
 ✓ Materials V3 output_bit_depth = 8 (correct)
@@ -211,7 +217,7 @@ python -m transformation_portal.lux_depth_v3 \
 
 ### TIFF Format Verification
 
-**Verification Script:** `tools/verify_16bit_handoff.py`
+**Verification Script:** `scripts/validation/verify_lux_depth_v3_16bit_handoff.py`
 
 ```
 ======================================================================
@@ -379,12 +385,12 @@ $ pytest tests/materials/ -v
 
 ### Test Scripts Added (2 files)
 
-4. **`tools/test_16bit_implementation.py`** (new)
+4. **`scripts/validation/validate_lux_depth_v3_16bit_output.py`** (relocated)
    - End-to-end validation suite
    - 3 test scenarios: 16-bit, 8-bit, V2 tracking
    - **Total:** ~350 lines
 
-5. **`tools/verify_16bit_handoff.py`** (new)
+5. **`scripts/validation/verify_lux_depth_v3_16bit_handoff.py`** (relocated)
    - TIFF format verification
    - Bit depth inspection
    - **Total:** ~200 lines

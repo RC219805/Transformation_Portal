@@ -217,8 +217,8 @@ def process_scene(input_path: Path, output_path: Path, scene_type: str) -> None:
 def main():
     """Process all luxury pipeline outputs with scene-specific refinements"""
 
-    input_dir = Path("/Users/rc/Desktop/Cache/750_LightFiction_Final_Views/Ultimate_Quality")
-    output_dir = Path("/Users/rc/Desktop/Cache/750_LightFiction_Final_Views/Phase3_Refined")
+    input_dir = Path.home() / "Desktop" / "Cache" / "750_LightFiction_Final_Views" / "Ultimate_Quality"
+    output_dir = Path.home() / "Desktop" / "Cache" / "750_LightFiction_Final_Views" / "Phase3_Refined"
 
     print(f"\n{'#' * 80}")
     print("  PHASE 3: SCENE-SPECIFIC REFINEMENT")

@@ -84,8 +84,8 @@ def apply_luxury_grade_16bit(image: np.ndarray) -> np.ndarray:
 @app.command()
 def process_view(
     view_name: str,
-    exr_dir: Path = Path("/Users/rc/Desktop/Cache/750_LightFiction_Final_Views/16-Bit_EXRs"),
-    output_dir: Path = Path("/Users/rc/Desktop/Cache/750_LightFiction_Final_Views/Master_TIFFs_16bit"),
+    exr_dir: Path = Path.home() / "Desktop" / "Cache" / "750_LightFiction_Final_Views" / "16-Bit_EXRs",
+    output_dir: Path = Path.home() / "Desktop" / "Cache" / "750_LightFiction_Final_Views" / "Master_TIFFs_16bit",
     apply_grade: bool = True,
 ):
     """Process a single view from EXR to proper 16-bit TIFF"""
@@ -149,8 +149,8 @@ def process_view(
 
 @app.command()
 def process_all(
-    exr_dir: Path = Path("/Users/rc/Desktop/Cache/750_LightFiction_Final_Views/16-Bit_EXRs"),
-    output_dir: Path = Path("/Users/rc/Desktop/Cache/750_LightFiction_Final_Views/Master_TIFFs_16bit"),
+    exr_dir: Path = Path.home() / "Desktop" / "Cache" / "750_LightFiction_Final_Views" / "16-Bit_EXRs",
+    output_dir: Path = Path.home() / "Desktop" / "Cache" / "750_LightFiction_Final_Views" / "Master_TIFFs_16bit",
     apply_grade: bool = True,
 ):
     """Process all EXR files to proper 16-bit TIFFs"""

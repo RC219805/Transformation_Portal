@@ -4,9 +4,14 @@ Example: Context-Aware Processing
 Demonstrates architectural context integration with 750 Picacho Kitchen rendering
 """
 
+import sys
 from pathlib import Path
 
-from architectural_context_engine import (
+REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from scripts.utilities.architectural_context_engine import (
     ArchitecturalContext,
     ArchitecturalContextExtractor,
     DimensionInfo,
@@ -39,8 +44,8 @@ print("\n[2/4] Enriching with architectural documents...")
 print("-" * 80)
 
 pdf_paths = [
-    Path("/Users/rc/24098.00_750 PICACHO LANE.pd"),
-    Path("/Users/rc/Documents/GitHub/Transformation_Portal/input_images/250930_MBAR SUBMITTAL 2.pd"),
+    Path.home() / "24098.00_750 PICACHO LANE.pd",
+    REPO_ROOT / "input_images" / "250930_MBAR SUBMITTAL 2.pd",
 ]
 
 pdf_found = []
@@ -160,10 +165,10 @@ print(
 1. Run context-aware pipeline:
    python context_aware_pro_pipeline.py \\
        input_images/Giga-V2_750Picacho_Kitchen_compatible_kitchen-bright.jpg \\
-       --pdf "/Users/rc/24098.00_750 PICACHO LANE.pd"
+       --pdf "$HOME/24098.00_750 PICACHO LANE.pd"
 
 2. Or use the enriched context directly:
-   from architectural_context_engine import ArchitecturalContext
+   from scripts.utilities.architectural_context_engine import ArchitecturalContext
    context = ArchitecturalContext.load(
        "extracted_context/750Picacho_Kitchen_enriched_context.json"
    )

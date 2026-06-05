@@ -20,7 +20,7 @@ DA3_RUNTIME_INSTALLER_PATH = PROJECT_ROOT / "scripts" / "setup" / "install_da3_r
 RAW_RUNTIME_INSTALLER_PATH = PROJECT_ROOT / "scripts" / "setup" / "install_raw_runtime.sh"
 VALIDATION_SUITE_PATH = PROJECT_ROOT / "scripts" / "validation" / "run_full_validation_suite.sh"
 ML_STACK_INSTALLER_PATH = PROJECT_ROOT / "scripts" / "bootstrap" / "install_ml_stack.sh"
-SECURITY_SCAN_PATH = PROJECT_ROOT / "scripts" / "security_scan.sh"
+SECURITY_SCAN_PATH = PROJECT_ROOT / "scripts" / "validation" / "security_scan.sh"
 
 
 def _write_executable(path: Path, content: str) -> Path:
@@ -243,7 +243,7 @@ def test_make_venv_accepts_supported_windows_repo_venv_layout(tmp_path: Path) ->
 def test_security_scan_uses_repo_python_resolver() -> None:
     script = SECURITY_SCAN_PATH.read_text(encoding="utf-8")
 
-    assert 'PYTHON_BIN="$("$SCRIPT_DIR/setup/resolve_python_311.sh")"' in script
+    assert 'PYTHON_BIN="$("$REPO_ROOT/scripts/setup/resolve_python_311.sh")"' in script
     assert '"$PYTHON_BIN" -m bandit -r src/ -ll -ii' in script
     assert "python -m bandit" not in script
 

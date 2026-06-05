@@ -6,9 +6,9 @@ Batch panoptic segmentation mask generator for depth_tools.py integration.
 Generates *_mask_sky.png and *_mask_building.png from Detectron2 panoptic outputs.
 Usage:
   python run_detectron2_panoptic_batch.py \
-      --images-root "/Users/rc/Desktop/my_project/outputs" \
-      --depths-root "/Users/rc/Desktop/my_project/outputs/depth/750_Picacho" \
-      --mask-root   "/Users/rc/Desktop/my_project/outputs/seg/750_Picacho" \
+      --images-root "/path/to/project/outputs" \
+      --depths-root "/path/to/project/outputs/depth/750_Picacho" \
+      --mask-root   "/path/to/project/outputs/seg/750_Picacho" \
       --device cpu --save-panoptic
 """
 import glob

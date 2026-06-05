@@ -12,7 +12,7 @@ from pathlib import Path
 
 def verify_example_paths():
     """Verify all paths referenced in examples exist."""
-    repo_root = Path(__file__).parent
+    repo_root = Path(__file__).resolve().parents[2]
 
     # Paths referenced in examples/vfx_extension_example.py
     paths_to_verify = [

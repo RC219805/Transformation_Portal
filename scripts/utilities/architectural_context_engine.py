@@ -501,7 +501,7 @@ def main():
     print("3. PDF DOCUMENT ANALYSIS")
     print("-" * 80)
 
-    pdf_path = Path("/Users/rc/24098.00_750 PICACHO LANE.pd")
+    pdf_path = Path.home() / "24098.00_750 PICACHO LANE.pd"
     if pdf_path.exists():
         pdf_context = extractor.extract_from_pdf(pdf_path)
         print(f"\nPDF: {pdf_path.name}")

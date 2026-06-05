@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-File: tools/ad_editorial_post_pipeline_v2.py
+File: tools/deprecated/ad_editorial_post_pipeline_v2.py
 Architectural Digest–grade Interior Post-Production Pipeline (Enhanced)
 
 VERSION 2.0 - Priority 2+ Improvements
@@ -30,10 +30,10 @@ python -m pip install pytest pytest-cov
 
 Usage
 -----
-python ad_editorial_post_pipeline_v2.py run --config config.yml -vv
+python tools/deprecated/ad_editorial_post_pipeline_v2.py run --config config.yml -vv
 
 Resume after interruption:
-python ad_editorial_post_pipeline_v2.py run --config config.yml --resume
+python tools/deprecated/ad_editorial_post_pipeline_v2.py run --config config.yml --resume
 
 License
 -------
@@ -896,7 +896,7 @@ def filter_selects(cfg: PipelineConfig, files: List[Path]) -> List[Path]:
     if not cfg.selects.get("use_csv", False):
         return files
 
-    csv_path = Path(cfg.selects.get("csv_path", "DOCS/selects.csv"))
+    csv_path = Path(cfg.selects.get("csv_path", Path("DOCS") / "selects.csv"))
     if not csv_path.exists():
         return files
 

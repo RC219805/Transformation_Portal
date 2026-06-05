@@ -1,37 +1,39 @@
 # Deprecated Files
 
-This directory contains older versions of scripts that have been superseded by newer implementations.
+This directory contains older AD editorial snapshots that have been superseded
+by the maintained implementation in `tools/ad_editorial_post_pipeline.py`.
 
 ## Why Are These Here?
 
-These files are kept for historical reference and backward compatibility but are no longer actively maintained.
+These files are kept for historical audit only and are no longer actively
+maintained.
 
 ## Deprecated Files
 
 ### AD Editorial Post Pipeline
 
-**Current Version:** `../ad_editorial_post_pipeline.py`
+**Current maintained entrypoint:** `../ad_editorial_post_pipeline.py`
 
 **Deprecated Versions:**
 - `ad_editorial_post_pipeline_v2.py` - Version 2.0 (superseded by main version)
 - `ad_editorial_post_pipeline_v3.py` - Version 3.0 (merged into main version)
-- `test_ad_pipeline.py` - Old tests (superseded by `test_ad_pipeline_v3.py`)
+- `test_ad_pipeline.py` - Version 2 tests
+- `test_ad_pipeline_v3.py` - Version 3 tests
 
 **Migration:**
-Use `../ad_editorial_post_pipeline.py` which incorporates the best features from all versions:
-- Proper sRGB gamma conversion
-- Fine-grained progress tracking
-- Comprehensive config validation
-- Downsampled auto-upright (30x speedup)
-- Style registry pattern
-- Stage-based architecture
+Use `../ad_editorial_post_pipeline.py` for current AD editorial processing.
+These snapshots remain co-located with their tests only so historical behavior
+can be audited without advertising deprecated entrypoints as active tools.
 
-## When Will These Be Removed?
+## Removal Policy
 
-These files will be removed in v0.2.0 (estimated Q1 2026). If you depend on any of these files, please migrate to the current versions before then.
+No removal date is promised here. Removing these snapshots requires an explicit
+contract audit confirming that no docs, tests, or historical evidence still need
+the files.
 
 ## Need Help?
 
 If you're unsure which version to use or need help migrating, see:
+- [AD Editorial Post-Production Guide](../../docs/guides/AD_EDITORIAL_POST_PIPELINE.md)
 - [Migration Guide](../../docs/guides/REFACTORING_2025.md)
 - [Tools README](../README.md)
