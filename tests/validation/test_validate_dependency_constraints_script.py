@@ -15,6 +15,7 @@ pytestmark = pytest.mark.unit
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 SCRIPT_PATH = PROJECT_ROOT / "scripts" / "validate_dependency_constraints.sh"
+CANONICAL_SCRIPT_PATH = PROJECT_ROOT / "scripts" / "validation" / "validate_dependency_constraints.sh"
 BANNED_REGISTRY_PATH = PROJECT_ROOT / "scripts" / "security" / "banned_dependencies.json"
 RESOLVER_PATH = PROJECT_ROOT / "scripts" / "setup" / "resolve_python_311.sh"
 DEFAULT_PATH = "/usr/bin:/bin"
@@ -72,6 +73,10 @@ def _write_lockfile(path: Path) -> None:
 
 def _prepare_validator_repo(repo_root: Path) -> None:
     _copy_repo_file(SCRIPT_PATH, repo_root / "scripts" / "validate_dependency_constraints.sh")
+    _copy_repo_file(
+        CANONICAL_SCRIPT_PATH,
+        repo_root / "scripts" / "validation" / "validate_dependency_constraints.sh",
+    )
     _copy_repo_file(BANNED_REGISTRY_PATH, repo_root / "scripts" / "security" / "banned_dependencies.json")
     _prepare_repo_python(repo_root)
 
