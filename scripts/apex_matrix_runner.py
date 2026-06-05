@@ -60,6 +60,8 @@ from transformation_portal.metrics.performance_capsule import PerformanceCapsule
 
 __version__ = "1.0.0"
 
+APEX_DA3_MODEL_KEY = "da3-metric"
+
 
 class ApexConfigError(ValueError):
     """Configuration error (invalid flags, unknown backend_id, etc.).
@@ -229,6 +231,13 @@ def check_ml_dependencies(backend_id: str) -> tuple[bool, list[str]]:
     return all_available, missing
 
 
+def _model_key_for_backend(backend_id: str) -> Optional[str]:
+    """Return governed model selectors that the matrix runner must pin."""
+    if backend_id == "da3":
+        return APEX_DA3_MODEL_KEY
+    return None
+
+
 def run_apex_for_config(
     run_spec: RunSpec,
     zone: str,
@@ -338,6 +347,7 @@ def run_apex_for_config(
 
     config = EnhanceConfig(
         model_variant=ModelVariant.METRIC_LARGE,
+        model_key=_model_key_for_backend(run_spec.backend_id),
         depth_device=run_spec.device,
         v2_device=run_spec.device,
         depth_backend=run_spec.backend_id,
