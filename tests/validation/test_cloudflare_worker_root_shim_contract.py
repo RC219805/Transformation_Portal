@@ -70,6 +70,7 @@ def test_root_wrangler_config_points_to_governed_worker_entrypoint() -> None:
     assert root_config["main"] == expected_root_main
     assert worker_entrypoint.is_file()
     assert root_config["compatibility_date"] == worker_config["compatibility_date"]
+    assert root_config["keep_vars"] is worker_config["keep_vars"] is True
     assert root_config["observability"] == worker_config["observability"]
     assert root_config["observability"]["enabled"] is True
     assert 0 < root_config["observability"]["head_sampling_rate"] <= 1
