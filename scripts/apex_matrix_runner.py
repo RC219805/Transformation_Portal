@@ -49,6 +49,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Optional
 
+from transformation_portal.lux_depth_v3._backend_contract import normalize_backend_id
 from transformation_portal.metrics.aggregator import (
     compute_global_stats,
     compute_per_zone_stats,
@@ -233,7 +234,7 @@ def check_ml_dependencies(backend_id: str) -> tuple[bool, list[str]]:
 
 def _model_key_for_backend(backend_id: str) -> Optional[str]:
     """Return governed model selectors that the matrix runner must pin."""
-    if backend_id == "da3":
+    if normalize_backend_id(backend_id, warn=False) == "da3":
         return APEX_DA3_MODEL_KEY
     return None
 
