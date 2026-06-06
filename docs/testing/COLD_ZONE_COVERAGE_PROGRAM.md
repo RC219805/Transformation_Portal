@@ -692,3 +692,39 @@ the new floor took effect in §17.3 below.
    code paths that assume `transformation_portal.vlm.LLaVAProcessor` is
    importable without instantiation)? Audit during PR 0; surface affected
    call sites in the PR description.
+
+---
+
+## 19. Floor additions — 2026-06-06 (app.py + orchestrator durable-state)
+
+A coverage audit on 2026-06-06 found two governed surfaces that were already
+*measured* by the core-tier coverage step (`.github/workflows/build.yml` runs
+`--cov=app`) but had **no enforced floor**, so they could silently regress:
+
+1. **`app.py`** — the FastAPI origin holding the most security-critical
+   hardening (allowed-root validation, API-key / trusted-host enforcement,
+   request size / concurrency / rate limits, pipeline allowlists).
+2. **The paid-pilot durable-state backends** —
+   `orchestrator/storage/`, `orchestrator/queue/`, `orchestrator/artifact_store/`
+   (the `JobRepository` / `QueueBroker` / `ArtifactStore` Protocol surfaces).
+   Their Postgres/Redis/S3 paths only get full exercise behind the opt-in
+   live-service contract gates, so the core-lane rollup leans on the
+   in-memory/local implementations — which is exactly the contract coverage a
+   floor protects.
+
+Floors were set conservatively below a 2026-06-06 core-lane snapshot
+(`(unit or security or regression or golden or integration) and not ml and not
+slow and not benchmark`) to absorb cross-lane variance, per the
+"conservative starter, ratchet upward after a confirming CI run" discipline.
+
+| Prefix | Measured line | Line floor | Measured branch | Branch floor |
+|---|---:|---:|---:|---:|
+| `app.py` | 83.8% | 76.0% | 75.3% | 66.0% |
+| `orchestrator/storage/` | 68.0% | 60.0% | 51.4% | 44.0% |
+| `orchestrator/queue/` | 67.6% | 58.0% | 43.8% | 36.0% |
+| `orchestrator/artifact_store/` | 65.9% | 58.0% | 54.7% | 46.0% |
+
+Line floors live in `scripts/ci/check_per_package_coverage.py`; branch floors
+in `scripts/ci/check_per_package_branch_coverage.py`. Ratchet upward once the
+live-service lanes (Postgres/Redis/S3 contract gates) are folded into the
+floor-bearing coverage run.

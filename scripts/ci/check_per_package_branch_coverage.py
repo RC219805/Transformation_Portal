@@ -41,6 +41,16 @@ BRANCH_FLOORS: tuple[BranchFloor, ...] = (
     BranchFloor("src/transformation_portal/depth/", 42.0),
     BranchFloor("src/transformation_portal/streaming/", 29.0),
     BranchFloor("src/transformation_portal/spatial_ai/reconstruction/", 47.0),
+    # FastAPI origin + governed paid-pilot durable-state backends. Measured in
+    # the 2026-06-06 core-lane snapshot at app.py 75.3%, orchestrator/storage/
+    # 51.4%, orchestrator/queue/ 43.8%, orchestrator/artifact_store/ 54.7%
+    # branch coverage. Conservative starters below those values; ratchet upward
+    # after a confirming required-CI run. See check_per_package_coverage.py for
+    # the matching line-coverage floors and rationale.
+    BranchFloor("app.py", 66.0),
+    BranchFloor("src/transformation_portal/orchestrator/storage/", 44.0),
+    BranchFloor("src/transformation_portal/orchestrator/queue/", 36.0),
+    BranchFloor("src/transformation_portal/orchestrator/artifact_store/", 46.0),
 )
 
 # If a future branch temporarily clears floors, dry-run mode still reports the
@@ -52,6 +62,10 @@ DRY_RUN_BRANCH_PREFIXES: tuple[str, ...] = (
     "src/transformation_portal/depth/",
     "src/transformation_portal/streaming/",
     "src/transformation_portal/spatial_ai/reconstruction/",
+    "app.py",
+    "src/transformation_portal/orchestrator/storage/",
+    "src/transformation_portal/orchestrator/queue/",
+    "src/transformation_portal/orchestrator/artifact_store/",
 )
 
 
