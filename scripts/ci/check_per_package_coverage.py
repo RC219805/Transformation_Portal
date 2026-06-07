@@ -90,6 +90,25 @@ PACKAGE_FLOORS: tuple[PackageFloor, ...] = (
     PackageFloor("src/transformation_portal/depth/", 57.0),
     PackageFloor("src/transformation_portal/streaming/", 53.0),
     PackageFloor("src/transformation_portal/spatial_ai/reconstruction/", 42.0),
+    # FastAPI origin. app.py is already measured in the core-tier coverage step
+    # (build.yml runs `--cov=app`), and a 2026-06-06 core-lane snapshot put it at
+    # ~83.8% line coverage, but until now nothing FLOORED it — the most
+    # security-critical hardening surface (allowed-root validation, API-key /
+    # trusted-host enforcement, request limits, pipeline allowlists) could
+    # silently regress. Conservative starter well below the measured value to
+    # absorb cross-lane variance; ratchet upward after a confirming CI run.
+    PackageFloor("app.py", 76.0),
+    # Governed paid-pilot durable-state backends. These three packages are the
+    # first-class JobRepository / QueueBroker / ArtifactStore Protocol surfaces
+    # (memory + Postgres/Redis/S3 implementations). The Postgres/Redis/S3 paths
+    # only get full exercise behind the opt-in live-service contract gates, so
+    # the core-lane rollup leans on the in-memory/local implementations. Floors
+    # set below the 2026-06-06 core-lane snapshot (storage 68.0%, queue 67.6%,
+    # artifact_store 65.9%) so the in-memory/local contract coverage cannot
+    # silently regress; raise once the live-service lanes are folded in.
+    PackageFloor("src/transformation_portal/orchestrator/storage/", 60.0),
+    PackageFloor("src/transformation_portal/orchestrator/queue/", 58.0),
+    PackageFloor("src/transformation_portal/orchestrator/artifact_store/", 58.0),
 )
 
 

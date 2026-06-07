@@ -142,7 +142,7 @@ def test_missing_coverage_xml_returns_2(script_module, tmp_path: Path):
     assert script_module.main([str(tmp_path / "missing.xml"), "--dry-run"]) == 2
 
 
-def test_default_branch_floors_cover_cold_zone_prefixes(script_module):
+def test_default_branch_floors_cover_cold_zone_and_durable_state_prefixes(script_module):
     assert tuple((floor.prefix, floor.floor) for floor in script_module.BRANCH_FLOORS) == (
         ("src/transformation_portal/plugins/", 36.0),
         ("src/transformation_portal/stage_graph/", 63.0),
@@ -150,6 +150,10 @@ def test_default_branch_floors_cover_cold_zone_prefixes(script_module):
         ("src/transformation_portal/depth/", 42.0),
         ("src/transformation_portal/streaming/", 29.0),
         ("src/transformation_portal/spatial_ai/reconstruction/", 47.0),
+        ("app.py", 66.0),
+        ("src/transformation_portal/orchestrator/storage/", 44.0),
+        ("src/transformation_portal/orchestrator/queue/", 36.0),
+        ("src/transformation_portal/orchestrator/artifact_store/", 46.0),
     )
 
 
