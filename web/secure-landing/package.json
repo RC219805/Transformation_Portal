@@ -27,7 +27,7 @@
   "dependencies": {
     "argon2": "^0.44.0",
     "better-sqlite3": "^12.10.0",
-    "ioredis": "^5.11.0",
+    "ioredis": "^5.11.1",
     "next": "16.2.7",
     "react": "^19.2.7",
     "react-dom": "^19.2.7"
@@ -39,6 +39,6 @@
     "@playwright/test": "1.60.0",
     "esbuild": "^0.28.0",
     "postcss": "8.5.15",
-    "stylelint": "^17.12.0"
+    "stylelint": "^17.13.0"
   }
 }
