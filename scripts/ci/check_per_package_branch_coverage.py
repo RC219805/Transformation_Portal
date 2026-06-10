@@ -58,6 +58,10 @@ BRANCH_FLOORS: tuple[BranchFloor, ...] = (
     # ComfyUI workflow builder — branch coverage reached 100% on 2026-06-06 via
     # tests/test_comfyui_workflow_builder.py. Conservative floor locks it in.
     BranchFloor("src/transformation_portal/comfyui/workflow_builder.py", 80.0),
+    # ComfyUI workflow templates — pure declarative builders and serialization
+    # only. Custom variant-list tests cover the non-default target/strength
+    # branches; no executor, torch, ML, or network runtime path is invoked.
+    BranchFloor("src/transformation_portal/comfyui/workflow_templates.py", 90.0),
     # Universal hardening wrapper — branch coverage reached 100% on 2026-06-06
     # via the input-validation path tests. Conservative package floor.
     BranchFloor("src/transformation_portal/hardening/", 85.0),
@@ -84,6 +88,7 @@ DRY_RUN_BRANCH_PREFIXES: tuple[str, ...] = (
     "src/transformation_portal/orchestrator/artifact_store/",
     "src/transformation_portal/metrics/ledger.py",
     "src/transformation_portal/comfyui/workflow_builder.py",
+    "src/transformation_portal/comfyui/workflow_templates.py",
     "src/transformation_portal/hardening/",
     "src/transformation_portal/storage/cas_store.py",
     "src/transformation_portal/orchestrator/worker.py",

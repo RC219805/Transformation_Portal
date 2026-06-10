@@ -67,6 +67,34 @@ def test_multi_variant_generation_builds_expected_count():
     assert all(workflow.nodes for workflow in workflows)
 
 
+def test_multi_variant_generation_preserves_custom_targets_and_strengths():
+    workflows = WorkflowTemplates.multi_variant_generation(
+        input_path="input.jpg",
+        output_dir="variants",
+        num_variants=3,
+        emotional_targets=["serenity"],
+        flux_strengths=[0.25, 0.65],
+    )
+
+    assert [workflow.metadata["name"] for workflow in workflows] == [
+        "Variant 1 - Serenity",
+        "Variant 2 - Serenity",
+        "Variant 3 - Serenity",
+    ]
+
+    for index, workflow in enumerate(workflows):
+        neuro_node = next(node for node in workflow.nodes.values() if node.node_type == NodeType.NEUROAESTHETICS)
+        output_node = next(node for node in workflow.nodes.values() if node.node_type == NodeType.OUTPUT)
+
+        assert neuro_node.parameters["emotional_target"] == "serenity"
+        assert output_node.parameters["filename"] == f"variants/variant_{index + 1}_serenity.jpg"
+
+    assert [
+        next(node for node in workflow.nodes.values() if node.node_type == NodeType.FLUX_ENHANCEMENT).parameters["strength"]
+        for workflow in workflows
+    ] == [0.25, 0.65, 0.45]
+
+
 @pytest.mark.parametrize(
     ("kwargs", "match"),
     [
