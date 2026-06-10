@@ -103,7 +103,7 @@ httpcore==1.0.9
     # via httpx
 httpx==0.28.1
     # via -r dev.in
-hypothesis==6.152.1
+hypothesis==6.155.2
     # via -r dev.in
 id==1.6.1
     # via twine
