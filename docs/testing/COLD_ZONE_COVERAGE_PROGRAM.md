@@ -728,3 +728,22 @@ Line floors live in `scripts/ci/check_per_package_coverage.py`; branch floors
 in `scripts/ci/check_per_package_branch_coverage.py`. Ratchet upward once the
 live-service lanes (Postgres/Redis/S3 contract gates) are folded into the
 floor-bearing coverage run.
+
+### 19.1 File-level ratchets from behavioral test fills (2026-06-06)
+
+Two live, pure-Python modules were lifted out of the cold zone with
+deterministic behavioral tests and pinned with file-level floors:
+
+| File | Before | After (line/branch) | Floor (line/branch) | Tests |
+|---|---:|---|---:|---|
+| `metrics/ledger.py` | ~30% line | 98.8% / 93% | 90% / 82% | `tests/test_metrics_ledger.py` |
+| `comfyui/workflow_builder.py` | 0% line | 100% / 100% | 90% / 80% | `tests/test_comfyui_workflow_builder.py` |
+
+`comfyui/workflow_builder.py` required a precondition: `comfyui/__init__.py`
+eagerly imported `custom_nodes` (top-level `import torch`), so the pure builder
+could not be imported in the core lane. It was converted to a **PEP 562
+lazy-import seam** (`__getattr__` over `_LAZY_EXPORTS`) — the same discipline
+§4.3 prescribes for VLM — so `workflow_builder` / `workflow_templates` import
+torch-free while `custom_nodes` / `executor` load lazily on first access
+(node-registry decorators still fire on access, so ML-lane behavior is
+unchanged).

@@ -114,6 +114,13 @@ PACKAGE_FLOORS: tuple[PackageFloor, ...] = (
     # on 2026-06-06; this file-level floor locks the gain in. The rest of
     # metrics/ stays unfloored (several siblings are ML/metric backends).
     PackageFloor("src/transformation_portal/metrics/ledger.py", 90.0),
+    # Pure-Python ComfyUI workflow builder. A PEP 562 lazy-import seam in
+    # comfyui/__init__.py made it importable torch-free; behavioral tests in
+    # tests/test_comfyui_workflow_builder.py took it from 0% to 100% line on
+    # 2026-06-06. Conservative file-level floor locks the gain in (the rest of
+    # comfyui/ stays unfloored — custom_nodes/executor are torch/atmosphere
+    # bound and only run in the ML lane).
+    PackageFloor("src/transformation_portal/comfyui/workflow_builder.py", 90.0),
 )
 
 
