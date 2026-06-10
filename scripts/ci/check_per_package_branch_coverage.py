@@ -64,6 +64,9 @@ BRANCH_FLOORS: tuple[BranchFloor, ...] = (
     # CAS store — branch coverage reached ~89% on 2026-06-06 via the lifecycle
     # tests. Conservative floor below that (residual misses are race/IO-fault).
     BranchFloor("src/transformation_portal/storage/cas_store.py", 80.0),
+    # Orchestrator worker runner — branch coverage reached 100% on 2026-06-06
+    # via the unit tests. Conservative floor.
+    BranchFloor("src/transformation_portal/orchestrator/worker.py", 85.0),
 )
 
 # If a future branch temporarily clears floors, dry-run mode still reports the
@@ -83,6 +86,7 @@ DRY_RUN_BRANCH_PREFIXES: tuple[str, ...] = (
     "src/transformation_portal/comfyui/workflow_builder.py",
     "src/transformation_portal/hardening/",
     "src/transformation_portal/storage/cas_store.py",
+    "src/transformation_portal/orchestrator/worker.py",
 )
 
 

@@ -132,6 +132,11 @@ PACKAGE_FLOORS: tuple[PackageFloor, ...] = (
     # line on 2026-06-06. The residual misses are deep I/O-fault and post-lock
     # race branches that resist deterministic testing.
     PackageFloor("src/transformation_portal/storage/cas_store.py", 88.0),
+    # Orchestrator worker runner (governed durable-state dispatch consumer).
+    # Unit tests in tests/orchestrator/test_worker_runner_unit.py cover the
+    # executor error branches, heartbeat-loop cancellation, supervisor backoff,
+    # broker disposal, and the CLI entry point: 76% -> 100% line on 2026-06-06.
+    PackageFloor("src/transformation_portal/orchestrator/worker.py", 90.0),
 )
 
 
