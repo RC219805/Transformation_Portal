@@ -96,6 +96,9 @@ actionable; use the linked docs and `Makefile` for exhaustive inventories.
   `make test-frontdoor-contract`, `make validate-frontdoor-browser`,
   `make validate-portal-browser`, and
   `make validate-frontdoor-deployment-gate` for shared deployment posture.
+  For direct deployments, set `TP_FRONTDOOR_GATE_DEPLOYMENT_TARGET` and
+  `TP_FRONTDOOR_GATE_DEPLOYMENT_URL`; the Vercel legacy alias is supported only
+  for Vercel checks.
   Keep selectors and managed-auth observability stable.
 - Archive and pipeline gates:
   `make test-archive-gate-contract`, `make audit-pipeline-readiness`,
@@ -108,7 +111,9 @@ actionable; use the linked docs and `Makefile` for exhaustive inventories.
   `make test-frontdoor-redis-contract`,
   `make test-artifact-s3-contract`, and
   `make test-paid-pilot-services-contract`. Start only the services required by
-  the lane and report missing services as environment blockers.
+  the lane and report missing services as environment blockers. Managed-provider
+  staging uses `TP_MANAGED_PAID_PILOT_ENV_FILE=/tmp/tp-managed-staging.env make run-managed-paid-pilot-gate`;
+  pass `MANAGED_PAID_PILOT_GATE_ARGS=--preflight-only` for clean-env preflight.
 - Governance/docs gates:
   `make validate-ci`,
   `make check-stale-docs`, `make check-doc-heading-links`,
@@ -133,6 +138,9 @@ actionable; use the linked docs and `Makefile` for exhaustive inventories.
   Treat this as cold-zone ratchet evidence, not a blocking local gate.
 - Segmentation content-digest contract:
   `./.venv/bin/pytest tests/spatial_ai/segmentation/test_content_digest.py -v`.
+- Legacy segmentation adapter contracts:
+  `./.venv/bin/pytest tests/segmentation/test_legacy_segmentation_contracts.py -v`.
+  Requires `torch`; report missing optional ML deps as environment blockers.
 - SAM2 CPU fallback benchmark:
   `TP_RUN_BENCHMARKS=1 TP_SAM2_BENCHMARK_DEVICE=cpu ./.venv/bin/pytest tests/spatial_ai/segmentation/test_sam2_backend_performance.py::TestSAM2AutoModePerformance::test_auto_mode_latency_512x512 -v -s`.
   Requires `checkpoints/sam2.1_hiera_large.pt`.
@@ -155,6 +163,11 @@ actionable; use the linked docs and `Makefile` for exhaustive inventories.
   `docker compose up -d postgres`, `docker compose up -d redis`, and
   `docker compose --profile paid-pilot up -d minio minio-create-bucket`.
   Pair Postgres with `make db-upgrade`.
+- External orchestrator workers:
+  use `TP_ORCHESTRATOR_IN_PROCESS_WORKERS_ENABLED=0 make run-backend-local-noreload`
+  on backend hosts, then run `make run-orchestrator-worker` with
+  `TP_ORCHESTRATOR_STATE_BACKEND=postgres`, `TP_ORCHESTRATOR_QUEUE_BACKEND=redis`,
+  `TP_DATABASE_URL`, and `TP_REDIS_URL` set.
 - Container smoke:
   `docker compose run --rm tp-init`,
   `docker compose up --build transformation-portal-cpu`, and
@@ -197,17 +210,27 @@ actionable; use the linked docs and `Makefile` for exhaustive inventories.
   `./scripts/validate_dependency_constraints.sh`,
   `./scripts/setup/ensure_node_version.sh`, and
   `./scripts/setup/run_repo_python.sh scripts/validation/check_unsafe_torch_load.py --fix-suggestions`.
+  Unicode-control scans use
+  `./scripts/setup/run_repo_python.sh scripts/validation/check_unicode_controls.py <paths>`;
+  omit paths to scan staged Python, YAML, and Markdown files.
 - Script topology:
-  canonical implementations live under governed `scripts/setup`,
-  `scripts/pipelines`, `scripts/utilities`, or `src/transformation_portal`
-  paths. Public compatibility wrappers in `scripts/` must delegate to the
-  canonical module, bootstrap the right import root, and propagate exit status.
-  Validate with
+  canonical implementations live under governed `scripts/analysis`,
+  `scripts/ci`, `scripts/maintenance`, `scripts/setup`, `scripts/pipelines`,
+  `scripts/validation`, `scripts/verification`, `scripts/utilities`, or
+  `src/transformation_portal` paths. Public compatibility wrappers in
+  `scripts/` must delegate to the canonical module, bootstrap the right import
+  root, and propagate exit status. Validate with
   `./scripts/setup/run_repo_python.sh scripts/governance/check_script_topology.py`.
 - Cloudflare Worker root shim:
   root `package.json` is only a Workers Builds deploy shim. Use
-  `npm run worker:dry-run` or `npm run worker:deploy`; keep versions and
-  scripts aligned with `cloudflare/transformationportal-worker`.
+  `npm run worker:dry-run` or `npm run worker:deploy`; deploys must preserve
+  dashboard-managed vars via `--keep-vars`, and scripts stay aligned with
+  `cloudflare/transformationportal-worker`.
+- Unified Luxury batch I/O benchmark:
+  `make benchmark-unified-luxury-batch-io`; pass harness options through
+  `UNIFIED_LUXURY_BATCH_IO_BENCHMARK_ARGS`. Synthetic fixtures are smoke
+  evidence only; representative production TIFFs are required before changing
+  defaults.
 - Presence Security CLI:
   `.venv/bin/presence-security params`, `anchor`, and `watermark` are the
   current helpers for sessionized Presence Compiler parameters, SHA3 anchor
