@@ -738,6 +738,7 @@ deterministic behavioral tests and pinned with file-level floors:
 |---|---:|---|---:|---|
 | `metrics/ledger.py` | ~30% line | 98.8% / 93% | 90% / 82% | `tests/test_metrics_ledger.py` |
 | `comfyui/workflow_builder.py` | 0% line | 100% / 100% | 90% / 80% | `tests/test_comfyui_workflow_builder.py` |
+| `comfyui/workflow_templates.py` | 98.0% / 88.9% | 100% / 100% | 95% / 90% | `tests/comfyui/test_workflow_templates_contract.py` |
 | `hardening/` (`universal.py`) | 81% / 67% | 98% / 100% | 90% / 85% | `tests/security/test_universal_hardening.py` |
 | `storage/cas_store.py` | 78.5% / 59% | 96% / 89% | 88% / 80% | `tests/storage/test_cas_store_lifecycle.py` |
 | `orchestrator/worker.py` | 76% / 71% | 100% / 100% | 90% / 85% | `tests/orchestrator/test_worker_runner_unit.py` |

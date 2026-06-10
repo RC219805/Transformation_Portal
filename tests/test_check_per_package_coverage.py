@@ -405,6 +405,7 @@ class TestDefaultFloors:
             "src/transformation_portal/depth/": 57.0,
             "src/transformation_portal/streaming/": 53.0,
             "src/transformation_portal/spatial_ai/reconstruction/": 42.0,
+            "src/transformation_portal/comfyui/workflow_templates.py": 95.0,
         }
 
         assert {prefix: floors[prefix] for prefix in expected_floors} == expected_floors
