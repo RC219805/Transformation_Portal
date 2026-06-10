@@ -1,50 +1,46 @@
-"""ComfyUI workflow integration for visual pipeline orchestration.
+"""ComfyUI declarative workflow integration.
 
-ComfyUI provides node-based workflow design for complex enhancement pipelines,
-enabling:
-- Visual pipeline composition
-- Modular component integration
-- Parameter experimentation
-- Reproducible enhancement workflows
-
-Integrates all Transformation Portal components:
-- FLUX diffusion for AI enhancement
-- SkyGAN for atmospheric rendering
-- VLM for scene analysis and quality validation
-- Semantic segmentation for material-aware processing
-- Neuroaesthetics optimization
-- Quality metrics (LPIPS, FID)
-
-Example Workflows:
-- Full luxury estate enhancement pipeline
-- Quick iterative enhancement with quality gates
-- Material-specific processing with segmentation
-- Location-specific atmospheric rendering
-- Multi-variant generation with emotional targeting
+The package-level import intentionally exposes only pure workflow construction
+primitives. Runtime custom nodes and the executor are loaded lazily because they
+depend on optional ML/runtime packages that are not part of the core install.
 """
 
-from transformation_portal.comfyui.custom_nodes import (
-    CustomNodeRegistry,
-    FluxEnhancementNode,
-    MaterialSegmentationNode,
-    NeuroaestheticsNode,
-    QualityValidationNode,
-    SceneAnalysisNode,
-    SkyGANNode,
-)
-from transformation_portal.comfyui.executor import WorkflowExecutor
-from transformation_portal.comfyui.workflow_builder import WorkflowBuilder
+from typing import Any
+
+from transformation_portal.comfyui.workflow_builder import Node, NodeConnection, NodeType, Workflow, WorkflowBuilder
 from transformation_portal.comfyui.workflow_templates import WorkflowTemplates
 
 __all__ = [
+    "Node",
+    "NodeConnection",
+    "NodeType",
+    "Workflow",
     "WorkflowBuilder",
     "WorkflowTemplates",
     "WorkflowExecutor",
     "CustomNodeRegistry",
+    "BaseNode",
     "FluxEnhancementNode",
     "SkyGANNode",
     "SceneAnalysisNode",
-    "MaterialSegmentationNode",
-    "NeuroaestheticsNode",
-    "QualityValidationNode",
 ]
+
+
+def __getattr__(name: str) -> Any:
+    if name == "WorkflowExecutor":
+        from transformation_portal.comfyui.executor import WorkflowExecutor
+
+        return WorkflowExecutor
+
+    if name in {
+        "CustomNodeRegistry",
+        "BaseNode",
+        "FluxEnhancementNode",
+        "SkyGANNode",
+        "SceneAnalysisNode",
+    }:
+        from transformation_portal.comfyui import custom_nodes
+
+        return getattr(custom_nodes, name)
+
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
