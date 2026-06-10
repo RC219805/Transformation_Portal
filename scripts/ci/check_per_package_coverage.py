@@ -126,6 +126,12 @@ PACKAGE_FLOORS: tuple[PackageFloor, ...] = (
     # took universal.py from 81% to ~98% line on 2026-06-06. Package floor
     # (only __init__.py + universal.py live here).
     PackageFloor("src/transformation_portal/hardening/", 90.0),
+    # Content-addressable store (core artifact storage). Lifecycle tests in
+    # tests/storage/test_cas_store_lifecycle.py (dedup paths, materialize modes,
+    # gc / gc_quarantine, file-lock stale/timeout) took it from 78.5% to ~96%
+    # line on 2026-06-06. The residual misses are deep I/O-fault and post-lock
+    # race branches that resist deterministic testing.
+    PackageFloor("src/transformation_portal/storage/cas_store.py", 88.0),
 )
 
 
