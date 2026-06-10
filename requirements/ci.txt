@@ -16,11 +16,11 @@ build==1.5.0
     # via
     #   -c all.txt
     #   -r ci.in
-cachetools==7.0.5
+cachetools==7.1.4
     # via
     #   -c all.txt
     #   tox
-certifi==2026.2.25
+certifi==2026.5.20
     # via
     #   -c all.txt
     #   requests
@@ -40,15 +40,15 @@ cryptography==47.0.0
     # via
     #   -c all.txt
     #   secretstorage
-distlib==0.4.0
+distlib==0.4.1
     # via
     #   -c all.txt
     #   virtualenv
-docutils==0.22.4
+docutils==0.23
     # via
     #   -c all.txt
     #   readme-renderer
-filelock==3.25.2
+filelock==3.29.1
     # via
     #   -c all.txt
     #   python-discovery
@@ -58,7 +58,7 @@ id==1.6.1
     # via
     #   -c all.txt
     #   twine
-idna==3.15
+idna==3.18
     # via
     #   -c all.txt
     #   requests
@@ -74,7 +74,7 @@ jaraco-context==6.1.2
     # via
     #   -c all.txt
     #   keyring
-jaraco-functools==4.4.0
+jaraco-functools==4.5.0
     # via
     #   -c all.txt
     #   keyring
@@ -87,7 +87,7 @@ keyring==25.7.0
     # via
     #   -c all.txt
     #   twine
-markdown-it-py==4.0.0
+markdown-it-py==4.2.0
     # via
     #   -c all.txt
     #   rich
@@ -95,23 +95,23 @@ mdurl==0.1.2
     # via
     #   -c all.txt
     #   markdown-it-py
-more-itertools==11.0.2
+more-itertools==11.1.0
     # via
     #   -c all.txt
     #   jaraco-classes
     #   jaraco-functools
-nh3==0.3.4
+nh3==0.3.5
     # via
     #   -c all.txt
     #   readme-renderer
-packaging==26.0
+packaging==26.2
     # via
     #   -c all.txt
     #   build
     #   pyproject-api
     #   tox
     #   twine
-platformdirs==4.9.6
+platformdirs==4.10.0
     # via
     #   -c all.txt
     #   python-discovery
@@ -130,11 +130,11 @@ pygments==2.20.0
     #   -c all.txt
     #   readme-renderer
     #   rich
-pypdf==6.12.2
+pypdf==6.13.1
     # via
     #   -c all.txt
     #   -r ci.in
-pyproject-api==1.10.0
+pyproject-api==1.10.1
     # via
     #   -c all.txt
     #   tox
@@ -142,7 +142,7 @@ pyproject-hooks==1.2.0
     # via
     #   -c all.txt
     #   build
-python-discovery==1.2.2
+python-discovery==1.4.0
     # via
     #   -c all.txt
     #   tox
@@ -155,7 +155,7 @@ readme-renderer==44.0
     # via
     #   -c all.txt
     #   twine
-requests==2.33.1
+requests==2.34.2
     # via
     #   -c all.txt
     #   requests-toolbelt
@@ -177,7 +177,7 @@ secretstorage==3.5.0
     # via
     #   -c all.txt
     #   keyring
-stevedore==5.7.0
+stevedore==5.8.0
     # via
     #   -c all.txt
     #   bandit
@@ -185,7 +185,7 @@ tomli-w==1.2.0
     # via
     #   -c all.txt
     #   tox
-tox==4.54.0
+tox==4.55.1
     # via
     #   -c all.txt
     #   -r ci.in
@@ -199,7 +199,7 @@ urllib3==2.7.0
     #   id
     #   requests
     #   twine
-virtualenv==21.2.1
+virtualenv==21.4.2
     # via
     #   -c all.txt
     #   tox
