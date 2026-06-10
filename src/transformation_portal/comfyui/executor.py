@@ -127,21 +127,20 @@ class WorkflowExecutor:
 
         inputs = self._get_node_inputs(node, workflow, context)
 
-        # Dispatch table
         method_name = f"_execute_{node.node_type.name.lower()}_node"
-        if hasattr(self, method_name):
-            outputs = getattr(self, method_name)(node, inputs)
-        else:
-            # Fallback mappings for specific types mentioned in your code
-            if node.node_type == NodeType.SKYGAN_SKY:
-                outputs = self._execute_skygan_node(node, inputs)
-            elif node.node_type == NodeType.ATMOSPHERIC_MODEL:
-                outputs = self._execute_atmospheric_model_node(node, inputs)
-            elif node.node_type == NodeType.FLUX_ENHANCEMENT:
-                outputs = self._execute_flux_node(node, inputs)
-            # ... add other mappings ...
-            else:
-                outputs = inputs  # Pass-through fallback
+        handler = getattr(self, method_name, None)
+
+        if handler is None and node.node_type == NodeType.SKYGAN_SKY:
+            handler = self._execute_skygan_node
+        elif handler is None and node.node_type == NodeType.ATMOSPHERIC_MODEL:
+            handler = self._execute_atmospheric_model_node
+
+        if handler is None:
+            raise NotImplementedError(
+                f"No executor implementation for node type {node.node_type.name} " f"({node.node_type.value})"
+            )
+
+        outputs = handler(node, inputs)
 
         context.set_output(node.node_id, outputs)
 

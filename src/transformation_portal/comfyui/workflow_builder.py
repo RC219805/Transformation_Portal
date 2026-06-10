@@ -241,17 +241,20 @@ class WorkflowBuilder:
         return self
 
     def add_scene_analysis(self, detailed: bool = True) -> "WorkflowBuilder":
+        previous_node_id = self._last_node_id
+        previous_output = self._last_output
+
         self._add_node(
             NodeType.SCENE_ANALYSIS,
             parameters={"detailed": detailed},
         )
-        # Note: Analysis node outputs STRING (json), not IMAGE.
-        # This breaks the chain for image processing unless we handle branching.
-        # For simplicity in linear builder, we assume analysis is a sidecar
-        # but the builder continues from the previous image node?
-        # A true builder would need to support branching.
-        # For this salvage, we will assume analysis acts as a pass-through or ends chain.
-        self._last_output = "STRING"
+
+        # Scene analysis reads the current image as a sidecar. Preserve the
+        # image chain so downstream image-processing nodes do not consume the
+        # analysis report as their input image.
+        self._last_node_id = previous_node_id
+        self._last_output = previous_output
+
         logger.info("Added scene analysis node")
         return self
 
@@ -263,6 +266,7 @@ class WorkflowBuilder:
         guidance_scale: float = 3.5,
         variant: str = "dev",
         use_controlnet: bool = False,
+        controlnet_types: Optional[List[str]] = None,
     ) -> "WorkflowBuilder":
         params = {
             "strength": strength,
@@ -273,8 +277,27 @@ class WorkflowBuilder:
         }
         if prompt:
             params["prompt"] = prompt
+        if controlnet_types is not None:
+            params["controlnet_types"] = controlnet_types
 
         self._add_node(NodeType.FLUX_ENHANCEMENT, parameters=params)
+        self._last_output = "IMAGE"
+        return self
+
+    def add_material_segmentation(
+        self,
+        materials: Optional[List[str]] = None,
+        filter_by_area: bool = True,
+        min_area: int = 500,
+    ) -> "WorkflowBuilder":
+        params: Dict[str, Any] = {
+            "filter_by_area": filter_by_area,
+            "min_area": min_area,
+        }
+        if materials is not None:
+            params["materials"] = materials
+
+        self._add_node(NodeType.MATERIAL_SEGMENTATION, parameters=params)
         self._last_output = "IMAGE"
         return self
 
@@ -286,6 +309,7 @@ class WorkflowBuilder:
         cloud_coverage: float = 0.3,
         auto_correct: bool = True,
         strict_physics: bool = False,
+        update_reflections: bool = True,
         sun_azimuth: Optional[float] = None,
         sun_elevation: Optional[float] = None,
         turbidity: Optional[float] = None,
@@ -301,6 +325,7 @@ class WorkflowBuilder:
             "cloud_coverage": cloud_coverage,
             "auto_correct": auto_correct,
             "strict_physics": strict_physics,
+            "update_reflections": update_reflections,
         }
 
         if sun_azimuth is not None:
@@ -315,17 +340,67 @@ class WorkflowBuilder:
         logger.info(f"Added SkyGAN node (location={location}, auto_correct={auto_correct})")
         return self
 
+    def add_neuroaesthetics_optimization(
+        self,
+        emotional_target: str = "luxury",
+        optimize_composition: bool = True,
+        optimize_color_harmony: bool = True,
+        optimize_spatial_frequency: bool = True,
+    ) -> "WorkflowBuilder":
+        self._add_node(
+            NodeType.NEUROAESTHETICS,
+            parameters={
+                "emotional_target": emotional_target,
+                "optimize_composition": optimize_composition,
+                "optimize_color_harmony": optimize_color_harmony,
+                "optimize_spatial_frequency": optimize_spatial_frequency,
+            },
+        )
+        self._last_output = "IMAGE"
+        return self
+
+    def add_atmospheric_model(
+        self,
+        apply_aerial_perspective: bool = True,
+        marine_layer: bool = False,
+        max_distance: float = 1000.0,
+    ) -> "WorkflowBuilder":
+        self._add_node(
+            NodeType.ATMOSPHERIC_MODEL,
+            parameters={
+                "apply_aerial_perspective": apply_aerial_perspective,
+                "marine_layer": marine_layer,
+                "max_distance": max_distance,
+            },
+        )
+        self._last_output = "IMAGE"
+        return self
+
     def add_quality_validation(
         self,
         pass_threshold: float = 7.0,
         warning_threshold: float = 5.0,
+        check_realism: bool = True,
+        check_structural_accuracy: bool = True,
+        check_material_consistency: bool = False,
     ) -> "WorkflowBuilder":
+        previous_node_id = self._last_node_id
+        previous_output = self._last_output
+
         params = {
             "pass_threshold": pass_threshold,
             "warning_threshold": warning_threshold,
+            "check_realism": check_realism,
+            "check_structural_accuracy": check_structural_accuracy,
+            "check_material_consistency": check_material_consistency,
         }
         self._add_node(NodeType.QUALITY_VALIDATION, parameters=params)
-        self._last_output = "STRING"  # Output is report
+
+        # Quality validation emits a report, but downstream image nodes should
+        # keep consuming the image that was validated.
+        self._last_node_id = previous_node_id
+        self._last_output = previous_output
+
         return self
 
     def add_output(self, output_path: str, format: str = "jpg", quality: int = 95) -> "WorkflowBuilder":
