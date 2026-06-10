@@ -738,6 +738,7 @@ deterministic behavioral tests and pinned with file-level floors:
 |---|---:|---|---:|---|
 | `metrics/ledger.py` | ~30% line | 98.8% / 93% | 90% / 82% | `tests/test_metrics_ledger.py` |
 | `comfyui/workflow_builder.py` | 0% line | 100% / 100% | 90% / 80% | `tests/test_comfyui_workflow_builder.py` |
+| `hardening/` (`universal.py`) | 81% / 67% | 98% / 100% | 90% / 85% | `tests/security/test_universal_hardening.py` |
 
 `comfyui/workflow_builder.py` required a precondition: `comfyui/__init__.py`
 eagerly imported `custom_nodes` (top-level `import torch`), so the pure builder

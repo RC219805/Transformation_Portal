@@ -121,6 +121,11 @@ PACKAGE_FLOORS: tuple[PackageFloor, ...] = (
     # comfyui/ stays unfloored — custom_nodes/executor are torch/atmosphere
     # bound and only run in the ML lane).
     PackageFloor("src/transformation_portal/comfyui/workflow_builder.py", 90.0),
+    # Universal hardening wrapper — a governed cold-zone surface (CLAUDE.md).
+    # Input-validation path tests in tests/security/test_universal_hardening.py
+    # took universal.py from 81% to ~98% line on 2026-06-06. Package floor
+    # (only __init__.py + universal.py live here).
+    PackageFloor("src/transformation_portal/hardening/", 90.0),
 )
 
 
