@@ -1019,8 +1019,7 @@ jobs:
     needs: [preflight, lightweight, dependency-constraints, frontdoor-contract, lint, typecheck, test, generate-manifest]
     if: ${{ always() }}
     timeout-minutes: 5
-    permissions:
-      checks: write
+    permissions: {}
 
     steps:
       - name: Summarize upstream results
@@ -1201,44 +1200,3 @@ jobs:
             echo ""
             echo "**Note**: ${GOV_NOTE}"
           } >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Publish Dedicated CI Gate Check
-        if: ${{ always() }}
-        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3  # v9.0.0
-        env:
-          GATE_STATUS: ${{ env.GATE_STATUS || 'failure' }}
-          GATE_MODE: ${{ env.GATE_MODE || 'unknown' }}
-          GOV_EMOJI: ${{ env.GOV_EMOJI || '❓' }}
-          GOV_NOTE: ${{ env.GOV_NOTE || 'N/A' }}
-        with:
-          script: |
-            const conclusion = process.env.GATE_STATUS === 'success' ? 'success' : 'failure';
-
-            await github.rest.checks.create({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              name: 'CI Gate',
-              head_sha: context.payload.pull_request?.head?.sha || context.sha,
-              status: 'completed',
-              conclusion,
-              output: {
-                title: conclusion === 'success' ? '✅ CI Gate: PASSED' : '❌ CI Gate: FAILED',
-                summary: `**Mode**: ${process.env.GATE_MODE}\n\n**Reason**: ${process.env.GATE_MODE.includes('full') ? '${{ needs.preflight.outputs.reason }}' : 'docs-only or non-runtime changes'}\n\n**Dataset Governance**: ${process.env.GOV_EMOJI} ${process.env.GOV_NOTE}`,
-                text: `
-            **Preflight Decision**:
-            - run_full: ${{ needs.preflight.outputs.run_full }}
-            - reason: ${{ needs.preflight.outputs.reason }}
-
-            **Job Results**:
-            - lightweight: ${{ needs.lightweight.result }}
-            - dependency-constraints: ${{ needs['dependency-constraints'].result }}
-            - lint: ${{ needs.lint.result }}
-            - test: ${{ needs.test.result }}
-            - generate-manifest: ${{ needs['generate-manifest'].result }}
-
-            **Dataset Governance**:
-            - governance_passed: ${{ needs['generate-manifest'].outputs.governance_passed || 'N/A' }}
-            - governance_note: ${{ needs['generate-manifest'].outputs.governance_note || 'N/A' }}
-            `,
-              }
-            });
