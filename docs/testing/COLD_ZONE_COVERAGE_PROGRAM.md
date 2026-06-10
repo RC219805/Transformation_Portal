@@ -750,3 +750,38 @@ only pure workflow construction primitives while keeping runtime custom nodes
 and the executor behind lazy `__getattr__` access, so `workflow_builder` /
 `workflow_templates` import torch-free while `custom_nodes` / `executor` load
 only on first access.
+
+### 19.2 Measured floor ratchet (2026-06-10)
+
+A full core-lane snapshot (`(unit or security or regression or golden or
+integration) and not ml and not slow and not benchmark`, with
+`--cov=src/transformation_portal --cov=src/tp --cov=app`) was taken against
+`main` and existing floors were ratcheted upward toward — but kept a safety
+margin below — the measured values. Prefixes whose measured headroom was under
+~5 points (`stage_graph`, `vlm`, `depth`, `streaming`,
+`spatial_ai/reconstruction`) were intentionally left unchanged until a fill PR
+raises the underlying coverage. Live-service backend prefixes were ratcheted
+only within their in-memory/local core-lane snapshot (not assuming the
+Postgres/Redis/S3 lanes).
+
+| Prefix | Measured (line / branch) | Line floor | Branch floor |
+|---|---:|---:|---:|
+| `src/tp/` | 84.7% / — | 40 → 75 | — |
+| `lux_depth_v3/` | 81.1% / — | 30 → 72 | — |
+| `lux_depth_v3/validators/` | 85.4% / — | 70 → 80 | — |
+| `plugins/` | 54.4% / 43.8% | 48 → 50 | 36 → 40 |
+| `app.py` | 83.8% / 75.3% | 76 → 79 | 66 → 71 |
+| `orchestrator/storage/` | 68.0% / 51.4% | 60 → 64 | 44 → 48 |
+| `orchestrator/queue/` | 67.6% / 43.8% | 58 → 63 | 36 → 40 |
+| `orchestrator/artifact_store/` | 65.9% / 54.7% | 58 → 62 | 46 → 50 |
+| `metrics/ledger.py` | 98.8% / 94.4% | 90 → 95 | 82 → 90 |
+| `comfyui/workflow_builder.py` | 99.4% / 96.9% | 90 → 96 | 80 → 92 |
+| `comfyui/workflow_templates.py` | 100% / 100% | 95 → 97 | 90 → 96 |
+| `hardening/` | 98.2% / 100% | 90 → 95 | 85 → 95 |
+| `storage/cas_store.py` | 96.0% / 89.0% | 88 → 92 | 80 → 85 |
+| `orchestrator/worker.py` | 100% / 100% | 90 → 95 | 85 → 95 |
+
+The deterministic pure-Python file/package floors (ledger, comfyui, hardening,
+cas_store, worker) carry essentially no cross-lane variance and were ratcheted
+to ~3–5 points below their measured ceiling; the ML-adjacent and integration-
+dependent prefixes keep wider headroom.

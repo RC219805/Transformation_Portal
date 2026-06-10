@@ -35,7 +35,7 @@ class BranchFloor:
 # Prefixes with cross-lane variance keep extra headroom until the next measured
 # ratchet.
 BRANCH_FLOORS: tuple[BranchFloor, ...] = (
-    BranchFloor("src/transformation_portal/plugins/", 36.0),
+    BranchFloor("src/transformation_portal/plugins/", 40.0),
     BranchFloor("src/transformation_portal/stage_graph/", 63.0),
     BranchFloor("src/transformation_portal/vlm/", 55.0),
     BranchFloor("src/transformation_portal/depth/", 42.0),
@@ -47,30 +47,30 @@ BRANCH_FLOORS: tuple[BranchFloor, ...] = (
     # branch coverage. Conservative starters below those values; ratchet upward
     # after a confirming required-CI run. See check_per_package_coverage.py for
     # the matching line-coverage floors and rationale.
-    BranchFloor("app.py", 66.0),
-    BranchFloor("src/transformation_portal/orchestrator/storage/", 44.0),
-    BranchFloor("src/transformation_portal/orchestrator/queue/", 36.0),
-    BranchFloor("src/transformation_portal/orchestrator/artifact_store/", 46.0),
+    BranchFloor("app.py", 71.0),
+    BranchFloor("src/transformation_portal/orchestrator/storage/", 48.0),
+    BranchFloor("src/transformation_portal/orchestrator/queue/", 40.0),
+    BranchFloor("src/transformation_portal/orchestrator/artifact_store/", 50.0),
     # Performance ledger CLI — branch coverage reached ~93% on 2026-06-06 via
     # tests/test_metrics_ledger.py; conservative floor locks it in. See the
     # matching line floor in check_per_package_coverage.py.
-    BranchFloor("src/transformation_portal/metrics/ledger.py", 82.0),
+    BranchFloor("src/transformation_portal/metrics/ledger.py", 90.0),
     # ComfyUI workflow builder — branch coverage reached 100% on 2026-06-06 via
     # tests/test_comfyui_workflow_builder.py. Conservative floor locks it in.
-    BranchFloor("src/transformation_portal/comfyui/workflow_builder.py", 80.0),
+    BranchFloor("src/transformation_portal/comfyui/workflow_builder.py", 92.0),
     # ComfyUI workflow templates — pure declarative builders and serialization
     # only. Custom variant-list tests cover the non-default target/strength
     # branches; no executor, torch, ML, or network runtime path is invoked.
-    BranchFloor("src/transformation_portal/comfyui/workflow_templates.py", 90.0),
+    BranchFloor("src/transformation_portal/comfyui/workflow_templates.py", 96.0),
     # Universal hardening wrapper — branch coverage reached 100% on 2026-06-06
     # via the input-validation path tests. Conservative package floor.
-    BranchFloor("src/transformation_portal/hardening/", 85.0),
+    BranchFloor("src/transformation_portal/hardening/", 95.0),
     # CAS store — branch coverage reached ~89% on 2026-06-06 via the lifecycle
     # tests. Conservative floor below that (residual misses are race/IO-fault).
-    BranchFloor("src/transformation_portal/storage/cas_store.py", 80.0),
+    BranchFloor("src/transformation_portal/storage/cas_store.py", 85.0),
     # Orchestrator worker runner — branch coverage reached 100% on 2026-06-06
     # via the unit tests. Conservative floor.
-    BranchFloor("src/transformation_portal/orchestrator/worker.py", 85.0),
+    BranchFloor("src/transformation_portal/orchestrator/worker.py", 95.0),
 )
 
 # If a future branch temporarily clears floors, dry-run mode still reports the

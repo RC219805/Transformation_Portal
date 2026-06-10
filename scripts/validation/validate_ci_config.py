@@ -308,6 +308,47 @@ class CIValidator:
 
         return valid
 
+    def validate_ci_gate_contract(self, workflow_path: Path, config: Dict) -> bool:
+        """Validate the branch-protection-facing CI Gate aggregator contract."""
+        if workflow_path.name != "build.yml":
+            return True
+
+        jobs = config.get("jobs", {})
+        ci_gate = jobs.get("ci_gate") if isinstance(jobs, dict) else None
+        if not isinstance(ci_gate, dict):
+            self.log_error("build.yml:ci_gate: Missing CI Gate aggregator job")
+            return False
+
+        valid = True
+        if ci_gate.get("name") != "CI Gate":
+            self.log_error("build.yml:ci_gate: Aggregator job name must remain 'CI Gate'")
+            valid = False
+
+        permissions = ci_gate.get("permissions")
+        if permissions not in (None, {}):
+            self.log_error("build.yml:ci_gate: Aggregator job must not request token permissions")
+            valid = False
+
+        steps = ci_gate.get("steps", [])
+        if not isinstance(steps, list):
+            self.log_error("build.yml:ci_gate: Steps must be a list")
+            return False
+
+        for step in steps:
+            if not isinstance(step, dict):
+                continue
+
+            if step.get("name") == "Publish Dedicated CI Gate Check":
+                self.log_error("build.yml:ci_gate: Must not publish a duplicate dedicated CI Gate check")
+                valid = False
+
+            script = step.get("with", {}).get("script") if isinstance(step.get("with"), dict) else None
+            if isinstance(script, str) and "github.rest.checks.create" in script:
+                self.log_error("build.yml:ci_gate: Must not call github.rest.checks.create from CI Gate")
+                valid = False
+
+        return valid
+
     def validate_mypy_policy_contract(self, workflow_path: Path, config: Dict) -> bool:
         """Validate mypy workflow whitelists against the current policy doc."""
         if workflow_path.name not in self.MYPY_POLICY_WORKFLOWS:
@@ -547,6 +588,7 @@ class CIValidator:
             self.validate_common_issues(workflow_path, config),
             self.validate_flake8_config(workflow_path, config),
             self.validate_build_coverage_contract(workflow_path, config),
+            self.validate_ci_gate_contract(workflow_path, config),
             self.validate_mypy_policy_contract(workflow_path, config),
         ]
 

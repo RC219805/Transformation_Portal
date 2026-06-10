@@ -54,6 +54,36 @@ def test_build_workflow_coverage_contract_passes_repo_config() -> None:
     assert validator.errors == []
 
 
+def test_build_workflow_ci_gate_contract_passes_repo_config() -> None:
+    validator, config = _load_config(BUILD_WORKFLOW_PATH)
+
+    assert validator.validate_ci_gate_contract(BUILD_WORKFLOW_PATH, config) is True
+    assert validator.errors == []
+
+
+def test_build_workflow_ci_gate_rejects_duplicate_check_publisher(tmp_path: Path) -> None:
+    workflow_path = _mutated_build_workflow(
+        tmp_path,
+        "    permissions: {}\n\n    steps:",
+        """    permissions:
+      checks: write
+
+    steps:
+      - name: Publish Dedicated CI Gate Check
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3
+        with:
+          script: |
+            await github.rest.checks.create({name: 'CI Gate'});
+""",
+    )
+    validator, config = _load_config(workflow_path)
+
+    assert validator.validate_ci_gate_contract(workflow_path, config) is False
+    assert any("must not request token permissions" in error for error in validator.errors)
+    assert any("Must not publish a duplicate dedicated CI Gate check" in error for error in validator.errors)
+    assert any("Must not call github.rest.checks.create" in error for error in validator.errors)
+
+
 def test_mypy_config_remains_root_linting_config() -> None:
     mypy_config = PROJECT_ROOT / "mypy.ini"
     assert mypy_config.exists()

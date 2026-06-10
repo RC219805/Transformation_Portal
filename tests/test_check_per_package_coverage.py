@@ -399,16 +399,28 @@ class TestDefaultFloors:
 
         floors = {floor.prefix: floor.floor for floor in script_module.PACKAGE_FLOORS}
         expected_floors = {
-            "src/transformation_portal/plugins/": 48.0,
+            "src/tp/": 75.0,
+            "src/transformation_portal/lux_depth_v3/validators/": 80.0,
+            "src/transformation_portal/lux_depth_v3/": 72.0,
+            "src/transformation_portal/plugins/": 50.0,
             "src/transformation_portal/stage_graph/": 74.0,
             "src/transformation_portal/vlm/": 69.0,
             "src/transformation_portal/depth/": 57.0,
             "src/transformation_portal/streaming/": 53.0,
             "src/transformation_portal/spatial_ai/reconstruction/": 42.0,
-            "src/transformation_portal/comfyui/workflow_templates.py": 95.0,
+            "app.py": 79.0,
+            "src/transformation_portal/orchestrator/storage/": 64.0,
+            "src/transformation_portal/orchestrator/queue/": 63.0,
+            "src/transformation_portal/orchestrator/artifact_store/": 62.0,
+            "src/transformation_portal/metrics/ledger.py": 95.0,
+            "src/transformation_portal/comfyui/workflow_builder.py": 96.0,
+            "src/transformation_portal/comfyui/workflow_templates.py": 97.0,
+            "src/transformation_portal/hardening/": 95.0,
+            "src/transformation_portal/storage/cas_store.py": 92.0,
+            "src/transformation_portal/orchestrator/worker.py": 95.0,
         }
 
-        assert {prefix: floors[prefix] for prefix in expected_floors} == expected_floors
+        assert floors == expected_floors
 
 
 class TestRenderTable:
