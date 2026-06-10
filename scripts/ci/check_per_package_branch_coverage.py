@@ -51,6 +51,10 @@ BRANCH_FLOORS: tuple[BranchFloor, ...] = (
     BranchFloor("src/transformation_portal/orchestrator/storage/", 44.0),
     BranchFloor("src/transformation_portal/orchestrator/queue/", 36.0),
     BranchFloor("src/transformation_portal/orchestrator/artifact_store/", 46.0),
+    # Performance ledger CLI — branch coverage reached ~93% on 2026-06-06 via
+    # tests/test_metrics_ledger.py; conservative floor locks it in. See the
+    # matching line floor in check_per_package_coverage.py.
+    BranchFloor("src/transformation_portal/metrics/ledger.py", 82.0),
 )
 
 # If a future branch temporarily clears floors, dry-run mode still reports the
@@ -66,6 +70,7 @@ DRY_RUN_BRANCH_PREFIXES: tuple[str, ...] = (
     "src/transformation_portal/orchestrator/storage/",
     "src/transformation_portal/orchestrator/queue/",
     "src/transformation_portal/orchestrator/artifact_store/",
+    "src/transformation_portal/metrics/ledger.py",
 )
 
 

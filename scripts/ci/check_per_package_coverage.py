@@ -109,6 +109,11 @@ PACKAGE_FLOORS: tuple[PackageFloor, ...] = (
     PackageFloor("src/transformation_portal/orchestrator/storage/", 60.0),
     PackageFloor("src/transformation_portal/orchestrator/queue/", 58.0),
     PackageFloor("src/transformation_portal/orchestrator/artifact_store/", 58.0),
+    # Performance ledger CLI (pure-Python SQLite). Behavioral tests in
+    # tests/test_metrics_ledger.py took this from ~30% to ~98.8% line coverage
+    # on 2026-06-06; this file-level floor locks the gain in. The rest of
+    # metrics/ stays unfloored (several siblings are ML/metric backends).
+    PackageFloor("src/transformation_portal/metrics/ledger.py", 90.0),
 )
 
 
