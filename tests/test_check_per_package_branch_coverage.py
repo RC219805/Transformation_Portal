@@ -144,22 +144,22 @@ def test_missing_coverage_xml_returns_2(script_module, tmp_path: Path):
 
 def test_default_branch_floors_cover_cold_zone_and_durable_state_prefixes(script_module):
     assert tuple((floor.prefix, floor.floor) for floor in script_module.BRANCH_FLOORS) == (
-        ("src/transformation_portal/plugins/", 36.0),
+        ("src/transformation_portal/plugins/", 40.0),
         ("src/transformation_portal/stage_graph/", 63.0),
         ("src/transformation_portal/vlm/", 55.0),
         ("src/transformation_portal/depth/", 42.0),
         ("src/transformation_portal/streaming/", 29.0),
         ("src/transformation_portal/spatial_ai/reconstruction/", 47.0),
-        ("app.py", 66.0),
-        ("src/transformation_portal/orchestrator/storage/", 44.0),
-        ("src/transformation_portal/orchestrator/queue/", 36.0),
-        ("src/transformation_portal/orchestrator/artifact_store/", 46.0),
-        ("src/transformation_portal/metrics/ledger.py", 82.0),
-        ("src/transformation_portal/comfyui/workflow_builder.py", 80.0),
-        ("src/transformation_portal/comfyui/workflow_templates.py", 90.0),
-        ("src/transformation_portal/hardening/", 85.0),
-        ("src/transformation_portal/storage/cas_store.py", 80.0),
-        ("src/transformation_portal/orchestrator/worker.py", 85.0),
+        ("app.py", 71.0),
+        ("src/transformation_portal/orchestrator/storage/", 48.0),
+        ("src/transformation_portal/orchestrator/queue/", 40.0),
+        ("src/transformation_portal/orchestrator/artifact_store/", 50.0),
+        ("src/transformation_portal/metrics/ledger.py", 90.0),
+        ("src/transformation_portal/comfyui/workflow_builder.py", 92.0),
+        ("src/transformation_portal/comfyui/workflow_templates.py", 96.0),
+        ("src/transformation_portal/hardening/", 95.0),
+        ("src/transformation_portal/storage/cas_store.py", 85.0),
+        ("src/transformation_portal/orchestrator/worker.py", 95.0),
     )
 
 
