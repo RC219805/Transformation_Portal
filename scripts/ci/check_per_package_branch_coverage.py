@@ -51,6 +51,22 @@ BRANCH_FLOORS: tuple[BranchFloor, ...] = (
     BranchFloor("src/transformation_portal/orchestrator/storage/", 44.0),
     BranchFloor("src/transformation_portal/orchestrator/queue/", 36.0),
     BranchFloor("src/transformation_portal/orchestrator/artifact_store/", 46.0),
+    # Performance ledger CLI — branch coverage reached ~93% on 2026-06-06 via
+    # tests/test_metrics_ledger.py; conservative floor locks it in. See the
+    # matching line floor in check_per_package_coverage.py.
+    BranchFloor("src/transformation_portal/metrics/ledger.py", 82.0),
+    # ComfyUI workflow builder — branch coverage reached 100% on 2026-06-06 via
+    # tests/test_comfyui_workflow_builder.py. Conservative floor locks it in.
+    BranchFloor("src/transformation_portal/comfyui/workflow_builder.py", 80.0),
+    # Universal hardening wrapper — branch coverage reached 100% on 2026-06-06
+    # via the input-validation path tests. Conservative package floor.
+    BranchFloor("src/transformation_portal/hardening/", 85.0),
+    # CAS store — branch coverage reached ~89% on 2026-06-06 via the lifecycle
+    # tests. Conservative floor below that (residual misses are race/IO-fault).
+    BranchFloor("src/transformation_portal/storage/cas_store.py", 80.0),
+    # Orchestrator worker runner — branch coverage reached 100% on 2026-06-06
+    # via the unit tests. Conservative floor.
+    BranchFloor("src/transformation_portal/orchestrator/worker.py", 85.0),
 )
 
 # If a future branch temporarily clears floors, dry-run mode still reports the
@@ -66,6 +82,11 @@ DRY_RUN_BRANCH_PREFIXES: tuple[str, ...] = (
     "src/transformation_portal/orchestrator/storage/",
     "src/transformation_portal/orchestrator/queue/",
     "src/transformation_portal/orchestrator/artifact_store/",
+    "src/transformation_portal/metrics/ledger.py",
+    "src/transformation_portal/comfyui/workflow_builder.py",
+    "src/transformation_portal/hardening/",
+    "src/transformation_portal/storage/cas_store.py",
+    "src/transformation_portal/orchestrator/worker.py",
 )
 
 

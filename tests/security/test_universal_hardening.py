@@ -573,3 +573,139 @@ class TestPipelineProtocol:
         # Runtime check only verifies method presence
         partial = PartialPipeline()
         assert isinstance(partial, Pipeline)
+
+
+# =============================================================================
+# Input-validation paths (policy auto-load + _validate_input branches)
+# =============================================================================
+
+
+class _OkPipeline:
+    """Minimal pipeline that echoes a success marker."""
+
+    def process(self, input_path: Path, **kwargs: Any) -> Dict[str, Any]:
+        return {"ok": True, "path": str(input_path)}
+
+
+def _install_fake_lux_depth_v2(monkeypatch: pytest.MonkeyPatch, *, safe_io=None, policy_cls=None) -> None:
+    """Inject fake ``lux_depth_v2.hardening`` submodules into ``sys.modules``.
+
+    The production import targets are optional (``lux_depth_v2`` no longer
+    ships), so the validation branches are only reachable when those modules
+    are present. We synthesize just enough surface for the import statements.
+    """
+    import sys
+    import types
+
+    root = types.ModuleType("lux_depth_v2")
+    hardening = types.ModuleType("lux_depth_v2.hardening")
+    root.hardening = hardening
+    monkeypatch.setitem(sys.modules, "lux_depth_v2", root)
+    monkeypatch.setitem(sys.modules, "lux_depth_v2.hardening", hardening)
+
+    if safe_io is not None:
+        mod = types.ModuleType("lux_depth_v2.hardening.safe_io")
+        mod.validate_input_path = safe_io
+        hardening.safe_io = mod
+        monkeypatch.setitem(sys.modules, "lux_depth_v2.hardening.safe_io", mod)
+
+    if policy_cls is not None:
+        mod = types.ModuleType("lux_depth_v2.hardening.policy")
+        mod.HardeningPolicy = policy_cls
+        hardening.policy = mod
+        monkeypatch.setitem(sys.modules, "lux_depth_v2.hardening.policy", mod)
+
+
+class TestInputValidationPaths:
+    """Cover the policy auto-load and ``_validate_input`` branches."""
+
+    def test_init_disables_validation_when_policy_unavailable(self) -> None:
+        """policy=None + validation enabled, but no lux_depth_v2 → fail closed to disabled."""
+        from transformation_portal.hardening.universal import UniversalHardenedWrapper
+
+        wrapper = UniversalHardenedWrapper(
+            pipeline=_OkPipeline(),
+            policy=None,
+            enable_input_validation=True,
+        )
+        # The auto-load import fails (lux_depth_v2 absent) → validation disabled.
+        assert wrapper.policy is None
+        assert wrapper.enable_input_validation is False
+
+    def test_init_autoloads_policy_when_available(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        sentinel_policy = object()
+
+        class FakePolicy:
+            @staticmethod
+            def load():
+                return sentinel_policy
+
+        _install_fake_lux_depth_v2(monkeypatch, policy_cls=FakePolicy)
+
+        from transformation_portal.hardening.universal import UniversalHardenedWrapper
+
+        wrapper = UniversalHardenedWrapper(
+            pipeline=_OkPipeline(),
+            policy=None,
+            enable_input_validation=True,
+        )
+        assert wrapper.policy is sentinel_policy
+        assert wrapper.enable_input_validation is True
+
+    def test_process_returns_error_response_when_validation_raises(self) -> None:
+        """A validation failure short-circuits into a structured error response."""
+        from transformation_portal.hardening.universal import UniversalHardenedWrapper
+
+        # Truthy policy keeps validation enabled; _validate_input then tries to
+        # import lux_depth_v2 (absent) and the failure becomes an error response.
+        wrapper = UniversalHardenedWrapper(
+            pipeline=_OkPipeline(),
+            policy=MagicMock(),
+            enable_input_validation=True,
+        )
+        out = wrapper.process(Path("/whatever.jpg"))
+        assert out["success"] is False
+        assert out["result"] is None
+        assert out["report"].success is False
+        assert out["report"].error
+
+    def test_validate_input_returns_path_when_policy_is_none(self) -> None:
+        from transformation_portal.hardening.universal import UniversalHardenedWrapper
+
+        wrapper = UniversalHardenedWrapper(
+            pipeline=_OkPipeline(),
+            policy=None,
+            enable_input_validation=False,
+        )
+        wrapper.policy = None
+        p = Path("/unchanged.jpg")
+        assert wrapper._validate_input(p) is p
+
+    def test_validate_input_uses_injected_validator(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        validated = Path("/validated/output.jpg")
+        _install_fake_lux_depth_v2(monkeypatch, safe_io=lambda path, policy: validated)
+
+        from transformation_portal.hardening.universal import UniversalHardenedWrapper
+
+        wrapper = UniversalHardenedWrapper(
+            pipeline=_OkPipeline(),
+            policy=MagicMock(),
+            enable_input_validation=False,
+        )
+        assert wrapper._validate_input(Path("/in.jpg")) == validated
+
+    def test_validate_input_wraps_validator_error(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        def _boom(path, policy):
+            raise RuntimeError("denied")
+
+        _install_fake_lux_depth_v2(monkeypatch, safe_io=_boom)
+
+        from transformation_portal.hardening.universal import UniversalHardenedWrapper
+
+        wrapper = UniversalHardenedWrapper(
+            pipeline=_OkPipeline(),
+            policy=MagicMock(),
+            enable_input_validation=False,
+        )
+        with pytest.raises(ValueError, match="Input validation failed"):
+            wrapper._validate_input(Path("/in.jpg"))

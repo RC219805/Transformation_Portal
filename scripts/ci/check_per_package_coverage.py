@@ -109,6 +109,34 @@ PACKAGE_FLOORS: tuple[PackageFloor, ...] = (
     PackageFloor("src/transformation_portal/orchestrator/storage/", 60.0),
     PackageFloor("src/transformation_portal/orchestrator/queue/", 58.0),
     PackageFloor("src/transformation_portal/orchestrator/artifact_store/", 58.0),
+    # Performance ledger CLI (pure-Python SQLite). Behavioral tests in
+    # tests/test_metrics_ledger.py took this from ~30% to ~98.8% line coverage
+    # on 2026-06-06; this file-level floor locks the gain in. The rest of
+    # metrics/ stays unfloored (several siblings are ML/metric backends).
+    PackageFloor("src/transformation_portal/metrics/ledger.py", 90.0),
+    # Pure-Python ComfyUI workflow builder. A PEP 562 lazy-import seam in
+    # comfyui/__init__.py made it importable torch-free; behavioral tests in
+    # tests/test_comfyui_workflow_builder.py took it from 0% to 100% line on
+    # 2026-06-06. Conservative file-level floor locks the gain in (the rest of
+    # comfyui/ stays unfloored — custom_nodes/executor are torch/atmosphere
+    # bound and only run in the ML lane).
+    PackageFloor("src/transformation_portal/comfyui/workflow_builder.py", 90.0),
+    # Universal hardening wrapper — a governed cold-zone surface (CLAUDE.md).
+    # Input-validation path tests in tests/security/test_universal_hardening.py
+    # took universal.py from 81% to ~98% line on 2026-06-06. Package floor
+    # (only __init__.py + universal.py live here).
+    PackageFloor("src/transformation_portal/hardening/", 90.0),
+    # Content-addressable store (core artifact storage). Lifecycle tests in
+    # tests/storage/test_cas_store_lifecycle.py (dedup paths, materialize modes,
+    # gc / gc_quarantine, file-lock stale/timeout) took it from 78.5% to ~96%
+    # line on 2026-06-06. The residual misses are deep I/O-fault and post-lock
+    # race branches that resist deterministic testing.
+    PackageFloor("src/transformation_portal/storage/cas_store.py", 88.0),
+    # Orchestrator worker runner (governed durable-state dispatch consumer).
+    # Unit tests in tests/orchestrator/test_worker_runner_unit.py cover the
+    # executor error branches, heartbeat-loop cancellation, supervisor backoff,
+    # broker disposal, and the CLI entry point: 76% -> 100% line on 2026-06-06.
+    PackageFloor("src/transformation_portal/orchestrator/worker.py", 90.0),
 )
 
 

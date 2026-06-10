@@ -154,6 +154,11 @@ def test_default_branch_floors_cover_cold_zone_and_durable_state_prefixes(script
         ("src/transformation_portal/orchestrator/storage/", 44.0),
         ("src/transformation_portal/orchestrator/queue/", 36.0),
         ("src/transformation_portal/orchestrator/artifact_store/", 46.0),
+        ("src/transformation_portal/metrics/ledger.py", 82.0),
+        ("src/transformation_portal/comfyui/workflow_builder.py", 80.0),
+        ("src/transformation_portal/hardening/", 85.0),
+        ("src/transformation_portal/storage/cas_store.py", 80.0),
+        ("src/transformation_portal/orchestrator/worker.py", 85.0),
     )
 
 
