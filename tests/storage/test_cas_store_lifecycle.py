@@ -156,7 +156,7 @@ def test_materialize_quarantines_corrupt_object(tmp_path: Path) -> None:
     with pytest.raises(CASError, match="quarantined"):
         store.materialize(obj.sha256, dest, verify=True)
 
-    quarantine = (tmp_path / "cas" / "quarantine")
+    quarantine = tmp_path / "cas" / "quarantine"
     assert quarantine.is_dir()
     assert list(quarantine.iterdir())  # the corrupt object was moved here
     assert not obj.path.exists()  # original removed

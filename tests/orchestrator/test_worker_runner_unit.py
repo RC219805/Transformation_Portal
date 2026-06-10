@@ -17,6 +17,12 @@ import pytest
 pytestmark = pytest.mark.unit
 
 from transformation_portal.orchestrator import worker as worker_module
+from transformation_portal.orchestrator.queue.base import (
+    JobEnqueueRequest,
+    JobLease,
+    LeaseNotHeldError,
+    LeaseStatus,
+)
 from transformation_portal.orchestrator.worker import (
     CancelledByOrchestrator,
     RetryableExecutorUnavailable,
@@ -27,12 +33,6 @@ from transformation_portal.orchestrator.worker import (
     main,
     monotonic_now,
     run_worker_forever,
-)
-from transformation_portal.orchestrator.queue.base import (
-    JobEnqueueRequest,
-    JobLease,
-    LeaseNotHeldError,
-    LeaseStatus,
 )
 
 

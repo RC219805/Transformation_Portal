@@ -27,7 +27,6 @@ from transformation_portal.comfyui.workflow_builder import (
     WorkflowBuilder,
 )
 
-
 # --------------------------------------------------------------------------- #
 # Import seam contract
 # --------------------------------------------------------------------------- #
@@ -201,13 +200,7 @@ def test_builder_add_input_with_explicit_node_id_sets_chain_head() -> None:
 
 
 def test_builder_linear_chain_connects_sequential_stages() -> None:
-    wf = (
-        WorkflowBuilder()
-        .add_input("a.jpg")
-        .add_flux_enhancement(strength=0.6)
-        .add_output("out.jpg")
-        .build()
-    )
+    wf = WorkflowBuilder().add_input("a.jpg").add_flux_enhancement(strength=0.6).add_output("out.jpg").build()
     assert len(wf.nodes) == 3
     # Two connections for a 3-node linear chain.
     assert len(wf.connections) == 2
@@ -226,12 +219,7 @@ def test_builder_flux_enhancement_includes_prompt_only_when_provided() -> None:
 
 
 def test_builder_skygan_optional_physics_params() -> None:
-    wf = (
-        WorkflowBuilder()
-        .add_input("a.jpg")
-        .add_skygan_sky(sun_azimuth=120.0, sun_elevation=35.0, turbidity=2.5)
-        .build()
-    )
+    wf = WorkflowBuilder().add_input("a.jpg").add_skygan_sky(sun_azimuth=120.0, sun_elevation=35.0, turbidity=2.5).build()
     sky = [n for n in wf.nodes.values() if n.node_type is NodeType.SKYGAN_SKY][0]
     assert sky.parameters["sun_azimuth"] == 120.0
     assert sky.parameters["sun_elevation"] == 35.0

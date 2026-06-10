@@ -23,8 +23,8 @@ pytestmark = pytest.mark.unit
 
 from transformation_portal.metrics import ledger as ledger_module
 from transformation_portal.metrics.ledger import (
-    PerformanceLedger,
     SCHEMA_VERSION,
+    PerformanceLedger,
     detect_regression,
     generate_performance_report,
     main,
@@ -150,9 +150,7 @@ def test_log_and_query_roundtrips_capsule(tmp_path: Path) -> None:
 def test_query_orders_by_captured_at_descending(tmp_path: Path) -> None:
     led = PerformanceLedger(tmp_path / "perf.db")
     for idx in range(3):
-        led.log_capsule(
-            _make_capsule(f"img-{idx}", captured_at=(_BASE_TS + timedelta(hours=idx)).isoformat())
-        )
+        led.log_capsule(_make_capsule(f"img-{idx}", captured_at=(_BASE_TS + timedelta(hours=idx)).isoformat()))
 
     ordered = [c.image_id for c in led.query_capsules()]
     assert ordered == ["img-2", "img-1", "img-0"]
@@ -201,9 +199,7 @@ def test_query_filters_match_every_supported_column(tmp_path: Path) -> None:
 def test_query_limit_is_respected(tmp_path: Path) -> None:
     led = PerformanceLedger(tmp_path / "perf.db")
     for idx in range(5):
-        led.log_capsule(
-            _make_capsule(f"img-{idx}", captured_at=(_BASE_TS + timedelta(minutes=idx)).isoformat())
-        )
+        led.log_capsule(_make_capsule(f"img-{idx}", captured_at=(_BASE_TS + timedelta(minutes=idx)).isoformat()))
 
     assert len(led.query_capsules(limit=2)) == 2
 
@@ -359,11 +355,16 @@ def test_cli_log_then_query_writes_output(tmp_path: Path, monkeypatch: pytest.Mo
     rc = _run_cli(
         monkeypatch,
         "query",
-        "--ledger-db", str(db),
-        "--scene-type", "pool",
-        "--device", "mps",
-        "--limit", "10",
-        "--output", str(out),
+        "--ledger-db",
+        str(db),
+        "--scene-type",
+        "pool",
+        "--device",
+        "mps",
+        "--limit",
+        "10",
+        "--output",
+        str(out),
     )
     assert rc == 0
     payload = json.loads(out.read_text())
@@ -408,9 +409,7 @@ def test_cli_report_and_prune(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -
     led = PerformanceLedger(db)
     recent = datetime.now(timezone.utc).isoformat()
     led.log_capsule(_make_capsule("r1", total_sec=8.0, captured_at=recent))
-    led.log_capsule(
-        _make_capsule("old", captured_at=(datetime.now(timezone.utc) - timedelta(days=400)).isoformat())
-    )
+    led.log_capsule(_make_capsule("old", captured_at=(datetime.now(timezone.utc) - timedelta(days=400)).isoformat()))
 
     report = tmp_path / "report.md"
     # --min-days exercises the cutoff branch; keep the recent row in-window.
@@ -425,8 +424,10 @@ def test_cli_returns_one_on_error(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
     rc = _run_cli(
         monkeypatch,
         "log",
-        "--capsule", str(tmp_path / "does-not-exist.json"),
-        "--ledger-db", str(tmp_path / "perf.db"),
+        "--capsule",
+        str(tmp_path / "does-not-exist.json"),
+        "--ledger-db",
+        str(tmp_path / "perf.db"),
     )
     assert rc == 1
 
