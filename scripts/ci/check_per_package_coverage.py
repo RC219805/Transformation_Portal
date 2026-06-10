@@ -61,30 +61,34 @@ class PackageFloor:
 # matter in review and adjust intentionally.
 PACKAGE_FLOORS: tuple[PackageFloor, ...] = (
     # tp.crypto / tp.merkle / tp.phase4 — contract & evidence chain.
-    # Conservative starter; tp.* is a small surface so coverage is volatile.
-    PackageFloor("src/tp/", 40.0),
+    # 2026-06-10 ratchet: a full core-lane snapshot measured 84.7% line; floor
+    # raised 40 -> 75 (tp.* is a small/volatile surface so headroom is kept).
+    PackageFloor("src/tp/", 75.0),
     # Run-card validators are the binding contract surface for governed
     # deliverables. The existing test_verify_run_card_integrity.py is
-    # comprehensive (~30 cases / 941 LOC) so 70% should comfortably hold
-    # — ratchet upward once a CI run confirms.
-    PackageFloor("src/transformation_portal/lux_depth_v3/validators/", 70.0),
+    # comprehensive (~30 cases / 941 LOC). 2026-06-10 snapshot measured 85.4%
+    # line; floor raised 70 -> 80.
+    PackageFloor("src/transformation_portal/lux_depth_v3/validators/", 80.0),
     # Lux Depth V3 core orchestrator seams (config_resolver, pipeline_coordinator,
     # execution_engine, artifact_manager, manifest, provenance, run_card_contract,
-    # io_atomic, reconstruction_manifest). Conservative 30% starter — large
-    # surface (~10k LOC) where coverage is heavier in some seams than others.
-    # Validators have their own stricter floor above; explicitly exclude
-    # them so a high validator percentage cannot mask a regression in the
-    # rest of lux_depth_v3.
+    # io_atomic, reconstruction_manifest). Large surface (~10k LOC) where coverage
+    # is heavier in some seams than others. 2026-06-10 core-lane snapshot measured
+    # 81.1% line; floor raised 30 -> 72 (keeps ~9pts headroom for the heavier ML
+    # seams that the core lane does not exercise). Validators have their own
+    # stricter floor above; explicitly exclude them so a high validator
+    # percentage cannot mask a regression in the rest of lux_depth_v3.
     PackageFloor(
         "src/transformation_portal/lux_depth_v3/",
-        30.0,
+        72.0,
         exclude_prefixes=("src/transformation_portal/lux_depth_v3/validators/",),
     ),
     # Cold-Zone Coverage Program stability ratchets. These floors were
     # raised after repeated stable CI runs and a fresh 2026-05-13 required
     # CI coverage snapshot. Prefixes with cross-lane variance keep extra
-    # headroom until the next measured ratchet.
-    PackageFloor("src/transformation_portal/plugins/", 48.0),
+    # headroom until the next measured ratchet. (2026-06-10: plugins ratcheted
+    # 48 -> 50 against a 54.4% snapshot; stage_graph/vlm/depth/streaming/
+    # reconstruction left as-is — measured headroom under ~5pts.)
+    PackageFloor("src/transformation_portal/plugins/", 50.0),
     PackageFloor("src/transformation_portal/stage_graph/", 74.0),
     PackageFloor("src/transformation_portal/vlm/", 69.0),
     PackageFloor("src/transformation_portal/depth/", 57.0),
@@ -95,9 +99,9 @@ PACKAGE_FLOORS: tuple[PackageFloor, ...] = (
     # ~83.8% line coverage, but until now nothing FLOORED it — the most
     # security-critical hardening surface (allowed-root validation, API-key /
     # trusted-host enforcement, request limits, pipeline allowlists) could
-    # silently regress. Conservative starter well below the measured value to
-    # absorb cross-lane variance; ratchet upward after a confirming CI run.
-    PackageFloor("app.py", 76.0),
+    # silently regress. 2026-06-10 core-lane snapshot measured 83.8% line;
+    # floor raised 76 -> 79 (kept conservative — large security-critical surface).
+    PackageFloor("app.py", 79.0),
     # Governed paid-pilot durable-state backends. These three packages are the
     # first-class JobRepository / QueueBroker / ArtifactStore Protocol surfaces
     # (memory + Postgres/Redis/S3 implementations). The Postgres/Redis/S3 paths
@@ -105,44 +109,46 @@ PACKAGE_FLOORS: tuple[PackageFloor, ...] = (
     # the core-lane rollup leans on the in-memory/local implementations. Floors
     # set below the 2026-06-06 core-lane snapshot (storage 68.0%, queue 67.6%,
     # artifact_store 65.9%) so the in-memory/local contract coverage cannot
-    # silently regress; raise once the live-service lanes are folded in.
-    PackageFloor("src/transformation_portal/orchestrator/storage/", 60.0),
-    PackageFloor("src/transformation_portal/orchestrator/queue/", 58.0),
-    PackageFloor("src/transformation_portal/orchestrator/artifact_store/", 58.0),
+    # silently regress; raise further once the live-service lanes are folded in.
+    # 2026-06-10 ratchet within the core lane: storage 60 -> 64, queue 58 -> 63,
+    # artifact_store 58 -> 62 (still below the in-memory/local snapshot values).
+    PackageFloor("src/transformation_portal/orchestrator/storage/", 64.0),
+    PackageFloor("src/transformation_portal/orchestrator/queue/", 63.0),
+    PackageFloor("src/transformation_portal/orchestrator/artifact_store/", 62.0),
     # Performance ledger CLI (pure-Python SQLite). Behavioral tests in
     # tests/test_metrics_ledger.py took this from ~30% to ~98.8% line coverage
     # on 2026-06-06; this file-level floor locks the gain in. The rest of
     # metrics/ stays unfloored (several siblings are ML/metric backends).
-    PackageFloor("src/transformation_portal/metrics/ledger.py", 90.0),
+    PackageFloor("src/transformation_portal/metrics/ledger.py", 95.0),
     # Pure-Python ComfyUI workflow builder. A PEP 562 lazy-import seam in
     # comfyui/__init__.py made it importable torch-free; behavioral tests in
     # tests/test_comfyui_workflow_builder.py took it from 0% to 100% line on
     # 2026-06-06. Conservative file-level floor locks the gain in (the rest of
     # comfyui/ stays unfloored — custom_nodes/executor are torch/atmosphere
     # bound and only run in the ML lane).
-    PackageFloor("src/transformation_portal/comfyui/workflow_builder.py", 90.0),
+    PackageFloor("src/transformation_portal/comfyui/workflow_builder.py", 96.0),
     # Pure-Python ComfyUI workflow templates. Behavioral tests exercise the
     # declarative template factories, custom variant target/strength expansion,
     # and JSON serialization without invoking executor, torch, ML, or network
     # runtime paths. A 2026-06-10 core-lane audit measured 100% line coverage
     # after the branch fill; this conservative file floor locks it in.
-    PackageFloor("src/transformation_portal/comfyui/workflow_templates.py", 95.0),
+    PackageFloor("src/transformation_portal/comfyui/workflow_templates.py", 97.0),
     # Universal hardening wrapper — a governed cold-zone surface (CLAUDE.md).
     # Input-validation path tests in tests/security/test_universal_hardening.py
     # took universal.py from 81% to ~98% line on 2026-06-06. Package floor
     # (only __init__.py + universal.py live here).
-    PackageFloor("src/transformation_portal/hardening/", 90.0),
+    PackageFloor("src/transformation_portal/hardening/", 95.0),
     # Content-addressable store (core artifact storage). Lifecycle tests in
     # tests/storage/test_cas_store_lifecycle.py (dedup paths, materialize modes,
     # gc / gc_quarantine, file-lock stale/timeout) took it from 78.5% to ~96%
     # line on 2026-06-06. The residual misses are deep I/O-fault and post-lock
     # race branches that resist deterministic testing.
-    PackageFloor("src/transformation_portal/storage/cas_store.py", 88.0),
+    PackageFloor("src/transformation_portal/storage/cas_store.py", 92.0),
     # Orchestrator worker runner (governed durable-state dispatch consumer).
     # Unit tests in tests/orchestrator/test_worker_runner_unit.py cover the
     # executor error branches, heartbeat-loop cancellation, supervisor backoff,
     # broker disposal, and the CLI entry point: 76% -> 100% line on 2026-06-06.
-    PackageFloor("src/transformation_portal/orchestrator/worker.py", 90.0),
+    PackageFloor("src/transformation_portal/orchestrator/worker.py", 95.0),
 )
 
 
