@@ -190,6 +190,13 @@ class WorkflowTemplates:
         """Generate multiple enhancement variants."""
         logger.info(f"Creating multi-variant generation workflows ({num_variants} variants)")
 
+        if num_variants < 1:
+            raise ValueError("num_variants must be >= 1")
+        if emotional_targets is not None and not emotional_targets:
+            raise ValueError("emotional_targets must not be empty when provided")
+        if flux_strengths is not None and not flux_strengths:
+            raise ValueError("flux_strengths must not be empty when provided")
+
         # Default emotional targets
         if emotional_targets is None:
             emotional_targets = ["luxury", "aspiration", "comfort"][:num_variants]
@@ -314,7 +321,7 @@ class WorkflowTemplates:
         for i, variant in enumerate(variants):
             variant.save(output_path / f"multi_variant_{i+1}.json")
 
-        logger.info(f"Saved {6 + len(variants)} workflow templates")
+        logger.info(f"Saved {5 + len(variants)} workflow templates")
 
 
 # Export

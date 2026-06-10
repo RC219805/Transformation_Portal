@@ -744,9 +744,8 @@ deterministic behavioral tests and pinned with file-level floors:
 
 `comfyui/workflow_builder.py` required a precondition: `comfyui/__init__.py`
 eagerly imported `custom_nodes` (top-level `import torch`), so the pure builder
-could not be imported in the core lane. It was converted to a **PEP 562
-lazy-import seam** (`__getattr__` over `_LAZY_EXPORTS`) — the same discipline
-§4.3 prescribes for VLM — so `workflow_builder` / `workflow_templates` import
-torch-free while `custom_nodes` / `executor` load lazily on first access
-(node-registry decorators still fire on access, so ML-lane behavior is
-unchanged).
+could not be imported in the core lane. The package import now eagerly exposes
+only pure workflow construction primitives while keeping runtime custom nodes
+and the executor behind lazy `__getattr__` access, so `workflow_builder` /
+`workflow_templates` import torch-free while `custom_nodes` / `executor` load
+only on first access.

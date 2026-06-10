@@ -18,6 +18,8 @@ anyio==4.13.0
     # via
     #   httpx
     #   starlette
+ast-serialize==0.5.0
+    # via mypy
 astroid==4.0.4
     # via pylint
 asyncpg==0.31.0
@@ -34,20 +36,20 @@ bandit==1.9.4
     # via -r ci.in
 black==26.3.1
     # via -r dev.in
-boto3==1.43.7
+boto3==1.43.24
     # via
     #   -r base.in
     #   moto
-botocore==1.43.7
+botocore==1.43.24
     # via
     #   boto3
     #   moto
     #   s3transfer
 build==1.5.0
     # via -r ci.in
-cachetools==7.0.5
+cachetools==7.1.4
     # via tox
-certifi==2026.2.25
+certifi==2026.5.20
     # via
     #   httpcore
     #   httpx
@@ -60,14 +62,13 @@ chardet==7.4.3
     # via diff-cover
 charset-normalizer==3.4.7
     # via requests
-click==8.3.2
+click==8.4.1
     # via
     #   black
-    #   typer
     #   uvicorn
 colorama==0.4.6
     # via tox
-coverage[toml]==7.13.5
+coverage[toml]==7.14.1
     # via pytest-cov
 cryptography==47.0.0
     # via
@@ -78,22 +79,22 @@ diff-cover==10.3.0
     # via -r dev.in
 dill==0.4.1
     # via pylint
-distlib==0.4.0
+distlib==0.4.1
     # via virtualenv
-docutils==0.22.4
+docutils==0.23
     # via readme-renderer
 execnet==2.1.2
     # via pytest-xdist
 fastapi==0.136.1
     # via -r base.in
-filelock==3.25.2
+filelock==3.29.1
     # via
     #   python-discovery
     #   tox
     #   virtualenv
 flake8==7.3.0
     # via -r dev.in
-greenlet==3.5.0
+greenlet==3.5.1
     # via sqlalchemy
 h11==0.16.0
     # via
@@ -103,13 +104,13 @@ httpcore==1.0.9
     # via httpx
 httpx==0.28.1
     # via -r dev.in
-hypothesis==6.152.1
+hypothesis==6.155.2
     # via -r dev.in
 id==1.6.1
     # via twine
 identify==2.6.19
     # via pre-commit
-idna==3.15
+idna==3.18
     # via
     #   anyio
     #   httpx
@@ -128,7 +129,7 @@ jaraco-classes==3.4.0
     # via keyring
 jaraco-context==6.1.2
     # via keyring
-jaraco-functools==4.4.0
+jaraco-functools==4.5.0
     # via keyring
 jeepney==0.9.0
     # via
@@ -152,11 +153,11 @@ keyring==25.7.0
     # via twine
 libcst==1.8.6
     # via -r dev.in
-librt==0.9.0
+librt==0.11.0
     # via mypy
 mako==1.3.12
     # via alembic
-markdown-it-py==4.0.0
+markdown-it-py==4.2.0
     # via rich
 markupsafe==3.0.3
     # via
@@ -169,27 +170,28 @@ mccabe==0.7.0
     #   pylint
 mdurl==0.1.2
     # via markdown-it-py
-more-itertools==11.0.2
+more-itertools==11.1.0
     # via
     #   jaraco-classes
     #   jaraco-functools
-moto[s3]==5.2.1
+moto[s3]==5.2.2
     # via -r dev.in
-mypy==1.20.2
+mypy==2.1.0
     # via -r dev.in
 mypy-extensions==1.1.0
     # via
     #   black
     #   mypy
-nh3==0.3.4
+narwhals==2.22.1
+    # via scikit-learn
+nh3==0.3.5
     # via readme-renderer
 nodeenv==1.10.0
     # via pre-commit
-numpy==2.4.4
+numpy==2.4.6
     # via
     #   -r base.in
     #   imagecodecs
-    #   opencv-python
     #   opencv-python-headless
     #   scikit-learn
     #   scipy
@@ -198,7 +200,7 @@ opencv-python==4.13.0.92 ; platform_system != "Linux"
     # via -r base.in
 opencv-python-headless==4.13.0.92 ; platform_system == "Linux"
     # via -r base.in
-packaging==26.0
+packaging==26.2
     # via
     #   black
     #   build
@@ -207,13 +209,13 @@ packaging==26.0
     #   pytest-rerunfailures
     #   tox
     #   twine
-pathspec==1.0.4
+pathspec==1.1.1
     # via
     #   black
     #   mypy
 pillow==12.2.0
     # via -r base.in
-platformdirs==4.9.6
+platformdirs==4.10.0
     # via
     #   black
     #   pylint
@@ -236,11 +238,11 @@ pycodestyle==2.14.0
     #   flake8
 pycparser==3.0
     # via cffi
-pydantic==2.13.3
+pydantic==2.13.4
     # via
     #   -r base.in
     #   fastapi
-pydantic-core==2.46.3
+pydantic-core==2.46.4
     # via pydantic
 pyflakes==3.4.0
     # via flake8
@@ -252,9 +254,9 @@ pygments==2.20.0
     #   rich
 pylint==4.0.5
     # via -r dev.in
-pypdf==6.12.2
+pypdf==6.13.1
     # via -r ci.in
-pyproject-api==1.10.0
+pyproject-api==1.10.1
     # via tox
 pyproject-hooks==1.2.0
     # via build
@@ -267,7 +269,7 @@ pytest==9.0.3
     #   pytest-metadata
     #   pytest-rerunfailures
     #   pytest-xdist
-pytest-asyncio==1.3.0
+pytest-asyncio==1.4.0
     # via -r dev.in
 pytest-cov==7.1.0
     # via -r dev.in
@@ -275,13 +277,13 @@ pytest-json-report==1.5.0
     # via -r dev.in
 pytest-metadata==3.1.1
     # via pytest-json-report
-pytest-rerunfailures==16.1
+pytest-rerunfailures==16.3
     # via -r dev.in
 pytest-xdist==3.8.0
     # via -r dev.in
 python-dateutil==2.9.0.post0
     # via botocore
-python-discovery==1.2.2
+python-discovery==1.4.0
     # via
     #   tox
     #   virtualenv
@@ -302,7 +304,7 @@ referencing==0.37.0
     # via
     #   jsonschema
     #   jsonschema-specifications
-requests==2.33.1
+requests==2.34.2
     # via
     #   moto
     #   requests-toolbelt
@@ -310,7 +312,7 @@ requests==2.33.1
     #   twine
 requests-toolbelt==1.0.0
     # via twine
-responses==0.26.0
+responses==0.26.1
     # via moto
 rfc3986==2.0.0
     # via twine
@@ -319,13 +321,13 @@ rich==15.0.0
     #   bandit
     #   twine
     #   typer
-rpds-py==0.30.0
+rpds-py==2026.5.1
     # via
     #   jsonschema
     #   referencing
-s3transfer==0.17.0
+s3transfer==0.18.0
     # via boto3
-scikit-learn==1.8.0
+scikit-learn==1.9.0
     # via -r base.in
 scipy==1.17.1
     # via
@@ -348,7 +350,7 @@ starlette==1.0.1
     # via
     #   -r base.in
     #   fastapi
-stevedore==5.7.0
+stevedore==5.8.0
     # via bandit
 threadpoolctl==3.6.0
     # via scikit-learn
@@ -356,17 +358,17 @@ tifffile==2026.3.3
     # via -r base.in
 tomli-w==1.2.0
     # via tox
-tomlkit==0.14.0
+tomlkit==0.15.0
     # via pylint
-tox==4.54.0
+tox==4.55.1
     # via -r ci.in
-tqdm==4.67.3
+tqdm==4.68.1
     # via -r base.in
 twine==6.2.0
     # via -r ci.in
-typer==0.25.1
+typer==0.26.7
     # via -r base.in
-types-pyyaml==6.0.12.20260408
+types-pyyaml==6.0.12.20260518
     # via -r dev.in
 typing-extensions==4.15.0
     # via
@@ -394,7 +396,7 @@ urllib3==2.7.0
     #   twine
 uvicorn==0.48.0
     # via -r base.in
-virtualenv==21.2.1
+virtualenv==21.4.2
     # via
     #   pre-commit
     #   tox

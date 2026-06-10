@@ -12,6 +12,8 @@ runtimes, no network).
 from __future__ import annotations
 
 import json
+import os
+import subprocess
 import sys
 from pathlib import Path
 
@@ -34,10 +36,28 @@ from transformation_portal.comfyui.workflow_builder import (
 
 def test_workflow_builder_importable_without_torch_backend() -> None:
     """Importing the builder must not drag in the torch-bound custom_nodes module."""
-    # Importing the pure builder (done above) must not have eagerly imported the
-    # heavy node registry. This proves the lazy-import seam holds regardless of
-    # whether torch happens to be installed in the running lane.
-    assert "transformation_portal.comfyui.custom_nodes" not in sys.modules
+    env = dict(os.environ)
+    env["PYTHONPATH"] = str(Path(__file__).resolve().parents[1] / "src")
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-S",
+            "-c",
+            (
+                "from transformation_portal.comfyui.workflow_builder import WorkflowBuilder; "
+                "import sys; "
+                "raise SystemExit('transformation_portal.comfyui.custom_nodes' in sys.modules)"
+            ),
+        ],
+        cwd=Path(__file__).resolve().parents[1],
+        env=env,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
 
 
 def test_package_dir_lists_public_exports() -> None:
@@ -234,14 +254,22 @@ def test_builder_skygan_omits_unset_physics_params() -> None:
     assert sky.parameters["location"] == "montecito"
 
 
-def test_builder_scene_analysis_and_quality_validation_set_string_output() -> None:
+def test_builder_scene_analysis_and_quality_validation_are_sidecars() -> None:
     builder = WorkflowBuilder().add_input("a.jpg")
     builder.add_scene_analysis(detailed=False)
-    assert builder._last_output == "STRING"
+    assert builder._last_output == "IMAGE"
 
     builder.add_quality_validation(pass_threshold=8.0, warning_threshold=6.0)
+    assert builder._last_output == "IMAGE"
+
     qv = [n for n in builder.workflow.nodes.values() if n.node_type is NodeType.QUALITY_VALIDATION][0]
-    assert qv.parameters == {"pass_threshold": 8.0, "warning_threshold": 6.0}
+    assert qv.parameters == {
+        "pass_threshold": 8.0,
+        "warning_threshold": 6.0,
+        "check_realism": True,
+        "check_structural_accuracy": True,
+        "check_material_consistency": False,
+    }
 
 
 def test_builder_full_chain_matches_docstring_example(tmp_path: Path) -> None:
