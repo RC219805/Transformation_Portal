@@ -7,20 +7,20 @@
 # this YAML, so comments remain aligned with actual enforcement behavior.
 
 version: 2
-last_updated: "2026-05-11"
+last_updated: "2026-06-11"
 
 current_scan_baseline:
   scanner: "scripts/validation/scan_todo_inventory.py"
   snapshot: "docs/analysis/todo_scanner_snapshot.json"
   refresh_command: "python scripts/validation/scan_todo_inventory.py --write-snapshot"
   governance_command: "python scripts/validation/scan_todo_inventory.py --check-governance"
-  files_scanned: 1570
-  total_items: 24
+  files_scanned: 1753
+  total_items: 25
   ungoverned_items: 0
   by_type:
-    NotImplementedError: 24
+    NotImplementedError: 25
   notes:
-    - "All current items are governed abstract/base-class stubs, phase gates, platform limits, or test protocol stubs."
+    - "All current items are governed abstract/base-class stubs, phase gates, platform limits, fail-closed dispatch guards, or test protocol stubs."
     - "The scanner excludes docs/ and generated/vendor/runtime directories, so documentation TODO prose remains narrative context rather than CI-enforced backlog."
 
 scan_scope:

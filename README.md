@@ -23,11 +23,11 @@ and [docs/governance/DOCUMENTATION_MAP.md](docs/governance/DOCUMENTATION_MAP.md)
 The May 11, 2026 repo-wide refresh audit remains the inventory baseline for
 historical classification decisions.
 Recent merged work added typed API v1 envelopes, typed health/readiness and job
-lifecycle response models, Docker health/env wiring, CI workflow hardening and
-a 30-workflow matrix, archive-gate readiness evidence, APEX fallback /
-failure-code hardening, optional FastVLM advisory captioning, portal/frontdoor
-modularization, governed RUM/privacy controls, logout UX, dependency
-maintenance, and the Portal UX/UI status snapshot.
+lifecycle response models, Docker health/env wiring, CI workflow hardening,
+archive-gate readiness evidence, APEX fallback / failure-code hardening,
+optional FastVLM advisory captioning, portal/frontdoor modularization, governed
+RUM/privacy controls, logout UX, dependency maintenance, a 31-workflow matrix,
+dependency-pinning validation, and the Portal UX/UI status snapshot.
 
 For reproducible installs, pin a specific release tag from [GitHub Releases](https://github.com/RC219805/Transformation_Portal/releases) instead of relying on branch prose. The release badge above reflects the latest tagged GitHub release.
 
@@ -529,4 +529,4 @@ Resources:
 
 ---
 
-Last Updated: 2026-06-03
+Last Updated: 2026-06-11
