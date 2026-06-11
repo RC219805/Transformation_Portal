@@ -434,6 +434,7 @@ class TestDefaultFloors:
             "src/transformation_portal/dashboard/dag_editor_api.py": 76.0,
             "src/transformation_portal/dashboard/execution_api.py": 86.0,
             "src/transformation_portal/dashboard/": 80.0,
+            "src/transformation_portal/processors/luxury_video_master_grader.py": 84.0,
         }
 
         assert floors == expected_floors

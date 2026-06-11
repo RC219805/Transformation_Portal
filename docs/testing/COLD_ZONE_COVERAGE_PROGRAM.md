@@ -758,6 +758,7 @@ deterministic behavioral tests and pinned with file-level floors:
 | `dashboard/dag_editor_api.py` | ~0% (unfloored) | 84.1% / 77.3% | 76% / 68% | `tests/dashboard/test_dag_editor_api.py` |
 | `dashboard/execution_api.py` | ~0% (unfloored) | 94.0% / 81.2% | 86% / 72% | `tests/dashboard/test_execution_api.py` |
 | `dashboard/` (package) | ~0% (unfloored) | 89.4% / 87.4% | 80% / 75% | (all `tests/dashboard/`) |
+| `processors/luxury_video_master_grader.py` | 65% line | 91.3% / 83.8% | 84% / 76% | `tests/test_luxury_video_master_grader{,_main}.py` |
 
 The `dashboard/` rows (2026-06-11) open coverage on the previously
 unfloored dashboard package (~9.6k LOC, pure-Python FastAPI/pydantic/sqlite,
@@ -779,6 +780,19 @@ executable statements (the bulk is HTML string literals); and the FastAPI-guard
 `except ImportError` blocks are unreachable while FastAPI — a core dependency —
 is installed. Percentages are from an isolated `tests/dashboard/` run; confirm
 against the first green core-lane `coverage.xml` before any upward ratchet.
+
+The `processors/luxury_video_master_grader.py` row (2026-06-11) is a separate
+file-level fill: this governed ffmpeg-driven CLI was at ~65% (the existing
+`tests/test_luxury_video_master_grader.py` covers the pure filter/command
+helpers). `tests/test_luxury_video_master_grader_main.py` adds offline coverage
+of `build_config` and the `main()` control flow — `probe_source` /
+`ensure_tools_available` are monkeypatched and `--dry-run` exits before the
+ffmpeg subprocess — exercising every documented return code (2/3/4/5/6/7), the
+real-run success path, and the parameter-validation matrix, lifting it to
+~91% line. The residual misses are the `ffprobe` subprocess body and a few deep
+helper branches owned by the existing suite. The rest of `processors/` is
+already covered by existing `material_response` tests, so no package floor is
+added there.
 
 `comfyui/workflow_builder.py` required a precondition: `comfyui/__init__.py`
 eagerly imported `custom_nodes` (top-level `import torch`), so the pure builder

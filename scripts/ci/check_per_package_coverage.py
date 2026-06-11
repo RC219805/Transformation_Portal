@@ -226,6 +226,13 @@ PACKAGE_FLOORS: tuple[PackageFloor, ...] = (
     # conservative package floor sits on top of the per-file floors and guards
     # against future *unfloored* additions silently dragging the package down.
     PackageFloor("src/transformation_portal/dashboard/", 80.0),
+    # Luxury video master grader (governed CLI; `make test-novideo` excludes its
+    # heavy tests). The existing tests cover the pure filter/command helpers;
+    # tests/test_luxury_video_master_grader_main.py adds offline coverage of
+    # build_config + the main() control flow (mocked probe/ffmpeg, --dry-run),
+    # lifting it 65% -> ~91% line on 2026-06-11. The residual misses are the
+    # ffprobe subprocess body and deep helper branches.
+    PackageFloor("src/transformation_portal/processors/luxury_video_master_grader.py", 84.0),
 )
 
 

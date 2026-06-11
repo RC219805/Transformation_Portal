@@ -176,6 +176,7 @@ def test_default_branch_floors_cover_cold_zone_and_durable_state_prefixes(script
         ("src/transformation_portal/dashboard/dag_editor_api.py", 68.0),
         ("src/transformation_portal/dashboard/execution_api.py", 72.0),
         ("src/transformation_portal/dashboard/", 75.0),
+        ("src/transformation_portal/processors/luxury_video_master_grader.py", 76.0),
     )
 
 
