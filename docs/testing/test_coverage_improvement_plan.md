@@ -25,7 +25,7 @@ The repository has substantial test volume, but high-risk areas remain under-cov
 | Offline integration tests | pytest | Pass |
 | Contract tests | pytest | Pass |
 | Security boundary tests | pytest | Pass |
-| **Global floor** | coverage | ≥25% |
+| **Global floor** | coverage | ≥30% |
 
 ### Local / Review Targets (non-blocking today)
 
@@ -66,7 +66,7 @@ its `app.py` milestone targets below are actually enforced, not aspirational.
 
 ```bash
 # Enforced in required PR CI today
-coverage report --fail-under=25
+pytest ... --cov-fail-under=30
 
 # Local target / intended future PR gate
 make coverage-diff
