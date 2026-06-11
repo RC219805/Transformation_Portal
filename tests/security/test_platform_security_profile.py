@@ -139,7 +139,7 @@ class TestTorchSecurityEnforcement:
         assert "minimum_supported_torch_version" in profile
         assert "torch_load_enforced" in profile
         assert "weights_only" in profile
-        assert profile["minimum_supported_torch_version"] == "2.8.0"
+        assert profile["minimum_supported_torch_version"] == "2.12.0"
         assert profile["cve_mitigation"] == "fixed-by-supported-torch-baseline"
 
         # Should NOT include runtime state

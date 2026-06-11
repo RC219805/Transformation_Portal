@@ -178,8 +178,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - **Governed ML Baseline Alignment:** Root release notes now track the supported Apple Silicon ML lock and package metadata instead of retired/untrusted ML lane targets.
-  - torch: supported lock baseline `2.8.0`
-  - torchvision: paired supported lock baseline `0.23.0`
+  - torch: supported lock baseline `2.12.0`
+  - torchvision: paired supported lock baseline `0.27.0`
   - scikit-learn: governed base lock baseline `1.8.0`
   - timm: locked transitive vision-helper baseline `1.0.26`
   - diffusers: metadata floor `0.38.0`; supported lock baseline `0.38.0`

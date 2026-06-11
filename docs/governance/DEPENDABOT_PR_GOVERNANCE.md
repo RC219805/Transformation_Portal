@@ -230,6 +230,7 @@ Before merging any Dependabot PR:
 | 2026-05-12 | Added npm Dependabot coverage and per-directory grouped minor/patch policy | Architect |
 | 2026-05-26 | Recorded the curated Starlette 1.0.1 patch for PYSEC-2026-161 and synced the current exact-pinned web stack baseline | Architect |
 | 2026-05-26 | Recorded the curated Python/runtime refresh for Uvicorn 0.48.0, SQLAlchemy 2.0.50, diff-cover 10.2.1, and FastVLM idna/fsspec pins | Architect |
+| 2026-06-10 | Added PyTorch alert wave triage for the `torch==2.12.0` supported baseline rotation and no-patch `torch.jit.script` dismissals | Architect |
 
 ---
 
@@ -255,7 +256,9 @@ Dependabot ML alert waves must be triaged by advisory reachability and lane supp
 
 ### Current triage artifact
 
-See [DEPENDABOT_ML_ALERT_TRIAGE_2026-04-16.md](DEPENDABOT_ML_ALERT_TRIAGE_2026-04-16.md) for the April 16, 2026 advisory mapping, dismissal evidence, and supported-lane audit runbook.
+See [DEPENDABOT_ML_ALERT_TRIAGE_2026-06-10.md](DEPENDABOT_ML_ALERT_TRIAGE_2026-06-10.md) for the June 10, 2026 PyTorch advisory mapping, dismissal evidence, and supported-lane rotation.
+The April 16, 2026 record remains available at
+[DEPENDABOT_ML_ALERT_TRIAGE_2026-04-16.md](DEPENDABOT_ML_ALERT_TRIAGE_2026-04-16.md).
 
 ---
 

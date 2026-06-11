@@ -50,8 +50,8 @@ def check_dependencies():
             ("cv2", "OpenCV", "4.13.0"),
         ],
         "ML": [
-            ("torch", "PyTorch", "2.8.0"),
-            ("torchvision", "TorchVision", "0.23.0"),
+            ("torch", "PyTorch", "2.12.0"),
+            ("torchvision", "TorchVision", "0.27.0"),
             ("transformers", "Transformers", "4.57.6"),
             ("diffusers", "Diffusers", "0.38.0"),
         ],

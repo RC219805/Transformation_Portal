@@ -73,8 +73,8 @@ classifiers = [
 
 # ML Core - supported metadata baseline (minimal spec; see ml-core.in for pins)
 ml-core = [
-    "torch>=2.8.0",
-    "torchvision>=0.23.0",
+    "torch>=2.12.0",
+    "torchvision>=0.27.0",
     "diffusers>=0.38.0,<1",
     "transformers>=5.0.0,<5.1",
     "huggingface-hub>=0.19",
@@ -95,8 +95,8 @@ raw = [
 #   CoreML: ./scripts/bootstrap/install_ml_stack.sh --profile core-cpu,coreml (macOS only)
 #   Full:   reserved until a trusted umbrella contract exists again
 ml = [
-    "torch>=2.8.0",
-    "torchvision>=0.23.0",
+    "torch>=2.12.0",
+    "torchvision>=0.27.0",
     "diffusers>=0.38.0,<1",
     "transformers>=5.0.0,<5.1",
     "rawpy>=0.18.0",

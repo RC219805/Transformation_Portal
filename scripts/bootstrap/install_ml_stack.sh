@@ -289,7 +289,7 @@ install_profile() {
         log_error "SECURITY BLOCK: macOS Intel (x86_64) ML Stack NOT SUPPORTED"
         log_error "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
         log_error ""
-        log_error "PyTorch does not provide the repo-supported torch>=2.8.0 baseline for macOS Intel."
+        log_error "PyTorch does not provide the repo-supported torch>=2.12.0 baseline for macOS Intel."
         log_error "The historical macOS Intel PyTorch 2.2.x lockfile has been retired"
         log_error "from installable requirements because it is vulnerable to CVE-2025-32434."
         log_error ""
