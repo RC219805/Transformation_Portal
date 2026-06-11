@@ -152,13 +152,13 @@ def test_cli_skips_constraints_when_passed_explicitly(tmp_path: Path, capsys) ->
 
     captured = capsys.readouterr()
     assert exit_code == 0
-    assert "skipping exempt file" in captured.err
+    assert "skipping constraints lockfile pin scan" in captured.err
     assert "constraints.txt" in captured.err
     assert "base.txt" in captured.out
 
 
-def test_cli_warns_about_all_exempt_inputs(tmp_path: Path, capsys) -> None:
-    """When every explicit path is exempt the message must reflect that, not the default dir."""
+def test_cli_audits_all_constraints_inputs(tmp_path: Path, capsys) -> None:
+    """When every explicit path is constraints.txt, the constraints audit still runs."""
     module = _load_module()
     constraints = tmp_path / "constraints.txt"
     constraints.write_text("realesrgan>=9999.0.0\n", encoding="utf-8")
@@ -174,9 +174,88 @@ def test_cli_warns_about_all_exempt_inputs(tmp_path: Path, capsys) -> None:
 
     captured = capsys.readouterr()
     assert exit_code == 0
-    assert "every supplied path was exempt" in captured.err
+    assert "skipping constraints lockfile pin scan" in captured.err
+    assert "1 constraints file(s) audited" in captured.out
     # The default-scan wording must not surface for explicit-args input.
     assert "no lockfiles found under" not in captured.err
+
+
+def test_constraint_hard_blocks_do_not_require_installed_package(tmp_path: Path) -> None:
+    module = _load_module()
+    constraints = tmp_path / "constraints.txt"
+    constraints.write_text("realesrgan>=9999.0.0\n", encoding="utf-8")
+
+    def missing_distribution(name: str) -> str:
+        raise module.importlib_metadata.PackageNotFoundError(name)
+
+    assert (
+        module.find_constraint_install_violations(
+            constraints,
+            version_lookup=missing_distribution,
+        )
+        == []
+    )
+
+
+def test_constraint_exact_pin_must_match_installed_version(tmp_path: Path) -> None:
+    module = _load_module()
+    constraints = tmp_path / "constraints.txt"
+    constraints.write_text("packaging==26.2\n", encoding="utf-8")
+
+    assert (
+        module.find_constraint_install_violations(
+            constraints,
+            version_lookup=lambda name: "26.2",
+        )
+        == []
+    )
+
+
+def test_constraint_version_drift_is_rejected(tmp_path: Path) -> None:
+    module = _load_module()
+    constraints = tmp_path / "constraints.txt"
+    constraints.write_text("packaging==26.2\n", encoding="utf-8")
+
+    violations = module.find_constraint_install_violations(
+        constraints,
+        version_lookup=lambda name: "26.1",
+    )
+
+    assert len(violations) == 1
+    assert "packaging==26.2" in violations[0]
+    assert "packaging==26.1" in violations[0]
+
+
+def test_constraint_missing_distribution_is_rejected(tmp_path: Path) -> None:
+    module = _load_module()
+    constraints = tmp_path / "constraints.txt"
+    constraints.write_text("packaging==26.2\n", encoding="utf-8")
+
+    def missing_distribution(name: str) -> str:
+        raise module.importlib_metadata.PackageNotFoundError(name)
+
+    violations = module.find_constraint_install_violations(
+        constraints,
+        version_lookup=missing_distribution,
+    )
+
+    assert len(violations) == 1
+    assert "not installed in the governed environment" in violations[0]
+
+
+def test_non_hard_block_constraint_range_is_rejected(tmp_path: Path) -> None:
+    module = _load_module()
+    constraints = tmp_path / "constraints.txt"
+    constraints.write_text("packaging>=26.2\n", encoding="utf-8")
+
+    violations = module.find_constraint_install_violations(
+        constraints,
+        version_lookup=lambda name: "26.2",
+    )
+
+    assert len(violations) == 1
+    assert ">=9999.0.0" in violations[0]
+    assert "==" in violations[0]
 
 
 def test_wrapped_extras_pinned_with_equals_is_accepted(tmp_path: Path) -> None:

@@ -101,7 +101,7 @@ help:
 	@echo "  check-python-headers  Fail on invalid encoding-cookie-like text in Python header lines 1-2"
 	@echo "  check-yaml-governance  Fail on raw yaml.safe_load outside approved preset/exempt boundaries"
 	@echo "  check-piptools-cache  Fail if requirements/.pip-tools-cache is tracked in git"
-	@echo "  check-dependency-pinning  Fail if requirements/*.txt lockfiles use unpinned operators (TODO §5.7)"
+	@echo "  check-dependency-pinning  Fail on unpinned requirements locks or constraints/env version drift (TODO §5.7)"
 	@echo "  compile-ml-darwin-arm64  Compile target-owned Darwin arm64 ML lock via requirements/"
 	@echo "  update-ml-darwin-arm64   Update target-owned Darwin arm64 ML lock via requirements/"
 	@echo "  check-ml-darwin-arm64    Verify target-owned Darwin arm64 ML lock via requirements/"
@@ -758,7 +758,7 @@ check-requirements-lock-contract:
 	@"$(PY)" scripts/validation/check_requirements_lock_contract.py
 
 check-dependency-pinning:
-	@echo "Checking that requirements lockfiles use exact (==) version pins..."
+	@echo "Checking requirements locks and constraints/env version alignment..."
 	@"$(PY)" scripts/validation/check_dependency_pinning.py
 
 check:
