@@ -106,6 +106,9 @@ BRANCH_FLOORS: tuple[BranchFloor, ...] = (
     # Package-level branch floor for the whole dashboard package (~87% measured
     # 2026-06-11); guards future unfloored additions.
     BranchFloor("src/transformation_portal/dashboard/", 75.0),
+    # Luxury video master grader — branch coverage reached ~84% on 2026-06-11
+    # via the build_config + main() control-flow tests. Conservative floor.
+    BranchFloor("src/transformation_portal/processors/luxury_video_master_grader.py", 76.0),
 )
 
 # If a future branch temporarily clears floors, dry-run mode still reports the
@@ -143,6 +146,7 @@ DRY_RUN_BRANCH_PREFIXES: tuple[str, ...] = (
     "src/transformation_portal/dashboard/dag_editor_api.py",
     "src/transformation_portal/dashboard/execution_api.py",
     "src/transformation_portal/dashboard/",
+    "src/transformation_portal/processors/luxury_video_master_grader.py",
 )
 
 
