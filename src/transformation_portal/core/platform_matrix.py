@@ -193,7 +193,7 @@ class PlatformMatrix:
             - ml_supported: True if ML stack is supported on this platform
 
         Security Context:
-            The supported Apple Silicon lane now pins torch==2.8.0.
+            The supported Apple Silicon lane now pins torch==2.12.0.
             Linux and macOS Intel ML locks are retired unsupported manifests and
             are not installable checked-in requirement files.
             All platforms must use weights_only=True for torch.load() calls as
@@ -214,14 +214,14 @@ class PlatformMatrix:
                     "weights_only=True remains required hardening but is not a remediation for retired baselines."
                 ),
                 "mitigation": base_mitigation,
-                "secure": False,  # macOS Intel has no supported torch>=2.8.0 baseline.
+                "secure": False,  # macOS Intel has no supported torch>=2.12.0 baseline.
                 "ml_supported": False,
             }
         if self.is_apple_silicon:
             return {
                 "platform": self.canonical_target,
                 "cve_2025_32434_note": (
-                    "Supported Apple Silicon lane uses torch==2.8.0. "
+                    "Supported Apple Silicon lane uses torch==2.12.0. "
                     "weights_only=True remains required for checkpoint defense in depth."
                 ),
                 "mitigation": base_mitigation,

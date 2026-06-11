@@ -72,7 +72,7 @@ def test_subprocess_availability_failure_includes_worker_diagnostics(tmp_path: P
             "device": "mps",
             "mps_built": True,
             "mps_available": False,
-            "torch_version": "2.11.0",
+            "torch_version": "2.12.0",
         },
         sort_keys=True,
     )
@@ -98,7 +98,7 @@ def test_worker_reports_structured_mps_diagnostics(capsys: pytest.CaptureFixture
         "device": "mps",
         "mps_built": True,
         "mps_available": False,
-        "torch_version": "2.11.0",
+        "torch_version": "2.12.0",
     }
     with patch(
         "transformation_portal.depth.backends.depth_pro_worker._torch_diagnostics",

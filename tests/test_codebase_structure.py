@@ -437,8 +437,8 @@ class TestRootGovernanceMetadata:
             "Canonical evidence-bundle root anchoring",
             "Optional notarization validation support",
             "Governed ML Baseline Alignment",
-            "torch: supported lock baseline `2.8.0`",
-            "torchvision: paired supported lock baseline `0.23.0`",
+            "torch: supported lock baseline `2.12.0`",
+            "torchvision: paired supported lock baseline `0.27.0`",
             "diffusers: metadata floor `0.38.0`; supported lock baseline `0.38.0`",
             "transformers: metadata floor `5.0.0`; supported lock baseline `5.0.0`",
             "## [2.0.0] - 2026-01-02",
@@ -764,9 +764,9 @@ class TestRootGovernanceMetadata:
         assert "make install-ml         # disabled: no trusted umbrella lock contract" in requirements_ml
         assert "Run `make compile` in this directory to generate pinned ml.txt" not in requirements_ml
         assert "make install-ml         # ml-core + ml-raw (this umbrella)" not in requirements_ml
-        assert "torch==2.8.0, torchvision==0.23.0, open-clip-torch==3.3.0" in requirements_ml
+        assert "torch==2.12.0, torchvision==0.27.0, open-clip-torch==3.3.0" in requirements_ml
         assert "target-owned locks are install support promises" in requirements_ml
-        assert "torch==2.10.0, torchvision==0.25.0" not in requirements_ml
+        assert "torch==2.8.0, torchvision==0.23.0" not in requirements_ml
         assert "CUDA is a retired unsupported lane" in requirements_ml_cpu
         assert "GPU-specific packages are in ml-cuda.in" not in requirements_ml_cpu
         assert "Retired unsupported CUDA ML lane" in requirements_ml_cuda

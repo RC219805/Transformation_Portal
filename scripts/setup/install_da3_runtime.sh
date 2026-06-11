@@ -217,8 +217,8 @@ log "Upgrading pip in ${VENV_DIR}"
 run "${PYTHON_BIN}" -m pip install --upgrade pip
 
 BASE_DEPS=(
-    "torch==2.11.0"
-    "torchvision==0.26.0"
+    "torch==2.12.0"
+    "torchvision==0.27.0"
     "transformers==5.5.0"
     "cryptography==47.0.0"
     "moviepy==1.0.3"

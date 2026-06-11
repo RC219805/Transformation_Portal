@@ -15,8 +15,8 @@
 # - Accel is EXPLICIT via profile, never inferred from OS
 #
 # SECURITY NOTE:
-# - Supported ML metadata now anchors on torch>=2.8.0 /
-#   torchvision>=0.23.0.
+# - Supported ML metadata now anchors on torch>=2.12.0 /
+#   torchvision>=0.27.0.
 # - Retired Darwin x86_64 and Linux locks are removed from installable
 #   requirements surfaces and must not drive dependency graph alerts.
 # - All torch.load() calls MUST use weights_only=True as defense in depth.
@@ -26,8 +26,8 @@
 
 # --- PyTorch secure baseline ---
 # NOTE: When updating torch versions, verify SAM2/CLIP compatibility.
-torch>=2.8.0
-torchvision>=0.23.0
+torch>=2.12.0
+torchvision>=0.27.0
 
 # Diffusion / HuggingFace ecosystem
 diffusers>=0.38.0,<1
