@@ -214,9 +214,7 @@ def test_artifact_info_success(client: TestClient, tmp_path: Path) -> None:
         (b"\x00\x01\x02\xff\xfe", "binary"),
     ],
 )
-def test_artifact_preview_content_type_matrix(
-    client: TestClient, tmp_path: Path, data: bytes, expected_type: str
-) -> None:
+def test_artifact_preview_content_type_matrix(client: TestClient, tmp_path: Path, data: bytes, expected_type: str) -> None:
     f = tmp_path / "blob"
     f.write_bytes(data)
     cas = _FakeCAS()
@@ -228,9 +226,7 @@ def test_artifact_preview_content_type_matrix(
     assert body["truncated"] is False
 
 
-def test_artifact_preview_json_leading_but_undecodable_falls_back_to_binary(
-    client: TestClient, tmp_path: Path
-) -> None:
+def test_artifact_preview_json_leading_but_undecodable_falls_back_to_binary(client: TestClient, tmp_path: Path) -> None:
     # Leading "{" routes into the JSON branch, but invalid UTF-8 makes the
     # decode raise -> the except: pass leaves it as binary with no preview.
     f = tmp_path / "bad.json"
