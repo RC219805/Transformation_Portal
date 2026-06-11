@@ -78,6 +78,12 @@ BRANCH_FLOORS: tuple[BranchFloor, ...] = (
     # via the lifecycle/cancellation tests. Conservative floor (residual misses
     # are the legacy inline-trim and post-loop cancellation edge branches).
     BranchFloor("src/transformation_portal/dashboard/execution_manager.py", 75.0),
+    # Dashboard time-travel router — branch coverage reached 100% on 2026-06-11
+    # via the TestClient route-branch tests. Conservative floor.
+    BranchFloor("src/transformation_portal/dashboard/time_travel.py", 90.0),
+    # Dashboard studio inspector — branch coverage reached 100% on 2026-06-11
+    # (only two branches; the rest is HTML). Conservative floor.
+    BranchFloor("src/transformation_portal/dashboard/studio_inspector.py", 80.0),
 )
 
 # If a future branch temporarily clears floors, dry-run mode still reports the
@@ -101,6 +107,8 @@ DRY_RUN_BRANCH_PREFIXES: tuple[str, ...] = (
     "src/transformation_portal/orchestrator/worker.py",
     "src/transformation_portal/dashboard/node_state_store.py",
     "src/transformation_portal/dashboard/execution_manager.py",
+    "src/transformation_portal/dashboard/time_travel.py",
+    "src/transformation_portal/dashboard/studio_inspector.py",
 )
 
 

@@ -163,6 +163,19 @@ PACKAGE_FLOORS: tuple[PackageFloor, ...] = (
     # / ML backend): ~91% line on 2026-06-11. Residual misses are the legacy
     # inline-trim fallback and post-loop cancellation edge branches.
     PackageFloor("src/transformation_portal/dashboard/execution_manager.py", 85.0),
+    # Dashboard time-travel router (node history, run snapshots, artifact
+    # compare). Route-branch tests in tests/dashboard/test_time_travel.py drive
+    # it via FastAPI TestClient against a real in-memory store + fake Merkle
+    # DAG: ~96% line on 2026-06-11. The residual miss is the module-level
+    # `except ImportError` FastAPI guard (unreachable while FastAPI — a core
+    # dependency — is installed).
+    PackageFloor("src/transformation_portal/dashboard/time_travel.py", 90.0),
+    # Dashboard studio inspector (3D inspector router). The module is ~1.4k LOC
+    # but coverage.py sees only ~25 executable statements — the bulk is HTML
+    # string literals. tests/dashboard/test_studio_inspector.py pins the router
+    # wiring, FastAPI guard, and HTML structural contracts: ~89% line on
+    # 2026-06-11 (residual miss is the import guard, as above).
+    PackageFloor("src/transformation_portal/dashboard/studio_inspector.py", 82.0),
 )
 
 

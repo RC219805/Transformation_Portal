@@ -744,17 +744,24 @@ deterministic behavioral tests and pinned with file-level floors:
 | `orchestrator/worker.py` | 76% / 71% | 100% / 100% | 90% / 85% | `tests/orchestrator/test_worker_runner_unit.py` |
 | `dashboard/node_state_store.py` | ~0% (unfloored) | 99.3% / 97.1% | 95% / 90% | `tests/dashboard/test_node_state_store.py` |
 | `dashboard/execution_manager.py` | ~0% (unfloored) | 90.9% / 81.8% | 85% / 75% | `tests/dashboard/test_execution_manager.py` |
+| `dashboard/time_travel.py` | ~0% (unfloored) | 96.0% / 100% | 90% / 90% | `tests/dashboard/test_time_travel.py` |
+| `dashboard/studio_inspector.py` | ~0% (unfloored) | 88.9% / 100% | 82% / 80% | `tests/dashboard/test_studio_inspector.py` |
 
-The two `dashboard/` rows (2026-06-11) open coverage on the previously
+The four `dashboard/` rows (2026-06-11) open coverage on the previously
 unfloored dashboard package (~9.6k LOC, pure-Python FastAPI/pydantic/sqlite,
 no ML — the largest offline-testable surface outside this program). They are
-file-level floors against the two most self-contained seams (a pure per-node
-state store and the async execution manager's lifecycle/cancellation state
-machine); the remaining dashboard modules stay unfloored pending further
-behavioral fills. Residual `execution_manager.py` misses are the legacy
-inline-trim fallback and post-loop cancellation edge branches. Percentages are
-from an isolated `tests/dashboard/` run; confirm against the first green
-core-lane `coverage.xml` before any upward ratchet.
+file-level floors against the most self-contained seams: a pure per-node state
+store, the async execution manager's lifecycle/cancellation state machine, and
+the two FastAPI routers (`time_travel`, `studio_inspector`) driven via
+`TestClient`. The remaining dashboard modules stay unfloored pending further
+behavioral fills. Notes: `execution_manager.py`'s residual misses are the
+legacy inline-trim fallback and post-loop cancellation edge branches;
+`studio_inspector.py` is ~1.4k LOC but coverage.py sees only ~25 executable
+statements (the bulk is HTML string literals), and both routers' only residual
+miss is the module-level `except ImportError` FastAPI guard (unreachable while
+FastAPI — a core dependency — is installed). Percentages are from an isolated
+`tests/dashboard/` run; confirm against the first green core-lane
+`coverage.xml` before any upward ratchet.
 
 `comfyui/workflow_builder.py` required a precondition: `comfyui/__init__.py`
 eagerly imported `custom_nodes` (top-level `import torch`), so the pure builder
