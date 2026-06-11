@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
-"""Validate that compiled requirements lockfiles use exact (==) version pins.
+"""Validate governed dependency pinning contracts.
 
 Policy:
 - Every requirement line in ``requirements/*.txt`` must specify an exact
   ``==`` version pin (``package==version``) so installations are reproducible.
   PEP 440 arbitrary-equality (``===``) and any range/inequality operator
   (``>=``, ``<=``, ``~=``, ``!=``, ``>``, ``<``) are rejected.
-- ``constraints.txt`` is always exempt — both when scanning the default
-  ``requirements/`` directory and when callers pass it explicitly via the
-  CLI (e.g. ``check_dependency_pinning.py requirements/*.txt``). The file
-  intentionally uses ``>=9999.0.0`` to hard-block banned packages.
+- ``constraints.txt`` is exempt from the lockfile ``==`` policy because it
+  intentionally uses ``>=9999.0.0`` to hard-block banned packages. Any normal
+  ``constraints.txt`` pin must use exact ``==`` syntax and match the version
+  installed in the governed Python environment.
 - Hashes, comments, blank lines, options (``-r``, ``-c``, ``--hash``, etc.),
   and pip-compile continuation lines are ignored.
 
@@ -20,17 +20,17 @@ invariant that no transitive dependency drifts onto a floating range.
 Implements the core local-enforcement piece of TODO_INVENTORY.md §5.7
 (Dependency Pinning Validation). A dedicated GitHub Actions workflow
 (``.github/workflows/dependency-pinning-check.yml``) runs this same check as an
-isolated PR/push signal; the constraints-vs-installed audit listed in §5.7
-remains a follow-up.
+isolated PR/push signal.
 """
 
 from __future__ import annotations
 
 import argparse
+import importlib.metadata as importlib_metadata
 import re
 import sys
 from pathlib import Path
-from typing import Iterable, Iterator
+from typing import Callable, Iterable, Iterator
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 REQUIREMENTS_DIR = PROJECT_ROOT / "requirements"
@@ -41,6 +41,8 @@ EXEMPT_FILES = frozenset({"constraints.txt"})
 # range/inequality operator. The ``(?!=)`` lookahead is the trip-wire that
 # stops ``pkg===1.2.3`` from masquerading as a ``==`` pin.
 PINNED_LINE_PATTERN = re.compile(r"^([A-Za-z0-9_.\-]+)(?:\[[A-Za-z0-9_.,\-\s]+\])?==(?!=)[^\s;#]+")
+CONSTRAINT_PIN_PATTERN = re.compile(r"^(?P<name>[A-Za-z0-9_.\-]+)(?:\[[A-Za-z0-9_.,\-\s]+\])?==(?!=)(?P<version>[^\s;#]+)$")
+HARD_BLOCK_CONSTRAINT_PATTERN = re.compile(r">=\s*9999(?:\.0\.0)?\b")
 # Order matters: longer operators must precede shorter ones so substring
 # detection reports ``===`` rather than the empty-string match it contains.
 UNPINNED_OPERATORS = ("===", ">=", "<=", "~=", "!=", ">", "<")
@@ -81,6 +83,21 @@ def _is_skippable(line: str) -> bool:
 def _is_hash_continuation(line: str) -> bool:
     """Return True for ``--hash=...`` continuation fragments on a wrapped line."""
     return line.lstrip().startswith("--hash=")
+
+
+def _requirement_head(line: str) -> str:
+    """Return the requirement segment before comments or environment markers."""
+    return re.split(r"[;#]", line, maxsplit=1)[0].strip()
+
+
+def _collapsed_requirement_head(line: str) -> str:
+    """Return a whitespace-normalized requirement segment for policy matching."""
+    return re.sub(r"\s+", "", _requirement_head(line))
+
+
+def _is_hard_block_constraint(line: str) -> bool:
+    """Return True when a constraints entry intentionally blocks a package."""
+    return bool(HARD_BLOCK_CONSTRAINT_PATTERN.search(_requirement_head(line)))
 
 
 def _iter_logical_lines(text: str) -> Iterator[tuple[int, str]]:
@@ -149,7 +166,7 @@ def find_violations(paths: Iterable[Path]) -> list[str]:
 
             # Strip inline environment markers / comments so we focus on the
             # ``package<op>version`` segment.
-            head = re.split(r"[;#]", line, maxsplit=1)[0].strip()
+            head = _requirement_head(line)
             if not head:
                 continue
             # Stray fragments without a leading package name (the bracket
@@ -161,7 +178,7 @@ def find_violations(paths: Iterable[Path]) -> list[str]:
             # Collapse internal whitespace so ``pkg[a, b]==1.0.0`` (joined
             # from a wrapped extras list) is matched the same way pip would
             # canonicalise it.
-            collapsed = re.sub(r"\s+", "", head)
+            collapsed = _collapsed_requirement_head(line)
 
             if PINNED_LINE_PATTERN.match(collapsed):
                 continue
@@ -177,6 +194,70 @@ def find_violations(paths: Iterable[Path]) -> list[str]:
                 f"{path}:{line_number}: requirement {head!r} uses unpinned operator "
                 f"{offending_op!r}; lockfiles must use '==' pins"
             )
+    return violations
+
+
+def find_constraint_install_violations(
+    constraints_path: Path,
+    *,
+    version_lookup: Callable[[str], str] = importlib_metadata.version,
+) -> list[str]:
+    """Return violations for normal constraints that drift from installed packages.
+
+    ``constraints.txt`` also carries intentional hard-blocks such as
+    ``realesrgan>=9999.0.0``. Those entries are supply-chain bans, not install
+    pins, so they are skipped here and enforced by the banned-dependencies
+    validator.
+    """
+    violations: list[str] = []
+    try:
+        text = constraints_path.read_text(encoding="utf-8")
+    except OSError as exc:
+        return [f"{constraints_path}: could not read file ({exc})"]
+
+    for line_number, logical_line in _iter_logical_lines(text):
+        if _is_skippable(logical_line) or _is_hash_continuation(logical_line):
+            continue
+        if _is_hard_block_constraint(logical_line):
+            continue
+
+        head = _requirement_head(logical_line)
+        if not head:
+            continue
+        if not re.match(r"^[A-Za-z0-9_.\-]", head):
+            continue
+
+        collapsed = _collapsed_requirement_head(logical_line)
+        match = CONSTRAINT_PIN_PATTERN.match(collapsed)
+        if match is None:
+            offending_op = next((op for op in UNPINNED_OPERATORS if op in collapsed), None)
+            if offending_op is None:
+                violations.append(f"{constraints_path}:{line_number}: constraint {head!r} has no exact (==) pin")
+            else:
+                violations.append(
+                    f"{constraints_path}:{line_number}: constraint {head!r} uses operator "
+                    f"{offending_op!r}; constraints must either hard-block with '>=9999.0.0' "
+                    "or use an exact installed-version '==' pin"
+                )
+            continue
+
+        name = match.group("name")
+        expected = match.group("version")
+        try:
+            installed = version_lookup(name)
+        except importlib_metadata.PackageNotFoundError:
+            violations.append(
+                f"{constraints_path}:{line_number}: constraint pins {name}=={expected} "
+                "but that distribution is not installed in the governed environment"
+            )
+            continue
+
+        if installed != expected:
+            violations.append(
+                f"{constraints_path}:{line_number}: constraint pins {name}=={expected} "
+                f"but the governed environment has {name}=={installed}"
+            )
+
     return violations
 
 
@@ -199,28 +280,25 @@ def main() -> int:
     else:
         raw_paths = iter_lockfiles()
 
-    paths, exempt = _partition_exempt(raw_paths)
-    for skipped in exempt:
+    paths, constraints_paths = _partition_exempt(raw_paths)
+    for skipped in constraints_paths:
         # ``constraints.txt`` intentionally uses ``>=9999.0.0`` to ban
         # packages, so it can never satisfy the ``==`` policy. Make the
         # exemption visible rather than silent so callers passing globs
         # like ``requirements/*.txt`` understand why it isn't scanned.
-        print(f"NOTE: skipping exempt file {skipped}", file=sys.stderr)
+        print(f"NOTE: skipping constraints lockfile pin scan for {skipped}", file=sys.stderr)
 
-    if not paths:
+    if not explicit:
+        constraints_paths = [REQUIREMENTS_DIR / "constraints.txt"]
+
+    if not paths and not constraints_paths:
         # Distinguish "default scan turned up nothing" from "every explicit
         # path was exempt" so the message describes the actual input mode.
         if explicit:
-            if exempt:
-                print(
-                    "WARNING: every supplied path was exempt; nothing to scan.",
-                    file=sys.stderr,
-                )
-            else:
-                print(
-                    "WARNING: no lockfiles supplied to scan.",
-                    file=sys.stderr,
-                )
+            print(
+                "WARNING: no lockfiles supplied to scan.",
+                file=sys.stderr,
+            )
         else:
             print(
                 f"WARNING: no lockfiles found under {REQUIREMENTS_DIR}",
@@ -229,14 +307,22 @@ def main() -> int:
         return 0
 
     violations = find_violations(paths)
+    for constraints_path in constraints_paths:
+        violations.extend(find_constraint_install_violations(constraints_path))
+
     if violations:
         print("ERROR: dependency pinning validation failed:", file=sys.stderr)
         for violation in violations:
             print(f"  - {violation}", file=sys.stderr)
         return 1
 
-    scanned = ", ".join(path.name for path in paths)
-    print(f"dependency pinning passed: {len(paths)} lockfile(s) verified ({scanned})")
+    scanned = ", ".join(path.name for path in paths) if paths else "none"
+    audited = ", ".join(path.name for path in constraints_paths) if constraints_paths else "none"
+    print(
+        "dependency pinning passed: "
+        f"{len(paths)} lockfile(s) verified ({scanned}); "
+        f"{len(constraints_paths)} constraints file(s) audited ({audited})"
+    )
     return 0
 
 

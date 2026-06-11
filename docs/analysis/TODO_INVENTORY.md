@@ -1159,7 +1159,7 @@ GitHub UI → Settings → Branches → Branch protection rules → main
 - [x] Wire into `make ci` so PR lanes catch drift
 - [x] Create `.github/workflows/dependency-pinning-check.yml` for an isolated
   signal independent of the broader CI matrix
-- [ ] Validate constraints.txt matches installed versions
+- [x] Validate constraints.txt matches installed versions
 - [ ] Check for floating transitive dependencies (separate analysis)
 
 **Example Check (now codified in script):**
@@ -1177,8 +1177,9 @@ GitHub UI → Settings → Branches → Branch protection rules → main
 **Architect Recommendation:** Local enforcement landed for v2.2.x; the isolated
 workflow now ships as a dedicated `dependency-pinning-check.yml` (chosen over
 overloading an existing governance workflow so the supply-chain signal stays
-focused and independently observable). The constraints-vs-installed audit and
-floating-transitive analysis remain the open follow-ups under this item.
+focused and independently observable). The constraints-vs-installed audit is
+wired into `check_dependency_pinning.py`; floating-transitive analysis remains
+the open follow-up under this item.
 
 ---
 
