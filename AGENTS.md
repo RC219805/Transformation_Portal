@@ -133,6 +133,10 @@ actionable; use the linked docs and `Makefile` for exhaustive inventories.
   `python3 scripts/ci/check_per_package_coverage.py coverage.xml`,
   `python3 scripts/ci/check_per_package_branch_coverage.py coverage.xml`, and
   `python3 scripts/ci/check_cold_zone_touched_files.py coverage.xml --compare-ref origin/main`.
+  For floor ratchets, first reproduce the CI core-tier snapshot:
+  `./.venv/bin/pytest -v tests/ -ra -m "(unit or security or regression or golden or integration) and not ml and not slow and not benchmark" --cov=src/transformation_portal --cov=src/tp --cov=lux_depth_v3 --cov=app --cov-branch --cov-report=term-missing --cov-report=xml:coverage.xml --cov-report=html --cov-fail-under=30 --cov-config=pyproject.toml`.
+  Keep floor changes below measured baselines, and do not assume live-service
+  Postgres/Redis/S3 coverage from this core lane.
 - ML sampled coverage evidence:
   `TRANSFORMERS_OFFLINE=1 HF_HOME=/tmp/hf_home_cov TRANSFORMERS_CACHE=/tmp/transformers_cache_cov OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 ./.venv/bin/pytest -v tests/vlm tests/spatial_ai/segmentation -ra -m "ml and not slow and not integration and not benchmark" --cov=src/transformation_portal/vlm --cov=src/transformation_portal/spatial_ai/segmentation --cov-report=term --cov-report=xml:coverage-ml-sampled.xml`.
   Treat this as cold-zone ratchet evidence, not a blocking local gate.
