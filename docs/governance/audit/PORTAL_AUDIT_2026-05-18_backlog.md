@@ -69,7 +69,7 @@ Each item carries severity, effort, the files to touch, observable acceptance cr
 
 ## Tier 2 — Near term (target window: 2026-05-26 → 2026-06-16)
 
-> **Tier 2 status (2026-05-27):** all three items merged. One open follow-up remains on N-2 — flip `--cov-fail-under=25 → 30` once the cold-zone trigger in `docs/testing/COLD_ZONE_COVERAGE_PROGRAM.md` §17.2 is met (two consecutive main-branch core runs ≥ 35% combined coverage + clean `coverage-ml-sampled-*` artifact + no regressing PRs).
+> **Tier 2 status (2026-06-11):** all three items merged, and the N-2 follow-up is complete. `--cov-fail-under` is ratcheted from `25` to `30` after the cold-zone trigger in `docs/testing/COLD_ZONE_COVERAGE_PROGRAM.md` §17.2 was met (two consecutive main-branch core runs ≥ 35% combined coverage + clean `coverage-ml-sampled-*` artifact + no regressing PRs).
 
 ### N-1. Expand mypy whitelist by tranche
 
@@ -83,9 +83,9 @@ Each item carries severity, effort, the files to touch, observable acceptance cr
 - Each newly typed module passes `mypy --config-file=mypy.ini <path>` cleanly per the in-comment policy at `build.yml:565`.
 - `docs/ci/TYPE_CHECKING_POLICY.md` (referenced from the workflow comment) is updated with the new tranche and remaining backlog.
 
-### N-2. Add lightweight ML sampled coverage and raise the 25% core floor
+### N-2. Add lightweight ML sampled coverage and raise the core floor to 30%
 
-**Status:** Instrumentation landed in PR #1835 (`37a73dc7`) on 2026-05-25 — ML PR lane runs sampled `--cov` on `vlm` + `spatial_ai/segmentation`, uploaded as the `coverage-ml-sampled-*` artifact, non-blocking. The global `--cov-fail-under` ratchet from 25 → 30 is deferred until the trigger in `docs/testing/COLD_ZONE_COVERAGE_PROGRAM.md` §17.2 is met (two consecutive main-branch core runs ≥ 35% combined coverage + clean ML sampled artifact + no regressing PRs). A follow-up PR will flip the floor when evidence is in hand.
+**Status:** Done — instrumentation landed in PR #1835 (`37a73dc7`) on 2026-05-25, and the global `--cov-fail-under` ratchet from 25 → 30 landed on 2026-06-11 after the trigger in `docs/testing/COLD_ZONE_COVERAGE_PROGRAM.md` §17.2 was met. The ML PR lane runs sampled `--cov` on `vlm` + `spatial_ai/segmentation`, uploaded as the `coverage-ml-sampled-*` artifact, non-blocking.
 
 **Severity / Effort:** Medium / M
 **Tracks finding:** [#2](../PORTAL_AUDIT_REPO_WIDE_2026-05-18.md#61-code-quality-typing-and-test-enforcement) — fragmented coverage

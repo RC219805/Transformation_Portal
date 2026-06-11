@@ -652,31 +652,31 @@ benchmark"` over the two test trees only — keeps the sample focused on
 the cold packages without re-running the full ML suite under tracing
 overhead.
 
-### 17.2 Global `--cov-fail-under` ratchet (deferred)
+### 17.2 Global `--cov-fail-under` ratchet (completed)
 
-The build.yml core lane currently sets `--cov-fail-under=25`. The
-audit's acceptance criterion is to ratchet that to `30` once the
-cold-zone baseline shows stable margin on the affected packages.
+The build.yml core lane now sets `--cov-fail-under=30`. The audit's
+acceptance criterion was to ratchet the floor from `25` to `30` once the
+cold-zone baseline showed stable margin on the affected packages.
 
-**Ratchet trigger (must hold before flipping):**
+**Ratchet trigger evidence (confirmed 2026-06-11 before flipping):**
 
-1. Two consecutive main-branch core CI runs report combined line
-   coverage ≥ 35% (a five-point margin over the new 30 floor).
-2. The `coverage-ml-sampled-*` artifact from a main-branch run shows
-   the ML-lane sampled packages above their existing per-package
-   floors (`vlm ≥ 69%` per §12.1, no regression on
-   `spatial_ai/segmentation`).
-3. No open PR is reducing the core lane's combined coverage.
-
-When all three hold, a follow-up PR flips
-`COV_FLAGS="... --cov-fail-under=30"` in build.yml and records the date
-the new floor took effect in §17.3 below.
+1. Two consecutive main-branch core CI runs reported combined line
+   coverage ≥ 35%: run `27345386028` at commit `0e384ba00` reported
+   `68.16%`, and run `27341933253` at commit `d47c24220` reported
+   `67.98%`.
+2. The `coverage-ml-sampled-*` artifact was generated successfully on
+   both sampled runs. VLM stayed above its floor (`78.7-79.2%` line
+   coverage against the `69%` floor), and
+   `spatial_ai/segmentation` was stable (`35.2-35.5%` line coverage).
+3. No open PR was reducing the core lane's combined coverage at the
+   verification point.
 
 ### 17.3 Ratchet history
 
 | Date | Floor before | Floor after | Trigger evidence |
 |---|---:|---:|---|
 | 2026-05-25 | 25 | 25 | N-2 instrumentation landed; ratchet awaiting two consecutive ≥35% main runs (see §17.2). |
+| 2026-06-11 | 25 | 30 | Runs `27345386028` (`0e384ba00`, 68.16%) and `27341933253` (`d47c24220`, 67.98%) met the two-run core margin; ML sampled artifacts generated successfully with VLM above floor and segmentation stable; no open regressing PRs. |
 
 ---
 
