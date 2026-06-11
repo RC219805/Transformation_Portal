@@ -84,6 +84,28 @@ BRANCH_FLOORS: tuple[BranchFloor, ...] = (
     # Dashboard studio inspector — branch coverage reached 100% on 2026-06-11
     # (only two branches; the rest is HTML). Conservative floor.
     BranchFloor("src/transformation_portal/dashboard/studio_inspector.py", 80.0),
+    # Dashboard node-inspection router — branch coverage reached 100% on
+    # 2026-06-11 via the TestClient route tests. Conservative floor.
+    BranchFloor("src/transformation_portal/dashboard/node_api.py", 90.0),
+    # Dashboard experiment API — branch coverage reached 100% on 2026-06-11
+    # via the Python-API + router tests. Conservative floor.
+    BranchFloor("src/transformation_portal/dashboard/experiment_api.py", 90.0),
+    # Remaining dashboard routers + server, covered 2026-06-11. Branch floors
+    # are conservative below the measured offline branch coverage; gpu_api and
+    # optimization_api carry inherent offline ceilings (no GPU / stubbed
+    # optimizer), so their floors are set accordingly.
+    BranchFloor("src/transformation_portal/dashboard/server.py", 66.0),
+    BranchFloor("src/transformation_portal/dashboard/gpu_api.py", 36.0),
+    BranchFloor("src/transformation_portal/dashboard/dag_api.py", 90.0),
+    BranchFloor("src/transformation_portal/dashboard/artifact_api.py", 76.0),
+    BranchFloor("src/transformation_portal/dashboard/artifact_preview.py", 85.0),
+    BranchFloor("src/transformation_portal/dashboard/optimization_api.py", 72.0),
+    BranchFloor("src/transformation_portal/dashboard/rl_api.py", 65.0),
+    BranchFloor("src/transformation_portal/dashboard/dag_editor_api.py", 68.0),
+    BranchFloor("src/transformation_portal/dashboard/execution_api.py", 72.0),
+    # Package-level branch floor for the whole dashboard package (~87% measured
+    # 2026-06-11); guards future unfloored additions.
+    BranchFloor("src/transformation_portal/dashboard/", 75.0),
 )
 
 # If a future branch temporarily clears floors, dry-run mode still reports the
@@ -109,6 +131,18 @@ DRY_RUN_BRANCH_PREFIXES: tuple[str, ...] = (
     "src/transformation_portal/dashboard/execution_manager.py",
     "src/transformation_portal/dashboard/time_travel.py",
     "src/transformation_portal/dashboard/studio_inspector.py",
+    "src/transformation_portal/dashboard/node_api.py",
+    "src/transformation_portal/dashboard/experiment_api.py",
+    "src/transformation_portal/dashboard/server.py",
+    "src/transformation_portal/dashboard/gpu_api.py",
+    "src/transformation_portal/dashboard/dag_api.py",
+    "src/transformation_portal/dashboard/artifact_api.py",
+    "src/transformation_portal/dashboard/artifact_preview.py",
+    "src/transformation_portal/dashboard/optimization_api.py",
+    "src/transformation_portal/dashboard/rl_api.py",
+    "src/transformation_portal/dashboard/dag_editor_api.py",
+    "src/transformation_portal/dashboard/execution_api.py",
+    "src/transformation_portal/dashboard/",
 )
 
 

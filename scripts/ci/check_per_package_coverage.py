@@ -176,6 +176,56 @@ PACKAGE_FLOORS: tuple[PackageFloor, ...] = (
     # wiring, FastAPI guard, and HTML structural contracts: ~89% line on
     # 2026-06-11 (residual miss is the import guard, as above).
     PackageFloor("src/transformation_portal/dashboard/studio_inspector.py", 82.0),
+    # Dashboard node-inspection router (per-node detail/inputs/outputs/artifacts/
+    # logs, run summary, CAS artifact info/preview/download). TestClient route
+    # tests in tests/dashboard/test_node_api.py exercise the 404/503 paths and
+    # the preview content-type matrix against a fake CAS: ~98% line on
+    # 2026-06-11 (residual miss is the import guard).
+    PackageFloor("src/transformation_portal/dashboard/node_api.py", 92.0),
+    # Dashboard experiment-tracking API (SQLite-backed Python API + router).
+    # tests/dashboard/test_experiment_api.py points the DB at a tmp file and
+    # covers experiment/run CRUD, metric merge, and the router 400/404 paths:
+    # ~98% line on 2026-06-11 (residual miss is the import guard).
+    PackageFloor("src/transformation_portal/dashboard/experiment_api.py", 92.0),
+    # Dashboard server (app factory, event broadcast, history, WebSocket).
+    # tests/dashboard/test_server.py covers the routes, broadcast fan-out, and
+    # DashboardServer construction: ~84% line on 2026-06-11 (residual misses are
+    # the asyncio-loop dispatch branches and the blocking uvicorn.run helpers).
+    PackageFloor("src/transformation_portal/dashboard/server.py", 78.0),
+    # Dashboard GPU monitor. NVML/pynvml is absent on core CI hosts, so the
+    # NVML-present stats branches are unreachable offline; tests pin the
+    # degraded paths + router + stream error frame: ~61% line on 2026-06-11.
+    PackageFloor("src/transformation_portal/dashboard/gpu_api.py", 55.0),
+    # Dashboard DAG/Merkle visualization router. tests/dashboard/test_dag_api.py
+    # drives both configured and not-configured branches: ~96% line on 2026-06-11.
+    PackageFloor("src/transformation_portal/dashboard/dag_api.py", 88.0),
+    # Dashboard CAS artifact browser (list/get/preview/stats + _human_size).
+    # tests/dashboard/test_artifact_api.py uses a tmp_path objects tree: ~87%
+    # line on 2026-06-11.
+    PackageFloor("src/transformation_portal/dashboard/artifact_api.py", 80.0),
+    # Dashboard artifact preview (detect_content_type + meta/raw/thumbnail/text).
+    # tests/dashboard/test_artifact_preview.py covers the type matrix and Pillow
+    # thumbnailing: ~96% line on 2026-06-11.
+    PackageFloor("src/transformation_portal/dashboard/artifact_preview.py", 88.0),
+    # Dashboard optimization API. The background optimizer pulls heavy eval deps
+    # and is stubbed; tests cover the manager + router status/history/stop/list:
+    # ~72% line on 2026-06-11.
+    PackageFloor("src/transformation_portal/dashboard/optimization_api.py", 65.0),
+    # Dashboard RL API. The training task needs torch (absent on core CI); tests
+    # cover the torch-free actions/policy endpoints + handshake: ~88% line.
+    PackageFloor("src/transformation_portal/dashboard/rl_api.py", 80.0),
+    # Dashboard pipeline editor (FSGuard-backed CRUD with name validation).
+    # tests/dashboard/test_dag_editor_api.py covers the round-trip + rejection
+    # paths against a tmp_path pipelines dir: ~84% line on 2026-06-11.
+    PackageFloor("src/transformation_portal/dashboard/dag_editor_api.py", 76.0),
+    # Dashboard execution router (run/list/cancel + WebSocket). Driven via
+    # TestClient against an injected ExecutionManager: ~94% line on 2026-06-11.
+    PackageFloor("src/transformation_portal/dashboard/execution_api.py", 86.0),
+    # Package-level floor for the whole dashboard package. With all modules now
+    # behaviorally covered the aggregate measured ~89% line on 2026-06-11; this
+    # conservative package floor sits on top of the per-file floors and guards
+    # against future *unfloored* additions silently dragging the package down.
+    PackageFloor("src/transformation_portal/dashboard/", 80.0),
 )
 
 

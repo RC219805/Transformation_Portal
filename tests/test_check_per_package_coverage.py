@@ -422,6 +422,18 @@ class TestDefaultFloors:
             "src/transformation_portal/dashboard/execution_manager.py": 85.0,
             "src/transformation_portal/dashboard/time_travel.py": 90.0,
             "src/transformation_portal/dashboard/studio_inspector.py": 82.0,
+            "src/transformation_portal/dashboard/node_api.py": 92.0,
+            "src/transformation_portal/dashboard/experiment_api.py": 92.0,
+            "src/transformation_portal/dashboard/server.py": 78.0,
+            "src/transformation_portal/dashboard/gpu_api.py": 55.0,
+            "src/transformation_portal/dashboard/dag_api.py": 88.0,
+            "src/transformation_portal/dashboard/artifact_api.py": 80.0,
+            "src/transformation_portal/dashboard/artifact_preview.py": 88.0,
+            "src/transformation_portal/dashboard/optimization_api.py": 65.0,
+            "src/transformation_portal/dashboard/rl_api.py": 80.0,
+            "src/transformation_portal/dashboard/dag_editor_api.py": 76.0,
+            "src/transformation_portal/dashboard/execution_api.py": 86.0,
+            "src/transformation_portal/dashboard/": 80.0,
         }
 
         assert floors == expected_floors
