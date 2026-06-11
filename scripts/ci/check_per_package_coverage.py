@@ -149,6 +149,33 @@ PACKAGE_FLOORS: tuple[PackageFloor, ...] = (
     # executor error branches, heartbeat-loop cancellation, supervisor backoff,
     # broker disposal, and the CLI entry point: 76% -> 100% line on 2026-06-06.
     PackageFloor("src/transformation_portal/orchestrator/worker.py", 95.0),
+    # Dashboard node-state store (pure-Python per-node execution tracker, no
+    # external deps). Behavioral lifecycle tests in
+    # tests/dashboard/test_node_state_store.py established the first dedicated
+    # coverage for the previously-unfloored dashboard package: ~99% line on
+    # 2026-06-11. File-level floor (the rest of dashboard/ stays unfloored
+    # pending further behavioral fills).
+    PackageFloor("src/transformation_portal/dashboard/node_state_store.py", 95.0),
+    # Dashboard async execution manager (run lifecycle, history trimming,
+    # cancellation state machine). Tests in
+    # tests/dashboard/test_execution_manager.py drive it against a fake
+    # broadcast sink and tiny passthrough pipelines (no FastAPI app / WebSocket
+    # / ML backend): ~91% line on 2026-06-11. Residual misses are the legacy
+    # inline-trim fallback and post-loop cancellation edge branches.
+    PackageFloor("src/transformation_portal/dashboard/execution_manager.py", 85.0),
+    # Dashboard time-travel router (node history, run snapshots, artifact
+    # compare). Route-branch tests in tests/dashboard/test_time_travel.py drive
+    # it via FastAPI TestClient against a real in-memory store + fake Merkle
+    # DAG: ~96% line on 2026-06-11. The residual miss is the module-level
+    # `except ImportError` FastAPI guard (unreachable while FastAPI — a core
+    # dependency — is installed).
+    PackageFloor("src/transformation_portal/dashboard/time_travel.py", 90.0),
+    # Dashboard studio inspector (3D inspector router). The module is ~1.4k LOC
+    # but coverage.py sees only ~25 executable statements — the bulk is HTML
+    # string literals. tests/dashboard/test_studio_inspector.py pins the router
+    # wiring, FastAPI guard, and HTML structural contracts: ~89% line on
+    # 2026-06-11 (residual miss is the import guard, as above).
+    PackageFloor("src/transformation_portal/dashboard/studio_inspector.py", 82.0),
 )
 
 

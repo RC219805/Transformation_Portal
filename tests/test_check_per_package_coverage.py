@@ -418,6 +418,10 @@ class TestDefaultFloors:
             "src/transformation_portal/hardening/": 95.0,
             "src/transformation_portal/storage/cas_store.py": 92.0,
             "src/transformation_portal/orchestrator/worker.py": 95.0,
+            "src/transformation_portal/dashboard/node_state_store.py": 95.0,
+            "src/transformation_portal/dashboard/execution_manager.py": 85.0,
+            "src/transformation_portal/dashboard/time_travel.py": 90.0,
+            "src/transformation_portal/dashboard/studio_inspector.py": 82.0,
         }
 
         assert floors == expected_floors
