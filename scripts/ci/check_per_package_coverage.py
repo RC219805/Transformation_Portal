@@ -149,6 +149,20 @@ PACKAGE_FLOORS: tuple[PackageFloor, ...] = (
     # executor error branches, heartbeat-loop cancellation, supervisor backoff,
     # broker disposal, and the CLI entry point: 76% -> 100% line on 2026-06-06.
     PackageFloor("src/transformation_portal/orchestrator/worker.py", 95.0),
+    # Dashboard node-state store (pure-Python per-node execution tracker, no
+    # external deps). Behavioral lifecycle tests in
+    # tests/dashboard/test_node_state_store.py established the first dedicated
+    # coverage for the previously-unfloored dashboard package: ~99% line on
+    # 2026-06-11. File-level floor (the rest of dashboard/ stays unfloored
+    # pending further behavioral fills).
+    PackageFloor("src/transformation_portal/dashboard/node_state_store.py", 95.0),
+    # Dashboard async execution manager (run lifecycle, history trimming,
+    # cancellation state machine). Tests in
+    # tests/dashboard/test_execution_manager.py drive it against a fake
+    # broadcast sink and tiny passthrough pipelines (no FastAPI app / WebSocket
+    # / ML backend): ~91% line on 2026-06-11. Residual misses are the legacy
+    # inline-trim fallback and post-loop cancellation edge branches.
+    PackageFloor("src/transformation_portal/dashboard/execution_manager.py", 85.0),
 )
 
 

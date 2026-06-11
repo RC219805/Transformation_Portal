@@ -160,6 +160,8 @@ def test_default_branch_floors_cover_cold_zone_and_durable_state_prefixes(script
         ("src/transformation_portal/hardening/", 95.0),
         ("src/transformation_portal/storage/cas_store.py", 85.0),
         ("src/transformation_portal/orchestrator/worker.py", 95.0),
+        ("src/transformation_portal/dashboard/node_state_store.py", 90.0),
+        ("src/transformation_portal/dashboard/execution_manager.py", 75.0),
     )
 
 

@@ -71,6 +71,13 @@ BRANCH_FLOORS: tuple[BranchFloor, ...] = (
     # Orchestrator worker runner — branch coverage reached 100% on 2026-06-06
     # via the unit tests. Conservative floor.
     BranchFloor("src/transformation_portal/orchestrator/worker.py", 95.0),
+    # Dashboard node-state store — branch coverage reached ~97% on 2026-06-11
+    # via the lifecycle tests. Conservative file-level floor.
+    BranchFloor("src/transformation_portal/dashboard/node_state_store.py", 90.0),
+    # Dashboard execution manager — branch coverage reached ~82% on 2026-06-11
+    # via the lifecycle/cancellation tests. Conservative floor (residual misses
+    # are the legacy inline-trim and post-loop cancellation edge branches).
+    BranchFloor("src/transformation_portal/dashboard/execution_manager.py", 75.0),
 )
 
 # If a future branch temporarily clears floors, dry-run mode still reports the
@@ -92,6 +99,8 @@ DRY_RUN_BRANCH_PREFIXES: tuple[str, ...] = (
     "src/transformation_portal/hardening/",
     "src/transformation_portal/storage/cas_store.py",
     "src/transformation_portal/orchestrator/worker.py",
+    "src/transformation_portal/dashboard/node_state_store.py",
+    "src/transformation_portal/dashboard/execution_manager.py",
 )
 
 
