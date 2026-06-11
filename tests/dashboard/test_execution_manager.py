@@ -353,9 +353,7 @@ async def test_cancel_run_requests_cancellation_then_is_idempotent(manager: Exec
     "terminal",
     [RunStatus.COMPLETE, RunStatus.ERROR, RunStatus.CANCELLED],
 )
-async def test_cancel_run_on_terminal_returns_current_status(
-    manager: ExecutionManager, terminal: RunStatus
-) -> None:
+async def test_cancel_run_on_terminal_returns_current_status(manager: ExecutionManager, terminal: RunStatus) -> None:
     manager.prepare_run("r", {"nodes": []})
     manager.active_runs["r"].status = terminal
     assert await manager.cancel_run("r", _Recorder()) == terminal.value

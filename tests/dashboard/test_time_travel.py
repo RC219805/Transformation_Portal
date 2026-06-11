@@ -132,9 +132,7 @@ def test_history_without_store_returns_error_payload(unconfigured_client: TestCl
 
 
 def test_history_enriches_with_merkle_lineage(store: NodeStateStore) -> None:
-    merkle = _FakeMerkleDAG(
-        {"mhash-old": _FakeMerkleNode(inputs=["dep-1"], metadata={"run_id": "run_old"})}
-    )
+    merkle = _FakeMerkleDAG({"mhash-old": _FakeMerkleNode(inputs=["dep-1"], metadata={"run_id": "run_old"})})
     original_store = time_travel._node_store
     original_merkle = time_travel._merkle_dag
     time_travel.set_time_travel_store(store)
