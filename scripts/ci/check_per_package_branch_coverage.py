@@ -84,6 +84,12 @@ BRANCH_FLOORS: tuple[BranchFloor, ...] = (
     # Dashboard studio inspector — branch coverage reached 100% on 2026-06-11
     # (only two branches; the rest is HTML). Conservative floor.
     BranchFloor("src/transformation_portal/dashboard/studio_inspector.py", 80.0),
+    # Dashboard node-inspection router — branch coverage reached 100% on
+    # 2026-06-11 via the TestClient route tests. Conservative floor.
+    BranchFloor("src/transformation_portal/dashboard/node_api.py", 90.0),
+    # Dashboard experiment API — branch coverage reached 100% on 2026-06-11
+    # via the Python-API + router tests. Conservative floor.
+    BranchFloor("src/transformation_portal/dashboard/experiment_api.py", 90.0),
 )
 
 # If a future branch temporarily clears floors, dry-run mode still reports the
@@ -109,6 +115,8 @@ DRY_RUN_BRANCH_PREFIXES: tuple[str, ...] = (
     "src/transformation_portal/dashboard/execution_manager.py",
     "src/transformation_portal/dashboard/time_travel.py",
     "src/transformation_portal/dashboard/studio_inspector.py",
+    "src/transformation_portal/dashboard/node_api.py",
+    "src/transformation_portal/dashboard/experiment_api.py",
 )
 
 

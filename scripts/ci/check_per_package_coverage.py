@@ -176,6 +176,17 @@ PACKAGE_FLOORS: tuple[PackageFloor, ...] = (
     # wiring, FastAPI guard, and HTML structural contracts: ~89% line on
     # 2026-06-11 (residual miss is the import guard, as above).
     PackageFloor("src/transformation_portal/dashboard/studio_inspector.py", 82.0),
+    # Dashboard node-inspection router (per-node detail/inputs/outputs/artifacts/
+    # logs, run summary, CAS artifact info/preview/download). TestClient route
+    # tests in tests/dashboard/test_node_api.py exercise the 404/503 paths and
+    # the preview content-type matrix against a fake CAS: ~98% line on
+    # 2026-06-11 (residual miss is the import guard).
+    PackageFloor("src/transformation_portal/dashboard/node_api.py", 92.0),
+    # Dashboard experiment-tracking API (SQLite-backed Python API + router).
+    # tests/dashboard/test_experiment_api.py points the DB at a tmp file and
+    # covers experiment/run CRUD, metric merge, and the router 400/404 paths:
+    # ~98% line on 2026-06-11 (residual miss is the import guard).
+    PackageFloor("src/transformation_portal/dashboard/experiment_api.py", 92.0),
 )
 
 
