@@ -29,7 +29,7 @@ This document defines the testing strategy for the Transformation Portal reposit
 | **CI Selection** | `(unit or security or regression or golden or integration) and not ml and not slow and not benchmark` |
 | **Duration** | < 2 minutes |
 | **Dependencies** | Standard library, numpy, PIL, pyyaml |
-| **Coverage Target** | 25% minimum for core modules |
+| **Coverage Target** | 30% minimum for core modules |
 
 **Note:** Per ADR-044, all tests must have a category marker. CI uses **positive marker selection** to explicitly select core test categories.
 
@@ -328,7 +328,7 @@ TP_RUN_BENCHMARKS=1 pytest -v tests/benchmarks/ -m "benchmark"
 
 | Tier | Minimum | Notes |
 |------|---------|-------|
-| Core tests | 20% | `--cov-fail-under=20` in build.yml |
+| Core tests | 30% | `--cov-fail-under=30` in build.yml |
 | ML tests | — | Coverage disabled for faster PR feedback |
 
 **Aspirational Per-Module Targets (Not Yet Enforced):**

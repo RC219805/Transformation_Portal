@@ -219,7 +219,8 @@ All pull requests must pass these automated gates before merge:
 ### 4. Coverage Gates and Targets
 
 #### Global Minimum
-- Combined coverage must stay **≥25%** (enforced via `coverage report --fail-under=25`)
+- Combined coverage must stay **≥30%** (enforced by the core `build.yml`
+  test leg via `--cov-fail-under=30`)
 - Coverage ratchet targets and current baseline evidence live in
   [`docs/testing/test_coverage_improvement_plan.md`](docs/testing/test_coverage_improvement_plan.md)
   and [`docs/testing/COLD_ZONE_COVERAGE_PROGRAM.md`](docs/testing/COLD_ZONE_COVERAGE_PROGRAM.md).
@@ -228,7 +229,7 @@ All pull requests must pass these automated gates before merge:
 - **New/changed lines should target 85%+ covered**
 - This is the primary local quality ratchet and PR-review signal.
 - Check it with `make coverage-diff`; required PR CI currently enforces the
-  global 25% floor and package/cold-zone checks in `build.yml`, not `diff-cover`.
+  global 30% floor and package/cold-zone checks in `build.yml`, not `diff-cover`.
 
 #### Critical Module Floors
 Future enforcement (not yet active):
@@ -304,7 +305,7 @@ pytest -v tests/ -m "not slow" \
   --cov-report=html
 
 # Check coverage threshold
-coverage report --fail-under=25
+coverage report --fail-under=30
 
 # Build package
 .venv/bin/python -m build

@@ -1,16 +1,16 @@
 # Coverage Improvement Plan
 
-**Current Status (as of 2026-02-04)**
+**Current Status (baseline captured 2026-02-04; gate ratcheted 2026-06-11)**
 - **Combined Coverage**: 25.44%
 - **Total Statements**: 24,820
 - **Covered Statements**: ~6,314 (24,820 × 0.2544)
-- **Baseline Gate**: 25% (prevents regression below this floor)
+- **Current Required PR Gate**: 30% (prevents regression below this floor)
 
 ## Historical Context
 
 The coverage baseline was previously set at 33% but this was aspirational rather than actual. After PR #832 fixed coverage artifact consolidation, we now have accurate combined coverage data from both core and ML test suites.
 
-**Why 25.44%?**
+**Why was the 2026-02-04 baseline 25.44%?**
 - Core tests focus on depth processing, material response, and rendering pipelines
 - ML tests cover model backends and inference paths
 - Many modules (plugins, streaming, style transfer, VLM) have 0% coverage
@@ -86,7 +86,7 @@ Low-priority modules (can defer):
 4. **Mock expensive operations**: File I/O, model inference, FFmpeg calls
 
 ### CI Integration
-- **Baseline gate** (`--fail-under=25`): Prevents regression
+- **Baseline gate** (`--cov-fail-under=30`): Prevents regression
 - **Diff coverage target** (`make coverage-diff`): Local PR-review signal for new code;
   not a required PR CI gate until `build.yml` wires in `diff-cover`
 - **Ratchet mechanism**: As coverage improves, baseline gate increases
@@ -142,7 +142,7 @@ make coverage-fast-scope
 
 **Q: What are the coverage targets?**
 - **Diff coverage**: 85% on new/changed lines (local target / future PR gate)
-- **Global floor**: 25% (required PR gate; prevents regression)
+- **Global floor**: 30% (required PR gate; prevents regression)
 - **Long-horizon target**: 70% overall
 
 See `docs/testing/test_coverage_improvement_plan.md` for the full phased plan.

@@ -707,7 +707,7 @@ class TestRootGovernanceMetadata:
         testing_plan = (_repo_root / "docs" / "testing" / "test_coverage_improvement_plan.md").read_text()
         guide_plan = (_repo_root / "docs" / "guides" / "coverage-improvement-plan.md").read_text()
 
-        assert "coverage report --fail-under=25" in contributing
+        assert "--cov-fail-under=30" in contributing
         assert "**New/changed lines should target 85%+ covered**" in contributing
         assert "required PR CI currently enforces the" in contributing
         assert "`build.yml`, not `diff-cover`" in contributing
