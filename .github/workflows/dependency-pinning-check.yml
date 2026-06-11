@@ -1,0 +1,46 @@
+name: Dependency Pinning Check
+
+# Dedicated, isolated signal for TODO_INVENTORY.md §5.7 (Dependency Pinning
+# Validation). The same check runs transitively inside `make ci`, but a
+# standalone workflow gives a focused pass/fail status that is independent of
+# the broader CI matrix and surfaces supply-chain drift quickly on PRs.
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'requirements/**'
+      - 'scripts/validation/check_dependency_pinning.py'
+      - '.github/workflows/dependency-pinning-check.yml'
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'requirements/**'
+      - 'scripts/validation/check_dependency_pinning.py'
+      - '.github/workflows/dependency-pinning-check.yml'
+
+# Cancel superseded runs on the same branch/PR to save CI minutes.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  dependency-pinning:
+    name: Verify Exact (==) Version Pins
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6.0.3
+        with:
+          fetch-depth: 1
+
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
+        with:
+          python-version: '3.11'
+
+      # The checker is standard-library only, so no dependency install is
+      # required — keep this job lean and fast.
+      - name: Verify requirements lockfiles use exact (==) pins
+        run: python scripts/validation/check_dependency_pinning.py

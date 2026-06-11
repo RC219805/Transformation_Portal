@@ -18,8 +18,10 @@ header metadata and security baselines) by enforcing the broader supply-chain
 invariant that no transitive dependency drifts onto a floating range.
 
 Implements the core local-enforcement piece of TODO_INVENTORY.md §5.7
-(Dependency Pinning Validation). The standalone GitHub Actions workflow
-and the constraints-vs-installed audit listed there remain follow-ups.
+(Dependency Pinning Validation). A dedicated GitHub Actions workflow
+(``.github/workflows/dependency-pinning-check.yml``) runs this same check as an
+isolated PR/push signal; the constraints-vs-installed audit listed in §5.7
+remains a follow-up.
 """
 
 from __future__ import annotations
