@@ -206,7 +206,7 @@ RAG system: 10.00/10 (perfect)
 - Pillow>=10,<12
 - scipy>=1.10,<2
 - scikit-learn>=1.4.0,<2
-- torch>=2.8.0,<3 (supported ML security baseline)
+- torch>=2.12.0,<3 (supported ML security baseline)
 
 ### **ML/AI Stack**
 - diffusers>=0.20,<1 (Stable Diffusion)

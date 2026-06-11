@@ -55,9 +55,7 @@ CORE_LOCK_FILES = (
 )
 
 # Target-owned ML core lockfiles (pip-compile multi-platform fix)
-PLATFORM_ML_CORE_LOCK_FILES = (
-    "ml-core-darwin-arm64.txt",
-)
+PLATFORM_ML_CORE_LOCK_FILES = ("ml-core-darwin-arm64.txt",)
 GOVERNED_LOCK_FILES = CORE_LOCK_FILES + PLATFORM_ML_CORE_LOCK_FILES
 
 # Non-core optional ML lockfiles are not part of the checked-in contract.
@@ -114,8 +112,8 @@ GENERIC_BASE_RUNTIME_LOCKS = ("all.txt", "base.txt")
 # because ml-core-darwin-arm64.in declares coremltools with a trailing # comment.
 # The x86 guard patterns check stripped non-comment lines, so they use [^#\n]*.
 
-SUPPORTED_TORCH_PIN = "2.8.0"
-SUPPORTED_TORCHVISION_PIN = "0.23.0"
+SUPPORTED_TORCH_PIN = "2.12.0"
+SUPPORTED_TORCHVISION_PIN = "0.27.0"
 SUPPORTED_DIFFUSERS_MIN = "0.38.0"
 SUPPORTED_DIFFUSERS_INPUT_RANGE = "diffusers>=0.38.0,<1"
 SUPPORTED_TRANSFORMERS_MIN = "5.0.0"

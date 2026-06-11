@@ -111,7 +111,7 @@ def fixture_isolated_repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Pa
         tmp_path,
         "ml-core-darwin-arm64.txt",
         "3.11",
-        body="torch==2.8.0\ntorchvision==0.23.0\ndiffusers==0.38.0\ntransformers==5.0.0\ncoremltools==9.0\n",
+        body="torch==2.12.0\ntorchvision==0.27.0\ndiffusers==0.38.0\ntransformers==5.0.0\ncoremltools==9.0\n",
     )
     return tmp_path
 
@@ -310,7 +310,7 @@ def test_platform_lock_wrong_os_marker_is_reported(isolated_repo: Path) -> None:
         isolated_repo,
         "ml-core-darwin-arm64.txt",
         "3.11",
-        body='torch==2.8.0\ncoremltools==9.0\ntorchvision==0.23.0\ntransformers==5.0.0 ; platform_system == "Linux"\n',
+        body='torch==2.12.0\ncoremltools==9.0\ntorchvision==0.27.0\ntransformers==5.0.0 ; platform_system == "Linux"\n',
     )
     errors = contract.validate_platform_lock_markers()
     pattern = contract.PLATFORM_LOCK_FORBIDDEN_PATTERNS["ml-core-darwin-arm64.txt"][0]
@@ -350,7 +350,7 @@ def test_retired_darwin_x86_input_is_reported(isolated_repo: Path) -> None:
 
 def test_darwin_arm64_input_requires_coremltools(isolated_repo: Path) -> None:
     (isolated_repo / "requirements" / "ml-core-darwin-arm64.in").write_text(
-        "torch==2.8.0\ntorchvision==0.23.0\ndiffusers>=0.38.0,<1\ntransformers>=5.0.0,<5.1\n",
+        "torch==2.12.0\ntorchvision==0.27.0\ndiffusers>=0.38.0,<1\ntransformers>=5.0.0,<5.1\n",
         encoding="utf-8",
     )
 
@@ -364,33 +364,33 @@ def test_darwin_arm64_input_requires_coremltools(isolated_repo: Path) -> None:
 
 def test_darwin_arm64_input_requires_supported_torch_pin(isolated_repo: Path) -> None:
     (isolated_repo / "requirements" / "ml-core-darwin-arm64.in").write_text(
-        "torch==2.7.0\ntorchvision==0.23.0\ndiffusers>=0.38.0,<1\ntransformers>=5.0.0,<5.1\ncoremltools>=7.0\n",
+        "torch==2.7.0\ntorchvision==0.27.0\ndiffusers>=0.38.0,<1\ntransformers>=5.0.0,<5.1\ncoremltools>=7.0\n",
         encoding="utf-8",
     )
 
     errors = contract.validate_darwin_input_guards()
 
     assert errors == [
-        f"{isolated_repo / 'requirements' / 'ml-core-darwin-arm64.in'} must pin torch==2.8.0 for the supported Apple Silicon security baseline."
+        f"{isolated_repo / 'requirements' / 'ml-core-darwin-arm64.in'} must pin torch==2.12.0 for the supported Apple Silicon security baseline."
     ]
 
 
 def test_darwin_arm64_input_requires_supported_torchvision_pin(isolated_repo: Path) -> None:
     (isolated_repo / "requirements" / "ml-core-darwin-arm64.in").write_text(
-        "torch==2.8.0\ntorchvision==0.22.0\ndiffusers>=0.38.0,<1\ntransformers>=5.0.0,<5.1\ncoremltools>=7.0\n",
+        "torch==2.12.0\ntorchvision==0.22.0\ndiffusers>=0.38.0,<1\ntransformers>=5.0.0,<5.1\ncoremltools>=7.0\n",
         encoding="utf-8",
     )
 
     errors = contract.validate_darwin_input_guards()
 
     assert errors == [
-        f"{isolated_repo / 'requirements' / 'ml-core-darwin-arm64.in'} must pin torchvision==0.23.0 alongside the supported Apple Silicon torch baseline."
+        f"{isolated_repo / 'requirements' / 'ml-core-darwin-arm64.in'} must pin torchvision==0.27.0 alongside the supported Apple Silicon torch baseline."
     ]
 
 
 def test_darwin_arm64_input_requires_supported_transformers_range(isolated_repo: Path) -> None:
     (isolated_repo / "requirements" / "ml-core-darwin-arm64.in").write_text(
-        "torch==2.8.0\ntorchvision==0.23.0\ndiffusers>=0.38.0,<1\ntransformers>=4.57.0,<5\ncoremltools>=7.0\n",
+        "torch==2.12.0\ntorchvision==0.27.0\ndiffusers>=0.38.0,<1\ntransformers>=4.57.0,<5\ncoremltools>=7.0\n",
         encoding="utf-8",
     )
 
@@ -404,7 +404,7 @@ def test_darwin_arm64_input_requires_supported_transformers_range(isolated_repo:
 
 def test_darwin_arm64_input_requires_supported_diffusers_range(isolated_repo: Path) -> None:
     (isolated_repo / "requirements" / "ml-core-darwin-arm64.in").write_text(
-        "torch==2.8.0\ntorchvision==0.23.0\ndiffusers>=0.36.0,<1\ntransformers>=5.0.0,<5.1\ncoremltools>=7.0\n",
+        "torch==2.12.0\ntorchvision==0.27.0\ndiffusers>=0.36.0,<1\ntransformers>=5.0.0,<5.1\ncoremltools>=7.0\n",
         encoding="utf-8",
     )
 
@@ -421,7 +421,7 @@ def test_platform_lock_runtime_compatibility_requires_arm64_coremltools(isolated
         isolated_repo,
         "ml-core-darwin-arm64.txt",
         "3.11",
-        body="torch==2.8.0\ntorchvision==0.23.0\ndiffusers==0.38.0\ntransformers==5.0.0\nnumpy==2.4.3\n",
+        body="torch==2.12.0\ntorchvision==0.27.0\ndiffusers==0.38.0\ntransformers==5.0.0\nnumpy==2.4.3\n",
     )
 
     errors = contract.validate_platform_lock_runtime_compatibility()
@@ -437,7 +437,7 @@ def test_platform_lock_runtime_compatibility_requires_arm64_diffusers(isolated_r
         isolated_repo,
         "ml-core-darwin-arm64.txt",
         "3.11",
-        body="torch==2.8.0\ntorchvision==0.23.0\ntransformers==5.0.0\nnumpy==2.4.3\ncoremltools==9.0\n",
+        body="torch==2.12.0\ntorchvision==0.27.0\ntransformers==5.0.0\nnumpy==2.4.3\ncoremltools==9.0\n",
     )
 
     errors = contract.validate_platform_lock_runtime_compatibility()
@@ -459,8 +459,8 @@ def test_platform_lock_runtime_compatibility_requires_supported_arm64_torch_rota
     errors = contract.validate_platform_lock_runtime_compatibility()
 
     assert errors == [
-        f"{isolated_repo / 'requirements' / 'ml-core-darwin-arm64.txt'} must rotate to torch==2.8.0 for the supported Apple Silicon security baseline.",
-        f"{isolated_repo / 'requirements' / 'ml-core-darwin-arm64.txt'} must rotate to torchvision==0.23.0 for the supported Apple Silicon security baseline.",
+        f"{isolated_repo / 'requirements' / 'ml-core-darwin-arm64.txt'} must rotate to torch==2.12.0 for the supported Apple Silicon security baseline.",
+        f"{isolated_repo / 'requirements' / 'ml-core-darwin-arm64.txt'} must rotate to torchvision==0.27.0 for the supported Apple Silicon security baseline.",
     ]
 
 
@@ -469,7 +469,7 @@ def test_platform_lock_runtime_compatibility_requires_supported_transformers_rot
         isolated_repo,
         "ml-core-darwin-arm64.txt",
         "3.11",
-        body="torch==2.8.0\ntorchvision==0.23.0\ndiffusers==0.38.0\ntransformers==4.57.6\nnumpy==2.4.4\ncoremltools==9.0\n",
+        body="torch==2.12.0\ntorchvision==0.27.0\ndiffusers==0.38.0\ntransformers==4.57.6\nnumpy==2.4.4\ncoremltools==9.0\n",
     )
 
     errors = contract.validate_platform_lock_runtime_compatibility()
@@ -485,7 +485,7 @@ def test_platform_lock_runtime_compatibility_requires_supported_diffusers_rotati
         isolated_repo,
         "ml-core-darwin-arm64.txt",
         "3.11",
-        body="torch==2.8.0\ntorchvision==0.23.0\ndiffusers==0.37.1\ntransformers==5.0.0\nnumpy==2.4.4\ncoremltools==9.0\n",
+        body="torch==2.12.0\ntorchvision==0.27.0\ndiffusers==0.37.1\ntransformers==5.0.0\nnumpy==2.4.4\ncoremltools==9.0\n",
     )
 
     errors = contract.validate_platform_lock_runtime_compatibility()
@@ -501,7 +501,7 @@ def test_darwin_lock_purity_rejects_triton_on_arm64(isolated_repo: Path) -> None
         isolated_repo,
         "ml-core-darwin-arm64.txt",
         "3.11",
-        body="torch==2.8.0\ntorchvision==0.23.0\ntransformers==5.0.0\nnumpy==2.4.3\ncoremltools==9.0\ntriton==2.2.0\n",
+        body="torch==2.12.0\ntorchvision==0.27.0\ntransformers==5.0.0\nnumpy==2.4.3\ncoremltools==9.0\ntriton==2.2.0\n",
     )
 
     errors = contract.validate_darwin_lock_purity()
@@ -518,8 +518,8 @@ def test_darwin_lock_purity_rejects_nvidia_package_on_arm64(isolated_repo: Path)
         "ml-core-darwin-arm64.txt",
         "3.11",
         body=(
-            "torch==2.8.0\n"
-            "torchvision==0.23.0\n"
+            "torch==2.12.0\n"
+            "torchvision==0.27.0\n"
             "transformers==5.0.0\n"
             "numpy==2.4.3\n"
             "coremltools==9.0\n"
@@ -540,7 +540,7 @@ def test_darwin_lock_purity_accepts_clean_darwin_locks(isolated_repo: Path) -> N
         isolated_repo,
         "ml-core-darwin-arm64.txt",
         "3.11",
-        body="torch==2.8.0\ntorchvision==0.23.0\ntransformers==5.0.0\nnumpy==2.4.3\ncoremltools==9.0\n",
+        body="torch==2.12.0\ntorchvision==0.27.0\ntransformers==5.0.0\nnumpy==2.4.3\ncoremltools==9.0\n",
     )
 
     errors = contract.validate_darwin_lock_purity()
