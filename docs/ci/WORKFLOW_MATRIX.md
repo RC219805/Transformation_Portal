@@ -2,15 +2,15 @@
 
 **Purpose**: Canonical reference for all GitHub Actions workflows. Tracks the full inventory and the consolidation roadmap.
 **Owner**: Transformation Portal Architect
-**Last Updated**: 2026-04-27
+**Last Updated**: 2026-06-11
 
 ---
 
 ## Status Snapshot
 
-- **Workflow files**: 30 (`.github/workflows/*.yml`), ~7,700 lines total
+- **Workflow files**: 31 (`.github/workflows/*.yml`), 7,843 lines total
 - **Required PR check**: `build.yml` → `CI Gate` (single aggregated check)
-- **Consolidation target**: 30 → ~18 workflows via phased incremental PRs (see [Consolidation Roadmap](#consolidation-roadmap))
+- **Consolidation target**: 31 → ~19 workflows via phased incremental PRs (see [Consolidation Roadmap](#consolidation-roadmap))
 - **Prior matrix doc** (2026-03-25) listed 12 workflows — this revision corrects the omission of 18 that exist on disk.
 
 ---
@@ -21,36 +21,37 @@ Every `.github/workflows/*.yml` file, current as of the timestamp above. The **R
 
 | # | File | Name | Triggers | Blocking? | Approx. LOC | Recommendation |
 |---|------|------|----------|-----------|-------------|----------------|
-| 1 | `build.yml` | CI (Lint, Tests & Manifest) | push, PR, manual | ✅ Required | 1101 | **Keep** — primary PR gate; aggregated `CI Gate` check |
-| 2 | `ci.yml` | CI Quality Firewall (push) | push (main, develop) | Post-merge | 579 | **Investigate → Selective port into `build.yml`** — overlaps with `build.yml` on `lint`, `typecheck`, `test-core`, `test-ml`, but has **unique jobs** that build.yml does not currently provide: `security` (bandit + pip-audit on the push commit range), `coverage-gate`, `build` (packaging artifact), `repo-hygiene`, `quality-summary`. **Before retiring, port each unique job into `build.yml`** (or confirm it's shadowed by `security-unified.yml` / `enforcement.yml`) and **expand `build.yml`'s push branches to include `develop`** so post-merge coverage on `develop` isn't dropped. Naive deletion would lose real signal. |
-| 3 | `ci-quality-firewall.yml` | CI Quality Firewall (post-CI) | workflow_run, manual | Post-merge | 951 | **Investigate → Retire** — `workflow_run` gating fires *after* `build.yml`; if `build.yml` is truly required, this is redundant. Largest single workflow file. |
-| 4 | `enforcement.yml` | Enforcement | push, PR, schedule | ⚠️ Partial | 211 | **Keep** — owns action-pin, banned-deps, HF-revision, artifact-boundary, layer-1/2 tests, golden-regression. Distinct from `build.yml` test surface. |
+| 1 | `build.yml` | CI (Lint, Tests & Manifest) | push, PR, manual | ✅ Required | 1202 | **Keep** — primary PR gate; aggregated `CI Gate` check |
+| 2 | `ci.yml` | CI Quality Firewall (push) | push (main, develop) | Post-merge | 595 | **Investigate → Selective port into `build.yml`** — overlaps with `build.yml` on `lint`, `typecheck`, `test-core`, `test-ml`, but has **unique jobs** that build.yml does not currently provide: `security` (bandit + pip-audit on the push commit range), `coverage-gate`, `build` (packaging artifact), `repo-hygiene`, `quality-summary`. **Before retiring, port each unique job into `build.yml`** (or confirm it's shadowed by `security-unified.yml` / `enforcement.yml`) and **expand `build.yml`'s push branches to include `develop`** so post-merge coverage on `develop` isn't dropped. Naive deletion would lose real signal. |
+| 3 | `ci-quality-firewall.yml` | CI Quality Firewall (post-CI) | workflow_run, manual | Post-merge | 961 | **Investigate → Retire** — `workflow_run` gating fires *after* `build.yml`; if `build.yml` is truly required, this is redundant. Largest single workflow file. |
+| 4 | `enforcement.yml` | Enforcement | push, PR, schedule | ⚠️ Partial | 230 | **Keep** — owns action-pin, banned-deps, HF-revision, artifact-boundary, layer-1/2 tests, golden-regression. Distinct from `build.yml` test surface. |
 | 5 | `quality-gate.yml` | Quality Gate | PR, push | ⚠️ Advisory | 41 | **Investigate → Replace with pre-commit** — runs `scripts/lint_runner.sh advisory` and `scripts/setup/pre-commit-check.sh --all`. If those advisory lint and pre-commit checks are run by devs locally and by `build.yml`'s lint job, this duplicates. |
 | 6 | `codeql.yml` | CodeQL Advanced | push, PR, schedule | ✅ Required | 112 | **Keep** — GitHub semantic SAST; can't be replicated by other workflows. |
-| 7 | `security-unified.yml` | Security Unified | schedule, push, PR, manual | ✅ Required | 255 | **Keep** — pip-audit + security gates; distinct from CodeQL. |
+| 7 | `security-unified.yml` | Security Unified | schedule, push, PR, manual | ✅ Required | 261 | **Keep** — pip-audit + security gates; distinct from CodeQL. |
 | 8 | `dependency-review.yml` | Dependency Review | PR | ⚠️ Advisory (warn-only) | 30 | **Keep** — GitHub-native PR dependency check; minimal cost. The workflow sets `warn-only: true` and the job name is "Dependency Review (advisory)", so findings never fail a PR — they only post warnings. |
 | 9 | `dependency-submission.yml` | Dependency Submission | push, PR, manual | ❌ No | 256 | **Keep** — feeds GitHub dependency graph; distinct concern. |
-| 10 | `dependency-update.yml` | Dependency Updates | schedule, manual | ❌ No | 174 | **Keep** — Dependabot supplement; scheduled. |
-| 11 | `secure-install-pilot.yml` | Secure Install Pilot | PR | ⚠️ Advisory | 62 | **Investigate** — pilot/experimental; check whether the pilot has graduated or should be retired. |
-| 12 | `nightly.yml` | Nightly Deep Checks | schedule (2 AM UTC), manual | ❌ No | 459 | **Keep** — owns stress, benchmarks, memory leak, deep dep audit, full integration. |
-| 13 | `ml-slow-suite.yml` | ML Slow Suite | schedule (3:30 AM UTC), manual | ❌ No | 155 | **Merge → `nightly.yml`** — overlapping concern (long-running ML coverage). Note schedule differs (`nightly.yml` runs `0 2 * * *`, `ml-slow-suite.yml` runs `30 3 * * *`); the merger needs to either preserve both crons (two `cron:` entries with a job-level guard on schedule) or pick one — choosing 3:30 AM UTC keeps the ML cache warm from the 2 AM nightly run. Decide before consolidation. |
-| 14 | `performance-monitor.yml` | Performance Monitor | schedule (3:30 AM UTC), manual | ❌ No | 224 | **Keep** — schedule-only by design (baseline persistence); distinct from nightly benchmarks. |
-| 15 | `apex_performance.yml` | APEX Performance Matrix | PR, push, manual, schedule | ⚠️ Advisory | 442 | **Keep** — APEX-specific matrix runner with synthetic-data PR comments. Standalone domain. |
-| 16 | `apex_policy_validation.yml` | APEX Policy Validation | PR, push | ✅ Required | 123 | **Merge → `contract-validations.yml`** (proposed new) |
-| 17 | `evalsuite_contract_validation.yml` | Eval Suite Contract Validation | push, PR, manual | ✅ Required | 95 | **Merge → `contract-validations.yml`** |
-| 18 | `ingest_contract_validation.yml` | Ingest Contract Validation | PR, push, manual | ✅ Required | 219 | **Merge → `contract-validations.yml`** |
-| 19 | `machine_mode_contract_validation.yml` | Machine Mode Contract Validation | push, PR, manual | ✅ Required | 157 | **Merge → `contract-validations.yml`** |
-| 20 | `determinism-gate.yml` | determinism-gate | PR | ✅ Required | 205 | **Merge → `determinism.yml`** (proposed) — combine with cross-ISA |
-| 21 | `determinism-cross-isa.yml` | Determinism Harness / Cross-ISA Parity | PR | ⚠️ Advisory | 195 | **Merge → `determinism.yml`** |
-| 22 | `docs.yml` | Documentation | PR, push, manual | ⚠️ Advisory | 128 | **Keep** — multi-job (build, validate-markdown, navigation); coherent. |
-| 23 | `frontdoor-deployment-gate.yml` | Frontdoor Deployment Gate | manual only | Manual | 117 | **Keep** — operational gate for frontdoor deploys. |
-| 24 | `diagnostic-trial.yml` | diagnostic-trial | PR, manual | ⚠️ Advisory | 188 | **Keep / revisit naming** — advisory determinism/provenance diagnostic gate running `scripts/diagnostics/full_chain_determinism_trial.sh` plus bundle-root and evidence-manifest checks. Concrete behavior, just badly named. |
-| 25 | `submit-pypi.yml` | Submit to PyPI | push (tag), manual | Release | 139 | **Keep** — release pipeline. |
-| 26 | `tag_retention_prune_preservation_tags.yml` | Tag Retention (Preservation Tags) | schedule, manual | ❌ No | 40 | **Keep** — periodic cleanup. |
-| 27 | `ai-code-review.yml` | AI Code Review | PR | ❌ No | 285 | **Investigate → Consolidate or retire** — frequent rate-limit failures on recent PRs (#1558 saw 4/4 calls error out). Either fold into `ai-advisory.yml` (proposed) or accept the noise. |
-| 28 | `summary.yml` | Issue Summarizer | issue_comment, PR, issues | ❌ No | 279 | **Investigate → Consolidate or retire** — same rate-limit story as ai-code-review. |
-| 29 | `smart-issue-management.yml` | Smart Issue Management | issues, pull_request_target | ❌ No | 337 | **Investigate → Consolidate or retire** — same. |
-| 30 | `issue_printer.yml` | Print Issue Info | issues | ❌ No | 24 | **Retire** — 24 lines that print title/body to job logs. No artifact, no enforcement. Pure noise. |
+| 10 | `dependency-update.yml` | Dependency Updates | schedule, manual | ❌ No | 171 | **Keep** — Dependabot supplement; scheduled. |
+| 11 | `dependency-pinning-check.yml` | Dependency Pinning Check | push, PR | ⚠️ Advisory | 46 | **Keep** — focused exact-pin drift guard for requirements and the dependency-pinning validator; the same check also runs through `make ci`, but this workflow surfaces supply-chain drift quickly on scoped changes. |
+| 12 | `secure-install-pilot.yml` | Secure Install Pilot | PR | ⚠️ Advisory | 62 | **Investigate** — pilot/experimental; check whether the pilot has graduated or should be retired. |
+| 13 | `nightly.yml` | Nightly Deep Checks | schedule (2 AM UTC), manual | ❌ No | 457 | **Keep** — owns stress, benchmarks, memory leak, deep dep audit, full integration. |
+| 14 | `ml-slow-suite.yml` | ML Slow Suite | schedule (3:30 AM UTC), manual | ❌ No | 155 | **Merge → `nightly.yml`** — overlapping concern (long-running ML coverage). Note schedule differs (`nightly.yml` runs `0 2 * * *`, `ml-slow-suite.yml` runs `30 3 * * *`); the merger needs to either preserve both crons (two `cron:` entries with a job-level guard on schedule) or pick one — choosing 3:30 AM UTC keeps the ML cache warm from the 2 AM nightly run. Decide before consolidation. |
+| 15 | `performance-monitor.yml` | Performance Monitor | schedule (3:30 AM UTC), manual | ❌ No | 232 | **Keep** — schedule-only by design (baseline persistence); distinct from nightly benchmarks. |
+| 16 | `apex_performance.yml` | APEX Performance Matrix | PR, push, manual, schedule | ⚠️ Advisory | 442 | **Keep** — APEX-specific matrix runner with synthetic-data PR comments. Standalone domain. |
+| 17 | `apex_policy_validation.yml` | APEX Policy Validation | PR, push | ✅ Required | 125 | **Merge → `contract-validations.yml`** (proposed new) |
+| 18 | `evalsuite_contract_validation.yml` | Eval Suite Contract Validation | push, PR, manual | ✅ Required | 95 | **Merge → `contract-validations.yml`** |
+| 19 | `ingest_contract_validation.yml` | Ingest Contract Validation | PR, push, manual | ✅ Required | 219 | **Merge → `contract-validations.yml`** |
+| 20 | `machine_mode_contract_validation.yml` | Machine Mode Contract Validation | push, PR, manual | ✅ Required | 159 | **Merge → `contract-validations.yml`** |
+| 21 | `determinism-gate.yml` | determinism-gate | PR | ✅ Required | 205 | **Merge → `determinism.yml`** (proposed) — combine with cross-ISA |
+| 22 | `determinism-cross-isa.yml` | Determinism Harness / Cross-ISA Parity | PR | ⚠️ Advisory | 195 | **Merge → `determinism.yml`** |
+| 23 | `docs.yml` | Documentation | PR, push, manual | ⚠️ Advisory | 128 | **Keep** — multi-job (build, validate-markdown, navigation); coherent. |
+| 24 | `frontdoor-deployment-gate.yml` | Frontdoor Deployment Gate | manual only | Manual | 131 | **Keep** — operational gate for frontdoor deploys. |
+| 25 | `diagnostic-trial.yml` | diagnostic-trial | PR, manual | ⚠️ Advisory | 188 | **Keep / revisit naming** — advisory determinism/provenance diagnostic gate running `scripts/diagnostics/full_chain_determinism_trial.sh` plus bundle-root and evidence-manifest checks. Concrete behavior, just badly named. |
+| 26 | `submit-pypi.yml` | Submit to PyPI | push (tag), manual | Release | 139 | **Keep** — release pipeline. |
+| 27 | `tag_retention_prune_preservation_tags.yml` | Tag Retention (Preservation Tags) | schedule, manual | ❌ No | 40 | **Keep** — periodic cleanup. |
+| 28 | `ai-code-review.yml` | AI Code Review | PR | ❌ No | 316 | **Investigate → Consolidate or retire** — frequent rate-limit failures on recent PRs (#1558 saw 4/4 calls error out). Either fold into `ai-advisory.yml` (proposed) or accept the noise. |
+| 29 | `summary.yml` | Issue Summarizer | issue_comment, PR, issues | ❌ No | 279 | **Investigate → Consolidate or retire** — same rate-limit story as ai-code-review. |
+| 30 | `smart-issue-management.yml` | Smart Issue Management | issues, pull_request_target | ❌ No | 347 | **Investigate → Consolidate or retire** — same. |
+| 31 | `issue_printer.yml` | Print Issue Info | issues | ❌ No | 24 | **Retire** — 24 lines that print title/body to job logs. No artifact, no enforcement. Pure noise. |
 
 **Legend** (Blocking? column reflects effective PR-merge enforcement, not just whether the workflow runs):
 - **✅ Required** — failing the workflow blocks the PR (listed in branch protection or aggregated by `CI Gate`).
@@ -98,7 +99,7 @@ Aggregated reduction: **5 fewer workflows** (4 contract validators → 1 = net �
 
 These need maintainer judgment, not mechanical merging.
 
-7. **Three AI advisory workflows** (`ai-code-review.yml`, `summary.yml`, `smart-issue-management.yml`, total 901 lines). They share a hardening baseline (per `AI_WORKFLOWS_HARDENING_STATUS.md`) and currently fail with rate-limit errors on most PRs. Options:
+7. **Three AI advisory workflows** (`ai-code-review.yml`, `summary.yml`, `smart-issue-management.yml`, total 942 lines). They share a hardening baseline (per `AI_WORKFLOWS_HARDENING_STATUS.md`) and currently fail with rate-limit errors on most PRs. Options:
    - **Consolidate** into one `ai-advisory.yml` with three jobs sharing setup (saves ~200 LOC)
    - **Retire** if the value-to-noise ratio is unfavorable (recent PR #1558: 4 of 4 AI calls errored)
    - **Keep separate** if isolation is desirable for independent ownership
@@ -111,7 +112,7 @@ These need maintainer judgment, not mechanical merging.
 
 ### Tier D — Keep as-is
 
-`build.yml`, `enforcement.yml`, `codeql.yml`, `security-unified.yml`, `dependency-review.yml`, `dependency-submission.yml`, `dependency-update.yml`, `nightly.yml`, `performance-monitor.yml`, `apex_performance.yml`, `docs.yml`, `frontdoor-deployment-gate.yml`, `submit-pypi.yml`, `tag_retention_prune_preservation_tags.yml`. Each owns a distinct concern.
+`build.yml`, `enforcement.yml`, `codeql.yml`, `security-unified.yml`, `dependency-review.yml`, `dependency-submission.yml`, `dependency-update.yml`, `dependency-pinning-check.yml`, `nightly.yml`, `performance-monitor.yml`, `apex_performance.yml`, `docs.yml`, `frontdoor-deployment-gate.yml`, `submit-pypi.yml`, `tag_retention_prune_preservation_tags.yml`. Each owns a distinct concern.
 
 ---
 
@@ -121,16 +122,16 @@ Sequence the work so each PR is independently revertible.
 
 | PR | Tier | Scope | Net workflow count |
 |----|------|-------|---------------------|
-| 1 | A | Retire `issue_printer.yml` | 30 → 29 |
-| 2 | A | Audit `ci.yml`'s unique jobs; port into `build.yml`; delete `ci.yml` | 29 → 28 |
-| 3 | A | Audit `ci-quality-firewall.yml`'s unique jobs; retire | 28 → 27 |
-| 4 | B | Create `contract-validations.yml`; delete the four single-purpose validators | 27 → 24 |
-| 5 | B | Create `determinism.yml`; delete the two single-purpose determinism workflows | 24 → 23 |
-| 6 | B | Merge `ml-slow-suite.yml` into `nightly.yml` | 23 → 22 |
-| 7 | C | Discuss & resolve AI advisory consolidation | 22 → 20 (if consolidated) |
-| 8 | C | Resolve `quality-gate.yml`, `secure-install-pilot.yml`, `diagnostic-trial.yml` | 20 → ~18 |
+| 1 | A | Retire `issue_printer.yml` | 31 → 30 |
+| 2 | A | Audit `ci.yml`'s unique jobs; port into `build.yml`; delete `ci.yml` | 30 → 29 |
+| 3 | A | Audit `ci-quality-firewall.yml`'s unique jobs; retire | 29 → 28 |
+| 4 | B | Create `contract-validations.yml`; delete the four single-purpose validators | 28 → 25 |
+| 5 | B | Create `determinism.yml`; delete the two single-purpose determinism workflows | 25 → 24 |
+| 6 | B | Merge `ml-slow-suite.yml` into `nightly.yml` | 24 → 23 |
+| 7 | C | Discuss & resolve AI advisory consolidation | 23 → 21 (if consolidated) |
+| 8 | C | Resolve `quality-gate.yml`, `secure-install-pilot.yml`, `diagnostic-trial.yml` | 21 → ~19 |
 
-After Tier A + B alone: 30 → 22. After Tier C: ~18 (depending on calls). The "~10" target from the architectural review is achievable but requires consolidating things like the `dependency-*` family into `security.yml`, which trades clarity for count.
+After Tier A + B alone: 31 → 23. After Tier C: ~19 (depending on calls). The older "~18" target remains achievable only if the dedicated dependency-pinning signal is folded into a broader security/dependency workflow after its contract stabilizes. The "~10" target from the architectural review is achievable but requires consolidating things like the `dependency-*` family into `security.yml`, which trades clarity for count.
 
 **Each PR should:**
 - Verify on a feature branch that the consolidated workflow runs all the original checks
@@ -213,6 +214,7 @@ For conditional job execution on PRs, use `dorny/paths-filter` instead of unreli
 
 | Date | Change | Rationale |
 |------|--------|-----------|
+| 2026-06-11 | Current inventory refreshed to 31 workflows after `dependency-pinning-check.yml` landed; status snapshot, table counts, keep-list, and roadmap math updated from live `.github/workflows/*.yml` line counts. | Remove drift between the maintained matrix, live workflow files, and top-level documentation references. |
 | 2026-04-27 | Second review pass: `quality-gate.yml` description corrected (runs `lint_runner.sh advisory` + `pre-commit-check.sh --all`, not `pre-commit run --all-files`); `dependency-review.yml` reclassified as ⚠️ Advisory (warn-only) since the workflow uses `warn-only: true` and self-identifies as "(advisory)"; `diagnostic-trial.yml` row + Tier C item 10 now describe its actual behavior (determinism/provenance diagnostic gate running `scripts/diagnostics/full_chain_determinism_trial.sh` + bundle-root and evidence-manifest checks); legend expanded to disambiguate Required / Advisory / Partial / Post-merge / Manual / Release / No. | Address review feedback on row accuracy and column-semantics ambiguity. |
 | 2026-04-27 | Review-driven corrections: `ci.yml` row now lists actually-unique jobs (security/coverage-gate/build/repo-hygiene/quality-summary) and flags the `develop` branch coverage risk; `ml-slow-suite` row corrects the conflated schedule (nightly = 2 AM, ml-slow = 3:30 AM); LOC column re-labeled as approximate; Tier B count math corrected (5, not 6); status-snapshot phasing rephrased to match the 8-PR roadmap. | Address review feedback on the inventory accuracy. |
 | 2026-04-27 | Complete inventory rebuild (30 workflows) + consolidation roadmap | Prior revision listed 12; the missing 18 went undocumented. Phase 1.4 of remediation plan from PR #1558. |

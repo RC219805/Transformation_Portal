@@ -28,7 +28,7 @@ Recent current-state contract anchors:
 - The managed front door in `web/secure-landing/` is Node 22.x only.
 - Root `.env.example` is the Docker/FastAPI template; `web/secure-landing/.env.example`
   is the managed front-door template.
-- `docs/ci/WORKFLOW_MATRIX.md` is the current 30-workflow GitHub Actions inventory.
+- `docs/ci/WORKFLOW_MATRIX.md` is the current 31-workflow GitHub Actions inventory.
 - `docs/governance/audit/archive-gates-2026-04-27.md` is the current archive
   Gates A/B/C readiness audit evidence.
 

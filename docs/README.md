@@ -7,8 +7,8 @@ as canonical documents.
 
 **Current baseline:** repo-wide refresh audit dated May 11, 2026, building on
 `main` through PR #1721, with the May 12 architecture triage overlay for
-`docs/architecture` file dispositions and the May 12 CLI reference alignment
-for `docs/cli`.
+`docs/architecture` file dispositions, the May 12 CLI reference alignment for
+`docs/cli`, and the June 11 CI/TODO documentation alignment refresh.
 
 ## Start Here
 
@@ -37,10 +37,10 @@ for `docs/cli`.
 | Secure front door | [Front Door Quickstart](guides/PORTAL_SECURE_FRONTDOOR_QUICKSTART.md) | Node 22.x is the enforced local/runtime contract for `web/secure-landing`. |
 | Managed paid-pilot staging | [Managed Paid-Pilot Staging Runbook](deployment/managed_paid_pilot_staging_runbook.md), [Paid-Pilot Managed-Services Smoke Gate](deployment/paid_pilot_services.md) | Phase 5.A is locally validated at `07a3e8e847dee4a6e1ccf46d6dcd80b612fe3753`; managed-provider validation remains pending until the same gate passes against provider Postgres, Redis, and S3-compatible storage. |
 | Docker / environment | [Main README](../README.md), [`.env.example`](../.env.example) | Docker Compose reads the root `.env` template with `required: false`; set `TP_API_KEY` for non-throwaway runs. |
-| CI / validation | [Workflow Matrix](ci/WORKFLOW_MATRIX.md), [CI/CD Workflows](ci_cd/CI_CD_WORKFLOWS.md) | The current GitHub Actions inventory contains 30 workflows after the Phase 1.4 refresh. |
+| CI / validation | [Workflow Matrix](ci/WORKFLOW_MATRIX.md), [CI/CD Workflows](ci_cd/CI_CD_WORKFLOWS.md) | The current GitHub Actions inventory contains 31 workflows after the dependency-pinning signal landed. |
 | Agent / Copilot guidance | [Custom Agent Guide](guides/CUSTOM_AGENT_GUIDE.md), [Agent Quick Reference](reference/AGENT_QUICK_REFERENCE.md), [Copilot Instructions](../.github/copilot-instructions.md), [CLAUDE.md](../CLAUDE.md) | Live agent behavior is governed by `.github/agents/`, Copilot instructions, `CLAUDE.md`, and `docs/architecture/agent_governance.md`. |
 | Skill progression | [Skill Progress Tracks](guides/SKILL_PROGRESS_TRACKS.md) | Maps recurring PR review themes to evidence-linked drills, acceptance tests, and review checklists. |
-| TODO governance | [TODO Inventory](analysis/TODO_INVENTORY.md), [TODO Action Plan](analysis/TODO_ACTION_PLAN.md), [TODO Quick Reference](architecture/TODO_INVENTORY_QUICK_REF.md), [TODO Priority Schema](governance/todo_priority_schema.yaml) | Current scanner-governed baseline: 24 governed `NotImplementedError` items, 0 ungoverned TODOs, snapshot refreshed May 11, 2026. |
+| TODO governance | [TODO Inventory](analysis/TODO_INVENTORY.md), [TODO Action Plan](analysis/TODO_ACTION_PLAN.md), [TODO Quick Reference](architecture/TODO_INVENTORY_QUICK_REF.md), [TODO Priority Schema](governance/todo_priority_schema.yaml) | Current scanner-governed baseline: 25 governed `NotImplementedError` items, 0 ungoverned TODOs, snapshot refreshed June 11, 2026. |
 | Archive gates | [Archive Machine Contract](api/ARCHIVE_MACHINE_MODE_CONTRACT.md), [2026-04-27 Archive Gates Audit](governance/audit/archive-gates-2026-04-27.md) | Gates A/B/C are documented with the April 27 readiness audit and normalized JSON evidence. |
 | APEX / Materials | [APEX Governance Status](apex/GOVERNANCE_STATUS.md), [APEX Workflow Design](architecture/APEX_WORKFLOW_DESIGN.md), [APEX Model Family Characterization](validation/APEX_MODEL_FAMILY_CHARACTERIZATION_PROTOCOL.md) | Recent merges added offline model-family characterization, failure-code surfacing, confidence-only pixel-op passthrough, V2 fallback, and SAM2 tile-merge regression coverage. |
 | Schema contracts | [Schema Contracts](../schemas/README.md), [Metadata Schema](schemas/METADATA_SCHEMA.md) | Root `schemas/` holds live machine-readable runtime contracts/profiles; `docs/schemas/` holds published schema contracts and schema documentation. |
@@ -96,4 +96,4 @@ make check-doc-heading-links
 python3 scripts/governance/check_docs_structure.py --all
 ```
 
-**Last Updated:** 2026-06-01
+**Last Updated:** 2026-06-11

@@ -90,7 +90,7 @@ This repository is broader than the earlier “luxury rendering pipeline only”
 
 6. **Performance, Observability, and Repo Hygiene**
    - APEX performance authority
-   - current 30-workflow inventory in `docs/ci/WORKFLOW_MATRIX.md`
+   - current 31-workflow inventory in `docs/ci/WORKFLOW_MATRIX.md`
    - contract tests, marker audits, CI-aligned linting, and local CI targets
    - documentation/repository organization guardrails
 
