@@ -184,7 +184,7 @@ class TestRootGovernanceMetadata:
             "docs/README.md",
             "docs/governance/DOCUMENTATION_MAP.md",
             "May 11, 2026 repo-wide refresh audit",
-            "Last Updated: 2026-06-03",
+            "Last Updated: 2026-06-11",
         ]
         for expected in required_navigation:
             assert expected in readme
