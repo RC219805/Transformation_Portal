@@ -34,11 +34,11 @@ attrs==26.1.0
     #   -c all.txt
     #   jsonschema
     #   referencing
-boto3==1.43.24
+boto3==1.43.29
     # via
     #   -c all.txt
     #   -r base.in
-botocore==1.43.24
+botocore==1.43.29
     # via
     #   -c all.txt
     #   boto3
@@ -198,7 +198,7 @@ tifffile==2026.3.3
     # via
     #   -c all.txt
     #   -r base.in
-tqdm==4.68.1
+tqdm==4.68.2
     # via
     #   -c all.txt
     #   -r base.in

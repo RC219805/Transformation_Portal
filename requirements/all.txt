@@ -36,11 +36,11 @@ bandit==1.9.4
     # via -r ci.in
 black==26.3.1
     # via -r dev.in
-boto3==1.43.24
+boto3==1.43.29
     # via
     #   -r base.in
     #   moto
-botocore==1.43.24
+botocore==1.43.29
     # via
     #   boto3
     #   moto
@@ -79,7 +79,7 @@ diff-cover==10.3.0
     # via -r dev.in
 dill==0.4.1
     # via pylint
-distlib==0.4.1
+distlib==0.4.3
     # via virtualenv
 docutils==0.23
     # via readme-renderer
@@ -87,7 +87,7 @@ execnet==2.1.2
     # via pytest-xdist
 fastapi==0.136.1
     # via -r base.in
-filelock==3.29.1
+filelock==3.29.4
     # via
     #   python-discovery
     #   tox
@@ -252,15 +252,15 @@ pygments==2.20.0
     #   pytest
     #   readme-renderer
     #   rich
-pylint==4.0.5
+pylint==4.0.6
     # via -r dev.in
-pypdf==6.13.1
+pypdf==6.13.2
     # via -r ci.in
 pyproject-api==1.10.1
     # via tox
 pyproject-hooks==1.2.0
     # via build
-pytest==9.0.3
+pytest==9.1.0
     # via
     #   -r dev.in
     #   pytest-asyncio
@@ -283,7 +283,7 @@ pytest-xdist==3.8.0
     # via -r dev.in
 python-dateutil==2.9.0.post0
     # via botocore
-python-discovery==1.4.0
+python-discovery==1.4.2
     # via
     #   tox
     #   virtualenv
@@ -296,7 +296,7 @@ pyyaml==6.0.3
     #   moto
     #   pre-commit
     #   responses
-readme-renderer==44.0
+readme-renderer==45.0
     # via twine
 redis==6.4.0
     # via -r base.in
@@ -362,7 +362,7 @@ tomlkit==0.15.0
     # via pylint
 tox==4.55.1
     # via -r ci.in
-tqdm==4.68.1
+tqdm==4.68.2
     # via -r base.in
 twine==6.2.0
     # via -r ci.in
@@ -396,7 +396,7 @@ urllib3==2.7.0
     #   twine
 uvicorn==0.48.0
     # via -r base.in
-virtualenv==21.4.2
+virtualenv==21.5.0
     # via
     #   pre-commit
     #   tox
