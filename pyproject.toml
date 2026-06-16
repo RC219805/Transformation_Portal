@@ -76,7 +76,7 @@ ml-core = [
     "torch>=2.12.0",
     "torchvision>=0.27.0",
     "diffusers>=0.38.0,<1",
-    "transformers>=5.0.0,<5.1",
+    "transformers>=5.0.0,<5.13",
     "huggingface-hub>=0.19",
     "accelerate>=0.20",
 ]
@@ -98,7 +98,7 @@ ml = [
     "torch>=2.12.0",
     "torchvision>=0.27.0",
     "diffusers>=0.38.0,<1",
-    "transformers>=5.0.0,<5.1",
+    "transformers>=5.0.0,<5.13",
     "rawpy>=0.18.0",
 ]
 # Spatial AI research pipeline (Phase 2) — SAM2 + NVDiffRec + 3DGS
