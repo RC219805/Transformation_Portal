@@ -61,7 +61,7 @@ requests==2.34.2
 rich==15.0.0
 safehttpx==0.1.7
 safetensors==0.8.0
-scipy==1.13.1
+scipy==1.15.3
 semantic-version==2.10.0
 shellingham==1.5.4
 six==1.17.0
