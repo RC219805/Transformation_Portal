@@ -19,6 +19,6 @@ pytest>=8,<10
 # Linting tools (exact pins for CI/local parity)
 # Keep these in sync with pre-commit hook version checks.
 flake8==7.3.0
-black==26.3.1
+black==26.5.1
 isort==8.0.1
 pylint==4.0.5

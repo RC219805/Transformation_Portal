@@ -21,7 +21,7 @@ moto[s3]>=5.0,<6  # S3 mock for the Phase 4.A S3ArtifactStore contract test bran
 mypy>=1.10
 flake8>=7.0
 pylint>=3.0
-black==26.3.1  # CAS determinism + Security: arbitrary file writes fixed in 26.3.1
+black==26.5.1  # CAS determinism + Security: arbitrary file writes fixed in 26.3.1
 isort>=5.13,<9
 autopep8>=2.0,<3
 libcst>=1.2,<2
