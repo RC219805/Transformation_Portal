@@ -70,7 +70,7 @@ colorama==0.4.6
     # via tox
 coverage[toml]==7.14.1
     # via pytest-cov
-cryptography==47.0.0
+cryptography==48.0.1
     # via
     #   -r dev.in
     #   moto
@@ -196,8 +196,6 @@ numpy==2.4.6
     #   scikit-learn
     #   scipy
     #   tifffile
-opencv-python==4.13.0.92 ; platform_system != "Linux"
-    # via -r base.in
 opencv-python-headless==4.13.0.92 ; platform_system == "Linux"
     # via -r base.in
 packaging==26.2
