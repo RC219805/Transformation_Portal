@@ -196,8 +196,6 @@ numpy==2.4.6
     #   scikit-learn
     #   scipy
     #   tifffile
-opencv-python==4.13.0.92 ; platform_system != "Linux"
-    # via -r base.in
 opencv-python-headless==4.13.0.92 ; platform_system == "Linux"
     # via -r base.in
 packaging==26.2
@@ -254,7 +252,7 @@ pygments==2.20.0
     #   rich
 pylint==4.0.5
     # via -r dev.in
-pypdf==6.13.1
+pypdf==6.13.3
     # via -r ci.in
 pyproject-api==1.10.1
     # via tox

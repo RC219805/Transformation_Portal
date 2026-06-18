@@ -19,4 +19,4 @@ twine>=4.0,<7          # upload distributions to PyPI
 tox>=4.5,<5            # test runner for multiple envs (future compatibility)
 
 # Additional CI utilities
-pypdf>=3.9.0           # PDF processing for reports
+pypdf>=6.13.3           # PDF processing for reports
