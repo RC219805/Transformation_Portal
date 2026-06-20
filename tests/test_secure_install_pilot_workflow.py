@@ -104,9 +104,9 @@ def test_requirements_readme_records_current_curated_web_runtime_baseline() -> N
     readme = REQUIREMENTS_README_PATH.read_text(encoding="utf-8")
 
     assert "| FastAPI | `requirements/base.in` | `0.136.1` |" in readme
-    assert "| Starlette | `requirements/base.in` + `pyproject.toml` bound | `1.0.1` |" in readme
+    assert "| Starlette | `requirements/base.in` + `pyproject.toml` bound | `1.3.1` |" in readme
     assert "| Uvicorn | `requirements/base.in` + `pyproject.toml` bound | `0.48.0` |" in readme
-    assert "Starlette `PYSEC-2026-161` patch" in readme
+    assert "Starlette `1.3.1` security patch" in readme
 
 
 def test_dependabot_governance_doc_includes_dep_pin_changed_checklist() -> None:

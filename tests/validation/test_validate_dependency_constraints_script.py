@@ -164,7 +164,7 @@ def test_generic_stale_warning_preserves_make_compile_guidance(tmp_path: Path) -
     ("constraint", "minimum", "reason"),
     (
         ("Pillow>=10.0.0,<13  # stale security floor", "10.3.0", "CVE-2024-28219"),
-        ("starlette==1.0.0  # stale Starlette pin", "1.0.1", "CVE-2026-48710"),
+        ("starlette==1.0.0  # stale Starlette pin", "1.3.1", "CVE-2026-48710"),
     ),
 )
 def test_security_minimums_reject_stale_constraints(
@@ -395,7 +395,7 @@ def test_validator_uses_repo_resolved_python_instead_of_path_python3(tmp_path: P
         "\n".join(
             [
                 "Pillow>=10.3.0,<13  # Security regression coverage",
-                "starlette==1.0.1  # direct runtime import + curated Starlette 1.x validation target",
+                "starlette==1.3.1  # direct runtime import + curated Starlette 1.x validation target",
             ]
         )
         + "\n",

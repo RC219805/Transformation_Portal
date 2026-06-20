@@ -121,7 +121,7 @@ get_security_minimum() {
             return 0
             ;;
         "starlette")
-            echo "1.0.1|CVE-2026-48710 / PYSEC-2026-161 (BadHost request URL construction weakness)"
+            echo "1.3.1|CVE-2026-48710 / PYSEC-2026-161 plus 2026 StaticFiles/HTTPEndpoint/form parsing fixes"
             return 0
             ;;
     esac

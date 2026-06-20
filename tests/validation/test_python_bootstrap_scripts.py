@@ -560,7 +560,7 @@ def test_install_da3_runtime_baseline_profile_omits_optional_deps(tmp_path: Path
     assert result.returncode == 0, result.stdout + result.stderr
     pip_install_lines = "\n".join(_dry_run_pip_install_lines(result.stdout))
     assert "DA3 NumPy spec: numpy>=2.0,<3" in result.stdout
-    assert "cryptography==47.0.0" in pip_install_lines
+    assert "cryptography==48.0.1" in pip_install_lines
     assert "cryptography==46.0.6" not in pip_install_lines
     assert "numpy==1.26.4" not in pip_install_lines
     assert "pycolmap==" not in pip_install_lines
