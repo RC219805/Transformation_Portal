@@ -17,6 +17,9 @@ bandit[toml]>=1.9,<2
 # This is the SOLE governed blocking dependency scanner for CI
 pip-audit>=2.10,<3
 
+# Transitive cachecontrol[filecache] dependency; floor kept explicit for GHSA-6v7p-g79w-8964.
+msgpack>=1.2.1,<2
+
 # Safety was removed from the security toolchain (March 2026):
 # - Safety pulls nltk as a transitive dependency, triggering security alerts
 # - pip-audit provides equivalent CVE/advisory scanning via PyPI database

@@ -51,6 +51,7 @@ def test_root_worker_build_lock_matches_package_contract() -> None:
     assert "dependencies" not in root_lock_package
     assert root_lock["packages"]["node_modules/wrangler"]["version"] == wrangler_spec
     assert root_lock["packages"]["node_modules/wrangler"]["bin"] == {
+        "cf-wrangler": "bin/cf-wrangler.js",
         "wrangler": "bin/wrangler.js",
         "wrangler2": "bin/wrangler.js",
     }

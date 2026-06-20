@@ -33,6 +33,7 @@
     "react-dom": "^19.2.7"
   },
   "overrides": {
+    "js-yaml": "4.2.0",
     "postcss": "8.5.15"
   },
   "devDependencies": {

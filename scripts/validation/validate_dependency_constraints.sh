@@ -144,7 +144,7 @@ get_approved_exception() {
         "coremltools") echo "ml.in|Apple ML tools: platform-specific updates"; return 0 ;;
         "psutil") echo "ml.in|System utilities: OS compatibility layer"; return 0 ;;
         "memory-profiler") echo "ml.in|Dev/profiling tool in optional deps"; return 0 ;;
-        "pypdf") echo "ci.in|PDF utilities: backward compat in 3.x"; return 0 ;;
+        "pypdf") echo "ci.in|PDF utilities: backward-compatible 6.x security floor"; return 0 ;;
     esac
     return 1
 }

@@ -13,8 +13,8 @@
   },
   "packageManager": "npm@11.12.1",
   "devDependencies": {
-    "@cloudflare/workers-types": "4.20260609.1",
+    "@cloudflare/workers-types": "4.20260617.1",
     "typescript": "6.0.3",
-    "wrangler": "4.98.0"
+    "wrangler": "4.103.0"
   }
 }

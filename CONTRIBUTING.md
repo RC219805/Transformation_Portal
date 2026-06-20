@@ -711,7 +711,9 @@ Certain packages require minimum versions due to CVEs:
 |-------------------------|-----------------|-------------------------------------|
 | `cryptography`          | >=48.0.1        | Governed lock baseline includes the OpenSSL wheel security fix |
 | `sentence-transformers` | >=3.1.0         | CVE-73169 (arbitrary code execution) |
+| `msgpack`               | >=1.2.1         | GHSA-6v7p-g79w-8964 |
 | `Pillow`                | >=10.3.0        | CVE-2024-28219 and multiple 9.x CVEs |
+| `pypdf`                 | >=6.13.3        | GHSA-jm82-fx9c-mx94 |
 | `starlette`             | >=1.3.1         | CVE-2026-48710 / PYSEC-2026-161 plus 2026 web-stack advisories |
 
 ### Approved Exceptions
@@ -719,7 +721,7 @@ Certain packages require minimum versions due to CVEs:
 Lower-bound-only constraints are approved for these development tools:
 
 - `mypy`, `black`, `flake8`, `pylint` (linters/formatters with stable CLIs)
-- `pypdf` (CI utilities with backward compat)
+- `pypdf` (CI utilities with backward-compatible 6.x security floor)
 - `PyYAML`, `coremltools`, `psutil` (optional ML deps with stable APIs)
 
 See [`docs/architecture/ADR-032-dependency-pinning-strategy.md`](docs/architecture/ADR-032-dependency-pinning-strategy.md) for full rationale.
