@@ -37,7 +37,7 @@
   },
   "devDependencies": {
     "@playwright/test": "1.60.0",
-    "esbuild": "^0.28.0",
+    "esbuild": "^0.28.1",
     "postcss": "8.5.15",
     "stylelint": "^17.13.0"
   }
