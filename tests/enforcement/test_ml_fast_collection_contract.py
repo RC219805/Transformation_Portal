@@ -127,7 +127,7 @@ def _write_torch_blocker(sitecustomize_path: Path) -> None:
         "class TorchBlocker(importlib.abc.MetaPathFinder):\n"
         "    def find_spec(self, fullname, path=None, target=None):\n"
         "        if fullname == 'torch' or fullname.startswith('torch.'):\n"
-        f"            raise ImportError('{TORCH_BLOCK_MESSAGE}: ' + fullname)\n"
+        f"            raise ModuleNotFoundError('{TORCH_BLOCK_MESSAGE}: ' + fullname)\n"
         "        return None\n"
         "\n"
         "sys.meta_path.insert(0, TorchBlocker())\n",

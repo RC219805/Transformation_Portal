@@ -220,7 +220,7 @@ BASE_DEPS=(
     "torch==2.12.0"
     "torchvision==0.27.0"
     "transformers==5.5.0"
-    "cryptography==47.0.0"
+    "cryptography==48.0.1"
     "moviepy==1.0.3"
     "einops==0.8.2"
     "huggingface_hub==1.9.0"

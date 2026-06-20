@@ -83,7 +83,7 @@ The following dependencies are **exact-pinned** in `requirements/base.in` for AP
 
 ```
 fastapi==0.136.1
-starlette==1.0.1
+starlette==1.3.1
 uvicorn==0.48.0
 aiofiles==25.1.0
 ```

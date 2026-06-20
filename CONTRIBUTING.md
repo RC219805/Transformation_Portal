@@ -709,10 +709,10 @@ Certain packages require minimum versions due to CVEs:
 
 | Package                 | Minimum Version | Reason                              |
 |-------------------------|-----------------|-------------------------------------|
-| `cryptography`          | >=47.0.0        | Governed lock baseline includes the CVE-2026-26007 / GHSA-r6ph-v2qm-q3c2 fix |
+| `cryptography`          | >=48.0.1        | Governed lock baseline includes the OpenSSL wheel security fix |
 | `sentence-transformers` | >=3.1.0         | CVE-73169 (arbitrary code execution) |
 | `Pillow`                | >=10.3.0        | CVE-2024-28219 and multiple 9.x CVEs |
-| `starlette`             | >=1.0.1         | CVE-2026-48710 / PYSEC-2026-161      |
+| `starlette`             | >=1.3.1         | CVE-2026-48710 / PYSEC-2026-161 plus 2026 web-stack advisories |
 
 ### Approved Exceptions
 

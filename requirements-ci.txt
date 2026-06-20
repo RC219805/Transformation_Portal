@@ -32,4 +32,4 @@ opencv-python-headless>=4.8.0,<5 ; platform_system == "Linux"
 opencv-python>=4.8.0,<5 ; platform_system != "Linux"
 
 # Required for detached Merkle signing/verification CLI tests
-cryptography>=47.0.0,<48
+cryptography>=48.0.1,<49

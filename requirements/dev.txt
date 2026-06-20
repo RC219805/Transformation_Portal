@@ -69,7 +69,7 @@ coverage[toml]==7.14.1
     # via
     #   -c all.txt
     #   pytest-cov
-cryptography==47.0.0
+cryptography==48.0.1
     # via
     #   -c all.txt
     #   -r dev.in
