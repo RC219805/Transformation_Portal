@@ -126,6 +126,17 @@ actionable; use the linked docs and `Makefile` for exhaustive inventories.
   `./scripts/setup/run_repo_python.sh scripts/governance/check_script_topology.py`
   and
   `./scripts/setup/run_repo_python.sh scripts/validation/check_gitleaks_workflow_contract.py`.
+  For scoped dependency drift checks, the dedicated
+  `.github/workflows/dependency-pinning-check.yml` workflow runs
+  `python scripts/validation/check_dependency_pinning.py`; it enforces exact
+  requirement pins and audits normal `constraints.txt` pins against the
+  governed environment. When TODO or workflow baselines change, refresh
+  committed docs from live repo state:
+  `python3 scripts/validation/scan_todo_inventory.py --write-snapshot` updates
+  `docs/analysis/todo_scanner_snapshot.json`, and
+  `docs/ci/WORKFLOW_MATRIX.md` must match live `.github/workflows/*.yml`
+  inventory counts plus per-workflow line estimates. Treat workflow-matrix
+  recommendations as proposals until matching workflow YAML changes land.
 - Root metadata contract tests:
   `./.venv/bin/pytest tests/validation/test_cloudflare_worker_root_shim_contract.py tests/validation/test_git_blame_ignore_revs_contract.py tests/validation/test_gitattributes_contract.py tests/validation/test_pylint_config_contract.py -v`.
 - Coverage/cold-zone:
