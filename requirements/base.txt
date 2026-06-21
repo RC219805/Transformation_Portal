@@ -21,7 +21,7 @@ annotated-types==0.7.0
     # via
     #   -c all.txt
     #   pydantic
-anyio==4.13.0
+anyio==4.14.0
     # via
     #   -c all.txt
     #   starlette
@@ -34,11 +34,11 @@ attrs==26.1.0
     #   -c all.txt
     #   jsonschema
     #   referencing
-boto3==1.43.24
+boto3==1.43.34
     # via
     #   -c all.txt
     #   -r base.in
-botocore==1.43.24
+botocore==1.43.34
     # via
     #   -c all.txt
     #   boto3
@@ -51,7 +51,7 @@ fastapi==0.136.1
     # via
     #   -c all.txt
     #   -r base.in
-greenlet==3.5.1
+greenlet==3.5.2
     # via
     #   -c all.txt
     #   sqlalchemy
@@ -109,12 +109,14 @@ numpy==2.4.6
     #   -c all.txt
     #   -r base.in
     #   imagecodecs
-    #   opencv-python-headless
+    #   opencv-python
     #   scikit-learn
     #   scipy
     #   tifffile
 opencv-python==4.13.0.92 ; platform_system != "Linux"
-    # via -r base.in
+    # via
+    #   -c all.txt
+    #   -r base.in
 opencv-python-headless==4.13.0.92 ; platform_system == "Linux"
     # via
     #   -c all.txt
@@ -158,7 +160,7 @@ rpds-py==2026.5.1
     #   -c all.txt
     #   jsonschema
     #   referencing
-s3transfer==0.18.0
+s3transfer==0.19.0
     # via
     #   -c all.txt
     #   boto3
@@ -179,7 +181,7 @@ six==1.17.0
     # via
     #   -c all.txt
     #   python-dateutil
-sqlalchemy[asyncio]==2.0.50
+sqlalchemy[asyncio]==2.0.51
     # via
     #   -c all.txt
     #   -r base.in
@@ -198,7 +200,7 @@ tifffile==2026.3.3
     # via
     #   -c all.txt
     #   -r base.in
-tqdm==4.68.1
+tqdm==4.68.3
     # via
     #   -c all.txt
     #   -r base.in
