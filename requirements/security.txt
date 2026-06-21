@@ -12,15 +12,15 @@ cachecontrol[filecache]==0.14.4
     # via
     #   cachecontrol
     #   pip-audit
-certifi==2026.5.20
+certifi==2026.6.17
     # via requests
 charset-normalizer==3.4.7
     # via requests
-cyclonedx-python-lib==11.9.0
+cyclonedx-python-lib==11.11.0
     # via pip-audit
 defusedxml==0.7.1
     # via py-serializable
-filelock==3.29.1
+filelock==3.29.4
     # via cachecontrol
 idna==3.18
     # via requests
@@ -42,7 +42,7 @@ packaging==26.2
     #   pip-requirements-parser
 pip-api==0.0.34
     # via pip-audit
-pip-audit==2.10.0
+pip-audit==2.10.1
     # via -r security.in
 pip-requirements-parser==32.0.1
     # via pip-audit
