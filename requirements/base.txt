@@ -109,7 +109,7 @@ numpy==2.4.6
     #   -c all.txt
     #   -r base.in
     #   imagecodecs
-    #   opencv-python
+    #   opencv-python-headless
     #   scikit-learn
     #   scipy
     #   tifffile

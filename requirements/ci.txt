@@ -100,7 +100,7 @@ more-itertools==11.1.0
     #   -c all.txt
     #   jaraco-classes
     #   jaraco-functools
-nh3==0.3.5
+nh3==0.3.6
     # via
     #   -c all.txt
     #   readme-renderer
