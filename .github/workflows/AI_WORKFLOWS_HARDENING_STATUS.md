@@ -75,7 +75,7 @@ All three AI advisory workflows have been hardened according to the technical re
 AI API Failure Path:
 ┌────────────────────────────────────────────┐
 │ OpenAI API call                            │
-│ └─ Retry logic (6 attempts, exp backoff)  │
+│ └─ Retry logic (workflow-specific bound)  │
 │    └─ All retries exhausted                │
 │       └─ Exception caught in Python        │
 │          └─ print("::warning::...")        │  ← Visible in UI
@@ -112,7 +112,7 @@ All three workflows implement a shared hardening baseline:
 - ✅ Python: `print("::warning::...(non-blocking)...")`
 - ✅ Shell: `echo "::warning::...failed (non-blocking)..."`
 - ✅ Terminal: `if: always()` summary step
-- ℹ️ Retry/backoff is currently implemented in `ai-code-review.yml` and `smart-issue-management.yml` only
+- ℹ️ Retry/backoff is implemented in all three workflows; `summary.yml` uses a shorter 3-attempt bound
 
 ---
 
@@ -126,7 +126,7 @@ All three workflows implement a shared hardening baseline:
 | Failure visibility | ✅ | `::warning::` in Python + Shell |
 | Syntax validation | ✅ | `make validate-ci` passes |
 | Consistent implementation | ✅ | Shared advisory hardening baseline across all three workflows |
-| Retry logic coverage | ✅ | Backoff retries in code review + triage; summary uses single-attempt fallback path |
+| Retry logic coverage | ✅ | Backoff retries in code review + triage; summary uses a 3-attempt fallback path |
 | Error messages clear | ✅ | Indicate non-blocking nature |
 
 ---
@@ -135,7 +135,7 @@ All three workflows implement a shared hardening baseline:
 
 ### Scenario 1: OpenAI Rate Limit (429)
 **Expected Behavior:**
-1. Retry logic attempts 6 times with backoff
+1. Retry logic uses the workflow-specific retry bound with backoff
 2. If all fail, Python emits `::warning::`
 3. Script exits 0 (non-blocking)
 4. `if: always()` summary step runs
