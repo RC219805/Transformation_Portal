@@ -20,7 +20,7 @@ jobs:
       - name: Checkout code (attempt 1)
         id: checkout_validate_1
         continue-on-error: true
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           fetch-depth: 1
           lfs: false
@@ -30,7 +30,7 @@ jobs:
         id: checkout_validate_2
         if: steps.checkout_validate_1.outcome == 'failure'
         continue-on-error: true
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           fetch-depth: 1
           lfs: false
@@ -89,7 +89,7 @@ jobs:
       - name: Checkout PR branch (attempt 1)
         id: checkout_schema_1
         continue-on-error: true
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           # Keep the PR base commit local so schema drift detection can diff
@@ -102,7 +102,7 @@ jobs:
         id: checkout_schema_2
         if: steps.checkout_schema_1.outcome == 'failure'
         continue-on-error: true
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
