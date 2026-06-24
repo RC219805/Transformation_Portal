@@ -2,7 +2,7 @@
 
 **Issue:** GitHub Actions workflows using AI services (OpenAI) have experienced rate-limit errors (HTTP 429) during PR reviews and issue summarization, causing workflow failures or degraded experience.
 
-**Current State:** AI code review is non-blocking, retries transient OpenAI 429 responses, treats `insufficient_quota` as terminal, and keeps fallback diagnostics in CI logs instead of posting fallback PR comments.
+**Current State:** AI advisory workflows are non-blocking. AI code review retries transient OpenAI 429 responses, treats `insufficient_quota` as terminal, and keeps fallback diagnostics in CI logs instead of posting fallback PR comments. The issue summarizer retries bounded transient OpenAI failures and posts only successful AI summaries; fallback diagnostics stay in CI logs.
 
 ---
 
@@ -32,10 +32,15 @@
 
 ### Issue Summarizer Workflow (`.github/workflows/summary.yml`)
 
-⚠️ **Partial mitigation:**
+✅ **Has bounded retry logic and quiet fallback behavior:**
 - Has concurrency control
 - Skips gracefully if key missing
-- **No retry logic** - single attempt only
+- Retries OpenAI HTTP 429 responses up to 3 total attempts
+- Retries transient HTTP 5xx and network errors up to 3 total attempts
+- Honors `Retry-After` when present, capped at 30 seconds
+- Otherwise uses exponential backoff with jitter, capped at 20 seconds
+- Writes fallback diagnostics to the workflow output/logs without posting PR comments
+- Posts only successful AI-generated summaries as issue/PR comments
 
 ---
 
@@ -59,43 +64,23 @@ jobs:
 - Rate limits and quota exhaustion must not block PR merges when code is correct
 - Human review is the authoritative gate; AI is advisory
 
-### 2. Add Retry Logic to Issue Summarizer (Medium Priority)
+### 2. Keep Issue Summarizer Retry Bounded (Implemented)
 
-**Change:** Add same retry/backoff pattern used in AI code review.
+**Contract:** `.github/workflows/summary.yml` keeps retries short enough for its 4-minute step timeout and 10-minute job timeout.
 
 **Implementation:**
-```python
-def call_openai_with_retries(client, messages, model="gpt-4o-mini", max_retries=6, **kwargs):
-    for attempt in range(1, max_retries + 1):
-        try:
-            return client.chat.completions.create(
-                model=model,
-                messages=messages,
-                max_tokens=1000,
-                temperature=0.3,
-                **kwargs
-            )
-        except Exception as e:
-            err_str = str(e)
-            status_is_429 = False
-            status = getattr(e, "status_code", None) or getattr(e, "http_status", None)
-            if status == 429 or "429" in err_str or "Rate limit" in err_str:
-                status_is_429 = True
-
-            if status_is_429 and attempt < max_retries:
-                base_wait = min(60, 2 ** attempt)
-                jitter = random.uniform(0.5, 1.5)
-                wait = base_wait * jitter
-                print(f"⚠️ Rate limited (attempt {attempt}/{max_retries}). Waiting {wait:.1f}s...")
-                time.sleep(wait)
-                continue
-            raise
-```
+- Calls OpenAI with `max_retries=3`
+- Retries HTTP 429, transient HTTP 5xx, and network errors
+- Honors `Retry-After` for 429/5xx responses, capped at 30 seconds
+- Falls back to exponential backoff plus jitter when `Retry-After` is absent, capped at 20 seconds
+- Treats other HTTP 4xx responses as terminal for the current run
+- Emits workflow warnings and exits non-blocking after exhausted retries
+- Keeps diagnostic fallback bodies log-only by skipping comment posting when the `<!-- ai-summarizer-diagnostic -->` marker is present
 
 **Rationale:**
-- Consistent error handling across AI workflows
-- Transient rate limits should not cause permanent failures
-- Terminal quota errors such as `insufficient_quota` should be logged once and not retried
+- Transient rate limits should get a bounded retry window
+- PRs should not accumulate comments for service-unavailable diagnostics
+- Human review and normal CI remain authoritative when AI services are unavailable
 
 ### 3. Add Rate-Limit Budget Monitoring (Medium Priority)
 
@@ -155,7 +140,7 @@ check-quota:
 | Priority | Change | Impact | Effort | Recommended Timeline |
 |----------|--------|--------|--------|---------------------|
 | **Done** | Keep AI workflows non-blocking | Prevents PR merge blockage | Low (1 line change) | Implemented |
-| **Medium** | Add retry to issue summarizer | Improves reliability | Medium (30 mins) | Next sprint |
+| **Done** | Keep issue summarizer retries bounded and fallback comments suppressed | Improves reliability without PR noise | Low | Implemented |
 | **Medium** | Add rate-limit budget monitoring | Proactive management | Medium (1-2 hours) | Next sprint |
 | **Low** | Add degraded mode fallback | Better job-summary UX when limited | High (2-3 hours) | Future consideration |
 | **Low** | Alternative AI providers | Risk diversification | High (4-6 hours) | Future consideration |
@@ -190,7 +175,7 @@ jobs:
 2. Trigger AI review workflow
 3. Verify that even if AI fails, PR can still merge
 4. Verify that AI comments still post when successful
-5. Verify that `insufficient_quota` logs a warning without repeated retries or a fallback PR comment
+5. Verify that rate-limit fallback diagnostics log a warning without posting a fallback PR comment
 
 ---
 
@@ -200,7 +185,7 @@ jobs:
 
 1. **GitHub Actions logs:** Search for "Rate limited", "429", or `insufficient_quota` in workflow runs
 2. **OpenAI dashboard:** Monitor API usage and quota consumption
-3. **GitHub Issues:** Track rate-limit failures as incidents
+3. **GitHub Issues:** Track rate-limit failures as maintainer-created incidents when logs show sustained failures
 
 **Alert thresholds:**
 - **Warning:** >10 rate-limit errors per day
@@ -218,9 +203,9 @@ jobs:
 
 ## Status
 
-**Current:** AI code review retries transient 429s, treats `insufficient_quota` as terminal, stays non-blocking, and avoids fallback PR comments.
+**Current:** AI code review retries transient 429s, treats `insufficient_quota` as terminal, stays non-blocking, and avoids fallback PR comments. The issue summarizer retries 429/5xx/network failures up to 3 total attempts, keeps fallback diagnostics log-only, and posts successful AI summaries.
 
-**Proposed:** Add retry classification parity to issue summarizer and consider optional quota monitoring.
+**Proposed:** Consider optional quota monitoring if logs show sustained OpenAI rate-limit pressure.
 
 **Owner:** Repository maintainers (requires workflow permission to modify).
 

@@ -2,13 +2,13 @@
 
 **Purpose**: Canonical reference for all GitHub Actions workflows. Tracks the full inventory and the consolidation roadmap.
 **Owner**: Transformation Portal Architect
-**Last Updated**: 2026-06-11
+**Last Updated**: 2026-06-22
 
 ---
 
 ## Status Snapshot
 
-- **Workflow files**: 31 (`.github/workflows/*.yml`), 7,843 lines total
+- **Workflow files**: 31 (`.github/workflows/*.yml`), 7,838 lines total
 - **Required PR check**: `build.yml` → `CI Gate` (single aggregated check)
 - **Consolidation target**: 31 → ~19 workflows via phased incremental PRs (see [Consolidation Roadmap](#consolidation-roadmap))
 - **Prior matrix doc** (2026-03-25) listed 12 workflows — this revision corrects the omission of 18 that exist on disk.
@@ -49,7 +49,7 @@ Every `.github/workflows/*.yml` file, current as of the timestamp above. The **R
 | 26 | `submit-pypi.yml` | Submit to PyPI | push (tag), manual | Release | 139 | **Keep** — release pipeline. |
 | 27 | `tag_retention_prune_preservation_tags.yml` | Tag Retention (Preservation Tags) | schedule, manual | ❌ No | 40 | **Keep** — periodic cleanup. |
 | 28 | `ai-code-review.yml` | AI Code Review | PR | ❌ No | 316 | **Investigate → Consolidate or retire** — frequent rate-limit failures on recent PRs (#1558 saw 4/4 calls error out). Either fold into `ai-advisory.yml` (proposed) or accept the noise. |
-| 29 | `summary.yml` | Issue Summarizer | issue_comment, PR, issues | ❌ No | 279 | **Investigate → Consolidate or retire** — same rate-limit story as ai-code-review. |
+| 29 | `summary.yml` | Issue Summarizer | issue_comment, PR, issues | ❌ No | 274 | **Investigate → Consolidate or retire** — same rate-limit story as ai-code-review. |
 | 30 | `smart-issue-management.yml` | Smart Issue Management | issues, pull_request_target | ❌ No | 347 | **Investigate → Consolidate or retire** — same. |
 | 31 | `issue_printer.yml` | Print Issue Info | issues | ❌ No | 24 | **Retire** — 24 lines that print title/body to job logs. No artifact, no enforcement. Pure noise. |
 
@@ -99,7 +99,7 @@ Aggregated reduction: **5 fewer workflows** (4 contract validators → 1 = net �
 
 These need maintainer judgment, not mechanical merging.
 
-7. **Three AI advisory workflows** (`ai-code-review.yml`, `summary.yml`, `smart-issue-management.yml`, total 942 lines). They share a hardening baseline (per `AI_WORKFLOWS_HARDENING_STATUS.md`) and currently fail with rate-limit errors on most PRs. Options:
+7. **Three AI advisory workflows** (`ai-code-review.yml`, `summary.yml`, `smart-issue-management.yml`, total 937 lines). They share a hardening baseline (per `AI_WORKFLOWS_HARDENING_STATUS.md`) and currently fail with rate-limit errors on most PRs. Options:
    - **Consolidate** into one `ai-advisory.yml` with three jobs sharing setup (saves ~200 LOC)
    - **Retire** if the value-to-noise ratio is unfavorable (recent PR #1558: 4 of 4 AI calls errored)
    - **Keep separate** if isolation is desirable for independent ownership
