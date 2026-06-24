@@ -105,8 +105,9 @@ The repository includes three AI-powered advisory workflows that provide intelli
 **Features:**
 - Triggered on `issues`, `pull_request`, and `issue_comment` events.
 - Uses OpenAI `gpt-4o-mini` model to generate neutral, concise summaries.
-- Posts the summary as a comment on the issue or pull request.
-- Graceful handling when API key is missing (posts diagnostic message once).
+- Retries HTTP 429, transient HTTP 5xx, and network errors up to 3 total attempts.
+- Posts successful AI-generated summaries as comments on the issue or pull request.
+- Graceful handling when API key is missing or AI calls fail; diagnostic fallbacks stay in logs.
 - Non-blocking: continues even if AI service fails.
 - Timeout-bounded: 4-minute step timeout, 10-minute job timeout.
 - Requires `OPENAI_API_KEY` in repository secrets.
@@ -130,7 +131,7 @@ All three workflows implement a hardened pattern with:
 - **Non-blocking behavior**: `continue-on-error: true`; expected AI/service failures emit warnings and typically exit 0, while hard infrastructure errors may still exit non-zero
 - **Timeout bounds**: 4-minute step timeout for AI calls, 10-minute job timeout
 - **Failure visibility**: `::warning::` emission in Python exception handlers and shell failure steps
-- **Retry logic (where implemented)**: up to 6 attempts with exponential backoff in `ai-code-review.yml` and `smart-issue-management.yml`; `summary.yml` currently uses a single-attempt call with graceful fallback
+- **Retry logic**: up to 6 attempts with exponential backoff in `ai-code-review.yml` and `smart-issue-management.yml`; up to 3 attempts with bounded backoff in `summary.yml`
 - **Concurrency control**: Cancel outdated runs to reduce CI costs
 
 ---
