@@ -14,7 +14,7 @@ click==8.4.2
 coremltools==9.0
 datasets==4.8.5
 dill==0.4.1
-fastapi==0.136.1
+fastapi==0.138.0
 filelock==3.29.0
 frozenlist==1.8.0
 fsspec==2026.2.0
