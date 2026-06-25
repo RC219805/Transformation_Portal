@@ -48,10 +48,20 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Disable broken Azure CLI apt source when present
+      - name: Disable broken Microsoft apt sources when present
         run: |
-          if ls /etc/apt/sources.list.d/azure-cli*.list >/dev/null 2>&1; then
-            sudo rm -f /etc/apt/sources.list.d/azure-cli*.list
+          if [ -d /etc/apt/sources.list.d ]; then
+            sudo rm -f \
+              /etc/apt/sources.list.d/azure-cli*.list \
+              /etc/apt/sources.list.d/azure-cli*.sources \
+              /etc/apt/sources.list.d/microsoft*.list \
+              /etc/apt/sources.list.d/microsoft*.sources
+            microsoft_sources="$(grep -rl 'packages.microsoft.com' /etc/apt/sources.list.d || true)"
+            if [ -n "$microsoft_sources" ]; then
+              printf '%s\n' "$microsoft_sources" | while IFS= read -r source_file; do
+                sudo rm -f "$source_file"
+              done
+            fi
           fi
 
       - name: Install exiftool
