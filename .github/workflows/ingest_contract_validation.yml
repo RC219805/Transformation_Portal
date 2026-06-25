@@ -20,7 +20,7 @@ jobs:
       - name: Checkout code (attempt 1)
         id: checkout_validate_1
         continue-on-error: true
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           fetch-depth: 1
           lfs: false
@@ -30,7 +30,7 @@ jobs:
         id: checkout_validate_2
         if: steps.checkout_validate_1.outcome == 'failure'
         continue-on-error: true
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           fetch-depth: 1
           lfs: false
@@ -48,10 +48,20 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Disable broken Azure CLI apt source when present
+      - name: Disable broken Microsoft apt sources when present
         run: |
-          if ls /etc/apt/sources.list.d/azure-cli*.list >/dev/null 2>&1; then
-            sudo rm -f /etc/apt/sources.list.d/azure-cli*.list
+          if [ -d /etc/apt/sources.list.d ]; then
+            sudo rm -f \
+              /etc/apt/sources.list.d/azure-cli*.list \
+              /etc/apt/sources.list.d/azure-cli*.sources \
+              /etc/apt/sources.list.d/microsoft*.list \
+              /etc/apt/sources.list.d/microsoft*.sources
+            microsoft_sources="$(grep -rl 'packages.microsoft.com' /etc/apt/sources.list.d || true)"
+            if [ -n "$microsoft_sources" ]; then
+              printf '%s\n' "$microsoft_sources" | while IFS= read -r source_file; do
+                sudo rm -f "$source_file"
+              done
+            fi
           fi
 
       - name: Install exiftool
@@ -89,7 +99,7 @@ jobs:
       - name: Checkout PR branch (attempt 1)
         id: checkout_schema_1
         continue-on-error: true
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           # Keep the PR base commit local so schema drift detection can diff
@@ -102,7 +112,7 @@ jobs:
         id: checkout_schema_2
         if: steps.checkout_schema_1.outcome == 'failure'
         continue-on-error: true
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
