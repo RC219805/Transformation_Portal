@@ -41,7 +41,7 @@ alembic>=1.13,<2                # schema migration tool for the orchestrator job
 # activates when TP_ORCHESTRATOR_QUEUE_BACKEND=redis and TP_REDIS_URL is set.
 # The client is always installed so the contract test suite and the
 # RedisQueueBroker module load without an optional-extra dance.
-redis>=5.0,<7                   # asyncio Redis client for RedisQueueBroker
+redis>=5.0,<9                   # asyncio Redis client for RedisQueueBroker
 
 # Artifact store backend (Phase 4.A). Filesystem backend remains default;
 # S3 activates when TP_ARTIFACT_STORE=s3 and TP_ARTIFACT_BUCKET is set.
