@@ -17,7 +17,7 @@ dill==0.4.1
 fastapi==0.138.0
 filelock==3.29.0
 frozenlist==1.8.0
-fsspec==2026.2.0
+fsspec==2026.6.0
 gradio==6.19.0
 gradio_client==2.5.0
 groovy==0.1.2
