@@ -85,7 +85,7 @@ docutils==0.23
     # via readme-renderer
 execnet==2.1.2
     # via pytest-xdist
-fastapi==0.136.1
+fastapi==0.138.0
     # via -r base.in
 filelock==3.29.4
     # via
@@ -192,12 +192,10 @@ numpy==2.4.6
     # via
     #   -r base.in
     #   imagecodecs
-    #   opencv-python
+    #   opencv-python-headless
     #   scikit-learn
     #   scipy
     #   tifffile
-opencv-python==4.13.0.92 ; platform_system != "Linux"
-    # via -r base.in
 opencv-python-headless==4.13.0.92 ; platform_system == "Linux"
     # via -r base.in
 packaging==26.2
@@ -213,7 +211,7 @@ pathspec==1.1.1
     # via
     #   black
     #   mypy
-pillow==12.2.0
+pillow==12.3.0
     # via -r base.in
 platformdirs==4.10.0
     # via
