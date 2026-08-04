@@ -25,21 +25,21 @@
   },
   "packageManager": "npm@11.12.1",
   "dependencies": {
-    "argon2": "^0.44.0",
+    "argon2": "^0.45.1",
     "better-sqlite3": "^12.11.1",
     "ioredis": "^5.11.1",
-    "next": "16.2.9",
-    "react": "^19.2.7",
-    "react-dom": "^19.2.7"
+    "next": "16.2.12",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8"
   },
   "overrides": {
     "js-yaml": "4.2.0",
-    "postcss": "8.5.15"
+    "postcss": "8.5.25"
   },
   "devDependencies": {
-    "@playwright/test": "1.61.0",
+    "@playwright/test": "1.62.1",
     "esbuild": "^0.28.1",
-    "postcss": "8.5.15",
+    "postcss": "8.5.25",
     "stylelint": "^17.13.0"
   }
 }
