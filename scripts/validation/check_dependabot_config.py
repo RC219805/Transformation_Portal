@@ -23,8 +23,6 @@ REQUIRED_UPDATES = {
     ("npm", "/web/secure-landing"),
 }
 REQUIRED_NPM_GROUPS = {
-    ("npm", "/"): "root-node-tooling",
-    ("npm", "/cloudflare/transformationportal-worker"): "cloudflare-worker-node",
     ("npm", "/web/secure-landing"): "frontdoor-node",
 }
 REQUIRED_SCHEDULES = {
@@ -35,7 +33,7 @@ REQUIRED_SCHEDULES = {
     ("npm", "/cloudflare/transformationportal-worker"): {
         "interval": "weekly",
         "day": "tuesday",
-        "time": "11:00",
+        "time": "10:30",
         "timezone": "Etc/UTC",
     },
 }
@@ -45,6 +43,15 @@ REQUIRED_OPEN_PR_LIMIT = 5
 REQUIRED_PIP_EXCLUDE_PATHS: set[str] = set()
 REQUIRED_NPM_GROUP_PATTERNS = {"*", "@*/*"}
 REQUIRED_NPM_GROUP_UPDATE_TYPES = {"minor", "patch"}
+ROOT_WORKER_NPM_PAIRS = {
+    ("npm", "/"),
+    ("npm", "/cloudflare/transformationportal-worker"),
+}
+FRONTDOOR_NPM_PAIR = ("npm", "/web/secure-landing")
+REQUIRED_PIP_IGNORES = {
+    "redis": {"version-update:semver-major"},
+    "transformers": {"version-update:semver-minor"},
+}
 
 
 def _load_config(text: str) -> dict[str, Any]:
@@ -88,45 +95,76 @@ def validate_dependabot_config(text: str) -> list[str]:
             continue
 
         directory = entry.get("directory")
-        if not isinstance(directory, str) or not directory:
-            errors.append(f"updates[{index}] directory must be a non-empty string")
+        directories = entry.get("directories")
+        if directory is not None and directories is not None:
+            errors.append(f"updates[{index}] must define only one of directory or directories")
             continue
+        if directory is not None:
+            if not isinstance(directory, str) or not directory:
+                errors.append(f"updates[{index}] directory must be a non-empty string")
+                continue
+            directory_values = [directory]
+        else:
+            if (
+                not isinstance(directories, list)
+                or not directories
+                or any(not isinstance(value, str) or not value for value in directories)
+            ):
+                errors.append(f"updates[{index}] directories must be a non-empty list of strings")
+                continue
+            directory_values = list(dict.fromkeys(directories))
+            if len(directory_values) != len(directories):
+                errors.append(f"updates[{index}] directories must not contain duplicates")
 
-        pair = (ecosystem, directory)
-        if pair in seen_pairs:
-            errors.append(f"dependabot config contains duplicate update target {pair!r}")
-            continue
-        seen_pairs.add(pair)
+        entry_pairs = {(ecosystem, value) for value in directory_values}
+        for pair in sorted(entry_pairs):
+            if pair in seen_pairs:
+                errors.append(f"dependabot config contains duplicate update target {pair!r}")
+                continue
+            seen_pairs.add(pair)
+            if pair not in REQUIRED_UPDATES:
+                errors.append(
+                    "dependabot config contains unsupported update target "
+                    f"{pair!r}; expected only {sorted(REQUIRED_UPDATES)!r}"
+                )
 
-        if pair not in REQUIRED_UPDATES:
+        target = next(iter(entry_pairs)) if len(entry_pairs) == 1 else tuple(sorted(entry_pairs))
+        if len(entry_pairs) > 1 and entry_pairs != ROOT_WORKER_NPM_PAIRS:
             errors.append(
-                "dependabot config contains unsupported update target " f"{pair!r}; expected only {sorted(REQUIRED_UPDATES)!r}"
+                "dependabot multi-directory target must be the governed root/Worker npm pair "
+                f"{sorted(ROOT_WORKER_NPM_PAIRS)!r}"
             )
 
-        if entry.get("target-branch") != REQUIRED_TARGET_BRANCH:
-            errors.append(f"dependabot update {pair!r} must target branch {REQUIRED_TARGET_BRANCH!r}")
+        if FRONTDOOR_NPM_PAIR in entry_pairs:
+            if "target-branch" in entry:
+                errors.append("dependabot frontdoor update must omit target-branch so security-update grouping applies")
+        elif entry.get("target-branch") != REQUIRED_TARGET_BRANCH:
+            errors.append(f"dependabot update {target!r} must target branch {REQUIRED_TARGET_BRANCH!r}")
 
         if entry.get("open-pull-requests-limit") != REQUIRED_OPEN_PR_LIMIT:
-            errors.append(f"dependabot update {pair!r} must set open-pull-requests-limit " f"to {REQUIRED_OPEN_PR_LIMIT}")
+            errors.append(f"dependabot update {target!r} must set open-pull-requests-limit to {REQUIRED_OPEN_PR_LIMIT}")
 
         labels = entry.get("labels")
         if not isinstance(labels, list):
-            errors.append(f"dependabot update {pair!r} must define labels as a list")
+            errors.append(f"dependabot update {target!r} must define labels as a list")
         else:
             normalized_labels = {value for value in labels if isinstance(value, str) and value}
             if normalized_labels != REQUIRED_LABELS:
-                errors.append(f"dependabot update {pair!r} must use labels {sorted(REQUIRED_LABELS)!r}")
+                errors.append(f"dependabot update {target!r} must use labels {sorted(REQUIRED_LABELS)!r}")
 
         schedule = entry.get("schedule")
-        required_schedule = REQUIRED_SCHEDULES.get(pair)
         if not isinstance(schedule, dict):
-            errors.append(f"dependabot update {pair!r} must define schedule as a mapping")
-        elif required_schedule is not None:
-            for key, expected_value in required_schedule.items():
-                if schedule.get(key) != expected_value:
-                    errors.append(f"dependabot update {pair!r} must set schedule {key!r} to {expected_value!r}")
+            errors.append(f"dependabot update {target!r} must define schedule as a mapping")
+        else:
+            for pair in sorted(entry_pairs):
+                required_schedule = REQUIRED_SCHEDULES.get(pair)
+                if required_schedule is None:
+                    continue
+                for key, expected_value in required_schedule.items():
+                    if schedule.get(key) != expected_value:
+                        errors.append(f"dependabot update {pair!r} must set schedule {key!r} to {expected_value!r}")
 
-        if pair == ("pip", "/"):
+        if ("pip", "/") in entry_pairs:
             exclude_paths = entry.get("exclude-paths")
             if REQUIRED_PIP_EXCLUDE_PATHS and not isinstance(exclude_paths, list):
                 errors.append("dependabot update ('pip', '/') must define exclude-paths as a list")
@@ -137,8 +175,85 @@ def validate_dependabot_config(text: str) -> list[str]:
                 for missing in sorted(missing_excludes):
                     errors.append(f"dependabot update ('pip', '/') must exclude unsupported manifest {missing!r}")
 
-        required_group = REQUIRED_NPM_GROUPS.get(pair)
-        if required_group is not None:
+            ignores = entry.get("ignore")
+            if not isinstance(ignores, list):
+                errors.append("dependabot update ('pip', '/') must define governed ignore rules")
+            else:
+                ignores_by_name = {
+                    value.get("dependency-name"): value
+                    for value in ignores
+                    if isinstance(value, dict) and isinstance(value.get("dependency-name"), str)
+                }
+                for dependency_name, expected_types in REQUIRED_PIP_IGNORES.items():
+                    ignore = ignores_by_name.get(dependency_name)
+                    if not isinstance(ignore, dict):
+                        errors.append(f"dependabot pip ignores must include {dependency_name!r}")
+                        continue
+                    update_types = ignore.get("update-types")
+                    normalized_types = (
+                        {value for value in update_types if isinstance(value, str) and value}
+                        if isinstance(update_types, list)
+                        else set()
+                    )
+                    if normalized_types != expected_types:
+                        errors.append(
+                            f"dependabot pip ignore {dependency_name!r} must use update-types " f"{sorted(expected_types)!r}"
+                        )
+
+        groups = entry.get("groups")
+        if ("github-actions", "/") in entry_pairs:
+            codeql_group = groups.get("codeql-actions") if isinstance(groups, dict) else None
+            if not isinstance(codeql_group, dict):
+                errors.append("dependabot github-actions update must define group 'codeql-actions'")
+            else:
+                if codeql_group.get("applies-to") != "version-updates":
+                    errors.append("dependabot group 'codeql-actions' must apply to version-updates")
+                if codeql_group.get("patterns") != ["github/codeql-action/*"]:
+                    errors.append("dependabot group 'codeql-actions' must atomically match github/codeql-action/*")
+
+        if entry_pairs == ROOT_WORKER_NPM_PAIRS:
+            wrangler_group = groups.get("wrangler-sync") if isinstance(groups, dict) else None
+            if not isinstance(wrangler_group, dict):
+                errors.append("dependabot root/Worker npm update must define group 'wrangler-sync'")
+            else:
+                if wrangler_group.get("applies-to") != "version-updates":
+                    errors.append("dependabot group 'wrangler-sync' must apply to version-updates")
+                if wrangler_group.get("patterns") != ["wrangler"]:
+                    errors.append("dependabot group 'wrangler-sync' must match only wrangler")
+                if wrangler_group.get("group-by") != "dependency-name":
+                    errors.append("dependabot group 'wrangler-sync' must group-by dependency-name")
+
+            worker_group = groups.get("worker-node-tooling") if isinstance(groups, dict) else None
+            if not isinstance(worker_group, dict):
+                errors.append("dependabot root/Worker npm update must define group 'worker-node-tooling'")
+            else:
+                if worker_group.get("applies-to") != "version-updates":
+                    errors.append("dependabot group 'worker-node-tooling' must apply to version-updates")
+                patterns = worker_group.get("patterns")
+                normalized_patterns = (
+                    {value for value in patterns if isinstance(value, str) and value} if isinstance(patterns, list) else set()
+                )
+                if not REQUIRED_NPM_GROUP_PATTERNS.issubset(normalized_patterns):
+                    errors.append("dependabot group 'worker-node-tooling' must match npm dependencies")
+                exclude_patterns = worker_group.get("exclude-patterns")
+                if not isinstance(exclude_patterns, list) or "wrangler" not in exclude_patterns:
+                    errors.append("dependabot group 'worker-node-tooling' must exclude wrangler")
+                update_types = worker_group.get("update-types")
+                normalized_update_types = (
+                    {value for value in update_types if isinstance(value, str) and value}
+                    if isinstance(update_types, list)
+                    else set()
+                )
+                if normalized_update_types != REQUIRED_NPM_GROUP_UPDATE_TYPES:
+                    errors.append(
+                        "dependabot group 'worker-node-tooling' must group only "
+                        f"{sorted(REQUIRED_NPM_GROUP_UPDATE_TYPES)!r} updates"
+                    )
+
+        for pair in sorted(entry_pairs):
+            required_group = REQUIRED_NPM_GROUPS.get(pair)
+            if required_group is None:
+                continue
             groups = entry.get("groups")
             if not isinstance(groups, dict):
                 errors.append(f"dependabot update {pair!r} must define npm version-update groups")
@@ -172,6 +287,22 @@ def validate_dependabot_config(text: str) -> list[str]:
                         f"dependabot npm group {required_group!r} must group only "
                         f"{sorted(REQUIRED_NPM_GROUP_UPDATE_TYPES)!r} updates"
                     )
+
+            if pair == ("npm", "/web/secure-landing"):
+                security_group = groups.get("frontdoor-security")
+                if not isinstance(security_group, dict):
+                    errors.append("dependabot frontdoor update must define group 'frontdoor-security'")
+                else:
+                    if security_group.get("applies-to") != "security-updates":
+                        errors.append("dependabot group 'frontdoor-security' must apply to security-updates")
+                    security_patterns = security_group.get("patterns")
+                    normalized_security_patterns = (
+                        {value for value in security_patterns if isinstance(value, str) and value}
+                        if isinstance(security_patterns, list)
+                        else set()
+                    )
+                    if not REQUIRED_NPM_GROUP_PATTERNS.issubset(normalized_security_patterns):
+                        errors.append("dependabot group 'frontdoor-security' must match npm dependencies")
 
     missing = REQUIRED_UPDATES - seen_pairs
     for pair in sorted(missing):

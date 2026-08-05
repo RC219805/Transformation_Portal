@@ -12,6 +12,13 @@ updates:
       day: "tuesday"
       time: "10:00"
       timezone: "Etc/UTC"
+    ignore:
+      - dependency-name: "redis"
+        update-types:
+          - "version-update:semver-major"
+      - dependency-name: "transformers"
+        update-types:
+          - "version-update:semver-minor"
   - package-ecosystem: "github-actions"
     directory: "/"
     target-branch: "main"
@@ -24,8 +31,15 @@ updates:
       day: "tuesday"
       time: "10:15"
       timezone: "Etc/UTC"
+    groups:
+      codeql-actions:
+        applies-to: "version-updates"
+        patterns:
+          - "github/codeql-action/*"
   - package-ecosystem: "npm"
-    directory: "/"
+    directories:
+      - "/"
+      - "/cloudflare/transformationportal-worker"
     target-branch: "main"
     open-pull-requests-limit: 5
     labels:
@@ -37,17 +51,23 @@ updates:
       time: "10:30"
       timezone: "Etc/UTC"
     groups:
-      root-node-tooling:
+      wrangler-sync:
+        applies-to: "version-updates"
+        patterns:
+          - "wrangler"
+        group-by: "dependency-name"
+      worker-node-tooling:
         applies-to: "version-updates"
         patterns:
           - "*"
           - "@*/*"
+        exclude-patterns:
+          - "wrangler"
         update-types:
           - "minor"
           - "patch"
   - package-ecosystem: "npm"
     directory: "/web/secure-landing"
-    target-branch: "main"
     open-pull-requests-limit: 5
     labels:
       - "dependencies"
@@ -58,28 +78,12 @@ updates:
       time: "10:45"
       timezone: "Etc/UTC"
     groups:
-      frontdoor-node:
-        applies-to: "version-updates"
+      frontdoor-security:
+        applies-to: "security-updates"
         patterns:
           - "*"
           - "@*/*"
-        update-types:
-          - "minor"
-          - "patch"
-  - package-ecosystem: "npm"
-    directory: "/cloudflare/transformationportal-worker"
-    target-branch: "main"
-    open-pull-requests-limit: 5
-    labels:
-      - "dependencies"
-      - "automated"
-    schedule:
-      interval: "weekly"
-      day: "tuesday"
-      time: "11:00"
-      timezone: "Etc/UTC"
-    groups:
-      cloudflare-worker-node:
+      frontdoor-node:
         applies-to: "version-updates"
         patterns:
           - "*"

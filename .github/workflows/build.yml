@@ -22,7 +22,7 @@ defaults:
 env:
   # Pip configuration
   # Note: PIP_NO_CACHE_DIR removed and --no-cache-dir flags removed from install commands (Issue #817)
-  # actions/cache@v5 manages ~/.cache/pip for 3-5 min savings per job
+  # actions/cache@v6 manages ~/.cache/pip for 3-5 min savings per job
   PIP_DISABLE_PIP_VERSION_CHECK: "1"
 
   # Cleaner CI behavior/logging
@@ -328,7 +328,7 @@ jobs:
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
 
       - name: Setup Python
-        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
         with:
           python-version: "3.11"
 
@@ -405,7 +405,7 @@ jobs:
           npm run build
 
       - name: Cache Playwright browsers
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae  # v5
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
         with:
           path: ~/.cache/ms-playwright
           # Cache key is pinned to the front-door package-lock so it
@@ -472,12 +472,12 @@ jobs:
           # Keep full history so diff-based pylint selection can resolve the PR merge-base reliably.
           fetch-depth: 0
 
-      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
         with:
           python-version: "3.12" # latest for linting
 
       - name: Cache pip packages
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae  # v5
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
         with:
           path: ~/.cache/pip
           key: ${{ runner.os }}-pip-lint-${{ hashFiles('requirements-lint.txt') }}
@@ -527,12 +527,12 @@ jobs:
         with:
           fetch-depth: 1
 
-      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
         with:
           python-version: "3.12"
 
       - name: Cache pip packages
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae  # v5
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
         with:
           path: ~/.cache/pip
           key: ${{ runner.os }}-pip-typecheck-${{ hashFiles('requirements*.txt') }}
@@ -652,12 +652,12 @@ jobs:
           echo "::error::GitHub checkout failed twice (transient GitHub infra / HTTP 500 / packfile). Re-run workflow."
           exit 1
 
-      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
         with:
           python-version: ${{ matrix.python-version }}
 
       - name: Cache pip packages
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae  # v5
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
         with:
           path: ~/.cache/pip
           key: ${{ runner.os }}-pip-${{ matrix.test-type }}-${{ hashFiles('requirements-ci.txt') }}
@@ -684,7 +684,7 @@ jobs:
           set -euo pipefail
           bash scripts/ci/install_ml_test_dependencies.sh --skip-ci-requirements --include-rawpy
 
-          # Note: pip cache purge removed - cache now managed by actions/cache@v5
+          # Note: pip cache purge removed - cache now managed by actions/cache@v6
           rm -rf ~/.cache/huggingface || true
           rm -rf /tmp/pip-* || true
           echo "Disk space after ML install:"
@@ -884,7 +884,7 @@ jobs:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
 
       - name: Set up Python
-        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
         with:
           python-version: "3.12"
 
