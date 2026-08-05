@@ -4276,16 +4276,15 @@ def test_delete_job_artifacts_requires_api_key_before_store_access(
 
 
 def test_delete_job_artifacts_routes_use_job_status_response_model() -> None:
-    route_models = {}
-    for route in orchestrator_app.app.routes:
-        path = getattr(route, "path", None)
-        methods = getattr(route, "methods", set()) or set()
-        if path in {"/v1/jobs/{job_id}/artifacts", "/v2/jobs/{job_id}/artifacts"} and "DELETE" in methods:
-            route_models[path] = getattr(route, "response_model", None)
+    openapi_paths = orchestrator_app.app.openapi()["paths"]
+    route_models = {
+        path: openapi_paths[path]["delete"]["responses"]["200"]["content"]["application/json"]["schema"]
+        for path in {"/v1/jobs/{job_id}/artifacts", "/v2/jobs/{job_id}/artifacts"}
+    }
 
     assert route_models == {
-        "/v1/jobs/{job_id}/artifacts": orchestrator_app.JobStatusEnvelope,
-        "/v2/jobs/{job_id}/artifacts": orchestrator_app.JobStatusEnvelope,
+        "/v1/jobs/{job_id}/artifacts": {"$ref": "#/components/schemas/ApiEnvelope_JobStatusData_"},
+        "/v2/jobs/{job_id}/artifacts": {"$ref": "#/components/schemas/ApiEnvelope_JobStatusData_"},
     }
 
 

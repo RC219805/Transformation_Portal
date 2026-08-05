@@ -123,7 +123,7 @@ The repository's governed web stack currently resolves to:
 
 | Dependency | Source of Truth | Current Version |
 |-----------|-----------------|-----------------|
-| FastAPI | `requirements/base.in` | `0.136.1` |
+| FastAPI | `requirements/base.in` | `0.138.0` |
 | Starlette | `requirements/base.in` + `pyproject.toml` bound | `1.3.1` |
 | Uvicorn | `requirements/base.in` + `pyproject.toml` bound | `0.48.0` |
 

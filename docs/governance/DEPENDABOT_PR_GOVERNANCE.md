@@ -100,7 +100,7 @@ compatibility changes.
 The following dependencies are **exact-pinned** in `requirements/base.in` for API/UI parity and security baseline:
 
 ```
-fastapi==0.136.1
+fastapi==0.138.0
 starlette==1.3.1
 uvicorn==0.48.0
 aiofiles==25.1.0

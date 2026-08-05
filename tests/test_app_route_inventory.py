@@ -5,8 +5,8 @@ of FastAPI routes. The two large contract suites
 (``test_app_orchestrator_runtime.py``, ``test_app_orchestrator_contract_http.py``)
 exercise most behaviour, but new routes can land without anyone noticing
 that no contract test was ever written for them. This file is the
-*inventory* gate — it walks ``app.routes`` and asserts every method+path
-pair appears in an explicit registry tagged with a coarse family.
+*inventory* gate — it reads the generated OpenAPI paths and asserts every
+method+path pair appears in an explicit registry tagged with a coarse family.
 
 What this file enforces (the cheap, statically-verifiable invariants):
 
@@ -33,6 +33,7 @@ What this file deliberately does NOT enforce:
 from __future__ import annotations
 
 import importlib
+import re
 from typing import Iterable
 
 import pytest
@@ -100,19 +101,19 @@ ROUTE_REGISTRY: dict[tuple[str, str], str] = {
 }
 
 
+def _normalize_path(path: str) -> str:
+    """Normalize Starlette path converters to their public OpenAPI form."""
+    return re.sub(r"\{([^}:]+):[^}]+\}", r"{\1}", path)
+
+
 def _iter_app_routes() -> Iterable[tuple[str, str]]:
-    """Yield ``(method, path)`` tuples for every concrete HTTP route on ``app``."""
+    """Yield ``(method, path)`` tuples from the app's public OpenAPI contract."""
     orchestrator_app = importlib.import_module("app").app
-    for route in orchestrator_app.routes:
-        # Starlette also tracks Mount objects, lifespan handlers, etc;
-        # we only care about HTTP-level concrete routes that have ``methods``.
-        methods = getattr(route, "methods", None)
-        path = getattr(route, "path", None)
-        if not methods or not path:
-            continue
-        for method in methods:
-            if method in _TRACKED_METHODS:
-                yield (method, path)
+    for path, path_item in orchestrator_app.openapi()["paths"].items():
+        for method in path_item:
+            normalized_method = method.upper()
+            if normalized_method in _TRACKED_METHODS:
+                yield (normalized_method, _normalize_path(path))
 
 
 @pytest.fixture(scope="module")
@@ -123,7 +124,7 @@ def discovered_routes() -> set[tuple[str, str]]:
 class TestRouteInventory:
     def test_every_live_route_is_registered(self, discovered_routes):
         # New route landed in app.py? Add it to ROUTE_REGISTRY.
-        registered = set(ROUTE_REGISTRY)
+        registered = {(method, _normalize_path(path)) for method, path in ROUTE_REGISTRY}
         unexpected = sorted(discovered_routes - registered)
         assert not unexpected, (
             "The following live routes are NOT in ROUTE_REGISTRY:\n  "
@@ -136,7 +137,7 @@ class TestRouteInventory:
 
     def test_every_registered_route_is_live(self, discovered_routes):
         # Route was removed/renamed? Remove the registry entry too.
-        registered = set(ROUTE_REGISTRY)
+        registered = {(method, _normalize_path(path)) for method, path in ROUTE_REGISTRY}
         stale = sorted(registered - discovered_routes)
         assert not stale, (
             "The following ROUTE_REGISTRY entries no longer match a live "

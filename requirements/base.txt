@@ -8,20 +8,20 @@ aiofiles==25.1.0
     # via
     #   -c all.txt
     #   -r base.in
-alembic==1.18.4
+alembic==1.18.5
     # via
     #   -c all.txt
     #   -r base.in
-annotated-doc==0.0.4
+annotated-doc==0.0.5
     # via
     #   -c all.txt
     #   fastapi
     #   typer
-annotated-types==0.7.0
+annotated-types==0.8.0
     # via
     #   -c all.txt
     #   pydantic
-anyio==4.14.0
+anyio==4.14.2
     # via
     #   -c all.txt
     #   starlette
@@ -34,24 +34,24 @@ attrs==26.1.0
     #   -c all.txt
     #   jsonschema
     #   referencing
-boto3==1.43.34
+boto3==1.43.62
     # via
     #   -c all.txt
     #   -r base.in
-botocore==1.43.34
+botocore==1.43.62
     # via
     #   -c all.txt
     #   boto3
     #   s3transfer
-click==8.4.1
+click==8.4.2
     # via
     #   -c all.txt
     #   uvicorn
-fastapi==0.136.1
+fastapi==0.138.0
     # via
     #   -c all.txt
     #   -r base.in
-greenlet==3.5.2
+greenlet==3.5.4
     # via
     #   -c all.txt
     #   sqlalchemy
@@ -100,7 +100,7 @@ mdurl==0.1.2
     # via
     #   -c all.txt
     #   markdown-it-py
-narwhals==2.22.1
+narwhals==2.24.0
     # via
     #   -c all.txt
     #   scikit-learn
@@ -109,19 +109,19 @@ numpy==2.4.6
     #   -c all.txt
     #   -r base.in
     #   imagecodecs
-    #   opencv-python
+    #   opencv-python-headless
     #   scikit-learn
     #   scipy
     #   tifffile
-opencv-python==4.13.0.92 ; platform_system != "Linux"
+opencv-python==4.14.0.94 ; platform_system != "Linux"
     # via
     #   -c all.txt
     #   -r base.in
-opencv-python-headless==4.13.0.92 ; platform_system == "Linux"
+opencv-python-headless==4.14.0.94 ; platform_system == "Linux"
     # via
     #   -c all.txt
     #   -r base.in
-pillow==12.2.0
+pillow==12.3.0
     # via
     #   -c all.txt
     #   -r base.in
@@ -155,12 +155,12 @@ rich==15.0.0
     # via
     #   -c all.txt
     #   typer
-rpds-py==2026.5.1
+rpds-py==2026.6.3
     # via
     #   -c all.txt
     #   jsonschema
     #   referencing
-s3transfer==0.19.0
+s3transfer==0.19.2
     # via
     #   -c all.txt
     #   boto3
@@ -200,15 +200,15 @@ tifffile==2026.3.3
     # via
     #   -c all.txt
     #   -r base.in
-tqdm==4.68.3
+tqdm==4.70.0
     # via
     #   -c all.txt
     #   -r base.in
-typer==0.26.7
+typer==0.27.0
     # via
     #   -c all.txt
     #   -r base.in
-typing-extensions==4.15.0
+typing-extensions==4.16.0
     # via
     #   -c all.txt
     #   alembic
