@@ -23,7 +23,7 @@ gradio_client==2.5.0
 groovy==0.1.2
 h11==0.16.0
 hf-gradio==0.4.1
-hf-xet==1.5.0
+hf-xet==1.5.2
 httpcore==1.0.9
 httpx==0.28.1
 huggingface_hub==1.13.0
