@@ -3,7 +3,7 @@
 **Purpose**: Define triage policy and merge criteria for Dependabot-generated pull requests
 **Owner**: Transformation Portal Architect
 **Created**: 2026-03-26
-**Last Updated**: 2026-05-26
+**Last Updated**: 2026-08-04
 
 ---
 
@@ -13,12 +13,27 @@ This document establishes governance for reviewing and merging Dependabot PRs in
 
 1. **GitHub Actions updates** (`package-ecosystem: "github-actions"`)
 2. **Python dependency updates** (`package-ecosystem: "pip"`)
-3. **Node dependency updates** (`package-ecosystem: "npm"`) for `/`, `/web/secure-landing`, and `/cloudflare/transformationportal-worker`
+3. **Node dependency updates** (`package-ecosystem: "npm"`) for the paired root/Worker manifests and `/web/secure-landing`
 
 Each category has different risk profiles and merge criteria.
 All configured Dependabot entries carry the `dependencies` and `automated`
 labels and use staggered Tuesday UTC schedules so update PRs remain
 classifiable without arriving in one burst.
+
+Current grouping and compatibility controls keep coupled changes atomic:
+
+- `github/codeql-action/init` and `github/codeql-action/analyze` are grouped as
+  one action-family update and must retain the same immutable release SHA.
+- Root and Cloudflare Worker `wrangler` updates are grouped across both npm
+  directories with the Worker's `@cloudflare/workers-types` peer. The coupled
+  group is validated together before merge.
+- Frontdoor security updates are grouped separately from routine version
+  updates. Its Dependabot entry intentionally omits `target-branch` so GitHub
+  applies security grouping while targeting the repository default branch,
+  `main`.
+- Redis major updates and core Transformers minor updates are ignored because
+  the governed contracts remain Redis `<7` and Transformers `>=5.0,<5.1`.
+  Compatible patch updates remain eligible.
 
 ---
 
@@ -66,7 +81,10 @@ Dependabot tracks three checked-in npm lockfile roots:
 - `/web/secure-landing` for the managed Next frontdoor.
 - `/cloudflare/transformationportal-worker` for the frontdoor-only Cloudflare Worker package.
 
-Minor and patch version updates are grouped per directory to reduce PR noise. Major updates remain separate PRs and must be reviewed as compatibility changes.
+Root and Worker updates share one multi-directory entry so Wrangler stays in
+parity. Other minor and patch version updates are grouped by runtime surface to
+reduce PR noise. Major updates remain separate PRs and must be reviewed as
+compatibility changes.
 
 | Risk Level | Criteria | Examples | Merge Policy |
 |------------|----------|----------|--------------|
@@ -231,6 +249,7 @@ Before merging any Dependabot PR:
 | 2026-05-26 | Recorded the curated Starlette 1.0.1 patch for PYSEC-2026-161 and synced the current exact-pinned web stack baseline | Architect |
 | 2026-05-26 | Recorded the curated Python/runtime refresh for Uvicorn 0.48.0, SQLAlchemy 2.0.50, diff-cover 10.2.1, and FastVLM idna/fsspec pins | Architect |
 | 2026-06-10 | Added PyTorch alert wave triage for the `torch==2.12.0` supported baseline rotation and no-patch `torch.jit.script` dismissals | Architect |
+| 2026-08-04 | Grouped CodeQL, root/Worker Wrangler, and frontdoor security updates; guarded Redis and Transformers compatibility bounds | Architect |
 
 ---
 

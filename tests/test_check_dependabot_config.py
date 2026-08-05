@@ -14,97 +14,7 @@ SPEC.loader.exec_module(dependabot_contract)
 
 
 def valid_dependabot_text() -> str:
-    return """
-version: 2
-updates:
-  - package-ecosystem: "pip"
-    directory: "/"
-    target-branch: "main"
-    open-pull-requests-limit: 5
-    labels:
-      - "dependencies"
-      - "automated"
-    schedule:
-      interval: "weekly"
-      day: "tuesday"
-      time: "10:00"
-      timezone: "Etc/UTC"
-  - package-ecosystem: "github-actions"
-    directory: "/"
-    target-branch: "main"
-    open-pull-requests-limit: 5
-    labels:
-      - "dependencies"
-      - "automated"
-    schedule:
-      interval: "weekly"
-      day: "tuesday"
-      time: "10:15"
-      timezone: "Etc/UTC"
-  - package-ecosystem: "npm"
-    directory: "/"
-    target-branch: "main"
-    open-pull-requests-limit: 5
-    labels:
-      - "dependencies"
-      - "automated"
-    schedule:
-      interval: "weekly"
-      day: "tuesday"
-      time: "10:30"
-      timezone: "Etc/UTC"
-    groups:
-      root-node-tooling:
-        applies-to: "version-updates"
-        patterns:
-          - "*"
-          - "@*/*"
-        update-types:
-          - "minor"
-          - "patch"
-  - package-ecosystem: "npm"
-    directory: "/web/secure-landing"
-    target-branch: "main"
-    open-pull-requests-limit: 5
-    labels:
-      - "dependencies"
-      - "automated"
-    schedule:
-      interval: "weekly"
-      day: "tuesday"
-      time: "10:45"
-      timezone: "Etc/UTC"
-    groups:
-      frontdoor-node:
-        applies-to: "version-updates"
-        patterns:
-          - "*"
-          - "@*/*"
-        update-types:
-          - "minor"
-          - "patch"
-  - package-ecosystem: "npm"
-    directory: "/cloudflare/transformationportal-worker"
-    target-branch: "main"
-    open-pull-requests-limit: 5
-    labels:
-      - "dependencies"
-      - "automated"
-    schedule:
-      interval: "weekly"
-      day: "tuesday"
-      time: "11:00"
-      timezone: "Etc/UTC"
-    groups:
-      cloudflare-worker-node:
-        applies-to: "version-updates"
-        patterns:
-          - "*"
-          - "@*/*"
-        update-types:
-          - "minor"
-          - "patch"
-"""
+    return (PROJECT_ROOT / ".github" / "dependabot.yml").read_text(encoding="utf-8")
 
 
 def test_valid_dependabot_config_passes() -> None:
@@ -208,7 +118,17 @@ updates:
       interval: "weekly"
 """
     errors = dependabot_contract.validate_dependabot_config(broken)
-    assert "updates[0] directory must be a non-empty string" in errors
+    assert "updates[0] directories must be a non-empty list of strings" in errors
+
+
+def test_frontdoor_target_branch_override_is_rejected() -> None:
+    broken = valid_dependabot_text().replace(
+        '    directory: "/web/secure-landing"\n',
+        '    directory: "/web/secure-landing"\n    target-branch: "main"\n',
+        1,
+    )
+    errors = dependabot_contract.validate_dependabot_config(broken)
+    assert "dependabot frontdoor update must omit target-branch so security-update grouping applies" in errors
 
 
 def test_duplicate_update_target_is_reported() -> None:
@@ -240,20 +160,12 @@ updates:
 
 def test_missing_npm_group_is_reported() -> None:
     broken = valid_dependabot_text().replace(
-        """    groups:
-      frontdoor-node:
-        applies-to: "version-updates"
-        patterns:
-          - "*"
-          - "@*/*"
-        update-types:
-          - "minor"
-          - "patch"
-""",
-        "",
+        "      frontdoor-node:\n",
+        "      missing-frontdoor-node:\n",
+        1,
     )
     errors = dependabot_contract.validate_dependabot_config(broken)
-    assert "dependabot update ('npm', '/web/secure-landing') must define npm version-update groups" in errors
+    assert "dependabot update ('npm', '/web/secure-landing') must define npm group 'frontdoor-node'" in errors
 
 
 def test_npm_group_must_keep_major_updates_separate() -> None:
@@ -270,4 +182,60 @@ def test_npm_group_must_keep_major_updates_separate() -> None:
         1,
     )
     errors = dependabot_contract.validate_dependabot_config(broken)
-    assert "dependabot npm group 'root-node-tooling' must group only ['minor', 'patch'] updates" in errors
+    assert "dependabot group 'worker-node-tooling' must group only ['minor', 'patch'] updates" in errors
+
+
+def test_wrangler_group_must_include_worker_types() -> None:
+    broken = valid_dependabot_text().replace(
+        '          - "@cloudflare/workers-types"\n',
+        "",
+        1,
+    )
+    errors = dependabot_contract.validate_dependabot_config(broken)
+    assert ("dependabot group 'wrangler-sync' must atomically match " "['@cloudflare/workers-types', 'wrangler']") in errors
+
+
+def test_wrangler_group_must_not_split_updates_by_dependency_name() -> None:
+    broken = valid_dependabot_text().replace(
+        '          - "@cloudflare/workers-types"\n',
+        '          - "@cloudflare/workers-types"\n        group-by: "dependency-name"\n',
+        1,
+    )
+    errors = dependabot_contract.validate_dependabot_config(broken)
+    assert "dependabot group 'wrangler-sync' must omit group-by so Wrangler and Worker types stay coupled" in errors
+
+
+def test_codeql_actions_must_be_grouped() -> None:
+    broken = valid_dependabot_text().replace("      codeql-actions:\n", "      split-codeql-actions:\n", 1)
+    errors = dependabot_contract.validate_dependabot_config(broken)
+    assert "dependabot github-actions update must define group 'codeql-actions'" in errors
+
+
+def test_redis_major_updates_remain_ignored() -> None:
+    broken = valid_dependabot_text().replace(
+        '          - "version-update:semver-major"',
+        '          - "version-update:semver-minor"',
+        1,
+    )
+    errors = dependabot_contract.validate_dependabot_config(broken)
+    assert ("dependabot pip ignore 'redis' must use update-types " "['version-update:semver-major']") in errors
+
+
+def test_transformers_minor_updates_remain_ignored() -> None:
+    broken = valid_dependabot_text().replace(
+        '          - "version-update:semver-minor"',
+        '          - "version-update:semver-major"',
+        1,
+    )
+    errors = dependabot_contract.validate_dependabot_config(broken)
+    assert ("dependabot pip ignore 'transformers' must use update-types " "['version-update:semver-minor']") in errors
+
+
+def test_frontdoor_security_updates_must_be_grouped() -> None:
+    broken = valid_dependabot_text().replace(
+        "      frontdoor-security:\n",
+        "      split-frontdoor-security:\n",
+        1,
+    )
+    errors = dependabot_contract.validate_dependabot_config(broken)
+    assert "dependabot frontdoor update must define group 'frontdoor-security'" in errors
