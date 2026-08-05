@@ -6,61 +6,39 @@
 #
 attrs==26.1.0
     # via
-    #   -c all.txt
     #   jsonschema
     #   referencing
 bagit==1.9.0
     # via -r tools-archive.in
 cffi==2.0.0
-    # via
-    #   -c all.txt
-    #   cryptography
-cryptography==48.0.1
-    # via
-    #   -c all.txt
-    #   -r tools-archive.in
+    # via cryptography
+cryptography==50.0.0
+    # via -r tools-archive.in
 jsonschema==4.26.0
-    # via
-    #   -c all.txt
-    #   -r tools-archive.in
+    # via -r tools-archive.in
 jsonschema-specifications==2025.9.1
-    # via
-    #   -c all.txt
-    #   jsonschema
+    # via jsonschema
 numpy==2.4.6
     # via
-    #   -c all.txt
     #   -r tools-archive.in
     #   pandas
 pandas==3.0.3
     # via -r tools-archive.in
 pycparser==3.0
-    # via
-    #   -c all.txt
-    #   cffi
+    # via cffi
 python-dateutil==2.9.0.post0
-    # via
-    #   -c all.txt
-    #   pandas
+    # via pandas
 pyyaml==6.0.3
-    # via
-    #   -c all.txt
-    #   -r tools-archive.in
+    # via -r tools-archive.in
 referencing==0.37.0
     # via
-    #   -c all.txt
     #   jsonschema
     #   jsonschema-specifications
 rpds-py==2026.5.1
     # via
-    #   -c all.txt
     #   jsonschema
     #   referencing
 six==1.17.0
-    # via
-    #   -c all.txt
-    #   python-dateutil
+    # via python-dateutil
 typing-extensions==4.15.0
-    # via
-    #   -c all.txt
-    #   referencing
+    # via referencing
