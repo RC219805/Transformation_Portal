@@ -34,12 +34,12 @@
   },
   "overrides": {
     "js-yaml": "4.2.0",
-    "postcss": "8.5.15"
+    "postcss": "8.5.23"
   },
   "devDependencies": {
     "@playwright/test": "1.61.0",
     "esbuild": "^0.28.1",
-    "postcss": "8.5.15",
+    "postcss": "8.5.23",
     "stylelint": "^17.13.0"
   }
 }
