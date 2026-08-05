@@ -594,7 +594,7 @@ class TestRootGovernanceMetadata:
         assert "cryptography==48.0.1" in (_repo_root / "requirements/ci.txt").read_text()
         assert "cryptography==48.0.1" in (_repo_root / "requirements/dev.txt").read_text()
         assert "cryptography==48.0.1" in (_repo_root / "requirements/all.txt").read_text()
-        assert "pillow==12.2.0" in (_repo_root / "requirements/base.txt").read_text()
+        assert "pillow==12.3.0" in (_repo_root / "requirements/base.txt").read_text()
 
         assert "**cryptography==48.0.1**" in security_policy
         assert "**cryptography==46.0.5**" not in security_policy
@@ -606,7 +606,7 @@ class TestRootGovernanceMetadata:
         assert "`cryptography`          | >=46.0.5" not in contributing
         assert "`starlette`             | >=1.3.1" in contributing
         assert "Starlette==1.3.1" in security_policy
-        assert "current governed lock baseline is pillow==12.2.0" in requirements_lint
+        assert "current governed lock baseline is pillow==12.3.0" in requirements_lint
         assert "allows pillow==12.1.1 in lockfiles" not in requirements_lint
 
     def test_pyproject_security_extras_track_current_cryptography_floor(self):

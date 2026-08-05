@@ -4,7 +4,7 @@
 
 # Core array and image processing
 numpy>=1.24,<2.5.0         # upper bound for OpenCV compatibility; see ADR-032
-Pillow>=10.3.0,<13         # Security: CVE-2024-28219 fixed in 10.3.0; current governed lock baseline is pillow==12.2.0
+Pillow>=10.3.0,<13         # Security: CVE-2024-28219 fixed in 10.3.0; current governed lock baseline is pillow==12.3.0
 scipy>=1.15,<2
 scikit-learn>=1.8.0,<2       # classical ML (used in core features)
 opencv-python-headless>=4.8.0,<5 ; platform_system == "Linux"      # required for depth_writer (core pipeline)
