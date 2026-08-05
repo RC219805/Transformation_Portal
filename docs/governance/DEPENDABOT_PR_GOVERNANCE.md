@@ -25,8 +25,8 @@ Current grouping and compatibility controls keep coupled changes atomic:
 - `github/codeql-action/init` and `github/codeql-action/analyze` are grouped as
   one action-family update and must retain the same immutable release SHA.
 - Root and Cloudflare Worker `wrangler` updates are grouped across both npm
-  directories by dependency name. Wrangler and its Worker types peer are
-  validated together before merge.
+  directories with the Worker's `@cloudflare/workers-types` peer. The coupled
+  group is validated together before merge.
 - Frontdoor security updates are grouped separately from routine version
   updates. Its Dependabot entry intentionally omits `target-branch` so GitHub
   applies security grouping while targeting the repository default branch,

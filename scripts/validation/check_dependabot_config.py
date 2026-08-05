@@ -43,6 +43,7 @@ REQUIRED_OPEN_PR_LIMIT = 5
 REQUIRED_PIP_EXCLUDE_PATHS: set[str] = set()
 REQUIRED_NPM_GROUP_PATTERNS = {"*", "@*/*"}
 REQUIRED_NPM_GROUP_UPDATE_TYPES = {"minor", "patch"}
+REQUIRED_WRANGLER_GROUP_PATTERNS = {"wrangler", "@cloudflare/workers-types"}
 ROOT_WORKER_NPM_PAIRS = {
     ("npm", "/"),
     ("npm", "/cloudflare/transformationportal-worker"),
@@ -218,10 +219,19 @@ def validate_dependabot_config(text: str) -> list[str]:
             else:
                 if wrangler_group.get("applies-to") != "version-updates":
                     errors.append("dependabot group 'wrangler-sync' must apply to version-updates")
-                if wrangler_group.get("patterns") != ["wrangler"]:
-                    errors.append("dependabot group 'wrangler-sync' must match only wrangler")
-                if wrangler_group.get("group-by") != "dependency-name":
-                    errors.append("dependabot group 'wrangler-sync' must group-by dependency-name")
+                patterns = wrangler_group.get("patterns")
+                normalized_patterns = (
+                    {value for value in patterns if isinstance(value, str) and value} if isinstance(patterns, list) else set()
+                )
+                if normalized_patterns != REQUIRED_WRANGLER_GROUP_PATTERNS:
+                    errors.append(
+                        "dependabot group 'wrangler-sync' must atomically match "
+                        f"{sorted(REQUIRED_WRANGLER_GROUP_PATTERNS)!r}"
+                    )
+                if "group-by" in wrangler_group:
+                    errors.append(
+                        "dependabot group 'wrangler-sync' must omit group-by so Wrangler and Worker types stay coupled"
+                    )
 
             worker_group = groups.get("worker-node-tooling") if isinstance(groups, dict) else None
             if not isinstance(worker_group, dict):
@@ -236,8 +246,13 @@ def validate_dependabot_config(text: str) -> list[str]:
                 if not REQUIRED_NPM_GROUP_PATTERNS.issubset(normalized_patterns):
                     errors.append("dependabot group 'worker-node-tooling' must match npm dependencies")
                 exclude_patterns = worker_group.get("exclude-patterns")
-                if not isinstance(exclude_patterns, list) or "wrangler" not in exclude_patterns:
-                    errors.append("dependabot group 'worker-node-tooling' must exclude wrangler")
+                normalized_excludes = (
+                    {value for value in exclude_patterns if isinstance(value, str) and value}
+                    if isinstance(exclude_patterns, list)
+                    else set()
+                )
+                if not REQUIRED_WRANGLER_GROUP_PATTERNS.issubset(normalized_excludes):
+                    errors.append("dependabot group 'worker-node-tooling' must exclude Wrangler and Worker types")
                 update_types = worker_group.get("update-types")
                 normalized_update_types = (
                     {value for value in update_types if isinstance(value, str) and value}

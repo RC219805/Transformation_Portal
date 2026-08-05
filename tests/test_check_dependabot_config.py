@@ -185,14 +185,24 @@ def test_npm_group_must_keep_major_updates_separate() -> None:
     assert "dependabot group 'worker-node-tooling' must group only ['minor', 'patch'] updates" in errors
 
 
-def test_wrangler_group_must_group_across_directories_by_dependency_name() -> None:
+def test_wrangler_group_must_include_worker_types() -> None:
     broken = valid_dependabot_text().replace(
-        '        group-by: "dependency-name"',
-        '        group-by: "directory"',
+        '          - "@cloudflare/workers-types"\n',
+        "",
         1,
     )
     errors = dependabot_contract.validate_dependabot_config(broken)
-    assert "dependabot group 'wrangler-sync' must group-by dependency-name" in errors
+    assert ("dependabot group 'wrangler-sync' must atomically match " "['@cloudflare/workers-types', 'wrangler']") in errors
+
+
+def test_wrangler_group_must_not_split_updates_by_dependency_name() -> None:
+    broken = valid_dependabot_text().replace(
+        '          - "@cloudflare/workers-types"\n',
+        '          - "@cloudflare/workers-types"\n        group-by: "dependency-name"\n',
+        1,
+    )
+    errors = dependabot_contract.validate_dependabot_config(broken)
+    assert "dependabot group 'wrangler-sync' must omit group-by so Wrangler and Worker types stay coupled" in errors
 
 
 def test_codeql_actions_must_be_grouped() -> None:

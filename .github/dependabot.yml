@@ -55,7 +55,7 @@ updates:
         applies-to: "version-updates"
         patterns:
           - "wrangler"
-        group-by: "dependency-name"
+          - "@cloudflare/workers-types"
       worker-node-tooling:
         applies-to: "version-updates"
         patterns:
@@ -63,6 +63,7 @@ updates:
           - "@*/*"
         exclude-patterns:
           - "wrangler"
+          - "@cloudflare/workers-types"
         update-types:
           - "minor"
           - "patch"
