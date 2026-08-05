@@ -77,7 +77,7 @@ jobs:
       - name: Checkout repository (attempt 1)
         id: checkout_attempt_1
         continue-on-error: true
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           # Shallow clone to save space
           fetch-depth: 1
@@ -86,7 +86,7 @@ jobs:
         id: checkout_attempt_2
         if: steps.checkout_attempt_1.outcome == 'failure'
         continue-on-error: true
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           fetch-depth: 1
 
@@ -145,7 +145,7 @@ jobs:
 
       - name: Submit dependencies to GitHub (attempt 1)
         id: dependency_submission_attempt_1
-        uses: advanced-security/component-detection-dependency-submission-action@323c31e9ce03ff590dca3d2e24bf4a7e11c42872 # v2
+        uses: advanced-security/component-detection-dependency-submission-action@31f25a8de68ae5ce2ca274bc28546a78683c15ce # v0.1.4
         env:
           # Critical: Disable pip caching to save disk space
           PIP_NO_CACHE_DIR: '1'
@@ -169,7 +169,7 @@ jobs:
       - name: Submit dependencies to GitHub (attempt 2)
         id: dependency_submission_attempt_2
         if: steps.dependency_submission_attempt_1.outcome == 'failure'
-        uses: advanced-security/component-detection-dependency-submission-action@323c31e9ce03ff590dca3d2e24bf4a7e11c42872 # v2
+        uses: advanced-security/component-detection-dependency-submission-action@31f25a8de68ae5ce2ca274bc28546a78683c15ce # v0.1.4
         env:
           # Critical: Disable pip caching to save disk space
           PIP_NO_CACHE_DIR: '1'
