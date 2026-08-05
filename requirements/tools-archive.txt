@@ -11,7 +11,7 @@ attrs==26.1.0
     #   referencing
 bagit==1.9.0
     # via -r tools-archive.in
-cffi==2.0.0
+cffi==2.1.0
     # via
     #   -c all.txt
     #   cryptography
@@ -32,7 +32,7 @@ numpy==2.4.6
     #   -c all.txt
     #   -r tools-archive.in
     #   pandas
-pandas==3.0.3
+pandas==3.0.5
     # via -r tools-archive.in
 pycparser==3.0
     # via
@@ -51,7 +51,7 @@ referencing==0.37.0
     #   -c all.txt
     #   jsonschema
     #   jsonschema-specifications
-rpds-py==2026.5.1
+rpds-py==2026.6.3
     # via
     #   -c all.txt
     #   jsonschema
@@ -60,7 +60,7 @@ six==1.17.0
     # via
     #   -c all.txt
     #   python-dateutil
-typing-extensions==4.15.0
+typing-extensions==4.16.0
     # via
     #   -c all.txt
     #   referencing

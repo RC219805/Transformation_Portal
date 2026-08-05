@@ -116,28 +116,21 @@ def test_jobs_router_default_factory_call_uses_portal_list_limit_contract() -> N
 def test_jobs_router_pins_paths_methods_endpoint_names_and_response_models() -> None:
     _client, _recording, test_app = _build_test_app()
 
-    tracked: dict[tuple[str, str], tuple[str, type[Any] | None]] = {}
-    for route in test_app.routes:
-        methods = getattr(route, "methods", None)
-        path = getattr(route, "path", None)
-        if not methods or not path:
-            continue
-        for method in methods:
-            if method in {"GET", "POST", "DELETE"}:
-                tracked[(method, path)] = (
-                    getattr(route, "name"),
-                    getattr(route, "response_model", None),
-                )
-
-    assert tracked == {
+    schema_refs = {
+        JobEnvelope: {"$ref": "#/components/schemas/ApiEnvelope_JobBriefData_"},
+        JobsListEnvelope: {"$ref": "#/components/schemas/ApiEnvelope_JobsListData_"},
+        JobStatusEnvelope: {"$ref": "#/components/schemas/ApiEnvelope_JobStatusData_"},
+        None: {},
+    }
+    expected = {
         ("POST", "/v1/jobs"): ("create_job_http", JobEnvelope),
         ("POST", "/v2/jobs"): ("create_job_v2_http", JobEnvelope),
         ("GET", "/v1/jobs"): ("list_jobs", JobsListEnvelope),
         ("GET", "/v2/jobs"): ("list_jobs_v2", JobsListEnvelope),
         ("GET", "/v1/jobs/{job_id}"): ("get_job", JobStatusEnvelope),
         ("GET", "/v2/jobs/{job_id}"): ("get_job_v2", JobStatusEnvelope),
-        ("GET", "/v1/jobs/{job_id}/artifacts/{artifact_path:path}"): ("get_job_artifact", None),
-        ("GET", "/v2/jobs/{job_id}/artifacts/{artifact_path:path}"): ("get_job_artifact_v2", None),
+        ("GET", "/v1/jobs/{job_id}/artifacts/{artifact_path}"): ("get_job_artifact", None),
+        ("GET", "/v2/jobs/{job_id}/artifacts/{artifact_path}"): ("get_job_artifact_v2", None),
         ("DELETE", "/v1/jobs/{job_id}/artifacts"): ("delete_job_artifacts", JobStatusEnvelope),
         ("DELETE", "/v2/jobs/{job_id}/artifacts"): ("delete_job_artifacts_v2", JobStatusEnvelope),
         ("POST", "/v1/jobs/{job_id}/cancel"): ("cancel_job", JobEnvelope),
@@ -145,6 +138,23 @@ def test_jobs_router_pins_paths_methods_endpoint_names_and_response_models() -> 
         ("GET", "/v1/jobs/{job_id}/events"): ("job_events", None),
         ("GET", "/v2/jobs/{job_id}/events"): ("job_events_v2", None),
     }
+
+    openapi_paths = test_app.openapi()["paths"]
+    tracked = {
+        (method.upper(), path): operation
+        for path, path_item in openapi_paths.items()
+        for method, operation in path_item.items()
+        if method.upper() in {"GET", "POST", "DELETE"}
+    }
+    assert set(tracked) == set(expected)
+    for route, (_endpoint_name, response_model) in expected.items():
+        assert tracked[route]["responses"]["200"]["content"]["application/json"]["schema"] == schema_refs[response_model]
+
+    for (method, path), (endpoint_name, _response_model) in expected.items():
+        values = {"job_id": "job-1", "artifact_path": "nested/report.json"}
+        expected_path = path.format(**values)
+        route_values = {name: value for name, value in values.items() if "{" + name + "}" in path}
+        assert str(test_app.url_path_for(endpoint_name, **route_values)) == expected_path
 
 
 def test_jobs_router_delegates_list_limits_to_the_injected_handlers() -> None:
