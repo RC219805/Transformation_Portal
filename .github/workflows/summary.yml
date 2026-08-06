@@ -21,8 +21,14 @@ permissions:
 jobs:
   summarize:
     name: AI Advisory / Summary
-    # Avoid blocked/required PR checks for bot-authored PR events.
-    if: ${{ !(github.event_name == 'pull_request' && (github.actor == 'Copilot' || github.actor == 'copilot-swe-agent[bot]')) }}
+    # Avoid blocked/required PR checks for bot-authored PR events, and skip
+    # bot-authored issue_comment / issues events entirely (deployment bots like
+    # cloudflare-workers-and-pages[bot] and vercel[bot] comment on every deploy,
+    # which burns runs/API calls and can leave spurious failed check runs).
+    if: >-
+      ${{ !(github.event_name == 'pull_request' && (github.actor == 'Copilot' || github.actor == 'copilot-swe-agent[bot]')) &&
+      !(github.event_name == 'issue_comment' && github.event.comment.user.type == 'Bot') &&
+      !(github.event_name == 'issues' && github.event.sender.type == 'Bot') }}
     runs-on: ubuntu-latest
     continue-on-error: true
     timeout-minutes: 10

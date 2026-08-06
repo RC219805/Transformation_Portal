@@ -104,6 +104,9 @@ The repository includes three AI-powered advisory workflows that provide intelli
 
 **Features:**
 - Triggered on `issues`, `pull_request`, and `issue_comment` events.
+- Skips bot-authored `issue_comment` and `issues` events (deployment bots such as
+  `cloudflare-workers-and-pages[bot]` and `vercel[bot]` comment on every deploy),
+  plus Copilot-authored `pull_request` events.
 - Uses OpenAI `gpt-4o-mini` model to generate neutral, concise summaries.
 - Retries HTTP 429, transient HTTP 5xx, and network errors up to 3 total attempts.
 - Posts successful AI-generated summaries as comments on the issue or pull request.

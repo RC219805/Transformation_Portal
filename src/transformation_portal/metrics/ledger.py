@@ -331,7 +331,7 @@ class PerformanceLedger:
         # values flow through `params` only. Adding interpolation here would introduce SQL
         # injection. The base query is also a literal and intentionally not f-stringed.
         where_sql = " AND ".join(where_clauses) if where_clauses else "1=1"
-        query = "SELECT capsule_json FROM performance_capsules WHERE " + where_sql + " ORDER BY captured_at DESC"
+        query = "SELECT capsule_json FROM performance_capsules WHERE " + where_sql + " ORDER BY captured_at DESC"  # nosec B608
         if safe_limit is not None:
             query += " LIMIT ?"
             params.append(safe_limit)

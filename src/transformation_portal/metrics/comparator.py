@@ -239,13 +239,16 @@ def query_baseline_stats(
 
     with sqlite3.connect(ledger_db_path) as conn:
         # Step 1: Find latest run_id
+        # SAFETY: `where_sql` joins only the hardcoded "<column> = ?" literals built
+        # above; all caller values bind through `run_params`, and LIMIT is validated
+        # by normalize_query_limit() and bound via the `?` placeholder.
         run_query = f"""
             SELECT run_id, timestamp
             FROM apex_runs
             WHERE {where_sql}
             ORDER BY timestamp DESC
             LIMIT ?
-        """
+        """  # nosec B608
         run_params = [*params, safe_limit]
         cursor = conn.execute(run_query, run_params)
         latest_run = cursor.fetchone()

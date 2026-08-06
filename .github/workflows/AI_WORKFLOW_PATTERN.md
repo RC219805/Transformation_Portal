@@ -170,6 +170,20 @@ concurrency:
 
 **Rationale**: Reduces CI minutes and API costs by only processing latest relevant state while avoiding unrelated event cancellation.
 
+```yaml
+# Bot-event filtering for issue/PR advisory workflows
+jobs:
+  advisory-job:
+    if: >-
+      ${{ !(github.event_name == 'issue_comment' && github.event.comment.user.type == 'Bot') &&
+      !(github.event_name == 'issues' && github.event.sender.type == 'Bot') }}
+```
+
+**Rationale**: Deployment bots (`cloudflare-workers-and-pages[bot]`, `vercel[bot]`) and
+dependency bots comment on nearly every deploy/PR; running AI advisory jobs on those
+events wastes runs and API calls and can leave spurious failed check runs. A missing
+payload path evaluates to an empty string (`!= 'Bot'`), so the guard fails safe.
+
 ---
 
 ## Permissions (Minimal)
