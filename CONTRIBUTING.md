@@ -709,7 +709,7 @@ Certain packages require minimum versions due to CVEs:
 
 | Package                 | Minimum Version | Reason                              |
 |-------------------------|-----------------|-------------------------------------|
-| `cryptography`          | >=48.0.1        | Governed lock baseline includes the OpenSSL wheel security fix |
+| `cryptography`          | >=50.0.0        | PYSEC-2026-3552/3553/3554 (PKCS#7 oracle, chain DoS, wildcard SAN bypass) |
 | `sentence-transformers` | >=3.1.0         | CVE-73169 (arbitrary code execution) |
 | `msgpack`               | >=1.2.1         | GHSA-6v7p-g79w-8964 |
 | `Pillow`                | >=10.3.0        | CVE-2024-28219 and multiple 9.x CVEs |
