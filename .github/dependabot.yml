@@ -19,6 +19,12 @@ updates:
       - dependency-name: "transformers"
         update-types:
           - "version-update:semver-minor"
+      # Governed target-owned ML pins: rotated only via the authoritative
+      # Apple Silicon lock lane (requirements/Makefile), and unresolvable by
+      # Dependabot's updater (every batch run errored with unknown_error).
+      - dependency-name: "torch"
+      - dependency-name: "torchvision"
+      - dependency-name: "rawpy"
   - package-ecosystem: "github-actions"
     directory: "/"
     target-branch: "main"

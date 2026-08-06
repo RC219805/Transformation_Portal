@@ -118,6 +118,8 @@ Given our image/video processing nature, special attention is required for:
     - **Action**: Dependabot alerts are dismissed as `not_used` with repo search evidence instead of forcing a `transformers` 5.x pre-release upgrade into inference stacks
   - **Pillow>=10.3.0** - Fixed CVE-2024-28219 (buffer overflow vulnerability)
   - **cryptography==50.0.0** - Current governed lock; fixes PYSEC-2026-3552 (PKCS#7 decrypt Bleichenbacher oracle), PYSEC-2026-3553 (chain-building DoS), and PYSEC-2026-3554 (name-constraint wildcard bypass)
+  - **Pillow 12.3.0 alignment (August 2026)** - `requirements/ml-core-darwin-arm64.txt` re-aligned to its `-c base.txt` constraint (`pillow==12.3.0`), clearing the 2026 Pillow advisory batch reported against the trailing 12.2.0 pin
+  - **Pending authoritative Apple Silicon lock rotation (August 2026)** - `torch==2.12.0` (ML core lock, `config/fastvlm_runtime_requirements.txt` carries 2.12.1) is flagged for GHSA-rrmf-rvhw-rf47 (fixed in 2.13.0) and `transformers==5.0.0` (ML core lock) for GHSA-29pf-2h5f-8g72 / GHSA-fgcw-684q-jj6r / PYSEC-2026-2289 / PYSEC-2026-2290 (fixed in 5.3.0/5.5.0). These are anchored baselines (`requirements/ml-core-darwin-arm64.in`) whose rotation must run on the native Darwin arm64 authoritative lane (`make compile-ml-darwin-arm64`) with paired torchvision/tokenizers resolution; do not hand-edit them on other hosts
   - **black==26.3.1** - Fixed arbitrary file writes from unsanitized cache names
   - **Pygments==2.20.0** - Fixed CVE-2026-4539; the temporary pip-audit exception is retired
   - **Starlette==1.3.1** - Fixed CVE-2026-48710 / PYSEC-2026-161 plus 2026 StaticFiles, HTTPEndpoint, and form parsing advisories

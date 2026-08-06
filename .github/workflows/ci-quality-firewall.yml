@@ -198,7 +198,7 @@ jobs:
         run: |
           # Generate JSON report for artifacts (may contain low-severity issues)
           bandit -r src/ -f json -o bandit-report.json --exit-zero
-          # Fail on issues with severity >= LOW and confidence >= MEDIUM (Bandit flags: -ll -ii)
+          # Fail on issues with severity >= MEDIUM and confidence >= MEDIUM (Bandit flags: -ll -ii)
           bandit -r src/ -ll -ii -f screen
 
       - name: Run pip-audit (dependency vulnerabilities)
