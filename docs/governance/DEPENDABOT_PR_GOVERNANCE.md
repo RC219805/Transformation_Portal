@@ -3,7 +3,7 @@
 **Purpose**: Define triage policy and merge criteria for Dependabot-generated pull requests
 **Owner**: Transformation Portal Architect
 **Created**: 2026-03-26
-**Last Updated**: 2026-08-04
+**Last Updated**: 2026-08-06
 
 ---
 
@@ -32,7 +32,7 @@ Current grouping and compatibility controls keep coupled changes atomic:
   applies security grouping while targeting the repository default branch,
   `main`.
 - Redis major updates and core Transformers minor updates are ignored because
-  the governed contracts remain Redis `<7` and Transformers `>=5.0,<5.1`.
+  the governed contracts remain Redis `<7` and Transformers `>=5.5,<5.6`.
   Compatible patch updates remain eligible.
 
 ---
@@ -250,6 +250,7 @@ Before merging any Dependabot PR:
 | 2026-05-26 | Recorded the curated Python/runtime refresh for Uvicorn 0.48.0, SQLAlchemy 2.0.50, diff-cover 10.2.1, and FastVLM idna/fsspec pins | Architect |
 | 2026-06-10 | Added PyTorch alert wave triage for the `torch==2.12.0` supported baseline rotation and no-patch `torch.jit.script` dismissals | Architect |
 | 2026-08-04 | Grouped CodeQL, root/Worker Wrangler, and frontdoor security updates; guarded Redis and Transformers compatibility bounds | Architect |
+| 2026-08-06 | Rotated supported ML and subprocess runtimes to Pillow 12.3.0, torch 2.13.0 / torchvision 0.28.0, and Transformers 5.5.x after patched releases became available | Architect |
 
 ---
 

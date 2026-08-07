@@ -132,3 +132,32 @@ def test_verify_object_is_case_insensitive_on_input_hash(tmp_path):
     obj = store.add_bytes(b"case test")
     assert store.verify_object(obj.sha256.upper()) is True
     assert store.verify_object(obj.sha256.lower()) is True
+
+
+@pytest.mark.parametrize(
+    "invalid_sha256",
+    [
+        "../" + ("a" * 61),
+        "a" * 63,
+        "a" * 65,
+        "g" * 64,
+    ],
+    ids=["traversal", "too-short", "too-long", "non-hex"],
+)
+def test_cas_rejects_invalid_hashes_before_object_or_lock_path_derivation(tmp_path, invalid_sha256):
+    store = ArtifactStore(tmp_path / "cas")
+
+    with pytest.raises(ValueError, match="64 hex characters"):
+        store._object_path(invalid_sha256)
+    with pytest.raises(ValueError, match="64 hex characters"):
+        store._get_lock(invalid_sha256)
+
+
+def test_cas_normalizes_uppercase_hashes_for_object_and_lock_paths(tmp_path):
+    store = ArtifactStore(tmp_path / "cas")
+    obj = store.add_bytes(b"case-normalization")
+    uppercase_sha256 = obj.sha256.upper()
+
+    assert store._object_path(uppercase_sha256) == obj.path
+    assert store._get_lock(uppercase_sha256).lock_path == (store.locks_dir / obj.sha256[:2] / f"{obj.sha256}.lock")
+    assert store.get_object(uppercase_sha256) == obj

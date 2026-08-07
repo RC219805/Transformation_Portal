@@ -169,6 +169,10 @@ The installer is manifest-backed and fail-closed:
 ./scripts/validation/validate_fastvlm_runtime.py --json --models smoke
 ```
 
+Validation output is safe for shared CI logs: human-readable failures and the
+machine-readable `--json` payload retain statuses and error counts while
+redacting raw exception text and local filesystem paths.
+
 The manifest lives at `config/fastvlm_runtime_manifest.json` and pins:
 
 ```text

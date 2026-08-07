@@ -1,7 +1,7 @@
 """Contract tests for the Depth Pro subprocess runtime.
 
 Depth Pro is research-license, runs in its own ``.venv-depth-pro`` because
-of the NumPy 1.x / torch 2.7.1 / torchvision 0.22.1 pin conflict, and is
+of the NumPy 1.x / torch 2.13.0 / torchvision 0.28.0 pin conflict, and is
 governed by an explicit license-acknowledgement gate. The end-to-end
 inference path is exercised in the ML lane; this file pins the contract
 that lives outside the model:

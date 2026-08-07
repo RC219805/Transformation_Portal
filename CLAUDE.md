@@ -244,7 +244,7 @@ Use `pathlib.Path`, normalize/validate untrusted paths, enforce allowlisted root
 ### Backend / license governance
 - `da3` is the default commercial-safe production depth backend.
 - `da3-research` / `depth_pro` require `non_commercial_ok=True` + (for Depth Pro) `accept_apple_depth_pro_research_license=True`.
-- Depth Pro lives in its own venv (constraint conflicts with main repo stack: pinned `torch==2.7.1`, `torchvision==0.22.1`, `numpy==1.26.4`).
+- Depth Pro lives in its own venv (constraint conflicts with main repo stack: pinned `torch==2.13.0`, `torchvision==0.28.0`, `numpy==1.26.4`).
 - Backend resolution metadata (`requested_backend`, `resolved_backend`, `resolution_status`, `resolution_reason`) is part of every manifest — preserve it.
 - Banned dependency: `realesrgan` (unmaintained); enforced by `requirements/constraints.txt` + `scripts/security/verify_banned_dependencies.py`.
 

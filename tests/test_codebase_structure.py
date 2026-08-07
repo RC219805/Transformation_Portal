@@ -764,7 +764,7 @@ class TestRootGovernanceMetadata:
         assert "make install-ml         # disabled: no trusted umbrella lock contract" in requirements_ml
         assert "Run `make compile` in this directory to generate pinned ml.txt" not in requirements_ml
         assert "make install-ml         # ml-core + ml-raw (this umbrella)" not in requirements_ml
-        assert "torch==2.12.0, torchvision==0.27.0, open-clip-torch==3.3.0" in requirements_ml
+        assert "torch==2.13.0, torchvision==0.28.0, open-clip-torch==3.3.0" in requirements_ml
         assert "target-owned locks are install support promises" in requirements_ml
         assert "torch==2.8.0, torchvision==0.23.0" not in requirements_ml
         assert "CUDA is a retired unsupported lane" in requirements_ml_cpu

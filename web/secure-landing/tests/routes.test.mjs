@@ -216,7 +216,9 @@ async function importFresh(relativePath) {
 
 test("next config honors TP_NEXT_DIST_DIR for isolated local frontdoor runs", async () => {
   const previous = process.env.TP_NEXT_DIST_DIR;
+  const previousVercel = process.env.VERCEL;
   process.env.TP_NEXT_DIST_DIR = ".next-smoke-test";
+  delete process.env.VERCEL;
 
   try {
     const configModule = await importFresh("../next.config.js");
@@ -229,6 +231,7 @@ test("next config honors TP_NEXT_DIST_DIR for isolated local frontdoor runs", as
     assert.equal(path.resolve(developmentConfig.turbopack.root), REPO_ROOT);
     assert.equal(developmentConfig.output, undefined);
     assert.equal(developmentConfig.outputFileTracingRoot, undefined);
+    assert.equal(productionConfig.output, "standalone");
     assert.equal(
       path.resolve(productionConfig.outputFileTracingRoot),
       REPO_ROOT,
@@ -239,6 +242,37 @@ test("next config honors TP_NEXT_DIST_DIR for isolated local frontdoor runs", as
       process.env.TP_NEXT_DIST_DIR = previous;
     } else {
       delete process.env.TP_NEXT_DIST_DIR;
+    }
+    if (typeof previousVercel === "string") {
+      process.env.VERCEL = previousVercel;
+    } else {
+      delete process.env.VERCEL;
+    }
+  }
+});
+
+test("next config delegates deployment output to Vercel without disabling tracing", async () => {
+  const previousVercel = process.env.VERCEL;
+  process.env.VERCEL = "1";
+
+  try {
+    const configModule = await importFresh("../next.config.js");
+    const productionConfig = configModule.default("phase-production-build");
+
+    assert.equal(
+      productionConfig.output,
+      undefined,
+      "Vercel's deployment adapter owns its build output and must not also copy standalone traces"
+    );
+    assert.equal(path.resolve(productionConfig.outputFileTracingRoot), REPO_ROOT);
+    assert.deepEqual(productionConfig.outputFileTracingIncludes, {
+      "/portal/assets/[...path]": ["../../config/portal_asset_manifest.json"]
+    });
+  } finally {
+    if (typeof previousVercel === "string") {
+      process.env.VERCEL = previousVercel;
+    } else {
+      delete process.env.VERCEL;
     }
   }
 });

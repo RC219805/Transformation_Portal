@@ -135,7 +135,10 @@ def create_preview_router() -> "APIRouter":
     def _resolve_path(hash: str) -> Optional[Path]:
         """Resolve CAS path for hash."""
         if _global_cas:
-            obj = _global_cas.get_object(hash)
+            try:
+                obj = _global_cas.get_object(hash)
+            except ValueError:
+                return None
             if obj:
                 return obj.path
         return None

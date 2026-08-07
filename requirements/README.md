@@ -67,10 +67,10 @@ To ensure deterministic builds, the checked-in ML contract is limited to the sup
 
 | Target | Lockfile | Governed baseline |
 |----------|----------|-------------------|
-| macOS Apple Silicon (`darwin-arm64`) | `ml-core-darwin-arm64.txt` | `torch==2.12.0` + `torchvision==0.27.0` + `diffusers>=0.38.0` + `transformers==5.0.0` + pinned `coremltools` |
+| macOS Apple Silicon (`darwin-arm64`) | `ml-core-darwin-arm64.txt` | `torch==2.13.0` + `torchvision==0.28.0` + `diffusers>=0.38.0` + `transformers==5.5.4` + pinned `coremltools` |
 
 **Contract notes:**
-- Supported target-owned core locks anchor on torch 2.12.0 / torchvision 0.27.0, Diffusers 0.38.0+, and Transformers 5.x.
+- Supported target-owned core locks anchor on torch 2.13.0 / torchvision 0.28.0, Diffusers 0.38.0+, and Transformers 5.5.x.
 - The Apple Silicon Darwin lock must keep pinned `coremltools` and must remain free of Linux/CUDA-only packages.
 - Darwin target-owned lockfiles must never contain `nvidia-*` or `triton`.
 - Linux and macOS Intel ML lanes are retired unsupported lanes and are not kept as installable `requirements/*.in` or `requirements/*.txt` manifests.
@@ -315,7 +315,7 @@ make install-ml
 
 Or use the package extras (installs latest allowed versions, not pinned).
 The ML extras require the supported PyTorch security baseline
-(`torch>=2.12.0`, `torchvision>=0.27.0`); retired historical ML locks are
+(`torch>=2.13.0`, `torchvision>=0.28.0`); retired historical ML locks are
 not remediation targets for Dependabot alerts.
 
 ```bash
@@ -464,7 +464,7 @@ Each ML layer has a specific contract:
 
 | Layer | Contract | Platform Target | Notes |
 |-------|----------|-----------------|-------|
-| ml-core | Supported PyTorch baseline (torch 2.12.0, torchvision 0.27.0, Transformers 5.x) | darwin-arm64 | Base ML functionality |
+| ml-core | Supported PyTorch baseline (torch 2.13.0, torchvision 0.28.0, Transformers 5.5.x) | darwin-arm64 | Base ML functionality |
 | ml-cpu | CPU fallback for supported Apple Silicon baseline | darwin-arm64-cpu | No GPU packages |
 | ml-mps | Apple Silicon MPS | darwin-arm64-mps | Includes accelerate |
 | ml-cuda | Retired unsupported lane | linux-x86_64-cuda | Fails closed until a governed Linux lane exists |

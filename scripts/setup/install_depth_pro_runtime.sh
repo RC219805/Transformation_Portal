@@ -149,10 +149,10 @@ run "${PYTHON_BIN}" -m pip install --upgrade pip
 log "Installing pinned Depth Pro dependencies"
 run "${PYTHON_BIN}" -m pip install \
     "numpy==1.26.4" \
-    "torch==2.7.1" \
-    "torchvision==0.22.1" \
+    "torch==2.13.0" \
+    "torchvision==0.28.0" \
     "matplotlib==3.10.8" \
-    "pillow==12.2.0" \
+    "pillow==12.3.0" \
     "pillow_heif==1.3.0" \
     "timm==1.0.26"
 
@@ -191,7 +191,7 @@ fi
 cat <<EOF
 [INFO] Depth Pro runtime ready.
 [INFO] Stable executable: ./.venv-depth-pro/bin/python
-[INFO] Pinned refs: torch==2.7.1 torchvision==0.22.1 numpy==1.26.4 depth_pro@${REF}
+[INFO] Pinned refs: torch==2.13.0 torchvision==0.28.0 numpy==1.26.4 depth_pro@${REF}
 [INFO] Example:
 lux-depth-v3 --input-dir ./input_images --output-dir ./output --depth-pro-python ./.venv-depth-pro/bin/python
 EOF

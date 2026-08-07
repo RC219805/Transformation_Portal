@@ -288,10 +288,10 @@ curl -L https://ml-site.cdn-apple.com/models/depth-pro/depth_pro.pt -o checkpoin
 ```
 
 Keep `depth-pro` in its own environment. Its dependency constraints conflict with
-the main repository stack, and the repo-owned setup script pins the known-good
-Depth Pro runtime surface (`torch==2.7.1`, `torchvision==0.22.1`,
-`numpy==1.26.4`) that restores MPS readiness on current macOS 26.x pip-wheel
-hosts.
+the main repository stack, and the repo-owned setup script pins the governed
+Depth Pro runtime surface (`torch==2.13.0`, `torchvision==0.28.0`,
+`numpy==1.26.4`). Run the installer readiness check on the target host before
+using this optional research runtime.
 
 Required CLI wiring:
 ```bash

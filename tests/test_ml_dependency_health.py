@@ -84,7 +84,7 @@ def test_detect_transformers_torch_version_issue_allows_repo_baseline(monkeypatc
         lambda: False,
     )
 
-    message = detect_transformers_torch_version_issue("2.12.0", "5.0.0")
+    message = detect_transformers_torch_version_issue("2.13.0", "5.5.0")
 
     assert message is None
 
@@ -103,8 +103,8 @@ def test_detect_transformers_torch_version_issue_rejects_retired_old_baseline(mo
     message = detect_transformers_torch_version_issue("2.2.2", "4.57.6")
 
     assert message is not None
-    assert "supported security baseline 2.12.0" in message
-    assert "supported security baseline 5.0.0" in message
+    assert "supported security baseline 2.13.0" in message
+    assert "supported security baseline 5.5.0" in message
 
 
 def test_detect_transformers_torch_version_issue_rejects_transformers_53_with_old_torch(

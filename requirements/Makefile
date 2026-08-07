@@ -18,7 +18,7 @@
 # TARGET-OWNED ML LOCKFILES (pip-compile cannot resolve multi-platform .in)
 # -------------------------------------------------------------------------
 # Target            Lockfile                    Baseline
-# darwin-arm64      ml-core-darwin-arm64.txt   torch 2.12.0 + torchvision 0.27.0 + CoreML tooling
+# darwin-arm64      ml-core-darwin-arm64.txt   torch 2.13.0 + torchvision 0.28.0 + CoreML tooling
 # darwin-x86_64     retired                    unsupported; no installable checked-in ML lock
 # linux-x86_64      retired                    unsupported; no installable checked-in ML lock
 #

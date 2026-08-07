@@ -112,6 +112,12 @@ class TestGetArtifact:
 
         assert client.get("/api/artifacts/deadbeef").status_code == 404
 
+    @pytest.mark.parametrize("suffix", ["", "/preview"])
+    def test_returns_404_for_invalid_hash(self, client: TestClient, cas: ArtifactStore, suffix: str) -> None:
+        artifact_api.set_artifact_store(cas)
+
+        assert client.get(f"/api/artifacts/{'g' * 64}{suffix}").status_code == 404
+
     def test_returns_metadata_for_known_artifact(self, client: TestClient, cas: ArtifactStore) -> None:
         obj = cas.add_bytes(b"hello world")
         artifact_api.set_artifact_store(cas)

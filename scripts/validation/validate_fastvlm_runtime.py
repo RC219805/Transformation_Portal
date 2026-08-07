@@ -24,6 +24,9 @@ from fastvlm_runtime_manifest import (
     verify_runtime_sources,
 )
 
+_REDACTED_DETAIL = "validation details redacted"
+_REDACTED_PATH = "<redacted>"
+
 
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
@@ -59,13 +62,15 @@ def _check_evidence(
     scope: str = "static",
     remediation: str = "",
 ) -> dict[str, Any]:
+    raw_errors = list(errors or [])
     payload: dict[str, Any] = {
         "status": status,
         "scope": scope,
-        "errors": list(errors or []),
+        "errors": [_REDACTED_DETAIL] if raw_errors else [],
+        "error_count": len(raw_errors),
     }
     if path is not None:
-        payload["path"] = str(path)
+        payload["path"] = _REDACTED_PATH
     if remediation:
         payload["remediation"] = remediation
     return payload
@@ -73,6 +78,12 @@ def _check_evidence(
 
 def _status_for_errors(errors: list[str]) -> str:
     return "ready" if not errors else "failed"
+
+
+def _print_redacted_failure() -> None:
+    """Report validation failure without writing runtime details to logs."""
+    print("FastVLM runtime verification failed.", file=sys.stderr)
+    print("Validation details redacted; use --json for structured redacted status.", file=sys.stderr)
 
 
 def _runtime_evidence(
@@ -181,11 +192,12 @@ def _evidence(
     checks: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     return {
-        "manifest_path": str(manifest_path),
-        "runtime_root": str(root),
+        "manifest_path": _REDACTED_PATH,
+        "runtime_root": _REDACTED_PATH,
         "models": roles,
         "runtime_status": "ready" if not errors else "invalid",
-        "errors": errors,
+        "errors": [_REDACTED_DETAIL] if errors else [],
+        "error_count": len(errors),
         "checks": checks or {},
         "advisory_role": "advisory",
         "used_for_quality_gate": False,
@@ -226,15 +238,13 @@ def main(argv: list[str] | None = None) -> int:
         if args.json:
             print(json.dumps(evidence, indent=2, sort_keys=True))
         else:
-            print(f"FastVLM runtime manifest invalid: {exc}", file=sys.stderr)
+            print("FastVLM runtime manifest invalid; validation details redacted.", file=sys.stderr)
         return 2
 
     if args.json:
         print(json.dumps(evidence, indent=2, sort_keys=True))
     elif evidence["errors"]:
-        print("FastVLM runtime verification failed:", file=sys.stderr)
-        for error in evidence["errors"]:
-            print(f"- {error}", file=sys.stderr)
+        _print_redacted_failure()
     else:
         print(f"FastVLM runtime ready for roles: {', '.join(roles)}")
         print(f"runtime_root={root}")

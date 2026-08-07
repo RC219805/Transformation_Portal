@@ -63,6 +63,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Optional
 
+from transformation_portal.core.security.path_safety import safe_cas_path, validate_sha256
+
 logger = logging.getLogger(__name__)
 
 # Quarantine lifecycle policy (prevents unbounded growth)
@@ -241,7 +243,7 @@ class ArtifactStore:
         Returns:
             CASFileLock for the given hash
         """
-        lock_file = self.locks_dir / f"{sha256[:2]}" / f"{sha256}.lock"
+        lock_file = safe_cas_path(self.locks_dir, sha256).with_suffix(".lock")
         return CASFileLock(lock_file)
 
     def _sha256_file(self, path: Path, chunk_size: int = 1024 * 1024) -> str:
@@ -269,8 +271,7 @@ class ArtifactStore:
         Returns:
             Path to object location
         """
-        sha256 = sha256.lower()
-        return self.objects_dir / sha256[:2] / sha256
+        return safe_cas_path(self.objects_dir, sha256)
 
     def has_object(self, sha256: str) -> bool:
         """Check if object exists in CAS.
@@ -292,12 +293,13 @@ class ArtifactStore:
         Returns:
             CASObject if found, None otherwise
         """
+        sha256 = validate_sha256(sha256)
         path = self._object_path(sha256)
         if not path.exists():
             return None
 
         return CASObject(
-            sha256=sha256.lower(),
+            sha256=sha256,
             path=path,
             size_bytes=path.stat().st_size,
         )

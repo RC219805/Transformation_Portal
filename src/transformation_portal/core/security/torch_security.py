@@ -4,7 +4,7 @@ This module provides safe model loading functions that reduce checkpoint
 loading risk and preserve a single repository-wide torch.load() policy.
 
 MITIGATION STRATEGY:
-    Supported repository lanes require torch >= 2.12.0. Runtime hardening still
+    Supported repository lanes require torch >= 2.13.0. Runtime hardening still
     enforces weights_only=True for all torch.load() calls as defense in depth.
     Frozen historical lanes are not considered remediated by runtime hardening.
 
@@ -52,7 +52,7 @@ from typing import Any, Optional, Union
 # Security profile version for CAS identity
 # Increment when security enforcement logic changes
 SECURITY_PROFILE_VERSION = "torch_safe_load_v2"
-MINIMUM_SUPPORTED_TORCH_VERSION = "2.12.0"
+MINIMUM_SUPPORTED_TORCH_VERSION = "2.13.0"
 CVE_2025_32434_FIXED_TORCH_VERSION = "2.6.0"
 
 # Track whether enforcement has been installed
@@ -497,7 +497,7 @@ def get_canonical_security_profile() -> dict[str, Any]:
         >>> get_canonical_security_profile()
         {
             'policy_version': 'torch_safe_load_v2',
-            'minimum_supported_torch_version': '2.12.0',
+            'minimum_supported_torch_version': '2.13.0',
             'torch_load_enforced': True,
             'weights_only': True,
             'cve_mitigation': 'fixed-by-supported-torch-baseline'

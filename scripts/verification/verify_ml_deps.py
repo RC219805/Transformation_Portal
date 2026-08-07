@@ -46,13 +46,13 @@ def check_dependencies():
     dependencies = {
         "Core": [
             ("numpy", "NumPy", "1.26.4"),
-            ("PIL", "Pillow", "11.3.0"),
+            ("PIL", "Pillow", "12.3.0"),
             ("cv2", "OpenCV", "4.13.0"),
         ],
         "ML": [
-            ("torch", "PyTorch", "2.12.0"),
-            ("torchvision", "TorchVision", "0.27.0"),
-            ("transformers", "Transformers", "4.57.6"),
+            ("torch", "PyTorch", "2.13.0"),
+            ("torchvision", "TorchVision", "0.28.0"),
+            ("transformers", "Transformers", "5.5.0"),
             ("diffusers", "Diffusers", "0.38.0"),
         ],
         "Depth": [
