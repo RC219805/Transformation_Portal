@@ -119,7 +119,7 @@ spatial-ai = [
 ]
 # Optional detached signing support for archive attestation CLIs
 archive-signing = [
-    "cryptography>=48.0.1,<49",
+    "cryptography>=50.0.0,<51",
 ]
 # Development tools - see requirements/dev.in for pinned versions
 dev = [
@@ -133,7 +133,7 @@ dev = [
     "httpx>=0.28,<1",  # required for FastAPI/Starlette TestClient in HTTP contract tests
     "hypothesis>=6.0,<7",
     "jsonschema>=4.21.0,<5",  # required for machine-mode contract schema validation tests
-    "cryptography>=48.0.1,<49",  # required for Phase 3.1 signing CLI tests
+    "cryptography>=50.0.0,<51",  # required for Phase 3.1 signing CLI tests
     "moto[s3]>=5.0,<6",  # required for moto-backed S3 ArtifactStore contract tests
     "mypy>=1.10",
     "flake8>=7.0",

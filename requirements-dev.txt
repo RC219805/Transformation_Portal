@@ -17,7 +17,7 @@ jsonschema>=4.21.0,<5
 httpx>=0.28,<1
 
 # Optional Phase 3.1 detached signing support (tools + tests)
-cryptography>=48.0.1,<49
+cryptography>=50.0.0,<51
 
 # S3 mock for the Phase 4.A ArtifactStore contract tests
 moto[s3]>=5.0,<6

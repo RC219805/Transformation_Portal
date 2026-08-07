@@ -36,7 +36,7 @@ colorama==0.4.6
     # via
     #   -c all.txt
     #   tox
-cryptography==48.0.1
+cryptography==50.0.0
     # via
     #   -c all.txt
     #   secretstorage

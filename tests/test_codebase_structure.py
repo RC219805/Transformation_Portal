@@ -591,19 +591,19 @@ class TestRootGovernanceMetadata:
         requirements_lint = (_repo_root / "requirements-lint.txt").read_text()
         contributing = (_repo_root / "CONTRIBUTING.md").read_text()
 
-        assert "cryptography==48.0.1" in (_repo_root / "requirements/ci.txt").read_text()
-        assert "cryptography==48.0.1" in (_repo_root / "requirements/dev.txt").read_text()
-        assert "cryptography==48.0.1" in (_repo_root / "requirements/all.txt").read_text()
+        assert "cryptography==50.0.0" in (_repo_root / "requirements/ci.txt").read_text()
+        assert "cryptography==50.0.0" in (_repo_root / "requirements/dev.txt").read_text()
+        assert "cryptography==50.0.0" in (_repo_root / "requirements/all.txt").read_text()
         assert "pillow==12.3.0" in (_repo_root / "requirements/base.txt").read_text()
 
-        assert "**cryptography==48.0.1**" in security_policy
-        assert "**cryptography==46.0.5**" not in security_policy
-        assert "cryptography>=48.0.1,<49" in requirements_ci
-        assert "cryptography>=48.0.1,<49" in requirements_dev
-        assert "cryptography>=46.0,<48" not in requirements_ci
-        assert "cryptography>=46.0,<48" not in requirements_dev
-        assert "`cryptography`          | >=48.0.1" in contributing
-        assert "`cryptography`          | >=46.0.5" not in contributing
+        assert "**cryptography==50.0.0**" in security_policy
+        assert "**cryptography==48.0.1**" not in security_policy
+        assert "cryptography>=50.0.0,<51" in requirements_ci
+        assert "cryptography>=50.0.0,<51" in requirements_dev
+        assert "cryptography>=48.0.1,<49" not in requirements_ci
+        assert "cryptography>=48.0.1,<49" not in requirements_dev
+        assert "`cryptography`          | >=50.0.0" in contributing
+        assert "`cryptography`          | >=48.0.1" not in contributing
         assert "`starlette`             | >=1.3.1" in contributing
         assert "Starlette==1.3.1" in security_policy
         assert "current governed lock baseline is pillow==12.3.0" in requirements_lint
@@ -617,12 +617,12 @@ class TestRootGovernanceMetadata:
         tools_archive_lock = (_repo_root / "requirements" / "tools-archive.txt").read_text()
 
         for extra_name in ("archive-signing", "dev"):
-            assert "cryptography>=48.0.1,<49" in optional_dependencies[extra_name]
-            assert "cryptography>=46.0,<48" not in optional_dependencies[extra_name]
+            assert "cryptography>=50.0.0,<51" in optional_dependencies[extra_name]
+            assert "cryptography>=48.0.1,<49" not in optional_dependencies[extra_name]
 
-        assert "cryptography>=48.0.1,<49" in tools_archive_in
-        assert "cryptography>=46.0,<48" not in tools_archive_in
-        assert "cryptography==48.0.1" in tools_archive_lock
+        assert "cryptography>=50.0.0,<51" in tools_archive_in
+        assert "cryptography>=48.0.1,<49" not in tools_archive_in
+        assert "cryptography==50.0.0" in tools_archive_lock
 
     def test_pyproject_core_dependencies_track_governed_base_requirements(self):
         """Installable package metadata should not trail the governed core dependency surface."""
