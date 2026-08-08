@@ -211,18 +211,18 @@ The local pilot currently expects the same toolchain as the advisory CI
 workflow:
 
 - `pip==26.1.2`
-- `pip-tools==7.5.3`
+- `pip-tools==7.6.0`
 
 That pairing includes the current pip security fixes and a pip-tools release
 compatible with pip 26 hash generation. To match the workflow locally:
 
 ```bash
 python -m pip install --upgrade "pip==26.1.2"
-python -m pip install "pip-tools==7.5.3"
+python -m pip install "pip-tools==7.6.0"
 ```
 
-`pip-tools 7.5.3` replaces the incompatible 7.5.2 baseline, which fails against
-pip 26 while compiling hashes. The workflow in
+`pip-tools 7.6.0` replaces the incompatible 7.5.2 baseline and is the first
+release with upstream support for pip 26.1. The workflow in
 `.github/workflows/secure-install-pilot.yml` applies this toolchain
 automatically, so local runs should use the same versions.
 ```bash

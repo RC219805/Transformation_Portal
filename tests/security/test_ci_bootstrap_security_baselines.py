@@ -43,5 +43,7 @@ def test_lock_generation_workflows_use_pip_tools_with_pip_26_support(
 ) -> None:
     workflow = (REPO_ROOT / workflow_path).read_text(encoding="utf-8")
 
-    assert '"pip-tools==7.5.3"' in workflow
+    assert 'python -m pip install --upgrade "pip==26.1.2"' in workflow
+    assert '"pip-tools==7.6.0"' in workflow
+    assert '"pip-tools==7.5.3"' not in workflow
     assert '"pip-tools==7.5.2"' not in workflow
