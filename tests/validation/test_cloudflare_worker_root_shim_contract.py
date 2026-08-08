@@ -29,6 +29,7 @@ def test_root_worker_build_package_is_minimal_deploy_shim() -> None:
     assert root_package["scripts"]["worker:deploy"].endswith(" --keep-vars")
     assert root_package["engines"] == worker_package["engines"]
     assert root_package["packageManager"] == worker_package["packageManager"]
+    assert root_package["overrides"] == worker_package["overrides"]
     assert root_package["devDependencies"] == {
         "wrangler": worker_package["devDependencies"]["wrangler"],
     }
@@ -55,6 +56,20 @@ def test_root_worker_build_lock_matches_package_contract() -> None:
         "wrangler": "bin/wrangler.js",
         "wrangler2": "bin/wrangler.js",
     }
+
+
+def test_root_and_worker_locks_apply_the_same_security_overrides() -> None:
+    """Worker build surfaces must resolve governed transitive fixes identically."""
+    root_package = _load_json(PROJECT_ROOT / "package.json")
+    worker_package = _load_json(WORKER_ROOT / "package.json")
+    root_lock = _load_json(PROJECT_ROOT / "package-lock.json")
+    worker_lock = _load_json(WORKER_ROOT / "package-lock.json")
+
+    assert root_package["overrides"] == worker_package["overrides"]
+    for dependency, version in root_package["overrides"].items():
+        lock_key = f"node_modules/{dependency}"
+        assert root_lock["packages"][lock_key]["version"] == version
+        assert worker_lock["packages"][lock_key]["version"] == version
 
 
 def test_root_wrangler_config_points_to_governed_worker_entrypoint() -> None:

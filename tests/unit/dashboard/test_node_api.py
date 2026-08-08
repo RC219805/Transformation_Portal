@@ -128,6 +128,18 @@ class TestNodeArtifacts:
         assert entry["size_bytes"] == len(b"rgb-bytes")
         assert entry["exists"] is True
 
+    def test_invalid_artifact_hash_remains_listable_with_cas(
+        self,
+        client: TestClient,
+        populated_store: NodeStateStore,
+        tmp_path: Path,
+    ) -> None:
+        node_api.set_cas(ArtifactStore(tmp_path / "cas"))
+
+        body = client.get("/api/inspect/runs/run_1/nodes/ingest/artifacts").json()
+
+        assert body["artifacts"] == [{"name": "rgb.png", "hash": "hash_abc"}]
+
 
 class TestRunSummary:
     """Tests for GET /api/inspect/runs/{run}/summary."""
@@ -157,6 +169,17 @@ class TestArtifactEndpoints:
         node_api.set_cas(ArtifactStore(tmp_path / "cas"))
 
         assert client.get("/api/inspect/artifact/deadbeef").status_code == 404
+
+    @pytest.mark.parametrize("suffix", ["", "/preview", "/download"])
+    def test_artifact_endpoints_return_404_for_invalid_hash(
+        self,
+        client: TestClient,
+        tmp_path: Path,
+        suffix: str,
+    ) -> None:
+        node_api.set_cas(ArtifactStore(tmp_path / "cas"))
+
+        assert client.get(f"/api/inspect/artifact/{'g' * 64}{suffix}").status_code == 404
 
     def test_artifact_info_returns_metadata(self, client: TestClient, tmp_path: Path) -> None:
         cas = ArtifactStore(tmp_path / "cas")

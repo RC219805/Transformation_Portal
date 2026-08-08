@@ -13,9 +13,9 @@ This guide helps you get started with Apple's Depth Pro for metric depth estimat
 Keep `depth-pro` out of the main Transformation Portal environment. Depth Pro
 currently requires `numpy<2`, while the primary repository environment is pinned
 around NumPy 2.x for OpenCV, imagecodecs, and related tooling. The repo-owned
-setup script pins the validated Depth Pro runtime surface:
-- `torch==2.7.1`
-- `torchvision==0.22.1`
+setup script pins the governed Depth Pro runtime surface:
+- `torch==2.13.0`
+- `torchvision==0.28.0`
 - `numpy==1.26.4`
 - `depth_pro` from Apple `ml-depth-pro` git ref `9efe5c1def37a26c5367a71df664b18e1306c708`
 

@@ -139,7 +139,10 @@ def create_artifact_router() -> "APIRouter":
         if _global_cas is None:
             raise HTTPException(status_code=404, detail="No CAS configured")
 
-        obj = _global_cas.get_object(hash)
+        try:
+            obj = _global_cas.get_object(hash)
+        except ValueError:
+            raise HTTPException(status_code=404, detail="Artifact not found") from None
         if obj is None:
             raise HTTPException(status_code=404, detail=f"Artifact not found: {hash}")
 
@@ -177,7 +180,10 @@ def create_artifact_router() -> "APIRouter":
         if _global_cas is None:
             raise HTTPException(status_code=404, detail="No CAS configured")
 
-        obj = _global_cas.get_object(hash)
+        try:
+            obj = _global_cas.get_object(hash)
+        except ValueError:
+            raise HTTPException(status_code=404, detail="Artifact not found") from None
         if obj is None:
             raise HTTPException(status_code=404, detail=f"Artifact not found: {hash}")
 

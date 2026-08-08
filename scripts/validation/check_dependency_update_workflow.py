@@ -62,8 +62,8 @@ REQUIRED_WORKFLOW_SNIPPETS = (
 )
 
 REQUIRED_INSTALL_TOOLCHAIN_SNIPPETS = (
-    'python -m pip install --upgrade "pip<26"',
-    'python -m pip install "pip-tools==7.5.2"',
+    'python -m pip install --upgrade "pip==26.1.2"',
+    'python -m pip install "pip-tools==7.6.0"',
     "python -m pip install -r requirements/security.txt",
 )
 

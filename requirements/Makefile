@@ -18,7 +18,7 @@
 # TARGET-OWNED ML LOCKFILES (pip-compile cannot resolve multi-platform .in)
 # -------------------------------------------------------------------------
 # Target            Lockfile                    Baseline
-# darwin-arm64      ml-core-darwin-arm64.txt   torch 2.12.0 + torchvision 0.27.0 + CoreML tooling
+# darwin-arm64      ml-core-darwin-arm64.txt   torch 2.13.0 + torchvision 0.28.0 + CoreML tooling
 # darwin-x86_64     retired                    unsupported; no installable checked-in ML lock
 # linux-x86_64      retired                    unsupported; no installable checked-in ML lock
 #
@@ -37,6 +37,7 @@
 
 SHELL := /bin/bash
 LOCK_PYTHON_VERSION ?= 3.11
+PIP_TOOLS_VERSION := 7.6.0
 PIP_TOOLS_CACHE_DIR ?= $(CURDIR)/.pip-tools-cache
 HASH_PILOT_OUT_DIR ?= $(CURDIR)/.hash-pilot
 PIP_COMPILE_BIN := $(if $(wildcard $(CURDIR)/../.venv/bin/pip-compile),$(CURDIR)/../.venv/bin/pip-compile,pip-compile)
@@ -127,7 +128,13 @@ compile-accel:
 require-pip-compile:
 	@if ! command -v "$(PIP_COMPILE_BIN)" >/dev/null 2>&1; then \
 		echo "ERROR: pip-compile is required for requirements/Makefile targets."; \
-		echo "ERROR: Install pip-tools==7.5.2 in the active environment before running compile/update/check commands."; \
+		echo "ERROR: Install pip-tools==7.6.0 in the active environment before running compile/update/check commands."; \
+		exit 1; \
+	fi; \
+	reported_version="$$("$(PIP_COMPILE_BIN)" --version 2>/dev/null)"; \
+	if [ "$$reported_version" != "pip-compile, version $(PIP_TOOLS_VERSION)" ]; then \
+		echo "ERROR: requirements/Makefile requires pip-tools==$(PIP_TOOLS_VERSION)."; \
+		echo "ERROR: $(PIP_COMPILE_BIN) reported '$${reported_version:-unknown}'."; \
 		exit 1; \
 	fi
 

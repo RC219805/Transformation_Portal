@@ -366,7 +366,7 @@ which prevents this collision in most cases. However, if you still encounter thi
 
 1. **Ensure consistent libomp across environments:**
    - Rebuild `.venv-depth-pro` with `./scripts/setup/install_depth_pro_runtime.sh`
-   - Keep the Depth Pro subprocess on the repo-owned pin (`torch==2.7.1`, `torchvision==0.22.1`, `numpy==1.26.4`) instead of mirroring the main repo runtime
+   - Keep the Depth Pro subprocess on the repo-owned pin (`torch==2.13.0`, `torchvision==0.28.0`, `numpy==1.26.4`) instead of mirroring the main repo runtime
    - Use the subprocess isolation mode (configured via `--depth-pro-python`)
 
 2. **Temporary diagnostic workaround (not recommended for production):**

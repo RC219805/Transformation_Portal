@@ -110,10 +110,11 @@ def test_missing_required_workflow_snippet_is_reported() -> None:
 
 
 def test_missing_required_install_toolchain_snippet_is_reported() -> None:
-    broken = remove_workflow_snippet(valid_workflow_text(), 'python -m pip install --upgrade "pip<26"')
+    broken = remove_workflow_snippet(valid_workflow_text(), 'python -m pip install --upgrade "pip==26.1.2"')
     errors = workflow_contract.validate_dependency_update_workflow(broken)
     assert (
-        "dependency-update workflow must include install-tool snippet 'python -m pip install --upgrade \"pip<26\"'" in errors
+        "dependency-update workflow must include install-tool snippet 'python -m pip install --upgrade \"pip==26.1.2\"'"
+        in errors
     )
 
 

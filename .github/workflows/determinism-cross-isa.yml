@@ -41,7 +41,7 @@ jobs:
 
       - name: Install pinned build tools
         run: |
-          python -m pip install --upgrade "pip==24.0" "setuptools==69.0.3" "wheel==0.42.0"
+          python -m pip install --upgrade "pip==26.1.2" "setuptools==83.0.0" "wheel==0.46.2"
 
       - name: Install pinned numpy (binary only, no BLAS drift)
         run: |
@@ -111,7 +111,7 @@ jobs:
 
       - name: Install pinned build tools
         run: |
-          python -m pip install --upgrade "pip==24.0" "setuptools==69.0.3" "wheel==0.42.0"
+          python -m pip install --upgrade "pip==26.1.2" "setuptools==83.0.0" "wheel==0.46.2"
 
       - name: Install pinned numpy (binary only, no BLAS drift)
         run: |

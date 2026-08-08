@@ -130,35 +130,49 @@ jobs:
       # P0 Enhancement: pip-audit for dependency vulnerability scanning
       - name: Install security tools
         run: |
-          python -m pip install --upgrade pip
+          python -m pip install --upgrade "pip==26.1.2" "setuptools==83.0.0"
           # Install from locked requirements file for deterministic, governed security tooling
           pip install -r requirements/security.txt
 
-      - name: Run pip-audit (BLOCKING for high/critical vulnerabilities)
+      - name: Run pip-audit (BLOCKING on any advisory)
         run: |
           set -euo pipefail
           echo "🔍 Running pip-audit for dependency vulnerabilities..."
 
-          # Run pip-audit and capture output
+          # Capture the exit so the report can be displayed before the step fails.
+          AUDIT_EXIT=0
           pip-audit --format json --output audit-report.json || AUDIT_EXIT=$?
 
-          # Display full report
-          if [ -f audit-report.json ]; then
-            echo "📄 Vulnerability Audit Report:"
-            cat audit-report.json | python -m json.tool || cat audit-report.json
-          fi
-
-          # Fail only on HIGH or CRITICAL vulnerabilities
-          if [ -f audit-report.json ]; then
-            # Count HIGH and CRITICAL vulnerabilities using jq
-            CRITICAL_COUNT=$(jq '[.vulnerabilities[]? | select(.severity? | ascii_upcase | IN("HIGH", "CRITICAL"))] | length' audit-report.json 2>/dev/null || echo "0")
-
-            if [ "$CRITICAL_COUNT" -gt 0 ]; then
-              echo "❌ BLOCKED: Found $CRITICAL_COUNT high/critical vulnerabilities"
-              exit 1
+          if [ ! -f audit-report.json ]; then
+            echo "❌ BLOCKED: pip-audit did not produce audit-report.json"
+            if [ "$AUDIT_EXIT" -ne 0 ]; then
+              exit "$AUDIT_EXIT"
             fi
-            echo "✅ No high/critical vulnerabilities found"
+            exit 1
           fi
+
+          echo "📄 Vulnerability Audit Report:"
+          python -m json.tool audit-report.json || cat audit-report.json
+
+          # pip-audit 2.10.1 records findings under dependencies[].vulns[].
+          VULN_COUNT=$(jq '[.dependencies[] | .vulns[]?] | length' audit-report.json)
+
+          if [ "$AUDIT_EXIT" -ne 0 ]; then
+            if [ "$VULN_COUNT" -gt 0 ]; then
+              echo "❌ BLOCKED: Found $VULN_COUNT known vulnerability advisories"
+            else
+              echo "❌ BLOCKED: pip-audit failed with exit code $AUDIT_EXIT"
+            fi
+            exit "$AUDIT_EXIT"
+          fi
+
+          # Defense in depth: a report containing findings must never pass even
+          # if pip-audit unexpectedly returns zero.
+          if [ "$VULN_COUNT" -gt 0 ]; then
+            echo "❌ BLOCKED: Found $VULN_COUNT known vulnerability advisories"
+            exit 1
+          fi
+          echo "✅ No known vulnerability advisories found"
 
       # CVE-2025-32434 defense-in-depth: scan for raw torch.load() calls that
       # bypass weights_only=True. Blocking gate (no continue-on-error) since
@@ -192,11 +206,11 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           if [ -f audit-report.json ]; then
             echo "### pip-audit Results" >> $GITHUB_STEP_SUMMARY
-            VULN_COUNT=$(cat audit-report.json | python -c "import json,sys; print(len(json.load(sys.stdin).get('vulnerabilities', [])))" || echo "0")
+            VULN_COUNT=$(jq '[.dependencies[] | .vulns[]?] | length' audit-report.json)
             echo "- Total vulnerabilities: $VULN_COUNT" >> $GITHUB_STEP_SUMMARY
           fi
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "✅ Security checks completed" >> $GITHUB_STEP_SUMMARY
+          echo "Security checks completed; see the job status for the blocking result." >> $GITHUB_STEP_SUMMARY
 
   # ===========================================================================
   # Job 2: Security Gates

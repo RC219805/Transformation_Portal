@@ -112,12 +112,12 @@ GENERIC_BASE_RUNTIME_LOCKS = ("all.txt", "base.txt")
 # because ml-core-darwin-arm64.in declares coremltools with a trailing # comment.
 # The x86 guard patterns check stripped non-comment lines, so they use [^#\n]*.
 
-SUPPORTED_TORCH_PIN = "2.12.0"
-SUPPORTED_TORCHVISION_PIN = "0.27.0"
+SUPPORTED_TORCH_PIN = "2.13.0"
+SUPPORTED_TORCHVISION_PIN = "0.28.0"
 SUPPORTED_DIFFUSERS_MIN = "0.38.0"
 SUPPORTED_DIFFUSERS_INPUT_RANGE = "diffusers>=0.38.0,<1"
-SUPPORTED_TRANSFORMERS_MIN = "5.0.0"
-SUPPORTED_TRANSFORMERS_INPUT_RANGE = "transformers>=5.0.0,<5.1"
+SUPPORTED_TRANSFORMERS_MIN = "5.5.0"
+SUPPORTED_TRANSFORMERS_INPUT_RANGE = "transformers>=5.5.0,<5.6"
 
 
 def read_expected_lock_python_version() -> str:

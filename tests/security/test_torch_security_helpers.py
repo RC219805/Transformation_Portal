@@ -300,7 +300,7 @@ def test_warn_if_vulnerable_silent_when_baseline_met(monkeypatch):
         ts,
         "check_torch_security_compliance",
         lambda: {
-            "torch_version": "2.12.0",
+            "torch_version": "2.13.0",
             "supported_security_baseline_met": True,
         },
     )

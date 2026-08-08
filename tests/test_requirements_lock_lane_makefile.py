@@ -56,11 +56,15 @@ def test_check_generic_normalizes_host_specific_generic_lock_packages() -> None:
         assert snippet in body
 
 
-def _write_fake_pip_compile(path: Path) -> None:
+def _write_fake_pip_compile(path: Path, *, version: str = "7.6.0") -> None:
     path.write_text(
         """#!/usr/bin/env python3
 from pathlib import Path
 import sys
+
+if "--version" in sys.argv:
+    print("pip-compile, version __PIP_TOOLS_VERSION__")
+    raise SystemExit(0)
 
 if "--help" in sys.argv:
     print("fake pip-compile")
@@ -98,10 +102,30 @@ else:
     body = ["packaging==99.0"]
 
 path.write_text("\\n".join(header + body) + "\\n", encoding="utf-8")
-""",
+""".replace("__PIP_TOOLS_VERSION__", version),
         encoding="utf-8",
     )
     path.chmod(0o755)
+
+
+@pytest.mark.security
+def test_require_pip_compile_rejects_stale_toolchain(tmp_path: Path) -> None:
+    fake_pip_compile = tmp_path / "pip-compile"
+    _write_fake_pip_compile(fake_pip_compile, version="7.5.2")
+
+    result = subprocess.run(
+        ["make", "require-pip-compile", f"PIP_COMPILE_BIN={fake_pip_compile}"],
+        cwd=MAKEFILE_PATH.parent,
+        env=os.environ.copy(),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode != 0
+    output = result.stdout + result.stderr
+    assert "requires pip-tools==7.6.0" in output
+    assert "pip-compile, version 7.5.2" in output
 
 
 def _write_lock_with_opencv_marker_pins(path: Path) -> None:

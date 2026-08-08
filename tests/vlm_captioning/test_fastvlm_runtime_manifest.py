@@ -308,6 +308,69 @@ def test_validate_fastvlm_runtime_json_reports_static_and_import_checks(
     assert payload["checks"]["python_imports"]["status"] == "skipped"
 
 
+def test_validate_fastvlm_runtime_redacts_human_and_json_error_details(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    validation_dir = str(repo_root / "scripts" / "validation")
+    sys.path.insert(0, validation_dir)
+    try:
+        module = _load_script_module(
+            "validate_fastvlm_runtime_redaction_test",
+            "scripts/validation/validate_fastvlm_runtime.py",
+        )
+    finally:
+        sys.path.remove(validation_dir)
+    private_detail = "private-runtime-detail-that-must-not-appear"
+    monkeypatch.setattr(module, "load_manifest", lambda _path: {})
+    monkeypatch.setattr(module, "runtime_root", lambda *_args, **_kwargs: tmp_path / "fastvlm")
+    monkeypatch.setattr(module, "selected_model_roles", lambda *_args, **_kwargs: ["smoke"])
+    monkeypatch.setattr(
+        module,
+        "_runtime_evidence",
+        lambda **_kwargs: {
+            "errors": [private_detail],
+            "checks": {},
+        },
+    )
+
+    rc = module.main(["--manifest", str(tmp_path / "manifest.json")])
+
+    captured = capsys.readouterr()
+    assert rc == 1
+    assert private_detail not in captured.err
+    assert "runtime verification failed" in captured.err
+    assert "details redacted" in captured.err.lower()
+
+    def invalid_manifest(_path: Path) -> dict:
+        raise module.ManifestError(private_detail)
+
+    monkeypatch.setattr(module, "load_manifest", invalid_manifest)
+
+    rc = module.main(["--manifest", str(tmp_path / "manifest.json")])
+
+    captured = capsys.readouterr()
+    assert rc == 2
+    assert private_detail not in captured.err
+    assert "manifest invalid" in captured.err
+    assert "details redacted" in captured.err.lower()
+
+    rc = module.main(["--manifest", str(tmp_path / "manifest.json"), "--json"])
+
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+    assert rc == 2
+    assert private_detail not in captured.out
+    assert str(tmp_path) not in captured.out
+    assert payload["manifest_path"] == "<redacted>"
+    assert payload["runtime_root"] == "<redacted>"
+    assert payload["errors"] == ["validation details redacted"]
+    assert payload["checks"]["manifest"]["path"] == "<redacted>"
+    assert payload["checks"]["manifest"]["errors"] == ["validation details redacted"]
+
+
 def test_downloader_rejects_bad_hash_without_promoting_partial_model(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

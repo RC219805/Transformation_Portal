@@ -167,7 +167,8 @@ Certain packages require minimum versions due to CVEs or security patches:
 
 **Security Monitoring Tools:**
 
-- `pip-audit` (in `requirements/security.in`): **Sole governed blocking dependency scanner.** Run in `.github/workflows/security-unified.yml` (`dependency-scan` job) on every PR and on the nightly + Tuesday-staggered schedules. **Scan target:** the installed Python 3.11 environment built from `requirements/constraints.txt` + `requirements-ci.txt` + editable project install + `requirements/security.txt` — the workflow invokes `pip-audit` with no `-r` flag, so it audits resolved packages rather than a single lockfile spec. **Block policy:** any HIGH or CRITICAL finding fails the job and blocks merge; LOW/MEDIUM findings are non-blocking. **Where to find LOW/MEDIUM details:** the full pip-audit JSON is printed to the job log and uploaded as the `security-reports-<sha>` `audit-report.json` artifact (30-day retention); the GitHub step summary records only the total vulnerability count. **Exception process:** time-bound suppressions use `pip-audit --ignore-vuln <CVE-ID>` with an inline comment in the workflow naming the CVE, the upstream tracking link, and the removal trigger (e.g., the current `--ignore-vuln CVE-2026-4539` pending an upstream pygments fix). Suppressions are reviewed every quarter; un-removable ones escalate to the next Approved Exceptions table entry.
+- `pip-audit` (in `requirements/security.in`): **Sole governed blocking dependency scanner.** Run in `.github/workflows/security-unified.yml` (`dependency-scan` job) on every PR and on the nightly + Tuesday-staggered schedules. **Scan target:** the installed Python 3.11 environment built from `requirements/constraints.txt` + `requirements-ci.txt` + editable project install + `requirements/security.txt`; the scanner bootstrap additionally pins the non-vulnerable toolchain `pip==26.1.2` and `setuptools==83.0.0`. The workflow invokes `pip-audit` with no `-r` flag, so it audits resolved packages rather than a single lockfile spec. **Block policy:** every reported advisory fails the job and blocks merge; any audit execution failure, missing report, or malformed report also fails closed. `pip-audit` 2.10.1 does not include severity in its JSON report, so the workflow does not attempt severity filtering; it counts the records under `dependencies[].vulns[]` and propagates the scanner's nonzero exit. **Where to find details:** the full pip-audit JSON is printed to the job log and uploaded as the `security-reports-<sha>` `audit-report.json` artifact (30-day retention); the GitHub step summary records the nested vulnerability count. **Exception process:** time-bound suppressions use `pip-audit --ignore-vuln <CVE-ID>` with an inline comment in the workflow naming the CVE, the upstream tracking link, and the removal trigger. Suppressions are reviewed every quarter; un-removable ones escalate to the next Approved Exceptions table entry.
+- CI bootstrap tools are part of the security baseline. Determinism workflows pin `pip==26.1.2`, `setuptools==83.0.0`, and `wheel==0.46.2`; lock-generation workflows pair pip 26.1.2 with `pip-tools==7.6.0`, the first release with upstream pip 26.1 support. The requirements Makefile rejects any other pip-tools version before lock generation. These pins must move atomically when a bootstrap-tool advisory or compatibility boundary changes.
 - `bandit[toml]` (in `requirements/security.in`): Static security analysis for Python source.
 - Dependabot: GitHub-native automated PR creation for security patches.
 
@@ -651,8 +652,8 @@ Use this checklist every quarter (Feb, May, Aug, Nov):
 
 ---
 
-**Document Version:** 1.1
-**Last Updated:** 2026-05-18 (Amendment A1)
+**Document Version:** 1.2
+**Last Updated:** 2026-08-06 (Amendment A2)
 **Next Review:** 2026-08-16 (Q3 2026; quarterly cadence per Appendix B)
 **Approvers:** Platform Engineering Team
 
@@ -678,6 +679,19 @@ Use this checklist every quarter (Feb, May, Aug, Nov):
 - `.github/workflows/security-unified.yml` — invocation, blocking semantics, current `--ignore-vuln` suppressions.
 
 **Re-introduction policy:** Re-adding Safety (or any additional dependency scanner) requires a follow-up ADR amendment that explains how the transitive-dependency noise problem is mitigated and why pip-audit alone is insufficient.
+
+---
+
+### A2 — 2026-08-06: pip-audit aligned with its JSON schema and fail-closed policy
+
+**Scope:** §3 "Security Monitoring Tools" and `.github/workflows/security-unified.yml`.
+
+**Change:**
+- Changed the governed block policy from severity filtering to blocking every reported advisory.
+- Counted pip-audit 2.10.1 findings from `dependencies[].vulns[]` in the gate and job summary.
+- Required missing or malformed reports and every nonzero scanner exit to fail closed.
+
+**Rationale:** pip-audit 2.10.1 reports advisory records without severity metadata. The previous workflow queried nonexistent top-level `vulnerabilities` and `severity` fields, then ignored the captured scanner exit, so a report with known vulnerabilities could incorrectly pass. Blocking every advisory matches the direct pip-audit invocations in `.github/workflows/ci.yml` and `.github/workflows/ci-quality-firewall.yml` and keeps the governed scanner deterministic.
 
 ---
 

@@ -100,6 +100,17 @@ class TestMetaEndpoint:
 
         assert client.get("/api/preview/artifact/deadbeef/meta").status_code == 404
 
+    @pytest.mark.parametrize("operation", ["meta", "raw", "thumbnail", "text"])
+    def test_returns_404_for_invalid_hash(
+        self,
+        client: TestClient,
+        cas: ArtifactStore,
+        operation: str,
+    ) -> None:
+        artifact_preview.set_preview_cas(cas)
+
+        assert client.get(f"/api/preview/artifact/{'g' * 64}/{operation}").status_code == 404
+
     def test_returns_image_metadata(self, client: TestClient, cas: ArtifactStore) -> None:
         obj = cas.add_bytes(_png_bytes())
         artifact_preview.set_preview_cas(cas)

@@ -117,7 +117,10 @@ def create_node_inspection_router() -> "APIRouter":
 
             # Try to get CAS metadata
             if _global_cas:
-                obj = _global_cas.get_object(hash)
+                try:
+                    obj = _global_cas.get_object(hash)
+                except ValueError:
+                    obj = None
                 if obj:
                     artifact_info["size_bytes"] = obj.size_bytes
                     artifact_info["path"] = str(obj.path)
@@ -194,7 +197,10 @@ def create_node_inspection_router() -> "APIRouter":
         if _global_cas is None:
             raise HTTPException(status_code=503, detail="CAS not configured")
 
-        obj = _global_cas.get_object(hash)
+        try:
+            obj = _global_cas.get_object(hash)
+        except ValueError:
+            raise HTTPException(status_code=404, detail="Artifact not found") from None
         if obj is None:
             raise HTTPException(status_code=404, detail=f"Artifact not found: {hash}")
 
@@ -218,7 +224,10 @@ def create_node_inspection_router() -> "APIRouter":
         if _global_cas is None:
             raise HTTPException(status_code=503, detail="CAS not configured")
 
-        obj = _global_cas.get_object(hash)
+        try:
+            obj = _global_cas.get_object(hash)
+        except ValueError:
+            raise HTTPException(status_code=404, detail="Artifact not found") from None
         if obj is None:
             raise HTTPException(status_code=404, detail="Artifact not found")
 
@@ -275,7 +284,10 @@ def create_node_inspection_router() -> "APIRouter":
         if _global_cas is None:
             raise HTTPException(status_code=503, detail="CAS not configured")
 
-        obj = _global_cas.get_object(hash)
+        try:
+            obj = _global_cas.get_object(hash)
+        except ValueError:
+            raise HTTPException(status_code=404, detail="Artifact not found") from None
         if obj is None:
             raise HTTPException(status_code=404, detail="Artifact not found")
 
