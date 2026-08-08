@@ -713,7 +713,7 @@ Certain packages require minimum versions due to CVEs:
 | `sentence-transformers` | >=3.1.0         | CVE-73169 (arbitrary code execution) |
 | `msgpack`               | >=1.2.1         | GHSA-6v7p-g79w-8964 |
 | `Pillow`                | >=10.3.0        | CVE-2024-28219 and multiple 9.x CVEs |
-| `pypdf`                 | >=6.13.3        | GHSA-jm82-fx9c-mx94 |
+| `pypdf`                 | >=6.15.0        | GHSA-fwg2-594c-jp42 and GHSA-fp3f-mc75-235c |
 | `starlette`             | >=1.3.1         | CVE-2026-48710 / PYSEC-2026-161 plus 2026 web-stack advisories |
 
 ### Approved Exceptions
