@@ -130,7 +130,7 @@ jobs:
       # P0 Enhancement: pip-audit for dependency vulnerability scanning
       - name: Install security tools
         run: |
-          python -m pip install --upgrade "pip==25.3" "setuptools==83.0.0"
+          python -m pip install --upgrade "pip==26.1.2" "setuptools==83.0.0"
           # Install from locked requirements file for deterministic, governed security tooling
           pip install -r requirements/security.txt
 

@@ -28,7 +28,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          python -m pip install --upgrade "pip==24.0" "setuptools==69.0.3" "wheel==0.42.0"
+          python -m pip install --upgrade "pip==26.1.2" "setuptools==83.0.0" "wheel==0.46.2"
           pip install -r requirements/base.txt -r requirements/dev.txt
           pip install -e . --no-deps
 
@@ -156,7 +156,7 @@ jobs:
 
       - name: Install dependencies for Python 3.12 parity gates
         run: |
-          python -m pip install --upgrade "pip==24.0" "setuptools==69.0.3" "wheel==0.42.0"
+          python -m pip install --upgrade "pip==26.1.2" "setuptools==83.0.0" "wheel==0.46.2"
           pip install -r requirements/base.txt -r requirements/dev.txt
           pip install -e . --no-deps
 

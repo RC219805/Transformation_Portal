@@ -127,7 +127,7 @@ compile-accel:
 require-pip-compile:
 	@if ! command -v "$(PIP_COMPILE_BIN)" >/dev/null 2>&1; then \
 		echo "ERROR: pip-compile is required for requirements/Makefile targets."; \
-		echo "ERROR: Install pip-tools==7.5.2 in the active environment before running compile/update/check commands."; \
+		echo "ERROR: Install pip-tools==7.5.3 in the active environment before running compile/update/check commands."; \
 		exit 1; \
 	fi
 
