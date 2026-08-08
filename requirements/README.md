@@ -224,7 +224,8 @@ python -m pip install "pip-tools==7.6.0"
 `pip-tools 7.6.0` replaces the incompatible 7.5.2 baseline and is the first
 release with upstream support for pip 26.1. The workflow in
 `.github/workflows/secure-install-pilot.yml` applies this toolchain
-automatically, so local runs should use the same versions.
+automatically. The requirements Makefile fails closed when `pip-compile`
+reports any other version, so local runs must use the same versions.
 ```bash
 cd requirements
 make compile-hash-pilot LOCK_PYTHON_VERSION=3.11
