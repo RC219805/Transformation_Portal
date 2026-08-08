@@ -152,7 +152,7 @@ ci = [
     "build>=1.0,<2",
     "twine>=4.0,<7",
     "tox>=4.5,<5",
-    "pypdf>=6.13.3",
+    "pypdf>=6.15.0",
 ]
 # All dependencies combined (minimal pointer, not full graph)
 # For production, use lockfiles: requirements/all.txt

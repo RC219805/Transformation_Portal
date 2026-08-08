@@ -207,7 +207,7 @@ Exceptions to pinning rules require explicit approval via one of:
 | `psutil`      | ml.in   | `>=5.9.0`       | System utilities: OS compatibility layer   |
 | `memory-profiler` | ml.in | `>=0.61.0`  | Dev/profiling tool in optional deps        |
 | `types-PyYAML` | dev.in | `>=6.0.12`     | Type stubs: must track PyYAML version      |
-| `pypdf`       | ci.in   | `>=6.13.3`      | PDF utilities: backward-compatible 6.x security floor |
+| `pypdf`       | ci.in   | `>=6.15.0`      | PDF utilities: backward-compatible 6.x security floor |
 
 ---
 

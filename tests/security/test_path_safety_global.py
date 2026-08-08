@@ -226,6 +226,15 @@ class TestSafeCasPath:
         with pytest.raises(PathSafetyError):
             safe_cas_path(tmp_path, "../" + "a" * 61)
 
+    def test_symlinked_shard_cannot_escape_objects_directory(self, tmp_path: Path) -> None:
+        """A shard symlink cannot redirect CAS access outside its root."""
+        outside_dir = tmp_path.parent / f"{tmp_path.name}-outside"
+        outside_dir.mkdir()
+        (tmp_path / "aa").symlink_to(outside_dir, target_is_directory=True)
+
+        with pytest.raises(PathSafetyError, match="escapes objects directory"):
+            safe_cas_path(tmp_path, "a" * 64)
+
 
 @pytest.mark.security
 class TestPathSafetyIntegration:

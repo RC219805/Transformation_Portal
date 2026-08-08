@@ -13,7 +13,7 @@ NOT:
 Key guarantees:
 - Pre-sanitization before path construction
 - Whitelist-based validation (not blocklist)
-- No reliance on .resolve() or .relative_to() as security boundaries
+- Normalized containment checks before filesystem access where symlinks matter
 - CodeQL-compliant patterns
 
 Usage:
@@ -31,6 +31,7 @@ Usage:
 from __future__ import annotations
 
 import logging
+import os
 import re
 from pathlib import Path
 from typing import List
@@ -225,9 +226,15 @@ def safe_cas_path(
     """
     safe_sha = validate_sha256(sha256)
 
-    # Standard 2-char prefix sharding
-    prefix = safe_sha[:2]
-    filepath = objects_dir / prefix / safe_sha
+    # Normalize before the containment check so both runtime enforcement and
+    # static analysis can prove that filesystem access stays under the CAS
+    # objects directory, including when a shard is replaced by a symlink.
+    normalized_root = os.path.realpath(os.fspath(objects_dir))
+    filepath = os.path.realpath(os.path.join(normalized_root, safe_sha[:2], safe_sha))
+    root_prefix = normalized_root if normalized_root.endswith(os.sep) else normalized_root + os.sep
+    if not filepath.startswith(root_prefix):
+        logger.warning("Path safety: rejected CAS path outside objects directory")
+        raise PathSafetyError("CAS path escapes objects directory")
 
     logger.debug("Path safety: constructed CAS path %s", filepath)
-    return filepath
+    return Path(filepath)
