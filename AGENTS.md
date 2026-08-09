@@ -144,9 +144,8 @@ actionable; use the linked docs and `Makefile` for exhaustive inventories.
   `<!-- ai-summarizer-diagnostic -->` stay log-only; only marker-free
   successful summaries should post PR comments.
 - Secure-install hash pilot:
-  from `requirements/`, run
-  `make compile-hash-pilot LOCK_PYTHON_VERSION=3.11` then
-  `make check-hash-pilot LOCK_PYTHON_VERSION=3.11`; use
+  `make -C requirements compile-hash-pilot LOCK_PYTHON_VERSION=3.11` then
+  `make -C requirements check-hash-pilot LOCK_PYTHON_VERSION=3.11`; use
   `HASH_PILOT_OUT_DIR=/tmp/tp-hash-pilot` to keep pilot artifacts disposable.
   Match CI with `python -m pip install --upgrade "pip==26.1.2"` and
   `python -m pip install "pip-tools==7.6.0"`. Use the same toolchain for the
