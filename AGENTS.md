@@ -118,7 +118,8 @@ actionable; use the linked docs and `Makefile` for exhaustive inventories.
   `make validate-ci`,
   `make check-stale-docs`, `make check-doc-heading-links`,
   `make check-todo-governance`, `make check-ci-sync`,
-  `make check-requirements-lock-contract`, `make check-dependency-pinning`,
+  `make check-piptools-cache`, `make check-requirements-lock-contract`,
+  `make check-dependency-pinning`,
   `make check-json-serialization`, `make check-yaml-governance`,
   `make check-python-headers`, and
   `python3 scripts/governance/check_docs_structure.py --all`. For direct
@@ -137,6 +138,24 @@ actionable; use the linked docs and `Makefile` for exhaustive inventories.
   `docs/ci/WORKFLOW_MATRIX.md` must match live `.github/workflows/*.yml`
   inventory counts plus per-workflow line estimates. Treat workflow-matrix
   recommendations as proposals until matching workflow YAML changes land.
+- AI advisory workflow contracts:
+  `./.venv/bin/pytest tests/test_summary_workflow.py tests/test_ai_code_review_workflow.py tests/test_smart_issue_management_workflow.py -q`.
+  Issue summarizer fallback diagnostics carrying
+  `<!-- ai-summarizer-diagnostic -->` stay log-only; only marker-free
+  successful summaries should post PR comments.
+- Secure-install hash pilot:
+  from `requirements/`, run
+  `make compile-hash-pilot LOCK_PYTHON_VERSION=3.11` then
+  `make check-hash-pilot LOCK_PYTHON_VERSION=3.11`; use
+  `HASH_PILOT_OUT_DIR=/tmp/tp-hash-pilot` to keep pilot artifacts disposable.
+  Match CI with `python -m pip install --upgrade "pip==26.1.2"` and
+  `python -m pip install "pip-tools==7.6.0"`. Use the same toolchain for the
+  decisive generic-lock freshness check:
+  `make -C requirements check-generic LOCK_PYTHON_VERSION=3.11`. Validate
+  contract changes with
+  `./.venv/bin/pytest tests/test_requirements_makefile_hash_pilot.py tests/test_secure_install_pilot_workflow.py -q`.
+  This pilot is advisory and does not replace the standard checked-in lock or
+  install flows.
 - Root metadata contract tests:
   `./.venv/bin/pytest tests/validation/test_cloudflare_worker_root_shim_contract.py tests/validation/test_git_blame_ignore_revs_contract.py tests/validation/test_gitattributes_contract.py tests/validation/test_pylint_config_contract.py -v`.
 - Coverage/cold-zone:
