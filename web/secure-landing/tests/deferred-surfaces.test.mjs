@@ -42,7 +42,7 @@ test("deferred Build load reconciles state fetched before lazy import", () => {
   );
 });
 
-test("renderJobQueue does not import Operate surface outside active Operate views", () => {
+test("renderJobQueue stays deferred while idle and loads for active Build dispatches", () => {
   const shouldLoad = sourceBetween(
     portalTemplate,
     "function _shouldLoadDeferredOperateSurface()",
@@ -50,6 +50,9 @@ test("renderJobQueue does not import Operate surface outside active Operate view
   );
   assert.match(shouldLoad, /if \(!_isBootstrapReady\(\)\) return false;/);
   assert.match(shouldLoad, /_isOperateQueuePanelVisible\(\)/);
+  assert.match(shouldLoad, /state\.currentView === 'build'/);
+  assert.match(shouldLoad, /state\.portalUi\.dispatchPending/);
+  assert.match(shouldLoad, /state\.portalUi\.dispatchHandoffJobId/);
 
   const renderJobQueue = sourceBetween(
     portalTemplate,

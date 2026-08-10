@@ -34,7 +34,6 @@
     border-color: rgba(8, 145, 178, 0.28);
     background: rgba(255, 255, 255, 0.84);
     box-shadow: 0 14px 28px rgba(14, 116, 144, 0.08);
-    outline: none;
 }
 
 .workspace-link:focus-visible {

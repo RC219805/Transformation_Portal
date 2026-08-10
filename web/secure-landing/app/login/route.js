@@ -39,6 +39,7 @@ export const runtime = "nodejs";
 
 function resolveLoginMessage(code) {
   if (code === "access") return "Access verification is required before sign-in can continue. Refresh your Access session and try again.";
+  if (code === "access_unavailable") return "Managed access verification is temporarily unavailable. Retry after the Access service recovers.";
   if (code === "csrf") return "Your session could not be verified. Refresh the page and submit the form again.";
   if (code === "throttled") return "Too many sign-in attempts. Wait a few minutes before trying again.";
   if (code === "configuration") return "Operator access is temporarily unavailable. Contact an administrator if this persists.";
@@ -47,6 +48,7 @@ function resolveLoginMessage(code) {
 
 function resolveRecoveryGuidance(code) {
   if (code === "access") return "Re-open the verified access path, then return here after Access identity is restored.";
+  if (code === "access_unavailable") return "Retry managed access after the verification service recovers. Operator credentials remain fail-closed until then.";
   if (code === "csrf") return "Refresh the page to mint a clean session, then retry the operator credential handoff.";
   if (code === "throttled") return "Wait for the throttle window to clear before attempting the operator credential handoff again.";
   if (code === "configuration") return "Managed entry is fail-closed until the front door configuration is restored.";
@@ -55,7 +57,12 @@ function resolveRecoveryGuidance(code) {
 
 function resolveEntryState({ accessEmail, errorCode, bypass = false }) {
   const hasVerifiedAccess = Boolean(accessEmail) || Boolean(bypass);
-  const hasRecoveryIssue = Boolean(errorCode);
+  const normalizedErrorCode = String(errorCode || "").trim().toLowerCase();
+  const hasRecoveryIssue = Boolean(normalizedErrorCode);
+  const hasBlockingError = ["configuration", "csrf", "throttled", "access_unavailable"].includes(normalizedErrorCode)
+    || (normalizedErrorCode === "access" && !hasVerifiedAccess);
+  const formEnabled = hasVerifiedAccess && !hasBlockingError;
+  const isCredentialRetry = hasRecoveryIssue && !hasBlockingError;
   const accessLabel = bypass
     ? "Local development bypass active"
     : hasVerifiedAccess
@@ -66,20 +73,27 @@ function resolveEntryState({ accessEmail, errorCode, bypass = false }) {
     : hasVerifiedAccess
       ? `Verified for <strong>${escapeHtml(accessEmail)}</strong>.`
       : "Managed access verification opens the next step.";
-  const credentialLabel = hasRecoveryIssue ? "Recovery required" : hasVerifiedAccess ? "Credential handoff ready" : "Waiting on verified access";
+  const credentialLabel = isCredentialRetry
+    ? "Credentials need another attempt"
+    : hasRecoveryIssue
+      ? "Recovery required"
+      : hasVerifiedAccess
+        ? "Credential handoff ready"
+        : "Waiting on verified access";
   const credentialDetail = hasRecoveryIssue
-    ? escapeHtml(resolveRecoveryGuidance(errorCode))
-    : hasVerifiedAccess
+    ? escapeHtml(resolveRecoveryGuidance(normalizedErrorCode))
+    : formEnabled
       ? "Continue with operator credentials."
       : "Credential handoff stays closed until access is verified.";
   return {
     accessState: hasVerifiedAccess ? "verified" : "required",
-    credentialState: hasRecoveryIssue ? "blocked" : hasVerifiedAccess ? "ready" : "waiting",
+    credentialState: formEnabled ? (isCredentialRetry ? "retry" : "ready") : hasRecoveryIssue ? "blocked" : "waiting",
     accessLabel,
     accessDetail,
     credentialLabel,
     credentialDetail,
-    recoveryState: hasRecoveryIssue ? String(errorCode || "").trim().toLowerCase() || "invalid" : "clear",
+    formEnabled,
+    recoveryState: hasRecoveryIssue ? normalizedErrorCode || "invalid" : "clear",
   };
 }
 
@@ -87,9 +101,18 @@ function renderLoginPage({ csrfToken, accessEmail, errorCode, bypass = false, re
   const rumScriptTag = rumScript && scriptNonce
     ? `<script nonce="${escapeHtml(scriptNonce)}">${rumScript}</script>`
     : "";
-  const errorMessage = errorCode ? resolveLoginMessage(errorCode) : "";
   const entryState = resolveEntryState({ accessEmail, errorCode, bypass });
+  const normalizedErrorCode = entryState.recoveryState === "clear" ? "" : entryState.recoveryState;
+  const errorMessage = normalizedErrorCode ? resolveLoginMessage(normalizedErrorCode) : "";
   const hasAccessContext = Boolean(bypass || accessEmail);
+  const formState = entryState.formEnabled
+    ? normalizedErrorCode ? "retry" : "ready"
+    : "blocked";
+  const disabledControlAttributes = entryState.formEnabled ? "" : " disabled aria-disabled=\"true\"";
+  const cleanLoginHref = returnTo
+    ? `/login?returnTo=${encodeURIComponent(returnTo)}`
+    : "/login";
+  const canStartFreshSignIn = ["access", "access_unavailable", "csrf"].includes(normalizedErrorCode);
   const escapedAccessEmail = accessEmail ? escapeHtml(accessEmail) : "";
   const accessSequenceDetail = bypass
     ? "Local troubleshooting bypass is active for this front door session."
@@ -118,12 +141,14 @@ function renderLoginPage({ csrfToken, accessEmail, errorCode, bypass = false, re
       }
       : null;
   const nextStepTitle = errorMessage
-    ? "Recovery is required before sign-in can continue."
+    ? entryState.formEnabled
+      ? "Re-enter your operator credentials."
+      : "Recovery is required before sign-in can continue."
     : bypass || accessEmail
       ? "Credential handoff is ready."
       : "Managed access must complete first.";
   const nextStepDetail = errorMessage
-    ? resolveRecoveryGuidance(errorCode)
+    ? resolveRecoveryGuidance(normalizedErrorCode)
     : bypass
       ? "Use your operator username and password to continue into the governed console."
       : accessEmail
@@ -131,10 +156,11 @@ function renderLoginPage({ csrfToken, accessEmail, errorCode, bypass = false, re
       : "Return after managed access verification opens operator credential entry.";
 
   return `<!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="dark" data-theme="dark">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark" />
     <title>Dynamic Neural Access | Transformation Portal</title>
     <link rel="stylesheet" href="/login.css" />
   </head>
@@ -181,45 +207,67 @@ function renderLoginPage({ csrfToken, accessEmail, errorCode, bypass = false, re
             <p class="eyebrow" data-ui="login-eyebrow">Managed operator access</p>
             <h1 data-ui="login-title">Continue to the operator console.</h1>
             <p class="lede" data-ui="login-lede">
-              Confirm managed access, then complete credential handoff into the governed dispatch, operation, and review console.
+              Sign in after managed access is verified. The operator console remains closed whenever that boundary is unavailable.
             </p>
+            ${errorMessage ? `<div class="login-status-stack" data-ui="login-status-stack">
+              <div class="banner" data-ui="login-error-banner" role="alert">
+                <p class="banner-title">Sign-in needs attention</p>
+                <p class="banner-detail">${escapeHtml(errorMessage)}</p>
+              </div>
+            </div>` : ""}
             <div class="login-entry-state" data-ui="login-entry-state">
               <article class="login-status-card" data-ui="login-access-status" data-state="${escapeHtml(entryState.accessState)}">
                 <p class="login-status-card-kicker">Verified access</p>
                 <p class="login-status-card-title">${entryState.accessLabel}</p>
                 <p class="login-status-card-detail">${entryState.accessDetail}</p>
               </article>
-              <article class="login-status-card" data-ui="login-credential-status" data-state="${escapeHtml(entryState.credentialState)}">
-                <p class="login-status-card-kicker">Credential handoff</p>
-                <p class="login-status-card-title">${entryState.credentialLabel}</p>
-                <p class="login-status-card-detail">${entryState.credentialDetail}</p>
-              </article>
             </div>
-            <div class="login-capability-summary" data-ui="login-capability-summary">
-              <p class="login-status-card-kicker">Portal capabilities</p>
-              <ul>
-                <li>Managed dispatch, queue operation, artifact review, provenance, and run-card proof surfaces.</li>
-                <li>Archive gates, staged uploads, Lux Depth, SAM2, reconstruction, RAW ingest, and FastVLM controls surface only from existing portal contracts.</li>
-                <li>Gated or missing runtimes stay disabled until rollout, license, configuration, or recovery prerequisites clear.</li>
-              </ul>
-            </div>
-            <div class="login-next-step" data-state="${escapeHtml(entryState.credentialState)}">
-              <p class="login-next-step-kicker">Next step</p>
-              <p class="login-next-step-title">${escapeHtml(nextStepTitle)}</p>
-              <p class="login-next-step-detail">${escapeHtml(nextStepDetail)}</p>
-            </div>
-            ${errorMessage ? `<div class="login-status-stack" data-ui="login-status-stack">
-              ${errorMessage ? `<div class="banner" data-ui="login-error-banner" role="alert">
-                <p class="banner-title">Sign-in needs attention</p>
-                <p class="banner-detail">${escapeHtml(errorMessage)}</p>
-              </div>` : ""}
-            </div>` : ""}
+            <form method="post" action="/login" autocomplete="on" data-ui="login-form" data-form-state="${formState}" aria-describedby="login-form-status">
+              <input type="hidden" name="csrf_token" value="${escapeHtml(csrfToken)}" />
+              ${returnTo ? `<input type="hidden" name="returnTo" value="${escapeHtml(returnTo)}" />` : ""}
+              <label data-ui="login-username-field">
+                Username
+                <input type="text" name="username" autocomplete="username" required${disabledControlAttributes} />
+              </label>
+              <label data-ui="login-password-field">
+                Password
+                <input type="password" name="password" autocomplete="current-password" required${disabledControlAttributes} />
+              </label>
+              <p id="login-form-status" class="login-helper" data-ui="login-helper">
+                ${entryState.formEnabled
+                  ? "Use your operator credentials. Successful sign-in rotates the session before portal handoff."
+                  : escapeHtml(nextStepDetail)}
+              </p>
+              <div class="login-actions" data-ui="login-actions">
+                <button type="submit" data-ui="login-submit"${disabledControlAttributes}>Sign in</button>
+                ${canStartFreshSignIn ? `<a class="login-secondary-link" href="${escapeHtml(cleanLoginHref)}" data-ui="login-retry-link">${normalizedErrorCode === "access" || normalizedErrorCode === "access_unavailable" ? "Retry managed access" : normalizedErrorCode === "csrf" ? "Start a fresh sign-in" : "Retry sign-in"}</a>` : ""}
+                <a class="login-secondary-link" href="/" data-ui="login-secondary-link">Review public proof surface</a>
+              </div>
+            </form>
             <details class="login-secondary-details" data-ui="login-sequence">
               <summary>
-                <span>Access details</span>
+                <span>Access and portal details</span>
                 <span class="login-secondary-details__meta">${bypass ? "Bypass context" : hasAccessContext ? "Verified context" : "Managed entry flow"}</span>
               </summary>
               <div class="login-secondary-details__content">
+                <article class="login-status-card" data-ui="login-credential-status" data-state="${escapeHtml(entryState.credentialState)}">
+                  <p class="login-status-card-kicker">Credential handoff</p>
+                  <p class="login-status-card-title">${entryState.credentialLabel}</p>
+                  <p class="login-status-card-detail">${entryState.credentialDetail}</p>
+                </article>
+                <div class="login-capability-summary" data-ui="login-capability-summary">
+                  <p class="login-status-card-kicker">Portal capabilities</p>
+                  <ul>
+                    <li>Managed dispatch, queue operation, artifact review, provenance, and run-card proof surfaces.</li>
+                    <li>Archive gates, staged uploads, Lux Depth, SAM2, reconstruction, RAW ingest, and FastVLM controls surface only from existing portal contracts.</li>
+                    <li>Gated or missing runtimes stay disabled until rollout, license, configuration, or recovery prerequisites clear.</li>
+                  </ul>
+                </div>
+                <div class="login-next-step" data-state="${escapeHtml(entryState.credentialState)}">
+                  <p class="login-next-step-kicker">Next step</p>
+                  <p class="login-next-step-title">${escapeHtml(nextStepTitle)}</p>
+                  <p class="login-next-step-detail">${escapeHtml(nextStepDetail)}</p>
+                </div>
                 <div class="login-sequence">
                   <article class="login-sequence-step${hasAccessContext ? " login-sequence-step--ready" : ""}">
                     <p class="login-sequence-step-kicker">Step 1</p>
@@ -239,25 +287,6 @@ function renderLoginPage({ csrfToken, accessEmail, errorCode, bypass = false, re
                 </div>` : ""}
               </div>
             </details>
-            <form method="post" action="/login" autocomplete="on" data-ui="login-form">
-              <input type="hidden" name="csrf_token" value="${escapeHtml(csrfToken)}" />
-              ${returnTo ? `<input type="hidden" name="returnTo" value="${escapeHtml(returnTo)}" />` : ""}
-              <label data-ui="login-username-field">
-                Username
-                <input type="text" name="username" autocomplete="username" required />
-              </label>
-              <label data-ui="login-password-field">
-                Password
-                <input type="password" name="password" autocomplete="current-password" required />
-              </label>
-              <p class="login-helper" data-ui="login-helper">
-                Use your operator credentials. Successful sign-in rotates the session before portal handoff.
-              </p>
-              <div class="login-actions" data-ui="login-actions">
-                <button type="submit" data-ui="login-submit">Sign in</button>
-                <a class="login-secondary-link" href="/" data-ui="login-secondary-link">Review public proof surface</a>
-              </div>
-            </form>
           </div>
         </div>
       </section>
@@ -308,6 +337,20 @@ export async function GET(request) {
   // token on the login form is bound to a server-side session from the start.
   session = session || (await createAnonymousSession());
   const accessContext = await resolveAccessContext(request);
+  const requestedErrorCode = request.nextUrl.searchParams.get("error");
+  const configurationError = accessContext.errorCode === "configuration" || !getConfig().users.length
+    ? "configuration"
+    : "";
+  const liveAccessError = ["jwks_unreachable", "jwks_invalid"].includes(accessContext.errorCode)
+    ? "access_unavailable"
+    : accessContext.errorCode && accessContext.errorCode !== "missing_assertion" && !accessContext.accessEmail && !accessContext.bypass
+      ? "access"
+      : "";
+  const activeErrorCode = requestedErrorCode === "access" && (accessContext.accessEmail || accessContext.bypass)
+    ? ""
+    : requestedErrorCode === "configuration" && !configurationError
+      ? ""
+      : requestedErrorCode;
   const rumTraceparent = resolveRequestTraceparent(request);
   const rumEnabled = isFrontdoorRumTelemetryEnabled({ traceparent: rumTraceparent });
   const scriptNonce = rumEnabled ? generateScriptNonce() : null;
@@ -321,7 +364,7 @@ export async function GET(request) {
   const html = renderLoginPage({
     csrfToken: session.csrfToken,
     accessEmail: accessContext.accessEmail,
-    errorCode: request.nextUrl.searchParams.get("error"),
+    errorCode: configurationError || liveAccessError || activeErrorCode,
     bypass: accessContext.bypass,
     returnTo: requestedReturnTo || "",
     rumScript,

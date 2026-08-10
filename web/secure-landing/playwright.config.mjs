@@ -16,8 +16,9 @@
 //
 // The two webServer entries boot:
 //   1. The Node mock FastAPI origin on MOCK_FASTAPI_PORT (default 9999).
-//      Serves portal.html with placeholder URLs substituted to inert
-//      mock-asset stubs.
+//      Serves portal.html with production CSS/font/brand assets and inert
+//      per-surface JavaScript URLs. Hydrated specs opt into the production
+//      bundles by intercepting those distinct script URLs.
 //   2. The front-door Next.js dev server on PLAYWRIGHT_BASE_URL's port.
 //      Configured via TP_FASTAPI_ORIGIN to proxy to the mock above.
 //

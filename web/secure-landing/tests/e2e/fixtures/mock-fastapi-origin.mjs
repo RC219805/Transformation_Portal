@@ -6,8 +6,10 @@
 // server-side from the Next.js process, so browser-level page.route()
 // cannot intercept it. This tiny Node origin stands in for FastAPI
 // and serves the real portal.html template with placeholder URLs
-// substituted to inert mock-served stubs — keeping the assertions
-// against live portal markup, not a hand-written fixture.
+// substituted to mock-served assets. CSS, fonts, and brand assets come
+// from the production bundle; JavaScript stays inert by default so
+// structural specs are deterministic. Hydrated specs can intercept the
+// distinct script URLs and fulfill them with the production bundles.
 //
 // Lifecycle is owned by Playwright's webServer config (no
 // globalSetup/globalTeardown). The script starts a node:http server
@@ -24,9 +26,10 @@ const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..
 const PORTAL_HTML_PATH = process.env.MOCK_FASTAPI_PORTAL_HTML
   ? path.resolve(process.env.MOCK_FASTAPI_PORTAL_HTML)
   : path.join(REPO_ROOT, "portal.html");
+const PORTAL_ASSETS_DIR = path.join(REPO_ROOT, "public", "portal-assets");
 const PUBLIC_ORIGIN = `http://${HOST}:${PORT}`;
 
-// Mock-served stub asset paths the placeholder substitutions point at.
+// Mock-served asset paths the placeholder substitutions point at.
 // Asset URLs in the substituted HTML are *fully qualified* back to the
 // mock origin (PUBLIC_ORIGIN below), because the front-door serves the
 // proxied portal HTML at port 3000 — root-relative paths would resolve
@@ -35,17 +38,31 @@ const PUBLIC_ORIGIN = `http://${HOST}:${PORT}`;
 // headers), and the /portal route doesn't apply CSP (lib/http.js:138),
 // so cross-origin <link>/<script>/<img> loads have no policy hurdle.
 //
-// Each stub returns a minimal valid body so the browser does not raise
-// errors when loading these assets — the @portal-browser specs assert
-// `consoleErrors === []` end-to-end.
-const STUB_ROUTES = new Map([
-  ["/__mock-portal-asset.css", { type: "text/css; charset=utf-8", body: "/* mock portal css */\n" }],
-  ["/__mock-portal-asset.js", { type: "text/javascript; charset=utf-8", body: "/* mock portal js */\n" }],
-  ["/__mock-portal-asset.svg", {
-    type: "image/svg+xml",
-    body: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1 1"></svg>'
-  }]
+// Production visual assets keep layout/a11y checks representative. Script
+// stubs keep older structural specs deterministic; hydrated specs intercept
+// their distinct paths with production bundles.
+const SCRIPT_STUB_ROUTES = new Map([
+  "/__mock-portal/portal.js",
+  "/__mock-portal/portal-build.js",
+  "/__mock-portal/portal-profile.js",
+  "/__mock-portal/portal-operate.js",
+  "/__mock-portal/portal-overview.js",
+  "/__mock-portal/portal-review.js",
+].map((pathname) => [pathname, { type: "text/javascript; charset=utf-8", body: "/* mock portal js */\n" }]));
+
+const FILE_ROUTES = new Map([
+  ["/__mock-portal/portal-review.css", { type: "text/css; charset=utf-8", file: "portal-review.css" }],
+  ["/__mock-portal/portal-sans.woff2", { type: "font/woff2", file: "fonts/portal-sans.woff2" }],
+  ["/__mock-portal/portal-mono.woff2", { type: "font/woff2", file: "fonts/portal-mono.woff2" }],
+  ["/__mock-portal/dna-symbol-light.svg", { type: "image/svg+xml", file: "brand/dna-symbol-light.svg" }],
+  ["/__mock-portal/dna-symbol-dark.svg", { type: "image/svg+xml", file: "brand/dna-symbol-dark.svg" }],
 ]);
+
+function readPortalCss() {
+  return readFileSync(path.join(PORTAL_ASSETS_DIR, "portal.css"), "utf-8")
+    .replaceAll("__PORTAL_FONT_SANS_URL__", `${PUBLIC_ORIGIN}/__mock-portal/portal-sans.woff2`)
+    .replaceAll("__PORTAL_FONT_MONO_URL__", `${PUBLIC_ORIGIN}/__mock-portal/portal-mono.woff2`);
+}
 
 // Substitution map for the __PORTAL_*_URL__ placeholders defined in
 // src/transformation_portal/portal/asset_bundle.py. All placeholders
@@ -53,16 +70,17 @@ const STUB_ROUTES = new Map([
 // loads them from port 9999 (where the stubs are served), not from the
 // front-door at port 3000 where they would 404.
 const PLACEHOLDER_SUBSTITUTIONS = Object.freeze({
-  __PORTAL_CSS_URL__: `${PUBLIC_ORIGIN}/__mock-portal-asset.css`,
-  __PORTAL_REVIEW_CSS_URL__: `${PUBLIC_ORIGIN}/__mock-portal-asset.css`,
-  __PORTAL_JS_URL__: `${PUBLIC_ORIGIN}/__mock-portal-asset.js`,
-  __PORTAL_BUILD_JS_URL__: `${PUBLIC_ORIGIN}/__mock-portal-asset.js`,
-  __PORTAL_OPERATE_JS_URL__: `${PUBLIC_ORIGIN}/__mock-portal-asset.js`,
-  __PORTAL_OVERVIEW_JS_URL__: `${PUBLIC_ORIGIN}/__mock-portal-asset.js`,
-  __PORTAL_REVIEW_JS_URL__: `${PUBLIC_ORIGIN}/__mock-portal-asset.js`,
-  __PORTAL_BRAND_LIGHT_URL__: `${PUBLIC_ORIGIN}/__mock-portal-asset.svg`,
-  __PORTAL_BRAND_DARK_URL__: `${PUBLIC_ORIGIN}/__mock-portal-asset.svg`,
-  __PORTAL_FONT_SANS_URL__: `${PUBLIC_ORIGIN}/__mock-portal-asset.svg`
+  __PORTAL_CSS_URL__: `${PUBLIC_ORIGIN}/__mock-portal/portal.css`,
+  __PORTAL_REVIEW_CSS_URL__: `${PUBLIC_ORIGIN}/__mock-portal/portal-review.css`,
+  __PORTAL_JS_URL__: `${PUBLIC_ORIGIN}/__mock-portal/portal.js`,
+  __PORTAL_BUILD_JS_URL__: `${PUBLIC_ORIGIN}/__mock-portal/portal-build.js`,
+  __PORTAL_PROFILE_JS_URL__: `${PUBLIC_ORIGIN}/__mock-portal/portal-profile.js`,
+  __PORTAL_OPERATE_JS_URL__: `${PUBLIC_ORIGIN}/__mock-portal/portal-operate.js`,
+  __PORTAL_OVERVIEW_JS_URL__: `${PUBLIC_ORIGIN}/__mock-portal/portal-overview.js`,
+  __PORTAL_REVIEW_JS_URL__: `${PUBLIC_ORIGIN}/__mock-portal/portal-review.js`,
+  __PORTAL_BRAND_LIGHT_URL__: `${PUBLIC_ORIGIN}/__mock-portal/dna-symbol-light.svg`,
+  __PORTAL_BRAND_DARK_URL__: `${PUBLIC_ORIGIN}/__mock-portal/dna-symbol-dark.svg`,
+  __PORTAL_FONT_SANS_URL__: `${PUBLIC_ORIGIN}/__mock-portal/portal-sans.woff2`
 });
 
 function renderPortalHtml() {
@@ -71,14 +89,6 @@ function renderPortalHtml() {
   for (const [placeholder, replacement] of Object.entries(PLACEHOLDER_SUBSTITUTIONS)) {
     rendered = rendered.split(placeholder).join(replacement);
   }
-  // Drop the woff2 font preload — without a real font body the browser
-  // emits a console error about the preload type/cors mismatch which would
-  // trip @portal-browser console-error gates. The preload is a perf hint,
-  // not part of the markup contract.
-  rendered = rendered.replace(
-    /<link\s+rel="preload"\s+as="font"[^>]*>\s*/g,
-    ""
-  );
   const unresolved = rendered.match(/__PORTAL_[A-Z0-9_]+__/g);
   if (unresolved) {
     throw new Error(`mock-fastapi-origin: unresolved portal placeholders: ${[...new Set(unresolved)].join(", ")}`);
@@ -86,12 +96,8 @@ function renderPortalHtml() {
   return rendered;
 }
 
-let cachedPortalHtml = null;
 function getPortalHtml() {
-  if (cachedPortalHtml === null) {
-    cachedPortalHtml = renderPortalHtml();
-  }
-  return cachedPortalHtml;
+  return renderPortalHtml();
 }
 
 const server = createServer((req, res) => {
@@ -126,8 +132,24 @@ const server = createServer((req, res) => {
     return;
   }
 
-  if (req.method === "GET" && STUB_ROUTES.has(pathname)) {
-    const stub = STUB_ROUTES.get(pathname);
+  if (req.method === "GET" && pathname === "/__mock-portal/portal.css") {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.writeHead(200, { "Content-Type": "text/css; charset=utf-8" });
+    res.end(readPortalCss());
+    return;
+  }
+
+  if (req.method === "GET" && FILE_ROUTES.has(pathname)) {
+    const asset = FILE_ROUTES.get(pathname);
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.writeHead(200, { "Content-Type": asset.type });
+    res.end(readFileSync(path.join(PORTAL_ASSETS_DIR, asset.file)));
+    return;
+  }
+
+  if (req.method === "GET" && SCRIPT_STUB_ROUTES.has(pathname)) {
+    const stub = SCRIPT_STUB_ROUTES.get(pathname);
+    res.setHeader("Access-Control-Allow-Origin", "*");
     res.writeHead(200, { "Content-Type": stub.type });
     res.end(stub.body);
     return;

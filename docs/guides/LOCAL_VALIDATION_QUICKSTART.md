@@ -65,6 +65,17 @@ volta install node@22
 
 See `web/secure-landing/.nvmrc` and `package.json` engines constraint.
 
+### Browser Test Runtime
+
+After installing the frontdoor dependencies, install Playwright's managed
+Chromium runtime once before running the browser validation targets:
+
+```bash
+cd web/secure-landing
+npm run test:browser:install
+cd ../..
+```
+
 ## Validation Sequence
 
 ### Option 1: Full Validation Suite (Recommended)
@@ -111,6 +122,9 @@ make test-orchestrator-contract
 # Frontdoor contract tests (requires Node 22.x)
 make test-frontdoor-contract
 
+# Frontdoor + authenticated Portal axe, contrast, reflow, adaptive-mode, and hydrated interaction checks
+make test-accessibility-browser
+
 # Portal browser smoke
 make validate-portal-browser
 
@@ -135,6 +149,9 @@ make ci
 ```bash
 # Test portal contracts
 make test-portal-contract
+
+# Verify keyboard-visible, reflow, contrast, reduced-motion, and forced-color behavior
+make test-accessibility-browser
 
 # Run browser smoke
 make validate-portal-browser

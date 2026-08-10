@@ -27,6 +27,7 @@ export function createDeferredOperateSurfaceApi(host) {
         _latestVisibleTransportWarning,
         _nativeEventSourceReadyState,
         _portalPrivilegesReady,
+        _consumeQueueDeltaAnnouncementSuppression,
         _reconcileJobTimeline,
         _setSurfaceEmptyState,
         _toggleSurfaceSkeleton,
@@ -46,6 +47,46 @@ export function createDeferredOperateSurfaceApi(host) {
 
     let queueRenderScheduled = false;
     let queuedReviewSurfaceRefresh = false;
+    let lastQueueDeltaSnapshot = null;
+
+    function _announceQueueDelta() {
+        if (!els.queueDeltaStatus) return;
+        const current = new Map(state.jobs.map((job) => [String(job.id || ''), _displayJobState(job)]));
+        let message = '';
+        if (lastQueueDeltaSnapshot === null) {
+            const activeCount = state.jobs.filter((job) => job && (job.state === 'running' || job.state === 'queued')).length;
+            message = state.jobs.length === 0
+                ? 'Queue is empty.'
+                : `Queue has ${state.jobs.length} job${state.jobs.length === 1 ? '' : 's'}; ${activeCount} active.`;
+        } else {
+            const added = Array.from(current.keys()).filter((jobId) => !lastQueueDeltaSnapshot.has(jobId));
+            const removed = Array.from(lastQueueDeltaSnapshot.keys()).filter((jobId) => !current.has(jobId));
+            const changed = Array.from(current.entries()).filter(([jobId, displayState]) => (
+                lastQueueDeltaSnapshot.has(jobId) && lastQueueDeltaSnapshot.get(jobId) !== displayState
+            ));
+            const announceableChanged = changed.filter(([jobId, displayState]) => (
+                typeof _consumeQueueDeltaAnnouncementSuppression !== 'function'
+                || !_consumeQueueDeltaAnnouncementSuppression(jobId, displayState)
+            ));
+            if (added.length > 0) {
+                message = `${added.length} job${added.length === 1 ? '' : 's'} added to the queue.`;
+            } else if (removed.length > 0) {
+                message = `${removed.length} job${removed.length === 1 ? '' : 's'} removed from the queue.`;
+            } else if (announceableChanged.length > 0) {
+                const [jobId, displayState] = announceableChanged[0];
+                message = `Job ${jobId} is now ${displayState}.`;
+            }
+        }
+        lastQueueDeltaSnapshot = current;
+        if (!message || els.queueDeltaStatus.textContent === message) return;
+        els.queueDeltaStatus.dataset.pendingAnnouncement = message;
+        els.queueDeltaStatus.textContent = '';
+        window.setTimeout(() => {
+            if (els.queueDeltaStatus.dataset.pendingAnnouncement === message) {
+                els.queueDeltaStatus.textContent = message;
+            }
+        }, 0);
+    }
 
     function _queueEmptyStateCopy() {
         if (state.jobsLoadStatus === 'offline' || (!state.backendOk && state.jobs.length === 0)) {
@@ -77,6 +118,13 @@ export function createDeferredOperateSurfaceApi(host) {
             return {
                 title: 'Select or dispatch a run',
                 detail: 'Use Queue to inspect a recent run or open Build to create the next governed dispatch.'
+            };
+        }
+
+        if (job.cancelPending) {
+            return {
+                title: 'Cancel request pending',
+                detail: 'The Portal is waiting for the backend to confirm cancellation. The run remains active until that response succeeds.'
             };
         }
 
@@ -161,20 +209,30 @@ export function createDeferredOperateSurfaceApi(host) {
             { name: 'logs', button: els.inspectorLogsTab, panel: els.selectedJobLogsPanel },
         ];
 
+        const tabList = tabConfig[0]?.button?.parentElement || null;
+        if (tabList) {
+            tabList.setAttribute('role', 'tablist');
+            if (!tabList.getAttribute('aria-label')) tabList.setAttribute('aria-label', 'Selected job inspector views');
+        }
+
         tabConfig.forEach(({ name, button, panel }) => {
             const active = name === nextTab;
             if (button) {
                 button.setAttribute('role', 'tab');
                 button.setAttribute('aria-selected', active ? 'true' : 'false');
                 button.tabIndex = active ? 0 : -1;
+                if (panel?.id) button.setAttribute('aria-controls', panel.id);
                 button.className = active
                     ? 'rounded-full border border-cyan-200 dark:border-cyan-900/60 bg-cyan-50 dark:bg-cyan-900/20 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-cyan-700 dark:text-cyan-300 transition-colors'
                     : 'rounded-full border border-slate-200 dark:border-slate-800 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400 transition-colors';
             }
             if (panel) {
                 panel.classList.toggle('hidden', !active);
+                panel.hidden = !active;
                 panel.setAttribute('role', 'tabpanel');
                 panel.setAttribute('aria-hidden', active ? 'false' : 'true');
+                panel.tabIndex = 0;
+                if (button?.id) panel.setAttribute('aria-labelledby', button.id);
             }
         });
 
@@ -374,7 +432,18 @@ export function createDeferredOperateSurfaceApi(host) {
 
     function renderJobQueue(includeReviewSurfaces = true) {
         if (!els.jobList) return;
-        els.jobList.setAttribute('role', 'listbox');
+        els.jobList.setAttribute('role', 'list');
+        els.jobList.setAttribute('aria-label', 'Job queue');
+        els.jobList.removeAttribute('aria-live');
+        els.jobList.removeAttribute('aria-relevant');
+        const focusedAction = document.activeElement?.closest?.('[data-action][data-job-id]');
+        const focusKey = focusedAction
+            ? { action: String(focusedAction.dataset.action || ''), jobId: String(focusedAction.dataset.jobId || '') }
+            : null;
+        const existingRows = new Map(
+            Array.from(els.jobList.querySelectorAll('li[data-job-id]'))
+                .map((row) => [String(row.dataset.jobId || ''), row])
+        );
         const queueLoading = _isJobsHydrationPending();
         if (els.queueShell) {
             els.queueShell.setAttribute('aria-busy', queueLoading ? 'true' : 'false');
@@ -406,6 +475,7 @@ export function createDeferredOperateSurfaceApi(host) {
                         : 'Queue recovery needs operator attention before live history can refresh.';
             }
             els.jobList.innerHTML = '';
+            _announceQueueDelta();
             if (includeReviewSurfaces) renderReviewSurfaces();
             return;
         }
@@ -417,14 +487,12 @@ export function createDeferredOperateSurfaceApi(host) {
             li.dataset.jobId = job.id;
             li.dataset.ui = 'queue-row';
             const isSelected = state.selectedJobId === job.id;
-            li.className = `rounded-2xl border p-4 cursor-pointer transition-all ${isSelected ? 'border-cyan-500 bg-cyan-50/80 dark:bg-cyan-900/20 shadow-md ring-1 ring-cyan-500/15' : 'border-slate-200 dark:border-slate-800 bg-slate-50/75 dark:bg-slate-900/45 hover:bg-white/90 dark:hover:bg-slate-800/80'}`;
-            li.tabIndex = 0;
-            li.setAttribute('role', 'option');
-            li.setAttribute('aria-selected', isSelected ? 'true' : 'false');
+            li.dataset.selected = isSelected ? 'true' : 'false';
+            li.className = `rounded-2xl border p-4 transition-all ${isSelected ? 'border-cyan-500 bg-cyan-50/80 dark:bg-cyan-900/20 shadow-md ring-1 ring-cyan-500/15' : 'border-slate-200 dark:border-slate-800 bg-slate-50/75 dark:bg-slate-900/45'}`;
 
             let badgeColor = 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700';
             const displayState = _displayJobState(job);
-            if (displayState === 'running' || displayState === 'indexing' || displayState === 'partial-failure') {
+            if (displayState === 'running' || displayState === 'canceling' || displayState === 'indexing' || displayState === 'partial-failure') {
                 badgeColor = 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-800';
             }
             if (displayState === 'reviewable') {
@@ -437,7 +505,9 @@ export function createDeferredOperateSurfaceApi(host) {
             const safePipeline = String(job.pipeline || 'unknown');
             const safeId = String(job.id || 'job_unknown');
             const safeProgress = Math.max(0, Math.min(100, Number(job.progress) || 0));
-            const canCancel = _portalPrivilegesReady() && (job.state === 'running' || job.state === 'queued');
+            const cancelableState = job.state === 'running' || job.state === 'queued';
+            const showCancel = _portalPrivilegesReady() && cancelableState;
+            const canCancel = showCancel && !job.cancelPending;
             const artifactCount = Array.isArray(job.artifacts) ? job.artifacts.length : 0;
             const errorLine = getReadableError(job.error);
             const outcomeSummary = jobOutcomeSummary(job);
@@ -462,12 +532,41 @@ export function createDeferredOperateSurfaceApi(host) {
 
             header.appendChild(headerLeft);
 
+            const rowActions = document.createElement('div');
+            rowActions.className = 'flex items-center gap-2';
+
+            const inspectButton = document.createElement('button');
+            inspectButton.type = 'button';
+            inspectButton.dataset.action = 'inspect-job';
+            inspectButton.dataset.jobId = safeId;
+            inspectButton.className = 'operator-action-btn operator-action-btn-secondary';
+            inspectButton.textContent = isSelected ? 'Inspecting' : 'Inspect';
+            inspectButton.setAttribute('aria-label', `${isSelected ? 'Inspecting' : 'Inspect'} ${safePipeline} job ${safeId}`);
+            inspectButton.setAttribute('aria-pressed', isSelected ? 'true' : 'false');
+            rowActions.appendChild(inspectButton);
+
             const cancelButton = document.createElement('button');
+            cancelButton.type = 'button';
             cancelButton.dataset.action = 'cancel-job';
             cancelButton.dataset.jobId = safeId;
-            cancelButton.className = `text-[10px] uppercase font-bold text-red-500 hover:text-red-700 focus:outline-none ${canCancel ? '' : 'hidden'}`;
-            cancelButton.textContent = 'Cancel';
-            header.appendChild(cancelButton);
+            cancelButton.className = `operator-action-btn operator-action-btn-secondary ${showCancel ? '' : 'hidden'}`;
+            cancelButton.dataset.tone = 'blocked';
+            // Keep the initiating control focusable while cancellation is
+            // pending so its replacement can restore focus after the server
+            // confirms or rejects the request. The handler already rejects
+            // repeated activation while cancelPending is true.
+            cancelButton.disabled = !canCancel && !job.cancelPending;
+            if (job.cancelPending) {
+                cancelButton.setAttribute('aria-disabled', 'true');
+                cancelButton.setAttribute('aria-busy', 'true');
+            } else {
+                cancelButton.removeAttribute('aria-disabled');
+                cancelButton.removeAttribute('aria-busy');
+            }
+            cancelButton.textContent = job.cancelPending ? 'Canceling…' : job.cancelError ? 'Retry Cancel' : 'Cancel';
+            cancelButton.setAttribute('aria-label', `${cancelButton.textContent} job ${safeId}`);
+            rowActions.appendChild(cancelButton);
+            header.appendChild(rowActions);
             li.appendChild(header);
 
             const meta = document.createElement('div');
@@ -520,6 +619,8 @@ export function createDeferredOperateSurfaceApi(host) {
             progressEl.max = 100;
             progressEl.value = safeProgress;
             progressEl.className = 'flex-1';
+            progressEl.setAttribute('aria-label', `${safePipeline} job ${safeId} progress`);
+            progressEl.setAttribute('aria-valuetext', `${safeProgress}%`);
             progressRow.appendChild(progressEl);
 
             const progressText = document.createElement('span');
@@ -530,18 +631,51 @@ export function createDeferredOperateSurfaceApi(host) {
 
             const summary = document.createElement('p');
             summary.className = 'mt-3 text-[11px] leading-5 text-slate-500 dark:text-slate-400';
-            summary.textContent = job.state === 'partial' && outcomeSummary
-                ? outcomeSummary
-                : errorLine
-                    ? errorLine
-                    : outcomeSummary || `${artifactCount} artifact${artifactCount === 1 ? '' : 's'} indexed`;
+            summary.textContent = job.cancelError && cancelableState
+                ? `Cancellation was not confirmed: ${String(job.cancelError)} Retry Cancel.`
+                : job.state === 'partial' && outcomeSummary
+                    ? outcomeSummary
+                    : errorLine
+                        ? errorLine
+                        : outcomeSummary || `${artifactCount} artifact${artifactCount === 1 ? '' : 's'} indexed`;
             li.appendChild(summary);
 
-            fragment.appendChild(li);
+            li.dataset.renderSignature = JSON.stringify([
+                safePipeline,
+                safeId,
+                displayState,
+                safeProgress,
+                artifactCount,
+                errorLine,
+                outcomeSummary,
+                captioningRunStatus,
+                transportLabel,
+                freshnessLabel,
+                isSelected,
+                showCancel,
+                Boolean(job.cancelPending),
+                String(job.cancelError || '')
+            ]);
+            const existing = existingRows.get(safeId);
+            fragment.appendChild(existing?.dataset.renderSignature === li.dataset.renderSignature ? existing : li);
         });
 
-        els.jobList.innerHTML = '';
-        els.jobList.appendChild(fragment);
+        els.jobList.replaceChildren(fragment);
+        if (focusKey && !els.jobList.contains(document.activeElement)) {
+            const matchingButtons = Array.from(els.jobList.querySelectorAll('[data-action][data-job-id]'));
+            let restored = matchingButtons.find((button) => (
+                String(button.dataset.action || '') === focusKey.action
+                && String(button.dataset.jobId || '') === focusKey.jobId
+            ));
+            if (!restored || restored.disabled || restored.classList.contains('hidden')) {
+                restored = matchingButtons.find((button) => (
+                    String(button.dataset.action || '') === 'inspect-job'
+                    && String(button.dataset.jobId || '') === focusKey.jobId
+                ));
+            }
+            if (restored) restored.focus({ preventScroll: true });
+        }
+        _announceQueueDelta();
         if (els.queueStatusSummary) {
             const selected = state.jobs.find((job) => job.id === state.selectedJobId) || null;
             els.queueStatusSummary.textContent = selected

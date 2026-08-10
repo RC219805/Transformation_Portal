@@ -15,6 +15,10 @@ JavaScript hydration runs:
   strong).
 * Item 14: the workspace rail uses ``<nav>`` + ``aria-current="page"``
   semantics, not ``role="tablist"`` / ``aria-selected``.
+* UX/accessibility hardening: navigation precedes view content, Build-step
+  ownership is explicit, dynamic field messages are associated with their
+  controls, modal/inert hooks are stable, and high-churn queue content is not
+  itself a live region.
 
 Parser: stdlib ``html.parser`` only — no new dependency.
 """
@@ -223,3 +227,170 @@ def test_workspace_rail_uses_nav_semantics() -> None:
     assert active_tag == "a", f'aria-current="page" must be on an <a>, got <{active_tag}>'
     href = active_attrs.get("href")
     assert href and href.strip(), f"active workspace link must have a non-empty href, got {href!r}"
+
+
+class _PortalContractParser(HTMLParser):
+    """Collect id/data-ui elements and explicit label associations."""
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.elements: List[Tuple[str, Dict[str, Optional[str]]]] = []
+        self.by_id: Dict[str, Tuple[str, Dict[str, Optional[str]]]] = {}
+        self.labels_for: List[str] = []
+
+    def handle_starttag(self, tag: str, attrs: List[Tuple[str, Optional[str]]]) -> None:
+        attr_map = {key: value for key, value in attrs}
+        self.elements.append((tag, attr_map))
+        element_id = attr_map.get("id")
+        if element_id:
+            self.by_id[element_id] = (tag, attr_map)
+        if tag == "label" and attr_map.get("for"):
+            self.labels_for.append(str(attr_map["for"]))
+
+
+def _portal_contract_parser() -> _PortalContractParser:
+    parser = _PortalContractParser()
+    parser.feed(_read_portal_markup())
+    return parser
+
+
+def test_workspace_navigation_precedes_overview_in_dom_order() -> None:
+    parser = _portal_contract_parser()
+    nav_index = next(
+        index for index, (tag, attrs) in enumerate(parser.elements) if tag == "nav" and attrs.get("data-ui") == "view-switcher"
+    )
+    overview_index = next(index for index, (_tag, attrs) in enumerate(parser.elements) if attrs.get("id") == "overview-shell")
+    assert nav_index < overview_index
+
+
+def test_capability_matrix_is_progressively_disclosed_without_losing_hooks() -> None:
+    parser = _portal_contract_parser()
+    tag, attrs = parser.by_id["overviewCapabilityRow"]
+    assert tag == "details"
+    assert "open" not in attrs
+
+    matrix_tag, matrix_attrs = parser.by_id["capabilityMatrix"]
+    assert matrix_tag == "div"
+    assert matrix_attrs.get("data-ui") == "capability-matrix"
+    assert matrix_attrs.get("role") == "list"
+
+
+def test_build_step_toolbar_controls_peer_sections_without_false_tabpanels() -> None:
+    parser = _portal_contract_parser()
+    expected_controls = {
+        "buildStepTab1": {"presetBuilderShell"},
+        "buildStepTab2": {"buildPathsShell", "fieldsArchiveGate"},
+        "buildStepTab3": {"fieldsLuxDepth", "flagsShellPanel", "governance-shell"},
+        "buildStepTab4": {"cli-shell"},
+    }
+
+    toolbar_tag, toolbar_attrs = parser.by_id["buildStepTabs"]
+    assert toolbar_tag == "div"
+    assert toolbar_attrs.get("role") == "toolbar"
+    assert toolbar_attrs.get("aria-label") == "Build steps"
+
+    active_steps = []
+    for step_id, panel_ids in expected_controls.items():
+        step_tag, step_attrs = parser.by_id[step_id]
+        assert step_tag == "button"
+        assert "role" not in step_attrs
+        assert "aria-selected" not in step_attrs
+        assert step_attrs.get("aria-pressed") in {"true", "false"}
+        if step_attrs.get("aria-current") == "step":
+            active_steps.append(step_id)
+        assert set(str(step_attrs.get("aria-controls") or "").split()) == panel_ids
+        for panel_id in panel_ids:
+            _panel_tag, panel_attrs = parser.by_id[panel_id]
+            assert panel_attrs.get("role") != "tabpanel"
+            assert "aria-labelledby" not in panel_attrs
+            assert "tabindex" not in panel_attrs
+
+    assert active_steps == ["buildStepTab1"]
+
+    flags_tag, flags_attrs = parser.by_id["flags-shell"]
+    assert flags_tag == "fieldset"
+    assert "role" not in flags_attrs
+
+
+def test_inspector_tablist_and_panels_have_complete_associations() -> None:
+    parser = _portal_contract_parser()
+    expected = {
+        "inspectorOverviewTab": "selectedJobOverviewPanel",
+        "inspectorTimelineTab": "selectedJobTimelinePanel",
+        "inspectorLogsTab": "selectedJobLogsPanel",
+    }
+    for tab_id, panel_id in expected.items():
+        _tab_tag, tab_attrs = parser.by_id[tab_id]
+        _panel_tag, panel_attrs = parser.by_id[panel_id]
+        assert tab_attrs.get("role") == "tab"
+        assert tab_attrs.get("aria-controls") == panel_id
+        assert panel_attrs.get("role") == "tabpanel"
+        assert panel_attrs.get("aria-labelledby") == tab_id
+
+
+def test_dynamic_build_field_messages_are_associated_and_fixed_values_are_labeled() -> None:
+    parser = _portal_contract_parser()
+    status_by_control = {
+        "inputDir": "inputDirStatus",
+        "outputDir": "outputDirStatus",
+        "archiveIndexPath": "archiveIndexStatus",
+        "rightsManifestPath": "rightsManifestStatus",
+        "groupingMode": "groupingModeStatus",
+        "reconstructionIterations": "reconstructionIterationsStatus",
+        "camerasSidecarPath": "camerasSidecarStatus",
+        "reconstructionTier": "reconstructionTierStatus",
+        "rawIngestMode": "rawIngestModeStatus",
+        "maxWorkersMode": "maxWorkersStatus",
+        "maxWorkers": "maxWorkersStatus",
+        "maxGpuWorkersMode": "maxGpuWorkersStatus",
+        "maxGpuWorkers": "maxGpuWorkersStatus",
+        "logLevel": "logLevelStatus",
+    }
+    for control_id, status_id in status_by_control.items():
+        _tag, attrs = parser.by_id[control_id]
+        assert status_id in str(attrs.get("aria-describedby") or "").split()
+        assert attrs.get("aria-errormessage") == status_id
+        assert status_id in parser.by_id
+
+    for control_id in ("v2Preset", "maxWorkers", "maxGpuWorkers"):
+        assert control_id in parser.labels_for
+
+    switch_attrs = [attrs for _tag, attrs in parser.elements if attrs.get("role") == "switch"]
+    assert switch_attrs
+    assert all(str(attrs.get("aria-label") or "").strip() for attrs in switch_attrs)
+
+
+def test_modal_inert_hooks_review_empty_state_and_queue_announcements_are_stable() -> None:
+    parser = _portal_contract_parser()
+    modal_shells = [attrs for _tag, attrs in parser.elements if attrs.get("data-modal-shell")]
+    modal_dialogs = [attrs for _tag, attrs in parser.elements if "data-modal-dialog" in attrs]
+    inert_targets = [attrs for _tag, attrs in parser.elements if "data-modal-inert-target" in attrs]
+    assert {attrs["data-modal-shell"] for attrs in modal_shells} == {
+        "shortcuts",
+        "effective-config",
+        "artifact-viewer",
+    }
+    assert len(modal_dialogs) == 3
+    assert all(attrs.get("role") == "dialog" and attrs.get("aria-modal") == "true" for attrs in modal_dialogs)
+    assert len(inert_targets) == 2
+
+    health_attrs = next(attrs for _tag, attrs in parser.elements if "topbar-status" in str(attrs.get("class") or "").split())
+    assert health_attrs.get("role") == "group"
+    assert "aria-live" not in health_attrs
+    assert health_attrs.get("aria-label") == "Backend health"
+
+    _empty_tag, empty_attrs = parser.by_id["emptyArtifactState"]
+    assert empty_attrs.get("role") == "status"
+    assert empty_attrs.get("aria-live") == "polite"
+    assert empty_attrs.get("aria-labelledby") == "emptyArtifactTitle"
+    assert set(str(empty_attrs.get("aria-describedby") or "").split()) == {
+        "emptyArtifactDetail",
+        "emptyArtifactAction",
+    }
+
+    _list_tag, list_attrs = parser.by_id["jobList"]
+    _delta_tag, delta_attrs = parser.by_id["queueDeltaStatus"]
+    assert "aria-live" not in list_attrs
+    assert delta_attrs.get("role") == "status"
+    assert delta_attrs.get("aria-live") == "polite"
+    assert delta_attrs.get("aria-atomic") == "true"

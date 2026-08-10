@@ -40,6 +40,7 @@ PORTAL_TEMPLATE_SOURCE_PATH = PORTAL_FRONTDOOR_ROOT / "portal-src" / "portal.tem
 PORTAL_REVIEW_SURFACE_SOURCE_PATH = PORTAL_FRONTDOOR_ROOT / "portal-src" / "review-surface-deferred.js"
 PORTAL_OPERATE_SURFACE_SOURCE_PATH = PORTAL_FRONTDOOR_ROOT / "portal-src" / "operate-surface-deferred.js"
 PORTAL_BUILD_SURFACE_SOURCE_PATH = PORTAL_FRONTDOOR_ROOT / "portal-src" / "build-surface-deferred.js"
+PORTAL_PROFILE_SURFACE_SOURCE_PATH = PORTAL_FRONTDOOR_ROOT / "portal-src" / "profile-surface-deferred.js"
 PORTAL_OVERVIEW_SURFACE_SOURCE_PATH = PORTAL_FRONTDOOR_ROOT / "portal-src" / "overview-surface-deferred.js"
 FRONTDOOR_BRAND_ROOT = PORTAL_HTML_PATH.parent / "web" / "secure-landing" / "public" / "brand"
 
@@ -188,6 +189,12 @@ def _portal_build_source_content() -> str:
     refreshArchiveFieldVisibility, and related Build form helpers. The
     main bundle keeps shims that delegate on first invocation."""
     return PORTAL_BUILD_SURFACE_SOURCE_PATH.read_text(encoding="utf-8")
+
+
+@lru_cache(maxsize=1)
+def _portal_profile_source_content() -> str:
+    """Deferred local-profile dialog, validation, and storage lifecycle."""
+    return PORTAL_PROFILE_SURFACE_SOURCE_PATH.read_text(encoding="utf-8")
 
 
 @lru_cache(maxsize=1)
@@ -585,7 +592,8 @@ def test_portal_routed_shell_hidden_rules_preserve_responsive_display_utilities(
     hidden_body = hidden_rule.group("body")
     assert re.search(r"display:\s*none;?", hidden_body)
     assert "!important" not in hidden_body
-    assert 'class="topbar-status hidden lg:flex"' in html_content
+    assert 'class="topbar-status"' in html_content
+    assert 'class="topbar-status hidden' not in html_content
 
     route_shell_rule = re.search(
         (
@@ -647,6 +655,7 @@ def test_portal_html_externalizes_direct_debug_assets_without_third_party_hosts(
     assert f'src="{bundle.urls["portal.js"]}"' in html_content
     assert f'data-review-surface-js-url="{bundle.urls["portal-review.js"]}"' in html_content
     assert f'data-review-surface-css-url="{bundle.urls["portal-review.css"]}"' in html_content
+    assert f'data-profile-surface-js-url="{bundle.urls["portal-profile.js"]}"' in html_content
     assert "@import" not in css_content
     assert "--ux-target-min-size:" in css_content
     assert '<meta name="theme-color" content="#F4F7FB" media="(prefers-color-scheme: light)" />' in html_content
@@ -686,6 +695,7 @@ def test_portal_runtime_helpers_read_served_js_assets_from_rendered_html() -> No
     bundle = orchestrator_app._get_portal_asset_bundle()
     served_portal_js = _portal_js_content()
     served_review_js = _portal_review_bundle_content()
+    source_portal_js = _portal_js_source_content()
     runtime_content = _portal_runtime_bundle_content()
 
     assert served_portal_js == _portal_asset_path(bundle.urls["portal.js"]).read_text(encoding="utf-8")
@@ -693,13 +703,14 @@ def test_portal_runtime_helpers_read_served_js_assets_from_rendered_html() -> No
     assert served_portal_js != _portal_js_source_content()
     assert "overviewStatsSkeletonState" in served_portal_js
     assert "overviewCapabilitySkeletonState" in served_portal_js
+    assert "_toggleSurfaceSkeleton" in served_portal_js
     assert (
-        "_toggleSurfaceSkeleton(els.overviewStatsRow,els.overviewStatsRow,els.overviewStatsSkeletonState,bootstrapLoading)"
-        in served_portal_js
+        "_toggleSurfaceSkeleton(els.overviewStatsRow, els.overviewStatsRow, els.overviewStatsSkeletonState, bootstrapLoading);"
+        in source_portal_js
     )
     assert (
-        "_toggleSurfaceSkeleton(els.overviewCapabilityRow,els.overviewCapabilityRow,els.overviewCapabilitySkeletonState,bootstrapLoading)"
-        in served_portal_js
+        "_toggleSurfaceSkeleton(els.overviewCapabilityRow, els.overviewCapabilityRow, els.overviewCapabilitySkeletonState, bootstrapLoading);"
+        in source_portal_js
     )
     assert "Review surfaces failed to load. Reload the portal and retry the review action." in runtime_content
     assert "deferredReviewSurfaceLoadFailedAt" in runtime_content
@@ -781,10 +792,11 @@ def test_portal_asset_manifest_is_explicit_and_repo_local() -> None:
         "portal.js": orchestrator_app.PORTAL_ASSETS_DIR / "portal.js",
         "portal-review.js": orchestrator_app.PORTAL_ASSETS_DIR / "portal-review.js",
         "portal-review.css": orchestrator_app.PORTAL_ASSETS_DIR / "portal-review.css",
-        # Surface-split deferred bundles. Operate and Build are real carves;
-        # Overview is an intentional placeholder (see commit fe2ed28).
+        # Surface-split deferred bundles. Operate, Build, and Profile are real
+        # carves; Overview is an intentional placeholder (see commit fe2ed28).
         "portal-operate.js": orchestrator_app.PORTAL_ASSETS_DIR / "portal-operate.js",
         "portal-build.js": orchestrator_app.PORTAL_ASSETS_DIR / "portal-build.js",
+        "portal-profile.js": orchestrator_app.PORTAL_ASSETS_DIR / "portal-profile.js",
         "portal-overview.js": orchestrator_app.PORTAL_ASSETS_DIR / "portal-overview.js",
         "fonts/portal-sans.woff2": orchestrator_app.PORTAL_ASSETS_DIR / "fonts" / "portal-sans.woff2",
         "fonts/portal-mono.woff2": orchestrator_app.PORTAL_ASSETS_DIR / "fonts" / "portal-mono.woff2",
@@ -799,6 +811,7 @@ def test_portal_asset_manifest_is_explicit_and_repo_local() -> None:
         "portal-review.css": "text/css; charset=utf-8",
         "portal-operate.js": "text/javascript; charset=utf-8",
         "portal-build.js": "text/javascript; charset=utf-8",
+        "portal-profile.js": "text/javascript; charset=utf-8",
         "portal-overview.js": "text/javascript; charset=utf-8",
         "fonts/portal-sans.woff2": "font/woff2",
         "fonts/portal-mono.woff2": "font/woff2",
@@ -1219,7 +1232,7 @@ def test_portal_staged_upload_ui_contract_is_present_in_markup_and_source() -> N
     assert 'data-ui="staged-upload-dropzone"' in html
     assert 'role="button"' in html
     assert 'aria-label="Choose files or drop files for staged upload"' in html
-    assert 'aria-describedby="stagedUploadStatus"' in html
+    assert 'aria-describedby="stagedUploadStatus stagedUploadError"' in html
     assert 'id="stagedUploadFilesInput"' in html
     assert 'id="stagedUploadFolderInput"' in html
     assert "const STAGED_UPLOAD_SUPPORTED_PIPELINES = new Set(['lux-depth-v3', 'archive-gate-a']);" in content
@@ -1770,9 +1783,9 @@ def test_portal_artifact_viewer_modal_is_feature_flagged_and_keyboard_complete()
     assert "_rememberArtifactSelection(context.job.id, nextPath);" in navigate_body
     assert "renderReviewSurfaces();" in navigate_body
     assert '_abortArtifactViewerPreview("close");' in close_body
-    assert "_setArtifactViewerBackgroundInert(false);" in close_body
+    assert "_setPortalBackgroundInert(false);" in close_body
     assert "_renderArtifactViewerRetry(null);" in close_body
-    assert "_setArtifactViewerBackgroundInert(true);" in open_body
+    assert "_setPortalBackgroundInert(true);" in open_body
     assert 'document.addEventListener("keydown", artifactViewerKeydownHandler, true);' in open_body
     assert (
         'if (e.key === "Escape" && els.artifactViewerModal && !els.artifactViewerModal.classList.contains("hidden"))'
@@ -1914,18 +1927,19 @@ def test_portal_review_surface_supports_compare_summary_and_keyboard_selection()
     assert 'id="reviewCompareDetail"' in content
     assert 'data-ui="review-compare-summary"' in content
     assert re.search(
-        r"els\.artifactThumbnailRail\.setAttribute\([\"']role[\"'],\s*[\"']listbox[\"']\);",
+        r"els\.artifactThumbnailRail\.setAttribute\([\"']role[\"'],\s*[\"']group[\"']\);",
         render_body,
     )
     assert re.search(
-        r"els\.artifactThumbnailRail\.setAttribute\([\"']aria-label[\"'],\s*[\"']Artifact thumbnails[\"']\);",
+        r"els\.artifactThumbnailRail\.setAttribute\([\"']aria-label[\"'],\s*[\"']Artifact choices[\"']\);",
         render_body,
     )
-    assert re.search(r"button\.setAttribute\([\"']role[\"'],\s*[\"']option[\"']\);", render_body)
     assert re.search(
-        r"button\.setAttribute\([\"']aria-selected[\"'],\s*active \? [\"']true[\"'] : [\"']false[\"']\);",
+        r"button\.setAttribute\([\"']aria-pressed[\"'],\s*active \? [\"']true[\"'] : [\"']false[\"']\);",
         render_body,
     )
+    assert "button.setAttribute('role', 'option');" not in render_body
+    assert "button.setAttribute('aria-selected'" not in render_body
     assert "button.tabIndex = active ? 0 : -1;" in render_body
     assert (
         "_renderReviewCompareSummary(selectedArtifact, compareAvailable ? compareCandidate : null, compareEnabled);"
@@ -2267,10 +2281,15 @@ def test_portal_build_stepper_and_quick_actions_drive_task_first_navigation() ->
     assert 'id="buildStepTab4"' in content
     assert 'id="resumeDraftBtn"' in content
     assert "const BUILD_STEP_CONTENT = Object.freeze({" in content
-    assert "button.setAttribute('aria-selected', active ? 'true' : 'false');" in stepper_body
-    assert "panel.hidden = !active;" in stepper_body
+    assert "button.setAttribute('aria-pressed', active ? 'true' : 'false');" in stepper_body
+    assert "button.setAttribute('aria-current', 'step');" in stepper_body
+    assert "button.removeAttribute('aria-selected');" in stepper_body
+    assert "panel.removeAttribute('role');" in stepper_body
+    assert "panel.removeAttribute('tabindex');" in stepper_body
+    assert "const visible = active && !panel.classList.contains('hidden');" in stepper_body
+    assert "panel.hidden = !visible;" in stepper_body
     assert "panel.setAttribute('data-step-active', active ? 'true' : 'false');" in stepper_body
-    assert "panel.setAttribute('data-step-hidden', active ? 'false' : 'true');" in stepper_body
+    assert "panel.setAttribute('data-step-hidden', visible ? 'false' : 'true');" in stepper_body
     assert "panel.classList.toggle('hidden', !active);" not in stepper_body
     assert "function setBuildStep(nextStep, options) {" in content
     assert "const settings = options && typeof options === 'object' ? options : {};" in content
@@ -2317,9 +2336,12 @@ def test_portal_keyboard_shortcuts_cover_view_navigation_and_help_without_text_f
     assert "function _isTypingTarget(target) {" in content
     assert "target.isContentEditable || target.closest('[contenteditable=\"true\"]')" in typing_body
     assert "tagName === 'textarea' || tagName === 'select'" in typing_body
-    assert "if (isPlainShortcut && (key === '?' || (key === '/' && e.shiftKey)))" in content
+    assert "if (isPlainShortcut && !_activeOverlayPanel() && " "(key === '?' || (key === '/' && e.shiftKey)))" in content
     assert "toggleModal(true);" in content
-    assert "if (isPlainShortcut && Object.prototype.hasOwnProperty.call(WORKSPACE_VIEW_SHORTCUTS, key)) {" in content
+    assert (
+        "if (isPlainShortcut && !_activeOverlayPanel() && "
+        "Object.prototype.hasOwnProperty.call(WORKSPACE_VIEW_SHORTCUTS, key)) {" in content
+    )
     assert "const nextView = WORKSPACE_VIEW_SHORTCUTS[key];" in content
     assert "navigateConsoleView(nextView);" in content
 
@@ -2368,6 +2390,8 @@ def test_portal_display_job_state_keeps_terminal_retained_outputs_reviewable_wit
     assert "Terminal runs stay reviewable once outputs are retained" in body
     assert "if ((rawState === 'succeeded' || rawState === 'ready') && reviewableOutputs) return 'reviewable';" in body
     assert "if ((rawState === 'succeeded' || rawState === 'ready') && artifactCount > 0) return 'indexing';" not in body
+    assert "if (rawState === 'canceled') return 'canceled';" in body
+    assert "rawState === 'failed' || rawState === 'canceled'" not in body
 
 
 def test_portal_switch_state_badges_share_the_toggle_control_wrapper() -> None:
@@ -2525,6 +2549,23 @@ def test_portal_runtime_css_ships_short_viewport_modal_and_phone_stepper_rules()
     assert base_stepper_rule.start() < phone_stepper_rule.start()
 
 
+def test_portal_workspace_grid_uses_disjoint_desktop_and_mobile_breakpoints() -> None:
+    css = _portal_css_content()
+    desktop_rail = css.rfind("@media(min-width:768px){.workspace-rail{grid-template-columns:minmax(0,240px) minmax(0,1fr)")
+    mobile_media = css.rfind("@media(max-width:767px)")
+    mobile_media_end = css.find("@media(", mobile_media + 1)
+    mobile_rail = css.find(".workspace-rail{grid-template-columns:minmax(0,1fr)", mobile_media)
+    mobile_links = css.find(
+        ".workspace-rail-links{grid-template-columns:repeat(2,minmax(0,1fr));gap:.5rem}",
+        mobile_media,
+    )
+
+    assert desktop_rail >= 0
+    assert mobile_media >= 0
+    assert mobile_media < mobile_rail < mobile_media_end
+    assert mobile_media < mobile_links < mobile_media_end
+
+
 def test_portal_preview_statuses_render_inline_for_build_fields() -> None:
     content = _portal_bundle_content()
     build_content = _portal_build_source_content()
@@ -2559,19 +2600,111 @@ def test_portal_overlay_focus_management_traps_and_restores_focus() -> None:
     assert "_restoreOverlayFocus();" in content
 
 
+def test_portal_runtime_accessibility_scopes_shortcuts_and_focuses_invalid_build_controls() -> None:
+    content = _portal_bundle_content()
+    shortcut_body = _extract_js_function_body(content, "_isBuildStepFourShortcutReady")
+    invalid_focus_body = _extract_js_function_block(content, "_focusInvalidBuildControl")
+    issue_body = _extract_js_function_body(content, "_syncIssueAccessibility")
+    inert_body = _extract_js_function_body(content, "_setPortalBackgroundInert")
+
+    assert "state.currentView !== 'build'" in shortcut_body
+    assert "resolveBuildStep(state.portalUi.buildStep) !== 4" in shortcut_body
+    assert "_isTypingTarget(target) || _activeOverlayPanel()" in shortcut_body
+    assert "state.portalUi.dispatchPending" in shortcut_body
+    assert "els.runJobBtn.dataset.action !== 'open-live-job'" in shortcut_body
+    assert "const step = _buildStepForControl(control);" in invalid_focus_body
+    assert "setBuildStep(step, { silent: true });" in invalid_focus_body
+    assert "control.focus({ preventScroll: false });" in invalid_focus_body
+    assert "control.setAttribute('aria-invalid', 'true');" in issue_body
+    assert "control.setAttribute('aria-errormessage', el.id);" in issue_body
+    assert "document.querySelector('[data-ui=\"portal-topbar\"]')" in inert_body
+    assert "document.getElementById('main-content')" in inert_body
+
+
+def test_portal_cancel_waits_for_confirmation_and_restores_retry_state_on_failure() -> None:
+    content = _portal_bundle_content()
+    body = _extract_js_function_body(content, "cancelJob")
+
+    pending_index = body.index("job.cancelPending = true;")
+    response_index = body.index("const result = await fetchBodyWithTimeout(")
+    response_state_index = body.index("const responseState = String(responsePayload?.data?.state || '')")
+    confirmation_index = body.index("if (job.state === 'canceled')")
+    assert 0 <= pending_index < response_index < response_state_index < confirmation_index
+    assert "encodeURIComponent(id)" in body
+    assert "JOB_CANCEL_TIMEOUT_MS" in body
+    assert "'cancel_request_timeout'" in body
+    assert "const response = result.response;" in body
+    assert "_parseJsonResponseBody(result.body)" in body
+    assert "if (!response.ok)" in body
+    assert "if (job.state !== 'canceled') await refreshJobStatus(job);" in body
+    assert "Cancel request accepted for job ${id}. Waiting for backend confirmation." in body
+    assert "job.cancelPending = false;" in body
+    assert "await refreshJobStatus(job);" in body
+    assert "const stillCancelable = job.state === 'running' || job.state === 'queued';" in body
+    assert "retry Cancel" in body
+    assert "Refreshed job state" in body
+    catch_index = body.index("} catch (error) {")
+    retry_render_index = body.index("scheduleRenderJobQueue();", catch_index)
+    retry_announcement_index = body.index("Retry Cancel.", retry_render_index)
+    refresh_index = body.index("await refreshJobStatus(job);", retry_announcement_index)
+    assert catch_index < retry_render_index < retry_announcement_index < refresh_index
+
+
+def test_portal_profile_manager_is_deferred_validated_and_requires_destructive_confirmation() -> None:
+    content = _portal_bundle_content()
+    profile_content = _portal_profile_source_content()
+    name_body = _extract_js_function_body(profile_content, "nameValidationMessage")
+    confirmation_body = _extract_js_function_body(profile_content, "requireConfirmation")
+    loader_body = _extract_js_function_body(content, "_loadDeferredProfileSurface")
+    primer_body = _extract_js_function_body(content, "_primeDeferredProfileSurface")
+    init_body = _extract_js_function_body(content, "init")
+
+    assert 'data-profile-surface-js-url="' in content
+    assert "return loadDeferredSurface('profile', _createDeferredProfileSurfaceHost);" in loader_body
+    assert "if (!_isBootstrapReady() || state.currentView !== 'build') return;" in primer_body
+    assert "api.refreshDropdown" in primer_body
+    assert "transientDraftRestoredForProfile = _restoreTransientPortalDraft();" in init_body
+    assert init_body.index("_captureUnprofiledProfileBaseline();") < init_body.index("_restoreTransientPortalDraft();")
+    assert init_body.index("_restoreTransientPortalDraft();") < init_body.index("_primeDeferredBuildSurface();")
+    assert "Profile names must be ${PROFILE_NAME_MAX_LENGTH} characters or fewer." in name_body
+    assert "Profile names cannot contain control characters." in name_body
+    assert "refs.pendingAction === action && refs.pendingName === name" in confirmation_body
+    assert "renderDialog();" in confirmation_body
+    assert "'overwrite'" in profile_content
+    assert "'rename-overwrite'" in profile_content
+    assert "'delete'" in profile_content
+    assert "'import-legacy'" in profile_content
+    assert "Confirm Claim & Import" in profile_content
+    assert "resolvedOwnerKey() === 'direct_debug'" in profile_content
+    assert "hasProtectedChanges" in profile_content
+    assert "data-profile-state" not in profile_content  # state is set through dataset, not duplicated markup
+    assert "dataset.profileState" in profile_content
+    assert "dataset.draftState" in profile_content
+    assert "window.prompt" not in profile_content
+    assert "window.confirm" not in profile_content
+    assert "prompt(" not in profile_content
+    assert "confirm(" not in profile_content
+
+
 def test_portal_queue_rows_support_keyboard_selection_navigation() -> None:
     content = _portal_bundle_content()
     operate_content = _portal_operate_source_content()
     # handleJobListKeydown stays in the main bundle (it is wired via
     # addEventListener at init time and only references main-bundle helpers).
-    # renderJobQueue is carved into operate-surface-deferred.js and emits
-    # the listbox role/aria-selected markup there.
+    # renderJobQueue is carved into operate-surface-deferred.js and keeps
+    # row inspection and cancellation as distinct semantic buttons.
     keydown_body = _extract_js_function_body(content, "handleJobListKeydown")
     queue_body = _extract_js_function_body(operate_content, "renderJobQueue")
 
-    assert "li.setAttribute('role', 'option');" in queue_body
-    assert "li.setAttribute('aria-selected', isSelected ? 'true' : 'false');" in queue_body
-    assert "if (event.key === 'Enter' || event.key === ' ') {" in keydown_body
+    assert "els.jobList.setAttribute('role', 'list');" in queue_body
+    assert "inspectButton.dataset.action = 'inspect-job';" in queue_body
+    assert "inspectButton.setAttribute('aria-pressed', isSelected ? 'true' : 'false');" in queue_body
+    assert "cancelButton.dataset.action = 'cancel-job';" in queue_body
+    assert "progressEl.setAttribute('aria-label', `${safePipeline} job ${safeId} progress`);" in queue_body
+    assert "progressEl.setAttribute('aria-valuetext', `${safeProgress}%`);" in queue_body
+    assert "li.setAttribute('role', 'option');" not in queue_body
+    assert "li.setAttribute('aria-selected'" not in queue_body
+    assert "const inspectButton = event.target.closest('[data-action=\"inspect-job\"][data-job-id]');" in keydown_body
     assert "if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;" in keydown_body
     assert "if (els.jobList) els.jobList.addEventListener('keydown', handleJobListKeydown);" in content
 
@@ -3994,6 +4127,7 @@ def test_portal_dispatch_controls_require_backend_readiness_and_live_backend() -
     assert "Pipeline is blocked by missing prerequisites." in submit_body
     assert "Backend submission failed: ${truncateMiddle(errorMessage, 180)}" in submit_body
     assert 'createToast(toastMessage, "error");' in submit_body
+    assert "els.runJobBtn.focus({ preventScroll: true });" in submit_body
     assert "mock simulation" not in submit_body
 
 

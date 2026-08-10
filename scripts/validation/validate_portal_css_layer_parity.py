@@ -193,13 +193,13 @@ INTERACTION_OUTLINE_PROBES = (
         "name": "dispatch-tool-btn",
         "selector": ".dispatch-tool-btn:not(.dispatch-tool-btn-primary):not([disabled])",
         "sharedProperties": ("transform", "borderColor", "backgroundColor", "color"),
-        "combinedOutlineStyle": "none",
+        "combinedOutlineStyle": "solid",
     },
     {
         "name": "workspace-link",
         "selector": ".workspace-link:not(.is-active)",
         "sharedProperties": ("transform", "borderColor", "backgroundColor", "boxShadow"),
-        "combinedOutlineStyle": "none",
+        "combinedOutlineStyle": "solid",
     },
 )
 UTILITY_FOCUS_RING_PROBES = (

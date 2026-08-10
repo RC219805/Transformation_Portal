@@ -40,6 +40,7 @@ Contract notes:
     data-review-surface-css-url="__PORTAL_REVIEW_CSS_URL__"
     data-operate-surface-js-url="__PORTAL_OPERATE_JS_URL__"
     data-build-surface-js-url="__PORTAL_BUILD_JS_URL__"
+    data-profile-surface-js-url="__PORTAL_PROFILE_JS_URL__"
     data-overview-surface-js-url="__PORTAL_OVERVIEW_JS_URL__"
     class="shell-bg text-slate-900 dark:text-slate-100 antialiased selection:bg-cyan-500/25 transition-colors duration-300"
 >
@@ -53,10 +54,10 @@ Contract notes:
     <!-- ============================================ -->
     <!-- 1. HEADER                                   -->
     <!-- ============================================ -->
-    <header class="portal-topbar sticky top-0 z-40 border-b backdrop-blur-xl transition-colors duration-300" data-ui="portal-topbar">
-        <div class="portal-topbar__inner mx-auto max-w-7xl px-6 py-4 flex items-center justify-between gap-4">
-            <div class="flex items-center gap-4 min-w-0">
-                <div class="portal-brand-mark flex h-12 w-12 items-center justify-center rounded-2xl text-sm font-black tracking-[0.24em] shadow-soft">
+    <header class="portal-topbar sticky top-0 z-40 border-b backdrop-blur-xl transition-colors duration-300" data-ui="portal-topbar" data-modal-inert-target>
+        <div class="portal-topbar__inner mx-auto max-w-7xl">
+            <div class="portal-topbar__brand">
+                <div class="portal-brand-mark h-12 w-12 rounded-2xl text-sm font-black tracking-[0.24em] shadow-soft">
                     <img
                         class="portal-brand-asset portal-brand-asset--light"
                         src="__PORTAL_BRAND_LIGHT_URL__"
@@ -79,31 +80,76 @@ Contract notes:
                 </div>
                 <div class="flex min-w-0 flex-col">
                     <p class="section-kicker">Operator Console</p>
-                    <h1 class="mt-0.5 text-lg font-extrabold tracking-tight">Transformation Portal</h1>
+                    <h1 class="mt-0.5 text-lg font-extrabold tracking-tight" aria-label="Transformation Portal">
+                        <span class="topbar-title-full" aria-hidden="true">Transformation Portal</span>
+                        <span class="topbar-title-short" aria-hidden="true">Portal</span>
+                    </h1>
                     <p class="topbar-subtitle">Task-first build, live operations, and governed artifact review.</p>
                 </div>
-                <div class="topbar-status hidden lg:flex">
+                <div class="topbar-status" role="group" aria-label="Backend health">
                     <span id="healthIndicator" class="status-dot"></span>
                     <span id="healthText" class="text-[11px] font-mono font-semibold text-slate-600 dark:text-slate-400">Checking...</span>
                 </div>
             </div>
 
-            <div class="portal-topbar__actions flex items-center gap-3" data-ui="portal-topbar-actions">
-                <button id="shortcutsBtn" type="button" class="portal-action-control portal-action-control--topbar portal-action-control--shortcut border px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500 hover:text-slate-900 hover:border-slate-300 dark:text-slate-400 dark:hover:text-white dark:hover:border-slate-600 transition-colors">
+            <div class="portal-topbar__actions" data-ui="portal-topbar-actions">
+                <button id="shortcutsBtn" type="button" class="portal-action-control portal-action-control--topbar portal-action-control--shortcut border font-semibold uppercase text-slate-500 hover:text-slate-900 hover:border-slate-300 dark:text-slate-400 dark:hover:text-white dark:hover:border-slate-600 transition-colors" aria-label="Open keyboard shortcuts">
                     Shortcuts <span class="kbd">?</span>
                 </button>
-                <button id="themeBtn" type="button" class="portal-action-control portal-action-control--topbar px-4 py-2 text-xs font-semibold border hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors" aria-label="Theme preference: system. Click to switch to dark.">
+                <button id="themeBtn" type="button" class="portal-action-control portal-action-control--topbar font-semibold border hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors" aria-label="Theme preference: system. Click to switch to dark.">
                     Theme: System
                 </button>
-                <button id="logoutBtn" type="button" data-ui="logout-button" hidden class="portal-action-control portal-action-control--topbar px-4 py-2 text-xs font-semibold border hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed" aria-label="Sign out of the operator console">
+                <button id="logoutBtn" type="button" data-ui="logout-button" hidden class="portal-action-control portal-action-control--topbar font-semibold border hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed" aria-label="Sign out of the operator console">
                     Sign out
                 </button>
             </div>
         </div>
     </header>
 
-    <main id="main-content" tabindex="-1" class="portal-main mx-auto max-w-7xl outline-none">
+    <main id="main-content" tabindex="-1" class="portal-main mx-auto max-w-7xl outline-none" data-modal-inert-target>
         <div class="portal-shell-grid">
+        <nav aria-label="Workspace sections" class="portal-workspace-rail workspace-rail mb-6 lg:mb-0 rounded-2xl px-3 py-3" data-ui="view-switcher">
+            <div class="workspace-rail-copy">
+                <p class="section-kicker">Workspace</p>
+                <p class="workspace-rail-text">
+                    Overview, build, live operation, and review in one quiet shell.
+                </p>
+                <p class="workspace-shortcut-hint" data-ui="workspace-shortcut-hint">
+                    Keyboard: <span class="kbd">1</span> overview, <span class="kbd">2</span> build, <span class="kbd">3</span> operate, <span class="kbd">4</span> review, <span class="kbd">?</span> shortcuts.
+                </p>
+            </div>
+            <div class="workspace-rail-links" aria-label="Console views">
+                <a class="workspace-link is-active" data-view-link="overview" data-ui="view-link" href="?view=overview" aria-current="page" aria-keyshortcuts="1">
+                    <span class="workspace-link-heading">
+                        <span class="workspace-link-label">Overview</span>
+                        <span class="workspace-link-shortcut" aria-hidden="true">1</span>
+                    </span>
+                    <span class="workspace-link-meta">Status, active jobs, and next action.</span>
+                </a>
+                <a class="workspace-link" data-view-link="build" data-ui="view-link" href="?view=build" aria-keyshortcuts="2">
+                    <span class="workspace-link-heading">
+                        <span class="workspace-link-label">Build</span>
+                        <span class="workspace-link-shortcut" aria-hidden="true">2</span>
+                    </span>
+                    <span class="workspace-link-meta">Preview-backed dispatch flow.</span>
+                </a>
+                <a class="workspace-link" data-view-link="operate" data-ui="view-link" href="?view=operate" aria-keyshortcuts="3">
+                    <span class="workspace-link-heading">
+                        <span class="workspace-link-label">Operate</span>
+                        <span class="workspace-link-shortcut" aria-hidden="true">3</span>
+                    </span>
+                    <span class="workspace-link-meta">Queue, inspector, artifacts, and logs.</span>
+                </a>
+                <a class="workspace-link" data-view-link="review" data-ui="view-link" href="?view=review" aria-keyshortcuts="4">
+                    <span class="workspace-link-heading">
+                        <span class="workspace-link-label">Review</span>
+                        <span class="workspace-link-shortcut" aria-hidden="true">4</span>
+                    </span>
+                    <span class="workspace-link-meta">Artifact preview, provenance, and actions.</span>
+                </a>
+            </div>
+        </nav>
+
         <!-- ============================================ -->
         <!-- 2. OVERVIEW VIEW                            -->
         <!-- ============================================ -->
@@ -149,7 +195,7 @@ Contract notes:
                 <div class="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
                     <div class="max-w-2xl">
                         <p class="section-kicker">Overview</p>
-                        <h2 class="mt-3 text-3xl font-extrabold tracking-tight text-slate-950 dark:text-white">Current operator status</h2>
+                        <h2 id="overviewViewTitle" class="mt-3 text-3xl font-extrabold tracking-tight text-slate-950 dark:text-white">Current operator status</h2>
                         <p class="mt-3 text-base leading-7 text-slate-600 dark:text-slate-300">
                             Start a new run, resume the current draft, or jump straight into the latest live or reviewable work.
                         </p>
@@ -292,7 +338,7 @@ Contract notes:
                     <p id="heroModeValue" class="stat-value">Checking…</p>
                 </div>
                 <div class="stat-tile" data-ui="overview-card">
-                    <p class="stat-label">Recent Jobs</p>
+                    <p class="stat-label">Active Jobs</p>
                     <p id="heroQueueValue" class="stat-value">0 live jobs</p>
                 </div>
             </div>
@@ -308,60 +354,24 @@ Contract notes:
                 </div>
             </div>
 
-            <div id="overviewCapabilityRow" class="portal-overview-capability lg:col-span-12">
-                <div class="capability-stack-header">
-                    <div>
-                        <p class="stat-label">Capability Stack</p>
-                        <p id="capabilitySummaryDetail" class="capability-stack-summary">Capability status will align to bootstrap, readiness, preview, and review state.</p>
-                    </div>
-                    <span id="capabilitySummaryBadge" class="capability-summary-badge" data-capability-status="available">0/0 enabled</span>
+            <details id="overviewCapabilityRow" class="portal-overview-capability capability-disclosure lg:col-span-12">
+                <summary class="capability-stack-header capability-disclosure__summary">
+                    <span class="capability-disclosure__copy">
+                        <span class="stat-label">Capabilities</span>
+                        <span id="capabilitySummaryDetail" class="capability-stack-summary">Capability status will align to bootstrap, readiness, preview, and review state.</span>
+                    </span>
+                    <span class="capability-disclosure__meta">
+                        <span id="capabilitySummaryBadge" class="capability-summary-badge" data-capability-status="available">0/0 enabled</span>
+                        <span class="capability-disclosure__closed-label" aria-hidden="true">View all</span>
+                        <span class="capability-disclosure__open-label" aria-hidden="true">Hide details</span>
+                    </span>
+                </summary>
+                <div class="capability-disclosure__body">
+                    <div id="capabilityChips" class="mt-3 flex flex-wrap gap-2"></div>
+                    <div id="capabilityMatrix" class="capability-matrix" data-ui="capability-matrix" role="list" aria-label="Portal capability status matrix"></div>
                 </div>
-                <div id="capabilityChips" class="mt-3 flex flex-wrap gap-2"></div>
-                <div id="capabilityMatrix" class="capability-matrix" data-ui="capability-matrix" role="list" aria-label="Portal capability status matrix"></div>
-            </div>
+            </details>
         </section>
-
-        <nav aria-label="Workspace sections" class="portal-workspace-rail workspace-rail mb-6 lg:mb-0 rounded-2xl px-3 py-3" data-ui="view-switcher">
-            <div class="workspace-rail-copy">
-                <p class="section-kicker">Workspace</p>
-                <p class="workspace-rail-text">
-                    Overview, build, live operation, and review in one quiet shell.
-                </p>
-                <p class="workspace-shortcut-hint" data-ui="workspace-shortcut-hint">
-                    Keyboard: <span class="kbd">1</span> overview, <span class="kbd">2</span> build, <span class="kbd">3</span> operate, <span class="kbd">4</span> review, <span class="kbd">?</span> shortcuts.
-                </p>
-            </div>
-            <div class="workspace-rail-links" aria-label="Console views">
-                <a class="workspace-link is-active" data-view-link="overview" data-ui="view-link" href="?view=overview" aria-current="page" aria-keyshortcuts="1">
-                    <span class="workspace-link-heading">
-                        <span class="workspace-link-label">Overview</span>
-                        <span class="workspace-link-shortcut" aria-hidden="true">1</span>
-                    </span>
-                    <span class="workspace-link-meta">Status, recent jobs, and next action.</span>
-                </a>
-                <a class="workspace-link" data-view-link="build" data-ui="view-link" href="?view=build" aria-keyshortcuts="2">
-                    <span class="workspace-link-heading">
-                        <span class="workspace-link-label">Build</span>
-                        <span class="workspace-link-shortcut" aria-hidden="true">2</span>
-                    </span>
-                    <span class="workspace-link-meta">Preview-backed dispatch flow.</span>
-                </a>
-                <a class="workspace-link" data-view-link="operate" data-ui="view-link" href="?view=operate" aria-keyshortcuts="3">
-                    <span class="workspace-link-heading">
-                        <span class="workspace-link-label">Operate</span>
-                        <span class="workspace-link-shortcut" aria-hidden="true">3</span>
-                    </span>
-                    <span class="workspace-link-meta">Queue, inspector, artifacts, and logs.</span>
-                </a>
-                <a class="workspace-link" data-view-link="review" data-ui="view-link" href="?view=review" aria-keyshortcuts="4">
-                    <span class="workspace-link-heading">
-                        <span class="workspace-link-label">Review</span>
-                        <span class="workspace-link-shortcut" aria-hidden="true">4</span>
-                    </span>
-                    <span class="workspace-link-meta">Artifact preview, provenance, and actions.</span>
-                </a>
-            </div>
-        </nav>
 
         <section id="console-context-shell" class="portal-shell-card portal-shell-card--context workspace-shell portal-context-shell mb-6 lg:mb-0 shell-panel" data-ui="console-context-shell">
             <div class="portal-context-head flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
@@ -599,29 +609,29 @@ Contract notes:
                             <p id="buildPulseDispatchMeta" class="build-pulse-meta">The next operator action stays pinned here while the draft changes.</p>
                         </div>
                     </div>
-                    <div id="buildStepTabs" class="build-step-tabs mt-5" role="tablist" aria-label="Build steps">
-                        <button id="buildStepTab1" type="button" class="build-step-tab is-active" data-build-step-target="1" role="tab" aria-selected="true" data-ui="build-step-tab">
+                    <div id="buildStepTabs" class="build-step-tabs mt-5" role="toolbar" aria-label="Build steps">
+                        <button id="buildStepTab1" type="button" class="build-step-tab is-active" data-build-step-target="1" aria-pressed="true" aria-current="step" aria-controls="presetBuilderShell" tabindex="0" data-ui="build-step-tab">
                             <span class="build-step-index">1</span>
                             <span class="build-step-copy">
                                 <span class="build-step-label">Configure</span>
                                 <span class="build-step-meta">Pipeline and preset posture.</span>
                             </span>
                         </button>
-                        <button id="buildStepTab2" type="button" class="build-step-tab" data-build-step-target="2" role="tab" aria-selected="false" data-ui="build-step-tab">
+                        <button id="buildStepTab2" type="button" class="build-step-tab" data-build-step-target="2" aria-pressed="false" aria-controls="buildPathsShell fieldsArchiveGate" tabindex="-1" data-ui="build-step-tab">
                             <span class="build-step-index">2</span>
                             <span class="build-step-copy">
                                 <span class="build-step-label">Paths</span>
                                 <span class="build-step-meta">Inputs, outputs, and stage-specific files.</span>
                             </span>
                         </button>
-                        <button id="buildStepTab3" type="button" class="build-step-tab" data-build-step-target="3" role="tab" aria-selected="false" data-ui="build-step-tab">
+                        <button id="buildStepTab3" type="button" class="build-step-tab" data-build-step-target="3" aria-pressed="false" aria-controls="fieldsLuxDepth flagsShellPanel governance-shell" tabindex="-1" data-ui="build-step-tab">
                             <span class="build-step-index">3</span>
                             <span class="build-step-copy">
                                 <span class="build-step-label">Outputs</span>
                                 <span class="build-step-meta">Deliverables, posture, and readiness.</span>
                             </span>
                         </button>
-                        <button id="buildStepTab4" type="button" class="build-step-tab" data-build-step-target="4" role="tab" aria-selected="false" data-ui="build-step-tab">
+                        <button id="buildStepTab4" type="button" class="build-step-tab" data-build-step-target="4" aria-pressed="false" aria-controls="cli-shell" tabindex="-1" data-ui="build-step-tab">
                             <span class="build-step-index">4</span>
                             <span class="build-step-copy">
                                 <span class="build-step-label">Dispatch</span>
@@ -681,7 +691,7 @@ Contract notes:
                         <div class="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-4">
                             <div class="sm:col-span-3">
                                 <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="presetSelect">Preset</label>
-                                <select id="presetSelect" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2.5 text-[13px] font-mono transition-colors cursor-pointer">
+                                <select id="presetSelect" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2.5 text-[13px] font-mono transition-colors cursor-pointer" aria-describedby="presetBuilderHint">
                                     <option value="premium" selected>premium (Stable)</option>
                                     <option value="default">default (Canary)</option>
                                     <option value="depth-anything-v3.1-research-m4">v3.1-m4 (Experimental)</option>
@@ -723,7 +733,7 @@ Contract notes:
                         <div class="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div>
                                 <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="inputDir">Input Directory</label>
-                                <input type="text" id="inputDir" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-2.5 text-[13px] font-mono transition-colors" value="./input_images" autocomplete="off" spellcheck="false" required aria-required="true" />
+                                <input type="text" id="inputDir" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-2.5 text-[13px] font-mono transition-colors" value="./input_images" autocomplete="off" spellcheck="false" required aria-required="true" aria-describedby="inputDirStatus" aria-errormessage="inputDirStatus" />
                                 <p id="inputDirStatus" class="field-status mt-1 text-[12px] leading-6 text-slate-500 dark:text-slate-400">Set the source folder for the next run.</p>
                                 <div id="stagedUploadShell" class="mt-3 hidden rounded-xl border border-dashed border-slate-300 dark:border-slate-700 bg-white/70 dark:bg-slate-900/60 p-4" data-ui="staged-upload-shell">
                                     <div class="flex flex-wrap items-start justify-between gap-3">
@@ -736,7 +746,7 @@ Contract notes:
                                             <button type="button" id="stagedUploadPickFolderBtn" class="inline-flex items-center justify-center rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2 text-[12px] font-semibold text-slate-700 dark:text-slate-200 transition-colors hover:border-indigo-400 hover:text-indigo-600 dark:hover:text-indigo-300" data-ui="staged-upload-pick-folder">Choose folder</button>
                                         </div>
                                     </div>
-                                    <div id="stagedUploadDropzone" class="mt-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-950/40 px-4 py-4 text-[12px] leading-6 text-slate-600 dark:text-slate-300" data-ui="staged-upload-dropzone" tabindex="0" role="button" aria-label="Choose files or drop files for staged upload" aria-describedby="stagedUploadStatus">
+                                    <div id="stagedUploadDropzone" class="mt-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-950/40 px-4 py-4 text-[12px] leading-6 text-slate-600 dark:text-slate-300" data-ui="staged-upload-dropzone" tabindex="0" role="button" aria-label="Choose files or drop files for staged upload" aria-describedby="stagedUploadStatus stagedUploadError" aria-errormessage="stagedUploadError">
                                         Drop files here or choose a file set from disk. Relative paths are preserved for managed staging.
                                     </div>
                                     <div class="mt-3">
@@ -747,20 +757,20 @@ Contract notes:
                                     </div>
                                     <div id="stagedUploadSummary" class="mt-3" aria-live="polite" aria-atomic="true" role="status"></div>
                                     <p id="stagedUploadError" class="mt-1 text-[12px] leading-6 text-red-600 dark:text-red-300" aria-live="assertive" role="alert"></p>
-                                    <input type="file" id="stagedUploadFilesInput" class="hidden" multiple />
-                                    <input type="file" id="stagedUploadFolderInput" class="hidden" webkitdirectory directory multiple />
+                                    <input type="file" id="stagedUploadFilesInput" class="hidden" multiple aria-label="Choose staged upload files" aria-describedby="stagedUploadStatus stagedUploadError" aria-errormessage="stagedUploadError" />
+                                    <input type="file" id="stagedUploadFolderInput" class="hidden" webkitdirectory directory multiple aria-label="Choose a staged upload folder" aria-describedby="stagedUploadStatus stagedUploadError" aria-errormessage="stagedUploadError" />
                                 </div>
                             </div>
                             <div>
                                 <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="outputDir">Output Directory</label>
-                                <input type="text" id="outputDir" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-2.5 text-[13px] font-mono transition-colors" value="./output/lux_depth_v3_apex" autocomplete="off" spellcheck="false" required aria-required="true" />
+                                <input type="text" id="outputDir" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-2.5 text-[13px] font-mono transition-colors" value="./output/lux_depth_v3_apex" autocomplete="off" spellcheck="false" required aria-required="true" aria-describedby="outputDirStatus" aria-errormessage="outputDirStatus" />
                                 <p id="outputDirStatus" class="field-status mt-1 text-[12px] leading-6 text-slate-500 dark:text-slate-400">Choose the governed destination for generated outputs.</p>
                             </div>
                         </div>
                     </section>
 
                     <!-- Lux Depth Specific Fields -->
-                    <div id="fieldsLuxDepth" data-build-step-panel="3" class="pipeline-fields build-step-panel block space-y-6 mt-5 pt-5 border-t border-slate-200 dark:border-slate-800" data-ui="build-step-panel">
+                    <div id="fieldsLuxDepth" data-build-step-panel="3" class="pipeline-fields build-step-panel space-y-6 mt-5 pt-5 border-t border-slate-200 dark:border-slate-800" data-ui="build-step-panel">
                         <div class="flex items-start justify-between gap-3">
                             <div>
                                 <p class="section-kicker">Step 3</p>
@@ -791,14 +801,14 @@ Contract notes:
                             <label class="flex items-center justify-between rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50 px-4 py-3.5 cursor-pointer group transition-colors">
                                 <span class="text-[12px] font-medium select-none text-slate-700 dark:text-slate-300">Enable Segmentation</span>
                                 <div class="relative inline-flex items-center">
-                                    <input type="checkbox" id="enableSegmentation" role="switch" class="sr-only peer" checked />
+                                    <input type="checkbox" id="enableSegmentation" role="switch" class="sr-only peer" checked aria-label="Enable Segmentation" aria-describedby="segmentationApplicabilityHint" />
                                     <div class="w-9 h-5 rounded-full transition-colors duration-200 ease-in-out peer-focus-visible:ring-2 peer-focus-visible:ring-offset-2 peer-focus-visible:ring-indigo-500 bg-slate-300 dark:bg-slate-600 peer-checked:bg-indigo-600"></div>
                                     <div class="absolute left-[2px] top-[2px] bg-white w-4 h-4 rounded-full transition-transform duration-200 ease-in-out peer-checked:translate-x-4 shadow-sm"></div>
                                 </div>
                             </label>
                             <div id="segmentationBackendField">
                                 <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="segmentationBackend">Segmentation Backend</label>
-                                <select id="segmentationBackend" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2.5 text-[13px] font-mono transition-colors cursor-pointer">
+                                <select id="segmentationBackend" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2.5 text-[13px] font-mono transition-colors cursor-pointer" aria-describedby="segmentationApplicabilityHint">
                                     <option value="sam2">sam2</option>
                                     <option value="efficientsam" selected>efficientsam</option>
                                     <option value="stub">stub</option>
@@ -814,7 +824,7 @@ Contract notes:
                             <label id="strictSegmentationField" class="flex items-center justify-between rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50 px-4 py-3.5 cursor-pointer group transition-colors">
                                 <span class="text-[12px] font-medium select-none text-slate-700 dark:text-slate-300">Strict Segmentation</span>
                                 <div class="relative inline-flex items-center">
-                                    <input type="checkbox" id="strictSegmentation" role="switch" class="sr-only peer" checked />
+                                    <input type="checkbox" id="strictSegmentation" role="switch" class="sr-only peer" checked aria-label="Strict Segmentation" aria-describedby="segmentationApplicabilityHint" />
                                     <div class="w-9 h-5 rounded-full transition-colors duration-200 ease-in-out peer-focus-visible:ring-2 peer-focus-visible:ring-offset-2 peer-focus-visible:ring-indigo-500 bg-slate-300 dark:bg-slate-600 peer-checked:bg-indigo-600"></div>
                                     <div class="absolute left-[2px] top-[2px] bg-white w-4 h-4 rounded-full transition-transform duration-200 ease-in-out peer-checked:translate-x-4 shadow-sm"></div>
                                 </div>
@@ -837,7 +847,7 @@ Contract notes:
                             <label id="sam2TilingToggleField" class="flex items-center justify-between rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3.5 cursor-pointer group transition-colors">
                                 <span class="text-[12px] font-medium select-none text-slate-700 dark:text-slate-300">Enable SAM2 Tiling</span>
                                 <div class="relative inline-flex items-center">
-                                    <input type="checkbox" id="sam2TilingEnabled" role="switch" class="sr-only peer" />
+                                    <input type="checkbox" id="sam2TilingEnabled" role="switch" class="sr-only peer" aria-label="Enable SAM2 Tiling" aria-describedby="sam2TuningHint" />
                                     <div class="w-9 h-5 rounded-full transition-colors duration-200 ease-in-out peer-focus-visible:ring-2 peer-focus-visible:ring-offset-2 peer-focus-visible:ring-indigo-500 bg-slate-300 dark:bg-slate-600 peer-checked:bg-indigo-600"></div>
                                     <div class="absolute left-[2px] top-[2px] bg-white w-4 h-4 rounded-full transition-transform duration-200 ease-in-out peer-checked:translate-x-4 shadow-sm"></div>
                                 </div>
@@ -895,12 +905,12 @@ Contract notes:
                         </div>
                         <div id="archiveIndexField">
                             <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="archiveIndexPath">Archive Index Path</label>
-                            <input type="text" id="archiveIndexPath" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-2.5 text-[13px] font-mono transition-colors" value="" placeholder="./tests/fixtures/archive_small/archive_index_normalized.csv.gz" autocomplete="off" spellcheck="false" />
+                            <input type="text" id="archiveIndexPath" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-2.5 text-[13px] font-mono transition-colors" value="" placeholder="./tests/fixtures/archive_small/archive_index_normalized.csv.gz" autocomplete="off" spellcheck="false" aria-describedby="archiveIndexStatus" aria-errormessage="archiveIndexStatus" />
                             <p id="archiveIndexStatus" class="mt-1 text-[12px] leading-6 text-slate-500 dark:text-slate-400">Required for `fixity-scan`. Supply an existing normalized archive index that is safe to read from the local allowlist.</p>
                         </div>
                         <div id="rightsManifestField" class="hidden">
                             <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="rightsManifestPath">Rights Manifest JSONL</label>
-                            <input type="text" id="rightsManifestPath" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-2.5 text-[13px] font-mono transition-colors" value="" placeholder="./output/archive_manifest_v2.rights.jsonl" autocomplete="off" spellcheck="false" />
+                            <input type="text" id="rightsManifestPath" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-2.5 text-[13px] font-mono transition-colors" value="" placeholder="./output/archive_manifest_v2.rights.jsonl" autocomplete="off" spellcheck="false" aria-describedby="rightsManifestStatus" aria-errormessage="rightsManifestStatus" />
                             <p id="rightsManifestStatus" class="mt-1 text-[12px] leading-6 text-slate-500 dark:text-slate-400">Required for `bag-build` and `mets-export`. This must point to an existing rights-manifest artifact generated by an earlier archive stage.</p>
                         </div>
                     </div>
@@ -908,7 +918,8 @@ Contract notes:
                     </div>
 
                 <!-- Pipeline Flags -->
-                <fieldset id="flags-shell" data-build-step-panel="3" class="workspace-shell deferred-shell rounded-2xl shell-panel p-6 shadow-soft dark:shadow-soft-dark transition-colors duration-300 build-step-panel" data-shell-size="tall" data-ui="build-step-panel">
+                <div id="flagsShellPanel" data-build-step-panel="3" class="build-step-panel" data-ui="build-step-panel">
+                <fieldset id="flags-shell" class="workspace-shell deferred-shell rounded-2xl shell-panel p-6 shadow-soft dark:shadow-soft-dark transition-colors duration-300" data-shell-size="tall">
                     <legend class="block text-[11px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-4">Primary Output Posture</legend>
                     <p class="step-primary-note">Shape the deliverables first. Diagnostics, acknowledgments, and runtime detail stay below as secondary controls unless the preview or contract pulls them forward.</p>
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -917,7 +928,7 @@ Contract notes:
                         <label class="flex items-center justify-between rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800 px-4 py-3.5 cursor-pointer group transition-colors">
                             <span class="text-[13px] font-medium select-none text-slate-700 dark:text-slate-300">Materials V3</span>
                             <div class="relative inline-flex items-center">
-                                <input type="checkbox" id="flagMaterials" role="switch" class="sr-only peer" checked />
+                                <input type="checkbox" id="flagMaterials" role="switch" class="sr-only peer" checked aria-label="Materials V3" />
                                 <div class="w-9 h-5 rounded-full transition-colors duration-200 ease-in-out peer-focus-visible:ring-2 peer-focus-visible:ring-offset-2 peer-focus-visible:ring-indigo-500 bg-slate-300 dark:bg-slate-600 peer-checked:bg-indigo-600"></div>
                                 <div class="absolute left-[2px] top-[2px] bg-white w-4 h-4 rounded-full transition-transform duration-200 ease-in-out peer-checked:translate-x-4 shadow-sm"></div>
                             </div>
@@ -926,7 +937,7 @@ Contract notes:
                         <label class="flex items-center justify-between rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800 px-4 py-3.5 cursor-pointer group transition-colors">
                             <span class="text-[13px] font-medium select-none text-slate-700 dark:text-slate-300">PBR Generation</span>
                             <div class="relative inline-flex items-center">
-                                <input type="checkbox" id="flagPBR" role="switch" class="sr-only peer" checked />
+                                <input type="checkbox" id="flagPBR" role="switch" class="sr-only peer" checked aria-label="PBR Generation" />
                                 <div class="w-9 h-5 rounded-full transition-colors duration-200 ease-in-out peer-focus-visible:ring-2 peer-focus-visible:ring-offset-2 peer-focus-visible:ring-indigo-500 bg-slate-300 dark:bg-slate-600 peer-checked:bg-indigo-600"></div>
                                 <div class="absolute left-[2px] top-[2px] bg-white w-4 h-4 rounded-full transition-transform duration-200 ease-in-out peer-checked:translate-x-4 shadow-sm"></div>
                             </div>
@@ -935,7 +946,7 @@ Contract notes:
                         <label class="flex items-center justify-between rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800 px-4 py-3.5 cursor-pointer group transition-colors">
                             <span class="text-[13px] font-medium select-none text-slate-700 dark:text-slate-300">Cache Depth</span>
                             <div class="relative inline-flex items-center">
-                                <input type="checkbox" id="flagCache" role="switch" class="sr-only peer" checked />
+                                <input type="checkbox" id="flagCache" role="switch" class="sr-only peer" checked aria-label="Cache Depth" />
                                 <div class="w-9 h-5 rounded-full transition-colors duration-200 ease-in-out peer-focus-visible:ring-2 peer-focus-visible:ring-offset-2 peer-focus-visible:ring-indigo-500 bg-slate-300 dark:bg-slate-600 peer-checked:bg-indigo-600"></div>
                                 <div class="absolute left-[2px] top-[2px] bg-white w-4 h-4 rounded-full transition-transform duration-200 ease-in-out peer-checked:translate-x-4 shadow-sm"></div>
                             </div>
@@ -944,7 +955,7 @@ Contract notes:
                         <label class="flex items-center justify-between rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800 px-4 py-3.5 cursor-pointer group transition-colors">
                             <span class="text-[13px] font-medium select-none text-red-600 dark:text-red-400">Overwrite Existing</span>
                             <div class="relative inline-flex items-center">
-                                <input type="checkbox" id="flagOverwrite" role="switch" class="sr-only peer" />
+                                <input type="checkbox" id="flagOverwrite" role="switch" class="sr-only peer" aria-label="Overwrite Existing" />
                                 <div class="w-9 h-5 rounded-full transition-colors duration-200 ease-in-out peer-focus-visible:ring-2 peer-focus-visible:ring-offset-2 peer-focus-visible:ring-red-500 bg-slate-300 dark:bg-slate-600 peer-checked:bg-red-500"></div>
                                 <div class="absolute left-[2px] top-[2px] bg-white w-4 h-4 rounded-full transition-transform duration-200 ease-in-out peer-checked:translate-x-4 shadow-sm"></div>
                             </div>
@@ -953,14 +964,15 @@ Contract notes:
                         <label class="flex items-center justify-between rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800 px-4 py-3.5 cursor-pointer group transition-colors sm:col-span-2">
                             <span class="text-[13px] font-medium select-none text-slate-700 dark:text-slate-300">Enable V2 Compatibility</span>
                             <div class="relative inline-flex items-center ml-4">
-                                <input type="checkbox" id="flagEnableV2" role="switch" class="sr-only peer" />
+                                <input type="checkbox" id="flagEnableV2" role="switch" class="sr-only peer" aria-label="Enable V2 Compatibility" aria-controls="v2PresetField" />
                                 <div class="w-9 h-5 rounded-full transition-colors duration-200 ease-in-out peer-focus-visible:ring-2 peer-focus-visible:ring-offset-2 peer-focus-visible:ring-indigo-500 bg-slate-300 dark:bg-slate-600 peer-checked:bg-indigo-600"></div>
                                 <div class="absolute left-[2px] top-[2px] bg-white w-4 h-4 rounded-full transition-transform duration-200 ease-in-out peer-checked:translate-x-4 shadow-sm"></div>
                             </div>
                         </label>
 
                         <div id="v2PresetField" class="hidden sm:col-span-2">
-                             <input type="text" id="v2Preset" placeholder="V2 Preset (e.g. default)" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-2.5 text-[13px] font-mono transition-colors disabled:opacity-50" value="default" disabled autocomplete="off" spellcheck="false" />
+                             <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="v2Preset">V2 Preset</label>
+                             <input type="text" id="v2Preset" placeholder="e.g. default" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-2.5 text-[13px] font-mono transition-colors disabled:opacity-50" value="default" disabled autocomplete="off" spellcheck="false" />
                         </div>
                     </div>
 
@@ -1141,7 +1153,7 @@ Contract notes:
                             <label class="flex items-center justify-between rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3.5 cursor-pointer group transition-colors">
                                 <span class="text-[12px] font-medium select-none text-slate-700 dark:text-slate-300">Enable FastVLM Captioning</span>
                                 <div class="relative inline-flex items-center">
-                                    <input type="checkbox" id="enableFastVlmCaptioning" role="switch" class="sr-only peer" />
+                                    <input type="checkbox" id="enableFastVlmCaptioning" role="switch" class="sr-only peer" aria-label="Enable FastVLM Captioning" aria-describedby="captioningStatus" />
                                     <div class="w-9 h-5 rounded-full transition-colors duration-200 ease-in-out peer-focus-visible:ring-2 peer-focus-visible:ring-offset-2 peer-focus-visible:ring-indigo-500 bg-slate-300 dark:bg-slate-600 peer-checked:bg-indigo-600"></div>
                                     <div class="absolute left-[2px] top-[2px] bg-white w-4 h-4 rounded-full transition-transform duration-200 ease-in-out peer-checked:translate-x-4 shadow-sm"></div>
                                 </div>
@@ -1230,7 +1242,7 @@ Contract notes:
                                     <span class="shrink-0 rounded border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 px-1.5 py-0.5 text-[9px] uppercase tracking-wide text-amber-700 dark:text-amber-400">Experimental</span>
                                 </span>
                                 <div class="relative inline-flex items-center">
-                                    <input type="checkbox" id="enableReconstruction" role="switch" class="sr-only peer" />
+                                    <input type="checkbox" id="enableReconstruction" role="switch" class="sr-only peer" aria-label="Enable Reconstruction" aria-describedby="reconstructionDetailsHint" />
                                     <div class="w-9 h-5 rounded-full transition-colors duration-200 ease-in-out peer-focus-visible:ring-2 peer-focus-visible:ring-offset-2 peer-focus-visible:ring-indigo-500 bg-slate-300 dark:bg-slate-600 peer-checked:bg-indigo-600"></div>
                                     <div class="absolute left-[2px] top-[2px] bg-white w-4 h-4 rounded-full transition-transform duration-200 ease-in-out peer-checked:translate-x-4 shadow-sm"></div>
                                 </div>
@@ -1241,7 +1253,7 @@ Contract notes:
                             <label class="flex items-center justify-between rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50 px-4 py-3.5 cursor-pointer group transition-colors">
                                 <span class="text-[12px] font-medium select-none text-slate-700 dark:text-slate-300">Emit Scene Debug Bundle</span>
                                 <div class="relative inline-flex items-center">
-                                    <input type="checkbox" id="emitSceneDebugBundle" role="switch" class="sr-only peer" />
+                                    <input type="checkbox" id="emitSceneDebugBundle" role="switch" class="sr-only peer" aria-label="Emit Scene Debug Bundle" aria-controls="debugBundleGuardrail" />
                                     <div class="w-9 h-5 rounded-full transition-colors duration-200 ease-in-out peer-focus-visible:ring-2 peer-focus-visible:ring-offset-2 peer-focus-visible:ring-indigo-500 bg-slate-300 dark:bg-slate-600 peer-checked:bg-indigo-600"></div>
                                     <div class="absolute left-[2px] top-[2px] bg-white w-4 h-4 rounded-full transition-transform duration-200 ease-in-out peer-checked:translate-x-4 shadow-sm"></div>
                                 </div>
@@ -1254,7 +1266,7 @@ Contract notes:
                                 <p id="debugBundleSensitivity" class="mt-2 text-[12px] leading-6 text-slate-600 dark:text-slate-300">May include source images, camera metadata, segmentation overlays, and reprojection previews.</p>
                             </div>
                             <label class="flex items-start gap-3 cursor-pointer group">
-                                <input type="checkbox" id="debugBundleAcknowledge" class="w-4 h-4 mt-0.5 rounded text-amber-600 border-amber-300 dark:border-amber-700 dark:bg-slate-900" />
+                                <input type="checkbox" id="debugBundleAcknowledge" class="w-4 h-4 mt-0.5 rounded text-amber-600 border-amber-300 dark:border-amber-700 dark:bg-slate-900" aria-describedby="debugBundleAcknowledgeHint" aria-errormessage="debugBundleAcknowledgeHint" />
                                 <span class="text-[12px] leading-tight select-none text-slate-700 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-white transition-colors">I understand this debug bundle can copy source imagery and camera metadata into the output directory for offline triage.</span>
                             </label>
                             <p id="debugBundleAcknowledgeHint" class="text-[11px] leading-5 text-amber-700 dark:text-amber-300">Required before dispatch when debug bundle emission is enabled.</p>
@@ -1262,7 +1274,7 @@ Contract notes:
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div>
                                 <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="groupingMode">Grouping Mode</label>
-                                <select id="groupingMode" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2.5 text-[13px] font-mono transition-colors cursor-pointer">
+                                <select id="groupingMode" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2.5 text-[13px] font-mono transition-colors cursor-pointer" aria-describedby="groupingModeStatus" aria-errormessage="groupingModeStatus">
                                     <option value="single" selected>single</option>
                                     <option value="parent_dir">parent_dir</option>
                                 </select>
@@ -1270,19 +1282,19 @@ Contract notes:
                             </div>
                             <div>
                                 <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="reconstructionIterations">Reconstruction Iterations</label>
-                                <input type="number" id="reconstructionIterations" min="1" step="1" value="1000" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-2.5 text-[13px] font-mono transition-colors" />
+                                <input type="number" id="reconstructionIterations" min="1" step="1" value="1000" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-2.5 text-[13px] font-mono transition-colors" aria-describedby="reconstructionIterationsStatus" aria-errormessage="reconstructionIterationsStatus" />
                                 <p id="reconstructionIterationsStatus" class="mt-1 text-[11px] leading-5 text-slate-500 dark:text-slate-400">Balanced default: 1000 iterations.</p>
                             </div>
                         </div>
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div>
                                 <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="camerasSidecarPath">Cameras Sidecar Path (Optional)</label>
-                                <input type="text" id="camerasSidecarPath" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-2.5 text-[13px] font-mono transition-colors" placeholder="./manifests/scene_cameras.json" autocomplete="off" spellcheck="false" />
+                                <input type="text" id="camerasSidecarPath" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-2.5 text-[13px] font-mono transition-colors" placeholder="./manifests/scene_cameras.json" autocomplete="off" spellcheck="false" aria-describedby="camerasSidecarStatus" aria-errormessage="camerasSidecarStatus" />
                                 <p id="camerasSidecarStatus" class="mt-1 text-[11px] leading-5 text-slate-500 dark:text-slate-400">Recommended for multi-view reconstruction runs.</p>
                             </div>
                             <div>
                                 <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="reconstructionTier">Reconstruction Tier</label>
-                                <select id="reconstructionTier" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2.5 text-[13px] font-mono transition-colors cursor-pointer">
+                                <select id="reconstructionTier" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2.5 text-[13px] font-mono transition-colors cursor-pointer" aria-describedby="reconstructionTierStatus" aria-errormessage="reconstructionTierStatus">
                                     <option value="apex_research" selected>apex_research</option>
                                     <option value="apex_research_ultra">apex_research_ultra</option>
                                     <option value="experimental">experimental</option>
@@ -1298,7 +1310,7 @@ Contract notes:
                                     <span>RAW Ingest Mode</span>
                                     <span class="shrink-0 rounded border border-indigo-300 dark:border-indigo-700 bg-indigo-50 dark:bg-indigo-900/20 px-1.5 py-0.5 text-[9px] uppercase tracking-wide text-indigo-700 dark:text-indigo-400">Advanced</span>
                                 </label>
-                                <select id="rawIngestMode" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2.5 text-[13px] font-mono transition-colors cursor-pointer">
+                                <select id="rawIngestMode" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2.5 text-[13px] font-mono transition-colors cursor-pointer" aria-describedby="rawIngestModeStatus" aria-errormessage="rawIngestModeStatus">
                                     <option value="auto" selected>auto</option>
                                     <option value="force_rawpy">force_rawpy</option>
                                     <option value="force_preview">force_preview</option>
@@ -1336,29 +1348,31 @@ Contract notes:
                         <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
                             <div>
                                 <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="maxWorkersMode">Max Workers</label>
-                                <select id="maxWorkersMode" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2.5 text-[13px] font-mono transition-colors cursor-pointer">
+                                <select id="maxWorkersMode" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2.5 text-[13px] font-mono transition-colors cursor-pointer" aria-describedby="maxWorkersStatus" aria-errormessage="maxWorkersStatus">
                                     <option value="auto" selected>auto</option>
                                     <option value="fixed">fixed</option>
                                 </select>
                                 <div id="maxWorkersValueField" class="hidden mt-3">
-                                    <input type="number" id="maxWorkers" min="1" step="1" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-2.5 text-[13px] font-mono transition-colors" placeholder="enter worker cap" />
+                                    <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="maxWorkers">Fixed CPU Worker Limit</label>
+                                    <input type="number" id="maxWorkers" min="1" step="1" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-2.5 text-[13px] font-mono transition-colors" placeholder="enter worker cap" aria-describedby="maxWorkersStatus" aria-errormessage="maxWorkersStatus" />
                                 </div>
                                 <p id="maxWorkersStatus" class="mt-1 text-[11px] leading-5 text-slate-500 dark:text-slate-400">Auto lets the backend choose a safe CPU worker cap.</p>
                             </div>
                             <div>
                                 <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="maxGpuWorkersMode">Max GPU Workers</label>
-                                <select id="maxGpuWorkersMode" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2.5 text-[13px] font-mono transition-colors cursor-pointer">
+                                <select id="maxGpuWorkersMode" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2.5 text-[13px] font-mono transition-colors cursor-pointer" aria-describedby="maxGpuWorkersStatus" aria-errormessage="maxGpuWorkersStatus">
                                     <option value="auto" selected>auto</option>
                                     <option value="fixed">fixed</option>
                                 </select>
                                 <div id="maxGpuWorkersValueField" class="hidden mt-3">
-                                    <input type="number" id="maxGpuWorkers" min="1" step="1" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-2.5 text-[13px] font-mono transition-colors" placeholder="enter GPU worker cap" />
+                                    <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="maxGpuWorkers">Fixed GPU Worker Limit</label>
+                                    <input type="number" id="maxGpuWorkers" min="1" step="1" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-2.5 text-[13px] font-mono transition-colors" placeholder="enter GPU worker cap" aria-describedby="maxGpuWorkersStatus" aria-errormessage="maxGpuWorkersStatus" />
                                 </div>
                                 <p id="maxGpuWorkersStatus" class="mt-1 text-[11px] leading-5 text-slate-500 dark:text-slate-400">Auto keeps GPU parallelism conservative to reduce VRAM contention.</p>
                             </div>
                             <div>
                                 <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="logLevel">Log Level (Optional)</label>
-                                <select id="logLevel" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2.5 text-[13px] font-mono transition-colors cursor-pointer">
+                                <select id="logLevel" class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2.5 text-[13px] font-mono transition-colors cursor-pointer" aria-describedby="logLevelStatus" aria-errormessage="logLevelStatus">
                                     <option value="" selected>(default)</option>
                                     <option value="DEBUG">DEBUG</option>
                                     <option value="INFO">INFO</option>
@@ -1372,6 +1386,7 @@ Contract notes:
                         </div>
                     </details>
                 </fieldset>
+                </div>
 
                 <section id="governance-shell" data-build-step-panel="3" class="workspace-shell deferred-shell governance-banner rounded-2xl p-6 shadow-soft dark:shadow-soft-dark build-step-panel" data-shell-size="compact" data-ui="build-governance">
                     <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -1581,24 +1596,24 @@ Contract notes:
                         </div>
                     </div>
 
-                    <div class="mt-5 flex flex-wrap items-center gap-2 border-b border-slate-200 dark:border-slate-800 pb-4">
-                        <button id="inspectorOverviewTab" type="button" class="rounded-full border border-cyan-200 dark:border-cyan-900/60 bg-cyan-50 dark:bg-cyan-900/20 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-cyan-700 dark:text-cyan-300 transition-colors">Overview</button>
-                        <button id="inspectorTimelineTab" type="button" class="rounded-full border border-slate-200 dark:border-slate-800 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400 transition-colors">Timeline</button>
-                        <button id="inspectorLogsTab" type="button" class="rounded-full border border-slate-200 dark:border-slate-800 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400 transition-colors">Logs</button>
+                    <div class="mt-5 flex flex-wrap items-center gap-2 border-b border-slate-200 dark:border-slate-800 pb-4" role="tablist" aria-label="Selected job inspector views">
+                        <button id="inspectorOverviewTab" type="button" class="rounded-full border border-cyan-200 dark:border-cyan-900/60 bg-cyan-50 dark:bg-cyan-900/20 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-cyan-700 dark:text-cyan-300 transition-colors" role="tab" aria-selected="true" aria-controls="selectedJobOverviewPanel" tabindex="0">Overview</button>
+                        <button id="inspectorTimelineTab" type="button" class="rounded-full border border-slate-200 dark:border-slate-800 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400 transition-colors" role="tab" aria-selected="false" aria-controls="selectedJobTimelinePanel" tabindex="-1">Timeline</button>
+                        <button id="inspectorLogsTab" type="button" class="rounded-full border border-slate-200 dark:border-slate-800 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400 transition-colors" role="tab" aria-selected="false" aria-controls="selectedJobLogsPanel" tabindex="-1">Logs</button>
                     </div>
 
-                    <div id="selectedJobOverviewPanel" class="mt-4 space-y-3">
+                    <div id="selectedJobOverviewPanel" class="mt-4 space-y-3" role="tabpanel" aria-labelledby="inspectorOverviewTab" tabindex="0">
                         <p class="text-[12px] leading-6 text-slate-600 dark:text-slate-300">
                             Primary run context stays pinned above while you inspect the timeline and log stream.
                         </p>
                     </div>
 
-                    <div id="selectedJobTimelinePanel" class="mt-4 hidden">
+                    <div id="selectedJobTimelinePanel" class="mt-4 hidden" role="tabpanel" aria-labelledby="inspectorTimelineTab" tabindex="0">
                         <ol id="selectedJobTimelineList" class="space-y-3"></ol>
                         <p id="selectedJobTimelineEmpty" class="text-[12px] leading-6 text-slate-500 dark:text-slate-400">Select a job to see a structured run timeline.</p>
                     </div>
 
-                    <div id="selectedJobLogsPanel" class="mt-4 hidden space-y-3">
+                    <div id="selectedJobLogsPanel" class="mt-4 hidden space-y-3" role="tabpanel" aria-labelledby="inspectorLogsTab" tabindex="0">
                         <p class="text-[12px] leading-6 text-slate-500 dark:text-slate-400">Raw logs stay available for deep debugging, but this view keeps them secondary to the structured timeline.</p>
                         <pre id="selectedJobLogPreview" class="command-frame min-h-[120px] rounded-2xl border border-slate-200 dark:border-slate-800 p-4 text-[11px] font-mono leading-relaxed text-slate-300 overflow-y-auto custom-scrollbar whitespace-pre-wrap break-words"></pre>
                     </div>
@@ -1611,7 +1626,7 @@ Contract notes:
                 <div id="queue-shell" class="portal-shell-card portal-shell-card--queue workspace-shell deferred-shell shell-panel shadow-soft dark:shadow-soft-dark transition-colors duration-300 flex flex-col" data-shell-size="compact" data-ui="queue-panel">
                     <div class="flex items-center justify-between mb-4 pb-4 border-b border-slate-200 dark:border-slate-800">
                         <div>
-                            <h2 class="text-[11px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">Job Queue</h2>
+                            <h2 id="operateViewTitle" class="text-[11px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">Job Queue</h2>
                             <p id="queueStatusSummary" class="mt-1 text-[11px] text-slate-500 dark:text-slate-400">Newest jobs stay pinned to the top.</p>
                         </div>
                         <span id="queueCount" class="text-[11px] text-slate-500 dark:text-slate-400 font-mono">0 jobs</span>
@@ -1644,7 +1659,8 @@ Contract notes:
                                 <span class="skeleton-line skeleton-line-medium"></span>
                             </div>
                         </div>
-                        <ul id="jobList" class="space-y-3" aria-live="polite" aria-relevant="additions" data-ui="queue-list"></ul>
+                        <p id="queueDeltaStatus" class="sr-only" role="status" aria-live="polite" aria-atomic="true" data-ui="queue-delta-status"></p>
+                        <ul id="jobList" class="space-y-3" data-ui="queue-list"></ul>
                         <div id="emptyQueueState" class="surface-empty-state h-full flex flex-col items-center justify-center text-center py-8" data-ui="queue-empty-state" data-tone="neutral">
                             <p class="surface-empty-kicker">Queue</p>
                             <p id="emptyQueueTitle" class="surface-empty-title">No runs yet</p>
@@ -1659,7 +1675,7 @@ Contract notes:
                 <!-- ============================================ -->
                 <div id="artifacts-shell" data-ambient-zone="artifacts" data-ambient-focus-x="76" data-ambient-focus-y="64" data-ambient-shift-x="14" data-ambient-shift-y="12" data-ambient-stage-scale="1.03" data-ambient-stage-rotate="-0.2" data-ambient-color-a="#0ea5e9" data-ambient-color-b="#f59e0b" data-ambient-color-c="#14b8a6" data-ambient-focus-color="#fde68a" class="portal-shell-card portal-shell-card--artifacts workspace-shell deferred-shell shell-panel shadow-soft dark:shadow-soft-dark transition-colors duration-300" data-shell-size="compact" data-ui="review-surface">
                     <div class="flex items-center justify-between mb-4 pb-3 border-b border-slate-200 dark:border-slate-800">
-                        <h2 class="text-[11px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">Artifacts</h2>
+                        <h2 id="reviewViewTitle" class="text-[11px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">Artifacts</h2>
                         <div class="flex items-center gap-2">
                             <button id="artifactCompareBtn" type="button" class="portal-action-control portal-action-control--compare hidden border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">Compare</button>
                             <span id="artifactMeta" class="text-[11px] text-slate-500 dark:text-slate-400 font-mono">No job selected</span>
@@ -1781,7 +1797,7 @@ Contract notes:
                     </div>
                     <div class="mt-4 max-h-[220px] overflow-y-auto custom-scrollbar pr-1">
                         <div id="artifactThumbnailRail" class="artifact-thumbnail-rail grid grid-cols-2 gap-3 lg:grid-cols-3"></div>
-                        <div id="emptyArtifactState" class="surface-empty-state surface-empty-state--compact flex flex-col items-center justify-center py-4 text-center" data-ui="artifact-empty-state" data-tone="neutral">
+                        <div id="emptyArtifactState" class="surface-empty-state surface-empty-state--compact flex flex-col items-center justify-center py-4 text-center" data-ui="artifact-empty-state" data-tone="neutral" role="status" aria-live="polite" aria-atomic="true" aria-labelledby="emptyArtifactTitle" aria-describedby="emptyArtifactDetail emptyArtifactAction">
                             <p class="surface-empty-kicker">Review</p>
                             <p id="emptyArtifactTitle" class="surface-empty-title">No indexed artifacts</p>
                             <p id="emptyArtifactDetail" class="surface-empty-detail">Choose a completed run or wait for outputs to index so review surfaces can populate.</p>
@@ -1801,7 +1817,7 @@ Contract notes:
                             </h2>
                             <p id="logMetaLabel" class="mt-1 text-[11px] text-slate-500 dark:text-slate-400">Select a job to stream or inspect its log output.</p>
                         </div>
-                        <button id="clearLogsBtn" type="button" class="text-[10px] uppercase font-bold text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors">Clear</button>
+                        <button id="clearLogsBtn" type="button" class="text-[10px] uppercase font-bold text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white transition-colors">Clear</button>
                     </div>
                     <pre id="logPane" class="log-surface flex-1 p-6 text-[11px] font-mono leading-relaxed text-slate-300 overflow-y-auto custom-scrollbar whitespace-pre-wrap break-words"></pre>
                 </div>
@@ -1817,8 +1833,8 @@ Contract notes:
     <!-- ============================================ -->
 
     <!-- Shortcuts Modal -->
-    <div id="shortcutsModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 dark:bg-black/60 transition-opacity" aria-hidden="true" data-ui="modal-shell">
-        <div class="w-full max-w-sm max-h-[92vh] overflow-y-auto custom-scrollbar rounded-xl bg-white shadow-2xl border border-slate-200 dark:bg-slate-900 dark:border-slate-800 transform scale-95 opacity-0 transition-all duration-200" id="shortcutsPanel" role="dialog" aria-modal="true" aria-labelledby="shortcutsTitle">
+    <div id="shortcutsModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 dark:bg-black/60 transition-opacity" aria-hidden="true" data-ui="modal-shell" data-modal-shell="shortcuts">
+        <div class="w-full max-w-sm max-h-[92vh] overflow-y-auto custom-scrollbar rounded-xl bg-white shadow-2xl border border-slate-200 dark:bg-slate-900 dark:border-slate-800 transform scale-95 opacity-0 transition-all duration-200" id="shortcutsPanel" role="dialog" aria-modal="true" aria-labelledby="shortcutsTitle" data-modal-dialog>
             <div class="px-5 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
                 <h2 id="shortcutsTitle" class="text-sm font-semibold">Keyboard Shortcuts</h2>
                 <button id="closeShortcutsBtn" type="button" class="rounded-md px-2 py-1 text-slate-500 hover:bg-slate-100 hover:text-slate-900 dark:hover:bg-slate-800 dark:hover:text-white transition-colors" aria-label="Close dialog">
@@ -1829,15 +1845,15 @@ Contract notes:
                 <div class="flex justify-between items-center"><span class="text-slate-600 dark:text-slate-400">Open Shortcuts</span> <kbd class="kbd text-[11px]">?</kbd></div>
                 <div class="flex justify-between items-center"><span class="text-slate-600 dark:text-slate-400">Jump to Overview / Build / Operate / Review</span> <kbd class="kbd text-[11px]">1 / 2 / 3 / 4</kbd></div>
                 <div class="flex justify-between items-center"><span class="text-slate-600 dark:text-slate-400">Run Job</span> <kbd class="kbd text-[11px]">Ctrl/⌘ + Enter</kbd></div>
-                <div class="flex justify-between items-center"><span class="text-slate-600 dark:text-slate-400">Copy Command</span> <kbd class="kbd text-[11px]">Ctrl/⌘ + Shift + C</kbd></div>
+                <div class="flex justify-between items-center"><span class="text-slate-600 dark:text-slate-400">Copy Command</span> <kbd class="kbd text-[11px]">Ctrl/⌘ + Alt + C</kbd></div>
                 <div class="flex justify-between items-center"><span class="text-slate-600 dark:text-slate-400">Cycle Theme</span> <kbd class="kbd text-[11px]">Ctrl/⌘ + J</kbd></div>
                 <div class="flex justify-between items-center"><span class="text-slate-600 dark:text-slate-400">Close Dialog</span> <kbd class="kbd text-[11px]">Esc</kbd></div>
             </div>
         </div>
     </div>
 
-    <div id="effectiveConfigDrawer" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/55 backdrop-blur-sm p-4 dark:bg-black/70 transition-opacity" aria-hidden="true" data-ui="drawer-shell">
-        <div class="w-full max-w-5xl max-h-[92vh] overflow-y-auto custom-scrollbar rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-800 dark:bg-slate-900" role="dialog" aria-modal="true" aria-labelledby="effectiveConfigTitle">
+    <div id="effectiveConfigDrawer" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/55 backdrop-blur-sm p-4 dark:bg-black/70 transition-opacity" aria-hidden="true" data-ui="drawer-shell" data-modal-shell="effective-config">
+        <div id="effectiveConfigPanel" class="w-full max-w-5xl max-h-[92vh] overflow-y-auto custom-scrollbar rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-800 dark:bg-slate-900" role="dialog" aria-modal="true" aria-labelledby="effectiveConfigTitle" aria-describedby="effectiveConfigMeta" data-modal-dialog>
             <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                 <div>
                     <p class="section-kicker">Effective Config</p>
@@ -1879,8 +1895,8 @@ Contract notes:
         </div>
     </div>
 
-    <div id="artifactViewerModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-950/72 backdrop-blur-sm p-4 dark:bg-black/80 transition-opacity" aria-hidden="true" data-ui="artifact-viewer-modal">
-        <div id="artifactViewerPanel" class="artifact-viewer-panel w-full max-w-6xl max-h-[92vh] overflow-y-auto custom-scrollbar rounded-xl border border-slate-200 bg-white p-5 shadow-2xl dark:border-slate-800 dark:bg-slate-900" role="dialog" aria-modal="true" aria-labelledby="artifactViewerTitle" aria-describedby="artifactViewerMeta artifactViewerStatus">
+    <div id="artifactViewerModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-950/72 backdrop-blur-sm p-4 dark:bg-black/80 transition-opacity" aria-hidden="true" data-ui="artifact-viewer-modal" data-modal-shell="artifact-viewer">
+        <div id="artifactViewerPanel" class="artifact-viewer-panel w-full max-w-6xl max-h-[92vh] overflow-y-auto custom-scrollbar rounded-xl border border-slate-200 bg-white p-5 shadow-2xl dark:border-slate-800 dark:bg-slate-900" role="dialog" aria-modal="true" aria-labelledby="artifactViewerTitle" aria-describedby="artifactViewerMeta artifactViewerStatus" data-modal-dialog>
             <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                 <div class="min-w-0">
                     <p class="section-kicker">Artifact Viewer</p>
@@ -1933,7 +1949,7 @@ Contract notes:
     </div>
 
     <!-- Toast Container -->
-    <div id="toastContainer" class="fixed bottom-6 right-6 z-50 flex flex-col gap-3 w-full max-w-sm pointer-events-none" aria-live="polite" role="status"></div>
+    <div id="toastContainer" class="fixed z-50 flex flex-col gap-3 pointer-events-none" aria-live="polite" role="status"></div>
     <script src="__PORTAL_JS_URL__" defer></script>
 </body>
 </html>

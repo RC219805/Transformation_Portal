@@ -85,6 +85,13 @@
     color: var(--shell-accent);
 }
 
+#overviewViewTitle,
+#buildStepTitle,
+#operateViewTitle,
+#reviewViewTitle {
+    scroll-margin-block: 7rem 1rem;
+}
+
 .mission-grid {
     background-image:
         linear-gradient(rgba(148, 163, 184, 0.08) 1px, transparent 1px),
@@ -686,11 +693,66 @@
 }
 
 .capability-stack-summary {
+    display: block;
     margin-top: 0.45rem;
     max-width: 54rem;
     color: var(--shell-muted);
     font-size: 12px;
     line-height: 1.6;
+}
+
+.capability-disclosure {
+    overflow: hidden;
+    border: 1px solid var(--shell-border);
+    border-radius: var(--ux-radius-lg);
+    background: var(--ux-surface-elevated);
+    box-shadow: var(--ux-shadow-surface);
+}
+
+.dark .capability-disclosure {
+    background: var(--ux-surface-muted);
+}
+
+.capability-disclosure__summary {
+    min-height: var(--ux-target-min-size);
+    padding: 1rem 1.1rem;
+    cursor: pointer;
+    list-style: none;
+}
+
+.capability-disclosure__summary::-webkit-details-marker {
+    display: none;
+}
+
+.capability-disclosure__copy {
+    min-width: 0;
+}
+
+.capability-disclosure__meta {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: 0.65rem;
+    color: var(--shell-muted);
+    font-size: 11px;
+    font-weight: 700;
+}
+
+.capability-disclosure__open-label {
+    display: none;
+}
+
+.capability-disclosure[open] .capability-disclosure__closed-label {
+    display: none;
+}
+
+.capability-disclosure[open] .capability-disclosure__open-label {
+    display: inline;
+}
+
+.capability-disclosure__body {
+    border-top: 1px solid var(--shell-border);
+    padding: 0 1.1rem 1.1rem;
 }
 
 .capability-summary-badge,
@@ -878,6 +940,11 @@
 @media (max-width: 640px) {
     .capability-stack-header {
         flex-direction: column;
+    }
+
+    .capability-disclosure__meta {
+        width: 100%;
+        justify-content: space-between;
     }
 
     .capability-matrix {

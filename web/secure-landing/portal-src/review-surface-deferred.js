@@ -43,12 +43,21 @@ export function createDeferredReviewSurfaceApi(host) {
     _rememberArtifactSelection,
     _rememberOverlayTrigger,
     _restoreOverlayFocus,
+    _setPortalBackgroundInert,
     renderReviewSurfaces,
     _compareSurfaceCopy,
     _jobFreshnessLabel,
     _jobHasReviewableOutputs,
     _latestVisibleTransportWarning,
   } = host;
+
+  function setTextContentIfChanged(element, value) {
+    if (!element) return false;
+    const nextText = String(value || "");
+    if (element.textContent === nextText) return false;
+    element.textContent = nextText;
+    return true;
+  }
   let artifactViewerObjectUrl = "";
   let artifactViewerPreviewPath = "";
   let artifactViewerPreviewSource = "";
@@ -945,8 +954,8 @@ export function createDeferredReviewSurfaceApi(host) {
     }
 
     if (!els.artifactMeta || !els.artifactThumbnailRail) return;
-    els.artifactThumbnailRail.setAttribute("role", "listbox");
-    els.artifactThumbnailRail.setAttribute("aria-label", "Artifact thumbnails");
+    els.artifactThumbnailRail.setAttribute("role", "group");
+    els.artifactThumbnailRail.setAttribute("aria-label", "Artifact choices");
     const selected = state.jobs.find((item) => item.id === state.selectedJobId);
     const artifacts = Array.isArray(selected?.artifacts) ? rankArtifactsForDisplay(selected.artifacts) : [];
 
@@ -954,7 +963,7 @@ export function createDeferredReviewSurfaceApi(host) {
       _resetArtifactActionButtons();
       const emptyCopy = _artifactEmptyStateCopy(null);
       _setSurfaceEmptyState(els.emptyArtifactState, els.emptyArtifactTitle, els.emptyArtifactDetail, emptyCopy);
-      if (els.emptyArtifactAction) els.emptyArtifactAction.textContent = emptyCopy.action || "";
+      setTextContentIfChanged(els.emptyArtifactAction, emptyCopy.action);
       els.artifactMeta.textContent = "No job selected";
       els.artifactThumbnailRail.innerHTML = "";
       if (els.artifactSelectionTitle) els.artifactSelectionTitle.textContent = "No artifact selected";
@@ -998,7 +1007,7 @@ export function createDeferredReviewSurfaceApi(host) {
       _resetArtifactActionButtons();
       const emptyCopy = _artifactEmptyStateCopy(selected);
       _setSurfaceEmptyState(els.emptyArtifactState, els.emptyArtifactTitle, els.emptyArtifactDetail, emptyCopy);
-      if (els.emptyArtifactAction) els.emptyArtifactAction.textContent = emptyCopy.action || "";
+      setTextContentIfChanged(els.emptyArtifactAction, emptyCopy.action);
       els.artifactThumbnailRail.innerHTML = "";
       if (els.artifactSelectionTitle) els.artifactSelectionTitle.textContent = "No artifact selected";
       if (els.artifactSelectionMeta) els.artifactSelectionMeta.textContent = "Review surfaces will populate here when the selected run indexes outputs.";
@@ -1112,6 +1121,7 @@ export function createDeferredReviewSurfaceApi(host) {
     }
     if (compareEnabled && selectedArtifact && compareCandidate) {
       if (els.artifactPreviewImage) {
+        els.artifactPreviewImage.alt = `${artifactDisplayLabel(selectedArtifact)} preview: ${artifactLabel(selectedArtifact)}`;
         if (selectedPreviewSrc && !_isArtifactUrlKnownMissing(selectedPreviewSrc)) {
           els.artifactPreviewImage.src = selectedPreviewSrc;
           els.artifactPreviewImage.classList.remove("hidden");
@@ -1122,6 +1132,7 @@ export function createDeferredReviewSurfaceApi(host) {
       }
       if (els.artifactPreviewPrimaryCaption) els.artifactPreviewPrimaryCaption.textContent = artifactLabel(selectedArtifact);
       if (els.artifactCompareImage) {
+        els.artifactCompareImage.alt = `${artifactDisplayLabel(compareCandidate)} comparison preview: ${artifactLabel(compareCandidate)}`;
         if (comparePreviewSrc && !_isArtifactUrlKnownMissing(comparePreviewSrc)) {
           els.artifactCompareImage.src = comparePreviewSrc;
           els.artifactCompareImage.classList.remove("hidden");
@@ -1134,6 +1145,7 @@ export function createDeferredReviewSurfaceApi(host) {
       if (captioningEvidenceVisible) _renderArtifactMetadataCard(selected, selectedArtifact);
     } else if (selectedPreviewAvailable) {
       if (els.artifactPreviewSoloImage) {
+        els.artifactPreviewSoloImage.alt = `${artifactDisplayLabel(selectedArtifact)} preview: ${artifactLabel(selectedArtifact)}`;
         if (selectedPreviewSrc && !_isArtifactUrlKnownMissing(selectedPreviewSrc)) {
           els.artifactPreviewSoloImage.src = selectedPreviewSrc;
           els.artifactPreviewSoloImage.classList.remove("hidden");
@@ -1173,8 +1185,8 @@ export function createDeferredReviewSurfaceApi(host) {
       const active = selectedArtifact && artifact.path === selectedArtifact.path;
       button.type = "button";
       button.dataset.artifactPath = _artifactRouteKey(artifact);
-      button.setAttribute("role", "option");
-      button.setAttribute("aria-selected", active ? "true" : "false");
+      button.setAttribute("aria-pressed", active ? "true" : "false");
+      button.setAttribute("aria-label", `${active ? "Selected" : "Select"} ${artifactDisplayLabel(artifact)}: ${artifactLabel(artifact)}`);
       button.tabIndex = active ? 0 : -1;
       button.className = active
         ? "rounded-2xl border border-cyan-300 dark:border-cyan-900/60 bg-cyan-50/90 dark:bg-cyan-900/20 p-3 text-left shadow-sm transition-colors"
@@ -1185,7 +1197,7 @@ export function createDeferredReviewSurfaceApi(host) {
         : "";
       if (thumbPreviewSrc && !_isArtifactUrlKnownMissing(thumbPreviewSrc)) {
         const thumb = document.createElement("img");
-        thumb.alt = artifactLabel(artifact);
+        thumb.alt = "";
         thumb.src = thumbPreviewSrc;
         thumb.className = "h-24 w-full rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-900/60 object-cover";
         button.appendChild(thumb);
@@ -1312,6 +1324,9 @@ export function createDeferredReviewSurfaceApi(host) {
     const relPath = artifactLabel(artifact);
     const fingerprint = artifactFingerprint(artifact);
     const artifactName = artifactNameParts(artifact).fileName;
+    if (els.artifactViewerImage) {
+      els.artifactViewerImage.alt = `${artifactDisplayLabel(artifact)} preview: ${artifactLabel(artifact)}`;
+    }
     if (els.artifactViewerTitle) els.artifactViewerTitle.textContent = artifactName;
     if (els.artifactViewerMeta) {
       els.artifactViewerMeta.textContent = `${artifactDisplayLabel(artifact)} • ${artifactContentType(artifact) || "binary"} • ${formatBytes(artifact.size_bytes)}`;
@@ -1379,16 +1394,6 @@ export function createDeferredReviewSurfaceApi(host) {
     void job;
   }
 
-  function _setArtifactViewerBackgroundInert(inert) {
-    const main = document.getElementById("main-content");
-    if (!main) return;
-    if (inert) main.setAttribute("aria-hidden", "true");
-    else main.removeAttribute("aria-hidden");
-    try {
-      main.inert = Boolean(inert);
-    } catch (_) {}
-  }
-
   function _handleArtifactViewerKeydown(event) {
     if (!state.portalUi?.artifactViewer?.open) return;
     if (event.key === "Escape") {
@@ -1422,7 +1427,7 @@ export function createDeferredReviewSurfaceApi(host) {
       document.removeEventListener("keydown", artifactViewerKeydownHandler, true);
       artifactViewerKeydownHandler = null;
     }
-    _setArtifactViewerBackgroundInert(false);
+    _setPortalBackgroundInert(false);
     _renderArtifactViewerRetry(null);
     renderArtifactViewer();
     if (restoreFocus) {
@@ -1442,7 +1447,7 @@ export function createDeferredReviewSurfaceApi(host) {
     state.portalUi.artifactViewer.zoomPercent = 100;
     artifactViewerFallbackEventKey = "";
     _rememberOverlayTrigger(trigger);
-    _setArtifactViewerBackgroundInert(true);
+    _setPortalBackgroundInert(true);
     if (!artifactViewerKeydownHandler && typeof document !== "undefined") {
       artifactViewerKeydownHandler = _handleArtifactViewerKeydown;
       document.addEventListener("keydown", artifactViewerKeydownHandler, true);

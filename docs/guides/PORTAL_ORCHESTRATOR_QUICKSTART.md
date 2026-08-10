@@ -182,6 +182,19 @@ If the form still shows the missing-index warning:
 - keep `Input Dir` pointed at `./tests/fixtures/archive_small/archive_root`
 - the equivalent command will then include `--archive-index`
 
+### Browser-Saved Build Profiles
+
+Build profiles are stored only in the current browser and are scoped to the
+resolved portal actor. Unsaved restored drafts are protected: choosing another
+profile opens an explicit discard confirmation instead of replacing the draft.
+
+Profiles created by older portal versions used one browser-wide storage key.
+In standalone `direct_debug` mode, that legacy store migrates automatically to
+the direct-debug scope when no scoped profiles exist. In managed mode, open
+**Manage saved profile** and use **Import Legacy Profiles**; the two-step claim
+keeps a shared legacy store from being assigned silently to the first signed-in
+actor.
+
 ## SSE Authentication Note
 
 There are now two supported browser paths:

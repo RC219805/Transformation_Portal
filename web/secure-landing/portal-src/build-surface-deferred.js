@@ -155,22 +155,26 @@ export function createDeferredBuildSurfaceApi(host) {
         _renderIssueStatus(
             els.inputDirStatus,
             _buildFieldStatusCopy('input_dir', currentPayload),
-            _previewIssueForField('input_dir', currentPayload)
+            _previewIssueForField('input_dir', currentPayload),
+            els.inputDir
         );
         _renderIssueStatus(
             els.outputDirStatus,
             _buildFieldStatusCopy('output_dir', currentPayload),
-            _previewIssueForField('output_dir', currentPayload)
+            _previewIssueForField('output_dir', currentPayload),
+            els.outputDir
         );
         _renderIssueStatus(
             els.archiveIndexStatus,
             _buildFieldStatusCopy('archive_index', currentPayload),
-            _previewIssueForField('archive_index', currentPayload)
+            _previewIssueForField('archive_index', currentPayload),
+            els.archiveIndexPath
         );
         _renderIssueStatus(
             els.rightsManifestStatus,
             _buildFieldStatusCopy('manifest_jsonl', currentPayload),
-            _previewIssueForField('manifest_jsonl', currentPayload)
+            _previewIssueForField('manifest_jsonl', currentPayload),
+            els.rightsManifestPath
         );
     }
 
