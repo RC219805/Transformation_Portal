@@ -341,6 +341,31 @@ async function gotoHydratedPortal(page, target = "/portal") {
 }
 
 test.describe("hydrated portal UX runtime", { tag: "@portal-browser" }, () => {
+  test("deep links hydrate the intended surface and reserve the context rail for Operate", async ({ page }) => {
+    await installHydratedPortalRoutes(page);
+
+    const viewContracts = [
+      { view: "overview", affordance: '[data-ui="overview-grid"]', contextVisible: false },
+      { view: "build", affordance: '[data-ui="build-stepper"]', contextVisible: false },
+      { view: "operate", affordance: '[data-ui="operate-grid"]', contextVisible: true },
+      { view: "review", affordance: '[data-ui="review-surface"]', contextVisible: false },
+    ];
+    const contextShell = page.locator('[data-ui="console-context-shell"]');
+
+    for (const { view, affordance, contextVisible } of viewContracts) {
+      await gotoHydratedPortal(page, `/portal?view=${view}`);
+      await expect(page.locator("body")).toHaveAttribute("data-console-view", view);
+      await expect(page.locator(`[data-view-link="${view}"]`)).toHaveAttribute("aria-current", "page");
+      await expect(page.locator(affordance)).toBeVisible();
+      if (contextVisible) {
+        await expect(contextShell).toBeVisible();
+        await expect(contextShell.locator(".portal-context-head")).toBeHidden();
+      } else {
+        await expect(contextShell).toBeHidden();
+      }
+    }
+  });
+
   test("navigation keeps page semantics and opens empty Review by mouse and keyboard", async ({ page }) => {
     await installHydratedPortalRoutes(page);
     await gotoHydratedPortal(page);

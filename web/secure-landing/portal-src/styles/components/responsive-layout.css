@@ -26,10 +26,6 @@ body:not([data-console-view="operate"]) #console-context-shell {
     display: none;
 }
 
-body[data-console-view="operate"] .portal-context-head {
-    display: none;
-}
-
 @media (min-width: 1024px) {
     .portal-shell-grid {
         display: grid;

@@ -3948,12 +3948,12 @@
     "generatedRawBytesAfter": 88936,
     "generatedRawByteDelta": 8011,
     "generatedGzipBytesBefore": 15752,
-    "generatedGzipBytesAfter": 17017,
-    "generatedGzipByteDelta": 1265,
+    "generatedGzipBytesAfter": 17014,
+    "generatedGzipByteDelta": 1262,
     "generatedPortalCssHashBefore": "a86edcd4ad993bae7c081300877681c6ebcfa0faf31dbc3358c3e6119d49627f",
-    "generatedPortalCssHashAfter": "132fe5e5641432da272639b183b34b8ceca495c5d64420eaa0415b3bd1a375b6",
+    "generatedPortalCssHashAfter": "5a32fa16c5664d665f42ac30d151e6e781b54a0d95b2456d053d77e1f1284cab",
     "renderedPortalCssFingerprintBefore": "08a5cefdcc6a",
-    "renderedPortalCssFingerprintAfter": "31d56bdf9cc5",
+    "renderedPortalCssFingerprintAfter": "71f7897e7979",
     "sentinelStatePreserved": true,
     "parityBaselineChanged": false
   }
