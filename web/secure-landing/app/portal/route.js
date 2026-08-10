@@ -54,10 +54,11 @@ function renderManagedPortalRecoveryPage({ reason, message, loginHref }) {
   const recoveryTone = resolvedReason === MANAGED_FAILURE_REASON.ACCESS_OUTAGE ? "waiting" : "blocked";
 
   return `<!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="dark" data-theme="dark">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark" />
     <title>Dynamic Neural Access | Managed Recovery</title>
     <link rel="stylesheet" href="/login.css" />
   </head>

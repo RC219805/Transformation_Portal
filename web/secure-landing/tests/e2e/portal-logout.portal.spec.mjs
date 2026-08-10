@@ -9,7 +9,7 @@
 //
 // Architectural split (preserved from PR #1692):
 //   - The @portal-browser fixture (mock-fastapi-origin.mjs) substitutes
-//     __PORTAL_JS_URL__ to /__mock-portal-asset.js, an inert stub. The
+//     __PORTAL_JS_URL__ to /__mock-portal/portal.js, an inert stub. The
 //     real portal bundle never executes in this lane, so the
 //     bootstrap-ready code that un-hides the logout button never runs
 //     and a click handler is never attached. Asserting visibility or

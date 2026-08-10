@@ -28,7 +28,8 @@ body.frontdoor-homepage {
   --fd-success: #34d399;
   margin: 0;
   min-height: 100vh;
-  background:
+  background-color: var(--fd-bg);
+  background-image:
     radial-gradient(circle at top, rgba(6, 182, 212, 0.18), transparent 32%),
     radial-gradient(circle at 78% 16%, rgba(37, 99, 235, 0.16), transparent 24%),
     linear-gradient(180deg, rgba(2, 6, 23, 0.98), rgba(2, 6, 23, 1));
@@ -683,6 +684,60 @@ body.frontdoor-homepage .proof-layout {
   gap: 1.4rem;
 }
 
+body.frontdoor-homepage .proof-report-details {
+  margin-top: 1.5rem;
+  border: 1px solid var(--fd-border-strong);
+  border-radius: var(--ux-radius-lg);
+  background: rgba(8, 15, 29, 0.82);
+  box-shadow: var(--ux-shadow-surface);
+  overflow: hidden;
+}
+
+body.frontdoor-homepage .proof-report-details > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  min-height: var(--ux-target-min-size);
+  padding: 1rem 1.15rem;
+  cursor: pointer;
+  list-style: none;
+}
+
+body.frontdoor-homepage .proof-report-details > summary::-webkit-details-marker {
+  display: none;
+}
+
+body.frontdoor-homepage .proof-report-details__kicker,
+body.frontdoor-homepage .proof-report-details__title {
+  display: block;
+}
+
+body.frontdoor-homepage .proof-report-details__kicker {
+  color: var(--fd-accent);
+  font-size: var(--ux-label-size);
+  font-weight: 700;
+  letter-spacing: var(--ux-meta-tracking);
+  text-transform: uppercase;
+}
+
+body.frontdoor-homepage .proof-report-details__title {
+  margin-top: 0.25rem;
+  color: var(--fd-text-strong);
+  font-weight: 700;
+}
+
+body.frontdoor-homepage .proof-report-details__action {
+  color: var(--fd-text);
+  font-size: 0.9rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+body.frontdoor-homepage .proof-report-details__content {
+  padding: 0 1rem 1rem;
+}
+
 body.frontdoor-homepage .standards-note {
   max-width: 34rem;
 }
@@ -1056,12 +1111,12 @@ body.frontdoor-homepage .site-footer__copy {
   }
 
   body.frontdoor-homepage .hero-section {
-    grid-template-columns: minmax(0, 1.05fr) minmax(21rem, 35rem);
+    grid-template-columns: minmax(0, 1fr);
     align-items: start;
   }
 
   body.frontdoor-homepage .entry-rail {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: minmax(0, 1fr);
   }
 
   body.frontdoor-homepage .proof-layout {
@@ -1134,6 +1189,7 @@ body.frontdoor-homepage .site-footer__copy {
 }
 
 body.frontdoor-homepage {
+  color-scheme: dark;
   --fd-border: var(--ux-border-subtle);
   --fd-border-strong: var(--ux-border-strong);
   --fd-text: var(--ux-text-primary);
@@ -1141,7 +1197,8 @@ body.frontdoor-homepage {
   --fd-text-soft: var(--ux-text-muted);
   --fd-accent: var(--ux-accent-primary);
   --fd-accent-strong: var(--ux-accent-secondary);
-  background:
+  background-color: var(--fd-bg);
+  background-image:
     radial-gradient(circle at top, rgba(6, 182, 212, 0.08), transparent 32%),
     linear-gradient(180deg, rgba(2, 6, 23, 0.98), rgba(2, 6, 23, 1));
 }
@@ -1232,7 +1289,7 @@ body.frontdoor-homepage .hero-inline-link {
 body.frontdoor-homepage .site-cta {
   padding: 0.85rem 1.15rem;
   border-color: rgba(255, 255, 255, 0.06);
-  background: linear-gradient(135deg, rgba(15, 118, 110, 0.96), rgba(8, 145, 178, 0.9));
+  background: linear-gradient(135deg, rgba(15, 118, 110, 0.98), rgba(14, 116, 144, 0.98));
   box-shadow: var(--ux-shadow-surface);
 }
 

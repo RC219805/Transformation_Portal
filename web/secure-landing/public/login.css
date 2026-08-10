@@ -502,6 +502,16 @@ button:hover {
   filter: brightness(1.04);
 }
 
+input:disabled,
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
+}
+
+button:disabled:hover {
+  filter: none;
+}
+
 .login-helper {
   margin: 0;
   color: var(--frontdoor-muted-soft);
@@ -869,6 +879,13 @@ button,
     rgba(15, 23, 42, 0.76);
 }
 
+.login-status-card[data-state="retry"] {
+  border-color: rgba(251, 191, 36, 0.28);
+  background:
+    linear-gradient(180deg, rgba(180, 83, 9, 0.12), rgba(15, 23, 42, 0.78)),
+    rgba(15, 23, 42, 0.76);
+}
+
 .login-status-card[data-state="blocked"],
 .login-recovery-card[data-state="access"],
 .login-recovery-card[data-state="access_outage"],
@@ -887,7 +904,7 @@ button,
 .login-next-step {
   display: grid;
   gap: 0.35rem;
-  margin-bottom: 1rem;
+  margin-bottom: 0;
   padding: 0.95rem 1rem;
 }
 
@@ -911,7 +928,8 @@ button,
 }
 
 .login-secondary-details {
-  margin-bottom: 1rem;
+  margin-top: 1rem;
+  margin-bottom: 0;
   border: 1px solid var(--ux-border-subtle);
   background: rgba(8, 15, 29, 0.88);
   box-shadow: var(--ux-shadow-surface);
@@ -960,7 +978,7 @@ input {
 
 button {
   border: 1px solid rgba(125, 211, 252, 0.18);
-  background: linear-gradient(135deg, rgba(15, 118, 110, 0.96), rgba(8, 145, 178, 0.9));
+  background: linear-gradient(135deg, rgba(15, 118, 110, 0.98), rgba(14, 116, 144, 0.98));
   box-shadow: var(--ux-shadow-surface);
 }
 

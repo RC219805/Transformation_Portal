@@ -6,6 +6,26 @@
     }
 }
 
+.portal-shell-grid,
+.portal-shell-grid > *,
+.portal-overview-shell,
+.portal-overview-shell > *,
+#console-grid,
+#console-grid > *,
+#build-shell,
+#build-shell > *,
+#jobs-shell > *,
+.portal-shell-card {
+    min-width: 0;
+}
+
+/* Overview, Build, and Review already expose their primary action in the
+   surface that owns it. Keep the shared context/action shell for Operate,
+   where it is the single recovery and handoff rail instead of a duplicate. */
+body:not([data-console-view="operate"]) #console-context-shell {
+    display: none;
+}
+
 @media (min-width: 1024px) {
     .portal-shell-grid {
         display: grid;
@@ -39,7 +59,7 @@
         display: none;
     }
     .portal-shell-grid > .portal-workspace-rail .workspace-link {
-        min-height: 0;
+        min-height: var(--ux-target-min-size);
         padding: 0.6rem 0.7rem;
         border-radius: 0.75rem;
     }
@@ -57,18 +77,9 @@
     }
 }
 
-@media (max-width: 767px) {
-    .workspace-rail-links {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-}
-
 @media (max-width: 479px) {
     .portal-overview-stats,
     .portal-overview-stats-skeleton {
-        grid-template-columns: 1fr;
-    }
-    .workspace-rail-links {
         grid-template-columns: 1fr;
     }
     .hero-action {

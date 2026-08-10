@@ -28,6 +28,10 @@
       "repo_path": "public/portal-assets/portal-build.js",
       "media_type": "text/javascript; charset=utf-8"
     },
+    "portal-profile.js": {
+      "repo_path": "public/portal-assets/portal-profile.js",
+      "media_type": "text/javascript; charset=utf-8"
+    },
     "portal-overview.js": {
       "repo_path": "public/portal-assets/portal-overview.js",
       "media_type": "text/javascript; charset=utf-8"

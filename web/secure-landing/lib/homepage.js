@@ -8,12 +8,6 @@ const NAV_LINKS = Object.freeze([
   { id: "faq", label: "FAQ" }
 ]);
 
-const HERO_SIGNALS = Object.freeze([
-  "Governed dispatch and review",
-  "Archive gates and run-card proof",
-  "Optional runtimes surfaced when enabled"
-]);
-
 const HERO_HIGHLIGHTS = Object.freeze([
   {
     title: "Reviewer-ready evidence",
@@ -44,7 +38,7 @@ const HERO_PATHS = Object.freeze([
     kicker: "Verify",
     title: "Inspect the proof surface",
     detail: "Review the public verification report, bundle structure, and standards posture first.",
-    href: "#proof-report",
+    href: "#proof",
     dataUi: "homepage-verify-link"
   },
   {
@@ -403,7 +397,7 @@ function renderReleaseBundlePreview() {
       </div>
     </div>
 
-    <div id="proof-report" class="report-panel">
+    <div class="report-panel" data-ui="homepage-report-excerpt">
       <p class="subsection-kicker">Verification report excerpt</p>
       <pre><code>${escapeHtml(VERIFICATION_REPORT_EXCERPT)}</code></pre>
       <p class="report-note">Illustrative excerpt based on the verification contract. Example values shown.</p>
@@ -416,10 +410,11 @@ export function renderHomepage({ rumScript = "", scriptNonce = null } = {}) {
     ? `<script nonce="${escapeHtml(scriptNonce)}">${rumScript}</script>`
     : "";
   return `<!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="dark" data-theme="dark">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark" />
     <title>Dynamic Neural Access</title>
     <link rel="stylesheet" href="/frontdoor-homepage.css" />
   </head>
@@ -467,7 +462,7 @@ export function renderHomepage({ rumScript = "", scriptNonce = null } = {}) {
 
         <div class="site-actions">
           <a class="site-link" href="/login" data-ui="homepage-operator-link">Operator Login</a>
-          <a class="site-cta site-cta--ghost" href="/login" data-ui="homepage-utility-cta">Operator Access</a>
+          <a class="site-cta site-cta--ghost" href="#proof" data-ui="homepage-utility-cta">View Proof</a>
         </div>
 
         <details class="site-mobile-menu">
@@ -478,14 +473,14 @@ export function renderHomepage({ rumScript = "", scriptNonce = null } = {}) {
             </nav>
             <div class="site-mobile-menu__actions">
               <a class="site-link site-link--mobile" href="/login" data-ui="homepage-mobile-operator-link">Operator Login</a>
-              <a class="site-cta site-cta--ghost site-cta--mobile" href="/login" data-ui="homepage-mobile-utility-cta">Operator Access</a>
+              <a class="site-cta site-cta--ghost site-cta--mobile" href="#proof" data-ui="homepage-mobile-utility-cta">View Proof</a>
             </div>
           </div>
         </details>
       </div>
     </header>
 
-    <main id="main-content" class="homepage-main" data-ui="homepage-main">
+    <main id="main-content" class="homepage-main" tabindex="-1" data-ui="homepage-main">
       <section class="hero-section" aria-labelledby="hero-title" data-ui="homepage-hero">
         <div class="hero-copy">
           <div class="hero-lockup" data-ui="homepage-hero-lockup">
@@ -499,51 +494,36 @@ export function renderHomepage({ rumScript = "", scriptNonce = null } = {}) {
           <p class="section-kicker">Dynamic Neural Access</p>
           <h1 id="hero-title" data-ui="homepage-hero-title">Make premium media verifiable before it ships.</h1>
           <p class="hero-lede" data-ui="homepage-hero-lede">
-            Verifier-backed release proof for premium media. Managed access opens a governed console for dispatch, queue operation, artifact review, archive gates, and optional runtimes when the current codebase enables them.
+            Inspect release proof publicly, or enter managed operator access to build, operate, review, and archive-gate governed work.
           </p>
           <div class="hero-actions" data-ui="homepage-hero-actions">
             <a class="site-cta" href="/login" data-ui="homepage-primary-cta">Operator Access</a>
-            <a class="site-cta site-cta--secondary" href="#proof-report" data-ui="homepage-secondary-cta">Inspect Verification Report</a>
+            <a class="site-cta site-cta--secondary" href="#proof" data-ui="homepage-secondary-cta">Review Proof Overview</a>
             <a class="hero-inline-link" href="#workflow" data-ui="homepage-learn-link">Explore workflow</a>
           </div>
           <p class="hero-access-note" data-ui="homepage-hero-note">
-            Public proof stays visible. Managed entry opens only for code-backed operator work and keeps gated runtimes disabled until their rollout, license, or runtime prerequisites are satisfied.
+            Optional runtimes appear only when enabled and remain disabled until rollout, license, and runtime prerequisites are satisfied.
           </p>
           <div class="entry-rail" data-ui="homepage-entry-rail">
             <article class="entry-card entry-card--proofband" data-state="public-proof">
               <div class="entry-card__summary">
                 <p class="entry-card__kicker">Proof snapshot</p>
-                <p class="entry-card__title">One release bundle, one decision path.</p>
-                <p class="entry-card__detail">Verification report, provenance artifacts, rights posture, and operator review stay in one reviewable handoff.</p>
+                <p class="entry-card__title">Proof before access.</p>
+                <p class="entry-card__detail">Review the verification bundle publicly; sign in only when you are ready to run governed operator work.</p>
               </div>
               <div class="entry-card__meta">
                 <div class="entry-card__meta-item">
-                  <p class="entry-card__meta-label">Public proof</p>
-                  <p class="entry-card__meta-value">Inspect the report before access is requested.</p>
+                  <p class="entry-card__meta-label">Verification</p>
+                  <p class="entry-card__meta-value">Report, provenance, rights posture, and review history stay in one handoff.</p>
                 </div>
                 <div class="entry-card__meta-item">
-                  <p class="entry-card__meta-label">Managed entry</p>
-                  <p class="entry-card__meta-value">Access verification stays separate from operator credentials.</p>
-                </div>
-                <div class="entry-card__meta-item">
-                  <p class="entry-card__meta-label">Operator console</p>
-                  <p class="entry-card__meta-value">Build, operate, review, and archive-gate work continue inside the governed shell.</p>
-                </div>
-                <div class="entry-card__meta-item">
-                  <p class="entry-card__meta-label">Optional runtimes</p>
-                  <p class="entry-card__meta-value">Lux Depth, SAM2, reconstruction, RAW ingest, and FastVLM stay visible only as real controls and remain gated when unavailable.</p>
+                  <p class="entry-card__meta-label">Managed work</p>
+                  <p class="entry-card__meta-value">Verified access stays separate from operator credentials and gated capabilities.</p>
                 </div>
               </div>
             </article>
           </div>
-          <div class="signal-strip" aria-label="Proof signals">
-            ${renderList(HERO_SIGNALS, (item) => `<span class="signal-pill">${escapeHtml(item)}</span>`)}
-          </div>
-          <div class="guardrail-callout">
-            <strong>Not a truth engine.</strong> A release-readiness system for provenance context, rights clarity, and reviewable evidence.
-          </div>
         </div>
-        ${renderReleaseBundlePreview()}
       </section>
 
       <section id="platform" class="homepage-section" aria-labelledby="platform-title">
@@ -580,6 +560,18 @@ export function renderHomepage({ rumScript = "", scriptNonce = null } = {}) {
             ${renderList(EVIDENCE_ITEMS, renderEvidenceCard)}
           </div>
         </div>
+        <details id="proof-report" class="proof-report-details" data-ui="homepage-proof-details">
+          <summary>
+            <span>
+              <span class="proof-report-details__kicker">Sample release proof</span>
+              <span class="proof-report-details__title">Inspect the verification bundle</span>
+            </span>
+            <span class="proof-report-details__action" aria-hidden="true">View report</span>
+          </summary>
+          <div class="proof-report-details__content">
+            ${renderReleaseBundlePreview()}
+          </div>
+        </details>
       </section>
 
       <section id="workflow" class="homepage-section" aria-labelledby="workflow-title">
@@ -640,7 +632,7 @@ export function renderHomepage({ rumScript = "", scriptNonce = null } = {}) {
             <p class="section-kicker">Next move</p>
             <h2 id="cta-title">Bring certification to every asset that leaves your pipeline.</h2>
             <p>
-              Choose the public proof path when you need orientation, or continue into managed operator access when you are ready to run governed work.
+              Inspect public proof first, then continue into managed access when you are ready to run governed work.
             </p>
           </div>
           <div class="hero-actions" data-ui="homepage-final-actions">

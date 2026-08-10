@@ -732,7 +732,15 @@ test("login POST redirects authenticated users to a validated returnTo route", a
 test("login GET serves a minimal branded sign-in shell and boots an anonymous session", async () => {
   const env = withTempEnvironment({
     NODE_ENV: "development",
-    TP_ALLOW_LOCAL_ACCESS_BYPASS: "1"
+    TP_ALLOW_LOCAL_ACCESS_BYPASS: "1",
+    usersFileEntries: [
+      {
+        username: "admin",
+        password_hash: "placeholder-hash",
+        access_email: "admin@example.com",
+        role: "admin"
+      }
+    ]
   });
 
   try {
@@ -751,6 +759,8 @@ test("login GET serves a minimal branded sign-in shell and boots an anonymous se
     assert.match(html, /preload="metadata"/);
     assert.match(html, /\/video\/dna-loop\.mp4/);
     assert.match(html, /\/brand\/dna-lockup-dark\.svg/);
+    assert.match(html, /<html lang="en" class="dark" data-theme="dark">/);
+    assert.match(html, /<meta name="color-scheme" content="dark" \/>/);
     assert.match(html, /href="#main-content">Skip to sign-in</);
     assert.match(html, /id="main-content"/);
     assert.match(html, /Transformation Portal operator console/);
@@ -767,12 +777,18 @@ test("login GET serves a minimal branded sign-in shell and boots an anonymous se
     assert.match(html, /name="password"/);
     assert.match(html, /data-ui="login-helper"/);
     assert.match(html, /data-ui="login-submit"[^>]*>Sign in</);
+    assert.match(html, /data-ui="login-form" data-form-state="ready"/);
     assert.match(html, /(?:data-ui="login-secondary-link"[^>]*href="\/"|href="\/"[^>]*data-ui="login-secondary-link")/);
     assert.match(html, /data-access-state="verified"/);
     assert.match(html, /Local development bypass active/);
     assert.match(html, /Credential handoff ready/);
     assert.match(html, /Bypass context/);
     assert.match(html, /login-sequence-step login-sequence-step--ready/);
+    assert.ok(html.indexOf('data-ui="login-access-status"') < html.indexOf('data-ui="login-form"'));
+    assert.ok(html.indexOf('data-ui="login-form"') < html.indexOf('data-ui="login-capability-summary"'));
+    assert.ok(html.indexOf('data-ui="login-form"') < html.indexOf('data-ui="login-sequence"'));
+    assert.doesNotMatch(html, /name="username"[^>]*\bdisabled\b/);
+    assert.doesNotMatch(html, /name="password"[^>]*\bdisabled\b/);
     assert.doesNotMatch(html, /Authorized operators only\./);
     assert.doesNotMatch(html, /Need access\?/);
     assert.doesNotMatch(html, /Secure operator access to governed orchestration\./);
@@ -780,6 +796,226 @@ test("login GET serves a minimal branded sign-in shell and boots an anonymous se
     assert.doesNotMatch(html, /TP_CF_ACCESS_TEAM_DOMAIN/);
     assert.ok(sessionCookie.value);
     assert.equal((await sessions.getSessionById(sessionCookie.value, { touch: false }))?.authenticated, false);
+  } finally {
+    env.cleanup();
+  }
+});
+
+test("login GET disables credential entry until managed access is verified", async () => {
+  const env = withTempEnvironment({
+    usersFileEntries: [
+      {
+        username: "admin",
+        password_hash: "placeholder-hash",
+        access_email: "admin@example.com",
+        role: "admin"
+      }
+    ]
+  });
+
+  try {
+    const { GET } = await importFresh("../app/login/route.js");
+    const response = await GET(buildRequest("https://portal.example.com/login"));
+    const html = await response.text();
+
+    assert.equal(response.status, 200);
+    assert.match(html, /data-access-state="required"/);
+    assert.match(html, /data-ui="login-form" data-form-state="blocked"/);
+    assert.match(html, /name="username"[^>]*\bdisabled\b/);
+    assert.match(html, /name="password"[^>]*\bdisabled\b/);
+    assert.match(html, /data-ui="login-submit"[^>]*\bdisabled\b/);
+  } finally {
+    env.cleanup();
+  }
+});
+
+test("login GET offers a clean managed-access retry from an access failure", async () => {
+  const env = withTempEnvironment({
+    usersFileEntries: [
+      {
+        username: "admin",
+        password_hash: "placeholder-hash",
+        access_email: "admin@example.com",
+        role: "admin"
+      }
+    ]
+  });
+
+  try {
+    const { GET } = await importFresh("../app/login/route.js");
+    const response = await GET(buildRequest(
+      "https://portal.example.com/login?error=access&returnTo=%2Fportal%3Fview%3Doperate"
+    ));
+    const html = await response.text();
+
+    assert.equal(response.status, 200);
+    assert.match(html, /data-recovery-state="access"/);
+    assert.match(html, /data-ui="login-form" data-form-state="blocked"/);
+    assert.match(html, /data-ui="login-retry-link"/);
+    assert.match(html, /href="\/login\?returnTo=%2Fportal%3Fview%3Doperate"/);
+    assert.match(html, /Retry managed access/);
+  } finally {
+    env.cleanup();
+  }
+});
+
+test("login GET surfaces live assertion failures with a fail-closed recovery path", async () => {
+  const env = withTempEnvironment({
+    usersFileEntries: [
+      {
+        username: "admin",
+        password_hash: "placeholder-hash",
+        access_email: "admin@example.com",
+        role: "admin"
+      }
+    ]
+  });
+
+  try {
+    const { GET } = await importFresh("../app/login/route.js");
+    const response = await GET(buildRequest("https://portal.example.com/login", {
+      headers: { "Cf-Access-Jwt-Assertion": "malformed" }
+    }));
+    const html = await response.text();
+
+    assert.equal(response.status, 200);
+    assert.match(html, /data-recovery-state="access"/);
+    assert.match(html, /data-ui="login-error-banner"/);
+    assert.match(html, /data-ui="login-form" data-form-state="blocked"/);
+    assert.match(html, /data-ui="login-retry-link"/);
+    assert.match(html, /Retry managed access/);
+  } finally {
+    env.cleanup();
+  }
+});
+
+test("login GET distinguishes a live Access verification outage", async () => {
+  const outageTeamDomain = "https://outage-frontdoor-tests.cloudflareaccess.com";
+  const env = withTempEnvironment({
+    TP_CF_ACCESS_TEAM_DOMAIN: outageTeamDomain,
+    usersFileEntries: [
+      {
+        username: "admin",
+        password_hash: "placeholder-hash",
+        access_email: "admin@example.com",
+        role: "admin"
+      }
+    ]
+  });
+  const originalFetch = global.fetch;
+  global.fetch = async () => {
+    throw new Error("Access cert endpoint unavailable");
+  };
+
+  try {
+    const { GET } = await importFresh("../app/login/route.js");
+    const response = await GET(buildRequest("https://portal.example.com/login", {
+      headers: {
+        "Cf-Access-Jwt-Assertion": createAccessJwt({ iss: outageTeamDomain })
+      }
+    }));
+    const html = await response.text();
+
+    assert.equal(response.status, 200);
+    assert.match(html, /data-recovery-state="access_unavailable"/);
+    assert.match(html, /Managed access verification is temporarily unavailable/);
+    assert.match(html, /data-ui="login-form" data-form-state="blocked"/);
+    assert.match(html, /data-ui="login-retry-link"/);
+    assert.match(html, /Retry managed access/);
+  } finally {
+    global.fetch = originalFetch;
+    env.cleanup();
+  }
+});
+
+test("login GET keeps invalid-credential retry editable under the local access bypass", async () => {
+  const env = withTempEnvironment({
+    NODE_ENV: "development",
+    TP_ALLOW_LOCAL_ACCESS_BYPASS: "1",
+    usersFileEntries: [
+      {
+        username: "admin",
+        password_hash: "placeholder-hash",
+        access_email: "admin@example.com",
+        role: "admin"
+      }
+    ]
+  });
+
+  try {
+    const { GET } = await importFresh("../app/login/route.js");
+    const response = await GET(buildRequest("http://localhost:3000/login?error=invalid"));
+    const html = await response.text();
+
+    assert.equal(response.status, 200);
+    assert.match(html, /data-recovery-state="invalid"/);
+    assert.match(html, /data-ui="login-form" data-form-state="retry"/);
+    assert.match(html, /Credentials need another attempt/);
+    assert.doesNotMatch(html, /name="username"[^>]*\bdisabled\b/);
+    assert.doesNotMatch(html, /name="password"[^>]*\bdisabled\b/);
+    assert.doesNotMatch(html, /data-ui="login-submit"[^>]*\bdisabled\b/);
+  } finally {
+    env.cleanup();
+  }
+});
+
+test("login GET disables throttle and stale-CSRF recovery states", async () => {
+  const env = withTempEnvironment({
+    NODE_ENV: "development",
+    TP_ALLOW_LOCAL_ACCESS_BYPASS: "1",
+    usersFileEntries: [
+      {
+        username: "admin",
+        password_hash: "placeholder-hash",
+        access_email: "admin@example.com",
+        role: "admin"
+      }
+    ]
+  });
+
+  try {
+    const { GET } = await importFresh("../app/login/route.js");
+    for (const errorCode of ["throttled", "csrf"]) {
+      const response = await GET(buildRequest(`http://localhost:3000/login?error=${errorCode}&returnTo=%2Fportal%3Fview%3Dreview`));
+      const html = await response.text();
+
+      assert.equal(response.status, 200);
+      assert.match(html, new RegExp(`data-recovery-state="${errorCode}"`));
+      assert.match(html, /data-ui="login-form" data-form-state="blocked"/);
+      assert.match(html, /name="username"[^>]*\bdisabled\b/);
+      assert.match(html, /name="password"[^>]*\bdisabled\b/);
+      assert.match(html, /data-ui="login-submit"[^>]*\bdisabled\b/);
+      if (errorCode === "csrf") {
+        assert.match(html, /data-ui="login-retry-link"/);
+        assert.match(html, /href="\/login\?returnTo=%2Fportal%3Fview%3Dreview"/);
+        assert.match(html, /Start a fresh sign-in/);
+      } else {
+        assert.doesNotMatch(html, /data-ui="login-retry-link"/);
+        assert.doesNotMatch(html, /Retry sign-in/);
+      }
+    }
+  } finally {
+    env.cleanup();
+  }
+});
+
+test("login GET disables credential entry when operator configuration is missing", async () => {
+  const env = withTempEnvironment({
+    NODE_ENV: "development",
+    TP_ALLOW_LOCAL_ACCESS_BYPASS: "1"
+  });
+
+  try {
+    const { GET } = await importFresh("../app/login/route.js");
+    const response = await GET(buildRequest("http://localhost:3000/login"));
+    const html = await response.text();
+
+    assert.equal(response.status, 200);
+    assert.match(html, /data-recovery-state="configuration"/);
+    assert.match(html, /data-ui="login-form" data-form-state="blocked"/);
+    assert.match(html, /name="username"[^>]*\bdisabled\b/);
+    assert.match(html, /name="password"[^>]*\bdisabled\b/);
+    assert.match(html, /data-ui="login-submit"[^>]*\bdisabled\b/);
   } finally {
     env.cleanup();
   }
@@ -844,7 +1080,16 @@ test("login GET redirects authenticated sessions to a validated returnTo route",
 });
 
 test("login GET escapes verified access context exactly once in the recovery card", async () => {
-  const env = withTempEnvironment();
+  const env = withTempEnvironment({
+    usersFileEntries: [
+      {
+        username: "admin",
+        password_hash: "placeholder-hash",
+        access_email: "admin@example.com",
+        role: "admin"
+      }
+    ]
+  });
 
   try {
     const { GET } = await importFresh("../app/login/route.js");
@@ -901,19 +1146,28 @@ test("homepage GET serves the public DNA landing page instead of redirecting", a
     assert.match(html, /\/video\/dna-loop\.mp4/);
     assert.match(html, /\/brand\/dna-symbol-dark\.svg/);
     assert.match(html, /\/brand\/dna-lockup-dark\.svg/);
+    assert.match(html, /<html lang="en" class="dark" data-theme="dark">/);
+    assert.match(html, /<main id="main-content" class="homepage-main" tabindex="-1" data-ui="homepage-main">/);
     assert.match(html, /data-ui="homepage-hero-lockup"/);
     assert.match(html, /data-ui="homepage-hero-title"/);
     assert.match(html, /data-ui="homepage-entry-rail"/);
-    assert.match(html, /Managed access opens a governed console for dispatch, queue operation, artifact review, archive gates, and optional runtimes/);
-    assert.match(html, /Lux Depth, SAM2, reconstruction, RAW ingest, and FastVLM stay visible only as real controls/);
+    assert.match(html, /Inspect release proof publicly, or enter managed operator access/);
+    assert.match(html, /Optional runtimes appear only when enabled/);
     assert.match(html, /(?:data-ui="homepage-learn-link"[^>]*href="#workflow"|href="#workflow"[^>]*data-ui="homepage-learn-link")/);
     assert.match(html, /(?:data-ui="homepage-primary-cta"[^>]*href="\/login"|href="\/login"[^>]*data-ui="homepage-primary-cta")/);
-    assert.match(html, /(?:data-ui="homepage-secondary-cta"[^>]*href="#proof-report"|href="#proof-report"[^>]*data-ui="homepage-secondary-cta")/);
-    assert.match(html, /(?:data-ui="homepage-utility-cta"[^>]*href="\/login"|href="\/login"[^>]*data-ui="homepage-utility-cta")/);
+    assert.match(html, /(?:data-ui="homepage-secondary-cta"[^>]*href="#proof"|href="#proof"[^>]*data-ui="homepage-secondary-cta")/);
+    assert.match(html, /(?:data-ui="homepage-utility-cta"[^>]*href="#proof"|href="#proof"[^>]*data-ui="homepage-utility-cta")/);
+    assert.match(html, /(?:data-ui="homepage-mobile-utility-cta"[^>]*href="#proof"|href="#proof"[^>]*data-ui="homepage-mobile-utility-cta")/);
     assert.match(html, /(?:data-ui="homepage-final-primary-cta"[^>]*href="\/login"|href="\/login"[^>]*data-ui="homepage-final-primary-cta")/);
     assert.match(html, /Verify\. Enhance\. Enforce\. Distribute\./);
     assert.match(html, /(?:data-ui="homepage-operator-link"[^>]*href="\/login"|href="\/login"[^>]*data-ui="homepage-operator-link")/);
     assert.match(html, /tp\.meta\.verification_report\.v1/);
+    assert.match(html, /<details id="proof-report"[^>]*data-ui="homepage-proof-details"/);
+    assert.ok(html.indexOf('id="proof"') < html.indexOf('id="proof-report"'));
+    const desktopActions = html.match(/<div class="site-actions">([\s\S]*?)<\/div>/)?.[1] || "";
+    const mobileActions = html.match(/<div class="site-mobile-menu__actions">([\s\S]*?)<\/div>/)?.[1] || "";
+    assert.equal((desktopActions.match(/href="\/login"/g) || []).length, 1);
+    assert.equal((mobileActions.match(/href="\/login"/g) || []).length, 1);
     assert.match(html, /when enabled/i);
     assert.match(html, /strip metadata/i);
     assert.doesNotMatch(html, /href="\/start"/);
@@ -964,7 +1218,7 @@ test("homepage GET is stateless and ignores authenticated session hints", async 
 
     assert.equal(response.status, 200);
     assert.equal(response.headers.get("set-cookie"), null);
-    assert.match(html, /(?:data-ui="homepage-utility-cta"[^>]*href="\/login"|href="\/login"[^>]*data-ui="homepage-utility-cta")/);
+    assert.match(html, /(?:data-ui="homepage-utility-cta"[^>]*href="#proof"|href="#proof"[^>]*data-ui="homepage-utility-cta")/);
     assert.match(html, />Operator Access</);
     assert.match(html, /(?:data-ui="homepage-primary-cta"[^>]*href="\/login"|href="\/login"[^>]*data-ui="homepage-primary-cta")/);
     assert.equal(after.last_seen_at, before.last_seen_at);
@@ -2147,6 +2401,8 @@ test("portal returns 503 with no-store when the FastAPI UI origin is unavailable
       assert.equal(response.headers.get("cache-control"), "no-store");
       assert.match(response.headers.get("content-security-policy") || "", /default-src 'self'/);
       const html = await response.text();
+      assert.match(html, /<html lang="en" class="dark" data-theme="dark">/);
+      assert.match(html, /<meta name="color-scheme" content="dark" \/>/);
       assert.match(html, /data-ui="managed-recovery-shell"/);
       assert.match(html, /data-reason="upstream_unavailable"/);
       assert.match(html, /data-ui="managed-recovery-capabilities"/);
@@ -2692,6 +2948,7 @@ test("shared portal asset manifest pins the managed asset proxy allowlist", asyn
     "portal-review.css",
     "portal-operate.js",
     "portal-build.js",
+    "portal-profile.js",
     "portal-overview.js",
     "fonts/portal-sans.woff2",
     "fonts/portal-mono.woff2",

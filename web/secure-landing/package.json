@@ -17,6 +17,7 @@
     "test": "npm run build:portal && node ./scripts/guard-runtime.mjs && node --experimental-specifier-resolution=node --test tests/*.test.mjs",
     "test:coverage": "npm run build:portal && node ./scripts/guard-runtime.mjs && node --experimental-specifier-resolution=node --experimental-test-coverage --test-coverage-include=app/**/*.js --test-coverage-include=lib/**/*.js --test-coverage-exclude=app/**/page.js --test-coverage-exclude=app/**/layout.js --test-coverage-exclude=app/**/global-error.js --test-coverage-exclude=app/**/not-found.js --test-coverage-lines=45 --test-coverage-functions=45 --test tests/*.test.mjs",
     "test:browser": "node ./scripts/guard-runtime.mjs && playwright test",
+    "test:browser:a11y": "npm run build:portal && node ./scripts/guard-runtime.mjs && playwright test ux-accessibility.spec.mjs ux-accessibility.portal.spec.mjs ux-runtime.portal.spec.mjs",
     "test:browser:install": "node ./scripts/guard-runtime.mjs && playwright install --with-deps chromium",
     "test:browser:ui": "node ./scripts/guard-runtime.mjs && playwright test --ui"
   },
@@ -37,6 +38,7 @@
     "postcss": "8.5.25"
   },
   "devDependencies": {
+    "@axe-core/playwright": "4.12.1",
     "@playwright/test": "1.62.1",
     "esbuild": "^0.28.1",
     "postcss": "8.5.25",

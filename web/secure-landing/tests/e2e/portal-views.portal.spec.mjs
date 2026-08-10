@@ -1,18 +1,20 @@
 // @portal-browser portal-views smoke.
 //
-// Verifies the per-view affordances are present in the static portal
-// markup served via the front-door upstream proxy, and that the
-// shared shell anchors remain visible regardless of the ?view= deep
+// Verifies the per-view affordances remain in the static portal markup
+// served via the front-door upstream proxy, and that the universally
+// visible shell anchors remain rendered regardless of the ?view= deep
 // link. The portal interactivity bundle is stubbed in this mock
-// environment, so we assert the markup contract — not the JS-driven
-// view-toggling behavior, which is governed by
-// validate_portal_browser_smoke.py's live CDP suite.
+// environment, so route-owned surfaces are structural assertions — the
+// hydrated runtime suite governs their JS-driven visibility.
 
 import { test, expect } from "@playwright/test";
 
-const SHARED_SHELL_ANCHORS = [
+const VISIBLE_SHELL_ANCHORS = [
   '[data-ui="portal-topbar"]',
-  '[data-ui="view-switcher"]',
+  '[data-ui="view-switcher"]'
+];
+
+const STRUCTURAL_SHELL_ANCHORS = [
   '[data-ui="console-context-shell"]'
 ];
 
@@ -27,7 +29,7 @@ test.describe(
   { tag: "@portal-browser" },
   () => {
     for (const [view, affordances] of Object.entries(VIEW_AFFORDANCES)) {
-      test(`/portal?view=${view} keeps the shared shell and reaches the ${view} affordances`, async ({ page }) => {
+      test(`/portal?view=${view} preserves the shared shell and ${view} affordance hooks`, async ({ page }) => {
         const consoleErrors = [];
         page.on("console", (msg) => {
           if (msg.type() === "error") consoleErrors.push(msg.text());
@@ -37,12 +39,16 @@ test.describe(
         const response = await page.goto(`/portal?view=${view}`);
         expect(response?.status()).toBe(200);
 
-        for (const sharedAnchor of SHARED_SHELL_ANCHORS) {
-          await expect(page.locator(sharedAnchor)).toBeVisible();
+        for (const visibleAnchor of VISIBLE_SHELL_ANCHORS) {
+          await expect(page.locator(visibleAnchor)).toBeVisible();
+        }
+
+        for (const structuralAnchor of STRUCTURAL_SHELL_ANCHORS) {
+          await expect(page.locator(structuralAnchor)).toHaveCount(1);
         }
 
         for (const viewAnchor of affordances) {
-          await expect(page.locator(viewAnchor).first()).toBeVisible();
+          await expect(page.locator(viewAnchor)).toHaveCount(1);
         }
 
         expect(

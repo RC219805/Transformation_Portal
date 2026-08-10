@@ -1,3 +1,8 @@
+/* portal-override-owner: operate-context-heading */
+body[data-console-view="operate"] .portal-context-head {
+  display: none;
+}
+
 /* portal-override-owner: reduced-motion */
 @media (prefers-reduced-motion: reduce) {
   .workspace-shell,

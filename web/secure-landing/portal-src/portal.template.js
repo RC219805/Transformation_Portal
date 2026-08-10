@@ -43,6 +43,7 @@ const THEME_STORAGE_VERSION = '2';
 const THEME_PREFERENCES = Object.freeze(['system', 'dark', 'light']);
 const MAX_JOB_LOG_LINES = 1200;
 const BOOTSTRAP_TIMEOUT_MS = 3500;
+const JOB_CANCEL_TIMEOUT_MS = 5000;
 const BOOTSTRAP_RETRY_BASE_DELAY_MS = 1000;
 const BOOTSTRAP_RETRY_MAX_DELAY_MS = 12000;
 const BOOTSTRAP_RETRY_MAX_EXPONENT = 4;
@@ -68,6 +69,7 @@ const DEFERRED_SURFACE_RETRY_WINDOW_MS = 30000;
 const DEFERRED_SURFACE_REGISTRY = Object.freeze({
     operate: { datasetKey: 'operateSurfaceJsUrl', factoryName: 'createDeferredOperateSurfaceApi' },
     build: { datasetKey: 'buildSurfaceJsUrl', factoryName: 'createDeferredBuildSurfaceApi' },
+    profile: { datasetKey: 'profileSurfaceJsUrl', factoryName: 'createDeferredProfileSurfaceApi' },
     overview: { datasetKey: 'overviewSurfaceJsUrl', factoryName: 'createDeferredOverviewSurfaceApi' },
 });
 const _deferredSurfaceState = new Map();
@@ -102,6 +104,10 @@ let configPreviewServiceRetryAttempts = 0;
 let configPreviewLastRateLimitHint = null;
 let transientDraftPersistTimerId = null;
 let transientDraftPersistIdleId = null;
+let unprofiledProfileBaselineRecord = null;
+let transientDraftRestoredForProfile = false;
+let deferredProfileOwnerKey = '';
+let deferredProfileOpenIntent = 0;
 let deferredReviewSurfaceApi = null;
 let deferredReviewSurfaceLoadPromise = null;
 let deferredReviewSurfaceCssLoaded = false;
@@ -551,6 +557,7 @@ const els = {
     logStatusIndicator: _domId('logStatusIndicator'),
     clearLogsBtn: _domId('clearLogsBtn'),
     queueStatusSummary: _domId('queueStatusSummary'),
+    queueDeltaStatus: _domId('queueDeltaStatus'),
 
     themeBtn: _domId('themeBtn'),
     shortcutsBtn: _domId('shortcutsBtn'),
@@ -938,7 +945,7 @@ function setupAmbientMotion() {
 const CONSOLE_VIEW_META = {
     overview: {
         title: 'Overview',
-        summary: 'Status, recent jobs, and the clearest next operator action.',
+        summary: 'Status, active jobs, and the clearest next operator action.',
         meta: 'Use this surface to understand connection mode, current draft, and where the next useful click should go.'
     },
     build: {
@@ -1043,13 +1050,131 @@ function setActiveWorkspaceLink(viewName) {
     document.querySelectorAll('[data-view-link]').forEach((link) => {
         const active = String(link.dataset.viewLink || '') === String(viewName || '');
         link.classList.toggle('is-active', active);
-        link.setAttribute('aria-selected', active ? 'true' : 'false');
+        link.removeAttribute('aria-selected');
         if (active) {
-            link.setAttribute('aria-current', 'location');
+            link.setAttribute('aria-current', 'page');
         } else {
             link.removeAttribute('aria-current');
         }
     });
+}
+
+function _portalStatusRegion() {
+    let region = document.getElementById('portalA11yStatus');
+    if (region) return region;
+    region = document.createElement('div');
+    region.id = 'portalA11yStatus';
+    region.className = 'sr-only';
+    region.setAttribute('role', 'status');
+    region.setAttribute('aria-live', 'polite');
+    region.setAttribute('aria-atomic', 'true');
+    document.body.appendChild(region);
+    return region;
+}
+
+const _portalStatusMessages = new Map();
+const _queueDeltaAnnouncementSuppressions = new Map();
+
+function _queueDeltaAnnouncementKey(jobId, displayState) {
+    const normalizedJobId = String(jobId || '').trim();
+    const normalizedDisplayState = String(displayState || '').trim().toLowerCase();
+    return normalizedJobId && normalizedDisplayState
+        ? `${normalizedJobId}\u0000${normalizedDisplayState}`
+        : '';
+}
+
+function _suppressNextQueueDeltaAnnouncement(jobId, displayState) {
+    const key = _queueDeltaAnnouncementKey(jobId, displayState);
+    if (!key) return;
+    const expiresAt = Date.now() + 5000;
+    _queueDeltaAnnouncementSuppressions.set(key, expiresAt);
+    window.setTimeout(() => {
+        if (_queueDeltaAnnouncementSuppressions.get(key) === expiresAt) {
+            _queueDeltaAnnouncementSuppressions.delete(key);
+        }
+    }, 5000);
+}
+
+function _consumeQueueDeltaAnnouncementSuppression(jobId, displayState) {
+    const key = _queueDeltaAnnouncementKey(jobId, displayState);
+    if (!key) return false;
+    const expiresAt = Number(_queueDeltaAnnouncementSuppressions.get(key) || 0);
+    _queueDeltaAnnouncementSuppressions.delete(key);
+    return expiresAt >= Date.now();
+}
+
+function _announcePortalStatus(channel, message, options = {}) {
+    const key = String(channel || 'portal').trim() || 'portal';
+    const text = String(message || '').trim();
+    if (!text || (!options.force && _portalStatusMessages.get(key) === text)) return false;
+    _portalStatusMessages.set(key, text);
+    const region = _portalStatusRegion();
+    const announcementToken = `${key}:${text}`;
+    region.dataset.pendingAnnouncement = announcementToken;
+    region.textContent = '';
+    window.setTimeout(() => {
+        if (region.dataset.pendingAnnouncement === announcementToken) {
+            region.textContent = text;
+        }
+    }, 0);
+    return true;
+}
+
+function _announceCancellationStatus(job, message) {
+    const jobId = String(job?.id || '').trim();
+    if (jobId) {
+        _suppressNextQueueDeltaAnnouncement(jobId, _displayJobState(job));
+    }
+    return _announcePortalStatus('cancel', message, { force: true });
+}
+
+function _focusConsoleViewHeading(viewName) {
+    const focusTargetIds = {
+        overview: 'overviewViewTitle',
+        build: 'buildStepTitle',
+        operate: 'operateViewTitle',
+        review: 'reviewViewTitle'
+    };
+    const heading = document.getElementById(focusTargetIds[viewName]) || els.consoleViewTitle;
+    if (!heading) return;
+    if (!heading.hasAttribute('tabindex')) heading.setAttribute('tabindex', '-1');
+    heading.focus();
+    _scrollConsoleViewHeadingIntoView(heading, viewName);
+    const deferredSurfacesReady = _deferredConsoleViewFocusSettlement(viewName);
+    if (deferredSurfacesReady) {
+        void deferredSurfacesReady.then(() => {
+            window.requestAnimationFrame(() => {
+                window.requestAnimationFrame(() => {
+                    _scrollConsoleViewHeadingIntoView(heading, viewName);
+                });
+            });
+        });
+    }
+    _announcePortalStatus('view', `${CONSOLE_VIEW_META[viewName]?.title || 'Portal'} view opened.`, { force: true });
+    return heading;
+}
+
+function _scrollConsoleViewHeadingIntoView(heading, viewName) {
+    if (
+        !heading
+        || !heading.isConnected
+        || state.currentView !== viewName
+        || document.activeElement !== heading
+    ) return false;
+    heading.scrollIntoView({ behavior: 'instant', block: 'center', inline: 'nearest' });
+    return true;
+}
+
+function _deferredConsoleViewFocusSettlement(viewName) {
+    if (!_isBootstrapReady()) return null;
+    const pending = [];
+    if ((viewName === 'operate' || viewName === 'review') && _shouldLoadDeferredOperateSurface()) {
+        pending.push(_loadDeferredOperateSurface());
+    }
+    if (viewName === 'review' && _shouldLoadDeferredReviewSurface('route')) {
+        pending.push(_loadDeferredReviewSurface());
+    }
+    return pending.length > 0 ? Promise.allSettled(pending) : null;
 }
 
 function _routeUrlForView(viewName, jobId = '', artifactPath = '', compareEnabled = null) {
@@ -1086,6 +1211,23 @@ function _managedLoginUrlForCurrentRoute() {
 
 function _copyTransientDraftConfig(config = state.config) {
     return JSON.parse(JSON.stringify(config && typeof config === 'object' ? config : portalInternals.createPortalConfigState()));
+}
+
+function _captureUnprofiledProfileBaseline() {
+    if (unprofiledProfileBaselineRecord) return unprofiledProfileBaselineRecord;
+    unprofiledProfileBaselineRecord = {
+        pipeline: String(state.pipeline || 'lux-depth-v3'),
+        config: _copyTransientDraftConfig()
+    };
+    return unprofiledProfileBaselineRecord;
+}
+
+function _unprofiledProfileBaseline() {
+    const baseline = _captureUnprofiledProfileBaseline();
+    return {
+        pipeline: baseline.pipeline,
+        config: _copyTransientDraftConfig(baseline.config)
+    };
 }
 
 function _managedDraftOwnerKey() {
@@ -1350,7 +1492,7 @@ function _operatorActionHintHtml() {
     ];
     if (state.currentView === 'build') {
         base.push('<span class="kbd">Ctrl/⌘ + Enter</span> dispatch');
-        base.push('<span class="kbd">Ctrl/⌘ + Shift + C</span> copy CLI');
+        base.push('<span class="kbd">Ctrl/⌘ + Alt + C</span> copy CLI');
     }
     return `Keyboard: ${base.join(', ')}.`;
 }
@@ -2655,6 +2797,8 @@ function applyConsoleViewLayout() {
 
 function navigateConsoleView(viewName, options = {}) {
     const replace = Boolean(options.replace);
+    const shouldFocus = options.focus !== false;
+    deferredProfileOpenIntent += 1;
     state.currentView = resolveConsoleView(viewName);
     const explicitJobId = _normalizeSelectedJobId(options.jobId);
     const hasArtifactOption = Object.prototype.hasOwnProperty.call(options, 'artifactPath');
@@ -2688,6 +2832,7 @@ function navigateConsoleView(viewName, options = {}) {
     applyConsoleViewLayout();
     _syncConsoleRoute(replace);
     renderJobQueue();
+    if (shouldFocus) _focusConsoleViewHeading(state.currentView);
 }
 
 function applyConsoleRouteFromLocation(replace = false) {
@@ -2697,6 +2842,7 @@ function applyConsoleRouteFromLocation(replace = false) {
         normalizeArtifactRoutePath: _normalizeArtifactRoutePath,
         normalizeCompareQueryValue: _normalizeCompareQueryValue
     });
+    deferredProfileOpenIntent += 1;
     state.currentView = routeState.view;
     const routeJobId = routeState.jobId;
     const routeArtifactPath = routeState.artifactPath;
@@ -2749,10 +2895,6 @@ function setupSectionRail() {
             }
             event.preventDefault();
             const nextView = resolveConsoleView(link.dataset.viewLink);
-            if (nextView === 'review' && !state.selectedJobId) {
-                createToast('Select a run first, then open its review surface.', 'info');
-                return;
-            }
             navigateConsoleView(nextView);
         });
     });
@@ -2859,21 +3001,37 @@ function syncBuildStepUi() {
         const content = stepContent[index] || BUILD_STEP_CONTENT.lux[index];
         const unavailable = step < minimum;
         const active = step === activeStep;
+        const controlledPanels = Array.from(document.querySelectorAll(`[data-build-step-panel="${step}"]`));
         _setBuildStepButtonCopy(button, content);
         button.classList.toggle('is-active', active);
         button.classList.toggle('is-disabled', unavailable);
         button.disabled = unavailable;
         button.tabIndex = active ? 0 : -1;
-        button.setAttribute('aria-selected', active ? 'true' : 'false');
+        button.removeAttribute('role');
+        button.removeAttribute('aria-selected');
+        button.setAttribute('aria-pressed', active ? 'true' : 'false');
+        if (active) button.setAttribute('aria-current', 'step');
+        else button.removeAttribute('aria-current');
         button.setAttribute('aria-disabled', unavailable ? 'true' : 'false');
+        const controlledIds = controlledPanels.map((panel, panelIndex) => {
+            if (!panel.id) panel.id = `buildStep${step}Panel${panelIndex + 1}`;
+            panel.removeAttribute('role');
+            panel.removeAttribute('aria-labelledby');
+            panel.removeAttribute('tabindex');
+            return panel.id;
+        });
+        if (controlledIds.length > 0) button.setAttribute('aria-controls', controlledIds.join(' '));
+        else button.removeAttribute('aria-controls');
     });
 
     document.querySelectorAll('[data-build-step-panel]').forEach((panel) => {
         const step = Number.parseInt(String(panel.getAttribute('data-build-step-panel') || ''), 10);
         const active = step === activeStep;
-        panel.hidden = !active;
+        const visible = active && !panel.classList.contains('hidden');
+        panel.hidden = !visible;
+        panel.setAttribute('aria-hidden', visible ? 'false' : 'true');
         panel.setAttribute('data-step-active', active ? 'true' : 'false');
-        panel.setAttribute('data-step-hidden', active ? 'false' : 'true');
+        panel.setAttribute('data-step-hidden', visible ? 'false' : 'true');
     });
 
     if (els.buildStepBackBtn) {
@@ -2908,14 +3066,14 @@ function setupBuildStepper() {
             setBuildStep(button.dataset.buildStepTarget);
         });
         button.addEventListener('keydown', (event) => {
-            if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+            if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key)) return;
             event.preventDefault();
             const buttons = _buildStepButtons().filter((candidate) => !candidate.disabled);
             const currentIndex = buttons.indexOf(button);
             if (currentIndex === -1) return;
             let nextIndex = currentIndex;
-            if (event.key === 'ArrowRight') nextIndex = Math.min(buttons.length - 1, currentIndex + 1);
-            if (event.key === 'ArrowLeft') nextIndex = Math.max(0, currentIndex - 1);
+            if (event.key === 'ArrowRight' || event.key === 'ArrowDown') nextIndex = (currentIndex + 1) % buttons.length;
+            if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') nextIndex = (currentIndex - 1 + buttons.length) % buttons.length;
             if (event.key === 'Home') nextIndex = 0;
             if (event.key === 'End') nextIndex = buttons.length - 1;
             const nextButton = buttons[nextIndex];
@@ -3007,6 +3165,7 @@ function formatTransportLabel(job) {
 function _displayJobState(job) {
     if (!job) return 'idle';
     const rawState = String(job.state || '').trim().toLowerCase();
+    if (job.cancelPending && (rawState === 'running' || rawState === 'queued')) return 'canceling';
     const artifactCount = Array.isArray(job.artifacts) ? job.artifacts.length : 0;
     const reviewableOutputs = _jobHasReviewableOutputs(job);
     if (rawState === 'queued') return 'queued';
@@ -3015,17 +3174,18 @@ function _displayJobState(job) {
     // Terminal runs stay reviewable once outputs are retained, even when the active artifact is metadata-only.
     if ((rawState === 'succeeded' || rawState === 'ready') && reviewableOutputs) return 'reviewable';
     if (rawState === 'partial') return 'partial-failure';
-    if (rawState === 'failed' || rawState === 'canceled') return 'failed';
+    if (rawState === 'failed') return 'failed';
+    if (rawState === 'canceled') return 'canceled';
     return rawState || 'idle';
 }
 
 function _displayJobStateTone(job) {
     const displayState = _displayJobState(job);
     if (displayState === 'reviewable') return 'ready';
-    if (displayState === 'running' || displayState === 'queued' || displayState === 'indexing' || displayState === 'partial-failure') {
+    if (displayState === 'running' || displayState === 'queued' || displayState === 'indexing' || displayState === 'canceling' || displayState === 'partial-failure') {
         return 'running';
     }
-    if (displayState === 'failed' || displayState === 'offline') return 'offline';
+    if (displayState === 'failed' || displayState === 'canceled' || displayState === 'offline') return 'offline';
     return 'ready';
 }
 
@@ -3066,6 +3226,7 @@ function _syncSwitchStateLabels() {
             stateLabel = document.createElement('span');
             stateLabel.dataset.switchStateLabel = 'true';
             stateLabel.className = 'inline-flex min-w-[3rem] items-center justify-center rounded-full border px-2 py-1 text-[10px] font-bold uppercase tracking-[0.16em]';
+            stateLabel.setAttribute('aria-hidden', 'true');
             if (controlsWrap) {
                 controlsWrap.insertBefore(stateLabel, controlsWrap.firstChild);
             } else {
@@ -3075,13 +3236,13 @@ function _syncSwitchStateLabels() {
             controlsWrap.insertBefore(stateLabel, controlsWrap.firstChild);
         }
         const checked = Boolean(input.checked);
+        stateLabel.setAttribute('aria-hidden', 'true');
         stateLabel.textContent = checked ? 'On' : 'Off';
         stateLabel.className = checked
             ? 'inline-flex min-w-[3rem] items-center justify-center rounded-full border border-emerald-300 bg-emerald-50 px-2 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-300'
             : 'inline-flex min-w-[3rem] items-center justify-center rounded-full border border-slate-300 bg-slate-100 px-2 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-600 dark:border-slate-700 dark:bg-slate-900/80 dark:text-slate-300';
         input.setAttribute('aria-checked', checked ? 'true' : 'false');
-        const baseLabel = String(input.getAttribute('aria-label') || input.id || 'toggle').replace(/\s+\((on|off)\)$/i, '');
-        input.setAttribute('aria-label', `${baseLabel} (${checked ? 'on' : 'off'})`);
+        input.removeAttribute('aria-label');
     });
 }
 
@@ -3356,6 +3517,20 @@ function _noteTransportWarning(job, code, detail, tone = 'warn') {
     };
     job.transportWarnings.push(warning);
     _pushTimelineEntry(job, _timelineEntry('transport', 'Transport warning', detail, warning.timestamp, tone, `transport|${code}|${detail}`));
+    const announcement = code === 'backend_recovered'
+        ? 'Backend connectivity restored. Live transport can resume.'
+        : code === 'backend_offline'
+            ? 'Backend connectivity lost. Live transport may be stale.'
+            : code === 'auth_blocked'
+                ? 'Live transport is blocked by authentication.'
+                : code === 'reconnect_pending' || code.includes('reconnecting')
+                    ? 'Live transport disconnected and is reconnecting.'
+                    : tone === 'info'
+                        ? ''
+                        : 'Live transport reported an interruption.';
+    if (announcement && String(job.id || '') === String(state.selectedJobId || '')) {
+        _announcePortalStatus(`transport:${String(job.id || '')}`, announcement);
+    }
 }
 
 function _recordProgressTimeline(job, progress, timestamp = Date.now()) {
@@ -4352,6 +4527,8 @@ function renderMissionControl(payload = null) {
             : 'Backend offline';
     }
     if (els.heroQueueValue) {
+        const queueLabel = els.heroQueueValue.previousElementSibling;
+        if (queueLabel?.classList.contains('stat-label')) queueLabel.textContent = 'Active Jobs';
         els.heroQueueValue.textContent = activeJobs > 0 ? `${activeJobs} live job${activeJobs === 1 ? '' : 's'}` : '0 live jobs';
     }
     if (els.heroRunBtn) {
@@ -5092,6 +5269,7 @@ function _syncBootstrapUi() {
     const showApiKeyInput = bootstrapReady && state.auth.features.apiKeyInput;
     const badgeLabel = bootstrapReady ? state.auth.mode : 'unknown';
     const summary = _bootstrapSurfaceSummary();
+    _announcePortalStatus('access', `Access status: ${String(summary.badge || 'unknown').toLowerCase()}.`);
     if (els.apiKeySection) {
         els.apiKeySection.classList.toggle('hidden', !showApiKeyInput);
     }
@@ -6235,6 +6413,7 @@ function _createDeferredReviewSurfaceHost() {
         _rememberArtifactSelection,
         _rememberOverlayTrigger,
         _restoreOverlayFocus,
+        _setPortalBackgroundInert,
         renderReviewSurfaces,
         _compareSurfaceCopy,
         _jobFreshnessLabel,
@@ -6377,6 +6556,7 @@ function _createDeferredOperateSurfaceHost() {
         _latestVisibleTransportWarning,
         _nativeEventSourceReadyState,
         _portalPrivilegesReady,
+        _consumeQueueDeltaAnnouncementSuppression,
         _reconcileJobTimeline,
         _setSurfaceEmptyState,
         _toggleSurfaceSkeleton,
@@ -6405,7 +6585,11 @@ function _loadDeferredOperateSurface() {
 
 function _isOperateQueuePanelVisible() {
     return Boolean(
-        els.queueShell
+        state.currentView === 'operate'
+        && els.jobsShell
+        && !els.jobsShell.classList.contains('hidden')
+        && els.jobsShell.getAttribute('aria-hidden') !== 'true'
+        && els.queueShell
         && !els.queueShell.classList.contains('hidden')
         && els.queueShell.getAttribute('aria-hidden') !== 'true'
     );
@@ -6413,7 +6597,13 @@ function _isOperateQueuePanelVisible() {
 
 function _shouldLoadDeferredOperateSurface() {
     if (!_isBootstrapReady()) return false;
-    return state.currentView === 'operate' || state.currentView === 'review' || _isOperateQueuePanelVisible();
+    const buildDispatchNeedsQueue = state.currentView === 'build'
+        && state.jobs.length > 0
+        && (state.portalUi.dispatchPending || Boolean(state.portalUi.dispatchHandoffJobId));
+    return state.currentView === 'operate'
+        || state.currentView === 'review'
+        || _isOperateQueuePanelVisible()
+        || buildDispatchNeedsQueue;
 }
 
 function _primeDeferredOperateSurface() {
@@ -6458,8 +6648,52 @@ function _reconcileDeferredBuildSurface(api = _deferredBuildSurfaceApi()) {
 
 function _primeDeferredBuildSurface() {
     if (!_shouldLoadDeferredBuildSurface()) return;
+    _primeDeferredProfileSurface();
     void _loadDeferredBuildSurface().then((loaded) => {
         _reconcileDeferredBuildSurface(loaded);
+    });
+}
+
+function _createDeferredProfileSurfaceHost() {
+    return {
+        state,
+        els,
+        storageKey: STORAGE_KEY,
+        ownerKey: _transientDraftOwnerKey,
+        unprofiledBaselineRecord: _unprofiledProfileBaseline(),
+        restoredUnprofiledDraft: transientDraftRestoredForProfile,
+        announcePortalStatus: _announcePortalStatus,
+        copyDraftConfig: _copyTransientDraftConfig,
+        createToast,
+        fetchPresetsForPipeline,
+        persistTransientDraft: _persistTransientPortalDraft,
+        rememberOverlayTrigger: _rememberOverlayTrigger,
+        restoreOverlayFocus: _restoreOverlayFocus,
+        setPortalBackgroundInert: _setPortalBackgroundInert,
+        updateUIFromState,
+    };
+}
+
+function _deferredProfileSurfaceApi() {
+    return _deferredSurfaceState.get('profile')?.api || null;
+}
+
+function _loadDeferredProfileSurface() {
+    return loadDeferredSurface('profile', _createDeferredProfileSurfaceHost);
+}
+
+function _primeDeferredProfileSurface() {
+    if (!_isBootstrapReady() || state.currentView !== 'build') return;
+    const ownerKey = _transientDraftOwnerKey();
+    if (!ownerKey) return;
+    void _loadDeferredProfileSurface().then((api) => {
+        if (!api) return;
+        if (deferredProfileOwnerKey !== ownerKey) {
+            deferredProfileOwnerKey = ownerKey;
+            if (api.refreshDropdown) api.refreshDropdown();
+            return;
+        }
+        if (api.syncDraftState) api.syncDraftState();
     });
 }
 
@@ -6480,8 +6714,8 @@ function _renderDeferredReviewSurfaceFallback(jobsLoading = false) {
         }
     }
     if (els.artifactThumbnailRail) {
-        els.artifactThumbnailRail.setAttribute('role', 'listbox');
-        els.artifactThumbnailRail.setAttribute('aria-label', 'Artifact thumbnails');
+        els.artifactThumbnailRail.setAttribute('role', 'group');
+        els.artifactThumbnailRail.setAttribute('aria-label', 'Artifact choices');
         els.artifactThumbnailRail.innerHTML = '';
     }
     if (els.emptyArtifactState) els.emptyArtifactState.style.display = 'block';
@@ -6491,9 +6725,10 @@ function _renderDeferredReviewSurfaceFallback(jobsLoading = false) {
             title: 'Review surface unavailable',
             detail: 'Reload the portal to retry loading the review surface assets for this artifact context.',
         });
-        if (els.emptyArtifactAction) {
-            els.emptyArtifactAction.textContent = 'Next action: reload the portal before reopening review.';
-        }
+        _setTextContentIfChanged(
+            els.emptyArtifactAction,
+            'Next action: reload the portal before reopening review.'
+        );
     }
     if (els.reviewStatusBanner) els.reviewStatusBanner.classList.add('hidden');
     if (els.reviewProvenanceGrid) els.reviewProvenanceGrid.classList.add('hidden');
@@ -6682,6 +6917,10 @@ function _syncHydratedJob(existing, hydrated, rawJob = null) {
     existing.createdAt = hydrated.createdAt || existing.createdAt || Date.now();
     existing.updatedAt = hydrated.updatedAt || existing.updatedAt || existing.createdAt;
     existing.lastEventAt = hydrated.lastEventAt || existing.lastEventAt || 0;
+    if (existing.state !== 'running' && existing.state !== 'queued') {
+        existing.cancelPending = false;
+        existing.cancelError = '';
+    }
     existing.timeline = Array.isArray(existing.timeline) && existing.timeline.length > 0 ? existing.timeline : hydrated.timeline;
     existing.transportWarnings = Array.isArray(existing.transportWarnings) ? existing.transportWarnings : hydrated.transportWarnings;
     existing.progressMilestones = Array.isArray(existing.progressMilestones) ? existing.progressMilestones : hydrated.progressMilestones;
@@ -6705,12 +6944,18 @@ async function refreshJobStatus(job) {
     try {
         const headers = _buildAuthHeaders({ 'Accept': 'application/json' });
         const encodedId = encodeURIComponent(String(job.id));
-        const res = await fetch(`${API_BASE}/v1/jobs/${encodedId}`, { headers, cache: 'no-store' });
+        const result = await fetchBodyWithTimeout(
+            `${API_BASE}/v1/jobs/${encodedId}`,
+            { headers, cache: 'no-store' },
+            BOOTSTRAP_TIMEOUT_MS,
+            'job_detail_timeout'
+        );
+        const res = result.response;
         if (!res.ok) {
-            await _maybeSuppressOnProtectedResponse('jobs_detail', res);
+            await _maybeSuppressOnProtectedResponse('jobs_detail', result.inspectionResponse || res);
             return;
         }
-        const payload = await res.json();
+        const payload = _parseJsonResponseBody(result.body);
         const rawJob = payload?.data;
         if (!rawJob || String(rawJob.id || '') !== String(job.id)) return;
         const hydrated = hydrateJobFromServer(rawJob);
@@ -6831,7 +7076,11 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = HEALTH_CHECK_TIME
         lifecycle.onStart(controller, timeoutId);
     }
     try {
-        return await fetch(url, { ...options, signal: controller.signal });
+        const response = await fetch(url, { ...options, signal: controller.signal });
+        if (lifecycle && typeof lifecycle.readResponse === 'function') {
+            return await lifecycle.readResponse(response);
+        }
+        return response;
     } catch (error) {
         if (didTimeout) {
             const timeoutError = new Error(timeoutReason);
@@ -6848,6 +7097,25 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = HEALTH_CHECK_TIME
         if (lifecycle && typeof lifecycle.onFinally === 'function') {
             lifecycle.onFinally(controller, timeoutId);
         }
+    }
+}
+
+function fetchBodyWithTimeout(url, options = {}, timeoutMs = HEALTH_CHECK_TIMEOUT_MS, timeoutReason = 'request_timeout', lifecycle = null) {
+    return fetchWithTimeout(url, options, timeoutMs, timeoutReason, {
+        ...(lifecycle || {}),
+        readResponse: async (response) => {
+            const inspectionResponse = response.ok ? null : response.clone();
+            const body = await response.text();
+            return { response, inspectionResponse, body };
+        }
+    });
+}
+
+function _parseJsonResponseBody(rawBody) {
+    try {
+        return rawBody ? JSON.parse(rawBody) : null;
+    } catch {
+        return null;
     }
 }
 
@@ -7960,9 +8228,29 @@ function _previewIssueForField(fieldName, payload = null) {
     return null;
 }
 
-function _renderIssueStatus(el, helperText, issue) {
+function _syncIssueAccessibility(el, control, issue) {
+    if (!el || !control) return;
+    if (!el.id) el.id = `${control.id || 'buildField'}Status`;
+    const describedBy = new Set(String(control.getAttribute('aria-describedby') || '').split(/\s+/).filter(Boolean));
+    describedBy.add(el.id);
+    control.setAttribute('aria-describedby', Array.from(describedBy).join(' '));
+    if (issue?.tone === 'error') {
+        control.setAttribute('aria-invalid', 'true');
+        control.setAttribute('aria-errormessage', el.id);
+        el.setAttribute('role', 'alert');
+        el.setAttribute('aria-live', 'assertive');
+    } else {
+        control.removeAttribute('aria-invalid');
+        control.removeAttribute('aria-errormessage');
+        el.removeAttribute('role');
+        el.removeAttribute('aria-live');
+    }
+}
+
+function _renderIssueStatus(el, helperText, issue, control = null) {
     if (!el) return;
     el.textContent = issue?.detail?.message || helperText;
+    el.dataset.tone = String(issue?.tone || 'info');
     el.classList.remove('text-slate-500', 'dark:text-slate-400', 'text-amber-700', 'dark:text-amber-300', 'text-red-600', 'dark:text-red-300');
     if (issue?.tone === 'error') {
         el.classList.add('text-red-600', 'dark:text-red-300');
@@ -7971,6 +8259,7 @@ function _renderIssueStatus(el, helperText, issue) {
     } else {
         el.classList.add('text-slate-500', 'dark:text-slate-400');
     }
+    _syncIssueAccessibility(el, control, issue);
 }
 
 function renderFieldPreviewStatuses(payload = null) {
@@ -8287,6 +8576,7 @@ async function fetchConfigPreview(payload) {
 }
 
 function scheduleConfigPreview(immediate = false) {
+    _resetDispatchHandoff();
     if (configPreviewTimerId !== null) {
         clearTimeout(configPreviewTimerId);
         configPreviewTimerId = null;
@@ -8400,42 +8690,50 @@ function renderReconstructionRuntimeSummary(payload = null) {
     _renderIssueStatus(
         els.reconstruction.groupingModeStatus,
         groupingFieldStatusText(),
-        _previewIssueForField('grouping_mode', currentPayload)
+        _previewIssueForField('grouping_mode', currentPayload),
+        els.reconstruction.groupingMode
     );
     _renderIssueStatus(
         els.reconstruction.iterationsStatus,
         iterationFieldStatusText(),
-        _previewIssueForField('reconstruction_iterations', currentPayload)
+        _previewIssueForField('reconstruction_iterations', currentPayload),
+        els.reconstruction.iterations
     );
     _renderIssueStatus(
         els.reconstruction.camerasSidecarStatus,
         RECON_RUNTIME_DEFAULT_STATUS.cameras_sidecar_path,
-        _previewIssueForField('cameras_sidecar_path', currentPayload)
+        _previewIssueForField('cameras_sidecar_path', currentPayload),
+        els.reconstruction.camerasSidecarPath
     );
     _renderIssueStatus(
         els.reconstruction.tierStatus,
         reconstructionTierStatusText(),
-        _previewIssueForField('reconstruction_tier', currentPayload)
+        _previewIssueForField('reconstruction_tier', currentPayload),
+        els.reconstruction.tier
     );
     _renderIssueStatus(
         els.raw.ingestModeStatus,
         rawIngestModeStatusText(),
-        _previewIssueForField('raw_ingest_mode', currentPayload)
+        _previewIssueForField('raw_ingest_mode', currentPayload),
+        els.raw.ingestMode
     );
     _renderIssueStatus(
         els.runtime.maxWorkersStatus,
         maxWorkersStatusText(),
-        _previewIssueForField('max_workers', currentPayload)
+        _previewIssueForField('max_workers', currentPayload),
+        els.runtime.maxWorkers
     );
     _renderIssueStatus(
         els.runtime.maxGpuWorkersStatus,
         maxGpuWorkersStatusText(),
-        _previewIssueForField('max_gpu_workers', currentPayload)
+        _previewIssueForField('max_gpu_workers', currentPayload),
+        els.runtime.maxGpuWorkers
     );
     _renderIssueStatus(
         els.runtime.logLevelStatus,
         logLevelStatusText(),
-        _previewIssueForField('log_level', currentPayload)
+        _previewIssueForField('log_level', currentPayload),
+        els.runtime.logLevel
     );
 
     renderDebugBundleGuardrail(currentPayload, debugSummary, preview);
@@ -9184,10 +9482,51 @@ function _firstInvalidBuildInput() {
     ];
     for (const input of candidates) {
         if (!input || typeof input.checkValidity !== 'function') continue;
-        if (input.offsetParent === null && input.getClientRects().length === 0) continue;
+        if (input.disabled) continue;
         if (!input.checkValidity()) return input;
     }
     return null;
+}
+
+function _buildControlForPreviewField(fieldName) {
+    const controls = {
+        input_dir: els.inputDir,
+        output_dir: els.outputDir,
+        archive_index: els.archiveIndexPath,
+        manifest_jsonl: els.rightsManifestPath,
+        grouping_mode: els.reconstruction.groupingMode,
+        reconstruction_iterations: els.reconstruction.iterations,
+        cameras_sidecar_path: els.reconstruction.camerasSidecarPath,
+        reconstruction_tier: els.reconstruction.tier,
+        raw_ingest_mode: els.raw.ingestMode,
+        max_workers: els.runtime.maxWorkers,
+        max_gpu_workers: els.runtime.maxGpuWorkers,
+        log_level: els.runtime.logLevel,
+        verbose: els.flags.verbose,
+        quiet: els.flags.quiet,
+        debug_bundle_acknowledged: els.debugBundleAcknowledge
+    };
+    return controls[String(fieldName || '').trim()] || null;
+}
+
+function _buildStepForControl(control) {
+    if (!control) return null;
+    const panel = control.closest('[data-build-step-panel]');
+    const step = Number.parseInt(String(panel?.getAttribute('data-build-step-panel') || ''), 10);
+    return Number.isFinite(step) ? resolveBuildStep(step) : null;
+}
+
+function _focusInvalidBuildControl(control, options = {}) {
+    if (!control || typeof control.focus !== 'function') return false;
+    const step = _buildStepForControl(control);
+    if (step !== null) setBuildStep(step, { silent: true });
+    window.requestAnimationFrame(() => {
+        control.focus({ preventScroll: false });
+        if (options.reportValidity && typeof control.reportValidity === 'function') {
+            control.reportValidity();
+        }
+    });
+    return true;
 }
 
 function updateUIFromState() {
@@ -9872,6 +10211,9 @@ function renderCLI() {
     renderPreRunDiagnostics(payload);
     _syncBootstrapGuardedControls();
     _syncOverviewBuildLoadingState(payload);
+    const profileSurface = _deferredProfileSurfaceApi();
+    if (profileSurface?.syncDraftState) profileSurface.syncDraftState();
+    else _primeDeferredProfileSurface();
 }
 
 function bindInputs() {
@@ -10164,27 +10506,20 @@ function bindInputs() {
     }
 }
 
-function getProfiles() {
-    try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}"); } catch { return {}; }
-}
-
-function refreshProfileDropdown() {
-    if (!els.profileSelect) return;
-    const profiles = getProfiles();
-    els.profileSelect.innerHTML = '<option value="">Select Profile...</option>';
-    Object.keys(profiles).sort().forEach((k) => {
-        const opt = document.createElement('option');
-        opt.value = k;
-        opt.textContent = k;
-        els.profileSelect.appendChild(opt);
-    });
+function _setTextContentIfChanged(element, value) {
+    if (!element) return false;
+    const nextText = String(value || '');
+    if (element.textContent === nextText) return false;
+    element.textContent = nextText;
+    return true;
 }
 
 function _setSurfaceEmptyState(container, titleEl, detailEl, copy) {
     if (!container) return;
-    container.dataset.tone = String(copy?.tone || 'neutral');
-    if (titleEl) titleEl.textContent = String(copy?.title || '');
-    if (detailEl) detailEl.textContent = String(copy?.detail || '');
+    const nextTone = String(copy?.tone || 'neutral');
+    if (container.dataset.tone !== nextTone) container.dataset.tone = nextTone;
+    _setTextContentIfChanged(titleEl, copy?.title);
+    _setTextContentIfChanged(detailEl, copy?.detail);
 }
 
 // ============================================================================
@@ -10206,25 +10541,20 @@ function renderJobQueue(includeReviewSurfaces = true) {
 
 
 function handleJobListKeydown(event) {
-    const row = event.target.closest('li[data-job-id]');
-    if (!row || !els.jobList) return;
-    if (event.key === 'Enter' || event.key === ' ') {
-        event.preventDefault();
-        selectJob(row.dataset.jobId);
-        return;
-    }
+    const inspectButton = event.target.closest('[data-action="inspect-job"][data-job-id]');
+    if (!inspectButton || !els.jobList) return;
     if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
     event.preventDefault();
-    const rows = Array.from(els.jobList.querySelectorAll('li[data-job-id]'));
-    const currentIndex = rows.indexOf(row);
+    const buttons = Array.from(els.jobList.querySelectorAll('[data-action="inspect-job"][data-job-id]'));
+    const currentIndex = buttons.indexOf(inspectButton);
     if (currentIndex === -1) return;
     let nextIndex = currentIndex;
-    if (event.key === 'ArrowDown') nextIndex = Math.min(rows.length - 1, currentIndex + 1);
-    if (event.key === 'ArrowUp') nextIndex = Math.max(0, currentIndex - 1);
+    if (event.key === 'ArrowDown') nextIndex = (currentIndex + 1) % buttons.length;
+    if (event.key === 'ArrowUp') nextIndex = (currentIndex - 1 + buttons.length) % buttons.length;
     if (event.key === 'Home') nextIndex = 0;
-    if (event.key === 'End') nextIndex = rows.length - 1;
-    const nextRow = rows[nextIndex];
-    if (nextRow) nextRow.focus();
+    if (event.key === 'End') nextIndex = buttons.length - 1;
+    const nextButton = buttons[nextIndex];
+    if (nextButton) nextButton.focus();
 }
 
 function _focusArtifactRailButton(path) {
@@ -10286,8 +10616,9 @@ async function checkBackend(force = false) {
         if (res.ok) {
             state.backendOk = true;
             if (els.healthIndicator) els.healthIndicator.className = 'status-dot ready';
-            if (els.healthText) els.healthText.textContent = 'Backend Online';
+            _setTextContentIfChanged(els.healthText, 'Backend Online');
             if (!wasOnline) {
+                _announcePortalStatus('health', 'Backend online.');
                 state.jobs.forEach((job) => {
                     if (_isJobStreamRecoverable(job)) {
                         _noteTransportWarning(job, 'backend_recovered', 'Backend connectivity restored. Live telemetry can resume.', 'info');
@@ -10316,7 +10647,8 @@ async function checkBackend(force = false) {
             }
         });
         if (els.healthIndicator) els.healthIndicator.className = 'status-dot offline';
-        if (els.healthText) els.healthText.textContent = 'Backend Offline';
+        _setTextContentIfChanged(els.healthText, 'Backend Offline');
+        _announcePortalStatus('health', 'Backend offline.');
     } finally {
         renderJobQueue(false);
         renderReviewSurfaces();
@@ -10327,12 +10659,11 @@ async function checkBackend(force = false) {
 
 async function extractApiError(res) {
     const raw = await res.text();
-    let payload = null;
-    try {
-        payload = raw ? JSON.parse(raw) : null;
-    } catch {
-        payload = null;
-    }
+    return _apiErrorFromResponseBody(res, raw);
+}
+
+function _apiErrorFromResponseBody(res, raw) {
+    const payload = _parseJsonResponseBody(raw);
 
     if (payload && payload.error && payload.error.message) {
         const code = payload.error.code ? `[${payload.error.code}] ` : '';
@@ -10362,6 +10693,10 @@ function _applyJobStreamEvent(job, eventName, parsed) {
     if (eventName === 'state') {
         const nextState = String(parsed.state || job.state || 'running');
         job.state = nextState;
+        if (nextState !== 'running' && nextState !== 'queued') {
+            job.cancelPending = false;
+            job.cancelError = '';
+        }
         if (nextState === 'running' && !Number.isFinite(job.startedAt)) {
             job.startedAt = Date.now();
         } else if (nextState === 'running' && (!job.startedAt || job.startedAt <= 0)) {
@@ -10404,6 +10739,8 @@ function _applyJobStreamEvent(job, eventName, parsed) {
     }
     if (eventName === 'done') {
         job.state = String(parsed.state || job.state || 'failed');
+        job.cancelPending = false;
+        job.cancelError = '';
         job.progress = (job.state === 'succeeded' || job.state === 'partial') ? 100 : job.progress;
         job.finishedAt = Date.now();
         _recordProgressTimeline(job, job.progress, job.finishedAt);
@@ -10431,8 +10768,11 @@ function _applyJobStreamEvent(job, eventName, parsed) {
         scheduleRenderJobQueue();
         createToast(
             job.state === 'partial' ? 'Job partially completed. Reviewable outputs are available.' : `Job ${job.state}.`,
-            job.state === 'succeeded' ? 'success' : job.state === 'partial' ? 'info' : 'error'
+            job.state === 'succeeded' || job.state === 'canceled' ? 'success' : job.state === 'partial' ? 'info' : 'error'
         );
+        if (job.state === 'canceled') {
+            _announceCancellationStatus(job, `Job ${job.id} canceled.`);
+        }
         if (state.selectedJobId === job.id && els.logStatusIndicator) els.logStatusIndicator.classList.add('hidden');
     }
 }
@@ -10765,9 +11105,13 @@ async function recoverJobs() {
 
 async function cancelJob(id) {
     const job = state.jobs.find((item) => item.id === id);
-    if (!job || (job.state !== 'running' && job.state !== 'queued')) return;
+    if (!job || job.cancelPending || (job.state !== 'running' && job.state !== 'queued')) return;
     if (_blockManagedUnavailableAction('change job state')) return;
-    if (_isProtectedFamilySuppressed('jobs_cancel')) return;
+    if (_isProtectedFamilySuppressed('jobs_cancel')) {
+        createToast('Cancel is unavailable until managed access is restored.', 'error');
+        _announcePortalStatus('cancel', `Cancel is unavailable for job ${id} until managed access is restored.`, { force: true });
+        return;
+    }
 
     void emitPortalEvent('cancel_requested', {
         surface: 'job_queue',
@@ -10776,67 +11120,150 @@ async function cancelJob(id) {
             pipeline: String(job.pipeline || '')
         }
     });
-    stopJobActivity(job);
-    job.state = 'canceled';
-    appendJobLog(job, `[WARN] Cancelled by user.`);
-    logToPane(id, `[WARN] Cancelled by user.`);
+    job.cancelPending = true;
+    job.cancelError = '';
+    job.updatedAt = Date.now();
+    scheduleRenderJobQueue();
+    _announceCancellationStatus(job, `Canceling job ${id}.`);
 
     const requestTraceparent = portalInternals.createChildTraceparent(_portalRumTraceparent());
     const requestStartedAt = _portalRumNow();
-    const headers = _buildAuthHeaders({}, 'POST', { traceparent: requestTraceparent });
-    fetch(`${API_BASE}/v1/jobs/${id}/cancel`, { method: 'POST', headers })
-        .then((response) => {
-            if (!response.ok) {
-                void _maybeSuppressOnProtectedResponse('jobs_cancel', response);
+    let rumRecorded = false;
+    try {
+        const headers = _buildAuthHeaders({}, 'POST', { traceparent: requestTraceparent });
+        const result = await fetchBodyWithTimeout(
+            `${API_BASE}/v1/jobs/${encodeURIComponent(id)}/cancel`,
+            { method: 'POST', headers },
+            JOB_CANCEL_TIMEOUT_MS,
+            'cancel_request_timeout'
+        );
+        const response = result.response;
+        _queuePortalRumSample({
+            eventType: 'queue_request',
+            metric: 'cancel',
+            value: _portalRumNow() - requestStartedAt,
+            unit: 'ms',
+            traceparent: requestTraceparent,
+            metadata: {
+                outcome: response.ok ? 'ok' : 'error',
+                status: response.status
             }
-            _queuePortalRumSample({
-                eventType: 'queue_request',
-                metric: 'cancel',
-                value: _portalRumNow() - requestStartedAt,
-                unit: 'ms',
-                traceparent: requestTraceparent,
-                metadata: {
-                    outcome: response.ok ? 'ok' : 'error',
-                    status: response.status
-                }
-            });
-        })
-        .catch(() => {
-            _queuePortalRumSample({
-                eventType: 'queue_request',
-                metric: 'cancel',
-                value: _portalRumNow() - requestStartedAt,
-                unit: 'ms',
-                traceparent: requestTraceparent,
-                metadata: {
-                    outcome: 'error'
-                }
-            });
         });
+        rumRecorded = true;
+        if (!response.ok) {
+            await _maybeSuppressOnProtectedResponse('jobs_cancel', result.inspectionResponse || response);
+            const parsedError = _apiErrorFromResponseBody(response, result.body);
+            throw new Error(parsedError.message || `Cancellation failed (${response.status}).`);
+        }
 
-    scheduleRenderJobQueue();
-    if (state.selectedJobId === id && els.logStatusIndicator) els.logStatusIndicator.classList.add('hidden');
-    createToast("Job canceled.", "error");
+        const responsePayload = _parseJsonResponseBody(result.body);
+        const responseState = String(responsePayload?.data?.state || '').trim().toLowerCase();
+        if (responseState) job.state = responseState;
+        if (job.state !== 'canceled') await refreshJobStatus(job);
+
+        if (job.state === 'canceled') {
+            job.cancelPending = false;
+            stopJobActivity(job);
+            job.finishedAt = job.finishedAt || Date.now();
+            job.updatedAt = Date.now();
+            appendJobLog(job, '[WARN] Canceled by user.');
+            logToPane(id, '[WARN] Canceled by user.');
+            _reconcileJobTimeline(job);
+            scheduleRenderJobQueue();
+            if (state.selectedJobId === id && els.logStatusIndicator) els.logStatusIndicator.classList.add('hidden');
+            const confirmationMessage = `Job ${id} canceled.`;
+            createToast(confirmationMessage, 'success');
+            _announceCancellationStatus(job, confirmationMessage);
+        } else if (job.state === 'running' || job.state === 'queued') {
+            job.cancelPending = true;
+            scheduleRenderJobQueue();
+            const pendingMessage = `Cancel request accepted for job ${id}. Waiting for backend confirmation.`;
+            createToast(pendingMessage, 'info');
+            _announceCancellationStatus(job, pendingMessage);
+        } else {
+            job.cancelPending = false;
+            scheduleRenderJobQueue();
+            const completedMessage = `Cancel request for job ${id} completed with job state ${titleCaseToken(job.state, 'updated')}.`;
+            createToast(completedMessage, 'info');
+            _announceCancellationStatus(job, completedMessage);
+        }
+    } catch (error) {
+        if (!rumRecorded) {
+            _queuePortalRumSample({
+                eventType: 'queue_request',
+                metric: 'cancel',
+                value: _portalRumNow() - requestStartedAt,
+                unit: 'ms',
+                traceparent: requestTraceparent,
+                metadata: { outcome: 'error' }
+            });
+        }
+        job.cancelPending = false;
+        const rawMessage = error instanceof Error ? error.message : String(error || 'Cancellation failed.');
+        const message = rawMessage === 'cancel_request_timeout'
+            ? 'Cancellation request timed out before backend confirmation.'
+            : rawMessage;
+        job.cancelError = message || 'Cancellation failed.';
+        appendJobLog(job, `[WARN] Cancellation was not confirmed: ${job.cancelError}`);
+        logToPane(id, `[WARN] Cancellation was not confirmed: ${job.cancelError}`);
+        scheduleRenderJobQueue();
+        _announceCancellationStatus(job, `Cancellation was not confirmed for job ${id}. The job remains active. Retry Cancel.`);
+        await refreshJobStatus(job);
+        scheduleRenderJobQueue();
+        const stillCancelable = job.state === 'running' || job.state === 'queued';
+        if (job.state === 'canceled') {
+            job.cancelError = '';
+            const confirmationMessage = `Job ${id} canceled. Status was confirmed during refresh.`;
+            createToast(confirmationMessage, 'success');
+            _announceCancellationStatus(job, confirmationMessage);
+        } else if (stillCancelable) {
+            createToast(`Cancellation was not confirmed. The job remains active; retry Cancel. ${truncateMiddle(job.cancelError, 120)}`, 'error');
+        } else {
+            const refreshedState = titleCaseToken(job.state, 'updated');
+            job.cancelError = '';
+            createToast(`Cancellation was not confirmed. Refreshed job state: ${refreshedState}.`, 'error');
+            _announceCancellationStatus(job, `Cancellation was not confirmed for job ${id}. Refreshed job state is ${refreshedState}.`);
+        }
+    }
+}
+
+function _resetDispatchHandoff() {
+    state.portalUi.dispatchHandoffJobId = '';
+    if (!els.runJobBtn || state.portalUi.dispatchPending) return;
+    delete els.runJobBtn.dataset.action;
+    delete els.runJobBtn.dataset.jobId;
+    els.runJobBtn.textContent = 'Dispatch Job';
+}
+
+function _handleRunJobAction() {
+    const handoffJobId = String(state.portalUi.dispatchHandoffJobId || els.runJobBtn?.dataset.jobId || '').trim();
+    if (els.runJobBtn?.dataset.action === 'open-live-job' && handoffJobId) {
+        _resetDispatchHandoff();
+        navigateConsoleView('operate', { jobId: handoffJobId });
+        return;
+    }
+    void submitJob();
 }
 
 function handleJobListClick(event) {
-    const cancelBtn = event.target.closest('[data-action="cancel-job"]');
-    if (cancelBtn) {
+    const actionButton = event.target.closest('[data-action][data-job-id]');
+    if (!actionButton) return;
+    if (actionButton.dataset.action === 'cancel-job') {
         event.stopPropagation();
-        cancelJob(cancelBtn.dataset.jobId);
+        void cancelJob(actionButton.dataset.jobId);
         return;
     }
-
-    const row = event.target.closest('li[data-job-id]');
-    if (!row) return;
-    selectJob(row.dataset.jobId);
+    if (actionButton.dataset.action === 'inspect-job') {
+        selectJob(actionButton.dataset.jobId);
+    }
 }
 
 async function submitJob() {
+    if (state.portalUi.dispatchPending) return;
     if (_blockManagedUnavailableAction('dispatch jobs')) return;
     const invalidField = _firstInvalidBuildInput();
     if (invalidField) {
-        invalidField.reportValidity();
+        _focusInvalidBuildControl(invalidField, { reportValidity: true });
         void emitPortalEvent('dispatch_blocked', {
             surface: 'dispatch',
             field: invalidField.id || '',
@@ -10877,6 +11304,10 @@ async function submitJob() {
                     : String(firstError?.message || 'Preview validation blocked dispatch.'),
                 'error'
             );
+            const firstErrorControl = conflictError
+                ? (els.flags.verbose || els.flags.quiet)
+                : _buildControlForPreviewField(firstError?.field);
+            _focusInvalidBuildControl(firstErrorControl);
             void emitPortalEvent('dispatch_blocked', {
                 surface: 'dispatch',
                 field: String(firstError?.field || '').trim(),
@@ -10886,6 +11317,7 @@ async function submitJob() {
         }
         if (_effectiveDebugBundleEnabled(preview, payload) && !state.portalUi.debugBundleAcknowledged) {
             createToast('Acknowledge the reconstruction debug-bundle guardrail before dispatch.', 'error');
+            _focusInvalidBuildControl(els.debugBundleAcknowledge);
             void emitPortalEvent('dispatch_blocked', {
                 surface: 'dispatch',
                 field: 'debug_bundle_acknowledged',
@@ -10918,6 +11350,7 @@ async function submitJob() {
         els.runJobBtn.textContent = "Dispatching...";
         _setButtonBusy(els.runJobBtn, true);
     }
+    state.portalUi.dispatchPending = true;
 
     const randomId = window.crypto?.randomUUID ? window.crypto.randomUUID().replace(/-/g, '').slice(0, 8) : Math.random().toString(36).slice(2, 8);
     const localId = `job_${randomId}`;
@@ -10991,7 +11424,14 @@ async function submitJob() {
         state.selectedJobId = job.id;
         state.portalUi.lastSelectedJobId = String(job.id || '');
         scheduleRenderJobQueue();
-        createToast(`Job dispatched: ${job.id}`, 'success');
+        state.portalUi.dispatchHandoffJobId = String(job.id || '');
+        if (els.runJobBtn) {
+            els.runJobBtn.dataset.action = 'open-live-job';
+            els.runJobBtn.dataset.jobId = String(job.id || '');
+            els.runJobBtn.textContent = 'Open Live Job';
+        }
+        createToast(`Job dispatched: ${job.id}. Open the live job to monitor progress.`, 'success');
+        _announcePortalStatus('dispatch', `Job ${job.id} was dispatched. Open Live Job to monitor progress.`, { force: true });
         void emitPortalEvent('job_submitted', {
             surface: 'dispatch',
             metadata: {
@@ -11026,11 +11466,19 @@ async function submitJob() {
         createToast(toastMessage, "error");
         if (state.selectedJobId === job.id && els.logStatusIndicator) els.logStatusIndicator.classList.add('hidden');
     } finally {
+        state.portalUi.dispatchPending = false;
         if (els.runJobBtn) {
-            els.runJobBtn.textContent = "Execute Job";
+            if (!state.portalUi.dispatchHandoffJobId) {
+                els.runJobBtn.textContent = "Dispatch Job";
+                delete els.runJobBtn.dataset.action;
+                delete els.runJobBtn.dataset.jobId;
+            }
             _setButtonBusy(els.runJobBtn, false);
         }
         _syncBootstrapGuardedControls();
+        if (state.portalUi.dispatchHandoffJobId && els.runJobBtn) {
+            els.runJobBtn.focus({ preventScroll: true });
+        }
     }
 }
 
@@ -11098,30 +11546,23 @@ function stopHealthPolling() {
     stopSseWatchdog();
 }
 
-if (els.saveProfileBtn) els.saveProfileBtn.addEventListener('click', () => {
-    const name = prompt("Profile name:");
-    if (!name || !name.trim()) return;
-    const profiles = getProfiles();
-    profiles[name.trim()] = { pipeline: state.pipeline, config: JSON.parse(JSON.stringify(state.config)) };
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(profiles));
-    refreshProfileDropdown();
-    els.profileSelect.value = name.trim();
-    createToast(`Profile "${name.trim()}" saved.`, "success");
-});
-
-if (els.profileSelect) els.profileSelect.addEventListener('change', (e) => {
-    const name = e.target.value;
-    if (!name) return;
-    const profiles = getProfiles();
-    if (profiles[name]) {
-        state.pipeline = profiles[name].pipeline;
-        state.config = JSON.parse(JSON.stringify(profiles[name].config));
-        updateUIFromState();
-        _persistTransientPortalDraft();
-        void fetchPresetsForPipeline(state.pipeline, true);
-        createToast(`Profile ${name} loaded.`);
-    }
-});
+if (els.saveProfileBtn) {
+    els.saveProfileBtn.addEventListener('click', (event) => {
+        const trigger = event.currentTarget;
+        const openIntent = ++deferredProfileOpenIntent;
+        void _loadDeferredProfileSurface().then((api) => {
+            if (openIntent !== deferredProfileOpenIntent) return;
+            deferredProfileOpenIntent += 1;
+            if (
+                !api
+                || state.currentView !== 'build'
+                || _activeOverlayPanel()
+                || !_isPortalFocusTargetAvailable(trigger)
+            ) return;
+            api.open?.(trigger);
+        });
+    });
+}
 
 if (els.exportBtn) els.exportBtn.addEventListener('click', () => {
     const payload = generatePayload();
@@ -11397,9 +11838,31 @@ if (els.copyCliBtn) els.copyCliBtn.addEventListener('click', async () => {
     await copyToClipboard(els.cliPreview.textContent);
 });
 
-if (els.inspectorOverviewTab) els.inspectorOverviewTab.addEventListener('click', () => setInspectorTab('overview'));
-if (els.inspectorTimelineTab) els.inspectorTimelineTab.addEventListener('click', () => setInspectorTab('timeline'));
-if (els.inspectorLogsTab) els.inspectorLogsTab.addEventListener('click', () => setInspectorTab('logs'));
+const _inspectorTabEntries = [
+    { name: 'overview', button: els.inspectorOverviewTab },
+    { name: 'timeline', button: els.inspectorTimelineTab },
+    { name: 'logs', button: els.inspectorLogsTab }
+].filter((entry) => Boolean(entry.button));
+
+function _handleInspectorTabKeydown(event) {
+    if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key)) return;
+    const currentIndex = _inspectorTabEntries.findIndex((entry) => entry.button === event.currentTarget);
+    if (currentIndex < 0) return;
+    event.preventDefault();
+    let nextIndex = currentIndex;
+    if (event.key === 'ArrowRight' || event.key === 'ArrowDown') nextIndex = (currentIndex + 1) % _inspectorTabEntries.length;
+    if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') nextIndex = (currentIndex - 1 + _inspectorTabEntries.length) % _inspectorTabEntries.length;
+    if (event.key === 'Home') nextIndex = 0;
+    if (event.key === 'End') nextIndex = _inspectorTabEntries.length - 1;
+    const next = _inspectorTabEntries[nextIndex];
+    next.button.focus();
+    setInspectorTab(next.name);
+}
+
+_inspectorTabEntries.forEach(({ name, button }) => {
+    button.addEventListener('click', () => setInspectorTab(name));
+    button.addEventListener('keydown', _handleInspectorTabKeydown);
+});
 if (els.openRunDetailsBtn) {
     els.openRunDetailsBtn.addEventListener('click', () => {
         const selectedJob = state.jobs.find((item) => item.id === state.selectedJobId);
@@ -11513,7 +11976,7 @@ if (els.copyRunCardFingerprintBtn) {
 if (els.clearLogsBtn) els.clearLogsBtn.addEventListener('click', () => {
     if (els.logPane) els.logPane.textContent = '';
 });
-if (els.runJobBtn) els.runJobBtn.addEventListener('click', submitJob);
+if (els.runJobBtn) els.runJobBtn.addEventListener('click', _handleRunJobAction);
 if (els.refreshHealthBtn) {
     els.refreshHealthBtn.addEventListener('click', () => {
         const jobId = String(els.refreshHealthBtn.dataset.jobId || '').trim();
@@ -11613,16 +12076,57 @@ if (els.themeBtn) els.themeBtn.addEventListener('click', () => {
 // 12. OVERLAYS & PANELS
 // ============================================================================
 
+function _isPortalFocusTargetAvailable(target) {
+    return Boolean(
+        target
+        && document.contains(target)
+        && typeof target.focus === 'function'
+        && !target.hasAttribute?.('disabled')
+        && !target.closest?.('[hidden], [aria-hidden="true"], .hidden')
+        && target.getClientRects?.().length > 0
+    );
+}
+
 function _rememberOverlayTrigger(trigger = document.activeElement) {
+    deferredProfileOpenIntent += 1;
     state.portalUi.lastOverlayTrigger = trigger && typeof trigger.focus === 'function' ? trigger : null;
 }
 
 function _restoreOverlayFocus() {
     const trigger = state.portalUi.lastOverlayTrigger;
-    if (trigger && document.contains(trigger) && typeof trigger.focus === 'function') {
+    if (_isPortalFocusTargetAvailable(trigger)) {
         trigger.focus();
+    } else {
+        _focusConsoleViewHeading(state.currentView);
     }
     state.portalUi.lastOverlayTrigger = null;
+}
+
+function _setPortalBackgroundInert(inert) {
+    const background = [
+        document.querySelector('[data-ui="portal-topbar"]'),
+        document.getElementById('main-content')
+    ].filter(Boolean);
+    background.forEach((element) => {
+        if (inert) {
+            if (!Object.prototype.hasOwnProperty.call(element.dataset, 'portalPreviousAriaHidden')) {
+                element.dataset.portalPreviousAriaHidden = element.hasAttribute('aria-hidden')
+                    ? String(element.getAttribute('aria-hidden'))
+                    : '__none__';
+            }
+            element.setAttribute('aria-hidden', 'true');
+        } else {
+            const previous = String(element.dataset.portalPreviousAriaHidden || '__none__');
+            if (previous === '__none__') element.removeAttribute('aria-hidden');
+            else element.setAttribute('aria-hidden', previous);
+            delete element.dataset.portalPreviousAriaHidden;
+        }
+        try {
+            element.inert = Boolean(inert);
+        } catch {
+            // aria-hidden remains the compatibility fallback for browsers without inert.
+        }
+    });
 }
 
 function _overlayFocusableElements(root) {
@@ -11647,6 +12151,8 @@ function _activeOverlayPanel() {
     if (els.effectiveConfigDrawer && !els.effectiveConfigDrawer.classList.contains('hidden')) {
         return els.effectiveConfigDrawer.querySelector('[role="dialog"]');
     }
+    const profilePanel = _deferredProfileSurfaceApi()?.activePanel?.();
+    if (profilePanel) return profilePanel;
     return null;
 }
 
@@ -11680,6 +12186,24 @@ function _isTypingTarget(target) {
     if (tagName !== 'input') return false;
     const inputType = String(target.getAttribute('type') || 'text').trim().toLowerCase();
     return !['button', 'checkbox', 'color', 'file', 'hidden', 'radio', 'range', 'reset', 'submit'].includes(inputType);
+}
+
+function _isBuildStepFourShortcutReady(target, action) {
+    if (state.currentView !== 'build' || resolveBuildStep(state.portalUi.buildStep) !== 4) return false;
+    if (_isTypingTarget(target) || _activeOverlayPanel()) return false;
+    if (state.portalUi.dispatchPending) return false;
+    if (action === 'dispatch') {
+        return Boolean(
+            els.runJobBtn
+            && !els.runJobBtn.disabled
+            && els.runJobBtn.getAttribute('aria-busy') !== 'true'
+            && els.runJobBtn.dataset.action !== 'open-live-job'
+        );
+    }
+    if (action === 'copy-cli') {
+        return Boolean(els.copyCliBtn && !els.copyCliBtn.disabled && els.copyCliBtn.getAttribute('aria-busy') !== 'true');
+    }
+    return false;
 }
 
 function _artifactViewerContext() {
@@ -11773,6 +12297,7 @@ const toggleModal = (show, trigger = document.activeElement) => {
         els.shortcutsPanel.classList.add('scale-100', 'opacity-100');
         els.shortcutsModal.setAttribute("aria-hidden", "false");
         els.shortcutsModal.dataset.overlayOpen = 'true';
+        _setPortalBackgroundInert(true);
         els.closeShortcutsBtn.focus();
     } else {
         els.shortcutsModal.classList.add('opacity-0');
@@ -11783,6 +12308,7 @@ const toggleModal = (show, trigger = document.activeElement) => {
             els.shortcutsModal.classList.remove('flex');
             els.shortcutsModal.setAttribute("aria-hidden", "true");
             els.shortcutsModal.dataset.overlayOpen = 'false';
+            _setPortalBackgroundInert(false);
             _restoreOverlayFocus();
         }, 200);
     }
@@ -11798,6 +12324,7 @@ const toggleEffectiveConfigDrawer = (show, trigger = document.activeElement) => 
         els.effectiveConfigDrawer.classList.add('flex');
         els.effectiveConfigDrawer.setAttribute('aria-hidden', 'false');
         els.effectiveConfigDrawer.dataset.overlayOpen = 'true';
+        _setPortalBackgroundInert(true);
         if (els.closeEffectiveConfigBtn) els.closeEffectiveConfigBtn.focus();
         void emitPortalEvent('effective_config_opened', {
             surface: 'effective_config',
@@ -11809,6 +12336,7 @@ const toggleEffectiveConfigDrawer = (show, trigger = document.activeElement) => 
     els.effectiveConfigDrawer.classList.remove('flex');
     els.effectiveConfigDrawer.setAttribute('aria-hidden', 'true');
     els.effectiveConfigDrawer.dataset.overlayOpen = 'false';
+    _setPortalBackgroundInert(false);
     _restoreOverlayFocus();
 };
 
@@ -11912,25 +12440,25 @@ document.addEventListener('keydown', (e) => {
         toggleEffectiveConfigDrawer(false);
         return;
     }
+    if (e.key === 'Escape' && _deferredProfileSurfaceApi()?.isOpen?.()) {
+        e.preventDefault();
+        _deferredProfileSurfaceApi().close();
+        return;
+    }
     if (e.key === "Escape" && els.shortcutsModal && !els.shortcutsModal.classList.contains("hidden")) {
         e.preventDefault();
         toggleModal(false);
         return;
     }
-    if (isPlainShortcut && (key === '?' || (key === '/' && e.shiftKey))) {
+    if (isPlainShortcut && !_activeOverlayPanel() && (key === '?' || (key === '/' && e.shiftKey))) {
         if (els.shortcutsModal && els.shortcutsModal.classList.contains('hidden')) {
             e.preventDefault();
             toggleModal(true);
         }
         return;
     }
-    if (isPlainShortcut && Object.prototype.hasOwnProperty.call(WORKSPACE_VIEW_SHORTCUTS, key)) {
+    if (isPlainShortcut && !_activeOverlayPanel() && Object.prototype.hasOwnProperty.call(WORKSPACE_VIEW_SHORTCUTS, key)) {
         const nextView = WORKSPACE_VIEW_SHORTCUTS[key];
-        if (nextView === 'review' && !state.selectedJobId) {
-            e.preventDefault();
-            createToast('Select a run first, then open its review surface.', 'info');
-            return;
-        }
         e.preventDefault();
         navigateConsoleView(nextView);
         return;
@@ -11962,13 +12490,27 @@ document.addEventListener('keydown', (e) => {
             return;
         }
     }
-    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+    if (
+        (e.ctrlKey || e.metaKey)
+        && !e.altKey
+        && !e.shiftKey
+        && e.key === 'Enter'
+        && _isBuildStepFourShortcutReady(e.target, 'dispatch')
+    ) {
         e.preventDefault();
-        submitJob();
+        els.runJobBtn.click();
+        return;
     }
-    if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'c') {
+    if (
+        (e.ctrlKey || e.metaKey)
+        && e.altKey
+        && !e.shiftKey
+        && e.key.toLowerCase() === 'c'
+        && _isBuildStepFourShortcutReady(e.target, 'copy-cli')
+    ) {
         e.preventDefault();
-        if (els.copyCliBtn) els.copyCliBtn.click();
+        els.copyCliBtn.click();
+        return;
     }
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'j') {
         e.preventDefault();
@@ -12066,6 +12608,7 @@ window.addEventListener('focus', () => {
 window.addEventListener('popstate', () => {
     applyConsoleRouteFromLocation(true);
     portalRenderSurfaces.render('jobQueue', state);
+    _focusConsoleViewHeading(state.currentView);
 });
 
 async function init() {
@@ -12084,7 +12627,6 @@ async function init() {
 
     const bootstrapPromise = loadPortalBootstrap();
     seedPresetFallbacks();
-    refreshProfileDropdown();
     applyConsoleRouteFromLocation(true);
     updateUIFromState();
     setupBuildStepper();
@@ -12111,11 +12653,12 @@ async function init() {
     renderJobQueue();
     startHealthPolling();
     await bootstrapPromise;
+    _captureUnprofiledProfileBaseline();
+    transientDraftRestoredForProfile = _restoreTransientPortalDraft();
+    updateUIFromState();
     _primeDeferredReviewSurface('bootstrap');
     _primeDeferredOperateSurface();
     _primeDeferredBuildSurface();
-    _restoreTransientPortalDraft();
-    updateUIFromState();
     _persistTransientPortalDraft();
     portalRenderSurfaces.render('jobQueue', state);
     void checkBackend(true);

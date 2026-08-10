@@ -93,13 +93,16 @@ actionable; use the linked docs and `Makefile` for exhaustive inventories.
   `make test-orchestrator-http-contract`, and
   `make validate-orchestrator-http` when a backend is running.
 - Frontdoor/browser contracts:
-  `make test-frontdoor-contract`, `make validate-frontdoor-browser`,
-  `make validate-portal-browser`, and
+  `make test-frontdoor-contract`, `make test-accessibility-browser`,
+  `make validate-frontdoor-browser`, `make validate-portal-browser`, and
   `make validate-frontdoor-deployment-gate` for shared deployment posture.
   For direct deployments, set `TP_FRONTDOOR_GATE_DEPLOYMENT_TARGET` and
   `TP_FRONTDOOR_GATE_DEPLOYMENT_URL`; the Vercel legacy alias is supported only
   for Vercel checks.
-  Keep selectors and managed-auth observability stable.
+  Keep selectors and managed-auth observability stable. Build profiles are
+  browser-local and actor-scoped: keep unsaved-draft discard explicit; migrate
+  legacy profiles automatically only in standalone `direct_debug`, while
+  managed actors must use the two-step legacy import.
 - Archive and pipeline gates:
   `make test-archive-gate-contract`, `make audit-pipeline-readiness`,
   `make validate-portal-lux-materials-live`, and

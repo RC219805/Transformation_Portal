@@ -2,6 +2,12 @@
  * 3. BASE
  * ============================================================================ */
 
+html,
+body {
+    max-width: 100%;
+    overflow-x: clip;
+}
+
 .custom-scrollbar {
     scrollbar-width: thin;
     scrollbar-color: #94a3b8 transparent;
