@@ -36,7 +36,7 @@ msgpack==1.2.1
     #   cachecontrol
 packageurl-python==0.17.6
     # via cyclonedx-python-lib
-packaging==26.2
+packaging==26.3
     # via
     #   pip-audit
     #   pip-requirements-parser
@@ -46,7 +46,7 @@ pip-audit==2.10.1
     # via -r security.in
 pip-requirements-parser==32.0.1
     # via pip-audit
-platformdirs==4.11.0
+platformdirs==4.11.1
     # via pip-audit
 py-serializable==2.1.0
     # via cyclonedx-python-lib
