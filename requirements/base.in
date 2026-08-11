@@ -19,7 +19,7 @@ tqdm>=4.66,<5              # progress bar utility
 # PYSEC-2026-161, and the 2026 StaticFiles/HTTPEndpoint/form parsing fixes.
 fastapi==0.138.0           # orchestrator API framework (validated against curated Starlette 1.x upgrade)
 starlette==1.3.1           # direct runtime import + curated Starlette 1.x validation target
-uvicorn==0.48.0            # ASGI server runtime pin
+uvicorn==0.52.1            # ASGI server runtime pin
 aiofiles==25.1.0           # async file I/O support for FastAPI file responses
 
 # Schema validation (required for ingest contract)

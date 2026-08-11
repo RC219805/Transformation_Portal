@@ -25,7 +25,7 @@ dependencies = [
     # Exact versions are enforced in compiled lockfiles.
     "fastapi>=0.136.1,<0.139",
     "starlette>=1.3.1,<1.4",  # direct runtime import + patched Starlette 1.x baseline
-    "uvicorn>=0.48.0,<0.49",
+    "uvicorn>=0.48.0,<0.53",
     "aiofiles>=25.1.0,<26",
     "tifffile>=2023.7.18,<2027",
     "imagecodecs>=2023.9.18,<2027",
