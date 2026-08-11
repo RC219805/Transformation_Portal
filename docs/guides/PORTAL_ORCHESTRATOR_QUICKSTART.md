@@ -188,12 +188,23 @@ Build profiles are stored only in the current browser and are scoped to the
 resolved portal actor. Unsaved restored drafts are protected: choosing another
 profile opens an explicit discard confirmation instead of replacing the draft.
 
-Profiles created by older portal versions used one browser-wide storage key.
-In standalone `direct_debug` mode, that legacy store migrates automatically to
-the direct-debug scope when no scoped profiles exist. In managed mode, open
+Current managed profiles use the signed-in Access email and portal username as
+one actor scope, so separate configured usernames remain isolated even when
+they share an Access identity. Older portal versions used either one
+browser-wide storage key or an Access-email-only managed key. In standalone
+`direct_debug` mode, only the browser-wide legacy store migrates automatically
+to the direct-debug scope when no scoped profiles exist. In managed mode, open
 **Manage saved profile** and use **Import Legacy Profiles**; the two-step claim
-keeps a shared legacy store from being assigned silently to the first signed-in
-actor.
+prevents either ambiguous legacy store from being assigned silently. When a
+legacy profile name collides with a current actor profile, the current profile
+wins.
+
+An unsaved managed draft created before the composite actor scope is not
+claimed or deleted automatically. The Portal blocks Build edits and asks the
+current user to **Claim & Recover Draft** or **Discard Draft Permanently**;
+background persistence remains paused until that explicit choice succeeds.
+If browser storage rejects a recovery write, the legacy draft stays preserved
+and the recovery dialog remains open.
 
 ## SSE Authentication Note
 

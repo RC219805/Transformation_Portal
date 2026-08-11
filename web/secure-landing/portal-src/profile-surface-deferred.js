@@ -13,6 +13,7 @@ export function createDeferredProfileSurfaceApi(host) {
         els,
         storageKey,
         ownerKey,
+        legacyStorageKey,
         unprofiledBaselineRecord,
         restoredUnprofiledDraft,
         announcePortalStatus,
@@ -56,6 +57,11 @@ export function createDeferredProfileSurfaceApi(host) {
         return owner ? `${storageKey}:${encodeURIComponent(owner)}` : '';
     }
 
+    function legacyStorageKeys() {
+        const extraKey = normalizeName(typeof legacyStorageKey === 'function' ? legacyStorageKey() : legacyStorageKey);
+        return extraKey && extraKey !== storageKey ? [storageKey, extraKey] : [storageKey];
+    }
+
     function parseProfiles(rawValue) {
         const parsed = JSON.parse(rawValue || '{}');
         if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return Object.create(null);
@@ -72,10 +78,33 @@ export function createDeferredProfileSurfaceApi(host) {
     }
 
     function getLegacyProfiles() {
+        return legacyStorageKeys().reduce((profiles, key) => {
+            try {
+                Object.assign(profiles, parseProfiles(localStorage.getItem(key) || '{}'));
+            } catch {
+                // One corrupt or inaccessible legacy source must not hide another valid source.
+            }
+            return profiles;
+        }, Object.create(null));
+    }
+
+    function removeLegacyProfiles() {
+        let failed = false;
+        for (const key of legacyStorageKeys()) {
+            try {
+                localStorage.removeItem(key);
+            } catch {
+                failed = true;
+            }
+        }
+        if (failed) throw new Error('legacy_profile_cleanup_failed');
+    }
+
+    function cleanupLegacyProfiles() {
         try {
-            return parseProfiles(localStorage.getItem(storageKey) || '{}');
+            removeLegacyProfiles();
         } catch {
-            return Object.create(null);
+            createToast('Legacy profiles were saved, but a shared browser copy could not be removed.', 'error');
         }
     }
 
@@ -91,8 +120,8 @@ export function createDeferredProfileSurfaceApi(host) {
                 && Object.keys(legacyProfiles).length > 0
             ) {
                 localStorage.setItem(key, JSON.stringify(legacyProfiles));
-                localStorage.removeItem(storageKey);
                 profiles = legacyProfiles;
+                cleanupLegacyProfiles();
             }
             return profiles;
         } catch {
@@ -557,7 +586,7 @@ export function createDeferredProfileSurfaceApi(host) {
         if (!requireConfirmation(
             'import-legacy',
             String(legacyNames.length),
-            'Legacy profiles were shared by every portal user in this browser. Confirm to claim them for the current signed-in actor; existing actor-scoped profiles keep precedence.',
+            'Legacy profiles may have been shared by multiple portal accounts in this browser. Confirm to claim them for the current signed-in actor; existing actor-scoped profiles keep precedence.',
             dialog.importLegacyButton,
             'Confirm Claim & Import'
         )) return;
@@ -566,11 +595,7 @@ export function createDeferredProfileSurfaceApi(host) {
         const mergedProfiles = Object.assign(Object.create(null), legacyProfiles, currentProfiles);
         const importedCount = legacyNames.filter((name) => !hasProfile(currentProfiles, name)).length;
         if (!writeProfiles(mergedProfiles)) return;
-        try {
-            localStorage.removeItem(storageKey);
-        } catch {
-            createToast('Legacy profiles were imported, but the shared browser copy could not be removed.', 'error');
-        }
+        cleanupLegacyProfiles();
         refreshDropdown(activeName());
         resetConfirmation();
         setMessage(`${importedCount} legacy profile${importedCount === 1 ? '' : 's'} imported for the current actor.`, 'success');

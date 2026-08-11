@@ -1832,6 +1832,20 @@ Contract notes:
     <!-- 6. OVERLAYS                                 -->
     <!-- ============================================ -->
 
+    <!-- Legacy Draft Recovery -->
+    <div id="legacyDraftRecoveryModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/55 backdrop-blur-sm p-4 dark:bg-black/70" aria-hidden="true" data-ui="legacy-draft-recovery-dialog" data-modal-shell="legacy-draft-recovery">
+        <div id="legacyDraftRecoveryPanel" class="w-full max-w-sm rounded-2xl border border-amber-200 bg-white p-6 shadow-2xl dark:border-amber-900/60 dark:bg-slate-900" role="dialog" aria-modal="true" aria-labelledby="legacyDraftRecoveryTitle" aria-describedby="legacyDraftRecoveryDescription legacyDraftRecoveryStatus" data-modal-dialog>
+            <p class="section-kicker">Draft recovery</p>
+            <h2 id="legacyDraftRecoveryTitle" class="mt-2 text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white">Recover an earlier unsaved draft?</h2>
+            <p id="legacyDraftRecoveryDescription" class="mt-3 text-[13px] leading-6 text-slate-600 dark:text-slate-300">This draft was saved before portal usernames were included in browser ownership. Because multiple usernames can share one Access email, recover it only if it belongs to the current portal account, or discard it permanently.</p>
+            <p id="legacyDraftRecoveryStatus" class="mt-3 h-5 text-[12px] font-medium leading-5 text-red-700 dark:text-red-300" role="alert"></p>
+            <div class="mt-6 flex flex-wrap justify-end gap-3">
+                <button id="discardLegacyDraftBtn" type="button" class="operator-action-btn operator-action-btn-secondary" data-draft-recovery-action="discard">Discard Draft Permanently</button>
+                <button id="claimLegacyDraftBtn" type="button" class="operator-action-btn operator-action-btn-primary" data-draft-recovery-action="claim">Claim &amp; Recover Draft</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Shortcuts Modal -->
     <div id="shortcutsModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 dark:bg-black/60 transition-opacity" aria-hidden="true" data-ui="modal-shell" data-modal-shell="shortcuts">
         <div class="w-full max-w-sm max-h-[92vh] overflow-y-auto custom-scrollbar rounded-xl bg-white shadow-2xl border border-slate-200 dark:bg-slate-900 dark:border-slate-800 transform scale-95 opacity-0 transition-all duration-200" id="shortcutsPanel" role="dialog" aria-modal="true" aria-labelledby="shortcutsTitle" data-modal-dialog>

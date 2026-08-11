@@ -366,13 +366,29 @@ def test_modal_inert_hooks_review_empty_state_and_queue_announcements_are_stable
     modal_dialogs = [attrs for _tag, attrs in parser.elements if "data-modal-dialog" in attrs]
     inert_targets = [attrs for _tag, attrs in parser.elements if "data-modal-inert-target" in attrs]
     assert {attrs["data-modal-shell"] for attrs in modal_shells} == {
+        "legacy-draft-recovery",
         "shortcuts",
         "effective-config",
         "artifact-viewer",
     }
-    assert len(modal_dialogs) == 3
+    assert len(modal_dialogs) == 4
     assert all(attrs.get("role") == "dialog" and attrs.get("aria-modal") == "true" for attrs in modal_dialogs)
     assert len(inert_targets) == 2
+
+    _shell_tag, recovery_shell = parser.by_id["legacyDraftRecoveryModal"]
+    _panel_tag, recovery_panel = parser.by_id["legacyDraftRecoveryPanel"]
+    _status_tag, recovery_status = parser.by_id["legacyDraftRecoveryStatus"]
+    _claim_tag, recovery_claim = parser.by_id["claimLegacyDraftBtn"]
+    _discard_tag, recovery_discard = parser.by_id["discardLegacyDraftBtn"]
+    assert recovery_shell.get("data-ui") == "legacy-draft-recovery-dialog"
+    assert recovery_panel.get("aria-labelledby") == "legacyDraftRecoveryTitle"
+    assert set(str(recovery_panel.get("aria-describedby") or "").split()) == {
+        "legacyDraftRecoveryDescription",
+        "legacyDraftRecoveryStatus",
+    }
+    assert recovery_status.get("role") == "alert"
+    assert recovery_claim.get("data-draft-recovery-action") == "claim"
+    assert recovery_discard.get("data-draft-recovery-action") == "discard"
 
     health_attrs = next(attrs for _tag, attrs in parser.elements if "topbar-status" in str(attrs.get("class") or "").split())
     assert health_attrs.get("role") == "group"
