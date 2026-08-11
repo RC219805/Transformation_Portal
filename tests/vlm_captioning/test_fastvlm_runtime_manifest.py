@@ -242,6 +242,38 @@ def test_fastvlm_import_smoke_imports_modules_and_reports_metal_failures(
     assert "No Metal device available" in errors[0]
 
 
+def test_fastvlm_import_smoke_includes_network_free_datasets_capability_check(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = _load_script_module(
+        "fastvlm_runtime_manifest_datasets_smoke_test",
+        "scripts/validation/fastvlm_runtime_manifest.py",
+    )
+    runtime_root = tmp_path / "fastvlm"
+    manifest = _manifest(tmp_path)
+    _write_fixture_runtime(runtime_root)
+    smoke_sources: list[str] = []
+
+    def fake_run(args, **kwargs):  # noqa: ANN001
+        smoke_sources.append(args[-1])
+        return module.subprocess.CompletedProcess(args, returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(module.subprocess, "run", fake_run)
+
+    assert module.verify_python_imports(manifest, root=runtime_root) == []
+    assert module.FASTVLM_RUNTIME_IMPORTS == ("datasets", "huggingface_hub", "mlx_vlm")
+    assert len(smoke_sources) == 1
+    smoke_source = smoke_sources[0]
+    compile(smoke_source, "<fastvlm-import-smoke>", "exec")
+    assert "Dataset.from_dict" in smoke_source
+    assert ".map(" in smoke_source
+    assert "keep_in_memory=True" in smoke_source
+    assert "load_from_cache_file=False" in smoke_source
+    assert "datasets API smoke:" in smoke_source
+    assert "load_dataset" not in smoke_source
+
+
 def test_fastvlm_import_smoke_reports_missing_python_without_spawning(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
