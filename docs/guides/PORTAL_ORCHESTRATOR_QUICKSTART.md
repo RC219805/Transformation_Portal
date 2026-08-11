@@ -199,6 +199,13 @@ prevents either ambiguous legacy store from being assigned silently. When a
 legacy profile name collides with a current actor profile, the current profile
 wins.
 
+An unsaved managed draft created before the composite actor scope is not
+claimed or deleted automatically. The Portal blocks Build edits and asks the
+current user to **Claim & Recover Draft** or **Discard Draft Permanently**;
+background persistence remains paused until that explicit choice succeeds.
+If browser storage rejects a recovery write, the legacy draft stays preserved
+and the recovery dialog remains open.
+
 ## SSE Authentication Note
 
 There are now two supported browser paths:

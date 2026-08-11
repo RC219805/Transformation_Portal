@@ -106,6 +106,7 @@ let transientDraftPersistTimerId = null;
 let transientDraftPersistIdleId = null;
 let unprofiledProfileBaselineRecord = null;
 let transientDraftRestoredForProfile = false;
+let pendingLegacyTransientDraft = null;
 let deferredProfileOwnerKey = '';
 let deferredProfileOpenIntent = 0;
 let deferredReviewSurfaceApi = null;
@@ -565,6 +566,10 @@ const els = {
     shortcutsModal: _domId('shortcutsModal'),
     shortcutsPanel: _domId('shortcutsPanel'),
     closeShortcutsBtn: _domId('closeShortcutsBtn'),
+    legacyDraftRecoveryModal: _domId('legacyDraftRecoveryModal'),
+    legacyDraftRecoveryStatus: _domId('legacyDraftRecoveryStatus'),
+    claimLegacyDraftBtn: _domId('claimLegacyDraftBtn'),
+    discardLegacyDraftBtn: _domId('discardLegacyDraftBtn'),
     advancedFlagsSummary: _domId('advancedFlagsSummary'),
     governanceDetailsSummary: _domId('governanceDetailsSummary'),
     reconstructionDetailsSummary: _domId('reconstructionDetailsSummary'),
@@ -1238,12 +1243,16 @@ function _managedDraftOwnerKey() {
     return `managed:v2:${JSON.stringify([accessEmail, username])}`;
 }
 
-function _managedLegacyProfileStorageKey() {
-    if (!_isBootstrapReady() || !_isManagedAuthMode()) return '';
+function _managedLegacyDraftOwnerKey() {
+    if (!_isBootstrapReady() || !_isManagedAuthMode() || !_managedDraftOwnerKey()) return '';
     const actor = state.auth && state.auth.actor && typeof state.auth.actor === 'object' ? state.auth.actor : null;
     const accessEmail = String(actor?.accessEmail || '').trim().toLowerCase();
-    const username = String(actor?.username || '').trim().toLowerCase();
-    return accessEmail && username ? `${STORAGE_KEY}:${encodeURIComponent(`managed:${accessEmail}`)}` : '';
+    return accessEmail ? `managed:${accessEmail}` : '';
+}
+
+function _managedLegacyProfileStorageKey() {
+    const ownerKey = _managedLegacyDraftOwnerKey();
+    return ownerKey ? `${STORAGE_KEY}:${encodeURIComponent(ownerKey)}` : '';
 }
 
 function _transientDraftOwnerKey() {
@@ -1255,8 +1264,10 @@ function _transientDraftOwnerKey() {
 function _clearTransientPortalDraft() {
     try {
         sessionStorage.removeItem(TRANSIENT_DRAFT_STORAGE_KEY);
+        return true;
     } catch {
         // Ignore storage access failures during teardown or quota exhaustion.
+        return false;
     }
 }
 
@@ -1311,6 +1322,7 @@ function _readTransientPortalDraft() {
 }
 
 function _persistTransientPortalDraft() {
+    if (pendingLegacyTransientDraft) return false;
     const ownerKey = _transientDraftOwnerKey();
     if (!ownerKey) return false;
     const snapshot = {
@@ -1370,18 +1382,80 @@ function _scheduleTransientPortalDraftPersist(options) {
     return true;
 }
 
+function _applyTransientPortalDraft(snapshot) {
+    state.pipeline = snapshot.pipeline;
+    state.config = _copyTransientDraftConfig(snapshot.config);
+    state.portalUi.buildStep = resolveBuildStep(snapshot.buildStep);
+}
+
+function _toggleLegacyDraftRecoveryDialog(show) {
+    if (!els.legacyDraftRecoveryModal) return;
+    if (show) {
+        if (els.shortcutsModal) {
+            els.shortcutsModal.classList.add('hidden');
+            els.shortcutsModal.setAttribute('aria-hidden', 'true');
+        }
+        _rememberOverlayTrigger(null);
+    }
+    els.legacyDraftRecoveryModal.classList.toggle('hidden', !show);
+    els.legacyDraftRecoveryModal.classList.toggle('flex', show);
+    els.legacyDraftRecoveryModal.setAttribute('aria-hidden', show ? 'false' : 'true');
+    _setPortalBackgroundInert(show);
+    if (show && els.claimLegacyDraftBtn) els.claimLegacyDraftBtn.focus();
+    if (!show) _restoreOverlayFocus();
+}
+
+function _resolveLegacyTransientDraft(shouldClaim) {
+    const pending = pendingLegacyTransientDraft;
+    const ownerKey = _transientDraftOwnerKey();
+    const legacyOwnerKey = _managedLegacyDraftOwnerKey();
+    const snapshot = _readTransientPortalDraft();
+    if (!pending || ownerKey !== pending || !legacyOwnerKey || !snapshot || snapshot.ownerKey !== legacyOwnerKey) {
+        els.legacyDraftRecoveryStatus.textContent = 'Draft unavailable. Reload.';
+        return false;
+    }
+
+    if (shouldClaim) {
+        snapshot.ownerKey = ownerKey;
+        try {
+            sessionStorage.setItem(TRANSIENT_DRAFT_STORAGE_KEY, JSON.stringify(snapshot));
+        } catch {
+            els.legacyDraftRecoveryStatus.textContent = 'Action failed. Draft kept.';
+            return false;
+        }
+        _applyTransientPortalDraft(snapshot);
+        transientDraftRestoredForProfile = true;
+    } else if (!_clearTransientPortalDraft()) {
+        els.legacyDraftRecoveryStatus.textContent = 'Action failed. Draft kept.';
+        return false;
+    }
+
+    pendingLegacyTransientDraft = null;
+    if (!shouldClaim) _persistTransientPortalDraft();
+    _toggleLegacyDraftRecoveryDialog(false);
+    updateUIFromState();
+    _primeDeferredBuildSurface();
+    _queueBootstrapOnlineFollowup();
+    if (!_flushBootstrapOnlineFollowup(true)) void checkBackend(true);
+    return true;
+}
+
 function _restoreTransientPortalDraft() {
     const snapshot = _readTransientPortalDraft();
     if (!snapshot) return false;
     const ownerKey = _transientDraftOwnerKey();
-    if (!ownerKey || snapshot.ownerKey !== ownerKey) {
-        _clearTransientPortalDraft();
+    if (snapshot.ownerKey === ownerKey) {
+        _applyTransientPortalDraft(snapshot);
+        return true;
+    }
+    const legacyOwnerKey = _managedLegacyDraftOwnerKey();
+    if (legacyOwnerKey && snapshot.ownerKey === legacyOwnerKey) {
+        pendingLegacyTransientDraft = ownerKey;
+        _toggleLegacyDraftRecoveryDialog(true);
         return false;
     }
-    state.pipeline = snapshot.pipeline;
-    state.config = _copyTransientDraftConfig(snapshot.config);
-    state.portalUi.buildStep = resolveBuildStep(snapshot.buildStep);
-    return true;
+    _clearTransientPortalDraft();
+    return false;
 }
 
 function _jobFreshnessLabel(job) {
@@ -5088,7 +5162,7 @@ function _queueBootstrapOnlineFollowup() {
 
 function _flushBootstrapOnlineFollowup(force = false) {
     if (!state.backendOk) return false;
-    if (!_isBootstrapReady()) {
+    if (!_isBootstrapReady() || pendingLegacyTransientDraft) {
         _queueBootstrapOnlineFollowup();
         return false;
     }
@@ -5495,6 +5569,13 @@ async function loadPortalBootstrap(options = null) {
         }
         const previousHealthEndpointPath = String(state.bootstrap.lastHealthEndpointPath || '');
         _applyPortalBootstrap(payload, { status: 'ready', traceparent: bootstrapTraceparent });
+        if (!unprofiledProfileBaselineRecord) {
+            _captureUnprofiledProfileBaseline();
+            transientDraftRestoredForProfile = _restoreTransientPortalDraft();
+            updateUIFromState();
+            _primeDeferredBuildSurface();
+            _persistTransientPortalDraft();
+        }
         _recordPortalRumMilestone('bootstrap_ready', _portalRumNow(), {
             traceparent: bootstrapTraceparent
         });
@@ -6640,7 +6721,7 @@ function _loadDeferredBuildSurface() {
 }
 
 function _shouldLoadDeferredBuildSurface() {
-    if (!_isBootstrapReady()) return false;
+    if (!_isBootstrapReady() || pendingLegacyTransientDraft) return false;
     return state.currentView === 'build';
 }
 
@@ -6690,7 +6771,7 @@ function _loadDeferredProfileSurface() {
 }
 
 function _primeDeferredProfileSurface() {
-    if (!_isBootstrapReady() || state.currentView !== 'build') return;
+    if (!_isBootstrapReady() || pendingLegacyTransientDraft || state.currentView !== 'build') return;
     const ownerKey = _transientDraftOwnerKey();
     if (!ownerKey) return;
     void _loadDeferredProfileSurface().then((api) => {
@@ -12149,6 +12230,9 @@ function _overlayFocusableElements(root) {
 }
 
 function _activeOverlayPanel() {
+    if (els.legacyDraftRecoveryModal && !els.legacyDraftRecoveryModal.classList.contains('hidden')) {
+        return els.legacyDraftRecoveryModal.querySelector('[role="dialog"]');
+    }
     if (els.artifactViewerModal && !els.artifactViewerModal.classList.contains('hidden')) {
         return els.artifactViewerPanel;
     }
@@ -12315,8 +12399,10 @@ const toggleModal = (show, trigger = document.activeElement) => {
             els.shortcutsModal.classList.remove('flex');
             els.shortcutsModal.setAttribute("aria-hidden", "true");
             els.shortcutsModal.dataset.overlayOpen = 'false';
-            _setPortalBackgroundInert(false);
-            _restoreOverlayFocus();
+            if (!pendingLegacyTransientDraft) {
+                _setPortalBackgroundInert(false);
+                _restoreOverlayFocus();
+            }
         }, 200);
     }
 };
@@ -12347,6 +12433,12 @@ const toggleEffectiveConfigDrawer = (show, trigger = document.activeElement) => 
     _restoreOverlayFocus();
 };
 
+if (els.claimLegacyDraftBtn) {
+    els.claimLegacyDraftBtn.addEventListener('click', () => _resolveLegacyTransientDraft(true));
+}
+if (els.discardLegacyDraftBtn) {
+    els.discardLegacyDraftBtn.addEventListener('click', () => _resolveLegacyTransientDraft(false));
+}
 if (els.logoutBtn) els.logoutBtn.addEventListener('click', _handlePortalLogout);
 if (els.shortcutsBtn) els.shortcutsBtn.addEventListener('click', (event) => toggleModal(true, event.currentTarget));
 if (els.closeShortcutsBtn) els.closeShortcutsBtn.addEventListener('click', () => toggleModal(false));
@@ -12437,6 +12529,10 @@ document.addEventListener('keydown', (e) => {
     }
     const key = String(e.key || '');
     const isPlainShortcut = !e.ctrlKey && !e.metaKey && !e.altKey && !_isTypingTarget(e.target);
+    if (e.key === 'Escape' && els.legacyDraftRecoveryModal && !els.legacyDraftRecoveryModal.classList.contains('hidden')) {
+        e.preventDefault();
+        return;
+    }
     if (e.key === "Escape" && els.artifactViewerModal && !els.artifactViewerModal.classList.contains("hidden")) {
         e.preventDefault();
         _closeArtifactViewer();
@@ -12660,8 +12756,6 @@ async function init() {
     renderJobQueue();
     startHealthPolling();
     await bootstrapPromise;
-    _captureUnprofiledProfileBaseline();
-    transientDraftRestoredForProfile = _restoreTransientPortalDraft();
     updateUIFromState();
     _primeDeferredReviewSurface('bootstrap');
     _primeDeferredOperateSurface();
@@ -12669,7 +12763,7 @@ async function init() {
     _persistTransientPortalDraft();
     portalRenderSurfaces.render('jobQueue', state);
     void checkBackend(true);
-    void fetchConfigMetadata(state.pipeline, true);
+    if (!pendingLegacyTransientDraft) void fetchConfigMetadata(state.pipeline, true);
 }
 
 document.addEventListener('DOMContentLoaded', () => {

@@ -27,11 +27,14 @@ const EMPTY_PREVIEW = Object.freeze({
   inactive_fields: [],
 });
 
-function managedProfileStorageKey(actor) {
+function managedDraftOwnerKey(actor) {
   const accessEmail = String(actor?.accessEmail || "").trim().toLowerCase();
   const username = String(actor?.username || "").trim().toLowerCase();
-  const owner = `managed:v2:${JSON.stringify([accessEmail, username])}`;
-  return `${PROFILE_STORAGE_KEY}:${encodeURIComponent(owner)}`;
+  return `managed:v2:${JSON.stringify([accessEmail, username])}`;
+}
+
+function managedProfileStorageKey(actor) {
+  return `${PROFILE_STORAGE_KEY}:${encodeURIComponent(managedDraftOwnerKey(actor))}`;
 }
 
 function legacyEmailProfileStorageKey(actor) {
@@ -61,14 +64,19 @@ async function installHydratedPortalRoutes(page, options = {}) {
     ...EMPTY_PREVIEW,
     ...(options.preview && typeof options.preview === "object" ? options.preview : {}),
   };
+  const initialTransientDraft = options.initialTransientDraft && typeof options.initialTransientDraft === "object"
+    ? options.initialTransientDraft
+    : null;
   const runtime = {
     actor: options.actor || DEFAULT_MANAGED_ACTOR,
+    bootstrapRequests: 0,
     cancelRequests: 0,
     eventStreamRequests: 0,
     jobSubmissions: 0,
+    presetRequests: 0,
   };
 
-  await page.addInitScript(() => {
+  await page.addInitScript((transientDraft) => {
     const initializationKey = "__tp_ux_storage_initialized";
     if (sessionStorage.getItem(initializationKey) === "true") return;
     window.sessionStorage.clear();
@@ -79,8 +87,11 @@ async function installHydratedPortalRoutes(page, options = {}) {
       }
     }
     window.localStorage.removeItem("tp_portal_transient_draft");
+    if (transientDraft) {
+      sessionStorage.setItem("tp_portal_transient_draft", JSON.stringify(transientDraft));
+    }
     sessionStorage.setItem(initializationKey, "true");
-  });
+  }, initialTransientDraft);
 
   if (options.keepEventStreamOpen) {
     await page.addInitScript(() => {
@@ -140,6 +151,17 @@ async function installHydratedPortalRoutes(page, options = {}) {
   });
 
   await page.route("**/portal/bootstrap", async (route) => {
+    runtime.bootstrapRequests += 1;
+    if (runtime.bootstrapRequests <= Number(options.bootstrapFailureCount || 0)) {
+      await fulfillJson(route, {
+        reason: "upstream_unavailable",
+        message: "Injected retryable bootstrap failure.",
+      }, 503);
+      return;
+    }
+    if (options.bootstrapRecoveryDelayMs) {
+      await new Promise((resolve) => setTimeout(resolve, options.bootstrapRecoveryDelayMs));
+    }
     await fulfillJson(route, {
       authMode: "managed",
       csrfToken: "hydrated-ux-csrf",
@@ -309,6 +331,10 @@ async function installHydratedPortalRoutes(page, options = {}) {
     }
 
     if (pathname === "/v1/presets") {
+      runtime.presetRequests += 1;
+      if (options.presetDelayMs) {
+        await new Promise((resolve) => setTimeout(resolve, options.presetDelayMs));
+      }
       await fulfillJson(route, {
         success: true,
         data: {
@@ -1007,6 +1033,153 @@ test.describe("hydrated portal UX runtime", { tag: "@portal-browser" }, () => {
     await expect(profileSelect).toHaveValue("");
     await expect(page.locator("#qualityTier")).toHaveValue("standard");
     await expect(manageButton).toHaveText("Save Profile");
+  });
+
+  test("pre-v2 managed drafts remain preserved until explicit claim or discard", async ({ page }) => {
+    const runtime = await installHydratedPortalRoutes(page);
+    await gotoHydratedPortal(page, "/portal?view=build");
+
+    const qualityTier = page.locator("#qualityTier");
+    const defaultTier = await qualityTier.inputValue();
+    const tierValues = await qualityTier.locator("option").evaluateAll((options) =>
+      options.map((option) => option.value).filter(Boolean),
+    );
+    const editedTier = tierValues.find((value) => value !== defaultTier);
+    expect(editedTier).toBeTruthy();
+    await qualityTier.selectOption(editedTier);
+    await expect
+      .poll(() => page.evaluate(() => sessionStorage.getItem("tp_portal_transient_draft")))
+      .toContain(editedTier);
+
+    const legacyDraft = await page.evaluate((legacyOwnerKey) => {
+      const snapshot = JSON.parse(sessionStorage.getItem("tp_portal_transient_draft") || "null");
+      if (!snapshot) throw new Error("Expected a persisted transient draft");
+      return { ...snapshot, ownerKey: legacyOwnerKey };
+    }, `managed:${runtime.actor.accessEmail.toLowerCase()}`);
+    const legacyRaw = JSON.stringify(legacyDraft);
+    const expectedOwnerKey = managedDraftOwnerKey(runtime.actor);
+    const recoveryPage = await page.context().newPage();
+    const discardPage = await page.context().newPage();
+    const unrelatedPage = await page.context().newPage();
+
+    try {
+      const recoveryRuntime = await installHydratedPortalRoutes(recoveryPage, {
+        initialTransientDraft: legacyDraft,
+        bootstrapFailureCount: 1,
+        bootstrapRecoveryDelayMs: 250,
+        presetDelayMs: 250,
+      });
+      const recoveryResponse = await recoveryPage.goto("/portal?view=build");
+      expect(recoveryResponse?.status()).toBe(200);
+      await expect(recoveryPage.locator("body")).toHaveAttribute("data-bootstrap-status", "degraded");
+      await expect
+        .poll(() => recoveryPage.evaluate(() => sessionStorage.getItem("tp_portal_transient_draft")))
+        .toBe(legacyRaw);
+      await recoveryPage.locator("#shortcutsBtn").click();
+      await expect(recoveryPage.locator("#shortcutsModal")).toBeVisible();
+      await expect(recoveryPage.locator("body")).toHaveAttribute("data-bootstrap-status", "ready");
+      const recoveryModal = recoveryPage.locator("#legacyDraftRecoveryModal");
+      await expect(recoveryModal).toBeVisible();
+      await expect(recoveryPage.locator("#shortcutsModal")).toBeHidden();
+      await expect(recoveryPage.locator("#claimLegacyDraftBtn")).toBeFocused();
+      await expect(recoveryPage.locator("#qualityTier")).toHaveValue(defaultTier);
+      await expect
+        .poll(() => recoveryPage.evaluate(() => sessionStorage.getItem("tp_portal_transient_draft")))
+        .toBe(legacyRaw);
+      await expect
+        .poll(() =>
+          recoveryPage.evaluate(() => {
+            const topbar = document.querySelector('[data-ui="portal-topbar"]');
+            const main = document.getElementById("main-content");
+            return [topbar, main].map((element) => ({
+              inert: element.inert,
+              ariaHidden: element.getAttribute("aria-hidden"),
+            }));
+          }),
+        )
+        .toEqual([
+          { inert: true, ariaHidden: "true" },
+          { inert: true, ariaHidden: "true" },
+        ]);
+      expect(recoveryRuntime.presetRequests).toBe(0);
+
+      await recoveryPage.keyboard.press("Tab");
+      await expect(recoveryPage.locator("#discardLegacyDraftBtn")).toBeFocused();
+      await recoveryPage.keyboard.press("Shift+Tab");
+      await expect(recoveryPage.locator("#claimLegacyDraftBtn")).toBeFocused();
+      await recoveryPage.keyboard.press("Escape");
+      await recoveryModal.click({ position: { x: 5, y: 5 } });
+      await recoveryPage.evaluate(() => window.dispatchEvent(new Event("pagehide")));
+      await expect(recoveryModal).toBeVisible();
+      await expect
+        .poll(() => recoveryPage.evaluate(() => sessionStorage.getItem("tp_portal_transient_draft")))
+        .toBe(legacyRaw);
+      await expectNoWcagViolations(recoveryPage, "Portal legacy draft recovery");
+
+      await recoveryPage.evaluate(() => {
+        const nativeSetItem = Storage.prototype.setItem;
+        let failNextDraftWrite = true;
+        Object.defineProperty(Storage.prototype, "setItem", {
+          configurable: true,
+          value(key, value) {
+            if (failNextDraftWrite && key === "tp_portal_transient_draft") {
+              failNextDraftWrite = false;
+              throw new DOMException("Injected quota failure", "QuotaExceededError");
+            }
+            return nativeSetItem.call(this, key, value);
+          },
+        });
+      });
+      await recoveryPage.locator("#claimLegacyDraftBtn").click();
+      await expect(recoveryPage.locator("#legacyDraftRecoveryStatus")).toContainText("Draft kept");
+      await expect(recoveryModal).toBeVisible();
+      await expect
+        .poll(() => recoveryPage.evaluate(() => sessionStorage.getItem("tp_portal_transient_draft")))
+        .toBe(legacyRaw);
+
+      await recoveryPage.locator("#claimLegacyDraftBtn").click();
+      await expect(recoveryModal).toBeHidden();
+      await expect(recoveryPage.locator("#qualityTier")).toHaveValue(editedTier);
+      await expect
+        .poll(() =>
+          recoveryPage.evaluate(() => JSON.parse(sessionStorage.getItem("tp_portal_transient_draft") || "{}").ownerKey),
+        )
+        .toBe(expectedOwnerKey);
+      await expect.poll(() => recoveryRuntime.presetRequests).toBeGreaterThan(0);
+
+      await installHydratedPortalRoutes(discardPage, { initialTransientDraft: legacyDraft });
+      await gotoHydratedPortal(discardPage, "/portal?view=build");
+      await expect(discardPage.locator("#legacyDraftRecoveryModal")).toBeVisible();
+      await discardPage.locator("#discardLegacyDraftBtn").click();
+      await expect(discardPage.locator("#legacyDraftRecoveryModal")).toBeHidden();
+      await expect(discardPage.locator("#qualityTier")).toHaveValue(defaultTier);
+      await expect
+        .poll(() =>
+          discardPage.evaluate(() => JSON.parse(sessionStorage.getItem("tp_portal_transient_draft") || "{}").ownerKey),
+        )
+        .toBe(expectedOwnerKey);
+
+      const unrelatedActor = {
+        ...runtime.actor,
+        accessEmail: "unrelated-operator@example.com",
+      };
+      await installHydratedPortalRoutes(unrelatedPage, {
+        actor: unrelatedActor,
+        initialTransientDraft: legacyDraft,
+      });
+      await gotoHydratedPortal(unrelatedPage, "/portal?view=build");
+      await expect(unrelatedPage.locator("#legacyDraftRecoveryModal")).toBeHidden();
+      await expect(unrelatedPage.locator("#qualityTier")).toHaveValue(defaultTier);
+      await expect
+        .poll(() =>
+          unrelatedPage.evaluate(() => JSON.parse(sessionStorage.getItem("tp_portal_transient_draft") || "{}").ownerKey),
+        )
+        .toBe(managedDraftOwnerKey(unrelatedActor));
+    } finally {
+      await recoveryPage.close();
+      await discardPage.close();
+      await unrelatedPage.close();
+    }
   });
 
   test("managed actors claim legacy browser profiles explicitly", async ({ page }) => {

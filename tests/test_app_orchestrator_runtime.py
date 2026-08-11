@@ -1162,7 +1162,7 @@ def test_portal_bootstrap_loader_uses_abortable_timeout_and_state_contract() -> 
     )
     assert "timeoutError.name = 'AppTimeoutError';" in content
     assert "timeoutError.reason = timeoutReason;" in content
-    assert "if (!_isBootstrapReady()) {" in followup_body
+    assert "if (!_isBootstrapReady() || pendingLegacyTransientDraft) {" in followup_body
     assert "_queueBootstrapOnlineFollowup();" in followup_body
     assert "void fetchPresetsForPipeline(state.pipeline, true);" in followup_body
     assert "void recoverJobs();" in followup_body
@@ -1452,12 +1452,15 @@ def test_portal_transient_draft_restore_is_scoped_to_the_current_owner_and_exclu
     route_body = _extract_js_function_body(content, "_managedReturnToPath")
     owner_body = _extract_js_function_body(content, "_transientDraftOwnerKey")
     managed_owner_body = _extract_js_function_body(content, "_managedDraftOwnerKey")
+    legacy_owner_body = _extract_js_function_body(content, "_managedLegacyDraftOwnerKey")
     legacy_profile_key_body = _extract_js_function_body(content, "_managedLegacyProfileStorageKey")
     clear_body = _extract_js_function_body(content, "_clearTransientPortalDraft")
     read_body = _extract_js_function_body(content, "_readTransientPortalDraft")
     persist_body = _extract_js_function_body(content, "_persistTransientPortalDraft")
     schedule_body = _extract_js_function_body(content, "_scheduleTransientPortalDraftPersist")
     flush_body = _extract_js_function_body(content, "_flushPendingTransientPortalDraftPersist")
+    apply_body = _extract_js_function_body(content, "_applyTransientPortalDraft")
+    resolve_legacy_body = _extract_js_function_body(content, "_resolveLegacyTransientDraft")
     restore_body = _extract_js_function_body(content, "_restoreTransientPortalDraft")
 
     assert "const url = new URL(window.location.href);" in route_body
@@ -1469,13 +1472,16 @@ def test_portal_transient_draft_restore_is_scoped_to_the_current_owner_and_exclu
     assert "if (!accessEmail || !username) return '';" in managed_owner_body
     assert "return `managed:v2:${JSON.stringify([accessEmail, username])}`;" in managed_owner_body
     assert "actor?.role" not in managed_owner_body
-    assert "if (!_isBootstrapReady() || !_isManagedAuthMode()) return '';" in legacy_profile_key_body
-    assert "encodeURIComponent(`managed:${accessEmail}`)" in legacy_profile_key_body
+    assert "if (!_isBootstrapReady() || !_isManagedAuthMode() || !_managedDraftOwnerKey()) return '';" in legacy_owner_body
+    assert "return accessEmail ? `managed:${accessEmail}` : '';" in legacy_owner_body
+    assert "const ownerKey = _managedLegacyDraftOwnerKey();" in legacy_profile_key_body
+    assert "encodeURIComponent(ownerKey)" in legacy_profile_key_body
     assert "sessionStorage.removeItem(TRANSIENT_DRAFT_STORAGE_KEY);" in clear_body
     assert "sessionStorage.getItem(TRANSIENT_DRAFT_STORAGE_KEY)" in read_body
     assert "schema !== TRANSIENT_DRAFT_SCHEMA" in read_body
     assert "config: _copyTransientDraftConfig(config)" in read_body
     assert "sessionStorage.setItem(TRANSIENT_DRAFT_STORAGE_KEY, JSON.stringify(snapshot));" in persist_body
+    assert "if (pendingLegacyTransientDraft) return false;" in persist_body
     assert "schema: TRANSIENT_DRAFT_SCHEMA" in persist_body
     assert "ownerKey" in persist_body
     assert "savedAt: Date.now()" in persist_body
@@ -1488,33 +1494,48 @@ def test_portal_transient_draft_restore_is_scoped_to_the_current_owner_and_exclu
     assert "API_KEY_STORAGE_KEY" not in persist_body
     assert "csrfToken" not in persist_body
     assert "state.jobs" not in persist_body
-    assert "snapshot.ownerKey !== ownerKey" in restore_body
+    assert "if (snapshot.ownerKey === ownerKey)" in restore_body
+    assert "snapshot.ownerKey === legacyOwnerKey" in restore_body
+    assert "pendingLegacyTransientDraft = ownerKey;" in restore_body
+    assert "_toggleLegacyDraftRecoveryDialog(true);" in restore_body
     assert "_clearTransientPortalDraft();" in restore_body
-    assert "state.pipeline = snapshot.pipeline;" in restore_body
-    assert "state.config = _copyTransientDraftConfig(snapshot.config);" in restore_body
-    assert "state.portalUi.buildStep = resolveBuildStep(snapshot.buildStep);" in restore_body
+    assert "snapshot.ownerKey = ownerKey;" in resolve_legacy_body
+    assert "sessionStorage.setItem(TRANSIENT_DRAFT_STORAGE_KEY, JSON.stringify(snapshot));" in resolve_legacy_body
+    assert "_applyTransientPortalDraft(snapshot);" in resolve_legacy_body
+    assert "pendingLegacyTransientDraft = null;" in resolve_legacy_body
+    assert resolve_legacy_body.index("sessionStorage.setItem") < resolve_legacy_body.index("_applyTransientPortalDraft")
+    assert "state.pipeline = snapshot.pipeline;" in apply_body
+    assert "state.config = _copyTransientDraftConfig(snapshot.config);" in apply_body
+    assert "state.portalUi.buildStep = resolveBuildStep(snapshot.buildStep);" in apply_body
 
 
 def test_portal_transient_draft_restores_before_preview_and_readiness_hydration() -> None:
     content = _portal_bundle_content()
-    body = _extract_js_function_body(content, "init")
+    init_body = _extract_js_function_body(content, "init")
+    bootstrap_body = _extract_js_function_body(content, "loadPortalBootstrap")
+    followup_body = _extract_js_function_body(content, "_flushBootstrapOnlineFollowup")
     bind_body = _extract_js_function_body(content, "bindInputs")
     set_build_step_body = _extract_js_function_body(content, "setBuildStep")
 
-    assert "_restoreTransientPortalDraft();" in body
-    assert "_persistTransientPortalDraft();" in body
+    assert "transientDraftRestoredForProfile = _restoreTransientPortalDraft();" in bootstrap_body
+    assert "_persistTransientPortalDraft();" in init_body
+    assert "if (!_isBootstrapReady() || pendingLegacyTransientDraft)" in followup_body
+    assert "_queueBootstrapOnlineFollowup();" in followup_body
     assert "_scheduleTransientPortalDraftPersist();" in bind_body
     assert "_scheduleTransientPortalDraftPersist({ immediate: true });" in bind_body
     assert "_persistTransientPortalDraft();" in set_build_step_body
     assert "window.addEventListener('pagehide', _flushPendingTransientPortalDraftPersist);" in content
     assert "window.addEventListener('beforeunload', _flushPendingTransientPortalDraftPersist);" in content
 
-    restore_index = body.index("_restoreTransientPortalDraft();")
-    update_index = body.index("updateUIFromState();", restore_index)
-    check_index = body.index("void checkBackend(true);")
-    metadata_index = body.index("void fetchConfigMetadata(state.pipeline, true);")
+    apply_bootstrap_index = bootstrap_body.index("_applyPortalBootstrap(payload")
+    restore_index = bootstrap_body.index("_restoreTransientPortalDraft();")
+    update_index = bootstrap_body.index("updateUIFromState();", restore_index)
+    followup_index = bootstrap_body.index("_flushBootstrapOnlineFollowup();", update_index)
+    check_index = init_body.index("void checkBackend(true);")
+    metadata_index = init_body.index("void fetchConfigMetadata(state.pipeline, true);")
 
-    assert restore_index < update_index < check_index < metadata_index
+    assert apply_bootstrap_index < restore_index < update_index < followup_index
+    assert check_index < metadata_index
 
 
 def test_portal_managed_unavailable_mode_blocks_dispatch_and_api_key_recovery_prompts() -> None:
@@ -2671,16 +2692,18 @@ def test_portal_profile_manager_is_deferred_validated_and_requires_destructive_c
     loader_body = _extract_js_function_body(content, "_loadDeferredProfileSurface")
     host_body = _extract_js_function_body(content, "_createDeferredProfileSurfaceHost")
     primer_body = _extract_js_function_body(content, "_primeDeferredProfileSurface")
-    init_body = _extract_js_function_body(content, "init")
+    bootstrap_body = _extract_js_function_body(content, "loadPortalBootstrap")
 
     assert 'data-profile-surface-js-url="' in content
     assert "return loadDeferredSurface('profile', _createDeferredProfileSurfaceHost);" in loader_body
     assert "legacyStorageKey: _managedLegacyProfileStorageKey" in host_body
-    assert "if (!_isBootstrapReady() || state.currentView !== 'build') return;" in primer_body
+    assert "if (!_isBootstrapReady() || pendingLegacyTransientDraft || state.currentView !== 'build') return;" in primer_body
     assert "api.refreshDropdown" in primer_body
-    assert "transientDraftRestoredForProfile = _restoreTransientPortalDraft();" in init_body
-    assert init_body.index("_captureUnprofiledProfileBaseline();") < init_body.index("_restoreTransientPortalDraft();")
-    assert init_body.index("_restoreTransientPortalDraft();") < init_body.index("_primeDeferredBuildSurface();")
+    assert "transientDraftRestoredForProfile = _restoreTransientPortalDraft();" in bootstrap_body
+    assert bootstrap_body.index("_captureUnprofiledProfileBaseline();") < bootstrap_body.index(
+        "_restoreTransientPortalDraft();"
+    )
+    assert bootstrap_body.index("_restoreTransientPortalDraft();") < bootstrap_body.index("_primeDeferredBuildSurface();")
     assert "Profile names must be ${PROFILE_NAME_MAX_LENGTH} characters or fewer." in name_body
     assert "Profile names cannot contain control characters." in name_body
     assert "refs.pendingAction === action && refs.pendingName === name" in confirmation_body

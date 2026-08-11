@@ -878,6 +878,7 @@
     "dark:border-amber-900/60": {
       "owner": "static",
       "sources": [
+        "portal.html",
         "public/portal-assets/portal.js",
         "web/secure-landing/portal-src/portal.template.js"
       ],
@@ -3297,6 +3298,7 @@
     "text-red-700": {
       "owner": "static",
       "sources": [
+        "portal.html",
         "public/portal-assets/portal.js",
         "web/secure-landing/portal-src/operate-surface-deferred.js",
         "web/secure-landing/portal-src/portal.template.js"

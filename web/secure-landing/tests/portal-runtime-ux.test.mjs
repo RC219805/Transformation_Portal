@@ -134,7 +134,10 @@ test("deferred profile manager validates names and confirms destructive and lega
   assert.match(profile, /hasProtectedChanges/);
   assert.match(profile, /missingActiveProfile/);
   assert.match(profile, /if \(!hasProfile\(profiles, name\)\)/);
-  assert.match(portal, /_isBootstrapReady\(\) \|\| state\.currentView !== 'build'/);
+  assert.match(
+    portal,
+    /_isBootstrapReady\(\) \|\| pendingLegacyTransientDraft \|\| state\.currentView !== 'build'/
+  );
   assert.match(portal, /transientDraftRestoredForProfile = _restoreTransientPortalDraft\(\)/);
   assert.match(profile, /dataset\.profileState/);
   assert.match(profile, /dataset\.draftState/);
