@@ -30,6 +30,18 @@
 let _Redis = null;
 const DEFAULT_REDIS_CONNECT_TIMEOUT_MS = 1000;
 
+export function buildRedisClientOptions(connectTimeoutMs) {
+  return {
+    lazyConnect: false,
+    connectTimeout: connectTimeoutMs,
+    maxRetriesPerRequest: 1,
+    // ioredis 6 defaults to RESP3. Preserve the established RESP2 wire
+    // contract until the managed-provider lane deliberately validates and
+    // adopts RESP3 semantics.
+    protocol: 2
+  };
+}
+
 async function loadRedisClient() {
   if (_Redis !== null) return _Redis;
   try {
@@ -76,11 +88,10 @@ export class RedisSessionStore {
     if (!this._clientPromise) {
       this._clientPromise = (async () => {
         const Redis = await loadRedisClient();
-        this._client = new Redis(this._redisUrl, {
-          lazyConnect: false,
-          connectTimeout: this._connectTimeoutMs,
-          maxRetriesPerRequest: 1
-        });
+        this._client = new Redis(
+          this._redisUrl,
+          buildRedisClientOptions(this._connectTimeoutMs)
+        );
         return this._client;
       })();
     }

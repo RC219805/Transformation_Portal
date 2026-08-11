@@ -19,7 +19,10 @@ import path from "node:path";
 import { mkdtempSync, rmSync } from "node:fs";
 
 import { SqliteSessionStore } from "../lib/session-store/sqlite-store.js";
-import { RedisSessionStore } from "../lib/session-store/redis-store.js";
+import {
+  buildRedisClientOptions,
+  RedisSessionStore
+} from "../lib/session-store/redis-store.js";
 import {
   getSessionStore,
   resetSessionStoreSingleton
@@ -148,6 +151,15 @@ test("RedisSessionStore exposes the redis backend identifier", () => {
     absoluteTimeoutMs: 3_600_000
   });
   assert.equal(store.backend, "redis");
+});
+
+test("RedisSessionStore preserves the RESP2 client contract under ioredis 6", () => {
+  assert.deepEqual(buildRedisClientOptions(2_500), {
+    lazyConnect: false,
+    connectTimeout: 2_500,
+    maxRetriesPerRequest: 1,
+    protocol: 2
+  });
 });
 
 // ---------------------------------------------------------------------------
