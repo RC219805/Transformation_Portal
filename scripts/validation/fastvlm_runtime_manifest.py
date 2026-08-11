@@ -20,7 +20,7 @@ TRUSTED_RUNTIME_SOURCES = {
     "ml_fastvlm": "https://github.com/apple/ml-fastvlm.git",
     "mlx_vlm": "https://github.com/Blaizzy/mlx-vlm.git",
 }
-FASTVLM_RUNTIME_IMPORTS = ("huggingface_hub", "mlx_vlm")
+FASTVLM_RUNTIME_IMPORTS = ("datasets", "huggingface_hub", "mlx_vlm")
 HEX_DIGITS = set("0123456789abcdef")
 
 
@@ -315,15 +315,31 @@ def verify_python_imports(manifest: Mapping[str, Any], *, root: Path | None = No
     if python_errors:
         return python_errors
     import_lines = (
-        "import importlib, sys; "
-        f"modules = {FASTVLM_RUNTIME_IMPORTS!r}; "
-        "missing = []; "
-        "\nfor name in modules:\n"
+        "import importlib, sys\n"
+        f"modules = {FASTVLM_RUNTIME_IMPORTS!r}\n"
+        "missing = []\n"
+        "loaded = {}\n"
+        "for name in modules:\n"
         "    try:\n"
-        "        importlib.import_module(name)\n"
+        "        loaded[name] = importlib.import_module(name)\n"
         "    except Exception as exc:\n"
         "        missing.append(f'{name}: {type(exc).__name__}: {exc}')\n"
-        "print('\\n'.join(missing), file=sys.stderr); "
+        "datasets_module = loaded.get('datasets')\n"
+        "if datasets_module is not None:\n"
+        "    try:\n"
+        "        dataset = datasets_module.Dataset.from_dict({'value': [1, 2]})\n"
+        "        mapped = dataset.map(\n"
+        "            lambda row: {'doubled': row['value'] * 2},\n"
+        "            keep_in_memory=True,\n"
+        "            load_from_cache_file=False,\n"
+        "        )\n"
+        "        if dataset.column_names != ['value'] or mapped.column_names != ['value', 'doubled']:\n"
+        "            raise AssertionError('unexpected datasets columns')\n"
+        "        if mapped[1]['doubled'] != 4:\n"
+        "            raise AssertionError('unexpected datasets map result')\n"
+        "    except Exception as exc:\n"
+        "        missing.append(f'datasets API smoke: {type(exc).__name__}: {exc}')\n"
+        "print('\\n'.join(missing), file=sys.stderr)\n"
         "sys.exit(1 if missing else 0)"
     )
     try:
