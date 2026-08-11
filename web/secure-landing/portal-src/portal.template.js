@@ -1233,11 +1233,17 @@ function _unprofiledProfileBaseline() {
 function _managedDraftOwnerKey() {
     const actor = state.auth && state.auth.actor && typeof state.auth.actor === 'object' ? state.auth.actor : null;
     const accessEmail = String(actor?.accessEmail || '').trim().toLowerCase();
-    if (accessEmail) return `managed:${accessEmail}`;
     const username = String(actor?.username || '').trim().toLowerCase();
-    const role = String(actor?.role || '').trim().toLowerCase();
-    if (!username && !role) return '';
-    return `managed:${[username, role].filter(Boolean).join(':')}`;
+    if (!accessEmail || !username) return '';
+    return `managed:v2:${JSON.stringify([accessEmail, username])}`;
+}
+
+function _managedLegacyProfileStorageKey() {
+    if (!_isBootstrapReady() || !_isManagedAuthMode()) return '';
+    const actor = state.auth && state.auth.actor && typeof state.auth.actor === 'object' ? state.auth.actor : null;
+    const accessEmail = String(actor?.accessEmail || '').trim().toLowerCase();
+    const username = String(actor?.username || '').trim().toLowerCase();
+    return accessEmail && username ? `${STORAGE_KEY}:${encodeURIComponent(`managed:${accessEmail}`)}` : '';
 }
 
 function _transientDraftOwnerKey() {
@@ -6660,6 +6666,7 @@ function _createDeferredProfileSurfaceHost() {
         els,
         storageKey: STORAGE_KEY,
         ownerKey: _transientDraftOwnerKey,
+        legacyStorageKey: _managedLegacyProfileStorageKey,
         unprofiledBaselineRecord: _unprofiledProfileBaseline(),
         restoredUnprofiledDraft: transientDraftRestoredForProfile,
         announcePortalStatus: _announcePortalStatus,

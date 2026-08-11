@@ -1452,6 +1452,7 @@ def test_portal_transient_draft_restore_is_scoped_to_the_current_owner_and_exclu
     route_body = _extract_js_function_body(content, "_managedReturnToPath")
     owner_body = _extract_js_function_body(content, "_transientDraftOwnerKey")
     managed_owner_body = _extract_js_function_body(content, "_managedDraftOwnerKey")
+    legacy_profile_key_body = _extract_js_function_body(content, "_managedLegacyProfileStorageKey")
     clear_body = _extract_js_function_body(content, "_clearTransientPortalDraft")
     read_body = _extract_js_function_body(content, "_readTransientPortalDraft")
     persist_body = _extract_js_function_body(content, "_persistTransientPortalDraft")
@@ -1463,7 +1464,13 @@ def test_portal_transient_draft_restore_is_scoped_to_the_current_owner_and_exclu
     assert "return `${url.pathname}${url.search}`;" in route_body
     assert "if (_isManagedAuthMode()) return _managedDraftOwnerKey();" in owner_body
     assert "return 'direct_debug';" in owner_body
-    assert "managed:" in managed_owner_body
+    assert "const accessEmail = String(actor?.accessEmail || '').trim().toLowerCase();" in managed_owner_body
+    assert "const username = String(actor?.username || '').trim().toLowerCase();" in managed_owner_body
+    assert "if (!accessEmail || !username) return '';" in managed_owner_body
+    assert "return `managed:v2:${JSON.stringify([accessEmail, username])}`;" in managed_owner_body
+    assert "actor?.role" not in managed_owner_body
+    assert "if (!_isBootstrapReady() || !_isManagedAuthMode()) return '';" in legacy_profile_key_body
+    assert "encodeURIComponent(`managed:${accessEmail}`)" in legacy_profile_key_body
     assert "sessionStorage.removeItem(TRANSIENT_DRAFT_STORAGE_KEY);" in clear_body
     assert "sessionStorage.getItem(TRANSIENT_DRAFT_STORAGE_KEY)" in read_body
     assert "schema !== TRANSIENT_DRAFT_SCHEMA" in read_body
@@ -2655,12 +2662,20 @@ def test_portal_profile_manager_is_deferred_validated_and_requires_destructive_c
     profile_content = _portal_profile_source_content()
     name_body = _extract_js_function_body(profile_content, "nameValidationMessage")
     confirmation_body = _extract_js_function_body(profile_content, "requireConfirmation")
+    legacy_keys_body = _extract_js_function_body(profile_content, "legacyStorageKeys")
+    legacy_profiles_body = _extract_js_function_body(profile_content, "getLegacyProfiles")
+    legacy_remove_body = _extract_js_function_body(profile_content, "removeLegacyProfiles")
+    legacy_cleanup_body = _extract_js_function_body(profile_content, "cleanupLegacyProfiles")
+    get_profiles_body = _extract_js_function_body(profile_content, "getProfiles")
+    import_legacy_body = _extract_js_function_body(profile_content, "importLegacyProfiles")
     loader_body = _extract_js_function_body(content, "_loadDeferredProfileSurface")
+    host_body = _extract_js_function_body(content, "_createDeferredProfileSurfaceHost")
     primer_body = _extract_js_function_body(content, "_primeDeferredProfileSurface")
     init_body = _extract_js_function_body(content, "init")
 
     assert 'data-profile-surface-js-url="' in content
     assert "return loadDeferredSurface('profile', _createDeferredProfileSurfaceHost);" in loader_body
+    assert "legacyStorageKey: _managedLegacyProfileStorageKey" in host_body
     assert "if (!_isBootstrapReady() || state.currentView !== 'build') return;" in primer_body
     assert "api.refreshDropdown" in primer_body
     assert "transientDraftRestoredForProfile = _restoreTransientPortalDraft();" in init_body
@@ -2676,6 +2691,21 @@ def test_portal_profile_manager_is_deferred_validated_and_requires_destructive_c
     assert "'import-legacy'" in profile_content
     assert "Confirm Claim & Import" in profile_content
     assert "resolvedOwnerKey() === 'direct_debug'" in profile_content
+    assert "[storageKey, extraKey]" in legacy_keys_body
+    assert "Object.assign(profiles, parseProfiles(localStorage.getItem(key) || '{}'))" in legacy_profiles_body
+    assert "for (const key of legacyStorageKeys())" in legacy_remove_body
+    assert "localStorage.removeItem(key);" in legacy_remove_body
+    assert "if (failed) throw new Error('legacy_profile_cleanup_failed');" in legacy_remove_body
+    assert "removeLegacyProfiles();" in legacy_cleanup_body
+    assert "shared browser copy could not be removed" in legacy_cleanup_body
+    direct_debug_write_index = get_profiles_body.index("localStorage.setItem(key, JSON.stringify(legacyProfiles));")
+    direct_debug_profiles_index = get_profiles_body.index("profiles = legacyProfiles;")
+    direct_debug_cleanup_index = get_profiles_body.index("cleanupLegacyProfiles();")
+    assert direct_debug_write_index < direct_debug_profiles_index < direct_debug_cleanup_index
+    assert "Object.assign(Object.create(null), legacyProfiles, currentProfiles)" in import_legacy_body
+    assert import_legacy_body.index("if (!writeProfiles(mergedProfiles)) return;") < import_legacy_body.index(
+        "cleanupLegacyProfiles();"
+    )
     assert "hasProtectedChanges" in profile_content
     assert "data-profile-state" not in profile_content  # state is set through dataset, not duplicated markup
     assert "dataset.profileState" in profile_content
