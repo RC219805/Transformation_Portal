@@ -44,7 +44,7 @@ The following are the enforced controls that constrain Dependabot PR acceptance:
 | Control | Enforcement Location | Implication |
 |---------|---------------------|-------------|
 | Python `>=3.11` | `pyproject.toml` | Dependencies must support Python 3.11+ |
-| Web stack exact pins | `requirements/base.in` | FastAPI/Starlette/uvicorn are intentionally pinned for API/UI parity |
+| Web stack exact pins | `requirements/base.in` | FastAPI/Starlette/uvicorn/websockets are intentionally pinned for API/UI parity |
 | Action SHA pinning | `enforcement.yml` → `action-pins` job | Third-party actions must be SHA-pinned; official `actions/*@v...` tags are currently allowed, and enforcement is strictest in critical workflows |
 | Banned dependencies | `enforcement.yml` → `banned-dependencies` job | Blocked packages cannot be introduced |
 | Dependency constraints | `build.yml` → `dependency-constraints` job; `ci-quality-firewall.yml` → `validate-dependency-constraints` job | ADR-032 constraint validation |
@@ -70,7 +70,7 @@ The following are the enforced controls that constrain Dependabot PR acceptance:
 |------------|----------|----------|--------------|
 | **Low** | Patch bump, non-pinned dependency | General patches outside web stack | Merge after CI green |
 | **Medium** | Minor bump, non-pinned dependency | Feature updates to utilities | Review changelog, test coverage |
-| **High** | Any change to exact-pinned dependencies | `starlette`, `fastapi`, `uvicorn` | **HOLD** - requires curated PR |
+| **High** | Any change to exact-pinned dependencies | `starlette`, `fastapi`, `uvicorn`, `websockets` | **HOLD** - requires curated PR |
 | **Critical** | Major version bump to exact-pinned dependencies | `starlette` 0.x → 1.0 | **DO NOT MERGE** as routine bump |
 
 ### Node Dependency Updates
@@ -102,7 +102,8 @@ The following dependencies are **exact-pinned** in `requirements/base.in` for AP
 ```
 fastapi==0.138.0
 starlette==1.3.1
-uvicorn==0.48.0
+uvicorn==0.52.1
+websockets==17.0.1
 aiofiles==25.1.0
 ```
 

@@ -635,7 +635,8 @@ class TestRootGovernanceMetadata:
             "scikit-learn>=1.8.0,<2",
             "fastapi>=0.136.1,<0.139",
             "starlette>=1.3.1,<1.4",
-            "uvicorn>=0.48.0,<0.49",
+            "uvicorn>=0.52.1,<0.53",
+            "websockets>=17.0.1,<18",
             "aiofiles>=25.1.0,<26",
             "SQLAlchemy[asyncio]>=2.0.50,<2.2",
             "asyncpg>=0.29,<1",
@@ -650,6 +651,7 @@ class TestRootGovernanceMetadata:
             "scikit-learn>=1.0,<2",
             "fastapi>=0.121.0,<0.137",
             "starlette>=0.49.1,<1.1",
+            "uvicorn>=0.48.0,<0.49",
             "uvicorn>=0.29.0,<0.49",
             "aiofiles>=23.2.1,<26",
         }

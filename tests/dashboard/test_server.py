@@ -132,6 +132,16 @@ def test_post_event_endpoint(client: TestClient) -> None:
 # --------------------------------------------------------------------------- #
 
 
+def test_uvicorn_auto_selects_the_pinned_websocket_protocol() -> None:
+    config = server.uvicorn.Config(server.create_app(), ws="auto", lifespan="off")
+    config.load()
+
+    protocol = config.ws_protocol_class
+    assert protocol is not None
+    assert protocol.__module__ == "uvicorn.protocols.websockets.websockets_sansio_impl"
+    assert protocol.__name__ == "WebSocketsSansIOProtocol"
+
+
 def test_websocket_ping_pong_and_history(client: TestClient) -> None:
     # Seed one history event; it is replayed on connect.
     server.broadcast_event("eval", {"score": 1})

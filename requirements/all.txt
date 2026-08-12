@@ -393,12 +393,14 @@ urllib3==2.7.0
     #   requests
     #   responses
     #   twine
-uvicorn==0.48.0
+uvicorn==0.52.1
     # via -r base.in
 virtualenv==21.7.3
     # via
     #   pre-commit
     #   tox
+websockets==17.0.1
+    # via -r base.in
 werkzeug==3.1.8
     # via moto
 xmltodict==1.0.4
