@@ -93,16 +93,23 @@ actionable; use the linked docs and `Makefile` for exhaustive inventories.
   `make test-orchestrator-http-contract`, and
   `make validate-orchestrator-http` when a backend is running.
 - Frontdoor/browser contracts:
-  `make test-frontdoor-contract`, `make test-accessibility-browser`,
+  `make test-portal-contract`, `make test-frontdoor-contract`,
+  `make test-accessibility-browser`, `make validate-portal-css-layer-parity`,
   `make validate-frontdoor-browser`, `make validate-portal-browser`, and
   `make validate-frontdoor-deployment-gate` for shared deployment posture.
+  Before Playwright browser gates, install its managed Chromium once with
+  `cd web/secure-landing && npm run test:browser:install`. The CDP smoke/parity
+  validators instead require Google Chrome or a valid
+  `TP_PORTAL_BROWSER_BINARY`.
   For direct deployments, set `TP_FRONTDOOR_GATE_DEPLOYMENT_TARGET` and
   `TP_FRONTDOOR_GATE_DEPLOYMENT_URL`; the Vercel legacy alias is supported only
   for Vercel checks.
   Keep selectors and managed-auth observability stable. Build profiles are
   browser-local and actor-scoped: keep unsaved-draft discard explicit; migrate
   legacy profiles automatically only in standalone `direct_debug`, while
-  managed actors must use the two-step legacy import.
+  managed actors must use the two-step legacy import. For pre-composite managed
+  drafts, keep Build blocked and persistence paused until explicit claim or
+  discard succeeds; failed recovery must preserve the legacy snapshot.
 - Archive and pipeline gates:
   `make test-archive-gate-contract`, `make audit-pipeline-readiness`,
   `make validate-portal-lux-materials-live`, and
@@ -193,8 +200,9 @@ actionable; use the linked docs and `Makefile` for exhaustive inventories.
   `make run-backend-local` or `make run-backend-local-noreload`; both require
   `TP_API_KEY`.
 - Frontdoor only:
-  `make run-frontdoor-local`; it requires backend readiness, auth env, and a
-  free `localhost:3000`.
+  `make seed-frontdoor-user` once for the canonical local managed-frontdoor
+  credential fixture, then `make run-frontdoor-local`; the frontdoor requires
+  backend readiness, auth env, and a free `localhost:3000`.
 - Managed backend services:
   `docker compose up -d postgres`, `docker compose up -d redis`, and
   `docker compose --profile paid-pilot up -d minio minio-create-bucket`.
