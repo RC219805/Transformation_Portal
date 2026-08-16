@@ -470,7 +470,7 @@ pytest -v tests/ -ra -m "ml and not slow" --maxfail=1
 
 Performance is treated as a first-class signal in CI.
 
-- APEX workflows publish performance summaries and dashboard updates on `main`
+- APEX workflows publish performance summaries on PRs and `main`; dashboard updates are limited to result-bearing real scheduled or manual runs on `main`
 - Determinism and contract gates protect reproducibility, not just raw throughput
 - Local baseline capture and comparison are available through the performance ledger tooling
 

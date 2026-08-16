@@ -132,8 +132,11 @@ def auto_detect_device() -> str:
 def check_ml_dependencies(backend_id: str) -> tuple[bool, list[str]]:
     """Check availability of ML dependencies for real pipeline execution.
 
-    Validates dependencies for the selected backend. torch is ALWAYS required
-    for real execution; additional deps (transformers, etc.) are backend-specific.
+    Validates dependencies required in the host process for the selected
+    backend. Backends without a runtime-specific contract require host Torch
+    plus their declared packages. A backend with ``runtime_required_packages``
+    returns the complete host-process requirement set, which may be empty when
+    inference runs in an isolated subprocess.
 
     Args:
         backend_id: Backend identifier (e.g., "da3", "depth_pro", "mock").
@@ -167,8 +170,9 @@ def check_ml_dependencies(backend_id: str) -> tuple[bool, list[str]]:
             f"See: docs/apex/phase3/README.md for backend registration."
         )
 
-    # torch always required + backend-specific packages
+    # Torch is the default host requirement for in-process backends.
     backend_packages: list[str] = []
+    runtime_packages: Optional[list[str]] = None
     if hasattr(backend_cls, "required_packages") and callable(backend_cls.required_packages):
         try:
             backend_packages = list(backend_cls.required_packages())
@@ -186,7 +190,7 @@ def check_ml_dependencies(backend_id: str) -> tuple[bool, list[str]]:
     if hasattr(backend_cls, "runtime_required_packages"):
         try:
             backend_instance = backend_cls()
-            backend_packages = list(backend_instance.runtime_required_packages())
+            runtime_packages = list(backend_instance.runtime_required_packages())
         except FileNotFoundError as e:
             raise ApexConfigError(
                 f"Backend '{backend_id}' has an invalid isolated runtime configuration: {e}\n"
@@ -204,7 +208,7 @@ def check_ml_dependencies(backend_id: str) -> tuple[bool, list[str]]:
                 f"This is a backend implementation bug; please report it."
             ) from e
 
-    required = ["torch"] + backend_packages
+    required = runtime_packages if runtime_packages is not None else ["torch", *backend_packages]
     # Dedupe while preserving order
     required = list(dict.fromkeys(required))
 

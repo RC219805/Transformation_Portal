@@ -222,8 +222,10 @@ class DepthBackend(Protocol):
         Returns module names (not pip package names) that must be importable
         for this backend to function. For example: ["transformers"].
 
-        Note: torch is always required by the APEX runner for real execution;
-        backends should only list additional dependencies beyond torch.
+        The APEX runner treats Torch plus this list as the default host-process
+        requirements. A backend may expose ``runtime_required_packages()`` to
+        provide the complete host requirement set for its configured runtime;
+        an isolated subprocess backend can therefore return an empty list.
 
         Returns:
             List of import module names (e.g., ["transformers"]).
