@@ -34,11 +34,11 @@ attrs==26.1.0
     #   -c all.txt
     #   jsonschema
     #   referencing
-boto3==1.43.67
+boto3==1.43.72
     # via
     #   -c all.txt
     #   -r base.in
-botocore==1.43.67
+botocore==1.43.72
     # via
     #   -c all.txt
     #   boto3
@@ -51,7 +51,7 @@ fastapi==0.138.0
     # via
     #   -c all.txt
     #   -r base.in
-greenlet==3.5.4
+greenlet==3.5.5
     # via
     #   -c all.txt
     #   sqlalchemy
@@ -134,7 +134,7 @@ pydantic-core==2.46.4
     # via
     #   -c all.txt
     #   pydantic
-pygments==2.20.0
+pygments==2.21.0
     # via
     #   -c all.txt
     #   rich
@@ -181,7 +181,7 @@ six==1.17.0
     # via
     #   -c all.txt
     #   python-dateutil
-sqlalchemy[asyncio]==2.0.51
+sqlalchemy[asyncio]==2.0.52
     # via
     #   -c all.txt
     #   -r base.in
@@ -220,7 +220,7 @@ typing-extensions==4.16.0
     #   sqlalchemy
     #   starlette
     #   typing-inspection
-typing-inspection==0.4.2
+typing-inspection==0.4.4
     # via
     #   -c all.txt
     #   fastapi
