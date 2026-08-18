@@ -2,7 +2,7 @@
 
 ## Overview
 
-The APEX Performance workflow (`apex_performance.yml`) provides automated performance regression testing for GitHub PRs. It runs both V1 and V2 workflows, compares results, and posts human-readable comments to PRs.
+The APEX Performance workflow (`apex_performance.yml`) runs both V1 and V2 performance lanes. Pull requests and pushes use deterministic synthetic observations; scheduled runs and manual `mode=real` dispatches execute the selected depth backend against the checked-in image fixtures. PR runs also publish a human-readable comment.
 
 ## Features Delivered
 
@@ -56,24 +56,44 @@ The APEX Performance workflow (`apex_performance.yml`) provides automated perfor
 on:
   pull_request:
     types: [opened, synchronize, reopened]
+  push:
+    branches: [main]
   workflow_dispatch:
+    inputs:
+      mode:
+        options: [synthetic, real]
+  schedule:
+    - cron: "0 0 * * 0"
 ```
 
-- **Automated**: Runs on every PR open/update
-- **Manual**: Can be triggered via GitHub UI for testing
+- **PR and push**: Force synthetic mode for fast, deterministic contract evidence.
+- **Scheduled**: Run the real DA3 backend every Sunday at 00:00 UTC.
+- **Manual**: Select synthetic or real mode plus backend, sample size, and device.
 
 ## Workflow Steps
 
 ### 1. Checkout & Setup
 ```yaml
-- uses: actions/checkout@v4
-- uses: actions/setup-python@v5
+- uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+- uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
   with:
     python-version: "3.11"
     cache: "pip"
 ```
 
-### 2. Run APEX Matrix
+### 2. Prepare the Real Backend
+
+Real DA3 lanes install the governed, commit-pinned subprocess runtime and expose its interpreter to the matrix runner:
+
+```bash
+./scripts/setup/install_da3_runtime.sh --profile baseline
+export TRANSFORMATION_PORTAL_DA3_PYTHON="$PWD/.runtime/Depth-Anything-3/.venv-da3/bin/python"
+export TP_STRICT_MODEL_LOCK=1
+```
+
+The host environment intentionally remains core-only for DA3 because the isolated runtime owns Torch and Transformers. Other real backends continue to install the repository's `ml` extra.
+
+### 3. Run APEX Matrix
 Executes performance benchmarks across V1/V2 workflows:
 ```bash
 python scripts/apex_matrix_runner.py \
@@ -85,7 +105,7 @@ python scripts/apex_matrix_runner.py \
   --ledger-db ./apex_performance.db
 ```
 
-### 3. Generate PR Comment
+### 4. Generate PR Comment
 Creates markdown report from ledger:
 ```bash
 python scripts/apex_pr_comment.py \
@@ -98,7 +118,7 @@ python scripts/apex_pr_comment.py \
 cat comment.md >> "$GITHUB_STEP_SUMMARY"
 ```
 
-### 4. Post PR Comment (Idempotent)
+### 5. Post PR Comment (Idempotent)
 Updates existing APEX comment or creates new one:
 ```bash
 # Find existing APEX comment
@@ -117,14 +137,17 @@ else
 fi
 ```
 
-### 5. Upload Ledger Artifact
-Preserves ledger database for 30 days:
+### 6. Publish Current-Run Evidence
+
+The gate uploads a ledger only when the current matrix succeeded, both expected V1/V2 observations arrived, and ledger rebuild/aggregation completed successfully. Dashboard deployment is limited to real results on `main`, and the scheduled backup downloads that same run's ledger rather than searching for an older successful artifact.
+
+The ledger is retained for 90 days:
 ```yaml
-- uses: actions/upload-artifact@v4
+- uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
   with:
     name: apex-ledger
     path: apex_performance.db
-    retention-days: 30
+    retention-days: 90
 ```
 
 ## Permissions Required
@@ -212,9 +235,9 @@ gh markdown-preview test_comment.md
 ### Pinned Actions (SHA Hashes)
 All actions are pinned to specific commit SHAs for supply-chain security:
 ```yaml
-- uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332  # v4.1.7
-- uses: actions/setup-python@39cd14951b08e74b54015e9e001cdefcf80e669f  # v5.1.1
-- uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874  # v4.4.0
+- uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+- uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+- uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
 ```
 
 ### Token Permissions
@@ -246,6 +269,8 @@ Uses minimal required permissions:
 1. Check that `apex_matrix_runner.py` completed successfully
 2. Verify ledger artifact was uploaded
 3. Check run_id matches between runner and comment generator
+
+The partial report distinguishes an upstream matrix execution failure from a successful matrix whose result artifacts were not transferred. Start with the failed matrix job in the first case and with artifact upload/download in the second.
 
 ## Maintenance
 

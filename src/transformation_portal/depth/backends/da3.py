@@ -517,10 +517,10 @@ class DA3Backend:
         return ["transformers"]
 
     def runtime_required_packages(self) -> list[str]:
-        """Return required import module names for this backend instance."""
+        """Return the complete host-process requirements for this runtime mode."""
         if self._uses_subprocess():
             return []
-        return ["transformers"]
+        return ["torch", "transformers"]
 
     def _prepare_image(
         self,

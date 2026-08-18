@@ -2,13 +2,13 @@
 
 **Purpose**: Canonical reference for all GitHub Actions workflows. Tracks the full inventory and the consolidation roadmap.
 **Owner**: Transformation Portal Architect
-**Last Updated**: 2026-06-22
+**Last Updated**: 2026-08-15
 
 ---
 
 ## Status Snapshot
 
-- **Workflow files**: 31 (`.github/workflows/*.yml`), 7,838 lines total
+- **Workflow files**: 31 (`.github/workflows/*.yml`), 7,918 lines total
 - **Required PR check**: `build.yml` → `CI Gate` (single aggregated check)
 - **Consolidation target**: 31 → ~19 workflows via phased incremental PRs (see [Consolidation Roadmap](#consolidation-roadmap))
 - **Prior matrix doc** (2026-03-25) listed 12 workflows — this revision corrects the omission of 18 that exist on disk.
@@ -36,7 +36,7 @@ Every `.github/workflows/*.yml` file, current as of the timestamp above. The **R
 | 13 | `nightly.yml` | Nightly Deep Checks | schedule (2 AM UTC), manual | ❌ No | 457 | **Keep** — owns stress, benchmarks, memory leak, deep dep audit, full integration. |
 | 14 | `ml-slow-suite.yml` | ML Slow Suite | schedule (3:30 AM UTC), manual | ❌ No | 155 | **Merge → `nightly.yml`** — overlapping concern (long-running ML coverage). Note schedule differs (`nightly.yml` runs `0 2 * * *`, `ml-slow-suite.yml` runs `30 3 * * *`); the merger needs to either preserve both crons (two `cron:` entries with a job-level guard on schedule) or pick one — choosing 3:30 AM UTC keeps the ML cache warm from the 2 AM nightly run. Decide before consolidation. |
 | 15 | `performance-monitor.yml` | Performance Monitor | schedule (3:30 AM UTC), manual | ❌ No | 232 | **Keep** — schedule-only by design (baseline persistence); distinct from nightly benchmarks. |
-| 16 | `apex_performance.yml` | APEX Performance Matrix | PR, push, manual, schedule | ⚠️ Advisory | 442 | **Keep** — APEX-specific matrix runner with synthetic-data PR comments. Standalone domain. |
+| 16 | `apex_performance.yml` | APEX Performance Matrix | PR, push, manual, schedule | ⚠️ Advisory | 498 | **Keep** — APEX-specific matrix runner with synthetic PR/push evidence and real scheduled/manual backend runs. Standalone domain. |
 | 17 | `apex_policy_validation.yml` | APEX Policy Validation | PR, push | ✅ Required | 125 | **Merge → `contract-validations.yml`** (proposed new) |
 | 18 | `evalsuite_contract_validation.yml` | Eval Suite Contract Validation | push, PR, manual | ✅ Required | 95 | **Merge → `contract-validations.yml`** |
 | 19 | `ingest_contract_validation.yml` | Ingest Contract Validation | PR, push, manual | ✅ Required | 219 | **Merge → `contract-validations.yml`** |
