@@ -569,7 +569,7 @@ class TestRootGovernanceMetadata:
         ]
 
         for relative_path in lockfiles:
-            assert "pygments==2.20.0" in (_repo_root / relative_path).read_text()
+            assert "pygments==2.21.0" in (_repo_root / relative_path).read_text()
 
         forbidden_fragments = [
             "--ignore-vuln CVE-2026-4539",
@@ -580,7 +580,7 @@ class TestRootGovernanceMetadata:
         for fragment in forbidden_fragments:
             assert fragment not in scanned_text
 
-        assert "Pygments==2.20.0" in security_policy
+        assert "Pygments==2.21.0" in security_policy
         assert "None active. New exceptions require an explicit expiry condition" in security_policy
 
     def test_security_baseline_versions_match_current_locks(self):
@@ -606,6 +606,8 @@ class TestRootGovernanceMetadata:
         assert "`cryptography`          | >=48.0.1" not in contributing
         assert "`starlette`             | >=1.3.1" in contributing
         assert "Starlette==1.3.1" in security_policy
+        assert "Supported Apple Silicon lane runs on torch `2.13.0` / torchvision `0.28.0`" in security_policy
+        assert "Supported Apple Silicon lane runs on torch `2.8.0` / torchvision `0.23.0`" not in security_policy
         assert "current governed lock baseline is pillow==12.3.0" in requirements_lint
         assert "allows pillow==12.1.1 in lockfiles" not in requirements_lint
 
