@@ -1,8 +1,9 @@
 """Tests for APEX backend-aware dependency validation (Phase 3).
 
-Tests that the check_ml_dependencies() function correctly validates
-dependencies based on backend requirements, always requiring torch
-while making transformers optional for backends that don't need it.
+Tests that the check_ml_dependencies() function correctly validates host
+dependencies based on backend runtime requirements. Legacy/in-process backends
+default to Torch plus backend-specific packages, while isolated backends may
+declare that their host process needs no ML stack.
 """
 
 from __future__ import annotations
@@ -131,8 +132,8 @@ def test_non_hf_backend_does_not_require_transformers(mock_backend_registry):
                 assert missing == []
 
 
-def test_torch_always_required(mock_backend_registry):
-    """Test that torch is always required regardless of backend."""
+def test_torch_required_without_runtime_specific_contract(mock_backend_registry):
+    """Backends without a runtime-specific contract require host Torch."""
     from scripts.apex_matrix_runner import check_ml_dependencies
 
     def find_spec_side_effect(name):
@@ -238,8 +239,8 @@ def test_minimal_backend_requires_only_torch(mock_backend_registry):
                 assert missing == []
 
 
-def test_da3_isolated_runtime_does_not_require_local_transformers(monkeypatch, tmp_path):
-    """DA3 subprocess mode should honor the isolated runtime during preflight checks."""
+def test_da3_isolated_runtime_does_not_require_local_ml_stack(monkeypatch, tmp_path):
+    """DA3 subprocess mode should not require host Torch or Transformers."""
     from scripts.apex_matrix_runner import check_ml_dependencies
     from transformation_portal.depth.backends.da3 import DA3Backend
 
@@ -249,15 +250,11 @@ def test_da3_isolated_runtime_does_not_require_local_transformers(monkeypatch, t
     monkeypatch.setenv("TRANSFORMATION_PORTAL_DA3_PYTHON", str(python_executable))
 
     def find_spec_side_effect(name):
-        if name == "torch":
-            return MagicMock()
-        if name == "transformers":
+        if name in {"torch", "transformers"}:
             return None
         return MagicMock()
 
     def import_module_side_effect(name):
-        if name == "torch":
-            return MagicMock()
         raise ModuleNotFoundError(f"No module named '{name}'")
 
     registry = MagicMock()
@@ -271,3 +268,12 @@ def test_da3_isolated_runtime_does_not_require_local_transformers(monkeypatch, t
 
     assert all_available is True
     assert missing == []
+
+
+def test_da3_in_process_runtime_requires_host_ml_stack(monkeypatch):
+    """DA3 in-process mode requires host Torch and Transformers."""
+    from transformation_portal.depth.backends.da3 import DA3Backend
+
+    monkeypatch.delenv("TRANSFORMATION_PORTAL_DA3_PYTHON", raising=False)
+
+    assert DA3Backend().runtime_required_packages() == ["torch", "transformers"]
