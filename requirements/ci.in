@@ -15,7 +15,7 @@ bandit>=1.7,<2         # static security analyzer
 
 # Packaging and release tools
 build>=1.0,<2          # build wheels/distributions
-twine>=4.0,<7          # upload distributions to PyPI
+twine>=4.0,<8          # upload distributions to PyPI
 tox>=4.5,<5            # test runner for multiple envs (future compatibility)
 
 # Additional CI utilities
