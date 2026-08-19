@@ -9,7 +9,7 @@ pytestmark = [pytest.mark.unit, pytest.mark.security]
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SAFE_DETERMINISM_TOOLCHAIN = 'python -m pip install --upgrade "pip==26.1.2" ' '"setuptools==83.0.0" "wheel==0.46.2"'
 PYPDF_SECURITY_FLOOR = "pypdf>=6.15.0"
-PYPDF_LOCK_PIN = "pypdf==6.15.0"
+PYPDF_LOCK_PIN = "pypdf==6.16.1"
 
 
 @pytest.mark.parametrize(
