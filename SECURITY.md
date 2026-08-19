@@ -119,7 +119,7 @@ Given our image/video processing nature, special attention is required for:
   - **Pillow>=10.3.0** - Fixed CVE-2024-28219 (buffer overflow vulnerability)
   - **cryptography==50.0.0** - Current governed lock; includes the CVE-2026-69247 security fix
   - **black==26.3.1** - Fixed arbitrary file writes from unsanitized cache names
-  - **Pygments==2.20.0** - Fixed CVE-2026-4539; the temporary pip-audit exception is retired
+  - **Pygments==2.21.0** - Fixed CVE-2026-4539; the temporary pip-audit exception is retired
   - **Starlette==1.3.1** - Fixed CVE-2026-48710 / PYSEC-2026-161 plus 2026 StaticFiles, HTTPEndpoint, and form parsing advisories
 
   **January 2026**:
@@ -134,11 +134,11 @@ Given our image/video processing nature, special attention is required for:
   - All torch.load() calls MUST use `weights_only=True` parameter
 
 - **Known Vulnerabilities** (Mitigated):
-  - Supported Apple Silicon lane runs on torch `2.8.0` / torchvision `0.23.0`
+  - Supported Apple Silicon lane runs on torch `2.13.0` / torchvision `0.28.0`
   - Linux and macOS Intel ML lanes are retired unsupported lanes and are absent from installable `requirements/*.in` / `requirements/*.txt` manifests
   - Historical retired-lane details live in `docs/governance/RETIRED_ML_LOCK_LANES_2026-04-30.md` and must not drive supported-lane remediation
   - All model loading uses safe_load() wrapper or explicit weights_only=True
-  - Pygments CVE-2026-4539 is remediated by the governed `pygments==2.20.0` lock baseline; CI must not keep stale scanner exceptions for this CVE
+  - Pygments CVE-2026-4539 is remediated by the governed `pygments==2.21.0` lock baseline; CI must not keep stale scanner exceptions for this CVE
   - Pillow: Critical for image parsing vulnerabilities
   - NumPy: Monitor for numerical computation exploits
 
