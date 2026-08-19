@@ -47,7 +47,7 @@ click==8.4.2
     # via
     #   -c all.txt
     #   uvicorn
-fastapi==0.138.0
+fastapi==0.141.1
     # via
     #   -c all.txt
     #   -r base.in
