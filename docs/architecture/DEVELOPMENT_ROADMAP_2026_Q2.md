@@ -134,7 +134,7 @@ The repository already encodes a **provisional canonical decision**: `ci.yml` ex
 |----------|---------|--------------|-----------------------------|------------------|------------------|------------------|-------------------|
 | `build.yml` | PR, push, dispatch | De facto PR gate | Yes | ✅ Positive selection | ✅ Hard-fail mypy | SHA-pinned | Canonical |
 | `ci.yml` | push | Post-merge validation | No | ✅ Positive selection | Hard-fail mypy (critical modules) | SHA-pinned | Align with canonical or narrow scope |
-| `ci-quality-firewall.yml` | `workflow_run`, dispatch | Post-CI verification | No | ✅ Positive selection | Soft-fail mypy | ✅ SHA-pinned | Align, narrow, or retire |
+| `ci-quality-firewall.yml` | `workflow_run` | Post-CI verification | No | ✅ Positive selection | Soft-fail mypy | ✅ SHA-pinned | Align, narrow, or retire |
 | `quality-gate.yml` | PR, push | Legacy helper workflow | Non-canonical / ambiguous | N/A | N/A | ✅ SHA-pinned | Retire or scope down |
 
 **Scope note:** Workflows outside the quality-control plane (docs, security, nightly, deployment, automation) intentionally differ and are excluded from parity debt.

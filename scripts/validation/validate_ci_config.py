@@ -58,6 +58,18 @@ class CIValidator:
         f"python {COLD_ZONE_TOUCHED_FILE_SCRIPT} {BRANCH_COVERAGE_XML} --compare-ref origin/main"
     )
     REQUIRED_COLD_ZONE_COMPARE_REF_FETCH = "git fetch --no-tags --depth=1 origin main:refs/remotes/origin/main"
+    FIREWALL_WORKFLOW_NAME = "ci-quality-firewall.yml"
+    FIREWALL_TRUSTED_WORKFLOW_RUN_SHA_OUTPUT = 'echo "head_sha=${{ github.event.workflow_run.head_sha }}" >> $GITHUB_OUTPUT'
+    FIREWALL_TRUSTED_CHECKOUT_REF = "${{ needs.preflight.outputs.head_sha }}"
+    FIREWALL_TRUSTED_CONCURRENCY_GROUP = " ".join("""ci-firewall-${{ github.event.workflow_run.head_repository.id }}-${{
+        github.event.workflow_run.event }}-${{ github.event.workflow_run.head_branch }}""".split())
+    FIREWALL_TRUSTED_PREFLIGHT_CONDITION = " ".join(
+        """github.event.workflow_run.head_repository.full_name == github.repository &&
+        (
+          github.event.workflow_run.event == 'push' ||
+          github.event.workflow_run.event == 'workflow_dispatch'
+        )""".split()
+    )
 
     def __init__(self, repo_root: Path, fix_mode: bool = False):
         self.repo_root = repo_root
@@ -349,6 +361,103 @@ class CIValidator:
 
         return valid
 
+    def validate_firewall_checkout_trust_contract(self, workflow_path: Path, config: Dict) -> bool:
+        """Keep post-CI execution within one trusted workflow_run domain."""
+        if workflow_path.name != self.FIREWALL_WORKFLOW_NAME:
+            return True
+
+        triggers = config.get("on", {})
+        if not isinstance(triggers, dict) or set(triggers) != {"workflow_run"}:
+            self.log_error(
+                f"{workflow_path.name}: Must remain workflow_run-only so untrusted checkouts cannot write "
+                "default-branch caches"
+            )
+            return False
+
+        valid = True
+        workflow_run = triggers.get("workflow_run")
+        branches = workflow_run.get("branches", []) if isinstance(workflow_run, dict) else []
+        if set(branches) != {"main", "develop"}:
+            self.log_error(f"{workflow_path.name}:workflow_run: Branch allowlist must remain exactly main and develop")
+            valid = False
+
+        concurrency = config.get("concurrency", {})
+        concurrency_group = concurrency.get("group", "") if isinstance(concurrency, dict) else ""
+        if not isinstance(concurrency_group, str):
+            concurrency_group = ""
+        if " ".join(concurrency_group.split()) != self.FIREWALL_TRUSTED_CONCURRENCY_GROUP:
+            self.log_error(f"{workflow_path.name}:concurrency: Group must isolate upstream repository, event, and branch")
+            valid = False
+
+        jobs = config.get("jobs", {})
+        preflight = jobs.get("preflight") if isinstance(jobs, dict) else None
+        if not isinstance(preflight, dict):
+            self.log_error(f"{workflow_path.name}:preflight: Missing preflight job for checkout trust contract")
+            return False
+
+        preflight_condition = preflight.get("if", "")
+        if not isinstance(preflight_condition, str):
+            preflight_condition = ""
+        if " ".join(preflight_condition.split()) != self.FIREWALL_TRUSTED_PREFLIGHT_CONDITION:
+            self.log_error(f"{workflow_path.name}:preflight: Must admit only same-repository push or manual upstream runs")
+            valid = False
+
+        steps = preflight.get("steps", [])
+        resolve_step = None
+        if isinstance(steps, list):
+            resolve_step = next(
+                (step for step in steps if isinstance(step, dict) and step.get("id") == "resolve-ref"),
+                None,
+            )
+        if resolve_step is None:
+            self.log_error(f"{workflow_path.name}:preflight: Missing resolve-ref step for checkout trust contract")
+            return False
+
+        resolve_script = resolve_step.get("run", "")
+        if not isinstance(resolve_script, str):
+            resolve_script = ""
+        if self.FIREWALL_TRUSTED_WORKFLOW_RUN_SHA_OUTPUT not in resolve_script:
+            self.log_error(f"{workflow_path.name}:preflight: Must resolve head_sha from the trusted workflow_run payload")
+            valid = False
+        if "github.sha" in resolve_script or "github.event.inputs." in resolve_script or "inputs." in resolve_script:
+            self.log_error(f"{workflow_path.name}:preflight: resolve-ref must not mix direct-trigger and workflow_run refs")
+            valid = False
+
+        for job_name, job in jobs.items():
+            if not isinstance(job, dict):
+                continue
+            job_steps = job.get("steps", [])
+            if not isinstance(job_steps, list):
+                continue
+            checkout_steps = [
+                step
+                for step in job_steps
+                if isinstance(step, dict)
+                and isinstance(step.get("uses"), str)
+                and step["uses"].startswith("actions/checkout@")
+            ]
+            if not checkout_steps:
+                continue
+
+            needs = job.get("needs", [])
+            direct_needs = {needs} if isinstance(needs, str) else set(needs) if isinstance(needs, list) else set()
+            if "preflight" not in direct_needs:
+                self.log_error(
+                    f"{workflow_path.name}:{job_name}: Checkout consumers must depend directly on preflight"
+                )
+                valid = False
+
+            for checkout_step in checkout_steps:
+                checkout_with = checkout_step.get("with", {})
+                checkout_ref = checkout_with.get("ref") if isinstance(checkout_with, dict) else None
+                if checkout_ref != self.FIREWALL_TRUSTED_CHECKOUT_REF:
+                    self.log_error(
+                        f"{workflow_path.name}:{job_name}: Checkout must use the trusted preflight head_sha"
+                    )
+                    valid = False
+
+        return valid
+
     def validate_mypy_policy_contract(self, workflow_path: Path, config: Dict) -> bool:
         """Validate mypy workflow whitelists against the current policy doc."""
         if workflow_path.name not in self.MYPY_POLICY_WORKFLOWS:
@@ -589,6 +698,7 @@ class CIValidator:
             self.validate_flake8_config(workflow_path, config),
             self.validate_build_coverage_contract(workflow_path, config),
             self.validate_ci_gate_contract(workflow_path, config),
+            self.validate_firewall_checkout_trust_contract(workflow_path, config),
             self.validate_mypy_policy_contract(workflow_path, config),
         ]
 

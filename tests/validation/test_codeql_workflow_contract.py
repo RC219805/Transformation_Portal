@@ -23,3 +23,11 @@ def test_codeql_init_and_analyze_share_one_immutable_release() -> None:
     assert all(pins.values()), "CodeQL workflow must include both init and analyze actions"
     assert all(len(shas) == 1 for shas in pins.values()), "each CodeQL action must use one immutable SHA"
     assert pins["init"] == pins["analyze"], "CodeQL init and analyze must use the same release SHA"
+
+
+def test_codeql_workflow_keeps_actions_analysis_enabled() -> None:
+    workflow_text = CODEQL_WORKFLOW.read_text(encoding="utf-8")
+
+    assert re.search(
+        r"^\s*- language:\s*actions\s*$", workflow_text, flags=re.MULTILINE
+    ), "CodeQL must keep scanning GitHub Actions so workflow trust-boundary regressions remain visible"
