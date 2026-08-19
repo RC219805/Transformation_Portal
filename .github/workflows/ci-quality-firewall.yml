@@ -5,22 +5,15 @@ on:
     workflows: ["CI (Lint, Tests & Manifest)"]
     branches: [main, develop]
     types: [completed]
-  workflow_dispatch:
-    inputs:
-      ref:
-        description: 'Git ref to test (SHA, branch, or tag)'
-        required: false
-        type: string
-      force:
-        description: 'Force run even if upstream CI failed'
-        required: false
-        type: boolean
-        default: false
 
 # CRITICAL: workflow_run uses github.event.workflow_run.head_sha, NOT github.sha
-# Concurrency key must use head_branch, not ref (which is always 'main')
+# and may expose secrets or write-capable tokens. Keep this workflow_run-only,
+# and admit only same-repository push/manual upstream runs. For a manual run,
+# dispatch build.yml and let its completed run trigger this workflow.
 concurrency:
-  group: ci-firewall-${{ github.event.workflow_run.head_branch || github.ref_name }}
+  group: >-
+    ci-firewall-${{ github.event.workflow_run.head_repository.id }}-${{
+    github.event.workflow_run.event }}-${{ github.event.workflow_run.head_branch }}
   cancel-in-progress: true
 
 permissions:
@@ -34,9 +27,15 @@ env:
   PYTHON_VERSION_ML: "3.11"
 
 jobs:
-  # PREFLIGHT: Resolve exact ref to test and skip if upstream failed
+  # PREFLIGHT: Resolve the trusted commit to test and skip if upstream failed
   preflight:
-    name: Resolve Ref & Skip Logic
+    name: Resolve Trusted Commit & Skip Logic
+    if: >-
+      github.event.workflow_run.head_repository.full_name == github.repository &&
+      (
+        github.event.workflow_run.event == 'push' ||
+        github.event.workflow_run.event == 'workflow_dispatch'
+      )
     runs-on: ubuntu-latest
     outputs:
       should_run: ${{ steps.check.outputs.should_run }}
@@ -46,39 +45,21 @@ jobs:
       - name: Check upstream CI result
         id: check
         run: |
-          # For workflow_run: skip if upstream failed (unless forced)
-          # For workflow_dispatch: always run
-          if [ "${{ github.event_name }}" = "workflow_run" ]; then
-            upstream_result="${{ github.event.workflow_run.conclusion }}"
-            force_run="${{ github.event.inputs.force || 'false' }}"
-
-            if [ "$upstream_result" != "success" ] && [ "$force_run" != "true" ]; then
-              echo "Skipping: upstream CI $upstream_result (use workflow_dispatch with force=true to override)"
-              echo "should_run=false" >> $GITHUB_OUTPUT
-            else
-              echo "Running: upstream CI $upstream_result"
-              echo "should_run=true" >> $GITHUB_OUTPUT
-            fi
+          upstream_result="${{ github.event.workflow_run.conclusion }}"
+          if [ "$upstream_result" != "success" ]; then
+            echo "Skipping: upstream CI $upstream_result"
+            echo "should_run=false" >> $GITHUB_OUTPUT
           else
-            echo "Running: workflow_dispatch"
+            echo "Running: upstream CI $upstream_result"
             echo "should_run=true" >> $GITHUB_OUTPUT
           fi
 
       - name: Resolve exact ref
         id: resolve-ref
         run: |
-          if [ "${{ github.event_name }}" = "workflow_run" ]; then
-            # Use exact SHA from upstream workflow_run
-            echo "head_sha=${{ github.event.workflow_run.head_sha }}" >> $GITHUB_OUTPUT
-            echo "head_branch=${{ github.event.workflow_run.head_branch }}" >> $GITHUB_OUTPUT
-            echo "Testing commit: ${{ github.event.workflow_run.head_sha }} (branch: ${{ github.event.workflow_run.head_branch }})"
-          else
-            # Use user-provided ref or current ref
-            ref="${{ github.event.inputs.ref || github.sha }}"
-            echo "head_sha=$ref" >> $GITHUB_OUTPUT
-            echo "head_branch=${{ github.ref_name }}" >> $GITHUB_OUTPUT
-            echo "Testing commit: $ref (branch: ${{ github.ref_name }})"
-          fi
+          echo "head_sha=${{ github.event.workflow_run.head_sha }}" >> $GITHUB_OUTPUT
+          echo "head_branch=${{ github.event.workflow_run.head_branch }}" >> $GITHUB_OUTPUT
+          echo "Testing commit: ${{ github.event.workflow_run.head_sha }} (branch: ${{ github.event.workflow_run.head_branch }})"
 
   lint:
     name: Lint (Python ${{ matrix.python-version }})
@@ -772,13 +753,18 @@ jobs:
 
   flake-analysis:
     name: Flake Rate Analysis
-    needs: [test-core, test-ml]
-    if: always() && (needs.test-core.result == 'success' || needs.test-ml.result == 'success')
+    needs: [preflight, test-core, test-ml]
+    if: >-
+      always() &&
+      needs.preflight.outputs.should_run == 'true' &&
+      (needs.test-core.result == 'success' || needs.test-ml.result == 'success')
     runs-on: ubuntu-latest
     timeout-minutes: 5
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          ref: ${{ needs.preflight.outputs.head_sha }}
 
       - name: Locate previous flake ledger artifact on main
         id: find-ledger

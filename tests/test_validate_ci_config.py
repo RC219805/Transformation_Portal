@@ -84,6 +84,111 @@ def test_build_workflow_ci_gate_rejects_duplicate_check_publisher(tmp_path: Path
     assert any("Must not call github.rest.checks.create" in error for error in validator.errors)
 
 
+def test_firewall_checkout_trust_contract_passes_repo_config() -> None:
+    validator, config = _load_config(FIREWALL_WORKFLOW_PATH)
+
+    assert validator.validate_firewall_checkout_trust_contract(FIREWALL_WORKFLOW_PATH, config) is True
+    assert validator.errors == []
+
+
+def test_firewall_checkout_trust_contract_rejects_cache_write_trigger(tmp_path: Path) -> None:
+    workflow_path = _mutated_workflow(
+        FIREWALL_WORKFLOW_PATH,
+        tmp_path,
+        "    types: [completed]\n",
+        "    types: [completed]\n  workflow_dispatch:\n",
+    )
+    validator, config = _load_config(workflow_path)
+
+    assert validator.validate_firewall_checkout_trust_contract(workflow_path, config) is False
+    assert any("Must remain workflow_run-only" in error for error in validator.errors)
+
+
+def test_firewall_checkout_trust_contract_rejects_mixed_trigger_ref_resolution(tmp_path: Path) -> None:
+    workflow_path = _mutated_workflow(
+        FIREWALL_WORKFLOW_PATH,
+        tmp_path,
+        '          echo "head_sha=${{ github.event.workflow_run.head_sha }}" >> $GITHUB_OUTPUT\n',
+        '          echo "head_sha=${{ github.sha }}" >> $GITHUB_OUTPUT\n',
+    )
+    validator, config = _load_config(workflow_path)
+
+    assert validator.validate_firewall_checkout_trust_contract(workflow_path, config) is False
+    assert any("Must resolve head_sha from the trusted workflow_run payload" in error for error in validator.errors)
+    assert any("must not mix direct-trigger and workflow_run refs" in error for error in validator.errors)
+
+
+def test_firewall_checkout_trust_contract_requires_exact_same_repo_event_guard(tmp_path: Path) -> None:
+    workflow_path = _mutated_workflow(
+        FIREWALL_WORKFLOW_PATH,
+        tmp_path,
+        "      github.event.workflow_run.head_repository.full_name == github.repository &&\n",
+        "",
+    )
+    validator, config = _load_config(workflow_path)
+
+    assert validator.validate_firewall_checkout_trust_contract(workflow_path, config) is False
+    assert any("Must admit only same-repository push or manual upstream runs" in error for error in validator.errors)
+
+
+def test_firewall_checkout_trust_contract_rejects_branch_allowlist_expansion(tmp_path: Path) -> None:
+    workflow_path = _mutated_workflow(
+        FIREWALL_WORKFLOW_PATH,
+        tmp_path,
+        "    branches: [main, develop]\n",
+        "    branches: [main, develop, feature]\n",
+    )
+    validator, config = _load_config(workflow_path)
+
+    assert validator.validate_firewall_checkout_trust_contract(workflow_path, config) is False
+    assert any("Branch allowlist must remain exactly main and develop" in error for error in validator.errors)
+
+
+def test_firewall_checkout_trust_contract_requires_isolated_concurrency_group(tmp_path: Path) -> None:
+    workflow_path = _mutated_workflow(
+        FIREWALL_WORKFLOW_PATH,
+        tmp_path,
+        """  group: >-
+    ci-firewall-${{ github.event.workflow_run.head_repository.id }}-${{
+    github.event.workflow_run.event }}-${{ github.event.workflow_run.head_branch }}
+""",
+        "  group: ci-firewall-${{ github.event.workflow_run.head_branch }}\n",
+    )
+    validator, config = _load_config(workflow_path)
+
+    assert validator.validate_firewall_checkout_trust_contract(workflow_path, config) is False
+    assert any("Group must isolate upstream repository, event, and branch" in error for error in validator.errors)
+
+
+def test_firewall_checkout_trust_contract_rejects_default_checkout_ref(tmp_path: Path) -> None:
+    workflow_path = _mutated_workflow(
+        FIREWALL_WORKFLOW_PATH,
+        tmp_path,
+        """      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          ref: ${{ needs.preflight.outputs.head_sha }}
+""",
+        "      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1\n",
+    )
+    validator, config = _load_config(workflow_path)
+
+    assert validator.validate_firewall_checkout_trust_contract(workflow_path, config) is False
+    assert any("Checkout must use the trusted preflight head_sha" in error for error in validator.errors)
+
+
+def test_firewall_checkout_trust_contract_requires_direct_preflight_dependency(tmp_path: Path) -> None:
+    workflow_path = _mutated_workflow(
+        FIREWALL_WORKFLOW_PATH,
+        tmp_path,
+        "    needs: [preflight, test-core, test-ml]\n",
+        "    needs: [test-core, test-ml]\n",
+    )
+    validator, config = _load_config(workflow_path)
+
+    assert validator.validate_firewall_checkout_trust_contract(workflow_path, config) is False
+    assert any("Checkout consumers must depend directly on preflight" in error for error in validator.errors)
+
+
 def test_mypy_config_remains_root_linting_config() -> None:
     mypy_config = PROJECT_ROOT / "mypy.ini"
     assert mypy_config.exists()
