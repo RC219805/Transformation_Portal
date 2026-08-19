@@ -85,7 +85,7 @@ docutils==0.23
     # via readme-renderer
 execnet==2.1.2
     # via pytest-xdist
-fastapi==0.138.0
+fastapi==0.141.1
     # via -r base.in
 filelock==3.32.3
     # via

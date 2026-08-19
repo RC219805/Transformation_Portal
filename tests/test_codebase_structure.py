@@ -635,7 +635,7 @@ class TestRootGovernanceMetadata:
         required_dependency_ranges = {
             "Pillow>=10.3.0,<13",
             "scikit-learn>=1.8.0,<2",
-            "fastapi>=0.136.1,<0.139",
+            "fastapi>=0.136.1,<0.142",
             "starlette>=1.3.1,<1.4",
             "uvicorn>=0.52.1,<0.53",
             "websockets>=17.0.1,<18",
@@ -651,6 +651,7 @@ class TestRootGovernanceMetadata:
         stale_dependency_ranges = {
             "Pillow>=10.0.0,<13",
             "scikit-learn>=1.0,<2",
+            "fastapi>=0.136.1,<0.139",
             "fastapi>=0.121.0,<0.137",
             "starlette>=0.49.1,<1.1",
             "uvicorn>=0.48.0,<0.49",
