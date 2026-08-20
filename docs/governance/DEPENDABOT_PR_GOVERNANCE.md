@@ -3,7 +3,7 @@
 **Purpose**: Define triage policy and merge criteria for Dependabot-generated pull requests
 **Owner**: Transformation Portal Architect
 **Created**: 2026-03-26
-**Last Updated**: 2026-08-19
+**Last Updated**: 2026-08-20
 
 ---
 
@@ -291,9 +291,9 @@ Dependabot ML alert waves must be triaged by advisory reachability and lane supp
 4. Keep managed checkpoint and model-load trust boundaries tight while rotating versions.
 5. Record dismissals and supported-lane remediation evidence in a dedicated triage artifact.
 
-### Current triage artifact
+### Most recent detailed advisory mapping
 
-See [DEPENDABOT_ML_ALERT_TRIAGE_2026-06-10.md](DEPENDABOT_ML_ALERT_TRIAGE_2026-06-10.md) for the June 10, 2026 PyTorch advisory mapping, dismissal evidence, and supported-lane rotation.
+See [DEPENDABOT_ML_ALERT_TRIAGE_2026-06-10.md](DEPENDABOT_ML_ALERT_TRIAGE_2026-06-10.md) for the most recent detailed advisory mapping: the June 10, 2026 PyTorch dismissal evidence and supported-lane rotation. Current supported-runtime baselines remain governed by the target-owned manifests and locks.
 The April 16, 2026 record remains available at
 [DEPENDABOT_ML_ALERT_TRIAGE_2026-04-16.md](DEPENDABOT_ML_ALERT_TRIAGE_2026-04-16.md).
 

@@ -3,6 +3,8 @@ from __future__ import annotations
 import copy
 import importlib.util
 import json
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -79,6 +81,58 @@ def test_worker_dependency_parity_applies_numeric_caret_semantics(
 
 
 @pytest.mark.parametrize(
+    ("version", "constraint"),
+    (
+        ("1.2.2", "^1.2.3"),
+        ("0.2.2", "^0.2.3"),
+        ("0.0.2", "^0.0.3"),
+    ),
+)
+def test_worker_dependency_parity_rejects_versions_below_caret_lower_bound(
+    version: str,
+    constraint: str,
+) -> None:
+    assert parity._version_satisfies_caret(version, constraint) is False
+
+
+@pytest.mark.parametrize(
+    "constraint",
+    (
+        "^",
+        "^1",
+        "^1.2",
+        "^1.2.3.4",
+        "^01.2.3",
+        "^1.02.3",
+        "^1.2.03",
+        "^1.2.3-beta.1",
+        "^1.2.3+metadata",
+        "^^1.2.3",
+    ),
+)
+def test_worker_dependency_parity_rejects_malformed_caret_constraints(
+    constraint: str,
+) -> None:
+    assert parity._version_satisfies_caret("1.2.3", constraint) is False
+
+
+@pytest.mark.parametrize(
+    "constraint",
+    (
+        "1.2.3",
+        "~1.2.3",
+        ">=1.2.3",
+        "*",
+        None,
+    ),
+)
+def test_worker_dependency_parity_rejects_non_caret_constraints(
+    constraint: object,
+) -> None:
+    assert parity._version_satisfies_caret("1.2.3", constraint) is False
+
+
+@pytest.mark.parametrize(
     "wrangler_spec",
     (
         "^4.123.0",
@@ -109,6 +163,76 @@ def test_root_worker_dependency_parity_requires_stable_numeric_wrangler_pins(
         "root manifest must exact-pin Wrangler to a stable numeric release",
         "Worker manifest must exact-pin Wrangler to a stable numeric release",
     ]
+
+
+@pytest.mark.parametrize("dependency", ("@cloudflare/workers-types", "typescript"))
+@pytest.mark.parametrize(
+    "worker_spec",
+    (
+        "^1.2.3",
+        "1.2.3-beta.1",
+        "1.2.3+metadata",
+        "1.2.3.4",
+        "01.2.3",
+        "1.02.3",
+        "1.2.03",
+        "npm:package@1.2.3",
+    ),
+)
+def test_root_worker_dependency_parity_rejects_malformed_worker_only_pins(
+    dependency: str,
+    worker_spec: str,
+) -> None:
+    surfaces = copy.deepcopy(_dependency_surfaces())
+    surfaces["worker_package"]["devDependencies"][dependency] = worker_spec
+    surfaces["worker_lock"]["packages"][""]["devDependencies"][dependency] = worker_spec
+    surfaces["worker_lock"]["packages"][f"node_modules/{dependency}"]["version"] = worker_spec
+
+    errors = parity.validate_worker_dependency_parity(
+        surfaces["root_package"],
+        surfaces["root_lock"],
+        surfaces["worker_package"],
+        surfaces["worker_lock"],
+    )
+
+    expected_error = f"Worker manifest must exact-pin {dependency} to a stable numeric release"
+    assert expected_error in errors
+    assert f"Worker lockfile manifest entry must match its {dependency} manifest pin" not in errors
+    assert f"Worker lockfile must resolve its exact {dependency} manifest pin" not in errors
+
+
+@pytest.mark.parametrize(
+    ("root_package_contents", "expected_detail"),
+    (
+        (None, "package.json"),
+        ("{not valid JSON", None),
+        ("[]", "must contain a JSON mapping"),
+    ),
+)
+def test_worker_dependency_parity_cli_fails_closed_on_file_loading_errors(
+    tmp_path: Path,
+    root_package_contents: str | None,
+    expected_detail: str | None,
+) -> None:
+    tool_path = tmp_path / "scripts" / "validation" / PARITY_TOOL_PATH.name
+    tool_path.parent.mkdir(parents=True)
+    tool_path.write_bytes(PARITY_TOOL_PATH.read_bytes())
+    if root_package_contents is not None:
+        (tmp_path / "package.json").write_text(root_package_contents, encoding="utf-8")
+
+    completed = subprocess.run(
+        [sys.executable, str(tool_path)],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert completed.returncode == 1
+    assert completed.stdout == ""
+    assert completed.stderr.startswith("ERROR: could not inspect Worker dependency surfaces:")
+    assert "Traceback" not in completed.stderr
+    if expected_detail is not None:
+        assert expected_detail in completed.stderr
 
 
 def test_root_worker_dependency_parity_reports_lock_field_differences_in_stable_order() -> None:

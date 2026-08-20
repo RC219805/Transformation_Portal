@@ -20,6 +20,7 @@ import json
 import os
 import shutil
 import signal
+import stat
 import subprocess
 import sys
 import tempfile
@@ -487,13 +488,72 @@ def _run_preparation_command(command: tuple[str, ...], destination_dir: Path, st
         raise LockPublicationError(f"generic lock preparation command failed with exit status {return_code}")
 
 
+def _seed_existing_locks(
+    destination_dir: Path,
+    staging_dir: Path,
+    names: tuple[str, ...],
+) -> None:
+    """Seed regular existing locks so non-upgrade compilation preserves pins."""
+    for name in names:
+        source = destination_dir / name
+        try:
+            source_stat = source.lstat()
+        except FileNotFoundError:
+            continue
+        except OSError as exc:
+            raise LockPublicationError(f"could not inspect destination lockfile {source}: {exc}") from exc
+
+        if stat.S_ISLNK(source_stat.st_mode):
+            raise LockPublicationError(f"destination lockfile is a symlink: {source}")
+        if not stat.S_ISREG(source_stat.st_mode):
+            raise LockPublicationError(f"destination lockfile is not a regular file: {source}")
+
+        flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0)
+        try:
+            descriptor = os.open(source, flags)
+        except OSError as exc:
+            raise LockPublicationError(f"could not safely open destination lockfile {source}: {exc}") from exc
+
+        descriptor_open = True
+        try:
+            opened_stat = os.fstat(descriptor)
+            if not stat.S_ISREG(opened_stat.st_mode):
+                raise LockPublicationError(f"destination lockfile is not a regular file: {source}")
+            if (opened_stat.st_dev, opened_stat.st_ino) != (source_stat.st_dev, source_stat.st_ino):
+                raise LockPublicationError(f"destination lockfile changed while being seeded: {source}")
+
+            with os.fdopen(descriptor, "rb") as source_handle:
+                descriptor_open = False
+                with (staging_dir / name).open("xb") as destination_handle:
+                    shutil.copyfileobj(source_handle, destination_handle)
+
+                final_stat = os.fstat(source_handle.fileno())
+                if (final_stat.st_size, final_stat.st_mtime_ns) != (
+                    opened_stat.st_size,
+                    opened_stat.st_mtime_ns,
+                ):
+                    raise LockPublicationError(f"destination lockfile changed while being seeded: {source}")
+        except OSError as exc:
+            raise LockPublicationError(f"could not seed destination lockfile {source}: {exc}") from exc
+        finally:
+            if descriptor_open:
+                os.close(descriptor)
+
+
 def prepare_and_publish_generic_locks(
     destination_dir: Path,
     prepare_command: Sequence[str],
     *,
     lock_files: Sequence[str] = GENERIC_LOCK_FILES,
+    seed_existing: bool = False,
 ) -> None:
-    """Run preparation and publication under one destination writer lock."""
+    """Run preparation and publication under one destination writer lock.
+
+    When ``seed_existing`` is true, copy existing locks into the private
+    preparation directory before invoking the command. This preserves the
+    conservative default behavior of pip-compile without changing explicit
+    upgrade lanes, which intentionally start from an empty directory.
+    """
     command = tuple(prepare_command)
     if not command:
         raise LockPublicationError("generic lock preparation command must not be empty")
@@ -503,6 +563,8 @@ def prepare_and_publish_generic_locks(
         _recover_stale_transactions(destination_dir, normalized_names)
         with tempfile.TemporaryDirectory(prefix="tp-generic-lock-prepare-") as temporary_name:
             staging_dir = Path(temporary_name)
+            if seed_existing:
+                _seed_existing_locks(destination_dir, staging_dir, normalized_names)
             _run_preparation_command(command, destination_dir, staging_dir)
             for name in normalized_names:
                 _validate_candidate(staging_dir / name)
@@ -559,6 +621,11 @@ def clean_generic_locks(
 def main() -> int:
     parser = argparse.ArgumentParser(description="Manage governed generic requirements locks recoverably")
     parser.add_argument("--destination-dir", required=True, type=Path)
+    parser.add_argument(
+        "--seed-existing",
+        action="store_true",
+        help="seed the preparation directory from existing locks before a non-upgrade compile",
+    )
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument("--staging-dir", type=Path, help="publish a validated staged generic lock set")
     mode.add_argument(
@@ -573,13 +640,20 @@ def main() -> int:
     mode.add_argument("--clean-generic", action="store_true", help="remove the six governed generic locks")
     args = parser.parse_args()
 
+    if args.seed_existing and args.prepare_command is None:
+        parser.error("--seed-existing requires --prepare-command")
+
     try:
         if args.recover_only:
             recover_generic_locks(args.destination_dir)
         elif args.clean_generic:
             clean_generic_locks(args.destination_dir)
         elif args.prepare_command is not None:
-            prepare_and_publish_generic_locks(args.destination_dir, args.prepare_command)
+            prepare_and_publish_generic_locks(
+                args.destination_dir,
+                args.prepare_command,
+                seed_existing=args.seed_existing,
+            )
         else:
             publish_generic_locks(args.staging_dir, args.destination_dir)
     except LockPublicationError as exc:

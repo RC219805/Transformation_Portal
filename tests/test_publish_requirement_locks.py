@@ -103,6 +103,153 @@ def test_preparation_command_runs_while_destination_lock_is_held(tmp_path: Path)
     assert not list(destination.glob(f"{publisher.TRANSACTION_PREFIX}*"))
 
 
+def test_preparation_can_seed_existing_locks_for_conservative_compilation(tmp_path: Path) -> None:
+    destination = tmp_path / "requirements"
+    original = _write_lock_set(destination, "1.0")
+    command = (
+        sys.executable,
+        "-c",
+        (
+            "import os\n"
+            "from pathlib import Path\n"
+            f"names = {publisher.GENERIC_LOCK_FILES!r}\n"
+            f"expected = {original!r}\n"
+            f"staging = Path(os.environ[{publisher.PREPARATION_STAGING_ENV!r}])\n"
+            "for name in names:\n"
+            "    path = staging / name\n"
+            "    if path.read_bytes() != expected[name]:\n"
+            "        raise SystemExit(f'unseeded lock: {name}')\n"
+            "    path.write_text(f'example-{name.removesuffix(\".txt\")}==2.0\\n')\n"
+        ),
+    )
+
+    publisher.prepare_and_publish_generic_locks(destination, command, seed_existing=True)
+
+    for name in publisher.GENERIC_LOCK_FILES:
+        assert (destination / name).read_text() == f"example-{name.removesuffix('.txt')}==2.0\n"
+
+
+def test_preparation_rejects_seed_source_swapped_to_symlink(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    destination = tmp_path / "requirements"
+    original = _write_lock_set(destination, "1.0")
+    victim = destination / "base.txt"
+    attacker_file = tmp_path / "attacker.txt"
+    attacker_file.write_text("attacker==9.9\n", encoding="utf-8")
+    real_open = publisher.os.open
+
+    def swap_before_open(
+        path: str | bytes | os.PathLike[str] | os.PathLike[bytes],
+        flags: int,
+        mode: int = 0o777,
+        *,
+        dir_fd: int | None = None,
+    ) -> int:
+        if path == victim:
+            victim.unlink()
+            victim.symlink_to(attacker_file)
+        return real_open(path, flags, mode, dir_fd=dir_fd)
+
+    monkeypatch.setattr(publisher.os, "open", swap_before_open)
+
+    with pytest.raises(publisher.LockPublicationError, match="could not safely open destination lockfile"):
+        publisher.prepare_and_publish_generic_locks(
+            destination,
+            (sys.executable, "-c", "raise SystemExit('preparation must not run')"),
+            seed_existing=True,
+        )
+
+    assert attacker_file.read_text(encoding="utf-8") == "attacker==9.9\n"
+    for name, content in original.items():
+        if name != "base.txt":
+            assert (destination / name).read_bytes() == content
+
+
+def test_preparation_rejects_seed_source_swapped_to_fifo(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    nonblocking_flag = getattr(os, "O_NONBLOCK", 0)
+    if not nonblocking_flag or not hasattr(os, "mkfifo"):
+        pytest.skip("FIFO nonblocking-open semantics are unavailable on this platform")
+
+    destination = tmp_path / "requirements"
+    original = _write_lock_set(destination, "1.0")
+    victim = destination / "base.txt"
+    real_open = publisher.os.open
+
+    def swap_before_open(
+        path: str | bytes | os.PathLike[str] | os.PathLike[bytes],
+        flags: int,
+        mode: int = 0o777,
+        *,
+        dir_fd: int | None = None,
+    ) -> int:
+        if path == victim:
+            assert flags & nonblocking_flag
+            victim.unlink()
+            os.mkfifo(victim)
+        return real_open(path, flags, mode, dir_fd=dir_fd)
+
+    monkeypatch.setattr(publisher.os, "open", swap_before_open)
+
+    with pytest.raises(publisher.LockPublicationError, match="not a regular file"):
+        publisher.prepare_and_publish_generic_locks(
+            destination,
+            (sys.executable, "-c", "raise SystemExit('preparation must not run')"),
+            seed_existing=True,
+        )
+
+    for name, content in original.items():
+        if name != "base.txt":
+            assert (destination / name).read_bytes() == content
+
+
+def test_preparation_rejects_non_regular_seed_source(tmp_path: Path) -> None:
+    destination = tmp_path / "requirements"
+    original = _write_lock_set(destination, "1.0")
+    victim = destination / "base.txt"
+    victim.unlink()
+    victim.mkdir()
+
+    with pytest.raises(publisher.LockPublicationError, match="destination lockfile is not a regular file"):
+        publisher.prepare_and_publish_generic_locks(
+            destination,
+            (sys.executable, "-c", "raise SystemExit('preparation must not run')"),
+            seed_existing=True,
+        )
+
+    for name, content in original.items():
+        if name != "base.txt":
+            assert (destination / name).read_bytes() == content
+
+
+def test_preparation_starts_empty_by_default_for_upgrade_compilation(tmp_path: Path) -> None:
+    destination = tmp_path / "requirements"
+    _write_lock_set(destination, "1.0")
+    command = (
+        sys.executable,
+        "-c",
+        (
+            "import os\n"
+            "from pathlib import Path\n"
+            f"names = {publisher.GENERIC_LOCK_FILES!r}\n"
+            f"staging = Path(os.environ[{publisher.PREPARATION_STAGING_ENV!r}])\n"
+            "if any((staging / name).exists() for name in names):\n"
+            "    raise SystemExit('preparation directory was unexpectedly seeded')\n"
+            "for name in names:\n"
+            "    (staging / name).write_text(f'example-{name.removesuffix(\".txt\")}==2.0\\n')\n"
+        ),
+    )
+
+    publisher.prepare_and_publish_generic_locks(destination, command)
+
+    for name in publisher.GENERIC_LOCK_FILES:
+        assert (destination / name).read_text() == f"example-{name.removesuffix('.txt')}==2.0\n"
+
+
 def test_clean_generic_locks_removes_complete_set_and_leaves_target_owned_lock(tmp_path: Path) -> None:
     destination = tmp_path / "requirements"
     _write_lock_set(destination, "1.0")

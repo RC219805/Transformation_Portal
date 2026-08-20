@@ -48,6 +48,7 @@ PIP_COMPILE_HASHED := mkdir -p "$(PIP_TOOLS_CACHE_DIR)" && PIP_TOOLS_CACHE_DIR="
 RESTORE_MARKER_PINS := python3 ../scripts/utilities/restore_requirement_marker_pins.py
 GENERIC_LOCK_FILES := all.txt base.txt dev.txt ci.txt security.txt tools-archive.txt
 GENERIC_PIP_COMPILE_ARGS ?=
+GENERIC_LOCK_SEED_ARGS ?=
 
 # PyTorch CPU index for CI/cross-platform lockfiles
 PYTORCH_CPU_INDEX := --extra-index-url https://download.pytorch.org/whl/cpu
@@ -111,7 +112,7 @@ help:
 compile: compile-generic
 
 compile-generic:
-	@$(MAKE) --no-print-directory _publish-generic-lock-set GENERIC_PIP_COMPILE_ARGS=
+	@$(MAKE) --no-print-directory _publish-generic-lock-set GENERIC_PIP_COMPILE_ARGS= GENERIC_LOCK_SEED_ARGS=--seed-existing
 	@echo "✓ Generic requirements compiled successfully"
 
 compile-all: compile
@@ -180,7 +181,7 @@ _publish-generic-lock-set:
 	@echo "Compiling the governed generic lock set in a staging directory..."
 	@python3 ../scripts/utilities/publish_requirement_locks.py \
 		--destination-dir "$(CURDIR)" \
-		--prepare-command "$(MAKE)" --no-print-directory _prepare-generic-lock-set \
+		$(GENERIC_LOCK_SEED_ARGS) --prepare-command "$(MAKE)" --no-print-directory _prepare-generic-lock-set \
 		"PIP_COMPILE_BIN=$(PIP_COMPILE_BIN)" \
 		"LOCK_PYTHON_VERSION=$(LOCK_PYTHON_VERSION)" \
 		"PIP_TOOLS_CACHE_DIR=$(PIP_TOOLS_CACHE_DIR)" \
@@ -294,7 +295,7 @@ update: update-generic
 
 update-generic:
 	@echo "Updating generic checked-in lockfiles to latest allowed versions..."
-	@$(MAKE) --no-print-directory _publish-generic-lock-set GENERIC_PIP_COMPILE_ARGS=--upgrade
+	@$(MAKE) --no-print-directory _publish-generic-lock-set GENERIC_PIP_COMPILE_ARGS=--upgrade GENERIC_LOCK_SEED_ARGS=
 	@echo "✓ Generic requirements updated successfully"
 
 # Check if .txt files are up-to-date
