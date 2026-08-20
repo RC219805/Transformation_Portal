@@ -46,6 +46,8 @@ PIP_COMPILE_PY_FLAG := $(shell $(PIP_COMPILE_BIN) --help 2>/dev/null | grep -q -
 PIP_COMPILE := mkdir -p "$(PIP_TOOLS_CACHE_DIR)" && PIP_TOOLS_CACHE_DIR="$(PIP_TOOLS_CACHE_DIR)" $(PIP_COMPILE_BASE) $(PIP_COMPILE_PY_FLAG)
 PIP_COMPILE_HASHED := mkdir -p "$(PIP_TOOLS_CACHE_DIR)" && PIP_TOOLS_CACHE_DIR="$(PIP_TOOLS_CACHE_DIR)" $(PIP_COMPILE_BASE) $(PIP_COMPILE_PY_FLAG) --generate-hashes
 RESTORE_MARKER_PINS := python3 ../scripts/utilities/restore_requirement_marker_pins.py
+GENERIC_LOCK_FILES := all.txt base.txt dev.txt ci.txt security.txt tools-archive.txt
+GENERIC_PIP_COMPILE_ARGS ?=
 
 # PyTorch CPU index for CI/cross-platform lockfiles
 PYTORCH_CPU_INDEX := --extra-index-url https://download.pytorch.org/whl/cpu
@@ -56,6 +58,7 @@ PYTORCH_CPU_INDEX := --extra-index-url https://download.pytorch.org/whl/cpu
 	compile-ml-darwin-arm64 update-ml-darwin-arm64 check-ml-darwin-arm64 \
 	compile-ml-linux-x86_64 update-ml-linux-x86_64 check-ml-linux-x86_64 \
 	compile-ml-darwin-x86_64 update-ml-darwin-x86_64 check-ml-darwin-x86_64 \
+	_publish-generic-lock-set _prepare-generic-lock-set \
 	require-pip-compile require-darwin-arm64-authority refuse-darwin-x86_64-authority refuse-linux-x86_64-authority \
 	ml-core.txt ml-cpu.txt ml-mps.txt ml-cuda.txt ml-raw.txt ml-coreml.txt ml-research.txt ml.txt
 
@@ -74,9 +77,9 @@ help:
 	@echo "  check-hash-pilot  Validate the generated pilot lockfiles with --require-hashes"
 	@echo "  clean             Remove all compiled .txt files"
 	@echo ""
-	@echo "Individual compilation targets:"
-	@echo "  all.txt              Compile all.txt (checked-in contract aggregate)"
-	@echo "  base.txt             Compile base.txt (constrained by all.txt)"
+	@echo "Individual generic targets (compatibility aliases; each republishes all six generic locks):"
+	@echo "  all.txt              Regenerate the complete generic lock set"
+	@echo "  base.txt             Regenerate the complete generic lock set"
 	@echo ""
 	@echo "Target-owned ML commands:"
 	@echo "  compile-ml-darwin-arm64    Compile the Darwin arm64 ML lock on native Darwin arm64 only"
@@ -100,17 +103,15 @@ help:
 	@echo "Scripted-only layers (NOT compiled here):"
 	@echo "  ml-sam2              SAM2 segmentation - use bootstrap script"
 	@echo ""
-	@echo "Other targets:"
-	@echo "  dev.txt              Compile dev.txt (constrained by all.txt)"
-	@echo "  ci.txt               Compile ci.txt (constrained by all.txt)"
-	@echo "  security.txt         Compile security.txt (CI security scanning tools)"
-	@echo "  tools-archive.txt    Compile tools-archive.txt (constrained by all.txt)"
+	@echo "Remaining individual generic aliases (each republishes all six generic locks):"
+	@echo "  dev.txt, ci.txt, security.txt, tools-archive.txt"
 
 # Compile generic requirements in correct order
 # Note: target-owned ML lockfiles must be regenerated via explicit target commands.
 compile: compile-generic
 
-compile-generic: all.txt base.txt dev.txt ci.txt security.txt tools-archive.txt
+compile-generic:
+	@$(MAKE) --no-print-directory _publish-generic-lock-set GENERIC_PIP_COMPILE_ARGS=
 	@echo "✓ Generic requirements compiled successfully"
 
 compile-all: compile
@@ -167,16 +168,48 @@ check-hash-pilot: require-pip-compile
 	done; \
 	echo "✓ Secure-install hash pilot passed"
 
-# Compile all.txt first for global resolution
-# Note: all.txt intentionally excludes optional ML layers from the checked-in contract.
-all.txt: require-pip-compile all.in base.in dev.in ci.in
-	@echo "Compiling all.txt (checked-in contract aggregate)..."
-	@$(PIP_COMPILE) all.in -o all.txt
+# Every public generic lock writer delegates to the same staged, validated,
+# serialized six-file publication. This prevents a direct `make base.txt` (or
+# another individual target) from exposing a partially regenerated lock set.
+$(GENERIC_LOCK_FILES): compile-generic
 
-# Compile individual files constrained by all.txt
-base.txt: require-pip-compile base.in all.txt
-	@echo "Compiling base.txt..."
-	@$(PIP_COMPILE) -c all.txt base.in -o base.txt
+_publish-generic-lock-set:
+	@python3 ../scripts/utilities/publish_requirement_locks.py \
+		--destination-dir "$(CURDIR)" --recover-only
+	@$(MAKE) --no-print-directory require-pip-compile
+	@echo "Compiling the governed generic lock set in a staging directory..."
+	@python3 ../scripts/utilities/publish_requirement_locks.py \
+		--destination-dir "$(CURDIR)" \
+		--prepare-command "$(MAKE)" --no-print-directory _prepare-generic-lock-set \
+		"PIP_COMPILE_BIN=$(PIP_COMPILE_BIN)" \
+		"LOCK_PYTHON_VERSION=$(LOCK_PYTHON_VERSION)" \
+		"PIP_TOOLS_CACHE_DIR=$(PIP_TOOLS_CACHE_DIR)" \
+		"GENERIC_PIP_COMPILE_ARGS=$(GENERIC_PIP_COMPILE_ARGS)"
+
+_prepare-generic-lock-set:
+	@set -euo pipefail; \
+	repo_dir="$$(pwd)"; \
+	tmp_dir="$${TP_GENERIC_LOCK_STAGING_DIR:?generic lock staging directory is required}"; \
+	cp all.in base.in dev.in ci.in security.in tools-archive.in "$$tmp_dir"/; \
+	( \
+		cd "$$tmp_dir"; \
+		$(PIP_COMPILE) $(GENERIC_PIP_COMPILE_ARGS) all.in -o all.txt; \
+	); \
+	$(RESTORE_MARKER_PINS) --previous "$$repo_dir/all.txt" --lockfile "$$tmp_dir/all.txt"; \
+	( \
+		cd "$$tmp_dir"; \
+		$(PIP_COMPILE) $(GENERIC_PIP_COMPILE_ARGS) -c all.txt base.in -o base.txt; \
+	); \
+	$(RESTORE_MARKER_PINS) --previous "$$repo_dir/base.txt" --lockfile "$$tmp_dir/base.txt"; \
+	( \
+		cd "$$tmp_dir"; \
+		$(PIP_COMPILE) $(GENERIC_PIP_COMPILE_ARGS) -c all.txt dev.in -o dev.txt; \
+		$(PIP_COMPILE) $(GENERIC_PIP_COMPILE_ARGS) -c all.txt ci.in -o ci.txt; \
+		$(PIP_COMPILE) $(GENERIC_PIP_COMPILE_ARGS) security.in -o security.txt; \
+		$(PIP_COMPILE) $(GENERIC_PIP_COMPILE_ARGS) -c all.txt tools-archive.in -o tools-archive.txt; \
+	); \
+	python3 ../scripts/validation/check_requirements_lock_contract.py \
+		--staged-generic-dir "$$tmp_dir" --expected-python "$(LOCK_PYTHON_VERSION)"
 
 # ML layer lockfiles - checked-in contract is limited to target-owned core locks.
 # Target-owned core lockfiles resolve against the base layer contract.
@@ -217,12 +250,12 @@ ml-core-linux.txt: refuse-linux-x86_64-authority
 compile-ml-darwin-arm64: ml-core-darwin-arm64.txt
 	@echo "✓ Darwin arm64 ML lock compiled successfully"
 
-update-ml-darwin-arm64: require-darwin-arm64-authority require-pip-compile
+update-ml-darwin-arm64: require-darwin-arm64-authority require-pip-compile base.txt
 	@echo "Updating ml-core-darwin-arm64.txt on authoritative Darwin arm64 lane..."
 	@$(PIP_COMPILE) --upgrade $(PYTORCH_CPU_INDEX) -c base.txt ml-core-darwin-arm64.in -o ml-core-darwin-arm64.txt
 	@echo "✓ Darwin arm64 ML lock updated successfully"
 
-check-ml-darwin-arm64: require-darwin-arm64-authority require-pip-compile
+check-ml-darwin-arm64: require-darwin-arm64-authority require-pip-compile check-generic
 	@echo "Checking Darwin arm64 ML lock..."
 	@set -euo pipefail; \
 	repo_dir="$$(pwd)"; \
@@ -255,43 +288,13 @@ ml-core.txt ml-cpu.txt ml-mps.txt ml-cuda.txt ml-raw.txt ml-coreml.txt ml-resear
 	@echo "ERROR: Use target-specific bootstrap/install flows instead of checking in host-generated optional ML layer locks."
 	@exit 1
 
-dev.txt: require-pip-compile dev.in all.txt
-	@echo "Compiling dev.txt..."
-	@$(PIP_COMPILE) -c all.txt dev.in -o dev.txt
-
-ci.txt: require-pip-compile ci.in all.txt
-	@echo "Compiling ci.txt..."
-	@$(PIP_COMPILE) -c all.txt ci.in -o ci.txt
-
-# Security scanning tools (standalone layer for CI security job)
-# NOT constrained by all.txt to ensure latest security tool versions
-security.txt: require-pip-compile security.in
-	@echo "Compiling security.txt..."
-	@$(PIP_COMPILE) security.in -o security.txt
-
-tools-archive.txt: require-pip-compile tools-archive.in all.txt
-	@echo "Compiling tools-archive.txt..."
-	@$(PIP_COMPILE) -c all.txt tools-archive.in -o tools-archive.txt
-
 # Update generic dependencies to latest allowed versions
 # Note: target-owned ML locks must be updated via explicit target commands.
 update: update-generic
 
-update-generic: require-pip-compile
+update-generic:
 	@echo "Updating generic checked-in lockfiles to latest allowed versions..."
-	@set -euo pipefail; \
-	tmp_dir="$$(mktemp -d)"; \
-	trap 'rm -rf "$$tmp_dir"' EXIT; \
-	cp all.txt "$$tmp_dir/all.txt"; \
-	cp base.txt "$$tmp_dir/base.txt"; \
-	$(PIP_COMPILE) --upgrade all.in -o all.txt; \
-	$(RESTORE_MARKER_PINS) --previous "$$tmp_dir/all.txt" --lockfile all.txt; \
-	$(PIP_COMPILE) --upgrade -c all.txt base.in -o base.txt; \
-	$(RESTORE_MARKER_PINS) --previous "$$tmp_dir/base.txt" --lockfile base.txt
-	@$(PIP_COMPILE) --upgrade -c all.txt dev.in -o dev.txt
-	@$(PIP_COMPILE) --upgrade -c all.txt ci.in -o ci.txt
-	@$(PIP_COMPILE) --upgrade security.in -o security.txt
-	@$(PIP_COMPILE) --upgrade -c all.txt tools-archive.in -o tools-archive.txt
+	@$(MAKE) --no-print-directory _publish-generic-lock-set GENERIC_PIP_COMPILE_ARGS=--upgrade
 	@echo "✓ Generic requirements updated successfully"
 
 # Check if .txt files are up-to-date
@@ -345,5 +348,7 @@ check-generic: require-pip-compile
 # Note: ml-sam2.txt removed if present (historical artifact)
 clean:
 	@echo "Removing compiled .txt files..."
-	@rm -f all.txt base.txt ml-core-darwin-x86_64.txt ml-core-darwin-arm64.txt ml-core-linux.txt ml-sam2.txt dev.txt ci.txt security.txt tools-archive.txt
+	@python3 ../scripts/utilities/publish_requirement_locks.py \
+		--destination-dir "$(CURDIR)" --clean-generic
+	@rm -f ml-core-darwin-x86_64.txt ml-core-darwin-arm64.txt ml-core-linux.txt ml-sam2.txt
 	@echo "✓ Cleanup complete"

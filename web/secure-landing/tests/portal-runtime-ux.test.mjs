@@ -151,6 +151,7 @@ test("bundle compaction preserves diagnostic names and property keys", () => {
 
   assert.match(compact, /keepNames: true/);
   assert.match(compact, /minifyIdentifiers: true/);
+  assert.match(compact, /treeShaking: true/);
   assert.doesNotMatch(compact, /mangleProps|mangleQuoted/);
   assert.match(operateBuild, /keepNames: true/);
   assert.match(operateBuild, /minifyIdentifiers: true/);

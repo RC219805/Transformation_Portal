@@ -21,6 +21,62 @@ def test_valid_dependabot_config_passes() -> None:
     assert dependabot_contract.validate_dependabot_config(valid_dependabot_text()) == []
 
 
+def test_declared_codeql_action_group_has_live_repository_references() -> None:
+    assert dependabot_contract.validate_repository_references(valid_dependabot_text(), PROJECT_ROOT) == []
+
+
+def test_declared_codeql_action_group_is_rejected_when_action_family_is_absent(tmp_path: Path) -> None:
+    workflows = tmp_path / ".github" / "workflows"
+    workflows.mkdir(parents=True)
+    (workflows / "build.yml").write_text(
+        "steps:\n  - uses: actions/checkout@0123456789abcdef\n",
+        encoding="utf-8",
+    )
+
+    errors = dependabot_contract.validate_repository_references(valid_dependabot_text(), tmp_path)
+
+    assert errors == [
+        "dependabot group 'codeql-actions' is stale: no github/codeql-action/* uses remain under .github/workflows"
+    ]
+
+
+def test_codeql_text_inside_run_scalar_is_not_a_live_action_reference(tmp_path: Path) -> None:
+    workflows = tmp_path / ".github" / "workflows"
+    workflows.mkdir(parents=True)
+    (workflows / "decoy.yml").write_text(
+        """jobs:
+  decoy:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          echo 'uses: github/codeql-action/init@deadbeef'
+""",
+        encoding="utf-8",
+    )
+
+    errors = dependabot_contract.validate_repository_references(valid_dependabot_text(), tmp_path)
+
+    assert errors == [
+        "dependabot group 'codeql-actions' is stale: no github/codeql-action/* uses remain under .github/workflows"
+    ]
+
+
+def test_quoted_codeql_step_uses_is_a_live_action_reference(tmp_path: Path) -> None:
+    workflows = tmp_path / ".github" / "workflows"
+    workflows.mkdir(parents=True)
+    (workflows / "codeql.yml").write_text(
+        """jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: "github/codeql-action/init@deadbeef"
+""",
+        encoding="utf-8",
+    )
+
+    assert dependabot_contract.validate_repository_references(valid_dependabot_text(), tmp_path) == []
+
+
 def test_missing_target_branch_is_reported() -> None:
     broken = valid_dependabot_text().replace('    target-branch: "main"\n', "", 1)
     errors = dependabot_contract.validate_dependabot_config(broken)

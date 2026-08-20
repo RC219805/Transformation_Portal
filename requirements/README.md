@@ -376,6 +376,31 @@ cd requirements/
 make update
 ```
 
+Every public generic writer (`compile-generic`, `update-generic`, and the six
+individual `.txt` targets) compiles all six governed locks into a temporary
+staging directory, validates their Python header, platform-marker, Linux
+keyring-chain, and exact-pin contracts, and then publishes the set while one
+exclusive destination-keyed advisory writer lock covers compilation through
+publication. Before validating the `pip-compile` toolchain, the writer runs a
+lock-protected recovery-only pass, then reacquires the same lock for the entire
+compile-and-publish lifecycle before reading live locks as marker-pin sources.
+A stale mixed set is therefore restored even when toolchain validation or
+compilation then fails, and an older slow compile cannot overwrite a newer
+writer. Compile and staged validation failures leave the recovered live files
+unchanged. A Python exception, `KeyboardInterrupt`, or handled `SIGTERM` during
+publication attempts an immediate rollback. A durable journal lets the next
+writer restore a publication interrupted by an unhandled process crash or
+`SIGKILL`; rollback or cleanup failures report the retained recovery directory
+explicitly. Target-owned ML locks are outside this transaction and remain
+untouched.
+
+The six public lock paths intentionally remain regular files and are replaced
+with sequential per-file renames. The advisory lock serializes cooperating
+writers, but lock-free readers cannot obtain an atomic multi-file snapshot and
+may observe a mixed set during publication. After `SIGKILL`, a mixed set can
+remain until the next writer performs journal recovery; the journal does not
+make reader visibility atomic.
+
 For target-owned ML locks, use the explicit authoritative-lane command instead:
 
 ```bash
@@ -393,6 +418,11 @@ To verify that the generic checked-in lockfiles are up-to-date with `.in` files:
 cd requirements/
 make check
 ```
+
+`make clean` recovers any stale publication and removes the complete six-file
+generic set while holding the same destination writer lock used by publication.
+Target-owned ML lock cleanup remains a separate explicit step after the generic
+lock operation.
 
 For target-owned ML locks, use:
 

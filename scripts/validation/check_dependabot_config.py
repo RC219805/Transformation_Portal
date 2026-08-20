@@ -49,6 +49,7 @@ ROOT_WORKER_NPM_PAIRS = {
     ("npm", "/cloudflare/transformationportal-worker"),
 }
 FRONTDOOR_NPM_PAIR = ("npm", "/web/secure-landing")
+CODEQL_ACTION_PATTERN = "github/codeql-action/*"
 REQUIRED_PIP_IGNORES = {
     "redis": {"version-update:semver-major"},
     "transformers": {"version-update:semver-minor"},
@@ -326,6 +327,68 @@ def validate_dependabot_config(text: str) -> list[str]:
     return errors
 
 
+def validate_repository_references(text: str, repo_root: Path = REPO_ROOT) -> list[str]:
+    """Reject declared exact update families that no longer exist in the repo."""
+    if CODEQL_ACTION_PATTERN not in text:
+        return []
+
+    workflows_dir = repo_root / ".github" / "workflows"
+    references: list[str] = []
+    if workflows_dir.is_dir():
+        workflow_paths = (*workflows_dir.glob("*.yml"), *workflows_dir.glob("*.yaml"))
+        for workflow_path in sorted(workflow_paths):
+            try:
+                workflow_config = _load_workflow(workflow_path)
+            except (OSError, ValueError):
+                continue
+            if _workflow_uses_codeql_action(workflow_config):
+                references.append(workflow_path.relative_to(repo_root).as_posix())
+
+    if references:
+        return []
+    return ["dependabot group 'codeql-actions' is stale: no github/codeql-action/* uses remain under .github/workflows"]
+
+
+def _load_workflow(path: Path) -> dict[str, Any]:
+    if yaml is None:
+        raise ValueError("PyYAML not installed (pip install PyYAML)")
+    try:
+        loaded = yaml.safe_load(path.read_text(encoding="utf-8"))
+    except yaml.YAMLError as exc:
+        raise ValueError(f"invalid workflow YAML: {exc}") from exc
+    if not isinstance(loaded, dict):
+        raise ValueError("workflow must be a YAML mapping")
+    return loaded
+
+
+def _workflow_uses_codeql_action(config: dict[str, Any]) -> bool:
+    jobs = config.get("jobs")
+    if not isinstance(jobs, dict):
+        return False
+    for job in jobs.values():
+        if not isinstance(job, dict):
+            continue
+        steps = job.get("steps")
+        if not isinstance(steps, list):
+            continue
+        for step in steps:
+            if not isinstance(step, dict):
+                continue
+            uses = step.get("uses")
+            if not isinstance(uses, str):
+                continue
+            action_name, separator, revision = uses.strip().partition("@")
+            normalized_action_name = action_name.lower()
+            if (
+                separator
+                and revision
+                and normalized_action_name.startswith("github/codeql-action/")
+                and normalized_action_name.removeprefix("github/codeql-action/")
+            ):
+                return True
+    return False
+
+
 def main() -> int:
     try:
         config_text = DEPENDABOT_PATH.read_text(encoding="utf-8")
@@ -334,6 +397,8 @@ def main() -> int:
         return 1
 
     errors = validate_dependabot_config(config_text)
+    if not errors:
+        errors.extend(validate_repository_references(config_text))
     if errors:
         print("ERROR: Dependabot config contract validation failed:", file=sys.stderr)
         for error in errors:

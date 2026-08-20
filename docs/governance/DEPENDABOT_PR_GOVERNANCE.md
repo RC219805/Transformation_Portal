@@ -23,10 +23,15 @@ classifiable without arriving in one burst.
 Current grouping and compatibility controls keep coupled changes atomic:
 
 - `github/codeql-action/init` and `github/codeql-action/analyze` are grouped as
-  one action-family update and must retain the same immutable release SHA.
+  one action-family update and must retain the same immutable release SHA. The
+  Dependabot contract fails if that group remains configured after the last
+  live `github/codeql-action/*` workflow reference is removed.
 - Root and Cloudflare Worker `wrangler` updates are grouped across both npm
   directories with the Worker's `@cloudflare/workers-types` peer. The coupled
-  group is validated together before merge.
+  group is validated together before merge by
+  `python3 scripts/validation/check_worker_dependency_parity.py`, including
+  stable numeric manifest pins, the complete shared lock graph, and the
+  Wrangler peer range.
 - Frontdoor security updates are grouped separately from routine version
   updates. Its Dependabot entry intentionally omits `target-branch` so GitHub
   applies security grouping while targeting the repository default branch,
@@ -85,6 +90,10 @@ Root and Worker updates share one multi-directory entry so Wrangler stays in
 parity. Other minor and patch version updates are grouped by runtime surface to
 reduce PR noise. Major updates remain separate PRs and must be reviewed as
 compatibility changes.
+
+Run `python3 scripts/validation/check_worker_dependency_parity.py` after any
+root/Worker manifest or lockfile change. `make validate-ci` and the scheduled
+dependency updater run the same check before accepting or generating updates.
 
 | Risk Level | Criteria | Examples | Merge Policy |
 |------------|----------|----------|--------------|

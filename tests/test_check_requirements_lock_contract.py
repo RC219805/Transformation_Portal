@@ -116,6 +116,95 @@ def fixture_isolated_repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Pa
     return tmp_path
 
 
+def write_staged_generic_set(tmp_path: Path) -> Path:
+    staged_root = tmp_path / "staged-root"
+    staging_dir = staged_root / "requirements"
+    staging_dir.mkdir(parents=True)
+    write_input_file(
+        staged_root,
+        "base.in",
+        'opencv-python>=4.8.0,<5 ; platform_system != "Linux"\n'
+        'opencv-python-headless>=4.8.0,<5 ; platform_system == "Linux"',
+    )
+    marker_body = (
+        'opencv-python==4.13.0.92 ; platform_system != "Linux"\n'
+        'opencv-python-headless==4.13.0.92 ; platform_system == "Linux"\n'
+    )
+    write_lockfile(
+        staged_root,
+        "all.txt",
+        "3.11",
+        body=marker_body + "keyring==25.7.0\njeepney==0.9.0\nsecretstorage==3.5.0\npackaging==26.0",
+    )
+    write_lockfile(staged_root, "base.txt", "3.11", body=marker_body + "packaging==26.0")
+    write_lockfile(staged_root, "dev.txt", "3.11", body="packaging==26.0")
+    write_lockfile(
+        staged_root,
+        "ci.txt",
+        "3.11",
+        body=(
+            "keyring==25.7.0\ncffi==2.0.0\ncryptography==46.0.7\njeepney==0.9.0\n"
+            "pycparser==3.0\nsecretstorage==3.5.0\npackaging==26.0"
+        ),
+    )
+    write_lockfile(staged_root, "security.txt", "3.11", body="packaging==26.0")
+    write_lockfile(staged_root, "tools-archive.txt", "3.11", body="packaging==26.0")
+    return staging_dir
+
+
+def test_staged_generic_contract_accepts_complete_validated_set(tmp_path: Path) -> None:
+    staging_dir = write_staged_generic_set(tmp_path)
+
+    assert contract.validate_staged_generic_lock_contract(staging_dir, "3.11") == []
+
+
+def test_staged_generic_contract_rejects_wrong_python_header(tmp_path: Path) -> None:
+    staging_dir = write_staged_generic_set(tmp_path)
+    write_lockfile(tmp_path / "staged-root", "dev.txt", "3.12", body="packaging==26.0")
+
+    errors = contract.validate_staged_generic_lock_contract(staging_dir, "3.11")
+
+    assert any("dev.txt was generated with Python 3.12; expected Python 3.11" in error for error in errors)
+
+
+def test_staged_generic_contract_rejects_missing_platform_marker_pin(tmp_path: Path) -> None:
+    staging_dir = write_staged_generic_set(tmp_path)
+    write_lockfile(
+        tmp_path / "staged-root",
+        "base.txt",
+        "3.11",
+        body='opencv-python-headless==4.13.0.92 ; platform_system == "Linux"\npackaging==26.0',
+    )
+
+    errors = contract.validate_staged_generic_lock_contract(staging_dir, "3.11")
+
+    assert any("base.txt must retain 'opencv-python'" in error for error in errors)
+
+
+def test_staged_generic_contract_rejects_missing_linux_keyring_transitive(tmp_path: Path) -> None:
+    staging_dir = write_staged_generic_set(tmp_path)
+    write_lockfile(
+        tmp_path / "staged-root",
+        "ci.txt",
+        "3.11",
+        body="keyring==25.7.0\njeepney==0.9.0\nsecretstorage==3.5.0\npackaging==26.0",
+    )
+
+    errors = contract.validate_staged_generic_lock_contract(staging_dir, "3.11")
+
+    assert any("ci.txt" in error and "'cffi', 'cryptography', 'pycparser'" in error for error in errors)
+
+
+def test_staged_generic_contract_rejects_floating_line_among_exact_pins(tmp_path: Path) -> None:
+    staging_dir = write_staged_generic_set(tmp_path)
+    with (staging_dir / "dev.txt").open("a", encoding="utf-8") as handle:
+        handle.write("floating-package>=1.0\n")
+
+    errors = contract.validate_staged_generic_lock_contract(staging_dir, "3.11")
+
+    assert any("floating-package>=1.0" in error and "unpinned operator '>='" in error for error in errors)
+
+
 def test_headers_match_expected_python(isolated_repo: Path) -> None:
     expected = contract.read_expected_lock_python_version()
     assert contract.validate_lockfile_headers(expected) == []

@@ -29,6 +29,7 @@ They exist for documentation but install path is via bootstrap script.
 
 from __future__ import annotations
 
+import argparse
 import re
 import sys
 from pathlib import Path
@@ -37,6 +38,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
+from check_dependency_pinning import find_violations
 from check_lock_ownership import load_lock_ownership, validate_manifest_contract
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -129,7 +131,12 @@ def read_expected_lock_python_version() -> str:
     raise ValueError(f"Could not determine LOCK_PYTHON_VERSION from {MAKEFILE_PATH}")
 
 
-def validate_lockfile_headers(expected_python: str) -> list[str]:
+def validate_lockfile_headers(
+    expected_python: str,
+    *,
+    requirements_dir: Path | None = None,
+    lock_files: tuple[str, ...] | None = None,
+) -> list[str]:
     """Return header validation errors for generated lockfiles.
 
     Only validates files that exist. ML layer lockfiles may not exist in
@@ -141,8 +148,10 @@ def validate_lockfile_headers(expected_python: str) -> list[str]:
     - Scripted-only layers: validated if present but not required
     """
     errors: list[str] = []
-    for lock_name in ALL_LOCK_FILES:
-        lock_path = REQUIREMENTS_DIR / lock_name
+    target_dir = REQUIREMENTS_DIR if requirements_dir is None else requirements_dir
+    target_locks = ALL_LOCK_FILES if lock_files is None else lock_files
+    for lock_name in target_locks:
+        lock_path = target_dir / lock_name
         if not lock_path.is_file():
             # Scripted-only layers are not required as lockfiles
             if lock_name in SCRIPTED_ONLY_ML_LAYERS:
@@ -312,9 +321,12 @@ def _input_declares_package_with_marker(input_path: Path, package_name: str, mar
     return False
 
 
-def validate_generic_base_runtime_platform_marker_pins() -> list[str]:
+def validate_generic_base_runtime_platform_marker_pins(
+    requirements_dir: Path | None = None,
+) -> list[str]:
     """Ensure generic locks retain platform-marked base runtime packages."""
-    base_input_path = REQUIREMENTS_DIR / "base.in"
+    target_dir = REQUIREMENTS_DIR if requirements_dir is None else requirements_dir
+    base_input_path = target_dir / "base.in"
     if not base_input_path.is_file():
         return []
 
@@ -328,7 +340,7 @@ def validate_generic_base_runtime_platform_marker_pins() -> list[str]:
         return errors
 
     for lock_name in GENERIC_BASE_RUNTIME_LOCKS:
-        lock_path = REQUIREMENTS_DIR / lock_name
+        lock_path = target_dir / lock_name
         if not lock_path.is_file():
             continue
 
@@ -345,12 +357,13 @@ def validate_generic_base_runtime_platform_marker_pins() -> list[str]:
     return errors
 
 
-def validate_generic_linux_keyring_pins() -> list[str]:
+def validate_generic_linux_keyring_pins(requirements_dir: Path | None = None) -> list[str]:
     """Ensure generic locks keep the Linux keyring backend pinned."""
     errors: list[str] = []
+    target_dir = REQUIREMENTS_DIR if requirements_dir is None else requirements_dir
 
     for lock_name, required_packages in GENERIC_LINUX_KEYRING_REQUIRED_PACKAGES.items():
-        lock_path = REQUIREMENTS_DIR / lock_name
+        lock_path = target_dir / lock_name
         if not lock_path.is_file():
             continue
 
@@ -367,6 +380,20 @@ def validate_generic_linux_keyring_pins() -> list[str]:
                 "Linux transitive dependencies explicitly."
             )
 
+    return errors
+
+
+def validate_staged_generic_lock_contract(staging_dir: Path, expected_python: str) -> list[str]:
+    """Validate the complete staged generic set before any live replacement."""
+    lock_paths = [staging_dir / lock_name for lock_name in CORE_LOCK_FILES]
+    errors = validate_lockfile_headers(
+        expected_python,
+        requirements_dir=staging_dir,
+        lock_files=CORE_LOCK_FILES,
+    )
+    errors.extend(validate_generic_base_runtime_platform_marker_pins(staging_dir))
+    errors.extend(validate_generic_linux_keyring_pins(staging_dir))
+    errors.extend(find_violations(lock_paths))
     return errors
 
 
@@ -504,6 +531,18 @@ def validate_platform_lock_runtime_compatibility() -> list[str]:
 
 
 def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--staged-generic-dir",
+        type=Path,
+        help="Validate only a staged six-file generic lock set before publication",
+    )
+    parser.add_argument(
+        "--expected-python",
+        help="Expected pip-compile Python header for --staged-generic-dir",
+    )
+    args = parser.parse_args()
+
     errors: list[str] = []
 
     try:
@@ -511,6 +550,20 @@ def main() -> int:
     except ValueError as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 1
+
+    if args.staged_generic_dir is not None:
+        expected_staged_python = args.expected_python or expected_python
+        errors.extend(validate_staged_generic_lock_contract(args.staged_generic_dir, expected_staged_python))
+        if errors:
+            print("ERROR: staged generic requirements lock validation failed:", file=sys.stderr)
+            for error in errors:
+                print(f"  - {error}", file=sys.stderr)
+            return 1
+        print(
+            "staged generic requirements lock contract passed: "
+            f"{len(CORE_LOCK_FILES)} locks verified for Python {expected_staged_python}"
+        )
+        return 0
 
     errors.extend(validate_ml_layer_structure())
     errors.extend(validate_lock_ownership_manifest())

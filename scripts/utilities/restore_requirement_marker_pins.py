@@ -111,7 +111,13 @@ def _governed_marker_blocks(
     for pin in GOVERNED_MARKER_PINS:
         package_name = _normalize_package_name(pin.package_name)
         current_block = current_blocks.get(package_name)
-        continuation_lines = current_block[2][1:] if current_block is not None else previous_blocks[package_name][1:]
+        previous_block = previous_blocks.get(package_name)
+        if current_block is not None:
+            continuation_lines = current_block[2][1:]
+        elif previous_block is not None:
+            continuation_lines = previous_block[1:]
+        else:
+            continuation_lines = ["    # via -r base.in"]
         marker_blocks[package_name] = [
             f"{pin.package_name}=={resolved_versions[package_name]} ; {pin.marker}",
             *continuation_lines,
@@ -155,13 +161,25 @@ def _insertion_index(lines: Sequence[str]) -> int:
 
 
 def restore_marker_pins(previous_lockfile: Path, lockfile: Path) -> bool:
-    """Restore governed marker-pin blocks from ``previous_lockfile`` into ``lockfile``.
+    """Restore governed marker-pin blocks into ``lockfile``.
+
+    When ``previous_lockfile`` does not exist (for example after ``make clean``),
+    synthesize the missing platform block from the version resolved for the
+    other governed OpenCV package. Existing snapshots remain the preferred
+    source for pip-compile provenance continuation lines.
 
     Returns ``True`` when the target lockfile changed.
     """
-    previous_lines = previous_lockfile.read_text(encoding="utf-8").splitlines()
     current_lines = lockfile.read_text(encoding="utf-8").splitlines()
-    previous_blocks = _validated_previous_blocks(previous_lines)
+    if previous_lockfile.is_symlink():
+        raise ValueError(f"previous lockfile must not be a symlink: {previous_lockfile}")
+    if previous_lockfile.exists() and not previous_lockfile.is_file():
+        raise ValueError(f"previous lockfile must be a regular file: {previous_lockfile}")
+
+    previous_blocks: dict[str, list[str]] = {}
+    if previous_lockfile.is_file():
+        previous_lines = previous_lockfile.read_text(encoding="utf-8").splitlines()
+        previous_blocks = _validated_previous_blocks(previous_lines)
     marker_blocks = _governed_marker_blocks(previous_blocks, current_lines)
 
     filtered_lines = _without_governed_blocks(current_lines)
@@ -181,7 +199,12 @@ def restore_marker_pins(previous_lockfile: Path, lockfile: Path) -> bool:
 
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--previous", required=True, type=Path, help="pre-update lockfile snapshot")
+    parser.add_argument(
+        "--previous",
+        required=True,
+        type=Path,
+        help="pre-update lockfile snapshot (may be absent after make clean)",
+    )
     parser.add_argument("--lockfile", required=True, type=Path, help="lockfile to repair")
     args = parser.parse_args(argv)
 

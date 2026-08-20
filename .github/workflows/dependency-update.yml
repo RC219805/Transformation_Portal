@@ -23,11 +23,30 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        id: setup-python
         with:
           python-version: "3.11"
 
-      # Free up disk space before dependency operations
+      - name: Install lock generation tools
+        shell: /usr/bin/env -u BASH_ENV -u ENV /bin/bash --noprofile --norc -p -e -o pipefail {0}
+        run: |
+          "${{ steps.setup-python.outputs.python-path }}" -I -m pip --isolated install --upgrade "pip==26.1.2"
+          "${{ steps.setup-python.outputs.python-path }}" -I -m pip --isolated install "pip-tools==7.6.0"
+          # Install pip-audit from governed security lockfile
+          "${{ steps.setup-python.outputs.python-path }}" -I -m pip --isolated install -r requirements/security.txt
+
+      - name: Preflight dependency update targets
+        shell: /usr/bin/env -u BASH_ENV -u ENV /bin/bash --noprofile --norc -p -e -o pipefail {0}
+        run: |
+          set -euo pipefail
+          "${{ steps.setup-python.outputs.python-path }}" -I scripts/validation/check_dependabot_config.py
+          "${{ steps.setup-python.outputs.python-path }}" -I scripts/validation/check_worker_dependency_parity.py
+          "${{ steps.setup-python.outputs.python-path }}" -I scripts/validation/check_lock_ownership.py \
+            --context ubuntu-x64-generic
+
+      # Free up disk space before dependency generation and auditing.
       - name: Free disk space
+        shell: /usr/bin/env -u BASH_ENV -u ENV /bin/bash --noprofile --norc -p -e -o pipefail {0}
         run: |
           echo "Disk space before cleanup:"
           df -h
@@ -49,14 +68,8 @@ jobs:
           echo "Disk space after cleanup:"
           df -h
 
-      - name: Install lock generation tools
-        run: |
-          python -m pip install --upgrade "pip==26.1.2"
-          python -m pip install "pip-tools==7.6.0"
-          # Install pip-audit from governed security lockfile
-          python -m pip install -r requirements/security.txt
-
       - name: Update dependencies
+        shell: /usr/bin/env -u BASH_ENV -u ENV /bin/bash --noprofile --norc -p -e -o pipefail {0}
         env:
           PIP_NO_CACHE_DIR: "1"  # Disable pip caching to save disk space
         run: |
@@ -73,29 +86,13 @@ jobs:
           make check-generic LOCK_PYTHON_VERSION=3.11
           cd ..
 
-      - name: Check lock ownership authority
-        run: |
-          set -euo pipefail
-
-          changed_files_path="$(mktemp)"
-          trap 'rm -f "${changed_files_path}"' EXIT
-
-          git diff --name-only -- requirements > "${changed_files_path}"
-
-          python3 scripts/validation/check_lock_ownership.py \
-            --context ubuntu-x64-generic \
-            --changed-files-file "${changed_files_path}"
-
-          if grep -Eq '^requirements/ml-core-darwin-arm64.txt$' "${changed_files_path}"; then
-            echo "ERROR: scheduled dependency automation must not modify target-owned ML locks."
-            exit 1
-          fi
-
       - name: Verify lockfile contract
+        shell: /usr/bin/env -u BASH_ENV -u ENV /bin/bash --noprofile --norc -p -e -o pipefail {0}
         run: |
-          python3 scripts/validation/check_requirements_lock_contract.py
+          "${{ steps.setup-python.outputs.python-path }}" -I scripts/validation/check_requirements_lock_contract.py
 
       - name: Check for vulnerabilities
+        shell: /usr/bin/env -u BASH_ENV -u ENV /bin/bash --noprofile --norc -p -e -o pipefail {0}
         run: |
           set -euo pipefail
 
@@ -127,6 +124,52 @@ jobs:
           path: ${{ runner.temp }}/dependency-update-audit-reports/
           if-no-files-found: warn
           retention-days: 30
+
+      - name: Check lock ownership authority
+        shell: /usr/bin/env -u BASH_ENV -u ENV /bin/bash --noprofile --norc -p -e -o pipefail {0}
+        run: |
+          set -euo pipefail
+
+          baseline_sha="${{ github.sha }}"
+          current_sha="$(/usr/bin/git rev-parse --verify 'HEAD^{commit}')"
+          if [ "${current_sha}" != "${baseline_sha}" ]; then
+            echo "ERROR: dependency automation must not create or amend commits before publication."
+            exit 1
+          fi
+
+          changed_files_path="$(mktemp)"
+          trap 'rm -f "${changed_files_path}"' EXIT
+
+          /usr/bin/git diff --name-only "${baseline_sha}" > "${changed_files_path}"
+          /usr/bin/git ls-files --others --exclude-standard >> "${changed_files_path}"
+          LC_ALL=C sort -u -o "${changed_files_path}" "${changed_files_path}"
+
+          "${{ steps.setup-python.outputs.python-path }}" -I scripts/validation/check_lock_ownership.py \
+            --context ubuntu-x64-generic \
+            --changed-files-file "${changed_files_path}"
+
+          current_sha="$(/usr/bin/git rev-parse --verify 'HEAD^{commit}')"
+          if [ "${current_sha}" != "${baseline_sha}" ]; then
+            echo "ERROR: dependency automation must not create or amend commits during publication validation."
+            exit 1
+          fi
+
+          /usr/bin/git diff --name-only "${baseline_sha}" > "${changed_files_path}"
+          /usr/bin/git ls-files --others --exclude-standard >> "${changed_files_path}"
+          LC_ALL=C sort -u -o "${changed_files_path}" "${changed_files_path}"
+
+          if grep -Eq '^requirements/ml-core-darwin-arm64.txt$' "${changed_files_path}"; then
+            echo "ERROR: scheduled dependency automation must not modify target-owned ML locks."
+            exit 1
+          fi
+
+          if grep -Eqv '^requirements/(all|base|ci|dev|security|tools-archive)\.txt$' \
+            "${changed_files_path}"; then
+            echo "ERROR: scheduled dependency automation produced unexpected requirements changes:"
+            grep -Ev '^requirements/(all|base|ci|dev|security|tools-archive)\.txt$' \
+              "${changed_files_path}"
+            exit 1
+          fi
 
       - name: Create Pull Request
         uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1  # v8
@@ -165,6 +208,13 @@ jobs:
 
             **Generated automatically by GitHub Actions**
           branch: automated/dependency-updates
+          add-paths: |
+            requirements/all.txt
+            requirements/base.txt
+            requirements/dev.txt
+            requirements/ci.txt
+            requirements/security.txt
+            requirements/tools-archive.txt
           delete-branch: true
           labels: |
             dependencies

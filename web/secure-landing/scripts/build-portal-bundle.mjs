@@ -300,7 +300,8 @@ const compactPortalBundle = (await transform(nextPortalBundle, {
   minifyIdentifiers: true,
   minifySyntax: true,
   minifyWhitespace: true,
-  target: ["es2022"]
+  target: ["es2022"],
+  treeShaking: true
 })).code.trim();
 const portalChanged = writeIfChanged(PORTAL_ASSET_PATH, `${compactPortalBundle}\n`);
 const reviewSurfaceChanged = writeIfChanged(PORTAL_REVIEW_SURFACE_ASSET_PATH, `${deferredReviewSurfaceBuild.text.trim()}\n`);

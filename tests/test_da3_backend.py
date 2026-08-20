@@ -130,6 +130,25 @@ def test_da3_backend_python_executable_resolution_from_config(tmp_path):
     assert backend._python_executable == str(python_executable.resolve())
 
 
+def test_da3_backend_missing_configured_python_never_falls_back_to_ambient(tmp_path):
+    """A missing configured interpreter must fail instead of using host Python."""
+    from unittest.mock import patch
+
+    missing_python = tmp_path / ".venv-da3" / "bin" / "python"
+
+    with patch(
+        "transformation_portal.depth.backends.da3.shutil.which",
+        side_effect=AssertionError("configured paths must not fall back to PATH"),
+    ):
+        with pytest.raises(FileNotFoundError, match="DA3 Python executable not found"):
+            DA3Backend(
+                _licensed_da3_config(
+                    depth_device="cpu",
+                    da3_python_executable=str(missing_python),
+                )
+            )
+
+
 def test_da3_backend_python_executable_preserves_venv_symlink(tmp_path):
     """Configured DA3 Python should preserve the venv launcher symlink path."""
     target_python = tmp_path / "python3.11"
@@ -208,6 +227,8 @@ def test_da3_backend_subprocess_ensure_available_skips_local_dependency_checks(t
                 backend.ensure_available()
 
     command = mock_run.call_args.args[0]
+    assert command[0] == str(python_executable.absolute())
+    assert command[0] != sys.executable
     assert "--check" in command
     assert "METRIC_LARGE" in command
     assert "da3_research" in command
@@ -252,12 +273,57 @@ def test_da3_backend_subprocess_worker_env_sets_runtime_guards(monkeypatch, tmp_
             da3_python_executable=str(python_executable),
         )
     )
+    monkeypatch.setenv("TP_MODEL_LOCK_MANIFEST", str(tmp_path / "model-lock.yaml"))
+    monkeypatch.setenv("TP_STRICT_MODEL_LOCK", "1")
 
     env = backend._build_worker_env()
 
     assert env["PYTHONPATH"].split(":")[0] == str(backend._repo_src)
     assert env["KMP_DUPLICATE_LIB_OK"] == "TRUE"
     assert env["MPLCONFIGDIR"].endswith(".runtime/mplconfig")
+    assert env["TP_MODEL_LOCK_MANIFEST"] == str(tmp_path / "model-lock.yaml")
+    assert env["TP_STRICT_MODEL_LOCK"] == "1"
+
+
+def test_da3_backend_subprocess_model_lock_failure_never_falls_back_to_host(tmp_path):
+    """Worker model-lock failures must stop without trying host dependencies."""
+    from unittest.mock import MagicMock, patch
+
+    python_executable = tmp_path / ".venv-da3" / "bin" / "python"
+    python_executable.parent.mkdir(parents=True)
+    python_executable.write_text("#!/bin/sh\n", encoding="utf-8")
+    backend = DA3Backend(
+        _licensed_da3_config(
+            depth_device="cpu",
+            da3_python_executable=str(python_executable),
+        )
+    )
+
+    with patch.object(
+        backend,
+        "_ensure_local_package_available",
+        side_effect=AssertionError("host DA3 must not be used as fallback"),
+    ):
+        with patch(
+            "transformation_portal.depth.backends.da3.ensure_dependency_importable",
+            side_effect=AssertionError("host dependencies must not be used as fallback"),
+        ):
+            with patch("transformation_portal.depth.backends.da3.subprocess.run") as mock_run:
+                mock_run.return_value = MagicMock(
+                    returncode=1,
+                    stdout="",
+                    stderr=(
+                        "ModelLockError: repo 'depth-anything/DA3NESTED-GIANT-LARGE-1.1' "
+                        "revision mismatch with model lock manifest"
+                    ),
+                )
+                with pytest.raises(ImportError) as exc_info:
+                    backend.ensure_available()
+
+    assert "Failure category: startup_failed" in str(exc_info.value)
+    assert "revision mismatch with model lock manifest" in str(exc_info.value)
+    assert mock_run.call_count == 1
+    assert mock_run.call_args.args[0][0] == str(python_executable.absolute())
 
 
 def test_da3_backend_subprocess_dependency_failure_reports_category(tmp_path):
