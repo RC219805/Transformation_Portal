@@ -99,8 +99,10 @@ actionable; use the linked docs and `Makefile` for exhaustive inventories.
   `make validate-frontdoor-deployment-gate` for shared deployment posture.
   Before Playwright browser gates, install its managed Chromium once with
   `cd web/secure-landing && npm run test:browser:install`. The CDP smoke/parity
-  validators instead require Google Chrome or a valid
-  `TP_PORTAL_BROWSER_BINARY`.
+  validators require a valid `TP_PORTAL_BROWSER_BINARY` or Google Chrome. CSS
+  layer parity additionally requires the Chrome for Testing product pinned in
+  `tests/fixtures/portal-css/layer-parity-contract.json`; point
+  `TP_PORTAL_BROWSER_BINARY` at that managed executable.
   For direct deployments, set `TP_FRONTDOOR_GATE_DEPLOYMENT_TARGET` and
   `TP_FRONTDOOR_GATE_DEPLOYMENT_URL`; the Vercel legacy alias is supported only
   for Vercel checks.

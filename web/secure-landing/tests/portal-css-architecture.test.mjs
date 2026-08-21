@@ -3333,6 +3333,18 @@ test("portal CSS layer parity validates the production layered graph", () => {
   assert.match(output, /portal css layer parity: OK/);
   assert.match(output, /representative selectors/);
   assert.match(output, /style properties tracked for browser parity/);
+  assert.equal(contract.baselineVersion, 2);
+  assert.deepEqual(contract.captureContract, {
+    browser: { engine: "chromium", headlessMode: "new", product: "Chrome/151.0.7922.34" },
+    viewportRationale:
+      "Preserve the reviewed v1 baseline geometry while removing ambient browser-window dependence.",
+    viewport: { deviceScaleFactor: 1, height: 469, mobile: false, width: 756 }
+  });
+  assert.equal(baseline.version, contract.baselineVersion);
+  assert.equal(baseline.captureProvenance.browser.engine, contract.captureContract.browser.engine);
+  assert.equal(baseline.captureProvenance.browser.headlessMode, contract.captureContract.browser.headlessMode);
+  assert.equal(baseline.captureProvenance.browser.product, contract.captureContract.browser.product);
+  assert.deepEqual(baseline.captureProvenance.viewport, contract.captureContract.viewport);
   assert.deepEqual(baseline.representativeStyleSelectors, contract.representativeStyleSelectors);
   assert.deepEqual(baseline.representativeStyleProperties, contract.representativeStyleProperties);
   assert.ok(contract.representativeStyleProperties.includes("content-visibility"));
