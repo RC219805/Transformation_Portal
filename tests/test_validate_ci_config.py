@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import sys
 from pathlib import Path
 
 import pytest
@@ -145,7 +146,7 @@ def test_firewall_upstream_workflow_identity_rejects_renamed_build(tmp_path: Pat
     validator, config = _load_config(workflow_path)
 
     assert validator.validate_firewall_upstream_workflow_identity(workflow_path, config) is False
-    assert any("Workflow name must remain exactly" in error for error in validator.errors)
+    assert any("Workflow name must match the reserved firewall upstream identity" in error for error in validator.errors)
 
 
 def test_firewall_upstream_workflow_identity_rejects_duplicate_name(tmp_path: Path) -> None:
@@ -159,7 +160,50 @@ def test_firewall_upstream_workflow_identity_rejects_duplicate_name(tmp_path: Pa
     validator, config = _load_config(workflow_path)
 
     assert validator.validate_firewall_upstream_workflow_identity(workflow_path, config) is False
-    assert any("is reserved exclusively for build.yml" in error for error in validator.errors)
+    assert any(
+        "Non-build workflow must not claim the reserved firewall upstream identity" in error for error in validator.errors
+    )
+
+
+def test_firewall_upstream_identity_diagnostics_redact_reserved_name(
+    tmp_path: Path,
+    monkeypatch,
+    capsys,
+) -> None:
+    sensitive_name = "SENSITIVE_WORKFLOW_IDENTITY_SENTINEL"
+    monkeypatch.setattr(
+        validate_ci_config.CIValidator,
+        "FIREWALL_TRUSTED_UPSTREAM_WORKFLOW_NAME",
+        sensitive_name,
+    )
+
+    build_validator, build_config = _load_config(BUILD_WORKFLOW_PATH)
+    assert build_validator.validate_firewall_upstream_workflow_identity(BUILD_WORKFLOW_PATH, build_config) is False
+    assert sensitive_name not in "\n".join(build_validator.errors)
+
+    non_build_validator, non_build_config = _load_config(DIAGNOSTIC_WORKFLOW_PATH)
+    non_build_config["name"] = sensitive_name
+    assert (
+        non_build_validator.validate_firewall_upstream_workflow_identity(
+            DIAGNOSTIC_WORKFLOW_PATH,
+            non_build_config,
+        )
+        is False
+    )
+    assert sensitive_name not in "\n".join(non_build_validator.errors)
+
+    workflow_path = tmp_path / "build.yml"
+    workflow_path.write_text(BUILD_WORKFLOW_PATH.read_text(encoding="utf-8"), encoding="utf-8")
+    monkeypatch.setattr(sys, "argv", ["validate_ci_config.py", str(workflow_path)])
+
+    with pytest.raises(SystemExit) as exc_info:
+        validate_ci_config.main()
+
+    assert exc_info.value.code == 1
+    captured = capsys.readouterr()
+    rendered_output = captured.out + captured.err
+    assert "build.yml: Workflow name must match the reserved firewall upstream identity" in rendered_output
+    assert sensitive_name not in rendered_output
 
 
 def test_firewall_checkout_trust_contract_rejects_cache_write_trigger(tmp_path: Path) -> None:

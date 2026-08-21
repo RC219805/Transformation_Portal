@@ -611,11 +611,11 @@ class CIValidator:
         trusted_name = self.FIREWALL_TRUSTED_UPSTREAM_WORKFLOW_NAME
         if workflow_path.name == "build.yml":
             if workflow_name != trusted_name:
-                self.log_error(f"build.yml: Workflow name must remain exactly {trusted_name!r} for firewall provenance")
+                self.log_error("build.yml: Workflow name must match the reserved firewall upstream identity")
                 return False
             return True
         if workflow_name == trusted_name:
-            self.log_error(f"{workflow_path.name}: Workflow name {trusted_name!r} is reserved exclusively for build.yml")
+            self.log_error("Non-build workflow must not claim the reserved firewall upstream identity")
             return False
         return True
 

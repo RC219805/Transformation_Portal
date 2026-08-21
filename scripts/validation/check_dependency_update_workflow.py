@@ -424,10 +424,10 @@ def validate_dependency_update_workflow(text: str) -> list[str]:
         preflight_commands = _logical_shell_commands(preflight_run)
         for command in REQUIRED_PREFLIGHT_COMMANDS:
             if command not in preflight_commands:
-                errors.append(f"dependency-update preflight must include exact command {command!r}")
+                errors.append("dependency-update preflight is missing a governed command")
         for command in preflight_commands:
             if command not in REQUIRED_PREFLIGHT_COMMANDS:
-                errors.append(f"dependency-update preflight must not run unexpected command {command!r}")
+                errors.append("dependency-update preflight contains an unexpected command")
         if set(preflight_commands) == set(REQUIRED_PREFLIGHT_COMMANDS) and preflight_commands != REQUIRED_PREFLIGHT_COMMANDS:
             errors.append("dependency-update preflight commands must run in the required order")
         if "if" in preflight_step:

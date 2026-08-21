@@ -185,7 +185,7 @@ def test_missing_preflight_reference_check_is_reported() -> None:
     command = workflow_contract.REQUIRED_PREFLIGHT_COMMANDS[2]
     broken = remove_workflow_snippet(valid_workflow_text(), command)
     errors = workflow_contract.validate_dependency_update_workflow(broken)
-    assert f"dependency-update preflight must include exact command {command!r}" in errors
+    assert "dependency-update preflight is missing a governed command" in errors
 
 
 def test_commented_preflight_reference_check_is_not_executable_evidence() -> None:
@@ -194,7 +194,38 @@ def test_commented_preflight_reference_check_is_not_executable_evidence() -> Non
 
     errors = workflow_contract.validate_dependency_update_workflow(broken)
 
-    assert f"dependency-update preflight must include exact command {command!r}" in errors
+    assert "dependency-update preflight is missing a governed command" in errors
+
+
+def test_dependency_preflight_diagnostics_redact_command_values(tmp_path: Path, monkeypatch, capsys) -> None:
+    required_command = workflow_contract.REQUIRED_PREFLIGHT_COMMANDS[2]
+    sensitive_command = 'echo "SENSITIVE_COMMAND_SENTINEL"'
+    broken = valid_workflow_text().replace(
+        f"        {required_command}\n",
+        f"        {sensitive_command}\n",
+        1,
+    )
+
+    errors = workflow_contract.validate_dependency_update_workflow(broken)
+    rendered_errors = "\n".join(errors)
+
+    assert "dependency-update preflight is missing a governed command" in errors
+    assert "dependency-update preflight contains an unexpected command" in errors
+    assert required_command not in rendered_errors
+    assert sensitive_command not in rendered_errors
+
+    workflow_path = tmp_path / "dependency-update.yml"
+    workflow_path.write_text(broken, encoding="utf-8")
+    monkeypatch.setattr(workflow_contract, "WORKFLOW_PATH", workflow_path)
+
+    assert workflow_contract.main() == 1
+    captured = capsys.readouterr()
+    rendered_output = captured.out + captured.err
+
+    assert "dependency-update preflight is missing a governed command" in rendered_output
+    assert "dependency-update preflight contains an unexpected command" in rendered_output
+    assert required_command not in rendered_output
+    assert sensitive_command not in rendered_output
 
 
 @pytest.mark.parametrize(
@@ -363,7 +394,7 @@ def test_dependency_target_preflight_requires_pinned_python_output() -> None:
 
     errors = workflow_contract.validate_dependency_update_workflow(broken)
 
-    assert f"dependency-update preflight must include exact command {trusted_command!r}" in errors
+    assert "dependency-update preflight is missing a governed command" in errors
 
 
 def test_dependency_update_rejects_heredoc_command_decoy() -> None:
@@ -411,7 +442,7 @@ def test_dependency_target_preflight_does_not_absorb_following_nameless_step() -
 
     errors = workflow_contract.validate_dependency_update_workflow(broken)
 
-    assert f"dependency-update preflight must include exact command {command!r}" in errors
+    assert "dependency-update preflight is missing a governed command" in errors
 
 
 def test_dependency_target_preflight_must_run_before_lock_generation() -> None:
