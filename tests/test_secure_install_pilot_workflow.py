@@ -77,6 +77,8 @@ def test_secure_install_pilot_workflow_runs_makefile_targets_and_uploads_artifac
     assert upload_step["if"] == "always()"
     assert upload_step["with"]["name"] == "secure-install-pilot-locks"
     assert upload_step["with"]["path"] == "requirements/.hash-pilot/"
+    assert upload_step["with"]["include-hidden-files"] == "true"
+    assert upload_step["with"]["if-no-files-found"] == "error"
 
 
 def test_secure_install_pilot_readme_mentions_local_toolchain_requirement() -> None:
