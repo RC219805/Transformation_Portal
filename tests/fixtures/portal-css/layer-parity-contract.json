@@ -1,4 +1,19 @@
 {
+  "baselineVersion": 2,
+  "captureContract": {
+    "browser": {
+      "engine": "chromium",
+      "headlessMode": "new",
+      "product": "Chrome/151.0.7922.34"
+    },
+    "viewportRationale": "Preserve the reviewed v1 baseline geometry while removing ambient browser-window dependence.",
+    "viewport": {
+      "deviceScaleFactor": 1,
+      "height": 469,
+      "mobile": false,
+      "width": 756
+    }
+  },
   "states": [
     "light",
     "dark",

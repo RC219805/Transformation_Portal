@@ -1,6 +1,7 @@
 # Dependency Constraints
 # Blocks installation of banned/problematic packages
-# Use with: pip install -c requirements/constraints.txt
+# Governed installer baseline: pip==26.2.1; --build-constraint requires pip>=25.3.
+# Use with: pip install -c requirements/constraints.txt --build-constraint requirements/constraints.txt
 
 # Security/quality bans - these packages are NOT allowed
 

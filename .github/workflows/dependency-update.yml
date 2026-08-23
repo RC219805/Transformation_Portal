@@ -30,8 +30,8 @@ jobs:
       - name: Install lock generation tools
         shell: /usr/bin/env -u BASH_ENV -u ENV /bin/bash --noprofile --norc -p -e -o pipefail {0}
         run: |
-          "${{ steps.setup-python.outputs.python-path }}" -I -m pip --isolated install --upgrade "pip==26.1.2"
-          "${{ steps.setup-python.outputs.python-path }}" -I -m pip --isolated install "pip-tools==7.6.0"
+          "${{ steps.setup-python.outputs.python-path }}" -I -m pip --isolated install --upgrade "pip==26.2.1"
+          "${{ steps.setup-python.outputs.python-path }}" -I -m pip --isolated install "pip-tools==7.6.1"
           # Install pip-audit from governed security lockfile
           "${{ steps.setup-python.outputs.python-path }}" -I -m pip --isolated install -r requirements/security.txt
 
@@ -71,7 +71,9 @@ jobs:
       - name: Update dependencies
         shell: /usr/bin/env -u BASH_ENV -u ENV /bin/bash --noprofile --norc -p -e -o pipefail {0}
         env:
-          PIP_NO_CACHE_DIR: "1"  # Disable pip caching to save disk space
+          # pip 26.2 caches Simple API responses. Disabling that cache keeps
+          # newly published releases visible to this scheduled update lane.
+          PIP_NO_CACHE_DIR: "1"
         run: |
           set -euo pipefail
 

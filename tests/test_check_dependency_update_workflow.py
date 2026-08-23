@@ -181,6 +181,41 @@ def test_missing_required_workflow_snippet_is_reported() -> None:
     assert ("dependency-update workflow must include snippet " "'make update-generic LOCK_PYTHON_VERSION=3.11'") in errors
 
 
+def test_missing_fresh_index_contract_is_reported() -> None:
+    broken = remove_workflow_snippet(valid_workflow_text(), 'PIP_NO_CACHE_DIR: "1"')
+    errors = workflow_contract.validate_dependency_update_workflow(broken)
+    assert "dependency-update update step must use only the governed environment" in errors
+
+
+def test_fresh_index_setting_in_run_script_is_reported() -> None:
+    broken = valid_workflow_text().replace(
+        '      env:\n        PIP_NO_CACHE_DIR: "1"\n      run: |',
+        '      run: |\n        PIP_NO_CACHE_DIR: "1"',
+        1,
+    )
+    errors = workflow_contract.validate_dependency_update_workflow(broken)
+    assert "dependency-update update step must use only the governed environment" in errors
+
+
+def test_fresh_index_setting_on_wrong_step_is_reported() -> None:
+    broken = valid_workflow_text().replace('      env:\n        PIP_NO_CACHE_DIR: "1"\n', "", 1)
+    install_step = (
+        "    - name: Install lock generation tools\n"
+        f"      shell: {workflow_contract.TRUSTED_PREFLIGHT_SHELL}\n"
+        "      run: |"
+    )
+    broken = broken.replace(
+        install_step,
+        install_step.replace(
+            "      run: |",
+            '      env:\n        PIP_NO_CACHE_DIR: "1"\n      run: |',
+        ),
+        1,
+    )
+    errors = workflow_contract.validate_dependency_update_workflow(broken)
+    assert "dependency-update update step must use only the governed environment" in errors
+
+
 def test_missing_preflight_reference_check_is_reported() -> None:
     command = workflow_contract.REQUIRED_PREFLIGHT_COMMANDS[2]
     broken = remove_workflow_snippet(valid_workflow_text(), command)

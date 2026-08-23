@@ -230,6 +230,211 @@ def test_portal_css_layer_parity_mutating_probes_use_probe_guard() -> None:
     assert "window.__portalParityProbeGuard = guard" in expressions["class census"]
 
 
+def test_portal_css_layer_parity_applies_contract_viewport() -> None:
+    module = _load_portal_css_layer_parity_module("tests_validate_portal_css_layer_parity_viewport")
+    calls: list[tuple[str, dict[str, object], float]] = []
+
+    class Connection:
+        def call(self, method: str, params: dict[str, object], timeout_seconds: float):
+            calls.append((method, params, timeout_seconds))
+            return {}
+
+    module._apply_capture_viewport(Connection())
+
+    assert calls == [
+        (
+            "Emulation.setDeviceMetricsOverride",
+            {
+                "width": 756,
+                "height": 469,
+                "deviceScaleFactor": 1,
+                "mobile": False,
+                "screenWidth": 756,
+                "screenHeight": 469,
+            },
+            20.0,
+        )
+    ]
+
+
+def test_portal_css_layer_parity_verifies_applied_viewport() -> None:
+    module = _load_portal_css_layer_parity_module("tests_validate_portal_css_layer_parity_viewport_probe")
+
+    class Connection:
+        def __init__(self, viewport: dict[str, object]) -> None:
+            self.viewport = viewport
+
+        def evaluate(self, _expression: str, timeout_seconds: float):
+            assert timeout_seconds == 20.0
+            return self.viewport
+
+    expected = {"width": 756, "height": 469, "deviceScaleFactor": 1, "mobile": False}
+
+    assert module._verify_capture_viewport(Connection(expected)) == expected
+    with pytest.raises(module.SmokeFailure, match="height=413 .*expected 469"):
+        module._verify_capture_viewport(Connection({**expected, "height": 413}))
+
+
+def test_portal_css_layer_parity_restores_contract_viewport_when_mobile_probe_fails() -> None:
+    module = _load_portal_css_layer_parity_module("tests_validate_portal_css_layer_parity_mobile_restore")
+    calls: list[tuple[str, dict[str, object]]] = []
+
+    class Connection:
+        def call(self, method: str, params: dict[str, object], timeout_seconds: float):
+            assert timeout_seconds == 20.0
+            calls.append((method, params))
+            return {}
+
+        def evaluate(self, _expression: str, timeout_seconds: float):
+            assert timeout_seconds == 20.0
+            raise module.SmokeFailure("mobile probe failed")
+
+    with pytest.raises(module.SmokeFailure, match="mobile probe failed"):
+        module._validate_overview_mobile_states(Connection())
+
+    assert calls[-1] == (
+        "Emulation.setDeviceMetricsOverride",
+        {
+            "width": 756,
+            "height": 469,
+            "deviceScaleFactor": 1,
+            "mobile": False,
+            "screenWidth": 756,
+            "screenHeight": 469,
+        },
+    )
+
+
+def test_portal_css_layer_parity_derives_and_pins_runtime_browser_provenance() -> None:
+    module = _load_portal_css_layer_parity_module("tests_validate_portal_css_layer_parity_browser")
+
+    class Connection:
+        def call(self, method: str, params: dict[str, object], timeout_seconds: float):
+            assert (method, params, timeout_seconds) == ("Browser.getVersion", {}, 20.0)
+            return {
+                "product": "Chrome/151.0.7922.34",
+                "protocolVersion": "1.3",
+                "revision": "@revision",
+                "userAgent": "Mozilla/5.0 HeadlessChrome/151.0.7922.34 Safari/537.36",
+                "jsVersion": "15.1.1",
+            }
+
+    provenance = module._read_browser_provenance(Connection())
+
+    assert provenance == {
+        "engine": "chromium",
+        "headlessMode": "new",
+        "product": "Chrome/151.0.7922.34",
+        "protocolVersion": "1.3",
+        "revision": "@revision",
+        "jsVersion": "15.1.1",
+    }
+    assert "userAgent" not in provenance
+
+
+def test_portal_css_layer_parity_rejects_unpinned_runtime_browser() -> None:
+    module = _load_portal_css_layer_parity_module("tests_validate_portal_css_layer_parity_browser_mismatch")
+
+    class Connection:
+        def call(self, _method: str, _params: dict[str, object], timeout_seconds: float):
+            assert timeout_seconds == 20.0
+            return {
+                "product": "Chrome/152.0.8000.1",
+                "protocolVersion": "1.3",
+                "revision": "@revision",
+                "userAgent": "Mozilla/5.0 HeadlessChrome/152.0.8000.1 Safari/537.36",
+                "jsVersion": "15.2.1",
+            }
+
+    with pytest.raises(module.SmokeFailure, match="product='Chrome/152.0.8000.1'"):
+        module._read_browser_provenance(Connection())
+
+
+def test_portal_css_layer_parity_baseline_round_trip_includes_capture_provenance(tmp_path: Path) -> None:
+    module = _load_portal_css_layer_parity_module("tests_validate_portal_css_layer_parity_baseline")
+    baseline_path = tmp_path / "layer-parity-baseline.json"
+    provenance = {
+        "browser": {
+            "engine": "chromium",
+            "headlessMode": "new",
+            "product": "Chrome/151.0.7922.34",
+            "protocolVersion": "1.3",
+            "revision": "@revision",
+            "jsVersion": "15.1.1",
+        },
+        "viewport": {"width": 756, "height": 469, "deviceScaleFactor": 1, "mobile": False},
+    }
+    snapshot = {"body.shell-bg": {"min-height": "469px"}}
+
+    module._write_baseline(baseline_path, snapshot, provenance)
+
+    payload = json.loads(baseline_path.read_text(encoding="utf-8"))
+    assert payload["version"] == 2
+    assert payload["captureProvenance"] == provenance
+    assert module._read_baseline(baseline_path) == (snapshot, provenance)
+
+
+def test_portal_css_layer_parity_rejects_stale_baseline_capture_contract(tmp_path: Path) -> None:
+    module = _load_portal_css_layer_parity_module("tests_validate_portal_css_layer_parity_stale_baseline")
+    baseline_path = tmp_path / "layer-parity-baseline.json"
+    baseline_path.write_text(
+        json.dumps(
+            {
+                "version": 2,
+                "captureProvenance": {
+                    "browser": {
+                        "engine": "chromium",
+                        "headlessMode": "new",
+                        "product": "Chrome/151.0.7922.34",
+                        "protocolVersion": "1.3",
+                        "revision": "@revision",
+                        "jsVersion": "15.1.1",
+                    },
+                    "viewport": {"width": 756, "height": 413, "deviceScaleFactor": 1, "mobile": False},
+                },
+                "representativeStyleSelectors": module.REPRESENTATIVE_STYLE_SELECTORS,
+                "representativeStyleProperties": module.REPRESENTATIVE_STYLE_PROPERTIES,
+                "snapshot": {},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(module.SmokeFailure, match="baseline viewport provenance"):
+        module._read_baseline(baseline_path)
+
+
+def test_portal_css_layer_parity_v1_baseline_error_explains_pinned_migration(tmp_path: Path) -> None:
+    module = _load_portal_css_layer_parity_module("tests_validate_portal_css_layer_parity_v1_migration")
+    baseline_path = tmp_path / "layer-parity-baseline.json"
+    baseline_path.write_text(json.dumps({"version": 1}), encoding="utf-8")
+
+    with pytest.raises(
+        module.SmokeFailure,
+        match=r"version is 1; expected 2.*--write-baseline.*contract-pinned Chrome/151\.0\.7922\.34",
+    ):
+        module._read_baseline(baseline_path)
+
+
+def test_portal_css_layer_parity_rejects_runtime_baseline_browser_drift() -> None:
+    module = _load_portal_css_layer_parity_module("tests_validate_portal_css_layer_parity_runtime_drift")
+    baseline = {
+        "browser": {
+            "engine": "chromium",
+            "headlessMode": "new",
+            "product": "Chrome/151.0.7922.34",
+            "protocolVersion": "1.3",
+            "revision": "@baseline",
+            "jsVersion": "15.1.1",
+        },
+        "viewport": {"width": 756, "height": 469, "deviceScaleFactor": 1, "mobile": False},
+    }
+    runtime = {"browser": {**baseline["browser"], "revision": "@other"}, "viewport": baseline["viewport"]}
+
+    with pytest.raises(module.SmokeFailure, match="browser.revision='@other' .*baseline '@baseline'"):
+        module._validate_runtime_matches_baseline(runtime, baseline)
+
+
 def test_portal_browser_accessibility_probe_tracks_target_size_and_disclosure_contracts():
     module = _load_module(PORTAL_BROWSER_SCRIPT_PATH, "tests_validate_portal_browser_smoke_accessibility_probe")
 

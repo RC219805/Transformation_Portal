@@ -17,6 +17,8 @@ Contracts enforced:
 5. Dependency-update audit reports must be written outside the git checkout
    and uploaded from that temp location only.
 6. Repository-owned dependency targets must be validated before lock generation.
+7. The update transaction must bypass pip's Simple API cache so pip 26.2 does
+   not hide newly published releases from scheduled resolution.
 """
 
 from __future__ import annotations
@@ -191,8 +193,8 @@ EXPECTED_STEP_IDENTITIES = (
 )
 
 REQUIRED_INSTALL_TOOLCHAIN_SNIPPETS = (
-    f'{TRUSTED_PYTHON} -m pip --isolated install --upgrade "pip==26.1.2"',
-    f'{TRUSTED_PYTHON} -m pip --isolated install "pip-tools==7.6.0"',
+    f'{TRUSTED_PYTHON} -m pip --isolated install --upgrade "pip==26.2.1"',
+    f'{TRUSTED_PYTHON} -m pip --isolated install "pip-tools==7.6.1"',
     f"{TRUSTED_PYTHON} -m pip --isolated install -r requirements/security.txt",
 )
 

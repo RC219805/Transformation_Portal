@@ -4,6 +4,7 @@ SHELL := /bin/sh
 # .venv immediately switch to the repo interpreter on subsequent lines.
 BOOTSTRAP_PY = $$(./scripts/setup/resolve_python_311.sh)
 PY = $$(./scripts/setup/resolve_python_311.sh)
+PIP_VERSION := 26.2.1
 PRE_COMMIT_BIN := $(shell if [ -x .venv/bin/pre-commit ]; then printf '%s' .venv/bin/pre-commit; elif [ -x .venv/Scripts/pre-commit.exe ]; then printf '%s' .venv/Scripts/pre-commit.exe; fi)
 DOCS_TOOL_REQUIREMENTS := "sphinx>=7.2,<9" "sphinx-rtd-theme>=2.0,<3" "sphinx-autodoc-typehints>=2.0,<4"
 
@@ -160,11 +161,13 @@ venv:
 
 setup: venv
 	@echo "Installing package in editable mode..."
+	@"$(PY)" -m pip install --upgrade "pip==$(PIP_VERSION)"
 	@"$(PY)" -m pip install -e .
 
 install-core: venv
 	@echo "Installing pinned core dependencies into .venv..."
-	@"$(PY)" -m pip install -r requirements/base.txt -r requirements/dev.txt -c requirements/constraints.txt
+	@"$(PY)" -m pip install --upgrade "pip==$(PIP_VERSION)"
+	@"$(PY)" -m pip install -r requirements/base.txt -r requirements/dev.txt -c requirements/constraints.txt --build-constraint requirements/constraints.txt
 	@"$(PY)" -m pip install -e . --no-deps
 	@"$(PY)" -m pip check
 
@@ -173,7 +176,8 @@ repair-core-venv:
 	@rm -rf .venv
 	@bootstrap_py="$(BOOTSTRAP_PY)"; \
 		"$$bootstrap_py" -m venv .venv
-	@"$(PY)" -m pip install -r requirements/base.txt -r requirements/dev.txt -c requirements/constraints.txt
+	@"$(PY)" -m pip install --upgrade "pip==$(PIP_VERSION)"
+	@"$(PY)" -m pip install -r requirements/base.txt -r requirements/dev.txt -c requirements/constraints.txt --build-constraint requirements/constraints.txt
 	@"$(PY)" -m pip install -e . --no-deps
 	@"$(PY)" -m pip check
 	@echo "Repo .venv repaired."

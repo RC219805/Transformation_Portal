@@ -99,8 +99,10 @@ actionable; use the linked docs and `Makefile` for exhaustive inventories.
   `make validate-frontdoor-deployment-gate` for shared deployment posture.
   Before Playwright browser gates, install its managed Chromium once with
   `cd web/secure-landing && npm run test:browser:install`. The CDP smoke/parity
-  validators instead require Google Chrome or a valid
-  `TP_PORTAL_BROWSER_BINARY`.
+  validators require a valid `TP_PORTAL_BROWSER_BINARY` or Google Chrome. CSS
+  layer parity additionally requires the Chrome for Testing product pinned in
+  `tests/fixtures/portal-css/layer-parity-contract.json`; point
+  `TP_PORTAL_BROWSER_BINARY` at that managed executable.
   For direct deployments, set `TP_FRONTDOOR_GATE_DEPLOYMENT_TARGET` and
   `TP_FRONTDOOR_GATE_DEPLOYMENT_URL`; the Vercel legacy alias is supported only
   for Vercel checks.
@@ -157,8 +159,8 @@ actionable; use the linked docs and `Makefile` for exhaustive inventories.
   `make -C requirements compile-hash-pilot LOCK_PYTHON_VERSION=3.11` then
   `make -C requirements check-hash-pilot LOCK_PYTHON_VERSION=3.11`; use
   `HASH_PILOT_OUT_DIR=/tmp/tp-hash-pilot` to keep pilot artifacts disposable.
-  Match CI with `python -m pip install --upgrade "pip==26.1.2"` and
-  `python -m pip install "pip-tools==7.6.0"`. Use the same toolchain for the
+  Match CI with `python -m pip install --upgrade "pip==26.2.1"` and
+  `python -m pip install "pip-tools==7.6.1"`. Use the same toolchain for the
   decisive generic-lock freshness check:
   `make -C requirements check-generic LOCK_PYTHON_VERSION=3.11`. Validate
   contract changes with

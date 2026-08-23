@@ -1,4 +1,20 @@
 {
+  "captureProvenance": {
+    "browser": {
+      "engine": "chromium",
+      "headlessMode": "new",
+      "jsVersion": "15.1.206.8",
+      "product": "Chrome/151.0.7922.34",
+      "protocolVersion": "1.3",
+      "revision": "@782af9cb30a53f54487e5d2e44738645a8ec457c"
+    },
+    "viewport": {
+      "deviceScaleFactor": 1,
+      "height": 469,
+      "mobile": false,
+      "width": 756
+    }
+  },
   "representativeStyleProperties": [
     "display",
     "position",
@@ -1220,5 +1236,5 @@
       "z-index": "auto"
     }
   },
-  "version": 1
+  "version": 2
 }
