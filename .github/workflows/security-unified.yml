@@ -103,9 +103,9 @@ jobs:
 
       - name: Install Dependencies with Constraints
         run: |
-          pip install --upgrade pip
-          pip install -c requirements/constraints.txt -r requirements-ci.txt
-          pip install -c requirements/constraints.txt -e .
+          python -m pip install --upgrade "pip==26.2.1"
+          pip install -c requirements/constraints.txt --build-constraint requirements/constraints.txt -r requirements-ci.txt
+          pip install -c requirements/constraints.txt --build-constraint requirements/constraints.txt -e .
 
       - name: Verify basicsr Not Installed After pip install
         run: |
@@ -130,7 +130,7 @@ jobs:
       # P0 Enhancement: pip-audit for dependency vulnerability scanning
       - name: Install security tools
         run: |
-          python -m pip install --upgrade "pip==26.1.2" "setuptools==83.0.0"
+          python -m pip install --upgrade "pip==26.2.1" "setuptools==83.0.0"
           # Install from locked requirements file for deterministic, governed security tooling
           pip install -r requirements/security.txt
 

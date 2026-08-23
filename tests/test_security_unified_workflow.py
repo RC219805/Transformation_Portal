@@ -162,5 +162,5 @@ def test_pip_audit_workflow_contract_has_no_severity_or_top_level_count_fallback
 def test_security_tool_install_pins_a_non_vulnerable_setuptools() -> None:
     install_run = _workflow_step("Install security tools")["run"]
 
-    assert '"pip==26.1.2"' in install_run
+    assert '"pip==26.2.1"' in install_run
     assert '"setuptools==83.0.0"' in install_run

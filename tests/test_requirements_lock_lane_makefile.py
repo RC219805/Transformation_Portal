@@ -56,7 +56,7 @@ def test_check_generic_normalizes_host_specific_generic_lock_packages() -> None:
         assert snippet in body
 
 
-def _write_fake_pip_compile(path: Path, *, version: str = "7.6.0") -> None:
+def _write_fake_pip_compile(path: Path, *, version: str = "7.6.1") -> None:
     path.write_text(
         """#!/usr/bin/env python3
 from pathlib import Path
@@ -108,13 +108,33 @@ path.write_text("\\n".join(header + body) + "\\n", encoding="utf-8")
     path.chmod(0o755)
 
 
+def _write_fake_pip_python(path: Path, *, version: str = "26.2.1") -> None:
+    path.write_text(
+        "#!/bin/sh\n"
+        'if [ "$1" = "-m" ] && [ "$2" = "pip" ] && [ "$3" = "--version" ]; then\n'
+        f'  echo "pip {version} from /test/site-packages/pip (python 3.11)"\n'
+        "  exit 0\n"
+        "fi\n"
+        "exit 2\n",
+        encoding="utf-8",
+    )
+    path.chmod(0o755)
+
+
 @pytest.mark.security
 def test_require_pip_compile_rejects_stale_toolchain(tmp_path: Path) -> None:
     fake_pip_compile = tmp_path / "pip-compile"
+    fake_pip_python = tmp_path / "python"
     _write_fake_pip_compile(fake_pip_compile, version="7.5.2")
+    _write_fake_pip_python(fake_pip_python)
 
     result = subprocess.run(
-        ["make", "require-pip-compile", f"PIP_COMPILE_BIN={fake_pip_compile}"],
+        [
+            "make",
+            "require-pip-compile",
+            f"PIP_COMPILE_BIN={fake_pip_compile}",
+            f"PIP_PYTHON_BIN={fake_pip_python}",
+        ],
         cwd=MAKEFILE_PATH.parent,
         env=os.environ.copy(),
         capture_output=True,
@@ -124,8 +144,59 @@ def test_require_pip_compile_rejects_stale_toolchain(tmp_path: Path) -> None:
 
     assert result.returncode != 0
     output = result.stdout + result.stderr
-    assert "requires pip-tools==7.6.0" in output
+    assert "requires pip-tools==7.6.1" in output
     assert "pip-compile, version 7.5.2" in output
+
+
+@pytest.mark.security
+def test_require_pip_compile_rejects_stale_pip_runtime(tmp_path: Path) -> None:
+    fake_pip_compile = tmp_path / "pip-compile"
+    fake_pip_python = tmp_path / "python"
+    _write_fake_pip_compile(fake_pip_compile)
+    _write_fake_pip_python(fake_pip_python, version="26.1.2")
+
+    result = subprocess.run(
+        [
+            "make",
+            "require-pip-compile",
+            f"PIP_COMPILE_BIN={fake_pip_compile}",
+            f"PIP_PYTHON_BIN={fake_pip_python}",
+        ],
+        cwd=MAKEFILE_PATH.parent,
+        env=os.environ.copy(),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode != 0
+    output = result.stdout + result.stderr
+    assert "requires pip==26.2.1" in output
+    assert "pip 26.1.2 from /test/site-packages/pip" in output
+
+
+@pytest.mark.security
+def test_require_pip_compile_accepts_exact_governed_toolchain(tmp_path: Path) -> None:
+    fake_pip_compile = tmp_path / "pip-compile"
+    fake_pip_python = tmp_path / "python"
+    _write_fake_pip_compile(fake_pip_compile)
+    _write_fake_pip_python(fake_pip_python)
+
+    result = subprocess.run(
+        [
+            "make",
+            "require-pip-compile",
+            f"PIP_COMPILE_BIN={fake_pip_compile}",
+            f"PIP_PYTHON_BIN={fake_pip_python}",
+        ],
+        cwd=MAKEFILE_PATH.parent,
+        env=os.environ.copy(),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
 
 
 def _write_lock_with_opencv_marker_pins(path: Path) -> None:
@@ -168,10 +239,17 @@ def test_update_generic_preserves_governed_opencv_marker_pins_and_fresh_versions
         _write_lock_with_opencv_marker_pins(requirements_dir / name)
 
     fake_pip_compile = tmp_path / "pip-compile"
+    fake_pip_python = tmp_path / "python"
     _write_fake_pip_compile(fake_pip_compile)
+    _write_fake_pip_python(fake_pip_python)
 
     result = subprocess.run(
-        ["make", "update-generic", f"PIP_COMPILE_BIN={fake_pip_compile}"],
+        [
+            "make",
+            "update-generic",
+            f"PIP_COMPILE_BIN={fake_pip_compile}",
+            f"PIP_PYTHON_BIN={fake_pip_python}",
+        ],
         cwd=requirements_dir,
         env=os.environ.copy(),
         capture_output=True,

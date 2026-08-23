@@ -16,6 +16,8 @@ Contracts enforced:
    updates as installable manifests.
 5. Dependency-update audit reports must be written outside the git checkout
    and uploaded from that temp location only.
+6. The update transaction must bypass pip's Simple API cache so pip 26.2 does
+   not hide newly published releases from scheduled resolution.
 """
 
 from __future__ import annotations
@@ -62,8 +64,8 @@ REQUIRED_WORKFLOW_SNIPPETS = (
 )
 
 REQUIRED_INSTALL_TOOLCHAIN_SNIPPETS = (
-    'python -m pip install --upgrade "pip==26.1.2"',
-    'python -m pip install "pip-tools==7.6.0"',
+    'python -m pip install --upgrade "pip==26.2.1"',
+    'python -m pip install "pip-tools==7.6.1"',
     "python -m pip install -r requirements/security.txt",
 )
 
@@ -151,6 +153,53 @@ def _extract_create_pr_body(text: str) -> str | None:
     return "\n".join(body_lines)
 
 
+def _extract_named_step(text: str, name: str) -> str | None:
+    """Return one workflow step, bounded by its YAML indentation."""
+    lines = text.splitlines()
+    step_pattern = re.compile(rf"^\s*-\s+name:\s+{re.escape(name)}\s*$")
+
+    for index, line in enumerate(lines):
+        if not step_pattern.match(line):
+            continue
+
+        step_indent = len(line) - len(line.lstrip(" "))
+        step_lines = [line]
+        for candidate in lines[index + 1 :]:
+            stripped = candidate.strip()
+            indent = len(candidate) - len(candidate.lstrip(" "))
+            if stripped and indent <= step_indent:
+                break
+            step_lines.append(candidate)
+        return "\n".join(step_lines)
+
+    return None
+
+
+def _extract_step_env_value(step: str, key: str) -> str | None:
+    """Return a scalar from a step-local env map, without accepting run text."""
+    lines = step.splitlines()
+    for index, line in enumerate(lines):
+        if not re.match(r"^\s*env:\s*$", line):
+            continue
+
+        env_indent = len(line) - len(line.lstrip(" "))
+        for candidate in lines[index + 1 :]:
+            stripped = candidate.strip()
+            indent = len(candidate) - len(candidate.lstrip(" "))
+            if stripped and indent <= env_indent:
+                break
+            match = re.match(rf"^\s*{re.escape(key)}:\s*(?P<value>.+?)\s*$", candidate)
+            if match is None:
+                continue
+            value = match.group("value").split("#", 1)[0].strip()
+            if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+                value = value[1:-1]
+            return value
+        return None
+
+    return None
+
+
 def _extract_audit_targets_block(text: str) -> str | None:
     """Return the audit_targets block content, if present."""
     match = AUDIT_TARGETS_BLOCK_RE.search(text)
@@ -164,6 +213,7 @@ def validate_dependency_update_workflow(text: str) -> list[str]:
     errors: list[str] = []
     audit_targets_block = _extract_audit_targets_block(text)
     pr_body = _extract_create_pr_body(text)
+    update_step = _extract_named_step(text, "Update dependencies")
 
     if audit_targets_block is None:
         errors.append("dependency-update workflow must define an audit_targets block")
@@ -175,6 +225,9 @@ def validate_dependency_update_workflow(text: str) -> list[str]:
     for snippet in REQUIRED_WORKFLOW_SNIPPETS:
         if snippet not in text:
             errors.append(f"dependency-update workflow must include snippet {snippet!r}")
+
+    if update_step is None or _extract_step_env_value(update_step, "PIP_NO_CACHE_DIR") != "1":
+        errors.append("dependency-update Update dependencies step must set env.PIP_NO_CACHE_DIR to '1'")
 
     for snippet in REQUIRED_INSTALL_TOOLCHAIN_SNIPPETS:
         if snippet not in text:

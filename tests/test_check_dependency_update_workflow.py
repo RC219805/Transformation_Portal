@@ -30,6 +30,8 @@ def valid_workflow_text() -> str:
       run: |
 {required_install_snippets}
     - name: Update dependencies
+      env:
+        PIP_NO_CACHE_DIR: "1"
       run: |
 {required_workflow_snippets}
     - name: Check for vulnerabilities
@@ -109,11 +111,38 @@ def test_missing_required_workflow_snippet_is_reported() -> None:
     assert ("dependency-update workflow must include snippet " "'make update-generic LOCK_PYTHON_VERSION=3.11'") in errors
 
 
+def test_missing_fresh_index_contract_is_reported() -> None:
+    broken = remove_workflow_snippet(valid_workflow_text(), 'PIP_NO_CACHE_DIR: "1"')
+    errors = workflow_contract.validate_dependency_update_workflow(broken)
+    assert "dependency-update Update dependencies step must set env.PIP_NO_CACHE_DIR to '1'" in errors
+
+
+def test_fresh_index_setting_in_run_script_is_reported() -> None:
+    broken = valid_workflow_text().replace(
+        '      env:\n        PIP_NO_CACHE_DIR: "1"\n      run: |',
+        '      run: |\n        PIP_NO_CACHE_DIR: "1"',
+        1,
+    )
+    errors = workflow_contract.validate_dependency_update_workflow(broken)
+    assert "dependency-update Update dependencies step must set env.PIP_NO_CACHE_DIR to '1'" in errors
+
+
+def test_fresh_index_setting_on_wrong_step_is_reported() -> None:
+    broken = valid_workflow_text().replace('      env:\n        PIP_NO_CACHE_DIR: "1"\n', "", 1)
+    broken = broken.replace(
+        "    - name: Install lock generation tools\n      run: |",
+        '    - name: Install lock generation tools\n      env:\n        PIP_NO_CACHE_DIR: "1"\n      run: |',
+        1,
+    )
+    errors = workflow_contract.validate_dependency_update_workflow(broken)
+    assert "dependency-update Update dependencies step must set env.PIP_NO_CACHE_DIR to '1'" in errors
+
+
 def test_missing_required_install_toolchain_snippet_is_reported() -> None:
-    broken = remove_workflow_snippet(valid_workflow_text(), 'python -m pip install --upgrade "pip==26.1.2"')
+    broken = remove_workflow_snippet(valid_workflow_text(), 'python -m pip install --upgrade "pip==26.2.1"')
     errors = workflow_contract.validate_dependency_update_workflow(broken)
     assert (
-        "dependency-update workflow must include install-tool snippet 'python -m pip install --upgrade \"pip==26.1.2\"'"
+        "dependency-update workflow must include install-tool snippet 'python -m pip install --upgrade \"pip==26.2.1\"'"
         in errors
     )
 

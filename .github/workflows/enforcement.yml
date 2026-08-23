@@ -141,7 +141,8 @@ jobs:
 
       - name: Install core dependencies
         run: |
-          python -m pip install -c requirements/constraints.txt -r requirements-dev.txt
+          python -m pip install --upgrade "pip==26.2.1"
+          python -m pip install -c requirements/constraints.txt --build-constraint requirements/constraints.txt -r requirements-dev.txt
           python -m pip install -e . --no-deps
           python -m pip install numpy==2.2.6 pandas==2.2.3 jsonschema==4.23.0
           python -m pip check
@@ -176,8 +177,9 @@ jobs:
 
       - name: Install ML dependencies with constraints
         run: |
-          python -m pip install -c requirements/constraints.txt -r requirements-dev.txt
-          python -m pip install -e ".[ml]" -c requirements/constraints.txt
+          python -m pip install --upgrade "pip==26.2.1"
+          python -m pip install -c requirements/constraints.txt --build-constraint requirements/constraints.txt -r requirements-dev.txt
+          python -m pip install -e ".[ml]" -c requirements/constraints.txt --build-constraint requirements/constraints.txt
           python -m pip check
 
       - name: Run ML tests
@@ -202,7 +204,8 @@ jobs:
 
       - name: Install dependencies
         run: |
-          python -m pip install -c requirements/constraints.txt -r requirements-dev.txt
+          python -m pip install --upgrade "pip==26.2.1"
+          python -m pip install -c requirements/constraints.txt --build-constraint requirements/constraints.txt -r requirements-dev.txt
           python -m pip install -e . --no-deps
           python -m pip install numpy==2.2.6 pandas==2.2.3 jsonschema==4.23.0
           python -m pip check
