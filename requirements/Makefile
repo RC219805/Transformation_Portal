@@ -37,10 +37,12 @@
 
 SHELL := /bin/bash
 LOCK_PYTHON_VERSION ?= 3.11
-PIP_TOOLS_VERSION := 7.6.0
+PIP_VERSION := 26.2.1
+PIP_TOOLS_VERSION := 7.6.1
 PIP_TOOLS_CACHE_DIR ?= $(CURDIR)/.pip-tools-cache
 HASH_PILOT_OUT_DIR ?= $(CURDIR)/.hash-pilot
 PIP_COMPILE_BIN := $(if $(wildcard $(CURDIR)/../.venv/bin/pip-compile),$(CURDIR)/../.venv/bin/pip-compile,pip-compile)
+PIP_PYTHON_BIN ?= $(if $(findstring /,$(PIP_COMPILE_BIN)),$(dir $(PIP_COMPILE_BIN))python,python3)
 PIP_COMPILE_BASE := $(PIP_COMPILE_BIN) -q --resolver=backtracking
 PIP_COMPILE_PY_FLAG := $(shell $(PIP_COMPILE_BIN) --help 2>/dev/null | grep -q -- '--python-version' && echo "--python-version=$(LOCK_PYTHON_VERSION)" || true)
 PIP_COMPILE := mkdir -p "$(PIP_TOOLS_CACHE_DIR)" && PIP_TOOLS_CACHE_DIR="$(PIP_TOOLS_CACHE_DIR)" $(PIP_COMPILE_BASE) $(PIP_COMPILE_PY_FLAG)
@@ -128,9 +130,23 @@ compile-accel:
 require-pip-compile:
 	@if ! command -v "$(PIP_COMPILE_BIN)" >/dev/null 2>&1; then \
 		echo "ERROR: pip-compile is required for requirements/Makefile targets."; \
-		echo "ERROR: Install pip-tools==7.6.0 in the active environment before running compile/update/check commands."; \
+		echo "ERROR: Install pip==$(PIP_VERSION) and pip-tools==$(PIP_TOOLS_VERSION) in the active environment before running compile/update/check commands."; \
 		exit 1; \
 	fi; \
+	if ! command -v "$(PIP_PYTHON_BIN)" >/dev/null 2>&1; then \
+		echo "ERROR: Unable to locate the Python interpreter paired with $(PIP_COMPILE_BIN)."; \
+		echo "ERROR: Set PIP_PYTHON_BIN to the interpreter that owns pip-compile."; \
+		exit 1; \
+	fi; \
+	reported_pip_version="$$("$(PIP_PYTHON_BIN)" -m pip --version 2>/dev/null)"; \
+	case "$$reported_pip_version" in \
+		"pip $(PIP_VERSION) "*) ;; \
+		*) \
+			echo "ERROR: requirements/Makefile requires pip==$(PIP_VERSION)."; \
+			echo "ERROR: $(PIP_PYTHON_BIN) reported '$${reported_pip_version:-unknown}'."; \
+			exit 1; \
+			;; \
+	esac; \
 	reported_version="$$("$(PIP_COMPILE_BIN)" --version 2>/dev/null)"; \
 	if [ "$$reported_version" != "pip-compile, version $(PIP_TOOLS_VERSION)" ]; then \
 		echo "ERROR: requirements/Makefile requires pip-tools==$(PIP_TOOLS_VERSION)."; \

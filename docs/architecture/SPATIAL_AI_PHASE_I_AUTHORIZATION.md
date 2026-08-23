@@ -215,7 +215,7 @@
    ```yaml
    # .github/workflows/quality-gate.yml (existing, applies automatically)
    - name: Install with Constraints
-     run: pip install -c requirements/constraints.txt -r requirements/spatial-ai.txt
+     run: pip install -c requirements/constraints.txt --build-constraint requirements/constraints.txt -r requirements/spatial-ai.txt
    ```
    (Iceberg install will fail due to constraints.txt ban)
 

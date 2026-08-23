@@ -66,8 +66,8 @@ def test_secure_install_pilot_workflow_runs_makefile_targets_and_uploads_artifac
     check_step = next(step for step in steps if step.get("name") == "Validate secure-install pilot lockfiles")
     upload_step = next(step for step in steps if step.get("name") == "Upload secure-install pilot artifacts")
 
-    assert 'python -m pip install --upgrade "pip==26.1.2"' in install_step["run"]
-    assert 'python -m pip install "pip-tools==7.6.0"' in install_step["run"]
+    assert 'python -m pip install --upgrade "pip==26.2.1"' in install_step["run"]
+    assert 'python -m pip install "pip-tools==7.6.1"' in install_step["run"]
     assert compile_step["working-directory"] == "requirements"
     assert "make compile-hash-pilot" in compile_step["run"]
     assert 'HASH_PILOT_OUT_DIR="${GITHUB_WORKSPACE}/requirements/.hash-pilot"' in compile_step["run"]
@@ -77,13 +77,15 @@ def test_secure_install_pilot_workflow_runs_makefile_targets_and_uploads_artifac
     assert upload_step["if"] == "always()"
     assert upload_step["with"]["name"] == "secure-install-pilot-locks"
     assert upload_step["with"]["path"] == "requirements/.hash-pilot/"
+    assert upload_step["with"]["include-hidden-files"] == "true"
+    assert upload_step["with"]["if-no-files-found"] == "error"
 
 
 def test_secure_install_pilot_readme_mentions_local_toolchain_requirement() -> None:
     readme = REQUIREMENTS_README_PATH.read_text(encoding="utf-8")
 
-    assert 'python -m pip install --upgrade "pip==26.1.2"' in readme
-    assert 'python -m pip install "pip-tools==7.6.0"' in readme
+    assert 'python -m pip install --upgrade "pip==26.2.1"' in readme
+    assert 'python -m pip install "pip-tools==7.6.1"' in readme
     assert ".github/workflows/secure-install-pilot.yml" in readme
 
 

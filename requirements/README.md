@@ -210,22 +210,39 @@ layered install surface first.
 The local pilot currently expects the same toolchain as the advisory CI
 workflow:
 
-- `pip==26.1.2`
-- `pip-tools==7.6.0`
+- `pip==26.2.1`
+- `pip-tools==7.6.1`
 
-That pairing includes the current pip security fixes and a pip-tools release
-compatible with pip 26 hash generation. To match the workflow locally:
+That pairing includes the CVE-2026-13346 correction and the subsequent
+26.2.1 keyring fix while retaining the repository-validated pip-tools compiler.
+To match the workflow locally:
 
 ```bash
-python -m pip install --upgrade "pip==26.1.2"
-python -m pip install "pip-tools==7.6.0"
+python -m pip install --upgrade "pip==26.2.1"
+python -m pip install "pip-tools==7.6.1"
 ```
 
-`pip-tools 7.6.0` replaces the incompatible 7.5.2 baseline and is the first
-release with upstream support for pip 26.1. The workflow in
+`pip-tools 7.6.1` is the first compiler release compatible with pip 26.2 and
+replaces the pip-26.1-only 7.6.0 baseline. The workflow in
 `.github/workflows/secure-install-pilot.yml` applies this toolchain
 automatically. The requirements Makefile fails closed when `pip-compile`
-reports any other version, so local runs must use the same versions.
+or its paired pip interpreter reports any other version, so local runs must use
+the same versions.
+
+Pip 26.2 separates normal constraints from isolated-build constraints. Live
+`pip install` commands that use `requirements/constraints.txt` therefore pass
+both `-c requirements/constraints.txt` and
+`--build-constraint requirements/constraints.txt`; do not rely on
+`PIP_CONSTRAINT` propagating into an isolated build environment. The `-c`
+arguments on `pip-compile` commands are compiler resolution inputs and are not
+affected by this pip install behavior change.
+
+Pip 26.2 also caches Simple API index responses. The scheduled dependency
+update lane sets `PIP_NO_CACHE_DIR=1` around its lock update transaction so
+newly published releases remain visible. For an ad hoc pip operation that must
+retain the rest of the cache, use pip's targeted
+`--refresh-package <distribution>` option.
+
 ```bash
 cd requirements
 make compile-hash-pilot LOCK_PYTHON_VERSION=3.11
