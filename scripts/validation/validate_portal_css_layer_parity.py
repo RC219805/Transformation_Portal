@@ -46,22 +46,20 @@ def _utility_ownership_path() -> Path:
     return _repo_root() / "web" / "secure-landing" / "portal-src" / "styles" / "utility-ownership.json"
 
 
-def _load_layer_parity_contract() -> tuple[list[str], list[str], list[str], list[str]]:
+def _load_layer_parity_contract() -> Dict[str, Any]:
     contract = json.loads(_layer_parity_contract_path().read_text(encoding="utf-8"))
-    return (
-        list(contract.get("states", [])),
-        list(contract.get("views", [])),
-        list(contract["representativeStyleSelectors"]),
-        list(contract["representativeStyleProperties"]),
-    )
+    if not isinstance(contract, dict):
+        raise SmokeFailure("Layer parity contract must be a JSON object")
+    return contract
 
 
-(
-    LAYER_PARITY_STATES,
-    LAYER_PARITY_VIEWS,
-    REPRESENTATIVE_STYLE_SELECTORS,
-    REPRESENTATIVE_STYLE_PROPERTIES,
-) = _load_layer_parity_contract()
+LAYER_PARITY_CONTRACT = _load_layer_parity_contract()
+LAYER_PARITY_STATES = list(LAYER_PARITY_CONTRACT.get("states", []))
+LAYER_PARITY_VIEWS = list(LAYER_PARITY_CONTRACT.get("views", []))
+REPRESENTATIVE_STYLE_SELECTORS = list(LAYER_PARITY_CONTRACT["representativeStyleSelectors"])
+REPRESENTATIVE_STYLE_PROPERTIES = list(LAYER_PARITY_CONTRACT["representativeStyleProperties"])
+LAYER_PARITY_BASELINE_VERSION = int(LAYER_PARITY_CONTRACT["baselineVersion"])
+LAYER_PARITY_CAPTURE_CONTRACT = dict(LAYER_PARITY_CONTRACT["captureContract"])
 UTILITY_EXACT_CLASSES = {
     "absolute",
     "antialiased",
@@ -357,8 +355,7 @@ def _build_portal_css_with_compat_disabled() -> None:
         raise SmokeFailure(f"node binary not found while rebuilding portal.css: {exc}") from exc
     except subprocess.CalledProcessError as exc:
         raise SmokeFailure(
-            "PORTAL_CSS_DISABLE_COMPAT_OVERRIDES=1 build failed; "
-            f"stdout={exc.stdout!r} stderr={exc.stderr!r}"
+            "PORTAL_CSS_DISABLE_COMPAT_OVERRIDES=1 build failed; " f"stdout={exc.stdout!r} stderr={exc.stderr!r}"
         ) from exc
 
 
@@ -913,17 +910,12 @@ def _validate_surface_final_pass_states(connection: DevToolsConnection) -> None:
                 failures.append(f"{theme}: .review-provenance-label expected font-size unresolved")
             elif font_size != expected_font_size:
                 failures.append(
-                    f"{theme}: .review-provenance-label font-size drifted "
-                    f"({font_size!r} != {expected_font_size!r})"
+                    f"{theme}: .review-provenance-label font-size drifted " f"({font_size!r} != {expected_font_size!r})"
                 )
             if line_height in {"", "normal"}:
-                failures.append(
-                    f"{theme}: .review-provenance-label line-height unresolved ({line_height!r})"
-                )
+                failures.append(f"{theme}: .review-provenance-label line-height unresolved ({line_height!r})")
             if letter_spacing in {"", "normal"}:
-                failures.append(
-                    f"{theme}: .review-provenance-label letter-spacing unresolved ({letter_spacing!r})"
-                )
+                failures.append(f"{theme}: .review-provenance-label letter-spacing unresolved ({letter_spacing!r})")
     for theme in REVIEW_STATUS_THEMES:
         for ambient_active in (False, True):
             if (theme, ambient_active) not in workspace_seen:
@@ -986,48 +978,50 @@ def _validate_overview_mobile_states(connection: DevToolsConnection) -> None:
         {"width": 767, "height": 900, "mobile": False},
         {"width": 375, "height": 900, "mobile": True},
     ]
-    for probe in probes:
-        width = int(probe["width"])
-        connection.call(
-            "Emulation.setDeviceMetricsOverride",
-            {
-                "width": width,
-                "height": int(probe["height"]),
-                "deviceScaleFactor": 1,
-                "mobile": bool(probe["mobile"]),
-            },
-            timeout_seconds=20.0,
-        )
-        connection.evaluate(_style_settle_expression(), timeout_seconds=20.0)
-        result = connection.evaluate(_overview_mobile_probe_expression(), timeout_seconds=20.0)
-        if not isinstance(result, dict):
-            failures.append(f"{width}px: overview mobile probe did not return an object")
-            continue
-        overview = result.get("overviewActions")
-        build_stepper = result.get("buildStepperActions")
-        hero = result.get("heroAction")
-        if not isinstance(overview, dict) or not overview.get("present"):
-            failures.append(f"{width}px: overview actions cluster missing")
-        else:
-            if overview.get("display") != "grid":
-                failures.append(f"{width}px: overview actions display is {overview.get('display')!r}")
-            if overview.get("justifyContent") != "stretch":
-                failures.append(f"{width}px: overview actions justify-content is {overview.get('justifyContent')!r}")
-            if _grid_track_count(str(overview.get("gridTemplateColumns") or "")) != 1:
-                failures.append(f"{width}px: overview actions must resolve to one grid track")
-        if not isinstance(build_stepper, dict) or not build_stepper.get("present"):
-            failures.append(f"{width}px: build stepper actions missing")
-        elif build_stepper.get("justifyContent") != "stretch":
-            failures.append(f"{width}px: build stepper actions justify-content is {build_stepper.get('justifyContent')!r}")
-        if width <= 479:
-            if not isinstance(hero, dict) or not hero.get("present"):
-                failures.append(f"{width}px: overview hero action missing")
+    try:
+        for probe in probes:
+            width = int(probe["width"])
+            connection.call(
+                "Emulation.setDeviceMetricsOverride",
+                {
+                    "width": width,
+                    "height": int(probe["height"]),
+                    "deviceScaleFactor": 1,
+                    "mobile": bool(probe["mobile"]),
+                },
+                timeout_seconds=20.0,
+            )
+            connection.evaluate(_style_settle_expression(), timeout_seconds=20.0)
+            result = connection.evaluate(_overview_mobile_probe_expression(), timeout_seconds=20.0)
+            if not isinstance(result, dict):
+                failures.append(f"{width}px: overview mobile probe did not return an object")
+                continue
+            overview = result.get("overviewActions")
+            build_stepper = result.get("buildStepperActions")
+            hero = result.get("heroAction")
+            if not isinstance(overview, dict) or not overview.get("present"):
+                failures.append(f"{width}px: overview actions cluster missing")
             else:
-                if hero.get("justifyContent") != "center":
-                    failures.append(f"{width}px: hero action justify-content is {hero.get('justifyContent')!r}")
-                if abs(float(hero.get("width") or 0) - float(hero.get("parentWidth") or 0)) > 2:
-                    failures.append(f"{width}px: hero action is not full width")
-    connection.call("Emulation.clearDeviceMetricsOverride", {}, timeout_seconds=20.0)
+                if overview.get("display") != "grid":
+                    failures.append(f"{width}px: overview actions display is {overview.get('display')!r}")
+                if overview.get("justifyContent") != "stretch":
+                    failures.append(f"{width}px: overview actions justify-content is {overview.get('justifyContent')!r}")
+                if _grid_track_count(str(overview.get("gridTemplateColumns") or "")) != 1:
+                    failures.append(f"{width}px: overview actions must resolve to one grid track")
+            if not isinstance(build_stepper, dict) or not build_stepper.get("present"):
+                failures.append(f"{width}px: build stepper actions missing")
+            elif build_stepper.get("justifyContent") != "stretch":
+                failures.append(f"{width}px: build stepper actions justify-content is {build_stepper.get('justifyContent')!r}")
+            if width <= 479:
+                if not isinstance(hero, dict) or not hero.get("present"):
+                    failures.append(f"{width}px: overview hero action missing")
+                else:
+                    if hero.get("justifyContent") != "center":
+                        failures.append(f"{width}px: hero action justify-content is {hero.get('justifyContent')!r}")
+                    if abs(float(hero.get("width") or 0) - float(hero.get("parentWidth") or 0)) > 2:
+                        failures.append(f"{width}px: hero action is not full width")
+    finally:
+        _apply_capture_viewport(connection)
     if failures:
         raise SmokeFailure("Overview mobile parity probe failed:\n" + "\n".join(failures))
 
@@ -1233,13 +1227,11 @@ def _validate_interaction_outline_states_with_guard(connection: DevToolsConnecti
             combined_value = str(combined.get(property_name) or "")
             if focus_value != hover_value:
                 failures.append(
-                    f"{name}: focus-visible {property_name} drifted from hover value "
-                    f"({focus_value!r} != {hover_value!r})"
+                    f"{name}: focus-visible {property_name} drifted from hover value " f"({focus_value!r} != {hover_value!r})"
                 )
             if combined_value != hover_value:
                 failures.append(
-                    f"{name}: combined {property_name} drifted from hover value "
-                    f"({combined_value!r} != {hover_value!r})"
+                    f"{name}: combined {property_name} drifted from hover value " f"({combined_value!r} != {hover_value!r})"
                 )
 
     if failures:
@@ -1894,9 +1886,7 @@ def _collect_runtime_utility_classes(
                 if not isinstance(runtime_classes, list):
                     raise SmokeFailure("Runtime class census did not return a class list")
                 runtime_utility_classes.update(
-                    str(class_name)
-                    for class_name in runtime_classes
-                    if _is_utility_like_class_token(str(class_name))
+                    str(class_name) for class_name in runtime_classes if _is_utility_like_class_token(str(class_name))
                 )
             finally:
                 connection.evaluate(_portal_parity_probe_restore_expression(), timeout_seconds=20.0)
@@ -1917,24 +1907,182 @@ def _diff_snapshots(before: Dict[str, Any], after: Dict[str, Any]) -> list[str]:
             keys = sorted(set(before_values) | set(after_values))
             for key in keys:
                 if before_values.get(key) != after_values.get(key):
-                    differences.append(
-                        f"{selector} {key}: {before_values.get(key)!r} -> {after_values.get(key)!r}"
-                    )
+                    differences.append(f"{selector} {key}: {before_values.get(key)!r} -> {after_values.get(key)!r}")
     return differences
 
 
-def _read_baseline(path: Path) -> Dict[str, Any]:
+def _capture_contract_browser() -> Dict[str, str]:
+    browser = LAYER_PARITY_CAPTURE_CONTRACT.get("browser")
+    if not isinstance(browser, dict):
+        raise SmokeFailure("Layer parity capture contract has no browser object")
+    engine = str(browser.get("engine") or "").strip()
+    headless_mode = str(browser.get("headlessMode") or "").strip()
+    product = str(browser.get("product") or "").strip()
+    if not engine or not headless_mode or not product:
+        raise SmokeFailure("Layer parity capture contract browser requires engine, headlessMode, and product")
+    return {"engine": engine, "headlessMode": headless_mode, "product": product}
+
+
+def _capture_contract_viewport() -> Dict[str, Any]:
+    viewport = LAYER_PARITY_CAPTURE_CONTRACT.get("viewport")
+    if not isinstance(viewport, dict):
+        raise SmokeFailure("Layer parity capture contract has no viewport object")
+    width = viewport.get("width")
+    height = viewport.get("height")
+    device_scale_factor = viewport.get("deviceScaleFactor")
+    mobile = viewport.get("mobile")
+    if type(width) is not int or width <= 0:
+        raise SmokeFailure("Layer parity capture viewport width must be a positive integer")
+    if type(height) is not int or height <= 0:
+        raise SmokeFailure("Layer parity capture viewport height must be a positive integer")
+    if type(device_scale_factor) not in {int, float} or device_scale_factor <= 0:
+        raise SmokeFailure("Layer parity capture viewport deviceScaleFactor must be positive")
+    if type(mobile) is not bool:
+        raise SmokeFailure("Layer parity capture viewport mobile must be boolean")
+    return {
+        "width": width,
+        "height": height,
+        "deviceScaleFactor": device_scale_factor,
+        "mobile": mobile,
+    }
+
+
+def _apply_capture_viewport(connection: DevToolsConnection) -> None:
+    viewport = _capture_contract_viewport()
+    connection.call(
+        "Emulation.setDeviceMetricsOverride",
+        {
+            **viewport,
+            "screenWidth": viewport["width"],
+            "screenHeight": viewport["height"],
+        },
+        timeout_seconds=20.0,
+    )
+
+
+def _verify_capture_viewport(connection: DevToolsConnection) -> Dict[str, Any]:
+    expected = _capture_contract_viewport()
+    actual = connection.evaluate(
+        "({width: window.innerWidth, height: window.innerHeight, "
+        "deviceScaleFactor: window.devicePixelRatio, mobile: navigator.userAgentData?.mobile ?? false})",
+        timeout_seconds=20.0,
+    )
+    if not isinstance(actual, dict):
+        raise SmokeFailure(f"Layer parity viewport probe returned an invalid payload: {actual!r}")
+    differences = [
+        f"{name}={actual.get(name)!r} (expected {value!r})" for name, value in expected.items() if actual.get(name) != value
+    ]
+    if differences:
+        raise SmokeFailure("Layer parity capture viewport was not applied: " + ", ".join(differences))
+    return {name: actual[name] for name in expected}
+
+
+def _read_browser_provenance(connection: DevToolsConnection) -> Dict[str, str]:
+    contract = _capture_contract_browser()
+    version = connection.call("Browser.getVersion", {}, timeout_seconds=20.0)
+    product = str(version.get("product") or "").strip()
+    user_agent = str(version.get("userAgent") or "").strip()
+    engine = "chromium" if product.startswith(("Chrome/", "Chromium/", "HeadlessChrome/")) else ""
+    headless_mode = "new" if "HeadlessChrome/" in user_agent else ""
+    provenance = {
+        "engine": engine,
+        "headlessMode": headless_mode,
+        "product": product,
+        "protocolVersion": str(version.get("protocolVersion") or "").strip(),
+        "revision": str(version.get("revision") or "").strip(),
+        "jsVersion": str(version.get("jsVersion") or "").strip(),
+    }
+    missing = [name for name, value in provenance.items() if not value]
+    if missing:
+        raise SmokeFailure("Browser.getVersion omitted capture provenance fields: " + ", ".join(missing))
+    contract_differences = [
+        f"{name}={provenance.get(name)!r} (expected {expected!r})"
+        for name, expected in contract.items()
+        if provenance.get(name) != expected
+    ]
+    if contract_differences:
+        raise SmokeFailure(
+            "Runtime browser does not match the layer parity capture contract: " + ", ".join(contract_differences)
+        )
+    return provenance
+
+
+def _capture_provenance(connection: DevToolsConnection) -> Dict[str, Any]:
+    return {
+        "browser": _read_browser_provenance(connection),
+        "viewport": _verify_capture_viewport(connection),
+    }
+
+
+def _validate_capture_provenance(path: Path, provenance: object) -> Dict[str, Any]:
+    if not isinstance(provenance, dict):
+        raise SmokeFailure(f"Layer parity baseline has no captureProvenance object: {path}")
+    browser = provenance.get("browser")
+    if not isinstance(browser, dict):
+        raise SmokeFailure(f"Layer parity baseline captureProvenance has no browser object: {path}")
+    expected_browser = _capture_contract_browser()
+    for name, expected in expected_browser.items():
+        if browser.get(name) != expected:
+            raise SmokeFailure(f"Layer parity baseline browser {name} is {browser.get(name)!r}; expected {expected!r}")
+    required_browser_fields = ("protocolVersion", "revision", "jsVersion")
+    missing_browser_fields = [name for name in required_browser_fields if not str(browser.get(name) or "").strip()]
+    if missing_browser_fields:
+        raise SmokeFailure("Layer parity baseline browser provenance is incomplete: " + ", ".join(missing_browser_fields))
+    viewport = provenance.get("viewport")
+    expected_viewport = _capture_contract_viewport()
+    if viewport != expected_viewport:
+        raise SmokeFailure(f"Layer parity baseline viewport provenance is {viewport!r}; expected {expected_viewport!r}")
+    return {"browser": dict(browser), "viewport": dict(viewport)}
+
+
+def _validate_runtime_matches_baseline(runtime_provenance: Dict[str, Any], baseline_provenance: Dict[str, Any]) -> None:
+    differences: list[str] = []
+    for section in ("browser", "viewport"):
+        runtime_values = runtime_provenance.get(section)
+        baseline_values = baseline_provenance.get(section)
+        if not isinstance(runtime_values, dict) or not isinstance(baseline_values, dict):
+            differences.append(f"{section} provenance is not an object")
+            continue
+        for name in sorted(set(runtime_values) | set(baseline_values)):
+            if runtime_values.get(name) != baseline_values.get(name):
+                differences.append(
+                    f"{section}.{name}={runtime_values.get(name)!r} " f"(baseline {baseline_values.get(name)!r})"
+                )
+    if differences:
+        raise SmokeFailure("Runtime capture provenance does not match the committed baseline: " + ", ".join(differences))
+
+
+def _format_capture_provenance(label: str, provenance: Dict[str, Any]) -> str:
+    browser = provenance["browser"]
+    viewport = provenance["viewport"]
+    return (
+        f"portal-css-layer-parity: {label} browser={browser['product']} "
+        f"protocol={browser['protocolVersion']} revision={browser['revision']} "
+        f"viewport={viewport['width']}x{viewport['height']} "
+        f"scale={viewport['deviceScaleFactor']} mobile={str(viewport['mobile']).lower()}"
+    )
+
+
+def _read_baseline(path: Path) -> tuple[Dict[str, Any], Dict[str, Any]]:
     if not path.exists():
         raise SmokeFailure(f"Layer parity baseline is missing: {path}")
     baseline = json.loads(path.read_text(encoding="utf-8"))
+    if baseline.get("version") != LAYER_PARITY_BASELINE_VERSION:
+        pinned_product = _capture_contract_browser()["product"]
+        raise SmokeFailure(
+            f"Layer parity baseline version is {baseline.get('version')!r}; "
+            f"expected {LAYER_PARITY_BASELINE_VERSION!r}. Regenerate it with --write-baseline while "
+            f"TP_PORTAL_BROWSER_BINARY points to the contract-pinned {pinned_product} executable."
+        )
     selectors = baseline.get("representativeStyleSelectors")
     properties = baseline.get("representativeStyleProperties")
     if selectors != REPRESENTATIVE_STYLE_SELECTORS or properties != REPRESENTATIVE_STYLE_PROPERTIES:
         raise SmokeFailure("Layer parity baseline contract does not match layer-parity-contract.json")
+    provenance = _validate_capture_provenance(path, baseline.get("captureProvenance"))
     snapshot = baseline.get("snapshot")
     if not isinstance(snapshot, dict):
         raise SmokeFailure(f"Layer parity baseline has no snapshot object: {path}")
-    return snapshot
+    return snapshot, provenance
 
 
 def _class_token_base(token: str) -> str:
@@ -1966,12 +2114,14 @@ def _read_utility_ownership_classes() -> set[str]:
     return set(str(token) for token in utilities)
 
 
-def _write_baseline(path: Path, snapshot: Dict[str, Any]) -> None:
+def _write_baseline(path: Path, snapshot: Dict[str, Any], capture_provenance: Dict[str, Any]) -> None:
+    validated_provenance = _validate_capture_provenance(path, capture_provenance)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
         json.dumps(
             {
-                "version": 1,
+                "version": LAYER_PARITY_BASELINE_VERSION,
+                "captureProvenance": validated_provenance,
                 "representativeStyleSelectors": REPRESENTATIVE_STYLE_SELECTORS,
                 "representativeStyleProperties": REPRESENTATIVE_STYLE_PROPERTIES,
                 "snapshot": snapshot,
@@ -2066,6 +2216,7 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
         connection.call("Page.enable")
         connection.call("Page.setBypassCSP", {"enabled": True})
         connection.call("Runtime.enable")
+        _apply_capture_viewport(connection)
         connection.call("Page.navigate", {"url": base_url}, timeout_seconds=20.0)
 
         _poll(
@@ -2075,6 +2226,8 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
             timeout_seconds=float(args.timeout_seconds),
             description="portal document ready",
         )
+        runtime_capture_provenance = _capture_provenance(connection)
+        print(_format_capture_provenance("runtime capture", runtime_capture_provenance), flush=True)
         try:
             connection.evaluate(_force_snapshot_state_expression(), timeout_seconds=20.0)
             connection.evaluate(_style_settle_expression(), timeout_seconds=20.0)
@@ -2084,7 +2237,7 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
 
         baseline_path = Path(str(args.baseline_path))
         if args.write_baseline:
-            _write_baseline(baseline_path, current)
+            _write_baseline(baseline_path, current, runtime_capture_provenance)
             print(
                 "portal-css-layer-parity: wrote baseline "
                 f"{baseline_path} ({len(REPRESENTATIVE_STYLE_SELECTORS)} selectors, "
@@ -2093,7 +2246,9 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
             )
             return 0
 
-        expected = _read_baseline(baseline_path)
+        expected, baseline_capture_provenance = _read_baseline(baseline_path)
+        print(_format_capture_provenance("baseline capture", baseline_capture_provenance), flush=True)
+        _validate_runtime_matches_baseline(runtime_capture_provenance, baseline_capture_provenance)
         differences = _diff_snapshots(expected, current)
         if differences:
             detail = "\n".join(differences[:40])

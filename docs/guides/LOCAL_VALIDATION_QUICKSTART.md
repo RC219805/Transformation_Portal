@@ -11,6 +11,7 @@ This guide covers the canonical workflow for validating the Transformation Porta
 | Python | ≥3.11 | Backend, tests, validation scripts |
 | Node.js | 22.x | Managed frontdoor (secure-landing) |
 | Chrome/Chromium | Latest | Browser smoke tests |
+| Chrome for Testing | Contract-pinned (`151.0.7922.34`) | CSS layer computed-style parity |
 
 ### Quick Environment Check
 
@@ -190,7 +191,7 @@ The validation scripts use sensible defaults, but you can override them:
 | `TP_FRONTDOOR_USERS_FILE` | `/tmp/tp-frontdoor-users.json` | Seeded user credentials file |
 | `TP_FRONTDOOR_USERNAME` | `smoke-admin` | Local smoke test username |
 | `TP_FRONTDOOR_PASSWORD` | `correct horse battery staple` | Local smoke test password |
-| `TP_PORTAL_BROWSER_BINARY` | auto-detect | Chrome/Chromium binary path |
+| `TP_PORTAL_BROWSER_BINARY` | auto-detect | Chrome/Chromium path; CSS layer parity requires the contract-pinned Chrome for Testing product |
 
 ### Seeding Frontdoor Users
 
@@ -251,9 +252,24 @@ npm install
 Chrome or Chromium not found
 ```
 
-**Solution:** Install Chrome or set the binary path:
+**Solution:** Install Chrome or set the binary path for general CDP smoke tests:
 ```bash
 export TP_PORTAL_BROWSER_BINARY="/path/to/chrome"
+```
+
+For `make validate-portal-css-layer-parity`, install the repo-pinned Playwright
+browser and point the variable at its managed executable. Its product must match
+`captureContract.browser.product` in
+`tests/fixtures/portal-css/layer-parity-contract.json`:
+
+```bash
+cd web/secure-landing
+npm run test:browser:install
+export TP_PORTAL_BROWSER_BINARY="$(node --input-type=module -e \
+  'import { chromium } from "playwright"; process.stdout.write(chromium.executablePath())')"
+"$TP_PORTAL_BROWSER_BINARY" --version
+cd ../..
+make validate-portal-css-layer-parity
 ```
 
 ### Python Snippet Pasted Into zsh
