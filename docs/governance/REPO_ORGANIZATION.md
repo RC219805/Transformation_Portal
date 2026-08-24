@@ -174,7 +174,8 @@ Wrangler version, and the delegated entrypoint aligned with that governed
 worker package. Production deploy scripts must preserve dashboard-managed
 provider vars such as `FRONTDOOR_ORIGIN` with `--keep-vars`. The contract is
 enforced by
-`tests/validation/test_cloudflare_worker_root_shim_contract.py`.
+`tests/validation/test_cloudflare_worker_root_shim_contract.py` and
+`python3 scripts/validation/check_worker_dependency_parity.py`.
 
 ### Root Directory Limits
 

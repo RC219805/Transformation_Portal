@@ -34,20 +34,24 @@ def test_determinism_workflows_pin_non_vulnerable_bootstrap_tools(
 
 
 @pytest.mark.parametrize(
-    "workflow_path",
+    ("workflow_path", "pip_command"),
     [
-        ".github/workflows/secure-install-pilot.yml",
-        ".github/workflows/dependency-update.yml",
-        ".github/workflows/ci-quality-firewall.yml",
+        (".github/workflows/secure-install-pilot.yml", "python -m pip"),
+        (
+            ".github/workflows/dependency-update.yml",
+            '"${{ steps.setup-python.outputs.python-path }}" -I -m pip --isolated',
+        ),
+        (".github/workflows/ci-quality-firewall.yml", "python -m pip"),
     ],
 )
 def test_lock_generation_workflows_use_pip_tools_with_pip_26_support(
     workflow_path: str,
+    pip_command: str,
 ) -> None:
     workflow = (REPO_ROOT / workflow_path).read_text(encoding="utf-8")
 
-    assert f'python -m pip install --upgrade "{GOVERNED_PIP_PIN}"' in workflow
-    assert '"pip-tools==7.6.1"' in workflow
+    assert f'{pip_command} install --upgrade "{GOVERNED_PIP_PIN}"' in workflow
+    assert f'{pip_command} install "pip-tools==7.6.1"' in workflow
     assert '"pip-tools==7.6.0"' not in workflow
     assert '"pip-tools==7.5.3"' not in workflow
     assert '"pip-tools==7.5.2"' not in workflow

@@ -44,6 +44,7 @@ jobs:
     steps:
       - name: Check upstream CI result
         id: check
+        shell: bash
         run: |
           upstream_result="${{ github.event.workflow_run.conclusion }}"
           if [ "$upstream_result" != "success" ]; then
@@ -56,6 +57,7 @@ jobs:
 
       - name: Resolve exact ref
         id: resolve-ref
+        shell: bash
         run: |
           echo "head_sha=${{ github.event.workflow_run.head_sha }}" >> $GITHUB_OUTPUT
           echo "head_branch=${{ github.event.workflow_run.head_branch }}" >> $GITHUB_OUTPUT

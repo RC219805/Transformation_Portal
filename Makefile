@@ -746,6 +746,8 @@ validate-ci:
 	@"$(PY)" scripts/validation/check_dependency_update_workflow.py
 	@echo "Validating Dependabot config contract..."
 	@"$(PY)" scripts/validation/check_dependabot_config.py
+	@echo "Validating root/Worker dependency parity..."
+	@"$(PY)" scripts/validation/check_worker_dependency_parity.py
 
 check-json-serialization:
 	@echo "Checking JSON serialization guardrails..."

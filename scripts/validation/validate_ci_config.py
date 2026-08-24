@@ -59,8 +59,55 @@ class CIValidator:
     )
     REQUIRED_COLD_ZONE_COMPARE_REF_FETCH = "git fetch --no-tags --depth=1 origin main:refs/remotes/origin/main"
     FIREWALL_WORKFLOW_NAME = "ci-quality-firewall.yml"
+    FIREWALL_INTEGRATED_CACHE_ACTIONS = frozenset(
+        {
+            "actions/setup-node",
+            "actions/setup-python",
+        }
+    )
     FIREWALL_TRUSTED_WORKFLOW_RUN_SHA_OUTPUT = 'echo "head_sha=${{ github.event.workflow_run.head_sha }}" >> $GITHUB_OUTPUT'
+    FIREWALL_TRUSTED_WORKFLOW_RUN_BRANCH_OUTPUT = (
+        'echo "head_branch=${{ github.event.workflow_run.head_branch }}" >> $GITHUB_OUTPUT'
+    )
+    FIREWALL_TRUSTED_RESOLVE_SCRIPT_LINES = (
+        FIREWALL_TRUSTED_WORKFLOW_RUN_SHA_OUTPUT,
+        FIREWALL_TRUSTED_WORKFLOW_RUN_BRANCH_OUTPUT,
+        'echo "Testing commit: ${{ github.event.workflow_run.head_sha }} '
+        '(branch: ${{ github.event.workflow_run.head_branch }})"',
+    )
+    FIREWALL_TRUSTED_SHOULD_RUN_OUTPUTS = (
+        'echo "should_run=false" >> $GITHUB_OUTPUT',
+        'echo "should_run=true" >> $GITHUB_OUTPUT',
+    )
+    FIREWALL_TRUSTED_CHECK_SCRIPT_LINES = (
+        'upstream_result="${{ github.event.workflow_run.conclusion }}"',
+        'if [ "$upstream_result" != "success" ]; then',
+        'echo "Skipping: upstream CI $upstream_result"',
+        'echo "should_run=false" >> $GITHUB_OUTPUT',
+        "else",
+        'echo "Running: upstream CI $upstream_result"',
+        'echo "should_run=true" >> $GITHUB_OUTPUT',
+        "fi",
+    )
+    FIREWALL_TRUSTED_PREFLIGHT_OUTPUTS = {
+        "should_run": "${{ steps.check.outputs.should_run }}",
+        "head_sha": "${{ steps.resolve-ref.outputs.head_sha }}",
+        "head_branch": "${{ steps.resolve-ref.outputs.head_branch }}",
+    }
+    FIREWALL_TRUSTED_WORKFLOW_ENV = {
+        "PYTHON_VERSION_LINT": "3.12",
+        "PYTHON_VERSION_TEST_MIN": "3.11",
+        "PYTHON_VERSION_TEST_MAX": "3.12",
+        "PYTHON_VERSION_ML": "3.11",
+    }
+    FIREWALL_TRUSTED_UPSTREAM_WORKFLOW_NAME = "CI (Lint, Tests & Manifest)"
+    FIREWALL_TRUSTED_UPSTREAM_WORKFLOWS = [FIREWALL_TRUSTED_UPSTREAM_WORKFLOW_NAME]
+    FIREWALL_TRUSTED_UPSTREAM_BRANCHES = ["main", "develop"]
+    FIREWALL_TRUSTED_UPSTREAM_TYPES = ["completed"]
+    FIREWALL_TRUSTED_PREFLIGHT_KEYS = frozenset({"name", "if", "runs-on", "outputs", "steps"})
+    FIREWALL_TRUSTED_PREFLIGHT_STEP_KEYS = frozenset({"name", "id", "shell", "run"})
     FIREWALL_TRUSTED_CHECKOUT_REF = "${{ needs.preflight.outputs.head_sha }}"
+    FIREWALL_TRUSTED_CONSUMER_CONDITION = "needs.preflight.outputs.should_run == 'true'"
     FIREWALL_TRUSTED_CONCURRENCY_GROUP = " ".join("""ci-firewall-${{ github.event.workflow_run.head_repository.id }}-${{
         github.event.workflow_run.event }}-${{ github.event.workflow_run.head_branch }}""".split())
     FIREWALL_TRUSTED_PREFLIGHT_CONDITION = " ".join(
@@ -375,10 +422,30 @@ class CIValidator:
             return False
 
         valid = True
+        if "defaults" in config:
+            self.log_error(f"{workflow_path.name}: Must not define workflow run defaults across the trust boundary")
+            valid = False
+        if config.get("env") != self.FIREWALL_TRUSTED_WORKFLOW_ENV:
+            self.log_error(f"{workflow_path.name}: Workflow environment must match the trusted non-execution values")
+            valid = False
+
         workflow_run = triggers.get("workflow_run")
-        branches = workflow_run.get("branches", []) if isinstance(workflow_run, dict) else []
-        if set(branches) != {"main", "develop"}:
-            self.log_error(f"{workflow_path.name}:workflow_run: Branch allowlist must remain exactly main and develop")
+        if not isinstance(workflow_run, dict) or set(workflow_run) != {"workflows", "branches", "types"}:
+            self.log_error(f"{workflow_path.name}:workflow_run: Trigger must define only workflows, branches, and types")
+            valid = False
+            workflow_run = workflow_run if isinstance(workflow_run, dict) else {}
+        if workflow_run.get("workflows") != self.FIREWALL_TRUSTED_UPSTREAM_WORKFLOWS:
+            self.log_error(
+                f"{workflow_path.name}:workflow_run: Upstream workflow must remain exactly CI (Lint, Tests & Manifest)"
+            )
+            valid = False
+        if workflow_run.get("branches") != self.FIREWALL_TRUSTED_UPSTREAM_BRANCHES:
+            self.log_error(
+                f"{workflow_path.name}:workflow_run: Branch allowlist must remain the ordered main and develop list"
+            )
+            valid = False
+        if workflow_run.get("types") != self.FIREWALL_TRUSTED_UPSTREAM_TYPES:
+            self.log_error(f"{workflow_path.name}:workflow_run: Event type must remain exactly completed")
             valid = False
 
         concurrency = config.get("concurrency", {})
@@ -394,6 +461,16 @@ class CIValidator:
         if not isinstance(preflight, dict):
             self.log_error(f"{workflow_path.name}:preflight: Missing preflight job for checkout trust contract")
             return False
+        unexpected_preflight_keys = set(preflight) - self.FIREWALL_TRUSTED_PREFLIGHT_KEYS
+        if unexpected_preflight_keys:
+            self.log_error(
+                f"{workflow_path.name}:preflight: Must not define execution overrides: "
+                f"{', '.join(sorted(unexpected_preflight_keys))}"
+            )
+            valid = False
+        if preflight.get("runs-on") != "ubuntu-latest":
+            self.log_error(f"{workflow_path.name}:preflight: Must run on the trusted GitHub-hosted Ubuntu runner")
+            valid = False
 
         preflight_condition = preflight.get("if", "")
         if not isinstance(preflight_condition, str):
@@ -402,22 +479,81 @@ class CIValidator:
             self.log_error(f"{workflow_path.name}:preflight: Must admit only same-repository push or manual upstream runs")
             valid = False
 
+        if preflight.get("outputs") != self.FIREWALL_TRUSTED_PREFLIGHT_OUTPUTS:
+            self.log_error(
+                f"{workflow_path.name}:preflight: Outputs must map exactly to the trusted check and resolve-ref steps"
+            )
+            valid = False
+
         steps = preflight.get("steps", [])
+        check_step = None
         resolve_step = None
         if isinstance(steps, list):
+            step_ids = [step.get("id") if isinstance(step, dict) else None for step in steps]
+            if step_ids != ["check", "resolve-ref"]:
+                self.log_error(f"{workflow_path.name}:preflight: Must contain only the ordered check and resolve-ref steps")
+                valid = False
+            check_step = next(
+                (step for step in steps if isinstance(step, dict) and step.get("id") == "check"),
+                None,
+            )
             resolve_step = next(
                 (step for step in steps if isinstance(step, dict) and step.get("id") == "resolve-ref"),
                 None,
             )
+        if check_step is None:
+            self.log_error(f"{workflow_path.name}:preflight: Missing check step for checkout trust contract")
+            return False
         if resolve_step is None:
             self.log_error(f"{workflow_path.name}:preflight: Missing resolve-ref step for checkout trust contract")
             return False
 
+        for step_id, step in (("check", check_step), ("resolve-ref", resolve_step)):
+            unexpected_step_keys = set(step) - self.FIREWALL_TRUSTED_PREFLIGHT_STEP_KEYS
+            if unexpected_step_keys:
+                self.log_error(
+                    f"{workflow_path.name}:preflight: {step_id} must not define execution overrides: "
+                    f"{', '.join(sorted(unexpected_step_keys))}"
+                )
+                valid = False
+
+        if check_step.get("shell") != "bash":
+            self.log_error(f"{workflow_path.name}:preflight: check must explicitly use the trusted bash shell")
+            valid = False
+        if resolve_step.get("shell") != "bash":
+            self.log_error(f"{workflow_path.name}:preflight: resolve-ref must explicitly use the trusted bash shell")
+            valid = False
+
+        check_script = check_step.get("run", "")
+        if not isinstance(check_script, str):
+            check_script = ""
+        check_script_lines = tuple(line.strip() for line in check_script.splitlines() if line.strip())
+        if check_script_lines != self.FIREWALL_TRUSTED_CHECK_SCRIPT_LINES:
+            self.log_error(
+                f"{workflow_path.name}:preflight: check must exactly gate should_run on a successful upstream result"
+            )
+            valid = False
+        check_output_writes = [line.strip() for line in check_script.splitlines() if "GITHUB_OUTPUT" in line]
+        if tuple(check_output_writes) != self.FIREWALL_TRUSTED_SHOULD_RUN_OUTPUTS:
+            self.log_error(f"{workflow_path.name}:preflight: check must write only the trusted should_run outcomes")
+            valid = False
+
         resolve_script = resolve_step.get("run", "")
         if not isinstance(resolve_script, str):
             resolve_script = ""
-        if self.FIREWALL_TRUSTED_WORKFLOW_RUN_SHA_OUTPUT not in resolve_script:
-            self.log_error(f"{workflow_path.name}:preflight: Must resolve head_sha from the trusted workflow_run payload")
+        resolve_script_lines = tuple(line.strip() for line in resolve_script.splitlines() if line.strip())
+        if resolve_script_lines != self.FIREWALL_TRUSTED_RESOLVE_SCRIPT_LINES:
+            self.log_error(f"{workflow_path.name}:preflight: resolve-ref must use only the trusted ref resolution script")
+            valid = False
+        resolve_output_writes = [line.strip() for line in resolve_script.splitlines() if "GITHUB_OUTPUT" in line]
+        if resolve_output_writes != [
+            self.FIREWALL_TRUSTED_WORKFLOW_RUN_SHA_OUTPUT,
+            self.FIREWALL_TRUSTED_WORKFLOW_RUN_BRANCH_OUTPUT,
+        ]:
+            self.log_error(
+                f"{workflow_path.name}:preflight: resolve-ref must write only the trusted workflow_run "
+                "head_sha and head_branch outputs"
+            )
             valid = False
         if "github.sha" in resolve_script or "github.event.inputs." in resolve_script or "inputs." in resolve_script:
             self.log_error(f"{workflow_path.name}:preflight: resolve-ref must not mix direct-trigger and workflow_run refs")
@@ -429,34 +565,122 @@ class CIValidator:
             job_steps = job.get("steps", [])
             if not isinstance(job_steps, list):
                 continue
-            checkout_steps = [
-                step
-                for step in job_steps
-                if isinstance(step, dict)
-                and isinstance(step.get("uses"), str)
-                and step["uses"].startswith("actions/checkout@")
-            ]
-            if not checkout_steps:
+            sensitive_steps = []
+            for step in job_steps:
+                if not isinstance(step, dict):
+                    continue
+                sensitive_kind = self._firewall_sensitive_step_kind(step)
+                if sensitive_kind is not None:
+                    sensitive_steps.append((step, sensitive_kind))
+            if not sensitive_steps:
                 continue
 
             needs = job.get("needs", [])
             direct_needs = {needs} if isinstance(needs, str) else set(needs) if isinstance(needs, list) else set()
             if "preflight" not in direct_needs:
+                sensitive_kinds = {sensitive_kind for _, sensitive_kind in sensitive_steps}
+                consumer_description = "Checkout consumers" if "checkout" in sensitive_kinds else "Cache/artifact producers"
+                self.log_error(f"{workflow_path.name}:{job_name}: {consumer_description} must depend directly on preflight")
+                valid = False
+
+            if not self._firewall_condition_has_trusted_gate(job.get("if")):
                 self.log_error(
-                    f"{workflow_path.name}:{job_name}: Checkout consumers must depend directly on preflight"
+                    f"{workflow_path.name}:{job_name}: Checkout/cache/artifact jobs must require the trusted "
+                    "preflight should_run output"
                 )
                 valid = False
 
-            for checkout_step in checkout_steps:
+            for checkout_step, sensitive_kind in sensitive_steps:
+                if sensitive_kind != "checkout":
+                    continue
                 checkout_with = checkout_step.get("with", {})
                 checkout_ref = checkout_with.get("ref") if isinstance(checkout_with, dict) else None
+                checkout_repository = checkout_with.get("repository") if isinstance(checkout_with, dict) else None
                 if checkout_ref != self.FIREWALL_TRUSTED_CHECKOUT_REF:
-                    self.log_error(
-                        f"{workflow_path.name}:{job_name}: Checkout must use the trusted preflight head_sha"
-                    )
+                    self.log_error(f"{workflow_path.name}:{job_name}: Checkout must use the trusted preflight head_sha")
+                    valid = False
+                if checkout_repository not in (None, ""):
+                    self.log_error(f"{workflow_path.name}:{job_name}: Checkout must not override the trusted repository")
                     valid = False
 
         return valid
+
+    def validate_firewall_upstream_workflow_identity(self, workflow_path: Path, config: Dict) -> bool:
+        """Reserve the firewall's trusted workflow_run display name to build.yml."""
+        workflow_name = config.get("name")
+        trusted_name = self.FIREWALL_TRUSTED_UPSTREAM_WORKFLOW_NAME
+        if workflow_path.name == "build.yml":
+            if workflow_name != trusted_name:
+                self.log_error("build.yml: Workflow name must match the reserved firewall upstream identity")
+                return False
+            return True
+        if workflow_name == trusted_name:
+            self.log_error("Non-build workflow must not claim the reserved firewall upstream identity")
+            return False
+        return True
+
+    @classmethod
+    def _firewall_sensitive_step_kind(cls, step: Dict) -> Optional[str]:
+        """Classify firewall steps that can consume code or persist derived state."""
+        uses = step.get("uses")
+        if not isinstance(uses, str):
+            return None
+
+        action_name = uses.partition("@")[0].lower()
+        if action_name == "actions/checkout":
+            return "checkout"
+        if action_name in {"actions/cache", "actions/cache/restore", "actions/cache/save"}:
+            return "cache"
+        if action_name in {"actions/upload-artifact", "codecov/codecov-action"}:
+            return "artifact"
+        if action_name in cls.FIREWALL_INTEGRATED_CACHE_ACTIONS:
+            action_inputs = step.get("with", {})
+            if isinstance(action_inputs, dict) and action_inputs.get("cache") not in (None, "", False):
+                return "cache"
+        return None
+
+    @classmethod
+    def _firewall_condition_has_trusted_gate(cls, condition: object) -> bool:
+        """Require should_run as a non-bypassable top-level conjunction."""
+        if not isinstance(condition, str):
+            return False
+
+        expression = " ".join(condition.split())
+        if expression.startswith("${{") and expression.endswith("}}"):
+            expression = expression[3:-2].strip()
+
+        depth = 0
+        quote = ""
+        term_start = 0
+        terms: List[str] = []
+        index = 0
+        while index < len(expression):
+            char = expression[index]
+            if quote:
+                if char == quote and (index == 0 or expression[index - 1] != "\\"):
+                    quote = ""
+                index += 1
+                continue
+            if char in {"'", '"'}:
+                quote = char
+                index += 1
+                continue
+            if char == "(":
+                depth += 1
+            elif char == ")":
+                depth = max(depth - 1, 0)
+            elif depth == 0 and expression[index : index + 2] == "||":
+                return False
+            elif depth == 0 and expression[index : index + 2] == "&&":
+                terms.append(expression[term_start:index].strip())
+                term_start = index + 2
+                index += 2
+                continue
+            index += 1
+
+        terms.append(expression[term_start:].strip())
+        normalized_terms = {term.strip().strip("()").strip() for term in terms}
+        return cls.FIREWALL_TRUSTED_CONSUMER_CONDITION in normalized_terms
 
     def validate_mypy_policy_contract(self, workflow_path: Path, config: Dict) -> bool:
         """Validate mypy workflow whitelists against the current policy doc."""
@@ -699,6 +923,7 @@ class CIValidator:
             self.validate_build_coverage_contract(workflow_path, config),
             self.validate_ci_gate_contract(workflow_path, config),
             self.validate_firewall_checkout_trust_contract(workflow_path, config),
+            self.validate_firewall_upstream_workflow_identity(workflow_path, config),
             self.validate_mypy_policy_contract(workflow_path, config),
         ]
 

@@ -104,6 +104,7 @@ jobs:
           fi
 
       - name: Run APEX Matrix
+        id: run_apex
         env:
           APEX_ZONE: ${{ matrix.zone }}
         run: |
@@ -151,11 +152,13 @@ jobs:
           "${CMD[@]}"
 
       - name: Upload Results
+        id: upload_results
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
         with:
           name: apex-results-${{ matrix.workflow_version }}-${{ matrix.zone }}
           path: ${{ env.APEX_RESULTS_DIR }}/
+          if-no-files-found: error
           retention-days: 3
 
   apex_gate:
@@ -166,7 +169,11 @@ jobs:
     if: always()
     outputs:
       evidence_complete: ${{ steps.results_check.outputs.evidence_complete }}
+      runner_outcome: ${{ steps.matrix_stages.outputs.runner_outcome }}
+      upload_outcome: ${{ steps.matrix_stages.outputs.upload_outcome }}
+      download_outcome: ${{ steps.results_check.outputs.download_outcome }}
     permissions:
+      actions: read
       contents: read
       pull-requests: write
 
@@ -192,6 +199,64 @@ jobs:
           python -c "import yaml; print('✅ PyYAML OK')"
           pip check
 
+      - name: Resolve Matrix Stage Outcomes
+        id: matrix_stages
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_MATRIX_JOBS: "2"
+        run: |
+          set -euo pipefail
+          {
+            echo "runner_outcome=unknown"
+            echo "upload_outcome=unknown"
+            echo "matrix_job_count=0"
+          } >> "${GITHUB_OUTPUT}"
+
+          jobs_json="${RUNNER_TEMP}/apex-matrix-jobs.json"
+          if ! gh api \
+            "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/jobs?per_page=100" \
+            > "${jobs_json}"; then
+            echo "::warning::Unable to inspect current-run APEX matrix stage outcomes."
+            exit 0
+          fi
+
+          if ! JOBS_JSON="${jobs_json}" python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          payload = json.loads(Path(os.environ["JOBS_JSON"]).read_text(encoding="utf-8"))
+          expected_jobs = int(os.environ["EXPECTED_MATRIX_JOBS"])
+          matrix_jobs = [
+              job
+              for job in payload.get("jobs", [])
+              if str(job.get("name", "")).startswith("Run (")
+          ]
+
+          def aggregate_step(step_name: str) -> str:
+              conclusions = []
+              for job in matrix_jobs:
+                  matching_step = next(
+                      (step for step in job.get("steps", []) if step.get("name") == step_name),
+                      None,
+                  )
+                  conclusion = matching_step.get("conclusion") if matching_step else None
+                  if isinstance(conclusion, str) and conclusion:
+                      conclusions.append(conclusion)
+              if len(matrix_jobs) != expected_jobs or len(conclusions) != expected_jobs:
+                  return "unknown"
+              return "success" if all(value == "success" for value in conclusions) else "failure"
+
+          with Path(os.environ["GITHUB_OUTPUT"]).open("a", encoding="utf-8") as output:
+              output.write(f"runner_outcome={aggregate_step('Run APEX Matrix')}\n")
+              output.write(f"upload_outcome={aggregate_step('Upload Results')}\n")
+              output.write(f"matrix_job_count={len(matrix_jobs)}\n")
+          PY
+          then
+            echo "::warning::Unable to parse current-run APEX matrix stage outcomes."
+          fi
+
       - name: Download Results
         id: download_results
         continue-on-error: true
@@ -205,9 +270,18 @@ jobs:
         id: results_check
         if: always()
         env:
+          DOWNLOAD_OUTCOME: ${{ steps.download_results.outcome }}
           MATRIX_RESULT: ${{ needs.apex_matrix.result }}
+          RUNNER_OUTCOME: ${{ steps.matrix_stages.outputs.runner_outcome }}
+          UPLOAD_OUTCOME: ${{ steps.matrix_stages.outputs.upload_outcome }}
         run: |
           set -euo pipefail
+          {
+            echo "download_outcome=${DOWNLOAD_OUTCOME:-unknown}"
+            echo "runner_outcome=${RUNNER_OUTCOME:-unknown}"
+            echo "upload_outcome=${UPLOAD_OUTCOME:-unknown}"
+          } >> "$GITHUB_OUTPUT"
+
           if [ ! -d apex_downloaded_results ]; then
             echo "has_results=false" >> "$GITHUB_OUTPUT"
             echo "evidence_complete=false" >> "$GITHUB_OUTPUT"
@@ -234,12 +308,15 @@ jobs:
             fi
           done
 
-          if [[ "${MATRIX_RESULT}" == "success" && ${#missing_results[@]} -eq 0 ]]; then
+          if [[ "${RUNNER_OUTCOME}" == "success" && \
+                "${UPLOAD_OUTCOME}" == "success" && \
+                "${DOWNLOAD_OUTCOME}" == "success" && \
+                ${#missing_results[@]} -eq 0 ]]; then
             echo "evidence_complete=true" >> "$GITHUB_OUTPUT"
             echo "Complete V1/V2 APEX evidence downloaded."
           else
             echo "evidence_complete=false" >> "$GITHUB_OUTPUT"
-            echo "::warning::Incomplete APEX evidence (matrix=${MATRIX_RESULT}, missing=${missing_results[*]:-none})."
+            echo "::warning::Incomplete APEX evidence (runner=${RUNNER_OUTCOME:-unknown}, upload=${UPLOAD_OUTCOME:-unknown}, download=${DOWNLOAD_OUTCOME:-unknown}, matrix=${MATRIX_RESULT}, missing=${missing_results[*]:-none})."
           fi
 
       - name: Rebuild Ledger
@@ -263,36 +340,117 @@ jobs:
 
       - name: Generate PR Comment
         if: always()
+        env:
+          DOWNLOAD_OUTCOME: ${{ steps.results_check.outputs.download_outcome }}
+          MATRIX_RESULT: ${{ needs.apex_matrix.result }}
+          RUNNER_OUTCOME: ${{ steps.matrix_stages.outputs.runner_outcome }}
+          UPLOAD_OUTCOME: ${{ steps.matrix_stages.outputs.upload_outcome }}
         run: |
           set -euo pipefail
           # Always create apex_comment.md (even on error) to prevent downstream failures
           : > apex_comment.md
 
           if [[ "${{ steps.results_check.outputs.evidence_complete }}" != "true" ]]; then
-            if [[ "${{ needs.apex_matrix.result }}" == "success" ]]; then
+            if [[ "${RUNNER_OUTCOME:-unknown}" == "failure" ]]; then
               cat > apex_comment.md <<'ERREOF'
           # 🎯 APEX Performance Report [PARTIAL]
 
-          ⚠️ **APEX result artifacts were not transferred after a successful matrix run.**
-          Review the result upload and download steps before trusting this run.
+          ❌ **The `Run APEX Matrix` stage did not complete successfully.**
+          Review the matrix runner and prerequisite logs before trusting this run.
 
           Run ID: ${{ env.APEX_RUN_ID }}
           Commit: ${{ env.APEX_COMMIT_SHA }}
+          Runner outcome: ${{ steps.matrix_stages.outputs.runner_outcome }}
+          Upload outcome: ${{ steps.matrix_stages.outputs.upload_outcome }}
+          Download outcome: ${{ steps.results_check.outputs.download_outcome }}
+          Matrix result: ${{ needs.apex_matrix.result }}
+          ERREOF
+            elif [[ "${RUNNER_OUTCOME:-unknown}" != "success" ]]; then
+              cat > apex_comment.md <<'ERREOF'
+          # 🎯 APEX Performance Report [PARTIAL]
+
+          ⚠️ **The current-run matrix runner outcome could not be resolved.**
+          Review the gate's `Resolve Matrix Stage Outcomes` logs and the matrix jobs before attributing this run.
+
+          Run ID: ${{ env.APEX_RUN_ID }}
+          Commit: ${{ env.APEX_COMMIT_SHA }}
+          Runner outcome: ${{ steps.matrix_stages.outputs.runner_outcome }}
+          Upload outcome: ${{ steps.matrix_stages.outputs.upload_outcome }}
+          Download outcome: ${{ steps.results_check.outputs.download_outcome }}
+          Matrix result: ${{ needs.apex_matrix.result }}
+          ERREOF
+            elif [[ "${UPLOAD_OUTCOME:-unknown}" == "failure" ]]; then
+              cat > apex_comment.md <<'ERREOF'
+          # 🎯 APEX Performance Report [PARTIAL]
+
+          ❌ **APEX result upload failed after successful matrix execution.**
+          Review the failed `Upload Results` step; the matrix runner itself succeeded.
+
+          Run ID: ${{ env.APEX_RUN_ID }}
+          Commit: ${{ env.APEX_COMMIT_SHA }}
+          Runner outcome: ${{ steps.matrix_stages.outputs.runner_outcome }}
+          Upload outcome: ${{ steps.matrix_stages.outputs.upload_outcome }}
+          Download outcome: ${{ steps.results_check.outputs.download_outcome }}
+          Matrix result: ${{ needs.apex_matrix.result }}
+          ERREOF
+            elif [[ "${UPLOAD_OUTCOME:-unknown}" != "success" ]]; then
+              cat > apex_comment.md <<'ERREOF'
+          # 🎯 APEX Performance Report [PARTIAL]
+
+          ⚠️ **The current-run result upload outcome could not be resolved.**
+          Review the gate's `Resolve Matrix Stage Outcomes` logs before attributing this run.
+
+          Run ID: ${{ env.APEX_RUN_ID }}
+          Commit: ${{ env.APEX_COMMIT_SHA }}
+          Runner outcome: ${{ steps.matrix_stages.outputs.runner_outcome }}
+          Upload outcome: ${{ steps.matrix_stages.outputs.upload_outcome }}
+          Download outcome: ${{ steps.results_check.outputs.download_outcome }}
+          Matrix result: ${{ needs.apex_matrix.result }}
+          ERREOF
+            elif [[ "${DOWNLOAD_OUTCOME:-unknown}" == "failure" ]]; then
+              cat > apex_comment.md <<'ERREOF'
+          # 🎯 APEX Performance Report [PARTIAL]
+
+          ❌ **APEX result download failed after successful matrix execution and upload.**
+          Review the failed `Download Results` step before trusting this run.
+
+          Run ID: ${{ env.APEX_RUN_ID }}
+          Commit: ${{ env.APEX_COMMIT_SHA }}
+          Runner outcome: ${{ steps.matrix_stages.outputs.runner_outcome }}
+          Upload outcome: ${{ steps.matrix_stages.outputs.upload_outcome }}
+          Download outcome: ${{ steps.results_check.outputs.download_outcome }}
+          Matrix result: ${{ needs.apex_matrix.result }}
+          ERREOF
+            elif [[ "${DOWNLOAD_OUTCOME:-unknown}" != "success" ]]; then
+              cat > apex_comment.md <<'ERREOF'
+          # 🎯 APEX Performance Report [PARTIAL]
+
+          ⚠️ **The current-run result download outcome could not be resolved.**
+          Review the `Download Results` and gate logs before attributing this run.
+
+          Run ID: ${{ env.APEX_RUN_ID }}
+          Commit: ${{ env.APEX_COMMIT_SHA }}
+          Runner outcome: ${{ steps.matrix_stages.outputs.runner_outcome }}
+          Upload outcome: ${{ steps.matrix_stages.outputs.upload_outcome }}
+          Download outcome: ${{ steps.results_check.outputs.download_outcome }}
           Matrix result: ${{ needs.apex_matrix.result }}
           ERREOF
             else
               cat > apex_comment.md <<'ERREOF'
           # 🎯 APEX Performance Report [PARTIAL]
 
-          ❌ **APEX matrix execution failed before producing complete result artifacts.**
-          Review the failed `Run APEX Matrix` job logs; gate/report steps were skipped.
+          ⚠️ **Complete V1/V2 APEX evidence was not present after successful transfer.**
+          Review the produced result set before trusting this run.
 
           Run ID: ${{ env.APEX_RUN_ID }}
           Commit: ${{ env.APEX_COMMIT_SHA }}
+          Runner outcome: ${{ steps.matrix_stages.outputs.runner_outcome }}
+          Upload outcome: ${{ steps.matrix_stages.outputs.upload_outcome }}
+          Download outcome: ${{ steps.results_check.outputs.download_outcome }}
           Matrix result: ${{ needs.apex_matrix.result }}
           ERREOF
             fi
-            echo "::warning::Complete APEX evidence unavailable (matrix=${{ needs.apex_matrix.result }}); generated partial report."
+            echo "::warning::Complete APEX evidence unavailable (runner=${RUNNER_OUTCOME:-unknown}, upload=${UPLOAD_OUTCOME:-unknown}, download=${DOWNLOAD_OUTCOME:-unknown}, matrix=${MATRIX_RESULT}); generated partial report."
             exit 0
           fi
 

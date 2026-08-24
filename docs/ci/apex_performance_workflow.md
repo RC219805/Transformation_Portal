@@ -93,6 +93,8 @@ export TP_STRICT_MODEL_LOCK=1
 
 The host environment intentionally remains core-only for DA3 because the isolated runtime owns Torch and Transformers. Other real backends continue to install the repository's `ml` extra.
 
+When `TRANSFORMATION_PORTAL_DA3_PYTHON` is configured, that exact executable is the runtime boundary: a missing or non-executable path fails closed instead of falling back to the host interpreter. The worker subprocess also inherits `TP_STRICT_MODEL_LOCK` and any explicit model-lock manifest override.
+
 ### 3. Run APEX Matrix
 Executes performance benchmarks across V1/V2 workflows:
 ```bash
@@ -139,7 +141,7 @@ fi
 
 ### 6. Publish Current-Run Evidence
 
-The gate uploads a ledger only when the current matrix succeeded, both expected V1/V2 observations arrived, and ledger rebuild/aggregation completed successfully. Dashboard deployment is limited to real results on `main`, and the scheduled backup downloads that same run's ledger rather than searching for an older successful artifact.
+The gate reads the current run's matrix-step outcomes from the GitHub Jobs API and keeps runner execution, result upload, and result download as separate stages. It uploads a ledger only when all three stages succeeded, both expected V1/V2 observations arrived, and ledger rebuild/aggregation completed successfully. Dashboard deployment is limited to real results on `main`, and the scheduled backup downloads that same run's ledger rather than searching for an older successful artifact.
 
 The ledger is retained for 90 days:
 ```yaml
@@ -270,7 +272,7 @@ Uses minimal required permissions:
 2. Verify ledger artifact was uploaded
 3. Check run_id matches between runner and comment generator
 
-The partial report distinguishes an upstream matrix execution failure from a successful matrix whose result artifacts were not transferred. Start with the failed matrix job in the first case and with artifact upload/download in the second.
+The partial report identifies the earliest proven failed stage: matrix runner execution, result upload, result download, or incomplete V1/V2 files after successful transfer. If the Jobs API or step data is unavailable, the report says the outcome could not be resolved instead of attributing a failure. Start with that named stage; the aggregate matrix-job result is diagnostic context, not proof that runner execution failed.
 
 ## Maintenance
 
