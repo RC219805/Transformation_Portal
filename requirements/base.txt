@@ -34,11 +34,11 @@ attrs==26.1.0
     #   -c all.txt
     #   jsonschema
     #   referencing
-boto3==1.43.72
+boto3==1.43.78
     # via
     #   -c all.txt
     #   -r base.in
-botocore==1.43.72
+botocore==1.43.78
     # via
     #   -c all.txt
     #   boto3
@@ -59,7 +59,7 @@ h11==0.16.0
     # via
     #   -c all.txt
     #   uvicorn
-idna==3.18
+idna==3.19
     # via
     #   -c all.txt
     #   anyio
@@ -100,7 +100,7 @@ mdurl==0.1.2
     # via
     #   -c all.txt
     #   markdown-it-py
-narwhals==2.24.0
+narwhals==2.25.0
     # via
     #   -c all.txt
     #   scikit-learn

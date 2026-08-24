@@ -20,9 +20,9 @@ cyclonedx-python-lib==11.12.0
     # via pip-audit
 defusedxml==0.7.1
     # via py-serializable
-filelock==3.32.3
+filelock==3.32.4
     # via cachecontrol
-idna==3.18
+idna==3.19
     # via requests
 license-expression==30.4.4
     # via cyclonedx-python-lib
@@ -66,7 +66,7 @@ rich==15.0.0
     #   pip-audit
 sortedcontainers==2.4.0
     # via cyclonedx-python-lib
-stevedore==5.9.0
+stevedore==5.9.1
     # via bandit
 tomli==2.4.1
     # via pip-audit
