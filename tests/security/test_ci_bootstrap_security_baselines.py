@@ -10,7 +10,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 GOVERNED_PIP_PIN = "pip==26.2.1"
 SAFE_DETERMINISM_TOOLCHAIN = f'python -m pip install --upgrade "{GOVERNED_PIP_PIN}" ' '"setuptools==83.0.0" "wheel==0.46.2"'
 PYPDF_SECURITY_FLOOR = "pypdf>=6.15.0"
-PYPDF_LOCK_PIN = "pypdf==6.16.1"
+PYPDF_LOCK_PIN = "pypdf==6.16.2"
 
 
 @pytest.mark.parametrize(
