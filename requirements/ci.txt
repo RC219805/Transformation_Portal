@@ -48,7 +48,7 @@ docutils==0.23
     # via
     #   -c all.txt
     #   readme-renderer
-filelock==3.32.3
+filelock==3.32.4
     # via
     #   -c all.txt
     #   python-discovery
@@ -58,7 +58,7 @@ id==1.6.1
     # via
     #   -c all.txt
     #   twine
-idna==3.18
+idna==3.19
     # via
     #   -c all.txt
     #   requests
@@ -100,7 +100,7 @@ more-itertools==11.1.0
     #   -c all.txt
     #   jaraco-classes
     #   jaraco-functools
-nh3==0.3.6
+nh3==0.3.7
     # via
     #   -c all.txt
     #   readme-renderer
@@ -129,7 +129,7 @@ pygments==2.21.0
     #   -c all.txt
     #   readme-renderer
     #   rich
-pypdf==6.16.1
+pypdf==6.16.2
     # via
     #   -c all.txt
     #   -r ci.in
@@ -176,7 +176,7 @@ secretstorage==3.5.0
     # via
     #   -c all.txt
     #   keyring
-stevedore==5.9.0
+stevedore==5.9.1
     # via
     #   -c all.txt
     #   bandit

@@ -29,11 +29,11 @@ black==26.3.1
     # via
     #   -c all.txt
     #   -r dev.in
-boto3==1.43.72
+boto3==1.43.78
     # via
     #   -c all.txt
     #   moto
-botocore==1.43.72
+botocore==1.43.78
     # via
     #   -c all.txt
     #   boto3
@@ -90,7 +90,7 @@ execnet==2.1.2
     # via
     #   -c all.txt
     #   pytest-xdist
-filelock==3.32.3
+filelock==3.32.4
     # via
     #   -c all.txt
     #   python-discovery
@@ -119,7 +119,7 @@ identify==2.6.19
     # via
     #   -c all.txt
     #   pre-commit
-idna==3.18
+idna==3.19
     # via
     #   -c all.txt
     #   anyio
@@ -169,7 +169,7 @@ mccabe==0.7.0
     #   -c all.txt
     #   flake8
     #   pylint
-moto[s3]==5.2.2
+moto[s3]==5.2.3
     # via
     #   -c all.txt
     #   -r dev.in
