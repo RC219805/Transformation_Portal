@@ -3,7 +3,7 @@
 **Purpose**: Define triage policy and merge criteria for Dependabot-generated pull requests
 **Owner**: Transformation Portal Architect
 **Created**: 2026-03-26
-**Last Updated**: 2026-08-20
+**Last Updated**: 2026-08-27
 
 ---
 
@@ -32,6 +32,10 @@ Current grouping and compatibility controls keep coupled changes atomic:
   `python3 scripts/validation/check_worker_dependency_parity.py`, including
   stable numeric manifest pins, the complete shared lock graph, and the
   Wrangler peer range.
+- FastVLM `mlx` and `mlx-metal` version updates are grouped as `mlx-runtime`.
+  The Dependabot config contract keeps both packages in that group, and the ML
+  runtime security contract requires exactly one equal pin for each package so
+  Darwin installs cannot receive a one-sided update.
 - Frontdoor security updates are grouped separately from routine version
   updates. Its Dependabot entry intentionally omits `target-branch` so GitHub
   applies security grouping while targeting the repository default branch,

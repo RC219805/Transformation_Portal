@@ -54,3 +54,13 @@ def test_fastvlm_runtime_does_not_keep_stale_datasets_pin() -> None:
     content = (REPO_ROOT / "config/fastvlm_runtime_requirements.txt").read_text(encoding="utf-8").lower()
 
     assert "datasets==4.8.5" not in content
+
+
+def test_fastvlm_mlx_runtime_pins_stay_coupled() -> None:
+    content = (REPO_ROOT / "config/fastvlm_runtime_requirements.txt").read_text(encoding="utf-8").lower()
+    mlx_versions = [line.removeprefix("mlx==") for line in content.splitlines() if line.startswith("mlx==")]
+    mlx_metal_versions = [line.removeprefix("mlx-metal==") for line in content.splitlines() if line.startswith("mlx-metal==")]
+
+    assert len(mlx_versions) == 1, "FastVLM requirements must contain exactly one exact mlx pin"
+    assert len(mlx_metal_versions) == 1, "FastVLM requirements must contain exactly one exact mlx-metal pin"
+    assert mlx_versions == mlx_metal_versions, "mlx and mlx-metal must use the same exact version on Darwin"
