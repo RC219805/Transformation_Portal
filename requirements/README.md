@@ -124,10 +124,14 @@ The repository's governed web stack currently resolves to:
 | Dependency | Source of Truth | Current Version |
 |-----------|-----------------|-----------------|
 | FastAPI | `requirements/base.in` | `0.141.1` |
-| Starlette | `requirements/base.in` + `pyproject.toml` bound | `1.3.1` |
+| Starlette | `requirements/base.in` + `pyproject.toml` bound | `1.6.0` |
 | Uvicorn | `requirements/base.in` + `pyproject.toml` bound | `0.52.1` |
 
-This baseline was validated through the curated compatibility path, most recently on 2026-08-19 for the FastAPI `0.141.1` update in PR #2042 and the already-governed Uvicorn `0.52.1` pin. Do not treat future updates to these exact pins as routine dependency bumps; use the governance flow documented in `docs/governance/DEPENDABOT_PR_GOVERNANCE.md`.
+This baseline combines the FastAPI `0.141.1` update in PR #2042, the curated
+Starlette `1.6.0` promotion on 2026-08-28, and the already-governed Uvicorn
+`0.52.1` pin. Do not treat future updates to these exact pins as routine
+dependency bumps; use the governance flow documented in
+`docs/governance/DEPENDABOT_PR_GOVERNANCE.md`.
 
 ### Layered ML Strategy
 

@@ -120,7 +120,10 @@ Given our image/video processing nature, special attention is required for:
   - **cryptography==50.0.0** - Current governed lock; includes the CVE-2026-69247 security fix
   - **black==26.3.1** - Fixed arbitrary file writes from unsanitized cache names
   - **Pygments==2.21.0** - Fixed CVE-2026-4539; the temporary pip-audit exception is retired
-  - **Starlette==1.3.1** - Fixed CVE-2026-48710 / PYSEC-2026-161 plus 2026 StaticFiles, HTTPEndpoint, and form parsing advisories
+  - **Starlette==1.6.0** - Retains the governed CVE-2026-48710 / PYSEC-2026-161,
+    StaticFiles, HTTPEndpoint, and form-parsing fixes; adds Starlette 1.5.1
+    `FileResponse` range hardening and the 1.6.0 application/route
+    `max_body_size` control
 
   **January 2026**:
   - **protobuf 6.34.0** - Fixed CVE-2026-0994 / GHSA-7gcm-g887-7qv7 (Dependabot #69)
