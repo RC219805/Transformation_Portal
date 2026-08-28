@@ -35,14 +35,16 @@ competitors — including their test suites and coverage floors.
 |---|---|---|---|---|
 | 1 | `stage_graph/graph.py` wrapped by `core/cas_dag_executor.py` | ThreadPool DAG + CAS + MerkleDAG provenance, deterministic replay | No production consumers outside `core/`; `lux_depth_v3/v2_enhance.py:36-37` imports `stage_graph` for one stage adapter | `tests/` (stage_graph has a branch floor) |
 | 2 | `spatial_ai/orchestration/graph/executor.py` (ADR-029) | Execution-graph executor with its own `ExecutionGraph`/`ExecutionPlan` | `spatial_ai` only | `tests/spatial_ai/` |
-| 3 | `execution_graph/scheduler.py` (`PriorityDAGScheduler`) + `distributed_executor.py` + `nodes/` | Priority DAG scheduler with node library | **Live**: `dashboard/dag_api.py:13`; `rl/{mcts,ma_env,env}.py` (patcher) | own suites |
+| 3 | `execution_graph/scheduler.py` (`PriorityDAGScheduler`) + `distributed_executor.py` + `nodes/` | Priority DAG scheduler with node library | `rl/{mcts,ma_env,env}.py` consume `execution_graph.patcher` (lazy, in-function); `dashboard/dag_api.py` references the scheduler **type-only** (`TYPE_CHECKING`, line 12-13) — no verified runtime consumer of the scheduler/distributed executor themselves | own suites |
+| 3b | `comfyui/executor.py` (+ `workflow_builder.py`, `custom_nodes.py`) | ComfyUI workflow executor | comfyui surface; carries `comfyui/*` branch-coverage floors | own suites |
 | 4 | `runtime/engine.py` + `runtime/scheduler.py` (+ `process_executor.py`, `execution_manifest.py`, `ledger.py`, `replay.py`) | Runtime execution engine with Merkle-backed manifests and replay | runtime package surfaces; dashboard | `tests/runtime/` (engine, execution_manifest, ledger, process_executor, …) |
 | 5 | `lux_depth_v3` orchestrator + `pipeline_coordinator`/`execution_engine` | Bespoke per-image state machine; `ExecutionPlan` is a flat string list (`pipeline_coordinator.py:1051-1097`); facade classes production-dead | **The flagship pipeline — the only path users run** | `tests/lux_depth_v3/` (36 files) |
-| J | `orchestrator/worker.py` `WorkerRunner` | Durable job-level queue/lease consumer — not a stage DAG | FastAPI lifespan (only execution path since Phase 2.E) | `tests/orchestrator/` |
+| J | `orchestrator/worker.py` `WorkerRunner` + `orchestrator/worker_process.py` (standalone `python -m ...worker_process` entry point for multi-host workers) | Durable job-level queue/lease consumer — not a stage DAG | FastAPI lifespan (only in-process execution path since Phase 2.E); standalone process for multi-host deployment | `tests/orchestrator/` (incl. `test_worker_process_contract.py`) |
 
 **Execution identity.** `core/execution_identity.py` (`ExecutionIdentity`, `compute_cas_id`,
 `compute_code_hash`, `create_artifact_metadata`) implements model+config+code identity and is
-**orphaned**. Competing partial identities: `config_resolver.compute_config_fingerprint`, the depth
+**consumed within `core/`** (`core/execution_wrapper.py:49,314`, `core/cas_dag_executor.py:54`) but
+**unwired from the Lux production path**. Competing partial identities: `config_resolver.compute_config_fingerprint`, the depth
 cache fingerprint (`config_resolver.py:507-566`), the segmentation cache key
 (`segmentation/_cache.py:251-320`), and the manifest `ConfigFingerprint`.
 
@@ -53,11 +55,15 @@ coverage floor. `lux_depth_v3/artifact_manager.compute_artifact_merkle_root` is 
 production path. `tp.merkle`/`tp.crypto` is the evidence plane — contract-bearing, out of scope for
 consolidation (see Authority boundary).
 
-**Event / audit recording.** Live: `orchestrator/storage/` `JobEventStore` and
-`OperationalAuditStore` (`orchestrator/storage/base.py:315`). Orphaned but gap-doc-designated for
-lifecycle events: `events/store.py` `EventStore`. **This ADR makes no presumption that the
-synchronous `events/store.py` is the operational ledger** — that is a row to decide, with the live
-job-plane stores as first-class candidates.
+**Event / audit / ledger recording — four distinct surfaces, not one.** (a) `orchestrator/storage/`
+`JobEventStore` — live; job-event history backing SSE replay. (b) `OperationalAuditStore`
+(`orchestrator/storage/base.py:315`) — live; paid-pilot operational audit. (c) `events/store.py`
+`EventStore` — orphaned; gap-doc-designated for lifecycle events. (d) `runtime/ledger.py`
+`ImmutableLedger` (line 102) — the literal append-only ledger implementation in the runtime plane.
+These serve different purposes (SSE history, pilot audit, operation events, immutable record) and the
+designation row below must dispose of each explicitly. **This ADR makes no presumption that the
+synchronous `events/store.py` is the operational ledger** — that is a row to decide, with all four
+surfaces as candidates for their respective roles.
 
 **Artifact surfaces.** Three classes named `ArtifactStore` exist, and they are **not
 interchangeable** — they serve different roles:
@@ -92,12 +98,12 @@ in earlier drafts effectively pre-decided rows before the evidence comparison, a
 | Plane | Designated authority | Migration path |
 |---|---|---|
 | Execution identity | ⟨DECIDE⟩ — one canonical implementation; cache fingerprints become derivations of it, with complete identity fields (code, model, config, dependency, executed path) | ⟨DECIDE⟩ |
-| Plan/DAG representation | ⟨DECIDE⟩ — one schema + owner; grown from the [#2065](https://github.com/RC219805/Transformation_Portal/issues/2065) resolver-only `ResolvedInvocation` | plan verb → typed plan (Phase 3) |
+| Plan/DAG representation | ⟨DECIDE⟩ — one schema + owner, chosen through the suitability matrix with no pre-selected candidate. The [#2065](https://github.com/RC219805/Transformation_Portal/issues/2065) `ResolvedInvocation` is hereby scoped as a **bounded, provisional pre-designation spike**: its serialization is marked `stability: provisional`, carries no designation weight, and is either adopted or migrated when this row is decided | spike (provisional) → designated representation (Phase 3) |
 | Stage executor | ⟨DECIDE⟩ — one production executor for local/runtime stage work, evaluated across inventory rows 1–5 | Phase 3 pilot |
 | Job runner boundary | ⟨DECIDE⟩ — boundary statement with `WorkerRunner`: the designated stage executor runs inside a leased job; never a second queue | n/a |
 | CAS/Merkle operational lineage | ⟨DECIDE⟩ — one identity + lineage authority for **operational** records (evidence plane excluded; see Authority boundary) | Phase 3 |
 | Artifact roles & composition | ⟨DECIDE⟩ — designate how the four roles above **compose** (CAS bytes / stage cache / job delivery / generation publication); do not force one interface to absorb all four jobs. The publication-transaction owner defines per-backend semantics (filesystem rename vs object-store transaction) | [#2063](https://github.com/RC219805/Transformation_Portal/issues/2063) → 1.5-b → Phase 3 |
-| Operational ledger & projections | ⟨DECIDE⟩ — canonical operational event/artifact record and projection rules, chosen among `JobEventStore` / `OperationalAuditStore` / `events/store.py` (or a designated composition) | Phase 3 |
+| Operational ledger & projections | ⟨DECIDE⟩ — canonical operational event/artifact record and projection rules, disposing of each of the four surfaces explicitly (`JobEventStore` SSE/job history, `OperationalAuditStore` pilot audit, `events/store.py` lifecycle events, `runtime/ledger.py` `ImmutableLedger`) — a designated composition, never a conflation | Phase 3 |
 | Competing implementations | ⟨DECIDE per inventory row⟩: keep / adapt / freeze / remove — including `execution_graph`'s live dashboard/rl consumers and `runtime/`'s engine surfaces | staged with Phase 3 |
 | Associated tests | Tests follow authority ownership: retained, migrated, consolidated, or **deleted with their implementation** | same PRs as dispositions |
 | Coverage floors | Floors move to the owning package; a frozen implementation's floor is removed or frozen-and-annotated | `scripts/ci/check_per_package_*` updates in disposition PRs |
@@ -121,8 +127,12 @@ record may be the generation-time source used to render contract artifacts, but 
 substitute evidence chain. Published evidence bytes, their schemas and canonicalization rules, their
 contract-native commitments, and — where authenticity is asserted — their verified detached
 signatures remain authoritative within their respective scopes. Operational records may reference
-them by digest but may not reinterpret, repair, overwrite, or supersede them. **Divergence fails
-closed.**
+them by digest but may not reinterpret, repair, overwrite, or supersede them. **Divergence must fail
+closed** — stated here as a binding REQUIREMENT on the designated authorities, not as a description
+of current behavior: review evidence (2026-08-28) established that the current run-card
+self-attestation verifier does not recompute the evidence digest, so tampered projected evidence can
+presently verify. Closing that gap is an acceptance precondition for the evidence-projection row,
+and the verifier fix is in scope for the repair program regardless of designation outcome.
 
 Additionally:
 
@@ -142,16 +152,26 @@ Additionally:
 | ADR-029 | spatial_ai execution-graph executor for spatial pipelines | Stage-executor row may designate a different executor | Amend ADR-029 scope or record spatial_ai as an adapt-consumer; update Supersedes here |
 | ADR-043 | Lux decomposition seams; facade extraction pattern; recorded finding that depth/materials stages resist extraction | Plan-representation and stage-executor rows change how the Lux loop executes | Record ADR-043's Phase-6 finding as an input constraint; amend its "completed" scope if the state machine is replanned |
 | ADR-045 | Repo-wide extraction pattern; ~200 LOC/quarter orchestrator ratchet | Phase 3 removals must land as ADR-045-pattern PRs; freeze dispositions must not violate the ratchet commitment | Cite ADR-045 in each disposition PR; reconcile the ratchet if orchestrator code moves wholesale |
+| PR #2070 / issue #2065 (`ResolvedInvocation`, `--plan`) | Provisional Lux-owned plan serialization and contract-aware fingerprint identity | Plan/DAG-representation and execution-identity rows may designate differently | Scoped above as a bounded provisional pre-designation spike (`stability: provisional`); adopted or migrated at designation; its identity algorithm is an input to — not a decision of — the execution-identity row |
 | Production-hardening baseline (gap doc §4) | `orchestrator/*` Protocols, EventStore for lifecycle events, attestation chain authoritative, "reuse, don't reinvent" | Ledger and artifact-composition rows must extend, not parallel, these primitives | Any deviation from §4's designations is recorded here and in the gap doc's next refresh |
 
 ### Binding rules (effective on acceptance)
 
 1. **No new scheduler, ledger, or artifact-store abstraction merges before this ADR is accepted.**
+   Before acceptance this is a proposed convention, not an enforceable gate on `main`: it binds
+   the proposers voluntarily from the proposal date, and any abstraction that merges during the
+   proposal window must be added to the conflict matrix and disposed of at acceptance (the #2065
+   provisional plan surface is the first such entry).
 2. A frozen implementation cannot retain a permanently green suite that no longer proves production
    behavior — its tests are migrated, consolidated, or deleted in the disposition PR.
 3. `plan` and `run` share one resolution path; `run` ultimately consumes the exact resolved plan
    object `plan` emits ([#2065](https://github.com/RC219805/Transformation_Portal/issues/2065)) —
-   this invariant applies to every designated component.
+   this invariant applies to every designated component. **Definition across process boundaries:**
+   within one process, "exact" means object identity; across separate CLI invocations or the worker
+   subprocess boundary, it means equivalence — byte-identical canonical serialization and equal
+   config fingerprint — with the carried model contract revalidated fail-closed
+   (`validate_authoritative_model_contract`) at every consumption boundary, because a deserialized
+   plan carries no authority of its own.
 4. Structural write prohibition: manifest/run-card/artifact-path writes outside the designated
    authority fail CI, enforced by extending the existing raw-JSON governance gate
    (`check_raw_json_usage.py` pattern), not a new mechanism.
