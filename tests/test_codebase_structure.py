@@ -605,7 +605,7 @@ class TestRootGovernanceMetadata:
         assert "`cryptography`          | >=50.0.0" in contributing
         assert "`cryptography`          | >=48.0.1" not in contributing
         assert "`starlette`             | >=1.3.1" in contributing
-        assert "Starlette==1.3.1" in security_policy
+        assert "Starlette==1.6.0" in security_policy
         assert "Supported Apple Silicon lane runs on torch `2.13.0` / torchvision `0.28.0`" in security_policy
         assert "Supported Apple Silicon lane runs on torch `2.8.0` / torchvision `0.23.0`" not in security_policy
         assert "current governed lock baseline is pillow==12.3.0" in requirements_lint
@@ -636,7 +636,7 @@ class TestRootGovernanceMetadata:
             "Pillow>=10.3.0,<13",
             "scikit-learn>=1.8.0,<2",
             "fastapi>=0.136.1,<0.142",
-            "starlette>=1.3.1,<1.4",
+            "starlette>=1.3.1,<1.7",
             "uvicorn>=0.52.1,<0.53",
             "websockets>=17.0.1,<18",
             "aiofiles>=25.1.0,<26",
@@ -653,6 +653,7 @@ class TestRootGovernanceMetadata:
             "scikit-learn>=1.0,<2",
             "fastapi>=0.136.1,<0.139",
             "fastapi>=0.121.0,<0.137",
+            "starlette>=1.3.1,<1.4",
             "starlette>=0.49.1,<1.1",
             "uvicorn>=0.48.0,<0.49",
             "uvicorn>=0.29.0,<0.49",
