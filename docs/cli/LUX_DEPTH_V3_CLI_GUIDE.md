@@ -400,13 +400,23 @@ For v2 run cards, detached attestation helpers are available:
 .venv/bin/python tools/sign_run_card_attestation.py \
   --run-card ./path/to/run_card.json \
   --format both \
-  --key-id "release-signer"
+  --gpg \
+  --gpg-key-id "<PRIMARY_GPG_FINGERPRINT>" \
+  --key-id "<PRIMARY_GPG_FINGERPRINT>"
 
 .venv/bin/python tools/verify_run_card_attestation.py \
   --run-card ./path/to/run_card.json \
   --require-native \
-  --require-dsse
+  --require-dsse \
+  --gpg
 ```
+
+For native clear-sign attestations, `--key-id` must resolve through the local
+GPG keyring to exactly one primary fingerprint and must match the primary key
+reported by the verified signature. Logical labels such as `release-signer`
+that are not GPG-resolvable now fail closed. Verification also compares the
+GPG-extracted cleartext with the exact canonical attestation preimage; a valid
+signature over unrelated content is rejected.
 
 When you need policy-based release gating instead of low-level integrity checks, use:
 
@@ -415,7 +425,8 @@ When you need policy-based release gating instead of low-level integrity checks,
   ./path/to/run_card.json \
   --require-v2 \
   --require-native-attestation \
-  --require-dsse-attestation
+  --require-dsse-attestation \
+  --gpg
 ```
 
 ## Example Workflows

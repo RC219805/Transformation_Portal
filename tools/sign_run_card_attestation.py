@@ -16,7 +16,11 @@ if _SRC.is_dir():
 
 # pylint: disable=wrong-import-position
 from transformation_portal.attestation.dsse import DSSE_IN_TOTO_JSON_PAYLOAD_TYPE, pre_auth_encode
-from transformation_portal.attestation.gpg import gpg_clearsign_bytes, gpg_detached_sign_bytes
+from transformation_portal.attestation.gpg import (
+    gpg_clearsign_bytes,
+    gpg_detached_sign_bytes,
+    gpg_verify_clearsign,
+)
 from transformation_portal.attestation.run_card_detached import (
     build_run_card_detached_attestation_payload,
     canonical_run_card_attestation_bytes,
@@ -65,7 +69,11 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--release-assessment", default=None, help="Optional JSON assessment payload to bind into predicate.")
     parser.add_argument("--gpg", action="store_true", help="Use GPG backends for native and DSSE signatures.")
     parser.add_argument("--gpg-key-id", default=None, help="Optional gpg key id for signing.")
-    parser.add_argument("--key-id", required=True, help="Key identifier to record in signatures.")
+    parser.add_argument(
+        "--key-id",
+        required=True,
+        help="Key identifier to record; native signing requires it to resolve to the signing primary GPG key.",
+    )
     parser.add_argument("--signed-at", default=None, help="RFC3339 UTC timestamp, e.g. 2026-04-10T20:15:00Z.")
     parser.add_argument("--sigstore-key", default=None, help="Optional cosign key path for bundle signing.")
     parser.add_argument(
@@ -125,13 +133,21 @@ def main() -> int:
         return EXIT_BUILD_ERROR
 
     try:
-        native_out = Path(args.native_out) if args.native_out else _default_sidecar_path(
-            run_card_path,
-            ".attestation.native.json",
+        native_out = (
+            Path(args.native_out)
+            if args.native_out
+            else _default_sidecar_path(
+                run_card_path,
+                ".attestation.native.json",
+            )
         )
-        dsse_out = Path(args.dsse_out) if args.dsse_out else _default_sidecar_path(
-            run_card_path,
-            ".attestation.dsse.json",
+        dsse_out = (
+            Path(args.dsse_out)
+            if args.dsse_out
+            else _default_sidecar_path(
+                run_card_path,
+                ".attestation.dsse.json",
+            )
         )
 
         if args.format in {"native", "both"}:
@@ -140,6 +156,11 @@ def main() -> int:
                 run_card_bytes=run_card_bytes,
             )
             signature_text = gpg_clearsign_bytes(preimage_bytes, key_id=args.gpg_key_id)
+            gpg_verify_clearsign(
+                signature_text,
+                expected_payload=preimage_bytes,
+                key_id=args.key_id,
+            )
             native_payload = build_run_card_detached_attestation_payload(
                 run_card_payload,
                 run_card_bytes=run_card_bytes,

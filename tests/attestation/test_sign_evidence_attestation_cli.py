@@ -18,9 +18,16 @@ pytestmark = pytest.mark.unit
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 TOOL_PATH = PROJECT_ROOT / "tools" / "sign_evidence_attestation.py"
+VERIFY_TOOL_PATH = PROJECT_ROOT / "tools" / "verify_evidence_attestation.py"
+FAKE_GPG_PATH = PROJECT_ROOT / "tests" / "fixtures" / "attestation" / "fake_gpg.py"
 
 
-def _run_tool(*args: str, path_prepend: Path | None = None) -> subprocess.CompletedProcess[str]:
+def _run_tool(
+    *args: str,
+    path_prepend: Path | None = None,
+    env_updates: dict[str, str] | None = None,
+    tool_path: Path = TOOL_PATH,
+) -> subprocess.CompletedProcess[str]:
     env = dict(os.environ)
     pythonpath_parts = [str(PROJECT_ROOT / "src"), str(PROJECT_ROOT)]
     if env.get("PYTHONPATH"):
@@ -28,9 +35,11 @@ def _run_tool(*args: str, path_prepend: Path | None = None) -> subprocess.Comple
     env["PYTHONPATH"] = os.pathsep.join(pythonpath_parts)
     if path_prepend is not None:
         env["PATH"] = os.pathsep.join([str(path_prepend), env.get("PATH", "")])
+    if env_updates:
+        env.update(env_updates)
 
     return subprocess.run(
-        [sys.executable, str(TOOL_PATH), *args],
+        [sys.executable, str(tool_path), *args],
         cwd=PROJECT_ROOT,
         env=env,
         capture_output=True,
@@ -71,21 +80,7 @@ def _write_fake_gpg(tmp_path: Path) -> Path:
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir(parents=True, exist_ok=True)
     gpg_path = bin_dir / "gpg"
-    gpg_path.write_text(
-        """#!/bin/sh
-cat >/dev/null
-cat <<'EOF'
------BEGIN PGP SIGNED MESSAGE-----
-Hash: SHA256
-
-payload
------BEGIN PGP SIGNATURE-----
-fake-signature
------END PGP SIGNATURE-----
-EOF
-""",
-        encoding="utf-8",
-    )
+    gpg_path.write_bytes(FAKE_GPG_PATH.read_bytes())
     gpg_path.chmod(0o755)
     return bin_dir
 
@@ -127,5 +122,79 @@ def test_sign_cli_writes_attestation_with_fake_gpg(tmp_path: Path) -> None:
     assert "BEGIN PGP SIGNED MESSAGE" in attestation["signature"]["signature"]
     assert attestation["attestation_sha256"] == compute_attestation_sha256(attestation)
 
+    verify_result = _run_tool(
+        "--evidence",
+        str(evidence_path),
+        "--attestation",
+        str(output_path),
+        "--gpg",
+        path_prepend=fake_path,
+        tool_path=VERIFY_TOOL_PATH,
+    )
+    assert verify_result.returncode == 0, verify_result.stderr
+
     tmp_siblings = list(output_path.parent.glob(f".{output_path.name}.*.tmp"))
     assert tmp_siblings == []
+
+
+def test_sign_cli_fails_closed_when_recorded_key_does_not_match_signature(tmp_path: Path) -> None:
+    evidence_path = _write_evidence(tmp_path)
+    output_path = tmp_path / "attestation.json"
+    fake_path = _write_fake_gpg(tmp_path)
+
+    result = _run_tool(
+        "--evidence",
+        str(evidence_path),
+        "--out",
+        str(output_path),
+        "--gpg",
+        "--key-id",
+        "logical-label",
+        path_prepend=fake_path,
+        env_updates={"TP_FAKE_GPG_RESOLVED_FINGERPRINT": "B" * 40},
+    )
+
+    assert result.returncode == 4
+    assert "primary fingerprint does not match recorded key_id" in result.stderr
+    assert not output_path.exists()
+
+
+def test_sign_cli_marks_no_recompute_check_deprecated() -> None:
+    result = _run_tool("--help")
+
+    assert result.returncode == 0
+    assert "DEPRECATED" in result.stdout
+    assert "forensic migration only" in result.stdout
+
+
+def test_no_recompute_check_does_not_create_verifier_bypass(tmp_path: Path) -> None:
+    evidence_path = _write_evidence(tmp_path)
+    evidence = json.loads(evidence_path.read_text(encoding="utf-8"))
+    evidence["projected_envelope"]["data"]["preset"] = "tampered"
+    evidence_path.write_text(json.dumps(evidence), encoding="utf-8")
+    output_path = tmp_path / "attestation.json"
+    fake_path = _write_fake_gpg(tmp_path)
+
+    sign_result = _run_tool(
+        "--evidence",
+        str(evidence_path),
+        "--out",
+        str(output_path),
+        "--gpg",
+        "--key-id",
+        "test-key",
+        "--no-recompute-check",
+        path_prepend=fake_path,
+    )
+    verify_result = _run_tool(
+        "--evidence",
+        str(evidence_path),
+        "--attestation",
+        str(output_path),
+        tool_path=VERIFY_TOOL_PATH,
+    )
+
+    assert sign_result.returncode == 0, sign_result.stderr
+    assert "deprecated" in sign_result.stderr
+    assert verify_result.returncode == 5
+    assert "projected_envelope does not reproduce stored evidence_sha256" in verify_result.stderr
