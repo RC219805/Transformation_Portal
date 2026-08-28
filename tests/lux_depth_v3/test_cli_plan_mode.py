@@ -100,6 +100,44 @@ class TestPlanMode:
         assert result.exit_code == 1
         assert "APEX strict gate" in result.output
 
+    def test_run_mode_attaches_invocation_to_config(self, tmp_path: Path, monkeypatch) -> None:
+        """Without --plan, the run path attaches the exact invocation object
+        to the config before orchestrator construction (the single-resolution
+        invariant's consumption side)."""
+        import transformation_portal.lux_depth_v3.__main__ as cli_module
+
+        captured: dict = {}
+
+        class _StubOrchestrator:
+            def __init__(self, config, output_root):
+                captured["invocation"] = config.resolved_invocation
+                captured["output_root"] = output_root
+
+            def enhance_batch(self, input_dir, image_extensions):
+                return []
+
+        monkeypatch.setattr(cli_module, "EnhanceOrchestrator", _StubOrchestrator)
+        input_dir = _make_input_dir(tmp_path)
+        output_dir = tmp_path / "out"
+        result = runner.invoke(
+            app,
+            [
+                "--input-dir",
+                str(input_dir),
+                "--output-dir",
+                str(output_dir),
+                "--model-key",
+                "da3-metric",
+            ],
+        )
+        assert result.exit_code == 0, result.output
+        invocation = captured["invocation"]
+        assert invocation is not None
+        assert invocation.schema == "tp.lux.resolved_invocation.v1"
+        assert invocation.resolved_model.canonical_key == "da3_metric"
+        # Run mode (unlike --plan) does create the output root.
+        assert output_dir.exists()
+
     def test_plan_json_deterministic_across_invocations(self, tmp_path: Path) -> None:
         input_dir = _make_input_dir(tmp_path)
         args = [

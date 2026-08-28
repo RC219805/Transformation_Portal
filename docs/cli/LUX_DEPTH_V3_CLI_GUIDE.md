@@ -302,6 +302,20 @@ FastVLM captioning is advisory only. Its output is not quality-gate evidence.
   algorithms produce different pixels - the choice is captured in the
   Phase II ingest fingerprint for reproducibility.
 
+### Planning
+
+- `--plan`: Resolver-only mode. Runs the same argument parsing, configuration
+  and model/license resolution, input selection, and cross-field validation a
+  real run performs, then prints the resolved invocation
+  (`tp.lux.resolved_invocation.v1`) as canonical JSON and exits — without
+  loading models, creating the output directory, or writing any files. A
+  command that would fail validation or resolution fails `--plan` with the
+  same error and exit code. The emitted plan includes the authoritative
+  resolved model contract, the planned backend and candidate fallback chain
+  (the backend actually executed at runtime is recorded in manifests, not in
+  the plan), license acknowledgements, planned stages, requested artifacts,
+  the selected input files, and the configuration fingerprint.
+
 ### Logging
 
 - `--verbose` / `-v`: Enable verbose logging

@@ -134,6 +134,84 @@ class TestPlanSerialization:
         assert "marketing" not in " ".join(payload["requested_artifacts"])
 
 
+class TestNonDa3AndOptionalStages:
+    def test_depth_pro_plan_has_no_da3_contract_and_defers_license(self, tmp_path: Path) -> None:
+        config = EnhanceConfig(
+            depth_backend="depth_pro",
+            non_commercial_ok=True,
+            accept_apple_depth_pro_research_license=True,
+        )
+        invocation = _build(config, tmp_path)
+        assert invocation.planned_backend == "depth_pro"
+        assert invocation.resolved_model is None
+        assert invocation.license_enforced is False
+        payload = invocation.to_payload()
+        assert payload["resolved_model"] is None
+        assert payload["license_evaluation"]["status"] == "deferred_to_backend_gates"
+
+    def test_carrier_without_da3_contract_falls_back_to_local_resolution(self, tmp_path: Path) -> None:
+        # A non-DA3 invocation carries resolved_model=None; consumers must
+        # fall back to their existing resolution rather than treating None
+        # as an authoritative contract.
+        from transformation_portal.depth.backends.da3 import DA3Backend
+        from transformation_portal.lux_depth_v3.config_resolver import ConfigResolver
+
+        config = EnhanceConfig(
+            depth_backend="depth_pro",
+            non_commercial_ok=True,
+            accept_apple_depth_pro_research_license=True,
+        )
+        config.resolved_invocation = _build(config, tmp_path)
+        resolved = ConfigResolver().resolve(config)
+        assert resolved.resolved_model_contract is not None
+        backend = DA3Backend(config)
+        assert backend._resolved_model_contract is not None
+
+    def test_all_optional_stages_and_artifacts_planned(self, tmp_path: Path) -> None:
+        config = EnhanceConfig(
+            model_key="da3-metric",
+            enable_materials_v3=True,
+            generate_pbr=True,
+            enable_v2=True,
+            v2_preset="signature",
+            enable_reconstruction=True,
+            save_float_depth=True,
+            emit_master16=True,
+            emit_upscaled16=True,
+        )
+        invocation = _build(config, tmp_path)
+        assert invocation.stages == (
+            "preprocess",
+            "depth",
+            "materials_v3",
+            "pbr",
+            "v2",
+            "reconstruction",
+            "output",
+        )
+        artifacts = set(invocation.requested_artifacts)
+        assert {
+            "depth_float_npy",
+            "materials_v3_masks",
+            "pbr_maps",
+            "v2_enhanced_image",
+            "reconstruction_bundle",
+            "bit_depth_16_intermediates",
+        } <= artifacts
+        assert any("bit-depth switch" in warning for warning in invocation.warnings)
+
+    def test_input_file_outside_input_dir_kept_as_posix_path(self, tmp_path: Path) -> None:
+        input_dir = tmp_path / "inputs"
+        input_dir.mkdir()
+        outside = tmp_path / "elsewhere" / "x.jpg"
+        invocation = build_resolved_invocation(
+            _commercial_config(),
+            input_dir=input_dir,
+            input_files=[outside],
+        )
+        assert invocation.input_files == (outside.as_posix(),)
+
+
 class TestNoWrites:
     def test_build_performs_no_filesystem_writes(self, tmp_path: Path) -> None:
         input_dir = tmp_path / "inputs"
