@@ -27,19 +27,27 @@ assumed "one repository-standard durable executor and CAS" exists to bind to; ve
 artifact-store abstraction merges, this ADR designates one authority per concern and disposes of the
 competitors — including their test suites and coverage floors.
 
-### Inventory (verified 2026-08-28 at `c6d620a` — facts, not proposals)
+### Inventory (initially verified at `c6d620a`; execution-surface corrections reverified at `61456c3`;
+affected identity and evidence-binding claims refreshed at `81c9f15` — facts, not proposals)
 
-**Execution planes (stage-level), plus the job plane:**
+**Execution surfaces (stage-level), plus a separate job-runner boundary:**
+
+Seven stage-level implementation surfaces are inventoried below. `WorkerRunner` is listed as `J`
+because its queue/lease responsibility is the job boundary, not an eighth stage executor.
 
 | # | Implementation | Character | Verified consumers | Tests |
 |---|---|---|---|---|
 | 1 | `stage_graph/graph.py` wrapped by `core/cas_dag_executor.py` | ThreadPool DAG + CAS + MerkleDAG provenance, deterministic replay | No production consumers outside `core/`; `lux_depth_v3/v2_enhance.py:36-37` imports `stage_graph` for one stage adapter | `tests/` (stage_graph has a branch floor) |
 | 2 | `spatial_ai/orchestration/graph/executor.py` (ADR-029) | Execution-graph executor with its own `ExecutionGraph`/`ExecutionPlan` | `spatial_ai` only | `tests/spatial_ai/` |
-| 3 | `execution_graph/scheduler.py` (`PriorityDAGScheduler`) + `distributed_executor.py` + `nodes/` | Priority DAG scheduler with node library | `rl/{mcts,ma_env,env}.py` consume `execution_graph.patcher` (lazy, in-function); `dashboard/dag_api.py` references the scheduler **type-only** (`TYPE_CHECKING`, line 12-13) — no verified runtime consumer of the scheduler/distributed executor themselves | own suites |
-| 3b | `comfyui/executor.py` (+ `workflow_builder.py`, `custom_nodes.py`) | ComfyUI workflow executor | comfyui surface; carries `comfyui/*` branch-coverage floors | own suites |
-| 4 | `runtime/engine.py` + `runtime/scheduler.py` (+ `process_executor.py`, `execution_manifest.py`, `ledger.py`, `replay.py`) | Runtime execution engine with Merkle-backed manifests and replay | runtime package surfaces; dashboard | `tests/runtime/` (engine, execution_manifest, ledger, process_executor, …) |
-| 5 | `lux_depth_v3` orchestrator + `pipeline_coordinator`/`execution_engine` | Bespoke per-image state machine; `ExecutionPlan` is a flat string list (`pipeline_coordinator.py:1051-1097`); facade classes production-dead | **The flagship pipeline — the only path users run** | `tests/lux_depth_v3/` (36 files) |
+| 3 | `execution_graph/scheduler.py` (`PriorityDAGScheduler`) + `nodes/` | Priority DAG scheduler with in-process node execution and node library | `dashboard/execution_manager.py:379-405` constructs the scheduler at runtime, adds dashboard pipeline nodes, and consumes its execution order; `dashboard/dag_api.py` exposes a scheduler injection/visualization surface, although its import is type-only | own suites plus dashboard suites |
+| 4 | `execution_graph/distributed_executor.py` (`DistributedDAGExecutor`) | Local/Ray wrapper around row 3, with its own Ray execution loop | Package re-export plus tests/doc examples only; no verified runtime construction or execution outside its own suite | `tests/execution_graph/test_distributed_executor.py` |
+| 5 | `comfyui/executor.py` (+ `workflow_builder.py`, `custom_nodes.py`) | ComfyUI workflow executor | comfyui surface; carries `comfyui/*` branch-coverage floors | own suites |
+| 6 | `runtime/engine.py` + `runtime/scheduler.py` (+ `process_executor.py`, `execution_manifest.py`, `ledger.py`, `replay.py`) | Runtime execution engine with Merkle-backed manifests and replay | runtime package surfaces; dashboard | `tests/runtime/` (engine, execution_manifest, ledger, process_executor, …) |
+| 7 | `lux_depth_v3` orchestrator + `pipeline_coordinator`/`execution_engine` | Bespoke per-image state machine; `ExecutionPlan` is a flat string list (`pipeline_coordinator.py:1051-1097`); facade classes production-dead | **The flagship pipeline — the only path users run** | `tests/lux_depth_v3/` (36 files) |
 | J | `orchestrator/worker.py` `WorkerRunner` + `orchestrator/worker_process.py` (standalone `python -m ...worker_process` entry point for multi-host workers) | Durable job-level queue/lease consumer — not a stage DAG | FastAPI lifespan (only in-process execution path since Phase 2.E); standalone process for multi-host deployment | `tests/orchestrator/` (incl. `test_worker_process_contract.py`) |
+
+`execution_graph.patcher` has verified `rl`/`evals` consumers, but those consumers do not construct
+either row 3 or row 4 and therefore are not evidence that either execution surface is live.
 
 **Execution identity.** `core/execution_identity.py` (`ExecutionIdentity`, `compute_cas_id`,
 `compute_code_hash`, `create_artifact_metadata`) implements model+config+code identity and is
@@ -47,11 +55,15 @@ competitors — including their test suites and coverage floors.
 **unwired from the Lux production path**. Competing partial identities: `config_resolver.compute_config_fingerprint`, the depth
 cache fingerprint (`config_resolver.py:507-566`), the segmentation cache key
 (`segmentation/_cache.py:251-320`), and the manifest `ConfigFingerprint`.
-*Evidence update (2026-08-28, PR #2070 merged as `e30bd58`):* the Lux fingerprint identity is now
-contract-aware in production — with an authoritative resolved contract present, plan, depth cache,
-manifests, and Stage-A reuse share one algorithm whose model identity is
-`canonical_key:repo_id@revision` (`resolved_model_identity_for_backend`). This is landed production
-evidence for the execution-identity suitability matrix, not a designation.
+*Evidence updates (2026-08-28; facts, not designations):* PR #2070 (`e30bd58`) introduced the
+provisional `ResolvedInvocation` serialization and contract-aware fingerprint surface. PR #2081
+(`81c9f15`) then selected `da3_metric` as the commercial-safe default and repaired identity and
+selector provenance across no-selector, explicit-selector, typed-preset, direct-Python, resolver,
+invocation, backend/inference, depth-cache, manifest, and run-card fingerprint boundaries. With an
+authoritative resolved contract present, the current plan, depth cache, manifests, and Stage-A reuse
+derive model identity as `canonical_key:repo_id@revision`
+(`resolved_model_identity_for_backend`). These landed behaviors feed the execution-identity
+suitability matrix; the plan surface remains provisional and carries no designation weight.
 
 **CAS / Merkle lineage.** `storage/merkle_dag.py` is **not orphaned**: consumed by
 `runtime/{engine,execution_manifest,replay}.py`, `core/cas_dag_executor.py`, and
@@ -85,7 +97,8 @@ Plus `lux_depth_v3/artifact_manager.py` (index/hash/Merkle root, live) and `port
 
 ### Current problems
 
-1. Five stage-level execution planes plus the job plane; none is both durable and used by Lux Depth.
+1. Seven stage-level execution surfaces plus a separate job-runner boundary; none is both durable
+   and used by Lux Depth.
 2. Identity is fragmented across four partial fingerprints; the complete implementation is unwired.
 3. Four artifact roles across three same-named classes and two ad-hoc surfaces; the generation
    publication transaction has no owner.
@@ -103,13 +116,13 @@ in earlier drafts effectively pre-decided rows before the evidence comparison, a
 | Plane | Designated authority | Migration path |
 |---|---|---|
 | Execution identity | ⟨DECIDE⟩ — one canonical implementation; cache fingerprints become derivations of it, with complete identity fields (code, model, config, dependency, executed path) | ⟨DECIDE⟩ |
-| Plan/DAG representation | ⟨DECIDE⟩ — one schema + owner, chosen through the suitability matrix with no pre-selected candidate. The [#2065](https://github.com/RC219805/Transformation_Portal/issues/2065) `ResolvedInvocation` is hereby scoped as a **bounded, provisional pre-designation spike**: its serialization is marked `stability: provisional`, carries no designation weight, and is either adopted or migrated when this row is decided. *Status: the spike is MERGED to `main` (PR [#2070](https://github.com/RC219805/Transformation_Portal/pull/2070), `e30bd58`, 2026-08-28) after two adversarial review rounds — its production evidence (fail-closed carrier validation at three consumption boundaries, end-to-end revision pinning incl. the worker subprocess, plan/run input and backend-selection parity, wheel-shipped provisional schema) feeds this row's suitability matrix* | spike (merged, provisional) → designated representation (Phase 3) |
-| Stage executor | ⟨DECIDE⟩ — one production executor for local/runtime stage work, evaluated across inventory rows 1–5 | Phase 3 pilot |
+| Plan/DAG representation | ⟨DECIDE⟩ — one schema + owner, chosen through the suitability matrix with no pre-selected candidate. The [#2065](https://github.com/RC219805/Transformation_Portal/issues/2065) `ResolvedInvocation` is hereby scoped as a **bounded, provisional pre-designation spike**: its serialization is marked `stability: provisional`, carries no designation weight, and is either adopted or migrated when this row is decided. *Status: PR [#2070](https://github.com/RC219805/Transformation_Portal/pull/2070) (`e30bd58`, 2026-08-28) introduced the merged spike, including revision pinning through the worker subprocess, plan/run input and backend-selection parity, and a wheel-shipped provisional schema. PR [#2081](https://github.com/RC219805/Transformation_Portal/pull/2081) (`81c9f15`, 2026-08-28) subsequently hardened default, selector, typed-preset, direct-Python, carrier, and execution-path model identity and licensing behavior. Both changes supply production evidence for this row's suitability matrix; neither designates the representation.* | spike (merged, provisional) → designated representation (Phase 3) |
+| Stage executor | ⟨DECIDE⟩ — one production executor for local/runtime stage work, evaluated across inventory rows 1–7 | Phase 3 pilot |
 | Job runner boundary | ⟨DECIDE⟩ — boundary statement with `WorkerRunner`: the designated stage executor runs inside a leased job; never a second queue | n/a |
 | CAS/Merkle operational lineage | ⟨DECIDE⟩ — one identity + lineage authority for **operational** records (evidence plane excluded; see Authority boundary) | Phase 3 |
 | Artifact roles & composition | ⟨DECIDE⟩ — designate how the four roles above **compose** (CAS bytes / stage cache / job delivery / generation publication); do not force one interface to absorb all four jobs. The publication-transaction owner defines per-backend semantics (filesystem rename vs object-store transaction) | [#2063](https://github.com/RC219805/Transformation_Portal/issues/2063) → 1.5-b → Phase 3 |
 | Operational ledger & projections | ⟨DECIDE⟩ — canonical operational event/artifact record and projection rules, disposing of each of the four surfaces explicitly (`JobEventStore` SSE/job history, `OperationalAuditStore` pilot audit, `events/store.py` lifecycle events, `runtime/ledger.py` `ImmutableLedger`) — a designated composition, never a conflation | Phase 3 |
-| Competing implementations | ⟨DECIDE per inventory row⟩: keep / adapt / freeze / remove — including `execution_graph`'s live dashboard/rl consumers and `runtime/`'s engine surfaces | staged with Phase 3 |
+| Competing implementations | ⟨DECIDE per inventory row⟩: keep / adapt / freeze / remove — separately account for row 3's live dashboard scheduler consumer, row 4's unconsumed distributed wrapper, the patcher/node consumers, and `runtime/`'s engine surfaces | staged with Phase 3 |
 | Associated tests | Tests follow authority ownership: retained, migrated, consolidated, or **deleted with their implementation** | same PRs as dispositions |
 | Coverage floors | Floors move to the owning package; a frozen implementation's floor is removed or frozen-and-annotated | `scripts/ci/check_per_package_*` updates in disposition PRs |
 
@@ -121,6 +134,7 @@ in earlier drafts effectively pre-decided rows before the evidence comparison, a
 | Verified capabilities | What it demonstrably does today (tests cited) |
 | Missing capabilities | Gap to the row's requirement |
 | Contract conflicts | Collisions with contract families, ADR designations, version planes |
+| Security / trust boundaries | Entry-point and actor trust model; authentication, authorization, and tenant isolation; untrusted plan/config/node deserialization; arbitrary-code/plugin, subprocess, and remote-worker boundaries; filesystem/CAS path validation; digest and signature verification; secret handling; dependency/runtime provenance; resource/denial-of-service limits; and fail-closed test evidence. Record unsupported controls as missing capabilities, not assumptions |
 | Migration cost / rollback | Effort to adopt; effort to back out |
 | CI support | Which existing lanes exercise it; what new lanes it would need |
 | Production-spike evidence | Result of a bounded spike on the Lux production path |
@@ -139,11 +153,18 @@ substitute evidence chain. Published evidence bytes, their schemas and canonical
 contract-native commitments, and — where authenticity is asserted — their verified detached
 signatures remain authoritative within their respective scopes. Operational records may reference
 them by digest but may not reinterpret, repair, overwrite, or supersede them. **Divergence must fail
-closed** — stated here as a binding REQUIREMENT on the designated authorities, not as a description
-of current behavior: review evidence (2026-08-28) established that the current run-card
-self-attestation verifier does not recompute the evidence digest, so tampered projected evidence can
-presently verify. Closing that gap is an acceptance precondition for the evidence-projection row,
-and the verifier fix is in scope for the repair program regardless of designation outcome.
+closed** — a binding REQUIREMENT on the designated authorities. Current verifier behavior cited here
+is suitability evidence, not an authority designation. Review evidence (2026-08-28) found that
+detached evidence-attestation binding (`bind_attestation_to_evidence`, reached by
+`tools/verify_evidence_attestation.py`) had compared stored `evidence_sha256` values without
+recomputing the canonical digest of `projected_envelope`. PR
+[#2082](https://github.com/RC219805/Transformation_Portal/pull/2082) (`6e8e3a3`, 2026-08-28) closed
+that specific gap on `main`: verification now recomputes the projected-envelope digest, binds the
+file and bundle-root digests plus the attestation self-hash, and verifies exact native-GPG cleartext
+and recorded signer identity, with adversarial library and CLI regression coverage. That landed
+repair supplies evidence for this requirement and satisfies this specific evidence-binding
+precondition. It does not select an operational-ledger/projections authority or change this ADR's
+Proposed status; those decisions remain matrix-gated.
 
 Additionally:
 
@@ -164,6 +185,7 @@ Additionally:
 | ADR-043 | Lux decomposition seams; facade extraction pattern; recorded finding that depth/materials stages resist extraction | Plan-representation and stage-executor rows change how the Lux loop executes | Record ADR-043's Phase-6 finding as an input constraint; amend its "completed" scope if the state machine is replanned |
 | ADR-045 | Repo-wide extraction pattern; ~200 LOC/quarter orchestrator ratchet | Phase 3 removals must land as ADR-045-pattern PRs; freeze dispositions must not violate the ratchet commitment | Cite ADR-045 in each disposition PR; reconcile the ratchet if orchestrator code moves wholesale |
 | PR #2070 / issue #2065 (`ResolvedInvocation`, `--plan`) — **merged to `main` as `e30bd58` (2026-08-28)** | Provisional Lux-owned plan serialization and contract-aware fingerprint identity, now live in production | Plan/DAG-representation and execution-identity rows may designate differently | Scoped above as a bounded provisional pre-designation spike (`stability: provisional`); adopted or migrated at designation; its identity algorithm and review-verified trust-boundary evidence are inputs to — not decisions of — the identity and plan rows |
+| PR #2081 / issue #2066 — **merged to `main` as `81c9f15` (2026-08-28); issue closed** | Current Lux model-selection contract: commercial-safe `da3_metric` default; deprecated `da3` alias to acknowledgement-gated `da3_research`; explicit selector provenance; identity consistency across plan and execution carriers | Execution-identity and Plan/DAG rows may change representation, but do not implicitly change this model-selection and licensing contract | Preserve as landed contract input; any incompatible later decision requires explicit contract, version, test, and documentation handling. This row supplies evidence, not a designation |
 | Production-hardening baseline (gap doc §4) | `orchestrator/*` Protocols, EventStore for lifecycle events, attestation chain authoritative, "reuse, don't reinvent" | Ledger and artifact-composition rows must extend, not parallel, these primitives | Any deviation from §4's designations is recorded here and in the gap doc's next refresh |
 
 ### Binding rules (effective on acceptance)
@@ -172,7 +194,8 @@ Additionally:
    Before acceptance this is a proposed convention, not an enforceable gate on `main`: it binds
    the proposers voluntarily from the proposal date, and any abstraction that merges during the
    proposal window must be added to the conflict matrix and disposed of at acceptance (the #2065
-   provisional plan surface is the first such entry, merged as `e30bd58` and recorded above).
+   provisional plan surface is the first such entry, introduced by #2070, hardened by #2081, and
+   recorded above).
 2. A frozen implementation cannot retain a permanently green suite that no longer proves production
    behavior — its tests are migrated, consolidated, or deleted in the disposition PR.
 3. `plan` and `run` share one resolution path; `run` ultimately consumes the exact resolved plan
@@ -180,9 +203,11 @@ Additionally:
    this invariant applies to every designated component. **Definition across process boundaries:**
    within one process, "exact" means object identity; across separate CLI invocations or the worker
    subprocess boundary, it means equivalence — byte-identical canonical serialization and equal
-   config fingerprint — with the carried model contract revalidated fail-closed
-   (`validate_authoritative_model_contract`) at every consumption boundary, because a deserialized
-   plan carries no authority of its own.
+   config fingerprint. A deserialized plan carries no authority of its own: every carried-contract
+   consumption boundary uses `validate_authoritative_model_contract` and fails closed on registry,
+   specification, or revision mismatch. Current acknowledgement and licensing policy additionally
+   fails closed at every execution-capable boundary. The explicitly metadata-only, idempotent
+   `ConfigResolver` carrier revalidates contract integrity without independently enforcing licensing.
 4. Structural write prohibition: manifest/run-card/artifact-path writes outside the designated
    authority fail CI, enforced by extending the existing raw-JSON governance gate
    (`check_raw_json_usage.py` pattern), not a new mechanism.
@@ -200,8 +225,8 @@ Filed repairs feeding this ADR (Lux Depth V3 repair program, first waves):
 | 1.6-a Performance false-green | [#2062](https://github.com/RC219805/Transformation_Portal/issues/2062) — **closed by merged PR [#2071](https://github.com/RC219805/Transformation_Portal/pull/2071)** (`6bf5c8b`, 2026-08-28) | Restores trustworthy perf evidence for suitability spikes. *Landed:* the nightly lane is green only when `scripts/ci/check_performance_evidence.py` proves the four baseline-writer tests executed and passed, the four benchmark artifacts parsed, and the committed baselines were valid; the gate's exit code separates regression (failed writer comparison with complete evidence) from invalid evidence and non-writer suite failures. Performance rows in suitability matrices may now cite this lane's runs — validated end-to-end by dispatch run [33210317364](https://github.com/RC219805/Transformation_Portal/actions/runs/33210317364) (evidence, not designation) |
 | 1.5-a Atomic evidence writes | [#2063](https://github.com/RC219805/Transformation_Portal/issues/2063) | Prerequisite primitives for the publication-transaction role |
 | 1.4-a Depth cache identity | [#2064](https://github.com/RC219805/Transformation_Portal/issues/2064) | First derivation of the identity-authority pattern |
-| P0-1 `--plan` / `ResolvedInvocation` | [#2065](https://github.com/RC219805/Transformation_Portal/issues/2065) — advanced by merged PR [#2070](https://github.com/RC219805/Transformation_Portal/pull/2070) (`e30bd58`); parity harness, manifest plan fields, and the programmatic-API path remain open on the issue | Seed of the plan-representation row (spike merged, provisional) |
-| 1.2 DA3 default (decision) | [#2066](https://github.com/RC219805/Transformation_Portal/issues/2066) | Exercises single-resolution invariant |
+| P0-1 `--plan` / `ResolvedInvocation` | [#2065](https://github.com/RC219805/Transformation_Portal/issues/2065) — **open**; advanced by merged PR [#2070](https://github.com/RC219805/Transformation_Portal/pull/2070) (`e30bd58`) and direct-Python/default/preset/carrier hardening in merged PR [#2081](https://github.com/RC219805/Transformation_Portal/pull/2081) (`81c9f15`). The full documented-workflow parity harness and production-manifest plan fields remain issue-level closure items | Seed of the plan-representation row (spike merged, provisional) |
+| 1.2 DA3 default (decision) | [#2066](https://github.com/RC219805/Transformation_Portal/issues/2066) — **closed by merged PR [#2081](https://github.com/RC219805/Transformation_Portal/pull/2081)** (`81c9f15`): Option A landed with `da3_metric` as the commercial-safe default and `da3` retained as a deprecated alias to acknowledgement-gated `da3_research` | Landed single-resolution contract input; not a designation |
 | 1.3-a emit flags (decision) | [#2067](https://github.com/RC219805/Transformation_Portal/issues/2067) | Deliverable contract input to accounting |
 | 1.3-b 16-bit flags (decision) | [#2068](https://github.com/RC219805/Transformation_Portal/issues/2068) | Deliverable contract input to accounting |
 
@@ -231,7 +256,7 @@ generation publication (**gated on this ADR's acceptance**), 1.6-b Lux branch fl
   shadow-architecture failure mode already observed (production-dead facade classes, orphaned
   `EventStore`/`execution_identity`), and leaves the generation publication transaction ownerless.
 - **New unified V4 kernel**: rejected — the "parallel abstraction" the gap doc §4 forbids; would be
-  the sixth stage-execution plane.
+  an eighth stage-execution surface.
 - **Designation without disposition** (name authorities, leave competitors in place): rejected —
   binding rule 2 exists precisely because green-but-unproving suites and unwired "canonical" code are
   the documented failure mode here.
