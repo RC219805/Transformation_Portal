@@ -18,7 +18,7 @@ tqdm>=4.66,<5              # progress bar utility
 # Security: keep FastAPI + Starlette on patched baseline for CVE-2025-62727,
 # PYSEC-2026-161, and the 2026 StaticFiles/HTTPEndpoint/form parsing fixes.
 fastapi==0.141.1           # orchestrator API framework (validated against curated Starlette 1.x upgrade)
-starlette==1.3.1           # direct runtime import + curated Starlette 1.x validation target
+starlette==1.6.0           # direct runtime import + curated Starlette 1.x validation target
 uvicorn==0.52.1            # ASGI server runtime pin
 websockets==17.0.1         # Uvicorn default WebSocket protocol implementation
 aiofiles==25.1.0           # async file I/O support for FastAPI file responses

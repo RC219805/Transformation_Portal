@@ -114,7 +114,7 @@ The following dependencies are **exact-pinned** in `requirements/base.in` for AP
 
 ```
 fastapi==0.141.1
-starlette==1.3.1
+starlette==1.6.0
 uvicorn==0.52.1
 websockets==17.0.1
 aiofiles==25.1.0
@@ -205,6 +205,12 @@ Dependabot PRs that bump exact-pinned dependencies **must not be merged as routi
 - **Validation**: generic-lock freshness, orchestrator/API/dashboard/frontdoor contracts, FastVLM isolated install, and full CI
 - **Governance Lesson**: Dependabot source-bound changes are incomplete until exact locks and every governed baseline consumer move in the same reviewed change
 
+#### Current curated Starlette 1.6 compatibility promotion
+- **Scope**: Starlette source pin and package bound, complete generic lock set, FastVLM subprocess manifest, contract tests, and current baseline documentation
+- **Validated Set**: FastAPI `0.141.1`, Starlette `1.6.0`, Uvicorn `0.52.1`
+- **Validation Contract**: generic-lock freshness, orchestrator/API compatibility, blocking dependency audit, and FastVLM manifest parity
+- **Governance Lesson**: A routine Dependabot source-only change is superseded by a curated promotion that keeps every governed consumer synchronized
+
 ---
 
 ## "Dep Pin Changed" Checklist
@@ -272,6 +278,7 @@ Before merging any Dependabot PR:
 | 2026-08-04 | Grouped CodeQL, root/Worker Wrangler, and frontdoor security updates; guarded Redis and Transformers compatibility bounds | Architect |
 | 2026-08-06 | Rotated supported ML and subprocess runtimes to Pillow 12.3.0, torch 2.13.0 / torchvision 0.28.0, and Transformers 5.5.x after patched releases became available | Architect |
 | 2026-08-19 | Curated FastAPI 0.141.1 via PR #2042 and synchronized its locks, runtime manifest, contract tests, and current web-stack baseline | Architect |
+| 2026-08-27 | Curated Starlette 1.6.0 and synchronized its locks, runtime manifest, contract tests, and current web-stack baseline | Architect |
 
 ---
 
