@@ -175,7 +175,13 @@ class DA3Backend:
                 ModelRequest(
                     model_key=getattr(config, "model_key", None) if config is not None else None,
                     raw_model_id=getattr(config, "raw_model_id", None) if config is not None else None,
-                    model_variant=self._model_variant if config is not None else None,
+                    # Selection must come from what the config actually
+                    # carries — NOT self._model_variant, whose METRIC_LARGE
+                    # fallback is a display/compat default. Fabricating an
+                    # explicit legacy variant here would turn "no selection"
+                    # into the research model instead of DEFAULT_MODEL_KEY
+                    # (repair 1.2, #2066).
+                    model_variant=getattr(config, "model_variant", None) if config is not None else None,
                     use_coreml_backend=bool(getattr(config, "use_coreml_backend", False)) if config is not None else False,
                     non_commercial_ok=bool(getattr(config, "non_commercial_ok", False)) if config is not None else False,
                     enforce_license=config is not None,

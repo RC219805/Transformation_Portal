@@ -869,6 +869,19 @@ class ConfigResolver:
                 resolved_model_contract.canonical_key,
             )
         else:
+            # A pure default carries no selection on any plane: the
+            # resolved default must then be pinned onto the config BEFORE
+            # the compat model_variant mutation below, or downstream
+            # re-resolutions (DA3Backend, engine) would read the mutated
+            # METRIC_LARGE as an explicit legacy selection and resolve the
+            # research model — a split identity between run-card metadata
+            # (da3_metric) and the executed model (repair 1.2, #2066).
+            pure_default_selection = (
+                getattr(config, "model_key", None) is None
+                and getattr(config, "raw_model_id", None) is None
+                and config.model_variant is None
+                and config.preset is None
+            )
             resolved_model_contract = resolve_model_contract(
                 ModelRequest(
                     model_key=getattr(config, "model_key", None),
@@ -879,6 +892,8 @@ class ConfigResolver:
                     enforce_license=False,
                 )
             )
+            if pure_default_selection:
+                config.model_key = resolved_model_contract.canonical_key
             if getattr(config, "model_key", None) or getattr(config, "raw_model_id", None):
                 resolved_model = _compat_model_variant_for_resolved_key(
                     resolved_model_contract.canonical_key,

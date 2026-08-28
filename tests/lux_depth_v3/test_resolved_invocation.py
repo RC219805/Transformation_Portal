@@ -590,3 +590,72 @@ class TestNoWrites:
         )
         after = sorted(p.as_posix() for p in tmp_path.rglob("*"))
         assert before == after
+
+
+class TestPythonApiDefaultParity:
+    """Repair 1.2 (#2066) — Codex P1 on PR #2081: the public Python path
+    (EnhanceConfig -> ConfigResolver -> DA3Backend, no CLI carrier) must
+    execute the same commercial-safe default the metadata advertises.
+    The compat model_variant mutation (METRIC_LARGE) and the backend's
+    fabricated variant fallback previously re-resolved the bare default
+    to da3_research."""
+
+    def test_resolver_then_backend_keeps_metric_default(self) -> None:
+        from transformation_portal.depth.backends.da3 import DA3Backend
+        from transformation_portal.lux_depth_v3.config_resolver import ConfigResolver
+
+        config = EnhanceConfig()
+        resolved = ConfigResolver().resolve(config)
+        backend = DA3Backend(config)
+        assert resolved.resolved_model_contract.canonical_key == "da3_metric"
+        assert backend._resolved_model_contract.canonical_key == "da3_metric"
+
+    def test_no_split_identity_with_acknowledgement(self) -> None:
+        # Previously: metadata said da3_metric while the backend loaded
+        # da3_research — provenance lying about the executed model.
+        from transformation_portal.depth.backends.da3 import DA3Backend
+        from transformation_portal.lux_depth_v3.config_resolver import ConfigResolver
+
+        config = EnhanceConfig(non_commercial_ok=True)
+        resolved = ConfigResolver().resolve(config)
+        backend = DA3Backend(config)
+        assert resolved.resolved_model_contract.canonical_key == "da3_metric"
+        assert backend._resolved_model_contract.canonical_key == "da3_metric"
+
+    def test_unresolved_config_backend_uses_default_not_fabricated_variant(self) -> None:
+        from transformation_portal.depth.backends.da3 import DA3Backend
+
+        backend = DA3Backend(EnhanceConfig())
+        assert backend._resolved_model_contract.canonical_key == "da3_metric"
+
+    def test_preset_variant_plane_preserved(self) -> None:
+        # Presets keep their legacy variant semantics through the
+        # deprecation cycle: EXTERIOR carries METRIC_BASE -> da3_base.
+        from transformation_portal.depth.backends.da3 import DA3Backend
+        from transformation_portal.lux_depth_v3.config import Preset
+        from transformation_portal.lux_depth_v3.config_resolver import ConfigResolver
+
+        config = EnhanceConfig(preset=Preset.ARCHITECTURAL_EXTERIOR)
+        ConfigResolver().resolve(config)
+        backend = DA3Backend(config)
+        assert backend._resolved_model_contract.canonical_key == "da3_base"
+
+    def test_explicit_legacy_variant_still_means_research_and_gates(self) -> None:
+        from transformation_portal.depth.backends.da3 import DA3Backend
+        from transformation_portal.lux_depth_v3.config_resolver import ConfigResolver
+
+        config = EnhanceConfig(model_variant=ModelVariant.METRIC_LARGE)
+        with pytest.warns(DeprecationWarning):
+            ConfigResolver().resolve(config)
+        with pytest.raises(ModelLicenseError):
+            DA3Backend(config)
+
+    def test_direct_orchestrator_pins_metric_default(self, tmp_path: Path) -> None:
+        # The focused direct-orchestrator regression: constructing the
+        # public orchestrator on a bare default pins the commercial-safe
+        # identity onto the config for every downstream consumer.
+        from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
+
+        config = EnhanceConfig(allow_synthetic_fallback=True)
+        EnhanceOrchestrator(config, tmp_path)
+        assert config.model_key == "da3_metric"
