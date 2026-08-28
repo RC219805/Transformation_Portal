@@ -125,6 +125,12 @@ in earlier drafts effectively pre-decided rows before the evidence comparison, a
 | CI support | Which existing lanes exercise it; what new lanes it would need |
 | Production-spike evidence | Result of a bounded spike on the Lux production path |
 
+*Evidence standard for performance criteria (2026-08-28, repair 1.6-a merged as `6bf5c8b`):*
+performance claims in a suitability matrix cite runs of the repaired Performance Monitor lane —
+which now hard-fails unless `scripts/ci/check_performance_evidence.py` proves the benchmark tests
+executed against valid committed baselines — or an equivalently evidence-gated measurement. Output
+from the pre-repair lane (false-green on every nightly run) is not admissible evidence.
+
 ### Authority boundary: operational records vs cryptographic evidence
 
 Operational records and cryptographic evidence are **separate authority planes**. The operational
@@ -191,7 +197,7 @@ Filed repairs feeding this ADR (Lux Depth V3 repair program, first waves):
 
 | Repair | Issue | Relation to this ADR |
 |---|---|---|
-| 1.6-a Performance false-green | [#2062](https://github.com/RC219805/Transformation_Portal/issues/2062) | Restores trustworthy perf evidence for suitability spikes |
+| 1.6-a Performance false-green | [#2062](https://github.com/RC219805/Transformation_Portal/issues/2062) — **closed by merged PR [#2071](https://github.com/RC219805/Transformation_Portal/pull/2071)** (`6bf5c8b`, 2026-08-28) | Restores trustworthy perf evidence for suitability spikes. *Landed:* the nightly lane is green only when `scripts/ci/check_performance_evidence.py` proves the four baseline-writer tests executed and passed, the four benchmark artifacts parsed, and the committed baselines were valid; the gate's exit code separates regression (failed writer comparison with complete evidence) from invalid evidence and non-writer suite failures. Performance rows in suitability matrices may now cite this lane's runs — validated end-to-end by dispatch run [33210317364](https://github.com/RC219805/Transformation_Portal/actions/runs/33210317364) (evidence, not designation) |
 | 1.5-a Atomic evidence writes | [#2063](https://github.com/RC219805/Transformation_Portal/issues/2063) | Prerequisite primitives for the publication-transaction role |
 | 1.4-a Depth cache identity | [#2064](https://github.com/RC219805/Transformation_Portal/issues/2064) | First derivation of the identity-authority pattern |
 | P0-1 `--plan` / `ResolvedInvocation` | [#2065](https://github.com/RC219805/Transformation_Portal/issues/2065) — advanced by merged PR [#2070](https://github.com/RC219805/Transformation_Portal/pull/2070) (`e30bd58`); parity harness, manifest plan fields, and the programmatic-API path remain open on the issue | Seed of the plan-representation row (spike merged, provisional) |
