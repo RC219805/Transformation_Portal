@@ -43,6 +43,7 @@ REQUIRED_OPEN_PR_LIMIT = 5
 REQUIRED_PIP_EXCLUDE_PATHS: set[str] = set()
 REQUIRED_NPM_GROUP_PATTERNS = {"*", "@*/*"}
 REQUIRED_NPM_GROUP_UPDATE_TYPES = {"minor", "patch"}
+REQUIRED_MLX_GROUP_PATTERNS = {"mlx", "mlx-metal"}
 REQUIRED_WRANGLER_GROUP_PATTERNS = {"wrangler", "@cloudflare/workers-types"}
 ROOT_WORKER_NPM_PAIRS = {
     ("npm", "/"),
@@ -166,6 +167,7 @@ def validate_dependabot_config(text: str) -> list[str]:
                     if schedule.get(key) != expected_value:
                         errors.append(f"dependabot update {pair!r} must set schedule {key!r} to {expected_value!r}")
 
+        groups = entry.get("groups")
         if ("pip", "/") in entry_pairs:
             exclude_paths = entry.get("exclude-paths")
             if REQUIRED_PIP_EXCLUDE_PATHS and not isinstance(exclude_paths, list):
@@ -202,7 +204,23 @@ def validate_dependabot_config(text: str) -> list[str]:
                             f"dependabot pip ignore {dependency_name!r} must use update-types " f"{sorted(expected_types)!r}"
                         )
 
-        groups = entry.get("groups")
+            mlx_group = groups.get("mlx-runtime") if isinstance(groups, dict) else None
+            if not isinstance(mlx_group, dict):
+                errors.append("dependabot pip update must define group 'mlx-runtime'")
+            else:
+                if mlx_group.get("applies-to") != "version-updates":
+                    errors.append("dependabot group 'mlx-runtime' must apply to version-updates")
+                patterns = mlx_group.get("patterns")
+                normalized_patterns = (
+                    {value for value in patterns if isinstance(value, str) and value} if isinstance(patterns, list) else set()
+                )
+                if normalized_patterns != REQUIRED_MLX_GROUP_PATTERNS:
+                    errors.append(
+                        "dependabot group 'mlx-runtime' must atomically match " f"{sorted(REQUIRED_MLX_GROUP_PATTERNS)!r}"
+                    )
+                if "group-by" in mlx_group:
+                    errors.append("dependabot group 'mlx-runtime' must omit group-by so MLX packages stay coupled")
+
         if ("github-actions", "/") in entry_pairs:
             codeql_group = groups.get("codeql-actions") if isinstance(groups, dict) else None
             if not isinstance(codeql_group, dict):
