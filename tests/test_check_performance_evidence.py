@@ -8,6 +8,11 @@ Acceptance criteria from the issue:
    baseline-writer test that skipped instead of passing).
 5. Green requires: >=1 executed test AND four parsed artifacts AND the
    required tests passed against parseable committed baselines.
+
+Exit-code classification (Codex P2 on PR #2071): invalid evidence exits 1
+and must never be reported as a regression; executed-test failures with
+otherwise-valid evidence exit 2 (the only regression-classifiable outcome);
+invalidity takes precedence when both are present.
 """
 
 from __future__ import annotations
@@ -69,81 +74,108 @@ def _run(report_path: Path, artifacts_dir: Path, baselines_dir: Path):
     )
 
 
+def _cli_args(report_path: Path, artifacts_dir: Path, baselines_dir: Path) -> list:
+    return [
+        "--report",
+        str(report_path),
+        "--artifacts-dir",
+        str(artifacts_dir),
+        "--baselines-dir",
+        str(baselines_dir),
+    ]
+
+
 class TestEvidenceGate:
     def test_valid_evidence_passes(self, tmp_path: Path) -> None:
-        errors = _run(*_write_environment(tmp_path, _passing_outcomes()))
-        assert errors == []
+        invalid, failures = _run(*_write_environment(tmp_path, _passing_outcomes()))
+        assert invalid == []
+        assert failures == []
 
     def test_all_skipped_run_fails_as_historic_false_green(self, tmp_path: Path) -> None:
         """Criterion 1: the exact --benchmark-only failure mode — every
         selected test skipped, pytest exit 0 — must fail loudly."""
         outcomes = {name: "skipped" for name in DEFAULT_REQUIRED_TESTS}
-        errors = _run(*_write_environment(tmp_path, outcomes))
-        assert any("zero benchmark tests executed" in e for e in errors)
-        assert any("false-green" in e for e in errors)
+        invalid, _ = _run(*_write_environment(tmp_path, outcomes))
+        assert any("zero benchmark tests executed" in e for e in invalid)
+        assert any("false-green" in e for e in invalid)
 
     def test_missing_report_fails(self, tmp_path: Path) -> None:
         _, artifacts_dir, baselines_dir = _write_environment(tmp_path, _passing_outcomes())
-        errors = _run(tmp_path / "absent-report.json", artifacts_dir, baselines_dir)
-        assert any("pytest json report missing" in e for e in errors)
+        invalid, _ = _run(tmp_path / "absent-report.json", artifacts_dir, baselines_dir)
+        assert any("pytest json report missing" in e for e in invalid)
 
     def test_missing_artifact_fails(self, tmp_path: Path) -> None:
         """Criterion 2: any of the four artifacts missing fails."""
         report_path, artifacts_dir, baselines_dir = _write_environment(tmp_path, _passing_outcomes())
         (artifacts_dir / "baseline_memory.json").unlink()
-        errors = _run(report_path, artifacts_dir, baselines_dir)
-        assert any("baseline_memory.json" in e and "missing" in e for e in errors)
+        invalid, _ = _run(report_path, artifacts_dir, baselines_dir)
+        assert any("baseline_memory.json" in e and "missing" in e for e in invalid)
 
     def test_unparsable_artifact_fails(self, tmp_path: Path) -> None:
         report_path, artifacts_dir, baselines_dir = _write_environment(tmp_path, _passing_outcomes())
         (artifacts_dir / "baseline_batch.json").write_text("{not json", encoding="utf-8")
-        errors = _run(report_path, artifacts_dir, baselines_dir)
-        assert any("baseline_batch.json" in e and "invalid JSON" in e for e in errors)
+        invalid, _ = _run(report_path, artifacts_dir, baselines_dir)
+        assert any("baseline_batch.json" in e and "invalid JSON" in e for e in invalid)
 
     def test_missing_or_invalid_committed_baseline_fails(self, tmp_path: Path) -> None:
         """Criterion 3: absent or unparsable committed baselines fail."""
         report_path, artifacts_dir, baselines_dir = _write_environment(tmp_path, _passing_outcomes())
         (baselines_dir / "baseline_cold_start.json").unlink()
         (baselines_dir / "baseline_steady_state.json").write_text("[]", encoding="utf-8")
-        errors = _run(report_path, artifacts_dir, baselines_dir)
-        assert any("committed baseline for 'baseline_cold_start.json' missing" in e for e in errors)
-        assert any("baseline_steady_state.json" in e and "non-empty JSON object" in e for e in errors)
+        invalid, _ = _run(report_path, artifacts_dir, baselines_dir)
+        assert any("committed baseline for 'baseline_cold_start.json' missing" in e for e in invalid)
+        assert any("baseline_steady_state.json" in e and "non-empty JSON object" in e for e in invalid)
 
     def test_required_test_skipped_fails_comparison_evidence(self, tmp_path: Path) -> None:
         """Criterion 4: the in-test committed-baseline comparison only runs
         when the writer test executes — a skipped required test (e.g. psutil
-        missing starving the memory baseline) is a failure."""
+        missing starving the memory baseline) is invalid evidence, not a
+        regression."""
         outcomes = _passing_outcomes()
         outcomes["test_memory_peak_rss_baseline"] = "skipped"
         report_path, artifacts_dir, baselines_dir = _write_environment(tmp_path, outcomes)
-        errors = _run(report_path, artifacts_dir, baselines_dir)
-        assert any("test_memory_peak_rss_baseline" in e and "did not pass" in e for e in errors)
+        invalid, failures = _run(report_path, artifacts_dir, baselines_dir)
+        assert any("test_memory_peak_rss_baseline" in e and "did not pass" in e for e in invalid)
+        assert failures == []
 
-    def test_failed_test_fails_gate(self, tmp_path: Path) -> None:
+    def test_failed_test_is_regression_classifiable(self, tmp_path: Path) -> None:
+        """A failed writer with all artifacts and baselines intact is the
+        one outcome allowed to claim a committed-baseline regression."""
         outcomes = _passing_outcomes()
         outcomes["test_single_image_cold_start_p95"] = "failed"
         report_path, artifacts_dir, baselines_dir = _write_environment(tmp_path, outcomes)
-        errors = _run(report_path, artifacts_dir, baselines_dir)
-        assert any("regression or broken harness" in e for e in errors)
+        invalid, failures = _run(report_path, artifacts_dir, baselines_dir)
+        assert invalid == []
+        assert any("regression or broken harness" in e for e in failures)
 
     def test_required_test_not_selected_fails(self, tmp_path: Path) -> None:
         outcomes = _passing_outcomes()
         del outcomes["test_batch_throughput_baseline"]
         report_path, artifacts_dir, baselines_dir = _write_environment(tmp_path, outcomes)
-        errors = _run(report_path, artifacts_dir, baselines_dir)
-        assert any("test_batch_throughput_baseline" in e and "not selected" in e for e in errors)
+        invalid, _ = _run(report_path, artifacts_dir, baselines_dir)
+        assert any("test_batch_throughput_baseline" in e and "not selected" in e for e in invalid)
 
     def test_cli_exit_codes(self, tmp_path: Path) -> None:
         """Criterion 5: exit 0 only with full evidence; 1 otherwise."""
         report_path, artifacts_dir, baselines_dir = _write_environment(tmp_path, _passing_outcomes())
-        args = [
-            "--report",
-            str(report_path),
-            "--artifacts-dir",
-            str(artifacts_dir),
-            "--baselines-dir",
-            str(baselines_dir),
-        ]
+        args = _cli_args(report_path, artifacts_dir, baselines_dir)
         assert main(args) == 0
         (artifacts_dir / "baseline_cold_start.json").unlink()
         assert main(args) == 1
+
+    def test_cli_exit_2_for_regression_with_valid_evidence(self, tmp_path: Path) -> None:
+        """Codex P2: a tolerance failure whose evidence is otherwise complete
+        exits 2 so the workflow may report status=regression."""
+        outcomes = _passing_outcomes()
+        outcomes["test_batch_throughput_baseline"] = "failed"
+        report_path, artifacts_dir, baselines_dir = _write_environment(tmp_path, outcomes)
+        assert main(_cli_args(report_path, artifacts_dir, baselines_dir)) == 2
+
+    def test_cli_invalid_evidence_outranks_test_failure(self, tmp_path: Path) -> None:
+        """Codex P2: a writer that failed BEFORE producing its artifact is a
+        broken harness (exit 1), never a regression claim (exit 2)."""
+        outcomes = _passing_outcomes()
+        outcomes["test_memory_peak_rss_baseline"] = "failed"
+        report_path, artifacts_dir, baselines_dir = _write_environment(tmp_path, outcomes)
+        (artifacts_dir / "baseline_memory.json").unlink()
+        assert main(_cli_args(report_path, artifacts_dir, baselines_dir)) == 1

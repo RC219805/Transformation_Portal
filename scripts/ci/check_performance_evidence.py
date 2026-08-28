@@ -29,8 +29,17 @@ against the committed baseline with no conditional, "all required tests passed
 AND all artifacts present AND all baselines valid" is proof the comparison
 executed — the property the old workflow never checked.
 
-Exit code 0 only when every check holds; 1 otherwise, with one line per
-violation on stderr.
+Exit codes (one line per violation on stderr):
+
+* 0 — every check holds: valid, green evidence.
+* 1 — the evidence itself is INVALID (missing/unparsable report, zero
+  executed tests, a required test not selected or skipped, a missing or
+  unparsable artifact or committed baseline). Such a run must never be
+  reported as a performance regression — it is a broken harness.
+* 2 — the evidence is structurally valid (report parsed, tests executed,
+  all artifacts and baselines present and parsable) but at least one
+  executed test FAILED. This is the regression-classifiable outcome: the
+  committed-baseline comparisons ran against real data and one tripped.
 """
 
 from __future__ import annotations
@@ -39,7 +48,7 @@ import argparse
 import json
 import sys
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Tuple
 
 DEFAULT_REQUIRED_ARTIFACTS = (
     "baseline_cold_start.json",
@@ -79,15 +88,22 @@ def check_evidence(
     baselines_dir: Path,
     required_tests: List[str],
     required_artifacts: List[str],
-) -> List[str]:
-    """Return a list of violations; empty means the evidence is valid."""
-    errors: List[str] = []
+) -> Tuple[List[str], List[str]]:
+    """Return ``(invalid, failures)`` violation lists.
 
-    report = _load_json_object(report_path, "pytest json report", errors)
+    ``invalid`` holds structural-evidence violations (the run cannot be
+    classified as a regression); ``failures`` holds executed-test failures
+    (regression-classifiable only when ``invalid`` is empty). Both empty
+    means the evidence is valid and green.
+    """
+    invalid: List[str] = []
+    failures: List[str] = []
+
+    report = _load_json_object(report_path, "pytest json report", invalid)
     if report is not None:
         tests = report.get("tests")
         if not isinstance(tests, list):
-            errors.append(f"pytest json report has no 'tests' array: {report_path}")
+            invalid.append(f"pytest json report has no 'tests' array: {report_path}")
             tests = []
         outcomes = {str(t.get("nodeid", "")): str(t.get("outcome", "")) for t in tests if isinstance(t, dict)}
         executed = [nodeid for nodeid, outcome in outcomes.items() if outcome in EXECUTED_OUTCOMES]
@@ -95,33 +111,36 @@ def check_evidence(
         failed = [nodeid for nodeid, outcome in outcomes.items() if outcome in {"failed", "error"}]
 
         if not executed:
-            errors.append(
+            invalid.append(
                 "zero benchmark tests executed"
                 + (f" ({len(skipped)} selected tests were all skipped — the historic false-green)" if skipped else "")
             )
         for nodeid in failed:
-            errors.append(f"benchmark test failed (regression or broken harness): {nodeid}")
+            failures.append(f"benchmark test failed (regression or broken harness): {nodeid}")
         for required in required_tests:
             matches = {nodeid: outcome for nodeid, outcome in outcomes.items() if required in nodeid}
             if not matches:
-                errors.append(f"required benchmark test not selected: {required}")
-            elif not any(outcome == "passed" for outcome in matches.values()):
+                invalid.append(f"required benchmark test not selected: {required}")
+            elif not any(outcome in EXECUTED_OUTCOMES for outcome in matches.values()):
+                # A required test that FAILED is already recorded above as a
+                # test failure; only a required test that never executed
+                # (e.g. skipped) is missing evidence outright.
                 observed = ", ".join(sorted(set(matches.values())))
-                errors.append(f"required benchmark test did not pass: {required} (outcome: {observed})")
+                invalid.append(f"required benchmark test did not pass: {required} (outcome: {observed})")
 
     for artifact_name in required_artifacts:
         _load_json_object(
             artifacts_dir / artifact_name,
             f"required benchmark artifact '{artifact_name}'",
-            errors,
+            invalid,
         )
         _load_json_object(
             baselines_dir / artifact_name,
             f"committed baseline for '{artifact_name}'",
-            errors,
+            invalid,
         )
 
-    return errors
+    return invalid, failures
 
 
 def main(argv: List[str] | None = None) -> int:
@@ -148,7 +167,7 @@ def main(argv: List[str] | None = None) -> int:
     required_tests = args.required_tests or list(DEFAULT_REQUIRED_TESTS)
     required_artifacts = args.required_artifacts or list(DEFAULT_REQUIRED_ARTIFACTS)
 
-    errors = check_evidence(
+    invalid, failures = check_evidence(
         report_path=args.report,
         artifacts_dir=args.artifacts_dir,
         baselines_dir=args.baselines_dir,
@@ -156,11 +175,20 @@ def main(argv: List[str] | None = None) -> int:
         required_artifacts=required_artifacts,
     )
 
-    if errors:
-        print("Performance evidence gate FAILED:", file=sys.stderr)
-        for error in errors:
+    if invalid:
+        print("Performance evidence gate FAILED — run is NOT valid evidence:", file=sys.stderr)
+        for error in invalid + failures:
             print(f"  - {error}", file=sys.stderr)
         return 1
+
+    if failures:
+        print(
+            "Performance evidence gate: evidence is valid but executed tests FAILED (regression candidate):",
+            file=sys.stderr,
+        )
+        for error in failures:
+            print(f"  - {error}", file=sys.stderr)
+        return 2
 
     print(
         "Performance evidence gate passed: "
