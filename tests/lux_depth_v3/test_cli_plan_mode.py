@@ -8,6 +8,7 @@ writing nothing.
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 
 import pytest
@@ -18,6 +19,33 @@ from transformation_portal.lux_depth_v3.__main__ import app
 pytestmark = [pytest.mark.unit]
 
 runner = CliRunner()
+
+# Root level at import time, before any test in this module runs; the
+# leak-guard test compares against it after other CLI tests have executed.
+# (Handler lists are not comparable across tests — pytest's logging plugin
+# installs its own per-test capture handlers — but the root LEVEL is what
+# gates record creation, and the leaked INFO level is what broke unrelated
+# tests that monkeypatch time.time with finite iterators.)
+_ROOT_LEVEL_BASELINE = logging.getLogger().level
+
+
+@pytest.fixture(autouse=True)
+def _restore_root_logging():
+    """Undo the CLI's global logging side effects after each test.
+
+    The CLI calls logging.basicConfig(force=True), which replaces root
+    handlers and raises the root level to INFO for the whole process.
+    Left in place, that leaks into unrelated tests later in the session
+    (e.g. tests that monkeypatch time.time with finite iterators and then
+    trip on logging's own time.time() call once INFO records start
+    emitting).
+    """
+    root = logging.getLogger()
+    saved_handlers = root.handlers[:]
+    saved_level = root.level
+    yield
+    root.handlers[:] = saved_handlers
+    root.setLevel(saved_level)
 
 
 def _make_input_dir(tmp_path: Path) -> Path:
@@ -137,6 +165,37 @@ class TestPlanMode:
         assert invocation.resolved_model.canonical_key == "da3_metric"
         # Run mode (unlike --plan) does create the output root.
         assert output_dir.exists()
+
+    def test_cli_invocation_mutates_then_fixture_restores_root_logging(self, tmp_path: Path) -> None:
+        """Regression guard for the session-wide logging leak.
+
+        The CLI's basicConfig(force=True) raises the root level to INFO
+        during invoke — prove that mutation happens here, and prove the
+        autouse fixture restored the module-import baseline after every
+        preceding CLI test in this class — any leak from those earlier
+        invokes would show up in the pre-invoke state asserted below.
+        """
+        root = logging.getLogger()
+        # Earlier tests in this class already invoked the CLI; without the
+        # fixture their basicConfig(force=True) INFO level would still be
+        # in effect here.
+        assert root.level == _ROOT_LEVEL_BASELINE
+        input_dir = _make_input_dir(tmp_path)
+        result = runner.invoke(
+            app,
+            [
+                "--input-dir",
+                str(input_dir),
+                "--output-dir",
+                str(tmp_path / "out"),
+                "--model-key",
+                "da3-metric",
+                "--plan",
+            ],
+        )
+        assert result.exit_code == 0, result.output
+        # The mutation the fixture exists to undo really does happen.
+        assert root.level == logging.INFO
 
     def test_plan_json_deterministic_across_invocations(self, tmp_path: Path) -> None:
         input_dir = _make_input_dir(tmp_path)
