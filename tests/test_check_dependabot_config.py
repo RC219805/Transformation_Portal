@@ -287,6 +287,26 @@ def test_transformers_minor_updates_remain_ignored() -> None:
     assert ("dependabot pip ignore 'transformers' must use update-types " "['version-update:semver-minor']") in errors
 
 
+def test_mlx_runtime_group_must_include_both_packages() -> None:
+    broken = valid_dependabot_text().replace(
+        '          - "mlx-metal"\n',
+        "",
+        1,
+    )
+    errors = dependabot_contract.validate_dependabot_config(broken)
+    assert "dependabot group 'mlx-runtime' must atomically match ['mlx', 'mlx-metal']" in errors
+
+
+def test_mlx_runtime_group_must_not_split_updates_by_dependency_name() -> None:
+    broken = valid_dependabot_text().replace(
+        '          - "mlx-metal"\n',
+        '          - "mlx-metal"\n        group-by: "dependency-name"\n',
+        1,
+    )
+    errors = dependabot_contract.validate_dependabot_config(broken)
+    assert "dependabot group 'mlx-runtime' must omit group-by so MLX packages stay coupled" in errors
+
+
 def test_frontdoor_security_updates_must_be_grouped() -> None:
     broken = valid_dependabot_text().replace(
         "      frontdoor-security:\n",
