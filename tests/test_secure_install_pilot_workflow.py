@@ -109,7 +109,7 @@ def test_requirements_readme_records_current_curated_web_runtime_baseline() -> N
     assert "| Starlette | `requirements/base.in` + `pyproject.toml` bound | `1.6.0` |" in readme
     assert "| Uvicorn | `requirements/base.in` + `pyproject.toml` bound | `0.52.1` |" in readme
     assert "FastAPI `0.141.1` update in PR #2042" in readme
-    assert "Starlette `1.6.0` promotion on 2026-08-27" in readme
+    assert "Starlette `1.6.0` promotion on 2026-08-28" in readme
 
 
 def test_dependabot_governance_doc_includes_dep_pin_changed_checklist() -> None:

@@ -3,7 +3,7 @@
 **Purpose**: Define triage policy and merge criteria for Dependabot-generated pull requests
 **Owner**: Transformation Portal Architect
 **Created**: 2026-03-26
-**Last Updated**: 2026-08-27
+**Last Updated**: 2026-08-28
 
 ---
 
@@ -278,7 +278,7 @@ Before merging any Dependabot PR:
 | 2026-08-04 | Grouped CodeQL, root/Worker Wrangler, and frontdoor security updates; guarded Redis and Transformers compatibility bounds | Architect |
 | 2026-08-06 | Rotated supported ML and subprocess runtimes to Pillow 12.3.0, torch 2.13.0 / torchvision 0.28.0, and Transformers 5.5.x after patched releases became available | Architect |
 | 2026-08-19 | Curated FastAPI 0.141.1 via PR #2042 and synchronized its locks, runtime manifest, contract tests, and current web-stack baseline | Architect |
-| 2026-08-27 | Curated Starlette 1.6.0 and synchronized its locks, runtime manifest, contract tests, and current web-stack baseline | Architect |
+| 2026-08-28 | Curated Starlette 1.6.0 and synchronized its locks, runtime manifest, contract tests, and current web-stack baseline | Architect |
 
 ---
 
