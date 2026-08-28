@@ -47,6 +47,11 @@ competitors — including their test suites and coverage floors.
 **unwired from the Lux production path**. Competing partial identities: `config_resolver.compute_config_fingerprint`, the depth
 cache fingerprint (`config_resolver.py:507-566`), the segmentation cache key
 (`segmentation/_cache.py:251-320`), and the manifest `ConfigFingerprint`.
+*Evidence update (2026-08-28, PR #2070 merged as `e30bd58`):* the Lux fingerprint identity is now
+contract-aware in production — with an authoritative resolved contract present, plan, depth cache,
+manifests, and Stage-A reuse share one algorithm whose model identity is
+`canonical_key:repo_id@revision` (`resolved_model_identity_for_backend`). This is landed production
+evidence for the execution-identity suitability matrix, not a designation.
 
 **CAS / Merkle lineage.** `storage/merkle_dag.py` is **not orphaned**: consumed by
 `runtime/{engine,execution_manifest,replay}.py`, `core/cas_dag_executor.py`, and
@@ -98,7 +103,7 @@ in earlier drafts effectively pre-decided rows before the evidence comparison, a
 | Plane | Designated authority | Migration path |
 |---|---|---|
 | Execution identity | ⟨DECIDE⟩ — one canonical implementation; cache fingerprints become derivations of it, with complete identity fields (code, model, config, dependency, executed path) | ⟨DECIDE⟩ |
-| Plan/DAG representation | ⟨DECIDE⟩ — one schema + owner, chosen through the suitability matrix with no pre-selected candidate. The [#2065](https://github.com/RC219805/Transformation_Portal/issues/2065) `ResolvedInvocation` is hereby scoped as a **bounded, provisional pre-designation spike**: its serialization is marked `stability: provisional`, carries no designation weight, and is either adopted or migrated when this row is decided | spike (provisional) → designated representation (Phase 3) |
+| Plan/DAG representation | ⟨DECIDE⟩ — one schema + owner, chosen through the suitability matrix with no pre-selected candidate. The [#2065](https://github.com/RC219805/Transformation_Portal/issues/2065) `ResolvedInvocation` is hereby scoped as a **bounded, provisional pre-designation spike**: its serialization is marked `stability: provisional`, carries no designation weight, and is either adopted or migrated when this row is decided. *Status: the spike is MERGED to `main` (PR [#2070](https://github.com/RC219805/Transformation_Portal/pull/2070), `e30bd58`, 2026-08-28) after two adversarial review rounds — its production evidence (fail-closed carrier validation at three consumption boundaries, end-to-end revision pinning incl. the worker subprocess, plan/run input and backend-selection parity, wheel-shipped provisional schema) feeds this row's suitability matrix* | spike (merged, provisional) → designated representation (Phase 3) |
 | Stage executor | ⟨DECIDE⟩ — one production executor for local/runtime stage work, evaluated across inventory rows 1–5 | Phase 3 pilot |
 | Job runner boundary | ⟨DECIDE⟩ — boundary statement with `WorkerRunner`: the designated stage executor runs inside a leased job; never a second queue | n/a |
 | CAS/Merkle operational lineage | ⟨DECIDE⟩ — one identity + lineage authority for **operational** records (evidence plane excluded; see Authority boundary) | Phase 3 |
@@ -152,7 +157,7 @@ Additionally:
 | ADR-029 | spatial_ai execution-graph executor for spatial pipelines | Stage-executor row may designate a different executor | Amend ADR-029 scope or record spatial_ai as an adapt-consumer; update Supersedes here |
 | ADR-043 | Lux decomposition seams; facade extraction pattern; recorded finding that depth/materials stages resist extraction | Plan-representation and stage-executor rows change how the Lux loop executes | Record ADR-043's Phase-6 finding as an input constraint; amend its "completed" scope if the state machine is replanned |
 | ADR-045 | Repo-wide extraction pattern; ~200 LOC/quarter orchestrator ratchet | Phase 3 removals must land as ADR-045-pattern PRs; freeze dispositions must not violate the ratchet commitment | Cite ADR-045 in each disposition PR; reconcile the ratchet if orchestrator code moves wholesale |
-| PR #2070 / issue #2065 (`ResolvedInvocation`, `--plan`) | Provisional Lux-owned plan serialization and contract-aware fingerprint identity | Plan/DAG-representation and execution-identity rows may designate differently | Scoped above as a bounded provisional pre-designation spike (`stability: provisional`); adopted or migrated at designation; its identity algorithm is an input to — not a decision of — the execution-identity row |
+| PR #2070 / issue #2065 (`ResolvedInvocation`, `--plan`) — **merged to `main` as `e30bd58` (2026-08-28)** | Provisional Lux-owned plan serialization and contract-aware fingerprint identity, now live in production | Plan/DAG-representation and execution-identity rows may designate differently | Scoped above as a bounded provisional pre-designation spike (`stability: provisional`); adopted or migrated at designation; its identity algorithm and review-verified trust-boundary evidence are inputs to — not decisions of — the identity and plan rows |
 | Production-hardening baseline (gap doc §4) | `orchestrator/*` Protocols, EventStore for lifecycle events, attestation chain authoritative, "reuse, don't reinvent" | Ledger and artifact-composition rows must extend, not parallel, these primitives | Any deviation from §4's designations is recorded here and in the gap doc's next refresh |
 
 ### Binding rules (effective on acceptance)
@@ -161,7 +166,7 @@ Additionally:
    Before acceptance this is a proposed convention, not an enforceable gate on `main`: it binds
    the proposers voluntarily from the proposal date, and any abstraction that merges during the
    proposal window must be added to the conflict matrix and disposed of at acceptance (the #2065
-   provisional plan surface is the first such entry).
+   provisional plan surface is the first such entry, merged as `e30bd58` and recorded above).
 2. A frozen implementation cannot retain a permanently green suite that no longer proves production
    behavior — its tests are migrated, consolidated, or deleted in the disposition PR.
 3. `plan` and `run` share one resolution path; `run` ultimately consumes the exact resolved plan
@@ -189,7 +194,7 @@ Filed repairs feeding this ADR (Lux Depth V3 repair program, first waves):
 | 1.6-a Performance false-green | [#2062](https://github.com/RC219805/Transformation_Portal/issues/2062) | Restores trustworthy perf evidence for suitability spikes |
 | 1.5-a Atomic evidence writes | [#2063](https://github.com/RC219805/Transformation_Portal/issues/2063) | Prerequisite primitives for the publication-transaction role |
 | 1.4-a Depth cache identity | [#2064](https://github.com/RC219805/Transformation_Portal/issues/2064) | First derivation of the identity-authority pattern |
-| P0-1 `--plan` / `ResolvedInvocation` | [#2065](https://github.com/RC219805/Transformation_Portal/issues/2065) | Seed of the plan-representation row |
+| P0-1 `--plan` / `ResolvedInvocation` | [#2065](https://github.com/RC219805/Transformation_Portal/issues/2065) — advanced by merged PR [#2070](https://github.com/RC219805/Transformation_Portal/pull/2070) (`e30bd58`); parity harness, manifest plan fields, and the programmatic-API path remain open on the issue | Seed of the plan-representation row (spike merged, provisional) |
 | 1.2 DA3 default (decision) | [#2066](https://github.com/RC219805/Transformation_Portal/issues/2066) | Exercises single-resolution invariant |
 | 1.3-a emit flags (decision) | [#2067](https://github.com/RC219805/Transformation_Portal/issues/2067) | Deliverable contract input to accounting |
 | 1.3-b 16-bit flags (decision) | [#2068](https://github.com/RC219805/Transformation_Portal/issues/2068) | Deliverable contract input to accounting |
