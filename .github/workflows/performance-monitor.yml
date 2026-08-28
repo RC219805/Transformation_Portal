@@ -1,8 +1,11 @@
 # .github/workflows/performance-monitor.yml
 # Performance Regression Testing - Schedule and Manual Only
 # NOTE: This workflow does NOT run on PRs to avoid baseline comparison issues.
-# Benchmark baselines require cross-run persistence which workflow artifacts don't provide.
-# Baselines are stored in tools/benchmarks/baseline.json (if present).
+# Baselines are the committed files under tests/benchmarks/baselines/; each
+# Lux perf smoke test compares its measurement against them in-test.
+# A run is green ONLY when scripts/ci/check_performance_evidence.py proves
+# the required tests executed and passed, the four benchmark artifacts were
+# produced, and the committed baselines were valid (repair 1.6-a, #2062).
 # Regression status is a nightly-blocking signal per docs/performance/GATE_POLICY.md.
 name: Performance Monitor
 
@@ -52,87 +55,53 @@ jobs:
           pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
           pip install -r requirements-ci.txt
           pip install -e ".[ml]"
-          pip install pytest pytest-benchmark memory-profiler
-
-      - name: Fetch baseline from repository (if exists)
-        id: baseline
-        run: |
-          # Baseline storage: prefer canonical path, fall back to committed baselines
-          # Future enhancement: could also fetch from release assets or dedicated baseline branch.
-          BASELINE_FILE=""
-
-          # Prefer a canonical checked-in baseline owned by performance-monitor, if present
-          if [ -f "tools/benchmarks/baseline.json" ]; then
-            BASELINE_FILE="tools/benchmarks/baseline.json"
-            echo "baseline_source=repo" >> $GITHUB_OUTPUT
-          # Fall back to any existing committed baselines under tests/benchmarks/baselines/
-          elif ls tests/benchmarks/baselines/*.json >/dev/null 2>&1; then
-            FIRST_BASELINE_FILE="$(ls tests/benchmarks/baselines/*.json | head -n 1)"
-            echo "Using fallback baseline at $FIRST_BASELINE_FILE"
-            BASELINE_FILE="$FIRST_BASELINE_FILE"
-            echo "baseline_source=fallback" >> $GITHUB_OUTPUT
-          else
-            echo "No benchmark baseline file found; regression comparison will be skipped."
-            echo "baseline_source=none" >> $GITHUB_OUTPUT
-          fi
-
-          echo "baseline_file=$BASELINE_FILE" >> $GITHUB_OUTPUT
+          # psutil is REQUIRED evidence tooling: without it the memory
+          # baseline test skips and the evidence gate below fails the run
+          # (repair 1.6-a, issue #2062 — no silent evidence starvation).
+          pip install pytest memory-profiler psutil
 
       - name: Run performance tests
         id: benchmark
+        # Repair 1.6-a (issue #2062): the Lux perf smoke tests use a custom
+        # timing harness, NOT the pytest-benchmark fixture. The former
+        # "--benchmark-only" invocation skipped every selected test and went
+        # green with zero executed benchmarks on every nightly run, and
+        # collect-exit-5 was also treated as green. Baseline comparison
+        # happens INSIDE each baseline-writer test against the committed
+        # baselines in tests/benchmarks/baselines/; the evidence gate below
+        # proves the tests executed, the four artifacts were produced, and
+        # the committed baselines were valid — or the run fails.
         run: |
           set -euo pipefail
 
-          # Check if any benchmark tests exist using exit-code semantics
-          # Exit code 5 = no tests collected (pytest convention)
-          # Exit code 0 = collection succeeded
-          # Other exit codes = collection/import failure
+          export BENCHMARK_ARTIFACTS_DIR="$GITHUB_WORKSPACE/benchmark-artifacts"
+          mkdir -p "$BENCHMARK_ARTIFACTS_DIR"
+
           set +e
-          pytest tests/ -m "benchmark" --collect-only -q > benchmark-collect.log 2>&1
-          COLLECT_EXIT=$?
+          pytest tests/benchmarks/test_lux_depth_v3_perf_smoke.py -m "benchmark" \
+            --json-report --json-report-file=perf-test-report.json
+          PYTEST_EXIT=$?
+          python scripts/ci/check_performance_evidence.py \
+            --report perf-test-report.json \
+            --artifacts-dir "$BENCHMARK_ARTIFACTS_DIR" \
+            --baselines-dir tests/benchmarks/baselines
+          EVIDENCE_EXIT=$?
           set -e
 
-          if [ "$COLLECT_EXIT" -eq 5 ]; then
-            echo "status=no_tests" >> $GITHUB_OUTPUT
-            echo "⚠️ No benchmark tests found (tests marked with @pytest.mark.benchmark)"
-            exit 0
-          elif [ "$COLLECT_EXIT" -ne 0 ]; then
-            echo "status=failed" >> $GITHUB_OUTPUT
-            echo "❌ Benchmark collection failed with exit code $COLLECT_EXIT"
-            cat benchmark-collect.log || true
-            exit "$COLLECT_EXIT"
-          fi
-
-          echo "Benchmark collection succeeded"
-
-          COMPARE_ARGS=()
-          BASELINE_FILE="${{ steps.baseline.outputs.baseline_file }}"
-
-          if [ -n "$BASELINE_FILE" ] && [ -f "$BASELINE_FILE" ]; then
-            echo "Using baseline benchmark file: $BASELINE_FILE"
-            COMPARE_ARGS=(
-              "--benchmark-compare=$BASELINE_FILE"
-              "--benchmark-compare-fail=mean:10%"
-            )
-          else
-            echo "No baseline benchmark found; running without regression comparison."
-          fi
-
-          # Run benchmarks - capture exit code properly
-          if pytest tests/ -m "benchmark" \
-            --benchmark-only \
-            --benchmark-json=current-benchmark.json \
-            "${COMPARE_ARGS[@]}"; then
+          if [ "$PYTEST_EXIT" -eq 0 ] && [ "$EVIDENCE_EXIT" -eq 0 ]; then
             echo "status=passed" >> $GITHUB_OUTPUT
+            echo "✅ Benchmarks executed and evidence gate passed"
+          elif [ "$PYTEST_EXIT" -eq 1 ]; then
+            # Test-body assertion failures include the committed-baseline
+            # regression comparisons (assert_regression_within_tolerance).
+            echo "status=regression" >> $GITHUB_OUTPUT
+            echo "⚠️ Benchmark test failure — regression against committed baselines or broken harness"
           else
-            BENCHMARK_EXIT=$?
-            if [ $BENCHMARK_EXIT -eq 1 ]; then
-              echo "status=regression" >> $GITHUB_OUTPUT
-              echo "⚠️ Performance regression detected (>10% mean increase)"
-            else
-              echo "status=failed" >> $GITHUB_OUTPUT
-              echo "❌ Benchmark execution failed with exit code $BENCHMARK_EXIT"
-            fi
+            # Zero executed tests (incl. pytest exit 5), collection/import
+            # errors, missing artifacts, or invalid baselines: not valid
+            # green evidence, never a pass.
+            echo "status=failed" >> $GITHUB_OUTPUT
+            echo "❌ Benchmark run is not valid evidence (pytest exit ${PYTEST_EXIT}, evidence gate exit ${EVIDENCE_EXIT})"
           fi
 
       - name: Analyze memory usage
@@ -156,6 +125,7 @@ jobs:
           python -m memory_profiler mem_test.py > memory-report.txt 2>&1 || echo "Memory profiling skipped"
 
       - name: Generate performance report
+        if: always()
         run: |
           BENCHMARK_STATUS="${{ steps.benchmark.outputs.status }}"
 
@@ -164,10 +134,11 @@ jobs:
 
           ## Status
           - Benchmark Status: **${BENCHMARK_STATUS:-unknown}**
-          - Baseline Source: **${{ steps.baseline.outputs.baseline_source }}**
+          - Baselines: committed under \`tests/benchmarks/baselines/\`, compared in-test
+          - Evidence gate: \`scripts/ci/check_performance_evidence.py\` (required tests executed, four artifacts produced, baselines valid)
 
           ## Benchmark Summary
-          $(if [ -f current-benchmark.json ]; then echo "See \`current-benchmark.json\` for detailed results."; else echo "No benchmark results generated."; fi)
+          $(if [ -d benchmark-artifacts ]; then echo "Measured baselines in \`benchmark-artifacts/\`; execution report in \`perf-test-report.json\`."; else echo "No benchmark artifacts generated — the evidence gate fails such a run."; fi)
 
           ## Memory Profile
           $(if [ -f memory-report.txt ]; then echo "See \`memory-report.txt\` for memory usage analysis."; else echo "Memory profiling not available."; fi)
@@ -179,7 +150,8 @@ jobs:
         with:
           name: performance-results
           path: |
-            current-benchmark.json
+            benchmark-artifacts/
+            perf-test-report.json
             memory-report.txt
             performance-summary.md
           if-no-files-found: warn
@@ -219,7 +191,7 @@ jobs:
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 title: '⚠️ Performance Regression Detected',
-                body: `Performance benchmarks detected regression beyond acceptable threshold (>10% mean increase).\n\nCheck the workflow run for details: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+                body: `Lux perf smoke tests failed their committed-baseline tolerance (assert_regression_within_tolerance in tests/benchmarks/test_lux_depth_v3_perf_smoke.py, baselines under tests/benchmarks/baselines/).\n\nCheck the workflow run for details: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
                 labels: ['performance', 'regression', 'automated']
               });
             }

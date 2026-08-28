@@ -33,8 +33,13 @@ run as bounded smoke checks.
 - Performance ledger baseline comparisons with explicit backend, device, and
   quality-tier metadata.
 - `.github/workflows/performance-monitor.yml` is schedule/manual only and fails
-  when pytest-benchmark reports a regression beyond its documented threshold
-  or when benchmark execution fails and the run is not valid evidence.
+  when a Lux perf smoke test exceeds its committed-baseline tolerance
+  (`assert_regression_within_tolerance` against `tests/benchmarks/baselines/`)
+  or when the run is not valid evidence — the
+  `scripts/ci/check_performance_evidence.py` gate requires the four
+  baseline-writer tests to execute and pass, the four benchmark artifacts to
+  be produced, and the committed baselines to parse; zero executed tests
+  (including an all-skipped selection) is a hard failure, never a pass.
 
 ## Advisory Signals
 
