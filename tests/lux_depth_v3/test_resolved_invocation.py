@@ -347,6 +347,49 @@ class TestCarrierTrustBoundary:
         with pytest.raises(UntrustedModelContractError):
             engine._resolve_model_contract()
 
+    def test_forged_revision_rejected_in_non_strict_mode(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """The revision leg must resolve the model lock INDEPENDENTLY and
+        compare — passing the carried revision into the resolver echoes it
+        back in non-strict mode (requested wins), which previously accepted
+        any forged revision (review P1, second round)."""
+        import dataclasses
+
+        from transformation_portal.lux_depth_v3.config_resolver import ConfigResolver
+        from transformation_portal.lux_depth_v3.model_resolution import UntrustedModelContractError
+
+        monkeypatch.delenv("TP_STRICT_MODEL_LOCK", raising=False)
+        config = _commercial_config()
+        invocation = _build(config, tmp_path)
+        forged_model = dataclasses.replace(invocation.resolved_model, revision="b" * 40)
+        config.resolved_invocation = dataclasses.replace(invocation, resolved_model=forged_model)
+        with pytest.raises(UntrustedModelContractError):
+            ConfigResolver().resolve(config)
+
+    def test_dropped_revision_rejected_when_lock_pins(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        import dataclasses
+
+        from transformation_portal.lux_depth_v3.config_resolver import ConfigResolver
+        from transformation_portal.lux_depth_v3.model_resolution import UntrustedModelContractError
+
+        monkeypatch.delenv("TP_STRICT_MODEL_LOCK", raising=False)
+        config = _commercial_config()
+        invocation = _build(config, tmp_path)
+        if invocation.resolved_model.revision is None:
+            pytest.skip("model lock does not pin this repo in this environment")
+        stripped_model = dataclasses.replace(invocation.resolved_model, revision=None)
+        config.resolved_invocation = dataclasses.replace(invocation, resolved_model=stripped_model)
+        with pytest.raises(UntrustedModelContractError):
+            ConfigResolver().resolve(config)
+
+    def test_lock_consistent_carrier_accepted(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        from transformation_portal.lux_depth_v3.config_resolver import ConfigResolver
+
+        monkeypatch.delenv("TP_STRICT_MODEL_LOCK", raising=False)
+        config = _commercial_config()
+        config.resolved_invocation = _build(config, tmp_path)
+        resolved = ConfigResolver().resolve(config)
+        assert resolved.resolved_model_contract is config.resolved_invocation.resolved_model
+
     def test_non_resolvedmodel_carrier_rejected(self, tmp_path: Path) -> None:
         from transformation_portal.lux_depth_v3.config_resolver import ConfigResolver
         from transformation_portal.lux_depth_v3.model_resolution import UntrustedModelContractError
@@ -411,6 +454,15 @@ class TestSchemaValidation:
         payload = _build(_commercial_config(), tmp_path).to_payload()
         assert payload["stability"] == "provisional"
 
+    def test_schema_loads_from_package_resources(self) -> None:
+        """The schema ships as package data and loads via
+        importlib.resources — the mechanism an installed wheel uses (review
+        P2, second round: the repo-root path never reached wheels)."""
+        from transformation_portal.lux_depth_v3.resolved_invocation import load_resolved_invocation_schema
+
+        schema = load_resolved_invocation_schema()
+        assert schema["$id"] == "tp.lux.resolved_invocation.v1"
+
 
 class TestSingleResolutionCallCount:
     """The advertised contract is exactly one resolution per invocation
@@ -469,16 +521,19 @@ class TestRevisionPinning:
         """The subprocess boundary must carry the planned revision — the
         parent previously serialized only the canonical key, letting the
         worker re-resolve a drifted lock (review P1 on PR #2070). Captures
-        the REAL availability-check argv, not a reconstruction."""
-        import dataclasses
+        the REAL availability-check argv, not a reconstruction. Uses the
+        genuine lock-resolved revision — a forged one is now rejected at the
+        carrier boundary."""
         import types
 
         import transformation_portal.depth.backends.da3 as da3_module
 
         config = _commercial_config()
         invocation = _build(config, tmp_path)
-        pinned_model = dataclasses.replace(invocation.resolved_model, revision="a" * 40)
-        config.resolved_invocation = dataclasses.replace(invocation, resolved_model=pinned_model)
+        planned_revision = invocation.resolved_model.revision
+        if planned_revision is None:
+            pytest.skip("model lock does not pin this repo in this environment")
+        config.resolved_invocation = invocation
         backend = da3_module.DA3Backend(config)
         backend._python_executable = "/usr/bin/env-python-stub"
 
@@ -492,7 +547,7 @@ class TestRevisionPinning:
         backend._ensure_subprocess_available()
         command = captured["command"]
         assert "--model-revision" in command
-        assert command[command.index("--model-revision") + 1] == "a" * 40
+        assert command[command.index("--model-revision") + 1] == planned_revision
         assert command[command.index("--model-key") + 1] == "da3_metric"
 
     def test_model_request_threads_requested_revision(self) -> None:

@@ -128,9 +128,22 @@ class ResolvedInvocation:
         return canonicalize_json(self.to_payload()).decode("utf-8")
 
 
-def resolved_invocation_schema_path() -> Path:
-    """Path to the provisional tp.lux.resolved_invocation.v1 JSON Schema."""
-    return Path(__file__).resolve().parents[3] / "schemas" / "lux" / "resolved_invocation.schema.json"
+def load_resolved_invocation_schema() -> Dict[str, Any]:
+    """Load the provisional tp.lux.resolved_invocation.v1 JSON Schema.
+
+    The schema ships as package data (``transformation_portal.schemas.lux``)
+    and is loaded via importlib.resources so installed wheels — not just the
+    source tree — can validate plans.
+    """
+    import json
+    from importlib import resources
+
+    schema_text = (
+        resources.files("transformation_portal.schemas.lux")
+        .joinpath("resolved_invocation.schema.json")
+        .read_text(encoding="utf-8")
+    )
+    return json.loads(schema_text)
 
 
 def validate_resolved_invocation_payload(payload: Dict[str, Any]) -> None:
@@ -143,13 +156,9 @@ def validate_resolved_invocation_payload(payload: Dict[str, Any]) -> None:
     ``model_resolution.validate_authoritative_model_contract`` at every
     consumption boundary.
     """
-    import json
-
     import jsonschema
 
-    with open(resolved_invocation_schema_path(), "r", encoding="utf-8") as fh:
-        schema = json.load(fh)
-    jsonschema.validate(payload, schema)
+    jsonschema.validate(payload, load_resolved_invocation_schema())
 
 
 def authoritative_model_contract(config: Any) -> Optional[ResolvedModel]:

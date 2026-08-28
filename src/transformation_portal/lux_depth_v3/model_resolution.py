@@ -207,14 +207,19 @@ def validate_authoritative_model_contract(
             f"registry repo_id={expected_spec.repo_id!r}); refusing to adopt it."
         )
     _enforce_license_policy(expected_spec, non_commercial_ok)
-    expected_revision = resolve_model_lock_revision(
+    # Resolve the lock INDEPENDENTLY of the carried value: passing the carried
+    # revision as requested_revision would echo it back in non-strict mode
+    # (requested wins), turning the comparison into a self-check that accepts
+    # any forged revision. The carrier must equal what the lock manifest
+    # itself resolves to, including the no-pin (None) case.
+    locked_revision = resolve_model_lock_revision(
         expected_spec.repo_id,
-        requested_revision=contract.revision,
+        requested_revision=None,
         context="authoritative contract validation",
     )
-    if expected_revision != contract.revision:
+    if contract.revision != locked_revision:
         raise UntrustedModelContractError(
             f"Authoritative model contract revision {contract.revision!r} disagrees with the "
-            f"model lock ({expected_revision!r}) for {expected_spec.repo_id}; refusing to adopt it."
+            f"model lock ({locked_revision!r}) for {expected_spec.repo_id}; refusing to adopt it."
         )
     return contract
