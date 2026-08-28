@@ -108,7 +108,7 @@ def _run_inference(
     output_json: Path,
     model_variant_name: str,
     model_key: str | None,
-    model_revision: str | None,
+    model_revision: str | None = None,
     device: str,
     use_coreml: bool,
     non_commercial_ok: bool,
