@@ -200,7 +200,7 @@ def test_da3_inference_da3_custom_path_ignores_transformers_pipeline_guard(
     monkeypatch.setattr(
         da3_inference.DA3InferenceEngine,
         "_load_da3_model",
-        lambda self, model_id: captured.setdefault("model_id", model_id),
+        lambda self, model_id, requested_revision=None: captured.setdefault("model_id", model_id),
     )
 
     engine = da3_inference.DA3InferenceEngine(

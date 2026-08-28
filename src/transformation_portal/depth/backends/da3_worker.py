@@ -31,6 +31,14 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Canonical Lux Depth V3 registry key (for example da3_metric).",
     )
     parser.add_argument(
+        "--model-revision",
+        help=(
+            "Planned model revision from the parent's resolved contract "
+            "(P0-1, issue #2065): pins the worker's resolution and model "
+            "load to the revision the plan recorded."
+        ),
+    )
+    parser.add_argument(
         "--device",
         default="cpu",
         help="Inference device to pass to DA3.",
@@ -100,6 +108,7 @@ def _run_inference(
     output_json: Path,
     model_variant_name: str,
     model_key: str | None,
+    model_revision: str | None = None,
     device: str,
     use_coreml: bool,
     non_commercial_ok: bool,
@@ -114,6 +123,7 @@ def _run_inference(
         model_variant=model_variant,
         model_key=model_key,
         non_commercial_ok=non_commercial_ok,
+        model_revision=model_revision,
         device=DeviceConfig(device=device, use_coreml=use_coreml),
     )
     engine = DA3InferenceEngine(
@@ -167,6 +177,7 @@ def main(argv: list[str] | None = None) -> int:
         output_json=args.output_json.expanduser(),
         model_variant_name=str(args.model_variant),
         model_key=str(args.model_key) if args.model_key else None,
+        model_revision=str(args.model_revision) if args.model_revision else None,
         device=str(args.device),
         use_coreml=bool(args.use_coreml),
         non_commercial_ok=bool(args.non_commercial_ok),

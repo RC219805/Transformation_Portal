@@ -111,6 +111,15 @@ class DA3Config:
     model_key: Optional[str] = None
     raw_model_id: Optional[str] = None
     non_commercial_ok: bool = False
+    # Authoritative single-resolution model contract (P0-1, issue #2065),
+    # injected by DA3Backend so the inference engine consumes it instead of
+    # re-resolving. Typed Any to keep this module import-light; concrete
+    # type is model_resolution.ResolvedModel.
+    resolved_model_contract: Optional[Any] = None
+    # Planned model revision (P0-1): pins engine-side resolution and model
+    # loading to the revision the plan recorded. Serializable across the
+    # DA3 worker subprocess boundary, unlike the contract object above.
+    model_revision: Optional[str] = None
     device: DeviceConfig = field(default_factory=DeviceConfig)
     postprocessing: PostprocessingConfig = field(
         default_factory=PostprocessingConfig,
@@ -474,6 +483,15 @@ class EnhanceConfig:
     # Emit per-scene debug bundle for
     # reconstruction triage
     emit_scene_debug_bundle: bool = False
+
+    # Authoritative single-resolution invocation (P0-1, issue #2065).
+    # Set by the CLI after the shared plan/run resolution pass; consumers
+    # (ConfigResolver, depth backends) read the model contract from it via
+    # resolved_invocation.authoritative_model_contract() instead of
+    # re-resolving from compatibility fields. Typed as Any to keep this
+    # module import-light; the concrete type is
+    # lux_depth_v3.resolved_invocation.ResolvedInvocation.
+    resolved_invocation: Optional[Any] = None
 
     def __post_init__(self) -> None:
         """Normalize backend identifiers and compatibility fields."""

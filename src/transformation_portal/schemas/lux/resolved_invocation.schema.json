@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "tp.lux.resolved_invocation.v1",
+  "title": "Lux Depth V3 resolved invocation (PROVISIONAL)",
+  "description": "Serialized ResolvedInvocation emitted by the lux-depth-v3 --plan mode and consumed by the run path. PROVISIONAL: this plan surface is a bounded pre-designation spike under ADR-051's Plan/DAG representation row; the serialization may change or be superseded when that designation is decided. Compatibility policy: within the provisional period, fields may be added but not removed or re-typed; consumers must ignore unknown fields; a breaking change bumps the schema id.",
+  "type": "object",
+  "required": [
+    "schema",
+    "stability",
+    "planned_backend",
+    "candidate_fallback_chain",
+    "resolved_model",
+    "license_acknowledgements",
+    "license_evaluation",
+    "quality_tier",
+    "stages",
+    "requested_artifacts",
+    "input_dir",
+    "input_files",
+    "config_fingerprint_sha256",
+    "warnings"
+  ],
+  "properties": {
+    "schema": { "const": "tp.lux.resolved_invocation.v1" },
+    "stability": { "const": "provisional" },
+    "planned_backend": { "type": "string", "minLength": 1 },
+    "candidate_fallback_chain": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "minItems": 1
+    },
+    "resolved_model": {
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "required": [
+            "requested_selector",
+            "canonical_key",
+            "repo_id",
+            "revision",
+            "license_id",
+            "usage_class",
+            "requires_non_commercial_ok",
+            "accelerator_kind"
+          ],
+          "properties": {
+            "requested_selector": { "type": "string" },
+            "canonical_key": { "type": "string", "minLength": 1 },
+            "repo_id": { "type": ["string", "null"] },
+            "revision": { "type": ["string", "null"] },
+            "license_id": { "type": ["string", "null"] },
+            "usage_class": { "type": ["string", "null"] },
+            "requires_non_commercial_ok": { "type": "boolean" },
+            "accelerator_kind": { "type": ["string", "null"] },
+            "legacy_model_variant_name": { "type": ["string", "null"] }
+          }
+        }
+      ]
+    },
+    "license_acknowledgements": {
+      "type": "object",
+      "required": ["non_commercial_ok", "apple_depth_pro_research", "research_tools"],
+      "properties": {
+        "non_commercial_ok": { "type": "boolean" },
+        "apple_depth_pro_research": { "type": "boolean" },
+        "research_tools": { "type": "boolean" }
+      }
+    },
+    "license_evaluation": {
+      "type": "object",
+      "required": ["enforced", "status"],
+      "properties": {
+        "enforced": { "type": "boolean" },
+        "status": { "type": "string" }
+      }
+    },
+    "quality_tier": { "type": "string" },
+    "preset_requested": { "type": ["string", "null"] },
+    "preset_resolved": { "type": ["string", "null"] },
+    "stages": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+    "requested_artifacts": { "type": "array", "items": { "type": "string" } },
+    "input_dir": { "type": "string" },
+    "input_files": { "type": "array", "items": { "type": "string" } },
+    "config_fingerprint_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "warnings": { "type": "array", "items": { "type": "string" } }
+  }
+}

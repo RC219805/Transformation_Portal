@@ -34,7 +34,7 @@ from ...core.ml_dependency_health import (
     ensure_dependency_importable,
 )
 from ...core.platform_matrix import CURRENT_PLATFORM
-from ...lux_depth_v3.model_resolution import ModelRequest, resolve_model_contract
+from ...lux_depth_v3.model_resolution import ModelRequest, resolve_model_contract, validate_authoritative_model_contract
 from .protocol import DepthResult, LicenseType
 
 if TYPE_CHECKING:
@@ -155,16 +155,32 @@ class DA3Backend:
         self._engine: Optional[DA3InferenceEngine] = None
         self._device = self._resolve_device(config)
         self._model_variant = self._resolve_model_variant(config)
-        self._resolved_model_contract = resolve_model_contract(
-            ModelRequest(
-                model_key=getattr(config, "model_key", None) if config is not None else None,
-                raw_model_id=getattr(config, "raw_model_id", None) if config is not None else None,
-                model_variant=self._model_variant if config is not None else None,
-                use_coreml_backend=bool(getattr(config, "use_coreml_backend", False)) if config is not None else False,
-                non_commercial_ok=bool(getattr(config, "non_commercial_ok", False)) if config is not None else False,
-                enforce_license=config is not None,
+        # P0-1 (issue #2065): consume the authoritative single-resolution
+        # contract when the invocation carries one, instead of re-resolving.
+        # Re-resolution here is the seam where the legacy model_variant
+        # compatibility mapping could silently turn a commercial selection
+        # (da3_metric) back into the research model (da3_research).
+        authoritative_contract = None
+        if config is not None:
+            invocation = getattr(config, "resolved_invocation", None)
+            if invocation is not None:
+                authoritative_contract = getattr(invocation, "resolved_model", None)
+        if authoritative_contract is not None:
+            self._resolved_model_contract = validate_authoritative_model_contract(
+                authoritative_contract,
+                non_commercial_ok=bool(getattr(config, "non_commercial_ok", False)),
             )
-        )
+        else:
+            self._resolved_model_contract = resolve_model_contract(
+                ModelRequest(
+                    model_key=getattr(config, "model_key", None) if config is not None else None,
+                    raw_model_id=getattr(config, "raw_model_id", None) if config is not None else None,
+                    model_variant=self._model_variant if config is not None else None,
+                    use_coreml_backend=bool(getattr(config, "use_coreml_backend", False)) if config is not None else False,
+                    non_commercial_ok=bool(getattr(config, "non_commercial_ok", False)) if config is not None else False,
+                    enforce_license=config is not None,
+                )
+            )
         self._model_id = self._resolved_model_contract.spec.repo_id
         self._repo_root = self._find_repo_root()
         self._repo_src = self._repo_root / "src" if self._repo_root is not None else None
@@ -352,6 +368,8 @@ class DA3Backend:
             "--device",
             self._device,
         )
+        if self._resolved_model_contract.revision:
+            command.extend(["--model-revision", self._resolved_model_contract.revision])
         if self._non_commercial_opt_in_enabled():
             command.append("--non-commercial-ok")
         if self._apple_coreml_opt_in_enabled():
@@ -616,6 +634,8 @@ class DA3Backend:
                 "--device",
                 str(use_device),
             )
+            if self._resolved_model_contract.revision:
+                command.extend(["--model-revision", self._resolved_model_contract.revision])
             if self._non_commercial_opt_in_enabled():
                 command.append("--non-commercial-ok")
             if self._apple_coreml_opt_in_enabled():
@@ -814,6 +834,11 @@ class DA3Backend:
             model_key=self._resolved_model_contract.canonical_key,
             raw_model_id=self._resolved_model_contract.spec.repo_id,
             non_commercial_ok=bool(getattr(self._config, "non_commercial_ok", False)) if self._config else False,
+            # Inject the authoritative contract so the engine consumes it
+            # instead of performing another resolution (P0-1, issue #2065),
+            # and pin the planned revision for the load path.
+            resolved_model_contract=self._resolved_model_contract,
+            model_revision=self._resolved_model_contract.revision,
             device=device_config,
         )
 

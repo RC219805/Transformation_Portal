@@ -53,6 +53,11 @@ class ModelRequest:
     enforce_license: bool = True
     strict_model_lock: Optional[bool] = None
     manifest_path: Optional[Path] = None
+    # Pin resolution to a planned revision (P0-1, issue #2065): when set,
+    # the model-lock resolution uses this as the requested revision so a
+    # lock-manifest change between plan and execution cannot silently load
+    # a different revision than the plan recorded.
+    requested_revision: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -136,7 +141,7 @@ def resolve_model_contract(request: ModelRequest) -> ResolvedModel:
     spec = get_model_spec(canonical_key)
     revision = resolve_model_lock_revision(
         spec.repo_id,
-        requested_revision=None,
+        requested_revision=request.requested_revision,
         strict=request.strict_model_lock,
         manifest_path=request.manifest_path,
         context="lux_depth_v3 model resolution",
@@ -153,3 +158,68 @@ def resolve_model_contract(request: ModelRequest) -> ResolvedModel:
         accelerator_kind=accelerator_kind,
         legacy_model_variant_name=legacy_variant_name,
     )
+
+
+class UntrustedModelContractError(ModelResolutionError):
+    """An authoritative model contract failed fail-closed validation."""
+
+
+def validate_authoritative_model_contract(
+    contract: Any,
+    *,
+    non_commercial_ok: bool,
+) -> ResolvedModel:
+    """Fail-closed validation for a carried authoritative model contract.
+
+    Consumers of ``config.resolved_invocation`` / ``DA3Config.resolved_model_contract``
+    MUST call this before adopting the contract (P0-1, issue #2065). It performs
+    no model resolution — it re-anchors the carried object to the static model
+    registry and the model-lock manifest so a forged or drifted carrier cannot
+    bypass licensing, the registry allowlist, or revision pinning:
+
+    - the object must be a genuine ``ResolvedModel``;
+    - its canonical key must exist in the registry, and its spec must be the
+      registry's spec for that key (a carrier cannot substitute repo_id,
+      license, or usage class);
+    - the registry spec's license policy is re-enforced against the caller's
+      ``non_commercial_ok`` acknowledgement;
+    - its revision must agree with the model-lock manifest (passing the
+      carried revision as the requested revision, so strict-lock policy and
+      pin validation apply).
+
+    Raises ``UntrustedModelContractError`` (or ``ModelLicenseError`` for the
+    license leg) on any mismatch. Returns the validated contract.
+    """
+    if not isinstance(contract, ResolvedModel):
+        raise UntrustedModelContractError(
+            f"Authoritative model contract has unexpected type {type(contract).__name__}; refusing to adopt it."
+        )
+    try:
+        expected_spec = get_model_spec(contract.canonical_key)
+    except KeyError as exc:
+        raise UntrustedModelContractError(
+            f"Authoritative model contract names unknown registry key {contract.canonical_key!r}."
+        ) from exc
+    if contract.spec != expected_spec:
+        raise UntrustedModelContractError(
+            "Authoritative model contract spec does not match the registry entry for "
+            f"{contract.canonical_key!r} (carried repo_id={getattr(contract.spec, 'repo_id', None)!r}, "
+            f"registry repo_id={expected_spec.repo_id!r}); refusing to adopt it."
+        )
+    _enforce_license_policy(expected_spec, non_commercial_ok)
+    # Resolve the lock INDEPENDENTLY of the carried value: passing the carried
+    # revision as requested_revision would echo it back in non-strict mode
+    # (requested wins), turning the comparison into a self-check that accepts
+    # any forged revision. The carrier must equal what the lock manifest
+    # itself resolves to, including the no-pin (None) case.
+    locked_revision = resolve_model_lock_revision(
+        expected_spec.repo_id,
+        requested_revision=None,
+        context="authoritative contract validation",
+    )
+    if contract.revision != locked_revision:
+        raise UntrustedModelContractError(
+            f"Authoritative model contract revision {contract.revision!r} disagrees with the "
+            f"model lock ({locked_revision!r}) for {expected_spec.repo_id}; refusing to adopt it."
+        )
+    return contract
