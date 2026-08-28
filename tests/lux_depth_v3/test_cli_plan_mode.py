@@ -141,7 +141,8 @@ class TestPlanMode:
                 captured["invocation"] = config.resolved_invocation
                 captured["output_root"] = output_root
 
-            def enhance_batch(self, input_dir, image_extensions):
+            def enhance_batch(self, input_dir, image_extensions, input_files=None):
+                captured["input_files"] = input_files
                 return []
 
         monkeypatch.setattr(cli_module, "EnhanceOrchestrator", _StubOrchestrator)
@@ -165,6 +166,10 @@ class TestPlanMode:
         assert invocation.resolved_model.canonical_key == "da3_metric"
         # Run mode (unlike --plan) does create the output root.
         assert output_dir.exists()
+        # The run consumes the plan's frozen input selection — the same
+        # files the invocation recorded, not a rediscovered list.
+        assert captured["input_files"] is not None
+        assert [p.name for p in captured["input_files"]] == list(invocation.input_files)
 
     def test_cli_invocation_mutates_then_fixture_restores_root_logging(self, tmp_path: Path) -> None:
         """Regression guard for the session-wide logging leak.

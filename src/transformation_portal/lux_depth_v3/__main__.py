@@ -1129,10 +1129,14 @@ def main(
 
     discovery_config = DiscoveryConfig(strict_mode=strict_inputs)
     try:
+        # P0-1 (issue #2065): pass output_dir so this discovery uses exactly
+        # the exclusion semantics the orchestrator uses — the plan's input
+        # selection and the run's must be the same list.
         image_files = discover_images(
             input_dir,
             discovery_config,
             image_extensions,
+            output_dir=output_dir,
         )
     except ValueError as e:
         # Strict mode validation failed
@@ -1156,6 +1160,8 @@ def main(
     # P0-1 (issue #2065): the single shared resolution pass. Both plan and
     # run consume this exact object; the run path attaches it to the config
     # so ConfigResolver and the depth backends do not re-resolve.
+    from ..depth.backends.protocol import LicenseRestrictionError
+    from ..depth.backends.registry import UnknownDepthBackendError
     from .resolved_invocation import build_resolved_invocation
 
     try:
@@ -1164,7 +1170,12 @@ def main(
             input_dir=input_dir,
             input_files=image_files,
         )
-    except (ModelLicenseError, UnknownModelError) as exc:
+    except (
+        ModelLicenseError,
+        UnknownModelError,
+        LicenseRestrictionError,
+        UnknownDepthBackendError,
+    ) as exc:
         logger.error(str(exc))
         print(str(exc), file=sys.stdout)
         raise typer.Exit(code=1)
@@ -1188,6 +1199,8 @@ def main(
         results = orchestrator.enhance_batch(
             input_dir=input_dir,
             image_extensions=image_extensions,
+            # P0-1: the run consumes the plan's frozen input selection.
+            input_files=sorted(image_files),
         )
 
         # Summary (Note: orchestrator returns "ok" not "success")

@@ -45,7 +45,12 @@ from ..ingest.canonical_json import canonicalize_json, dumps_json
 from ._backend_contract import normalize_backend_id
 from .config import DA3Config, EnhanceConfig, ModelVariant, Preset
 from .manifest import ConfigFingerprint
-from .model_resolution import ModelRequest, ResolvedModel, resolve_model_contract
+from .model_resolution import (
+    ModelRequest,
+    ResolvedModel,
+    resolve_model_contract,
+    validate_authoritative_model_contract,
+)
 
 logger = logging.getLogger(__name__)
 _REPO_LOCAL_DEPTH_PRO_PYTHON_PARTS = (".venv-depth-pro", "bin", "python")
@@ -245,13 +250,33 @@ def resolved_model_identity_for_backend(
     model_variant: Optional[ModelVariant] = None,
     *,
     backend_id: Optional[Any] = None,
+    resolved_model_contract: Optional[ResolvedModel] = None,
 ) -> str:
-    """Return the model identity serialized into replay/cache fingerprints."""
+    """Return the model identity serialized into replay/cache fingerprints.
+
+    When an authoritative resolved contract is available — passed explicitly
+    (plan path) or carried on the config (run path) — the identity is the
+    contract's ``canonical_key:repo_id@revision``, which distinguishes models
+    the legacy ModelVariant label cannot (da3_metric vs da3_research both map
+    to METRIC_LARGE) and changes when the locked revision changes. This keeps
+    plan, cache, manifest, and run-card identity on ONE algorithm (P0-1,
+    issue #2065). Without a contract, the legacy label is preserved so
+    uncarried runs keep their existing fingerprints.
+    """
     normalized_backend = normalize_backend_id(
         backend_id if backend_id is not None else getattr(config, "depth_backend", None),
     )
     if normalized_backend == "depth_pro":
         return DEPTH_PRO_MODEL_ID
+
+    contract = resolved_model_contract
+    if contract is None:
+        invocation = getattr(config, "resolved_invocation", None)
+        if invocation is not None:
+            contract = getattr(invocation, "resolved_model", None)
+    if contract is not None and (normalized_backend is None or normalized_backend == "da3"):
+        repo_id = getattr(contract.spec, "repo_id", None)
+        return f"{contract.canonical_key}:{repo_id}@{contract.revision}"
 
     mv = model_variant or config.model_variant or ModelVariant.METRIC_LARGE
     return mv.value.name
@@ -569,6 +594,8 @@ def build_depth_cache_fingerprint(
 def compute_config_fingerprint(
     config: EnhanceConfig,
     model_variant: Optional[ModelVariant] = None,
+    *,
+    resolved_model_contract: Optional[ResolvedModel] = None,
 ) -> ConfigFingerprint:
     """Compute configuration fingerprint for cache validation.
 
@@ -589,7 +616,11 @@ def compute_config_fingerprint(
     effective_raw_python = resolve_effective_raw_python_executable(config)
 
     return ConfigFingerprint(
-        model_variant=resolved_model_identity_for_backend(config, mv),
+        model_variant=resolved_model_identity_for_backend(
+            config,
+            mv,
+            resolved_model_contract=resolved_model_contract,
+        ),
         depth_quantization=config.depth_quantization,
         depth_device=config.depth_device,
         preset=config.preset.value if config.preset else None,
@@ -830,7 +861,10 @@ class ConfigResolver:
         if invocation is not None:
             authoritative_contract = getattr(invocation, "resolved_model", None)
         if authoritative_contract is not None:
-            resolved_model_contract = authoritative_contract
+            resolved_model_contract = validate_authoritative_model_contract(
+                authoritative_contract,
+                non_commercial_ok=bool(getattr(config, "non_commercial_ok", False)),
+            )
             resolved_model = _compat_model_variant_for_resolved_key(
                 resolved_model_contract.canonical_key,
             )

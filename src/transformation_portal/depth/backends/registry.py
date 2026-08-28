@@ -13,6 +13,11 @@ from typing import TYPE_CHECKING, Any, Dict, Optional, Type
 from ...lux_depth_v3._backend_contract import normalize_backend_id
 from .protocol import DepthBackend, LicenseRestrictionError, LicenseType
 
+
+class UnknownDepthBackendError(ValueError):
+    """Requested depth backend is not present in the registry."""
+
+
 if TYPE_CHECKING:
     from ...lux_depth_v3.config import EnhanceConfig
 
@@ -132,6 +137,31 @@ class DepthBackendRegistry:
             }
             for name, cls in self._backends.items()
         }
+
+    def validate_backend_request(
+        self,
+        backend_id: str,
+        config: Optional["EnhanceConfig"],
+    ) -> str:
+        """Validate a requested backend without instantiating it.
+
+        Plan-time seam (P0-1, issue #2065): applies the same registry
+        membership and license checks execution applies, so a plan cannot
+        advertise a backend the runtime registry would reject. Returns the
+        normalized backend id.
+
+        Raises:
+            UnknownDepthBackendError: If the backend is not registered.
+            LicenseRestrictionError: If license requirements are not met.
+        """
+        normalized = normalize_backend_id(backend_id) or ""
+        backend_cls = self._backends.get(normalized)
+        if backend_cls is None:
+            raise UnknownDepthBackendError(
+                f"Unknown depth backend {backend_id!r}. Registered backends: {sorted(self._backends.keys())}."
+            )
+        self._validate_license(normalized, backend_cls, config)
+        return normalized
 
     def get_backend_class(
         self,

@@ -4904,12 +4904,18 @@ class EnhanceOrchestrator:
         self,
         input_dir: Path,
         image_extensions: Optional[List[str]] = None,
+        input_files: Optional[List[Path]] = None,
     ) -> List[Dict[str, Any]]:
         """Process a batch of images with accurate execution timestamps.
 
         Args:
             input_dir: Directory containing input images
             image_extensions: List of file extensions to process
+            input_files: Optional frozen input selection (P0-1, issue #2065).
+                When provided — e.g. from a ResolvedInvocation — these exact
+                files are processed and no rediscovery scan runs, so the run
+                consumes the plan's input selection instead of recomputing
+                one that may diverge.
 
         Returns:
             List of processing results for each image
@@ -4952,15 +4958,19 @@ class EnhanceOrchestrator:
         # Use input discovery to exclude depth artifacts and derived outputs
         # ROBUSTNESS FIX (#6): Pass output_root
         # to explicitly exclude output directory
-        discovery_config = DiscoveryConfig(
-            strict_mode=self.config.strict_inputs,
-        )
-        images = discover_images(
-            input_dir,
-            discovery_config,
-            image_extensions,
-            output_dir=self.output_root,
-        )
+        if input_files is not None:
+            # P0-1: the plan's frozen selection is authoritative — no rescan.
+            images = [Path(f) for f in input_files]
+        else:
+            discovery_config = DiscoveryConfig(
+                strict_mode=self.config.strict_inputs,
+            )
+            images = discover_images(
+                input_dir,
+                discovery_config,
+                image_extensions,
+                output_dir=self.output_root,
+            )
 
         # Inert scene-group bridge: preserve
         # existing per-image behavior and order.

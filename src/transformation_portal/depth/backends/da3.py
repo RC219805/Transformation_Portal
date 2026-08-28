@@ -34,7 +34,7 @@ from ...core.ml_dependency_health import (
     ensure_dependency_importable,
 )
 from ...core.platform_matrix import CURRENT_PLATFORM
-from ...lux_depth_v3.model_resolution import ModelRequest, resolve_model_contract
+from ...lux_depth_v3.model_resolution import ModelRequest, resolve_model_contract, validate_authoritative_model_contract
 from .protocol import DepthResult, LicenseType
 
 if TYPE_CHECKING:
@@ -166,7 +166,10 @@ class DA3Backend:
             if invocation is not None:
                 authoritative_contract = getattr(invocation, "resolved_model", None)
         if authoritative_contract is not None:
-            self._resolved_model_contract = authoritative_contract
+            self._resolved_model_contract = validate_authoritative_model_contract(
+                authoritative_contract,
+                non_commercial_ok=bool(getattr(config, "non_commercial_ok", False)),
+            )
         else:
             self._resolved_model_contract = resolve_model_contract(
                 ModelRequest(
@@ -365,6 +368,8 @@ class DA3Backend:
             "--device",
             self._device,
         )
+        if self._resolved_model_contract.revision:
+            command.extend(["--model-revision", self._resolved_model_contract.revision])
         if self._non_commercial_opt_in_enabled():
             command.append("--non-commercial-ok")
         if self._apple_coreml_opt_in_enabled():
@@ -629,6 +634,8 @@ class DA3Backend:
                 "--device",
                 str(use_device),
             )
+            if self._resolved_model_contract.revision:
+                command.extend(["--model-revision", self._resolved_model_contract.revision])
             if self._non_commercial_opt_in_enabled():
                 command.append("--non-commercial-ok")
             if self._apple_coreml_opt_in_enabled():
@@ -828,8 +835,10 @@ class DA3Backend:
             raw_model_id=self._resolved_model_contract.spec.repo_id,
             non_commercial_ok=bool(getattr(self._config, "non_commercial_ok", False)) if self._config else False,
             # Inject the authoritative contract so the engine consumes it
-            # instead of performing another resolution (P0-1, issue #2065).
+            # instead of performing another resolution (P0-1, issue #2065),
+            # and pin the planned revision for the load path.
             resolved_model_contract=self._resolved_model_contract,
+            model_revision=self._resolved_model_contract.revision,
             device=device_config,
         )
 

@@ -116,6 +116,10 @@ class DA3Config:
     # re-resolving. Typed Any to keep this module import-light; concrete
     # type is model_resolution.ResolvedModel.
     resolved_model_contract: Optional[Any] = None
+    # Planned model revision (P0-1): pins engine-side resolution and model
+    # loading to the revision the plan recorded. Serializable across the
+    # DA3 worker subprocess boundary, unlike the contract object above.
+    model_revision: Optional[str] = None
     device: DeviceConfig = field(default_factory=DeviceConfig)
     postprocessing: PostprocessingConfig = field(
         default_factory=PostprocessingConfig,

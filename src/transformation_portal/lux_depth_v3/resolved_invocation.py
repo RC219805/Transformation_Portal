@@ -99,6 +99,10 @@ class ResolvedInvocation:
             }
         return {
             "schema": self.schema,
+            # ADR-051 conflict-matrix note: this plan surface is a bounded
+            # pre-designation spike; its serialization is provisional until
+            # the Plan/DAG representation row of ADR-051 is decided.
+            "stability": "provisional",
             "planned_backend": self.planned_backend,
             "candidate_fallback_chain": list(self.candidate_fallback_chain),
             "resolved_model": model_payload,
@@ -122,6 +126,30 @@ class ResolvedInvocation:
         from ..ingest.canonical_json import canonicalize_json
 
         return canonicalize_json(self.to_payload()).decode("utf-8")
+
+
+def resolved_invocation_schema_path() -> Path:
+    """Path to the provisional tp.lux.resolved_invocation.v1 JSON Schema."""
+    return Path(__file__).resolve().parents[3] / "schemas" / "lux" / "resolved_invocation.schema.json"
+
+
+def validate_resolved_invocation_payload(payload: Dict[str, Any]) -> None:
+    """Validate a serialized plan against the provisional v1 JSON Schema.
+
+    Raises jsonschema.ValidationError on mismatch. Consumers parsing plan
+    JSON from an untrusted producer MUST validate before use; note that a
+    schema-valid payload still carries NO licensing authority — the model
+    contract must be revalidated via
+    ``model_resolution.validate_authoritative_model_contract`` at every
+    consumption boundary.
+    """
+    import json
+
+    import jsonschema
+
+    with open(resolved_invocation_schema_path(), "r", encoding="utf-8") as fh:
+        schema = json.load(fh)
+    jsonschema.validate(payload, schema)
 
 
 def authoritative_model_contract(config: Any) -> Optional[ResolvedModel]:
@@ -158,7 +186,12 @@ def _requested_artifacts(config: "EnhanceConfig") -> Tuple[str, ...]:
     # Only artifacts the pipeline actually produces are listed; the inert
     # emit_marketing/emit_report switches surface as warnings instead
     # (dispositions tracked in issues #2067/#2068).
-    artifacts: List[str] = ["depth_u16_png", "depth_metadata_json", "combined_manifest_json"]
+    artifacts: List[str] = [
+        "depth_u16_png",
+        "depth_metadata_json",
+        "combined_manifest_json",
+        "batch_manifest_json",
+    ]
     if getattr(config, "save_float_depth", False):
         artifacts.append("depth_float_npy")
     if getattr(config, "enable_materials_v3", False):
@@ -205,14 +238,33 @@ def build_resolved_invocation(
     Performs no model loading, no inference, and no filesystem writes.
     """
     # Local imports keep this module import-light and cycle-free.
+    from ..depth.backends.registry import DepthBackendRegistry
     from .config_resolver import compute_config_fingerprint
-    from .pipeline_coordinator import normalize_backend_id, resolve_runtime_backend_chain
+    from .pipeline_coordinator import (
+        normalize_backend_id,
+        resolve_requested_backend,
+        resolve_runtime_backend_chain,
+    )
 
-    planned_backend = normalize_backend_id(getattr(config, "depth_backend", None) or "da3") or "da3"
-    candidate_chain = tuple(resolve_runtime_backend_chain(planned_backend, config))
+    # Backend selection parity (P0-1): use the SAME platform-aware requested-
+    # backend resolution and registry validation the runtime uses, so a plan
+    # cannot select a backend the run would not (e.g. Apple Silicon Depth Pro
+    # opt-in), advertise an unregistered backend, or skip a license gate the
+    # runtime registry enforces.
+    explicit_backend_request = normalize_backend_id(getattr(config, "depth_backend", None)) is not None
+    planned_backend = resolve_requested_backend(getattr(config, "depth_backend", None), config)
+    planned_backend = DepthBackendRegistry().validate_backend_request(planned_backend, config)
+
+    # Candidate-chain truth: an explicit backend request is strict at runtime
+    # (no silent downgrade), so the plan must not advertise fallback edges
+    # startup will never attempt. Only a defaulted selection carries the
+    # configured operational chain.
+    if explicit_backend_request:
+        candidate_chain: Tuple[str, ...] = (planned_backend,)
+    else:
+        candidate_chain = tuple(resolve_runtime_backend_chain(planned_backend, config))
 
     resolved_model: Optional[ResolvedModel] = None
-    license_enforced = False
     if planned_backend == "da3":
         resolved_model = resolve_model_contract(
             ModelRequest(
@@ -224,20 +276,18 @@ def build_resolved_invocation(
                 enforce_license=True,
             )
         )
-        license_enforced = True
+    # License evaluation happened for every planned backend: the DA3 family
+    # through resolve_model_contract, every other backend through the
+    # registry's license validation above.
+    license_enforced = True
 
-    # The invocation fingerprint must identify the authoritative resolved
-    # model, not just the config's compatibility fields: ConfigFingerprint
-    # serializes the model as the ModelVariant label (METRIC_LARGE for every
-    # unset variant), which cannot distinguish da3_metric from da3_research.
-    # Hash the config fingerprint together with the resolved identity so two
-    # plans that execute different models never share a fingerprint.
-    fingerprint = compute_config_fingerprint(config)
-    fingerprint_sha256 = _invocation_fingerprint_sha256(
-        fingerprint.to_sha256(),
-        planned_backend,
-        resolved_model,
-    )
+    # ONE identity across plan, cache, manifests, and run cards: the plan
+    # fingerprint is the SAME ConfigFingerprint algorithm the runtime uses,
+    # with the authoritative resolved identity flowing into it (the runtime
+    # path picks the identity up from the carried invocation, so plan and
+    # runtime fingerprints are equal for the same contract).
+    fingerprint = compute_config_fingerprint(config, resolved_model_contract=resolved_model)
+    fingerprint_sha256 = fingerprint.to_sha256()
     preset = getattr(config, "preset", None)
     preset_resolved = preset.value if preset is not None else f"quality_tier:{config.quality_tier}"
 
@@ -271,27 +321,3 @@ def build_resolved_invocation(
         config_fingerprint_sha256=fingerprint_sha256,
         warnings=_plan_warnings(config),
     )
-
-
-def _invocation_fingerprint_sha256(
-    config_fingerprint_sha256: str,
-    planned_backend: str,
-    resolved_model: Optional[ResolvedModel],
-) -> str:
-    import hashlib
-
-    from ..ingest.canonical_json import canonicalize_json
-
-    model_identity: Optional[Dict[str, Any]] = None
-    if resolved_model is not None:
-        model_identity = {
-            "canonical_key": resolved_model.canonical_key,
-            "repo_id": getattr(resolved_model.spec, "repo_id", None),
-            "revision": resolved_model.revision,
-        }
-    payload = {
-        "config_fingerprint_sha256": config_fingerprint_sha256,
-        "planned_backend": planned_backend,
-        "resolved_model": model_identity,
-    }
-    return hashlib.sha256(canonicalize_json(payload)).hexdigest()

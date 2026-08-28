@@ -135,7 +135,7 @@ class TestPlanSerialization:
 
 
 class TestNonDa3AndOptionalStages:
-    def test_depth_pro_plan_has_no_da3_contract_and_defers_license(self, tmp_path: Path) -> None:
+    def test_depth_pro_plan_enforces_acknowledgements(self, tmp_path: Path) -> None:
         config = EnhanceConfig(
             depth_backend="depth_pro",
             non_commercial_ok=True,
@@ -144,10 +144,35 @@ class TestNonDa3AndOptionalStages:
         invocation = _build(config, tmp_path)
         assert invocation.planned_backend == "depth_pro"
         assert invocation.resolved_model is None
-        assert invocation.license_enforced is False
+        # The registry license gate ran at build time, so the plan reports
+        # enforcement — not deferral — matching what the run enforces.
+        assert invocation.license_enforced is True
         payload = invocation.to_payload()
         assert payload["resolved_model"] is None
-        assert payload["license_evaluation"]["status"] == "deferred_to_backend_gates"
+        assert payload["license_evaluation"] == {"enforced": True, "status": "allowed"}
+
+    def test_depth_pro_plan_without_acknowledgements_fails_like_run(self, tmp_path: Path) -> None:
+        from transformation_portal.depth.backends.protocol import LicenseRestrictionError
+
+        with pytest.raises(LicenseRestrictionError):
+            _build(EnhanceConfig(depth_backend="depth_pro"), tmp_path)
+
+    def test_ensemble_plan_without_acknowledgement_fails_like_run(self, tmp_path: Path) -> None:
+        from transformation_portal.depth.backends.protocol import LicenseRestrictionError, LicenseType
+        from transformation_portal.depth.backends.registry import DepthBackendRegistry
+
+        registry = DepthBackendRegistry()
+        ensemble_cls = registry.get_backend_class("ensemble")
+        if ensemble_cls is None or ensemble_cls.license_type != LicenseType.RESEARCH_ONLY:
+            pytest.skip("ensemble backend unavailable or not research-only in this environment")
+        with pytest.raises(LicenseRestrictionError):
+            _build(EnhanceConfig(depth_backend="ensemble"), tmp_path)
+
+    def test_unknown_backend_plan_fails_like_run_registry(self, tmp_path: Path) -> None:
+        from transformation_portal.depth.backends.registry import UnknownDepthBackendError
+
+        with pytest.raises(UnknownDepthBackendError):
+            _build(EnhanceConfig(depth_backend="bogus"), tmp_path)
 
     def test_carrier_without_da3_contract_falls_back_to_local_resolution(self, tmp_path: Path) -> None:
         # A non-DA3 invocation carries resolved_model=None; consumers must
@@ -225,6 +250,167 @@ class TestFingerprintIdentity:
         assert metric.resolved_model.canonical_key != research.resolved_model.canonical_key
         assert metric.config_fingerprint_sha256 != research.config_fingerprint_sha256
 
+    def test_plan_and_runtime_share_one_fingerprint_algorithm(self, tmp_path: Path) -> None:
+        """No split identities: the plan fingerprint IS the runtime
+        ConfigFingerprint for the same resolved contract — the value the
+        depth cache, manifests, and Stage-A reuse compare."""
+        from transformation_portal.lux_depth_v3.config_resolver import compute_config_fingerprint
+
+        config = _commercial_config()
+        invocation = _build(config, tmp_path)
+        config.resolved_invocation = invocation
+        runtime_fingerprint = compute_config_fingerprint(config)
+        assert invocation.config_fingerprint_sha256 == runtime_fingerprint.to_sha256()
+
+    def test_runtime_fingerprint_distinguishes_models_with_carrier(self, tmp_path: Path) -> None:
+        """The runtime identity (cache/manifest/Stage-A) itself now
+        distinguishes da3_metric from da3_research when the invocation is
+        carried — not only the plan serialization."""
+        from transformation_portal.lux_depth_v3.config_resolver import compute_config_fingerprint
+
+        metric_config = EnhanceConfig(model_key="da3-metric")
+        metric_config.resolved_invocation = _build(metric_config, tmp_path)
+        research_config = EnhanceConfig(model_key="da3-research", non_commercial_ok=True)
+        research_config.resolved_invocation = _build(research_config, tmp_path)
+        assert compute_config_fingerprint(metric_config).to_sha256() != compute_config_fingerprint(research_config).to_sha256()
+
+
+class TestCarrierTrustBoundary:
+    """A forged or drifted carrier must be rejected at every consumption
+    boundary — the carrier is a transport, not an authority (review P1 on
+    PR #2070: an injected research contract must not bypass licensing, and
+    a contract with an unapproved repo_id must not reach inference)."""
+
+    def _forged_research_config(self, tmp_path: Path) -> EnhanceConfig:
+        # Build a legitimate research contract WITH acknowledgement, then
+        # carry it on a config WITHOUT the acknowledgement.
+        acknowledged = EnhanceConfig(model_key="da3-research", non_commercial_ok=True)
+        invocation = _build(acknowledged, tmp_path)
+        config = EnhanceConfig(model_key="da3-research", non_commercial_ok=False)
+        config.resolved_invocation = invocation
+        return config
+
+    def _forged_repo_config(self, tmp_path: Path) -> EnhanceConfig:
+        import dataclasses
+
+        config = _commercial_config()
+        invocation = _build(config, tmp_path)
+        forged_model = dataclasses.replace(
+            invocation.resolved_model,
+            spec=dataclasses.replace(invocation.resolved_model.spec, repo_id="unapproved/example-model"),
+            revision=None,
+        )
+        config.resolved_invocation = dataclasses.replace(invocation, resolved_model=forged_model)
+        return config
+
+    def test_config_resolver_rejects_unacknowledged_research_carrier(self, tmp_path: Path) -> None:
+        from transformation_portal.lux_depth_v3.config_resolver import ConfigResolver
+
+        with pytest.raises(ModelLicenseError):
+            ConfigResolver().resolve(self._forged_research_config(tmp_path))
+
+    def test_da3_backend_rejects_unacknowledged_research_carrier(self, tmp_path: Path) -> None:
+        from transformation_portal.depth.backends.da3 import DA3Backend
+
+        with pytest.raises(ModelLicenseError):
+            DA3Backend(self._forged_research_config(tmp_path))
+
+    def test_config_resolver_rejects_forged_repo_id(self, tmp_path: Path) -> None:
+        from transformation_portal.lux_depth_v3.config_resolver import ConfigResolver
+        from transformation_portal.lux_depth_v3.model_resolution import UntrustedModelContractError
+
+        with pytest.raises(UntrustedModelContractError):
+            ConfigResolver().resolve(self._forged_repo_config(tmp_path))
+
+    def test_da3_backend_rejects_forged_repo_id(self, tmp_path: Path) -> None:
+        from transformation_portal.depth.backends.da3 import DA3Backend
+        from transformation_portal.lux_depth_v3.model_resolution import UntrustedModelContractError
+
+        with pytest.raises(UntrustedModelContractError):
+            DA3Backend(self._forged_repo_config(tmp_path))
+
+    def test_engine_rejects_forged_carrier(self, tmp_path: Path) -> None:
+        import dataclasses
+
+        from transformation_portal.lux_depth_v3.config import DA3Config
+        from transformation_portal.lux_depth_v3.inference import DA3InferenceEngine
+        from transformation_portal.lux_depth_v3.model_resolution import UntrustedModelContractError
+
+        invocation = _build(_commercial_config(), tmp_path)
+        forged = dataclasses.replace(
+            invocation.resolved_model,
+            spec=dataclasses.replace(invocation.resolved_model.spec, repo_id="unapproved/example-model"),
+        )
+        engine = DA3InferenceEngine.__new__(DA3InferenceEngine)
+        engine.config = DA3Config(resolved_model_contract=forged)
+        engine._resolved_model_contract = None
+        with pytest.raises(UntrustedModelContractError):
+            engine._resolve_model_contract()
+
+    def test_non_resolvedmodel_carrier_rejected(self, tmp_path: Path) -> None:
+        from transformation_portal.lux_depth_v3.config_resolver import ConfigResolver
+        from transformation_portal.lux_depth_v3.model_resolution import UntrustedModelContractError
+
+        config = _commercial_config()
+
+        class _Fake:
+            resolved_model = object()
+
+        config.resolved_invocation = _Fake()
+        with pytest.raises(UntrustedModelContractError):
+            ConfigResolver().resolve(config)
+
+
+class TestBackendSelectionParity:
+    def test_apple_silicon_depth_pro_opt_in_matches_runtime(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """On Apple Silicon with the Depth Pro opt-in, the runtime's
+        requested-backend resolution selects depth_pro — the plan must
+        select the same backend, not default to da3."""
+        import transformation_portal.lux_depth_v3.pipeline_coordinator as pc
+
+        class _FakeApple:
+            is_apple_silicon = True
+
+        monkeypatch.setattr(pc, "CURRENT_PLATFORM", _FakeApple())
+        config = EnhanceConfig(
+            non_commercial_ok=True,
+            accept_apple_depth_pro_research_license=True,
+        )
+        if not pc._apple_silicon_depth_pro_opt_in(config):
+            pytest.skip("depth_pro opt-in requires additional config in this build")
+        invocation = _build(config, tmp_path)
+        assert invocation.planned_backend == "depth_pro"
+
+    def test_explicit_backend_chain_is_strict(self, tmp_path: Path) -> None:
+        """An explicit backend request is strict at runtime, so the plan
+        must not advertise fallback edges startup will never attempt."""
+        explicit = _build(EnhanceConfig(depth_backend="da3", model_key="da3-metric"), tmp_path)
+        assert explicit.candidate_fallback_chain == ("da3",)
+        defaulted = _build(EnhanceConfig(model_key="da3-metric"), tmp_path)
+        assert defaulted.candidate_fallback_chain[0] == "da3"
+
+
+class TestSchemaValidation:
+    def test_emitted_payload_validates_against_schema(self, tmp_path: Path) -> None:
+        from transformation_portal.lux_depth_v3.resolved_invocation import validate_resolved_invocation_payload
+
+        payload = _build(_commercial_config(), tmp_path).to_payload()
+        validate_resolved_invocation_payload(payload)
+
+    def test_schema_rejects_missing_required_field(self, tmp_path: Path) -> None:
+        import jsonschema
+
+        from transformation_portal.lux_depth_v3.resolved_invocation import validate_resolved_invocation_payload
+
+        payload = _build(_commercial_config(), tmp_path).to_payload()
+        del payload["config_fingerprint_sha256"]
+        with pytest.raises(jsonschema.ValidationError):
+            validate_resolved_invocation_payload(payload)
+
+    def test_payload_is_marked_provisional(self, tmp_path: Path) -> None:
+        payload = _build(_commercial_config(), tmp_path).to_payload()
+        assert payload["stability"] == "provisional"
+
 
 class TestSingleResolutionCallCount:
     """The advertised contract is exactly one resolution per invocation
@@ -276,6 +462,54 @@ class TestSingleResolutionCallCount:
         resolved = engine._resolve_model_contract()
         assert resolved is invocation.resolved_model
         assert calls == []
+
+
+class TestRevisionPinning:
+    def test_worker_command_carries_planned_revision(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """The subprocess boundary must carry the planned revision — the
+        parent previously serialized only the canonical key, letting the
+        worker re-resolve a drifted lock (review P1 on PR #2070). Captures
+        the REAL availability-check argv, not a reconstruction."""
+        import dataclasses
+        import types
+
+        import transformation_portal.depth.backends.da3 as da3_module
+
+        config = _commercial_config()
+        invocation = _build(config, tmp_path)
+        pinned_model = dataclasses.replace(invocation.resolved_model, revision="a" * 40)
+        config.resolved_invocation = dataclasses.replace(invocation, resolved_model=pinned_model)
+        backend = da3_module.DA3Backend(config)
+        backend._python_executable = "/usr/bin/env-python-stub"
+
+        captured: dict = {}
+
+        def _fake_run(command, **kwargs):
+            captured["command"] = list(command)
+            return types.SimpleNamespace(returncode=0, stdout="", stderr="")
+
+        monkeypatch.setattr(da3_module.subprocess, "run", _fake_run)
+        backend._ensure_subprocess_available()
+        command = captured["command"]
+        assert "--model-revision" in command
+        assert command[command.index("--model-revision") + 1] == "a" * 40
+        assert command[command.index("--model-key") + 1] == "da3_metric"
+
+    def test_model_request_threads_requested_revision(self) -> None:
+        from transformation_portal.lux_depth_v3.model_resolution import ModelRequest, resolve_model_contract
+
+        pinned = resolve_model_contract(ModelRequest(model_key="da3-metric", requested_revision="b" * 40))
+        assert pinned.revision == "b" * 40
+
+    def test_engine_config_revision_reaches_resolution(self) -> None:
+        from transformation_portal.lux_depth_v3.config import DA3Config
+        from transformation_portal.lux_depth_v3.inference import DA3InferenceEngine
+
+        engine = DA3InferenceEngine.__new__(DA3InferenceEngine)
+        engine.config = DA3Config(model_key="da3-metric", model_revision="c" * 40)
+        engine._resolved_model_contract = None
+        resolved = engine._resolve_model_contract()
+        assert resolved.revision == "c" * 40
 
 
 class TestNoWrites:

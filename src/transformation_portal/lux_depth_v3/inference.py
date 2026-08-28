@@ -32,7 +32,7 @@ from transformation_portal.core.security.model_lock import is_model_lock_strict_
 
 # noqa: F401 - Used in docstring examples
 from .config import DA3Config, ModelVariant  # noqa: F401
-from .model_resolution import ModelRequest, ResolvedModel, resolve_model_contract
+from .model_resolution import ModelRequest, ResolvedModel, resolve_model_contract, validate_authoritative_model_contract
 from .raw_loader import is_raw_file
 
 if TYPE_CHECKING:
@@ -279,6 +279,11 @@ class DA3InferenceEngine:
         ):
             return self._resolved_model_contract
         authoritative = getattr(self.config, "resolved_model_contract", None)
+        if authoritative is not None:
+            authoritative = validate_authoritative_model_contract(
+                authoritative,
+                non_commercial_ok=bool(getattr(self.config, "non_commercial_ok", False)),
+            )
         if authoritative is not None and not use_coreml_backend:
             self._resolved_model_contract = authoritative
             return authoritative
@@ -289,6 +294,7 @@ class DA3InferenceEngine:
                 model_variant=self.config.model_variant,
                 use_coreml_backend=bool(use_coreml_backend),
                 non_commercial_ok=bool(getattr(self.config, "non_commercial_ok", False)),
+                requested_revision=getattr(self.config, "model_revision", None),
             )
         )
         if authoritative is not None and (
@@ -422,7 +428,7 @@ class DA3InferenceEngine:
         if self._is_da3_model(model_id):
             if not TORCH_AVAILABLE:
                 raise ImportError("torch required for PyTorch backend. Install with: pip install torch")
-            self._load_da3_model(model_id)
+            self._load_da3_model(model_id, model_revision)
             return
 
         if not TORCH_AVAILABLE:
@@ -475,7 +481,7 @@ class DA3InferenceEngine:
         normalized_model_id = model_id.lower()
         return normalized_model_id.startswith("depth-anything/da3") or "da3nested" in normalized_model_id
 
-    def _load_da3_model(self, model_id: str) -> None:
+    def _load_da3_model(self, model_id: str, requested_revision: Optional[str] = None) -> None:
         """Load DA3 model using custom depth-anything-3 library.
 
         DA3 Nested models require custom library installation:
@@ -557,9 +563,13 @@ class DA3InferenceEngine:
             model_id,
         )
         strict_enabled = is_model_lock_strict_enabled(None)
+        # P0-1 (issue #2065): honor the resolved contract's revision. The
+        # previous requested_revision=None reread the lock manifest here, so
+        # a lock change between resolution and load could load a different
+        # revision than the contract recorded in manifests/run cards.
         model_revision = resolve_model_lock_revision(
             model_id,
-            requested_revision=None,
+            requested_revision=requested_revision,
             strict=strict_enabled,
             context="DA3InferenceEngine(da3_model)",
         )
