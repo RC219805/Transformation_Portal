@@ -165,7 +165,7 @@ from ._backend_contract import backend_alias_warning, is_legacy_backend_alias, n
 from .config import EnhanceConfig, Preset
 from .config_resolver import apply_effective_raw_runtime_config
 from .ingest_adapter import RAW_PREVIEW_ESCAPE_ENV
-from .model_resolution import ModelLicenseError, ModelRequest, UnknownModelError, resolve_model_contract
+from .model_resolution import ModelLicenseError, UnknownModelError
 from .orchestrator import EnhanceOrchestrator
 
 logger = logging.getLogger(__name__)
@@ -700,6 +700,19 @@ def main(
         "--allow-semantic-fallback",
         help=("Allow fallback to secondary depth backends " + "when APEX semantic gate fails"),
     ),
+    # Planning
+    plan: bool = typer.Option(
+        False,
+        "--plan",
+        help=(
+            "Resolver-only mode: run argument parsing, configuration and "
+            "model/license resolution, input selection, and cross-field "
+            "validation, then print the resolved invocation as canonical "
+            "JSON and exit without loading models or writing any files. "
+            "Exits with the same errors a real run would raise at "
+            "validation/resolution time."
+        ),
+    ),
     # Logging
     verbose: bool = typer.Option(
         False,
@@ -815,8 +828,10 @@ def main(
         print(error_msg, file=sys.stdout)  # Also print to stdout for CLI tests
         raise typer.Exit(code=1)
 
-    # Create output directory
-    output_dir.mkdir(parents=True, exist_ok=True)
+    # Create output directory (skipped in resolver-only --plan mode, which
+    # must perform no filesystem writes).
+    if not plan:
+        output_dir.mkdir(parents=True, exist_ok=True)
 
     # Validate quality tier
     valid_quality_tiers = ["standard", "premium", "apex"]
@@ -1083,20 +1098,11 @@ def main(
         keep_intermediates=keep_intermediates,
     )
     apply_effective_raw_runtime_config(config)
-    if depth_backend == "da3" or depth_backend is None:
-        try:
-            resolve_model_contract(
-                ModelRequest(
-                    model_key=model_key,
-                    model_variant=config.model_variant,
-                    use_coreml_backend=bool(getattr(config, "use_coreml_backend", False)),
-                    non_commercial_ok=enable_non_commercial,
-                )
-            )
-        except (ModelLicenseError, UnknownModelError) as exc:
-            logger.error(str(exc))
-            print(str(exc), file=sys.stdout)
-            raise typer.Exit(code=1)
+    # Model/license resolution happens exactly once, in
+    # build_resolved_invocation below (P0-1, issue #2065). The former
+    # duplicate pre-check here was removed so plan and run share one
+    # resolution pass; license errors now surface after input discovery,
+    # with the same message and exit code as before.
 
     # Forward-compatible knobs: apply via setattr
     # for non-breaking config evolution.
@@ -1123,10 +1129,14 @@ def main(
 
     discovery_config = DiscoveryConfig(strict_mode=strict_inputs)
     try:
+        # P0-1 (issue #2065): pass output_dir so this discovery uses exactly
+        # the exclusion semantics the orchestrator uses — the plan's input
+        # selection and the run's must be the same list.
         image_files = discover_images(
             input_dir,
             discovery_config,
             image_extensions,
+            output_dir=output_dir,
         )
     except ValueError as e:
         # Strict mode validation failed
@@ -1147,6 +1157,37 @@ def main(
         config.raw_python_executable,
     )
 
+    # P0-1 (issue #2065): the single shared resolution pass. Both plan and
+    # run consume this exact object; the run path attaches it to the config
+    # so ConfigResolver and the depth backends do not re-resolve.
+    from ..depth.backends.protocol import LicenseRestrictionError
+    from ..depth.backends.registry import UnknownDepthBackendError
+    from .resolved_invocation import build_resolved_invocation
+
+    try:
+        invocation = build_resolved_invocation(
+            config,
+            input_dir=input_dir,
+            input_files=image_files,
+        )
+    except (
+        ModelLicenseError,
+        UnknownModelError,
+        LicenseRestrictionError,
+        UnknownDepthBackendError,
+    ) as exc:
+        logger.error(str(exc))
+        print(str(exc), file=sys.stdout)
+        raise typer.Exit(code=1)
+
+    if plan:
+        # Resolver-only mode: emit the canonical plan and stop before any
+        # orchestrator construction, model loading, or filesystem writes.
+        print(invocation.to_canonical_json())
+        return
+
+    config.resolved_invocation = invocation
+
     # Create orchestrator only after input discovery and RAW preflight succeed.
     logger.info(
         "Initializing orchestrator with" f" output dir: {output_dir}",
@@ -1158,6 +1199,8 @@ def main(
         results = orchestrator.enhance_batch(
             input_dir=input_dir,
             image_extensions=image_extensions,
+            # P0-1: the run consumes the plan's frozen input selection.
+            input_files=sorted(image_files),
         )
 
         # Summary (Note: orchestrator returns "ok" not "success")
