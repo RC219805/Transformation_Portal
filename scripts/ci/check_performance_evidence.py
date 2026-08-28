@@ -37,9 +37,14 @@ Exit codes (one line per violation on stderr):
   unparsable artifact or committed baseline). Such a run must never be
   reported as a performance regression — it is a broken harness.
 * 2 — the evidence is structurally valid (report parsed, tests executed,
-  all artifacts and baselines present and parsable) but at least one
-  executed test FAILED. This is the regression-classifiable outcome: the
-  committed-baseline comparisons ran against real data and one tripped.
+  all artifacts and baselines present and parsable) and at least one
+  REQUIRED baseline-writer test FAILED. Only the writers perform the
+  committed-baseline comparison (assert_regression_within_tolerance), so
+  this is the sole regression-classifiable outcome.
+* 3 — the evidence is structurally valid and every required writer
+  passed, but some OTHER selected benchmark test failed. That proves a
+  suite failure, not a baseline-tolerance breach, and must not open a
+  regression issue.
 """
 
 from __future__ import annotations
@@ -88,16 +93,20 @@ def check_evidence(
     baselines_dir: Path,
     required_tests: List[str],
     required_artifacts: List[str],
-) -> Tuple[List[str], List[str]]:
-    """Return ``(invalid, failures)`` violation lists.
+) -> Tuple[List[str], List[str], List[str]]:
+    """Return ``(invalid, regressions, other_failures)`` violation lists.
 
     ``invalid`` holds structural-evidence violations (the run cannot be
-    classified as a regression); ``failures`` holds executed-test failures
-    (regression-classifiable only when ``invalid`` is empty). Both empty
-    means the evidence is valid and green.
+    classified as a regression); ``regressions`` holds failures of REQUIRED
+    baseline-writer tests — the only tests whose bodies perform the
+    committed-baseline comparison — and is regression-classifiable only when
+    ``invalid`` is empty; ``other_failures`` holds failures of any other
+    selected benchmark test, which prove a suite failure rather than a
+    tolerance breach. All three empty means the evidence is valid and green.
     """
     invalid: List[str] = []
-    failures: List[str] = []
+    regressions: List[str] = []
+    other_failures: List[str] = []
 
     report = _load_json_object(report_path, "pytest json report", invalid)
     if report is not None:
@@ -116,7 +125,10 @@ def check_evidence(
                 + (f" ({len(skipped)} selected tests were all skipped — the historic false-green)" if skipped else "")
             )
         for nodeid in failed:
-            failures.append(f"benchmark test failed (regression or broken harness): {nodeid}")
+            if any(required in nodeid for required in required_tests):
+                regressions.append(f"required baseline-writer test failed (regression or broken harness): {nodeid}")
+            else:
+                other_failures.append(f"benchmark test failed (suite failure, not a baseline comparison): {nodeid}")
         for required in required_tests:
             matches = {nodeid: outcome for nodeid, outcome in outcomes.items() if required in nodeid}
             if not matches:
@@ -140,7 +152,7 @@ def check_evidence(
             invalid,
         )
 
-    return invalid, failures
+    return invalid, regressions, other_failures
 
 
 def main(argv: List[str] | None = None) -> int:
@@ -167,7 +179,7 @@ def main(argv: List[str] | None = None) -> int:
     required_tests = args.required_tests or list(DEFAULT_REQUIRED_TESTS)
     required_artifacts = args.required_artifacts or list(DEFAULT_REQUIRED_ARTIFACTS)
 
-    invalid, failures = check_evidence(
+    invalid, regressions, other_failures = check_evidence(
         report_path=args.report,
         artifacts_dir=args.artifacts_dir,
         baselines_dir=args.baselines_dir,
@@ -177,18 +189,29 @@ def main(argv: List[str] | None = None) -> int:
 
     if invalid:
         print("Performance evidence gate FAILED — run is NOT valid evidence:", file=sys.stderr)
-        for error in invalid + failures:
+        for error in invalid + regressions + other_failures:
             print(f"  - {error}", file=sys.stderr)
         return 1
 
-    if failures:
+    if regressions:
         print(
-            "Performance evidence gate: evidence is valid but executed tests FAILED (regression candidate):",
+            "Performance evidence gate: evidence is valid but a committed-baseline comparison FAILED "
+            "(regression candidate):",
             file=sys.stderr,
         )
-        for error in failures:
+        for error in regressions + other_failures:
             print(f"  - {error}", file=sys.stderr)
         return 2
+
+    if other_failures:
+        print(
+            "Performance evidence gate: benchmark-suite failure with complete evidence — "
+            "not a committed-baseline regression:",
+            file=sys.stderr,
+        )
+        for error in other_failures:
+            print(f"  - {error}", file=sys.stderr)
+        return 3
 
     print(
         "Performance evidence gate passed: "

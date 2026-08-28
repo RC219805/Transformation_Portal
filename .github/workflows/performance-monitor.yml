@@ -90,21 +90,27 @@ jobs:
 
           # The evidence gate classifies the run: exit 0 = valid green
           # evidence; exit 2 = structurally valid evidence (artifacts and
-          # committed baselines all present and parsable) with executed-test
-          # failures — the only outcome allowed to report a regression, since
-          # the committed-baseline comparisons demonstrably ran; exit 1 =
-          # invalid evidence (zero executed tests, a writer that died before
-          # producing its artifact, unparsable baselines, ...), which must
-          # surface as a broken harness, never as a regression.
+          # committed baselines all present and parsable) with a FAILED
+          # required baseline-writer test — the only outcome allowed to
+          # report a regression, since only the writers perform the
+          # committed-baseline comparison; exit 3 = valid evidence but a
+          # non-writer benchmark test failed (suite failure, not a
+          # tolerance breach); exit 1 = invalid evidence (zero executed
+          # tests, a writer that died before producing its artifact,
+          # unparsable baselines, ...), which must surface as a broken
+          # harness, never as a regression.
           if [ "$PYTEST_EXIT" -eq 0 ] && [ "$EVIDENCE_EXIT" -eq 0 ]; then
             echo "status=passed" >> $GITHUB_OUTPUT
             echo "✅ Benchmarks executed and evidence gate passed"
           elif [ "$EVIDENCE_EXIT" -eq 2 ]; then
-            # Test-body assertion failures with otherwise-valid evidence
-            # include the committed-baseline regression comparisons
-            # (assert_regression_within_tolerance).
+            # A required writer's in-test committed-baseline comparison
+            # (assert_regression_within_tolerance) tripped with the
+            # evidence otherwise complete.
             echo "status=regression" >> $GITHUB_OUTPUT
             echo "⚠️ Benchmark test failure — regression against committed baselines"
+          elif [ "$EVIDENCE_EXIT" -eq 3 ]; then
+            echo "status=failed" >> $GITHUB_OUTPUT
+            echo "❌ Benchmark-suite failure with complete evidence — not a committed-baseline regression"
           else
             # Zero executed tests (incl. pytest exit 5), collection/import
             # errors, missing artifacts, or invalid baselines: not valid

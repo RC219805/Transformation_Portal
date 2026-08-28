@@ -40,6 +40,9 @@ run as bounded smoke checks.
   baseline-writer tests to execute and pass, the four benchmark artifacts to
   be produced, and the committed baselines to parse; zero executed tests
   (including an all-skipped selection) is a hard failure, never a pass.
+  Only a failed baseline-writer test is reported as a regression; a failed
+  non-writer benchmark test is a suite failure with complete evidence and
+  fails the run without claiming a tolerance breach.
 
 ## Advisory Signals
 
