@@ -147,6 +147,7 @@ def test_runtime_success_output(tmp_path: Path) -> None:
     assert result.caption_parse.caption["scene"] == "Pool"
     assert result.raw_stdout
     assert result.raw_stderr == ""
+    assert not list(runtime_dir.rglob("*.pyc"))
 
 
 def test_default_runtime_paths_resolve_from_repo_root_when_cwd_changes(

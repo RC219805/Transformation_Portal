@@ -330,6 +330,16 @@ def run_fastvlm_caption(
         return fail("invalid_config", "FastVLM timeout_seconds must be greater than zero.")
 
     start = time.monotonic()
+    runtime_environment = os.environ.copy()
+    runtime_environment.pop("PYTHONHOME", None)
+    runtime_environment.update(
+        {
+            "PYTHONDONTWRITEBYTECODE": "1",
+            "PYTHONNOUSERSITE": "1",
+            "PYTHONPATH": str(config.mlx_vlm_dir),
+            "PYTHONSAFEPATH": "1",
+        }
+    )
     try:
         completed = subprocess.run(
             command,
@@ -338,6 +348,7 @@ def run_fastvlm_caption(
             text=True,
             timeout=config.timeout_seconds,
             check=False,
+            env=runtime_environment,
         )
     except subprocess.TimeoutExpired as exc:
         runtime_seconds = time.monotonic() - start

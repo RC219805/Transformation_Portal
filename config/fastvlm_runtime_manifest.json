@@ -13,7 +13,13 @@
     "mlx_vlm": {
       "repo_url": "https://github.com/Blaizzy/mlx-vlm.git",
       "revision": "1884b551bc741f26b2d54d68fa89d4e934b9a3de",
-      "target_dir": "mlx-vlm"
+      "target_dir": "mlx-vlm",
+      "patch": {
+        "source": "ml_fastvlm",
+        "path": "model_export/fastvlm_mlx-vlm.patch",
+        "sha256": "1904693eb317ef476a2b13eef43c27f28e9e1529ce497b9b01a398332bdfccb8",
+        "patched_tree": "672677cd58a2760d7f8c6cf6b39fbb60940e7c30"
+      }
     }
   },
   "models": {

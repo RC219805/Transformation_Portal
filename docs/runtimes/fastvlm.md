@@ -169,6 +169,12 @@ The installer is manifest-backed and fail-closed:
 ./scripts/validation/validate_fastvlm_runtime.py --json --models smoke
 ```
 
+`--skip-verify` skips only the final Python/model smoke. It never skips source
+trust verification. The complete source, venv, evidence, and model transaction
+is serialized by an interprocess lock. Existing source trust is checked before
+source replacement, dependency, or model work and again as the absolute last
+installer operation, including when `--skip-verify` is selected.
+
 Validation output is safe for shared CI logs: human-readable failures and the
 machine-readable `--json` payload retain statuses and error counts while
 redacting raw exception text and local filesystem paths.
@@ -180,10 +186,31 @@ apple/ml-fastvlm@592b4add3c1c8a518e77d95dc6248e76c1dd591f
 Blaizzy/mlx-vlm@1884b551bc741f26b2d54d68fa89d4e934b9a3de
 ```
 
+The Apple source revision supplies the CoreML-hybrid compatibility patch for
+the pinned `mlx-vlm` revision. The manifest pins both the patch SHA-256 and the
+resulting Git tree. Installation materializes both revisions in a fresh,
+hook-free staging checkout, applies that exact patch with the Git index,
+verifies every file and executable bit against its Git blob/tree, and promotes
+the pair with rollback on failure. Existing checkout metadata and origin are
+validated before any network access. Runtime validation does not use Git ignore
+rules: missing, modified, symlinked, ignored, or additional files and directories
+are rejected, including bytecode, native extensions, `.pth` files, active local
+excludes, redirected worktrees/object stores, and executable Git hooks. Ambient
+Git configuration and `GIT_*` redirection variables are disabled. Do not replace
+the governed patch with native upstream FastVLM support without also migrating
+and revalidating the CoreML checkpoint format.
+
 The isolated Python dependency set is pinned in
-`config/fastvlm_runtime_requirements.txt`; the installer installs that file
-first and then installs the pinned `mlx-vlm` checkout with `--no-deps` so the
-manifest and requirements file remain the source of truth.
+`config/fastvlm_runtime_requirements.txt`. The governed source checkout is not
+installed editable because editable installation and ordinary imports can write
+`.egg-info` or `__pycache__` into the verified tree. Caption subprocesses select
+the pinned checkout explicitly through `PYTHONPATH` and disable bytecode writes;
+the requirements file remains the dependency source of truth. Every install
+builds a fresh staged venv without executing the previous venv, rejects `.pth`,
+`sitecustomize`, symlinked site packages, and editable-install metadata, then
+promotes the venv with rollback. `fastvlm-pip-freeze.txt` is written through a
+no-follow regular temp file, flushed with `fsync`, and atomically replaced under
+the same transaction lock; an existing symlink or special file is rejected.
 
 Model downloads are limited to the allowlisted FastVLM roles, pinned Hugging
 Face revisions, and SHA-256-checked required files. Partial downloads, unsafe

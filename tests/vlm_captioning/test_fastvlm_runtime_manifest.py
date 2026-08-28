@@ -4,6 +4,7 @@ import hashlib
 import importlib.util
 import json
 import os
+import subprocess
 import sys
 from pathlib import Path
 from types import ModuleType
@@ -43,6 +44,12 @@ def _manifest(tmp_path: Path, payload: bytes = b"model-config") -> dict:
                 "repo_url": "https://github.com/Blaizzy/mlx-vlm.git",
                 "revision": "1884b551bc741f26b2d54d68fa89d4e934b9a3de",
                 "target_dir": "mlx-vlm",
+                "patch": {
+                    "source": "ml_fastvlm",
+                    "path": "model_export/fastvlm_mlx-vlm.patch",
+                    "sha256": "1904693eb317ef476a2b13eef43c27f28e9e1529ce497b9b01a398332bdfccb8",
+                    "patched_tree": "672677cd58a2760d7f8c6cf6b39fbb60940e7c30",
+                },
             },
         },
         "models": {
@@ -78,10 +85,81 @@ def _write_fixture_runtime(root: Path, payload: bytes = b"model-config") -> None
     (model_dir / "config.json").write_bytes(payload)
 
 
+def _git(repo: Path, *args: str) -> str:
+    completed = subprocess.run(
+        ["git", "-C", str(repo), *args],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return completed.stdout.strip()
+
+
+def _init_source_repo(path: Path, origin: str, files: dict[str, str]) -> str:
+    path.mkdir(parents=True)
+    _git(path, "init", "--quiet")
+    _git(path, "remote", "add", "origin", origin)
+    for relative_path, content in files.items():
+        target = path / relative_path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(content, encoding="utf-8")
+    _git(path, "add", "--all")
+    _git(
+        path,
+        "-c",
+        "user.name=FastVLM Test",
+        "-c",
+        "user.email=fastvlm-test@example.invalid",
+        "commit",
+        "--quiet",
+        "-m",
+        "fixture",
+    )
+    return _git(path, "rev-parse", "HEAD")
+
+
+def _write_governed_source_fixture(tmp_path: Path, module: ModuleType) -> tuple[dict, Path, Path]:
+    runtime_root = tmp_path / "fastvlm"
+    mlx_vlm = runtime_root / "mlx-vlm"
+    mlx_revision = _init_source_repo(
+        mlx_vlm,
+        "https://github.com/Blaizzy/mlx-vlm.git",
+        {"mlx_vlm/__init__.py": "", "mlx_vlm/runtime.py": "MODE = 'base'\n"},
+    )
+    runtime_file = mlx_vlm / "mlx_vlm/runtime.py"
+    runtime_file.write_text("MODE = 'patched'\n", encoding="utf-8")
+    patch_payload = _git(mlx_vlm, "diff", "--binary", "HEAD") + "\n"
+    runtime_file.write_text("MODE = 'base'\n", encoding="utf-8")
+    assert _git(mlx_vlm, "status", "--porcelain") == ""
+
+    ml_fastvlm = runtime_root / "ml-fastvlm"
+    patch_relative_path = "model_export/fastvlm_mlx-vlm.patch"
+    ml_revision = _init_source_repo(
+        ml_fastvlm,
+        "https://github.com/apple/ml-fastvlm.git",
+        {patch_relative_path: patch_payload},
+    )
+    patch_path = ml_fastvlm / patch_relative_path
+    _git(mlx_vlm, "apply", "--index", str(patch_path))
+
+    manifest = _manifest(tmp_path)
+    manifest["runtime_sources"]["ml_fastvlm"]["revision"] = ml_revision
+    mlx_source = manifest["runtime_sources"]["mlx_vlm"]
+    mlx_source["revision"] = mlx_revision
+    mlx_source["patch"]["sha256"] = _digest(patch_path.read_bytes())
+    mlx_source["patch"]["patched_tree"] = _git(mlx_vlm, "write-tree")
+    return manifest, runtime_root, patch_path
+
+
 def test_manifest_validator_rejects_unpinned_or_untrusted_manifest_values(tmp_path: Path) -> None:
     module = _load_script_module("fastvlm_runtime_manifest_test", "scripts/validation/fastvlm_runtime_manifest.py")
     manifest = _manifest(tmp_path)
     manifest["runtime_sources"]["mlx_vlm"]["revision"] = "main"
+    manifest["runtime_sources"]["mlx_vlm"]["target_dir"] = "alternate-mlx-vlm"
+    manifest["runtime_sources"]["mlx_vlm"]["patch"]["source"] = "mlx_vlm"
+    manifest["runtime_sources"]["mlx_vlm"]["patch"]["path"] = "../runtime.patch"
+    manifest["runtime_sources"]["mlx_vlm"]["patch"]["sha256"] = "bad"
+    manifest["runtime_sources"]["mlx_vlm"]["patch"]["patched_tree"] = "bad"
     manifest["models"]["smoke"]["repo_id"] = "attacker/model"
     manifest["models"]["smoke"]["target_dir"] = "../escape"
     manifest["models"]["smoke"]["required_files"][0]["sha256"] = "bad"
@@ -89,6 +167,11 @@ def test_manifest_validator_rejects_unpinned_or_untrusted_manifest_values(tmp_pa
     errors = module.validate_manifest(manifest)
 
     assert any("revision must be a pinned 40-hex revision" in error for error in errors)
+    assert any("target_dir must be mlx-vlm" in error for error in errors)
+    assert any("patch.source must be ml_fastvlm" in error for error in errors)
+    assert any("patch.path must be model_export/fastvlm_mlx-vlm.patch" in error for error in errors)
+    assert any("patch.sha256 must be a SHA-256 hex digest" in error for error in errors)
+    assert any("patch.patched_tree must be a 40-hex Git tree" in error for error in errors)
     assert any("repo_id is not allowlisted" in error for error in errors)
     assert any("Unsafe FastVLM manifest path" in error for error in errors)
     assert any("sha256 must be a SHA-256 hex digest" in error for error in errors)
@@ -115,7 +198,51 @@ def test_runtime_verifier_rejects_unverifiable_source_checkout(tmp_path: Path) -
 
     errors = module.verify_runtime_sources(manifest, root=root)
 
-    assert any("not a verifiable git checkout" in error for error in errors)
+    assert any("not a standalone Git checkout" in error for error in errors)
+
+
+def test_runtime_source_verifier_accepts_only_the_governed_patched_tree(tmp_path: Path) -> None:
+    module = _load_script_module(
+        "fastvlm_runtime_manifest_patched_source_test",
+        "scripts/validation/fastvlm_runtime_manifest.py",
+    )
+    manifest, runtime_root, patch_path = _write_governed_source_fixture(tmp_path, module)
+    mlx_vlm = runtime_root / "mlx-vlm"
+
+    assert module.validate_manifest(manifest) == []
+    assert module.verify_runtime_sources(manifest, root=runtime_root) == []
+
+    backdoor = mlx_vlm / "mlx_vlm/backdoor.py"
+    backdoor.write_text("raise RuntimeError('unexpected source')\n", encoding="utf-8")
+    errors = module.verify_runtime_sources(manifest, root=runtime_root)
+    assert any("source tree does not match" in error for error in errors)
+    backdoor.unlink()
+
+    _git(mlx_vlm, "remote", "set-url", "origin", "https://example.invalid/mlx-vlm.git")
+    errors = module.verify_runtime_sources(manifest, root=runtime_root)
+    assert any("origin mismatch" in error for error in errors)
+    _git(mlx_vlm, "remote", "set-url", "origin", "https://github.com/Blaizzy/mlx-vlm.git")
+
+    patch_path.write_text(patch_path.read_text(encoding="utf-8") + "# tampered\n", encoding="utf-8")
+    errors = module.verify_runtime_sources(manifest, root=runtime_root)
+    assert any("patch digest mismatch" in error for error in errors)
+    assert any("runtime source ml_fastvlm failed verification" in error for error in errors)
+
+
+def test_fastvlm_installer_applies_and_verifies_manifest_pinned_patch() -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    installer = (repo_root / "scripts/setup/install_fastvlm_runtime.sh").read_text(encoding="utf-8")
+    source_installer = (repo_root / "scripts/setup/install_fastvlm_sources.py").read_text(encoding="utf-8")
+
+    assert "install_fastvlm_sources.py" in installer
+    assert "install_fastvlm_venv.py" in installer
+    assert "run_fastvlm_install_locked.py" in installer
+    assert "install_sources" in installer
+    assert 'if [ "$SKIP_VERIFY" -eq 0 ]' in installer
+    assert installer.rstrip().endswith("verify_sources_last")
+    assert '["apply", "--index", str(patch_path)]' in source_installer
+    assert '["write-tree"]' in source_installer
+    assert "_promote_source_set" in source_installer
 
 
 def test_manifest_validator_rejects_unknown_runtime_sources(tmp_path: Path) -> None:
@@ -257,6 +384,9 @@ def test_fastvlm_import_smoke_includes_network_free_datasets_capability_check(
 
     def fake_run(args, **kwargs):  # noqa: ANN001
         smoke_sources.append(args[-1])
+        assert kwargs["env"]["PYTHONDONTWRITEBYTECODE"] == "1"
+        assert kwargs["env"]["PYTHONNOUSERSITE"] == "1"
+        assert kwargs["env"]["PYTHONPATH"] == str(runtime_root / "mlx-vlm")
         return module.subprocess.CompletedProcess(args, returncode=0, stdout="", stderr="")
 
     monkeypatch.setattr(module.subprocess, "run", fake_run)
@@ -271,6 +401,7 @@ def test_fastvlm_import_smoke_includes_network_free_datasets_capability_check(
     assert "keep_in_memory=True" in smoke_source
     assert "load_from_cache_file=False" in smoke_source
     assert "datasets API smoke:" in smoke_source
+    assert "mlx_vlm import origin:" in smoke_source
     assert "load_dataset" not in smoke_source
 
 
