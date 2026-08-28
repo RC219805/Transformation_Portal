@@ -821,20 +821,34 @@ class ConfigResolver:
             config.preset,
             config.model_variant,
         )
-        resolved_model_contract = resolve_model_contract(
-            ModelRequest(
-                model_key=getattr(config, "model_key", None),
-                raw_model_id=getattr(config, "raw_model_id", None),
-                model_variant=config.model_variant,
-                use_coreml_backend=bool(getattr(config, "use_coreml_backend", False)),
-                non_commercial_ok=bool(getattr(config, "non_commercial_ok", False)),
-                enforce_license=False,
-            )
-        )
-        if getattr(config, "model_key", None) or getattr(config, "raw_model_id", None):
+        # P0-1 (issue #2065): when the CLI has already performed the single
+        # license-enforcing resolution, consume its authoritative contract
+        # instead of re-resolving (which would use enforce_license=False and
+        # could drift through the legacy model_variant compatibility mapping).
+        authoritative_contract = None
+        invocation = getattr(config, "resolved_invocation", None)
+        if invocation is not None:
+            authoritative_contract = getattr(invocation, "resolved_model", None)
+        if authoritative_contract is not None:
+            resolved_model_contract = authoritative_contract
             resolved_model = _compat_model_variant_for_resolved_key(
                 resolved_model_contract.canonical_key,
             )
+        else:
+            resolved_model_contract = resolve_model_contract(
+                ModelRequest(
+                    model_key=getattr(config, "model_key", None),
+                    raw_model_id=getattr(config, "raw_model_id", None),
+                    model_variant=config.model_variant,
+                    use_coreml_backend=bool(getattr(config, "use_coreml_backend", False)),
+                    non_commercial_ok=bool(getattr(config, "non_commercial_ok", False)),
+                    enforce_license=False,
+                )
+            )
+            if getattr(config, "model_key", None) or getattr(config, "raw_model_id", None):
+                resolved_model = _compat_model_variant_for_resolved_key(
+                    resolved_model_contract.canonical_key,
+                )
 
         # Apply device configuration
         da3_config.device.device = config.depth_device

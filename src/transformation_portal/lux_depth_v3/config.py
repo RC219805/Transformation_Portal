@@ -475,6 +475,15 @@ class EnhanceConfig:
     # reconstruction triage
     emit_scene_debug_bundle: bool = False
 
+    # Authoritative single-resolution invocation (P0-1, issue #2065).
+    # Set by the CLI after the shared plan/run resolution pass; consumers
+    # (ConfigResolver, depth backends) read the model contract from it via
+    # resolved_invocation.authoritative_model_contract() instead of
+    # re-resolving from compatibility fields. Typed as Any to keep this
+    # module import-light; the concrete type is
+    # lux_depth_v3.resolved_invocation.ResolvedInvocation.
+    resolved_invocation: Optional[Any] = None
+
     def __post_init__(self) -> None:
         """Normalize backend identifiers and compatibility fields."""
         self.depth_backend = normalize_backend_id(

@@ -155,16 +155,29 @@ class DA3Backend:
         self._engine: Optional[DA3InferenceEngine] = None
         self._device = self._resolve_device(config)
         self._model_variant = self._resolve_model_variant(config)
-        self._resolved_model_contract = resolve_model_contract(
-            ModelRequest(
-                model_key=getattr(config, "model_key", None) if config is not None else None,
-                raw_model_id=getattr(config, "raw_model_id", None) if config is not None else None,
-                model_variant=self._model_variant if config is not None else None,
-                use_coreml_backend=bool(getattr(config, "use_coreml_backend", False)) if config is not None else False,
-                non_commercial_ok=bool(getattr(config, "non_commercial_ok", False)) if config is not None else False,
-                enforce_license=config is not None,
+        # P0-1 (issue #2065): consume the authoritative single-resolution
+        # contract when the invocation carries one, instead of re-resolving.
+        # Re-resolution here is the seam where the legacy model_variant
+        # compatibility mapping could silently turn a commercial selection
+        # (da3_metric) back into the research model (da3_research).
+        authoritative_contract = None
+        if config is not None:
+            invocation = getattr(config, "resolved_invocation", None)
+            if invocation is not None:
+                authoritative_contract = getattr(invocation, "resolved_model", None)
+        if authoritative_contract is not None:
+            self._resolved_model_contract = authoritative_contract
+        else:
+            self._resolved_model_contract = resolve_model_contract(
+                ModelRequest(
+                    model_key=getattr(config, "model_key", None) if config is not None else None,
+                    raw_model_id=getattr(config, "raw_model_id", None) if config is not None else None,
+                    model_variant=self._model_variant if config is not None else None,
+                    use_coreml_backend=bool(getattr(config, "use_coreml_backend", False)) if config is not None else False,
+                    non_commercial_ok=bool(getattr(config, "non_commercial_ok", False)) if config is not None else False,
+                    enforce_license=config is not None,
+                )
             )
-        )
         self._model_id = self._resolved_model_contract.spec.repo_id
         self._repo_root = self._find_repo_root()
         self._repo_src = self._repo_root / "src" if self._repo_root is not None else None

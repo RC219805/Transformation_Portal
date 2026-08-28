@@ -700,6 +700,19 @@ def main(
         "--allow-semantic-fallback",
         help=("Allow fallback to secondary depth backends " + "when APEX semantic gate fails"),
     ),
+    # Planning
+    plan: bool = typer.Option(
+        False,
+        "--plan",
+        help=(
+            "Resolver-only mode: run argument parsing, configuration and "
+            "model/license resolution, input selection, and cross-field "
+            "validation, then print the resolved invocation as canonical "
+            "JSON and exit without loading models or writing any files. "
+            "Exits with the same errors a real run would raise at "
+            "validation/resolution time."
+        ),
+    ),
     # Logging
     verbose: bool = typer.Option(
         False,
@@ -815,8 +828,10 @@ def main(
         print(error_msg, file=sys.stdout)  # Also print to stdout for CLI tests
         raise typer.Exit(code=1)
 
-    # Create output directory
-    output_dir.mkdir(parents=True, exist_ok=True)
+    # Create output directory (skipped in resolver-only --plan mode, which
+    # must perform no filesystem writes).
+    if not plan:
+        output_dir.mkdir(parents=True, exist_ok=True)
 
     # Validate quality tier
     valid_quality_tiers = ["standard", "premium", "apex"]
@@ -1146,6 +1161,30 @@ def main(
         raw_ingest_mode,
         config.raw_python_executable,
     )
+
+    # P0-1 (issue #2065): the single shared resolution pass. Both plan and
+    # run consume this exact object; the run path attaches it to the config
+    # so ConfigResolver and the depth backends do not re-resolve.
+    from .resolved_invocation import build_resolved_invocation
+
+    try:
+        invocation = build_resolved_invocation(
+            config,
+            input_dir=input_dir,
+            input_files=image_files,
+        )
+    except (ModelLicenseError, UnknownModelError) as exc:
+        logger.error(str(exc))
+        print(str(exc), file=sys.stdout)
+        raise typer.Exit(code=1)
+
+    if plan:
+        # Resolver-only mode: emit the canonical plan and stop before any
+        # orchestrator construction, model loading, or filesystem writes.
+        print(invocation.to_canonical_json())
+        return
+
+    config.resolved_invocation = invocation
 
     # Create orchestrator only after input discovery and RAW preflight succeed.
     logger.info(
