@@ -838,7 +838,10 @@ def test_runtime_operational_failure_falls_back_to_da2_with_attempt_provenance(t
     assert len(result["attempts"]) >= 2
     assert result["attempts"][0]["failure_kind"] == "operational"
     assert result["attempts"][0]["error_code"] == "CUDA_HARDCODED_IN_BACKEND"
-    assert result["attempts"][0]["model_id"] == config.model_variant.value.huggingface_id
+    # Repair 1.2 (#2066): a bare default (no model selector) resolves the
+    # commercial-safe da3_metric model, and attempt provenance records the
+    # repo that would actually execute — not the mutated compat variant.
+    assert result["attempts"][0]["model_id"] == "depth-anything/DA3METRIC-LARGE"
     assert result["attempts"][1]["status"] == "success"
     assert result["attempts"][1]["model_id"] == "depth-anything/Depth-Anything-V2-Small-hf"
     assert result["model_id"] == "depth-anything/Depth-Anything-V2-Small-hf"
@@ -917,7 +920,10 @@ def test_runtime_semantic_fallback_retries_when_enabled(tmp_path):
     assert len(result["attempts"]) == 2
     assert result["attempts"][0]["failure_kind"] == "semantic"
     assert result["attempts"][0]["error_code"] == "APEX_DEPTH_PLATEAU"
-    assert result["attempts"][0]["model_id"] == config.model_variant.value.huggingface_id
+    # Repair 1.2 (#2066): a bare default (no model selector) resolves the
+    # commercial-safe da3_metric model, and attempt provenance records the
+    # repo that would actually execute — not the mutated compat variant.
+    assert result["attempts"][0]["model_id"] == "depth-anything/DA3METRIC-LARGE"
     assert result["attempts"][1]["status"] == "success"
     assert result["attempts"][1]["model_id"] == "depth-anything/Depth-Anything-V2-Small-hf"
     assert result["model_id"] == "depth-anything/Depth-Anything-V2-Small-hf"
@@ -1225,7 +1231,9 @@ def test_runtime_multilevel_operational_fallback_chain_is_deterministic(tmp_path
     assert [attempt["backend"] for attempt in result["attempts"]] == ["depth_pro", "da3", "da2"]
     assert [attempt["model_id"] for attempt in result["attempts"]] == [
         "apple/ml-depth-pro",
-        config.model_variant.value.huggingface_id,
+        # Repair 1.2 (#2066): the defaulted da3 attempt records the
+        # commercial-safe metric repo, not the mutated compat variant.
+        "depth-anything/DA3METRIC-LARGE",
         "depth-anything/Depth-Anything-V2-Small-hf",
     ]
     assert result["attempts"][0]["model_artifact_filename"] == "depth_pro_custom.pt"
