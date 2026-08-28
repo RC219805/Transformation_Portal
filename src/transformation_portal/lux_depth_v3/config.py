@@ -111,6 +111,11 @@ class DA3Config:
     model_key: Optional[str] = None
     raw_model_id: Optional[str] = None
     non_commercial_ok: bool = False
+    # Authoritative single-resolution model contract (P0-1, issue #2065),
+    # injected by DA3Backend so the inference engine consumes it instead of
+    # re-resolving. Typed Any to keep this module import-light; concrete
+    # type is model_resolution.ResolvedModel.
+    resolved_model_contract: Optional[Any] = None
     device: DeviceConfig = field(default_factory=DeviceConfig)
     postprocessing: PostprocessingConfig = field(
         default_factory=PostprocessingConfig,

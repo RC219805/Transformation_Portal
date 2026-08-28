@@ -827,6 +827,9 @@ class DA3Backend:
             model_key=self._resolved_model_contract.canonical_key,
             raw_model_id=self._resolved_model_contract.spec.repo_id,
             non_commercial_ok=bool(getattr(self._config, "non_commercial_ok", False)) if self._config else False,
+            # Inject the authoritative contract so the engine consumes it
+            # instead of performing another resolution (P0-1, issue #2065).
+            resolved_model_contract=self._resolved_model_contract,
             device=device_config,
         )
 

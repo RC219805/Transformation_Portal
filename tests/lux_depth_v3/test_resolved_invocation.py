@@ -212,6 +212,72 @@ class TestNonDa3AndOptionalStages:
         assert invocation.input_files == (outside.as_posix(),)
 
 
+class TestFingerprintIdentity:
+    def test_fingerprint_distinguishes_resolved_models(self, tmp_path: Path) -> None:
+        """Two plans that execute different models must never share a
+        fingerprint, even though ConfigFingerprint's variant label is
+        METRIC_LARGE for both (Codex P1 on PR #2070)."""
+        metric = _build(EnhanceConfig(model_key="da3-metric"), tmp_path)
+        research = _build(
+            EnhanceConfig(model_key="da3-research", non_commercial_ok=True),
+            tmp_path,
+        )
+        assert metric.resolved_model.canonical_key != research.resolved_model.canonical_key
+        assert metric.config_fingerprint_sha256 != research.config_fingerprint_sha256
+
+
+class TestSingleResolutionCallCount:
+    """The advertised contract is exactly one resolution per invocation
+    (Codex P2 on PR #2070): the builder resolves once; ConfigResolver, the
+    DA3 backend, and the inference engine consume the carried contract with
+    zero further resolve_model_contract calls."""
+
+    def _install_spy(self, monkeypatch: pytest.MonkeyPatch):
+        import transformation_portal.depth.backends.da3 as da3_module
+        import transformation_portal.lux_depth_v3.config_resolver as resolver_module
+        import transformation_portal.lux_depth_v3.inference as inference_module
+        import transformation_portal.lux_depth_v3.resolved_invocation as invocation_module
+        from transformation_portal.lux_depth_v3.model_resolution import resolve_model_contract as real_resolve
+
+        calls: list = []
+
+        def spy(request):
+            calls.append(request)
+            return real_resolve(request)
+
+        for module in (invocation_module, resolver_module, da3_module, inference_module):
+            monkeypatch.setattr(module, "resolve_model_contract", spy)
+        return calls
+
+    def test_build_is_the_single_resolution(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        calls = self._install_spy(monkeypatch)
+        invocation = _build(_commercial_config(), tmp_path)
+        assert len(calls) == 1
+        assert invocation.resolved_model is not None
+
+    def test_consumers_add_zero_resolutions(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        from transformation_portal.depth.backends.da3 import DA3Backend
+        from transformation_portal.lux_depth_v3.config import DA3Config
+        from transformation_portal.lux_depth_v3.config_resolver import ConfigResolver
+        from transformation_portal.lux_depth_v3.inference import DA3InferenceEngine
+
+        config = _commercial_config()
+        invocation = _build(config, tmp_path)
+        config.resolved_invocation = invocation
+
+        calls = self._install_spy(monkeypatch)
+        ConfigResolver().resolve(config)
+        backend = DA3Backend(config)
+        assert backend._resolved_model_contract is invocation.resolved_model
+
+        engine = DA3InferenceEngine.__new__(DA3InferenceEngine)
+        engine.config = DA3Config(resolved_model_contract=invocation.resolved_model)
+        engine._resolved_model_contract = None
+        resolved = engine._resolve_model_contract()
+        assert resolved is invocation.resolved_model
+        assert calls == []
+
+
 class TestNoWrites:
     def test_build_performs_no_filesystem_writes(self, tmp_path: Path) -> None:
         input_dir = tmp_path / "inputs"

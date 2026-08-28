@@ -165,7 +165,7 @@ from ._backend_contract import backend_alias_warning, is_legacy_backend_alias, n
 from .config import EnhanceConfig, Preset
 from .config_resolver import apply_effective_raw_runtime_config
 from .ingest_adapter import RAW_PREVIEW_ESCAPE_ENV
-from .model_resolution import ModelLicenseError, ModelRequest, UnknownModelError, resolve_model_contract
+from .model_resolution import ModelLicenseError, UnknownModelError
 from .orchestrator import EnhanceOrchestrator
 
 logger = logging.getLogger(__name__)
@@ -1098,20 +1098,11 @@ def main(
         keep_intermediates=keep_intermediates,
     )
     apply_effective_raw_runtime_config(config)
-    if depth_backend == "da3" or depth_backend is None:
-        try:
-            resolve_model_contract(
-                ModelRequest(
-                    model_key=model_key,
-                    model_variant=config.model_variant,
-                    use_coreml_backend=bool(getattr(config, "use_coreml_backend", False)),
-                    non_commercial_ok=enable_non_commercial,
-                )
-            )
-        except (ModelLicenseError, UnknownModelError) as exc:
-            logger.error(str(exc))
-            print(str(exc), file=sys.stdout)
-            raise typer.Exit(code=1)
+    # Model/license resolution happens exactly once, in
+    # build_resolved_invocation below (P0-1, issue #2065). The former
+    # duplicate pre-check here was removed so plan and run share one
+    # resolution pass; license errors now surface after input discovery,
+    # with the same message and exit code as before.
 
     # Forward-compatible knobs: apply via setattr
     # for non-breaking config evolution.

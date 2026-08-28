@@ -226,7 +226,18 @@ def build_resolved_invocation(
         )
         license_enforced = True
 
+    # The invocation fingerprint must identify the authoritative resolved
+    # model, not just the config's compatibility fields: ConfigFingerprint
+    # serializes the model as the ModelVariant label (METRIC_LARGE for every
+    # unset variant), which cannot distinguish da3_metric from da3_research.
+    # Hash the config fingerprint together with the resolved identity so two
+    # plans that execute different models never share a fingerprint.
     fingerprint = compute_config_fingerprint(config)
+    fingerprint_sha256 = _invocation_fingerprint_sha256(
+        fingerprint.to_sha256(),
+        planned_backend,
+        resolved_model,
+    )
     preset = getattr(config, "preset", None)
     preset_resolved = preset.value if preset is not None else f"quality_tier:{config.quality_tier}"
 
@@ -257,6 +268,30 @@ def build_resolved_invocation(
         requested_artifacts=_requested_artifacts(config),
         input_dir=str(input_dir_resolved),
         input_files=tuple(sorted(relative_files)),
-        config_fingerprint_sha256=fingerprint.to_sha256(),
+        config_fingerprint_sha256=fingerprint_sha256,
         warnings=_plan_warnings(config),
     )
+
+
+def _invocation_fingerprint_sha256(
+    config_fingerprint_sha256: str,
+    planned_backend: str,
+    resolved_model: Optional[ResolvedModel],
+) -> str:
+    import hashlib
+
+    from ..ingest.canonical_json import canonicalize_json
+
+    model_identity: Optional[Dict[str, Any]] = None
+    if resolved_model is not None:
+        model_identity = {
+            "canonical_key": resolved_model.canonical_key,
+            "repo_id": getattr(resolved_model.spec, "repo_id", None),
+            "revision": resolved_model.revision,
+        }
+    payload = {
+        "config_fingerprint_sha256": config_fingerprint_sha256,
+        "planned_backend": planned_backend,
+        "resolved_model": model_identity,
+    }
+    return hashlib.sha256(canonicalize_json(payload)).hexdigest()

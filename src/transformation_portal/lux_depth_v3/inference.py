@@ -265,12 +265,23 @@ class DA3InferenceEngine:
         )
 
     def _resolve_model_contract(self, *, use_coreml_backend: Optional[bool] = None) -> ResolvedModel:
-        """Resolve and cache the registry-backed model contract."""
+        """Resolve and cache the registry-backed model contract.
+
+        When the config carries an authoritative single-resolution contract
+        (P0-1, issue #2065 — injected by DA3Backend from the run's
+        ResolvedInvocation), consume it instead of re-resolving; the CoreML
+        path still re-resolves to validate accelerator capability, but must
+        agree with the authoritative identity.
+        """
         if self._resolved_model_contract is not None and (
             use_coreml_backend is None
             or use_coreml_backend == (self._resolved_model_contract.accelerator_kind.value == "coreml")
         ):
             return self._resolved_model_contract
+        authoritative = getattr(self.config, "resolved_model_contract", None)
+        if authoritative is not None and not use_coreml_backend:
+            self._resolved_model_contract = authoritative
+            return authoritative
         resolved = resolve_model_contract(
             ModelRequest(
                 model_key=getattr(self.config, "model_key", None),
@@ -280,6 +291,14 @@ class DA3InferenceEngine:
                 non_commercial_ok=bool(getattr(self.config, "non_commercial_ok", False)),
             )
         )
+        if authoritative is not None and (
+            resolved.canonical_key != authoritative.canonical_key or resolved.revision != authoritative.revision
+        ):
+            raise RuntimeError(
+                "CoreML re-resolution disagrees with the authoritative model contract: "
+                f"{resolved.canonical_key}@{resolved.revision} != "
+                f"{authoritative.canonical_key}@{authoritative.revision}"
+            )
         if not use_coreml_backend:
             self._resolved_model_contract = resolved
         return resolved
