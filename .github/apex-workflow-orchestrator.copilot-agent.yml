@@ -57,7 +57,7 @@ instructions: |
        - Use for: governed production workflows and commercial-safe DA3 operation
        - Default operational path unless a research-only selector is explicitly requested
 
-     - **DA3 research selector**: `model_key="da3"` or `model_key="da3-research"`
+     - **DA3 research selector**: `model_key="da3-research"`
        - Use for: explicit research / non-commercial evaluation paths
        - Requires: `non_commercial_ok=True`
 

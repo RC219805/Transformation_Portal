@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import os
 import platform
+import subprocess
 import sys
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -256,6 +259,7 @@ class TestDa3DefaultDisposition:
         assert resolved.canonical_key == "da3_metric"
         assert resolved.spec.license_id == "apache-2.0"
         assert resolved.requested_selector == "default"
+        assert resolved.resolution_reason == ("no model selector supplied; defaulted to 'da3_metric'")
 
     def test_default_selector_label_is_not_the_da3_alias(self) -> None:
         # Manifest honesty: the "da3" alias (deprecated) still means the
@@ -270,9 +274,35 @@ class TestDa3DefaultDisposition:
         with pytest.warns(DeprecatedModelSelectorWarning, match="model_key='da3' is deprecated"):
             resolved = resolve_model_contract(ModelRequest(model_key="da3", non_commercial_ok=True))
         assert resolved.canonical_key == "da3_research"
+        assert resolved.resolution_reason == ("deprecated model alias 'da3' resolved to 'da3_research'")
         with pytest.warns(DeprecatedModelSelectorWarning):
             with pytest.raises(ModelLicenseError):
                 resolve_model_contract(ModelRequest(model_key="da3"))
+
+    def test_da3_alias_warning_is_visible_under_default_python_filters(self) -> None:
+        repo_root = Path(__file__).resolve().parents[2]
+        env = os.environ.copy()
+        env.pop("PYTHONWARNINGS", None)
+        env["PYTHONPATH"] = str(repo_root / "src")
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-c",
+                (
+                    "from transformation_portal.lux_depth_v3.model_resolution "
+                    "import ModelRequest, resolve_model_contract; "
+                    "resolve_model_contract(ModelRequest(model_key='da3', non_commercial_ok=True))"
+                ),
+            ],
+            cwd=repo_root,
+            env=env,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert result.returncode == 0, result.stderr
+        assert "DeprecatedModelSelectorWarning" in result.stderr
+        assert "model_key='da3' is deprecated" in result.stderr
 
     def test_explicit_selectors_do_not_warn(self) -> None:
         import warnings as _warnings

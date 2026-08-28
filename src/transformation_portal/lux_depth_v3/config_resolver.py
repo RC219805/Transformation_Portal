@@ -48,8 +48,11 @@ from .manifest import ConfigFingerprint
 from .model_resolution import (
     ModelRequest,
     ResolvedModel,
+    carry_direct_default_model_contract,
+    direct_default_model_contract,
     resolve_model_contract,
     validate_authoritative_model_contract,
+    warn_default_model_selection_changed,
 )
 
 logger = logging.getLogger(__name__)
@@ -532,6 +535,8 @@ def build_apex_depth_gate_fingerprint_payload(config: EnhanceConfig) -> Dict[str
 def build_depth_cache_payload(
     config: EnhanceConfig,
     model_variant: Optional[ModelVariant] = None,
+    *,
+    resolved_model_contract: Optional[ResolvedModel] = None,
 ) -> Dict[str, Any]:
     """Build depth cache fingerprint payload.
 
@@ -541,6 +546,7 @@ def build_depth_cache_payload(
     Args:
         config: EnhanceConfig instance
         model_variant: Resolved model variant (uses config.model_variant if not provided)
+        resolved_model_contract: Authoritative model identity when available
 
     Returns:
         Dictionary of depth configuration for cache fingerprinting
@@ -552,7 +558,11 @@ def build_depth_cache_payload(
     effective_raw_python = resolve_effective_raw_python_executable(config)
 
     return {
-        "model_variant": resolved_model_identity_for_backend(config, mv),
+        "model_variant": resolved_model_identity_for_backend(
+            config,
+            mv,
+            resolved_model_contract=resolved_model_contract,
+        ),
         "model_key": getattr(config, "model_key", None),
         "raw_model_id": getattr(config, "raw_model_id", None),
         "depth_device": config.depth_device,
@@ -577,9 +587,15 @@ def build_depth_cache_fingerprint(
     model_variant: ModelVariant,
     backend_id: str,
     output_depth_units: str,
+    *,
+    resolved_model_contract: Optional[ResolvedModel] = None,
 ) -> str:
     """Build backend-scoped depth cache fingerprint."""
-    cache_payload = build_depth_cache_payload(config, model_variant)
+    cache_payload = build_depth_cache_payload(
+        config,
+        model_variant,
+        resolved_model_contract=resolved_model_contract,
+    )
     base_fp = hashlib.sha256(
         dumps_json(
             cache_payload,
@@ -646,6 +662,8 @@ def build_run_card_config_fingerprint(
     config: EnhanceConfig,
     model_variant: Optional[ModelVariant] = None,
     backend_metadata: Optional[Any] = None,
+    *,
+    resolved_model_contract: Optional[ResolvedModel] = None,
 ) -> Dict[str, Any]:
     """Build run-card config fingerprint with full provenance.
 
@@ -656,13 +674,18 @@ def build_run_card_config_fingerprint(
         config: EnhanceConfig instance
         model_variant: Resolved model variant
         backend_metadata: Optional backend selection metadata
+        resolved_model_contract: Authoritative model identity when available
 
     Returns:
         Dictionary with fingerprint payload and SHA-256 hash
     """
     from .ingest_adapter import raw_ingest_summary
 
-    base = compute_config_fingerprint(config, model_variant)
+    base = compute_config_fingerprint(
+        config,
+        model_variant,
+        resolved_model_contract=resolved_model_contract,
+    )
     raw_summary = raw_ingest_summary(
         config,
         raw_python_executable=base.raw_python_executable,
@@ -742,12 +765,14 @@ def build_orchestrator_run_card_config_fingerprint(
     backend_selection: Optional[Dict[str, Any]] = None,
     run_card_version: Optional[str] = None,
     include_proofs: Optional[bool] = None,
+    resolved_model_contract: Optional[ResolvedModel] = None,
 ) -> Dict[str, Any]:
     """Build the orchestrator run-card config fingerprint payload."""
     fingerprint = build_run_card_config_fingerprint(
         config,
         model_variant,
         backend_metadata,
+        resolved_model_contract=resolved_model_contract,
     )
     payload = {key: value for key, value in fingerprint.items() if key not in {"hash_algorithm", "canonical_json", "sha256"}}
     resolved_backend = None
@@ -857,9 +882,16 @@ class ConfigResolver:
         # instead of re-resolving (which would use enforce_license=False and
         # could drift through the legacy model_variant compatibility mapping).
         authoritative_contract = None
+        carry_direct_default = False
         invocation = getattr(config, "resolved_invocation", None)
         if invocation is not None:
             authoritative_contract = getattr(invocation, "resolved_model", None)
+        elif normalize_backend_id(getattr(config, "depth_backend", None)) in {None, "da3"}:
+            # Direct Python callers have no ResolvedInvocation. Preserve the
+            # original no-selector provenance across repeated resolver passes
+            # instead of treating ConfigResolver's own canonical key pin as
+            # an explicit user selection.
+            authoritative_contract = direct_default_model_contract(config)
         if authoritative_contract is not None:
             resolved_model_contract = validate_authoritative_model_contract(
                 authoritative_contract,
@@ -893,7 +925,18 @@ class ConfigResolver:
                 )
             )
             if pure_default_selection:
+                # The CLI's authoritative invocation already emitted this
+                # migration warning during its enforcing resolution. Direct
+                # Python callers have no invocation carrier, so surface the
+                # affected-cohort warning once here before pinning model_key;
+                # subsequent backend enforcement sees an explicit canonical
+                # key and cannot duplicate it.
+                if normalize_backend_id(getattr(config, "depth_backend", None)) in {None, "da3"} and bool(
+                    getattr(config, "non_commercial_ok", False)
+                ):
+                    warn_default_model_selection_changed(stacklevel=3)
                 config.model_key = resolved_model_contract.canonical_key
+                carry_direct_default = True
             if getattr(config, "model_key", None) or getattr(config, "raw_model_id", None):
                 resolved_model = _compat_model_variant_for_resolved_key(
                     resolved_model_contract.canonical_key,
@@ -907,13 +950,19 @@ class ConfigResolver:
 
         # Update config with resolved model variant
         config.model_variant = resolved_model
+        if carry_direct_default:
+            carry_direct_default_model_contract(config, resolved_model_contract)
 
         # Determine preset resolution metadata
         preset_requested = getattr(config, "preset_requested", None) or (config.preset.value if config.preset else None)
         preset_resolved = config.preset.value if config.preset else f"quality_tier:{config.quality_tier}"
 
         # Compute fingerprint
-        fingerprint = compute_config_fingerprint(config, resolved_model)
+        fingerprint = compute_config_fingerprint(
+            config,
+            resolved_model,
+            resolved_model_contract=resolved_model_contract,
+        )
 
         return ResolvedConfig(
             enhance_config=config,
@@ -954,23 +1003,32 @@ class ConfigResolver:
         self,
         config: EnhanceConfig,
         model_variant: Optional[ModelVariant] = None,
+        *,
+        resolved_model_contract: Optional[ResolvedModel] = None,
     ) -> ConfigFingerprint:
         """Compute configuration fingerprint.
 
         Args:
             config: EnhanceConfig instance
             model_variant: Optional resolved model variant
+            resolved_model_contract: Authoritative model identity when available
 
         Returns:
             ConfigFingerprint for cache validation
         """
-        return compute_config_fingerprint(config, model_variant)
+        return compute_config_fingerprint(
+            config,
+            model_variant,
+            resolved_model_contract=resolved_model_contract,
+        )
 
     def build_run_card_fingerprint(
         self,
         config: EnhanceConfig,
         model_variant: Optional[ModelVariant] = None,
         backend_metadata: Optional[Any] = None,
+        *,
+        resolved_model_contract: Optional[ResolvedModel] = None,
     ) -> Dict[str, Any]:
         """Build run-card fingerprint with provenance.
 
@@ -978,6 +1036,7 @@ class ConfigResolver:
             config: EnhanceConfig instance
             model_variant: Resolved model variant
             backend_metadata: Backend selection metadata
+            resolved_model_contract: Authoritative model identity when available
 
         Returns:
             Dictionary with fingerprint and SHA-256 hash
@@ -986,4 +1045,5 @@ class ConfigResolver:
             config,
             model_variant,
             backend_metadata,
+            resolved_model_contract=resolved_model_contract,
         )

@@ -45,7 +45,15 @@
             "accelerator_kind"
           ],
           "properties": {
-            "requested_selector": { "type": "string" },
+            "requested_selector": {
+              "type": "string",
+              "description": "Selector supplied by the caller, or 'default' when no model selector was supplied. The deprecated 'da3' selector remains distinct and resolves to da3_research during its warning cycle."
+            },
+            "resolution_reason": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Deterministic explanation of whether model selection used the default, an explicit selector or repository, a deprecated alias, or a legacy variant."
+            },
             "canonical_key": { "type": "string", "minLength": 1 },
             "repo_id": { "type": ["string", "null"] },
             "revision": { "type": ["string", "null"] },

@@ -126,9 +126,10 @@ Commercial APEX runs should use the Apache-2.0 DA3 selector:
   --overwrite
 ```
 
-Research-only model selectors such as `da3`, `da3-research`, and
-`depth_pro` require explicit non-commercial license acknowledgement. Depth Pro
-also requires Apple Depth Pro research-license acknowledgement.
+The explicit `da3-research` model selector and the deprecated `da3`
+compatibility alias require non-commercial license acknowledgement. The
+`depth_pro` backend additionally requires Apple Depth Pro research-license
+acknowledgement.
 
 Current option groups include:
 

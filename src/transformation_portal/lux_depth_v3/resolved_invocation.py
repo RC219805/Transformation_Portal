@@ -25,7 +25,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Sequence, Tuple
 
-from .model_resolution import ModelRequest, ResolvedModel, resolve_model_contract
+from .model_resolution import (
+    ModelRequest,
+    ResolvedModel,
+    model_selection_migration_notices,
+    resolve_model_contract,
+)
 
 if TYPE_CHECKING:
     from .config import EnhanceConfig
@@ -88,6 +93,7 @@ class ResolvedInvocation:
             usage_class = getattr(spec, "usage_class", None)
             model_payload = {
                 "requested_selector": resolved.requested_selector,
+                "resolution_reason": resolved.resolution_reason,
                 "canonical_key": resolved.canonical_key,
                 "repo_id": getattr(spec, "repo_id", None),
                 "revision": resolved.revision,
@@ -220,7 +226,10 @@ def _requested_artifacts(config: "EnhanceConfig") -> Tuple[str, ...]:
     return tuple(artifacts)
 
 
-def _plan_warnings(config: "EnhanceConfig") -> Tuple[str, ...]:
+def _plan_warnings(
+    config: "EnhanceConfig",
+    resolved_model: Optional[ResolvedModel],
+) -> Tuple[str, ...]:
     warnings: List[str] = []
     if getattr(config, "emit_marketing", False):
         warnings.append("--emit-marketing currently produces no deliverable (disposition tracked in issue #2067)")
@@ -229,6 +238,12 @@ def _plan_warnings(config: "EnhanceConfig") -> Tuple[str, ...]:
             "--emit-master16 and --emit-upscaled16 currently act as a single "
             "bit-depth switch (disposition tracked in issue #2068)"
         )
+    warnings.extend(
+        model_selection_migration_notices(
+            resolved_model,
+            non_commercial_ok=bool(getattr(config, "non_commercial_ok", False)),
+        )
+    )
     return tuple(warnings)
 
 
@@ -328,5 +343,5 @@ def build_resolved_invocation(
         input_dir=str(input_dir_resolved),
         input_files=tuple(sorted(relative_files)),
         config_fingerprint_sha256=fingerprint_sha256,
-        warnings=_plan_warnings(config),
+        warnings=_plan_warnings(config, resolved_model),
     )

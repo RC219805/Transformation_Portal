@@ -52,6 +52,7 @@ lux-depth-v3 \
   --input-dir "./input_images" \
   --output-dir "./output/research" \
   --preset "depth-anything-v3.1-research-m4" \
+  --model-key "da3-research" \
   --non-commercial-ok "true" \
   --quality-tier "apex" \
   --pbr "on"
@@ -92,7 +93,8 @@ The V2 enhancement stage is **optional** and enabled by default for backward com
 
 ### Model Selectors
 
-- `da3` / `da3-research` - research-default DA3 selector; requires `--non-commercial-ok "true"`
+- `da3-research` - explicit research DA3 selector; requires `--non-commercial-ok "true"`
+- `da3` - deprecated compatibility alias for `da3-research`; do not use it in new commands
 - `da3-metric` - Apache-2.0 DA3 selector for the current Lux V3 relative-depth surface
 - `da3-base` / `da3-small` - registry-supported experimental selectors, hidden from public CLI help until smoke-tested
 
@@ -318,6 +320,7 @@ Output Deliverables
 **Depth Anything V3.1** (CC BY-NC 4.0)
 ```bash
 --preset "depth-anything-v3.1-research-m4" \
+--model-key "da3-research" \
 --non-commercial-ok "true"
 ```
 

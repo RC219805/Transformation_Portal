@@ -407,7 +407,13 @@
         },
         "requested_model_selector": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "description": "Selector supplied by the caller, or 'default' when no model selector was supplied. The deprecated 'da3' selector remains distinct and resolves to da3_research during its warning cycle."
+        },
+        "resolution_reason": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Deterministic explanation of the model selection path."
         },
         "canonical_model_key": {
           "type": "string",

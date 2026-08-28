@@ -16,7 +16,11 @@ from pathlib import Path
 import pytest
 
 from transformation_portal.lux_depth_v3.config import EnhanceConfig, ModelVariant
-from transformation_portal.lux_depth_v3.model_resolution import ModelLicenseError
+from transformation_portal.lux_depth_v3.model_resolution import (
+    DefaultModelSelectionChangedWarning,
+    DeprecatedModelSelectorWarning,
+    ModelLicenseError,
+)
 from transformation_portal.lux_depth_v3.resolved_invocation import (
     RESOLVED_INVOCATION_SCHEMA,
     authoritative_model_contract,
@@ -47,6 +51,7 @@ class TestSingleResolution:
         assert invocation.resolved_model is not None
         assert invocation.resolved_model.canonical_key == "da3_metric"
         assert invocation.resolved_model.requested_selector == "default"
+        assert invocation.resolved_model.resolution_reason == "no model selector supplied; defaulted to 'da3_metric'"
 
     def test_research_selector_fails_closed_on_license(self, tmp_path: Path) -> None:
         # The builder is THE enforcing resolution and must raise for the
@@ -133,6 +138,9 @@ class TestPlanSerialization:
         # executed_backend is runtime state recorded in manifests only.
         assert "executed_backend" not in json.dumps(payload)
         assert payload["resolved_model"]["canonical_key"] == "da3_metric"
+        assert payload["resolved_model"]["resolution_reason"] == (
+            "explicit model selector 'da3-metric' resolved to 'da3_metric'"
+        )
         assert payload["resolved_model"]["requires_non_commercial_ok"] is False
         assert payload["license_evaluation"] == {"enforced": True, "status": "allowed"}
         assert payload["input_files"] == ["a.jpg", "b.jpg"]
@@ -142,6 +150,32 @@ class TestPlanSerialization:
         payload = _build(config, tmp_path).to_payload()
         assert any("emit-marketing" in warning for warning in payload["warnings"])
         assert "marketing" not in " ".join(payload["requested_artifacts"])
+
+    def test_default_selection_migration_notice_is_recorded_without_duplicate_emission(
+        self,
+        tmp_path: Path,
+    ) -> None:
+        config = EnhanceConfig(non_commercial_ok=True)
+        with pytest.warns(DefaultModelSelectionChangedWarning, match="da3-research") as caught:
+            invocation = _build(config, tmp_path)
+
+        assert len(caught) == 1
+        matching_notices = [warning for warning in invocation.warnings if "No model selector was given" in warning]
+        assert len(matching_notices) == 1
+        assert "da3-research" in matching_notices[0]
+
+    def test_deprecated_alias_notice_is_recorded_without_duplicate_emission(
+        self,
+        tmp_path: Path,
+    ) -> None:
+        config = EnhanceConfig(model_key="da3", non_commercial_ok=True)
+        with pytest.warns(DeprecatedModelSelectorWarning, match="model_key='da3' is deprecated") as caught:
+            invocation = _build(config, tmp_path)
+
+        assert len(caught) == 1
+        matching_notices = [warning for warning in invocation.warnings if "model_key='da3' is deprecated" in warning]
+        assert len(matching_notices) == 1
+        assert "da3-research" in matching_notices[0]
 
 
 class TestNonDa3AndOptionalStages:
@@ -283,6 +317,85 @@ class TestFingerprintIdentity:
         research_config = EnhanceConfig(model_key="da3-research", non_commercial_ok=True)
         research_config.resolved_invocation = _build(research_config, tmp_path)
         assert compute_config_fingerprint(metric_config).to_sha256() != compute_config_fingerprint(research_config).to_sha256()
+
+    def test_direct_runtime_cache_and_manifest_identities_distinguish_models(self) -> None:
+        """The direct Python path has no invocation carrier, so the resolved
+        contract returned by ConfigResolver must still key every runtime cache
+        and manifest identity. Metric and research both use the legacy
+        METRIC_LARGE compatibility variant and previously collided here."""
+        from transformation_portal.lux_depth_v3.config_resolver import ConfigResolver
+        from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
+
+        metric = ConfigResolver().resolve(EnhanceConfig(model_key="da3-metric"))
+        research = ConfigResolver().resolve(
+            EnhanceConfig(model_key="da3-research", non_commercial_ok=True),
+        )
+
+        assert metric.fingerprint.model_variant.startswith("da3_metric:")
+        assert research.fingerprint.model_variant.startswith("da3_research:")
+        assert metric.fingerprint.depth_only().to_sha256() != research.fingerprint.depth_only().to_sha256()
+
+        metric_orchestrator = object.__new__(EnhanceOrchestrator)
+        metric_orchestrator.config = metric.enhance_config
+        metric_orchestrator._resolved_model_contract = metric.resolved_model_contract
+        research_orchestrator = object.__new__(EnhanceOrchestrator)
+        research_orchestrator.config = research.enhance_config
+        research_orchestrator._resolved_model_contract = research.resolved_model_contract
+
+        assert metric_orchestrator.compute_config_fingerprint().to_sha256() != (
+            research_orchestrator.compute_config_fingerprint().to_sha256()
+        )
+        assert metric_orchestrator._build_depth_cache_fingerprint("da3") != (
+            research_orchestrator._build_depth_cache_fingerprint("da3")
+        )
+
+    def test_research_manifest_cannot_skip_metric_depth_stage(self, tmp_path: Path) -> None:
+        """A research manifest must not satisfy a later metric Stage-A
+        lookup, even though both models retain the METRIC_LARGE compatibility
+        variant."""
+        from unittest.mock import patch
+
+        from transformation_portal.lux_depth_v3.input_manager import ImageInput
+        from transformation_portal.lux_depth_v3.manifest import CombinedManifest, DepthMetadata
+        from transformation_portal.lux_depth_v3.orchestrator import EnhanceOrchestrator
+
+        image_path = tmp_path / "input.jpg"
+        image_path.write_bytes(b"input")
+        depth_path = tmp_path / "depth.png"
+        depth_path.write_bytes(b"depth")
+        manifest_path = tmp_path / "manifest.json"
+
+        with patch("transformation_portal.lux_depth_v3.orchestrator.DepthBackendRegistry"):
+            research = EnhanceOrchestrator(
+                EnhanceConfig(model_key="da3-research", non_commercial_ok=True, enable_v2=False),
+                tmp_path / "research",
+                verify_outputs=False,
+            )
+            metric = EnhanceOrchestrator(
+                EnhanceConfig(model_key="da3-metric", enable_v2=False),
+                tmp_path / "metric",
+                verify_outputs=False,
+            )
+
+        CombinedManifest(
+            config_fingerprint=research.compute_config_fingerprint(),
+            depth=DepthMetadata(
+                model="da3_research",
+                depth_path=str(depth_path),
+                runtime_seconds=0.1,
+                scaling={},
+            ),
+            backend_selection=research._capture_backend_metadata(),
+        ).save(manifest_path)
+
+        assert (
+            metric.should_skip_depth(
+                depth_path,
+                manifest_path,
+                ImageInput(image_path),
+            )
+            is False
+        )
 
 
 class TestCarrierTrustBoundary:
@@ -645,10 +758,41 @@ class TestPythonApiDefaultParity:
         from transformation_portal.lux_depth_v3.config_resolver import ConfigResolver
 
         config = EnhanceConfig(model_variant=ModelVariant.METRIC_LARGE)
-        with pytest.warns(DeprecationWarning):
+        with pytest.warns(DeprecatedModelSelectorWarning):
             ConfigResolver().resolve(config)
         with pytest.raises(ModelLicenseError):
             DA3Backend(config)
+
+    def test_repeated_direct_resolution_preserves_default_provenance(self) -> None:
+        from transformation_portal.depth.backends.da3 import DA3Backend
+        from transformation_portal.lux_depth_v3.config_resolver import ConfigResolver
+
+        config = EnhanceConfig()
+        resolver = ConfigResolver()
+        first = resolver.resolve(config)
+        second = resolver.resolve(config)
+        backend = DA3Backend(config)
+
+        assert config.model_key == "da3_metric"
+        assert first.resolved_model_contract.requested_selector == "default"
+        assert second.resolved_model_contract.requested_selector == "default"
+        assert second.resolved_model_contract.resolution_reason == first.resolved_model_contract.resolution_reason
+        assert backend._resolved_model_contract.requested_selector == "default"
+
+    def test_changed_selector_invalidates_direct_default_provenance(self) -> None:
+        from transformation_portal.lux_depth_v3.config_resolver import ConfigResolver
+
+        config = EnhanceConfig()
+        resolver = ConfigResolver()
+        resolver.resolve(config)
+        config.model_key = "da3-research"
+        config.non_commercial_ok = True
+
+        changed = resolver.resolve(config)
+
+        assert changed.resolved_model_contract.canonical_key == "da3_research"
+        assert changed.resolved_model_contract.requested_selector == "da3-research"
+        assert changed.resolved_model_contract.resolution_reason.startswith("explicit model selector")
 
     def test_direct_orchestrator_pins_metric_default(self, tmp_path: Path) -> None:
         # The focused direct-orchestrator regression: constructing the
@@ -659,3 +803,36 @@ class TestPythonApiDefaultParity:
         config = EnhanceConfig(allow_synthetic_fallback=True)
         EnhanceOrchestrator(config, tmp_path)
         assert config.model_key == "da3_metric"
+
+    def test_direct_default_change_warning_is_emitted_once(self) -> None:
+        from transformation_portal.depth.backends.da3 import DA3Backend
+        from transformation_portal.lux_depth_v3.config_resolver import ConfigResolver
+
+        config = EnhanceConfig(non_commercial_ok=True)
+        with pytest.warns(DefaultModelSelectionChangedWarning, match="da3-research") as caught:
+            ConfigResolver().resolve(config)
+            ConfigResolver().resolve(config)
+            DA3Backend(config)
+        assert len(caught) == 1
+
+    def test_direct_deprecated_alias_warning_is_emitted_once(self) -> None:
+        from transformation_portal.depth.backends.da3 import DA3Backend
+        from transformation_portal.lux_depth_v3.config_resolver import ConfigResolver
+
+        config = EnhanceConfig(model_key="da3", non_commercial_ok=True)
+        with pytest.warns(DeprecatedModelSelectorWarning, match="model_key='da3' is deprecated") as caught:
+            ConfigResolver().resolve(config)
+            ConfigResolver().resolve(config)
+            DA3Backend(config)
+        assert len(caught) == 1
+
+    def test_cli_carrier_does_not_duplicate_default_change_warning(self, tmp_path: Path) -> None:
+        from transformation_portal.depth.backends.da3 import DA3Backend
+        from transformation_portal.lux_depth_v3.config_resolver import ConfigResolver
+
+        config = EnhanceConfig(non_commercial_ok=True)
+        with pytest.warns(DefaultModelSelectionChangedWarning, match="da3-research") as caught:
+            config.resolved_invocation = _build(config, tmp_path)
+            ConfigResolver().resolve(config)
+            DA3Backend(config)
+        assert len(caught) == 1

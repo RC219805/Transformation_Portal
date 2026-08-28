@@ -34,7 +34,12 @@ from ...core.ml_dependency_health import (
     ensure_dependency_importable,
 )
 from ...core.platform_matrix import CURRENT_PLATFORM
-from ...lux_depth_v3.model_resolution import ModelRequest, resolve_model_contract, validate_authoritative_model_contract
+from ...lux_depth_v3.model_resolution import (
+    ModelRequest,
+    direct_default_model_contract,
+    resolve_model_contract,
+    validate_authoritative_model_contract,
+)
 from .protocol import DepthResult, LicenseType
 
 if TYPE_CHECKING:
@@ -165,6 +170,8 @@ class DA3Backend:
             invocation = getattr(config, "resolved_invocation", None)
             if invocation is not None:
                 authoritative_contract = getattr(invocation, "resolved_model", None)
+            if authoritative_contract is None:
+                authoritative_contract = direct_default_model_contract(config)
         if authoritative_contract is not None:
             self._resolved_model_contract = validate_authoritative_model_contract(
                 authoritative_contract,

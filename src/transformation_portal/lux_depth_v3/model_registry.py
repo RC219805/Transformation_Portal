@@ -310,7 +310,7 @@ def resolve_legacy_model_variant_key(model_variant: Any) -> Optional[str]:
 
 def legacy_model_variant_warning(model_variant: Any) -> Optional[str]:
     """Return the deprecation warning text for a legacy ModelVariant."""
-    variant_name = getattr(model_variant, "name", None)
+    variant_name = model_variant if isinstance(model_variant, str) else getattr(model_variant, "name", None)
     if not isinstance(variant_name, str):
         return None
     return LEGACY_MODEL_VARIANT_WARNINGS.get(variant_name)

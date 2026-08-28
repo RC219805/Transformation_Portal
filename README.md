@@ -123,7 +123,7 @@ Transformation Portal supports depth models across two tiers with different lice
 - **Default:** Standard CLI flows resolve here unless a research-only backend is explicitly requested
 
 ### Research & Non-Commercial
-- **DA3 research selector:** `model_key="da3"` or `model_key="da3-research"`
+- **DA3 research selector:** `model_key="da3-research"`
 - **Depth Pro backend:** `depth_pro`
 - **Use for:** Explicitly acknowledged research and non-commercial evaluation paths
 - **Requirements:** `non_commercial_ok=True`, plus Apple license acceptance for `depth_pro`
@@ -138,6 +138,7 @@ from transformation_portal.lux_depth_v3 import EnhanceConfig
 # Non-commercial research (requires explicit opt-in)
 config = EnhanceConfig(
     preset_requested="depth-anything-v3.1-research-m4",
+    model_key="da3-research",
     non_commercial_ok=True,  # Acknowledge CC BY-NC 4.0 restrictions
     depth_device="mps",      # Apple Silicon
 )

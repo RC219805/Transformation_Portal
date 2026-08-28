@@ -118,6 +118,7 @@ lux-depth-v3 \
   --output-dir "./output/lux_depth_v3_apex_da31" \
   --preset "depth-anything-v3.1-research-m4" \
   --quality-tier "apex" \
+  --model-key "da3-research" \
   --non-commercial-ok "true" \
   --depth-device "mps" \
   --materials-v3 "on" \
@@ -135,7 +136,7 @@ lux-depth-v3 \
 **License**: CC BY-NC 4.0 (Non-Commercial)
 **Use Cases**: Research, academic projects, non-commercial portfolio work
 
-### Variant A2: DA3 Research Default
+### Variant A2: Explicit DA3 Research Model
 
 The deprecated `da3` model selector resolves to the research nested DA3 checkpoint and requires non-commercial acknowledgement; prefer the explicit `da3-research`. With no selector, the default is the Apache-2.0 `da3_metric` model.
 
@@ -146,7 +147,7 @@ lux-depth-v3 \
   --preset "premium" \
   --quality-tier "apex" \
   --depth-backend "da3" \
-  --model-key "da3" \
+  --model-key "da3-research" \
   --non-commercial-ok "true" \
   --materials-v3 "on" \
   --pbr "on"
@@ -207,7 +208,8 @@ lux-depth-v3 \
   - Explicit `depth_pro` runs report `model_variant: "apple/ml-depth-pro"` in effective config, manifests, depth cache fingerprints, and run-card fingerprints.
 - `--model-key TEXT`: Canonical model selector within the chosen backend family
   - Public options in this release: `da3`, `da3-research`, `da3-metric`
-  - `da3` / `da3-research`: Research-default DA3 selector; requires `--non-commercial-ok "true"`
+  - `da3-research`: Explicit research DA3 selector; requires `--non-commercial-ok "true"`
+  - `da3`: Deprecated compatibility alias for `da3-research`; do not use it in new commands
   - `da3-metric`: Apache-2.0 DA3 selector for the current Lux V3 relative-depth surface
 - `--depth-device TEXT`: Device for depth inference (default: `cpu`)
   - Options: `cpu`, `cuda`, `mps`
@@ -314,7 +316,11 @@ FastVLM captioning is advisory only. Its output is not quality-gate evidence.
   resolved model contract, the planned backend and candidate fallback chain
   (the backend actually executed at runtime is recorded in manifests, not in
   the plan), license acknowledgements, planned stages, requested artifacts,
-  the selected input files, and the configuration fingerprint.
+  the selected input files, and the configuration fingerprint. With no model
+  selector, `resolved_model.requested_selector` is `"default"` and
+  `resolved_model.resolution_reason` names `da3_metric`; emitted run cards
+  repeat those values as `model_contract.requested_model_selector` and
+  `model_contract.resolution_reason`.
 
 ### Logging
 
@@ -470,6 +476,7 @@ lux-depth-v3 \
   --output-dir "./output/research" \
   --preset "depth-anything-v3.1-research-m4" \
   --quality-tier "apex" \
+  --model-key "da3-research" \
   --non-commercial-ok "true" \
   --depth-device "cuda" \
   --materials-v3 "on" \
@@ -627,10 +634,11 @@ Solution: Add `--enable-v2 "off"` when you only need depth and PBR outputs.
 
 **Mistake: Using research models without license acknowledgement**
 ```bash
-# Avoid this - missing required flags
---preset "depth-anything-v3.1-research-m4"
+# Avoid this - explicit research selection without its required acknowledgement
+--model-key "da3-research"
 ```
-Solution: Add `--non-commercial-ok "true"` for non-commercial models.
+Solution: Keep the explicit `--model-key "da3-research"` selection and add
+`--non-commercial-ok "true"` for the non-commercial model.
 
 ### Missing ML Dependencies
 If you see warnings about missing torch, transformers, or coremltools:
