@@ -63,8 +63,19 @@ def test_benchmark_step_keeps_status_output_contract_for_gate_consumers() -> Non
     gate_step = _performance_gate_step(workflow_text)
 
     assert re.search(r"(?m)^        id: benchmark$", benchmark_step)
-    for status in ("no_tests", "passed", "regression", "failed"):
+    for status in ("passed", "regression", "failed"):
         assert f'echo "status={status}" >> $GITHUB_OUTPUT' in benchmark_step
+
+    # Repair 1.6-a (#2062): the no_tests status was the false-green enabler
+    # (zero collected/executed benchmarks exited 0 as green). It must never
+    # return; an empty or all-skipped selection is status=failed via the
+    # evidence gate.
+    assert 'echo "status=no_tests"' not in benchmark_step
+    # The flag may appear in explanatory comments but never on a pytest
+    # invocation line: with the custom harness it skips every selected test.
+    assert not re.search(r"(?m)^\s*pytest\b[^\n]*--benchmark-only", benchmark_step)
+    assert "scripts/ci/check_performance_evidence.py" in benchmark_step
+    assert "BENCHMARK_ARTIFACTS_DIR" in benchmark_step
 
     assert "${{ steps.benchmark.outputs.status }}" in report_step
     assert "steps.benchmark.outputs.status == 'regression'" in issue_step
@@ -78,9 +89,13 @@ def test_performance_gate_policy_matches_workflow_failure_modes() -> None:
     step = _performance_gate_step(workflow_text)
 
     assert "status == 'failed'" in step
-    assert "regression beyond its documented threshold" in policy_text
-    assert "benchmark execution fails" in policy_text
+    # Repair 1.6-a (#2062): regressions are committed-baseline tolerance
+    # breaches inside the Lux perf smoke tests, and validity is enforced by
+    # the evidence gate — the policy must document both.
+    assert "committed-baseline tolerance" in policy_text
+    assert "check_performance_evidence.py" in policy_text
     assert "not valid evidence" in policy_text
+    assert "never a pass" in policy_text
 
 
 def test_invalid_benchmark_runs_fail_gate_without_opening_regression_issue() -> None:
